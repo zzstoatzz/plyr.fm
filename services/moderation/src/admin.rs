@@ -9,6 +9,7 @@ use axum::{
     Json,
 };
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 use crate::db::LabelContext;
 use crate::state::{AppError, AppState};
@@ -102,6 +103,12 @@ pub struct ActiveLabelsRequest {
 #[derive(Debug, Serialize)]
 pub struct ActiveLabelsResponse {
     pub active_uris: Vec<String>,
+}
+
+/// Current active label values grouped by subject URI.
+#[derive(Debug, Serialize)]
+pub struct LabelValuesResponse {
+    pub labels: HashMap<String, Vec<String>>,
 }
 
 /// Response with URIs that have an explicit negation (dismissal) label.
@@ -322,6 +329,26 @@ pub async fn get_active_labels(
     );
 
     Ok(Json(ActiveLabelsResponse { active_uris }))
+}
+
+/// Get all current active label values for the requested URIs.
+///
+/// This is the generic label-consumption API. The older `/active-labels`
+/// endpoint remains as a copyright-only compatibility projection.
+pub async fn get_label_values(
+    State(state): State<AppState>,
+    Json(request): Json<ActiveLabelsRequest>,
+) -> Result<Json<LabelValuesResponse>, AppError> {
+    let db = state.db.as_ref().ok_or(AppError::LabelerNotConfigured)?;
+
+    tracing::debug!(uri_count = request.uris.len(), "querying active label values");
+
+    let mut labels: HashMap<String, Vec<String>> = HashMap::new();
+    for (uri, val) in db.get_active_label_values(&request.uris).await? {
+        labels.entry(uri).or_default().push(val);
+    }
+
+    Ok(Json(LabelValuesResponse { labels }))
 }
 
 /// Get which URIs have an explicit negation (dismissal) copyright label.

@@ -4,7 +4,10 @@ title: "sensitive content moderation"
 
 ## overview
 
-plyr.fm allows creators to upload cover art and use their Bluesky avatars. some of this content may be inappropriate for general audiences (nudity, graphic imagery, etc.). rather than blocking uploads, we blur sensitive images by default and let users opt-in to view them.
+plyr.fm allows creators to upload audio and cover art and use their Bluesky
+avatars. some of this content may be inappropriate for general audiences.
+sensitive images are blurred by default, and adult-labeled audio is omitted and
+cannot be streamed until an authenticated listener opts in.
 
 this follows our core moderation philosophy: **information, not enforcement**. we flag content and let users decide what they want to see.
 
@@ -25,6 +28,7 @@ CREATE TABLE sensitive_images (
 
 -- user preference
 ALTER TABLE user_preferences ADD COLUMN show_sensitive_artwork BOOLEAN DEFAULT false;
+ALTER TABLE user_preferences ADD COLUMN show_sensitive_audio BOOLEAN DEFAULT false;
 ```
 
 images can be flagged by either:
@@ -112,15 +116,19 @@ returns arrays for SSR compatibility (Sets don't serialize to JSON).
 ### default behavior
 
 - all images matching `sensitive_images` table are blurred
+- tracks with an active global `sexual` or `porn` label are absent from
+  discovery, search, lists, queues, and shared radio
+- the audio endpoint rejects anonymous access to those tracks; authenticated
+  listeners must explicitly enable sensitive audio
 - tooltip on hover explains how to enable
 - link previews (og:image) exclude sensitive images entirely
 
 ### opt-in flow
 
-1. user navigates to portal → "your data"
-2. toggles "sensitive artwork" to enabled
-3. `show_sensitive_artwork` preference saved to database
-4. all sensitive images immediately unblur
+1. user navigates to settings → "privacy & display"
+2. uses the sensitive-content master toggle, or changes artwork/audio separately
+3. the independent preferences are saved to the database
+4. sensitive images unblur and/or adult-labeled audio becomes discoverable and playable
 
 ## current limitations
 
@@ -135,18 +143,21 @@ the `sensitive_images` table is currently populated manually by admins. this is 
 3. **user reporting** - let users flag inappropriate content
 4. **artist self-labeling** - let artists mark their own content as sensitive
 
-### no ATProto labels yet
+### audio labels
 
-unlike copyright moderation, sensitive content flags don't emit ATProto labels. this is intentional for now - we're still figuring out the right taxonomy for content labels vs. copyright labels.
+audio uses the existing signed ATProto labeler rather than a parallel NSFW
+table. The canonical global values are:
 
-future work might include:
-- `content-warning` label type
-- integration with Bluesky's existing content label system
-- respecting labels from other ATProto services
+- `sexual`: sexually suggestive or explicit audio
+- `porn`: pornographic audio
+
+both map to the same default-hide policy today. Keeping the assertion and policy
+separate means the taxonomy remains interoperable while the product can later
+offer finer preferences without relabeling content.
 
 ## moderation workflow
 
-### current process
+### current image process
 
 1. admin discovers inappropriate image (user report, browsing, etc.)
 2. admin identifies the image source:
@@ -154,6 +165,15 @@ future work might include:
    - external: copy full URL
 3. admin inserts row into `sensitive_images` via SQL or Neon console
 4. image is immediately blurred for all users
+
+### current audio process
+
+1. creator self-labels a track or an operator reviews reported audio
+2. the moderation service emits a signed `sexual` or `porn` label against the
+   track AT URI and CID
+3. the backend consumes the active label and applies the listener preference
+4. revocation uses the labeler's normal `neg: true` event rather than deleting
+   history
 
 ### example: flagging an R2 image
 

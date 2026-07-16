@@ -754,11 +754,11 @@ class ModerationSettings(AppSettingsSection):
     )
     label_cache_prefix: str = Field(
         default="plyr:copyright-label:",
-        description="Redis key prefix for caching copyright label status",
+        description="Redis key prefix for caching label status",
     )
     label_cache_ttl_seconds: int = Field(
         default=300,
-        description="TTL in seconds for cached copyright label status (default 5 min)",
+        description="TTL in seconds for cached label status (default 5 min)",
     )
     image_moderation_enabled: bool = Field(
         default=True,

@@ -4,6 +4,7 @@ centralized client for all moderation service interactions.
 replaces scattered httpx calls with a single, testable interface.
 """
 
+import json
 import logging
 from dataclasses import dataclass
 from typing import Any
@@ -171,11 +172,11 @@ class ModerationClient:
                 # invalidate cache since label status changed
                 await self.invalidate_cache(uri)
 
-                logfire.info("copyright label emitted", uri=uri, cid=cid)
+                logfire.info("moderation label emitted", uri=uri, cid=cid, val=val)
                 return EmitLabelResult(success=True)
 
         except Exception as e:
-            logger.warning("failed to emit copyright label for %s: %s", uri, e)
+            logger.warning("failed to emit moderation label for %s: %s", uri, e)
             return EmitLabelResult(success=False, error=str(e))
 
     async def get_sensitive_images(self) -> SensitiveImagesResult:
@@ -399,6 +400,65 @@ class ModerationClient:
             )
             return set(uris)
 
+    async def get_active_label_values(
+        self, uris: list[str], *, strict: bool = False
+    ) -> dict[str, set[str]]:
+        """Return current active label values grouped by subject URI.
+
+        Values are cached per URI because the labeler is the source of truth but
+        track serialization and audio authorization are hot paths. An empty set
+        is cached too, preventing unlabeled catalog traffic from repeatedly
+        hitting the moderation service.
+
+        Discovery callers fail open on a labeler outage. Authorization callers
+        pass ``strict=True`` so an outage cannot silently turn into access to
+        content that may be adult-labeled.
+        """
+        if not uris:
+            return {}
+        if not self.auth_token:
+            return {uri: set() for uri in uris}
+
+        labels_by_uri: dict[str, set[str]] = {}
+        uris_to_fetch: list[str] = []
+
+        try:
+            redis = get_async_redis_client()
+            cache_keys = [self._label_values_cache_key(uri) for uri in uris]
+            cached_values = await redis.mget(cache_keys)
+            for uri, cached_value in zip(uris, cached_values, strict=True):
+                if cached_value is None:
+                    uris_to_fetch.append(uri)
+                    continue
+                labels_by_uri[uri] = set(json.loads(cached_value))
+        except Exception as e:
+            logger.warning("label values cache unavailable: %s", e)
+            uris_to_fetch = list(uris)
+
+        if not uris_to_fetch:
+            return labels_by_uri
+
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                response = await client.post(
+                    f"{self.labeler_url}/admin/labels",
+                    json={"uris": uris_to_fetch},
+                    headers=self._headers(),
+                )
+                response.raise_for_status()
+                raw_labels = response.json().get("labels", {})
+                fetched = {uri: set(raw_labels.get(uri, [])) for uri in uris_to_fetch}
+                labels_by_uri.update(fetched)
+                await self._cache_label_values(fetched)
+                return labels_by_uri
+        except Exception as e:
+            logger.warning("failed to query active label values: %s", e)
+            if strict:
+                raise
+            for uri in uris_to_fetch:
+                labels_by_uri.setdefault(uri, set())
+            return labels_by_uri
+
     async def get_negated_labels(self, uris: list[str]) -> set[str]:
         """check which URIs have an explicit negation (dismissal) label.
 
@@ -457,11 +517,33 @@ class ModerationClient:
         except Exception as e:
             logger.warning("failed to update redis cache: %s", e)
 
+    def _label_values_cache_key(self, uri: str) -> str:
+        """Return the cache key for a URI's complete active label set."""
+        return f"{self.label_cache_prefix}values:{uri}"
+
+    async def _cache_label_values(self, labels_by_uri: dict[str, set[str]]) -> None:
+        """Cache complete active label sets, including empty sets."""
+        try:
+            redis = get_async_redis_client()
+            async with redis.pipeline() as pipe:
+                for uri, values in labels_by_uri.items():
+                    await pipe.set(
+                        self._label_values_cache_key(uri),
+                        json.dumps(sorted(values)),
+                        ex=self.label_cache_ttl_seconds,
+                    )
+                await pipe.execute()
+        except Exception as e:
+            logger.warning("failed to cache label values: %s", e)
+
     async def invalidate_cache(self, uri: str) -> None:
         """invalidate cache entry for a URI when its label status changes."""
         try:
             redis = get_async_redis_client()
-            await redis.delete(f"{self.label_cache_prefix}{uri}")
+            await redis.delete(
+                f"{self.label_cache_prefix}{uri}",
+                self._label_values_cache_key(uri),
+            )
         except Exception as e:
             logger.warning("failed to invalidate label cache for %s: %s", uri, e)
 

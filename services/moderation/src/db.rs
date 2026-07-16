@@ -676,45 +676,51 @@ impl LabelDb {
             .map(|s| s.unwrap_or(0))
     }
 
-    /// Get URIs that have active (non-negated) copyright-violation labels.
+    /// Get the current active label values for a set of URIs.
     ///
-    /// For each URI, checks if there's a negation label. Returns only those
-    /// that are still actively flagged.
-    pub async fn get_active_labels(&self, uris: &[String]) -> Result<Vec<String>, sqlx::Error> {
+    /// Label state is event-sourced: the newest event for each
+    /// (source, URI, value) tuple wins. This deliberately permits a value to be
+    /// re-applied after a negation, unlike the old "any historical negation"
+    /// query which made revocation permanent.
+    pub async fn get_active_label_values(
+        &self,
+        uris: &[String],
+    ) -> Result<Vec<(String, String)>, sqlx::Error> {
         if uris.is_empty() {
             return Ok(Vec::new());
         }
 
-        // Get all negated URIs from our input set
-        let negated_uris: std::collections::HashSet<String> = sqlx::query_scalar::<_, String>(
+        sqlx::query_as::<_, (String, String)>(
             r#"
-            SELECT DISTINCT uri
-            FROM labels
-            WHERE val = 'copyright-violation' AND neg = true AND uri = ANY($1)
+            SELECT uri, val
+            FROM (
+                SELECT DISTINCT ON (src, uri, val)
+                       src, uri, val, neg, exp, seq
+                FROM labels
+                WHERE uri = ANY($1)
+                ORDER BY src, uri, val, seq DESC
+            ) current_labels
+            WHERE neg = false
+              AND (exp IS NULL OR exp > NOW())
+            ORDER BY uri, val
             "#,
         )
         .bind(uris)
         .fetch_all(&self.pool)
-        .await?
-        .into_iter()
-        .collect();
+        .await
+    }
 
-        // Get URIs that have a positive label and are not negated
-        let active_uris: Vec<String> = sqlx::query_scalar::<_, String>(
-            r#"
-            SELECT DISTINCT uri
-            FROM labels
-            WHERE val = 'copyright-violation' AND neg = false AND uri = ANY($1)
-            "#,
-        )
-        .bind(uris)
-        .fetch_all(&self.pool)
-        .await?
-        .into_iter()
-        .filter(|uri| !negated_uris.contains(uri))
-        .collect();
-
-        Ok(active_uris)
+    /// Get URIs that have an active copyright-violation label.
+    ///
+    /// Kept as a compatibility projection for the copyright reconciliation
+    /// task. New consumers should use `get_active_label_values`.
+    pub async fn get_active_labels(&self, uris: &[String]) -> Result<Vec<String>, sqlx::Error> {
+        Ok(self
+            .get_active_label_values(uris)
+            .await?
+            .into_iter()
+            .filter_map(|(uri, val)| (val == "copyright-violation").then_some(uri))
+            .collect())
     }
 
     /// Get URIs that have an explicit negation (dismissal) copyright label.

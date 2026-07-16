@@ -24,7 +24,7 @@ max_lines = 612
 
 [[rules]]
 path = "backend/src/backend/_internal/jams.py"
-max_lines = 896
+max_lines = 904
 
 [[rules]]
 path = "backend/src/backend/api/auth.py"
@@ -32,7 +32,7 @@ max_lines = 923
 
 [[rules]]
 path = "backend/src/backend/api/tracks/listing.py"
-max_lines = 601
+max_lines = 609
 
 [[rules]]
 path = "backend/src/backend/api/tracks/mutations.py"
@@ -52,7 +52,7 @@ max_lines = 905
 
 [[rules]]
 path = "backend/tests/api/test_audio.py"
-max_lines = 710
+max_lines = 769
 
 [[rules]]
 path = "backend/tests/api/test_albums.py"
@@ -160,7 +160,7 @@ max_lines = 3961
 
 [[rules]]
 path = "frontend/src/routes/settings/+page.svelte"
-max_lines = 1657
+max_lines = 1709
 
 [[rules]]
 path = "frontend/src/routes/track/\\[id\\]/+page.svelte"
@@ -180,11 +180,11 @@ max_lines = 949
 
 [[rules]]
 path = "services/moderation/src/admin.rs"
-max_lines = 716
+max_lines = 743
 
 [[rules]]
 path = "services/moderation/src/db.rs"
-max_lines = 1297
+max_lines = 1303
 
 [[rules]]
 path = "frontend/src/lib/components/FeedbackModal.svelte"
@@ -220,7 +220,7 @@ max_lines = 1959
 
 [[rules]]
 path = "frontend/src/lib/components/embed/CollectionEmbed.svelte"
-max_lines = 646
+max_lines = 650
 
 [[rules]]
 path = "backend/tests/api/test_track_deletion.py"
@@ -272,7 +272,7 @@ max_lines = 672
 
 [[rules]]
 path = "frontend/src/routes/embed/track/[[]id[]]/+page.svelte"
-max_lines = 623
+max_lines = 629
 
 [[rules]]
 path = "backend/tests/api/test_private_playlists.py"
@@ -340,7 +340,7 @@ max_lines = 502
 
 [[rules]]
 path = "frontend/src/routes/track/[[]id[]]/+page.svelte"
-max_lines = 1722
+max_lines = 1783
 
 [[rules]]
 path = "frontend/src/lib/components/playlist/PlaylistTrackList.svelte"
@@ -349,3 +349,7 @@ max_lines = 668
 [[rules]]
 path = "frontend/src/lib/components/player/PlaybackControls.svelte"
 max_lines = 512
+
+[[rules]]
+path = "backend/src/backend/_internal/clients/moderation.py"
+max_lines = 579

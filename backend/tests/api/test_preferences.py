@@ -96,8 +96,25 @@ async def test_get_preferences_includes_teal_fields(
     data = response.json()
     assert "enable_teal_scrobbling" in data
     assert "teal_needs_reauth" in data
+    assert data["show_sensitive_artwork"] is False
+    assert data["show_sensitive_audio"] is False
     # default should be disabled
     assert data["enable_teal_scrobbling"] is False
+
+
+async def test_sensitive_content_preferences_are_independent(
+    client_no_teal: AsyncClient,
+):
+    """Artwork and audio can share a UI master toggle without coupling storage."""
+    response = await client_no_teal.post(
+        "/preferences/",
+        json={"show_sensitive_artwork": True, "show_sensitive_audio": False},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["show_sensitive_artwork"] is True
+    assert data["show_sensitive_audio"] is False
 
 
 async def test_update_teal_scrobbling_preference(

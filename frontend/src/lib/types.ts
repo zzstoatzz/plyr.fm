@@ -57,6 +57,7 @@ export interface Track {
 	is_liked?: boolean;
 	copyright_flagged?: boolean | null; // null = not scanned, false = clear, true = flagged
 	copyright_match?: string | null; // "Title by Artist" of primary match
+	labels?: string[]; // active ATProto moderation labels on the track record
 	support_gate?: SupportGate | null; // if set, track requires supporter access
 	gated?: boolean; // true if track is gated AND viewer lacks access
 	original_file_id?: string | null; // original file hash if transcoded
@@ -244,4 +245,3 @@ export interface CollectionData {
 	imageUrl: string | null;
 	tracks: Track[];
 }
-

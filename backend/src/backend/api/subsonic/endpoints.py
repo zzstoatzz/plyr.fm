@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from backend._internal import Session
+from backend._internal.content_labels import filter_sensitive_audio_tracks_for_viewer
 from backend._internal.tasks import schedule_teal_scrobble
 from backend._internal.track_visibility import track_visible_filter
 from backend.api.lists.playlists import _can_view, _read_playlist_items
@@ -154,7 +155,14 @@ async def _tracks_by_uris(
         .where(Track.atproto_record_uri.in_(uris))
         .where(track_visible_filter(session_did))
     )
-    by_uri = {t.atproto_record_uri: t for t in result.scalars().all()}
+    visible, _ = await filter_sensitive_audio_tracks_for_viewer(
+        # Subsonic's redirect cannot carry the plyr.fm cookie required by the
+        # audio endpoint, so adult audio stays hidden on this surface.
+        db,
+        result.scalars().all(),
+        None,
+    )
+    by_uri = {t.atproto_record_uri: t for t in visible}
     return [by_uri[uri] for uri in uris if uri in by_uri]
 
 
@@ -172,7 +180,11 @@ async def _track_by_id(params: Params, session_did: str | None) -> Track:
             .where(track_visible_filter(session_did))
         )
         if track := result.scalar_one_or_none():
-            return track
+            visible, _ = await filter_sensitive_audio_tracks_for_viewer(
+                db, [track], None
+            )
+            if visible:
+                return track
     raise SubsonicError(ERROR_NOT_FOUND, "song not found")
 
 

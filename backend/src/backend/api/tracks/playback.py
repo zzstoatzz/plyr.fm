@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from backend._internal import Session, get_optional_session
+from backend._internal.content_labels import get_track_label_values
 from backend._internal.tasks import schedule_teal_scrobble
 from backend._internal.track_visibility import ensure_track_visible, viewer_did
 from backend.config import settings
@@ -108,9 +109,10 @@ async def _resolve_track(
     ):
         liked_track_ids = {track.id}
 
-    like_counts, track_tags = await asyncio.gather(
+    like_counts, track_tags, content_labels = await asyncio.gather(
         get_like_counts(db, [track.id]),
         get_track_tags(db, [track.id]),
+        get_track_label_values([track]),
     )
 
     return await TrackResponse.from_track(
@@ -118,6 +120,7 @@ async def _resolve_track(
         liked_track_ids=liked_track_ids,
         like_counts=like_counts,
         track_tags=track_tags,
+        content_labels=content_labels,
     )
 
 

@@ -5,10 +5,13 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import RedirectResponse, StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy import or_, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend._internal import Session, get_optional_session, validate_supporter
 from backend._internal.atproto.client import pds_blob_url
 from backend._internal.atproto.spaces.client import SpaceAccessError, open_space_blob
+from backend._internal.clients.moderation import get_moderation_client
+from backend._internal.content_labels import may_stream_sensitive_audio
 from backend.config import settings
 from backend.models import Artist, Track
 from backend.storage import storage
@@ -35,6 +38,39 @@ class AudioUrlResponse(BaseModel):
     url: str
     file_id: str
     file_type: str | None
+
+
+async def _enforce_content_label_access(
+    db: AsyncSession,
+    *,
+    uri: str | None,
+    artist_did: str,
+    session: Session | None,
+) -> None:
+    """Require an authenticated opt-in before serving adult-labeled audio."""
+    if not uri:
+        return
+    try:
+        labels = (
+            await get_moderation_client().get_active_label_values([uri], strict=True)
+        ).get(uri, set())
+    except Exception as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="content safety service temporarily unavailable",
+        ) from exc
+    if await may_stream_sensitive_audio(
+        db,
+        labels=labels,
+        artist_did=artist_did,
+        session=session,
+    ):
+        return
+    raise HTTPException(
+        status_code=401 if session is None else 403,
+        detail="sensitive audio is hidden; enable it in settings to listen",
+        headers={"X-Content-Labels": ",".join(sorted(labels))},
+    )
 
 
 @router.head("/{file_id}")
@@ -71,6 +107,7 @@ async def stream_audio(
                 Track.pds_blob_cid,
                 Track.is_private,
                 Track.space_uri,
+                Track.atproto_record_uri,
             )
             .where(or_(Track.file_id == file_id, Track.original_file_id == file_id))
             .order_by(Track.r2_url.is_not(None).desc(), Track.created_at.desc())
@@ -93,7 +130,15 @@ async def stream_audio(
             pds_blob_cid,
             is_private,
             space_uri,
+            atproto_record_uri,
         ) = track_data
+
+        await _enforce_content_label_access(
+            db,
+            uri=atproto_record_uri,
+            artist_did=artist_did,
+            session=session,
+        )
 
     # private media lives in a permissioned space — proxy the bytes through the
     # owner's space credential (can't redirect: the browser has no credential).
@@ -253,6 +298,7 @@ async def get_audio_url(
                 Track.pds_blob_cid,
                 Track.is_private,
                 Track.space_uri,
+                Track.atproto_record_uri,
             )
             .where(or_(Track.file_id == file_id, Track.original_file_id == file_id))
             .order_by(Track.r2_url.is_not(None).desc(), Track.created_at.desc())
@@ -275,7 +321,15 @@ async def get_audio_url(
             pds_blob_cid,
             is_private,
             _space_uri,
+            atproto_record_uri,
         ) = track_data
+
+        await _enforce_content_label_access(
+            db,
+            uri=atproto_record_uri,
+            artist_did=artist_did,
+            session=session,
+        )
 
     # private media is proxied through the permissioned-space credential path,
     # so the cacheable "url" is this backend's own stream endpoint (which holds

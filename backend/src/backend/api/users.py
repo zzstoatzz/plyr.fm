@@ -5,11 +5,12 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from backend._internal import Session, get_optional_session
+from backend._internal.content_labels import filter_sensitive_audio_tracks
 from backend._internal.track_visibility import track_visible_filter, viewer_did
 from backend.models import Artist, Track, TrackLike, get_db
 from backend.schemas import TrackResponse
@@ -66,7 +67,9 @@ async def get_user_liked_tracks(
     )
 
     track_result = await db.execute(stmt)
-    tracks = track_result.scalars().all()
+    tracks, labels_by_id = await filter_sensitive_audio_tracks(
+        db, track_result.scalars().all(), session
+    )
 
     # get current user's liked track IDs if authenticated
     liked_track_ids: set[int] = set()
@@ -88,20 +91,13 @@ async def get_user_liked_tracks(
                 liked_track_ids=liked_track_ids,
                 like_counts=like_counts,
                 comment_counts=comment_counts,
+                content_labels=labels_by_id,
             )
             for track in tracks
         ]
     )
 
-    # total like count — match the visible list (exclude others' private tracks)
-    count_stmt = (
-        select(func.count())
-        .select_from(TrackLike)
-        .join(Track, Track.id == TrackLike.track_id)
-        .where(TrackLike.user_did == artist.did)
-        .where(track_visible_filter(viewer_did(session)))
-    )
-    total_count = await db.scalar(count_stmt)
+    total_count = len(tracks)
 
     return UserLikedTracksResponse(
         user=UserInfo(

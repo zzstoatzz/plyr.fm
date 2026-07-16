@@ -72,6 +72,11 @@
             "description": "Track description (liner notes, show notes, etc.).",
             "maxLength": 5000
           },
+          "labels": {
+            "type": "union",
+            "description": "Creator-applied content warnings using global ATProto label values.",
+            "refs": ["com.atproto.label.defs#selfLabels"]
+          },
           "audioBlob": {
             "type": "blob",
             "description": "Audio file stored on the user's PDS. When present, this is the canonical source; audioUrl is the CDN fallback.",

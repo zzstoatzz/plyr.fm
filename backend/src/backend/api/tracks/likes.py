@@ -12,6 +12,7 @@ from sqlalchemy.orm import selectinload
 
 from backend._internal import Session as AuthSession
 from backend._internal import get_optional_session, require_auth
+from backend._internal.content_labels import filter_sensitive_audio_tracks
 from backend._internal.tasks import (
     schedule_pds_create_like,
     schedule_pds_delete_like,
@@ -72,7 +73,9 @@ async def list_liked_tracks(
     )
 
     result = await db.execute(stmt)
-    tracks = result.scalars().all()
+    tracks, labels_by_id = await filter_sensitive_audio_tracks(
+        db, result.scalars().all(), auth_session
+    )
 
     liked_track_ids = {track.id for track in tracks}
     track_ids = [track.id for track in tracks]
@@ -88,6 +91,7 @@ async def list_liked_tracks(
                 liked_track_ids=liked_track_ids,
                 like_counts=like_counts,
                 comment_counts=comment_counts,
+                content_labels=labels_by_id,
             )
             for track in tracks
         ]

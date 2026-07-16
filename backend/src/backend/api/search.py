@@ -8,8 +8,10 @@ from pydantic import BaseModel
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend._internal import Session, get_optional_session
 from backend._internal.clients.clap import get_clap_client
 from backend._internal.clients.tpuf import query as tpuf_query
+from backend._internal.content_labels import filter_sensitive_audio_tracks
 from backend.config import settings
 from backend.models import Album, Artist, Playlist, Tag, Track, TrackTag, get_db
 
@@ -103,6 +105,7 @@ async def unified_search(
         description="filter by type: tracks, artists, albums, tags (comma-separated for multiple)",
     ),
     limit: int = Query(20, ge=1, le=50, description="max results per type"),
+    session: Session | None = Depends(get_optional_session),
 ) -> SearchResponse:
     """unified search across tracks, artists, albums, and tags.
 
@@ -126,7 +129,7 @@ async def unified_search(
 
     # search tracks
     if "tracks" in types:
-        track_results = await _search_tracks(db, q, limit)
+        track_results = await _search_tracks(db, q, limit, session)
         results.extend(track_results)
         counts["tracks"] = len(track_results)
 
@@ -161,7 +164,7 @@ async def unified_search(
 
 
 async def _search_tracks(
-    db: AsyncSession, query: str, limit: int
+    db: AsyncSession, query: str, limit: int, session: Session | None = None
 ) -> list[TrackSearchResult]:
     """search tracks by title using trigram similarity + substring matching."""
     # use pg_trgm similarity function for fuzzy matching
@@ -181,6 +184,10 @@ async def _search_tracks(
 
     result = await db.execute(stmt)
     rows = result.all()
+    visible_tracks, _ = await filter_sensitive_audio_tracks(
+        db, [track for track, _artist, _relevance in rows], session
+    )
+    visible_ids = {track.id for track in visible_tracks}
 
     return [
         TrackSearchResult(
@@ -192,6 +199,7 @@ async def _search_tracks(
             relevance=round(relevance, 3),
         )
         for track, artist, relevance in rows
+        if track.id in visible_ids
     ]
 
 
@@ -373,6 +381,7 @@ async def semantic_search(
         description="text description of desired audio",
     ),
     limit: int = Query(10, ge=1, le=50, description="max results"),
+    session: Session | None = Depends(get_optional_session),
 ) -> SemanticSearchResponse:
     """semantic audio search — describe a mood and get matching tracks.
 
@@ -410,11 +419,16 @@ async def semantic_search(
     )
     result = await db.execute(stmt)
     rows = result.all()
+    visible_tracks, _ = await filter_sensitive_audio_tracks(
+        db, [track for track, _artist in rows], session
+    )
+    visible_ids = {track.id for track in visible_tracks}
 
     # build lookup and preserve vector similarity ordering
     track_lookup: dict[int, tuple[Track, Artist]] = {}
     for track, artist in rows:
-        track_lookup[track.id] = (track, artist)
+        if track.id in visible_ids:
+            track_lookup[track.id] = (track, artist)
 
     results: list[SemanticTrackResult] = []
     for track_id in track_ids:

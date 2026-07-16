@@ -20,6 +20,8 @@ this enables **stackable moderation**: multiple labelers can label the same cont
 
 for plyr.fm, this means:
 - we produce `copyright-violation` labels when admin confirms a match (or Osprey auto-emits)
+- we use global ATProto content labels such as `sexual` and `porn` for audio as
+  well as images; the media type does not change the label vocabulary
 - other ATProto apps can query our labels and apply their own policies
 - users/apps can choose to subscribe to our labeler or ignore it
 - we can revoke labels by emitting negations (`neg: true`)
@@ -90,9 +92,28 @@ curl "https://moderation.plyr.fm/xrpc/com.atproto.label.queryLabels?sources=did:
 
 WebSocket endpoint for real-time label streaming. apps can subscribe to receive new labels as they're created (monotonic sequence cursor).
 
-### POST /admin/active-labels
+### POST /admin/labels
 
-backend uses this to check which track URIs have active (non-negated) `copyright-violation` labels. powers the label cache in `backend/_internal/clients/moderation.py`.
+the backend uses this generic endpoint to fetch the current active values for
+each subject URI. This is the primary consumer API for discovery and playback
+policy.
+
+```json
+{
+  "uris": ["at://did:plc:abc123/fm.plyr.track/xyz789"]
+}
+```
+
+```json
+{
+  "labels": {
+    "at://did:plc:abc123/fm.plyr.track/xyz789": ["sexual"]
+  }
+}
+```
+
+`POST /admin/active-labels` remains as a compatibility projection for the
+copyright synchronization task and returns only `copyright-violation` subjects.
 
 ```bash
 curl -X POST https://moderation.plyr.fm/admin/active-labels \
@@ -129,6 +150,13 @@ the original overview discussed three options. we went with **option B** — the
 |-----|---------|------------|
 | `copyright-violation` | confirmed copyright match | admin dashboard (now), Osprey high-confidence rule (future) |
 | `copyright-review` | needs manual review | Osprey moderate-confidence rule (future) |
+| `sexual` | sexually suggestive or explicit content; global ATProto value | creator self-label or operator |
+| `porn` | pornographic content; global ATProto value | creator self-label or operator |
+
+`sexual` and `porn` are deliberately not plyr.fm-specific inventions. They are
+global ATProto label values, and ATProto's media labels apply to audio as well as
+images and video. A label is an assertion; plyr.fm's separate policy layer maps
+both values to the adult-audio preference and keeps anonymous access disabled.
 
 ### negation labels
 

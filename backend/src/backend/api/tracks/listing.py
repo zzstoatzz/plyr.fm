@@ -15,6 +15,7 @@ from sqlalchemy.orm import selectinload
 
 from backend._internal import Session as AuthSession
 from backend._internal import get_optional_session, get_supported_artists, require_auth
+from backend._internal.content_labels import filter_sensitive_audio_tracks
 from backend.config import settings
 from backend.models import (
     Artist,
@@ -184,6 +185,11 @@ async def list_tracks(
     with logfire.span("materialize track objects"):
         tracks = list(result.scalars().all())
 
+    # The labeler is the content-classification source of truth. Apply adult
+    # audio policy before pagination metadata or serialization so hidden tracks
+    # do not leak through the default/anonymous discovery response.
+    tracks, content_labels = await filter_sensitive_audio_tracks(db, tracks, session)
+
     # check if there are more results and trim to requested limit
     if has_more := len(tracks) > limit:
         tracks = tracks[:limit]
@@ -317,6 +323,7 @@ async def list_tracks(
                     track_tags=track_tags,
                     viewer_did=viewer_did,
                     supported_artist_dids=supported_artist_dids,
+                    content_labels=content_labels,
                 )
                 for track in tracks
             ]
@@ -384,6 +391,7 @@ async def list_top_tracks(
 
     # preserve order from top_track_ids (unlisted tracks silently dropped)
     tracks = [tracks_by_id[tid] for tid in top_track_ids if tid in tracks_by_id]
+    tracks, content_labels = await filter_sensitive_audio_tracks(db, tracks, session)
 
     # get authenticated user's liked tracks (scoped to current track IDs only)
     liked_track_ids: set[int] | None = None
@@ -436,6 +444,7 @@ async def list_top_tracks(
                 track_tags=track_tags,
                 viewer_did=viewer_did,
                 supported_artist_dids=supported_artist_dids,
+                content_labels=content_labels,
             )
             for track in tracks
         ]

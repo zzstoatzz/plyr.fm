@@ -20,6 +20,7 @@ from pydantic import BaseModel
 from sqlalchemy import select, update
 from sqlalchemy.orm import selectinload
 
+from backend._internal.content_labels import filter_sensitive_audio_tracks_for_viewer
 from backend.models import Track
 from backend.models.jam import Jam, JamParticipant
 from backend.schemas import TrackResponse
@@ -857,13 +858,20 @@ class JamService:
         )
         result = await db.execute(stmt)
         tracks = result.scalars().all()
-        track_by_file_id = {track.file_id: track for track in tracks}
+        visible_tracks, labels_by_id = await filter_sensitive_audio_tracks_for_viewer(
+            db, tracks, None
+        )
+        track_by_file_id = {track.file_id: track for track in visible_tracks}
 
         serialized: list[dict[str, Any]] = []
         for file_id in track_ids:
             if track := track_by_file_id.get(file_id):
                 track_response = await TrackResponse.from_track(
-                    track, pds_url=None, liked_track_ids=None, like_counts=None
+                    track,
+                    pds_url=None,
+                    liked_track_ids=None,
+                    like_counts=None,
+                    content_labels=labels_by_id,
                 )
                 serialized.append(track_response.model_dump(mode="json"))
 

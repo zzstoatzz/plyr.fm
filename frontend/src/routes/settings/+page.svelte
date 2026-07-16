@@ -21,6 +21,8 @@ import WaveLoading from '$lib/components/WaveLoading.svelte';
 	let enableTealScrobbling = $derived(preferences.enableTealScrobbling);
 	let tealNeedsReauth = $derived(preferences.tealNeedsReauth);
 	let showSensitiveArtwork = $derived(preferences.showSensitiveArtwork);
+	let showSensitiveAudio = $derived(preferences.showSensitiveAudio);
+	let showSensitiveContent = $derived(preferences.showSensitiveContent);
 	let showLikedOnProfile = $derived(preferences.showLikedOnProfile);
 	let currentTheme = $derived(preferences.theme);
 	let currentColor = $derived(preferences.accentColor ?? '#6a9fff');
@@ -334,6 +336,29 @@ import WaveLoading from '$lib/components/WaveLoading.svelte';
 		try {
 			await preferences.update({ show_sensitive_artwork: enabled });
 			toast.success(enabled ? 'sensitive artwork shown' : 'sensitive artwork hidden');
+		} catch (_e) {
+			console.error('failed to save preference:', _e);
+			toast.error('failed to update preference');
+		}
+	}
+
+	async function saveShowSensitiveAudio(enabled: boolean) {
+		try {
+			await preferences.update({ show_sensitive_audio: enabled });
+			toast.success(enabled ? 'sensitive audio shown' : 'sensitive audio hidden');
+		} catch (_e) {
+			console.error('failed to save preference:', _e);
+			toast.error('failed to update preference');
+		}
+	}
+
+	async function saveShowSensitiveContent(enabled: boolean) {
+		try {
+			await preferences.update({
+				show_sensitive_artwork: enabled,
+				show_sensitive_audio: enabled
+			});
+			toast.success(enabled ? 'sensitive content shown' : 'sensitive content hidden');
 		} catch (_e) {
 			console.error('failed to save preference:', _e);
 			toast.error('failed to update preference');
@@ -666,6 +691,21 @@ import WaveLoading from '$lib/components/WaveLoading.svelte';
 			<div class="settings-card">
 				<div class="setting-row">
 					<div class="setting-info">
+						<h3>sensitive content</h3>
+						<p>show all sensitive artwork and adult-labeled audio</p>
+					</div>
+					<label class="toggle-switch">
+						<input
+							type="checkbox"
+							checked={showSensitiveContent}
+							onchange={(e) => saveShowSensitiveContent((e.target as HTMLInputElement).checked)}
+						/>
+						<span class="toggle-slider"></span>
+					</label>
+				</div>
+
+				<div class="setting-row">
+					<div class="setting-info">
 						<h3>sensitive artwork</h3>
 						<p>show artwork that has been flagged as sensitive (nudity, etc.)</p>
 					</div>
@@ -674,6 +714,21 @@ import WaveLoading from '$lib/components/WaveLoading.svelte';
 							type="checkbox"
 							checked={showSensitiveArtwork}
 							onchange={(e) => saveShowSensitiveArtwork((e.target as HTMLInputElement).checked)}
+						/>
+						<span class="toggle-slider"></span>
+					</label>
+				</div>
+
+				<div class="setting-row">
+					<div class="setting-info">
+						<h3>sensitive audio</h3>
+						<p>show and play tracks labeled sexual or pornographic</p>
+					</div>
+					<label class="toggle-switch">
+						<input
+							type="checkbox"
+							checked={showSensitiveAudio}
+							onchange={(e) => saveShowSensitiveAudio((e.target as HTMLInputElement).checked)}
 						/>
 						<span class="toggle-slider"></span>
 					</label>

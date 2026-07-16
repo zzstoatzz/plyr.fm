@@ -13,6 +13,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
 
+from backend._internal.content_labels import filter_sensitive_audio_tracks_for_viewer
 from backend.config import settings
 from backend.models import QueueState, Track, UserPreferences
 from backend.schemas import TrackResponse
@@ -182,6 +183,7 @@ class QueueService:
                 tracks = await self._hydrate_tracks(
                     db,
                     queue_state.state.get("track_ids", []),
+                    did,
                 )
                 # include auto_advance in state
                 state = {**queue_state.state, "auto_advance": auto_advance}
@@ -253,6 +255,7 @@ class QueueService:
                 tracks = await self._hydrate_tracks(
                     db,
                     existing.state.get("track_ids", []),
+                    did,
                 )
 
                 # notify other instances
@@ -325,6 +328,7 @@ class QueueService:
         self,
         db,
         track_ids: list[str],
+        viewer_did: str,
     ) -> list[dict[str, Any]]:
         """fetch track metadata for queue display, preserving order."""
         if not track_ids:
@@ -345,6 +349,10 @@ class QueueService:
             track = track_by_file_id.get(file_id)
             if track:
                 tracks_in_order.append(track)
+
+        tracks_in_order, labels_by_id = await filter_sensitive_audio_tracks_for_viewer(
+            db, tracks_in_order, viewer_did
+        )
 
         # batch backfill image URLs for legacy records
         tracks_needing_backfill = [
@@ -372,6 +380,7 @@ class QueueService:
                 pds_url=None,
                 liked_track_ids=None,
                 like_counts=None,
+                content_labels=labels_by_id,
             )
             serialized.append(track_response.model_dump(mode="json"))
 
