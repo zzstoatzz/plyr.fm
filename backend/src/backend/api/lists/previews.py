@@ -4,6 +4,11 @@
 URLs in playlist order. clients render a composite cover from them when
 the playlist has no explicit image. refreshed on item mutations and
 self-healed on detail reads.
+
+the cache stores each track's *full-size* artwork URL — clients request
+display-sized renditions at the CDN edge, so a big hero mosaic and a tiny
+menu tile both come from the same cached URL. (older rows cached the 96px
+thumbnail; the detail-read heal rewrites them.)
 """
 
 from sqlalchemy import select
@@ -31,7 +36,7 @@ async def compute_preview_thumbnails(
             Track.atproto_record_uri.in_(item_uris)
         )
     )
-    art_by_uri = {uri: thumbnail or image for uri, thumbnail, image in result.all()}
+    art_by_uri = {uri: image or thumbnail for uri, thumbnail, image in result.all()}
     previews: list[str] = []
     for uri in item_uris:
         if (art := art_by_uri.get(uri)) and art not in previews:
@@ -45,7 +50,7 @@ def previews_from_tracks(tracks: list[TrackResponse]) -> list[str]:
     """same projection as `compute_preview_thumbnails`, from hydrated tracks."""
     previews: list[str] = []
     for track in tracks:
-        if (art := track.thumbnail_url or track.image_url) and art not in previews:
+        if (art := track.image_url or track.thumbnail_url) and art not in previews:
             previews.append(art)
             if len(previews) == PREVIEW_THUMBNAIL_LIMIT:
                 break

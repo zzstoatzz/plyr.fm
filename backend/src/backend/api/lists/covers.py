@@ -92,10 +92,11 @@ async def _fetch_image(client: httpx.AsyncClient, url: str) -> bytes | None:
 
 
 async def _full_size_previews(db: AsyncSession, previews: list[str]) -> list[str]:
-    """swap cached thumbnail URLs (96px) for the tracks' full-size artwork.
+    """swap legacy cached thumbnail URLs (96px) for the tracks' full-size artwork.
 
-    entries that don't resolve (e.g. the cache stored `image_url` because the
-    track had no thumbnail) pass through unchanged.
+    the preview cache now stores full-size URLs, but rows written before that
+    change hold thumbnails until a detail read heals them. entries that don't
+    resolve pass through unchanged.
     """
     result = await db.execute(
         select(Track.thumbnail_url, Track.image_url).where(

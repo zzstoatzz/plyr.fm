@@ -1,24 +1,31 @@
 <script lang="ts">
+	import { IMAGE_WIDTHS, resizedImageUrl } from '$lib/utils/display-image';
+
 	interface Props {
 		/** explicit playlist cover — always wins when set */
 		imageUrl?: string | null;
 		/** distinct member-track artwork URLs, in playlist order */
 		previews?: string[];
 		alt?: string;
+		/** rendered width of the whole cover slot, in device pixels */
+		width?: number;
 	}
 
-	let { imageUrl = null, previews = [], alt = '' }: Props = $props();
+	let { imageUrl = null, previews = [], alt = '', width = IMAGE_WIDTHS.thumb }: Props = $props();
 
 	// spotify's rule: a 2x2 mosaic only at 4+ distinct artworks; below that,
 	// the first track's artwork stands in for the whole cover
 	const mosaic = $derived(!imageUrl && previews.length >= 4);
-	const src = $derived(imageUrl ?? (previews.length > 0 ? previews[0] : null));
+	const src = $derived(
+		resizedImageUrl(imageUrl ?? (previews.length > 0 ? previews[0] : null), width)
+	);
+	const tileWidth = $derived(Math.ceil(width / 2));
 </script>
 
 {#if mosaic}
 	<div class="cover mosaic" role="img" aria-label={alt}>
 		{#each previews.slice(0, 4) as url (url)}
-			<img src={url} alt="" loading="lazy" />
+			<img src={resizedImageUrl(url, tileWidth)} alt="" loading="lazy" />
 		{/each}
 	</div>
 {:else if src}
