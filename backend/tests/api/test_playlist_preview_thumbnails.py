@@ -127,12 +127,12 @@ async def test_previews_follow_adds_in_order(
         assert playlist["preview_thumbnails"] == []
 
         body = await _add_track(client, playlist["id"], tracks[1])
-        assert body["preview_thumbnails"] == ["https://img.test/thumb1.webp"]
+        assert body["preview_thumbnails"] == ["https://img.test/full1.jpg"]
 
         body = await _add_track(client, playlist["id"], tracks[0])
         assert body["preview_thumbnails"] == [
-            "https://img.test/thumb1.webp",
-            "https://img.test/thumb0.webp",
+            "https://img.test/full1.jpg",
+            "https://img.test/full0.jpg",
         ]
 
 
@@ -147,10 +147,10 @@ async def test_previews_skip_artless_dedupe_and_cap_at_four(
             body = await _add_track(client, playlist["id"], track)
 
         assert body["preview_thumbnails"] == [
-            "https://img.test/thumb0.webp",
-            "https://img.test/thumb1.webp",
-            "https://img.test/thumb2.webp",
-            "https://img.test/thumb3.webp",
+            "https://img.test/full0.jpg",
+            "https://img.test/full1.jpg",
+            "https://img.test/full2.jpg",
+            "https://img.test/full3.jpg",
         ]
 
 
@@ -167,7 +167,7 @@ async def test_previews_refresh_on_remove(
             f"/lists/playlists/{playlist['id']}/tracks/{tracks[0].atproto_record_uri}",
         )
         assert resp.status_code == 200
-        assert resp.json()["preview_thumbnails"] == ["https://img.test/thumb1.webp"]
+        assert resp.json()["preview_thumbnails"] == ["https://img.test/full1.jpg"]
 
 
 async def test_remove_cover_falls_back_to_composite(
@@ -194,7 +194,7 @@ async def test_remove_cover_falls_back_to_composite(
         assert resp.status_code == 200
         body = resp.json()
         assert body["image_url"] is None
-        assert body["preview_thumbnails"] == ["https://img.test/thumb0.webp"]
+        assert body["preview_thumbnails"] == ["https://img.test/full0.jpg"]
 
         resp = await client.delete(f"/lists/playlists/{playlist['id']}/cover")
         assert resp.status_code == 400
@@ -224,14 +224,37 @@ async def test_og_cover_redirects_to_explicit_cover(
 async def test_og_cover_below_four_redirects_to_full_size_first_artwork(
     app_as_owner: FastAPI, tracks: list[Track]
 ) -> None:
-    """the cache stores 96px thumbnails; the og redirect upgrades to the
-    track's full-size artwork."""
     async with _client(app_as_owner) as client:
         playlist = await _create_private_playlist(client)
         await _add_track(client, playlist["id"], tracks[0])
         await _add_track(client, playlist["id"], tracks[1])
 
         resp = await client.get(f"/lists/playlists/{playlist['id']}/og-cover")
+    assert resp.status_code == 307
+    assert resp.headers["location"] == "https://img.test/full0.jpg"
+
+
+async def test_og_cover_upgrades_legacy_cached_thumbnails(
+    app_as_owner: FastAPI,
+    db_session: AsyncSession,
+    owner: Artist,
+    tracks: list[Track],
+) -> None:
+    """rows cached before previews stored full-size URLs hold 96px thumbnails;
+    the og redirect still upgrades them to the track's full-size artwork."""
+    playlist = Playlist(
+        owner_did=owner.did,
+        name="legacy thumbs",
+        is_private=True,
+        items_json=[{"uri": tracks[0].atproto_record_uri, "cid": "c"}],
+        track_count=1,
+        preview_thumbnails=["https://img.test/thumb0.webp"],
+    )
+    db_session.add(playlist)
+    await db_session.commit()
+
+    async with _client(app_as_owner) as client:
+        resp = await client.get(f"/lists/playlists/{playlist.id}/og-cover")
     assert resp.status_code == 307
     assert resp.headers["location"] == "https://img.test/full0.jpg"
 
@@ -303,6 +326,6 @@ async def test_legacy_private_playlist_heals_on_list(
     assert resp.status_code == 200
     listed = {p["id"]: p for p in resp.json()}
     assert listed[playlist.id]["preview_thumbnails"] == [
-        "https://img.test/thumb2.webp",
-        "https://img.test/thumb0.webp",
+        "https://img.test/full2.jpg",
+        "https://img.test/full0.jpg",
     ]

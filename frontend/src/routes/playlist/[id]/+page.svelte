@@ -5,6 +5,7 @@
 	import SensitiveImage from '$lib/components/SensitiveImage.svelte';
 	import PlaylistCover from '$lib/components/PlaylistCover.svelte';
 	import { hasPlaylistArt } from '$lib/playlist-cover';
+	import { IMAGE_WIDTHS, resizedImageUrl } from '$lib/utils/display-image';
 	import AddTracksModal from '$lib/components/playlist/AddTracksModal.svelte';
 	import OwnerActionButtons from '$lib/components/playlist/OwnerActionButtons.svelte';
 	import PlaylistTrackList from '$lib/components/playlist/PlaylistTrackList.svelte';
@@ -486,6 +487,7 @@
 								imageUrl={playlist.image_url}
 								previews={playlist.preview_thumbnails}
 								alt="{playlist.name} artwork"
+								width={IMAGE_WIDTHS.hero}
 							/>
 						</div>
 					{:else}
@@ -556,13 +558,18 @@
 				<div class="playlist-art-wrapper">
 					{#if playlist.image_url}
 						<SensitiveImage src={playlist.image_url} tooltipPosition="center">
-							<img src={playlist.image_url} alt="{playlist.name} artwork" class="playlist-art" />
+							<img
+								src={resizedImageUrl(playlist.image_url, IMAGE_WIDTHS.hero)}
+								alt="{playlist.name} artwork"
+								class="playlist-art"
+							/>
 						</SensitiveImage>
 					{:else if playlist.preview_thumbnails?.length}
 						<div class="playlist-art">
 							<PlaylistCover
 								previews={playlist.preview_thumbnails}
 								alt="{playlist.name} artwork"
+								width={IMAGE_WIDTHS.hero}
 							/>
 						</div>
 					{:else}
