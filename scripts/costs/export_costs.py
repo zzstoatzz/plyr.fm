@@ -55,7 +55,12 @@ def fetch_infra_costs() -> dict[str, Any]:
     note carrying the service count. raises if the feed is unreachable or has no
     plyr.fm line items, so we never silently publish stale/empty data.
     """
-    with urllib.request.urlopen(INFRA_COSTS_URL, timeout=15) as resp:
+    # cloudflare's bot protection on the aggregator zone 403s the default
+    # Python-urllib user agent; identify ourselves instead.
+    request = urllib.request.Request(
+        INFRA_COSTS_URL, headers={"User-Agent": "plyr-costs-export/1.0"}
+    )
+    with urllib.request.urlopen(request, timeout=15) as resp:
         feed = json.loads(resp.read())
 
     lines = [li for li in feed.get("lineItems", []) if li.get("project") == PROJECT_KEY]
