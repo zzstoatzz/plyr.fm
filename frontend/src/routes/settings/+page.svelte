@@ -689,49 +689,56 @@ import WaveLoading from '$lib/components/WaveLoading.svelte';
 		<section class="settings-section">
 			{@render sectionHeading('privacy & display')}
 			<div class="settings-card">
-				<div class="setting-row">
-					<div class="setting-info">
-						<h3>sensitive content</h3>
-						<p>show all sensitive artwork and adult-labeled audio</p>
+				<div class="sensitive-controls">
+					<div class="setting-row sensitive-master">
+						<div class="setting-info">
+							<span class="setting-scope">applies to both</span>
+							<h3>all sensitive content</h3>
+							<p>turn sensitive artwork and adult-labeled audio on or off together</p>
+						</div>
+						<label class="toggle-switch">
+							<input
+								type="checkbox"
+								checked={showSensitiveContent}
+								indeterminate={showSensitiveArtwork !== showSensitiveAudio}
+								onchange={(e) => saveShowSensitiveContent((e.target as HTMLInputElement).checked)}
+							/>
+							<span class="toggle-slider"></span>
+						</label>
 					</div>
-					<label class="toggle-switch">
-						<input
-							type="checkbox"
-							checked={showSensitiveContent}
-							onchange={(e) => saveShowSensitiveContent((e.target as HTMLInputElement).checked)}
-						/>
-						<span class="toggle-slider"></span>
-					</label>
-				</div>
 
-				<div class="setting-row">
-					<div class="setting-info">
-						<h3>sensitive artwork</h3>
-						<p>show artwork that has been flagged as sensitive (nudity, etc.)</p>
-					</div>
-					<label class="toggle-switch">
-						<input
-							type="checkbox"
-							checked={showSensitiveArtwork}
-							onchange={(e) => saveShowSensitiveArtwork((e.target as HTMLInputElement).checked)}
-						/>
-						<span class="toggle-slider"></span>
-					</label>
-				</div>
+					<div class="sensitive-children">
+						<p class="sensitive-children-label">choose individually</p>
+						<div class="setting-row sensitive-child">
+							<div class="setting-info">
+								<h3>sensitive artwork</h3>
+								<p>show artwork that has been flagged as sensitive (nudity, etc.)</p>
+							</div>
+							<label class="toggle-switch">
+								<input
+									type="checkbox"
+									checked={showSensitiveArtwork}
+									onchange={(e) => saveShowSensitiveArtwork((e.target as HTMLInputElement).checked)}
+								/>
+								<span class="toggle-slider"></span>
+							</label>
+						</div>
 
-				<div class="setting-row">
-					<div class="setting-info">
-						<h3>sensitive audio</h3>
-						<p>show and play tracks labeled sexual or pornographic</p>
+						<div class="setting-row sensitive-child">
+							<div class="setting-info">
+								<h3>sensitive audio</h3>
+								<p>show and play tracks labeled sexual or pornographic</p>
+							</div>
+							<label class="toggle-switch">
+								<input
+									type="checkbox"
+									checked={showSensitiveAudio}
+									onchange={(e) => saveShowSensitiveAudio((e.target as HTMLInputElement).checked)}
+								/>
+								<span class="toggle-slider"></span>
+							</label>
+						</div>
 					</div>
-					<label class="toggle-switch">
-						<input
-							type="checkbox"
-							checked={showSensitiveAudio}
-							onchange={(e) => saveShowSensitiveAudio((e.target as HTMLInputElement).checked)}
-						/>
-						<span class="toggle-slider"></span>
-					</label>
 				</div>
 
 				<div class="setting-row">
@@ -1148,6 +1155,61 @@ import WaveLoading from '$lib/components/WaveLoading.svelte';
 		margin-bottom: 1rem;
 	}
 
+	.sensitive-controls {
+		margin: -0.25rem 0 0.25rem;
+		padding-bottom: 0.75rem;
+		border-bottom: 1px solid var(--border-subtle);
+	}
+
+	.setting-row.sensitive-master {
+		align-items: center;
+		padding: 1rem;
+		background: color-mix(in srgb, var(--accent) 8%, var(--bg-primary));
+		border: 1px solid color-mix(in srgb, var(--accent) 24%, var(--border-subtle));
+		border-radius: var(--radius-base);
+	}
+
+	.setting-scope,
+	.sensitive-children-label {
+		display: block;
+		margin: 0 0 0.3rem;
+		font-size: var(--text-xs);
+		font-weight: 600;
+		letter-spacing: 0.07em;
+		text-transform: uppercase;
+		color: var(--accent);
+	}
+
+	.sensitive-children {
+		margin: 0.75rem 0 0 1.25rem;
+		padding-left: 1rem;
+		border-left: 2px solid color-mix(in srgb, var(--accent) 35%, var(--border-subtle));
+	}
+
+	.sensitive-children-label {
+		margin-bottom: 0;
+		color: var(--text-tertiary);
+	}
+
+	.sensitive-child {
+		padding: 0.75rem 0;
+	}
+
+	.sensitive-child:last-child {
+		padding-bottom: 0;
+	}
+
+	@media (max-width: 520px) {
+		.sensitive-master {
+			padding: 0.875rem;
+		}
+
+		.sensitive-children {
+			margin-left: 0.5rem;
+			padding-left: 0.75rem;
+		}
+	}
+
 	.setting-info h3 {
 		margin: 0 0 0.25rem;
 		font-size: var(--text-base);
@@ -1454,9 +1516,23 @@ import WaveLoading from '$lib/components/WaveLoading.svelte';
 		background: color-mix(in srgb, var(--accent) 65%, transparent);
 	}
 
+	.toggle-switch input:indeterminate + .toggle-slider {
+		background: color-mix(in srgb, var(--accent) 32%, var(--border-default));
+	}
+
 	.toggle-switch input:checked + .toggle-slider::after {
 		transform: translateX(20px);
 		background: var(--accent);
+	}
+
+	.toggle-switch input:indeterminate + .toggle-slider::after {
+		transform: translateX(10px);
+		background: var(--accent);
+	}
+
+	.toggle-switch input:focus-visible + .toggle-slider {
+		outline: 2px solid var(--accent);
+		outline-offset: 3px;
 	}
 
 	/* reauth notice */
