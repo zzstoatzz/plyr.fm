@@ -250,15 +250,19 @@ class TrackResponse(BaseModel):
                 )
                 gated = not (is_owner or is_supporter)
 
-        # Never expose the backing CDN/PDS URL in API responses. The backend
-        # audio endpoint is the stable public URL and enforces content labels,
-        # supporter gates, and private-media policy before redirecting/proxying.
-        audio_available = bool(track.r2_url or track.pds_blob_cid)
-        stream_url = (
-            f"{settings.atproto.base_url.rstrip('/')}/audio/{track.file_id}"
-            if audio_available
-            else None
-        )
+        labels = content_labels.get(track.id, set()) if content_labels else set()
+
+        # Preserve the existing API contract for ordinary and private tracks.
+        # Adult-labeled audio is the narrow exception: never expose its backing
+        # CDN URL, because playback must pass through the preference-enforcing
+        # backend endpoint even if a client cached older track metadata.
+        stream_url = track.r2_url
+        if labels.intersection({"sexual", "porn"}) and (
+            track.r2_url or track.pds_blob_cid
+        ):
+            stream_url = (
+                f"{settings.atproto.base_url.rstrip('/')}/audio/{track.file_id}"
+            )
 
         return cls(
             id=track.id,
@@ -296,5 +300,5 @@ class TrackResponse(BaseModel):
             unlisted=not track.in_discovery,
             copyright_song_uri=track.copyright_song_uri,
             copyright_recording_uri=track.copyright_recording_uri,
-            labels=content_labels.get(track.id, set()) if content_labels else set(),
+            labels=labels,
         )

@@ -101,6 +101,30 @@ async def test_private_track_serializes_without_at_uri_crash(
     # passing a pds_url used to push the ats:// URI through parse_at_uri and raise
     resp = await TrackResponse.from_track(track, pds_url="https://test.pds")
     assert resp.atproto_record_url is None
+    assert resp.r2_url is None
+
+
+async def test_adult_track_serializes_through_policy_endpoint(
+    db_session: AsyncSession, artist: Artist
+):
+    track = await _make_track(
+        db_session, title="adult", fid="adult_public", private=False
+    )
+    track.r2_url = "https://cdn.example.com/audio/adult.mp3"
+    await db_session.commit()
+    track = (
+        await db_session.execute(
+            select(Track)
+            .options(selectinload(Track.artist), selectinload(Track.album_rel))
+            .where(Track.file_id == "adult_public")
+        )
+    ).scalar_one()
+
+    resp = await TrackResponse.from_track(track, content_labels={track.id: {"sexual"}})
+
+    assert resp.r2_url is not None
+    assert resp.r2_url.endswith("/audio/adult_public")
+    assert "cdn.example.com" not in resp.r2_url
 
 
 # --- centralized helper (the chokepoint every endpoint routes through) --------
