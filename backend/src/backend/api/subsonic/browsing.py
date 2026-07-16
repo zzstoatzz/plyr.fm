@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from backend._internal import Session
+from backend._internal.content_labels import filter_sensitive_audio_tracks_for_viewer
 from backend._internal.track_visibility import track_visible_filter
 from backend.api.subsonic.endpoints import Params, _require, _rest, _run, _song
 from backend.api.subsonic.responses import ERROR_NOT_FOUND, SubsonicError
@@ -124,7 +125,9 @@ async def get_album(request: Request) -> Response:
                 .where(track_visible_filter(session.did))
                 .order_by(Track.created_at)
             )
-            tracks = list(track_result.scalars().all())
+            tracks, _ = await filter_sensitive_audio_tracks_for_viewer(
+                db, track_result.scalars().all(), None
+            )
         songs = [_song(track) for track in tracks]
         return {
             "album": {
@@ -219,7 +222,9 @@ async def get_random_songs(request: Request) -> Response:
                 .order_by(func.random())
                 .limit(size)
             )
-            tracks = list(result.scalars().all())
+            tracks, _ = await filter_sensitive_audio_tracks_for_viewer(
+                db, result.scalars().all(), None
+            )
         return {"randomSongs": {"song": [_song(track) for track in tracks]}}
 
     return await _run(request, impl)

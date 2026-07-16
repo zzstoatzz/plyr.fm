@@ -105,6 +105,7 @@ export async function resolveAudioSource(
 	track: Track,
 	fileIdUsed: string
 ): Promise<ResolvedSource> {
+	const hasAdultLabel = track.labels?.some((label) => label === 'sexual' || label === 'porn') ?? false;
 	// the interim raw source isn't playable in this browser yet — surface a
 	// "processing" outcome rather than handing `<audio>` a file it can't decode.
 	// checked before the cache lookup: a cached interim blob is just as
@@ -113,19 +114,24 @@ export async function resolveAudioSource(
 		return { kind: 'processing', trackId: track.id };
 	}
 
-	try {
-		const cachedUrl = await getCachedAudioUrl(fileIdUsed);
-		if (cachedUrl) {
-			return {
-				kind: 'ready',
-				trackId: track.id,
-				fileIdUsed,
-				src: cachedUrl,
-				ownsBlob: cachedUrl.startsWith('blob:')
-			};
+	// Adult-labeled audio must always pass through the backend's current
+	// preference check. A blob cached before the label was applied must not
+	// become a permanent authorization bypass.
+	if (!hasAdultLabel) {
+		try {
+			const cachedUrl = await getCachedAudioUrl(fileIdUsed);
+			if (cachedUrl) {
+				return {
+					kind: 'ready',
+					trackId: track.id,
+					fileIdUsed,
+					src: cachedUrl,
+					ownsBlob: cachedUrl.startsWith('blob:')
+				};
+			}
+		} catch (err) {
+			console.error('failed to check audio cache:', err);
 		}
-	} catch (err) {
-		console.error('failed to check audio cache:', err);
 	}
 
 	if (track.gated) {

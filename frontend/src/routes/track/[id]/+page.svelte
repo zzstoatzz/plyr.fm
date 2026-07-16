@@ -20,6 +20,7 @@
 	import { queue } from '$lib/queue.svelte';
 	import { playTrack, guardGatedTrack } from '$lib/playback.svelte';
 	import { auth } from '$lib/auth.svelte';
+	import { preferences } from '$lib/preferences.svelte';
 	import { toast } from '$lib/toast.svelte';
 	import { trackCoverUrl } from '$lib/track-cover';
 	import { redirectToLogin } from '$lib/utils/auth-redirect';
@@ -44,6 +45,14 @@
 	// refetch below fills it in for the owner, or flips `notFound`.
 	let track = $state<Track | null>(data.track);
 	let notFound = $state(false);
+	let isAdultLabeled = $derived(
+		track?.labels?.some((label) => label === 'sexual' || label === 'porn') ?? false
+	);
+	let mayPlayAdultAudio = $derived(
+		!isAdultLabeled ||
+		preferences.showSensitiveAudio ||
+		(auth.user?.did != null && auth.user.did === track?.artist_did)
+	);
 
 	// the visible cover and the og:image cascade share the same root rule
 	// (track art → album art); the og:image then fans out to the artist
@@ -160,6 +169,14 @@
 
 	async function handlePlay() {
 		if (!track) return;
+		if (!mayPlayAdultAudio) {
+			if (!auth.isAuthenticated) {
+				redirectToLogin();
+			} else {
+				toast.error('enable sensitive audio in settings to listen');
+			}
+			return;
+		}
 		if (player.currentTrack?.id === track.id) {
 			// this track is already loaded - just toggle play/pause
 			queue.togglePlayPause();
@@ -176,6 +193,10 @@
 
 	function addToQueue() {
 		if (!track) return;
+		if (!mayPlayAdultAudio) {
+			toast.error('enable sensitive audio in settings to queue this track');
+			return;
+		}
 		if (!guardGatedTrack(track, auth.isAuthenticated)) return;
 		queue.addTracks([track]);
 		toast.success(`queued ${track.title}`, 1800);
@@ -538,7 +559,7 @@ $effect(() => {
 		<meta property="og:image:height" content="1200" />
 	{/if}
 	<meta property="og:image:alt" content="{track.title} by {track.artist}" />
-	{#if track.r2_url}
+	{#if track.r2_url && !isAdultLabeled}
 		<meta property="og:audio" content="{track.r2_url}" />
 		<meta property="og:audio:type" content="audio/{track.file_type}" />
 	{/if}
@@ -567,6 +588,17 @@ $effect(() => {
 		<Header user={auth.user} isAuthenticated={auth.isAuthenticated} onLogout={handleLogout} />
 		<main>
 			<div class="track-detail">
+			{#if isAdultLabeled && !mayPlayAdultAudio}
+				<div class="adult-content-warning" role="note">
+					<strong>adult content</strong>
+					<span>this audio has been labeled as sexually explicit and is hidden by default.</span>
+					{#if auth.isAuthenticated}
+						<a href="/settings">enable sensitive audio in settings</a>
+					{:else}
+						<button type="button" onclick={() => redirectToLogin()}>sign in to change this setting</button>
+					{/if}
+				</div>
+			{/if}
 				{#if notFound}
 					<p class="track-missing">track not found</p>
 				{:else}
@@ -1698,6 +1730,35 @@ $effect(() => {
 		.skeleton-bar {
 			animation: none;
 		}
+	}
+
+	.adult-content-warning {
+		grid-column: 1 / -1;
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.5rem 0.75rem;
+		padding: 0.8rem 1rem;
+		border: 1px solid var(--border-emphasis);
+		border-radius: var(--radius-md);
+		background: var(--bg-secondary);
+		color: var(--text-secondary);
+	}
+
+	.adult-content-warning strong {
+		color: var(--text-primary);
+		text-transform: lowercase;
+	}
+
+	.adult-content-warning a,
+	.adult-content-warning button {
+		margin-left: auto;
+		border: 0;
+		background: none;
+		color: var(--accent);
+		font: inherit;
+		cursor: pointer;
+		text-decoration: underline;
 	}
 
 	@media (max-width: 768px) {

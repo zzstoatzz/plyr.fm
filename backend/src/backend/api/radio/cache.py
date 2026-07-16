@@ -28,7 +28,7 @@ from .schemas import RadioTrack
 
 logger = logging.getLogger(__name__)
 
-ROTATION_CACHE_PREFIX = "plyr:radio:rotation:"
+ROTATION_CACHE_PREFIX = "plyr:radio:rotation:v2:"
 # generous next to a normal sub-second rebuild, so the lock only expires under
 # a genuinely dead or stalled holder rather than a slow database.
 BUILD_LOCK_TTL_SECONDS = 10

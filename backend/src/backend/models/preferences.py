@@ -54,6 +54,11 @@ class UserPreferences(Base):
     show_sensitive_artwork: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default=text("false")
     )
+    # when enabled, tracks carrying the global `sexual` or `porn` label may be
+    # discovered and streamed. Anonymous listeners always use the safe default.
+    show_sensitive_audio: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
 
     # profile preferences
     # when enabled, liked tracks are displayed on the user's artist page

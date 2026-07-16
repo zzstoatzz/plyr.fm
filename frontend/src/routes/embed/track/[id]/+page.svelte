@@ -15,8 +15,11 @@
 	let { data }: { data: PageData } = $props();
 	let track = $derived(data.track);
 	let coverUrl = $derived(trackCoverUrl(track));
+	let isAdultLabeled = $derived(
+		track.labels?.some((label) => label === 'sexual' || label === 'porn') ?? false
+	);
 
-	let audio: HTMLAudioElement;
+	let audio: HTMLAudioElement = $state() as HTMLAudioElement;
 	let paused = $state(true);
 	let currentTime = $state(0);
 	let duration = $state(0);
@@ -31,6 +34,7 @@
 	}
 
 	function togglePlay() {
+		if (isAdultLabeled) return;
 		if (audio.paused) {
 			audio.play();
 		} else {
@@ -54,7 +58,7 @@
 
 	onMount(() => {
 		const autoplay = $page.url.searchParams.get('autoplay') === '1';
-		if (autoplay) {
+		if (autoplay && !isAdultLabeled) {
 			audio.play().catch(() => {
 				// Autoplay policy might block this
 				paused = true;
@@ -154,7 +158,7 @@
 			{/if}
 		</div>
 		<div class="header">
-			<button class="play-btn" onclick={togglePlay} aria-label={paused ? 'Play' : 'Pause'}>
+			<button class="play-btn" onclick={togglePlay} disabled={isAdultLabeled} aria-label={isAdultLabeled ? 'Adult content hidden' : paused ? 'Play' : 'Pause'}>
 				{#if paused}
 					<svg viewBox="0 0 24 24" fill="currentColor" class="icon">
 						<path d="M8 5v14l11-7z" />
@@ -197,6 +201,7 @@
 		</div>
 	</div>
 
+	{#if !isAdultLabeled}
 	<audio
 		bind:this={audio}
 		src={track.r2_url}
@@ -205,6 +210,7 @@
 		bind:duration
 		onended={() => (paused = true)}
 	></audio>
+	{/if}
 </div>
 
 <style>

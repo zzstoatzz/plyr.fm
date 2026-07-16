@@ -22,7 +22,11 @@
 	let currentIndex = $state(0);
 
 	let currentTrack = $derived(collection.tracks[currentIndex]);
-	let isPlayable = $derived(currentTrack?.r2_url && !currentTrack?.gated);
+	const hasAdultLabel = (track: (typeof collection.tracks)[number]) =>
+		track.labels?.some((label) => label === 'sexual' || label === 'porn') ?? false;
+	let isPlayable = $derived(
+		currentTrack?.r2_url && !currentTrack?.gated && !hasAdultLabel(currentTrack)
+	);
 	let showCopied = $state(false);
 
 	async function copyShareLink() {
@@ -44,7 +48,7 @@
 
 	async function playTrack(index: number) {
 		const track = collection.tracks[index];
-		if (!track?.r2_url || track.gated) return;
+		if (!track?.r2_url || track.gated || hasAdultLabel(track)) return;
 		if (index === currentIndex && !paused) {
 			audio.pause();
 		} else {
@@ -61,7 +65,7 @@
 		}
 		for (let i = currentIndex - 1; i >= 0; i--) {
 			const t = collection.tracks[i];
-			if (t.r2_url && !t.gated) {
+			if (t.r2_url && !t.gated && !hasAdultLabel(t)) {
 				currentIndex = i;
 				await tick();
 				audio.play().catch(() => {});
@@ -73,7 +77,7 @@
 	async function skipNext() {
 		for (let i = currentIndex + 1; i < collection.tracks.length; i++) {
 			const t = collection.tracks[i];
-			if (t.r2_url && !t.gated) {
+			if (t.r2_url && !t.gated && !hasAdultLabel(t)) {
 				currentIndex = i;
 				await tick();
 				audio.play().catch(() => {});
@@ -210,12 +214,12 @@
 		<div class="track-list">
 			{#each collection.tracks as track, i (track.id)}
 				<button
-					class="track-row" class:active={i === currentIndex} class:gated={!track.r2_url || track.gated}
+					class="track-row" class:active={i === currentIndex} class:gated={!track.r2_url || track.gated || hasAdultLabel(track)}
 					onclick={(e) => {
 						if ((e.target as HTMLElement).closest?.('a')) return;
 						playTrack(i);
 					}}
-					disabled={!track.r2_url || track.gated}
+					disabled={!track.r2_url || track.gated || hasAdultLabel(track)}
 				>
 					<span class="track-num">
 						{#if i === currentIndex && !paused}
@@ -281,7 +285,7 @@
 		</div>
 	</div>
 
-	{#if currentTrack?.r2_url && !currentTrack.gated}
+	{#if currentTrack?.r2_url && !currentTrack.gated && !hasAdultLabel(currentTrack)}
 		<audio
 			bind:this={audio} src={currentTrack.r2_url}
 			bind:paused bind:currentTime bind:duration

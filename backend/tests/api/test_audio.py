@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend._internal import Session, get_optional_session, require_auth
 from backend.main import app
-from backend.models import Artist, Track
+from backend.models import Artist, Track, UserPreferences
 
 
 @pytest.fixture
@@ -164,6 +164,69 @@ async def test_stream_audio_file_not_in_storage(
 
     assert response.status_code == 404
     assert response.json()["detail"] == "audio file not found"
+
+
+async def test_adult_labeled_audio_is_hidden_from_anonymous_viewers(
+    test_app: FastAPI,
+    test_track_with_r2_url: Track,
+    db_session: AsyncSession,
+):
+    """A global sexual label must gate the bytes, not only discovery UI."""
+    test_track_with_r2_url.atproto_record_uri = (
+        "at://did:plc:artist123/fm.plyr.feed.track/adult-track"
+    )
+    await db_session.commit()
+    mock_moderation = MagicMock()
+    mock_moderation.get_active_label_values = AsyncMock(
+        return_value={test_track_with_r2_url.atproto_record_uri: {"sexual"}}
+    )
+
+    with patch("backend.api.audio.get_moderation_client", return_value=mock_moderation):
+        async with AsyncClient(
+            transport=ASGITransport(app=test_app), base_url="http://test"
+        ) as client:
+            response = await client.get(
+                f"/audio/{test_track_with_r2_url.file_id}", follow_redirects=False
+            )
+
+    assert response.status_code == 401
+    assert response.headers["x-content-labels"] == "sexual"
+
+
+async def test_adult_labeled_audio_is_available_after_opt_in(
+    test_app: FastAPI,
+    test_track_with_r2_url: Track,
+    mock_session: Session,
+    db_session: AsyncSession,
+):
+    """Authenticated listeners may opt into adult-labeled audio independently."""
+    test_track_with_r2_url.atproto_record_uri = (
+        "at://did:plc:artist123/fm.plyr.feed.track/adult-track"
+    )
+    db_session.add(UserPreferences(did=mock_session.did, show_sensitive_audio=True))
+    await db_session.commit()
+    mock_moderation = MagicMock()
+    mock_moderation.get_active_label_values = AsyncMock(
+        return_value={test_track_with_r2_url.atproto_record_uri: {"sexual"}}
+    )
+    test_app.dependency_overrides[get_optional_session] = lambda: mock_session
+
+    try:
+        with patch(
+            "backend.api.audio.get_moderation_client", return_value=mock_moderation
+        ):
+            async with AsyncClient(
+                transport=ASGITransport(app=test_app), base_url="http://test"
+            ) as client:
+                response = await client.get(
+                    f"/audio/{test_track_with_r2_url.file_id}",
+                    follow_redirects=False,
+                )
+    finally:
+        test_app.dependency_overrides.pop(get_optional_session, None)
+
+    assert response.status_code == 307
+    assert response.headers["location"] == test_track_with_r2_url.r2_url
 
 
 # tests for /audio/{file_id}/url endpoint (offline caching, requires auth)

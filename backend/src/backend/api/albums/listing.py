@@ -12,6 +12,7 @@ from sqlalchemy.orm import selectinload
 from backend._internal import Session as AuthSession
 from backend._internal import get_optional_session
 from backend._internal.atproto.records import fetch_list_item_uris
+from backend._internal.content_labels import filter_sensitive_audio_tracks
 from backend._internal.track_visibility import track_visible_filter, viewer_did
 from backend.models import Album, Artist, Track, TrackLike, get_db
 from backend.schemas import TrackResponse
@@ -130,7 +131,7 @@ async def get_album(
     cache_key = _album_cache_key(handle, slug)
     try:
         redis = get_async_redis_client()
-        if cached := await redis.get(cache_key):
+        if session is None and (cached := await redis.get(cache_key)):
             return AlbumResponse.model_validate_json(cached)
     except Exception:
         logger.debug("album cache read failed for %s/%s", handle, slug)
@@ -192,7 +193,9 @@ async def get_album(
         # no ATProto record - order by created_at
         ordered_tracks = sorted(all_tracks, key=lambda t: t.created_at)
 
-    tracks = ordered_tracks
+    tracks, labels_by_id = await filter_sensitive_audio_tracks(
+        db, ordered_tracks, session
+    )
     track_ids = [track.id for track in tracks]
 
     # batch fetch aggregations
@@ -227,6 +230,7 @@ async def get_album(
                 like_counts,
                 comment_counts,
                 track_tags=track_tags,
+                content_labels=labels_by_id,
             )
             for track in tracks
         ]
@@ -245,9 +249,10 @@ async def get_album(
         redis = get_async_redis_client()
         cache_tracks = [{**t, "is_liked": False} for t in response.tracks]
         cacheable = AlbumResponse(metadata=response.metadata, tracks=cache_tracks)
-        await redis.set(
-            cache_key, cacheable.model_dump_json(), ex=ALBUM_CACHE_TTL_SECONDS
-        )
+        if session is None:
+            await redis.set(
+                cache_key, cacheable.model_dump_json(), ex=ALBUM_CACHE_TTL_SECONDS
+            )
     except Exception:
         logger.debug("album cache write failed for %s/%s", handle, slug)
 

@@ -55,6 +55,7 @@ export interface Preferences {
 	enable_teal_scrobbling: boolean;
 	teal_needs_reauth: boolean;
 	show_sensitive_artwork: boolean;
+	show_sensitive_audio: boolean;
 	show_liked_on_profile: boolean;
 	support_url: string | null;
 	ui_settings: UiSettings;
@@ -71,6 +72,7 @@ const DEFAULT_PREFERENCES: Preferences = {
 	enable_teal_scrobbling: false,
 	teal_needs_reauth: false,
 	show_sensitive_artwork: false,
+	show_sensitive_audio: false,
 	show_liked_on_profile: false,
 	support_url: null,
 	ui_settings: {},
@@ -125,6 +127,14 @@ class PreferencesManager {
 
 	get showSensitiveArtwork(): boolean {
 		return this.data?.show_sensitive_artwork ?? DEFAULT_PREFERENCES.show_sensitive_artwork;
+	}
+
+	get showSensitiveAudio(): boolean {
+		return this.data?.show_sensitive_audio ?? DEFAULT_PREFERENCES.show_sensitive_audio;
+	}
+
+	get showSensitiveContent(): boolean {
+		return this.showSensitiveArtwork && this.showSensitiveAudio;
 	}
 
 	get showLikedOnProfile(): boolean {
@@ -266,6 +276,7 @@ class PreferencesManager {
 					enable_teal_scrobbling: data.enable_teal_scrobbling ?? DEFAULT_PREFERENCES.enable_teal_scrobbling,
 					teal_needs_reauth: data.teal_needs_reauth ?? DEFAULT_PREFERENCES.teal_needs_reauth,
 					show_sensitive_artwork: data.show_sensitive_artwork ?? DEFAULT_PREFERENCES.show_sensitive_artwork,
+					show_sensitive_audio: data.show_sensitive_audio ?? DEFAULT_PREFERENCES.show_sensitive_audio,
 					show_liked_on_profile: data.show_liked_on_profile ?? DEFAULT_PREFERENCES.show_liked_on_profile,
 					support_url: data.support_url ?? DEFAULT_PREFERENCES.support_url,
 					ui_settings: data.ui_settings ?? DEFAULT_PREFERENCES.ui_settings,

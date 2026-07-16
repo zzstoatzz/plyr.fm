@@ -31,6 +31,7 @@ from sqlalchemy.orm import selectinload
 
 from backend._internal import Session as AuthSession
 from backend._internal import get_supported_artists, require_auth
+from backend._internal.content_labels import filter_sensitive_audio_tracks
 from backend.models import (
     Artist,
     Tag,
@@ -388,6 +389,9 @@ async def get_for_you_feed(
     )
     tracks_by_id = {t.id: t for t in track_result.scalars().all()}
     tracks = [tracks_by_id[tid] for tid in page_ids if tid in tracks_by_id]
+    tracks, content_labels = await filter_sensitive_audio_tracks(
+        db, tracks, auth_session
+    )
 
     # step 6: batch aggregations + liked set + supporter status (mirrors /tracks/)
     liked_result = await db.execute(
@@ -431,6 +435,7 @@ async def get_for_you_feed(
                 track_tags=track_tags,
                 viewer_did=actor_did,
                 supported_artist_dids=supported_artist_dids,
+                content_labels=content_labels,
             )
             for t in tracks
         ]

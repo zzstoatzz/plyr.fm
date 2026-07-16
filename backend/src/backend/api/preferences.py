@@ -32,6 +32,7 @@ class PreferencesResponse(BaseModel):
     # indicates if user needs to re-login to activate teal scrobbling
     teal_needs_reauth: bool = False
     show_sensitive_artwork: bool = False
+    show_sensitive_audio: bool = False
     show_liked_on_profile: bool = False
     support_url: str | None = None
     # extensible UI settings (background_image_url, glass_effects, custom_colors, etc.)
@@ -49,6 +50,7 @@ class PreferencesUpdate(BaseModel):
     hidden_tags: list[str] | None = None
     enable_teal_scrobbling: bool | None = None
     show_sensitive_artwork: bool | None = None
+    show_sensitive_audio: bool | None = None
     show_liked_on_profile: bool | None = None
     support_url: str | None = None
     ui_settings: dict[str, Any] | None = None
@@ -113,6 +115,7 @@ async def get_preferences(
         enable_teal_scrobbling=prefs.enable_teal_scrobbling,
         teal_needs_reauth=teal_needs_reauth,
         show_sensitive_artwork=prefs.show_sensitive_artwork,
+        show_sensitive_audio=prefs.show_sensitive_audio,
         show_liked_on_profile=prefs.show_liked_on_profile,
         support_url=prefs.support_url,
         ui_settings=prefs.ui_settings or {},
@@ -153,6 +156,9 @@ async def update_preferences(
             show_sensitive_artwork=update.show_sensitive_artwork
             if update.show_sensitive_artwork is not None
             else False,
+            show_sensitive_audio=update.show_sensitive_audio
+            if update.show_sensitive_audio is not None
+            else False,
             show_liked_on_profile=update.show_liked_on_profile
             if update.show_liked_on_profile is not None
             else False,
@@ -176,6 +182,8 @@ async def update_preferences(
             prefs.enable_teal_scrobbling = update.enable_teal_scrobbling
         if update.show_sensitive_artwork is not None:
             prefs.show_sensitive_artwork = update.show_sensitive_artwork
+        if update.show_sensitive_audio is not None:
+            prefs.show_sensitive_audio = update.show_sensitive_audio
         if update.show_liked_on_profile is not None:
             prefs.show_liked_on_profile = update.show_liked_on_profile
         if update.support_url is not None:
@@ -201,6 +209,7 @@ async def update_preferences(
         enable_teal_scrobbling=prefs.enable_teal_scrobbling,
         teal_needs_reauth=teal_needs_reauth,
         show_sensitive_artwork=prefs.show_sensitive_artwork,
+        show_sensitive_audio=prefs.show_sensitive_audio,
         show_liked_on_profile=prefs.show_liked_on_profile,
         support_url=prefs.support_url,
         ui_settings=prefs.ui_settings or {},

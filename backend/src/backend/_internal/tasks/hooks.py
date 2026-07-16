@@ -24,7 +24,7 @@ from backend.utilities.redis import get_async_redis_client
 
 logger = logging.getLogger(__name__)
 
-_DISCOVERY_CACHE_KEY = "plyr:tracks:discovery"
+_DISCOVERY_CACHE_KEY = "plyr:tracks:discovery:v2"
 
 
 async def invalidate_tracks_discovery_cache() -> None:
