@@ -10,7 +10,7 @@ plyr.fm uses a simple three-tier deployment strategy: development → staging �
 |-------------|---------|-------------|----------|-------|----------|---------|
 | **development** | local | localhost:8001 | plyr-dev (neon) | localhost:6379 (docker) | localhost:5173 | audio-dev, images-dev (r2) |
 | **staging** | push to main | api-stg.plyr.fm | plyr-stg (neon) | plyr-redis-stg (fly.io) | stg.plyr.fm (main branch) | audio-staging, images-staging (r2) |
-| **production** | github release | api.plyr.fm | plyr-prd (neon) | plyr-redis (fly.io) | plyr.fm (production-fe branch) | audio-prod, images-prod (r2) |
+| **production** | GitHub release (backend) or `production-fe` push (frontend) | api.plyr.fm | plyr-prd (neon) | plyr-redis (fly.io) | plyr.fm (production-fe branch) | audio-prod, images-prod (r2) |
 
 ## workflow
 
@@ -54,7 +54,10 @@ connects to `plyr-dev` neon database, local Redis, and uses `fm.plyr.dev` atprot
 
 ### production deployment (manual)
 
-**trigger**: run `just release` (creates github tag, merges main → production-fe)
+**trigger**: choose the recipe from the diff:
+
+- backend, migration, or mixed change: `just release`
+- frontend-only change: `just release-frontend-only`
 
 **backend**:
 1. github actions runs `.github/workflows/deploy-prod.yml`
@@ -76,6 +79,18 @@ just release
 this will:
 1. create timestamped github tag (triggers backend deploy)
 2. merge main → production-fe (triggers frontend deploy)
+
+for a frontend-only diff, `just release` intentionally exits with “no backend
+changes since last release.” Use:
+
+```bash
+just release-frontend-only
+```
+
+this promotes remote `main` directly to `production-fe` without creating an
+empty backend release. Verify the Cloudflare Pages project `plyr-fm` reaches the
+expected commit and reports a successful deploy stage; a successful Git push is
+not by itself proof of deployment.
 
 **testing**:
 - frontend: `https://plyr.fm`
@@ -186,6 +201,7 @@ note: prod's split sizing (`app=1GB`, `worker=2GB`) replaced the prior single 1G
 
 - **merge PR to main**: deploys staging backend + staging frontend to `stg.plyr.fm`
 - **run `just release`**: deploys production backend + production frontend to `plyr.fm`
+- **run `just release-frontend-only`**: deploys only the production frontend
 - **database migrations**: run automatically before deploy completes
 - **rollback**: revert github release or restore database from neon backup
 

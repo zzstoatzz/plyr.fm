@@ -34,7 +34,7 @@ the core content record — an audio track uploaded by an artist.
 ```
 key: tid (timestamp-based ID)
 required: title, artist, fileType, createdAt
-optional: audioUrl, audioBlob, album, duration, features, imageUrl, description, supportGate
+optional: audioUrl, audioBlob, album, duration, features, imageUrl, description, supportGate, labels
 note: at least one of audioUrl or audioBlob must be present
 ```
 
@@ -60,6 +60,11 @@ example record from the network:
 ```
 
 this was the first lexicon, established when the project began. tracks are stored in the user's PDS (Personal Data Server) and indexed by plyr.fm for discovery. when both `audioUrl` and `audioBlob` are present, the blob on the PDS is canonical and the URL is a CDN fallback.
+
+`labels` uses ATProto's standard `com.atproto.label.defs#selfLabels` shape for
+creator-applied content warnings. plyr.fm indexes these values separately from
+signed operator labels and applies listener policy to their union. See
+[sensitive content](/sensitive-content/) for the current behavior.
 
 ### fm.plyr.like
 

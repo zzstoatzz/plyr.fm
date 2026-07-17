@@ -15,6 +15,9 @@ creator's repository record as `com.atproto.label.defs#selfLabels`. plyr.fm
 preserves the two provenances separately and evaluates their union; the labeler
 must not re-emit a creator assertion as though it were an operator decision.
 
+the labeler's data lives in the separate Neon project `plyr-moderation`
+(`rough-hall-37695610`), not the `plyr-prd` application database.
+
 ## why labels?
 
 from [Bluesky's labeling architecture](https://docs.bsky.app/docs/advanced-guides/moderation):
@@ -37,7 +40,10 @@ the moderation service exposes these label-related endpoints:
 
 ### POST /emit-label
 
-creates a signed ATProto label. called by the admin dashboard (manual) or Osprey output sink (automatic).
+creates a signed ATProto label. called by the copyright admin dashboard, a
+generic operator request, or a future rules-engine output sink. See the
+[sensitive-audio runbook](../runbooks/moderating-sensitive-audio.md) before using
+it for an adult-audio action.
 
 ```bash
 curl -X POST https://moderation.plyr.fm/emit-label \
@@ -81,6 +87,10 @@ response:
 }
 ```
 
+`MODERATION_AUTH_TOKEN` authorizes this endpoint. The similarly named
+`MODERATION_BSKY_PASSWORD` is only an app password for updating the labeler
+account's repository declaration and cannot authorize HTTP label emission.
+
 ### GET /xrpc/com.atproto.label.queryLabels
 
 standard ATProto XRPC endpoint for querying labels.
@@ -119,6 +129,10 @@ policy.
 
 `POST /admin/active-labels` remains as a compatibility projection for the
 copyright synchronization task and returns only `copyright-violation` subjects.
+
+current state is the latest event for each `(src, uri, val)` tuple. A historical
+negation does not permanently suppress a newer positive label, and a newer
+negation revokes the positive state without deleting either event.
 
 ```bash
 curl -X POST https://moderation.plyr.fm/admin/active-labels \
@@ -231,6 +245,13 @@ fly secrets list -a plyr-moderation
 
 deployment happens via CI on merge to main (no local `fly deploy`).
 
+### operator access
+
+run the [agent access preflight](../tools/agent-access.md) before an incident.
+Public health and XRPC label queries require no credential. Protected writes
+require `MODERATION_AUTH_TOKEN`; the signing key stays inside the Fly service and
+must never be copied into an operator environment.
+
 ### feature gates
 
 the Rust service has two feature gates (`config.rs`):
@@ -241,15 +262,24 @@ if labeler isn't configured, `/emit-label` returns an error and the admin dashbo
 
 ## integration with backend
 
-the backend interacts with the labeler in two ways:
+the backend interacts with the labeler in three ways:
 
-1. **label cache** (`_internal/clients/moderation.py`): periodically checks which URIs have active labels via `POST /admin/active-labels`. used to determine track visibility.
+1. **generic label cache** (`_internal/clients/moderation.py`): fetches complete active value sets via `POST /admin/labels`. used for discovery and playback policy.
 
-2. **label invalidation**: when admin resolves a flag (negation label), the backend's cache is invalidated so the track becomes visible again.
+2. **copyright compatibility**: `POST /admin/active-labels` and `/admin/negated-labels` drive the legacy copyright synchronization task.
 
-the backend does **not** call `/emit-label` directly. labels are emitted by:
-- admin via the htmx dashboard (manual)
-- Osprey output sink calling `/emit-label` (future, automatic)
+3. **strict byte authorization**: the audio endpoint requires a current label
+   check and returns `503` rather than serving possibly adult audio when the
+   labeler cannot be reached.
+
+the backend does **not** call `/emit-label` directly. labels are emitted by an
+operator or the copyright dashboard. A first-class generic-label operator UI or
+CLI remains a tooling gap.
+
+the cache includes empty label sets. After an urgent label write, invalidate the
+label, discovery, album, and radio caches using the runbook or wait for their
+TTL; otherwise a newly labeled track can remain in a previously serialized
+response temporarily.
 
 ## troubleshooting
 

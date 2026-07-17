@@ -79,7 +79,7 @@ wraps any image that might need blurring:
 the component:
 - checks if `src` matches any flagged image
 - applies CSS blur filter if flagged
-- shows tooltip on hover: "sensitive - enable in portal"
+- shows an explanation that points listeners to settings
 - respects user's `show_sensitive_artwork` preference
 
 ### matching logic
@@ -164,6 +164,14 @@ both map to the same default-hide policy today. Keeping the assertion and policy
 separate means the taxonomy remains interoperable while the product can later
 offer finer preferences without relabeling content.
 
+### operator tooling
+
+generic label emission currently uses the protected `/emit-label` HTTP API.
+There is no generic-label admin UI or first-class CLI, and label writes do not
+push cache invalidation events to the backend. Follow the
+[sensitive-audio runbook](../runbooks/moderating-sensitive-audio.md); do not
+invent a database visibility state as a substitute.
+
 ## moderation workflow
 
 ### current image process
@@ -227,3 +235,4 @@ VALUES (
 - [overview](overview.md) — moderation philosophy and architecture
 - [copyright detection](copyright-detection.md) — automated copyright scanning
 - [ATProto labeler](atproto-labeler.md) — ATProto label emission
+- [sensitive-audio runbook](../runbooks/moderating-sensitive-audio.md) — production operator procedure

@@ -11,7 +11,7 @@
 *   **Workflow:**
     *   Use **GitHub Issues** (not Linear).
     *   **PRs:** Always create for review; never push to main directly.
-    *   **Deploy:** Merging to `main` auto-deploys to **staging** (`stg.plyr.fm`). Production requires `just release` (see `docs/deployment/environments.md`). Never deploy locally.
+    *   **Deploy:** Merging to `main` auto-deploys to **staging** (`stg.plyr.fm`). Production backend changes require `just release`; frontend-only changes use `just release-frontend-only` (see `docs/internal/deployment/environments.md`). Never deploy locally.
 *   **ATProto NSIDs:** namespaces are environment-aware via settings (e.g., `fm.plyr.dev` (dev), `fm.plyr` (prod)). **Never** hardcode outside of scripts. these are fully-qualified hostname in Reverse Domain-Name Order, not urls.
 *   **Auth Security:** Session IDs live in HttpOnly cookies. **Never** touch `localStorage` for auth.
 *   **Async Everywhere:** Never block the event loop. Use `anyio`/`aiofiles`.
@@ -25,11 +25,14 @@
 *   **Observability:** Logfire.
 *   **`just` use the justfiles!**
 *   **use MCPs** for access to external systems, review docs/tools when needed
+*   **Access preflight:** For operational work, verify GitHub, Fly, Neon, and Cloudflare access at the start rather than discovering missing access mid-incident. See `docs/internal/tools/agent-access.md`.
+*   **Moderation writes:** `MODERATION_AUTH_TOKEN` authorizes protected labeler endpoints. `MODERATION_BSKY_PASSWORD` is a Bluesky app password used only for the labeler's ATProto service declaration; it cannot emit labels. Never print either secret.
 
 ### Neon Serverless Postgres
 - `plyr-prd` (cold-butterfly-11920742) - production (us-east-1)
 - `plyr-stg` (frosty-math-37367092) - staging (us-west-2)
 - `plyr-dev` (muddy-flower-98795112) - development (us-east-2)
+- `plyr-moderation` (rough-hall-37695610) - signed labels and moderation data (us-east-2)
 
 ## 💻 Development Commands
 *   **Backend:** `just backend run`
