@@ -15,6 +15,7 @@ export default defineConfig({
       sidebar: [
         { slug: "listeners" },
         { slug: "artists" },
+        { slug: "sensitive-content" },
         {
           label: "developers",
           items: [

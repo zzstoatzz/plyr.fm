@@ -21,7 +21,7 @@ a system that auto-deletes on detection would be legally risky, user-hostile, an
 
 ## architecture
 
-### current flow (as of march 2026)
+### current flow (as of july 2026)
 
 ```
 track upload completes
@@ -61,11 +61,20 @@ track upload completes
 | **moderation service** | `services/moderation/` (Rust, Fly.io) | AuDD scanning, ATProto label signing/emission, admin dashboard |
 | **admin dashboard** | `services/moderation/src/admin.rs` | htmx UI for reviewing flags, resolving false positives |
 | **label cache** | `backend/_internal/clients/moderation.py` | backend caches active labels to check track visibility |
+| **content policy** | `backend/_internal/content_labels.py` | maps interoperable label values to viewer discovery and playback behavior |
 | **sensitive images** | `services/moderation/src/handlers.rs` | Claude-powered image moderation for cover art |
 
 ### what doesn't happen automatically
 
-labels are **never auto-emitted** today. the scan produces a flag, the admin gets a DM, and the admin manually decides whether to emit a `copyright-violation` label or resolve as false positive.
+labels are **never auto-emitted** today. a copyright scan produces a flag, the
+admin gets a DM, and the admin manually decides whether to emit a
+`copyright-violation` label or resolve it as a false positive. Adult-audio labels
+can come from either a creator notice in the track record or an operator review
+and signed label emission.
+
+creator self-labels are indexed directly from the canonical PDS record and stay
+separate from signed labeler assertions. The policy layer evaluates their union;
+it does not promote creator values into operator-signed labels.
 
 ### Osprey rules engine (PR #958, not yet merged)
 
@@ -85,8 +94,26 @@ see PR #958 for current status.
 |-----|---------|-------------|
 | `copyright-violation` | high-confidence copyright match | admin (manual) or Osprey (future) |
 | `copyright-review` | moderate-confidence, needs review | Osprey (future) |
+| `sexual` | adult audio with sexual discussion, sounds, or themes | creator and/or operator |
+| `porn` | audio whose primary purpose is pornographic content | creator and/or operator |
 
-negation (`neg: true`) revokes a label — used when admin resolves a false positive.
+`sexual` and `porn` are global ATProto values, not plyr.fm-specific taxonomy.
+Both map to the adult-audio preference and default-hide policy. Negation
+(`neg: true`) revokes the latest active label state without deleting history.
+
+### assertion versus enforcement
+
+creators own self-label assertions in their track records, the moderation
+service owns signed operator assertions, and the backend owns policy:
+
+1. fetch current active values with `POST /admin/labels`
+2. filter adult-labeled tracks from default discovery and collection surfaces
+3. require authenticated opt-in at the audio byte endpoint
+4. always exclude adult audio from shared radio
+
+the byte endpoint checks labels strictly and returns `503` when the labeler is
+unavailable. Discovery fails open on a labeler outage; authorization fails
+closed.
 
 ## key technical details
 
@@ -120,3 +147,4 @@ when a scan flags a track, the backend sends a DM to the admin via ATProto notif
 - [copyright detection](copyright-detection.md) — scan flow, data model, interpreting results
 - [ATProto labeler](atproto-labeler.md) — label signing, XRPC endpoints, deployment
 - [sensitive content](sensitive-content.md) — image moderation with Claude
+- [sensitive-audio runbook](../runbooks/moderating-sensitive-audio.md) — operator emission, cache invalidation, and verification

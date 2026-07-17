@@ -10,6 +10,7 @@ organized knowledge base for plyr.fm development.
 - **[runbooks/](./runbooks/)** - production incident procedures
   - [connection-pool-exhaustion](./runbooks/connection-pool-exhaustion.md) - 500s, stuck connections
   - [worker-silence-alert](./runbooks/worker-silence-alert.md) - docket worker stopped or crash-looping
+  - [moderating-sensitive-audio](./runbooks/moderating-sensitive-audio.md) - operator labeling and verification
 
 ### backend
 - **[background-tasks.md](./backend/background-tasks.md)** - docket-based task system (copyright scan, export, scrobble, genre classification)
@@ -44,6 +45,7 @@ organized knowledge base for plyr.fm development.
 ### tools
 - **[logfire.md](./tools/logfire.md)** - SQL query patterns for observability
 - **[neon.md](./tools/neon.md)** - postgres database management
+- **[agent-access.md](./tools/agent-access.md)** - external-system capability and credential preflight
 - **[pdsx.md](./tools/pdsx.md)** - ATProto PDS explorer
 - **[plyrfm.md](./tools/plyrfm.md)** - Python SDK and MCP server
 - **[tap.md](./tools/tap.md)** - ATProto sync utility for backfilling custom lexicons

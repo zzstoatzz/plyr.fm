@@ -8,6 +8,7 @@ operational procedures for production incidents.
 
 - [connection pool exhaustion](/runbooks/connection-pool-exhaustion/) - 500s everywhere, queue listener down, stuck connections
 - [worker silence + crash-loop alerts](/runbooks/worker-silence-alert/) - docket worker has stopped processing tasks, or is restart-looping faster than a healthy deploy would explain
+- [moderating sensitive audio](/runbooks/moderating-sensitive-audio/) - emit or revoke adult-audio labels, invalidate caches, and verify default-hide enforcement
 
 ## when to use
 

@@ -6,7 +6,7 @@ the [neon mcp server](https://github.com/neondatabase/mcp-server-neon) provides 
 
 ## overview
 
-the neon mcp is integrated into claude code and provides direct access to:
+the Neon Postgres connector is available through Codex/Claude plugins and provides direct access to:
 - project and branch management
 - database schema inspection
 - SQL query execution
@@ -16,28 +16,33 @@ this guide focuses on **read-only operations** - querying and inspecting data wi
 
 ## discovering your projects
 
-### list all projects
+connector tool names are host-prefixed and can change. Discover the available
+Neon tools, then select them by capability (`search`, `describe_project`,
+`describe_branch`, `describe_table_schema`, or `run_sql`) rather than copying an
+old MCP prefix literally.
+
+### find all plyr.fm projects
 
 ```json
-mcp__neon__list_projects({})
+neon_postgres_search({"query": "plyr"})
 ```
 
-returns all neon projects in your account with details like:
-- project name and ID
-- region (aws-us-east-1, aws-us-east-2, etc.)
-- postgres version
-- compute usage stats
-- storage size
+returns matching projects with their names, IDs, and Neon Console links. Use
+`describe_project` for branches, region, Postgres version, and compute details.
 
 **plyr.fm projects:**
 - `plyr-prd` (cold-butterfly-11920742) - production (us-east-1)
 - `plyr-stg` (frosty-math-37367092) - staging (us-west-2)
 - `plyr-dev` (muddy-flower-98795112) - development (us-east-2)
+- `plyr-moderation` (rough-hall-37695610) - labels and moderation data (us-east-2)
+
+the moderation project is a separate source of truth. Do not query `plyr-prd`
+for signed label rows or `plyr-moderation` for the application track catalog.
 
 ### get project details
 
 ```json
-mcp__neon__describe_project({
+neon_postgres_describe_project({
   "projectId": "muddy-flower-98795112"
 })
 ```
@@ -49,8 +54,9 @@ shows branches, compute endpoints, and configuration for a specific project.
 ### list all tables
 
 ```json
-mcp__neon__get_database_tables({
-  "projectId": "muddy-flower-98795112"
+neon_postgres_describe_branch({
+  "projectId": "muddy-flower-98795112",
+  "branchId": "<branch-id-from-describe-project>"
 })
 ```
 
@@ -68,7 +74,7 @@ mcp__neon__get_database_tables({
 ### inspect table schema
 
 ```json
-mcp__neon__describe_table_schema({
+neon_postgres_describe_table_schema({
   "projectId": "muddy-flower-98795112",
   "tableName": "tracks"
 })
@@ -102,7 +108,7 @@ returns detailed schema information:
 ### visualize database structure
 
 ```json
-mcp__neon__describe_branch({
+neon_postgres_describe_branch({
   "projectId": "muddy-flower-98795112",
   "branchId": "br-crimson-recipe-aesyo0p9"
 })
@@ -115,7 +121,7 @@ returns a tree view showing all databases, schemas, tables, indexes, functions, 
 ### basic query execution
 
 ```json
-mcp__neon__run_sql({
+neon_postgres_run_sql({
   "projectId": "muddy-flower-98795112",
   "sql": "SELECT COUNT(*) FROM tracks"
 })
@@ -317,7 +323,7 @@ WHERE extra != '{}'::jsonb;
 ### get connection string
 
 ```json
-mcp__neon__get_connection_string({
+neon_postgres_get_connection_string({
   "projectId": "muddy-flower-98795112"
 })
 ```

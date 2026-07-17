@@ -198,6 +198,19 @@ after your upload finishes, plyr.fm scans the audio against [AudD](https://audd.
 
 if you believe a match is a false positive, or you hold the rights to the matched work, [get in touch](https://plyr.fm) — nothing about the flag is automatic or final.
 
+## sensitive content labels
+
+plyr.fm uses the global AT Protocol labels `sexual` and `porn` for adult audio.
+They are content warnings, not takedowns: the track and its ATProto record remain
+in place, while plyr.fm hides the track and blocks playback by default. The
+creator can always see and play their own track.
+
+enable **contains adult or sexual audio** during upload, or change the content
+notice later in the track editor. The notice is stored with your track as a
+standard ATProto self-label and immediately participates in plyr.fm's
+default-hide policy. It remains separate from any independent moderator label.
+See [sensitive content](/sensitive-content/) for the listener behavior.
+
 ## your data
 
 ![the artist portal — manage your profile, tracks, and albums](/screenshots/portal-dashboard.png)

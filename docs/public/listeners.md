@@ -58,6 +58,14 @@ even today, other apps (like [aetheros.computer](https://aetheros.computer)) alr
 
 to track and [visualize your listening history](https://teal-appview-production.up.railway.app/), you can [enable teal.fm scrobbling in your settings](https://plyr.fm/settings).
 
+## sensitive content
+
+sensitive artwork and adult-labeled audio are hidden by default. Signed-in
+listeners can turn both on together or manage artwork and audio separately in
+[settings](https://plyr.fm/settings#privacy-display). Signed-out visitors cannot
+opt in. See [sensitive content](/sensitive-content/) for how labels, direct
+links, radio, and playback behave.
+
 ## what's here
 
 - **stream audio** — music, podcasts, sound art, whatever creators publish
