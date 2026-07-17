@@ -118,7 +118,8 @@ class UploaderState {
 		callbacks?: UploadProgressCallback,
 		label?: string,
 		albumId?: string,
-		copyright?: object | null
+		copyright?: object | null,
+		selfLabels: string[] = []
 	): void {
 		const taskId = crypto.randomUUID();
 		const fileSizeMB = file.size / 1024 / 1024;
@@ -169,6 +170,9 @@ class UploaderState {
 		}
 		if (description) {
 			formData.append('description', description);
+		}
+		if (selfLabels.length > 0) {
+			formData.append('self_labels', JSON.stringify(selfLabels));
 		}
 
 		const xhr = new XMLHttpRequest();

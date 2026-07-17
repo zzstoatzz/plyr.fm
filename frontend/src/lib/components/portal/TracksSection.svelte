@@ -17,6 +17,7 @@
 
 	// supported audio formats — matches backend AudioFormat enum + AlbumUploadForm
 	const AUDIO_FILE_INPUT_ACCEPT = '.mp3,.wav,.m4a,.aiff,.aif,.flac,audio/mpeg,audio/wav,audio/mp4,audio/aiff,audio/x-aiff,audio/flac';
+	const ADULT_SELF_LABELS = new Set(['sexual', 'porn']);
 
 	type SortMode = 'recent' | 'title' | 'plays';
 
@@ -103,6 +104,10 @@
 	let restorePending = $state(false);
 	let editSupportGate = $state(false);
 	let editUnlisted = $state(false);
+	let editSelfLabels = $state<string[]>([]);
+	let editHasSensitiveAudio = $derived(
+		editSelfLabels.some((label) => ADULT_SELF_LABELS.has(label))
+	);
 	// copyright rights state for the inline edit form — kept in sync with the
 	// CopyrightRightsPanel via bindable props.
 	let editCopyrightEnabled = $state(false);
@@ -150,6 +155,7 @@
 			track.support_gate !== undefined &&
 			track.support_gate.type !== 'copyright';
 		editUnlisted = track.unlisted ?? false;
+		editSelfLabels = [...(track.self_labels ?? [])];
 		// initialize copyright state from the track's persisted URIs.
 		// we don't have the original ISWC/ISRC/masterOwner stored locally — those
 		// live on the PDS records. for now we leave the form blank on open; a
@@ -158,6 +164,14 @@
 		editCopyrightWasEnabled = editCopyrightEnabled;
 		editCopyrightRights = {};
 		fetchRecommendedTags(track.id);
+	}
+
+	function setSensitiveAudio(enabled: boolean) {
+		const nonAdult = editSelfLabels.filter((label) => !ADULT_SELF_LABELS.has(label));
+		const existingAdult = editSelfLabels.filter((label) => ADULT_SELF_LABELS.has(label));
+		editSelfLabels = enabled
+			? [...nonAdult, ...(existingAdult.length > 0 ? existingAdult : ['sexual'])]
+			: nonAdult;
 	}
 
 	async function fetchRecommendedTags(trackId: number) {
@@ -196,6 +210,7 @@
 		editRemoveImage = false;
 		editSupportGate = false;
 		editUnlisted = false;
+		editSelfLabels = [];
 		editCopyrightEnabled = false;
 		editCopyrightWasEnabled = false;
 		editCopyrightRights = {};
@@ -346,6 +361,7 @@
 			}
 		}
 		formData.append('unlisted', editUnlisted ? 'true' : 'false');
+		formData.append('self_labels', JSON.stringify(editSelfLabels));
 		// handle artwork: remove, replace, or leave unchanged
 		if (editRemoveImage) {
 			formData.append('remove_image', 'true');
@@ -708,6 +724,23 @@
 										{/if}
 									</div>
 								{/if}
+								<div class="edit-field-group">
+									<span class="edit-label">content notice</span>
+									<label class="toggle-row">
+										<input
+											type="checkbox"
+											checked={editHasSensitiveAudio}
+											onchange={(event) => setSensitiveAudio((event.target as HTMLInputElement).checked)}
+										/>
+										<span>contains adult or sexual audio</span>
+									</label>
+									<p class="field-hint">
+										this notice travels with the track on ATProto. the track is hidden by default and listeners must opt in to sensitive audio.
+									</p>
+									<p class="field-hint">
+										this changes only your notice. any independent moderation label remains in effect.
+									</p>
+								</div>
 								<div class="edit-field-group">
 									<span class="edit-label">copyright</span>
 									<CopyrightRightsPanel

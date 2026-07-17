@@ -103,6 +103,7 @@ class _MetadataState:
     features: list[dict]
     image_url: str | None
     description: str | None
+    self_labels: list[str]
     support_gate: dict | None
     atproto_record_uri: str
 
@@ -183,6 +184,7 @@ async def _refresh_metadata(state: _AudioState) -> _MetadataState:
             features=list(track.features) if track.features else [],
             image_url=await track.get_image_url(),
             description=track.description,
+            self_labels=list(track.self_labels or []),
             support_gate=dict(track.support_gate) if track.support_gate else None,
             atproto_record_uri=track.atproto_record_uri,
         )
@@ -383,6 +385,7 @@ async def optimize_track_audio(
                 support_gate=meta.support_gate,
                 audio_blob=pds_result.blob_ref if pds_result else None,
                 description=meta.description,
+                self_labels=meta.self_labels,
                 created_at=state.created_at,
             )
             _, new_cid = await update_record(

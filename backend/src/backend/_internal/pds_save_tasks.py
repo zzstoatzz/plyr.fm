@@ -156,6 +156,7 @@ async def save_tracks_to_pds(
                         "image_id": track.image_id,
                         "image_url": track.image_url,
                         "support_gate": track.support_gate,
+                        "self_labels": list(track.self_labels or []),
                         "artist_name": track.artist.display_name or track.artist.handle,
                         "created_at": track.created_at,
                         "atproto_record_uri": track.atproto_record_uri,
@@ -225,6 +226,7 @@ async def save_tracks_to_pds(
                         image_url=image_url,
                         support_gate=track_data["support_gate"],
                         audio_blob=blob_ref,
+                        self_labels=track_data["self_labels"],
                     )
                     track_record["createdAt"] = track_data["created_at"].isoformat()
 

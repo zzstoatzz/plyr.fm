@@ -80,6 +80,7 @@
 	let hasUnresolvedFeaturesInput = $state(false);
 	let attestedRights = $state(false);
 	let autoTag = $state(false);
+	let sensitiveAudio = $state(false);
 	// visibility/access — one mutually-exclusive choice:
 	//   public | unlisted | supporters | private
 	// "private" is only offered when the PDS supports com.atproto.space.* (/auth/me).
@@ -122,6 +123,7 @@
 			uploadTags = stashed.uploadTags;
 			attestedRights = stashed.attestedRights;
 			autoTag = stashed.autoTag;
+			sensitiveAudio = stashed.sensitiveAudio ?? false;
 			visibility = (stashed.visibility ?? 'public') as typeof visibility;
 			clearTrackFormStash();
 			toast.info(
@@ -175,6 +177,7 @@
 			uploadTags: [...uploadTags],
 			attestedRights,
 			autoTag,
+			sensitiveAudio,
 			visibility,
 		};
 	}
@@ -226,6 +229,7 @@
 		const tagsToUpload = [...uploadTags];
 		const uploadVisibility = visibility;
 		const shouldAutoTag = autoTag;
+		const uploadSelfLabels = sensitiveAudio ? ['sexual'] : [];
 		const uploadDescription = description;
 
 		const clearForm = () => {
@@ -238,6 +242,7 @@
 			uploadTags = [];
 			attestedRights = false;
 			autoTag = false;
+			sensitiveAudio = false;
 			visibility = 'public';
 			copyrightEnabled = false;
 			copyrightRights = {};
@@ -289,6 +294,7 @@
 			undefined, // label
 			undefined, // albumId
 			copyrightToSend,
+			uploadSelfLabels,
 		);
 	}
 
@@ -506,6 +512,17 @@
 				bind:rights={copyrightRights}
 				disabled={visibility !== 'public' && visibility !== 'unlisted'}
 			/>
+
+			<fieldset class="form-group content-notice-card">
+				<legend>content notice</legend>
+				<label class="content-notice-row checkbox-label">
+					<input type="checkbox" bind:checked={sensitiveAudio} />
+					<span class="access-body">
+						<span class="checkbox-text">contains adult or sexual audio</span>
+						<span class="access-note">hidden by default; listeners must sign in and choose to hear sensitive audio. the notice travels with this track on ATProto.</span>
+					</span>
+				</label>
+			</fieldset>
 
 			<fieldset class="form-group access-card">
 				<legend>visibility &amp; access</legend>
@@ -867,6 +884,25 @@
 		border: 1px solid var(--border-default);
 		border-radius: var(--radius-sm);
 		min-width: 0;
+	}
+
+	.content-notice-card {
+		padding: 0;
+		border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--border-default));
+		border-radius: var(--radius-sm);
+		min-width: 0;
+	}
+
+	.content-notice-card legend {
+		margin-left: 0.75rem;
+		padding: 0 0.4rem;
+		font-size: var(--text-sm);
+		color: var(--text-secondary);
+	}
+
+	.content-notice-row {
+		padding: 0.875rem 1rem;
+		margin: 0;
 	}
 
 	.access-card legend {

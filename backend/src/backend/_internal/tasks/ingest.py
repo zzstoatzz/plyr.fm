@@ -18,6 +18,7 @@ from sqlalchemy import delete, select, update
 from sqlalchemy.exc import IntegrityError, OperationalError
 
 from backend._internal.atproto.client import pds_blob_url
+from backend._internal.atproto.self_labels import self_label_values_from_record
 from backend._internal.tasks.hooks import run_post_track_create_hooks
 from backend._internal.tasks.origin_trust import (
     is_trusted_audio_origin,
@@ -308,6 +309,7 @@ async def ingest_track_create(
             r2_url=audio_url if audio_storage in ("r2", "both") else None,
             atproto_record_uri=uri,
             atproto_record_cid=cid,
+            self_labels=self_label_values_from_record(record.get("labels")),
             audio_storage=audio_storage,
             pds_blob_cid=pds_blob_cid,
             publish_state="published",
@@ -382,6 +384,10 @@ async def ingest_track_update(
                 )
         if cid:
             track.atproto_record_cid = cid
+
+        # putRecord events contain the complete record. Absence therefore clears
+        # the creator assertion instead of preserving stale indexed values.
+        track.self_labels = self_label_values_from_record(record.get("labels"))
 
         # audio storage fields
         audio_blob = record.get("audioBlob")

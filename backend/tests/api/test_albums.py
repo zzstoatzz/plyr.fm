@@ -660,6 +660,7 @@ async def test_update_album_title(test_app: FastAPI, db_session: AsyncSession):
         r2_url="https://r2.example.com/audio/test-file-update.mp3",
         atproto_record_uri="at://did:test:user123/fm.plyr.track/track123",
         atproto_record_cid="original_cid",
+        self_labels=["sexual"],
     )
     db_session.add(track)
     await db_session.commit()
@@ -697,6 +698,7 @@ async def test_update_album_title(test_app: FastAPI, db_session: AsyncSession):
     mock_track_update.assert_called_once()
     call_kwargs = mock_track_update.call_args.kwargs
     assert call_kwargs["record"]["album"] == "Updated Title"
+    assert call_kwargs["record"]["labels"]["values"] == [{"val": "sexual"}]
 
     # verify list record update was called with new name
     mock_list_update.assert_called_once()

@@ -110,3 +110,32 @@ async def test_editing_track_title_syncs_to_pds(
     # and the edit persisted (no rollback)
     await db_session.refresh(published_track)
     assert published_track.title == "renamed track"
+
+
+async def test_editing_creator_self_label_syncs_to_pds(
+    test_app: FastAPI, db_session: AsyncSession, published_track: Track
+) -> None:
+    pds = AsyncMock(
+        return_value={"uri": published_track.atproto_record_uri, "cid": "bafylabels"}
+    )
+    with patch("backend._internal.atproto.records.fm_plyr.track.make_pds_request", pds):
+        async with AsyncClient(
+            transport=ASGITransport(app=test_app), base_url="http://test"
+        ) as client:
+            response = await client.patch(
+                f"/tracks/{published_track.id}",
+                data={"self_labels": '["sexual"]'},
+            )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["self_labels"] == ["sexual"]
+    assert response.json()["labels"] == ["sexual"]
+    assert pds.await_args is not None
+    record = pds.await_args.args[3]["record"]
+    assert record["labels"] == {
+        "$type": "com.atproto.label.defs#selfLabels",
+        "values": [{"val": "sexual"}],
+    }
+
+    await db_session.refresh(published_track)
+    assert published_track.self_labels == ["sexual"]

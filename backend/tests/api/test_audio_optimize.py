@@ -554,6 +554,7 @@ async def test_optimize_swaps_wav_to_mp3_preserving_original_and_created_at(
     """happy path: WAV->MP3 swap, lossless original preserved, single PDS blob
     written, record createdAt preserved, interim WAV deleted."""
     track = _wav_track()
+    track.self_labels = ["sexual"]
     db_session.add(track)
     await db_session.commit()
     await db_session.refresh(track)
@@ -594,6 +595,7 @@ async def test_optimize_swaps_wav_to_mp3_preserving_original_and_created_at(
     # the rebuilt record is built with the track's ORIGINAL createdAt, not a
     # fresh one — so the optimization doesn't bump the track to "now".
     assert mocks["build_record"].await_args.kwargs["created_at"] == original_created_at
+    assert mocks["build_record"].await_args.kwargs["self_labels"] == ["sexual"]
 
     # the interim WAV is now orphaned and was deleted
     assert "WAVID" in deleted

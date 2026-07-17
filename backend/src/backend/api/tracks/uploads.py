@@ -6,7 +6,7 @@ import json
 import logging
 import tempfile
 from collections.abc import AsyncIterable, Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from io import BytesIO
 from pathlib import Path
 from typing import Annotated, Any, BinaryIO
@@ -41,6 +41,7 @@ from backend._internal.atproto.handles import (
     resolve_featured_artists,
 )
 from backend._internal.atproto.records.fm_plyr.track import build_track_record
+from backend._internal.atproto.self_labels import parse_self_label_values_json
 from backend._internal.atproto.spaces import (
     build_record_uri,
     detect_permissioned_capability,
@@ -118,6 +119,7 @@ class UploadContext:
     album_id: str | None  # new: explicit reference to an existing Album row
     features_json: str | None
     tags: list[str]
+    self_labels: list[str] = field(default_factory=list)
 
     # optional image (already in shared storage as `image_id`, plus computed URLs)
     image_id: str | None = None
@@ -923,6 +925,7 @@ async def _create_records(
             r2_url=sr.r2_url,
             atproto_record_uri=uri,
             atproto_record_cid=None,
+            self_labels=ctx.self_labels,
             created_at=created_at,
             publish_state="pending",
             image_id=image_id,
@@ -975,6 +978,7 @@ async def _create_records(
                 image_url=image_url,
                 audio_blob=pds_result.blob_ref,
                 description=ctx.description,
+                self_labels=ctx.self_labels,
                 created_at=created_at,
             )
             _, atproto_cid = await create_space_record(
@@ -998,6 +1002,7 @@ async def _create_records(
                 support_gate=ctx.support_gate,
                 audio_blob=pds_result.blob_ref if pds_result else None,
                 description=ctx.description,
+                self_labels=ctx.self_labels,
                 rkey=rkey,
                 created_at=created_at,
             )
@@ -1335,6 +1340,7 @@ async def run_track_upload(
     thumbnail_url: str | None,
     support_gate: dict | None,
     auto_tag: bool,
+    self_labels: list[str] | None = None,
     copyright_rights: dict | None = None,
     audio_blob: BlobRef | None = None,
     visibility: str = "public",
@@ -1405,6 +1411,7 @@ async def run_track_upload(
         album_id=album_id,
         features_json=features_json,
         tags=tags,
+        self_labels=self_labels or [],
         description=description,
         image_id=image_id,
         image_url=image_url,
@@ -1446,6 +1453,7 @@ async def schedule_track_upload(ctx: UploadContext) -> None:
         album_id=ctx.album_id,
         features_json=ctx.features_json,
         tags=ctx.tags,
+        self_labels=ctx.self_labels,
         description=ctx.description,
         image_id=ctx.image_id,
         image_url=ctx.image_url,
@@ -1494,6 +1502,10 @@ async def upload_track(
         str | None,
         Form(description="Track description (liner notes, show notes, etc.)"),
     ] = None,
+    self_labels: Annotated[
+        str | None,
+        Form(description="JSON array of creator-applied ATProto label values"),
+    ] = None,
     auto_tag: Annotated[
         str | None,
         Form(description="auto-apply recommended genre tags after classification"),
@@ -1528,6 +1540,11 @@ async def upload_track(
     # validate tags upfront before any processing
     try:
         validated_tags = parse_tags_json(tags)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+    try:
+        validated_self_labels = parse_self_label_values_json(self_labels)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
 
@@ -1730,6 +1747,7 @@ async def upload_track(
             album_id=album_id,
             features_json=features,
             tags=validated_tags,
+            self_labels=validated_self_labels,
             description=description,
             image_id=image_id,
             image_url=image_url,

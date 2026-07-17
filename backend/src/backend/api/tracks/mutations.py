@@ -30,6 +30,7 @@ from backend._internal.atproto.records import (
     rebuild_track_pds_record,
     update_record,
 )
+from backend._internal.atproto.self_labels import parse_self_label_values_json
 from backend._internal.atproto.spaces.client import delete_space_record
 from backend._internal.atproto.tid import datetime_to_tid
 from backend._internal.audio import AudioFormat
@@ -185,6 +186,10 @@ async def update_track_metadata(
         str | None,
         Form(description="Set to 'true' to exclude from feeds, 'false' to include"),
     ] = None,
+    self_labels: Annotated[
+        str | None,
+        Form(description="JSON array of creator-applied ATProto label values"),
+    ] = None,
 ) -> TrackResponse:
     """Update track metadata (only by owner)."""
     result = await db.execute(
@@ -265,6 +270,15 @@ async def update_track_metadata(
     # visibility; private tracks are rejected earlier with 409)
     if unlisted is not None and track.visibility in ("public", "unlisted"):
         track.visibility = "unlisted" if unlisted.lower() == "true" else "public"
+
+    self_labels_changed = False
+    if self_labels is not None:
+        try:
+            parsed_self_labels = parse_self_label_values_json(self_labels)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
+        self_labels_changed = parsed_self_labels != track.self_labels
+        track.self_labels = parsed_self_labels
 
     # track album changes for list sync
     old_album_id = track.album_id
@@ -360,6 +374,7 @@ async def update_track_metadata(
         or features is not None
         or image_changed
         or support_gate_changed
+        or self_labels_changed
     )
     if track.atproto_record_uri and metadata_changed:
         try:
@@ -563,6 +578,7 @@ async def restore_track_record(
         duration=track.duration,
         features=track.features if track.features else None,
         image_url=await track.get_image_url(),
+        self_labels=track.self_labels,
     )
     track_record["createdAt"] = track.created_at.isoformat()
 
@@ -742,6 +758,7 @@ async def migrate_track_to_pds(
                 image_url=await track.get_image_url(),
                 support_gate=track.support_gate,
                 audio_blob=blob_ref,
+                self_labels=track.self_labels,
             )
             track_record["createdAt"] = track.created_at.isoformat()
 

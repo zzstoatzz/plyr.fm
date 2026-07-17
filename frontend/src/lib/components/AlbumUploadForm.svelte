@@ -58,6 +58,7 @@
 			featuredArtists: [],
 			hasUnresolvedFeaturesInput: false,
 			autoTag: false,
+			sensitiveAudio: false,
 			supportGated: false,
 			status: 'pending',
 			error: null,
@@ -130,6 +131,7 @@
 				featuredArtists: [],
 				hasUnresolvedFeaturesInput: false,
 				autoTag: false,
+				sensitiveAudio: false,
 				supportGated: false,
 				status: 'pending',
 				error: null,
@@ -365,6 +367,8 @@
 					},
 					track.title,
 					albumId ?? undefined,
+					undefined, // copyright
+					track.sensitiveAudio ? ['sexual'] : [],
 				);
 			});
 		});

@@ -19,6 +19,7 @@ export interface TrackFormStash {
 	uploadTags: string[];
 	attestedRights: boolean;
 	autoTag: boolean;
+	sensitiveAudio?: boolean;
 	// single visibility value (public | unlisted | supporters | private) — the
 	// draft must survive a private-media scope-upgrade redirect with its choice intact.
 	visibility: string;

@@ -29,6 +29,9 @@ CREATE TABLE sensitive_images (
 -- user preference
 ALTER TABLE user_preferences ADD COLUMN show_sensitive_artwork BOOLEAN DEFAULT false;
 ALTER TABLE user_preferences ADD COLUMN show_sensitive_audio BOOLEAN DEFAULT false;
+
+-- creator assertions indexed from the track's canonical PDS record
+ALTER TABLE tracks ADD COLUMN self_labels JSONB NOT NULL DEFAULT '[]';
 ```
 
 images can be flagged by either:
@@ -141,12 +144,18 @@ the `sensitive_images` table is currently populated manually by admins. this is 
 1. **perceptual hashing** - hash images at upload time, detect re-uploads of flagged content
 2. **AI detection** - integrate NSFW detection API (AWS Rekognition, Google Vision, etc.)
 3. **user reporting** - let users flag inappropriate content
-4. **artist self-labeling** - let artists mark their own content as sensitive
+4. **creator education** - make the content notice and its consequences clear
 
 ### audio labels
 
-audio uses the existing signed ATProto labeler rather than a parallel NSFW
-table. The canonical global values are:
+audio accepts two independent kinds of assertions and applies one effective
+policy to their union:
+
+- creator self-labels live in the track's canonical PDS record under
+  `com.atproto.label.defs#selfLabels`
+- operator labels are signed assertions from the moderation service
+
+The canonical global values are:
 
 - `sexual`: sexually suggestive or explicit audio
 - `porn`: pornographic audio
@@ -168,12 +177,30 @@ offer finer preferences without relabeling content.
 
 ### current audio process
 
-1. creator self-labels a track or an operator reviews reported audio
-2. the moderation service emits a signed `sexual` or `porn` label against the
-   track AT URI and CID
-3. the backend consumes the active label and applies the listener preference
-4. revocation uses the labeler's normal `neg: true` event rather than deleting
-   history
+1. a creator adds a content notice during upload/edit, or an operator reviews
+   reported audio
+2. creator notices are published with the track record; operator decisions are
+   emitted as signed `sexual` or `porn` labels against its AT URI and CID
+3. the backend indexes creator values, queries active operator values, unions
+   them, and applies the listener preference
+4. removing a creator notice removes only the creator assertion; an independent
+   operator label remains active until the labeler emits its normal `neg: true`
+   event
+
+### self-label reconciliation
+
+Jetstream keeps indexed creator labels current after ordinary PDS writes. To
+reconcile records that predate the database column, read the canonical public
+records in dry-run mode first:
+
+```bash
+cd backend
+uv run scripts/backfill_track_self_labels.py --limit 20
+uv run scripts/backfill_track_self_labels.py --apply
+```
+
+The script never writes to creator repos. It only repairs plyr.fm's index from
+the PDS record and reports fetch failures separately.
 
 ### example: flagging an R2 image
 

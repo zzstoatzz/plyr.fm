@@ -40,6 +40,20 @@ your catalog isn't trapped here — other apps can access your tracks without pl
 5. **see it live** — your track is playable immediately and indexed for discovery
 6. **embed it** — copy the embed code to put a player on your website or blog (see [embeds](#embeds) below)
 
+## adult audio and content notices
+
+if a track contains adult or sexual audio, enable **contains adult or sexual
+audio** when uploading it. You can change the notice later in the track editor.
+
+the notice is stored with your track in your ATProto repository. On plyr.fm,
+noticed tracks are hidden from discovery and cannot be played by anonymous
+listeners. Signed-in listeners must explicitly enable sensitive audio in their
+settings. You can still see and manage your own noticed tracks.
+
+removing your notice removes only your own assertion. If a plyr.fm moderator
+independently labeled the track, that operator label and its default-hide policy
+remain until the moderation decision is reversed.
+
 ## artwork guidelines
 
 track artwork is displayed as a square across the app — in lists, the player, and on track pages. for best results:

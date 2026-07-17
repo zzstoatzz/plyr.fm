@@ -112,6 +112,7 @@ class TrackAudioState:
     features: list[dict]
     image_url: str | None
     description: str | None
+    self_labels: list[str]
     support_gate: dict | None
     created_at: datetime  # original record creation time — must survive replace
 
@@ -178,6 +179,7 @@ async def _load_and_authorize(
             features=list(track.features) if track.features else [],
             image_url=await track.get_image_url(),
             description=track.description,
+            self_labels=list(track.self_labels or []),
             support_gate=dict(track.support_gate) if track.support_gate else None,
             created_at=track.created_at,
         )
@@ -253,6 +255,7 @@ async def _publish_record_update(
         support_gate=state.support_gate,
         audio_blob=pds_result.blob_ref if pds_result else None,
         description=state.description,
+        self_labels=state.self_labels,
         created_at=state.created_at,
     )
 
@@ -555,6 +558,7 @@ async def _refresh_metadata_state(state: TrackAudioState) -> TrackAudioState:
             features=list(track.features) if track.features else [],
             image_url=await track.get_image_url(),
             description=track.description,
+            self_labels=list(track.self_labels or []),
             support_gate=dict(track.support_gate) if track.support_gate else None,
             created_at=state.created_at,
         )
