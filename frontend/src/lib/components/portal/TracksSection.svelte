@@ -174,6 +174,10 @@
 			: nonAdult;
 	}
 
+	function hasOperatorSensitiveLabel(track: Track): boolean {
+		return (track.operator_labels ?? []).some((label) => ADULT_SELF_LABELS.has(label));
+	}
+
 	async function fetchRecommendedTags(trackId: number) {
 		loadingRecommendedTags = true;
 		recommendedTags = [];
@@ -707,7 +711,7 @@
 									</div>
 								</div>
 								{#if atprotofansEligible || (track.support_gate && track.support_gate.type !== 'copyright')}
-									<div class="edit-field-group">
+									<div class="edit-field-group access-field">
 										<span class="edit-label">supporter access</span>
 										<label class="toggle-row">
 											<input
@@ -724,7 +728,7 @@
 										{/if}
 									</div>
 								{/if}
-								<div class="edit-field-group">
+								<div class="edit-field-group content-notice-field">
 									<span class="edit-label">content notice</span>
 									<label class="toggle-row">
 										<input
@@ -732,24 +736,28 @@
 											checked={editHasSensitiveAudio}
 											onchange={(event) => setSensitiveAudio((event.target as HTMLInputElement).checked)}
 										/>
-										<span>contains adult or sexual audio</span>
+										<span>contains sexually explicit audio</span>
 									</label>
 									<p class="field-hint">
 										this notice travels with the track on ATProto. the track is hidden by default and listeners must opt in to sensitive audio.
 									</p>
-									<p class="field-hint">
-										this changes only your notice. any independent moderation label remains in effect.
-									</p>
+									{#if hasOperatorSensitiveLabel(track)}
+										<div class="moderation-status" role="status">
+											<strong>plyr.fm moderation notice active</strong>
+											<span>removing your notice will not make this track visible by default because an independent moderation label remains in effect.</span>
+										</div>
+									{:else}
+										<p class="field-hint">
+											this changes only your notice. moderators can apply a separate notice when needed.
+										</p>
+									{/if}
 								</div>
-								<div class="edit-field-group">
-									<span class="edit-label">copyright</span>
-									<CopyrightRightsPanel
-										bind:enabled={editCopyrightEnabled}
-										bind:rights={editCopyrightRights}
-										disabled={editSupportGate}
-									/>
-								</div>
-								<div class="edit-field-group">
+								<CopyrightRightsPanel
+									bind:enabled={editCopyrightEnabled}
+									bind:rights={editCopyrightRights}
+									disabled={editSupportGate}
+								/>
+								<div class="edit-field-group access-field">
 									<span class="edit-label">visibility</span>
 									<label class="toggle-row">
 										<input
@@ -1144,14 +1152,33 @@
 	.edit-fields {
 		display: flex;
 		flex-direction: column;
-		gap: 0.75rem;
+		gap: 0.875rem;
 		flex: 1;
 	}
 
 	.edit-field-group {
 		display: flex;
 		flex-direction: column;
-		gap: 0.5rem;
+		gap: 0.625rem;
+		padding: 1rem;
+		background: color-mix(in srgb, var(--bg-primary) 78%, var(--bg-tertiary));
+		border: 1px solid var(--border-subtle);
+		border-radius: var(--radius-base);
+		transition: border-color 0.15s, background 0.15s;
+	}
+
+	.edit-field-group:focus-within {
+		background: var(--bg-primary);
+		border-color: color-mix(in srgb, var(--accent) 55%, var(--border-default));
+	}
+
+	.content-notice-field {
+		border-left: 3px solid var(--accent);
+		background: color-mix(in srgb, var(--accent) 6%, var(--bg-primary));
+	}
+
+	.access-field {
+		background: color-mix(in srgb, var(--bg-primary) 88%, var(--bg-tertiary));
 	}
 
 	.suggested-tags-row {
@@ -1163,7 +1190,7 @@
 
 	.suggested-label {
 		font-size: var(--text-xs, 0.75rem);
-		color: var(--text-muted);
+		color: var(--text-tertiary);
 		letter-spacing: 0.02em;
 		white-space: nowrap;
 		flex-shrink: 0;
@@ -1197,7 +1224,9 @@
 
 	.edit-label {
 		font-size: var(--text-sm);
-		color: var(--text-secondary);
+		font-weight: 600;
+		letter-spacing: 0.015em;
+		color: var(--text-primary);
 	}
 
 	.toggle-row {
@@ -1218,7 +1247,26 @@
 	.field-hint {
 		font-size: var(--text-sm);
 		color: var(--text-tertiary);
-		margin-top: 0.25rem;
+		line-height: 1.45;
+		margin: 0;
+	}
+
+	.moderation-status {
+		display: flex;
+		flex-direction: column;
+		gap: 0.25rem;
+		padding: 0.75rem 0.875rem;
+		background: color-mix(in srgb, var(--accent) 10%, var(--bg-primary));
+		border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--border-subtle));
+		border-radius: var(--radius-base);
+		font-size: var(--text-sm);
+		line-height: 1.45;
+		color: var(--text-secondary);
+	}
+
+	.moderation-status strong {
+		color: var(--text-primary);
+		font-weight: 600;
 	}
 
 	.field-hint a {
@@ -1554,7 +1602,7 @@
 		align-items: center;
 		gap: 0.5rem;
 		padding: 0.75rem 1rem;
-		color: var(--text-muted);
+		color: var(--text-tertiary);
 	}
 
 	.artwork-empty span {
@@ -1599,7 +1647,7 @@
 
 	.audio-current-label {
 		font-size: var(--text-sm);
-		color: var(--text-muted);
+		color: var(--text-tertiary);
 	}
 
 	.audio-selected {
@@ -1711,7 +1759,7 @@
 		flex-basis: 100%;
 		margin: 0.35rem 0 0;
 		font-size: var(--text-xs);
-		color: var(--text-muted);
+		color: var(--text-tertiary);
 	}
 
 	.edit-input:focus {
@@ -1784,7 +1832,11 @@
 		}
 
 		.edit-fields {
-			gap: 0.6rem;
+			gap: 0.75rem;
+		}
+
+		.edit-field-group {
+			padding: 0.875rem;
 		}
 
 		.edit-label {

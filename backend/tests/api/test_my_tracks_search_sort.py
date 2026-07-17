@@ -10,6 +10,7 @@ covers:
 
 from collections.abc import Generator
 from datetime import UTC, datetime, timedelta
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi import FastAPI
@@ -145,6 +146,25 @@ async def test_blank_q_is_no_filter(
 
     data = await _get(test_app, "?q=%20%20")  # whitespace only
     assert data["total"] == 2
+
+
+async def test_creator_track_response_separates_operator_labels(
+    test_app: FastAPI, db_session: AsyncSession, artist: Artist
+) -> None:
+    track = await _make_track(
+        db_session, title="Independently labeled", file_id="operator_label"
+    )
+    track.self_labels = ["sexual"]
+    await db_session.commit()
+
+    operator_labels = AsyncMock(return_value={track.id: {"sexual", "porn"}})
+    with patch("backend.api.tracks.listing.get_operator_label_values", operator_labels):
+        data = await _get(test_app)
+
+    response_track = data["tracks"][0]
+    assert response_track["self_labels"] == ["sexual"]
+    assert set(response_track["operator_labels"]) == {"sexual", "porn"}
+    assert set(response_track["labels"]) == {"sexual", "porn"}
 
 
 async def test_sort_title_alphabetical(

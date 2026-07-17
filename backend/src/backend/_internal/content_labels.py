@@ -26,9 +26,21 @@ async def get_track_label_values(tracks: Iterable[Track]) -> dict[int, set[str]]
     """Union creator self-labels with active operator labels by track."""
     track_list = list(tracks)
     effective = {track.id: set(track.self_labels or []) for track in track_list}
+    operator = await get_operator_label_values(track_list)
+    for track_id, values in operator.items():
+        effective[track_id].update(values)
+    return effective
+
+
+async def get_operator_label_values(
+    tracks: Iterable[Track],
+) -> dict[int, set[str]]:
+    """Return active operator labels without creator self-labels."""
+    track_list = list(tracks)
+    operator = {track.id: set() for track in track_list}
     tracks_with_uris = [track for track in track_list if track.atproto_record_uri]
     if not tracks_with_uris:
-        return effective
+        return operator
 
     uris = [
         track.atproto_record_uri
@@ -37,8 +49,8 @@ async def get_track_label_values(tracks: Iterable[Track]) -> dict[int, set[str]]
     ]
     by_uri = await get_moderation_client().get_active_label_values(uris)
     for track in tracks_with_uris:
-        effective[track.id].update(by_uri.get(track.atproto_record_uri, set()))
-    return effective
+        operator[track.id].update(by_uri.get(track.atproto_record_uri, set()))
+    return operator
 
 
 async def viewer_shows_sensitive_audio(

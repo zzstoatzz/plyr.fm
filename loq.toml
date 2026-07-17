@@ -32,7 +32,7 @@ max_lines = 923
 
 [[rules]]
 path = "backend/src/backend/api/tracks/listing.py"
-max_lines = 609
+max_lines = 616
 
 [[rules]]
 path = "backend/src/backend/api/tracks/mutations.py"
@@ -160,7 +160,7 @@ max_lines = 3961
 
 [[rules]]
 path = "frontend/src/routes/settings/+page.svelte"
-max_lines = 1785
+max_lines = 1788
 
 [[rules]]
 path = "frontend/src/routes/track/\\[id\\]/+page.svelte"
@@ -312,7 +312,7 @@ max_lines = 923
 
 [[rules]]
 path = "frontend/src/lib/components/portal/TracksSection.svelte"
-max_lines = 1833
+max_lines = 1879
 
 [[rules]]
 path = "frontend/src/lib/components/portal/SharesSection.svelte"

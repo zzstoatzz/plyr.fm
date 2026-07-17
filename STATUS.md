@@ -70,6 +70,12 @@ the backend applies policy to the union and preserves the notice across every
 first-party record rebuild. Existing PDS records have a dry-run-first
 reconciliation path.
 
+the first UX follow-up makes that provenance visible to creators when an
+independent adult-audio label remains active, gives every portal edit field a
+distinct control surface, fixes the empty copyright heading for users without
+that feature, and adds a reproducible Storybook edit-state fixture to the
+accessibility gate.
+
 **operator lesson**: the incident exposed an access/runbook gap.
 `MODERATION_AUTH_TOKEN` emits labels, while `MODERATION_BSKY_PASSWORD` only
 updates the labeler account declaration; Neon label data lives in the separate

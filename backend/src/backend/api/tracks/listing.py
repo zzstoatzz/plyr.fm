@@ -15,7 +15,10 @@ from sqlalchemy.orm import selectinload
 
 from backend._internal import Session as AuthSession
 from backend._internal import get_optional_session, get_supported_artists, require_auth
-from backend._internal.content_labels import filter_sensitive_audio_tracks
+from backend._internal.content_labels import (
+    filter_sensitive_audio_tracks,
+    get_operator_label_values,
+)
 from backend.config import settings
 from backend.models import (
     Artist,
@@ -496,16 +499,20 @@ async def list_my_tracks(
 
     # batch fetch copyright info and tags
     track_ids = [track.id for track in tracks]
-    copyright_info, track_tags = await asyncio.gather(
+    copyright_info, track_tags, operator_labels = await asyncio.gather(
         get_copyright_info(db, track_ids),
         get_track_tags(db, track_ids),
+        get_operator_label_values(tracks),
     )
 
     # fetch all track responses concurrently
     track_responses = await asyncio.gather(
         *[
             TrackResponse.from_track(
-                track, copyright_info=copyright_info, track_tags=track_tags
+                track,
+                copyright_info=copyright_info,
+                track_tags=track_tags,
+                operator_labels=operator_labels,
             )
             for track in tracks
         ]

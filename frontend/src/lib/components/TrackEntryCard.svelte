@@ -218,7 +218,7 @@
 						onchange={(e) => onUpdate('sensitiveAudio', (e.target as HTMLInputElement).checked)}
 						{disabled}
 					/>
-					<span class="checkbox-text">contains adult or sexual audio</span>
+					<span class="checkbox-text">contains sexually explicit audio</span>
 				</label>
 				<p class="gating-note">hidden by default; listeners must opt in to sensitive audio.</p>
 			</div>
