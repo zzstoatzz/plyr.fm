@@ -1190,7 +1190,7 @@
 
 	.suggested-label {
 		font-size: var(--text-xs, 0.75rem);
-		color: var(--text-muted);
+		color: var(--text-tertiary);
 		letter-spacing: 0.02em;
 		white-space: nowrap;
 		flex-shrink: 0;
