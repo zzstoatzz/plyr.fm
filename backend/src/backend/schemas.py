@@ -157,6 +157,7 @@ class TrackResponse(BaseModel):
     visibility: str = "public"  # public | unlisted | supporters | private
     unlisted: bool = False  # derived: excluded from discovery feeds
     self_labels: list[str] = Field(default_factory=list)
+    operator_labels: set[str] = Field(default_factory=set)
     labels: set[str] = Field(default_factory=set)
 
     @classmethod
@@ -172,6 +173,7 @@ class TrackResponse(BaseModel):
         viewer_did: str | None = None,
         supported_artist_dids: set[str] | None = None,
         content_labels: dict[int, set[str]] | None = None,
+        operator_labels: dict[int, set[str]] | None = None,
     ) -> "TrackResponse":
         """build track response from Track model.
 
@@ -251,7 +253,10 @@ class TrackResponse(BaseModel):
                 )
                 gated = not (is_owner or is_supporter)
 
-        labels = set(track.self_labels or [])
+        active_operator_labels = (
+            set(operator_labels.get(track.id, set())) if operator_labels else set()
+        )
+        labels = set(track.self_labels or []) | active_operator_labels
         if content_labels:
             labels.update(content_labels.get(track.id, set()))
 
@@ -304,5 +309,6 @@ class TrackResponse(BaseModel):
             copyright_song_uri=track.copyright_song_uri,
             copyright_recording_uri=track.copyright_recording_uri,
             self_labels=list(track.self_labels or []),
+            operator_labels=active_operator_labels,
             labels=labels,
         )

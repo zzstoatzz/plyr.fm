@@ -58,8 +58,9 @@ if a track is labeled incorrectly, use the report control while viewing it or co
 
 ## for developers
 
-track responses include creator provenance in `self_labels` and the effective
-union in `labels`. For adult-labeled tracks, the audio URL points at plyr.fm's
+track responses include creator provenance in `self_labels`, active plyr.fm
+moderation provenance in `operator_labels` on creator-owned track listings,
+and the effective union in `labels`. For adult-labeled tracks, the audio URL points at plyr.fm's
 protected `/audio/{file_id}` endpoint instead of a public CDN URL. Clients must
 not cache or bypass that endpoint.
 

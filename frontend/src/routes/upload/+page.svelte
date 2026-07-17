@@ -518,7 +518,7 @@
 				<label class="content-notice-row checkbox-label">
 					<input type="checkbox" bind:checked={sensitiveAudio} />
 					<span class="access-body">
-						<span class="checkbox-text">contains adult or sexual audio</span>
+						<span class="checkbox-text">contains sexually explicit audio</span>
 						<span class="access-note">hidden by default; listeners must sign in and choose to hear sensitive audio. the notice travels with this track on ATProto.</span>
 					</span>
 				</label>

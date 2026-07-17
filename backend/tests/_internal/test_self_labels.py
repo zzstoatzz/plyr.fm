@@ -11,7 +11,10 @@ from backend._internal.atproto.self_labels import (
     parse_self_label_values_json,
     self_label_values_from_record,
 )
-from backend._internal.content_labels import get_track_label_values
+from backend._internal.content_labels import (
+    get_operator_label_values,
+    get_track_label_values,
+)
 from backend.models import Track
 
 
@@ -56,6 +59,8 @@ async def test_effective_labels_union_creator_and_operator_provenance() -> None:
         "backend._internal.content_labels.get_moderation_client",
         return_value=moderation,
     ):
+        operator_values = await get_operator_label_values([track])
         values = await get_track_label_values([track])
 
+    assert operator_values[track.id] == {"porn", "operator:reviewed"}
     assert values[track.id] == {"sexual", "porn", "operator:reviewed"}

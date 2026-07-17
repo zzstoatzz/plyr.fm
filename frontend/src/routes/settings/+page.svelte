@@ -701,6 +701,7 @@ import WaveLoading from '$lib/components/WaveLoading.svelte';
 								type="checkbox"
 								checked={showSensitiveContent}
 								indeterminate={showSensitiveArtwork !== showSensitiveAudio}
+								aria-label="show all sensitive content"
 								onchange={(e) => saveShowSensitiveContent((e.target as HTMLInputElement).checked)}
 							/>
 							<span class="toggle-slider"></span>
@@ -718,6 +719,7 @@ import WaveLoading from '$lib/components/WaveLoading.svelte';
 								<input
 									type="checkbox"
 									checked={showSensitiveArtwork}
+									aria-label="show sensitive artwork"
 									onchange={(e) => saveShowSensitiveArtwork((e.target as HTMLInputElement).checked)}
 								/>
 								<span class="toggle-slider"></span>
@@ -733,6 +735,7 @@ import WaveLoading from '$lib/components/WaveLoading.svelte';
 								<input
 									type="checkbox"
 									checked={showSensitiveAudio}
+									aria-label="show sensitive audio"
 									onchange={(e) => saveShowSensitiveAudio((e.target as HTMLInputElement).checked)}
 								/>
 								<span class="toggle-slider"></span>

@@ -59,6 +59,7 @@ export interface Track {
 	copyright_match?: string | null; // "Title by Artist" of primary match
 	labels?: string[]; // active ATProto moderation labels on the track record
 	self_labels?: string[]; // creator-published ATProto content warnings
+	operator_labels?: string[]; // active labels independently applied by plyr.fm moderation
 	support_gate?: SupportGate | null; // if set, track requires supporter access
 	gated?: boolean; // true if track is gated AND viewer lacks access
 	original_file_id?: string | null; // original file hash if transcoded
