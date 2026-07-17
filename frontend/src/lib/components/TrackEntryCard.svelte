@@ -10,6 +10,7 @@
 		featuredArtists: FeaturedArtist[];
 		hasUnresolvedFeaturesInput: boolean;
 		autoTag: boolean;
+		sensitiveAudio: boolean;
 		supportGated: boolean;
 		status: 'pending' | 'uploading' | 'processing' | 'completed' | 'failed';
 		error: string | null;
@@ -206,6 +207,20 @@
 					onRemove={(did) => onUpdate('featuredArtists', entry.featuredArtists.filter((a) => a.did !== did))}
 					{disabled}
 				/>
+			</div>
+
+			<div class="form-group content-notice">
+				<span class="field-label">content notice</span>
+				<label class="checkbox-label">
+					<input
+						type="checkbox"
+						checked={entry.sensitiveAudio}
+						onchange={(e) => onUpdate('sensitiveAudio', (e.target as HTMLInputElement).checked)}
+						{disabled}
+					/>
+					<span class="checkbox-text">contains adult or sexual audio</span>
+				</label>
+				<p class="gating-note">hidden by default; listeners must opt in to sensitive audio.</p>
 			</div>
 
 			{#if artistProfile?.support_url}
@@ -490,6 +505,20 @@
 		font-size: var(--text-base);
 		color: var(--text-primary);
 		line-height: 1.4;
+	}
+
+	.content-notice {
+		background: color-mix(in srgb, var(--accent) 5%, var(--bg-primary));
+		padding: 1rem;
+		border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border-default));
+		border-radius: var(--radius-sm);
+	}
+
+	.field-label {
+		display: block;
+		margin-bottom: 0.75rem;
+		font-size: var(--text-sm);
+		color: var(--text-secondary);
 	}
 
 	.supporter-gating {

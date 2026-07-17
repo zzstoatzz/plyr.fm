@@ -156,6 +156,7 @@ class TrackResponse(BaseModel):
     pds_blob_cid: str | None = None  # CID if stored on user's PDS
     visibility: str = "public"  # public | unlisted | supporters | private
     unlisted: bool = False  # derived: excluded from discovery feeds
+    self_labels: list[str] = Field(default_factory=list)
     labels: set[str] = Field(default_factory=set)
 
     @classmethod
@@ -250,7 +251,9 @@ class TrackResponse(BaseModel):
                 )
                 gated = not (is_owner or is_supporter)
 
-        labels = content_labels.get(track.id, set()) if content_labels else set()
+        labels = set(track.self_labels or [])
+        if content_labels:
+            labels.update(content_labels.get(track.id, set()))
 
         # Preserve the existing API contract for ordinary and private tracks.
         # Adult-labeled audio is the narrow exception: never expose its backing
@@ -300,5 +303,6 @@ class TrackResponse(BaseModel):
             unlisted=not track.in_discovery,
             copyright_song_uri=track.copyright_song_uri,
             copyright_recording_uri=track.copyright_recording_uri,
+            self_labels=list(track.self_labels or []),
             labels=labels,
         )

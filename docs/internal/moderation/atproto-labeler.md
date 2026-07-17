@@ -10,6 +10,11 @@ the moderation service (`moderation.plyr.fm`) acts as an ATProto labeler — a s
 
 key distinction: **labels are signed data objects, not repository records**. they don't live in a user's repo — they're served directly by the labeler via XRPC endpoints.
 
+creator self-labels are the complementary mechanism: they live inside the
+creator's repository record as `com.atproto.label.defs#selfLabels`. plyr.fm
+preserves the two provenances separately and evaluates their union; the labeler
+must not re-emit a creator assertion as though it were an operator decision.
+
 ## why labels?
 
 from [Bluesky's labeling architecture](https://docs.bsky.app/docs/advanced-guides/moderation):
@@ -150,13 +155,18 @@ the original overview discussed three options. we went with **option B** — the
 |-----|---------|------------|
 | `copyright-violation` | confirmed copyright match | admin dashboard (now), Osprey high-confidence rule (future) |
 | `copyright-review` | needs manual review | Osprey moderate-confidence rule (future) |
-| `sexual` | sexually suggestive or explicit content; global ATProto value | creator self-label or operator |
-| `porn` | pornographic content; global ATProto value | creator self-label or operator |
+| `sexual` | sexually suggestive or explicit content; global ATProto value | creator PDS record and/or operator labeler |
+| `porn` | pornographic content; global ATProto value | creator PDS record and/or operator labeler |
 
 `sexual` and `porn` are deliberately not plyr.fm-specific inventions. They are
 global ATProto label values, and ATProto's media labels apply to audio as well as
 images and video. A label is an assertion; plyr.fm's separate policy layer maps
 both values to the adult-audio preference and keeps anonymous access disabled.
+
+creator removal and labeler negation are intentionally independent. A creator
+can remove only their repo assertion; they cannot clear an operator label by
+editing the track. Likewise, negating an operator label does not rewrite the
+creator's repository.
 
 ### negation labels
 

@@ -23,10 +23,12 @@ def has_adult_audio_label(labels: Iterable[str]) -> bool:
 
 
 async def get_track_label_values(tracks: Iterable[Track]) -> dict[int, set[str]]:
-    """Fetch active labels for tracks in one labeler request."""
-    tracks_with_uris = [track for track in tracks if track.atproto_record_uri]
+    """Union creator self-labels with active operator labels by track."""
+    track_list = list(tracks)
+    effective = {track.id: set(track.self_labels or []) for track in track_list}
+    tracks_with_uris = [track for track in track_list if track.atproto_record_uri]
     if not tracks_with_uris:
-        return {}
+        return effective
 
     uris = [
         track.atproto_record_uri
@@ -34,10 +36,9 @@ async def get_track_label_values(tracks: Iterable[Track]) -> dict[int, set[str]]
         if track.atproto_record_uri is not None
     ]
     by_uri = await get_moderation_client().get_active_label_values(uris)
-    return {
-        track.id: by_uri.get(track.atproto_record_uri, set())
-        for track in tracks_with_uris
-    }
+    for track in tracks_with_uris:
+        effective[track.id].update(by_uri.get(track.atproto_record_uri, set()))
+    return effective
 
 
 async def viewer_shows_sensitive_audio(

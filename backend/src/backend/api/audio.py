@@ -44,16 +44,21 @@ async def _enforce_content_label_access(
     db: AsyncSession,
     *,
     uri: str | None,
+    self_labels: list[str],
     artist_did: str,
     session: Session | None,
 ) -> None:
     """Require an authenticated opt-in before serving adult-labeled audio."""
-    if not uri:
-        return
+    labels = set(self_labels)
     try:
-        labels = (
-            await get_moderation_client().get_active_label_values([uri], strict=True)
-        ).get(uri, set())
+        if uri:
+            labels.update(
+                (
+                    await get_moderation_client().get_active_label_values(
+                        [uri], strict=True
+                    )
+                ).get(uri, set())
+            )
     except Exception as exc:
         raise HTTPException(
             status_code=503,
@@ -108,6 +113,7 @@ async def stream_audio(
                 Track.is_private,
                 Track.space_uri,
                 Track.atproto_record_uri,
+                Track.self_labels,
             )
             .where(or_(Track.file_id == file_id, Track.original_file_id == file_id))
             .order_by(Track.r2_url.is_not(None).desc(), Track.created_at.desc())
@@ -131,11 +137,13 @@ async def stream_audio(
             is_private,
             space_uri,
             atproto_record_uri,
+            self_labels,
         ) = track_data
 
         await _enforce_content_label_access(
             db,
             uri=atproto_record_uri,
+            self_labels=self_labels,
             artist_did=artist_did,
             session=session,
         )
@@ -299,6 +307,7 @@ async def get_audio_url(
                 Track.is_private,
                 Track.space_uri,
                 Track.atproto_record_uri,
+                Track.self_labels,
             )
             .where(or_(Track.file_id == file_id, Track.original_file_id == file_id))
             .order_by(Track.r2_url.is_not(None).desc(), Track.created_at.desc())
@@ -322,11 +331,13 @@ async def get_audio_url(
             is_private,
             _space_uri,
             atproto_record_uri,
+            self_labels,
         ) = track_data
 
         await _enforce_content_label_access(
             db,
             uri=atproto_record_uri,
+            self_labels=self_labels,
             artist_did=artist_did,
             session=session,
         )

@@ -230,6 +230,7 @@ async def restore_track_revision(
         support_gate=dict(track.support_gate) if track.support_gate else None,
         audio_blob=audio_blob,
         description=track.description,
+        self_labels=track.self_labels,
     )
     # track the effective PDS blob state that will land on the DB row:
     # - if the initial update_record succeeds: revision's own ref (no change)

@@ -193,6 +193,29 @@ async def test_adult_labeled_audio_is_hidden_from_anonymous_viewers(
     assert response.headers["x-content-labels"] == "sexual"
 
 
+async def test_creator_self_labeled_audio_is_hidden_from_anonymous_viewers(
+    test_app: FastAPI,
+    test_track_with_r2_url: Track,
+    db_session: AsyncSession,
+):
+    """A creator assertion gates bytes without an operator label."""
+    test_track_with_r2_url.self_labels = ["sexual"]
+    await db_session.commit()
+    mock_moderation = MagicMock()
+    mock_moderation.get_active_label_values = AsyncMock(return_value={})
+
+    with patch("backend.api.audio.get_moderation_client", return_value=mock_moderation):
+        async with AsyncClient(
+            transport=ASGITransport(app=test_app), base_url="http://test"
+        ) as client:
+            response = await client.get(
+                f"/audio/{test_track_with_r2_url.file_id}", follow_redirects=False
+            )
+
+    assert response.status_code == 401
+    assert response.headers["x-content-labels"] == "sexual"
+
+
 async def test_adult_labeled_audio_is_available_after_opt_in(
     test_app: FastAPI,
     test_track_with_r2_url: Track,

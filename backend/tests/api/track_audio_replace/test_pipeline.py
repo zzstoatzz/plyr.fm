@@ -237,6 +237,7 @@ class TestReplaceOrchestration:
         publish time — different microsecond, assertion fails.
         """
         track = make_track(file_id="OLD")
+        track.self_labels = ["sexual"]
         db_session.add(track)
         await db_session.commit()
         await db_session.refresh(track)
@@ -260,6 +261,7 @@ class TestReplaceOrchestration:
         # `build_track_record` serializes UTC datetimes as `...Z`.
         expected = original_created_at.isoformat().replace("+00:00", "Z")
         assert captured_record["createdAt"] == expected
+        assert captured_record["labels"]["values"] == [{"val": "sexual"}]
 
     async def test_lossless_replace_records_original_file_id(
         self, db_session: AsyncSession, owner: Artist
@@ -602,6 +604,7 @@ def test_track_audio_state_dataclass() -> None:
         features=[],
         image_url=None,
         description=None,
+        self_labels=[],
         support_gate=None,
         created_at=datetime.now(UTC),
     )

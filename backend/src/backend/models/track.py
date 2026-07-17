@@ -77,6 +77,11 @@ class Track(Base):
     r2_url: Mapped[str | None] = mapped_column(String, nullable=True)
     atproto_record_uri: Mapped[str | None] = mapped_column(String, nullable=True)
     atproto_record_cid: Mapped[str | None] = mapped_column(String, nullable=True)
+    # Author-published `com.atproto.label.defs#selfLabels` values. These remain
+    # separate from signed operator labels so provenance stays intact.
+    self_labels: Mapped[list[str]] = mapped_column(
+        JSONB, nullable=False, default=list, server_default="[]"
+    )
 
     # PDS blob storage (for audio stored on user's PDS)
     audio_storage: Mapped[str] = mapped_column(

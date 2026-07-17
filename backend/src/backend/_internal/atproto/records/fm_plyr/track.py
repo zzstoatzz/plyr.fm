@@ -10,6 +10,7 @@ from atproto_identity.did.resolver import AsyncDidResolver
 from backend._internal import Session as AuthSession
 from backend._internal.atproto.client import BlobRef, make_pds_request, parse_at_uri
 from backend._internal.atproto.profiles import resolve_dids
+from backend._internal.atproto.self_labels import build_self_labels
 from backend.config import settings
 from backend.models import Track
 
@@ -32,6 +33,7 @@ async def build_track_record(
     support_gate: dict[str, Any] | None = None,
     audio_blob: BlobRef | None = None,
     description: str | None = None,
+    self_labels: list[str] | None = None,
     created_at: datetime | None = None,
 ) -> dict[str, Any]:
     """Build a track record dict for ATProto.
@@ -49,6 +51,7 @@ async def build_track_record(
         support_gate: optional gating config (e.g., {"type": "any"})
         audio_blob: optional blob reference from PDS upload (canonical source when present)
         description: optional track description (liner notes, show notes)
+        self_labels: creator-published ATProto content-warning values
         created_at: optional timestamp (uses now if not provided)
 
     returns:
@@ -90,6 +93,8 @@ async def build_track_record(
         record["supportGate"] = support_gate
     if description:
         record["description"] = description
+    if labels := build_self_labels(self_labels or []):
+        record["labels"] = labels
     if audio_blob:
         record["audioBlob"] = audio_blob
 
@@ -109,6 +114,7 @@ async def create_track_record(
     support_gate: dict[str, Any] | None = None,
     audio_blob: BlobRef | None = None,
     description: str | None = None,
+    self_labels: list[str] | None = None,
     rkey: str | None = None,
     created_at: datetime | None = None,
 ) -> tuple[str, str]:
@@ -132,6 +138,7 @@ async def create_track_record(
         support_gate: optional gating config (e.g., {"type": "any"})
         audio_blob: optional blob reference from PDS upload (canonical source when present)
         description: optional track description (liner notes, show notes)
+        self_labels: creator-published ATProto content-warning values
         rkey: optional explicit record key (TID). uses putRecord when provided
         created_at: optional timestamp for the record (uses now if not provided)
 
@@ -154,6 +161,7 @@ async def create_track_record(
         support_gate=support_gate,
         audio_blob=audio_blob,
         description=description,
+        self_labels=self_labels,
         created_at=created_at,
     )
 
@@ -333,6 +341,7 @@ async def rebuild_track_pds_record(
         image_url=image_url_override or await track.get_image_url(),
         support_gate=track.support_gate,
         description=track.description,
+        self_labels=track.self_labels,
     )
 
     result = await update_record(

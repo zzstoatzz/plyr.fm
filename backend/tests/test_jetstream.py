@@ -356,6 +356,10 @@ class TestIngestTrackCreate:
             "fileType": "mp3",
             "audioUrl": "https://r2.example.com/js_file_001.mp3",
             "duration": 180,
+            "labels": {
+                "$type": "com.atproto.label.defs#selfLabels",
+                "values": [{"val": "sexual"}],
+            },
             "createdAt": _recent_ts(),
         }
         uri = "at://did:plc:jetstream_test/fm.plyr.track/newtrack1"
@@ -374,6 +378,7 @@ class TestIngestTrackCreate:
         assert track.audio_storage == "r2"
         assert track.extra.get("duration") == 180
         assert track.publish_state == "published"
+        assert track.self_labels == ["sexual"]
 
     async def test_dedup_by_uri(
         self, db_session: AsyncSession, artist: Artist, track: Track
@@ -917,6 +922,60 @@ class TestIngestTrackDelete:
 
 
 class TestIngestTrackUpdate:
+    async def test_replaces_creator_self_labels_from_full_record(
+        self, db_session: AsyncSession, artist: Artist, track: Track
+    ) -> None:
+        """A PDS putRecord replaces the indexed creator assertion."""
+        assert track.atproto_record_uri is not None
+        uri = track.atproto_record_uri
+        track.self_labels = ["sexual"]
+        await db_session.commit()
+
+        await ingest_track_update(
+            did=artist.did,
+            rkey="existing",
+            record={
+                "title": track.title,
+                "labels": {
+                    "$type": "com.atproto.label.defs#selfLabels",
+                    "values": [{"val": "porn"}],
+                },
+            },
+            uri=uri,
+            cid="bafyselflabels",
+        )
+
+        db_session.expire_all()
+        updated = await db_session.scalar(
+            select(Track).where(Track.atproto_record_uri == uri)
+        )
+        assert updated is not None
+        assert updated.self_labels == ["porn"]
+
+    async def test_absent_creator_self_labels_clears_indexed_assertion(
+        self, db_session: AsyncSession, artist: Artist, track: Track
+    ) -> None:
+        """The full replacement record is authoritative when labels are removed."""
+        assert track.atproto_record_uri is not None
+        uri = track.atproto_record_uri
+        track.self_labels = ["sexual"]
+        await db_session.commit()
+
+        await ingest_track_update(
+            did=artist.did,
+            rkey="existing",
+            record={"title": track.title},
+            uri=uri,
+            cid="bafyclearedlabels",
+        )
+
+        db_session.expire_all()
+        updated = await db_session.scalar(
+            select(Track).where(Track.atproto_record_uri == uri)
+        )
+        assert updated is not None
+        assert updated.self_labels == []
+
     async def test_updates_mutable_fields(
         self, db_session: AsyncSession, artist: Artist, track: Track
     ) -> None:

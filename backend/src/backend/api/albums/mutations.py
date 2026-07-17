@@ -433,6 +433,7 @@ async def update_album(
                     duration=track.duration,
                     features=track.features if track.features else None,
                     image_url=await track.get_image_url(),
+                    self_labels=track.self_labels,
                 )
 
                 _, new_cid = await update_record(
