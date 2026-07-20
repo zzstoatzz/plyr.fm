@@ -205,9 +205,13 @@ async def test_ensure_personal_space_uses_simplespace_shape(
         oauth_session={"pds_url": "https://x"},
     )
 
-    space = await space_client.ensure_personal_space(
-        session, space_type="fm.plyr.privateMedia", skey="self"
+    monkeypatch.setattr(
+        space_client.settings.atproto,
+        "app_namespace",
+        "fm.plyr",
     )
+
+    space = await space_client.ensure_personal_space(session, skey="self")
 
     assert space == "at://did:plc:x/space/fm.plyr.privateMedia/self"
     request.assert_awaited_once_with(

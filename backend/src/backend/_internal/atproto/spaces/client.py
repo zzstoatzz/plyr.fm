@@ -103,7 +103,6 @@ async def _raw_bearer_request(
 async def ensure_personal_space(
     auth_session: AuthSession,
     *,
-    space_type: str | None = None,
     skey: str = "self",
 ) -> str:
     """create (or find) the caller's artist-owned personal space; return its URI.
@@ -112,7 +111,7 @@ async def ensure_personal_space(
     this owner-only MVP. App access stays open so local/public OAuth clients can
     exercise the experimental feature without a confidential-client key.
     """
-    space_type = space_type or settings.atproto.private_media_space_type
+    space_type = settings.atproto.private_media_space_type
     space_uri = build_space_uri(auth_session.did, space_type, skey)
     try:
         await make_pds_request(

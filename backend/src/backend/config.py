@@ -494,8 +494,8 @@ class AtprotoSettings(AppSettingsSection):
     def private_media_space_type(self) -> str:
         """Permissioned-space type NSID for artist-owned private media.
 
-        also the id of the permission-set lexicon that grants access to it (same
-        NSID). records inside the space reuse the public track collection lexicon.
+        Records inside the space reuse the public track collection lexicon. OAuth
+        access is bundled separately by ``private_media_include_scope``.
         """
 
         return f"{self.app_namespace}.privateMedia"
