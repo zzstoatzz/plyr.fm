@@ -2,7 +2,7 @@
 
 private tracks set is_private=True (and unlisted=True). they must be excluded from
 public search and from an artist page viewed by anyone but the owner, and must
-serialize without tripping over their ats:// record URI.
+serialize without treating their permissioned at:// URI as a public record.
 """
 
 import pytest
@@ -43,9 +43,9 @@ async def _make_track(db_session: AsyncSession, *, title: str, fid: str, private
         file_id=fid,
         file_type="mp3",
         visibility="private" if private else "public",
-        space_uri=(f"ats://{_DID}/fm.plyr.privateMedia/self" if private else None),
+        space_uri=(f"at://{_DID}/space/fm.plyr.privateMedia/self" if private else None),
         atproto_record_uri=(
-            f"ats://{_DID}/fm.plyr.privateMedia/self/{_DID}/fm.plyr.track/rk"
+            f"at://{_DID}/space/fm.plyr.privateMedia/self/{_DID}/fm.plyr.track/rk"
             if private
             else f"at://{_DID}/fm.plyr.track/rk"
         ),
@@ -98,7 +98,7 @@ async def test_private_track_serializes_without_at_uri_crash(
             .where(Track.file_id == "ser_priv")
         )
     ).scalar_one()
-    # passing a pds_url used to push the ats:// URI through parse_at_uri and raise
+    # A PDS URL must not turn a permissioned URI into a public record endpoint.
     resp = await TrackResponse.from_track(track, pds_url="https://test.pds")
     assert resp.atproto_record_url is None
     assert resp.r2_url is None

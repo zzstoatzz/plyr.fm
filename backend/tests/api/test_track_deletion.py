@@ -233,7 +233,7 @@ async def test_private_track_delete_uses_space_api_and_never_r2(
     """permissioned records delete through space.deleteRecord; their synthetic
     content-hash file IDs must never be interpreted as R2 object keys."""
     record_uri = (
-        "ats://did:plc:artist123/fm.plyr.privateMedia/self/"
+        "at://did:plc:artist123/space/fm.plyr.privateMedia/self/"
         "did:plc:artist123/fm.plyr.track/private1"
     )
     track = Track(
@@ -244,7 +244,7 @@ async def test_private_track_delete_uses_space_api_and_never_r2(
         extra={},
         visibility="private",
         audio_storage="pds",
-        space_uri="ats://did:plc:artist123/fm.plyr.privateMedia/self",
+        space_uri="at://did:plc:artist123/space/fm.plyr.privateMedia/self",
         pds_blob_cid="bafkreiprivate",
         atproto_record_uri=record_uri,
         atproto_record_cid="bafyprivate",

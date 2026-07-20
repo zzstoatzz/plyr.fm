@@ -210,15 +210,10 @@ class TrackResponse(BaseModel):
                 artist_avatar_url=track.artist.avatar_url,
             )
 
-        # construct atproto record URL — only for public at:// records. private
-        # media uses an ats:// permissioned-space URI that parse_at_uri can't read
-        # and that has no public getRecord endpoint, so it has no record URL.
+        # Construct a public-repo record URL only. Permissioned records now also
+        # use at://, but require a space credential and have no public getRecord.
         atproto_record_url: str | None = None
-        if (
-            track.atproto_record_uri
-            and pds_url
-            and track.atproto_record_uri.startswith("at://")
-        ):
+        if track.atproto_record_uri and pds_url and not track.space_uri:
             _, _, rkey = parse_at_uri(track.atproto_record_uri)
             atproto_record_url = (
                 f"{pds_url}/xrpc/com.atproto.repo.getRecord"

@@ -470,6 +470,34 @@ def _create_client_assertion(
     return dpop._sign_jwt(header, payload, private_key)
 
 
+def create_space_client_attestation(audience: str) -> str | None:
+    """Create a Proposal-0016 client attestation for a space authority.
+
+    Public clients cannot prove a stable client identity and therefore return
+    ``None``. Confidential deployments reuse the OAuth client's published ES256
+    key, but use the permissioned-data-specific JWT ``typ`` and audience.
+    """
+    private_key, kid = _load_client_secret()
+    if private_key is None or kid is None:
+        return None
+
+    now = int(time.time())
+    header = {
+        "alg": "ES256",
+        "typ": "atproto-client-attestation+jwt",
+        "kid": kid,
+    }
+    payload = {
+        "iss": settings.atproto.client_id,
+        "sub": settings.atproto.client_id,
+        "aud": audience,
+        "jti": secrets.token_urlsafe(16),
+        "iat": now,
+        "exp": now + 60,
+    }
+    return DPoPManager()._sign_jwt(header, payload, private_key)
+
+
 async def _resolve_handle_from_pds(pds_url: str, did: str) -> str | None:
     """resolve handle from PDS when OAuth doesn't return it.
 

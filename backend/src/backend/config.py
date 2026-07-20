@@ -510,7 +510,7 @@ class AtprotoSettings(AppSettingsSection):
         expands into the concrete `space:<type>?action=...` scopes on the token.
         """
 
-        return f"include:{self.private_media_space_type}"
+        return f"include:{self.app_namespace}.privateMediaAccess"
 
     @computed_field
     @property
