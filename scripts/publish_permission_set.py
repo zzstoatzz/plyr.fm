@@ -1,10 +1,11 @@
 #!/usr/bin/env python
 """publish permission set lexicons from lexicons/ to the plyr.fm ATProto repo.
 
-usage: uv run scripts/publish_permission_set.py authFullApp [privateMedia privateMediaAccess]
+usage: uv run --project backend scripts/publish_permission_set.py authFullApp [privateMedia privateMediaAccess]
 
 publishes to the namespace in NAMESPACE (default: fm.plyr, i.e. production).
-for staging: NAMESPACE=fm.plyr.stg uv run scripts/publish_permission_set.py ...
+for staging:
+NAMESPACE=fm.plyr.stg uv run --project backend scripts/publish_permission_set.py ...
 """
 
 import argparse

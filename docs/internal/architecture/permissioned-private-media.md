@@ -175,11 +175,11 @@ Rollout order matters:
 
    ```bash
    # before merging to main (main auto-deploys staging)
-   NAMESPACE=fm.plyr.stg uv run scripts/publish_permission_set.py \
+   NAMESPACE=fm.plyr.stg uv run --project backend scripts/publish_permission_set.py \
      privateMedia privateMediaAccess
 
    # before the later production `just release`
-   NAMESPACE=fm.plyr uv run scripts/publish_permission_set.py \
+   NAMESPACE=fm.plyr uv run --project backend scripts/publish_permission_set.py \
      privateMedia privateMediaAccess
    ```
 
