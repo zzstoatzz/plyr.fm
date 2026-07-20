@@ -421,13 +421,13 @@ async def _handle_private_audio(
 ) -> Response:
     """proxy a private track's audio through the permissioned-space credential path.
 
-    access is owner-only by plyr.fm's APP-LAYER policy: the protocol no longer
-    enumerates readers (ZDS dropped member-list semantics, #1573), so reader/group
-    access is the app's concern, not the PDS's. for this MVP the only reader is the
-    space owner, so a non-owner (or anonymous) request gets a 404 — the same as a
-    missing file, so private tracks don't leak their existence. broader access
-    (label rosters, supporter tiers) would be a future app-layer roster, not a PDS
-    member list. Range is passed through so the 206/seek semantics survive the proxy.
+    access is owner-only at two layers: plyr.fm rejects non-owners here, while the
+    ``simplespace`` created for this MVP uses its explicit ``member-list`` policy.
+    Core permissioned spaces do not enumerate readers, but ``simplespace`` is the
+    required PDS management layer above that core protocol and may maintain members.
+    A non-owner (or anonymous) request gets a 404 — the same as a missing file — so
+    private tracks do not leak their existence. Range is passed through so the
+    206/seek semantics survive the proxy.
     """
     if session is None or session.did != artist_did:
         raise HTTPException(status_code=404, detail="audio file not found")

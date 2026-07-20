@@ -353,3 +353,7 @@ max_lines = 512
 [[rules]]
 path = "backend/src/backend/_internal/clients/moderation.py"
 max_lines = 579
+
+[[rules]]
+path = "backend/tests/_internal/test_permissioned_spaces.py"
+max_lines = 634

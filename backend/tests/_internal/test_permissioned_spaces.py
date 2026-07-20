@@ -490,3 +490,145 @@ async def test_space_credential_cache_and_force_refresh(monkeypatch):
     )
     assert renewed == "cred-2"
     assert calls["n"] == 2
+
+
+# --- discovery and sync routing ----------------------------------------------
+
+
+async def test_list_spaces_routes_through_authenticated_pds(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    request = AsyncMock(return_value={"spaces": []})
+    monkeypatch.setattr(space_client, "make_pds_request", request)
+    session = Session(
+        session_id="s",
+        did="did:plc:user",
+        handle="user.test",
+        oauth_session={},
+    )
+
+    result = await space_client.list_spaces(
+        session,
+        space_type="fm.example.catalog",
+        limit=25,
+    )
+
+    assert result == {"spaces": []}
+    request.assert_awaited_once_with(
+        session,
+        "GET",
+        "com.atproto.space.listSpaces",
+        params={
+            "did": "did:plc:user",
+            "limit": 25,
+            "type": "fm.example.catalog",
+        },
+    )
+
+
+async def test_list_space_repos_routes_to_authority_host(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    read = AsyncMock(return_value={"repos": []})
+    host = AsyncMock(return_value="https://authority-space.example")
+    monkeypatch.setattr(space_client, "_credential_read", read)
+    monkeypatch.setattr(space_client, "_space_host_url", host)
+    session = Session(
+        session_id="s",
+        did="did:plc:user",
+        handle="user.test",
+        oauth_session={},
+    )
+    space = "at://did:plc:authority/space/fm.example.catalog/main"
+
+    result = await space_client.list_space_repos(session, space, limit=20)
+
+    assert result == {"repos": []}
+    host.assert_awaited_once_with(space)
+    read.assert_awaited_once_with(
+        session,
+        host_url="https://authority-space.example",
+        endpoint="com.atproto.space.listRepos",
+        space=space,
+        params={"space": space, "limit": 20},
+    )
+
+
+async def test_list_space_records_routes_to_writer_repo_host(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    read = AsyncMock(return_value={"records": []})
+    host = AsyncMock(return_value="https://writer-pds.example")
+    monkeypatch.setattr(space_client, "_credential_read", read)
+    monkeypatch.setattr(space_client, "_repo_host_url", host)
+    session = Session(
+        session_id="s",
+        did="did:plc:user",
+        handle="user.test",
+        oauth_session={},
+    )
+    space = "at://did:plc:authority/space/fm.example.catalog/main"
+
+    result = await space_client.list_space_records(
+        session,
+        space=space,
+        repo="did:plc:writer",
+        collection="fm.example.track",
+        limit=75,
+        exclude_values=True,
+    )
+
+    assert result == {"records": []}
+    host.assert_awaited_once_with("did:plc:writer")
+    read.assert_awaited_once_with(
+        session,
+        host_url="https://writer-pds.example",
+        endpoint="com.atproto.space.listRecords",
+        space=space,
+        params={
+            "space": space,
+            "repo": "did:plc:writer",
+            "limit": 75,
+            "excludeValues": True,
+            "collection": "fm.example.track",
+        },
+    )
+
+
+async def test_list_space_repo_ops_routes_to_writer_repo_host(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    read = AsyncMock(return_value={"ops": []})
+    host = AsyncMock(return_value="https://writer-pds.example")
+    monkeypatch.setattr(space_client, "_credential_read", read)
+    monkeypatch.setattr(space_client, "_repo_host_url", host)
+    session = Session(
+        session_id="s",
+        did="did:plc:user",
+        handle="user.test",
+        oauth_session={},
+    )
+    space = "at://did:plc:authority/space/fm.example.catalog/main"
+
+    result = await space_client.list_space_repo_ops(
+        session,
+        space=space,
+        repo="did:plc:writer",
+        since="3mabc",
+        limit=250,
+    )
+
+    assert result == {"ops": []}
+    host.assert_awaited_once_with("did:plc:writer")
+    read.assert_awaited_once_with(
+        session,
+        host_url="https://writer-pds.example",
+        endpoint="com.atproto.space.listRepoOps",
+        space=space,
+        params={
+            "space": space,
+            "repo": "did:plc:writer",
+            "since": "3mabc",
+            "limit": 250,
+        },
+    )
