@@ -68,7 +68,8 @@ organized knowledge base for plyr.fm development.
 ## architecture overview
 
 plyr.fm uses a hybrid storage model:
-- **audio files**: cloudflare R2 (CDN-backed, zero egress)
+- **audio files**: cloudflare R2 for public and app-gated delivery; experimental
+  owner-private audio lives only in an artist-owned permissioned space on their PDS
 - **metadata**: ATProto records on user's PDS (decentralized, user-owned)
 - **indexes**: neon postgres for fast queries
 
@@ -80,6 +81,8 @@ key namespaces:
 - `fm.plyr.comment` - timed comments
 - `fm.plyr.list` - playlists and albums
 - `fm.plyr.actor.profile` - artist profiles
+- `fm.plyr.privateMedia` - experimental permissioned-space declaration
+- `fm.plyr.privateMediaAccess` - OAuth permission set for that space
 
 ## quick start
 

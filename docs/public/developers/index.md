@@ -5,7 +5,10 @@ description: "build on plyr.fm — API, lexicons, and architecture"
 
 open API, open data, open protocol. build a player, a recommendation engine, or something nobody's thought of yet.
 
-plyr.fm exposes a public API, a Python SDK, and an MCP server. all track data is atproto records — portable, verifiable, and queryable by any client.
+plyr.fm exposes a public API, a Python SDK, and an MCP server. public track data is
+portable ATProto records, verifiable and queryable by any client. Experimental private
+tracks instead use credential-gated permissioned records and are not part of the public
+repository or API surface.
 
 ## using a coding assistant?
 

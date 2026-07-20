@@ -170,17 +170,38 @@ record/convention and application enforcement.
 Rollout order matters:
 
 1. publish the `privateMedia` space declaration and `privateMediaAccess` permission set
-   for the target environment namespace;
+   for the target environment namespace. The script reads `PLYRFM_HANDLE` and
+   `PLYRFM_PASSWORD` from `.env`; never print the app password:
+
+   ```bash
+   # before merging to main (main auto-deploys staging)
+   NAMESPACE=fm.plyr.stg uv run scripts/publish_permission_set.py \
+     privateMedia privateMediaAccess
+
+   # before the later production `just release`
+   NAMESPACE=fm.plyr uv run scripts/publish_permission_set.py \
+     privateMedia privateMediaAccess
+   ```
+
 2. deploy the backend and run the database URI migration;
 3. run `scripts/permissioned_smoke.py` against an aligned ZDS account;
 4. verify an existing migrated private track still plays and a new upload creates a
    canonical URI;
 5. verify a non-supporting PDS continues to hide the private option.
 
+Publishing must precede deployment because a newly upgraded browser session requests
+`include:<namespace>.privateMediaAccess`; the PDS must be able to resolve that permission
+set during authorization. Existing sessions without the include will be sent through the
+normal one-time OAuth scope upgrade when they first choose private media.
+
 The smoke script covers space creation, record/blob writes, credential exchange, record
 reads, and ranged blob playback. Unit tests cover URI parsing, current config shape,
 scope composition, attestation inclusion, host routing, credential renewal, and the public
 record URL boundary.
+
+The smoke script currently authenticates with an app password. It proves the aligned ZDS
+data path, but not the browser OAuth scope-upgrade or confidential-client attestation path.
+That browser-level interoperability proof remains in #1684.
 
 ## remaining product work
 
