@@ -1,14 +1,17 @@
 """unit tests for the permissioned-data spaces foundation (#1528).
 
-pure-logic + mocked-PDS-boundary tests for capability detection, ats:// URI
+pure-logic + mocked-PDS-boundary tests for capability detection, canonical URI
 helpers, the OAuth scope composition, and space-credential caching/renewal. the
 full data path is exercised against a live ZDS by scripts/permissioned_smoke.py.
 """
 
+from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import httpx
 import pytest
+from cryptography.hazmat.primitives.asymmetric import ec
+from jose import jwt
 
 from backend._internal import Session
 from backend._internal.atproto.spaces import capability as cap
@@ -19,21 +22,22 @@ from backend._internal.atproto.spaces.uris import (
     parse_space_record_uri,
     parse_space_uri,
 )
+from backend._internal.auth import oauth as oauth_module
 from backend.config import settings
 
-# --- ats:// URI helpers -------------------------------------------------------
+# --- canonical permissioned at:// URI helpers --------------------------------
 
 
 def test_space_and_record_uri_roundtrip():
     space = build_space_uri("did:plc:abc", "fm.plyr.privateMedia", "self")
-    assert space == "ats://did:plc:abc/fm.plyr.privateMedia/self"
+    assert space == "at://did:plc:abc/space/fm.plyr.privateMedia/self"
 
     record = build_record_uri(space, "did:plc:abc", "fm.plyr.track", "rkey1")
     assert record == (
-        "ats://did:plc:abc/fm.plyr.privateMedia/self/did:plc:abc/fm.plyr.track/rkey1"
+        "at://did:plc:abc/space/fm.plyr.privateMedia/self/did:plc:abc/fm.plyr.track/rkey1"
     )
 
-    # parse_space_uri returns the 3-segment space portion from either form
+    # parse_space_uri returns the space portion from either form
     for uri in (space, record):
         parsed = parse_space_uri(uri)
         assert parsed.owner_did == "did:plc:abc"
@@ -48,7 +52,8 @@ def test_space_and_record_uri_roundtrip():
 
 
 @pytest.mark.parametrize(
-    "bad", ["at://did:plc:abc/x/y", "ats://did:plc:abc", "ats://did:plc:abc//self", ""]
+    "bad",
+    ["at://did:plc:abc/x/y", "ats://did:plc:abc", "at://did:plc:abc/space//self", ""],
 )
 def test_parse_space_uri_rejects_malformed(bad):
     with pytest.raises(ValueError):
@@ -59,9 +64,9 @@ def test_parse_space_uri_rejects_malformed(bad):
     "bad",
     [
         "at://did:plc:abc/x/y",
-        "ats://did:plc:abc/x/self",
-        "ats://did:plc:abc/x/self/did:plc:abc/y",
-        "ats://did:plc:abc/x/self/did:plc:abc/y/rkey/extra",
+        "at://did:plc:abc/space/x/self",
+        "at://did:plc:abc/space/x/self/did:plc:abc/y",
+        "at://did:plc:abc/space/x/self/did:plc:abc/y/rkey/extra",
     ],
 )
 def test_parse_space_record_uri_rejects_malformed(bad: str) -> None:
@@ -180,8 +185,8 @@ def test_permissioned_scope_opt_in_only():
 
     with_perm = settings.atproto.resolved_scope_with_extras(permissioned_spaces=True)
     assert settings.atproto.private_media_include_scope in with_perm
-    assert (
-        settings.atproto.private_media_include_scope == "include:fm.plyr.privateMedia"
+    assert settings.atproto.private_media_include_scope == (
+        "include:fm.plyr.privateMediaAccess"
     )
 
 
@@ -200,23 +205,28 @@ async def test_ensure_personal_space_uses_simplespace_shape(
         oauth_session={"pds_url": "https://x"},
     )
 
-    space = await space_client.ensure_personal_space(
-        session, space_type="fm.plyr.privateMedia", skey="self"
+    monkeypatch.setattr(
+        space_client.settings.atproto,
+        "app_namespace",
+        "fm.plyr",
     )
 
-    assert space == "ats://did:plc:x/fm.plyr.privateMedia/self"
+    space = await space_client.ensure_personal_space(session, skey="self")
+
+    assert space == "at://did:plc:x/space/fm.plyr.privateMedia/self"
     request.assert_awaited_once_with(
         session,
         "POST",
         "com.atproto.simplespace.createSpace",
         payload={
+            "did": "did:plc:x",
             "type": "fm.plyr.privateMedia",
             "skey": "self",
-            "managingApp": settings.atproto.client_id,
-            "policy": "member-list",
-            "appAccess": {"type": "open"},
+            "config": {
+                "policy": "member-list",
+                "appAccess": {"$type": "com.atproto.simplespace.defs#open"},
+            },
         },
-        parse_response=False,
     )
 
 
@@ -229,13 +239,21 @@ async def test_mint_credential_uses_delegation_token_flow(
     )
     monkeypatch.setattr(space_client, "make_pds_request", pds_request)
     monkeypatch.setattr(space_client, "_raw_bearer_request", bearer_request)
+    monkeypatch.setattr(
+        space_client,
+        "_space_host_url",
+        AsyncMock(return_value="https://space-host.test"),
+    )
+    monkeypatch.setattr(
+        space_client, "create_space_client_attestation", lambda _audience: None
+    )
     session = Session(
         session_id="s",
         did="did:plc:x",
         handle="x.test",
         oauth_session={"pds_url": "https://pds.test"},
     )
-    space = "ats://did:plc:x/fm.plyr.privateMedia/self"
+    space = "at://did:plc:x/space/fm.plyr.privateMedia/self"
 
     credential = await space_client._mint_credential(session, space)
 
@@ -247,12 +265,132 @@ async def test_mint_credential_uses_delegation_token_flow(
         params={"space": space},
     )
     bearer_request.assert_awaited_once_with(
-        "https://pds.test",
+        "https://space-host.test",
         "POST",
         "com.atproto.space.getSpaceCredential",
         "delegation-token",
         json={"space": space},
     )
+
+
+async def test_mint_credential_sends_separate_client_attestation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    bearer_request = AsyncMock(
+        return_value=httpx.Response(200, json={"credential": "space-credential"})
+    )
+    monkeypatch.setattr(
+        space_client,
+        "make_pds_request",
+        AsyncMock(return_value={"token": "delegation-token"}),
+    )
+    monkeypatch.setattr(space_client, "_raw_bearer_request", bearer_request)
+    monkeypatch.setattr(
+        space_client,
+        "_space_host_url",
+        AsyncMock(return_value="https://space-host.test"),
+    )
+    monkeypatch.setattr(
+        space_client,
+        "create_space_client_attestation",
+        lambda audience: f"attestation-for:{audience}",
+    )
+    session = Session(
+        session_id="s",
+        did="did:plc:x",
+        handle="x.test",
+        oauth_session={"pds_url": "https://pds.test"},
+    )
+    space = "at://did:plc:authority/space/fm.plyr.privateMedia/self"
+
+    await space_client._mint_credential(session, space)
+
+    bearer_request.assert_awaited_once_with(
+        "https://space-host.test",
+        "POST",
+        "com.atproto.space.getSpaceCredential",
+        "delegation-token",
+        json={
+            "space": space,
+            "clientAttestation": (
+                "attestation-for:did:plc:authority#atproto_space_host"
+            ),
+        },
+    )
+
+
+def test_space_client_attestation_uses_proposal_jwt_shape(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    private_key = ec.generate_private_key(ec.SECP256R1())
+    monkeypatch.setattr(
+        oauth_module,
+        "_load_client_secret",
+        lambda: (private_key, "space-test-key"),
+    )
+    monkeypatch.setattr(
+        oauth_module.settings.atproto,
+        "client_id",
+        "https://api.plyr.fm/oauth-client-metadata.json",
+    )
+
+    token = oauth_module.create_space_client_attestation(
+        "did:plc:authority#atproto_space_host"
+    )
+
+    assert token is not None
+    header = jwt.get_unverified_header(token)
+    claims = jwt.get_unverified_claims(token)
+    assert header == {
+        "alg": "ES256",
+        "kid": "space-test-key",
+        "typ": "atproto-client-attestation+jwt",
+    }
+    assert claims["iss"] == "https://api.plyr.fm/oauth-client-metadata.json"
+    assert claims["sub"] == claims["iss"]
+    assert claims["aud"] == "did:plc:authority#atproto_space_host"
+    assert claims["exp"] - claims["iat"] == 60
+    assert claims["jti"]
+
+
+async def test_space_host_resolution_prefers_dedicated_service(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    did = "did:plc:authority"
+    document = SimpleNamespace(
+        service=[
+            SimpleNamespace(
+                id=f"{did}#atproto_space_host",
+                service_endpoint="https://spaces.example",
+            )
+        ],
+        get_pds_endpoint=lambda: "https://pds.example",
+    )
+    resolver = SimpleNamespace(resolve=AsyncMock(return_value=document))
+    monkeypatch.setattr(space_client, "AsyncDidResolver", lambda: resolver)
+
+    endpoint = await space_client._space_host_url(
+        f"at://{did}/space/fm.plyr.privateMedia/self"
+    )
+
+    assert endpoint == "https://spaces.example"
+
+
+async def test_space_host_resolution_falls_back_to_pds(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    document = SimpleNamespace(
+        service=[],
+        get_pds_endpoint=lambda: "https://pds.example/",
+    )
+    resolver = SimpleNamespace(resolve=AsyncMock(return_value=document))
+    monkeypatch.setattr(space_client, "AsyncDidResolver", lambda: resolver)
+
+    endpoint = await space_client._space_host_url(
+        "at://did:plc:authority/space/fm.plyr.privateMedia/self"
+    )
+
+    assert endpoint == "https://pds.example"
 
 
 async def test_mint_credential_maps_zds_access_refusal(
@@ -273,6 +411,14 @@ async def test_mint_credential_maps_zds_access_refusal(
             )
         ),
     )
+    monkeypatch.setattr(
+        space_client,
+        "_space_host_url",
+        AsyncMock(return_value="https://space-host.test"),
+    )
+    monkeypatch.setattr(
+        space_client, "create_space_client_attestation", lambda _audience: None
+    )
     session = Session(
         session_id="s",
         did="did:plc:x",
@@ -282,7 +428,7 @@ async def test_mint_credential_maps_zds_access_refusal(
 
     with pytest.raises(space_client.SpaceAccessError, match="authority refused"):
         await space_client._mint_credential(
-            session, "ats://did:plc:x/fm.plyr.privateMedia/self"
+            session, "at://did:plc:x/space/fm.plyr.privateMedia/self"
         )
 
 
@@ -300,7 +446,7 @@ async def test_delete_space_record_uses_record_uri_shape(
 
     await space_client.delete_space_record(
         session,
-        "ats://did:plc:x/fm.plyr.privateMedia/self/did:plc:x/fm.plyr.track/rk",
+        "at://did:plc:x/space/fm.plyr.privateMedia/self/did:plc:x/fm.plyr.track/rk",
     )
 
     request.assert_awaited_once_with(
@@ -308,7 +454,7 @@ async def test_delete_space_record_uses_record_uri_shape(
         "POST",
         "com.atproto.space.deleteRecord",
         payload={
-            "space": "ats://did:plc:x/fm.plyr.privateMedia/self",
+            "space": "at://did:plc:x/space/fm.plyr.privateMedia/self",
             "repo": "did:plc:x",
             "collection": "fm.plyr.track",
             "rkey": "rk",
@@ -332,7 +478,7 @@ async def test_space_credential_cache_and_force_refresh(monkeypatch):
         handle="x.test",
         oauth_session={"pds_url": "https://x"},
     )
-    space = "ats://did:plc:x/fm.plyr.privateMedia/self"
+    space = "at://did:plc:x/space/fm.plyr.privateMedia/self"
 
     first = await space_client.get_space_credential(session, space)
     cached = await space_client.get_space_credential(session, space)
@@ -344,3 +490,145 @@ async def test_space_credential_cache_and_force_refresh(monkeypatch):
     )
     assert renewed == "cred-2"
     assert calls["n"] == 2
+
+
+# --- discovery and sync routing ----------------------------------------------
+
+
+async def test_list_spaces_routes_through_authenticated_pds(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    request = AsyncMock(return_value={"spaces": []})
+    monkeypatch.setattr(space_client, "make_pds_request", request)
+    session = Session(
+        session_id="s",
+        did="did:plc:user",
+        handle="user.test",
+        oauth_session={},
+    )
+
+    result = await space_client.list_spaces(
+        session,
+        space_type="fm.example.catalog",
+        limit=25,
+    )
+
+    assert result == {"spaces": []}
+    request.assert_awaited_once_with(
+        session,
+        "GET",
+        "com.atproto.space.listSpaces",
+        params={
+            "did": "did:plc:user",
+            "limit": 25,
+            "type": "fm.example.catalog",
+        },
+    )
+
+
+async def test_list_space_repos_routes_to_authority_host(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    read = AsyncMock(return_value={"repos": []})
+    host = AsyncMock(return_value="https://authority-space.example")
+    monkeypatch.setattr(space_client, "_credential_read", read)
+    monkeypatch.setattr(space_client, "_space_host_url", host)
+    session = Session(
+        session_id="s",
+        did="did:plc:user",
+        handle="user.test",
+        oauth_session={},
+    )
+    space = "at://did:plc:authority/space/fm.example.catalog/main"
+
+    result = await space_client.list_space_repos(session, space, limit=20)
+
+    assert result == {"repos": []}
+    host.assert_awaited_once_with(space)
+    read.assert_awaited_once_with(
+        session,
+        host_url="https://authority-space.example",
+        endpoint="com.atproto.space.listRepos",
+        space=space,
+        params={"space": space, "limit": 20},
+    )
+
+
+async def test_list_space_records_routes_to_writer_repo_host(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    read = AsyncMock(return_value={"records": []})
+    host = AsyncMock(return_value="https://writer-pds.example")
+    monkeypatch.setattr(space_client, "_credential_read", read)
+    monkeypatch.setattr(space_client, "_repo_host_url", host)
+    session = Session(
+        session_id="s",
+        did="did:plc:user",
+        handle="user.test",
+        oauth_session={},
+    )
+    space = "at://did:plc:authority/space/fm.example.catalog/main"
+
+    result = await space_client.list_space_records(
+        session,
+        space=space,
+        repo="did:plc:writer",
+        collection="fm.example.track",
+        limit=75,
+        exclude_values=True,
+    )
+
+    assert result == {"records": []}
+    host.assert_awaited_once_with("did:plc:writer")
+    read.assert_awaited_once_with(
+        session,
+        host_url="https://writer-pds.example",
+        endpoint="com.atproto.space.listRecords",
+        space=space,
+        params={
+            "space": space,
+            "repo": "did:plc:writer",
+            "limit": 75,
+            "excludeValues": True,
+            "collection": "fm.example.track",
+        },
+    )
+
+
+async def test_list_space_repo_ops_routes_to_writer_repo_host(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    read = AsyncMock(return_value={"ops": []})
+    host = AsyncMock(return_value="https://writer-pds.example")
+    monkeypatch.setattr(space_client, "_credential_read", read)
+    monkeypatch.setattr(space_client, "_repo_host_url", host)
+    session = Session(
+        session_id="s",
+        did="did:plc:user",
+        handle="user.test",
+        oauth_session={},
+    )
+    space = "at://did:plc:authority/space/fm.example.catalog/main"
+
+    result = await space_client.list_space_repo_ops(
+        session,
+        space=space,
+        repo="did:plc:writer",
+        since="3mabc",
+        limit=250,
+    )
+
+    assert result == {"ops": []}
+    host.assert_awaited_once_with("did:plc:writer")
+    read.assert_awaited_once_with(
+        session,
+        host_url="https://writer-pds.example",
+        endpoint="com.atproto.space.listRepoOps",
+        space=space,
+        params={
+            "space": space,
+            "repo": "did:plc:writer",
+            "since": "3mabc",
+            "limit": 250,
+        },
+    )

@@ -177,6 +177,40 @@ example:
 
 uses `literal:self` as the record key, meaning each user can only have one profile record. this is updated via `putRecord` with rkey="self".
 
+## permissioned private-media lexicons
+
+private media uses the experimental ATProto
+[Permissioned Data Proposal 0016](https://github.com/bluesky-social/proposals/tree/main/0016-permissioned-data).
+These declarations are environment-aware just like the public record lexicons.
+
+### fm.plyr.privateMedia
+
+a `type: "space"` declaration for artist-owned private track records and audio blobs. It
+declares `fm.plyr.track` as the expected record collection. A canonical private-media
+address has a fixed `space` segment:
+
+```text
+at://{artistDid}/space/fm.plyr.privateMedia/{skey}/{artistDid}/fm.plyr.track/{rkey}
+```
+
+This is not a public-repository URI. Reading its records or blobs requires a space
+credential. plyr.fm currently creates a `self` space with an owner-only product policy;
+the declaration itself does not require every implementation to use that audience policy.
+
+### fm.plyr.privateMediaAccess
+
+an OAuth permission set, separate from the space declaration. It grants plyr.fm read and
+record-management access to the artist's own private-media space and permission to create,
+update, or delete that space. Browser sessions request it only when private media is used:
+
+```text
+include:fm.plyr.privateMediaAccess
+```
+
+Permissioned data remains a proposal, and most PDSes do not implement it. These lexicons
+describe the current experimental integration rather than a stable cross-ecosystem catalog
+standard.
+
 ## ATProto primitives we use
 
 ### record keys
@@ -219,6 +253,12 @@ permission sets bundle OAuth permissions under human-readable titles. instead of
 ### fm.plyr.authFullApp
 
 full access for the main web app - create/update/delete on all collections.
+
+### fm.plyr.privateMediaAccess
+
+access to the artist's own `fm.plyr.privateMedia` space. this include is requested as a
+one-time scope upgrade only for users whose PDS supports permissioned data and who choose
+private media.
 
 ### enabling permission sets
 

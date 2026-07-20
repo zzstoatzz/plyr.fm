@@ -1,136 +1,216 @@
-# private media on permissioned spaces (design note)
+# private media on ATProto permissioned spaces
 
-resolves #1528. proves a minimum-viable **private-media** workflow on the experimental
-ATProto permissioned-data surface (`com.atproto.space.*`), engaging only for accounts
-whose PDS implements it. ports cleanly from today's public track flow: the record body
-is the same `fm.plyr.track` lexicon — only the write target (a permissioned space repo)
-and the read auth (a space credential) differ.
+plyr.fm's private-track experiment follows
+[ATProto Proposal 0016](https://github.com/bluesky-social/proposals/tree/main/0016-permissioned-data)
+and [Permissioned Data Diary 7](https://dholms.leaflet.pub/3mqtqvjidqs2p).
+The proposal is not a final specification, so this integration remains capability-gated
+and intentionally isolated under `backend/_internal/atproto/spaces/`.
 
-> **update (#1573): the generic space protocol no longer has a reader member list.** ZDS
-> removed its old member-list routes (`addMember`/`removeMember`/`getMembers`/`getMemberState`/
-> `getMemberOplog`/`notifyMembership`) and `getSpace`/`listSpaces` no longer expose
-> `members`/`isMember`. the newer `com.atproto.simplespace.*` baseline does have a
-> `member-list` access policy, but it is space management rather than a generic sync
-> surface. the **space credential is the substrate**; richer reader/group semantics live
-> **above** it, in the app. simplespace adds the authority as a member by default.
-> plyr.fm does not depend on any of the removed surface (audited: we never read
-> `members`/`isMember` and never called a member-list route). access for this MVP is
-> **owner-only by plyr's app-layer policy** — see the owner-model section. broader access
-> (label rosters, artist-catalog membership, supporter tiers) is future plyr.fm app-layer
-> state — ideally records in the relevant permissioned space — never a PDS member list.
-> sections below that say "member list" describe the original (now-removed) protocol shape
-> and are kept for history; the binding model is owner-only-by-app-policy.
+## what exists today
 
-## the first space type, and why it's the smallest meaningful one
+The shipped product is the smallest personal-space case:
 
-`fm.plyr.privateMedia` (env-aware: `fm.plyr.dev.privateMedia` in dev). One artist-owned
-personal space, `skey = "self"`. It holds **only** private audio — nothing else.
+- the artist is the space authority and only reader;
+- the artist uploads through plyr.fm;
+- the track record and audio blob live on the artist's PDS, never R2;
+- the browser receives audio through plyr.fm's authenticated proxy because it does not
+  hold a space credential;
+- private tracks remain absent from public discovery, feeds, radio, search, and stats.
 
-This narrowness is the point: per diary 6, granting an app a credential grants
-**whole-space** read access, not per-record. So the space type *is* the privacy boundary.
-Bundling drafts, proofs, DMs, or analytics into one space would mean one plyr.fm grant
-exposes all of them. Private audio is the smallest slice that proves the end-to-end flow
-(discover → space → blob → record → credential → playback) while keeping the blast radius
-of a grant to exactly "this artist's private tracks."
+This is not yet a general shared-catalog importer. The client foundation can discover a
+space's writer set and pull records or incremental operations from the correct repo hosts,
+but plyr.fm does not persist a multi-writer permissioned-space replica or expose catalog
+authorization UX yet.
 
-## capability check (now, and the standards-shaped replacement)
+## protocol roles
 
-No PDS advertises permissioned-space support declaratively — not `describeServer`, not
-`.well-known`, not OAuth metadata. ZDS's `openapi.json` (with `x-zds-experimental: true`)
-is vendor-specific and brittle, and the issue explicitly says not to lock onto it.
+Proposal 0016 separates roles that happen to collapse onto one PDS in the personal MVP:
 
-**Now:** an authenticated *method probe* — `com.atproto.space.listSpaces`. The method
-dispatching for real (`200`, or a genuine `InvalidRequest`/`InsufficientScope`/auth error)
-means supported; `404`/`501` or `MethodNotImplemented`/`UnknownMethod`/`XRPCNotSupported`
-means unsupported. The probe must be authenticated: an unauthenticated call can't tell a
-supporting PDS from a vanilla one, because PDS auth middleware returns `401` before method
-routing (verified: `bsky.social` and a permissioned ZDS both `401` unauthenticated).
-Result is cached per-PDS in Redis (6h) and surfaced on `/auth/me` as
-`permissioned_spaces.supported`, which gates all UI. Code:
-`backend/_internal/atproto/spaces/capability.py`.
+- **space authority**: DID that owns the space identifier and signs credentials;
+- **space host**: issues credentials, publishes the writer set, and routes notifications;
+- **repo host**: stores one writer's permissioned repo and blobs;
+- **catalog-management app**: may create/configure the artist's space with OAuth manage
+  permission without becoming its authority;
+- **syncer/player**: plyr.fm after a user authorizes it to read the space.
 
-**Later:** when the protocol defines a declarative capability (likely a `describeServer`
-field), swap it in behind the same `detect_permissioned_capability()` function — the one
-isolation point.
+The client resolves `#atproto_space_host` on the authority DID, falling back to
+`#atproto_pds`. Writer reads resolve each writer's `#atproto_pds`; they must not assume
+the logged-in user's PDS hosts every repo or the authority.
 
-## owner model, access, and plyr.fm's client ID
+## space type, permission set, and addressing
 
-- **Owner DID = artist DID.** Personal namespaces use the user's own DID (diary 5); no
-  dedicated space DID is needed until ownership must transfer (shared/gated spaces).
-- **Access: owner-only.** The personal simplespace uses the baseline `member-list` policy;
-  its authority is added automatically and plyr.fm adds nobody else. any wider read ACL
-  remains plyr's app-layer concern. write legitimacy is also app policy (below).
-- **plyr.fm's OAuth client ID is default-allowed.** The space is created with
-  `appAccess: {"type": "open"}`, so any OAuth client (including plyr.fm) may obtain a
-  credential for an authorized user. A future shared-space pass can flip to an allow-list.
-  ZDS binds the issued credential to the requesting client ID and enforces
-  `spaceAllowsClient` at `getSpaceCredential` time.
+The personal modality is `fm.plyr.privateMedia` (environment-aware through
+`ATPROTO_APP_NAMESPACE`). Its Lexicon is a Proposal-0016 `type: "space"` declaration
+whose default collection is `fm.plyr.track`.
 
-## the read path: OAuth → delegation token → space credential (with renewal/errors)
+OAuth requests `include:fm.plyr.privateMediaAccess`. That permission set grants the
+artist's `self` space record read/write operations plus explicit `manage` operations.
+The space declaration and permission set are separate NSIDs because the `main` definition
+of a space type cannot simultaneously be a permission set.
 
-1. `getDelegationToken?space=<uri>` — authenticated with the user's **OAuth (DPoP)** token
-   via `make_pds_request`. Returns a short-lived token signed by the requester's PDS and
-   bound to plyr.fm's client ID.
-2. `getSpaceCredential` (POST) — authenticated with the delegation token as a **plain
-   Bearer** token (delegation tokens/credentials are JWTs, *not* DPoP-bound, so they bypass
-   `make_pds_request`'s DPoP path via a raw-bearer helper). Returns an authority-signed
-   space credential (~hours TTL, client-ID-bound).
-3. reads (`getRecord`/`listRecords`/`getBlob`) accept the credential as a plain Bearer
-   token.
+Canonical identifiers are:
 
-**Renewal:** credentials are cached per `(space, client_id)` for ~50 min; a read that gets
-`401`/`InvalidToken` triggers one re-mint (delegation token → credential) and retry.
-**Errors:** authorization refusals and `SpaceDeleted` surface as a typed
-`SpaceAccessError`; `getSpaceCredential` requires the requester DID to be resolvable (the
-authority's PDS verifies the delegation token signature). Code:
-`backend/_internal/atproto/spaces/client.py`.
+```text
+space:  at://{authorityDid}/space/{spaceType}/{skey}
+record: at://{authorityDid}/space/{spaceType}/{skey}/{authorDid}/{collection}/{rkey}
+```
 
-## the record, and how it references the blob
+The earlier `ats://` experiment is rejected by current ZDS. The database migration in
+this change rewrites existing `tracks.space_uri` and `tracks.atproto_record_uri` values to
+the canonical form; ZDS independently migrates its resident space rows.
 
-The audio blob is uploaded to the artist's PDS blobstore with the standard
-`com.atproto.repo.uploadBlob`. The record reuses the **existing `fm.plyr.track` lexicon**
-body (`build_track_record`) with `audioBlob` set and `audioUrl` omitted (no public URL
-exists for private media), written into the space repo via `com.atproto.space.createRecord`
-(`putRecord` for idempotent retries). The resulting record URI is the 6-segment
-`ats://<ownerDid>/<spaceType>/<skey>/<authorDid>/fm.plyr.track/<rkey>`.
+Because public and permissioned records now both use `at://`, code must use
+`Track.space_uri` (or parse the fixed `/space/` marker) to distinguish them. A prefix
+check is no longer sufficient.
 
-## playback via getBlob / range
+## capability and OAuth upgrade
 
-Private tracks have no CDN URL. The backend stream endpoint obtains a space credential and
-proxies `com.atproto.space.getBlob?space=&repo=&cid=`, **passing the client's `Range`
-header through** and relaying the `206`/`Content-Range`/`Content-Type`/`Content-Length` so
-seeking works (verified `206` ranged reads against a live ZDS).
+No stable declarative PDS capability exists yet. An authenticated
+`com.atproto.space.listSpaces` probe remains the isolation point:
 
-## app-layer write legitimacy
+- a real response or route-level `InsufficientScope` proves support;
+- `UnknownMethod`, `MethodNotImplemented`, `404`, or `501` means unsupported;
+- ambiguous/transient failures fail closed and are not treated as support.
 
-The protocol no longer encodes write access (diary 6) — only a read member list. So
-plyr.fm enforces, in app/indexer logic, that **only the record's author DID (== the signed-in
-artist) may publish, edit, or delete** records in their private-media space. For this
-single-member personal space that's simply "owner only." Shared/gated spaces will need
-richer write/role policy.
+The result is cached per PDS and surfaced by `/auth/me`. Private-media OAuth permission is
+requested only through the explicit scope-upgrade flow for a capable PDS, never during the
+base login.
 
-## ZDS endpoints plyr.fm depends on (MVP)
+## space creation and policy
 
-`simplespace.createSpace`, `space.getSpace`/`listSpaces` (capability probe + idempotent ensure),
-`com.atproto.repo.uploadBlob`, `space.createRecord`/`putRecord`, `space.getRecord`,
-`space.listRecords`, `space.getDelegationToken`, `space.getSpaceCredential`, `space.getBlob`
-(with Range). All exist in the current ZDS source; the data path
-(`createSpace`→`uploadBlob`→`createRecord`→`getRecord`/`listRecords`→`getBlob` ranged) is
-verified against a local `ZDS_PERMISSIONED_DATA=true` build by `scripts/permissioned_smoke.py`.
+`com.atproto.simplespace.createSpace` receives the current proposal shape:
 
-## why shared/gated follow-ups need their own model
+```json
+{
+  "did": "did:plc:artist",
+  "type": "fm.plyr.privateMedia",
+  "skey": "self",
+  "config": {
+    "policy": "member-list",
+    "appAccess": {"$type": "com.atproto.simplespace.defs#open"}
+  }
+}
+```
 
-Supporter-gated, label-managed, or community spaces are **not** this MVP scaled up. They
-need: a **dedicated space DID** (so ownership can transfer without breaking references), an
-**arbiter / space host** (e.g. atprotofans) to manage membership, and **app-layer write/role
-rules** above the protocol. They must not reuse the personal-space MVP unchanged. Tracked
-alongside #564 (supporter gating) and #642 (time-release) on the permissioned-data substrate
-(#1384).
+The required `simplespace` management layer has a member list even though the core sync
+protocol does not enumerate readers. The authority is added by default and plyr.fm adds
+nobody else, yielding owner-only access.
 
-## deferred (this PR)
+App access is open for this personal experiment so local/public OAuth clients can use it
+without a confidential-client signing key. This is separate from user eligibility. A
+future cross-app catalog can use `#allowList`, which requires a verified client
+attestation.
 
-- Non-web-playable private uploads: today's pipeline defers the canonical MP3 to the
-  `optimize_track_audio` task, which writes the blob to the *public* repo. Routing that
-  deferred write into the space is a follow-up; the MVP path covers web-playable audio
-  (mp3/wav/m4a/flac), where the blob is written at publish time.
-- Multi-member sync (member/repo oplogs, SetHash) — single-member spaces don't need it.
+## credential exchange and reads
+
+The read path is:
+
+1. The user's DPoP OAuth session calls `getDelegationToken` on their PDS.
+2. plyr.fm resolves the authority's space host.
+3. A confidential plyr.fm deployment creates a fresh, single-use ES256 client attestation
+   with `typ=atproto-client-attestation+jwt`, its published OAuth client ID, and audience
+   `{authorityDid}#atproto_space_host`. Public-client deployments omit it.
+4. plyr.fm presents the delegation token and optional attestation to
+   `getSpaceCredential` on the space host.
+5. The resulting short-lived credential reads any repo in the space from that repo's own
+   host.
+
+The delegation token proves user-to-app delegation only; it does not identify the app.
+App identity comes exclusively from the separate attestation. Credentials are cached for
+50 minutes and renewed once after a `401`.
+
+The generic client exposes:
+
+- `list_spaces` on the user's PDS;
+- `list_space_repos` on the authority host;
+- `list_space_records` and `list_space_repo_ops` on each writer's repo host;
+- ranged `open_space_blob` reads on the writer's repo host.
+
+Proposal 0016 also defines full CAR recovery (`getRepo`), deniable LtHash commits, and
+best-effort notifications (`registerNotify`/`notifyWrite`). plyr.fm does not yet keep a
+durable permissioned-space replica, so it does not claim to implement or verify those sync
+state transitions. ZDS's smoke suite remains the implementation-level coverage for that
+substrate.
+
+## track records and playback
+
+Private media reuses the normal environment-aware `fm.plyr.track` record body with
+`audioBlob` present and `audioUrl` absent. Record writes use
+`com.atproto.space.createRecord`/`putRecord`; deletes use
+`com.atproto.space.deleteRecord`.
+
+`GET /audio/{file_id}` enforces owner visibility, obtains the space credential, then calls
+`com.atproto.space.getBlob(space, repo, cid)` on the artist's repo host. It forwards the
+browser's `Range` header and relays `206`, `Content-Range`, `Content-Type`, and length
+headers so seeking works.
+
+## third-party catalog interoperability
+
+An upstream catalog manager and a downstream player can interoperate without either
+becoming the artist's identity authority. For the use case "public listeners, but only
+approved streaming apps may source the catalog," the proposal-shaped policy is:
+
+- user policy: `public`;
+- app access: `#allowList` containing the streaming clients' OAuth client IDs.
+
+For a private audience, the user policy changes independently while app access can remain
+allowlisted. Both axes must authorize credential issuance.
+
+The critical boundary is the **space**, not an individual record. A credential reads the
+whole space. Tracks with different audience or streaming-app distribution sets therefore
+belong in different spaces (or in a future ecosystem convention that maps those policy
+cohorts to distinct spaces).
+
+App allowlisting is enforceable PDS access control, but it is not DRM or a licensing
+language. Any usage terms beyond who may sync the space need a separate interoperable
+record/convention and application enforcement.
+
+## rollout and verification
+
+Rollout order matters:
+
+1. publish the `privateMedia` space declaration and `privateMediaAccess` permission set
+   for the target environment namespace. The script reads `PLYRFM_HANDLE` and
+   `PLYRFM_PASSWORD` from `.env`; never print the app password:
+
+   ```bash
+   # before merging to main (main auto-deploys staging)
+   NAMESPACE=fm.plyr.stg uv run --project backend scripts/publish_permission_set.py \
+     privateMedia privateMediaAccess
+
+   # before the later production `just release`
+   NAMESPACE=fm.plyr uv run --project backend scripts/publish_permission_set.py \
+     privateMedia privateMediaAccess
+   ```
+
+2. deploy the backend and run the database URI migration;
+3. run `scripts/permissioned_smoke.py` against an aligned ZDS account;
+4. verify an existing migrated private track still plays and a new upload creates a
+   canonical URI;
+5. verify a non-supporting PDS continues to hide the private option.
+
+Publishing must precede deployment because a newly upgraded browser session requests
+`include:<namespace>.privateMediaAccess`; the PDS must be able to resolve that permission
+set during authorization. Existing sessions without the include will be sent through the
+normal one-time OAuth scope upgrade when they first choose private media.
+
+The smoke script covers space creation, record/blob writes, credential exchange, record
+reads, and ranged blob playback. Unit tests cover URI parsing, current config shape,
+scope composition, attestation inclusion, host routing, credential renewal, and the public
+record URL boundary.
+
+The smoke script currently authenticates with an app password. It proves the aligned ZDS
+data path, but not the browser OAuth scope-upgrade or confidential-client attestation path.
+That browser-level interoperability proof remains in #1684.
+
+## remaining product work
+
+- choose or standardize the portable music-catalog space modality;
+- add upstream-created space discovery and artist-facing authorization UX;
+- persist and verify multi-writer sync state if plyr.fm becomes a proactive catalog
+  syncer;
+- implement notification registration and deletion/revocation cleanup for that replica;
+- decide how distribution/licensing metadata is represented separately from access.
+
+Those are product/interoperability layers above the now-aligned personal private-media
+transport; they should not be folded into a listener member-list checkbox.

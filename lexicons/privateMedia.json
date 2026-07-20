@@ -3,20 +3,11 @@
   "id": "fm.plyr.privateMedia",
   "defs": {
     "main": {
-      "type": "permission-set",
-      "title": "plyr.fm Private Media",
-      "detail": "Access to your private audio — a permissioned space on your PDS that only you (and apps you grant) can read. Granting this lets plyr.fm create, read, and manage private tracks in this space. The audio and records never leave your PDS as public data.",
-      "permissions": [
-        {
-          "type": "permission",
-          "resource": "space",
-          "action": ["read", "create", "update", "delete", "manage"],
-          "space": ["fm.plyr.privateMedia"],
-          "skey": ["self"],
-          "did": ["*"],
-          "collection": ["fm.plyr.track"]
-        }
-      ]
+      "type": "space",
+      "description": "An artist-owned space containing private plyr.fm track records and their audio blobs.",
+      "key": "any",
+      "name": "plyr.fm Private Media",
+      "collections": ["fm.plyr.track"]
     }
   }
 }

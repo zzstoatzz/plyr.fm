@@ -1,4 +1,4 @@
-"""client for the permissioned-data space surfaces.
+"""Client for the Proposal-0016 permissioned-data surfaces.
 
 owner/author writes go through the DPoP-protected OAuth path
 ([make_pds_request][backend._internal.atproto.client.make_pds_request]); the
@@ -6,10 +6,10 @@ credential exchange and credential-gated reads use plain Bearer tokens
 (delegation tokens and space credentials are JWTs, not DPoP-bound), so those go
 through a small raw-bearer helper.
 
-read path (per permissioned-data diary 6):
+Read path:
 
     user OAuth -> getDelegationToken (requester PDS, DPoP) -> getSpaceCredential
-    (space authority, plain Bearer token) -> getRecord / getBlob
+    (space authority, delegation token + optional client attestation) -> reads
     (plain Bearer credential)
 """
 
@@ -20,6 +20,7 @@ from contextlib import asynccontextmanager
 from typing import Any
 
 import httpx
+from atproto_identity.did.resolver import AsyncDidResolver
 from atproto_oauth.security import is_safe_url
 
 from backend._internal import Session as AuthSession
@@ -27,7 +28,9 @@ from backend._internal.atproto.client import make_pds_request
 from backend._internal.atproto.spaces.uris import (
     build_space_uri,
     parse_space_record_uri,
+    parse_space_uri,
 )
+from backend._internal.auth.oauth import create_space_client_attestation
 from backend.config import settings
 
 logger = logging.getLogger(__name__)
@@ -41,11 +44,34 @@ class SpaceAccessError(Exception):
     """the space owner refused a credential (AppNotPermitted, NotAMember, ...)."""
 
 
-def _pds_url(auth_session: AuthSession) -> str:
-    pds_url = (auth_session.oauth_session or {}).get("pds_url")
-    if not pds_url:
-        raise ValueError(f"no pds_url on session for {auth_session.did}")
-    return pds_url
+async def _resolve_did_service(did: str, fragment: str) -> str:
+    """Resolve a DID service, falling back to its PDS for space hosting."""
+    document = await AsyncDidResolver().resolve(did)
+    if document is None:
+        raise ValueError(f"could not resolve DID document for {did}")
+
+    endpoint: str | None = None
+    for service in document.service or []:
+        if service.id in (fragment, f"{did}{fragment}"):
+            endpoint = service.service_endpoint
+            break
+    if endpoint is None and fragment == "#atproto_space_host":
+        endpoint = document.get_pds_endpoint()
+    if endpoint is None:
+        raise ValueError(f"no {fragment} service for {did}")
+    endpoint = endpoint.rstrip("/")
+    if not is_safe_url(endpoint):
+        raise ValueError(f"unsafe {fragment} endpoint for {did}")
+    return endpoint
+
+
+async def _space_host_url(space: str) -> str:
+    authority = parse_space_uri(space).owner_did
+    return await _resolve_did_service(authority, "#atproto_space_host")
+
+
+async def _repo_host_url(repo: str) -> str:
+    return await _resolve_did_service(repo, "#atproto_pds")
 
 
 async def _raw_bearer_request(
@@ -77,19 +103,15 @@ async def _raw_bearer_request(
 async def ensure_personal_space(
     auth_session: AuthSession,
     *,
-    space_type: str | None = None,
     skey: str = "self",
 ) -> str:
     """create (or find) the caller's artist-owned personal space; return its URI.
 
-    owner DID = the artist's DID. the space is owner-only: the protocol no longer
-    has a reader member list (#1573), and private-space credentials are owner-only
-    by default, so for this MVP the owner is the sole reader. any broader access
-    (label/supporter rosters) is plyr.fm app-layer state, not a PDS member list.
-    `appAccess:{"type":"open"}` leaves plyr.fm's OAuth client allowed for the
-    credential exchange.
+    The required ``simplespace`` management layer uses a member-list policy for
+    this owner-only MVP. App access stays open so local/public OAuth clients can
+    exercise the experimental feature without a confidential-client key.
     """
-    space_type = space_type or settings.atproto.private_media_space_type
+    space_type = settings.atproto.private_media_space_type
     space_uri = build_space_uri(auth_session.did, space_type, skey)
     try:
         await make_pds_request(
@@ -97,16 +119,14 @@ async def ensure_personal_space(
             "POST",
             "com.atproto.simplespace.createSpace",
             payload={
+                "did": auth_session.did,
                 "type": space_type,
                 "skey": skey,
-                "managingApp": settings.atproto.client_id,
-                "policy": "member-list",
-                "appAccess": {"type": "open"},
+                "config": {
+                    "policy": "member-list",
+                    "appAccess": {"$type": "com.atproto.simplespace.defs#open"},
+                },
             },
-            # The returned config is not needed. Current ZDS appends one extra
-            # closing brace to this otherwise-successful response, so decoding
-            # it would turn a created space into a failed upload.
-            parse_response=False,
         )
     except Exception as exc:
         if "SpaceAlreadyExists" not in str(exc):
@@ -159,7 +179,7 @@ async def delete_space_record(auth_session: AuthSession, record_uri: str) -> Non
     )
 
 
-# --- credential exchange (diary-6 read path) ----------------------------------
+# --- credential exchange ------------------------------------------------------
 
 # per-process cache: space credentials are owner-signed and client-id-bound, so
 # they're reusable across reads of the same space until they expire.
@@ -167,7 +187,6 @@ _credential_cache: dict[str, tuple[str, float]] = {}
 
 
 async def _mint_credential(auth_session: AuthSession, space: str) -> str:
-    pds_url = _pds_url(auth_session)
     delegation_resp = await make_pds_request(
         auth_session,
         "GET",
@@ -176,14 +195,20 @@ async def _mint_credential(auth_session: AuthSession, space: str) -> str:
     )
     delegation_token = delegation_resp["token"]
 
-    # exchange the delegation token (plain Bearer) for an authority-signed
-    # space credential. plyr.fm has no notification receiver to register.
+    authority = parse_space_uri(space).owner_did
+    audience = f"{authority}#atproto_space_host"
+    payload = {"space": space}
+    if attestation := create_space_client_attestation(audience):
+        payload["clientAttestation"] = attestation
+
+    # Credential issuance happens on the resolved space host, which may differ
+    # from both the user's PDS and each writer's repo host.
     cred_resp = await _raw_bearer_request(
-        pds_url,
+        await _space_host_url(space),
         "POST",
         "com.atproto.space.getSpaceCredential",
         delegation_token,
-        json={"space": space},
+        json=payload,
     )
     if cred_resp.status_code != 200:
         body = cred_resp.text
@@ -230,7 +255,7 @@ async def open_space_blob(
     yields the upstream streaming response (status, headers, body) so the caller
     can relay Range/206 semantics. renews the credential once on a 401/InvalidToken.
     """
-    pds_url = _pds_url(auth_session)
+    pds_url = await _repo_host_url(repo)
     url = f"{pds_url}/xrpc/com.atproto.space.getBlob"
     if not is_safe_url(url):
         raise ValueError(f"unsafe PDS URL: {url}")
@@ -254,3 +279,117 @@ async def open_space_blob(
             finally:
                 await resp.aclose()
             return
+
+
+async def list_spaces(
+    auth_session: AuthSession,
+    *,
+    space_type: str | None = None,
+    limit: int = 50,
+) -> dict[str, Any]:
+    """List permissioned spaces materialized for the authenticated user."""
+    params: dict[str, Any] = {"did": auth_session.did, "limit": limit}
+    if space_type:
+        params["type"] = space_type
+    return await make_pds_request(
+        auth_session,
+        "GET",
+        "com.atproto.space.listSpaces",
+        params=params,
+    )
+
+
+async def _credential_read(
+    auth_session: AuthSession,
+    *,
+    host_url: str,
+    endpoint: str,
+    space: str,
+    params: dict[str, Any],
+) -> dict[str, Any]:
+    """Perform a JSON space read, renewing once when the credential is stale."""
+    for attempt in range(2):
+        credential = await get_space_credential(
+            auth_session, space, force_refresh=attempt > 0
+        )
+        response = await _raw_bearer_request(
+            host_url,
+            "GET",
+            endpoint,
+            credential,
+            params=params,
+        )
+        if response.status_code == 401 and attempt == 0:
+            continue
+        if response.status_code != 200:
+            raise SpaceAccessError(
+                f"{endpoint} failed: {response.status_code} {response.text}"
+            )
+        return response.json()
+    raise SpaceAccessError(f"{endpoint} rejected renewed credential")
+
+
+async def list_space_repos(
+    auth_session: AuthSession,
+    space: str,
+    *,
+    limit: int = 50,
+) -> dict[str, Any]:
+    """Discover the writer set for a space from its authority host."""
+    return await _credential_read(
+        auth_session,
+        host_url=await _space_host_url(space),
+        endpoint="com.atproto.space.listRepos",
+        space=space,
+        params={"space": space, "limit": limit},
+    )
+
+
+async def list_space_records(
+    auth_session: AuthSession,
+    *,
+    space: str,
+    repo: str,
+    collection: str | None = None,
+    limit: int = 100,
+    exclude_values: bool = False,
+) -> dict[str, Any]:
+    """Read records directly from a writer's repo host."""
+    params: dict[str, Any] = {
+        "space": space,
+        "repo": repo,
+        "limit": limit,
+        "excludeValues": exclude_values,
+    }
+    if collection:
+        params["collection"] = collection
+    return await _credential_read(
+        auth_session,
+        host_url=await _repo_host_url(repo),
+        endpoint="com.atproto.space.listRecords",
+        space=space,
+        params=params,
+    )
+
+
+async def list_space_repo_ops(
+    auth_session: AuthSession,
+    *,
+    space: str,
+    repo: str,
+    since: str,
+    limit: int = 500,
+) -> dict[str, Any]:
+    """Pull incremental operations directly from a writer's repo host."""
+    return await _credential_read(
+        auth_session,
+        host_url=await _repo_host_url(repo),
+        endpoint="com.atproto.space.listRepoOps",
+        space=space,
+        params={
+            "space": space,
+            "repo": repo,
+            "since": since,
+            "limit": limit,
+        },
+    )

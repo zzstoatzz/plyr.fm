@@ -39,10 +39,13 @@ audio + record live in the artist's ATProto permissioned space on their PDS,
 never R2. the browser has no space credential, so we cannot redirect — we
 **proxy** the bytes through the owner's credential (`open_space_blob` →
 `getDelegationToken` → `getSpaceCredential` → ranged `getBlob`). access is
-**owner-only by plyr's app-layer policy** (the protocol no longer enumerates
-readers — ZDS dropped member lists, #1573); a non-owner or anonymous request
-gets a `404`, identical to a missing file, so private tracks don't leak their
-existence. `Range` is passed through so seek/`206` survives the proxy.
+owner-only at two layers: plyr rejects non-owners, and the required
+`com.atproto.simplespace` management layer uses an explicit `member-list`
+policy for this MVP. The core permissioned-data protocol does not enumerate
+readers; `simplespace` sits above that core and may maintain members. A
+non-owner or anonymous request gets a `404`, identical to a missing file, so
+private tracks don't leak their existence. `Range` is passed through so
+seek/`206` survives the proxy.
 
 > experimental: the `com.atproto.space.*` surface is implemented only by ZDS
 > (`pds.zat.dev`); inert on prod PDSes. see

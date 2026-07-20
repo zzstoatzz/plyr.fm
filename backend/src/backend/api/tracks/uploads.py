@@ -827,7 +827,8 @@ async def _create_records(
     collection = settings.atproto.track_collection
 
     # resolve where the record lives + its audio URL.
-    # private: record goes into the artist's permissioned space (ats:// URI, no
+    # private: record goes into the artist's permissioned space (canonical at://
+    # space URI, no
     # public audio URL — the canonical audio is the PDS blob, required).
     # gated: public repo record, audio proxied through the auth-protected backend.
     # default: public repo record pointing at the public R2 URL.

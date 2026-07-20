@@ -31,7 +31,6 @@ PASSWORD = os.environ["ZAT_TEST_PASSWORD"]
 SPACE_TYPE = "fm.plyr.dev.privateMedia"
 COLLECTION = "fm.plyr.dev.track"
 SKEY = "self"
-CLIENT_ID = "did:web:plyr.fm"
 
 
 def xrpc(
@@ -56,7 +55,7 @@ def main() -> int:
     token = session.json()["accessJwt"]
     print(f"✓ session  did={did}")
 
-    space_uri = f"ats://{did}/{SPACE_TYPE}/{SKEY}"
+    space_uri = f"at://{did}/space/{SPACE_TYPE}/{SKEY}"
 
     # capability probe: listSpaces should dispatch for real
     probe = xrpc(
@@ -90,19 +89,19 @@ def main() -> int:
         "com.atproto.simplespace.createSpace",
         token=token,
         json={
+            "did": did,
             "type": SPACE_TYPE,
             "skey": SKEY,
-            "managingApp": CLIENT_ID,
-            "policy": "member-list",
-            "appAccess": {"type": "open"},
+            "config": {
+                "policy": "member-list",
+                "appAccess": {"$type": "com.atproto.simplespace.defs#open"},
+            },
         },
     )
     if created.status_code == 400 and "SpaceAlreadyExists" in created.text:
         print("✓ createSpace → already exists (idempotent)")
     else:
         created.raise_for_status()
-        # Current ZDS appends an extra closing brace to the successful create
-        # response. The client intentionally ignores this unneeded body.
         assert f'"uri":"{space_uri}"' in created.text, created.text
         print(f"✓ createSpace  uri={space_uri}")
 

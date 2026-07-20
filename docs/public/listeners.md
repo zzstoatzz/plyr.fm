@@ -54,7 +54,7 @@ even today, other apps (like [aetheros.computer](https://aetheros.computer)) alr
 
    ![track actions menu — like, add to playlist, queue, share](/screenshots/track-actions-menu.png)
 
-   playlists can be **public** (published to your atmosphere account, readable by any compatible app) or **private** (stays in plyr.fm). private playlists live in plyr.fm's database for now because the part of the AT Protocol that supports shared-but-permissioned data ([permissioned spaces](https://github.com/bluesky-social/atproto/compare/permissioned-data)) is still being designed upstream — once it ships, private and selectively-shared playlists will move to your atmosphere account too.
+   playlists can be **public** (published to your atmosphere account, readable by any compatible app) or **private** (stays in plyr.fm). private playlists still live in plyr.fm's database; they have not moved to the experimental [ATProto permissioned-data proposal](https://github.com/bluesky-social/proposals/tree/main/0016-permissioned-data). a future playlist migration needs its own sharing, sync, and revocation design.
 
 to track and [visualize your listening history](https://teal-appview-production.up.railway.app/), you can [enable teal.fm scrobbling in your settings](https://plyr.fm/settings).
 

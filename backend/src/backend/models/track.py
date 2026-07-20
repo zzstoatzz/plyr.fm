@@ -115,7 +115,8 @@ class Track(Base):
     #                on atprotofans support; carries support_gate={"type":"any"}
     #   private    — NOT in feeds; audio + record live in the artist's ATProto
     #                permissioned space ON THEIR PDS (never R2); the PDS gates via
-    #                a space credential; owner-only. space_uri holds the ats:// space.
+    #                a space credential; owner-only. space_uri holds the canonical
+    #                at://<authority>/space/<type>/<skey> identifier.
     # copyright gating (indiemusi) is orthogonal — it rides on public/unlisted via
     # support_gate={"type":"copyright"} and the copyright_* pointers below.
     visibility: Mapped[str] = mapped_column(
@@ -134,7 +135,7 @@ class Track(Base):
         JSONB(none_as_null=True), nullable=True, default=None
     )
 
-    # 3-segment ats:// space URI for private (permissioned) media; None otherwise.
+    # canonical at:// permissioned-space URI for private media; None otherwise.
     space_uri: Mapped[str | None] = mapped_column(String, nullable=True)
 
     # copyright paradigm record pointers — set when the user has opted into a

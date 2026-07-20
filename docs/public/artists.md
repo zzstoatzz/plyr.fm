@@ -171,9 +171,31 @@ today this is a **binary check**: a listener either supports you or they don't. 
 
 gated audio lives in a **private bucket** on plyr.fm's infrastructure — not publicly accessible. when a supporter plays a gated track, plyr.fm validates their support status and generates a time-limited presigned URL. the audio is never exposed without authentication.
 
-this is the one exception to the "your audio, your data" promise: because atproto doesn't yet have permissioned data, there's no way to store private blobs on your PDS with access control. the atproto team is [exploring permissioned data](https://dholms.leaflet.pub/3mfrsbcn2gk2a) through concepts like **buckets** — named containers with access control lists that could let private blobs live on your own PDS. once that ships, gated tracks could move back to artist-controlled storage while still enforcing access rules at the protocol level.
+supporter gating is separate from the experimental permissioned-data path described below.
+It has a shared audience, so it remains on plyr.fm's authenticated storage until the
+ecosystem has an interoperable audience and revocation model.
 
 we'd also like to support more expressive gating — tiers, time-limited early access, per-track pricing — as the ecosystem matures.
+
+## private tracks
+
+:::caution[experimental]
+private tracks appear only when your PDS supports the evolving ATProto permissioned-data
+proposal. Most PDSes do not support it yet.
+:::
+
+Choosing **private** stores the track record and audio in an artist-owned permissioned
+space on your PDS. There is no public record or R2 copy. The track is hidden from feeds,
+search, profiles, albums, and playlists, and only you can view or play it through plyr.fm.
+
+The first time you choose private media, plyr.fm may ask you to approve an additional OAuth
+permission. Playback is proxied through plyr.fm because browsers do not hold the short-lived
+space credential needed to fetch the blob directly.
+
+This is not the same as **unlisted** (anyone who finds an unlisted track can play it) or
+**supporters only** (active supporters can play it). Broader permissioned sharing and
+third-party catalog interoperability are still being designed against
+[ATProto Proposal 0016](https://github.com/bluesky-social/proposals/tree/main/0016-permissioned-data).
 
 ## copyright detection
 

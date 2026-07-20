@@ -78,7 +78,7 @@ async def delete_track(
     # delete ATProto record if it exists
     if track.atproto_record_uri:
         try:
-            if track.atproto_record_uri.startswith("ats://"):
+            if track.space_uri:
                 await delete_space_record(auth_session, track.atproto_record_uri)
             else:
                 await delete_record_by_uri(auth_session, track.atproto_record_uri)

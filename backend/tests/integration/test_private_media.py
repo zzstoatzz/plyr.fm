@@ -127,7 +127,7 @@ async def test_private_track_upload_playback_and_delete_live_zds(
             assert track["audio_storage"] == "pds"
             assert track["r2_url"] is None
             assert track["pds_blob_cid"]
-            assert track["atproto_record_uri"].startswith("ats://")
+            assert track["atproto_record_uri"].startswith(f"at://{session.did}/space/")
             record_uri = track["atproto_record_uri"]
 
             parsed = parse_space_record_uri(record_uri)
