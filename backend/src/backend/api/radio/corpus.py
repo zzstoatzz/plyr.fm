@@ -32,7 +32,7 @@ async def load_corpus(db: AsyncSession) -> list[Track]:
     )
     result = await db.execute(stmt)
     tracks = list(result.scalars().all())
-    labels_by_id = await get_track_label_values(tracks)
+    labels_by_id = get_track_label_values(tracks)
     # Radio is a shared wall-clock rotation, including anonymous embeds. It
     # cannot vary by listener preference, so adult audio never enters it.
     return [

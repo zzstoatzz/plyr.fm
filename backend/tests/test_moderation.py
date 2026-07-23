@@ -779,3 +779,109 @@ async def test_create_report_invalid_reason(report_test_app: FastAPI) -> None:
         )
 
     assert response.status_code == 422  # validation error
+
+
+async def test_sync_operator_labels_reconciles_projection(
+    db_session: AsyncSession,
+) -> None:
+    """the projection sync both applies newly active labels and clears
+    negated ones, matching the labeler's by-value snapshot exactly."""
+    from backend._internal.tasks import sync_operator_labels
+
+    artist = Artist(
+        did="did:plc:labelsync",
+        handle="labelsync.bsky.social",
+        display_name="Label Sync User",
+    )
+    db_session.add(artist)
+    await db_session.commit()
+
+    # track 1: newly labeled in the labeler, projection empty
+    track1 = Track(
+        title="Newly Labeled",
+        file_id="labelsync_1",
+        file_type="mp3",
+        artist_did=artist.did,
+        atproto_record_uri="at://did:plc:labelsync/fm.plyr.track/1",
+        operator_labels=[],
+    )
+    # track 2: projection stale — label was negated in the labeler
+    track2 = Track(
+        title="Negated",
+        file_id="labelsync_2",
+        file_type="mp3",
+        artist_did=artist.did,
+        atproto_record_uri="at://did:plc:labelsync/fm.plyr.track/2",
+        operator_labels=["sexual"],
+    )
+    # track 3: unlabeled and unprojected — must remain untouched
+    track3 = Track(
+        title="Untouched",
+        file_id="labelsync_3",
+        file_type="mp3",
+        artist_did=artist.did,
+        atproto_record_uri="at://did:plc:labelsync/fm.plyr.track/3",
+        operator_labels=[],
+    )
+    db_session.add_all([track1, track2, track3])
+    await db_session.commit()
+
+    with patch(
+        "backend._internal.clients.moderation.get_moderation_client"
+    ) as mock_get_client:
+        mock_client = AsyncMock()
+        mock_client.get_active_labels_by_value.return_value = {
+            "at://did:plc:labelsync/fm.plyr.track/1": {"sexual"},
+        }
+        mock_get_client.return_value = mock_client
+
+        await sync_operator_labels()
+
+    await db_session.refresh(track1)
+    await db_session.refresh(track2)
+    await db_session.refresh(track3)
+
+    assert track1.operator_labels == ["sexual"]
+    assert track2.operator_labels == []
+    assert track3.operator_labels == []
+
+
+async def test_sync_operator_labels_skips_pass_on_labeler_outage(
+    db_session: AsyncSession,
+) -> None:
+    """an unreachable labeler must never clear the projection."""
+    from backend._internal.tasks import sync_operator_labels
+
+    artist = Artist(
+        did="did:plc:labeloutage",
+        handle="labeloutage.bsky.social",
+        display_name="Label Outage User",
+    )
+    db_session.add(artist)
+    await db_session.commit()
+
+    track = Track(
+        title="Projected",
+        file_id="labeloutage_1",
+        file_type="mp3",
+        artist_did=artist.did,
+        atproto_record_uri="at://did:plc:labeloutage/fm.plyr.track/1",
+        operator_labels=["sexual"],
+    )
+    db_session.add(track)
+    await db_session.commit()
+
+    with patch(
+        "backend._internal.clients.moderation.get_moderation_client"
+    ) as mock_get_client:
+        mock_client = AsyncMock()
+        mock_client.get_active_labels_by_value.side_effect = httpx.ConnectError(
+            "labeler down"
+        )
+        mock_get_client.return_value = mock_client
+
+        with pytest.raises(httpx.ConnectError):
+            await sync_operator_labels()
+
+    await db_session.refresh(track)
+    assert track.operator_labels == ["sexual"]

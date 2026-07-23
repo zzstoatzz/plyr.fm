@@ -459,6 +459,28 @@ class ModerationClient:
                 labels_by_uri.setdefault(uri, set())
             return labels_by_uri
 
+    async def get_active_labels_by_value(
+        self, values: list[str]
+    ) -> dict[str, set[str]]:
+        """Return every URI holding an active label of the given values.
+
+        Powers the operator-label projection sync (`sync_operator_labels`).
+        Raises on labeler failure — a reconciliation pass must never mistake
+        an outage for "nothing is labeled" and clear the projection.
+        """
+        if not values or not self.auth_token:
+            return {}
+
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            response = await client.post(
+                f"{self.labeler_url}/admin/labels-by-value",
+                json={"values": values},
+                headers=self._headers(),
+            )
+            response.raise_for_status()
+            raw_labels = response.json().get("labels", {})
+            return {uri: set(vals) for uri, vals in raw_labels.items()}
+
     async def get_negated_labels(self, uris: list[str]) -> set[str]:
         """check which URIs have an explicit negation (dismissal) label.
 

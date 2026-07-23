@@ -251,7 +251,11 @@ class TrackResponse(BaseModel):
         active_operator_labels = (
             set(operator_labels.get(track.id, set())) if operator_labels else set()
         )
-        labels = set(track.self_labels or []) | active_operator_labels
+        labels = (
+            set(track.self_labels or [])
+            | set(track.operator_labels or [])
+            | active_operator_labels
+        )
         if content_labels:
             labels.update(content_labels.get(track.id, set()))
 

@@ -18,6 +18,8 @@ from backend._internal import get_optional_session, get_supported_artists, requi
 from backend._internal.content_labels import (
     filter_sensitive_audio_tracks,
     get_operator_label_values,
+    get_track_label_values,
+    sensitive_audio_visible_clause,
 )
 from backend.config import settings
 from backend.models import (
@@ -111,6 +113,7 @@ async def list_tracks(
     # get authenticated user's liked tracks and preferences
     liked_track_ids: set[int] | None = None
     hidden_tags: list[str] = list(DEFAULT_HIDDEN_TAGS)
+    shows_sensitive_audio = False
 
     if session:
         liked_result = await db.execute(
@@ -125,6 +128,8 @@ async def list_tracks(
         prefs = prefs_result.scalar_one_or_none()
         if prefs and prefs.hidden_tags is not None:
             hidden_tags = prefs.hidden_tags
+        if prefs:
+            shows_sensitive_audio = bool(prefs.show_sensitive_audio)
 
     stmt = (
         select(Track)
@@ -173,6 +178,13 @@ async def list_tracks(
         )
         stmt = stmt.where(include_exists)
 
+    # adult-audio visibility lives in SQL (self labels + projected operator
+    # labels), so filtering composes with cursor pagination instead of
+    # corrupting it (#1676 regression: app-side filtering broke has_more)
+    if not shows_sensitive_audio:
+        viewer = session.did if session else None
+        stmt = stmt.where(sensitive_audio_visible_clause(viewer))
+
     # apply cursor-based pagination (tracks older than cursor timestamp)
     if cursor:
         try:
@@ -188,17 +200,13 @@ async def list_tracks(
     with logfire.span("materialize track objects"):
         tracks = list(result.scalars().all())
 
-    # The labeler is the content-classification source of truth. Apply adult
-    # audio policy before pagination metadata or serialization so hidden tracks
-    # do not leak through the default/anonymous discovery response.
-    tracks, content_labels = await filter_sensitive_audio_tracks(db, tracks, session)
-
     # check if there are more results and trim to requested limit
     if has_more := len(tracks) > limit:
         tracks = tracks[:limit]
 
     # generate next cursor from the last track's created_at
     next_cursor = tracks[-1].created_at.isoformat() if has_more and tracks else None
+    content_labels = get_track_label_values(tracks)
 
     # kick off supporter validation early — it makes external HTTP calls that
     # benefit from running concurrently with DB aggregations and PDS resolution

@@ -109,11 +109,11 @@ async def _resolve_track(
     ):
         liked_track_ids = {track.id}
 
-    like_counts, track_tags, content_labels = await asyncio.gather(
+    like_counts, track_tags = await asyncio.gather(
         get_like_counts(db, [track.id]),
         get_track_tags(db, [track.id]),
-        get_track_label_values([track]),
     )
+    content_labels = get_track_label_values([track])
 
     return await TrackResponse.from_track(
         track,

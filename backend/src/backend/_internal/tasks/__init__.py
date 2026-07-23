@@ -24,6 +24,7 @@ from backend._internal.tasks.hooks import (
     invalidate_tracks_discovery_cache,
     run_post_track_create_hooks,
 )
+from backend._internal.tasks.labels import sync_operator_labels
 from backend._internal.tasks.moderation import (
     scan_image_moderation,
     schedule_image_moderation_scan,
@@ -95,6 +96,7 @@ def _build_background_tasks() -> list:
     return [
         scan_copyright,
         sync_copyright_resolutions,
+        sync_operator_labels,
         process_export,
         sync_atproto,
         scrobble_to_teal,
@@ -191,5 +193,6 @@ __all__ = [
     "sync_album_list",
     "sync_atproto",
     "sync_copyright_resolutions",
+    "sync_operator_labels",
     "warm_follow_graph",
 ]

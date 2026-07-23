@@ -7,7 +7,8 @@ behavior; classifier evidence and moderation workflow state do not belong here.
 
 from collections.abc import Iterable
 
-from sqlalchemy import select
+from sqlalchemy import ColumnElement, select
+from sqlalchemy.dialects.postgresql import array
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend._internal.auth.session import Session
@@ -16,20 +17,42 @@ from backend.models import Track, UserPreferences
 
 ADULT_AUDIO_LABELS = frozenset({"sexual", "porn"})
 
+# Label values reconciled onto `tracks.operator_labels` by the
+# sync_operator_labels background task. Only these values may be read from
+# the projection; anything else must be queried from the labeler live.
+PROJECTED_LABEL_VALUES = ADULT_AUDIO_LABELS
+
 
 def has_adult_audio_label(labels: Iterable[str]) -> bool:
     """Return whether labels require the adult-audio preference."""
     return bool(ADULT_AUDIO_LABELS.intersection(labels))
 
 
-async def get_track_label_values(tracks: Iterable[Track]) -> dict[int, set[str]]:
-    """Union creator self-labels with active operator labels by track."""
-    track_list = list(tracks)
-    effective = {track.id: set(track.self_labels or []) for track in track_list}
-    operator = await get_operator_label_values(track_list)
-    for track_id, values in operator.items():
-        effective[track_id].update(values)
-    return effective
+def get_track_label_values(tracks: Iterable[Track]) -> dict[int, set[str]]:
+    """Union creator self-labels with projected operator labels by track.
+
+    Reads only track columns — operator labels come from the projection kept
+    fresh by sync_operator_labels, not a live labeler query. Authorization
+    paths (streaming bytes) must not use this; they query the labeler with
+    strict=True instead.
+    """
+    return {
+        track.id: set(track.self_labels or []) | set(track.operator_labels or [])
+        for track in tracks
+    }
+
+
+def sensitive_audio_visible_clause(viewer_did: str | None) -> ColumnElement[bool]:
+    """SQL predicate: the track needs no adult-audio opt-in from this viewer.
+
+    Callers skip the clause entirely for viewers whose saved preference shows
+    sensitive audio (see viewer_shows_sensitive_audio).
+    """
+    adult = array(sorted(ADULT_AUDIO_LABELS))
+    labeled = Track.self_labels.op("?|")(adult) | Track.operator_labels.op("?|")(adult)
+    if viewer_did is None:
+        return ~labeled
+    return ~labeled | (Track.artist_did == viewer_did)
 
 
 async def get_operator_label_values(
@@ -106,7 +129,7 @@ async def filter_sensitive_audio_tracks_for_viewer(
 ) -> tuple[list[Track], dict[int, set[str]]]:
     """Hide adult-labeled tracks for a viewer identified only by DID."""
     track_list = list(tracks)
-    labels_by_id = await get_track_label_values(track_list)
+    labels_by_id = get_track_label_values(track_list)
     if await viewer_did_shows_sensitive_audio(db, viewer_did):
         return track_list, labels_by_id
 
