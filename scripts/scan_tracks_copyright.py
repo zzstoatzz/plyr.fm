@@ -148,6 +148,7 @@ async def run_scan(
     dry_run: bool = False,
     limit: int | None = None,
     max_duration: float | None = None,
+    track_ids: list[int] | None = None,
 ) -> None:
     """scan all tracks for copyright."""
     # load settings
@@ -181,15 +182,18 @@ async def run_scan(
     from backend.utilities.database import db_session
 
     async with db_session() as db:
-        # find tracks without scans
+        # find tracks without scans (or the explicitly requested tracks)
         scanned_subq = select(CopyrightScan.track_id)
         stmt = (
             select(Track)
             .options(joinedload(Track.artist))
-            .where(Track.id.notin_(scanned_subq))
             .where(Track.r2_url.isnot(None))
             .order_by(Track.created_at.desc())
         )
+        if track_ids:
+            stmt = stmt.where(Track.id.in_(track_ids))
+        else:
+            stmt = stmt.where(Track.id.notin_(scanned_subq))
 
         if limit:
             stmt = stmt.limit(limit)
@@ -337,13 +341,23 @@ def main() -> None:
         default=None,
         help="skip tracks longer than this many minutes (estimated from file size)",
     )
+    parser.add_argument(
+        "--track-id",
+        type=int,
+        action="append",
+        dest="track_ids",
+        default=None,
+        help="scan this specific track id even if already scanned (repeatable)",
+    )
 
     args = parser.parse_args()
 
     print(f"🔍 copyright scan - {args.env}")
     print("=" * 50)
 
-    asyncio.run(run_scan(args.env, args.dry_run, args.limit, args.max_duration))
+    asyncio.run(
+        run_scan(args.env, args.dry_run, args.limit, args.max_duration, args.track_ids)
+    )
 
 
 if __name__ == "__main__":

@@ -83,6 +83,7 @@ async fn main() -> anyhow::Result<()> {
         label_tx,
         claude: claude_client.map(Arc::new),
         copyright_score_threshold: config.copyright_score_threshold,
+        copyright_mix_song_threshold: config.copyright_mix_song_threshold,
     };
 
     let app = Router::new()
