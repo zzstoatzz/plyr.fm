@@ -82,6 +82,14 @@ class Track(Base):
     self_labels: Mapped[list[str]] = mapped_column(
         JSONB, nullable=False, default=list, server_default="[]"
     )
+    # Active operator label values projected from the labeler so visibility
+    # can be enforced in SQL. The labeler stays the source of truth; the
+    # sync_operator_labels background task reconciles this every few minutes
+    # for the values it manages. Authorization paths must not read this —
+    # they query the labeler live (see may_stream_sensitive_audio).
+    operator_labels: Mapped[list[str]] = mapped_column(
+        JSONB, nullable=False, default=list, server_default="[]"
+    )
 
     # PDS blob storage (for audio stored on user's PDS)
     audio_storage: Mapped[str] = mapped_column(

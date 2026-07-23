@@ -111,6 +111,12 @@ pub struct LabelValuesResponse {
     pub labels: HashMap<String, Vec<String>>,
 }
 
+/// Request for all URIs currently holding an active label of the given values.
+#[derive(Debug, Deserialize)]
+pub struct LabelsByValueRequest {
+    pub values: Vec<String>,
+}
+
 /// Response with URIs that have an explicit negation (dismissal) label.
 #[derive(Debug, Serialize)]
 pub struct NegatedLabelsResponse {
@@ -345,6 +351,30 @@ pub async fn get_label_values(
 
     let mut labels: HashMap<String, Vec<String>> = HashMap::new();
     for (uri, val) in db.get_active_label_values(&request.uris).await? {
+        labels.entry(uri).or_default().push(val);
+    }
+
+    Ok(Json(LabelValuesResponse { labels }))
+}
+
+/// Get every URI currently holding an active label of the requested values.
+///
+/// Powers the backend's label projection sync: unlike `get_label_values`,
+/// which answers for a caller-supplied URI list, this scans the labeler's
+/// state so the backend can reconcile without shipping its whole catalog.
+pub async fn get_labels_by_value(
+    State(state): State<AppState>,
+    Json(request): Json<LabelsByValueRequest>,
+) -> Result<Json<LabelValuesResponse>, AppError> {
+    let db = state.db.as_ref().ok_or(AppError::LabelerNotConfigured)?;
+
+    tracing::debug!(
+        value_count = request.values.len(),
+        "querying active labels by value"
+    );
+
+    let mut labels: HashMap<String, Vec<String>> = HashMap::new();
+    for (uri, val) in db.get_active_labels_by_value(&request.values).await? {
         labels.entry(uri).or_default().push(val);
     }
 

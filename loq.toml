@@ -32,7 +32,7 @@ max_lines = 923
 
 [[rules]]
 path = "backend/src/backend/api/tracks/listing.py"
-max_lines = 616
+max_lines = 624
 
 [[rules]]
 path = "backend/src/backend/api/tracks/mutations.py"
@@ -76,7 +76,7 @@ max_lines = 569
 
 [[rules]]
 path = "backend/tests/test_moderation.py"
-max_lines = 781
+max_lines = 887
 
 [[rules]]
 path = "docs/internal/authentication.md"
@@ -180,11 +180,11 @@ max_lines = 983
 
 [[rules]]
 path = "services/moderation/src/admin.rs"
-max_lines = 743
+max_lines = 773
 
 [[rules]]
 path = "services/moderation/src/db.rs"
-max_lines = 1303
+max_lines = 1336
 
 [[rules]]
 path = "frontend/src/lib/components/FeedbackModal.svelte"
@@ -352,7 +352,7 @@ max_lines = 512
 
 [[rules]]
 path = "backend/src/backend/_internal/clients/moderation.py"
-max_lines = 579
+max_lines = 601
 
 [[rules]]
 path = "backend/tests/_internal/test_permissioned_spaces.py"

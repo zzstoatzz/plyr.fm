@@ -676,6 +676,39 @@ impl LabelDb {
             .map(|s| s.unwrap_or(0))
     }
 
+    /// Get every URI holding an active label of the given values.
+    ///
+    /// Same event-sourced resolution as `get_active_label_values`, but keyed
+    /// by value instead of URI so callers can reconcile projections without
+    /// knowing which URIs might be labeled.
+    pub async fn get_active_labels_by_value(
+        &self,
+        values: &[String],
+    ) -> Result<Vec<(String, String)>, sqlx::Error> {
+        if values.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        sqlx::query_as::<_, (String, String)>(
+            r#"
+            SELECT uri, val
+            FROM (
+                SELECT DISTINCT ON (src, uri, val)
+                       src, uri, val, neg, exp, seq
+                FROM labels
+                WHERE val = ANY($1)
+                ORDER BY src, uri, val, seq DESC
+            ) current_labels
+            WHERE neg = false
+              AND (exp IS NULL OR exp > NOW())
+            ORDER BY uri, val
+            "#,
+        )
+        .bind(values)
+        .fetch_all(&self.pool)
+        .await
+    }
+
     /// Get the current active label values for a set of URIs.
     ///
     /// Label state is event-sourced: the newest event for each

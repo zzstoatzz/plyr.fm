@@ -107,6 +107,7 @@ async fn main() -> anyhow::Result<()> {
         .route("/admin/context", post(admin::store_context))
         .route("/admin/active-labels", post(admin::get_active_labels))
         .route("/admin/labels", post(admin::get_label_values))
+        .route("/admin/labels-by-value", post(admin::get_labels_by_value))
         .route("/admin/negated-labels", post(admin::get_negated_labels))
         .route("/admin/sensitive-images", post(admin::add_sensitive_image))
         .route(

@@ -40,7 +40,7 @@ def test_normalize_self_labels_preserves_valid_unknown_values() -> None:
     ]
 
 
-async def test_effective_labels_union_creator_and_operator_provenance() -> None:
+async def test_operator_label_values_query_labeler_live() -> None:
     track = Track(
         id=1177,
         title="creator labeled",
@@ -60,7 +60,22 @@ async def test_effective_labels_union_creator_and_operator_provenance() -> None:
         return_value=moderation,
     ):
         operator_values = await get_operator_label_values([track])
-        values = await get_track_label_values([track])
 
     assert operator_values[track.id] == {"porn", "operator:reviewed"}
-    assert values[track.id] == {"sexual", "porn", "operator:reviewed"}
+
+
+def test_effective_labels_union_creator_and_projected_operator_provenance() -> None:
+    """get_track_label_values reads only columns — self labels union the
+    operator-label projection, with no live labeler query."""
+    track = Track(
+        id=1178,
+        title="creator labeled",
+        artist_did="did:plc:creator",
+        file_id="creator_labeled",
+        file_type="mp3",
+        atproto_record_uri="at://did:plc:creator/fm.plyr.track/explicit",
+        self_labels=["sexual"],
+        operator_labels=["porn"],
+    )
+
+    assert get_track_label_values([track])[track.id] == {"sexual", "porn"}
