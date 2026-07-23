@@ -46,6 +46,11 @@ from .router import router
 
 logger = logging.getLogger(__name__)
 
+# bounds how many extra row batches one request will scan past filtered
+# sensitive tracks before returning a short (possibly empty) page with
+# has_more=true and an advanced cursor
+MAX_SENSITIVE_SCAN_PASSES = 4
+
 
 class TracksListResponse(BaseModel):
     """Response for paginated track listing."""
@@ -174,31 +179,57 @@ async def list_tracks(
         stmt = stmt.where(include_exists)
 
     # apply cursor-based pagination (tracks older than cursor timestamp)
+    cursor_time: datetime | None = None
     if cursor:
         try:
             cursor_time = datetime.fromisoformat(cursor)
-            stmt = stmt.where(Track.created_at < cursor_time)
         except ValueError as e:
             raise HTTPException(status_code=400, detail="invalid cursor format") from e
 
-    # order by created_at desc and fetch one extra to check if there's more
-    stmt = stmt.order_by(Track.created_at.desc()).limit(limit + 1)
-    with logfire.span("db execute tracks query"):
-        result = await db.execute(stmt)
-    with logfire.span("materialize track objects"):
-        tracks = list(result.scalars().all())
+    stmt = stmt.order_by(Track.created_at.desc())
 
-    # The labeler is the content-classification source of truth. Apply adult
-    # audio policy before pagination metadata or serialization so hidden tracks
-    # do not leak through the default/anonymous discovery response.
-    tracks, content_labels = await filter_sensitive_audio_tracks(db, tracks, session)
+    # Adult-audio policy can't live in SQL — labels come partly from the
+    # moderation service — so pagination scans raw rows in batches, skipping
+    # hidden tracks and continuing until the page fills, the feed is exhausted,
+    # or the pass cap is hit. The cursor always advances over raw rows, so
+    # filtered tracks can never truncate the feed or stall its cursor (#1676
+    # regression: filtering before pagination bookkeeping did exactly that).
+    tracks: list[Track] = []
+    content_labels: dict[int, set[str]] = {}
+    scan_cursor = cursor_time
+    has_more = True
+    for _ in range(MAX_SENSITIVE_SCAN_PASSES):
+        batch_stmt = stmt
+        if scan_cursor is not None:
+            batch_stmt = batch_stmt.where(Track.created_at < scan_cursor)
+        batch_stmt = batch_stmt.limit(limit + 1)
+        with logfire.span("db execute tracks query"):
+            result = await db.execute(batch_stmt)
+        with logfire.span("materialize track objects"):
+            batch = list(result.scalars().all())
+        batch_exhausted = len(batch) <= limit
+        batch = batch[:limit]
 
-    # check if there are more results and trim to requested limit
-    if has_more := len(tracks) > limit:
-        tracks = tracks[:limit]
+        visible, batch_labels = await filter_sensitive_audio_tracks(db, batch, session)
+        content_labels.update(batch_labels)
+        visible_ids = {t.id for t in visible}
 
-    # generate next cursor from the last track's created_at
-    next_cursor = tracks[-1].created_at.isoformat() if has_more and tracks else None
+        page_full = False
+        for row in batch:
+            scan_cursor = row.created_at
+            if row.id in visible_ids:
+                tracks.append(row)
+                if len(tracks) >= limit:
+                    page_full = True
+                    break
+        if page_full:
+            has_more = not (batch_exhausted and row is batch[-1])
+            break
+        if batch_exhausted:
+            has_more = False
+            break
+
+    next_cursor = scan_cursor.isoformat() if has_more and scan_cursor else None
 
     # kick off supporter validation early — it makes external HTTP calls that
     # benefit from running concurrently with DB aggregations and PDS resolution

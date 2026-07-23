@@ -116,21 +116,35 @@ class TracksCache {
 
 		this.loadingMore = true;
 		try {
-			const url = new URL(`${API_URL}/tracks/`);
-			url.searchParams.set('cursor', this.nextCursor);
-			for (const tag of this.activeTags) {
-				url.searchParams.append('tags', tag);
+			// a page can come back empty with has_more=true when every scanned
+			// row was filtered server-side (e.g. sensitive audio); follow the
+			// cursor a few times so infinite scroll doesn't stall on the gap —
+			// the intersection observer won't refire if nothing new renders
+			for (let attempt = 0; attempt < 3; attempt++) {
+				const cursor = this.nextCursor;
+				if (!cursor) {
+					break;
+				}
+				const url = new URL(`${API_URL}/tracks/`);
+				url.searchParams.set('cursor', cursor);
+				for (const tag of this.activeTags) {
+					url.searchParams.append('tags', tag);
+				}
+
+				const response = await fetch(url.toString(), {
+					credentials: 'include'
+				});
+				const data: TracksApiResponse = await response.json();
+
+				// append new tracks to existing list
+				this.tracks = [...this.tracks, ...data.tracks];
+				this.nextCursor = data.next_cursor;
+				this.hasMore = data.has_more;
+
+				if (data.tracks.length > 0 || !this.hasMore || !this.nextCursor) {
+					break;
+				}
 			}
-
-			const response = await fetch(url.toString(), {
-				credentials: 'include'
-			});
-			const data: TracksApiResponse = await response.json();
-
-			// append new tracks to existing list
-			this.tracks = [...this.tracks, ...data.tracks];
-			this.nextCursor = data.next_cursor;
-			this.hasMore = data.has_more;
 
 			this.persistToStorage();
 		} catch (e) {
