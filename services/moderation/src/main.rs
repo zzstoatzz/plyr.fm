@@ -86,7 +86,39 @@ async fn main() -> anyhow::Result<()> {
         copyright_mix_song_threshold: config.copyright_mix_song_threshold,
     };
 
-    let app = Router::new()
+    let app = build_router(state, auth_token);
+
+    let addr: SocketAddr = format!("{}:{}", config.host, config.port)
+        .parse()
+        .map_err(|e| anyhow!("invalid bind addr: {e}"))?;
+    info!(%addr, "moderation service listening");
+
+    let listener = TcpListener::bind(addr).await?;
+    axum::serve(listener, app).await?;
+    Ok(())
+}
+
+/// Service-to-service endpoints the backend calls.
+///
+/// Served under `/internal`, and — for one deploy cycle — also under the
+/// legacy `/admin` prefix so the backend and this service can deploy
+/// independently. Remove the `/admin` mount once the backend client has
+/// moved (#1691).
+fn machine_api() -> Router<AppState> {
+    Router::new()
+        .route("/active-labels", post(admin::get_active_labels))
+        .route("/labels", post(admin::get_label_values))
+        .route("/labels-by-value", post(admin::get_labels_by_value))
+        .route("/negated-labels", post(admin::get_negated_labels))
+        .route("/sensitive-images", post(admin::add_sensitive_image))
+        .route(
+            "/sensitive-images/remove",
+            post(admin::remove_sensitive_image),
+        )
+}
+
+fn build_router(state: AppState, auth_token: Option<String>) -> Router {
+    Router::new()
         // Landing page
         .route("/", get(handlers::landing))
         // Health check
@@ -99,6 +131,9 @@ async fn main() -> anyhow::Result<()> {
         .route("/scan-image", post(handlers::scan_image))
         // Label emission (internal API)
         .route("/emit-label", post(handlers::emit_label))
+        // Service-to-service API
+        .nest("/internal", machine_api())
+        .nest("/admin", machine_api())
         // Admin UI and API
         .route("/admin", get(admin::admin_ui))
         .route("/admin/flags", get(admin::list_flagged))
@@ -106,15 +141,6 @@ async fn main() -> anyhow::Result<()> {
         .route("/admin/resolve", post(admin::resolve_flag))
         .route("/admin/resolve-htmx", post(admin::resolve_flag_htmx))
         .route("/admin/context", post(admin::store_context))
-        .route("/admin/active-labels", post(admin::get_active_labels))
-        .route("/admin/labels", post(admin::get_label_values))
-        .route("/admin/labels-by-value", post(admin::get_labels_by_value))
-        .route("/admin/negated-labels", post(admin::get_negated_labels))
-        .route("/admin/sensitive-images", post(admin::add_sensitive_image))
-        .route(
-            "/admin/sensitive-images/remove",
-            post(admin::remove_sensitive_image),
-        )
         .route("/admin/batches", post(admin::create_batch))
         // User reports
         .route("/reports", post(reports::create_report))
@@ -140,14 +166,88 @@ async fn main() -> anyhow::Result<()> {
         .layer(middleware::from_fn(move |req, next| {
             auth::auth_middleware(req, next, auth_token.clone())
         }))
-        .with_state(state);
+        .with_state(state)
+}
 
-    let addr: SocketAddr = format!("{}:{}", config.host, config.port)
-        .parse()
-        .map_err(|e| anyhow!("invalid bind addr: {e}"))?;
-    info!(%addr, "moderation service listening");
+#[cfg(test)]
+mod tests {
+    use axum::{
+        body::Body,
+        http::{Request, StatusCode},
+    };
+    use tower::ServiceExt;
 
-    let listener = TcpListener::bind(addr).await?;
-    axum::serve(listener, app).await?;
-    Ok(())
+    use super::*;
+
+    /// (path, body) for every service-to-service endpoint, relative to its prefix.
+    const MACHINE_ENDPOINTS: &[(&str, &str)] = &[
+        ("/active-labels", r#"{"uris":[]}"#),
+        ("/labels", r#"{"uris":[]}"#),
+        ("/labels-by-value", r#"{"values":[]}"#),
+        ("/negated-labels", r#"{"uris":[]}"#),
+        ("/sensitive-images", r#"{"image_id":"x"}"#),
+        ("/sensitive-images/remove", r#"{"id":1}"#),
+    ];
+
+    const TOKEN: &str = "test-token";
+
+    fn test_state() -> AppState {
+        AppState {
+            audd_api_token: String::new(),
+            audd_api_url: String::new(),
+            db: None,
+            signer: None,
+            label_tx: None,
+            claude: None,
+            copyright_score_threshold: 50,
+            copyright_mix_song_threshold: 3,
+        }
+    }
+
+    async fn post(path: &str, body: &str, token: Option<&str>) -> StatusCode {
+        let mut req = Request::post(path).header("content-type", "application/json");
+        if let Some(token) = token {
+            req = req.header("X-Moderation-Key", token);
+        }
+        build_router(test_state(), Some(TOKEN.to_string()))
+            .oneshot(req.body(Body::from(body.to_string())).unwrap())
+            .await
+            .unwrap()
+            .status()
+    }
+
+    /// Both prefixes must reach the same handler for the whole deploy-overlap
+    /// window: the backend still calls `/admin/*` until its client moves.
+    #[tokio::test]
+    async fn machine_endpoints_are_served_under_both_prefixes() {
+        for (path, body) in MACHINE_ENDPOINTS {
+            for prefix in ["/internal", "/admin"] {
+                let status = post(&format!("{prefix}{path}"), body, Some(TOKEN)).await;
+                assert_eq!(
+                    status,
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    "{prefix}{path} should reach the handler (503 = no labeler db in tests)"
+                );
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn machine_endpoints_require_the_moderation_key() {
+        for (path, body) in MACHINE_ENDPOINTS {
+            let status = post(&format!("/internal{path}"), body, None).await;
+            assert_eq!(status, StatusCode::UNAUTHORIZED, "/internal{path}");
+        }
+    }
+
+    /// The moderator UI is unaffected by the split.
+    #[tokio::test]
+    async fn admin_ui_routes_still_resolve() {
+        let status = build_router(test_state(), Some(TOKEN.to_string()))
+            .oneshot(Request::get("/admin/flags").body(Body::empty()).unwrap())
+            .await
+            .unwrap()
+            .status();
+        assert_ne!(status, StatusCode::NOT_FOUND);
+    }
 }
