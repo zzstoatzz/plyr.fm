@@ -261,6 +261,14 @@
 		href="{API_URL}/oembed?url={encodeURIComponent(`${APP_CANONICAL_URL}/u/${albumMetadata.artist_handle}/album/${albumMetadata.slug}`)}"
 		title="{albumMetadata.title} by {albumMetadata.artist}"
 	/>
+
+	<!-- at-tags: map this page to its atproto records (https://tangled.org/chrisshank.com/at-tags/) -->
+	{#if albumMetadata.list_uri}
+		<meta name="at:canonical" content={albumMetadata.list_uri} />
+	{/if}
+	{#if albumMetadata.artist_did}
+		<meta name="at:author" content="at://{albumMetadata.artist_did}" />
+	{/if}
 </svelte:head>
 
 <Header user={auth.user} isAuthenticated={auth.isAuthenticated} onLogout={() => goto('/login')} />

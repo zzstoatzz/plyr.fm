@@ -457,6 +457,14 @@
 		title={playlist.name}
 		href="{API_URL}/oembed?url={encodeURIComponent(`${APP_CANONICAL_URL}/playlist/${playlist.id}`)}"
 	/>
+
+	<!-- at-tags: map this page to its atproto records (https://tangled.org/chrisshank.com/at-tags/) -->
+	{#if playlist.atproto_record_uri}
+		<meta name="at:canonical" content={playlist.atproto_record_uri} />
+	{/if}
+	{#if playlist.owner_did}
+		<meta name="at:author" content="at://{playlist.owner_did}" />
+	{/if}
 </svelte:head>
 
 <Header user={auth.user} isAuthenticated={auth.isAuthenticated} onLogout={handleLogout} />

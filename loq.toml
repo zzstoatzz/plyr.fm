@@ -340,7 +340,7 @@ max_lines = 506
 
 [[rules]]
 path = "frontend/src/routes/track/[[]id[]]/+page.svelte"
-max_lines = 1783
+max_lines = 1791
 
 [[rules]]
 path = "frontend/src/lib/components/playlist/PlaylistTrackList.svelte"
@@ -357,3 +357,7 @@ max_lines = 601
 [[rules]]
 path = "backend/tests/_internal/test_permissioned_spaces.py"
 max_lines = 634
+
+[[rules]]
+path = "frontend/src/routes/u/[[]handle[]]/+page.svelte"
+max_lines = 1439
