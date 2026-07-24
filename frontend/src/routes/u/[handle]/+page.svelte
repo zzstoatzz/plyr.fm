@@ -397,6 +397,9 @@ $effect(() => {
 		{#if data.artist.avatar_url && !moderation.isSensitive(data.artist.avatar_url)}
 			<meta name="twitter:image" content="{data.artist.avatar_url}" />
 		{/if}
+
+		<!-- at-tags: map this page to its atproto identity (https://tangled.org/chrisshank.com/at-tags/) -->
+		<meta name="at:canonical" content="at://{data.artist.did}" />
 		{/if}
 </svelte:head>
 

@@ -580,6 +580,14 @@ $effect(() => {
 		href="{API_URL}/oembed?url={encodeURIComponent(`${APP_CANONICAL_URL}/track/${track.id}`)}"
 		title="{track.title} - {track.artist}"
 	/>
+
+	<!-- at-tags: map this page to its atproto records (https://tangled.org/chrisshank.com/at-tags/) -->
+	{#if track.atproto_record_uri}
+		<meta name="at:canonical" content={track.atproto_record_uri} />
+	{/if}
+	{#if track.artist_did}
+		<meta name="at:author" content="at://{track.artist_did}" />
+	{/if}
 	{/if}
 </svelte:head>
 
