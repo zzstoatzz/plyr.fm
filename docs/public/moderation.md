@@ -33,7 +33,8 @@ not plyr.fm inventions.
   Subsonic browsing unless you enable **sensitive audio** in settings
 - never in shared radio, for anyone — radio is one synchronized stream, so no
   single listener's preference can decide what everyone else hears
-- **a direct link plays for anyone**
+- **still listed on the artist's own page**, and **a direct link plays for
+  anyone**
 
 see [sensitive content](/sensitive-content) for the settings.
 
@@ -47,6 +48,24 @@ copyright claim is our responsibility and no listener setting can waive it.
   remixes, and an artist's own catalogue all match — so being flagged does not
   break the uploader's own link
 - removal from plyr.fm is a separate, deliberate decision made by a person
+
+## where a label applies
+
+a label changes where a track *surfaces*, not whether you can reach what you
+went looking for. The distinction is between two kinds of place:
+
+- **surfaces we choose for you** — the home feed, search results,
+  recommendations, radio. Adult labels filter here.
+- **places you navigated to** — an artist's page, an album, a track's own
+  link. These show what is there.
+
+this mirrors how the AT Protocol itself models moderation, where the same post
+can be hidden in a feed but visible when you open it. Hiding part of an
+artist's catalogue on their own page would misrepresent their work to someone
+who had already gone looking for them.
+
+copyright is the exception: it applies everywhere, because it is about what we
+are willing to keep serving rather than about what you would rather see.
 
 ## what gets published, and what does not
 
