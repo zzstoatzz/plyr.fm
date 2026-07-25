@@ -116,7 +116,9 @@ $effect(() => {
 		const minDisplayTime = 300; // minimum 300ms to avoid flicker
 
 		try {
-			const response = await fetch(`${API_URL}/artists/${artist.did}/analytics`);
+			const response = await fetch(`${API_URL}/artists/${artist.did}/analytics`, {
+				credentials: 'include'
+			});
 			if (response.ok) {
 				analytics = await response.json();
 			}
@@ -154,7 +156,9 @@ $effect(() => {
 		if (!artist?.did) return;
 
 		try {
-			const response = await fetch(`${API_URL}/lists/playlists/by-artist/${artist.did}`);
+			const response = await fetch(`${API_URL}/lists/playlists/by-artist/${artist.did}`, {
+				credentials: 'include'
+			});
 			if (response.ok) {
 				publicPlaylists = await response.json();
 			}
@@ -270,7 +274,8 @@ $effect(() => {
 		loadingMoreTracks = true;
 		try {
 			const response = await fetch(
-				`${API_URL}/tracks/?artist_did=${artist.did}&cursor=${encodeURIComponent(nextCursor)}&limit=10`
+				`${API_URL}/tracks/?artist_did=${artist.did}&cursor=${encodeURIComponent(nextCursor)}&limit=10`,
+				{ credentials: 'include' }
 			);
 			if (response.ok) {
 				const data = await response.json();

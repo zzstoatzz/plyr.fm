@@ -179,3 +179,79 @@ async def test_override_allow_does_not_override_a_listeners_adult_preference(
         db_session, [adult], VIEWER
     )
     assert visible == []
+
+
+async def test_artist_scoped_listing_is_a_destination_not_discovery(
+    db_session: AsyncSession,
+) -> None:
+    """An artist's own page shows their whole catalogue.
+
+    You are on someone's page because you already found them, so hiding their
+    adult-labeled tracks there makes the page misrepresent the catalogue — and
+    it disagreed with the album page one level deeper, which shows everything.
+    Regression for the artist page rendering "4 tracks" above a list of one.
+    """
+    from sqlalchemy import select
+
+    from backend._internal.content_labels import (
+        copyright_visible_clause,
+        sensitive_audio_visible_clause,
+    )
+
+    labeled = await _track(db_session, file_id="dest1", operator_labels=["sexual"])
+    plain = await _track(db_session, file_id="dest2")
+    await db_session.commit()
+
+    # what the artist page now asks for: copyright only, no viewer preference
+    rows = (
+        (
+            await db_session.execute(
+                select(Track)
+                .where(Track.artist_did == OWNER)
+                .where(copyright_visible_clause())
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert {t.id for t in rows} == {labeled.id, plain.id}
+
+    # a discovery surface still hides it from a viewer who has not opted in
+    discovery = (
+        (
+            await db_session.execute(
+                select(Track)
+                .where(Track.artist_did == OWNER)
+                .where(sensitive_audio_visible_clause(VIEWER))
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert {t.id for t in discovery} == {plain.id}
+
+
+async def test_copyright_still_hides_on_an_artist_page(
+    db_session: AsyncSession,
+) -> None:
+    """ "I already found this artist" does not discharge a hosting obligation."""
+    from sqlalchemy import select
+
+    from backend._internal.content_labels import copyright_visible_clause
+
+    await _track(db_session, file_id="dest3", operator_labels=["copyright-violation"])
+    plain = await _track(db_session, file_id="dest4")
+    await db_session.commit()
+
+    rows = (
+        (
+            await db_session.execute(
+                select(Track)
+                .where(Track.artist_did == OWNER)
+                .where(copyright_visible_clause())
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert {t.id for t in rows} == {plain.id}

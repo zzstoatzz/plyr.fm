@@ -19,7 +19,13 @@ export const load: PageServerLoad = async ({ params, fetch }) => {
 
 		const artist: Artist = await artistResponse.json();
 
-		// fetch artist's tracks server-side (no cookie available on frontend host)
+		// The session cookie is host-only on the API origin, so the browser never
+		// sends it here and there is nothing to forward -- #284 tried exactly that
+		// and abandoned it. This render is therefore always the anonymous view.
+		//
+		// That is fine now only because an artist-scoped listing no longer filters
+		// on viewer preference: SSR and the hydrated client agree, so there is no
+		// flash of a shorter list.
 		const tracksResponse = await fetch(`${API_URL}/tracks/?artist_did=${artist.did}&limit=5`);
 		let tracks: Track[] = [];
 		let hasMoreTracks = false;
