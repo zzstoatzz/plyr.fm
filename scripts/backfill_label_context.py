@@ -29,9 +29,9 @@ import sys
 from typing import Any, Literal
 
 import httpx
+from _moderation import ModerationClient
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
-
 
 Environment = Literal["dev", "staging", "prod"]
 
@@ -84,44 +84,18 @@ def setup_env(settings: BackfillSettings, env: Environment) -> None:
 
 
 async def store_context(
-    client: httpx.AsyncClient,
-    settings: BackfillSettings,
+    client: ModerationClient,
     uri: str,
     context: dict[str, Any],
 ) -> bool:
-    """store context directly via emit-label endpoint.
+    """attach context to a label that already exists.
 
-    we send a "dummy" emit that just stores context for an existing label.
-    the moderation service will upsert the context without creating a new label
-    if we use neg=false and the label already exists (it just updates context).
-
-    actually, we need a dedicated endpoint for this. let's use a workaround:
-    call emit-label with the context - it will store the context even though
-    the label already exists (store_context uses ON CONFLICT DO UPDATE).
+    emit-label cannot be reused for this: it appends a new signed label row on
+    every call (the labeler protocol has no unique constraint on uri+val), so a
+    backfill would forge fresh labels rather than annotate the existing ones.
     """
     try:
-        # we need to call emit-label to trigger context storage
-        # but we don't want to create duplicate labels
-        # the backend will reject duplicate labels, so we just send context
-        # via a new endpoint we need to add... or we can use a hack:
-        # just POST to emit-label with context - it will store label + context
-        # but since label already exists, we'll get an error... hmm
-
-        # actually, looking at the code, store_label will create a new label row
-        # each time (no unique constraint on uri+val). that's intentional for
-        # labeler protocol. so we can't use emit-label for backfill.
-
-        # we need a dedicated endpoint. let's add /admin/context for this.
-        response = await client.post(
-            f"{settings.moderation_service_url}/admin/context",
-            json={
-                "uri": uri,
-                "context": context,
-            },
-            headers={"X-Moderation-Key": settings.moderation_auth_token},
-            timeout=30.0,
-        )
-        response.raise_for_status()
+        await client.store_context(uri, context)
         return True
     except httpx.HTTPStatusError as e:
         print(f"  ❌ HTTP error: {e.response.status_code}")
@@ -160,11 +134,10 @@ async def run_backfill(env: Environment, dry_run: bool = False) -> None:
     setup_env(settings, env)
 
     # import backend after env setup
-    from sqlalchemy import select
-    from sqlalchemy.orm import joinedload
-
     from backend.models import CopyrightScan, Track
     from backend.utilities.database import db_session
+    from sqlalchemy import select
+    from sqlalchemy.orm import joinedload
 
     async with db_session() as db:
         # find flagged tracks with atproto URIs and their scan results
@@ -197,7 +170,9 @@ async def run_backfill(env: Environment, dry_run: bool = False) -> None:
             return
 
         # store context for each track
-        async with httpx.AsyncClient() as client:
+        async with ModerationClient(
+            settings.moderation_service_url, settings.moderation_auth_token
+        ) as client:
             stored = 0
             failed = 0
 
@@ -214,12 +189,7 @@ async def run_backfill(env: Environment, dry_run: bool = False) -> None:
                     "matches": scan.matches,
                 }
 
-                success = await store_context(
-                    client,
-                    settings,
-                    track.atproto_record_uri,
-                    context,
-                )
+                success = await store_context(client, track.atproto_record_uri, context)
 
                 if success:
                     stored += 1

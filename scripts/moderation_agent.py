@@ -24,7 +24,7 @@ usage:
     uv run scripts/moderation_agent.py --env staging --auto-resolve
 
 environment variables:
-    MODERATION_SERVICE_URL - URL of moderation service (default: https://plyr-moderation.fly.dev)
+    MODERATION_SERVICE_URL - URL of moderation service (default: https://moderation.plyr.fm)
     MODERATION_AUTH_TOKEN - auth token for moderation service
     ANTHROPIC_API_KEY - API key for Claude
 """
@@ -33,12 +33,10 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Literal
 
-import httpx
+from _moderation import ModerationClient
 from pydantic import BaseModel, Field
 from pydantic_ai import Agent
 from pydantic_ai.models.anthropic import AnthropicModel
@@ -151,55 +149,6 @@ class BatchAnalysis(BaseModel):
     per_track_analysis: dict[str, FlagAnalysis] = Field(
         default_factory=dict, description="detailed analysis per URI"
     )
-
-
-# --- moderation service client ---
-
-
-@dataclass
-class ModerationClient:
-    """client for the moderation service API."""
-
-    base_url: str
-    auth_token: str
-    _client: httpx.AsyncClient = field(init=False, repr=False)
-
-    def __post_init__(self) -> None:
-        self._client = httpx.AsyncClient(
-            base_url=self.base_url,
-            headers={"X-Moderation-Key": self.auth_token},
-            timeout=30.0,
-        )
-
-    async def close(self) -> None:
-        await self._client.aclose()
-
-    async def list_flags(
-        self, filter: Literal["pending", "resolved", "all"] = "pending"
-    ) -> list[FlaggedTrack]:
-        """list flagged tracks from the moderation service."""
-        response = await self._client.get("/admin/flags", params={"filter": filter})
-        response.raise_for_status()
-        data = response.json()
-        return [FlaggedTrack.model_validate(t) for t in data["tracks"]]
-
-    async def resolve_flag(
-        self,
-        uri: str,
-        reason: ResolutionReason,
-        notes: str | None = None,
-    ) -> dict:
-        """resolve (negate) a copyright flag."""
-        payload = {
-            "uri": uri,
-            "val": "copyright-violation",
-            "reason": reason.value,
-        }
-        if notes:
-            payload["notes"] = notes
-        response = await self._client.post("/admin/resolve", json=payload)
-        response.raise_for_status()
-        return response.json()
 
 
 # --- agent setup ---
@@ -453,7 +402,9 @@ async def run_agent(
 
     try:
         console.print("[dim]fetching pending flags...[/dim]")
-        flags = await client.list_flags(filter="pending")
+        flags = [
+            FlaggedTrack.model_validate(t) for t in await client.list_flags("pending")
+        ]
 
         if not flags:
             console.print("[green]no pending flags[/green]")
@@ -576,7 +527,7 @@ For each track:
                     )
 
                     try:
-                        await client.resolve_flag(uri, reason, notes)
+                        await client.resolve(uri, reason.value, notes)
                         resolved += 1
                         console.print(
                             f"  [green]\u2713[/green] resolved: {uri[:60]}..."
