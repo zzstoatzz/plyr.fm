@@ -23,9 +23,21 @@
     </div>
 
     <div id="main-content" style="display: none;">
+        <!-- attribution, not authentication: the shared key above is what
+             actually authorises. this records who is claiming the action so
+             the event log is an audit trail rather than anonymous mutations. -->
+        <div class="actor-section">
+            <label for="actor">acting as</label>
+            <input type="text" id="actor" placeholder="your handle" onchange="saveActor()">
+            <span class="muted">recorded on every decision</span>
+        </div>
+
         <nav class="tab-nav">
-            <button class="tab-btn active" data-tab="copyright" onclick="switchTab('copyright')">
-                copyright flags
+            <button class="tab-btn active" data-tab="queue" onclick="switchTab('queue')">
+                review queue
+            </button>
+            <button class="tab-btn" data-tab="copyright" onclick="switchTab('copyright')">
+                copyright labels
             </button>
             <button class="tab-btn" data-tab="reports" onclick="switchTab('reports')">
                 user reports
@@ -35,8 +47,25 @@
             </button>
         </nav>
 
-        <!-- copyright flags tab -->
-        <div id="tab-copyright" class="tab-content active">
+        <!-- review queue tab: everything actually awaiting a decision -->
+        <div id="tab-queue" class="tab-content active">
+            <div class="header-row">
+                <h2>awaiting review</h2>
+                <button class="btn btn-secondary" onclick="loadQueue()">
+                    refresh
+                </button>
+            </div>
+            <p class="muted">
+                scan flags and user reports with no decision recorded yet.
+                listen before deciding — a fingerprint match is not a finding.
+            </p>
+            <div id="queue-list" class="flags-list">
+                <div class="loading">loading...</div>
+            </div>
+        </div>
+
+        <!-- copyright labels tab -->
+        <div id="tab-copyright" class="tab-content">
             <div class="header-row">
                 <h2>flagged tracks</h2>
                 <button class="btn btn-secondary" onclick="refreshFlagsList()">
