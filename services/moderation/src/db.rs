@@ -197,6 +197,11 @@ impl LabelDb {
         Ok(Self { pool })
     }
 
+    /// Connection pool, for `impl LabelDb` blocks in sibling modules.
+    pub fn pool(&self) -> &PgPool {
+        &self.pool
+    }
+
     /// Run database migrations.
     pub async fn migrate(&self) -> Result<(), sqlx::Error> {
         sqlx::query(

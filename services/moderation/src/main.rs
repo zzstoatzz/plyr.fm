@@ -24,6 +24,7 @@ mod auth;
 mod claude;
 mod config;
 mod db;
+mod events;
 mod handlers;
 mod labels;
 mod reports;
@@ -47,6 +48,7 @@ async fn main() -> anyhow::Result<()> {
     let (db, signer, label_tx) = if config.labeler_enabled() {
         let db = db::LabelDb::connect(config.database_url.as_ref().unwrap()).await?;
         db.migrate().await?;
+        db.migrate_events().await?;
         info!("labeler database connected and migrated");
 
         let signer = labels::LabelSigner::from_hex(
@@ -117,6 +119,17 @@ fn machine_api() -> Router<AppState> {
         )
 }
 
+/// Service-to-service endpoints added after the split.
+///
+/// Deliberately not aliased under `/admin`: the aliases exist only so the
+/// endpoints that predate #1691 survive one deploy cycle, and a route born
+/// on `/internal` has no legacy caller to keep working.
+fn internal_only_api() -> Router<AppState> {
+    Router::new()
+        .route("/events", post(events::record_event))
+        .route("/overrides", get(events::active_overrides))
+}
+
 fn build_router(state: AppState, auth_token: Option<String>) -> Router {
     Router::new()
         // Landing page
@@ -133,6 +146,7 @@ fn build_router(state: AppState, auth_token: Option<String>) -> Router {
         .route("/emit-label", post(handlers::emit_label))
         // Service-to-service API
         .nest("/internal", machine_api())
+        .nest("/internal", internal_only_api())
         .nest("/admin", machine_api())
         // Admin UI and API
         .route("/admin", get(admin::admin_ui))
@@ -142,6 +156,10 @@ fn build_router(state: AppState, auth_token: Option<String>) -> Router {
         .route("/admin/resolve-htmx", post(admin::resolve_flag_htmx))
         .route("/admin/context", post(admin::store_context))
         .route("/admin/batches", post(admin::create_batch))
+        // review queue + decision log
+        .route("/admin/queue", get(events::review_queue))
+        .route("/admin/events", post(events::record_event))
+        .route("/admin/subject-events", post(events::subject_events))
         // User reports
         .route("/reports", post(reports::create_report))
         .route("/admin/reports", get(reports::list_reports))
@@ -238,6 +256,66 @@ mod tests {
             let status = post(&format!("/internal{path}"), body, None).await;
             assert_eq!(status, StatusCode::UNAUTHORIZED, "/internal{path}");
         }
+    }
+
+    /// Endpoints added after #1691 live only on `/internal`.
+    ///
+    /// The `/admin` aliases are a migration affordance for routes that predate
+    /// the split, not a mirror of the machine surface. Aliasing new ones would
+    /// re-create the mixed prefix the split removed.
+    #[tokio::test]
+    async fn post_split_machine_endpoints_are_not_aliased_under_admin() {
+        assert_eq!(
+            post(
+                "/internal/events",
+                r#"{"subject_uri":"at://x","action":"acknowledged","actor":"t"}"#,
+                Some(TOKEN)
+            )
+            .await,
+            StatusCode::SERVICE_UNAVAILABLE,
+            "/internal/events should reach the handler"
+        );
+        assert_eq!(
+            post(
+                "/admin/events",
+                r#"{"subject_uri":"at://x","action":"acknowledged","actor":"t"}"#,
+                Some(TOKEN)
+            )
+            .await,
+            StatusCode::SERVICE_UNAVAILABLE,
+            "/admin/events is the operator route, not an alias"
+        );
+        assert_eq!(
+            post("/admin/overrides", "{}", Some(TOKEN)).await,
+            StatusCode::NOT_FOUND,
+            "/overrides is service-to-service only"
+        );
+    }
+
+    #[tokio::test]
+    async fn event_writes_require_the_moderation_key() {
+        let status = post(
+            "/internal/events",
+            r#"{"subject_uri":"at://x","action":"takedown","actor":"t"}"#,
+            None,
+        )
+        .await;
+        assert_eq!(status, StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn review_queue_route_resolves() {
+        let status = build_router(test_state(), Some(TOKEN.to_string()))
+            .oneshot(
+                Request::get("/admin/queue")
+                    .header("X-Moderation-Key", TOKEN)
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap()
+            .status();
+        assert_ne!(status, StatusCode::NOT_FOUND);
     }
 
     /// The moderator UI is unaffected by the split.
