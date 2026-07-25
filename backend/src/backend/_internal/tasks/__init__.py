@@ -25,6 +25,7 @@ from backend._internal.tasks.hooks import (
     run_post_track_create_hooks,
 )
 from backend._internal.tasks.labels import sync_operator_labels
+from backend._internal.tasks.transparency import publish_moderation_decisions
 from backend._internal.tasks.moderation import (
     scan_image_moderation,
     schedule_image_moderation_scan,
@@ -97,6 +98,7 @@ def _build_background_tasks() -> list:
         scan_copyright,
         sync_copyright_resolutions,
         sync_operator_labels,
+        publish_moderation_decisions,
         process_export,
         sync_atproto,
         scrobble_to_teal,
@@ -170,6 +172,7 @@ __all__ = [
     "pds_delete_comment",
     "pds_delete_like",
     "pds_update_comment",
+    "publish_moderation_decisions",
     "reap_stuck_uploads",
     "run_post_track_create_hooks",
     "scan_copyright",

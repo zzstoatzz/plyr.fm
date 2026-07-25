@@ -128,6 +128,8 @@ fn internal_only_api() -> Router<AppState> {
     Router::new()
         .route("/events", post(events::record_event))
         .route("/overrides", get(events::active_overrides))
+        .route("/events-since", get(events::events_since))
+        .route("/events-head", get(events::events_head))
 }
 
 fn build_router(state: AppState, auth_token: Option<String>) -> Router {

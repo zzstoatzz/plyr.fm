@@ -97,6 +97,15 @@ class NotificationSettings(AppSettingsSection):
         default_factory=NotificationBotSettings,
         description="Bot credentials for sending DMs",
     )
+    publish_moderation_decisions: bool = Field(
+        default=False,
+        description=(
+            "Publish moderation decisions from the moderation account's public "
+            "timeline. Off by default: staging shares this Bluesky account, so "
+            "enabling it everywhere would post about test data. When off the "
+            "publisher still runs and logs what it would have posted."
+        ),
+    )
 
 
 class AppSettings(AppSettingsSection):
