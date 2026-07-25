@@ -179,3 +179,45 @@ async def test_trailing_sensitive_tracks_terminate_cleanly(
         listed = await _fetch_all_pages(client, limit=1)
 
     assert [t["title"] for t in listed] == ["Track 3"]
+
+
+async def test_null_override_does_not_hide_the_catalogue(
+    anonymous_app: FastAPI,
+    db_session: AsyncSession,
+    artist: Artist,
+):
+    """moderation_override is null for nearly every track.
+
+    `NOT (NULL = 'exclude')` evaluates to NULL, which a WHERE clause drops, so
+    a naive comparison hid the entire catalogue. The clause uses IS DISTINCT
+    FROM; this asserts ordinary tracks still list.
+    """
+    db_session.add_all([_track(artist, 2), _track(artist, 1)])
+    await db_session.commit()
+
+    async with AsyncClient(
+        transport=ASGITransport(app=anonymous_app), base_url="http://test"
+    ) as client:
+        response = await client.get("/tracks/", params={"limit": 10})
+
+    assert response.status_code == 200
+    assert [t["title"] for t in response.json()["tracks"]] == ["Track 2", "Track 1"]
+
+
+async def test_override_exclude_removes_a_track_from_the_feed(
+    anonymous_app: FastAPI,
+    db_session: AsyncSession,
+    artist: Artist,
+):
+    """An operator decision with no label behind it still de-lists."""
+    excluded = _track(artist, 2)
+    excluded.moderation_override = "exclude"
+    db_session.add_all([excluded, _track(artist, 1)])
+    await db_session.commit()
+
+    async with AsyncClient(
+        transport=ASGITransport(app=anonymous_app), base_url="http://test"
+    ) as client:
+        response = await client.get("/tracks/", params={"limit": 10})
+
+    assert [t["title"] for t in response.json()["tracks"]] == ["Track 1"]

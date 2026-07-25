@@ -91,11 +91,31 @@ def discovery_visible_clause(
     viewer opted in — would have leaked copyright-labeled tracks to exactly
     those viewers, because the whole predicate was dropped rather than the
     adult half of it.
+
+    A standing operator override wins over the copyright half. `exclude` hides
+    a track with no label needed; `allow` surfaces one whose copyright label we
+    reviewed and decided not to act on — a cover, say — without having to negate
+    the label and thereby claim the match never happened.
+
+    `allow` deliberately does not override the adult half. That is a listener
+    preference, and an operator deciding what someone else may be shown is a
+    different power than deciding what we host.
     """
-    clause = copyright_visible_clause()
+    labels_ok = copyright_visible_clause()
+    if not shows_sensitive_audio:
+        labels_ok = labels_ok & sensitive_audio_visible_clause(viewer_did)
+
+    # NULL-safe: the column is null for almost every track, and `NOT (NULL =
+    # 'exclude')` is NULL, which a WHERE clause drops. That would have hidden
+    # the entire catalogue.
+    allowed = Track.moderation_override.is_not_distinct_from("allow")
+    not_excluded = Track.moderation_override.is_distinct_from("exclude")
+
     if shows_sensitive_audio:
-        return clause
-    return clause & sensitive_audio_visible_clause(viewer_did)
+        return not_excluded & (allowed | labels_ok)
+    return not_excluded & (
+        (allowed & sensitive_audio_visible_clause(viewer_did)) | labels_ok
+    )
 
 
 async def get_operator_label_values(
@@ -178,8 +198,12 @@ async def filter_sensitive_audio_tracks_for_viewer(
     visible = []
     for track in track_list:
         labels = labels_by_id.get(track.id, set())
-        # copyright applies to everyone; no preference and no owner exemption
-        if has_copyright_label(labels):
+        override = track.moderation_override
+        if override == "exclude":
+            continue
+        # copyright applies to everyone; no preference and no owner exemption,
+        # unless an operator reviewed it and decided to surface it anyway
+        if has_copyright_label(labels) and override != "allow":
             continue
         if (
             shows_sensitive

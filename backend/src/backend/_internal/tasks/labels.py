@@ -37,22 +37,32 @@ async def sync_operator_labels(
     labels_by_uri = await client.get_active_labels_by_value(
         sorted(PROJECTED_LABEL_VALUES)
     )
+    overrides_by_uri = await client.get_moderation_overrides()
 
     async with db_session() as db:
-        # tracks that need updating: currently projected, or newly labeled
+        # tracks that need updating: currently projected, or newly labeled,
+        # or carrying an override in either direction
+        subjects = set(labels_by_uri) | set(overrides_by_uri)
         result = await db.execute(
             select(Track).where(
                 (cast(Track.operator_labels, JSONB) != cast([], JSONB))
-                | Track.atproto_record_uri.in_(labels_by_uri.keys())
+                | Track.moderation_override.isnot(None)
+                | Track.atproto_record_uri.in_(subjects)
             )
         )
         tracks = result.scalars().all()
 
         changed = 0
         for track in tracks:
-            desired = sorted(labels_by_uri.get(track.atproto_record_uri or "", set()))
-            if track.operator_labels != desired:
+            uri = track.atproto_record_uri or ""
+            desired = sorted(labels_by_uri.get(uri, set()))
+            desired_override = overrides_by_uri.get(uri)
+            if (
+                track.operator_labels != desired
+                or track.moderation_override != desired_override
+            ):
                 track.operator_labels = desired
+                track.moderation_override = desired_override
                 changed += 1
 
         if changed:

@@ -90,6 +90,11 @@ class Track(Base):
     operator_labels: Mapped[list[str]] = mapped_column(
         JSONB, nullable=False, default=list, server_default="[]"
     )
+    # Standing operator decision projected from the moderation event log:
+    # "allow" surfaces the track despite a copyright label, "exclude" keeps it
+    # off shared surfaces regardless of labels. Distinct from negating a label,
+    # which claims the assertion itself was wrong.
+    moderation_override: Mapped[str | None] = mapped_column(String, nullable=True)
 
     # PDS blob storage (for audio stored on user's PDS)
     audio_storage: Mapped[str] = mapped_column(

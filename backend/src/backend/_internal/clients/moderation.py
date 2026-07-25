@@ -481,6 +481,67 @@ class ModerationClient:
             raw_labels = response.json().get("labels", {})
             return {uri: set(vals) for uri, vals in raw_labels.items()}
 
+    async def record_event(
+        self,
+        *,
+        subject_uri: str,
+        action: str,
+        actor: str,
+        subject_track_id: int | None = None,
+        reason: str | None = None,
+        notes: str | None = None,
+    ) -> None:
+        """Append to the moderation event log.
+
+        Best-effort by design: the event log is the review queue and the audit
+        trail, but a scan that cannot reach the labeler must still record its
+        own result. Losing the queue entry is recoverable — the scan row is
+        still flagged — while failing the scan is not.
+        """
+        if not self.auth_token:
+            return
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                response = await client.post(
+                    f"{self.labeler_url}/internal/events",
+                    json={
+                        "subject_uri": subject_uri,
+                        "subject_track_id": subject_track_id,
+                        "action": action,
+                        "actor": actor,
+                        "reason": reason,
+                        "notes": notes,
+                    },
+                    headers=self._headers(),
+                )
+                response.raise_for_status()
+                logfire.info(
+                    "moderation event recorded",
+                    subject_uri=subject_uri,
+                    action=action,
+                    actor=actor,
+                )
+        except Exception as e:
+            logger.warning("failed to record moderation event: %s", e)
+
+    async def get_moderation_overrides(self) -> dict[str, str]:
+        """Return standing per-subject overrides keyed by AT URI.
+
+        Raises on failure for the same reason `get_active_labels_by_value`
+        does: a reconciliation pass must never read an outage as "no overrides"
+        and quietly drop an operator's decision.
+        """
+        if not self.auth_token:
+            return {}
+
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            response = await client.get(
+                f"{self.labeler_url}/internal/overrides",
+                headers=self._headers(),
+            )
+            response.raise_for_status()
+            return response.json().get("overrides", {})
+
     async def get_negated_labels(self, uris: list[str]) -> set[str]:
         """check which URIs have an explicit negation (dismissal) label.
 
