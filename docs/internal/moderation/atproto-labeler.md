@@ -153,6 +153,12 @@ curl -X POST https://moderation.plyr.fm/internal/active-labels \
 
 the admin dashboard is an htmx UI served directly by the Rust moderation service at `/admin`. it's auth-protected via `X-Moderation-Key`.
 
+its primary tab is the **review queue**, which reads the
+[moderation event log](event-log.md) rather than labels. The older
+"copyright labels" tab still lists active labels, but that is a view of
+assertions, not of work: post-#703 a scan never emits a label, so a
+labels-backed queue cannot show a scan flag at all.
+
 ### what it shows
 
 - list of flagged tracks with status (pending/resolved)
@@ -270,30 +276,41 @@ if labeler isn't configured, `/emit-label` returns an error and the admin dashbo
 
 ## integration with backend
 
-the backend interacts with the labeler in three ways:
+the backend interacts with the labeler in four ways:
 
 1. **generic label cache** (`_internal/clients/moderation.py`): fetches complete active value sets via `POST /internal/labels`. used for discovery and playback policy.
 
 2. **copyright compatibility**: `POST /internal/active-labels` and `/internal/negated-labels` drive the legacy copyright synchronization task.
 
-3. **strict byte authorization**: the audio endpoint requires a current label
-   check and returns `503` rather than serving possibly adult audio when the
-   labeler cannot be reached.
+3. **decisions and overrides**: `POST /internal/events` records scan flags,
+   `GET /internal/overrides` feeds the projection, and the events cursor
+   endpoints drive transparency publishing. See [event log](event-log.md).
 
 4. **label stream subscriber** (`_internal/label_stream.py`): a websocket
-   consumer on `subscribeLabels` that invalidates a subject's cached label
-   values as soon as the labeler commits a label.
+   consumer on `subscribeLabels` that refreshes the `tracks.operator_labels`
+   projection — and the label cache — as soon as the labeler commits a label.
+
+the audio byte endpoint does **not** query the labeler. It once did, strictly,
+returning `503` when the labeler was unreachable; removing the adult gate
+removed that read and its failure mode from every audio request.
 
 ### why the subscriber exists
 
-the label cache is keyed by subject URI and is viewer-independent, so a single
-playback populates it for every listener. caching the *absence* of a label is
-the dangerous half: before the subscriber, a label emitted by an operator (the
-dashboard, a script, curl — anything other than the backend's own
-`emit_label`, which invalidates on the way out) had no effect on audio
-authorization until the entry expired. measured on staging, an anonymous
-listener kept streaming a freshly `sexual`-labeled track for the full
-`label_cache_ttl_seconds`.
+**the original reason is now historical.** The label cache is keyed by subject
+URI and viewer-independent, so a single playback populated it for every
+listener, and caching the *absence* of a label meant an operator-emitted label
+had no effect on audio authorization until the entry expired. Measured on
+staging, an anonymous listener kept streaming a freshly `sexual`-labeled track
+for the full `label_cache_ttl_seconds`.
+
+that particular exposure no longer exists, because labels stopped gating audio
+bytes at all. What the subscriber does now matters more: it refreshes
+`tracks.operator_labels`, which is what the SQL discovery filters actually read.
+A copyright label de-lists in about a second instead of waiting on the
+five-minute `sync_operator_labels` pass — and five minutes is a long time to
+keep broadcasting an asserted infringement on radio. Invalidating only the redis
+cache, as the first cut did, would have become dead weight: the filters never
+read that cache.
 
 the backend reads the stream rather than having the labeler call back into the
 backend, which keeps the dependency pointing one way. that matters here: one
@@ -310,13 +327,13 @@ keeps a track hidden after a moderator cleared it. that is the fail-closed
 direction, but it is still wrong.
 
 the backend does **not** call `/emit-label` directly. labels are emitted by an
-operator or the copyright dashboard. A first-class generic-label operator UI or
-CLI remains a tooling gap.
+operator or the copyright dashboard.
 
-the cache includes empty label sets. After an urgent label write, invalidate the
-label, discovery, album, and radio caches using the runbook or wait for their
-TTL; otherwise a newly labeled track can remain in a previously serialized
-response temporarily.
+**no manual cache invalidation.** The subscriber handles it. If enforcement has
+not landed within a minute, check that the subscriber is connected (Logfire,
+`message ILIKE '%label stream%'`) before reaching for anything manual — a
+disconnected subscriber falls back to the five-minute reconciliation, so the
+effect is late rather than lost.
 
 ## troubleshooting
 

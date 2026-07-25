@@ -37,10 +37,14 @@ when a creator self-labels a track or a trusted labeler applies either value:
 
 - it is omitted from discovery, search, recommendations, public collections,
   queues, Subsonic browsing, and shared radio by default
-- a direct link can still explain that the track exists, but playback requires
-  a signed-in listener who enabled **sensitive audio**
-- signed-out audio requests are rejected
+- **a direct link still plays, for anyone.** The label changes where a track
+  appears, not whether it can be reached
 - the creator can always see and play their own track
+
+signing in and enabling **sensitive audio** changes what you are *shown*. It has
+never been an age check — any account satisfied it, and plyr.fm does not verify
+anyone's age — so requiring one to press play cost creators the ability to share
+their own work with a signed-out listener and bought nothing in return.
 
 shared radio excludes adult-labeled tracks for everyone, including listeners
 who opted in. Radio is a public, synchronized surface where one listener's
@@ -59,16 +63,14 @@ if a track is labeled incorrectly, use the report control while viewing it or co
 ## for developers
 
 track responses include creator provenance in `self_labels`, active plyr.fm
-moderation provenance in `operator_labels` on creator-owned track listings,
-and the effective union in `labels`. For adult-labeled tracks, the audio URL points at plyr.fm's
-protected `/audio/{file_id}` endpoint instead of a public CDN URL. Clients must
-not cache or bypass that endpoint.
+moderation provenance in `operator_labels` on creator-owned track listings, and
+the effective union in `labels`.
 
-the endpoint returns:
+labels do not gate `/audio/{file_id}`. A client that wants to warn before
+playing should read the labels from the track response and decide for itself —
+which is the point: the assertion is published, and what to do about it is
+yours to choose.
 
-- `401` for a signed-out request
-- `403` for a signed-in listener who has not opted in
-- `503` when the content-safety service is unavailable and access cannot be
-  checked safely
-
-denied responses include `X-Content-Labels` with the active policy label.
+listing endpoints apply plyr.fm's own default (hide unless the viewer opted in
+or owns the track). That default is ours, not the network's; other clients
+reading the same labels are free to render them differently.

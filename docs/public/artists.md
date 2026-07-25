@@ -46,9 +46,11 @@ if a track contains adult or sexual audio, enable **contains adult or sexual
 audio** when uploading it. You can change the notice later in the track editor.
 
 the notice is stored with your track in your ATProto repository. On plyr.fm,
-noticed tracks are hidden from discovery and cannot be played by anonymous
-listeners. Signed-in listeners must explicitly enable sensitive audio in their
-settings. You can still see and manage your own noticed tracks.
+noticed tracks are hidden from discovery unless a signed-in listener has
+enabled sensitive audio in their settings. **A direct link to the track still
+plays for anyone** — the notice changes where your track appears, not whether
+someone you share it with can hear it. You can still see and manage your own
+noticed tracks.
 
 removing your notice removes only your own assertion. If a plyr.fm moderator
 independently labeled the track, that operator label and its default-hide policy
