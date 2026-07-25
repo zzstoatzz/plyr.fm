@@ -29,6 +29,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 import httpx
+from _moderation import ModerationClient
 from atproto import AsyncClient, models
 from pydantic import BaseModel, Field
 from pydantic_ai import Agent
@@ -143,51 +144,6 @@ class PlyrClient:
             return True  # assume exists on error (don't accidentally delete labels)
 
 
-@dataclass
-class ModClient:
-    base_url: str
-    auth_token: str
-    _client: httpx.AsyncClient = field(init=False, repr=False)
-
-    def __post_init__(self) -> None:
-        self._client = httpx.AsyncClient(
-            base_url=self.base_url,
-            headers={"X-Moderation-Key": self.auth_token},
-            timeout=30.0,
-        )
-
-    async def close(self) -> None:
-        await self._client.aclose()
-
-    async def list_pending(self) -> list[dict]:
-        r = await self._client.get("/admin/flags", params={"filter": "pending"})
-        r.raise_for_status()
-        return r.json().get("tracks", [])
-
-    async def resolve(self, uri: str, reason: str, notes: str = "") -> None:
-        r = await self._client.post(
-            "/admin/resolve",
-            json={
-                "uri": uri,
-                "val": "copyright-violation",
-                "reason": reason,
-                "notes": notes,
-            },
-        )
-        r.raise_for_status()
-
-    async def create_batch(
-        self, uris: list[str], created_by: str | None = None
-    ) -> dict:
-        """create a review batch and return {id, url, flag_count}."""
-        r = await self._client.post(
-            "/admin/batches",
-            json={"uris": uris, "created_by": created_by},
-        )
-        r.raise_for_status()
-        return r.json()
-
-
 def get_header(env: str) -> str:
     return f"[PLYR-MOD:{env.upper()}]"
 
@@ -229,14 +185,16 @@ async def run_loop(
         console.print("[yellow]DRY RUN[/yellow]")
 
     dm = DMClient(settings.bot_handle, settings.bot_password, settings.recipient_handle)
-    mod = ModClient(settings.moderation_service_url, settings.moderation_auth_token)
+    mod = ModerationClient(
+        settings.moderation_service_url, settings.moderation_auth_token
+    )
     plyr = PlyrClient(env=env)
 
     try:
         await dm.setup()
 
         # get pending flags
-        pending = await mod.list_pending()
+        pending = await mod.list_flags()
         if not pending:
             console.print("[green]no pending flags[/green]")
             return
@@ -317,7 +275,7 @@ async def run_loop(
 
             if not dry_run:
                 batch = await mod.create_batch(human_uris, created_by="moderation_loop")
-                full_url = f"{mod.base_url.rstrip('/')}{batch['url']}"
+                full_url = mod.review_url(batch)
                 msg = (
                     f"{get_header(env)} {batch['flag_count']} need review:\n{full_url}"
                 )
