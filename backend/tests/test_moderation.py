@@ -885,3 +885,61 @@ async def test_sync_operator_labels_skips_pass_on_labeler_outage(
 
     await db_session.refresh(track)
     assert track.operator_labels == ["sexual"]
+
+
+def _labeler_client() -> ModerationClient:
+    return ModerationClient(
+        service_url="https://moderation.test",
+        labeler_url="https://moderation.test",
+        auth_token="test-token",
+        timeout_seconds=5,
+        label_cache_prefix="test:label:",
+        label_cache_ttl_seconds=60,
+    )
+
+
+async def test_label_reads_target_the_internal_surface() -> None:
+    """the labeler's service-to-service endpoints live under /internal, not /admin.
+
+    A wrong prefix 404s, and the discovery-side readers fail *open* on error —
+    so a silent rename regression would quietly stop hiding labeled tracks
+    rather than raising. Assert the requested URL directly (#1691).
+    """
+    client = _labeler_client()
+    uris = ["at://did:plc:test/fm.plyr.track/1"]
+
+    expected = {
+        "/internal/active-labels": lambda: client.get_active_labels(uris),
+        "/internal/labels": lambda: client.get_active_label_values(uris),
+        "/internal/labels-by-value": lambda: client.get_active_labels_by_value(
+            ["sexual"]
+        ),
+        "/internal/negated-labels": lambda: client.get_negated_labels(uris),
+    }
+
+    for path, call in expected.items():
+        with patch("httpx.AsyncClient.post", new_callable=AsyncMock) as mock_post:
+            mock_post.return_value = Mock(
+                status_code=200,
+                json=Mock(return_value={}),
+                raise_for_status=Mock(),
+            )
+            await call()
+
+        assert mock_post.call_args is not None, f"{path} was never requested"
+        assert mock_post.call_args[0][0] == f"https://moderation.test{path}"
+
+
+async def test_sensitive_images_read_stays_on_the_public_route() -> None:
+    """GET /sensitive-images is public and was never part of the /internal split."""
+    client = _labeler_client()
+
+    with patch("httpx.AsyncClient.get", new_callable=AsyncMock) as mock_get:
+        mock_get.return_value = Mock(
+            status_code=200,
+            json=Mock(return_value={"image_ids": [], "urls": []}),
+            raise_for_status=Mock(),
+        )
+        await client.get_sensitive_images()
+
+    assert mock_get.call_args[0][0] == "https://moderation.test/sensitive-images"
