@@ -764,6 +764,37 @@ class ModerationSettings(AppSettingsSection):
         default=True,
         description="Enable image moderation via Claude vision on upload",
     )
+    label_stream_enabled: bool = Field(
+        default=True,
+        description=(
+            "Subscribe to the labeler's subscribeLabels stream and invalidate "
+            "the label cache as labels are committed, so operator-emitted "
+            "labels take effect without waiting out label_cache_ttl_seconds"
+        ),
+    )
+    label_stream_url: str = Field(
+        default="",
+        description=(
+            "WebSocket origin for the labeler stream. Empty derives it from "
+            "labeler_url."
+        ),
+    )
+    label_stream_cursor_key: str = Field(
+        default="plyr:label-stream:cursor",
+        description="Redis key for persisting the label stream cursor",
+    )
+    label_stream_cursor_flush_seconds: int = Field(
+        default=10,
+        description="How often to flush the label stream cursor to Redis",
+    )
+    label_stream_reconnect_base_seconds: float = Field(
+        default=1.0,
+        description="Base delay for exponential backoff on reconnect",
+    )
+    label_stream_reconnect_max_seconds: float = Field(
+        default=60.0,
+        description="Maximum delay for exponential backoff on reconnect",
+    )
 
 
 class TranscoderSettings(AppSettingsSection):

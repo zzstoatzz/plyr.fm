@@ -272,13 +272,42 @@ if labeler isn't configured, `/emit-label` returns an error and the admin dashbo
 
 the backend interacts with the labeler in three ways:
 
-1. **generic label cache** (`_internal/clients/moderation.py`): fetches complete active value sets via `POST /admin/labels`. used for discovery and playback policy.
+1. **generic label cache** (`_internal/clients/moderation.py`): fetches complete active value sets via `POST /internal/labels`. used for discovery and playback policy.
 
-2. **copyright compatibility**: `POST /admin/active-labels` and `/admin/negated-labels` drive the legacy copyright synchronization task.
+2. **copyright compatibility**: `POST /internal/active-labels` and `/internal/negated-labels` drive the legacy copyright synchronization task.
 
 3. **strict byte authorization**: the audio endpoint requires a current label
    check and returns `503` rather than serving possibly adult audio when the
    labeler cannot be reached.
+
+4. **label stream subscriber** (`_internal/label_stream.py`): a websocket
+   consumer on `subscribeLabels` that invalidates a subject's cached label
+   values as soon as the labeler commits a label.
+
+### why the subscriber exists
+
+the label cache is keyed by subject URI and is viewer-independent, so a single
+playback populates it for every listener. caching the *absence* of a label is
+the dangerous half: before the subscriber, a label emitted by an operator (the
+dashboard, a script, curl — anything other than the backend's own
+`emit_label`, which invalidates on the way out) had no effect on audio
+authorization until the entry expired. measured on staging, an anonymous
+listener kept streaming a freshly `sexual`-labeled track for the full
+`label_cache_ttl_seconds`.
+
+the backend reads the stream rather than having the labeler call back into the
+backend, which keeps the dependency pointing one way. that matters here: one
+labeler serves both the staging and production backends, so a callback would
+need the labeler to know about every backend deployment.
+
+the subscriber runs in the `jetstream` process group. it is co-located with the
+firehose consumer for the reason that consumer is isolated in the first place —
+the `worker` process's blocking tasks starve websocket keepalives — and both
+consumers only hold a socket, so sharing an event loop is cheap.
+
+negations invalidate exactly like positive labels: a stale cached *presence*
+keeps a track hidden after a moderator cleared it. that is the fail-closed
+direction, but it is still wrong.
 
 the backend does **not** call `/emit-label` directly. labels are emitted by an
 operator or the copyright dashboard. A first-class generic-label operator UI or
