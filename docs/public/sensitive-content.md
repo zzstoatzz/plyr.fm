@@ -37,6 +37,8 @@ when a creator self-labels a track or a trusted labeler applies either value:
 
 - it is omitted from discovery, search, recommendations, public collections,
   queues, Subsonic browsing, and shared radio by default
+- **the artist's own page still lists it.** Those surfaces are places we chose
+  to put something in front of you; an artist's page is somewhere you went
 - **a direct link still plays, for anyone.** The label changes where a track
   appears, not whether it can be reached
 - the creator can always see and play their own track

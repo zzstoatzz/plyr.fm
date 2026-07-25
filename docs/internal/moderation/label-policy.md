@@ -64,17 +64,53 @@ Filtering depends on *where* a track appears, not only what it carries.
 search, radio, recommendations. `LabelContext.VIEW` is a page they navigated
 to: an artist's catalogue, a collection.
 
-this mirrors ATProto's own moderation contexts, where the same content is
-filtered from a feed (`contentList`) but shown when opened directly
-(`contentView`). Bluesky's client makes that call per render; we make it per
-query, because our filtering has to live in SQL to compose with cursor
-pagination (#1676).
+this mirrors ATProto's own moderation contexts. From the
+[moderation API docs](https://github.com/bluesky-social/atproto/blob/main/packages/api/docs/moderation.md):
+
+> a post might be blurred in a feed (`contentList`) but fully visible when
+> opened directly (`contentView`)
+
+Bluesky's client makes that call per render, because its server ships labels
+and `moderateProfile(x, opts)` returns `filter` / `blur` / `alert` / `inform`
+for the UI to apply. We make it per query instead, because our filtering has to
+live in SQL to compose with cursor pagination (#1676). Same distinction,
+different layer — worth knowing when reading their code, since the shape does
+not transfer directly.
+
+**the deciding argument was local, though.** `list_tracks` had *already* made
+this call for visibility: an artist-scoped query lists unlisted tracks,
+excluding only private ones, because an artist page shows their catalogue.
+Labels were the outlier in a function that had settled the question six lines
+earlier.
 
 adult labels apply only in `LIST`. Filtering an artist's own page made it
 misrepresent their catalogue — it rendered "4 tracks" above a list of one —
 and disagreed with the album page one level deeper, which showed everything.
 Copyright applies in **every** context: a hosting obligation is not discharged
 by the listener having already found the artist.
+
+### why this also fixed an authentication problem
+
+the artist page could not know the viewer. Its server load runs on the frontend
+host, and the session cookie is host-only on the API origin, so the browser
+never delivers it there and there is nothing to forward — `55438aa3` (#284)
+tried exactly that in November 2025 and abandoned it, leaving the
+`no cookie available on frontend host` comment behind as the conclusion.
+
+widening the cookie to `.plyr.fm` would make forwarding possible and is the
+wrong trade: the session would then be sent to `audio.plyr.fm` and
+`images.plyr.fm`, which are R2 custom domains, on every artwork and audio
+request — session material into a storage service and its logs, and
+cookie-bearing requests are the shape most likely to defeat the 1-year edge
+cache rule on exactly those assets. Staging subdomains would receive production
+sessions too.
+
+not filtering a VIEW context dissolves the problem rather than working around
+it: the anonymous server render and the hydrated client render produce the same
+list, so there is no divergence to authenticate away. Client-side fetches still
+need `credentials: 'include'` for genuinely personalized data such as liked
+state — a cross-origin fetch sends no cookies without it, which is why the
+album page worked and the artist page did not.
 
 ## composing the SQL predicate
 
