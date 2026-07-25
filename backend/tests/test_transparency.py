@@ -14,7 +14,16 @@ from backend._internal.tasks.transparency import (
     CURSOR_KEY,
     publish_moderation_decisions,
 )
-from backend._internal.transparency import PUBLISHABLE_ACTIONS, is_publishable, render
+from backend._internal.transparency import (
+    POLICY_URL,
+    PUBLISHABLE_ACTIONS,
+    is_publishable,
+    render,
+)
+
+
+def _links(post) -> list[str]:
+    return [s.link for s in post.segments if s.link]
 
 
 def _event(action: str, **kwargs) -> dict:
@@ -64,7 +73,8 @@ def test_post_never_names_the_uploader_or_reporter() -> None:
 def test_post_links_the_track_and_states_the_reason() -> None:
     post = render(_event("override_exclude", reason="fingerprint_match", track_id=64))
     assert post is not None
-    assert "https://plyr.fm/track/64" in post.text
+    assert "https://plyr.fm/track/64" in _links(post)
+    assert "plyr.fm/track/64" in post.text
     assert "fingerprint match" in post.text
 
 
@@ -73,18 +83,75 @@ def test_post_links_a_policy_page_that_exists() -> None:
 
     The first cut used plyr.fm/docs/moderation, which 404s.
     """
-    from backend._internal.transparency import POLICY_URL
-
     post = render(_event("takedown"))
     assert post is not None
-    assert POLICY_URL in post.text
+    assert POLICY_URL in _links(post)
     assert "plyr.fm/docs/moderation" not in post.text
 
 
-def test_post_stays_within_the_bluesky_limit() -> None:
-    post = render(_event("takedown", reason="x" * 500))
+def test_every_url_is_a_link_not_bare_text() -> None:
+    """Bluesky does not infer links from text.
+
+    The first cut emitted a plain string, so both URLs rendered as unclickable
+    grey text. A URL that appears in the text must be carried by a segment
+    that also has a link, or it is decoration.
+    """
+    post = render(_event("override_exclude", track_id=1190))
+    assert post is not None
+
+    linked_text = {s.text for s in post.segments if s.link}
+    for segment in post.segments:
+        if segment.link is None:
+            assert "plyr.fm" not in segment.text, (
+                f"{segment.text!r} mentions a URL but carries no link"
+            )
+    assert linked_text == {"plyr.fm/track/1190", "docs.plyr.fm/sensitive-content"}
+
+
+def test_link_text_matches_its_target() -> None:
+    """Display text is the URL minus the scheme, as Bluesky's composer shows it.
+
+    Link text that points somewhere other than where it reads is how phishing
+    works; on a moderation account it would be especially corrosive.
+    """
+    post = render(_event("takedown", track_id=7))
+    assert post is not None
+    for segment in post.segments:
+        if segment.link:
+            assert segment.link.endswith(segment.text)
+            assert segment.link.startswith("https://")
+
+
+def test_byte_offsets_survive_multibyte_reasons() -> None:
+    """Facets index UTF-8 bytes, not characters.
+
+    Segments are assembled in order, so the invariant to hold is that the
+    concatenated text equals the post text -- any drift there would shift
+    every subsequent facet range.
+    """
+    post = render(_event("takedown", reason="dépôt non autorisé — ünïcode", track_id=9))
+    assert post is not None
+    assert "".join(s.text for s in post.segments) == post.text
+    rebuilt = post.text.encode("utf-8")
+    offset = 0
+    for segment in post.segments:
+        chunk = segment.text.encode("utf-8")
+        assert rebuilt[offset : offset + len(chunk)] == chunk
+        offset += len(chunk)
+    assert offset == len(rebuilt)
+
+
+def test_a_long_reason_is_bounded_without_truncating_the_post() -> None:
+    """Trimming the assembled text would corrupt every facet after the cut.
+
+    Facets are byte ranges into the post text, so the variable part is bounded
+    at the source instead.
+    """
+    post = render(_event("takedown", reason="x" * 500, track_id=1))
     assert post is not None
     assert len(post.text) <= 300
+    # the links still terminate the post, so their ranges are intact
+    assert post.segments[-1].link == POLICY_URL
 
 
 async def test_first_run_starts_at_head_and_posts_nothing() -> None:
