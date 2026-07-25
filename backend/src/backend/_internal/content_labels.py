@@ -6,6 +6,7 @@ behavior; classifier evidence and moderation workflow state do not belong here.
 """
 
 from collections.abc import Iterable
+from enum import StrEnum
 
 from sqlalchemy import ColumnElement, select
 from sqlalchemy.dialects.postgresql import array
@@ -81,41 +82,60 @@ def copyright_visible_clause() -> ColumnElement[bool]:
     return ~_labeled_with(COPYRIGHT_LABELS)
 
 
-def discovery_visible_clause(
-    viewer_did: str | None, *, shows_sensitive_audio: bool
-) -> ColumnElement[bool]:
-    """SQL predicate for any shared surface: feeds, search, radio, collections.
+class LabelContext(StrEnum):
+    """Where a track is being rendered.
 
-    Composes both label families so callers cannot accidentally apply one and
-    not the other. The previous shape — skip the adult clause entirely when the
-    viewer opted in — would have leaked copyright-labeled tracks to exactly
-    those viewers, because the whole predicate was dropped rather than the
-    adult half of it.
-
-    A standing operator override wins over the copyright half. `exclude` hides
-    a track with no label needed; `allow` surfaces one whose copyright label we
-    reviewed and decided not to act on — a cover, say — without having to negate
-    the label and thereby claim the match never happened.
-
-    `allow` deliberately does not override the adult half. That is a listener
-    preference, and an operator deciding what someone else may be shown is a
-    different power than deciding what we host.
+    Mirrors ATProto's moderation contexts, where the same content is filtered
+    from a feed (`contentList`) but shown when opened directly (`contentView`).
+    Bluesky's client makes this distinction per render; we make it per query,
+    because our filtering has to live in SQL to compose with cursor pagination
+    (#1676).
     """
-    labels_ok = copyright_visible_clause()
-    if not shows_sensitive_audio:
-        labels_ok = labels_ok & sensitive_audio_visible_clause(viewer_did)
 
+    #: a surface where we choose what to put in front of someone — feeds,
+    #: search, radio, recommendations
+    LIST = "list"
+    #: a page someone navigated to — an artist's catalogue, a collection.
+    #: They already found it; hiding part of it misrepresents what is there.
+    VIEW = "view"
+
+
+def label_visible_clause(
+    viewer_did: str | None,
+    *,
+    shows_sensitive_audio: bool,
+    context: LabelContext = LabelContext.LIST,
+) -> ColumnElement[bool]:
+    """SQL predicate for showing a track, given where it is being shown.
+
+    Composes both label families and the operator override in one place so a
+    caller cannot apply one and not the others. An earlier shape skipped the
+    whole predicate for viewers who opted into sensitive audio, which would
+    have leaked copyright-labeled tracks to exactly those viewers.
+
+    `exclude` hides a track with no label needed. `allow` surfaces one whose
+    copyright label we reviewed and decided not to act on — a cover, say —
+    without negating the label and thereby claiming the match never happened.
+    `allow` deliberately does not lift the adult half: that is a listener
+    preference, and an operator deciding what someone else may be *shown* is a
+    different power from deciding what we *host*.
+    """
     # NULL-safe: the column is null for almost every track, and `NOT (NULL =
     # 'exclude')` is NULL, which a WHERE clause drops. That would have hidden
     # the entire catalogue.
     allowed = Track.moderation_override.is_not_distinct_from("allow")
     not_excluded = Track.moderation_override.is_distinct_from("exclude")
 
-    if shows_sensitive_audio:
-        return not_excluded & (allowed | labels_ok)
-    return not_excluded & (
-        (allowed & sensitive_audio_visible_clause(viewer_did)) | labels_ok
-    )
+    # copyright is a hosting obligation, so it applies in every context and
+    # only an explicit operator decision lifts it
+    visible = allowed | copyright_visible_clause()
+
+    # adult labels are a rendering default, so they apply only where we are
+    # choosing what to surface
+    if context is LabelContext.LIST and not shows_sensitive_audio:
+        visible = visible & sensitive_audio_visible_clause(viewer_did)
+
+    return not_excluded & visible
 
 
 async def get_operator_label_values(

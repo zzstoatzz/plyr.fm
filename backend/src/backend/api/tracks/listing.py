@@ -16,10 +16,11 @@ from sqlalchemy.orm import selectinload
 from backend._internal import Session as AuthSession
 from backend._internal import get_optional_session, get_supported_artists, require_auth
 from backend._internal.content_labels import (
-    discovery_visible_clause,
+    LabelContext,
     filter_sensitive_audio_tracks,
     get_operator_label_values,
     get_track_label_values,
+    label_visible_clause,
 )
 from backend.config import settings
 from backend.models import (
@@ -178,15 +179,15 @@ async def list_tracks(
         )
         stmt = stmt.where(include_exists)
 
-    # label visibility lives in SQL (self labels + projected operator labels),
-    # so filtering composes with cursor pagination instead of corrupting it
-    # (#1676 regression: app-side filtering broke has_more). Always applied:
-    # the copyright half honours no preference, so this must not be skipped
-    # for viewers who opted into sensitive audio.
+    # label visibility lives in SQL so filtering composes with cursor
+    # pagination instead of corrupting it (#1676: app-side filtering broke
+    # has_more). An artist-scoped listing is a page someone navigated to, not a
+    # surface we chose to put in front of them.
     stmt = stmt.where(
-        discovery_visible_clause(
+        label_visible_clause(
             session.did if session else None,
             shows_sensitive_audio=shows_sensitive_audio,
+            context=LabelContext.VIEW if artist_did else LabelContext.LIST,
         )
     )
 

@@ -9,19 +9,38 @@ They differ in *who decides*, and that is the whole design:
 Neither gates the audio bytes. See `docs/internal/moderation/label-policy.md`.
 """
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend._internal.content_labels import (
     COPYRIGHT_LABELS,
     PROJECTED_LABEL_VALUES,
+    LabelContext,
     filter_sensitive_audio_tracks_for_viewer,
     has_copyright_label,
+    label_visible_clause,
     may_stream_sensitive_audio,
 )
 from backend.models import Artist, Track, UserPreferences
 
 OWNER = "did:plc:owner"
 VIEWER = "did:plc:viewer"
+
+
+async def _visible(
+    db: AsyncSession, context: LabelContext, *, shows_sensitive: bool
+) -> set[int]:
+    """Track ids the SQL predicate admits for this artist in this context."""
+    rows = await db.execute(
+        select(Track)
+        .where(Track.artist_did == OWNER)
+        .where(
+            label_visible_clause(
+                VIEWER, shows_sensitive_audio=shows_sensitive, context=context
+            )
+        )
+    )
+    return {track.id for track in rows.scalars().all()}
 
 
 async def _track(
@@ -179,3 +198,64 @@ async def test_override_allow_does_not_override_a_listeners_adult_preference(
         db_session, [adult], VIEWER
     )
     assert visible == []
+
+
+async def test_view_context_shows_the_whole_catalogue(
+    db_session: AsyncSession,
+) -> None:
+    """A page someone navigated to shows what is on it.
+
+    Mirrors ATProto's contentList/contentView split: filtered from a feed,
+    shown when opened directly. Regression for the artist page rendering
+    "4 tracks" above a list of one.
+    """
+    labeled = await _track(db_session, file_id="dest1", operator_labels=["sexual"])
+    plain = await _track(db_session, file_id="dest2")
+    await db_session.commit()
+
+    assert await _visible(db_session, LabelContext.VIEW, shows_sensitive=False) == {
+        labeled.id,
+        plain.id,
+    }
+
+
+async def test_list_context_still_hides_adult_from_a_viewer_who_opted_out(
+    db_session: AsyncSession,
+) -> None:
+    labeled = await _track(db_session, file_id="dest3", operator_labels=["sexual"])
+    plain = await _track(db_session, file_id="dest4")
+    await db_session.commit()
+
+    assert await _visible(db_session, LabelContext.LIST, shows_sensitive=False) == {
+        plain.id
+    }
+    assert await _visible(db_session, LabelContext.LIST, shows_sensitive=True) == {
+        labeled.id,
+        plain.id,
+    }
+
+
+async def test_copyright_hides_in_every_context(db_session: AsyncSession) -> None:
+    """ "I already found this artist" does not discharge a hosting obligation."""
+    await _track(db_session, file_id="dest5", operator_labels=["copyright-violation"])
+    plain = await _track(db_session, file_id="dest6")
+    await db_session.commit()
+
+    for context in (LabelContext.LIST, LabelContext.VIEW):
+        assert await _visible(db_session, context, shows_sensitive=True) == {
+            plain.id
+        }, context
+
+
+async def test_exclude_override_hides_in_every_context(
+    db_session: AsyncSession,
+) -> None:
+    hidden = await _track(db_session, file_id="dest7")
+    hidden.moderation_override = "exclude"
+    plain = await _track(db_session, file_id="dest8")
+    await db_session.commit()
+
+    for context in (LabelContext.LIST, LabelContext.VIEW):
+        assert await _visible(db_session, context, shows_sensitive=True) == {
+            plain.id
+        }, context
