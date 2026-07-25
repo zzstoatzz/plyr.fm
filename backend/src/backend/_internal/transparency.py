@@ -53,9 +53,7 @@ _HEADLINE = {
 
 TRACK_URL = "https://plyr.fm/track/{track_id}"
 # every post carries this, so a dead link would be a dead link on all of them.
-# `docs.plyr.fm/moderation` does not exist; the sensitive-content guide is the
-# closest public explanation of how labels affect what you see.
-POLICY_URL = "https://docs.plyr.fm/sensitive-content"
+POLICY_URL = "https://docs.plyr.fm/moderation"
 
 # operator-supplied, so bounded. the rest of the post is fixed-length.
 REASON_MAX_CHARS = 120

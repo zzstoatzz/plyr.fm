@@ -106,14 +106,21 @@ Both map to the adult-audio preference and default-hide policy. Negation
 creators own self-label assertions in their track records, the moderation
 service owns signed operator assertions, and the backend owns policy:
 
-1. fetch current active values with `POST /internal/labels`
+1. project active values onto `tracks.operator_labels` (`sync_operator_labels`,
+   refreshed immediately by the `subscribeLabels` consumer)
 2. filter adult-labeled tracks from default discovery and collection surfaces
-3. require authenticated opt-in at the audio byte endpoint
-4. always exclude adult audio from shared radio
+   unless the viewer opted in or owns the track
+3. filter copyright-labeled tracks from those surfaces for everyone — no
+   preference, no owner exemption
+4. always exclude both from shared radio
 
-the byte endpoint checks labels strictly and returns `503` when the labeler is
-unavailable. Discovery fails open on a labeler outage; authorization fails
-closed.
+**labels do not gate audio bytes.** Neither family does. The adult gate was
+removed because it read as age verification without being one, and copyright
+de-lists rather than blocks because a fingerprint match is not a finding. That
+also removed a strict labeler read, and its `503`, from every audio request.
+
+see [label policy](label-policy.md) for who decides what, and why the two
+families differ.
 
 ## key technical details
 
@@ -127,20 +134,43 @@ the meaningful signal is **dominant match percentage**: what fraction of audio s
 
 the Rust service flags a track when `dominant_match_pct >= MODERATION_COPYRIGHT_SCORE_THRESHOLD` (default: 30%).
 
-**known issue**: `fly.toml` sets `MODERATION_SCORE_THRESHOLD=70` but the Rust code reads `MODERATION_COPYRIGHT_SCORE_THRESHOLD` — different env var name. the threshold has been the default 30% all along, not the intended 70%.
+the env var name mismatch that once made this silently 30% is fixed —
+`fly.toml` and `config.rs` both use `MODERATION_COPYRIGHT_SCORE_THRESHOLD`, so
+production runs at the intended 70%.
 
-### admin dashboard
+a mix of several copyrighted songs trips a separate check
+(`MODERATION_COPYRIGHT_MIX_SONG_THRESHOLD`, #1689): no single song dominates a
+DJ mix, so the per-song percentage stays low while the count of sustained
+distinct songs is the signal.
 
-the admin dashboard lives on the Rust moderation service itself (option B from the original design discussion). it's an htmx UI at `/admin` that:
+### the review queue
 
-- lists flagged tracks with match details
-- shows track title, artist, environment badge, match count
-- allows resolving false positives (emits negation label)
-- supports batch review workflows
+the dashboard's primary tab reads the **moderation event log**, not labels. it
+previously read active labels, which meant scan flags were structurally
+invisible: post-#703 a scan never emits a label, so the queue rendered empty
+while flagged tracks accumulated. see [event log](event-log.md).
 
-### DM notifications
+each queue item embeds `plyr.fm/embed/track/{id}` so a copyright call is made by
+listening. Decisions — acknowledge, allow anyway, keep de-listed — post back to
+the event log and require an `acting as` handle.
 
-when a scan flags a track, the backend sends a DM to the admin via ATProto notifications (`notification_service.send_copyright_flag_notification`). this includes track title, artist handle, and match details. the DM is informational — it prompts the admin to review in the dashboard.
+### decisions and overrides
+
+negating a label says the assertion was wrong. An **override** says the
+assertion stands and we are surfacing the track anyway, which is the usual
+outcome for a cover or a remix. Those are different statements and both are
+recorded.
+
+### notifications
+
+when a scan flags a track the backend DMs the operator
+(`notification_service.send_copyright_flag_notification`) and opens a review
+item. **uploaders are never notified automatically** — and any future
+notification must fire on new events only, never on a backfill.
+
+decisions that change what the public can see are published to
+[@moderation.plyr.fm](https://bsky.app/profile/moderation.plyr.fm); flags and
+reports are not. see [label policy](label-policy.md).
 
 ## related documentation
 

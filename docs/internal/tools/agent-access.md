@@ -78,6 +78,17 @@ for the required variable by name without printing its value. If
 `MODERATION_AUTH_TOKEN` is unavailable for an operator action, stop and request
 that capability instead of trying unrelated credentials.
 
+`MODERATION_AUTH_TOKEN` is a single shared key: it authorises, but it does not
+identify. Every write to the moderation event log therefore carries an `actor`
+you supply, which is attribution rather than authentication — a claim about who
+acted, only as trustworthy as the key. Use a name that says what you are
+(`service:copyright-scan`, a handle, `verification:...`), never a generic one.
+
+`NOTIFY_PUBLISH_MODERATION_DECISIONS` on `relay-api` makes moderation decisions
+post publicly from the moderation account. It is deliberately absent on
+`relay-api-staging`, which shares that Bluesky account — setting it there would
+post about test data.
+
 ## production deployment choices
 
 - backend or migration changes: `just release`

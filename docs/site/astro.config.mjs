@@ -16,6 +16,7 @@ export default defineConfig({
         { slug: "listeners" },
         { slug: "artists" },
         { slug: "sensitive-content" },
+        { slug: "moderation" },
         {
           label: "developers",
           items: [

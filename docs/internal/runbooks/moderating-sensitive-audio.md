@@ -3,9 +3,17 @@ title: "moderating sensitive audio"
 ---
 
 use this runbook when an operator confirms that a track contains sexual or
-pornographic audio and it must be hidden from default and anonymous playback.
-The durable action is a signed ATProto label. `visibility = 'unlisted'` is not a
-moderation state and must not be the final fix.
+pornographic audio and must be hidden from default surfaces. The durable action
+is a signed ATProto label. `visibility = 'unlisted'` is not a moderation state
+and must not be the final fix.
+
+**adult labels do not block playback.** They keep a track out of discovery,
+search, collections, and radio unless a signed-in listener opted in. A direct
+link still plays, for anyone. Requiring an account to press play looked like an
+age check but was not — any account satisfied it — while breaking a creator's
+ability to share their own work. See
+[label policy](/moderation/label-policy/). If you need a track to stop being
+reachable at all, that is a takedown, not a label.
 
 ## 1. prove access first
 
@@ -78,19 +86,24 @@ the response must contain a sequence number, the expected URI/CID/value, and
 the plyr.fm labeler DID. Never log the signature or authorization header in an
 incident note.
 
-## 5. invalidate cached empty-label results
+## 5. cache invalidation happens on its own
 
-the backend caches complete active-label sets, including an empty set, for five
-minutes. Discovery, album, and radio responses also have caches. In an urgent
-moderation action, invalidate them instead of waiting for TTL expiry:
+**no manual Redis purge.** The backend subscribes to the labeler's
+`subscribeLabels` stream and refreshes both the label cache and the
+`tracks.operator_labels` projection as each label commits — measured at under a
+second, versus the five-minute TTL it used to wait out. See
+`backend/_internal/label_stream.py`.
+
+if enforcement has not taken effect after a minute, check that the subscriber is
+connected before reaching for anything manual:
 
 ```bash
-fly ssh console -a relay-api -g app -C \
-  "uv run --no-sync python -c \"import os, redis; r=redis.Redis.from_url(os.environ['REDIS_URL']); keys=['plyr:copyright-label:values:$URI','plyr:copyright-label:$URI','plyr:tracks:discovery:v2']; keys += list(r.scan_iter(match='plyr:radio:rotation:v2:*')); keys += list(r.scan_iter(match='plyr:album:v2:*')); print({'deleted': r.delete(*keys), 'targeted': len(keys)})\""
+# expect a recent "label stream connected" for the environment in question
 ```
 
-the historical `plyr:copyright-label:` prefix now stores generic label values;
-the name is legacy, not evidence that only copyright is cached.
+query Logfire for `message ILIKE '%label stream%'`. A disconnected subscriber
+falls back to the five-minute `sync_operator_labels` pass, so the effect still
+lands; it is late, not lost.
 
 ## 6. verify the assertion and policy
 
@@ -106,13 +119,12 @@ curl -fsS -G \
 then verify product enforcement:
 
 ```bash
-# direct metadata remains public but carries the label and protected audio URL
+# direct metadata remains public and carries the label
 curl -fsS "https://api.plyr.fm/tracks/$TRACK_ID" \
-  | jq '{id, visibility, unlisted, labels, r2_url}'
+  | jq '{id, visibility, unlisted, labels}'
 
-# signed-out playback must be denied and identify the policy label
-curl -sS -D - -o /dev/null "https://api.plyr.fm/audio/$FILE_ID" \
-  | rg -i '^(HTTP/|x-content-labels:)'
+# the permalink must still play — a label is not an access control
+curl -sS -o /dev/null -w '%{http_code}\n' "https://api.plyr.fm/audio/$FILE_ID"
 
 # the track must not be in anonymous discovery or fresh radio
 curl -fsS 'https://api.plyr.fm/tracks/?limit=100' \
@@ -125,7 +137,8 @@ expected results:
 
 - track metadata: `visibility: "public"`, `unlisted: false`, and the label in
   `labels`
-- audio: `401` plus `X-Content-Labels` for a signed-out request
+- audio: `307` — the permalink still resolves. A `401` here would mean the
+  byte-level gate was reintroduced, which is a regression, not enforcement
 - discovery and radio: empty arrays
 
 also search for the title/creator when the incident began in search, an album,
@@ -146,7 +159,33 @@ curl -fsS -X POST https://moderation.plyr.fm/emit-label \
     '{uri: $uri, cid: $cid, val: $val, neg: true}')"
 ```
 
-repeat cache invalidation and verification after the negation.
+verify after the negation the same way. Negation clears through the same
+subscriber, so again there is nothing to purge by hand.
+
+**negating is not the only correction.** A negation says the assertion was
+wrong. If the label is right but the track should stay up anyway — a cover, a
+licensed remix — record an `override_allow` decision instead, which keeps the
+assertion honest and still surfaces the track. See
+[label policy](/moderation/label-policy/).
+
+## record the decision
+
+every action belongs in the moderation event log, which is the review queue,
+the audit trail, and the input to the public transparency post. Emitting a
+label alone leaves no record of *who* decided or *why*:
+
+```bash
+curl -fsS -X POST https://moderation.plyr.fm/admin/events \
+  -H "X-Moderation-Key: $MODERATION_AUTH_TOKEN" \
+  -H "Content-Type: application/json" \
+  --data "$(jq -cn --arg uri "$URI" --argjson tid "$TRACK_ID" \
+    '{subject_uri: $uri, subject_track_id: $tid, action: "label_applied",
+      actor: "your.handle", reason: "adult_audio", notes: "..."}')"
+```
+
+`actor` is required. In practice use the dashboard at
+`https://moderation.plyr.fm/admin`, which records this for you and plays the
+track so a call can be made by listening.
 
 ## emergency visibility changes
 

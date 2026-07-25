@@ -58,6 +58,8 @@ organized knowledge base for plyr.fm development.
 
 ### moderation
 - **[moderation/](./moderation/)** - copyright detection, sensitive content, labeler
+  - [label policy](./moderation/label-policy.md) - what each label family does, and who decides
+  - [event log](./moderation/event-log.md) - review queue, overrides, audit trail, transparency posts
 
 ### testing
 - **[testing/](./testing/)** - pytest patterns, parallel execution

@@ -81,7 +81,8 @@ def test_post_links_the_track_and_states_the_reason() -> None:
 def test_post_links_a_policy_page_that_exists() -> None:
     """Every post carries this link, so a dead one is dead on all of them.
 
-    The first cut used plyr.fm/docs/moderation, which 404s.
+    The first cut used plyr.fm/docs/moderation, which 404d; it then pointed at
+    the sensitive-content guide, which only covers the adult half.
     """
     post = render(_event("takedown"))
     assert post is not None
@@ -105,7 +106,7 @@ def test_every_url_is_a_link_not_bare_text() -> None:
             assert "plyr.fm" not in segment.text, (
                 f"{segment.text!r} mentions a URL but carries no link"
             )
-    assert linked_text == {"plyr.fm/track/1190", "docs.plyr.fm/sensitive-content"}
+    assert linked_text == {"plyr.fm/track/1190", "docs.plyr.fm/moderation"}
 
 
 def test_link_text_matches_its_target() -> None:
