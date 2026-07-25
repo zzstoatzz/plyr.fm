@@ -13,6 +13,7 @@ from sqlalchemy.orm import selectinload
 from backend._internal.content_labels import (
     get_track_label_values,
     has_adult_audio_label,
+    has_copyright_label,
 )
 from backend.models import Artist, Track
 
@@ -35,8 +36,12 @@ async def load_corpus(db: AsyncSession) -> list[Track]:
     labels_by_id = get_track_label_values(tracks)
     # Radio is a shared wall-clock rotation, including anonymous embeds. It
     # cannot vary by listener preference, so adult audio never enters it.
+    # Copyright-labeled tracks are excluded for a different reason: radio is
+    # us actively broadcasting, which is the surface we least want to be
+    # serving an asserted infringement from (user report #5, track 64).
     return [
         track
         for track in tracks
         if not has_adult_audio_label(labels_by_id.get(track.id, set()))
+        and not has_copyright_label(labels_by_id.get(track.id, set()))
     ]

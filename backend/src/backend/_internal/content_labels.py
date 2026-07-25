@@ -16,16 +16,22 @@ from backend._internal.clients.moderation import get_moderation_client
 from backend.models import Track, UserPreferences
 
 ADULT_AUDIO_LABELS = frozenset({"sexual", "porn"})
+COPYRIGHT_LABELS = frozenset({"copyright-violation"})
 
 # Label values reconciled onto `tracks.operator_labels` by the
 # sync_operator_labels background task. Only these values may be read from
 # the projection; anything else must be queried from the labeler live.
-PROJECTED_LABEL_VALUES = ADULT_AUDIO_LABELS
+PROJECTED_LABEL_VALUES = ADULT_AUDIO_LABELS | COPYRIGHT_LABELS
 
 
 def has_adult_audio_label(labels: Iterable[str]) -> bool:
-    """Return whether labels require the adult-audio preference."""
+    """Return whether labels mark this as adult audio."""
     return bool(ADULT_AUDIO_LABELS.intersection(labels))
+
+
+def has_copyright_label(labels: Iterable[str]) -> bool:
+    """Return whether an operator has asserted a copyright violation."""
+    return bool(COPYRIGHT_LABELS.intersection(labels))
 
 
 def get_track_label_values(tracks: Iterable[Track]) -> dict[int, set[str]]:
@@ -42,17 +48,54 @@ def get_track_label_values(tracks: Iterable[Track]) -> dict[int, set[str]]:
     }
 
 
+def _labeled_with(values: frozenset[str]) -> ColumnElement[bool]:
+    """SQL predicate: the track carries any of these label values."""
+    wanted = array(sorted(values))
+    return Track.self_labels.op("?|")(wanted) | Track.operator_labels.op("?|")(wanted)
+
+
 def sensitive_audio_visible_clause(viewer_did: str | None) -> ColumnElement[bool]:
     """SQL predicate: the track needs no adult-audio opt-in from this viewer.
 
     Callers skip the clause entirely for viewers whose saved preference shows
     sensitive audio (see viewer_shows_sensitive_audio).
     """
-    adult = array(sorted(ADULT_AUDIO_LABELS))
-    labeled = Track.self_labels.op("?|")(adult) | Track.operator_labels.op("?|")(adult)
+    labeled = _labeled_with(ADULT_AUDIO_LABELS)
     if viewer_did is None:
         return ~labeled
     return ~labeled | (Track.artist_did == viewer_did)
+
+
+def copyright_visible_clause() -> ColumnElement[bool]:
+    """SQL predicate: the track carries no active copyright-violation label.
+
+    Unlike adult audio, this takes no viewer and honours no preference. Adult
+    labels are a rendering default a listener may override for themselves;
+    a copyright assertion is about whether *we* should keep surfacing the
+    track from our own storage, which no listener preference can answer.
+
+    Deliberately not owner-exempt on shared surfaces. Creators still see and
+    manage their own flagged tracks — the owner library (`list_my_tracks`)
+    filters on artist_did alone and never applies this clause.
+    """
+    return ~_labeled_with(COPYRIGHT_LABELS)
+
+
+def discovery_visible_clause(
+    viewer_did: str | None, *, shows_sensitive_audio: bool
+) -> ColumnElement[bool]:
+    """SQL predicate for any shared surface: feeds, search, radio, collections.
+
+    Composes both label families so callers cannot accidentally apply one and
+    not the other. The previous shape — skip the adult clause entirely when the
+    viewer opted in — would have leaked copyright-labeled tracks to exactly
+    those viewers, because the whole predicate was dropped rather than the
+    adult half of it.
+    """
+    clause = copyright_visible_clause()
+    if shows_sensitive_audio:
+        return clause
+    return clause & sensitive_audio_visible_clause(viewer_did)
 
 
 async def get_operator_label_values(
@@ -130,15 +173,20 @@ async def filter_sensitive_audio_tracks_for_viewer(
     """Hide adult-labeled tracks for a viewer identified only by DID."""
     track_list = list(tracks)
     labels_by_id = get_track_label_values(track_list)
-    if await viewer_did_shows_sensitive_audio(db, viewer_did):
-        return track_list, labels_by_id
+    shows_sensitive = await viewer_did_shows_sensitive_audio(db, viewer_did)
 
-    visible = [
-        track
-        for track in track_list
-        if track.artist_did == viewer_did
-        or not has_adult_audio_label(labels_by_id.get(track.id, set()))
-    ]
+    visible = []
+    for track in track_list:
+        labels = labels_by_id.get(track.id, set())
+        # copyright applies to everyone; no preference and no owner exemption
+        if has_copyright_label(labels):
+            continue
+        if (
+            shows_sensitive
+            or track.artist_did == viewer_did
+            or not has_adult_audio_label(labels)
+        ):
+            visible.append(track)
     return visible, labels_by_id
 
 
@@ -149,11 +197,16 @@ async def may_stream_sensitive_audio(
     artist_did: str,
     session: Session | None,
 ) -> bool:
-    """Authorize a labeled audio stream for its owner or an opted-in adult."""
-    if not has_adult_audio_label(labels):
-        return True
-    if session is None:
-        return False
-    if session.did == artist_did:
-        return True
-    return await viewer_shows_sensitive_audio(db, session)
+    """Adult labels never gate the bytes themselves.
+
+    They are a rendering default for shared surfaces, not an access control.
+    Requiring a session here looked like age verification but was not — any
+    account satisfied it, and plyr verifies nobody's age — while breaking the
+    thing it cost most: a creator sharing a direct link to their own work with
+    someone who is not signed in.
+
+    Listeners still control what they are *shown*: adult-labeled tracks stay
+    out of radio, feeds, search, and collections unless they opt in. Clients
+    that want to warn before playing read the labels off the response.
+    """
+    return True

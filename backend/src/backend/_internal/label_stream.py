@@ -108,27 +108,55 @@ class LabelStreamConsumer:
                     await self._maybe_flush_cursor()
 
     async def _process_message(self, message: dict[str, Any]) -> None:
-        """Invalidate every subject named by a committed label event.
+        """Refresh policy state for every subject named by a committed label.
 
-        Negations invalidate exactly like positives: a stale cached *presence*
-        keeps a track hidden after a moderator cleared it, which is the
-        fail-closed direction but still wrong.
+        Two things go stale when a label lands, and the projection is the one
+        that matters. `tracks.operator_labels` is what the SQL discovery and
+        radio filters read, so until it catches up a copyright-labeled track
+        keeps playing on radio -- and reconciling that on the five-minute
+        sync is a long time to keep broadcasting an asserted infringement.
+        The redis cache is refreshed too; it is cheap and keeps the two from
+        disagreeing.
+
+        Negations are handled identically to positives. A stale projection
+        keeps a track suppressed after a moderator cleared it, which is the
+        safe direction but still wrong.
         """
         labels = message.get("labels") or []
         client = get_moderation_client()
 
+        touched = False
         for label in labels:
             if uri := label.get("uri"):
                 await client.invalidate_cache(uri)
+                touched = True
                 logfire.info(
-                    "label cache invalidated from stream",
+                    "label committed",
                     uri=uri,
                     val=label.get("val"),
                     neg=bool(label.get("neg")),
                 )
 
+        if touched:
+            await self._refresh_projection()
+
         if (seq := message.get("seq")) is not None:
             self._cursor = int(seq)
+
+    async def _refresh_projection(self) -> None:
+        """Reconcile tracks.operator_labels now instead of on the next sync.
+
+        Reuses the perpetual task's own body so the stream cannot drift from
+        the scheduled reconciliation. A failure here is logged and dropped:
+        the five-minute sync remains the backstop, and losing the fast path
+        must never take down the consumer.
+        """
+        from backend._internal.tasks.labels import sync_operator_labels
+
+        try:
+            await sync_operator_labels()
+        except Exception:
+            logger.exception("label stream could not refresh the projection")
 
     def _build_url(self) -> str:
         base = settings.moderation.label_stream_url or _ws_url(
