@@ -67,9 +67,10 @@ impl IntoResponse for AppError {
         let (status, error_type) = match &self {
             AppError::Audd(_) => (StatusCode::BAD_GATEWAY, "AuddError"),
             AppError::Claude(_) => (StatusCode::BAD_GATEWAY, "ClaudeError"),
-            AppError::ImageModerationNotConfigured => {
-                (StatusCode::SERVICE_UNAVAILABLE, "ImageModerationNotConfigured")
-            }
+            AppError::ImageModerationNotConfigured => (
+                StatusCode::SERVICE_UNAVAILABLE,
+                "ImageModerationNotConfigured",
+            ),
             AppError::LabelerNotConfigured => {
                 (StatusCode::SERVICE_UNAVAILABLE, "LabelerNotConfigured")
             }

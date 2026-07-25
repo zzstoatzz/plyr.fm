@@ -71,30 +71,30 @@ pub struct BatchFlag {
 
 /// Type alias for context row from database query.
 type ContextRow = (
-    Option<i64>,    // track_id
-    Option<String>, // track_title
-    Option<String>, // artist_handle
-    Option<String>, // artist_did
-    Option<f64>,    // highest_score
+    Option<i64>,               // track_id
+    Option<String>,            // track_title
+    Option<String>,            // artist_handle
+    Option<String>,            // artist_did
+    Option<f64>,               // highest_score
     Option<serde_json::Value>, // matches
-    Option<String>, // resolution_reason
-    Option<String>, // resolution_notes
+    Option<String>,            // resolution_reason
+    Option<String>,            // resolution_notes
 );
 
 /// Type alias for flagged track row from database query.
 type FlaggedRow = (
-    i64,            // seq
-    String,         // uri
-    String,         // val
-    DateTime<Utc>,  // cts
-    Option<i64>,    // track_id
-    Option<String>, // track_title
-    Option<String>, // artist_handle
-    Option<String>, // artist_did
-    Option<f64>,    // highest_score
+    i64,                       // seq
+    String,                    // uri
+    String,                    // val
+    DateTime<Utc>,             // cts
+    Option<i64>,               // track_id
+    Option<String>,            // track_title
+    Option<String>,            // artist_handle
+    Option<String>,            // artist_did
+    Option<f64>,               // highest_score
     Option<serde_json::Value>, // matches
-    Option<String>, // resolution_reason
-    Option<String>, // resolution_notes
+    Option<String>,            // resolution_reason
+    Option<String>,            // resolution_notes
 );
 
 /// Copyright match info stored alongside labels.
@@ -1200,9 +1200,7 @@ impl LabelDb {
         limit: i64,
         offset: i64,
     ) -> Result<Vec<UserReport>, sqlx::Error> {
-        let mut query = String::from(
-            "SELECT * FROM user_reports WHERE 1=1",
-        );
+        let mut query = String::from("SELECT * FROM user_reports WHERE 1=1");
         let mut param_idx = 1;
 
         if status.is_some() {
@@ -1214,7 +1212,11 @@ impl LabelDb {
             param_idx += 1;
         }
 
-        query.push_str(&format!(" ORDER BY created_at DESC LIMIT ${} OFFSET ${}", param_idx, param_idx + 1));
+        query.push_str(&format!(
+            " ORDER BY created_at DESC LIMIT ${} OFFSET ${}",
+            param_idx,
+            param_idx + 1
+        ));
 
         let mut q = sqlx::query_as::<_, UserReport>(&query);
 
