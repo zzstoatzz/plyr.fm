@@ -16,11 +16,11 @@ from sqlalchemy.orm import selectinload
 from backend._internal import Session as AuthSession
 from backend._internal import get_optional_session, get_supported_artists, require_auth
 from backend._internal.content_labels import (
-    copyright_visible_clause,
-    discovery_visible_clause,
+    LabelContext,
     filter_sensitive_audio_tracks,
     get_operator_label_values,
     get_track_label_values,
+    label_visible_clause,
 )
 from backend.config import settings
 from backend.models import (
@@ -179,31 +179,17 @@ async def list_tracks(
         )
         stmt = stmt.where(include_exists)
 
-    # label visibility lives in SQL (self labels + projected operator labels),
-    # so filtering composes with cursor pagination instead of corrupting it
-    # (#1676 regression: app-side filtering broke has_more).
-    #
-    # An artist-scoped listing is a *destination*, not discovery: you are on
-    # someone's page because you already found them. Filtering it makes an
-    # artist's own page misrepresent their catalogue, and it disagreed with the
-    # album page one level deeper, which shows everything. Adult labels govern
-    # where a track surfaces, not whether you can see what you navigated to --
-    # the same reason a labeled track's permalink plays.
-    #
-    # Copyright still applies here. That is a hosting obligation rather than a
-    # rendering default, so no amount of "I already found this artist" changes
-    # it, and neither does a listener preference.
-    if artist_did:
-        stmt = stmt.where(copyright_visible_clause()).where(
-            Track.moderation_override.is_distinct_from("exclude")
+    # label visibility lives in SQL so filtering composes with cursor
+    # pagination instead of corrupting it (#1676: app-side filtering broke
+    # has_more). An artist-scoped listing is a page someone navigated to, not a
+    # surface we chose to put in front of them.
+    stmt = stmt.where(
+        label_visible_clause(
+            session.did if session else None,
+            shows_sensitive_audio=shows_sensitive_audio,
+            context=LabelContext.VIEW if artist_did else LabelContext.LIST,
         )
-    else:
-        stmt = stmt.where(
-            discovery_visible_clause(
-                session.did if session else None,
-                shows_sensitive_audio=shows_sensitive_audio,
-            )
-        )
+    )
 
     # apply cursor-based pagination (tracks older than cursor timestamp)
     if cursor:

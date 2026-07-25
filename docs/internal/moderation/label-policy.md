@@ -57,11 +57,30 @@ automated fingerprint match is neither.
 Removing the gate also deleted a strict labeler read — and its `503` failure
 mode — from every audio request.
 
+## context: where a track is being rendered
+
+Filtering depends on *where* a track appears, not only what it carries.
+`LabelContext.LIST` is a surface we chose to put in front of someone — feeds,
+search, radio, recommendations. `LabelContext.VIEW` is a page they navigated
+to: an artist's catalogue, a collection.
+
+this mirrors ATProto's own moderation contexts, where the same content is
+filtered from a feed (`contentList`) but shown when opened directly
+(`contentView`). Bluesky's client makes that call per render; we make it per
+query, because our filtering has to live in SQL to compose with cursor
+pagination (#1676).
+
+adult labels apply only in `LIST`. Filtering an artist's own page made it
+misrepresent their catalogue — it rendered "4 tracks" above a list of one —
+and disagreed with the album page one level deeper, which showed everything.
+Copyright applies in **every** context: a hosting obligation is not discharged
+by the listener having already found the artist.
+
 ## composing the SQL predicate
 
-`discovery_visible_clause()` composes both families and every shared surface
-uses it. The previous shape skipped the visibility predicate *entirely* for
-viewers who had opted into sensitive audio:
+`label_visible_clause()` composes both families, the override, and the context,
+and every shared surface uses it. An earlier shape skipped the visibility
+predicate *entirely* for viewers who had opted into sensitive audio:
 
 ```python
 if not shows_sensitive_audio:
