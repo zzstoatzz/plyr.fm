@@ -129,3 +129,53 @@ async def test_no_label_gates_the_bytes(db_session: AsyncSession) -> None:
         assert await may_stream_sensitive_audio(
             db_session, labels=labels, artist_did=OWNER, session=None
         )
+
+
+async def test_override_allow_surfaces_a_copyright_labeled_track(
+    db_session: AsyncSession,
+) -> None:
+    """The reason overrides exist: a real match we reviewed and decided to keep.
+
+    Negating the label would claim the match never happened. An override says
+    the assertion stands and we are surfacing it anyway.
+    """
+    cover = await _track(
+        db_session,
+        file_id="ov1",
+        operator_labels=["copyright-violation"],
+    )
+    cover.moderation_override = "allow"
+    await db_session.commit()
+
+    visible, _ = await filter_sensitive_audio_tracks_for_viewer(
+        db_session, [cover], None
+    )
+    assert [t.id for t in visible] == [cover.id]
+
+
+async def test_override_exclude_hides_an_unlabeled_track(
+    db_session: AsyncSession,
+) -> None:
+    """The other direction: keep something off shared surfaces with no label."""
+    track = await _track(db_session, file_id="ov2")
+    track.moderation_override = "exclude"
+    await db_session.commit()
+
+    visible, _ = await filter_sensitive_audio_tracks_for_viewer(
+        db_session, [track], OWNER
+    )
+    assert visible == []
+
+
+async def test_override_allow_does_not_override_a_listeners_adult_preference(
+    db_session: AsyncSession,
+) -> None:
+    """An operator decides what we host, not what someone else may be shown."""
+    adult = await _track(db_session, file_id="ov3", operator_labels=["sexual"])
+    adult.moderation_override = "allow"
+    await db_session.commit()
+
+    visible, _ = await filter_sensitive_audio_tracks_for_viewer(
+        db_session, [adult], VIEWER
+    )
+    assert visible == []

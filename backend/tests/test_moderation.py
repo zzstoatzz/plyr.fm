@@ -833,6 +833,9 @@ async def test_sync_operator_labels_reconciles_projection(
         mock_client.get_active_labels_by_value.return_value = {
             "at://did:plc:labelsync/fm.plyr.track/1": {"sexual"},
         }
+        mock_client.get_moderation_overrides.return_value = {
+            "at://did:plc:labelsync/fm.plyr.track/3": "allow",
+        }
         mock_get_client.return_value = mock_client
 
         await sync_operator_labels()
@@ -844,6 +847,9 @@ async def test_sync_operator_labels_reconciles_projection(
     assert track1.operator_labels == ["sexual"]
     assert track2.operator_labels == []
     assert track3.operator_labels == []
+    # overrides ride the same reconciliation as labels
+    assert track1.moderation_override is None
+    assert track3.moderation_override == "allow"
 
 
 async def test_sync_operator_labels_skips_pass_on_labeler_outage(

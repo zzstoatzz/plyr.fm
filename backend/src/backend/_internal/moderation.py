@@ -165,6 +165,22 @@ async def _store_scan_result(track_id: int, result: Any) -> None:
             match_count=len(scan.matches),
         )
 
+        # open a review item so the flag is visible to a moderator. before the
+        # event log existed this state lived only in copyright_scans, which the
+        # moderation dashboard cannot read — flags were raised into a queue
+        # nobody could see (#1678).
+        if is_flagged and track and track.atproto_record_uri:
+            await get_moderation_client().record_event(
+                subject_uri=track.atproto_record_uri,
+                subject_track_id=track_id,
+                action="flagged_by_scan",
+                actor="service:copyright-scan",
+                reason="fingerprint_match",
+                notes=(
+                    f"{len(scan.matches)} matches, highest score {scan.highest_score}"
+                ),
+            )
+
         # notify admin only — never DM the artist
         if is_flagged and track and track.artist:
             await notification_service.send_copyright_flag_notification(
