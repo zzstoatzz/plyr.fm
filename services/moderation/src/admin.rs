@@ -329,10 +329,7 @@ pub async fn get_active_labels(
 
     let active_uris = db.get_active_labels(&request.uris).await?;
 
-    tracing::debug!(
-        active_count = active_uris.len(),
-        "returning active labels"
-    );
+    tracing::debug!(active_count = active_uris.len(), "returning active labels");
 
     Ok(Json(ActiveLabelsResponse { active_uris }))
 }
@@ -347,7 +344,10 @@ pub async fn get_label_values(
 ) -> Result<Json<LabelValuesResponse>, AppError> {
     let db = state.db.as_ref().ok_or(AppError::LabelerNotConfigured)?;
 
-    tracing::debug!(uri_count = request.uris.len(), "querying active label values");
+    tracing::debug!(
+        uri_count = request.uris.len(),
+        "querying active label values"
+    );
 
     let mut labels: HashMap<String, Vec<String>> = HashMap::new();
     for (uri, val) in db.get_active_label_values(&request.uris).await? {
@@ -467,7 +467,11 @@ pub async fn create_batch(
 
     let url = format!("/admin/review/{}", id);
 
-    Ok(Json(CreateBatchResponse { id, url, flag_count }))
+    Ok(Json(CreateBatchResponse {
+        id,
+        url,
+        flag_count,
+    }))
 }
 
 /// Generate a short, URL-safe batch ID.
@@ -546,9 +550,21 @@ pub async fn admin_ui() -> Result<Response, AppError> {
 
 /// Render the flags list as HTML with filter controls.
 fn render_flags_list(tracks: &[FlaggedTrack], current_filter: &str) -> String {
-    let pending_active = if current_filter == "pending" { " active" } else { "" };
-    let resolved_active = if current_filter == "resolved" { " active" } else { "" };
-    let all_active = if current_filter == "all" { " active" } else { "" };
+    let pending_active = if current_filter == "pending" {
+        " active"
+    } else {
+        ""
+    };
+    let resolved_active = if current_filter == "resolved" {
+        " active"
+    } else {
+        ""
+    };
+    let all_active = if current_filter == "all" {
+        " active"
+    } else {
+        ""
+    };
 
     let count = tracks.len();
     let count_label = match current_filter {
@@ -577,10 +593,7 @@ fn render_flags_list(tracks: &[FlaggedTrack], current_filter: &str) -> String {
             "resolved" => "no resolved flags",
             _ => "no flagged tracks",
         };
-        return format!(
-            "{}<div class=\"empty\">{}</div>",
-            filter_buttons, empty_msg
-        );
+        return format!("{}<div class=\"empty\">{}</div>", filter_buttons, empty_msg);
     }
 
     let cards: Vec<String> = tracks.iter().map(render_flag_card).collect();
@@ -639,8 +652,7 @@ fn render_flag_card(track: &FlaggedTrack) -> String {
         format!(
             r#"<h3>{}</h3>
             <div class="artist">by {}</div>"#,
-            title_html,
-            artist_link
+            title_html, artist_link
         )
     } else {
         r#"<div class="no-context">no track info available</div>"#.to_string()

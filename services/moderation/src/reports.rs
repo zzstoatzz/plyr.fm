@@ -200,7 +200,8 @@ pub async fn get_report(
         )
     })?;
 
-    report.ok_or_else(|| (StatusCode::NOT_FOUND, "report not found".to_string()))
+    report
+        .ok_or_else(|| (StatusCode::NOT_FOUND, "report not found".to_string()))
         .map(Json)
 }
 
@@ -232,7 +233,12 @@ pub async fn resolve_report(
     }
 
     let report = db
-        .resolve_report(id, &req.status, req.admin_notes.as_deref(), &req.resolved_by)
+        .resolve_report(
+            id,
+            &req.status,
+            req.admin_notes.as_deref(),
+            &req.resolved_by,
+        )
         .await
         .map_err(|e| {
             (
@@ -302,13 +308,21 @@ pub async fn list_reports_html(
 
 /// Render the reports list as HTML with filter controls.
 fn render_reports_list(reports: &[UserReport], current_filter: &str) -> String {
-    let open_active = if current_filter == "open" { " active" } else { "" };
+    let open_active = if current_filter == "open" {
+        " active"
+    } else {
+        ""
+    };
     let resolved_active = if current_filter == "resolved" || current_filter == "dismissed" {
         " active"
     } else {
         ""
     };
-    let all_active = if current_filter == "all" { " active" } else { "" };
+    let all_active = if current_filter == "all" {
+        " active"
+    } else {
+        ""
+    };
 
     let count = reports.len();
     let count_label = match current_filter {
@@ -334,10 +348,7 @@ fn render_reports_list(reports: &[UserReport], current_filter: &str) -> String {
             "resolved" | "dismissed" => "no closed reports",
             _ => "no reports",
         };
-        return format!(
-            "{}<div class=\"empty\">{}</div>",
-            filter_buttons, empty_msg
-        );
+        return format!("{}<div class=\"empty\">{}</div>", filter_buttons, empty_msg);
     }
 
     let cards: Vec<String> = reports.iter().map(render_report_card).collect();
@@ -409,10 +420,7 @@ fn render_report_card(report: &UserReport) -> String {
 
     // Action buttons for open reports
     let action_html = if is_closed {
-        let resolved_by = report
-            .resolved_by
-            .as_deref()
-            .unwrap_or("unknown");
+        let resolved_by = report.resolved_by.as_deref().unwrap_or("unknown");
         format!(
             r#"<div class="resolution-info">
                 <span class="resolution-reason">{} by {}</span>

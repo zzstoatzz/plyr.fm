@@ -297,12 +297,10 @@ pub async fn scan_image(
                 );
             }
             "image_id" => {
-                image_id = Some(
-                    field
-                        .text()
-                        .await
-                        .map_err(|e| AppError::BadRequest(format!("failed to read image_id: {e}")))?,
-                );
+                image_id =
+                    Some(field.text().await.map_err(|e| {
+                        AppError::BadRequest(format!("failed to read image_id: {e}"))
+                    })?);
             }
             _ => {}
         }
