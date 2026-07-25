@@ -24,6 +24,7 @@ import signal
 
 from backend._internal.background import docket_client_lifespan
 from backend._internal.jetstream import JetstreamConsumer
+from backend._internal.label_stream import LabelStreamConsumer
 from backend.config import settings
 from backend.utilities.observability import (
     configure_observability,
@@ -39,17 +40,24 @@ logger = logging.getLogger(__name__)
 
 
 async def _run() -> None:
-    """run the jetstream consumer until SIGINT/SIGTERM."""
+    """run the stream consumers until SIGINT/SIGTERM."""
     if not settings.jetstream.enabled:
         logger.info("jetstream disabled, exiting")
         return
 
     loop = asyncio.get_running_loop()
-    consumer = JetstreamConsumer()
+    consumers: list[JetstreamConsumer | LabelStreamConsumer] = [JetstreamConsumer()]
+
+    # the label subscriber lives here rather than in `worker` for the same
+    # reason jetstream does: the worker's blocking tasks starve a WebSocket
+    # keepalive. it is cheap to co-locate -- both consumers only hold a socket.
+    if settings.moderation.label_stream_enabled:
+        consumers.append(LabelStreamConsumer())
 
     def request_stop(sig_name: str) -> None:
-        logger.info("received %s, stopping jetstream consumer", sig_name)
-        consumer.stop()
+        logger.info("received %s, stopping stream consumers", sig_name)
+        for consumer in consumers:
+            consumer.stop()
 
     loop.add_signal_handler(signal.SIGTERM, lambda: request_stop("SIGTERM"))
     loop.add_signal_handler(signal.SIGINT, lambda: request_stop("SIGINT"))
@@ -58,8 +66,8 @@ async def _run() -> None:
         # a docket client (no Worker) so the consumer can enqueue ingest
         # tasks; the dedicated `worker` process runs the Worker that drains them.
         async with docket_client_lifespan():
-            logger.info("jetstream process ready")
-            await consumer.run()
+            logger.info("stream process ready (%d consumers)", len(consumers))
+            await asyncio.gather(*(consumer.run() for consumer in consumers))
     finally:
         loop.remove_signal_handler(signal.SIGTERM)
         loop.remove_signal_handler(signal.SIGINT)
