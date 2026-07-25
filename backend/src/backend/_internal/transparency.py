@@ -52,6 +52,10 @@ _HEADLINE = {
 }
 
 TRACK_URL = "https://plyr.fm/track/{track_id}"
+# every post carries this, so a dead link would be a dead link on all of them.
+# `docs.plyr.fm/moderation` does not exist; the sensitive-content guide is the
+# closest public explanation of how labels affect what you see.
+POLICY_URL = "https://docs.plyr.fm/sensitive-content"
 
 
 @dataclass(frozen=True)
@@ -87,7 +91,7 @@ def render(event: dict[str, Any]) -> TransparencyPost | None:
         lines.append(TRACK_URL.format(track_id=track_id))
 
     lines.append("")
-    lines.append("plyr.fm/docs/moderation")
+    lines.append(POLICY_URL)
 
     text = "\n".join(lines)
     # bluesky's limit is 300 graphemes; these are short by construction, but a

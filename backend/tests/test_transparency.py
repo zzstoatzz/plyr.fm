@@ -68,6 +68,19 @@ def test_post_links_the_track_and_states_the_reason() -> None:
     assert "fingerprint match" in post.text
 
 
+def test_post_links_a_policy_page_that_exists() -> None:
+    """Every post carries this link, so a dead one is dead on all of them.
+
+    The first cut used plyr.fm/docs/moderation, which 404s.
+    """
+    from backend._internal.transparency import POLICY_URL
+
+    post = render(_event("takedown"))
+    assert post is not None
+    assert POLICY_URL in post.text
+    assert "plyr.fm/docs/moderation" not in post.text
+
+
 def test_post_stays_within_the_bluesky_limit() -> None:
     post = render(_event("takedown", reason="x" * 500))
     assert post is not None
