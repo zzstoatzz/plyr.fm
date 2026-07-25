@@ -76,7 +76,7 @@ max_lines = 569
 
 [[rules]]
 path = "backend/tests/test_moderation.py"
-max_lines = 951
+max_lines = 1026
 
 [[rules]]
 path = "docs/internal/authentication.md"
@@ -200,7 +200,7 @@ max_lines = 805
 
 [[rules]]
 path = "services/moderation/src/reports.rs"
-max_lines = 523
+max_lines = 544
 
 [[rules]]
 path = "scripts/moderation_agent.py"

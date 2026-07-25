@@ -949,3 +949,78 @@ async def test_sensitive_images_read_stays_on_the_public_route() -> None:
         await client.get_sensitive_images()
 
     assert mock_get.call_args[0][0] == "https://moderation.test/sensitive-images"
+
+
+async def test_track_report_carries_the_at_uri(
+    report_test_app: FastAPI, db_session: AsyncSession
+) -> None:
+    """A track report must resolve its subject URI.
+
+    The moderation event log is keyed by subject URI, so without this a report
+    lands in the reports tab alone and never opens a review item — which is how
+    the first real user report sat open while the queue read empty.
+    """
+    from httpx import ASGITransport, AsyncClient
+
+    artist = Artist(
+        did="did:plc:reporturi",
+        handle="reporturi.test",
+        display_name="Report URI",
+    )
+    db_session.add(artist)
+    await db_session.flush()
+    track = Track(
+        title="Reported Track",
+        file_id="reporturi_1",
+        file_type="mp3",
+        artist_did=artist.did,
+        atproto_record_uri="at://did:plc:reporturi/fm.plyr.track/abc",
+    )
+    db_session.add(track)
+    await db_session.commit()
+
+    with patch("backend.api.moderation.get_moderation_client") as mock_get_client:
+        mock_client = AsyncMock()
+        mock_client.create_report.return_value = CreateReportResult(report_id=1)
+        mock_get_client.return_value = mock_client
+
+        async with AsyncClient(
+            transport=ASGITransport(app=report_test_app), base_url="http://test"
+        ) as client:
+            response = await client.post(
+                "/moderation/reports",
+                json={
+                    "target_type": "track",
+                    "target_id": str(track.id),
+                    "reason": "copyright",
+                },
+            )
+
+    assert response.status_code == 200
+    assert (
+        mock_client.create_report.call_args.kwargs["target_uri"]
+        == "at://did:plc:reporturi/fm.plyr.track/abc"
+    )
+
+
+async def test_non_track_report_has_no_uri_to_resolve(
+    report_test_app: FastAPI,
+) -> None:
+    """Tags and comments have no AT URI; the report still succeeds."""
+    from httpx import ASGITransport, AsyncClient
+
+    with patch("backend.api.moderation.get_moderation_client") as mock_get_client:
+        mock_client = AsyncMock()
+        mock_client.create_report.return_value = CreateReportResult(report_id=2)
+        mock_get_client.return_value = mock_client
+
+        async with AsyncClient(
+            transport=ASGITransport(app=report_test_app), base_url="http://test"
+        ) as client:
+            response = await client.post(
+                "/moderation/reports",
+                json={"target_type": "tag", "target_id": "7", "reason": "abuse"},
+            )
+
+    assert response.status_code == 200
+    assert mock_client.create_report.call_args.kwargs["target_uri"] is None

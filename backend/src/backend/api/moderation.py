@@ -7,10 +7,13 @@ from typing import Literal
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, Field
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend._internal import Session, require_auth
 from backend._internal.clients.moderation import get_moderation_client
 from backend._internal.notifications import notification_service
+from backend.models import Track, get_db
 from backend.utilities.rate_limit import limiter
 
 logger = logging.getLogger(__name__)
@@ -67,6 +70,7 @@ async def create_report(
     request: Request,
     body: CreateReportRequest,
     session: Session = Depends(require_auth),
+    db: AsyncSession = Depends(get_db),
 ) -> CreateReportResponse:
     """submit a content report.
 
@@ -76,6 +80,15 @@ async def create_report(
     """
     client = get_moderation_client()
 
+    # the moderation event log is keyed by subject URI, so a track report only
+    # opens a review item if we resolve the URI here. without it a report lands
+    # in the reports tab alone and never reaches the queue a moderator works.
+    target_uri: str | None = None
+    if body.target_type == "track" and body.target_id.isdigit():
+        target_uri = await db.scalar(
+            select(Track.atproto_record_uri).where(Track.id == int(body.target_id))
+        )
+
     try:
         result = await client.create_report(
             reporter_did=session.did,
@@ -84,6 +97,7 @@ async def create_report(
             target_id=body.target_id,
             target_name=body.target_name,
             target_url=body.target_url,
+            target_uri=target_uri,
             reason=body.reason.value,
             description=body.description,
             screenshot_url=body.screenshot_url,
