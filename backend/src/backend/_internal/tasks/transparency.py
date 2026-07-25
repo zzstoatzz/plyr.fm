@@ -72,7 +72,7 @@ async def publish_moderation_decisions(
         if post is None:
             skipped += 1
         elif settings.notify.publish_moderation_decisions:
-            if await notification_service.post_publicly(post.text):
+            if await notification_service.post_publicly(post.segments):
                 posted += 1
             else:
                 # stop at the failure so the cursor does not skip past a

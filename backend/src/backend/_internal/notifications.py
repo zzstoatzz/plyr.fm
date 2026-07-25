@@ -2,11 +2,13 @@
 
 import logging
 import time
+from collections.abc import Sequence
 from dataclasses import dataclass
 
 import logfire
-from atproto import AsyncClient, models
+from atproto import AsyncClient, client_utils, models
 
+from backend._internal.transparency import Segment
 from backend.config import settings
 from backend.models import Track
 
@@ -179,7 +181,7 @@ class NotificationService:
                     error_type=error_type,
                 )
 
-    async def post_publicly(self, text: str) -> bool:
+    async def post_publicly(self, segments: Sequence[Segment]) -> bool:
         """Post from the moderation account's own timeline.
 
         Distinct from every other method here, which sends a DM to one
@@ -187,15 +189,33 @@ class NotificationService:
         responsible for having decided the content is publishable (see
         `_internal/transparency`).
 
+        Takes segments rather than a string because Bluesky does not infer
+        links from text. A URL only renders as a link if the record carries a
+        matching `facet` -- a byte range into the UTF-8 encoding of the text.
+        TextBuilder tracks those offsets as it appends, which is why the text
+        is assembled here rather than passed in pre-joined.
+
         Returns whether the post was created, so a caller walking a cursor can
         stop rather than skip past an announcement that never happened.
         """
         if await self.ensure_ready() is None or self.client is None:
             logger.warning("cannot post publicly: notification bot not ready")
             return False
+
+        builder = client_utils.TextBuilder()
+        for segment in segments:
+            if segment.link:
+                builder.link(segment.text, segment.link)
+            else:
+                builder.text(segment.text)
+
         try:
-            await self.client.send_post(text=text)
-            logfire.info("transparency post published", chars=len(text))
+            await self.client.send_post(builder)
+            logfire.info(
+                "transparency post published",
+                chars=len(builder.build_text()),
+                facets=len(builder.build_facets()),
+            )
             return True
         except Exception:
             logger.exception("failed to publish transparency post")
