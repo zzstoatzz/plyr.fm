@@ -16,10 +16,10 @@ from sqlalchemy.orm import selectinload
 from backend._internal import Session as AuthSession
 from backend._internal import get_optional_session, get_supported_artists, require_auth
 from backend._internal.content_labels import (
+    discovery_visible_clause,
     filter_sensitive_audio_tracks,
     get_operator_label_values,
     get_track_label_values,
-    sensitive_audio_visible_clause,
 )
 from backend.config import settings
 from backend.models import (
@@ -178,12 +178,17 @@ async def list_tracks(
         )
         stmt = stmt.where(include_exists)
 
-    # adult-audio visibility lives in SQL (self labels + projected operator
-    # labels), so filtering composes with cursor pagination instead of
-    # corrupting it (#1676 regression: app-side filtering broke has_more)
-    if not shows_sensitive_audio:
-        viewer = session.did if session else None
-        stmt = stmt.where(sensitive_audio_visible_clause(viewer))
+    # label visibility lives in SQL (self labels + projected operator labels),
+    # so filtering composes with cursor pagination instead of corrupting it
+    # (#1676 regression: app-side filtering broke has_more). Always applied:
+    # the copyright half honours no preference, so this must not be skipped
+    # for viewers who opted into sensitive audio.
+    stmt = stmt.where(
+        discovery_visible_clause(
+            session.did if session else None,
+            shows_sensitive_audio=shows_sensitive_audio,
+        )
+    )
 
     # apply cursor-based pagination (tracks older than cursor timestamp)
     if cursor:

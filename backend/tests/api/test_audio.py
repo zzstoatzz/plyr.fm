@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend._internal import Session, get_optional_session, require_auth
 from backend.main import app
-from backend.models import Artist, Track, UserPreferences
+from backend.models import Artist, Track
 
 
 @pytest.fixture
@@ -166,90 +166,107 @@ async def test_stream_audio_file_not_in_storage(
     assert response.json()["detail"] == "audio file not found"
 
 
-async def test_adult_labeled_audio_is_hidden_from_anonymous_viewers(
+async def test_adult_labeled_audio_plays_for_anonymous_listeners(
     test_app: FastAPI,
     test_track_with_r2_url: Track,
     db_session: AsyncSession,
 ):
-    """A global sexual label must gate the bytes, not only discovery UI."""
+    """An operator adult label must not break a shared permalink.
+
+    Adult labels are a rendering default for shared surfaces, not an access
+    control. Requiring a session here read as age verification but was not --
+    any account satisfied it -- while breaking a creator sharing their own
+    work with someone signed out.
+    """
     test_track_with_r2_url.atproto_record_uri = (
         "at://did:plc:artist123/fm.plyr.feed.track/adult-track"
     )
     await db_session.commit()
-    mock_moderation = MagicMock()
-    mock_moderation.get_active_label_values = AsyncMock(
-        return_value={test_track_with_r2_url.atproto_record_uri: {"sexual"}}
-    )
 
-    with patch("backend.api.audio.get_moderation_client", return_value=mock_moderation):
-        async with AsyncClient(
-            transport=ASGITransport(app=test_app), base_url="http://test"
-        ) as client:
-            response = await client.get(
-                f"/audio/{test_track_with_r2_url.file_id}", follow_redirects=False
-            )
-
-    assert response.status_code == 401
-    assert response.headers["x-content-labels"] == "sexual"
-
-
-async def test_creator_self_labeled_audio_is_hidden_from_anonymous_viewers(
-    test_app: FastAPI,
-    test_track_with_r2_url: Track,
-    db_session: AsyncSession,
-):
-    """A creator assertion gates bytes without an operator label."""
-    test_track_with_r2_url.self_labels = ["sexual"]
-    await db_session.commit()
-    mock_moderation = MagicMock()
-    mock_moderation.get_active_label_values = AsyncMock(return_value={})
-
-    with patch("backend.api.audio.get_moderation_client", return_value=mock_moderation):
-        async with AsyncClient(
-            transport=ASGITransport(app=test_app), base_url="http://test"
-        ) as client:
-            response = await client.get(
-                f"/audio/{test_track_with_r2_url.file_id}", follow_redirects=False
-            )
-
-    assert response.status_code == 401
-    assert response.headers["x-content-labels"] == "sexual"
-
-
-async def test_adult_labeled_audio_is_available_after_opt_in(
-    test_app: FastAPI,
-    test_track_with_r2_url: Track,
-    mock_session: Session,
-    db_session: AsyncSession,
-):
-    """Authenticated listeners may opt into adult-labeled audio independently."""
-    test_track_with_r2_url.atproto_record_uri = (
-        "at://did:plc:artist123/fm.plyr.feed.track/adult-track"
-    )
-    db_session.add(UserPreferences(did=mock_session.did, show_sensitive_audio=True))
-    await db_session.commit()
-    mock_moderation = MagicMock()
-    mock_moderation.get_active_label_values = AsyncMock(
-        return_value={test_track_with_r2_url.atproto_record_uri: {"sexual"}}
-    )
-    test_app.dependency_overrides[get_optional_session] = lambda: mock_session
-
-    try:
-        with patch(
-            "backend.api.audio.get_moderation_client", return_value=mock_moderation
-        ):
-            async with AsyncClient(
-                transport=ASGITransport(app=test_app), base_url="http://test"
-            ) as client:
-                response = await client.get(
-                    f"/audio/{test_track_with_r2_url.file_id}",
-                    follow_redirects=False,
-                )
-    finally:
-        test_app.dependency_overrides.pop(get_optional_session, None)
+    async with AsyncClient(
+        transport=ASGITransport(app=test_app), base_url="http://test"
+    ) as client:
+        response = await client.get(
+            f"/audio/{test_track_with_r2_url.file_id}", follow_redirects=False
+        )
 
     assert response.status_code == 307
     assert response.headers["location"] == test_track_with_r2_url.r2_url
+
+
+async def test_creator_self_labeled_audio_plays_for_anonymous_listeners(
+    test_app: FastAPI,
+    test_track_with_r2_url: Track,
+    db_session: AsyncSession,
+):
+    """A creator's own content notice does not gate their own permalink."""
+    test_track_with_r2_url.self_labels = ["sexual"]
+    await db_session.commit()
+
+    async with AsyncClient(
+        transport=ASGITransport(app=test_app), base_url="http://test"
+    ) as client:
+        response = await client.get(
+            f"/audio/{test_track_with_r2_url.file_id}", follow_redirects=False
+        )
+
+    assert response.status_code == 307
+
+
+async def test_copyright_labeled_audio_still_plays_from_its_permalink(
+    test_app: FastAPI,
+    test_track_with_r2_url: Track,
+    db_session: AsyncSession,
+):
+    """Copyright de-lists from shared surfaces; it does not block the bytes.
+
+    Takedown is a deliberate human step. An automatic label -- which may be a
+    cover or a remix the uploader performed -- must not silently break the
+    uploader's own link.
+    """
+    test_track_with_r2_url.operator_labels = ["copyright-violation"]
+    await db_session.commit()
+
+    async with AsyncClient(
+        transport=ASGITransport(app=test_app), base_url="http://test"
+    ) as client:
+        response = await client.get(
+            f"/audio/{test_track_with_r2_url.file_id}", follow_redirects=False
+        )
+
+    assert response.status_code == 307
+
+
+async def test_audio_does_not_query_the_labeler(
+    test_app: FastAPI,
+    test_track_with_r2_url: Track,
+    db_session: AsyncSession,
+):
+    """The byte path no longer depends on the labeler being reachable.
+
+    It previously issued a strict label read per request and returned 503 when
+    the labeler was down. Nothing about serving bytes needs label state now.
+    """
+    test_track_with_r2_url.atproto_record_uri = (
+        "at://did:plc:artist123/fm.plyr.feed.track/adult-track"
+    )
+    await db_session.commit()
+    client_factory = MagicMock(
+        side_effect=AssertionError("audio must not call the labeler")
+    )
+
+    with patch(
+        "backend._internal.clients.moderation.get_moderation_client", client_factory
+    ):
+        async with AsyncClient(
+            transport=ASGITransport(app=test_app), base_url="http://test"
+        ) as client:
+            response = await client.get(
+                f"/audio/{test_track_with_r2_url.file_id}", follow_redirects=False
+            )
+
+    assert response.status_code == 307
+    client_factory.assert_not_called()
 
 
 # tests for /audio/{file_id}/url endpoint (offline caching, requires auth)
