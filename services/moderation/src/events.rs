@@ -14,7 +14,10 @@
 //! Events are never mutated or deleted. Current state is derived from the
 //! latest relevant event per subject, the same way label state is.
 
-use axum::{extract::State, Json};
+use axum::{
+    extract::{Query, State},
+    Json,
+};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::Row;
@@ -122,6 +125,17 @@ pub struct EventsResponse {
     pub events: Vec<ModerationEvent>,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct EventsSinceParams {
+    pub after_id: Option<i64>,
+    pub limit: Option<i64>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct EventsHeadResponse {
+    pub latest_id: i64,
+}
+
 /// A subject awaiting review, with enough context to act without leaving the page.
 #[derive(Debug, Serialize)]
 pub struct QueueItem {
@@ -216,6 +230,34 @@ impl LabelDb {
         .fetch_all(self.pool())
         .await?;
         rows.into_iter().map(event_from_row).collect()
+    }
+
+    pub async fn events_since(
+        &self,
+        after_id: i64,
+        limit: i64,
+    ) -> Result<Vec<ModerationEvent>, sqlx::Error> {
+        let rows = sqlx::query(
+            r#"
+            SELECT id, subject_uri, subject_track_id, action, actor, reason, notes, created_at
+            FROM moderation_events
+            WHERE id > $1
+            ORDER BY id
+            LIMIT $2
+            "#,
+        )
+        .bind(after_id)
+        .bind(limit)
+        .fetch_all(self.pool())
+        .await?;
+        rows.into_iter().map(event_from_row).collect()
+    }
+
+    pub async fn latest_event_id(&self) -> Result<i64, sqlx::Error> {
+        let row = sqlx::query("SELECT COALESCE(max(id), 0) AS latest FROM moderation_events")
+            .fetch_one(self.pool())
+            .await?;
+        row.try_get("latest")
     }
 
     /// Subjects whose most recent opening event has no closing event after it.
@@ -354,6 +396,33 @@ pub async fn subject_events(
     let db = state.db.as_ref().ok_or(AppError::LabelerNotConfigured)?;
     Ok(Json(EventsResponse {
         events: db.events_for_subject(&query.subject_uri).await?,
+    }))
+}
+
+/// Events newer than a cursor, oldest first.
+///
+/// Drives the backend's transparency publisher, which needs to walk forward
+/// through decisions exactly once. Ordering by id (not timestamp) keeps the
+/// cursor total and gap-free.
+pub async fn events_since(
+    State(state): State<AppState>,
+    Query(params): Query<EventsSinceParams>,
+) -> Result<Json<EventsResponse>, AppError> {
+    let db = state.db.as_ref().ok_or(AppError::LabelerNotConfigured)?;
+    let limit = params.limit.unwrap_or(50).clamp(1, 200);
+    Ok(Json(EventsResponse {
+        events: db.events_since(params.after_id.unwrap_or(0), limit).await?,
+    }))
+}
+
+/// Highest event id, so a publisher can start from "now" rather than replaying
+/// history it was never meant to announce.
+pub async fn events_head(
+    State(state): State<AppState>,
+) -> Result<Json<EventsHeadResponse>, AppError> {
+    let db = state.db.as_ref().ok_or(AppError::LabelerNotConfigured)?;
+    Ok(Json(EventsHeadResponse {
+        latest_id: db.latest_event_id().await?,
     }))
 }
 

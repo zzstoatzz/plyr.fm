@@ -524,6 +524,33 @@ class ModerationClient:
         except Exception as e:
             logger.warning("failed to record moderation event: %s", e)
 
+    async def get_events_head(self) -> int:
+        """Highest event id, for starting a cursor at "now" rather than zero."""
+        if not self.auth_token:
+            return 0
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            response = await client.get(
+                f"{self.labeler_url}/internal/events-head",
+                headers=self._headers(),
+            )
+            response.raise_for_status()
+            return int(response.json().get("latest_id", 0))
+
+    async def get_events_since(
+        self, after_id: int, *, limit: int = 50
+    ) -> list[dict[str, Any]]:
+        """Moderation events newer than a cursor, oldest first."""
+        if not self.auth_token:
+            return []
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            response = await client.get(
+                f"{self.labeler_url}/internal/events-since",
+                params={"after_id": after_id, "limit": limit},
+                headers=self._headers(),
+            )
+            response.raise_for_status()
+            return response.json().get("events", [])
+
     async def get_moderation_overrides(self) -> dict[str, str]:
         """Return standing per-subject overrides keyed by AT URI.
 

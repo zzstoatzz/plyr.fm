@@ -179,6 +179,28 @@ class NotificationService:
                     error_type=error_type,
                 )
 
+    async def post_publicly(self, text: str) -> bool:
+        """Post from the moderation account's own timeline.
+
+        Distinct from every other method here, which sends a DM to one
+        recipient. This is outward-facing: it reaches anyone, so the caller is
+        responsible for having decided the content is publishable (see
+        `_internal/transparency`).
+
+        Returns whether the post was created, so a caller walking a cursor can
+        stop rather than skip past an announcement that never happened.
+        """
+        if await self.ensure_ready() is None or self.client is None:
+            logger.warning("cannot post publicly: notification bot not ready")
+            return False
+        try:
+            await self.client.send_post(text=text)
+            logfire.info("transparency post published", chars=len(text))
+            return True
+        except Exception:
+            logger.exception("failed to publish transparency post")
+            return False
+
     async def send_copyright_flag_notification(
         self,
         track_id: int,
