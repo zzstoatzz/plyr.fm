@@ -137,6 +137,27 @@ pub async fn create_report(
         "user report created"
     );
 
+    // Open a review item so the report lands in the same queue as scan flags.
+    // Without this a report only ever appears in its own tab, which is how the
+    // first real user report on the platform sat open while the queue read
+    // empty. Track reports carry an AT URI; other target types do not yet, and
+    // the event log is keyed by subject URI, so those stay reports-only for now.
+    if let Some(subject_uri) = req.target_uri.as_deref() {
+        let event = crate::events::RecordEventRequest {
+            subject_uri: subject_uri.to_string(),
+            subject_track_id: req.target_id.parse::<i64>().ok(),
+            action: crate::events::ModerationAction::Reported,
+            actor: format!("user:{}", req.reporter_did),
+            reason: Some(req.reason.clone()),
+            notes: req.description.clone(),
+        };
+        // Best effort: the report is already stored, and losing the queue entry
+        // must not turn a successful report into an error for the reporter.
+        if let Err(e) = db.record_event(&event).await {
+            tracing::warn!(error = %e, report_id = report.id, "could not open review item");
+        }
+    }
+
     Ok(Json(CreateReportResponse {
         report_id: report.id,
     }))
