@@ -196,7 +196,7 @@ max_lines = 526
 
 [[rules]]
 path = "services/moderation/static/admin.css"
-max_lines = 760
+max_lines = 805
 
 [[rules]]
 path = "services/moderation/src/reports.rs"

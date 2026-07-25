@@ -36,7 +36,7 @@ function authenticate() {
         localStorage.setItem('mod_token', token);
         currentToken = token;
         showMain();
-        htmx.trigger('#flags-list', 'load');
+        loadQueue();
     }
 }
 
@@ -46,8 +46,12 @@ if (savedToken) {
     document.getElementById('auth-token').value = '••••••••';
     currentToken = savedToken;
     showMain();
-    // Trigger load after DOM is ready and htmx is initialized
-    setTimeout(() => htmx.trigger('#flags-list', 'load'), 0);
+    setTimeout(loadQueue, 0);
+}
+
+const savedActor = localStorage.getItem('mod_actor');
+if (savedActor) {
+    document.getElementById('actor').value = savedActor;
 }
 
 // Handle auth errors
@@ -183,9 +187,137 @@ function switchTab(tab) {
     });
 
     // Load data for tab if needed
+    if (tab === 'queue') {
+        loadQueue();
+    }
     if (tab === 'reports' && !reportsLoaded) {
         reportsLoaded = true;
         refreshReportsList();
+    }
+}
+
+// --- review queue ---
+//
+// The queue the dashboard used to show read *labels*, but post-#703 a scan
+// never emits one, so scan flags were invisible here — raised into a queue
+// nobody could see. This reads the moderation event log instead, which is
+// where both scan flags and user reports now land.
+
+function getActor() {
+    return (document.getElementById('actor')?.value || '').trim();
+}
+
+function saveActor() {
+    localStorage.setItem('mod_actor', getActor());
+}
+
+function escapeHtml(value) {
+    return String(value ?? '').replace(/[&<>"']/g, (c) => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[c]));
+}
+
+async function loadQueue() {
+    const list = document.getElementById('queue-list');
+    list.innerHTML = '<div class="loading">loading...</div>';
+    try {
+        const response = await fetch('/admin/queue', {
+            headers: { 'X-Moderation-Key': currentToken }
+        });
+        if (!response.ok) throw new Error(`${response.status}`);
+        const { items } = await response.json();
+        renderQueue(items || []);
+    } catch (e) {
+        list.innerHTML = `<div class="empty-placeholder"><p>could not load queue (${escapeHtml(e.message)})</p></div>`;
+    }
+}
+
+function renderQueue(items) {
+    const list = document.getElementById('queue-list');
+    if (!items.length) {
+        list.innerHTML = '<div class="empty-placeholder"><p>nothing awaiting review</p>'
+            + '<p class="muted">scan flags and reports appear here until a decision is recorded</p></div>';
+        return;
+    }
+
+    list.innerHTML = items.map((item) => {
+        const uri = escapeHtml(item.subject_uri);
+        const trackId = item.subject_track_id;
+        const labels = (item.labels || []).map(
+            (l) => `<span class="label-chip">${escapeHtml(l)}</span>`
+        ).join(' ') || '<span class="muted">no labels</span>';
+
+        // the real player, so a copyright call can be made by listening
+        const player = trackId
+            ? `<iframe class="queue-player" src="https://plyr.fm/embed/track/${trackId}"
+                       loading="lazy" title="track ${trackId}"></iframe>`
+            : '<p class="muted">no track id — cannot preview</p>';
+
+        const link = trackId
+            ? `<a href="https://plyr.fm/track/${trackId}" target="_blank" rel="noopener">open on plyr.fm</a>`
+            : '';
+
+        return `
+        <div class="flag-card" data-uri="${uri}">
+            <div class="flag-header">
+                <strong>${trackId ? `track ${trackId}` : 'unknown track'}</strong>
+                <span class="muted">opened by ${escapeHtml(item.opened_by)}
+                    · ${new Date(item.opened_at).toLocaleString()}</span>
+            </div>
+            <div class="flag-meta">
+                <div>${labels}</div>
+                ${item.reason ? `<div class="muted">reason: ${escapeHtml(item.reason)}</div>` : ''}
+                ${item.notes ? `<div class="muted">${escapeHtml(item.notes)}</div>` : ''}
+                <div class="uri">${uri}</div>
+            </div>
+            ${player}
+            <div class="flag-actions">
+                <button class="btn btn-secondary"
+                        onclick="decide('${uri}', ${trackId ?? 'null'}, 'acknowledged')">
+                    acknowledge
+                </button>
+                <button class="btn btn-secondary"
+                        onclick="decide('${uri}', ${trackId ?? 'null'}, 'override_allow')">
+                    allow anyway
+                </button>
+                <button class="btn btn-danger"
+                        onclick="decide('${uri}', ${trackId ?? 'null'}, 'override_exclude')">
+                    keep de-listed
+                </button>
+                ${link}
+            </div>
+        </div>`;
+    }).join('');
+}
+
+async function decide(subjectUri, trackId, action) {
+    const actor = getActor();
+    if (!actor) {
+        showToast('set "acting as" first — decisions are attributed', 'error');
+        document.getElementById('actor').focus();
+        return;
+    }
+    const notes = prompt(`notes for "${action}" (optional)`) ?? '';
+    try {
+        const response = await fetch('/admin/events', {
+            method: 'POST',
+            headers: {
+                'X-Moderation-Key': currentToken,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                subject_uri: subjectUri,
+                subject_track_id: trackId,
+                action,
+                actor,
+                notes: notes || null
+            })
+        });
+        if (!response.ok) throw new Error(`${response.status}`);
+        showToast(`recorded ${action}`, 'success');
+        loadQueue();
+    } catch (e) {
+        showToast(`failed: ${e.message}`, 'error');
     }
 }
 

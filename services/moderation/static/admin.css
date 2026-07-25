@@ -747,3 +747,59 @@ h1 {
     .notes-input { width: 100%; margin-bottom: 8px; }
     .confirm-step { flex-wrap: wrap; }
 }
+
+/* --- review queue --- */
+
+.actor-section {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+}
+
+.actor-section label {
+    font-weight: 600;
+}
+
+.actor-section input {
+    padding: 6px 10px;
+    border: 1px solid var(--border, #444);
+    border-radius: 4px;
+    background: var(--bg-input, #1a1a1a);
+    color: inherit;
+}
+
+.queue-player {
+    width: 100%;
+    max-width: 560px;
+    height: 160px;
+    border: 0;
+    border-radius: 8px;
+    margin: 12px 0;
+}
+
+.label-chip {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 0.85em;
+    background: rgba(220, 80, 80, 0.18);
+    border: 1px solid rgba(220, 80, 80, 0.45);
+}
+
+.flag-meta .uri {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.8em;
+    opacity: 0.6;
+    word-break: break-all;
+    margin-top: 4px;
+}
+
+.flag-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-top: 10px;
+}
