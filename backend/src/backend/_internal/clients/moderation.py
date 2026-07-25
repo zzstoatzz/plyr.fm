@@ -373,7 +373,7 @@ class ModerationClient:
         try:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
                 response = await client.post(
-                    f"{self.labeler_url}/admin/active-labels",
+                    f"{self.labeler_url}/internal/active-labels",
                     json={"uris": uris_to_fetch},
                     headers=self._headers(),
                 )
@@ -441,7 +441,7 @@ class ModerationClient:
         try:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
                 response = await client.post(
-                    f"{self.labeler_url}/admin/labels",
+                    f"{self.labeler_url}/internal/labels",
                     json={"uris": uris_to_fetch},
                     headers=self._headers(),
                 )
@@ -473,7 +473,7 @@ class ModerationClient:
 
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             response = await client.post(
-                f"{self.labeler_url}/admin/labels-by-value",
+                f"{self.labeler_url}/internal/labels-by-value",
                 json={"values": values},
                 headers=self._headers(),
             )
@@ -506,7 +506,7 @@ class ModerationClient:
         try:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
                 response = await client.post(
-                    f"{self.labeler_url}/admin/negated-labels",
+                    f"{self.labeler_url}/internal/negated-labels",
                     json={"uris": uris},
                     headers=self._headers(),
                 )
