@@ -107,7 +107,15 @@ curl "https://moderation.plyr.fm/xrpc/com.atproto.label.queryLabels?sources=did:
 
 WebSocket endpoint for real-time label streaming. apps can subscribe to receive new labels as they're created (monotonic sequence cursor).
 
-### POST /admin/labels
+## service-to-service endpoints (`/internal/*`)
+
+the endpoints the backend calls live under `/internal`, separate from the
+human-facing `/admin` dashboard, though both are authenticated with the same
+`X-Moderation-Key`. They are also still mounted under `/admin/*` as deprecated
+aliases so the two services can deploy independently; the aliases go away once
+the backend client has moved (#1691).
+
+### POST /internal/labels
 
 the backend uses this generic endpoint to fetch the current active values for
 each subject URI. This is the primary consumer API for discovery and playback
@@ -127,7 +135,7 @@ policy.
 }
 ```
 
-`POST /admin/active-labels` remains as a compatibility projection for the
+`POST /internal/active-labels` remains as a compatibility projection for the
 copyright synchronization task and returns only `copyright-violation` subjects.
 
 current state is the latest event for each `(src, uri, val)` tuple. A historical
@@ -135,7 +143,7 @@ negation does not permanently suppress a newer positive label, and a newer
 negation revokes the positive state without deleting either event.
 
 ```bash
-curl -X POST https://moderation.plyr.fm/admin/active-labels \
+curl -X POST https://moderation.plyr.fm/internal/active-labels \
   -H "X-Moderation-Key: $MODERATION_AUTH_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"uris": ["at://did:plc:abc123/fm.plyr.track/xyz789"]}'

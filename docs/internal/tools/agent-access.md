@@ -69,7 +69,7 @@ look up deployments.
 
 | credential | authorizes | does not authorize |
 |---|---|---|
-| `MODERATION_AUTH_TOKEN` | `/emit-label`, `/admin/labels`, reports, and other protected moderation-service endpoints | updating the ATProto labeler service record |
+| `MODERATION_AUTH_TOKEN` | `/emit-label`, `/internal/*`, reports, and other protected moderation-service endpoints | updating the ATProto labeler service record |
 | `MODERATION_BSKY_PASSWORD` | an app-password session for the `moderation.plyr.fm` ATProto account, including its labeler declaration record | protected moderation-service HTTP endpoints |
 | labeler signing key (Fly secret) | cryptographic signing inside `plyr-moderation` | operator login; it must never leave the service |
 

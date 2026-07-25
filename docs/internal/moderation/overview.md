@@ -106,7 +106,7 @@ Both map to the adult-audio preference and default-hide policy. Negation
 creators own self-label assertions in their track records, the moderation
 service owns signed operator assertions, and the backend owns policy:
 
-1. fetch current active values with `POST /admin/labels`
+1. fetch current active values with `POST /internal/labels`
 2. filter adult-labeled tracks from default discovery and collection surfaces
 3. require authenticated opt-in at the audio byte endpoint
 4. always exclude adult audio from shared radio
