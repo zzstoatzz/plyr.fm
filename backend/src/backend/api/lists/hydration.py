@@ -4,7 +4,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from backend._internal.content_labels import filter_sensitive_audio_tracks_for_viewer
+from backend._internal.content_labels import (
+    LabelContext,
+    filter_sensitive_audio_tracks_for_viewer,
+)
 from backend._internal.track_visibility import track_visible_filter
 from backend.models import Track, TrackLike
 from backend.schemas import TrackResponse
@@ -31,8 +34,9 @@ async def hydrate_tracks_from_uris(
         # a private track referenced by a list hydrates only for its owner
         .where(track_visible_filter(session_did))
     )
+    # a playlist someone opened is a destination
     all_tracks, labels_by_id = await filter_sensitive_audio_tracks_for_viewer(
-        db, track_result.scalars().all(), session_did
+        db, track_result.scalars().all(), session_did, context=LabelContext.VIEW
     )
     track_by_uri = {t.atproto_record_uri: t for t in all_tracks}
 

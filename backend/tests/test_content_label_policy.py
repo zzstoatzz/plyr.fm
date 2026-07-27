@@ -259,3 +259,40 @@ async def test_exclude_override_hides_in_every_context(
         assert await _visible(db_session, context, shows_sensitive=True) == {
             plain.id
         }, context
+
+
+async def test_app_side_filter_honours_view_context(db_session: AsyncSession) -> None:
+    """The Python filter and the SQL clause must agree on a destination.
+
+    An album disagreeing with the artist page above it is precisely the
+    inconsistency the context parameter exists to prevent — before this, the
+    SQL path knew about VIEW and the app-side path did not.
+    """
+    labeled = await _track(db_session, file_id="ctx1", operator_labels=["sexual"])
+    plain = await _track(db_session, file_id="ctx2")
+    await db_session.commit()
+
+    shown, _ = await filter_sensitive_audio_tracks_for_viewer(
+        db_session, [labeled, plain], VIEWER, context=LabelContext.VIEW
+    )
+    assert {t.id for t in shown} == {labeled.id, plain.id}
+
+    hidden, _ = await filter_sensitive_audio_tracks_for_viewer(
+        db_session, [labeled, plain], VIEWER, context=LabelContext.LIST
+    )
+    assert {t.id for t in hidden} == {plain.id}
+
+
+async def test_app_side_filter_keeps_copyright_hidden_in_view(
+    db_session: AsyncSession,
+) -> None:
+    infringing = await _track(
+        db_session, file_id="ctx3", operator_labels=["copyright-violation"]
+    )
+    plain = await _track(db_session, file_id="ctx4")
+    await db_session.commit()
+
+    shown, _ = await filter_sensitive_audio_tracks_for_viewer(
+        db_session, [infringing, plain], VIEWER, context=LabelContext.VIEW
+    )
+    assert {t.id for t in shown} == {plain.id}

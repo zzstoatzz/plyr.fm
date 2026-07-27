@@ -242,7 +242,8 @@ class SearchState {
 
 		try {
 			const response = await fetch(
-				`${API_URL}/search/?q=${encodeURIComponent(query)}&limit=10`
+				`${API_URL}/search/?q=${encodeURIComponent(query)}&limit=10`,
+				{ credentials: 'include' }
 			);
 
 			if (!response.ok) {
@@ -277,7 +278,8 @@ class SearchState {
 
 		try {
 			const response = await fetch(
-				`${API_URL}/search/semantic?q=${encodeURIComponent(query)}&limit=10`
+				`${API_URL}/search/semantic?q=${encodeURIComponent(query)}&limit=10`,
+				{ credentials: 'include' }
 			);
 
 			if (!response.ok) {

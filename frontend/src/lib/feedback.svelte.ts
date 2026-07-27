@@ -96,7 +96,8 @@ class FeedbackState {
 
 		try {
 			const response = await fetch(
-				`${API_URL}/search/?q=${encodeURIComponent(query)}&limit=8`
+				`${API_URL}/search/?q=${encodeURIComponent(query)}&limit=8`,
+				{ credentials: 'include' }
 			);
 
 			if (!response.ok) {

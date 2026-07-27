@@ -17,7 +17,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from backend._internal import Session
-from backend._internal.content_labels import filter_sensitive_audio_tracks_for_viewer
+from backend._internal.content_labels import (
+    LabelContext,
+    filter_sensitive_audio_tracks_for_viewer,
+)
 from backend._internal.tasks import schedule_teal_scrobble
 from backend._internal.track_visibility import track_visible_filter
 from backend.api.lists.playlists import _can_view, _read_playlist_items
@@ -155,12 +158,15 @@ async def _tracks_by_uris(
         .where(Track.atproto_record_uri.in_(uris))
         .where(track_visible_filter(session_did))
     )
+    # a playlist's contents are a destination. The viewer is None because a
+    # Subsonic client authenticates with a developer token rather than a
+    # session, so there is no preference to read -- which is exactly why this
+    # must not depend on one.
     visible, _ = await filter_sensitive_audio_tracks_for_viewer(
-        # Subsonic's redirect cannot carry the plyr.fm cookie required by the
-        # audio endpoint, so adult audio stays hidden on this surface.
         db,
         result.scalars().all(),
         None,
+        context=LabelContext.VIEW,
     )
     by_uri = {t.atproto_record_uri: t for t in visible}
     return [by_uri[uri] for uri in uris if uri in by_uri]
@@ -181,7 +187,7 @@ async def _track_by_id(params: Params, session_did: str | None) -> Track:
         )
         if track := result.scalar_one_or_none():
             visible, _ = await filter_sensitive_audio_tracks_for_viewer(
-                db, [track], None
+                db, [track], None, context=LabelContext.VIEW
             )
             if visible:
                 return track
