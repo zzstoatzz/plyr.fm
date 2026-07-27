@@ -335,10 +335,8 @@ returns a postgres connection string for use with `psql`, database clients, or a
 - `databaseName` - specific database (defaults to neondb)
 - `roleName` - specific role (defaults to neondb_owner)
 
-**example output** (placeholder values — never commit a real connection string):
-```
-postgresql://<role>:<password>@<endpoint>.<region>.aws.neon.tech/<database>?channel_binding=require&sslmode=require
-```
+Treat the returned connection string as a secret. Never paste it into notes,
+logs, issues, or other tracked files.
 
 ## database environment mapping
 
