@@ -119,4 +119,4 @@ migrating your PDS (e.g. from bsky.social to a self-hosted instance) preserves y
 
 - check [STATUS.md](https://github.com/zzstoatzz/plyr.fm/blob/main/STATUS.md) for known issues and active work
 - open an issue on [GitHub](https://github.com/zzstoatzz/plyr.fm/issues)
-- email [plyrdotfm@proton.me](mailto:plyrdotfm@proton.me)
+- email [help@plyr.fm](mailto:help@plyr.fm)
