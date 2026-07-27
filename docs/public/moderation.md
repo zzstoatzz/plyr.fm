@@ -129,7 +129,7 @@ uploader and never mention a reporter.
 ## if you think a decision is wrong
 
 use the report control on the track, or email
-[plyrdotfm@proton.me](mailto:plyrdotfm@proton.me).
+[help@plyr.fm](mailto:help@plyr.fm).
 
 decisions are reversible and reversal is recorded the same way the original
 decision was. Two things can happen when we are wrong, and they mean different

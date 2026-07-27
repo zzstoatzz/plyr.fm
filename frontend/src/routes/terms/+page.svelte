@@ -2,7 +2,7 @@
 	import { APP_NAME, APP_CANONICAL_URL } from '$lib/branding';
 	import type { PageData } from './$types';
 
-	const FALLBACK_EMAIL = 'plyrdotfm@proton.me';
+	const FALLBACK_EMAIL = 'help@plyr.fm';
 
 	let { data } = $props<{ data: PageData }>();
 
@@ -81,7 +81,11 @@
 			<p>We respond to valid DMCA takedown notices. Our designated agent is:</p>
 			<address class="dmca-agent">
 				Nathan Nowack<br />
-				DMCA Registration: {data.dmcaRegistrationNumber}<br />
+				DMCA Registration: {data.dmcaRegistrationNumber} (<a
+					href="https://dmca.copyright.gov/osp/"
+					target="_blank"
+					rel="noopener">U.S. Copyright Office directory</a
+				>)<br />
 				Email: <a href="mailto:{dmcaEmail}">{dmcaEmail}</a>
 			</address>
 			<p>We terminate accounts of repeat infringers.</p>

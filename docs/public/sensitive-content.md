@@ -65,7 +65,7 @@ assertion and does not rewrite that record. Removing one does not remove the
 other. plyr.fm applies the same viewing and playback policy to their union.
 
 if a track is labeled incorrectly, use the report control while viewing it or contact
-[plyrdotfm@proton.me](mailto:plyrdotfm@proton.me).
+[help@plyr.fm](mailto:help@plyr.fm).
 
 ## for developers
 

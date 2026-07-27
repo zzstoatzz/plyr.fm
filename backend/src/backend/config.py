@@ -158,7 +158,7 @@ class LegalSettings(AppSettingsSection):
     )
 
     contact_email: str = Field(
-        default="plyrdotfm@proton.me",
+        default="help@plyr.fm",
         description="General contact email",
     )
     privacy_email: str | None = Field(
@@ -166,7 +166,7 @@ class LegalSettings(AppSettingsSection):
         description="Privacy-specific contact email (falls back to contact_email)",
     )
     dmca_email: str | None = Field(
-        default=None,
+        default="dmca@plyr.fm",
         description="DMCA/copyright contact email (falls back to contact_email)",
     )
     dmca_registration_number: str = Field(
