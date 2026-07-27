@@ -206,7 +206,9 @@
 		if (!track) return;
 		loadingComments = true;
 		try {
-			const response = await fetch(`${API_URL}/tracks/${track.id}/comments`);
+			const response = await fetch(`${API_URL}/tracks/${track.id}/comments`, {
+				credentials: 'include'
+			});
 			if (response.ok) {
 				const data = await response.json();
 				comments = data.comments;

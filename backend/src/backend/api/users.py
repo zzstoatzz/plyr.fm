@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from backend._internal import Session, get_optional_session
-from backend._internal.content_labels import filter_sensitive_audio_tracks
+from backend._internal.content_labels import LabelContext, filter_sensitive_audio_tracks
 from backend._internal.track_visibility import track_visible_filter, viewer_did
 from backend.models import Artist, Track, TrackLike, get_db
 from backend.schemas import TrackResponse
@@ -68,7 +68,7 @@ async def get_user_liked_tracks(
 
     track_result = await db.execute(stmt)
     tracks, labels_by_id = await filter_sensitive_audio_tracks(
-        db, track_result.scalars().all(), session
+        db, track_result.scalars().all(), session, context=LabelContext.VIEW
     )
 
     # get current user's liked track IDs if authenticated

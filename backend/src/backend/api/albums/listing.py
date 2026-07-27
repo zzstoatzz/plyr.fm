@@ -12,7 +12,11 @@ from sqlalchemy.orm import selectinload
 from backend._internal import Session as AuthSession
 from backend._internal import get_optional_session
 from backend._internal.atproto.records import fetch_list_item_uris
-from backend._internal.content_labels import filter_sensitive_audio_tracks
+from backend._internal.content_labels import (
+    LabelContext,
+    copyright_visible_clause,
+    filter_sensitive_audio_tracks,
+)
 from backend._internal.track_visibility import track_visible_filter, viewer_did
 from backend.models import Album, Artist, Track, TrackLike, get_db
 from backend.schemas import TrackResponse
@@ -54,10 +58,23 @@ async def list_albums(
             func.coalesce(func.sum(Track.play_count), 0).label("total_plays"),
         )
         .join(Artist, Album.artist_did == Artist.did)
-        # count only public tracks — albums that exist solely because of private
-        # uploads have a zero public count and drop out via the having clause
+        # count only tracks the album view will actually show. Private uploads
+        # drop out via the having clause; copyright-labeled and
+        # override-excluded tracks are counted out too, because a card
+        # promising three tracks over a page that lists two is the mismatch
+        # that made the artist page unreadable (#1709).
+        #
+        # Deliberately viewer-independent: adult labels are a preference, and
+        # a per-viewer count could not be cached or agreed on. In a VIEW
+        # context the album shows them anyway, so the count is right.
         .outerjoin(
-            Track, and_(Track.album_id == Album.id, Track.visibility != "private")
+            Track,
+            and_(
+                Track.album_id == Album.id,
+                Track.visibility != "private",
+                copyright_visible_clause(),
+                Track.moderation_override.is_distinct_from("exclude"),
+            ),
         )
         .group_by(Album.id, Artist.did)
         .having(func.count(Track.id) > 0)
@@ -193,8 +210,9 @@ async def get_album(
         # no ATProto record - order by created_at
         ordered_tracks = sorted(all_tracks, key=lambda t: t.created_at)
 
+    # an album someone opened is a destination, not a surface we chose
     tracks, labels_by_id = await filter_sensitive_audio_tracks(
-        db, ordered_tracks, session
+        db, ordered_tracks, session, context=LabelContext.VIEW
     )
     track_ids = [track.id for track in tracks]
 

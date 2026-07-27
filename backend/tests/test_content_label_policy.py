@@ -9,13 +9,14 @@ They differ in *who decides*, and that is the whole design:
 Neither gates the audio bytes. See `docs/internal/moderation/label-policy.md`.
 """
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend._internal.content_labels import (
     COPYRIGHT_LABELS,
     PROJECTED_LABEL_VALUES,
     LabelContext,
+    copyright_visible_clause,
     filter_sensitive_audio_tracks_for_viewer,
     has_copyright_label,
     label_visible_clause,
@@ -259,3 +260,86 @@ async def test_exclude_override_hides_in_every_context(
         assert await _visible(db_session, context, shows_sensitive=True) == {
             plain.id
         }, context
+
+
+async def test_app_side_filter_honours_view_context(db_session: AsyncSession) -> None:
+    """The Python filter and the SQL clause must agree on a destination.
+
+    An album disagreeing with the artist page above it is precisely the
+    inconsistency the context parameter exists to prevent — before this, the
+    SQL path knew about VIEW and the app-side path did not.
+    """
+    labeled = await _track(db_session, file_id="ctx1", operator_labels=["sexual"])
+    plain = await _track(db_session, file_id="ctx2")
+    await db_session.commit()
+
+    shown, _ = await filter_sensitive_audio_tracks_for_viewer(
+        db_session, [labeled, plain], VIEWER, context=LabelContext.VIEW
+    )
+    assert {t.id for t in shown} == {labeled.id, plain.id}
+
+    hidden, _ = await filter_sensitive_audio_tracks_for_viewer(
+        db_session, [labeled, plain], VIEWER, context=LabelContext.LIST
+    )
+    assert {t.id for t in hidden} == {plain.id}
+
+
+async def test_app_side_filter_keeps_copyright_hidden_in_view(
+    db_session: AsyncSession,
+) -> None:
+    infringing = await _track(
+        db_session, file_id="ctx3", operator_labels=["copyright-violation"]
+    )
+    plain = await _track(db_session, file_id="ctx4")
+    await db_session.commit()
+
+    shown, _ = await filter_sensitive_audio_tracks_for_viewer(
+        db_session, [infringing, plain], VIEWER, context=LabelContext.VIEW
+    )
+    assert {t.id for t in shown} == {plain.id}
+
+
+async def test_album_card_count_matches_what_the_album_will_show(
+    db_session: AsyncSession,
+) -> None:
+    """A card promising more tracks than the page lists is the reported bug.
+
+    The count is viewer-independent on purpose, so it excludes only what no
+    viewer can see: copyright labels and exclude overrides. Adult-labeled
+    tracks stay counted because a VIEW context shows them.
+    """
+    from backend.models import Album
+
+    keep = await _track(db_session, file_id="cnt1")  # also creates the artist
+    album = Album(title="Mixed", artist_did=OWNER, slug="mixed")
+    db_session.add(album)
+    await db_session.flush()
+
+    adult = await _track(db_session, file_id="cnt2", operator_labels=["sexual"])
+    infringing = await _track(
+        db_session, file_id="cnt3", operator_labels=["copyright-violation"]
+    )
+    excluded = await _track(db_session, file_id="cnt4")
+    excluded.moderation_override = "exclude"
+    for t in (keep, adult, infringing, excluded):
+        t.album_id = album.id
+    await db_session.commit()
+
+    counted = (
+        await db_session.execute(
+            select(func.count(Track.id)).where(
+                Track.album_id == album.id,
+                Track.visibility != "private",
+                copyright_visible_clause(),
+                Track.moderation_override.is_distinct_from("exclude"),
+            )
+        )
+    ).scalar_one()
+
+    shown, _ = await filter_sensitive_audio_tracks_for_viewer(
+        db_session,
+        [keep, adult, infringing, excluded],
+        None,
+        context=LabelContext.VIEW,
+    )
+    assert counted == len(shown) == 2

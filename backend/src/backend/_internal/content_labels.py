@@ -195,6 +195,8 @@ async def filter_sensitive_audio_tracks(
     db: AsyncSession,
     tracks: Iterable[Track],
     session: Session | None,
+    *,
+    context: LabelContext = LabelContext.LIST,
 ) -> tuple[list[Track], dict[int, set[str]]]:
     """Hide adult-labeled tracks unless the viewer opted in or owns them."""
     track_list = list(tracks)
@@ -202,6 +204,7 @@ async def filter_sensitive_audio_tracks(
         db,
         track_list,
         session.did if session else None,
+        context=context,
     )
 
 
@@ -209,8 +212,17 @@ async def filter_sensitive_audio_tracks_for_viewer(
     db: AsyncSession,
     tracks: Iterable[Track],
     viewer_did: str | None,
+    *,
+    context: LabelContext = LabelContext.LIST,
 ) -> tuple[list[Track], dict[int, set[str]]]:
-    """Hide adult-labeled tracks for a viewer identified only by DID."""
+    """Hide adult-labeled tracks for a viewer identified only by DID.
+
+    The app-side twin of `label_visible_clause`, for callers that already hold
+    a list of tracks. Takes the same `context`, so a destination filters the
+    same way whether it was assembled in SQL or in Python -- an album page
+    disagreeing with the artist page above it is exactly the inconsistency
+    this parameter exists to prevent.
+    """
     track_list = list(tracks)
     labels_by_id = get_track_label_values(track_list)
     shows_sensitive = await viewer_did_shows_sensitive_audio(db, viewer_did)
@@ -226,7 +238,8 @@ async def filter_sensitive_audio_tracks_for_viewer(
         if has_copyright_label(labels) and override != "allow":
             continue
         if (
-            shows_sensitive
+            context is LabelContext.VIEW
+            or shows_sensitive
             or track.artist_did == viewer_did
             or not has_adult_audio_label(labels)
         ):

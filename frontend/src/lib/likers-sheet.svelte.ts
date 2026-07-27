@@ -33,7 +33,9 @@ class LikersSheetState {
 
 	private async fetchLikers(trackId: number) {
 		try {
-			const response = await fetch(`${API_URL}/tracks/${trackId}/likes`);
+			const response = await fetch(`${API_URL}/tracks/${trackId}/likes`, {
+				credentials: 'include'
+			});
 			if (!response.ok) throw new Error(`failed to fetch likers: ${response.status}`);
 			const data = await response.json();
 			const users: LikerData[] = data.users || [];

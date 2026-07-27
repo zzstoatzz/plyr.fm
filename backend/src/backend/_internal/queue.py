@@ -13,7 +13,10 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
 
-from backend._internal.content_labels import filter_sensitive_audio_tracks_for_viewer
+from backend._internal.content_labels import (
+    LabelContext,
+    filter_sensitive_audio_tracks_for_viewer,
+)
 from backend.config import settings
 from backend.models import QueueState, Track, UserPreferences
 from backend.schemas import TrackResponse
@@ -350,8 +353,12 @@ class QueueService:
             if track:
                 tracks_in_order.append(track)
 
+        # your own queue is the strongest destination there is: you put these
+        # here. A track silently disappearing from it because it was labeled
+        # after you queued it is worse than showing it -- you already chose it.
+        # Copyright still removes it, since that is not yours to waive.
         tracks_in_order, labels_by_id = await filter_sensitive_audio_tracks_for_viewer(
-            db, tracks_in_order, viewer_did
+            db, tracks_in_order, viewer_did, context=LabelContext.VIEW
         )
 
         # batch backfill image URLs for legacy records
