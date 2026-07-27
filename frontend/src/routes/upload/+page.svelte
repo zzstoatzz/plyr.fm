@@ -9,6 +9,7 @@
 	import WaveLoading from "$lib/components/WaveLoading.svelte";
 	import TagInput from "$lib/components/TagInput.svelte";
 	import CopyrightRightsPanel from "$lib/components/CopyrightRightsPanel.svelte";
+	import LuminframePicker from "$lib/components/LuminframePicker.svelte";
 	import type { TrackRights } from "$lib/components/CopyrightRightsPanel.svelte";
 	import type { FeaturedArtist, AlbumSummary, Artist } from "$lib/types";
 	import { API_URL, getServerConfig } from "$lib/config";
@@ -330,28 +331,47 @@
 		}
 	}
 
+	async function validateImageSize(selected: File): Promise<boolean> {
+		try {
+			const config = await getServerConfig();
+			const sizeMB = selected.size / (1024 * 1024);
+			if (sizeMB > config.max_image_size_mb) {
+				toast.error(
+					`image too large (${sizeMB.toFixed(1)}MB). max: ${config.max_image_size_mb}MB`,
+				);
+				return false;
+			}
+		} catch (_e) {
+			console.error("failed to validate image size:", _e);
+		}
+		return true;
+	}
+
 	async function handleImageChange(e: Event) {
 		const target = e.target as HTMLInputElement;
 		if (target.files && target.files[0]) {
 			const selected = target.files[0];
 
-			try {
-				const config = await getServerConfig();
-				const sizeMB = selected.size / (1024 * 1024);
-				if (sizeMB > config.max_image_size_mb) {
-					toast.error(
-						`image too large (${sizeMB.toFixed(1)}MB). max: ${config.max_image_size_mb}MB`,
-					);
-					target.value = "";
-					imageFile = null;
-					return;
-				}
-			} catch (_e) {
-				console.error("failed to validate image size:", _e);
+			if (!(await validateImageSize(selected))) {
+				target.value = "";
+				imageFile = null;
+				return;
 			}
 
 			imageFile = selected;
 		}
+	}
+
+	// artwork picked from the user's luminframe records rather than disk.
+	// clear the native input so a previously-chosen disk file doesn't linger
+	// in the input UI while `imageFile` points at the luminframe image.
+	async function handleLuminframeSelect(selected: File) {
+		if (!(await validateImageSize(selected))) return;
+		const imageInput = document.getElementById(
+			"image-input",
+		) as HTMLInputElement | null;
+		if (imageInput) imageInput.value = "";
+		imageFile = selected;
 	}
 
 	async function logout() {
@@ -496,6 +516,15 @@
 					onchange={handleImageChange}
 				/>
 				<p class="format-hint">supported: jpg, png, webp, gif</p>
+				{#if auth.user}
+					<div class="luminframe-row">
+						<span class="format-hint">or</span>
+						<LuminframePicker
+							did={auth.user.did}
+							onSelect={handleLuminframeSelect}
+						/>
+					</div>
+				{/if}
 				{#if imageFile}
 					<p class="file-info">
 						{imageFile.name} ({(
@@ -778,6 +807,17 @@
 		margin-top: 0.25rem;
 		font-size: var(--text-sm);
 		color: var(--text-tertiary);
+	}
+
+	.luminframe-row {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		margin-top: 0.5rem;
+	}
+
+	.luminframe-row .format-hint {
+		margin-top: 0;
 	}
 
 	.char-count {
