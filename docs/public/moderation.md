@@ -51,21 +51,58 @@ copyright claim is our responsibility and no listener setting can waive it.
 
 ## where a label applies
 
-a label changes where a track *surfaces*, not whether you can reach what you
-went looking for. The distinction is between two kinds of place:
+A label changes **where a track surfaces**, never whether you can reach
+something you went looking for. Two kinds of place:
 
-- **surfaces we choose for you** — the home feed, search results,
-  recommendations, radio. Adult labels filter here.
-- **places you navigated to** — an artist's page, an album, a track's own
-  link. These show what is there.
+- **surfaces we choose for you** — the home feed, search, recommendations,
+  radio. Labels filter here.
+- **places you navigated to** — an artist's page, an album, a playlist,
+  someone's likes, your queue, a track's own link. These show what is there.
 
-this mirrors how the AT Protocol itself models moderation, where the same post
-can be hidden in a feed but visible when you open it. Hiding part of an
-artist's catalogue on their own page would misrepresent their work to someone
-who had already gone looking for them.
+this mirrors how the AT Protocol models moderation, where the same post can be
+hidden in a feed but visible when you open it.
 
-copyright is the exception: it applies everywhere, because it is about what we
-are willing to keep serving rather than about what you would rather see.
+### the full picture
+
+| where | adult (`sexual`, `porn`) | copyright |
+|---|---|---|
+| home feed, search, for you | hidden unless you opt in | hidden |
+| radio | never, for anyone | never |
+| artist page | **shown** | hidden |
+| album, playlist | **shown** | hidden |
+| someone's likes | **shown** | hidden |
+| your queue | **shown** | hidden |
+| a track's own link, and playback | **plays** | **plays** |
+| your own uploads, in your portal | **shown** | **shown** |
+| Subsonic browsing | **shown** | hidden |
+| Subsonic shuffle | hidden | hidden |
+| listening rooms (jams) | hidden unless you opt in | hidden |
+
+radio and jams are shared, synchronized surfaces: one listener's preference
+cannot decide what everyone else hears, so adult audio stays out.
+
+### two rules worth stating plainly
+
+**you always see your own adult-labeled tracks.** On any surface, whatever your
+settings say. A label on your own upload never hides it from you — except in
+radio, which is shared, and except for copyright, which is not a preference.
+
+**a copyright label is not a preference.** No setting reveals a
+copyright-labeled track, including for the person who uploaded it, because it
+is about what we are willing to keep serving rather than about what you would
+rather see. Playback from a direct link still works: a fingerprint match is not
+a finding, and covers and remixes match.
+
+### operator overrides
+
+sometimes we review a label and decide the behavior should differ from the
+default:
+
+- **allow** — the label is right, and we are surfacing the track anyway. The
+  usual outcome for a cover or a licensed remix. It lifts copyright filtering;
+  it never overrides your adult-content preference, because what you are shown
+  is your call, not ours.
+- **exclude** — kept off shared surfaces with no label needed.
 
 ## what gets published, and what does not
 

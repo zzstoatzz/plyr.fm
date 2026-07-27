@@ -83,6 +83,58 @@ excluding only private ones, because an artist page shows their catalogue.
 Labels were the outlier in a function that had settled the question six lines
 earlier.
 
+### every filtering site, and its context
+
+verified against the code; if you change one, change this table.
+
+| call site | context |
+|---|---|
+| `tracks/listing.py` list_tracks | **VIEW** when `artist_did`, else LIST |
+| `tracks/listing.py` top tracks | LIST |
+| `search.py` keyword + semantic | LIST |
+| `for_you.py` | LIST |
+| `radio/corpus.py` | excluded outright, both families, no viewer |
+| `albums/listing.py` detail | **VIEW** |
+| `lists/hydration.py` | **VIEW** |
+| `users.py` public likes | **VIEW** |
+| `tracks/likes.py` own likes | **VIEW** |
+| `_internal/queue.py` | **VIEW** |
+| `subsonic/browsing.py` getAlbum | **VIEW** |
+| `subsonic/browsing.py` getRandomSongs | LIST |
+| `subsonic/endpoints.py` playlist, getSong | **VIEW** |
+| `_internal/jams.py` | LIST |
+| `tracks/listing.py` list_my_tracks | no label filter at all |
+
+`list_my_tracks` filters on `artist_did` alone, which is why a creator's portal
+always shows their whole catalogue.
+
+**jams are LIST on purpose.** A jam is a shared synchronized room like radio.
+Its filter is per-viewer, so participants can already see different queues —
+a product question worth raising on its own rather than changing silently.
+
+**Subsonic passes `viewer=None`.** A Subsonic client authenticates with a
+developer token rather than a session, so there is no preference to read. In a
+VIEW context that is fine; `getRandomSongs` is a shuffle feed and stays LIST,
+which means adult audio never reaches it.
+
+### the owner exemption
+
+`sensitive_audio_visible_clause` returns `~labeled | (Track.artist_did ==
+viewer_did)`, and the app-side filter has the matching `or track.artist_did ==
+viewer_did`. So **an owner sees their own adult-labeled tracks in every
+context**, regardless of preference.
+
+it is scoped to the adult branch only: an owner does *not* see their own
+copyright-labeled track in a LIST surface, because that is a hosting decision
+rather than a preference. Radio has no viewer at all, so the exemption cannot
+apply there either.
+
+this rule is easy to trip over when testing. A check run as the track's owner
+passes whether or not the context split works — verify with an anonymous or
+non-owner viewer.
+
+### the rules
+
 adult labels apply only in `LIST`. Filtering an artist's own page made it
 misrepresent their catalogue — it rendered "4 tracks" above a list of one —
 and disagreed with the album page one level deeper, which showed everything.

@@ -51,6 +51,8 @@ signed-in listener has enabled sensitive audio in their settings. **Your own
 artist page still lists them, and a direct link still plays for anyone** — the
 notice changes where your track surfaces, not whether someone you send it to
 can hear it, and not how your catalogue looks to someone who came to find you.
+You always see your own noticed tracks, whatever your own settings say. See
+[moderation](/moderation) for exactly which surfaces are affected.
 
 removing your notice removes only your own assertion. If a plyr.fm moderator
 independently labeled the track, that operator label and its default-hide policy
