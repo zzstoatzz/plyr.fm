@@ -35,10 +35,15 @@ as well as images or video.
 
 when a creator self-labels a track or a trusted labeler applies either value:
 
-- it is omitted from discovery, search, recommendations, public collections,
-  queues, Subsonic browsing, and shared radio by default
-- **the artist's own page still lists it.** Those surfaces are places we chose
-  to put something in front of you; an artist's page is somewhere you went
+- it is omitted from the home feed, search, recommendations, and shared radio
+  by default
+- **it is still listed on the artist's page, in albums and playlists, in
+  someone's likes, and in your queue** — places you navigated to show what is
+  there
+- **you always see your own adult-labeled tracks**, whatever your settings say
+
+[moderation](/moderation) has the full surface-by-surface table, including how
+copyright labels differ.
 - **a direct link still plays, for anyone.** The label changes where a track
   appears, not whether it can be reached
 - the creator can always see and play their own track

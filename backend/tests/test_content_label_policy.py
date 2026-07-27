@@ -343,3 +343,30 @@ async def test_album_card_count_matches_what_the_album_will_show(
         context=LabelContext.VIEW,
     )
     assert counted == len(shown) == 2
+
+
+async def test_owner_sees_their_own_adult_track_but_not_their_own_copyright_one(
+    db_session: AsyncSession,
+) -> None:
+    """The owner exemption is scoped to the adult branch.
+
+    Documented in label-policy.md, and easy to trip over: a check run as the
+    owner passes whether or not the context split works. Pinned here so the
+    documented rule and the code cannot drift.
+    """
+    adult = await _track(db_session, file_id="own1", operator_labels=["sexual"])
+    infringing = await _track(
+        db_session, file_id="own2", operator_labels=["copyright-violation"]
+    )
+    await db_session.commit()
+
+    # OWNER, on a LIST surface, preference off
+    shown, _ = await filter_sensitive_audio_tracks_for_viewer(
+        db_session, [adult, infringing], OWNER, context=LabelContext.LIST
+    )
+    assert {t.id for t in shown} == {adult.id}, (
+        "owner sees their own adult track, but never their own copyright one"
+    )
+
+    # a non-owner sees neither
+    assert await _visible(db_session, LabelContext.LIST, shows_sensitive=False) == set()
