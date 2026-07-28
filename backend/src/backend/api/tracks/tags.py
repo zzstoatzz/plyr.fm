@@ -54,7 +54,10 @@ class TagTracksResponse(BaseModel):
     created_by_handle: str | None = None
 
 
-@router.get("/tags/{tag_name}")
+# `:path` because a tag may contain a slash -- "7/4", "funk / soul". The client
+# percent-encodes it, but the ASGI layer decodes once before routing, so a plain
+# `{tag_name}` never matches and the request 404s in the router rather than here.
+@router.get("/tags/{tag_name:path}")
 async def get_tracks_by_tag(
     tag_name: str,
     db: Annotated[AsyncSession, Depends(get_db)],
