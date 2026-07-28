@@ -17,11 +17,11 @@
 
 	let { did, onSelect, disabled = false }: Props = $props();
 
-	// only offer the picker when the account actually has luminframe images —
-	// the same shape as other capability-gated options on the upload form
-	// (permissioned spaces, supporter links). until the probe answers, this
-	// component renders nothing.
-	let available = $state(false);
+	// probe the account's luminframe collection once: accounts with images get
+	// the picker, accounts without get a quiet link to go make some — the same
+	// shape as other capability-gated options on the upload form (permissioned
+	// spaces, supporter links). until the probe answers, render nothing.
+	let available = $state<boolean | null>(null);
 
 	onMount(() => {
 		hasLuminframeImages(did).then((has) => {
@@ -104,6 +104,10 @@
 	<button type="button" class="luminframe-btn" {disabled} onclick={openPicker}>
 		choose from luminframe
 	</button>
+{:else if available === false}
+	<a class="luminframe-link" href="https://luminframe.com" target="_blank" rel="noopener">
+		create cover art with luminframe
+	</a>
 {/if}
 
 <dialog
@@ -176,6 +180,17 @@
 	.luminframe-btn:disabled {
 		opacity: 0.5;
 		cursor: not-allowed;
+	}
+
+	.luminframe-link {
+		font-size: var(--text-sm);
+		color: var(--text-tertiary);
+		text-decoration: underline;
+		text-underline-offset: 2px;
+	}
+
+	.luminframe-link:hover {
+		color: var(--accent);
 	}
 
 	.luminframe-dialog {
