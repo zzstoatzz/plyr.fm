@@ -5,7 +5,7 @@ description: "how plyr.fm handles your data"
 
 > **note:** the source of truth is `frontend/src/routes/privacy/+page.svelte`. this markdown is a plain-text mirror for reference.
 
-**last updated:** march 22, 2026
+**last updated:** july 28, 2026
 
 plyr.fm ("we", "us", or "our") is an audio streaming application built on the [AT Protocol](https://atproto.com). this privacy policy applies to the instance at https://plyr.fm (the "site").
 
@@ -27,7 +27,9 @@ plyr.fm uses the AT Protocol for identity and social features. this has importan
 
 **you provide:** your AT Protocol identity when you sign in, audio files and metadata you upload, and preferences like accent color.
 
-**automatically:** play counts, IP addresses, browser info, and session cookies for authentication.
+**automatically:** play counts, browser info, and session cookies for authentication.
+
+**we do not store your IP address.** our hosting and CDN providers see it in order to route your request, as any web service's do, but plyr.fm keeps no record of it in our database or our logs.
 
 ## 3. how we use it
 
@@ -37,7 +39,7 @@ we use your data to provide the service, maintain your session, and improve the 
 
 we use:
 
-- [Cloudflare](https://cloudflare.com) - CDN, storage (R2)
+- [Cloudflare](https://cloudflare.com) - CDN, storage (R2), and email forwarding for our contact addresses
 - [Fly.io](https://fly.io) - backend hosting
 - [Neon](https://neon.tech) - database
 - [Logfire](https://logfire.pydantic.dev) - error monitoring
