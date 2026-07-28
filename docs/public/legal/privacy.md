@@ -29,7 +29,9 @@ plyr.fm uses the AT Protocol for identity and social features. this has importan
 
 **automatically:** play counts, browser info, and session cookies for authentication.
 
-**we do not store your IP address.** our hosting and CDN providers see it in order to route your request, as any web service's do, but plyr.fm keeps no record of it in our database or our logs.
+**we do not store your IP address.** our hosting and CDN providers see it in order to route your request, as any web service's do, but plyr.fm writes it to neither our database nor our logs.
+
+when you are signed out, we use your IP address transiently to apply rate limits, so that one visitor cannot degrade the service for everyone. it is held only for the length of the limit window and is never retained. when you are signed in we use your session instead, and your IP is not used at all.
 
 ## 3. how we use it
 
