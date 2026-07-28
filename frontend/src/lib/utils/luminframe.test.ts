@@ -183,13 +183,15 @@ describe('fetchLuminframeImageAsFile', () => {
 		aspectRatio: { width: 800, height: 600 }
 	};
 
+	// DOM test environments disagree on how Response coerces binary bodies
+	// (some stringify them), so these mocks hand back the Blob directly —
+	// `blob()` is the only body accessor the code under test uses.
+	function blobResponse(blob: Blob): Response {
+		return { ok: true, status: 200, blob: async () => blob } as Response;
+	}
+
 	it('wraps the blob as a File named after the record rkey', async () => {
-		mockFetch(
-			() =>
-				new Response(new Uint8Array([1, 2, 3]), {
-					headers: { 'Content-Type': 'image/webp' }
-				})
-		);
+		mockFetch(() => blobResponse(new Blob([new Uint8Array([1, 2, 3])], { type: 'image/webp' })));
 		const file = await fetchLuminframeImageAsFile(image);
 		expect(file.name).toBe('luminframe-3lcabcdef.webp');
 		expect(file.type).toBe('image/webp');
@@ -197,11 +199,8 @@ describe('fetchLuminframeImageAsFile', () => {
 	});
 
 	it('falls back to the record mime type when the PDS serves a generic one', async () => {
-		mockFetch(
-			() =>
-				new Response(new Uint8Array([1]), {
-					headers: { 'Content-Type': 'application/octet-stream' }
-				})
+		mockFetch(() =>
+			blobResponse(new Blob([new Uint8Array([1])], { type: 'application/octet-stream' }))
 		);
 		const file = await fetchLuminframeImageAsFile(image);
 		expect(file.name).toBe('luminframe-3lcabcdef.webp');
@@ -209,12 +208,7 @@ describe('fetchLuminframeImageAsFile', () => {
 	});
 
 	it('collapses unknown image types to png so name and type agree', async () => {
-		mockFetch(
-			() =>
-				new Response(new Uint8Array([1]), {
-					headers: { 'Content-Type': 'image/avif' }
-				})
-		);
+		mockFetch(() => blobResponse(new Blob([new Uint8Array([1])], { type: 'image/avif' })));
 		const file = await fetchLuminframeImageAsFile(image);
 		expect(file.name).toBe('luminframe-3lcabcdef.png');
 		expect(file.type).toBe('image/png');
