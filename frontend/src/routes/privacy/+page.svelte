@@ -2,7 +2,7 @@
 	import { APP_NAME, APP_CANONICAL_URL } from '$lib/branding';
 	import type { PageData } from './$types';
 
-	const FALLBACK_EMAIL = 'plyrdotfm@proton.me';
+	const FALLBACK_EMAIL = 'help@plyr.fm';
 
 	let { data } = $props<{ data: PageData }>();
 
@@ -18,7 +18,7 @@
 <div class="legal-container">
 	<article class="legal-content">
 		<h1>Privacy Policy</h1>
-		<p class="last-updated">Last updated: March 22, 2026</p>
+		<p class="last-updated">Last updated: July 28, 2026</p>
 
 		<p class="intro">
 			{APP_NAME} ("we", "us", or "our") is an audio streaming application built on the
@@ -65,8 +65,15 @@
 			<h2>2. Data We Collect</h2>
 			<p><strong>You provide:</strong> Your AT Protocol identity when you sign in, audio files
 				and metadata you upload, and preferences like accent color.</p>
-			<p><strong>Automatically:</strong> Play counts, IP addresses, browser info, and
-				session cookies for authentication.</p>
+			<p><strong>Automatically:</strong> Play counts, browser info, and session cookies
+				for authentication.</p>
+			<p><strong>We do not store your IP address.</strong> Our hosting and CDN providers
+				see it in order to route your request, as any web service's do, but plyr.fm
+				writes it to neither our database nor our logs.</p>
+			<p>When you are signed out, we use your IP address transiently to apply rate
+				limits, so that one visitor cannot degrade the service for everyone. It is
+				held only for the length of the limit window and is never retained. When you
+				are signed in we use your session instead, and your IP is not used at all.</p>
 		</section>
 
 		<section>
@@ -79,7 +86,7 @@
 			<h2>4. Third Parties</h2>
 			<p>We use:</p>
 			<ul>
-				<li><strong><a href="https://cloudflare.com" target="_blank" rel="noopener">Cloudflare</a></strong> - CDN, storage (R2)</li>
+				<li><strong><a href="https://cloudflare.com" target="_blank" rel="noopener">Cloudflare</a></strong> - CDN, storage (R2), and email forwarding for our contact addresses</li>
 				<li><strong><a href="https://fly.io" target="_blank" rel="noopener">Fly.io</a></strong> - backend hosting</li>
 				<li><strong><a href="https://neon.tech" target="_blank" rel="noopener">Neon</a></strong> - database</li>
 				<li><strong><a href="https://logfire.pydantic.dev" target="_blank" rel="noopener">Logfire</a></strong> - error monitoring</li>
