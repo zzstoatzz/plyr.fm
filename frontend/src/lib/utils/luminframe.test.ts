@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
 	fetchLuminframeImageAsFile,
+	hasLuminframeImages,
 	listLuminframeImages,
 	recordToImage,
 	resolvePdsEndpoint,
@@ -139,6 +140,40 @@ describe('listLuminframeImages', () => {
 	});
 });
 
+describe('hasLuminframeImages', () => {
+	it('is true when the collection has at least one record', async () => {
+		mockFetch((url) => {
+			if (url.startsWith('https://plc.directory/')) {
+				return Response.json({
+					service: [{ id: '#atproto_pds', serviceEndpoint: PDS }]
+				});
+			}
+			expect(url).toContain('limit=1');
+			return Response.json({ records: [RECORD] });
+		});
+		expect(await hasLuminframeImages(DID)).toBe(true);
+	});
+
+	it('is false for an empty collection, an unresolvable PDS, or a failed probe', async () => {
+		mockFetch((url) =>
+			url.startsWith('https://plc.directory/')
+				? Response.json({ service: [{ id: '#atproto_pds', serviceEndpoint: PDS }] })
+				: Response.json({ records: [] })
+		);
+		expect(await hasLuminframeImages(DID)).toBe(false);
+
+		mockFetch(() => Response.json({ service: [] }));
+		expect(await hasLuminframeImages(DID)).toBe(false);
+
+		mockFetch((url) =>
+			url.startsWith('https://plc.directory/')
+				? Response.json({ service: [{ id: '#atproto_pds', serviceEndpoint: PDS }] })
+				: new Response(null, { status: 500 })
+		);
+		expect(await hasLuminframeImages(DID)).toBe(false);
+	});
+});
+
 describe('fetchLuminframeImageAsFile', () => {
 	const image: LuminframeImage = {
 		uri: `at://${DID}/com.luminframe.image/3lcabcdef`,
@@ -171,6 +206,18 @@ describe('fetchLuminframeImageAsFile', () => {
 		const file = await fetchLuminframeImageAsFile(image);
 		expect(file.name).toBe('luminframe-3lcabcdef.webp');
 		expect(file.type).toBe('image/webp');
+	});
+
+	it('collapses unknown image types to png so name and type agree', async () => {
+		mockFetch(
+			() =>
+				new Response(new Uint8Array([1]), {
+					headers: { 'Content-Type': 'image/avif' }
+				})
+		);
+		const file = await fetchLuminframeImageAsFile(image);
+		expect(file.name).toBe('luminframe-3lcabcdef.png');
+		expect(file.type).toBe('image/png');
 	});
 
 	it('throws on a failed blob fetch', async () => {

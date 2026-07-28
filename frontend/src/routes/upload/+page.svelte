@@ -518,7 +518,6 @@
 				<p class="format-hint">supported: jpg, png, webp, gif</p>
 				{#if auth.user}
 					<div class="luminframe-row">
-						<span class="format-hint">or</span>
 						<LuminframePicker
 							did={auth.user.did}
 							onSelect={handleLuminframeSelect}
@@ -810,14 +809,7 @@
 	}
 
 	.luminframe-row {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
 		margin-top: 0.5rem;
-	}
-
-	.luminframe-row .format-hint {
-		margin-top: 0;
 	}
 
 	.char-count {

@@ -1,6 +1,8 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import {
 		fetchLuminframeImageAsFile,
+		hasLuminframeImages,
 		listLuminframeImages,
 		type LuminframeImage
 	} from '$lib/utils/luminframe';
@@ -14,6 +16,18 @@
 	}
 
 	let { did, onSelect, disabled = false }: Props = $props();
+
+	// only offer the picker when the account actually has luminframe images —
+	// the same shape as other capability-gated options on the upload form
+	// (permissioned spaces, supporter links). until the probe answers, this
+	// component renders nothing.
+	let available = $state(false);
+
+	onMount(() => {
+		hasLuminframeImages(did).then((has) => {
+			available = has;
+		});
+	});
 
 	let dialogEl = $state<HTMLDialogElement>();
 	let open = $state(false);
@@ -62,6 +76,13 @@
 		if (event.target === dialogEl) requestClose();
 	}
 
+	function handleCancel(event: Event) {
+		// the native cancel event fires on ESC before the dialog closes; block
+		// it while a blob download is in flight so `open` can't desync from
+		// the dialog's real state (same guard as ConfirmDialog).
+		if (fetchingUri) event.preventDefault();
+	}
+
 	async function pick(image: LuminframeImage) {
 		if (fetchingUri) return;
 		fetchingUri = image.uri;
@@ -79,14 +100,17 @@
 	}
 </script>
 
-<button type="button" class="luminframe-btn" {disabled} onclick={openPicker}>
-	choose from luminframe
-</button>
+{#if available}
+	<button type="button" class="luminframe-btn" {disabled} onclick={openPicker}>
+		choose from luminframe
+	</button>
+{/if}
 
 <dialog
 	bind:this={dialogEl}
 	class="luminframe-dialog"
 	aria-label="choose a luminframe image"
+	oncancel={handleCancel}
 	onclose={requestClose}
 	onclick={handleBackdropClick}
 >

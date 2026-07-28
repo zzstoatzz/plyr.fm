@@ -123,6 +123,30 @@ export async function listLuminframeImages(did: string): Promise<LuminframeImage
 	return images;
 }
 
+/**
+ * whether the user has any luminframe images at all — one limit=1 probe.
+ * the upload form uses this to decide whether to offer the picker, the same
+ * way other capabilities (permissioned spaces, supporter links) only surface
+ * when the account actually has them.
+ */
+export async function hasLuminframeImages(did: string): Promise<boolean> {
+	const pds = await resolvePdsEndpoint(did);
+	if (!pds) return false;
+	const params = new URLSearchParams({
+		repo: did,
+		collection: LUMINFRAME_COLLECTION,
+		limit: '1'
+	});
+	try {
+		const response = await fetch(`${pds}/xrpc/com.atproto.repo.listRecords?${params}`);
+		if (!response.ok) return false;
+		const data: { records?: unknown[] } = await response.json();
+		return (data.records ?? []).length > 0;
+	} catch {
+		return false;
+	}
+}
+
 const EXTENSION_BY_MIME: Record<string, string> = {
 	'image/jpeg': 'jpg',
 	'image/png': 'png',
@@ -141,11 +165,12 @@ export async function fetchLuminframeImageAsFile(image: LuminframeImage): Promis
 		throw new Error(`failed to fetch image from your PDS (${response.status})`);
 	}
 	const blob = await response.blob();
-	// prefer the mime type the PDS actually served; fall back to the record's
-	const mimeType = blob.type?.startsWith('image/') ? blob.type : image.mimeType;
-	const ext = EXTENSION_BY_MIME[mimeType] ?? 'png';
+	// prefer the mime type the PDS actually served; fall back to the record's.
+	// types we don't know collapse to png, so name and type always agree.
+	const served = blob.type?.startsWith('image/') ? blob.type : image.mimeType;
+	const mimeType = served in EXTENSION_BY_MIME ? served : 'image/png';
 	const rkey = image.uri.split('/').pop() ?? 'image';
-	return new File([blob], `luminframe-${rkey}.${ext}`, {
-		type: mimeType in EXTENSION_BY_MIME ? mimeType : 'image/png'
+	return new File([blob], `luminframe-${rkey}.${EXTENSION_BY_MIME[mimeType]}`, {
+		type: mimeType
 	});
 }
