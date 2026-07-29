@@ -15,7 +15,11 @@ from backend.api.radio import cache as radio_cache
 from backend.api.radio import lenses
 from backend.api.radio import state as radio_state
 from backend.api.radio.lenses import LensContext
-from backend.api.radio.sampler import build_rotation, rank_decay_weights
+from backend.api.radio.sampler import (
+    ARTIST_SPACING,
+    build_rotation,
+    rank_decay_weights,
+)
 from backend.api.radio.schemas import RadioTrack
 from backend.config import settings
 from backend.main import app
@@ -321,6 +325,42 @@ def test_exploration_floor_reaches_the_dormant_tail() -> None:
     assert max(weighted_only) < 150  # the tail is unreachable without the floor
     assert max(with_floor) > 500
     assert len(with_floor) > len(weighted_only)
+
+
+def test_rotation_never_stacks_one_artist_back_to_back() -> None:
+    """no artist airs twice within the spacing window, including across the loop seam.
+
+    Regression: the airtime cap bounded an artist's *total* share but not its
+    clustering, so a heavily-liked creator could air several tracks in a row.
+    """
+    corpus = [
+        _sampler_track(i, artist_did="did:plc:hog" if i < 30 else f"did:plc:a{i}")
+        for i in range(60)
+    ]
+    weights = rank_decay_weights([t.id for t in corpus], 12.0)
+    for period in range(20):
+        rotation = build_rotation(
+            corpus,
+            weights,
+            station_slug="loved",
+            period=str(period),
+            max_tracks=40,
+        )
+        dids = [t.artist_did for t in rotation]
+        looped = dids + dids[:ARTIST_SPACING]  # the rotation replays from the top
+        for start in range(len(dids)):
+            window = looped[start : start + ARTIST_SPACING + 1]
+            assert len(set(window)) == len(window), f"{period}: {window}"
+
+
+def test_rotation_still_fills_when_one_artist_owns_the_corpus() -> None:
+    """spacing relaxes rather than starving the rotation on a thin corpus."""
+    corpus = [_sampler_track(i, artist_did="did:plc:solo") for i in range(10)]
+    weights = rank_decay_weights([t.id for t in corpus], 12.0)
+    rotation = build_rotation(
+        corpus, weights, station_slug="loved", period="0", max_tracks=40
+    )
+    assert len(rotation) > 1
 
 
 async def test_rotation_is_deterministic_within_a_period(
