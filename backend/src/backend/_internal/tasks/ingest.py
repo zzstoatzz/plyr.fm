@@ -920,10 +920,32 @@ async def ingest_account_status_change(
     goes dead. on account-level deactivation: clear it, so the frontend doesn't
     render a broken image.
     """
-    from backend._internal.atproto.account_status import hides_content
+    from backend._internal.atproto.account_status import (
+        hides_content,
+        repo_is_live_on_current_pds,
+    )
     from backend._internal.atproto.profile import fetch_user_avatar
 
     hide = hides_content(active, status)
+
+    if hide and await repo_is_live_on_current_pds(did) is True:
+        # the event came from a host this account has left. leaving a PDS
+        # deactivates the repo there, so the old host is telling the truth
+        # about itself and nothing about the person. the event is discarded
+        # outright — including its avatar handling, since nothing about this
+        # artist actually changed.
+        async with db_session() as db:
+            artist = await db.get(Artist, did)
+            if artist and (artist.deactivated or artist.account_status):
+                artist.deactivated = False
+                artist.account_status = None
+                await db.commit()
+        logfire.info(
+            "ingest: ignoring inactive event, repo is live on current PDS",
+            did=did,
+            status=status,
+        )
+        return
 
     async with db_session() as db:
         artist = await db.get(Artist, did)

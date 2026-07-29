@@ -2429,3 +2429,70 @@ class TestAccountReactivationOnRepoActivity:
         assert captured == [
             {"did": "did:plc:jetstream_test", "active": False, "status": "throttled"}
         ]
+
+
+class TestMigratedPdsIsNotDeactivation:
+    """leaving a PDS deactivates the repo on the host you left.
+
+    every artist wrongly hidden on plyr got there this way: their old
+    bsky-hosted PDS emitted `active=false status=deactivated` — true of that
+    host — while the account was alive on a PDS they had moved to. twelve more
+    were one reconciliation run away from the same fate.
+    """
+
+    async def test_inactive_event_ignored_when_current_pds_serves_repo(
+        self, db_session: AsyncSession, artist: Artist
+    ) -> None:
+        artist.avatar_url = "https://cdn.bsky.app/img/avatar/plain/x/bafkrei@jpeg"
+        await db_session.commit()
+
+        with patch(
+            "backend._internal.atproto.account_status.repo_is_live_on_current_pds",
+            new_callable=AsyncMock,
+            return_value=True,
+        ):
+            await ingest_account_status_change(
+                did=artist.did, active=False, status="deactivated"
+            )
+
+        await db_session.refresh(artist)
+        assert artist.deactivated is False
+        assert artist.account_status is None
+        assert artist.avatar_url is not None
+
+    async def test_genuine_deactivation_still_hides(
+        self, db_session: AsyncSession, artist: Artist
+    ) -> None:
+        """the current PDS agrees the repo is gone — hide, as before."""
+        with patch(
+            "backend._internal.atproto.account_status.repo_is_live_on_current_pds",
+            new_callable=AsyncMock,
+            return_value=False,
+        ):
+            await ingest_account_status_change(
+                did=artist.did, active=False, status="deactivated"
+            )
+
+        await db_session.refresh(artist)
+        assert artist.deactivated is True
+        assert artist.account_status == "deactivated"
+
+    async def test_unresolvable_pds_does_not_rescue(
+        self, db_session: AsyncSession, artist: Artist
+    ) -> None:
+        """`None` means "cannot tell", which must not be read as "still live".
+
+        otherwise a slingshot outage would silently stop all deactivations from
+        applying — the mirror of the bug being fixed.
+        """
+        with patch(
+            "backend._internal.atproto.account_status.repo_is_live_on_current_pds",
+            new_callable=AsyncMock,
+            return_value=None,
+        ):
+            await ingest_account_status_change(
+                did=artist.did, active=False, status="deactivated"
+            )
+
+        await db_session.refresh(artist)
+        assert artist.deactivated is True
