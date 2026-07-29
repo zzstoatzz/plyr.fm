@@ -23,6 +23,7 @@ import logging
 import httpx
 from sqlalchemy import select
 
+from backend._internal.atproto.account_status import hides_content
 from backend.models import Artist
 from backend.utilities.database import db_session
 
@@ -42,17 +43,15 @@ async def _resolve_pds(client: httpx.AsyncClient, did: str) -> str | None:
     return None
 
 
-async def _is_deactivated(
-    client: httpx.AsyncClient, did: str, _pds_url: str | None = None
-) -> bool | None:
-    """True/False if known, None if we couldn't determine (left unchanged).
+async def _repo_status(
+    client: httpx.AsyncClient, did: str
+) -> tuple[bool, str | None] | None:
+    """(hidden, status) if known, None if we couldn't determine.
 
     uses the same `hides_content` rule as the firehose path, so a one-shot
     reconciliation can never disagree with the live events about what an
     inactive repo means.
     """
-    from backend._internal.atproto.account_status import hides_content
-
     pds = await _resolve_pds(client, did)
     if not pds:
         return None
@@ -63,7 +62,8 @@ async def _is_deactivated(
         if r.status_code != 200:
             return None
         body = r.json()
-        return hides_content(body.get("active", True), body.get("status"))
+        active, status = body.get("active", True), body.get("status")
+        return hides_content(active, status), None if active else status
     except Exception as e:
         logger.warning("  getRepoStatus failed %s: %s", did, e)
         return None
@@ -78,7 +78,7 @@ async def main() -> None:
     args = parser.parse_args()
 
     async with db_session() as db:
-        stmt = select(Artist.did, Artist.pds_url, Artist.deactivated)
+        stmt = select(Artist.did, Artist.deactivated, Artist.account_status)
         if args.did:
             stmt = stmt.where(Artist.did == args.did)
         if args.limit:
@@ -87,28 +87,34 @@ async def main() -> None:
 
     logger.info("checking %d artists (concurrency=%d)", len(rows), args.concurrency)
     sem = asyncio.Semaphore(args.concurrency)
-    changed: list[tuple[str, bool]] = []
+    changed: list[tuple[str, bool, str | None]] = []
 
     async with httpx.AsyncClient(timeout=20) as client:
 
-        async def check(did: str, pds_url: str | None, current: bool) -> None:
+        async def check(did: str, current: bool, current_status: str | None) -> None:
             async with sem:
-                deactivated = await _is_deactivated(client, did, pds_url)
-            if deactivated is not None and deactivated != current:
-                changed.append((did, deactivated))
-                logger.info("  %s: deactivated %s -> %s", did, current, deactivated)
+                result = await _repo_status(client, did)
+            if result is None:
+                return
+            deactivated, status = result
+            if deactivated != current or status != current_status:
+                changed.append((did, deactivated, status))
+                logger.info(
+                    "  %s: deactivated %s -> %s (%s)", did, current, deactivated, status
+                )
 
-        await asyncio.gather(*(check(d, p, bool(c)) for d, p, c in rows))
+        await asyncio.gather(*(check(d, bool(c), st) for d, c, st in rows))
 
     logger.info("%d artists need updating", len(changed))
     if args.dry_run or not changed:
         return
 
     async with db_session() as db:
-        for did, deactivated in changed:
+        for did, deactivated, status in changed:
             artist = await db.get(Artist, did)
             if artist:
                 artist.deactivated = deactivated
+                artist.account_status = status
         await db.commit()
     logger.info("updated %d artists", len(changed))
 
