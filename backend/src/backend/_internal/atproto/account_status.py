@@ -39,6 +39,40 @@ INFRASTRUCTURE_STATUSES: Final[frozenset[str]] = frozenset(
 )
 
 
+async def repo_is_live_on_current_pds(did: str) -> bool | None:
+    """ask the DID's *current* PDS whether it serves this repo.
+
+    an `#account` event is emitted by some host, and the lexicon is explicit
+    that this need not be the account's current PDS. the common case in
+    practice is migration: leaving a host deactivates the repo there, so the
+    host you left correctly announces `deactivated` while the account is alive
+    somewhere else. every artist wrongly hidden on plyr got there this way.
+
+    returns True/False when the current PDS answers, None when we cannot tell —
+    and "cannot tell" must never be read as "gone".
+    """
+    import httpx
+
+    from backend._internal.slingshot import resolve_mini_doc_safe
+
+    if not (mini_doc := await resolve_mini_doc_safe(did)):
+        return None
+    if not (pds := mini_doc.get("pds")):
+        return None
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            r = await client.get(
+                f"{pds}/xrpc/com.atproto.sync.getRepoStatus", params={"did": did}
+            )
+        if r.status_code != 200:
+            return None
+        body = r.json()
+        return not hides_content(body.get("active", True), body.get("status"))
+    except Exception:
+        return None
+
+
 def hides_content(active: bool, status: str | None) -> bool:
     """should this account's content drop out of discovery?
 

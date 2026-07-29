@@ -1,11 +1,14 @@
 #!/usr/bin/env -S uv run --script --quiet
-"""backfill Artist.deactivated by checking each account's PDS status.
+"""reconcile Artist.deactivated against each account's *current* PDS.
 
 going forward, #account firehose events keep Artist.deactivated current (see
-ingest_account_status_change). but accounts that deactivated *before* that flag
-existed won't emit a new event, so their content (incl. dead audio) keeps showing
-up in discovery. this script resolves each artist's PDS and asks
-com.atproto.sync.getRepoStatus whether the account is active, then sets the flag.
+ingest_account_status_change). this script exists to repair drift.
+
+the PDS is always resolved fresh from plc.directory, never from the cached
+`Artist.pds_url`. that cache is exactly what goes stale when someone migrates,
+and the host they left reports their repo as `deactivated` — truthfully about
+itself, and misleadingly about them. asking the stale host is how this script
+once proposed hiding twelve live artists who had simply moved to their own PDS.
 
 usage:
     uv run scripts/backfill_account_status.py --dry-run
@@ -40,7 +43,7 @@ async def _resolve_pds(client: httpx.AsyncClient, did: str) -> str | None:
 
 
 async def _is_deactivated(
-    client: httpx.AsyncClient, did: str, pds_url: str | None
+    client: httpx.AsyncClient, did: str, _pds_url: str | None = None
 ) -> bool | None:
     """True/False if known, None if we couldn't determine (left unchanged).
 
@@ -50,7 +53,7 @@ async def _is_deactivated(
     """
     from backend._internal.atproto.account_status import hides_content
 
-    pds = pds_url or await _resolve_pds(client, did)
+    pds = await _resolve_pds(client, did)
     if not pds:
         return None
     try:
