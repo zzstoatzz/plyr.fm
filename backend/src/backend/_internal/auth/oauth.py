@@ -614,7 +614,16 @@ async def ensure_artist_exists(did: str, handle: str) -> bool:
 
     async with db_session() as db:
         result = await db.execute(select(Artist).where(Artist.did == did))
-        if result.scalar_one_or_none():
+        if existing := result.scalar_one_or_none():
+            # completing OAuth means their PDS just served us on their behalf,
+            # which is the liveness `active` claims to describe. clear a stale
+            # flag here so someone who signs in stops being hidden from
+            # discovery even if they never publish a record.
+            if existing.deactivated:
+                existing.deactivated = False
+                existing.account_status = None
+                await db.commit()
+                logger.info("cleared stale deactivated flag for %s on login", did)
             return False  # already exists
 
         # fetch avatar from Bluesky

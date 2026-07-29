@@ -33,6 +33,7 @@ from backend._internal.tasks.moderation import (
 from backend._internal.tasks.reaper import reap_stuck_uploads
 from backend._internal.tasks.ingest import (
     SubjectNotFoundError,
+    ingest_account_reactivated,
     ingest_account_status_change,
     ingest_bsky_profile_update,
     ingest_comment_create,
@@ -130,6 +131,7 @@ def _build_background_tasks() -> list:
         ingest_bsky_profile_update,
         ingest_identity_update,
         ingest_account_status_change,
+        ingest_account_reactivated,
         scan_image_moderation,
         run_track_upload,
         run_track_audio_replace,
@@ -156,6 +158,7 @@ __all__ = [
     "background_tasks",
     "classify_genres",
     "generate_embedding",
+    "ingest_account_reactivated",
     "ingest_account_status_change",
     "ingest_bsky_profile_update",
     "ingest_comment_create",

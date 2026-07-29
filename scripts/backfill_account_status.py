@@ -42,7 +42,14 @@ async def _resolve_pds(client: httpx.AsyncClient, did: str) -> str | None:
 async def _is_deactivated(
     client: httpx.AsyncClient, did: str, pds_url: str | None
 ) -> bool | None:
-    """True/False if known, None if we couldn't determine (left unchanged)."""
+    """True/False if known, None if we couldn't determine (left unchanged).
+
+    uses the same `hides_content` rule as the firehose path, so a one-shot
+    reconciliation can never disagree with the live events about what an
+    inactive repo means.
+    """
+    from backend._internal.atproto.account_status import hides_content
+
     pds = pds_url or await _resolve_pds(client, did)
     if not pds:
         return None
@@ -52,7 +59,8 @@ async def _is_deactivated(
         )
         if r.status_code != 200:
             return None
-        return not r.json().get("active", True)
+        body = r.json()
+        return hides_content(body.get("active", True), body.get("status"))
     except Exception as e:
         logger.warning("  getRepoStatus failed %s: %s", did, e)
         return None

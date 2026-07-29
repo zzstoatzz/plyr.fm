@@ -24,6 +24,7 @@ from websockets.asyncio.client import ClientConnection
 
 from backend._internal.background import get_docket
 from backend._internal.tasks.ingest import (
+    ingest_account_reactivated,
     ingest_account_status_change,
     ingest_bsky_profile_update,
     ingest_comment_create,
@@ -74,6 +75,7 @@ class JetstreamConsumer:
         ]
         self._ws: ClientConnection | None = None
         self._known_dids: set[str] = set()
+        self._deactivated_dids: set[str] = set()
         self._cursor: int | None = None
         self._last_cursor_flush: float = 0.0
         self._last_did_refresh: float = 0.0
@@ -175,14 +177,17 @@ class JetstreamConsumer:
             did = event.get("did")
             account = event.get("account") or {}
             active = account.get("active", False)
+            status = account.get("status")
             if did and did in self._known_dids:
                 docket = get_docket()
-                await docket.add(ingest_account_status_change)(did=did, active=active)
+                await docket.add(ingest_account_status_change)(
+                    did=did, active=active, status=status
+                )
                 logfire.info(
                     "jetstream dispatched account status change",
                     did=did,
                     active=active,
-                    status=account.get("status"),
+                    status=status,
                 )
             if time_us := event.get("time_us"):
                 self._cursor = time_us
@@ -194,6 +199,14 @@ class JetstreamConsumer:
         did = event.get("did")
         if not did or did not in self._known_dids:
             return
+
+        # a commit proves the repo is being served, which is what `active`
+        # claims to describe — so it retires a stale `deactivated` flag that
+        # would otherwise need an #account event we may have already missed.
+        if did in self._deactivated_dids:
+            self._deactivated_dids.discard(did)
+            await get_docket().add(ingest_account_reactivated)(did=did)
+            logfire.info("jetstream dispatched account reactivation", did=did)
 
         commit = event.get("commit", {})
         collection = commit.get("collection", "")
@@ -331,13 +344,21 @@ class JetstreamConsumer:
             await self._flush_cursor()
 
     async def _refresh_known_dids(self) -> None:
-        """refresh the known DID set from the database."""
+        """refresh the known DID set from the database.
+
+        also tracks which of them are currently flagged deactivated, so a
+        commit from one can retire the flag without a per-commit DB read.
+        """
         try:
             async with db_session() as db:
-                result = await db.execute(select(Artist.did))
-                self._known_dids = {row[0] for row in result.fetchall()}
+                result = await db.execute(select(Artist.did, Artist.deactivated))
+                rows = result.fetchall()
+                self._known_dids = {row[0] for row in rows}
+                self._deactivated_dids = {row[0] for row in rows if row[1]}
             logger.info(
-                "jetstream refreshed known DIDs: %d artists", len(self._known_dids)
+                "jetstream refreshed known DIDs: %d artists (%d deactivated)",
+                len(self._known_dids),
+                len(self._deactivated_dids),
             )
         except Exception:
             logger.warning("jetstream could not refresh known DIDs", exc_info=True)

@@ -8,11 +8,13 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend._internal.atproto.account_status import hides_content
 from backend._internal.atproto.profile import avatar_url_from_profile_record
 from backend._internal.jetstream import BSKY_PROFILE_COLLECTION, JetstreamConsumer
 from backend._internal.tasks.ingest import (
     SubjectNotFoundError,
     _write_tombstone,
+    ingest_account_reactivated,
     ingest_account_status_change,
     ingest_bsky_profile_update,
     ingest_comment_create,
@@ -1978,13 +1980,21 @@ class TestIngestAccountStatusChange:
     async def test_deactivation_clears_avatar(
         self, db_session: AsyncSession, artist: Artist
     ) -> None:
-        """deactivation clears avatar to avoid broken CDN URLs."""
+        """deactivation clears avatar to avoid broken CDN URLs.
+
+        `status` is now required to reach this path — an inactive event with no
+        reason given no longer touches the artist at all (see
+        TestAccountStatusSemantics). every `active=false` observed in production
+        carried `status="deactivated"`.
+        """
         artist.avatar_url = (
             "https://cdn.bsky.app/img/avatar/plain/did:plc:test/old@jpeg"
         )
         await db_session.commit()
 
-        await ingest_account_status_change(did=artist.did, active=False)
+        await ingest_account_status_change(
+            did=artist.did, active=False, status="deactivated"
+        )
 
         await db_session.refresh(artist)
         assert artist.avatar_url is None
@@ -2231,3 +2241,191 @@ class TestIngestTaskRegistration:
         registered = {fn.__name__ for fn in background_tasks}
 
         assert dispatchable - registered == set()
+
+
+# --- account status semantics tests ---
+
+
+class TestHidesContent:
+    """`#account` is a statement about a host, not about a person."""
+
+    @pytest.mark.parametrize(
+        "status", ["deactivated", "deleted", "takendown", "suspended"]
+    )
+    def test_account_level_statuses_hide(self, status: str) -> None:
+        assert hides_content(active=False, status=status) is True
+
+    @pytest.mark.parametrize("status", ["throttled", "desynchronized"])
+    def test_infrastructure_statuses_never_hide(self, status: str) -> None:
+        """the regression: a PDS having a bad second is not a moderation event.
+
+        production showed one DID flipping active false->true four times in 18
+        hours; each false edge used to remove their whole catalogue from radio,
+        the home feed, and for-you.
+        """
+        assert hides_content(active=False, status=status) is False
+
+    def test_unexplained_inactive_does_not_hide(self) -> None:
+        """`status` is optional in the lexicon. no reason given, no hiding."""
+        assert hides_content(active=False, status=None) is False
+
+    def test_active_never_hides(self) -> None:
+        assert hides_content(active=True, status=None) is False
+
+
+class TestAccountStatusSemantics:
+    async def test_infra_status_leaves_artist_alone(
+        self, db_session: AsyncSession, artist: Artist
+    ) -> None:
+        """a throttled host must not hide the catalogue or clear the avatar."""
+        artist.avatar_url = "https://cdn.bsky.app/img/avatar/plain/x/bafkrei@jpeg"
+        await db_session.commit()
+
+        await ingest_account_status_change(
+            did=artist.did, active=False, status="throttled"
+        )
+
+        await db_session.refresh(artist)
+        assert artist.deactivated is False
+        assert artist.avatar_url is not None
+        assert artist.account_status == "throttled"
+
+    async def test_deactivation_hides_and_records_why(
+        self, db_session: AsyncSession, artist: Artist
+    ) -> None:
+        await ingest_account_status_change(
+            did=artist.did, active=False, status="deactivated"
+        )
+
+        await db_session.refresh(artist)
+        assert artist.deactivated is True
+        assert artist.account_status == "deactivated"
+
+    async def test_reactivation_clears_status(
+        self, db_session: AsyncSession, artist: Artist
+    ) -> None:
+        artist.deactivated = True
+        artist.account_status = "deactivated"
+        await db_session.commit()
+
+        with patch(
+            "backend._internal.atproto.profile.fetch_user_avatar",
+            new_callable=AsyncMock,
+            return_value=None,
+        ):
+            await ingest_account_status_change(did=artist.did, active=True)
+
+        await db_session.refresh(artist)
+        assert artist.deactivated is False
+        assert artist.account_status is None
+
+
+class TestAccountReactivationOnRepoActivity:
+    async def test_commit_clears_stale_flag(
+        self, db_session: AsyncSession, artist: Artist
+    ) -> None:
+        """the sticky-flag regression.
+
+        only an `#account` event could clear `deactivated`, so a missed
+        reactivation edge hid an artist indefinitely. a commit proves the repo
+        is being served.
+        """
+        artist.deactivated = True
+        artist.account_status = "deactivated"
+        artist.avatar_url = None
+        await db_session.commit()
+
+        with patch(
+            "backend._internal.atproto.profile.fetch_user_avatar",
+            new_callable=AsyncMock,
+            return_value="https://cdn.bsky.app/img/avatar/plain/x/bafkrei@jpeg",
+        ):
+            await ingest_account_reactivated(did=artist.did)
+
+        await db_session.refresh(artist)
+        assert artist.deactivated is False
+        assert artist.account_status is None
+        assert artist.avatar_url is not None
+
+    async def test_active_artist_is_untouched(
+        self, db_session: AsyncSession, artist: Artist
+    ) -> None:
+        """no-op for the overwhelmingly common case."""
+        artist.avatar_url = None
+        await db_session.commit()
+
+        with patch(
+            "backend._internal.atproto.profile.fetch_user_avatar",
+            new_callable=AsyncMock,
+            return_value="https://example.com/should-not-be-fetched.jpg",
+        ) as fetch:
+            await ingest_account_reactivated(did=artist.did)
+
+        fetch.assert_not_awaited()
+        await db_session.refresh(artist)
+        assert artist.avatar_url is None
+
+    async def test_consumer_dispatches_only_for_flagged_dids(self) -> None:
+        consumer = JetstreamConsumer()
+        consumer._known_dids = {"did:plc:flagged", "did:plc:normal"}
+        consumer._deactivated_dids = {"did:plc:flagged"}
+
+        mock_docket = MagicMock()
+        dispatched: list[object] = []
+        mock_docket.add = MagicMock(
+            side_effect=lambda fn: (dispatched.append(fn), AsyncMock())[1]
+        )
+
+        def commit_event(did: str) -> dict:
+            return {
+                "kind": "commit",
+                "did": did,
+                "time_us": 1000000,
+                "commit": {
+                    "collection": "fm.plyr.track",
+                    "operation": "create",
+                    "rkey": "abc",
+                    "record": {"title": "t"},
+                    "cid": "bafy",
+                },
+            }
+
+        with patch("backend._internal.jetstream.get_docket", return_value=mock_docket):
+            await consumer._process_event(commit_event("did:plc:normal"))
+            assert ingest_account_reactivated not in dispatched
+
+            await consumer._process_event(commit_event("did:plc:flagged"))
+            assert ingest_account_reactivated in dispatched
+
+        # dispatched once, not on every subsequent commit
+        dispatched.clear()
+        with patch("backend._internal.jetstream.get_docket", return_value=mock_docket):
+            await consumer._process_event(commit_event("did:plc:flagged"))
+        assert ingest_account_reactivated not in dispatched
+
+    async def test_account_event_passes_status_through(self) -> None:
+        """the status field decides everything, so it must reach the task."""
+        consumer = JetstreamConsumer()
+        consumer._known_dids = {"did:plc:jetstream_test"}
+
+        mock_docket = MagicMock()
+        captured: list[dict] = []
+
+        async def capture(**kwargs: object) -> None:
+            captured.append(dict(kwargs))
+
+        mock_docket.add = MagicMock(return_value=capture)
+
+        event = {
+            "kind": "account",
+            "did": "did:plc:jetstream_test",
+            "time_us": 1000000,
+            "account": {"active": False, "status": "throttled", "seq": 1},
+        }
+
+        with patch("backend._internal.jetstream.get_docket", return_value=mock_docket):
+            await consumer._process_event(event)
+
+        assert captured == [
+            {"did": "did:plc:jetstream_test", "active": False, "status": "throttled"}
+        ]

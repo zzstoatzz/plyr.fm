@@ -906,17 +906,24 @@ async def ingest_identity_update(
 async def ingest_account_status_change(
     did: str,
     active: bool,
+    status: str | None = None,
 ) -> None:
     """handle account activation/deactivation events.
 
-    on reactivation (active=True): re-fetch avatar from Bluesky since
-    the CDN URL goes dead during deactivation.
+    `hides_content` decides whether this event describes the *account* or just
+    the emitting host — only the former affects what we show. an infrastructure
+    status leaves the artist entirely alone: their catalogue stays in discovery
+    and their avatar stays put, because neither depends on their PDS being
+    reachable this second.
 
-    on deactivation (active=False): clear the avatar URL so the frontend
-    doesn't show a broken image pointing at a dead CDN URL, and mark the artist
-    deactivated so their content drops out of discovery (radio / home / for-you).
+    on reactivation: re-fetch the avatar, since a deactivated account's CDN URL
+    goes dead. on account-level deactivation: clear it, so the frontend doesn't
+    render a broken image.
     """
+    from backend._internal.atproto.account_status import hides_content
     from backend._internal.atproto.profile import fetch_user_avatar
+
+    hide = hides_content(active, status)
 
     async with db_session() as db:
         artist = await db.get(Artist, did)
@@ -924,11 +931,32 @@ async def ingest_account_status_change(
             logger.debug("ingest_account_status_change: unknown artist %s", did)
             return
 
-        # persist liveness so discovery queries can exclude deactivated accounts
-        if artist.deactivated == active:
-            artist.deactivated = not active
+        if not active and not hide:
+            # a host is having trouble; the person is fine. record why, change
+            # nothing else.
+            if artist.account_status != status:
+                artist.account_status = status
+                await db.commit()
+            logfire.info(
+                "ingest: account inactive for non-account reason, ignoring",
+                did=did,
+                status=status,
+            )
+            return
+
+        if artist.deactivated != hide or artist.account_status != (
+            None if active else status
+        ):
+            artist.deactivated = hide
+            artist.account_status = None if active else status
             await db.commit()
-            logfire.info("ingest: account status changed", did=did, active=active)
+            logfire.info(
+                "ingest: account status changed",
+                did=did,
+                active=active,
+                status=status,
+                hidden=hide,
+            )
 
         if active:
             # re-fetch avatar on reactivation
@@ -954,3 +982,41 @@ async def ingest_account_status_change(
                 artist.avatar_url = None
                 await db.commit()
                 logfire.info("ingest: avatar cleared on deactivation", did=did)
+
+
+async def ingest_account_reactivated(
+    did: str,
+    retry: ExponentialRetry = _INGEST_RETRY,
+) -> None:
+    """clear a stale `deactivated` flag after seeing the account write to its repo.
+
+    the flag was sticky: only another `#account` event could clear it, so a
+    missed reactivation edge — consumer restart, cursor gap — hid someone's
+    catalogue indefinitely while they kept using the site. five live artists
+    were in that state when this was written.
+
+    a commit from a DID is proof its repo is being served, which is exactly what
+    `active` claims to describe. the consumer only dispatches this for DIDs it
+    currently believes are deactivated, so the common path costs nothing.
+    """
+    from backend._internal.atproto.profile import fetch_user_avatar
+
+    async with db_session() as db:
+        artist = await db.get(Artist, did)
+        if not artist or not artist.deactivated:
+            return
+
+        artist.deactivated = False
+        artist.account_status = None
+
+        # deactivation cleared the avatar; put it back rather than leaving a gap
+        if not artist.avatar_url:
+            try:
+                artist.avatar_url = await fetch_user_avatar(did)
+            except Exception as e:
+                logger.warning(
+                    "ingest_account_reactivated: avatar fetch failed for %s: %s", did, e
+                )
+
+        await db.commit()
+        logfire.info("ingest: account reactivated by repo activity", did=did)
