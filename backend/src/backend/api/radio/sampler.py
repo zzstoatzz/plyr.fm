@@ -17,6 +17,12 @@ Turns a scored corpus into a rotation that doesn't let one artist stack it:
   big slice of a single loop. That's a deliberate v1 tradeoff (popular long-form
   content should still feature) and a knob to revisit.
 
+* **Artist spacing:** an artist can't land within ``ARTIST_SPACING`` entries of
+  their own previous one, so back-to-back (or near-back-to-back) plays by the same
+  creator never reach a listener. The airtime budget bounds how *much* an artist
+  gets across a rotation; spacing bounds how *clustered* it is. Spacing relaxes
+  only when no other artist is drawable, so a thin corpus still fills a rotation.
+
 * **Weighted draw without replacement:** tracks are sampled in proportion to their
   lens weight, so the rotation isn't a fixed top-N chart and the long tail turns
   over.
@@ -38,6 +44,7 @@ DEFAULT_TRACK_SECONDS = 180
 ARTIST_AIRTIME_CAP_SECONDS = 20 * 60  # an artist is done once past ~20 min of airtime
 TARGET_ROTATION_SECONDS = 4 * 60 * 60  # aim for ~4 hours of programming per rotation
 EXPLORATION_FRACTION = 0.25  # share of draws that ignore lens weights entirely
+ARTIST_SPACING = 3  # entries an artist must wait before they can air again
 
 
 def rank_decay_weights(ranked_ids: list[int], scale: float) -> dict[int, float]:
@@ -73,6 +80,7 @@ def build_rotation(
     target_seconds: int = TARGET_ROTATION_SECONDS,
     artist_airtime_cap_seconds: int = ARTIST_AIRTIME_CAP_SECONDS,
     exploration: float = EXPLORATION_FRACTION,
+    artist_spacing: int = ARTIST_SPACING,
 ) -> list[Track]:
     """Draw a deterministic, airtime-fair rotation from scored candidates.
 
@@ -86,6 +94,8 @@ def build_rotation(
         artist_airtime_cap_seconds: per-artist airtime budget before they drop out.
         exploration: probability that a draw is uniform over the remaining pool
             instead of lens-weighted, so the tail is reachable.
+        artist_spacing: minimum number of entries between two airings by the same
+            artist; relaxed when no other artist can be drawn.
     """
     pool = [t for t in candidates if weights.get(t.id, 0.0) > 0.0]
     if not pool:
@@ -100,15 +110,32 @@ def build_rotation(
     total_seconds = 0
 
     while remaining and len(rotation) < max_tracks and total_seconds < target_seconds:
+        # drawing from an eligible subset rather than drawing-then-rejecting keeps
+        # a dominant artist from burning the draws that should have aired others.
+        blocked = {t.artist_did for t in rotation[-artist_spacing:]}
+        eligible = [
+            idx
+            for idx, t in enumerate(remaining)
+            if artist_airtime.get(t.artist_did, 0) < artist_airtime_cap_seconds
+            and t.artist_did not in blocked
+        ]
+        if not eligible:
+            eligible = [
+                idx
+                for idx, t in enumerate(remaining)
+                if artist_airtime.get(t.artist_did, 0) < artist_airtime_cap_seconds
+            ]
+        if not eligible:
+            break
+
         if rng.random() < exploration:
-            chosen_idx = rng.randrange(len(remaining))
+            chosen_idx = eligible[rng.randrange(len(eligible))]
         else:
-            chosen_idx = _weighted_pick(rng, remaining_weights)
+            chosen_idx = eligible[
+                _weighted_pick(rng, [remaining_weights[idx] for idx in eligible])
+            ]
         track = remaining.pop(chosen_idx)
         remaining_weights.pop(chosen_idx)
-
-        if artist_airtime.get(track.artist_did, 0) >= artist_airtime_cap_seconds:
-            continue  # this artist has already used their airtime budget
 
         seconds = _track_seconds(track)
         rotation.append(track)
@@ -117,7 +144,29 @@ def build_rotation(
         )
         total_seconds += seconds
 
+    # the rotation is a loop, so its tail plays into its head: trim trailing
+    # entries that would collide across that seam.
+    # a corpus too thin to satisfy spacing at all (one artist) has no seam to fix,
+    # and trimming it would only shorten the loop.
+    for _ in range(artist_spacing):
+        if (
+            len(rotation) <= artist_spacing + 1
+            or len({t.artist_did for t in rotation}) < 2
+            or not _seam_collides(rotation, artist_spacing)
+        ):
+            break
+        rotation.pop()
+
     return rotation
+
+
+def _seam_collides(rotation: list[Track], artist_spacing: int) -> bool:
+    """Whether the loop's tail repeats an artist within ``artist_spacing`` of its head."""
+    return any(
+        rotation[-tail].artist_did == rotation[head].artist_did
+        for tail in range(1, artist_spacing + 1)
+        for head in range(artist_spacing - tail + 1)
+    )
 
 
 def _weighted_pick(rng: random.Random, weights: list[float]) -> int:
