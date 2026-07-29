@@ -31,12 +31,17 @@ class Artist(Base):
     # cached PDS URL (for performance)
     pds_url: Mapped[str | None] = mapped_column(String, nullable=True)
 
-    # atproto account deactivated (or suspended): set from #account firehose
-    # events. deactivated accounts' content is hidden from discovery surfaces
-    # (radio, the home feed, for-you) and their PDS blobs / audio go dead.
+    # set from #account firehose events, but only for account-level statuses —
+    # see `_internal/atproto/account_status.py`. an infrastructure status
+    # (throttled / desynchronized) never sets this: it describes the host, not
+    # the person, and their audio is in our bucket either way.
     deactivated: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default="false", default=False, index=True
     )
+
+    # the raw `status` from the last inactive #account event, NULL while active.
+    # kept so the flag above can be explained rather than just believed.
+    account_status: Mapped[str | None] = mapped_column(String, nullable=True)
 
     # metadata
     created_at: Mapped[datetime] = mapped_column(
