@@ -2447,7 +2447,7 @@ class TestMigratedPdsIsNotDeactivation:
         await db_session.commit()
 
         with patch(
-            "backend._internal.atproto.account_status.repo_is_live_on_current_pds",
+            "backend._internal.tasks.ingest.repo_is_live_on_current_pds",
             new_callable=AsyncMock,
             return_value=True,
         ):
@@ -2465,7 +2465,7 @@ class TestMigratedPdsIsNotDeactivation:
     ) -> None:
         """the current PDS agrees the repo is gone — hide, as before."""
         with patch(
-            "backend._internal.atproto.account_status.repo_is_live_on_current_pds",
+            "backend._internal.tasks.ingest.repo_is_live_on_current_pds",
             new_callable=AsyncMock,
             return_value=False,
         ):
@@ -2486,7 +2486,7 @@ class TestMigratedPdsIsNotDeactivation:
         applying — the mirror of the bug being fixed.
         """
         with patch(
-            "backend._internal.atproto.account_status.repo_is_live_on_current_pds",
+            "backend._internal.tasks.ingest.repo_is_live_on_current_pds",
             new_callable=AsyncMock,
             return_value=None,
         ):

@@ -42,9 +42,7 @@ async def _resolve_pds(client: httpx.AsyncClient, did: str) -> str | None:
     return None
 
 
-async def _is_deactivated(
-    client: httpx.AsyncClient, did: str, _pds_url: str | None = None
-) -> bool | None:
+async def _is_deactivated(client: httpx.AsyncClient, did: str) -> bool | None:
     """True/False if known, None if we couldn't determine (left unchanged).
 
     uses the same `hides_content` rule as the firehose path, so a one-shot
@@ -78,7 +76,7 @@ async def main() -> None:
     args = parser.parse_args()
 
     async with db_session() as db:
-        stmt = select(Artist.did, Artist.pds_url, Artist.deactivated)
+        stmt = select(Artist.did, Artist.deactivated)
         if args.did:
             stmt = stmt.where(Artist.did == args.did)
         if args.limit:
@@ -91,14 +89,14 @@ async def main() -> None:
 
     async with httpx.AsyncClient(timeout=20) as client:
 
-        async def check(did: str, pds_url: str | None, current: bool) -> None:
+        async def check(did: str, current: bool) -> None:
             async with sem:
-                deactivated = await _is_deactivated(client, did, pds_url)
+                deactivated = await _is_deactivated(client, did)
             if deactivated is not None and deactivated != current:
                 changed.append((did, deactivated))
                 logger.info("  %s: deactivated %s -> %s", did, current, deactivated)
 
-        await asyncio.gather(*(check(d, p, bool(c)) for d, p, c in rows))
+        await asyncio.gather(*(check(d, bool(c)) for d, c in rows))
 
     logger.info("%d artists need updating", len(changed))
     if args.dry_run or not changed:

@@ -17,6 +17,10 @@ from docket import ConcurrencyLimit, ExponentialRetry
 from sqlalchemy import delete, select, update
 from sqlalchemy.exc import IntegrityError, OperationalError
 
+from backend._internal.atproto.account_status import (
+    hides_content,
+    repo_is_live_on_current_pds,
+)
 from backend._internal.atproto.client import pds_blob_url
 from backend._internal.atproto.profile import avatar_url_from_profile_record
 from backend._internal.atproto.self_labels import self_label_values_from_record
@@ -920,10 +924,6 @@ async def ingest_account_status_change(
     goes dead. on account-level deactivation: clear it, so the frontend doesn't
     render a broken image.
     """
-    from backend._internal.atproto.account_status import (
-        hides_content,
-        repo_is_live_on_current_pds,
-    )
     from backend._internal.atproto.profile import fetch_user_avatar
 
     hide = hides_content(active, status)
