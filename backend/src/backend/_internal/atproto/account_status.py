@@ -17,6 +17,10 @@ came to hide an artist's catalogue.
 
 from typing import Final
 
+import httpx
+
+from backend._internal.slingshot import resolve_mini_doc_safe
+
 # the account itself is gone or withdrawn — by the person, or by their host.
 # hiding their content follows from the account's own state.
 ACCOUNT_LEVEL_STATUSES: Final[frozenset[str]] = frozenset(
@@ -39,6 +43,19 @@ INFRASTRUCTURE_STATUSES: Final[frozenset[str]] = frozenset(
 )
 
 
+def hides_content(active: bool, status: str | None) -> bool:
+    """should this account's content drop out of discovery?
+
+    only for account-level states. an infrastructure status never hides
+    anyone, and neither does an `active=false` with no reason given — the
+    field is optional in the lexicon, and "some host said no, and wouldn't
+    say why" is not grounds for removing someone's music from the platform.
+    """
+    if active:
+        return False
+    return status in ACCOUNT_LEVEL_STATUSES
+
+
 async def repo_is_live_on_current_pds(did: str) -> bool | None:
     """ask the DID's *current* PDS whether it serves this repo.
 
@@ -51,10 +68,6 @@ async def repo_is_live_on_current_pds(did: str) -> bool | None:
     returns True/False when the current PDS answers, None when we cannot tell —
     and "cannot tell" must never be read as "gone".
     """
-    import httpx
-
-    from backend._internal.slingshot import resolve_mini_doc_safe
-
     if not (mini_doc := await resolve_mini_doc_safe(did)):
         return None
     if not (pds := mini_doc.get("pds")):
@@ -71,16 +84,3 @@ async def repo_is_live_on_current_pds(did: str) -> bool | None:
         return not hides_content(body.get("active", True), body.get("status"))
     except Exception:
         return None
-
-
-def hides_content(active: bool, status: str | None) -> bool:
-    """should this account's content drop out of discovery?
-
-    only for account-level states. an infrastructure status never hides
-    anyone, and neither does an `active=false` with no reason given — the
-    field is optional in the lexicon, and "some host said no, and wouldn't
-    say why" is not grounds for removing someone's music from the platform.
-    """
-    if active:
-        return False
-    return status in ACCOUNT_LEVEL_STATUSES
