@@ -8,11 +8,13 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend._internal.jetstream import JetstreamConsumer
+from backend._internal.atproto.profile import avatar_url_from_profile_record
+from backend._internal.jetstream import BSKY_PROFILE_COLLECTION, JetstreamConsumer
 from backend._internal.tasks.ingest import (
     SubjectNotFoundError,
     _write_tombstone,
     ingest_account_status_change,
+    ingest_bsky_profile_update,
     ingest_comment_create,
     ingest_comment_delete,
     ingest_identity_update,
@@ -20,6 +22,7 @@ from backend._internal.tasks.ingest import (
     ingest_like_delete,
     ingest_list_create,
     ingest_list_update,
+    ingest_profile_update,
     ingest_track_create,
     ingest_track_delete,
     ingest_track_update,
@@ -333,6 +336,8 @@ class TestJetstreamConsumer:
             "fm.plyr.stg.comment",
             "fm.plyr.stg.list",
             "fm.plyr.stg.actor.profile",
+            # not namespaced: bluesky profiles are the same in every environment
+            "app.bsky.actor.profile",
         ]
 
     async def test_explicit_collections_override(self) -> None:
@@ -2016,3 +2021,213 @@ class TestIngestAccountStatusChange:
 
         await db_session.refresh(artist)
         assert artist.avatar_url is None
+
+
+# --- bluesky avatar mirroring tests ---
+
+
+def _profile_record(cid: str | None) -> dict:
+    """an `app.bsky.actor.profile` record, with or without an avatar blob."""
+    record: dict = {
+        "$type": "app.bsky.actor.profile",
+        "displayName": "Brookie",
+        "description": "hi",
+    }
+    if cid:
+        record["avatar"] = {
+            "$type": "blob",
+            "ref": {"$link": cid},
+            "mimeType": "image/jpeg",
+            "size": 12345,
+        }
+    return record
+
+
+class TestAvatarUrlFromProfileRecord:
+    def test_builds_cdn_url_from_blob_ref(self) -> None:
+        did = "did:plc:v46ojbiop5ebs5h7gaomixcc"
+        url = avatar_url_from_profile_record(did, _profile_record("bafkreiavatar"))
+        assert url == f"https://cdn.bsky.app/img/avatar/plain/{did}/bafkreiavatar@jpeg"
+
+    def test_no_avatar_is_none(self) -> None:
+        assert (
+            avatar_url_from_profile_record("did:plc:x", _profile_record(None)) is None
+        )
+
+    @pytest.mark.parametrize(
+        "avatar",
+        [
+            "not-a-dict",
+            {"mimeType": "image/jpeg"},
+            {"ref": "not-a-dict"},
+            {"ref": {}},
+            {"ref": {"$link": ""}},
+        ],
+    )
+    def test_malformed_avatar_is_none(self, avatar: object) -> None:
+        """a malformed blob yields None rather than a URL that 404s forever."""
+        record = {"$type": "app.bsky.actor.profile", "avatar": avatar}
+        assert avatar_url_from_profile_record("did:plc:x", record) is None
+
+
+class TestIngestBskyProfileUpdate:
+    async def test_mirrors_new_avatar(
+        self, db_session: AsyncSession, artist: Artist
+    ) -> None:
+        """the regression: a profile-picture change updates the stored avatar.
+
+        before this, nothing subscribed to `app.bsky.actor.profile`, so a
+        changed avatar left a superseded blob CID in the database that 404s on
+        the CDN and renders as a broken image.
+        """
+        artist.avatar_url = "https://cdn.bsky.app/img/avatar/plain/x/bafkreiold@jpeg"
+        await db_session.commit()
+
+        await ingest_bsky_profile_update(
+            did=artist.did, record=_profile_record("bafkreinew")
+        )
+
+        await db_session.refresh(artist)
+        assert artist.avatar_url == (
+            f"https://cdn.bsky.app/img/avatar/plain/{artist.did}/bafkreinew@jpeg"
+        )
+
+    async def test_clears_avatar_when_removed(
+        self, db_session: AsyncSession, artist: Artist
+    ) -> None:
+        """removing a profile picture clears ours rather than leaving a 404."""
+        artist.avatar_url = "https://cdn.bsky.app/img/avatar/plain/x/bafkreiold@jpeg"
+        await db_session.commit()
+
+        await ingest_bsky_profile_update(did=artist.did, record=_profile_record(None))
+
+        await db_session.refresh(artist)
+        assert artist.avatar_url is None
+
+    async def test_does_not_touch_display_name(
+        self, db_session: AsyncSession, artist: Artist
+    ) -> None:
+        """display_name is editable in plyr, so mirroring would clobber it."""
+        original = artist.display_name
+
+        await ingest_bsky_profile_update(
+            did=artist.did, record=_profile_record("bafkreinew")
+        )
+
+        await db_session.refresh(artist)
+        assert artist.display_name == original
+
+    async def test_skips_deactivated_artist(
+        self, db_session: AsyncSession, artist: Artist
+    ) -> None:
+        """a deactivated account's avatar was cleared on purpose."""
+        artist.deactivated = True
+        artist.avatar_url = None
+        await db_session.commit()
+
+        await ingest_bsky_profile_update(
+            did=artist.did, record=_profile_record("bafkreinew")
+        )
+
+        await db_session.refresh(artist)
+        assert artist.avatar_url is None
+
+    async def test_unknown_did_is_skipped(self, db_session: AsyncSession) -> None:
+        await ingest_bsky_profile_update(
+            did="did:plc:nonexistent", record=_profile_record("bafkreinew")
+        )
+
+
+class TestBskyProfileSubscription:
+    async def test_bsky_profile_collection_is_subscribed(self) -> None:
+        """without this in wantedCollections, avatar changes never reach us."""
+        consumer = JetstreamConsumer()
+        assert BSKY_PROFILE_COLLECTION in consumer._collections
+        assert f"wantedCollections={BSKY_PROFILE_COLLECTION}" in consumer._build_url()
+
+    async def test_dispatches_bsky_profile_update(self) -> None:
+        consumer = JetstreamConsumer()
+        consumer._known_dids = {"did:plc:jetstream_test"}
+
+        mock_docket = MagicMock()
+        dispatched: list[object] = []
+        mock_docket.add = MagicMock(
+            side_effect=lambda fn: (dispatched.append(fn), AsyncMock())[1]
+        )
+
+        event = {
+            "kind": "commit",
+            "did": "did:plc:jetstream_test",
+            "time_us": 1000000,
+            "commit": {
+                "collection": BSKY_PROFILE_COLLECTION,
+                "operation": "update",
+                "rkey": "self",
+                "record": _profile_record("bafkreinew"),
+                "cid": "bafynew",
+            },
+        }
+
+        with patch("backend._internal.jetstream.get_docket", return_value=mock_docket):
+            await consumer._process_event(event)
+
+        assert dispatched == [ingest_bsky_profile_update]
+
+    async def test_bsky_profile_does_not_route_to_plyr_profile_task(self) -> None:
+        """`app.bsky.actor.profile` also ends in `.actor.profile`.
+
+        the plyr branch matched on that suffix, so subscribing to bluesky's
+        collection would have fed foreign records to `ingest_profile_update`,
+        which validates against the `fm.plyr.actor.profile` schema and writes
+        `bio`.
+        """
+        consumer = JetstreamConsumer()
+        consumer._known_dids = {"did:plc:jetstream_test"}
+
+        mock_docket = MagicMock()
+        dispatched: list[object] = []
+        mock_docket.add = MagicMock(
+            side_effect=lambda fn: (dispatched.append(fn), AsyncMock())[1]
+        )
+
+        event = {
+            "kind": "commit",
+            "did": "did:plc:jetstream_test",
+            "time_us": 1000000,
+            "commit": {
+                "collection": BSKY_PROFILE_COLLECTION,
+                "operation": "update",
+                "rkey": "self",
+                "record": _profile_record("bafkreinew"),
+                "cid": "bafynew",
+            },
+        }
+
+        with patch("backend._internal.jetstream.get_docket", return_value=mock_docket):
+            await consumer._process_event(event)
+
+        assert ingest_profile_update not in dispatched
+
+
+class TestIngestTaskRegistration:
+    async def test_every_ingest_task_is_registered_with_the_worker(self) -> None:
+        """every dispatchable ingest task must be in the worker's registry.
+
+        the registry is a hand-maintained list, and docket resolves a task by
+        name at execution time: an unregistered one is dropped with a log line
+        on the worker, not an error at the dispatch site. `ingest_identity_update`
+        was missing, so 35 production dispatches over two weeks were dropped and
+        no handle change, PDS migration, or avatar refresh ever applied.
+        """
+        import inspect
+
+        from backend._internal.tasks import background_tasks, ingest
+
+        dispatchable = {
+            name
+            for name, fn in inspect.getmembers(ingest, inspect.iscoroutinefunction)
+            if name.startswith("ingest_") and fn.__module__ == ingest.__name__
+        }
+        registered = {fn.__name__ for fn in background_tasks}
+
+        assert dispatchable - registered == set()
