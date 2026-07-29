@@ -8,6 +8,36 @@ import httpx
 logger = logging.getLogger(__name__)
 
 BSKY_API_BASE = "https://public.api.bsky.app/xrpc"
+BSKY_CDN_BASE = "https://cdn.bsky.app/img/avatar/plain"
+
+
+def bsky_avatar_cdn_url(did: str, cid: str) -> str:
+    """build the Bluesky CDN avatar URL for a blob CID.
+
+    the `@jpeg` suffix asks the CDN to serve a jpeg rendition. it also keeps
+    superseded blobs resolvable: once a profile points at a newer avatar, the
+    CDN 404s the old CID at the bare path but still serves it under `@jpeg`.
+    """
+    return f"{BSKY_CDN_BASE}/{did}/{cid}@jpeg"
+
+
+def avatar_url_from_profile_record(did: str, record: dict) -> str | None:
+    """extract the avatar CDN URL from an `app.bsky.actor.profile` record.
+
+    the record embeds the avatar as a blob ref, so the URL composes without a
+    round trip to the appview. returns None when the profile carries no avatar,
+    which is also how a cleared profile picture arrives.
+    """
+    avatar = record.get("avatar")
+    if not isinstance(avatar, dict):
+        return None
+
+    ref = avatar.get("ref")
+    cid = ref.get("$link") if isinstance(ref, dict) else None
+    if not isinstance(cid, str) or not cid:
+        return None
+
+    return bsky_avatar_cdn_url(did, cid)
 
 
 def normalize_avatar_url(url: str | None) -> str | None:
@@ -39,9 +69,7 @@ def normalize_avatar_url(url: str | None) -> str | None:
             cid = query.get("cid", [None])[0]
 
             if did and cid:
-                # default to jpeg as it's most common/safe for avatars
-                # @jpeg suffix hints CDN to serve/convert as jpeg
-                return f"https://cdn.bsky.app/img/avatar/plain/{did}/{cid}@jpeg"
+                return bsky_avatar_cdn_url(did, cid)
         except Exception:
             # if parsing fails, return original URL
             pass

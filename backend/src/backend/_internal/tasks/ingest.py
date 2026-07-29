@@ -18,6 +18,7 @@ from sqlalchemy import delete, select, update
 from sqlalchemy.exc import IntegrityError, OperationalError
 
 from backend._internal.atproto.client import pds_blob_url
+from backend._internal.atproto.profile import avatar_url_from_profile_record
 from backend._internal.atproto.self_labels import self_label_values_from_record
 from backend._internal.tasks.hooks import run_post_track_create_hooks
 from backend._internal.tasks.origin_trust import (
@@ -788,6 +789,48 @@ async def ingest_profile_update(
             artist.bio = bio
             await db.commit()
             logfire.info("ingest: profile updated", did=did)
+
+
+async def ingest_bsky_profile_update(
+    did: str,
+    record: dict,
+    retry: ExponentialRetry = _INGEST_RETRY,
+) -> None:
+    """mirror an artist's avatar from their `app.bsky.actor.profile` record.
+
+    a profile picture change is an ordinary commit, not an `#identity` or
+    `#account` event, so nothing else in the consumer sees it. without this the
+    avatar only refreshes on login, an explicit refresh, or a handle/PDS change
+    — and a superseded blob CID 404s on the CDN, which renders as a broken
+    image everywhere the artist appears.
+
+    `display_name` is deliberately not mirrored: it is editable via
+    `PUT /artists/me`, so overwriting it would clobber a plyr-local edit.
+    """
+    async with db_session() as db:
+        artist = await db.get(Artist, did)
+        if not artist:
+            logger.debug("ingest_bsky_profile_update: unknown artist %s", did)
+            return
+
+        # a deactivated account's CDN URL is dead; `ingest_account_status_change`
+        # cleared it on purpose, and reactivation re-fetches it.
+        if artist.deactivated:
+            logger.debug("ingest_bsky_profile_update: %s is deactivated", did)
+            return
+
+        fresh_avatar = avatar_url_from_profile_record(did, record)
+        if fresh_avatar == artist.avatar_url:
+            return
+
+        previous, artist.avatar_url = artist.avatar_url, fresh_avatar
+        await db.commit()
+        logfire.info(
+            "ingest: avatar mirrored from bluesky profile",
+            did=did,
+            old=previous,
+            new=fresh_avatar,
+        )
 
 
 # --- handle update task ---

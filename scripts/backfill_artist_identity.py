@@ -1,10 +1,15 @@
 #!/usr/bin/env -S uv run --script --quiet
 """resync Artist.handle / display_name / avatar_url from Bluesky.
 
-catches artists whose identity drifted before #1200 (Jetstream identity-event
-sync, shipped 2026-03-30) or whose displayName was never re-pulled from bsky
-(ingest_identity_update only syncs handle/pds_url/avatar_url, not
-display_name).
+catches artists whose identity drifted, or whose displayName was never
+re-pulled from bsky (ingest_identity_update only syncs handle/pds_url/
+avatar_url, not display_name).
+
+note: #1200 (2026-03-30) wired identity events to `ingest_identity_update`,
+but the task was never added to the docket worker's registry, so every
+dispatch was dropped as an unknown task and no identity event ever applied.
+fixed alongside the avatar-mirroring work; until that ships everywhere, assume
+identity drift is unbounded rather than "since the last event".
 
 display_name is only updated when it currently equals the stored handle —
 that's the "auto-defaulted from handle" marker set by ensure_artist_exists().

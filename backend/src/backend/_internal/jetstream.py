@@ -25,6 +25,7 @@ from websockets.asyncio.client import ClientConnection
 from backend._internal.background import get_docket
 from backend._internal.tasks.ingest import (
     ingest_account_status_change,
+    ingest_bsky_profile_update,
     ingest_comment_create,
     ingest_comment_delete,
     ingest_comment_update,
@@ -46,6 +47,11 @@ from backend.utilities.redis import get_async_redis_client
 
 logger = logging.getLogger(__name__)
 
+# not environment-namespaced: every environment mirrors avatars from the one
+# real Bluesky profile collection. ~2 commits/second network-wide, and
+# `_process_event` drops everything outside `_known_dids`.
+BSKY_PROFILE_COLLECTION = "app.bsky.actor.profile"
+
 
 class JetstreamConsumer:
     """consumes ATProto Jetstream events for this environment's collections.
@@ -53,7 +59,8 @@ class JetstreamConsumer:
     args:
         collections: exact collection NSIDs to subscribe to. defaults to the
             5 collections derived from settings.atproto.app_namespace so each
-            environment only receives its own records.
+            environment only receives its own records, plus Bluesky's profile
+            collection so avatar changes are mirrored as they happen.
     """
 
     def __init__(self, collections: list[str] | None = None) -> None:
@@ -63,6 +70,7 @@ class JetstreamConsumer:
             settings.atproto.comment_collection,
             settings.atproto.list_collection,
             settings.atproto.profile_collection,
+            BSKY_PROFILE_COLLECTION,
         ]
         self._ws: ClientConnection | None = None
         self._known_dids: set[str] = set()
@@ -223,6 +231,21 @@ class JetstreamConsumer:
     ) -> None:
         """dispatch event to the appropriate ingest task via docket."""
         docket = get_docket()
+
+        # bluesky's profile collection, checked before the suffix match below —
+        # it also ends in `.actor.profile`, but carries a different schema and
+        # feeds a different task.
+        if collection == BSKY_PROFILE_COLLECTION:
+            if operation in ("create", "update"):
+                await docket.add(ingest_bsky_profile_update)(
+                    did=did, record=record or {}
+                )
+                logfire.debug(
+                    "jetstream dispatched bsky profile.{operation}",
+                    operation=operation,
+                    did=did,
+                )
+            return
 
         # extract record type from the collection NSID
         # e.g. "fm.plyr.track" or "fm.plyr.dev.track" → "track"
