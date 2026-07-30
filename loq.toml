@@ -48,7 +48,7 @@ max_lines = 1222
 
 [[rules]]
 path = "backend/src/backend/storage/r2.py"
-max_lines = 932
+max_lines = 952
 
 [[rules]]
 path = "backend/tests/api/test_audio.py"

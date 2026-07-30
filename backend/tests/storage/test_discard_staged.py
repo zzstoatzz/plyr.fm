@@ -103,6 +103,34 @@ async def test_discard_staged_keeps_audio_referenced_as_a_lossless_source(
     s3.delete_object.assert_not_awaited()
 
 
+async def test_discard_staged_keeps_cover_art_another_row_still_uses(
+    storage: R2Storage, s3: MagicMock, db_session: AsyncSession
+) -> None:
+    """images are content-hashed too, and were protected by nothing at all.
+
+    The refcount query only ever counted audio columns, so every image in the
+    system was unguarded: two tracks sharing a cover, an album whose tracks
+    inherit its art, or two artists who uploaded the same JPEG.
+    """
+    artist = Artist(did="did:plc:cover", handle="cover.fm", display_name="cover")
+    db_session.add(artist)
+    await db_session.flush()
+    db_session.add(
+        Track(
+            title="keeps its cover",
+            artist_did=artist.did,
+            file_id="some-audio",
+            file_type="mp3",
+            image_id="shared-cover-hash",
+            extra={},
+        )
+    )
+    await db_session.commit()
+
+    assert await storage.discard_staged("shared-cover-hash") is False
+    s3.delete_object.assert_not_awaited()
+
+
 async def test_discard_staged_deletes_a_genuinely_orphaned_object(
     storage: R2Storage, s3: MagicMock, db_session: AsyncSession
 ) -> None:

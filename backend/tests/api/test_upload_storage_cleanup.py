@@ -91,11 +91,11 @@ class TestPhase1To5FailureDeletesStagedMedia:
 
         # non-gated → audio in public bucket
         discarded = [
-            (c.args[0], c.kwargs["gated"]) for c in mock_discard.call_args_list
+            (c.args[0], c.kwargs.get("gated")) for c in mock_discard.call_args_list
         ]
         assert ("staged-audio-id", False) in discarded
-        deleted_ids = [c.args[0] for c in mock_delete.call_args_list]
-        assert "staged-image-id" in deleted_ids
+        assert ("staged-image-id", None) in discarded
+        mock_delete.assert_not_called()
 
     async def test_gated_audio_deleted_from_private_bucket(self) -> None:
         with (
@@ -119,12 +119,12 @@ class TestPhase1To5FailureDeletesStagedMedia:
         # must route the audio delete to delete_gated. images are
         # never gated.
         discarded = [
-            (c.args[0], c.kwargs["gated"]) for c in mock_discard.call_args_list
+            (c.args[0], c.kwargs.get("gated")) for c in mock_discard.call_args_list
         ]
-        assert discarded == [("staged-audio-id", True)]
-        deleted_public_ids = [c.args[0] for c in mock_delete.call_args_list]
-        assert "staged-audio-id" not in deleted_public_ids
-        assert "staged-image-id" in deleted_public_ids
+        # gated audio routes to the private bucket; images are never gated
+        assert ("staged-audio-id", True) in discarded
+        assert ("staged-image-id", None) in discarded
+        mock_delete.assert_not_called()
 
     async def test_transcoded_failure_deletes_both_sibling_and_original(
         self,
@@ -179,8 +179,8 @@ class TestPhase1To5FailureDeletesStagedMedia:
         discarded = [c.args[0] for c in mock_discard.call_args_list]
         assert "transcoded-mp3-id" in discarded  # the playable sibling
         assert "staged-audio-id" in discarded  # the lossless source
-        deleted_ids = [c.args[0] for c in mock_delete.call_args_list]
-        assert "staged-image-id" in deleted_ids  # the cover art
+        assert "staged-image-id" in discarded  # the cover art
+        mock_delete.assert_not_called()
 
 
 class TestPhase6FailureDefersToCreateRecords:

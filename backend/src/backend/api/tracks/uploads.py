@@ -1046,7 +1046,7 @@ async def _create_records(
                     )
             if image_id:
                 with contextlib.suppress(Exception):
-                    await storage.delete(image_id)
+                    await storage.discard_staged(image_id)
         # else: Jetstream finalized the row — media belongs to the published track
 
         raise UploadPhaseError(f"failed to sync track to ATProto: {err_detail}") from e
@@ -1199,7 +1199,7 @@ async def _cleanup_staged_media_pre_db(
 
     if ctx.image_id:
         with contextlib.suppress(Exception):
-            await storage.delete(ctx.image_id)
+            await storage.discard_staged(ctx.image_id)
 
 
 async def _process_upload_background(ctx: UploadContext) -> None:
@@ -1397,7 +1397,7 @@ async def run_track_upload(
             )
         if image_id:
             with contextlib.suppress(Exception):
-                await storage.delete(image_id)
+                await storage.discard_staged(image_id)
         await job_service.update_progress(
             upload_id,
             JobStatus.FAILED,
@@ -1779,7 +1779,7 @@ async def upload_track(
                 )
             if image_id:
                 with contextlib.suppress(Exception):
-                    await storage.delete(image_id)
+                    await storage.discard_staged(image_id)
             with contextlib.suppress(Exception):
                 await job_service.update_progress(
                     upload_id,
