@@ -11,7 +11,7 @@ import boto3
 import logfire
 from botocore.config import Config
 from botocore.exceptions import ClientError
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 
 from backend._internal.audio import AudioFormat
 from backend._internal.image import ImageFormat
@@ -435,6 +435,46 @@ class R2Storage:
             size = response.get("ContentLength")
             return int(size) if size is not None else None
 
+    async def _reference_count(self, file_id: str) -> int:
+        """how many live tracks point at ``file_id``.
+
+        Counts `original_file_id` as well as `file_id`: a track's lossless source
+        is an object too, and a file_id is a content hash, so two rows can name
+        the same bytes through different columns.
+        """
+        async with db_session() as db:
+            stmt = (
+                select(func.count())
+                .select_from(Track)
+                .where(or_(Track.file_id == file_id, Track.original_file_id == file_id))
+            )
+            return (await db.execute(stmt)).scalar_one()
+
+    async def discard_staged(
+        self, file_id: str, file_type: str | None = None, *, gated: bool = False
+    ) -> bool:
+        """delete an object staged for an upload that never became a track.
+
+        Distinct from `delete()`, which removes the media of a track that is
+        going away and therefore tolerates its own single reference. Nothing
+        references a staged object, so *any* reference means these bytes belong
+        to somebody else and must survive.
+
+        The distinction is load-bearing because a file_id is a content hash: a
+        listener re-uploading a file they already published stages the exact key
+        their live track is served from, and the duplicate check that rejects
+        the upload is itself proof that the object is not ours to delete.
+        """
+        if refcount := await self._reference_count(file_id):
+            logfire.info(
+                "keeping staged object, a live track references it",
+                file_id=file_id,
+                refcount=refcount,
+            )
+            return False
+        delete_fn = self.delete_gated if gated else self.delete
+        return await delete_fn(file_id, file_type)
+
     async def delete(self, file_id: str, file_type: str | None = None) -> bool:
         """delete media file from R2.
 
@@ -448,26 +488,20 @@ class R2Storage:
                       if None, falls back to trying all formats (legacy/images).
         """
         # check refcount before deleting
-        async with db_session() as db:
-            stmt = (
-                select(func.count()).select_from(Track).where(Track.file_id == file_id)
+        refcount = await self._reference_count(file_id)
+        if refcount > 1:
+            logfire.info(
+                "skipping R2 delete, file still referenced",
+                file_id=file_id,
+                refcount=refcount,
             )
-            result = await db.execute(stmt)
-            refcount = result.scalar_one()
+            return False
 
-            if refcount > 1:
-                logfire.info(
-                    "skipping R2 delete, file still referenced",
-                    file_id=file_id,
-                    refcount=refcount,
-                )
-                return False
-
-            if refcount == 0:
-                logfire.warning(
-                    "deleting R2 file with no database references",
-                    file_id=file_id,
-                )
+        if refcount == 0:
+            logfire.warning(
+                "deleting R2 file with no database references",
+                file_id=file_id,
+            )
 
         # safe to delete - only one or zero references
         logfire.info(
@@ -684,20 +718,13 @@ class R2Storage:
 
         # refcount check — same guard as `delete()` so a duplicate gated row
         # doesn't pull the file out from under another track.
-        async with db_session() as db:
-            stmt = (
-                select(func.count()).select_from(Track).where(Track.file_id == file_id)
+        if (refcount := await self._reference_count(file_id)) > 1:
+            logfire.info(
+                "skipping R2 gated delete, file still referenced",
+                file_id=file_id,
+                refcount=refcount,
             )
-            result = await db.execute(stmt)
-            refcount = result.scalar_one()
-
-            if refcount > 1:
-                logfire.info(
-                    "skipping R2 gated delete, file still referenced",
-                    file_id=file_id,
-                    refcount=refcount,
-                )
-                return False
+            return False
 
         async with self._s3_client() as client:
             if file_type:
