@@ -281,6 +281,7 @@ async def radio_state(
                 stream_url=broadcast.stream_url,
                 kind=broadcast.kind,
                 started_at=broadcast.started_at,
+                artwork_url=broadcast.artwork_url,
             )
             if broadcast
             else None

@@ -180,8 +180,22 @@
 								{/if}
 							</a>
 						</SensitiveImage>
+					{:else if radio.state?.live?.artwork_url}
+						<img class="art-bg" src={radio.state.live.artwork_url} alt="" aria-hidden="true" />
+						<div class="art-link">
+							<img src={radio.state.live.artwork_url} alt="" class="art" />
+						</div>
 					{:else}
-						<div class="art fallback"></div>
+						<!-- no cover published for this broadcast: a placeholder sized like
+						     one, rather than a rectangle stretched over the whole stage. -->
+						<div class="art-link art-tile-live" aria-hidden="true">
+							<div class="art fallback live-art">
+								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round">
+									<circle cx="12" cy="12" r="2" />
+									<path d="M16.24 7.76a6 6 0 0 1 0 8.49M7.76 16.24a6 6 0 0 1 0-8.49M19.07 4.93a10 10 0 0 1 0 14.14M4.93 19.07a10 10 0 0 1 0-14.14" />
+								</svg>
+							</div>
+						</div>
 					{/if}
 				</div>
 				<div class="now-meta">
@@ -560,6 +574,28 @@
 		background:
 			linear-gradient(135deg, rgba(255, 255, 255, 0.08), transparent 45%),
 			var(--bg-secondary);
+	}
+
+	/* the cover path is height-driven, which needs an intrinsic image to stay
+	   square. a placeholder has none, so drive this one from width and cap it —
+	   otherwise it stretches to whatever vertical space the stage has. */
+	.art-link.art-tile-live {
+		height: auto;
+		width: min(100%, 18rem);
+		max-height: 100%;
+		aspect-ratio: 1 / 1;
+	}
+
+	.art.live-art {
+		display: grid;
+		place-items: center;
+		color: var(--text-secondary);
+	}
+
+	.art.live-art svg {
+		width: 38%;
+		height: 38%;
+		opacity: 0.55;
 	}
 
 	.now-meta {

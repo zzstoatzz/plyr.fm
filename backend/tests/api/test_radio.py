@@ -1025,3 +1025,69 @@ async def test_firehose_station_is_in_the_lineup(radio_app: FastAPI) -> None:
     assert "firehose" in slugs
     # it must not become the default — that is what every legacy client gets
     assert response.json()["default_slug"] != "firehose"
+
+
+async def test_a_broadcast_carries_its_own_artwork(
+    radio_app: FastAPI,
+    db_session: AsyncSession,
+    radio_artist: Artist,
+) -> None:
+    """the broadcaster owns its cover — a sonification renders one per interval."""
+    now = datetime.now(UTC) + TEST_TIME_OFFSET
+    radio_artist.handle = stations.FIREHOSE_PUBLISHER_HANDLE
+    await _create_track(
+        db_session, radio_artist, title="segment", file_id="seg", created_at=now
+    )
+    await db_session.commit()
+
+    payload = {
+        "live": True,
+        "started_at": "2026-07-30T19:12:32Z",
+        "artwork_url": "https://relay.test/sonify/live/cover.png",
+    }
+    response_stub = MagicMock()
+    response_stub.json.return_value = payload
+    response_stub.raise_for_status.return_value = None
+    client_stub = MagicMock()
+    client_stub.__aenter__ = AsyncMock(return_value=client_stub)
+    client_stub.__aexit__ = AsyncMock(return_value=False)
+    client_stub.get = AsyncMock(return_value=response_stub)
+
+    with patch.object(radio_live.httpx, "AsyncClient", return_value=client_stub):
+        async with AsyncClient(
+            transport=ASGITransport(app=radio_app),
+            base_url="https://radio.plyr.fm",
+        ) as client:
+            response = await client.get(
+                "/radio/state.json", params={"station": "firehose"}
+            )
+
+    live = response.json()["live"]
+    assert live["artwork_url"] == "https://relay.test/sonify/live/cover.png"
+
+
+async def test_a_broadcast_without_artwork_is_still_valid(
+    radio_app: FastAPI,
+    db_session: AsyncSession,
+    radio_artist: Artist,
+) -> None:
+    now = datetime.now(UTC) + TEST_TIME_OFFSET
+    radio_artist.handle = stations.FIREHOSE_PUBLISHER_HANDLE
+    await _create_track(
+        db_session, radio_artist, title="segment", file_id="seg", created_at=now
+    )
+    await db_session.commit()
+
+    broadcast = radio_live.LiveBroadcast(
+        stream_url="https://relay.test/live/index.m3u8", kind="hls", started_at=None
+    )
+    with patch.object(radio_live, "_probe", AsyncMock(return_value=broadcast)):
+        async with AsyncClient(
+            transport=ASGITransport(app=radio_app),
+            base_url="https://radio.plyr.fm",
+        ) as client:
+            response = await client.get(
+                "/radio/state.json", params={"station": "firehose"}
+            )
+
+    assert response.json()["live"]["artwork_url"] is None

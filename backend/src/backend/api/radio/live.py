@@ -31,6 +31,7 @@ class LiveBroadcast:
     stream_url: str
     kind: str
     started_at: str | None
+    artwork_url: str | None = None
 
 
 _cache: dict[str, tuple[float, LiveBroadcast | None]] = {}
@@ -83,11 +84,17 @@ async def _probe(source: LiveSource) -> LiveBroadcast | None:
     if not isinstance(payload, dict) or payload.get("live") is not True:
         return None
 
-    started_at = payload.get("started_at")
+    def _str(key: str) -> str | None:
+        value = payload.get(key)
+        return value if isinstance(value, str) and value else None
+
     return LiveBroadcast(
         stream_url=source.stream_url,
         kind=source.kind,
-        started_at=started_at if isinstance(started_at, str) else None,
+        started_at=_str("started_at"),
+        # the broadcaster owns its own artwork — a sonification renders a cover
+        # per interval, so this changes while the stream stays put.
+        artwork_url=_str("artwork_url"),
     )
 
 

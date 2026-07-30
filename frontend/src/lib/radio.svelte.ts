@@ -37,6 +37,8 @@ export interface LiveBroadcast {
 	stream_url: string;
 	kind: string;
 	started_at: string | null;
+	/** the broadcaster's own cover, when it publishes one */
+	artwork_url?: string | null;
 }
 
 export interface RadioState {
@@ -259,6 +261,7 @@ class Radio {
 			artist_handle: '',
 			file_id: '',
 			file_type: 'hls',
+			image_url: this.state?.live?.artwork_url ?? undefined,
 			play_count: 0,
 			album: null,
 			features: []
