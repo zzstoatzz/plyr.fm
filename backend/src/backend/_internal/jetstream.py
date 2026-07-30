@@ -214,6 +214,7 @@ class JetstreamConsumer:
         rkey = commit.get("rkey", "")
         record = commit.get("record")
         cid = commit.get("cid")
+        rev = commit.get("rev")
 
         # update cursor from event time_us
         if time_us := event.get("time_us"):
@@ -230,6 +231,7 @@ class JetstreamConsumer:
             record=record,
             uri=uri,
             cid=cid,
+            rev=rev,
         )
 
     async def _dispatch(
@@ -241,6 +243,7 @@ class JetstreamConsumer:
         record: dict[str, Any] | None,
         uri: str,
         cid: str | None,
+        rev: str | None = None,
     ) -> None:
         """dispatch event to the appropriate ingest task via docket."""
         docket = get_docket()
@@ -295,6 +298,8 @@ class JetstreamConsumer:
             if operation in ("create", "update"):
                 kwargs["record"] = record or {}
                 kwargs["cid"] = cid
+                if record_type == "track":
+                    kwargs["rev"] = rev
             await docket.add(task)(**kwargs)
             logfire.info(
                 "jetstream dispatched {record_type}.{operation}",

@@ -14,9 +14,10 @@ ingest.py`.
 2. for each commit/identity/account event it dispatches a docket task —
    `ingest_track_create` / `_update` / `_delete`, the like/comment/list
    equivalents, and `ingest_identity_update` / `ingest_account_status_change`.
-3. each task resolves the event into the DB. all tasks are **idempotent**
-   (dedupe by AT-URI or unique constraint) so a cursor rewind replaying events
-   is safe.
+3. each task resolves the event into the DB. create and delete are **idempotent**
+   by AT-URI or unique constraint. update cannot be — applying a record twice is
+   only safe if the second copy is not *older*, so track updates are ordered by
+   commit `rev` (see "re-delivery" below).
 
 the consumer runs in its **own fly process group** (not the docket worker loop) —
 it was starving as a worker task. see `runbooks/worker-silence-alert.md` and the
@@ -85,8 +86,35 @@ record landed as `audio_storage="both"` with an `r2_url` that `404`d forever on
 playback. See the retrospective and `backend/audio-streaming.md`.
 
 > `ingest_track_update` strips an untrusted `audioUrl` but (unlike create) never
-> rejects the whole update, and does not currently run the existence check — an
-> update can only mutate an already-ingested track.
+> rejects the whole update. It **does** run the existence check, as of #1736 —
+> the earlier reasoning ("an update can only mutate an already-ingested track")
+> was wrong, because an already-ingested track is exactly what a stale URL
+> corrupts.
+
+## re-delivery: the firehose does not promise order
+
+The firehose offers no ordering or exactly-once guarantee. A repo can re-emit its
+commit history, and jetstream's `time_us` is stamped **on receipt**, so it cannot
+distinguish a replay from a fresh write.
+
+`ingest_track_update` therefore orders commits by the repo `rev` on the commit
+(a TID: monotonic per repo, lexicographically sortable, and authored by the PDS
+so it survives re-delivery). The last applied rev is stored on
+`tracks.atproto_record_rev`; an update at or below it is refused and logged as
+`ingest: skipping superseded track commit`.
+
+Two properties worth knowing:
+
+- **No baseline means no ordering.** A row whose `atproto_record_rev` is `NULL`
+  accepts the next update unconditionally and records its rev. Applying-and-learning
+  beats rejecting, which would silently drop legitimate edits from clients.
+- **Only the track path is guarded.** `ingest_comment_update` and
+  `ingest_list_update` remain last-writer-wins. Track was fixed first because it
+  is the one that can strand audio bytes.
+
+This is the fix for the 2026-07-30 replay incident, where a re-emitted repo
+history walked one track's `r2_url` back to a 19-minute-old revision and another's
+title back by an hour, while both PDS records were correct throughout.
 
 ## other guards
 

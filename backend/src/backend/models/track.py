@@ -77,6 +77,12 @@ class Track(Base):
     r2_url: Mapped[str | None] = mapped_column(String, nullable=True)
     atproto_record_uri: Mapped[str | None] = mapped_column(String, nullable=True)
     atproto_record_cid: Mapped[str | None] = mapped_column(String, nullable=True)
+    # Repo commit `rev` (a TID) of the last record state applied to this row.
+    # The firehose gives no ordering or exactly-once guarantee, so a re-emitted
+    # historical commit can arrive after a newer one; `rev` is monotonic per
+    # repo and survives re-delivery, which `time_us` does not (jetstream stamps
+    # that on receipt). Ingest refuses to apply a commit at or below this.
+    atproto_record_rev: Mapped[str | None] = mapped_column(String, nullable=True)
     # Author-published `com.atproto.label.defs#selfLabels` values. These remain
     # separate from signed operator labels so provenance stays intact.
     self_labels: Mapped[list[str]] = mapped_column(

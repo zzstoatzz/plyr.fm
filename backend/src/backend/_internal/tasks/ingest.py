@@ -46,6 +46,21 @@ class SubjectNotFoundError(Exception):
     """referenced subject (track) not yet indexed — triggers retry."""
 
 
+def _is_stale_commit(incoming_rev: str | None, applied_rev: str | None) -> bool:
+    """has a commit at or before `applied_rev` already been applied?
+
+    Repo revs are TIDs — monotonic per repo and lexicographically sortable, so
+    a plain string compare orders them. A repo can re-emit its commit history
+    (observed in production: 37 `track.update` events for one URI whose record
+    had not changed in half an hour), and jetstream's `time_us` is stamped on
+    receipt so it cannot distinguish a replay from a fresh write. Without this
+    the older state wins and the track points at audio it no longer owns.
+    """
+    if not incoming_rev or not applied_rev:
+        return False
+    return incoming_rev <= applied_rev
+
+
 async def _audio_object_exists(audio_url: str) -> bool:
     """HEAD the R2 object a plyr-CDN audioUrl points at.
 
@@ -149,6 +164,7 @@ async def ingest_track_create(
     record: dict,
     uri: str,
     cid: str | None,
+    rev: str | None = None,
     retry: ExponentialRetry = _INGEST_RETRY,
     concurrency: ConcurrencyLimit = ConcurrencyLimit("did", max_concurrent=3),  # noqa: B008
 ) -> None:
@@ -160,6 +176,7 @@ async def ingest_track_create(
         record: the ATProto record data
         uri: the AT URI (at://did/collection/rkey)
         cid: content identifier
+        rev: repo commit rev, recorded so later updates can be ordered
     """
     if errors := validate_record("fm.plyr.track", record):
         logfire.warn("ingest: invalid track record, skipping", uri=uri, errors=errors)
@@ -192,6 +209,7 @@ async def ingest_track_create(
             if existing_track.publish_state == "pending":
                 # upload path reserved this row — finalize it
                 existing_track.atproto_record_cid = cid
+                existing_track.atproto_record_rev = rev
                 existing_track.publish_state = "published"
                 await db.commit()
                 await db.refresh(existing_track)
@@ -314,6 +332,7 @@ async def ingest_track_create(
             r2_url=audio_url if audio_storage in ("r2", "both") else None,
             atproto_record_uri=uri,
             atproto_record_cid=cid,
+            atproto_record_rev=rev,
             self_labels=self_label_values_from_record(record.get("labels")),
             audio_storage=audio_storage,
             pds_blob_cid=pds_blob_cid,
@@ -358,9 +377,15 @@ async def ingest_track_update(
     record: dict,
     uri: str,
     cid: str | None,
+    rev: str | None = None,
     retry: ExponentialRetry = _INGEST_RETRY,
 ) -> None:
-    """update mutable fields on an existing track."""
+    """update mutable fields on an existing track.
+
+    `rev` orders the commit against what's already applied — see
+    `_is_stale_commit`. It is optional so an event missing it still updates
+    (unordered, as before) rather than being silently dropped.
+    """
     if errors := validate_record("fm.plyr.track", record, partial=True):
         logfire.warn("ingest: invalid track record, skipping", uri=uri, errors=errors)
         return
@@ -372,6 +397,15 @@ async def ingest_track_update(
         track = result.scalar_one_or_none()
         if not track:
             logger.debug("ingest_track_update: track %s not found, skipping", uri)
+            return
+
+        if _is_stale_commit(rev, track.atproto_record_rev):
+            logfire.info(
+                "ingest: skipping superseded track commit",
+                uri=uri,
+                incoming_rev=rev,
+                applied_rev=track.atproto_record_rev,
+            )
             return
 
         if title := record.get("title"):
@@ -389,6 +423,8 @@ async def ingest_track_update(
                 )
         if cid:
             track.atproto_record_cid = cid
+        if rev:
+            track.atproto_record_rev = rev
 
         # putRecord events contain the complete record. Absence therefore clears
         # the creator assertion instead of preserving stale indexed values.
@@ -402,6 +438,18 @@ async def ingest_track_update(
         if audio_url and not await is_trusted_audio_origin(audio_url, artist_did=did):
             logfire.warn(
                 "ingest: stripping untrusted audioUrl on update",
+                uri=uri,
+                audio_url=audio_url,
+            )
+            audio_url = None
+
+        # origin trust is not existence — same reasoning as the create path.
+        # create has HEADed the object since #1616; update had not, justified by
+        # "an update can only mutate an already-ingested track", but an
+        # already-ingested track is precisely what a stale audioUrl corrupts.
+        if audio_url and not await _audio_object_exists(audio_url):
+            logfire.warn(
+                "ingest: audioUrl has no backing R2 object on update, ignoring",
                 uri=uri,
                 audio_url=audio_url,
             )

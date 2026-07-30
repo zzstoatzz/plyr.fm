@@ -51,6 +51,39 @@ def _add_revision(
 class TestPruneRevisions:
     """verify retention cap + blob deletion behavior."""
 
+    async def test_blob_named_only_by_r2_url_is_never_deleted(
+        self, db_session: AsyncSession, owner: Artist
+    ) -> None:
+        """#1736: the served object is named by `r2_url`, not always `file_id`.
+
+        a firehose commit can repoint one without the other. keying
+        reference-safety on `file_id` alone let pruning delete live audio.
+        """
+        from datetime import UTC, datetime, timedelta
+
+        track = make_track(file_id="CURRENT")
+        # divergent row: serves SERVED, while file_id says CURRENT
+        track.r2_url = "https://audio.example/SERVED.mp3"
+        db_session.add(track)
+        await db_session.commit()
+        await db_session.refresh(track)
+
+        base = datetime.now(UTC) - timedelta(hours=1)
+        for i in range(MAX_REVISIONS_PER_TRACK + 1):
+            rev = _add_revision(track.id, file_id="SERVED" if i == 0 else f"REV-{i}")
+            rev.created_at = base + timedelta(minutes=i)
+            db_session.add(rev)
+        await db_session.commit()
+
+        with patch(
+            "backend._internal.track_revisions.storage.delete",
+            AsyncMock(return_value=True),
+        ) as mock_delete:
+            await prune_revisions(track.id)
+
+        deleted = {call.args[0] for call in mock_delete.call_args_list}
+        assert "SERVED" not in deleted
+
     async def test_under_cap_is_a_noop(
         self, db_session: AsyncSession, owner: Artist
     ) -> None:
