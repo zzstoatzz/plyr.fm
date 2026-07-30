@@ -80,6 +80,12 @@ class JetstreamConsumer:
         self._last_cursor_flush: float = 0.0
         self._last_did_refresh: float = 0.0
         self._shutdown_event = asyncio.Event()
+        self._host_index = 0
+        # blind-host detection: a host can stay connected and keep delivering
+        # some collections while dropping ours entirely. tracked separately so
+        # "our collections are silent" can be told apart from "the network is".
+        self._last_own_event: float = 0.0
+        self._last_any_event: float = 0.0
 
     def stop(self) -> None:
         """signal the consumer to shut down and unblock the recv loop.
@@ -112,6 +118,11 @@ class JetstreamConsumer:
             if self._shutdown_event.is_set():
                 return
 
+            # every reconnect moves on. a host that just dropped us has no
+            # claim on the next attempt, and rotating costs nothing when it
+            # was healthy — the cursor makes reconnects resumable either way.
+            self._rotate_host()
+
             # exponential backoff with jitter
             jitter = random.uniform(0, backoff * 0.5)
             delay = min(backoff + jitter, settings.jetstream.reconnect_max_seconds)
@@ -128,17 +139,24 @@ class JetstreamConsumer:
         url = self._build_url()
         logger.info("jetstream connecting to %s", url)
 
+        # a fresh connection has not yet proven anything about this host
+        self._last_own_event = 0.0
+        self._last_any_event = 0.0
+
         with logfire.span(
             "jetstream consume",
             known_dids=len(self._known_dids),
             cursor=self._cursor,
+            endpoint=self._current_endpoint(),
         ):
             async with websockets.connect(url, max_size=2**20) as ws:
                 self._ws = ws
                 logfire.info(
                     "jetstream connected",
                     known_dids=len(self._known_dids),
+                    endpoint=self._current_endpoint(),
                 )
+                self._last_own_event = self._last_any_event = time.monotonic()
 
                 async for raw in ws:
                     if self._shutdown_event.is_set():
@@ -149,9 +167,24 @@ class JetstreamConsumer:
                     except (orjson.JSONDecodeError, TypeError):
                         continue
 
+                    self._last_any_event = time.monotonic()
+                    if self._is_own_collection_event(event):
+                        self._last_own_event = self._last_any_event
+
                     await self._process_event(event)
                     await self._maybe_flush_cursor()
                     await self._maybe_refresh_dids()
+
+                    if self._is_blind():
+                        logfire.warn(
+                            "jetstream host is serving other collections but "
+                            "none of ours, rotating",
+                            endpoint=self._current_endpoint(),
+                            silent_seconds=round(
+                                time.monotonic() - self._last_own_event
+                            ),
+                        )
+                        return  # the reconnect loop rotates and resumes
 
     async def _process_event(self, event: dict[str, Any]) -> None:
         """check if event is for a known DID and dispatch to docket task."""
@@ -309,6 +342,57 @@ class JetstreamConsumer:
                 uri=uri,
             )
 
+    def _is_own_collection_event(self, event: dict[str, Any]) -> bool:
+        """did this event come from one of plyr's own lexicons?
+
+        Bluesky's profile collection is excluded deliberately: it is the
+        traffic that made a blind host look alive.
+        """
+        commit = event.get("commit")
+        if not isinstance(commit, dict):
+            return False
+        collection = commit.get("collection", "")
+        return collection != BSKY_PROFILE_COLLECTION and collection in (
+            self._collections
+        )
+
+    def _current_endpoint(self) -> str:
+        """the endpoint for this attempt — pinned URL, or the host in rotation."""
+        if pinned := settings.jetstream.url:
+            return pinned
+        hosts = settings.jetstream.hosts
+        return f"wss://{hosts[self._host_index % len(hosts)]}/subscribe"
+
+    def _rotate_host(self) -> None:
+        """advance to the next host, and rewind the cursor to cover its lag.
+
+        instances are independently positioned in the stream, so the one we
+        move to may be slightly behind the one we left. replaying a little is
+        safe (ingest is ordered by commit rev) — a gap would not be.
+        """
+        if settings.jetstream.url:
+            return  # pinned by config; nothing to rotate through
+        self._host_index += 1
+        if self._cursor is not None:
+            self._cursor -= 10_000_000
+
+    def _is_blind(self) -> bool:
+        """is this host delivering other collections but none of ours?
+
+        the failure this catches never disconnects: jetstream2 kept serving
+        `app.bsky.actor.profile` for 10h on 2026-07-30 while dropping every
+        `fm.plyr.*` event. requiring recent *other* traffic is what separates a
+        blind host from a quiet network — on a genuinely quiet stream both go
+        silent together and we stay put.
+        """
+        timeout = settings.jetstream.blind_host_timeout_seconds
+        if timeout <= 0 or not self._last_own_event or not self._last_any_event:
+            return False
+        now = time.monotonic()
+        return (now - self._last_own_event) > timeout and (
+            now - self._last_any_event
+        ) < (timeout / 2)
+
     def _build_url(self) -> str:
         """build WebSocket URL with query parameters."""
         params = [f"wantedCollections={c}" for c in self._collections]
@@ -316,7 +400,7 @@ class JetstreamConsumer:
             # rewind cursor by 5 seconds for idempotent reprocessing
             rewound = self._cursor - 5_000_000
             params.append(f"cursor={rewound}")
-        return f"{settings.jetstream.url}?{'&'.join(params)}"
+        return f"{self._current_endpoint()}?{'&'.join(params)}"
 
     async def _load_cursor(self) -> None:
         """load cursor from Redis on startup."""
