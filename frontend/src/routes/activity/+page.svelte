@@ -382,27 +382,14 @@
 		--type-color: var(--border-subtle);
 		display: flex; align-items: center; gap: 0.875rem;
 		padding: 0.75rem 1rem; position: relative;
-		background: color-mix(in srgb, var(--track-bg) 85%, transparent);
-		backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
-		border: 1px solid var(--glass-border, var(--track-border));
-		border-radius: var(--radius-md);
-		transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease, border-color 0.2s ease;
-	}
-	/* neon glow accent — follows card border-radius */
-	.event-item::before {
-		content: ''; position: absolute; inset: 0;
-		border-radius: inherit; pointer-events: none;
+		background: color-mix(in srgb, var(--bg-secondary) 82%, transparent);
+		border: 0;
 		border-left: 2px solid var(--type-color);
-		box-shadow: inset 4px 0 8px -2px color-mix(in srgb, var(--type-color) 30%, transparent);
+		border-radius: var(--radius-sm);
+		transition: background 0.15s ease;
 	}
 	.event-item:hover {
-		background: color-mix(in srgb, var(--track-bg-hover) 90%, transparent);
-		border-color: color-mix(in srgb, var(--type-color) 20%, var(--glass-border, var(--track-border)));
-		transform: translateY(-1px);
-		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15), 0 0 20px color-mix(in srgb, var(--type-color) 10%, transparent);
-	}
-	.event-item:hover::before {
-		box-shadow: inset 6px 0 12px -2px color-mix(in srgb, var(--type-color) 50%, transparent);
+		background: var(--bg-hover);
 	}
 	.event-item.like { --type-color: #e0607e; }
 	.event-item.track { --type-color: var(--accent); }

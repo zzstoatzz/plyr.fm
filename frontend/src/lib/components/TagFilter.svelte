@@ -32,22 +32,6 @@
 			})
 	);
 
-	/** deterministic hue from tag name (0–360) */
-	function tagHue(name: string): number {
-		let hash = 0;
-		for (let i = 0; i < name.length; i++) {
-			hash = name.charCodeAt(i) + ((hash << 5) - hash);
-		}
-		return ((hash % 360) + 360) % 360;
-	}
-
-	function chipStyle(name: string, selected: boolean): string {
-		const hue = tagHue(name);
-		if (selected) {
-			return `--chip-hue: ${hue}; background: hsl(${hue} 60% 50% / 0.2); border-color: hsl(${hue} 55% 55%); color: hsl(${hue} 70% 75%);`;
-		}
-		return `--chip-hue: ${hue}; border-color: hsl(${hue} 30% 40% / 0.4); color: hsl(${hue} 30% 70%);`;
-	}
 
 	onMount(async () => {
 		try {
@@ -89,7 +73,7 @@
 				type="button"
 				class="chip"
 				class:selected={selectedTags.has(tag.name)}
-				style={chipStyle(tag.name, selectedTags.has(tag.name))}
+				aria-pressed={selectedTags.has(tag.name)}
 				onclick={() => toggle(tag.name)}
 			>
 				{tag.name}
@@ -122,10 +106,10 @@
 		gap: 0.25rem;
 		padding: 0.3rem 0.7rem;
 		background: transparent;
-		border: 1px solid var(--border-subtle);
+		border: 1px solid transparent;
 		color: var(--text-secondary);
-		border-radius: var(--radius-xl);
-		font-size: var(--text-xs);
+		border-radius: var(--radius-full);
+		font-size: var(--text-sm);
 		font-family: inherit;
 		cursor: pointer;
 		transition: all 0.15s;
@@ -134,17 +118,25 @@
 	}
 
 	.chip:hover {
-		background: hsl(var(--chip-hue, 0) 50% 50% / 0.1);
-		border-color: hsl(var(--chip-hue, 0) 50% 55%);
+		background: var(--bg-hover);
+		color: var(--text-primary);
 	}
 
 	.chip.selected {
+		background: var(--accent);
+		border-color: var(--accent);
+		color: var(--accent-contrast);
 		font-weight: 600;
+	}
+
+	.chip:focus-visible {
+		outline: 2px solid var(--accent);
+		outline-offset: 2px;
 	}
 
 	.count {
 		opacity: 0.6;
-		font-size: 0.65rem;
+		font-size: inherit;
 	}
 
 	.clear-chip {

@@ -457,15 +457,13 @@
 		display: flex;
 		align-items: center;
 		gap: 0.75rem;
-		background: var(--track-bg, var(--bg-secondary));
-		border: 1px solid var(--track-border, var(--border-subtle));
+		background: transparent;
+		border: 1px solid transparent;
 		border-radius: var(--radius-md);
 		padding: 1rem;
-		box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
 		transition:
-			box-shadow 0.2s ease-out,
 			background 0.15s ease-out,
-			border-color 0.15s ease-out;
+			box-shadow 0.15s ease-out;
 	}
 
 	.track-index {
@@ -478,36 +476,25 @@
 	}
 
 	.track-container:hover {
-		background: var(--track-bg-hover, var(--bg-tertiary));
-		border-color: color-mix(in srgb, var(--accent) 15%, var(--track-border-hover, var(--border-default)));
-		box-shadow:
-			0 1px 3px rgba(0, 0, 0, 0.06),
-			0 0 8px color-mix(in srgb, var(--accent) 8%, transparent);
+		background: color-mix(in srgb, var(--bg-hover) 70%, transparent);
 	}
 
 	.track-container:active {
-		box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+		background: var(--bg-hover);
 		transition-duration: 0.08s;
 	}
 
 	.track-container.playing {
-		background: color-mix(in srgb, var(--accent) 10%, var(--track-bg-playing, var(--bg-tertiary)));
-		border-color: color-mix(in srgb, var(--accent) 20%, var(--track-border, var(--border-subtle)));
+		background: color-mix(in srgb, var(--accent) 8%, transparent);
+		box-shadow: inset 2px 0 var(--accent);
 	}
 
 	.track-container.lossless {
-		border-color: color-mix(in srgb, var(--accent) 12%, var(--track-border, var(--border-subtle)));
-		box-shadow:
-			0 1px 2px rgba(0, 0, 0, 0.04),
-			inset 0 0 0 1px color-mix(in srgb, var(--accent) 6%, transparent);
+		box-shadow: none;
 	}
 
-	.track-container.lossless:hover {
-		border-color: color-mix(in srgb, var(--accent) 18%, var(--track-border-hover, var(--border-default)));
-		box-shadow:
-			0 1px 3px rgba(0, 0, 0, 0.06),
-			0 0 8px color-mix(in srgb, var(--accent) 8%, transparent),
-			inset 0 0 0 1px color-mix(in srgb, var(--accent) 10%, transparent);
+	.track-container.lossless.playing {
+		box-shadow: inset 2px 0 var(--accent);
 	}
 
 	/* elevate entire track container when likers tooltip is open
