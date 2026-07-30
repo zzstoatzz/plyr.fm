@@ -72,6 +72,8 @@ class StationSummary(BaseModel):
     name: str
     description: str
     is_default: bool
+    # where the station's audio comes from, when it comes from elsewhere.
+    source_url: str | None = None
 
 
 class StationsResponse(BaseModel):

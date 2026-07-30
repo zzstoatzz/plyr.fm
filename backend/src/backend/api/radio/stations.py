@@ -86,6 +86,10 @@ class Station:
     corpus_filter: CorpusFilter = field(default=_exclude_slop)
     rank_decay: float = DEFAULT_RANK_DECAY
     exploration: float = DEFAULT_EXPLORATION
+    # where this station comes from, when it comes from somewhere. a station
+    # built out of the local catalog has no such place; one that airs someone
+    # else's broadcast does, and crediting it is the point.
+    source_url: str | None = None
     # when set, this station airs the broadcast whenever it is live and falls
     # back to its rotation when it is not. this tuple is the allowlist: who may
     # preempt is a curation decision, made here, not something a publisher can
@@ -131,6 +135,7 @@ STATIONS: tuple[Station, ...] = (
         slug="firehose",
         name="firehose",
         description="the atproto firehose, sonified live",
+        source_url="https://relay-eval.waow.tech/sonify",
         # off-air, the station plays the archived segments of the same signal,
         # so it stays about the firehose either way rather than becoming a
         # generic music station whenever the broadcast drops.

@@ -226,9 +226,19 @@
 						</h2>
 						<a class="artist" href={`/u/${radio.current.artist_handle}`}>{radio.current.artist}</a>
 					{:else}
-						<!-- a broadcast has no track page or uploader to link to -->
+						<!-- a broadcast has no track page or uploader to link to, but it
+						     does have a source, and crediting it is the point -->
 						<h2>{radio.state?.station ?? 'live'}</h2>
-						<span class="artist">{radio.activeStation?.description ?? ''}</span>
+						{#if radio.activeStation?.source_url}
+							<a
+								class="artist"
+								href={radio.activeStation.source_url}
+								target="_blank"
+								rel="noopener"
+							>{radio.activeStation.description}</a>
+						{:else}
+							<span class="artist">{radio.activeStation?.description ?? ''}</span>
+						{/if}
 					{/if}
 				</div>
 				</div>

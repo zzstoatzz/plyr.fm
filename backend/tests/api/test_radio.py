@@ -1177,3 +1177,19 @@ class TestLivenessFallsBackToThePlaylist:
         assert result is not None
         assert result.artwork_url == "https://a.test/c.png"
         assert client.get.await_count == 1
+
+
+async def test_a_station_can_credit_where_its_audio_comes_from(
+    radio_app: FastAPI,
+) -> None:
+    """firehose airs someone else's broadcast; the lineup links back to it."""
+    async with AsyncClient(
+        transport=ASGITransport(app=radio_app),
+        base_url="https://radio.plyr.fm",
+    ) as client:
+        response = await client.get("/radio/stations")
+
+    by_slug = {s["slug"]: s for s in response.json()["stations"]}
+    assert by_slug["firehose"]["source_url"] == "https://relay-eval.waow.tech/sonify"
+    # a station built from the local catalog has no elsewhere to point at
+    assert by_slug["loved"]["source_url"] is None

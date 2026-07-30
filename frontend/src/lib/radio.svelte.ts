@@ -31,6 +31,8 @@ export interface RadioStation {
 	name: string;
 	description: string;
 	is_default: boolean;
+	/** where the station's audio comes from, when it comes from elsewhere */
+	source_url?: string | null;
 }
 
 export interface LiveBroadcast {
