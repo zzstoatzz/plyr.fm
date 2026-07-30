@@ -10,8 +10,10 @@ will not load — dead air is the one outcome radio must never produce.
 """
 
 import asyncio
+import re
 import time
 from dataclasses import dataclass
+from datetime import UTC, datetime
 
 import httpx
 import logfire
@@ -22,6 +24,10 @@ from backend.api.radio.stations import LiveSource
 # is noticed promptly, long enough that the broadcaster sees a trickle.
 _CACHE_TTL_SECONDS = 5.0
 _PROBE_TIMEOUT_SECONDS = 3.0
+# how stale the newest segment may be before the stream counts as stopped.
+# generous next to a typical 4s segment: a slow encoder tick is not an outage.
+_SEGMENT_FRESHNESS_SECONDS = 45.0
+_PROGRAM_DATE_TIME = re.compile(r"^#EXT-X-PROGRAM-DATE-TIME:(.+)$", re.MULTILINE)
 
 
 @dataclass(frozen=True)
@@ -81,12 +87,24 @@ async def _probe(source: LiveSource) -> LiveBroadcast | None:
         )
         return None
 
-    if not isinstance(payload, dict) or payload.get("live") is not True:
+    if not isinstance(payload, dict):
         return None
 
     def _str(key: str) -> str | None:
         value = payload.get(key)
         return value if isinstance(value, str) and value else None
+
+    if payload.get("live") is not True:
+        # a broadcaster can report itself down while its playlist keeps
+        # advancing — observed 2026-07-30, stream healthy and `live: false`.
+        # the playlist is what a listener actually plays, so it gets the last
+        # word before we tell anyone the station is off air.
+        if not await _playlist_is_advancing(source.stream_url):
+            return None
+        logfire.info(
+            "radio: broadcaster reports down but its playlist is live, airing it",
+            health_url=source.health_url,
+        )
 
     return LiveBroadcast(
         stream_url=source.stream_url,
@@ -96,6 +114,36 @@ async def _probe(source: LiveSource) -> LiveBroadcast | None:
         # per interval, so this changes while the stream stays put.
         artwork_url=_str("artwork_url"),
     )
+
+
+async def _playlist_is_advancing(playlist_url: str) -> bool:
+    """is the stream still producing segments?
+
+    Ground truth for "can someone hear this right now" is the playlist, not a
+    status field beside it. A live playlist carries no ENDLIST and stamps each
+    segment with a wall-clock time; if the newest one is recent, audio exists.
+    """
+    try:
+        async with httpx.AsyncClient(timeout=_PROBE_TIMEOUT_SECONDS) as client:
+            response = await client.get(playlist_url)
+            response.raise_for_status()
+            body = response.text
+    except Exception:
+        return False
+
+    if "#EXT-X-ENDLIST" in body:
+        return False  # the broadcaster closed the stream out
+    stamps = _PROGRAM_DATE_TIME.findall(body)
+    if not stamps:
+        return False
+    try:
+        newest = datetime.fromisoformat(stamps[-1].strip().replace("Z", "+00:00"))
+    except ValueError:
+        return False
+    if newest.tzinfo is None:
+        newest = newest.replace(tzinfo=UTC)
+    age = (datetime.now(UTC) - newest).total_seconds()
+    return age <= _SEGMENT_FRESHNESS_SECONDS
 
 
 def reset_cache() -> None:
