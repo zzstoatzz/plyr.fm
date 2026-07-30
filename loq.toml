@@ -328,7 +328,7 @@ max_lines = 612
 
 [[rules]]
 path = "frontend/src/routes/radio/[[][[]station[]][]]/+page.svelte"
-max_lines = 955
+max_lines = 969
 
 [[rules]]
 path = "backend/tests/api/test_radio.py"

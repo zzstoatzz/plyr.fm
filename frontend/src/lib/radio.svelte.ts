@@ -73,6 +73,17 @@ class Radio {
 		return this.state?.current ?? null;
 	}
 
+	/** a broadcast is preempting the rotation right now. */
+	get isLive(): boolean {
+		return Boolean(this.state?.live);
+	}
+
+	/** is there anything to tune in to — a broadcast, or a rotation entry?
+	 * a live station with an empty rotation is still on the air. */
+	get hasSomethingOnAir(): boolean {
+		return this.isLive || this.current !== null;
+	}
+
 	/** the resolved station metadata for the loaded state */
 	get activeStation(): RadioStation | null {
 		const slug = this.state?.station_slug;
@@ -124,8 +135,8 @@ class Radio {
 		} finally {
 			this.switching = false;
 		}
-		const c = this.current;
-		if (c && player.radio) player.playRadio(this.toNowPlaying(c), { autoplay: !player.paused });
+		const np = this.nowPlaying();
+		if (np && player.radio) player.playRadio(np, { autoplay: !player.paused });
 	}
 
 	/** whether radio is the active player source (single source of truth) */
@@ -216,10 +227,42 @@ class Radio {
 	/** start radio. synchronous (no await) so the caller's gesture is preserved
 	 * for autoplay — call once `current` is loaded (the page gates on it). */
 	tuneIn(): void {
-		const c = this.current;
-		if (!c) return;
-		player.playRadio(this.toNowPlaying(c));
+		const np = this.nowPlaying();
+		if (!np) return;
+		player.playRadio(np);
 		this.startPolling();
+	}
+
+	/** what the player should air: the broadcast if one is live, else the
+	 * rotation entry. a live station with an empty rotation still airs. */
+	private nowPlaying(startAt?: number): RadioNowPlaying | null {
+		const c = this.current;
+		if (c) return this.toNowPlaying(c, startAt);
+		const broadcast = this.state?.live;
+		if (!broadcast) return null;
+		return {
+			track: this.broadcastTrack(),
+			stream_url: broadcast.stream_url,
+			start_at: 0,
+			live: true,
+			streamKind: broadcast.kind
+		};
+	}
+
+	/** a display-only entry for a broadcast with no rotation behind it.
+	 * id 0 marks it as unlinkable — there is no track page for a broadcast. */
+	private broadcastTrack(): Track {
+		return {
+			id: 0,
+			title: this.state?.station ?? 'live',
+			artist: this.activeStation?.description ?? 'live broadcast',
+			artist_handle: '',
+			file_id: '',
+			file_type: 'hls',
+			play_count: 0,
+			album: null,
+			features: []
+		} as Track;
 	}
 
 	stop(): void {
@@ -256,10 +299,12 @@ class Radio {
 			return;
 		}
 		await this.loadState();
-		const c = this.current;
-		if (!c || !player.radio) return;
-		if (player.radio.stream_url !== c.stream_url) {
-			player.playRadio(this.toNowPlaying(c), { autoplay: !player.paused });
+		const np = this.nowPlaying();
+		if (!np || !player.radio) return;
+		// a broadcast starting or ending swaps the source mid-session, same as a
+		// rotation boundary does.
+		if (player.radio.stream_url !== np.stream_url) {
+			player.playRadio(np, { autoplay: !player.paused });
 		}
 	}
 

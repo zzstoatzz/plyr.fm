@@ -57,6 +57,17 @@
 </script>
 
 <div class="player-track">
+	<!-- a live broadcast (id 0) has no track page — render it unlinked -->
+	{#if !track.id}
+		<div class="player-artwork">
+			<div class="player-artwork-placeholder">
+				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" width="24" height="24">
+					<circle cx="12" cy="12" r="2" />
+					<path d="M16.24 7.76a6 6 0 0 1 0 8.49M7.76 16.24a6 6 0 0 1 0-8.49M19.07 4.93a10 10 0 0 1 0 14.14M4.93 19.07a10 10 0 0 1 0-14.14" />
+				</svg>
+			</div>
+		</div>
+	{:else}
 	<SensitiveImage src={track.image_url || track.album?.image_url}>
 		<a href="/track/{track.id}" class="player-artwork" aria-label={`view ${track.title}`}>
 			{#if (track.image_url || track.album?.image_url) && !imageError}
@@ -76,8 +87,9 @@
 			{/if}
 		</a>
 	</SensitiveImage>
+	{/if}
 	<div class="player-info">
-		{#if isOnTrackDetailPage}
+		{#if isOnTrackDetailPage || !track.id}
 			<div class="player-title" class:scrolling={titleOverflows} bind:this={titleEl}>
 				<span>{track.title}</span>
 			</div>
@@ -99,7 +111,11 @@
 				</svg>
 				<div class="text-container" class:scrolling={artistOverflows}>
 					<span class="artist-inline">
-						<a href="/u/{track.artist_handle}" class="inline-artist">{track.artist}</a>
+						{#if track.artist_handle}
+							<a href="/u/{track.artist_handle}" class="inline-artist">{track.artist}</a>
+						{:else}
+							<span class="inline-artist">{track.artist}</span>
+						{/if}
 						{#if track.features && track.features.length > 0}
 							<span class="features-inline">
 								<span class="features-label">feat.</span>
