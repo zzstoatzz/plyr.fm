@@ -82,18 +82,20 @@ class TestPhase1To5FailureDeletesStagedMedia:
                 AsyncMock(return_value=True),
             ) as mock_delete,
             patch(
-                "backend.api.tracks.uploads.storage.delete_gated",
+                "backend.api.tracks.uploads.storage.discard_staged",
                 AsyncMock(return_value=True),
-            ) as mock_delete_gated,
+            ) as mock_discard,
             patch("backend.api.tracks.uploads.job_service", AsyncMock()),
         ):
             await _process_upload_background(_ctx(gated=False))
 
         # non-gated → audio in public bucket
+        discarded = [
+            (c.args[0], c.kwargs["gated"]) for c in mock_discard.call_args_list
+        ]
+        assert ("staged-audio-id", False) in discarded
         deleted_ids = [c.args[0] for c in mock_delete.call_args_list]
-        assert "staged-audio-id" in deleted_ids
         assert "staged-image-id" in deleted_ids
-        mock_delete_gated.assert_not_called()
 
     async def test_gated_audio_deleted_from_private_bucket(self) -> None:
         with (
@@ -106,9 +108,9 @@ class TestPhase1To5FailureDeletesStagedMedia:
                 AsyncMock(return_value=True),
             ) as mock_delete,
             patch(
-                "backend.api.tracks.uploads.storage.delete_gated",
+                "backend.api.tracks.uploads.storage.discard_staged",
                 AsyncMock(return_value=True),
-            ) as mock_delete_gated,
+            ) as mock_discard,
             patch("backend.api.tracks.uploads.job_service", AsyncMock()),
         ):
             await _process_upload_background(_ctx(gated=True))
@@ -116,8 +118,10 @@ class TestPhase1To5FailureDeletesStagedMedia:
         # gated → staged audio lives in the private bucket; rollback
         # must route the audio delete to delete_gated. images are
         # never gated.
-        deleted_gated_ids = [c.args[0] for c in mock_delete_gated.call_args_list]
-        assert deleted_gated_ids == ["staged-audio-id"]
+        discarded = [
+            (c.args[0], c.kwargs["gated"]) for c in mock_discard.call_args_list
+        ]
+        assert discarded == [("staged-audio-id", True)]
         deleted_public_ids = [c.args[0] for c in mock_delete.call_args_list]
         assert "staged-audio-id" not in deleted_public_ids
         assert "staged-image-id" in deleted_public_ids
@@ -164,13 +168,18 @@ class TestPhase1To5FailureDeletesStagedMedia:
                 "backend.api.tracks.uploads.storage.delete",
                 AsyncMock(return_value=True),
             ) as mock_delete,
+            patch(
+                "backend.api.tracks.uploads.storage.discard_staged",
+                AsyncMock(return_value=True),
+            ) as mock_discard,
             patch("backend.api.tracks.uploads.job_service", AsyncMock()),
         ):
             await _process_upload_background(_ctx(gated=False))
 
+        discarded = [c.args[0] for c in mock_discard.call_args_list]
+        assert "transcoded-mp3-id" in discarded  # the playable sibling
+        assert "staged-audio-id" in discarded  # the lossless source
         deleted_ids = [c.args[0] for c in mock_delete.call_args_list]
-        assert "transcoded-mp3-id" in deleted_ids  # the playable sibling
-        assert "staged-audio-id" in deleted_ids  # the lossless source
         assert "staged-image-id" in deleted_ids  # the cover art
 
 
@@ -224,9 +233,9 @@ class TestPhase6FailureDefersToCreateRecords:
                 AsyncMock(return_value=True),
             ) as mock_delete,
             patch(
-                "backend.api.tracks.uploads.storage.delete_gated",
+                "backend.api.tracks.uploads.storage.discard_staged",
                 AsyncMock(return_value=True),
-            ) as mock_delete_gated,
+            ) as mock_discard,
             patch("backend.api.tracks.uploads.job_service", AsyncMock()),
         ):
             await _process_upload_background(_ctx(gated=False))
@@ -237,4 +246,4 @@ class TestPhase6FailureDefersToCreateRecords:
         # internal cleanup; we're asserting the orchestrator-level
         # cleanup does NOT fire, regardless of what _create_records does.)
         mock_delete.assert_not_called()
-        mock_delete_gated.assert_not_called()
+        mock_discard.assert_not_called()

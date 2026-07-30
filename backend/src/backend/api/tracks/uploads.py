@@ -950,10 +950,12 @@ async def _create_records(
             # hash that could collide with a public track's R2 key — never delete.
             if not ctx.private:
                 with contextlib.suppress(Exception):
-                    await storage.delete(sr.file_id, playable_file_type)
+                    await storage.discard_staged(sr.file_id, playable_file_type)
                 if sr.original_file_id and sr.original_file_type:
                     with contextlib.suppress(Exception):
-                        await storage.delete(sr.original_file_id, sr.original_file_type)
+                        await storage.discard_staged(
+                            sr.original_file_id, sr.original_file_type
+                        )
             raise UploadPhaseError(f"database constraint violation: {e!s}") from e
 
         track_id = track.id
@@ -1036,10 +1038,12 @@ async def _create_records(
             # that could collide with a public track's R2 key), so skip it; the
             # orphaned PDS blob is GC'd by the PDS.
             with contextlib.suppress(Exception):
-                await storage.delete(sr.file_id, playable_file_type)
+                await storage.discard_staged(sr.file_id, playable_file_type)
             if sr.original_file_id and sr.original_file_type:
                 with contextlib.suppress(Exception):
-                    await storage.delete(sr.original_file_id, sr.original_file_type)
+                    await storage.discard_staged(
+                        sr.original_file_id, sr.original_file_type
+                    )
             if image_id:
                 with contextlib.suppress(Exception):
                     await storage.delete(image_id)
@@ -1147,14 +1151,16 @@ async def _schedule_post_upload(
 async def _delete_staged_audio(
     file_id: str, file_type: str | None, *, gated: bool
 ) -> None:
-    """suppressed delete for audio bytes the user uploaded to a bucket
+    """suppressed discard for audio bytes the user uploaded to a bucket
     chosen at handler-staging time. `gated` selects the bucket so we
     don't no-op-delete from public when the file actually lives in
     private (or vice versa).
+
+    `discard_staged` rather than `delete`: a file_id is a content hash, so
+    these bytes may already belong to a published track (#1732).
     """
-    delete_fn = storage.delete_gated if gated else storage.delete
     with contextlib.suppress(Exception):
-        await delete_fn(file_id, file_type)
+        await storage.discard_staged(file_id, file_type, gated=gated)
 
 
 async def _cleanup_staged_media_pre_db(

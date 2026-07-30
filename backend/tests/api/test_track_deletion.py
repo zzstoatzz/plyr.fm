@@ -7,7 +7,8 @@ tests cover three critical fixes:
 """
 
 from collections.abc import Generator
-from unittest.mock import AsyncMock, patch
+from contextlib import asynccontextmanager
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi import FastAPI
@@ -18,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend._internal import Session, require_auth
 from backend.main import app
 from backend.models import Album, Artist, Track
+from backend.storage.r2 import R2Storage
 
 
 class MockSession(Session):
@@ -164,19 +166,28 @@ async def test_refcount_prevents_r2_deletion(db_session: AsyncSession):
     db_session.add(track2)
     await db_session.commit()
 
-    # try to delete the file
-    # this should be skipped because refcount = 2
-    # mock R2Storage to avoid requiring credentials
-    with patch("backend.storage.r2.R2Storage") as MockR2Storage:
-        mock_storage = AsyncMock()
-        MockR2Storage.return_value = mock_storage
-        mock_storage.delete = AsyncMock(return_value=False)
+    # drive the real guard against the real refcount query, mocking only the
+    # S3 boundary. the previous version of this test mocked R2Storage whole and
+    # asserted its own stub returned False, so it could not have caught a guard
+    # that let a referenced object through — which is exactly what happened in
+    # the staged-cleanup path (#1732).
+    with patch.object(R2Storage, "__init__", lambda self: None):
+        storage = R2Storage()
+    storage.audio_bucket_name = "audio-test"
 
-        storage = MockR2Storage()
-        result = await storage.delete(file_id)
+    s3 = MagicMock()
+    s3.head_object = AsyncMock(return_value={})
+    s3.delete_object = AsyncMock(return_value={})
+    s3.exceptions.NoSuchKey = type("NoSuchKey", (Exception,), {})
 
-        # deletion should be skipped (returns False)
-        assert result is False
+    @asynccontextmanager
+    async def _client(**_: object):
+        yield s3
+
+    storage._s3_client = _client  # type: ignore[method-assign]
+
+    assert await storage.delete(file_id, "mp3") is False
+    s3.delete_object.assert_not_awaited()
 
 
 async def test_atproto_cleanup_on_track_delete(

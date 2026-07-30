@@ -40,7 +40,7 @@ max_lines = 850
 
 [[rules]]
 path = "backend/src/backend/api/tracks/uploads.py"
-max_lines = 1862
+max_lines = 1868
 
 [[rules]]
 path = "backend/src/backend/config.py"
@@ -48,7 +48,7 @@ max_lines = 1222
 
 [[rules]]
 path = "backend/src/backend/storage/r2.py"
-max_lines = 905
+max_lines = 932
 
 [[rules]]
 path = "backend/tests/api/test_audio.py"
@@ -224,7 +224,7 @@ max_lines = 650
 
 [[rules]]
 path = "backend/tests/api/test_track_deletion.py"
-max_lines = 574
+max_lines = 585
 
 [[rules]]
 path = "backend/tests/api/test_top_tracks.py"
