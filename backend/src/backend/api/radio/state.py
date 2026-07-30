@@ -19,9 +19,11 @@ from backend.api.radio import stations
 from backend.api.radio.cache import get_rotation
 from backend.api.radio.corpus import load_corpus
 from backend.api.radio.lenses import LensContext
+from backend.api.radio.live import get_live_broadcast
 from backend.api.radio.router import router
 from backend.api.radio.sampler import build_rotation, rank_decay_weights
 from backend.api.radio.schemas import (
+    LiveBroadcastInfo,
     RadioStateResponse,
     RadioTrack,
     StationsResponse,
@@ -257,6 +259,11 @@ async def radio_state(
     current_index, progress, started_at, ends_at = _live_window(now, rotation)
     current = rotation[current_index] if current_index is not None else None
 
+    # the rotation is still computed and still described even while a broadcast
+    # preempts it — the loop is the clock, and it keeps running so that whatever
+    # resumes afterwards lands where wall-clock time says it should.
+    broadcast = await get_live_broadcast(resolved.live)
+
     return RadioStateResponse(
         station=resolved.name,
         station_slug=resolved.slug,
@@ -269,4 +276,13 @@ async def radio_state(
         current=current,
         up_next=_up_next(rotation, current_index),
         rotation=rotation,
+        live=(
+            LiveBroadcastInfo(
+                stream_url=broadcast.stream_url,
+                kind=broadcast.kind,
+                started_at=broadcast.started_at,
+            )
+            if broadcast
+            else None
+        ),
     )

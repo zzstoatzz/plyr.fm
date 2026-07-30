@@ -3,6 +3,7 @@
 import asyncio
 from collections.abc import Generator
 from datetime import UTC, datetime, timedelta
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi import FastAPI
@@ -12,7 +13,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend._internal import Session, get_optional_session
 from backend.api.radio import cache as radio_cache
-from backend.api.radio import lenses
+from backend.api.radio import lenses, stations
+from backend.api.radio import live as radio_live
 from backend.api.radio import state as radio_state
 from backend.api.radio.lenses import LensContext
 from backend.api.radio.sampler import (
@@ -466,7 +468,7 @@ async def test_stations_endpoint_lists_lineup(radio_app: FastAPI) -> None:
     data = response.json()
     assert data["default_slug"] == "loved"
     slugs = {s["slug"] for s in data["stations"]}
-    assert slugs == {"loved", "fresh", "deep-cuts", "slop"}
+    assert slugs == {"loved", "fresh", "deep-cuts", "slop", "firehose"}
     default = next(s for s in data["stations"] if s["slug"] == "loved")
     assert default["is_default"] is True
 
@@ -835,3 +837,191 @@ async def test_concurrent_cache_misses_build_once(
     assert builds == 1
     assert all(rotation == results[0] for rotation in results)
     assert all(rotation[0].id == 1 for rotation in results)
+
+
+# --- the firehose station: live preempts, rotation is the fallback ---
+
+
+@pytest.fixture(autouse=True)
+def _clear_live_cache() -> Generator[None, None, None]:
+    radio_live.reset_cache()
+    yield
+    radio_live.reset_cache()
+
+
+def _firehose_station() -> stations.Station:
+    station = stations.get_station("firehose")
+    assert station is not None
+    return station
+
+
+async def test_live_broadcast_preempts_but_rotation_still_resolves(
+    radio_app: FastAPI,
+    db_session: AsyncSession,
+    radio_artist: Artist,
+) -> None:
+    """while airing, `live` is set — and the loop keeps running underneath it.
+
+    the rotation is what resumes when the broadcast ends, so it must still be
+    described rather than blanked out.
+    """
+    now = datetime.now(UTC) + TEST_TIME_OFFSET
+    radio_artist.handle = stations.FIREHOSE_PUBLISHER_HANDLE
+    await _create_track(
+        db_session, radio_artist, title="segment", file_id="seg", created_at=now
+    )
+    await db_session.commit()
+
+    broadcast = radio_live.LiveBroadcast(
+        stream_url="https://example.test/live/index.m3u8",
+        kind="hls",
+        started_at="2026-07-30T19:12:32Z",
+    )
+    with patch.object(radio_live, "_probe", AsyncMock(return_value=broadcast)):
+        async with AsyncClient(
+            transport=ASGITransport(app=radio_app),
+            base_url="https://radio.plyr.fm",
+        ) as client:
+            response = await client.get(
+                "/radio/state.json", params={"station": "firehose"}
+            )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["live"]["stream_url"] == "https://example.test/live/index.m3u8"
+    assert body["live"]["kind"] == "hls"
+    # the clock underneath is untouched
+    assert body["current"] is not None
+    assert body["loop_duration_seconds"] > 0
+
+
+async def test_off_air_falls_back_to_the_rotation(
+    radio_app: FastAPI,
+    db_session: AsyncSession,
+    radio_artist: Artist,
+) -> None:
+    now = datetime.now(UTC) + TEST_TIME_OFFSET
+    radio_artist.handle = stations.FIREHOSE_PUBLISHER_HANDLE
+    await _create_track(
+        db_session, radio_artist, title="segment", file_id="seg", created_at=now
+    )
+    await db_session.commit()
+
+    with patch.object(radio_live, "_probe", AsyncMock(return_value=None)):
+        async with AsyncClient(
+            transport=ASGITransport(app=radio_app),
+            base_url="https://radio.plyr.fm",
+        ) as client:
+            response = await client.get(
+                "/radio/state.json", params={"station": "firehose"}
+            )
+
+    body = response.json()
+    assert body["live"] is None
+    assert body["current"]["title"] == "segment"
+
+
+async def test_an_unreachable_broadcaster_is_off_air_not_an_error(
+    radio_app: FastAPI,
+    db_session: AsyncSession,
+    radio_artist: Artist,
+) -> None:
+    """fail closed: never hand a client a stream URL that won't load."""
+    now = datetime.now(UTC) + TEST_TIME_OFFSET
+    radio_artist.handle = stations.FIREHOSE_PUBLISHER_HANDLE
+    await _create_track(
+        db_session, radio_artist, title="segment", file_id="seg", created_at=now
+    )
+    await db_session.commit()
+
+    async def _boom(source: stations.LiveSource) -> None:
+        raise RuntimeError("connection refused")
+
+    with patch.object(radio_live.httpx, "AsyncClient", side_effect=_boom):
+        async with AsyncClient(
+            transport=ASGITransport(app=radio_app),
+            base_url="https://radio.plyr.fm",
+        ) as client:
+            response = await client.get(
+                "/radio/state.json", params={"station": "firehose"}
+            )
+
+    assert response.status_code == 200
+    assert response.json()["live"] is None
+
+
+async def test_stations_without_a_live_source_never_probe(
+    radio_app: FastAPI,
+    db_session: AsyncSession,
+    radio_artist: Artist,
+) -> None:
+    """the other four stations must not pay for this feature."""
+    now = datetime.now(UTC) + TEST_TIME_OFFSET
+    await _create_track(
+        db_session, radio_artist, title="t", file_id="t", created_at=now
+    )
+    await db_session.commit()
+
+    probe = AsyncMock(return_value=None)
+    with patch.object(radio_live, "_probe", probe):
+        async with AsyncClient(
+            transport=ASGITransport(app=radio_app),
+            base_url="https://radio.plyr.fm",
+        ) as client:
+            response = await client.get(
+                "/radio/state.json", params={"station": "loved"}
+            )
+
+    assert response.json()["live"] is None
+    probe.assert_not_awaited()
+
+
+async def test_liveness_is_cached_across_requests(
+    radio_app: FastAPI,
+    db_session: AsyncSession,
+    radio_artist: Artist,
+) -> None:
+    """one probe per window regardless of audience size."""
+    now = datetime.now(UTC) + TEST_TIME_OFFSET
+    radio_artist.handle = stations.FIREHOSE_PUBLISHER_HANDLE
+    await _create_track(
+        db_session, radio_artist, title="segment", file_id="seg", created_at=now
+    )
+    await db_session.commit()
+
+    probe = AsyncMock(return_value=None)
+    with patch.object(radio_live, "_probe", probe):
+        async with AsyncClient(
+            transport=ASGITransport(app=radio_app),
+            base_url="https://radio.plyr.fm",
+        ) as client:
+            for _ in range(4):
+                await client.get("/radio/state.json", params={"station": "firehose"})
+
+    assert probe.await_count == 1
+
+
+async def test_the_firehose_station_only_airs_its_publisher(
+    db_session: AsyncSession,
+) -> None:
+    """off-air fallback stays about the firehose, not arbitrary music."""
+    station = _firehose_station()
+    mine = MagicMock(spec=Track)
+    mine.artist.handle = stations.FIREHOSE_PUBLISHER_HANDLE
+    theirs = MagicMock(spec=Track)
+    theirs.artist.handle = "someone.else"
+    assert station.corpus_filter(mine, set()) is True
+    assert station.corpus_filter(theirs, set()) is False
+
+
+async def test_firehose_station_is_in_the_lineup(radio_app: FastAPI) -> None:
+    async with AsyncClient(
+        transport=ASGITransport(app=radio_app),
+        base_url="https://radio.plyr.fm",
+    ) as client:
+        response = await client.get("/radio/stations")
+
+    slugs = [s["slug"] for s in response.json()["stations"]]
+    assert "firehose" in slugs
+    # it must not become the default — that is what every legacy client gets
+    assert response.json()["default_slug"] != "firehose"
