@@ -974,7 +974,12 @@ class JetstreamSettings(AppSettingsSection):
         description="Enable Jetstream consumer for real-time ATProto event ingestion",
     )
     url: str = Field(
-        default="wss://jetstream2.us-east.bsky.network/subscribe",
+        default="wss://jetstream1.us-east.bsky.network/subscribe",
+        # jetstream2 served `app.bsky.actor.profile` normally while emitting
+        # nothing at all for `fm.plyr.*` — 10h of silent blackout on 2026-07-30,
+        # confirmed by subscribing to both instances for the same DID at once
+        # (jetstream1: 10 track commits, jetstream2: zero). A partial view looks
+        # exactly like a quiet network, so prefer the instance that was right.
         description="Jetstream WebSocket URL",
     )
     cursor_key: str = Field(
