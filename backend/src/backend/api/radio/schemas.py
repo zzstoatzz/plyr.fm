@@ -41,6 +41,7 @@ class LiveBroadcastInfo(BaseModel):
     stream_url: str
     kind: str  # "hls"
     started_at: str | None = None
+    artwork_url: str | None = None
 
 
 class RadioStateResponse(BaseModel):
