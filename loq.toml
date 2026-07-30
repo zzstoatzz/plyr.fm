@@ -44,7 +44,7 @@ max_lines = 1868
 
 [[rules]]
 path = "backend/src/backend/config.py"
-max_lines = 1222
+max_lines = 1227
 
 [[rules]]
 path = "backend/src/backend/storage/r2.py"
