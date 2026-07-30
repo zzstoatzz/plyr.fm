@@ -305,10 +305,14 @@ class TestOriginValidationOnUpdate:
         updated = result.scalar_one()
         assert updated.image_url == "https://images.example.com/original.jpg"
 
+    @patch(
+        "backend._internal.tasks.ingest._audio_object_exists",
+        AsyncMock(return_value=True),
+    )
     async def test_trusted_audio_url_accepted(
         self, db_session: AsyncSession, artist: Artist, track: Track
     ) -> None:
-        """trusted audioUrl is accepted on update."""
+        """trusted audioUrl backed by a real object is accepted on update."""
         assert track.atproto_record_uri is not None
         uri = track.atproto_record_uri
 

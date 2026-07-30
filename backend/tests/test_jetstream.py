@@ -2496,3 +2496,189 @@ class TestMigratedPdsIsNotDeactivation:
 
         await db_session.refresh(artist)
         assert artist.deactivated is True
+
+
+# --- commit ordering (#1736) ---
+
+
+class TestStaleCommitGuard:
+    """the firehose can re-deliver a repo's commit history.
+
+    observed in production 2026-07-30: 37 `track.update` events for one URI
+    whose PDS record had not changed in half an hour, walking `r2_url` back to
+    a 19-minute-old revision while `file_id` stayed correct. `rev` is monotonic
+    per repo and survives re-delivery; `time_us` does not.
+    """
+
+    async def test_replayed_older_commit_does_not_overwrite_newer(
+        self, db_session: AsyncSession, artist: Artist, track: Track
+    ) -> None:
+        assert track.atproto_record_uri is not None
+        uri = track.atproto_record_uri
+
+        await ingest_track_update(
+            did=artist.did,
+            rkey="existing",
+            record={"title": "current", "audioUrl": "https://r2.example.com/new.mp3"},
+            uri=uri,
+            cid="bafynew",
+            rev="3mrtqf7ut6s22",
+        )
+
+        # the same repo re-emits an earlier commit
+        await ingest_track_update(
+            did=artist.did,
+            rkey="existing",
+            record={"title": "stale", "audioUrl": "https://r2.example.com/old.mp3"},
+            uri=uri,
+            cid="bafyold",
+            rev="3mrtaaaaaaa22",
+        )
+
+        db_session.expire_all()
+        updated = await db_session.scalar(
+            select(Track).where(Track.atproto_record_uri == uri)
+        )
+        assert updated is not None
+        assert updated.title == "current"
+        assert updated.r2_url == "https://r2.example.com/new.mp3"
+        assert updated.atproto_record_rev == "3mrtqf7ut6s22"
+
+    async def test_redelivery_of_the_same_commit_is_a_noop(
+        self, db_session: AsyncSession, artist: Artist, track: Track
+    ) -> None:
+        assert track.atproto_record_uri is not None
+        uri = track.atproto_record_uri
+        rev = "3mrtqf7ut6s22"
+
+        for title in ("applied", "should not land"):
+            await ingest_track_update(
+                did=artist.did,
+                rkey="existing",
+                record={"title": title},
+                uri=uri,
+                cid="bafysame",
+                rev=rev,
+            )
+
+        db_session.expire_all()
+        updated = await db_session.scalar(
+            select(Track).where(Track.atproto_record_uri == uri)
+        )
+        assert updated is not None
+        assert updated.title == "applied"
+
+    async def test_newer_commit_still_applies(
+        self, db_session: AsyncSession, artist: Artist, track: Track
+    ) -> None:
+        assert track.atproto_record_uri is not None
+        uri = track.atproto_record_uri
+
+        for rev, title in (("3mrtaaaaaaa22", "first"), ("3mrtqf7ut6s22", "second")):
+            await ingest_track_update(
+                did=artist.did,
+                rkey="existing",
+                record={"title": title},
+                uri=uri,
+                cid=f"bafy{rev}",
+                rev=rev,
+            )
+
+        db_session.expire_all()
+        updated = await db_session.scalar(
+            select(Track).where(Track.atproto_record_uri == uri)
+        )
+        assert updated is not None
+        assert updated.title == "second"
+        assert updated.atproto_record_rev == "3mrtqf7ut6s22"
+
+    async def test_update_without_rev_still_applies(
+        self, db_session: AsyncSession, artist: Artist, track: Track
+    ) -> None:
+        """a missing rev must not silently drop the update (unordered, as before)."""
+        assert track.atproto_record_uri is not None
+        uri = track.atproto_record_uri
+        track.atproto_record_rev = "3mrtqf7ut6s22"
+        await db_session.commit()
+
+        await ingest_track_update(
+            did=artist.did,
+            rkey="existing",
+            record={"title": "applied anyway"},
+            uri=uri,
+            cid="bafynorev",
+            rev=None,
+        )
+
+        db_session.expire_all()
+        updated = await db_session.scalar(
+            select(Track).where(Track.atproto_record_uri == uri)
+        )
+        assert updated is not None
+        assert updated.title == "applied anyway"
+
+    async def test_create_records_the_rev_as_a_baseline(
+        self, db_session: AsyncSession, artist: Artist
+    ) -> None:
+        """without a baseline the first replayed update would win."""
+        rkey = f"baseline_{uuid.uuid4().hex[:8]}"
+        uri = f"at://{artist.did}/fm.plyr.track/{rkey}"
+
+        await ingest_track_create(
+            did=artist.did,
+            rkey=rkey,
+            record={
+                "title": "created",
+                "artist": "Test Artist",
+                "fileId": "baseline_file",
+                "fileType": "mp3",
+                "audioUrl": "https://r2.example.com/baseline.mp3",
+                "duration": 120,
+                "createdAt": _recent_ts(),
+            },
+            uri=uri,
+            cid="bafybaseline",
+            rev="3mrtqf7ut6s22",
+        )
+
+        db_session.expire_all()
+        created = await db_session.scalar(
+            select(Track).where(Track.atproto_record_uri == uri)
+        )
+        assert created is not None
+        assert created.atproto_record_rev == "3mrtqf7ut6s22"
+
+
+class TestAudioExistenceOnUpdate:
+    async def test_update_ignores_audio_url_with_no_backing_object(
+        self,
+        db_session: AsyncSession,
+        artist: Artist,
+        track: Track,
+        _mock_audio_object_exists: MagicMock,
+    ) -> None:
+        """a replayed url can name a blob already pruned as an old revision."""
+        assert track.atproto_record_uri is not None
+        uri = track.atproto_record_uri
+        original = track.r2_url
+        _mock_audio_object_exists.return_value = False
+
+        await ingest_track_update(
+            did=artist.did,
+            rkey="existing",
+            record={
+                "title": "metadata still lands",
+                "audioUrl": "https://r2.example.com/pruned.mp3",
+            },
+            uri=uri,
+            cid="bafypruned",
+            rev="3mrtqf7ut6s22",
+        )
+
+        db_session.expire_all()
+        updated = await db_session.scalar(
+            select(Track).where(Track.atproto_record_uri == uri)
+        )
+        assert updated is not None
+        assert updated.title == "metadata still lands"
+        assert updated.r2_url == original

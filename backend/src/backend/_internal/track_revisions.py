@@ -12,6 +12,8 @@ the cap, never silently corrupts the live audio pointer.
 """
 
 import logging
+from pathlib import PurePosixPath
+from urllib.parse import urlparse
 
 from sqlalchemy import select
 
@@ -20,6 +22,19 @@ from backend.storage import storage
 from backend.utilities.database import db_session
 
 logger = logging.getLogger(__name__)
+
+
+def _file_ids_in_url(audio_url: str | None) -> set[str]:
+    """the storage key an audio URL names, as a one-or-zero-element set.
+
+    A URL is only a reliable pointer when it names one of our own keys; the
+    stem is that key. Anything else (a PDS blob URL, a foreign origin) yields
+    nothing, which is correct — we don't own those bytes either way.
+    """
+    if not audio_url:
+        return set()
+    stem = PurePosixPath(urlparse(audio_url).path).stem
+    return {stem} if stem else set()
 
 
 async def prune_revisions(track_id: int) -> None:
@@ -53,10 +68,16 @@ async def prune_revisions(track_id: int) -> None:
             in_use_original_file_ids: set[str] = set()
             if track:
                 in_use_file_ids.add(track.file_id)
+                # the object a track actually *serves* is named by its audio
+                # URL, which can name a different key than `file_id` — a
+                # firehose commit can repoint one without the other (#1736).
+                # keying only on `file_id` would let us delete the live blob.
+                in_use_file_ids |= _file_ids_in_url(track.r2_url)
                 if track.original_file_id:
                     in_use_original_file_ids.add(track.original_file_id)
             for keeper in keepers:
                 in_use_file_ids.add(keeper.file_id)
+                in_use_file_ids |= _file_ids_in_url(keeper.audio_url)
                 if keeper.original_file_id:
                     in_use_original_file_ids.add(keeper.original_file_id)
 
