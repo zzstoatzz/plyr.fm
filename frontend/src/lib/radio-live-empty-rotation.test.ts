@@ -65,3 +65,52 @@ describe('a live station with no rotation', () => {
 		expect(player.radio).toBeNull();
 	});
 });
+
+describe('an empty remembered station must not strand bare /radio', () => {
+	beforeEach(() => {
+		localStorage.clear();
+		radio.state = null;
+		radio.stations = [];
+	});
+
+	it('falls back to the default when the remembered station has nothing on air', async () => {
+		localStorage.setItem('plyr_radio_station', 'firehose');
+		const calls: (string | null)[] = [];
+		vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+			const url = String(input);
+			calls.push(url.includes('station=') ? new URL(url).searchParams.get('station') : null);
+			const empty = url.includes('station=firehose');
+			return new Response(
+				JSON.stringify(
+					empty
+						? { ...liveStateWithNoRotation(), live: null }
+						: { ...liveStateWithNoRotation(), live: null, station_slug: 'loved', current: { id: 1 } }
+				),
+				{ status: 200, headers: { 'content-type': 'application/json' } }
+			);
+		});
+
+		await radio.show(null); // bare /radio
+
+		// asked for the remembered station, found it silent, retried the default
+		expect(calls[0]).toBe('firehose');
+		expect(localStorage.getItem('plyr_radio_station')).toBeNull();
+		// landed on the server default rather than on silence
+		expect(radio.station).toBe('loved');
+	});
+
+	it('respects an explicit /radio/<slug> even when it is off air', async () => {
+		vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+			new Response(JSON.stringify({ ...liveStateWithNoRotation(), live: null }), {
+				status: 200,
+				headers: { 'content-type': 'application/json' }
+			})
+		);
+
+		await radio.show('firehose');
+
+		// being told a station is off air beats being silently shown a different one
+		expect(radio.station).toBe('firehose');
+		expect(localStorage.getItem('plyr_radio_station')).toBe('firehose');
+	});
+});
