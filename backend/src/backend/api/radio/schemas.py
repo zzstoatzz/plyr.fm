@@ -30,8 +30,25 @@ class RadioTrack(BaseModel):
     liked: bool = False  # whether the requesting (authenticated) user liked it
 
 
+class LiveBroadcastInfo(BaseModel):
+    """A broadcast preempting this station's rotation right now.
+
+    Additive and optional. A client that does not know about it plays the
+    rotation as before — on a station with a live source that means the
+    archived recordings, which is a coherent fallback rather than a broken one.
+    """
+
+    stream_url: str
+    kind: str  # "hls"
+    started_at: str | None = None
+
+
 class RadioStateResponse(BaseModel):
-    """Live radio state response (one station's deterministic loop)."""
+    """Live radio state response (one station's deterministic loop).
+
+    ``live`` preempts: while it is set, the station is airing that broadcast
+    and the rotation fields describe what resumes when it ends.
+    """
 
     station: str
     station_slug: str
@@ -44,6 +61,7 @@ class RadioStateResponse(BaseModel):
     current: RadioTrack | None
     up_next: list[RadioTrack]
     rotation: list[RadioTrack]
+    live: LiveBroadcastInfo | None = None
 
 
 class StationSummary(BaseModel):

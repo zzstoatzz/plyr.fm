@@ -33,6 +33,12 @@ export interface RadioStation {
 	is_default: boolean;
 }
 
+export interface LiveBroadcast {
+	stream_url: string;
+	kind: string;
+	started_at: string | null;
+}
+
 export interface RadioState {
 	station: string;
 	station_slug: string;
@@ -45,6 +51,8 @@ export interface RadioState {
 	current: RadioTrack | null;
 	up_next: RadioTrack[];
 	rotation: RadioTrack[];
+	/** set while a broadcast preempts the rotation. absent on older servers. */
+	live?: LiveBroadcast | null;
 }
 
 const POLL_INTERVAL_MS = 30000;
@@ -159,6 +167,18 @@ class Radio {
 			album: null,
 			features: []
 		};
+		// a broadcast preempts the rotation: air the stream, but keep rendering the
+		// rotation entry so the strip still has a title and artwork to show.
+		const broadcast = this.state?.live;
+		if (broadcast) {
+			return {
+				track: { ...track, title: this.state?.station ?? track.title },
+				stream_url: broadcast.stream_url,
+				start_at: 0, // live has no position to resume
+				live: true,
+				streamKind: broadcast.kind
+			};
+		}
 		return {
 			track,
 			stream_url: c.stream_url,

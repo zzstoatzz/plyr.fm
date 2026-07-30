@@ -11,6 +11,10 @@ export interface RadioNowPlaying {
 	stream_url: string;
 	/** station position to resume at (seconds) */
 	start_at: number;
+	/** a broadcast is airing: unbounded, no position to resume, no scrubbing */
+	live?: boolean;
+	/** transport for `stream_url` when live (currently only "hls") */
+	streamKind?: string;
 }
 
 interface RadioPlaybackOptions {
@@ -27,6 +31,9 @@ class PlayerState {
 	// when non-null, the player is in radio mode (overrides currentTrack)
 	radio = $state<RadioNowPlaying | null>(null);
 	audioElement = $state<HTMLAudioElement | undefined>(undefined);
+	/** live hls.js instance, when a broadcast needs one. not reactive — it is a
+	 * teardown handle, never rendered. */
+	private hls: { destroy(): void } | null = null;
 	paused = $state(true);
 
 	currentTime = $state(0);
@@ -96,8 +103,7 @@ class PlayerState {
 		this.unlockPlayCount();
 		const el = this.audioElement;
 		if (!el) return;
-		el.src = np.stream_url;
-		el.load();
+		void this.attachRadioSource(el, np, assigned);
 		if (autoplay) {
 			// play immediately (preserve the gesture), then align to station position
 			el.play().catch((err: unknown) => {
@@ -118,6 +124,8 @@ class PlayerState {
 		} else {
 			el.pause();
 		}
+		// a broadcast has no position to resume — it is wherever it is.
+		if (np.live) return;
 		const seek = () => {
 			if (np.start_at > 0 && Number.isFinite(el.duration)) {
 				el.currentTime = Math.min(np.start_at, el.duration);
@@ -127,10 +135,65 @@ class PlayerState {
 		else el.onloadedmetadata = seek;
 	}
 
+	/** point the shared element at a radio source, via hls.js when required.
+	 *
+	 * Safari and iOS play HLS natively from `src`; Chrome and Firefox do not, so
+	 * hls.js is imported only when a live station is actually tuned. everyone
+	 * else never downloads it.
+	 */
+	private async attachRadioSource(
+		el: HTMLAudioElement,
+		np: RadioNowPlaying,
+		assigned: RadioNowPlaying | null
+	) {
+		this.detachHls();
+		const needsHlsJs =
+			np.live &&
+			np.streamKind === 'hls' &&
+			!el.canPlayType('application/vnd.apple.mpegurl');
+
+		if (!needsHlsJs) {
+			el.src = np.stream_url;
+			el.load();
+			return;
+		}
+
+		try {
+			const { default: Hls } = await import('hls.js');
+			// compare against the $state proxy captured at tune-in — `np` is the
+			// raw object and never equals `this.radio`.
+			if (this.radio !== assigned) return; // tuned away while the chunk loaded
+			if (!Hls.isSupported()) {
+				el.src = np.stream_url;
+				el.load();
+				return;
+			}
+			const hls = new Hls({ enableWorker: true });
+			this.hls = hls;
+			hls.loadSource(np.stream_url);
+			hls.attachMedia(el);
+		} catch (e) {
+			console.error('failed to load hls.js for live radio:', e);
+			this.paused = true;
+		}
+	}
+
+	/** tear down any hls.js instance so its buffers and timers stop. */
+	private detachHls() {
+		if (!this.hls) return;
+		try {
+			this.hls.destroy();
+		} catch (e) {
+			console.error('failed to destroy hls instance:', e);
+		}
+		this.hls = null;
+	}
+
 	stopRadio() {
 		this.radio = null;
 		this.paused = true;
 		this.audioElement?.pause();
+		this.detachHls();
 	}
 
 	incrementPlayCount() {

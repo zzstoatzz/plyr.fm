@@ -37,12 +37,43 @@ def _only_slop(track: Track, tags: set[str]) -> bool:
     return _has_hidden_tag(tags) and track.artist.handle != PLYR_FM_ACCOUNT_HANDLE
 
 
+# the account broadcasting the sonified firehose; its published segments are
+# what the station airs when the live stream is down.
+FIREHOSE_PUBLISHER_HANDLE = "waow.tech"
+
+
+def _only_firehose_publisher(track: Track, tags: set[str]) -> bool:
+    return track.artist.handle == FIREHOSE_PUBLISHER_HANDLE
+
+
 # how far down a station's lens ranking the sampler meaningfully reaches: weights
 # decay as exp(-rank/scale), so roughly the top ~3*scale ranks carry the station.
 DEFAULT_RANK_DECAY = 12.0
 # share of draws that ignore the lens and pick uniformly from the un-drawn pool,
 # so the dormant tail cycles through instead of never airing.
 DEFAULT_EXPLORATION = 0.25
+
+
+@dataclass(frozen=True)
+class LiveSource:
+    """A broadcast that preempts a station's rotation while it is airing.
+
+    Live is deliberately *not* a rotation entry. The rotation is a loop whose
+    position is derived from wall-clock time (`epoch % loop_duration`), which is
+    what lets every listener compute the same "now playing" with no server
+    state. A broadcast has no known duration, so putting one in the loop would
+    leave it with no period and dissolve that property.
+
+    Modelling it as preemption keeps the loop running as the clock it is — a
+    live show interrupts automation, and when it ends automation resumes
+    wherever it has got to, exactly like real radio.
+
+    `health_url` answers "is this airing right now" without pulling media.
+    """
+
+    stream_url: str
+    health_url: str
+    kind: str = "hls"
 
 
 @dataclass(frozen=True)
@@ -55,6 +86,11 @@ class Station:
     corpus_filter: CorpusFilter = field(default=_exclude_slop)
     rank_decay: float = DEFAULT_RANK_DECAY
     exploration: float = DEFAULT_EXPLORATION
+    # when set, this station airs the broadcast whenever it is live and falls
+    # back to its rotation when it is not. this tuple is the allowlist: who may
+    # preempt is a curation decision, made here, not something a publisher can
+    # assert about themselves.
+    live: LiveSource | None = None
 
 
 STATIONS: tuple[Station, ...] = (
@@ -90,6 +126,21 @@ STATIONS: tuple[Station, ...] = (
         description="ai-generated tracks",
         lens=lenses.loved,
         corpus_filter=_only_slop,
+    ),
+    Station(
+        slug="firehose",
+        name="firehose",
+        description="the atproto firehose, sonified live",
+        # off-air, the station plays the archived segments of the same signal,
+        # so it stays about the firehose either way rather than becoming a
+        # generic music station whenever the broadcast drops.
+        lens=lenses.fresh,
+        corpus_filter=_only_firehose_publisher,
+        exploration=0.0,
+        live=LiveSource(
+            stream_url="https://relay-eval.waow.tech/sonify/live/index.m3u8",
+            health_url="https://relay-eval.waow.tech/api/sonify/live",
+        ),
     ),
 )
 
