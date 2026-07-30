@@ -461,7 +461,11 @@
 
 	/* the swappable station content — artwork + title — fades while tuning */
 	.now-block {
-		flex: 1 1 auto;
+		/* content-sized. it used to grow and centre, which was invisible while the
+		   artwork stretched to fill the leftover space — once covers were sized to
+		   their own ratio, that growth became a dead band under the title. slack
+		   belongs below the controls, per `.tuner`'s flex-start. */
+		flex: 0 0 auto;
 		min-height: 0;
 		display: flex;
 		flex-direction: column;
@@ -553,10 +557,12 @@
 	}
 
 	.art-stage {
-		/* a size container, so the cover can be sized against both of its axes */
-		container-type: size;
-		flex: 1 1 auto;
-		min-height: clamp(7rem, 22vh, 18rem);
+		--cover-max-height: clamp(7rem, 42vh, 26rem);
+		/* hug the cover exactly: don't grow (that left a dead band between the
+		   artwork and the title once covers stopped being stretched to fit) and
+		   don't shrink below it (that let a wide cover overlap the title). */
+		flex: 0 0 auto;
+		min-height: 0;
 		width: 100%;
 		position: relative;
 		display: flex;
@@ -594,13 +600,13 @@
 		z-index: 1;
 		flex: 0 0 auto;
 		display: block;
-		/* fit inside the stage at the cover's own ratio: take the full height
-		   unless that would overflow the width, in which case width wins.
-		   percentage max-heights can't express this — they don't resolve against
-		   an auto-height parent, which is how a square cover became a tall slice. */
-		height: min(100cqh, calc(100cqw / var(--cover-ratio, 1)));
+		/* sized from the column width and a viewport cap, at the cover's own
+		   ratio — so a square cover reads square and a widescreen one reads wide,
+		   neither cropped. driven by width rather than the stage's height,
+		   because the stage now hugs this box instead of the other way round. */
+		width: min(100%, calc(var(--cover-max-height) * var(--cover-ratio, 1)));
 		aspect-ratio: var(--cover-ratio, 1);
-		width: auto;
+		height: auto;
 		text-decoration: none;
 		border-radius: var(--radius-md);
 		overflow: hidden;
@@ -1057,12 +1063,12 @@
 		.radio-player { gap: 0.4rem; }
 		.now-block { gap: 0.35rem; }
 		.now-meta h2 { font-size: clamp(1.35rem, 4.2vh, 2rem); }
-		.art-stage { min-height: clamp(5rem, 15vh, 11rem); }
+		.art-stage { --cover-max-height: clamp(5rem, 15vh, 11rem); }
 	}
 
 	@media (max-height: 560px) {
 		.now-meta h2 { font-size: 1.2rem; }
-		.art-stage { min-height: 4.5rem; }
+		.art-stage { --cover-max-height: 4.5rem; }
 		/* no room for the deck on a very short screen */
 		.station-board { display: none; }
 	}

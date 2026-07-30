@@ -1091,3 +1091,89 @@ async def test_a_broadcast_without_artwork_is_still_valid(
             )
 
     assert response.json()["live"]["artwork_url"] is None
+
+
+# --- the playlist gets the last word on liveness ---
+
+
+def _playlist(*, age_seconds: float, ended: bool = False, stamped: bool = True) -> str:
+    stamp = (datetime.now(UTC) - timedelta(seconds=age_seconds)).isoformat()
+    lines = ["#EXTM3U", "#EXT-X-VERSION:3", "#EXT-X-TARGETDURATION:4"]
+    lines.append("#EXTINF:3.99,")
+    if stamped:
+        lines.append(f"#EXT-X-PROGRAM-DATE-TIME:{stamp}")
+    lines.append("segment-000000001.ts")
+    if ended:
+        lines.append("#EXT-X-ENDLIST")
+    return "\n".join(lines)
+
+
+def _health_client(payload: dict, playlist: str | None = None) -> MagicMock:
+    """stub httpx.AsyncClient: health json first, playlist text after."""
+    health = MagicMock()
+    health.json.return_value = payload
+    health.raise_for_status.return_value = None
+    health.text = ""
+    pl = MagicMock()
+    pl.raise_for_status.return_value = None
+    pl.text = playlist or ""
+    client = MagicMock()
+    client.__aenter__ = AsyncMock(return_value=client)
+    client.__aexit__ = AsyncMock(return_value=False)
+    client.get = AsyncMock(side_effect=[health, pl])
+    return client
+
+
+class TestLivenessFallsBackToThePlaylist:
+    """a broadcaster reported itself down while its playlist kept advancing.
+
+    observed 2026-07-30: `{"live": false}` with MEDIA-SEQUENCE climbing and
+    segments decoding fine. the listener could have heard it; the station said
+    off air. the playlist is what actually gets played, so it decides.
+    """
+
+    async def test_advancing_playlist_overrides_a_down_report(self) -> None:
+        radio_live.reset_cache()
+        source = stations.LiveSource(
+            stream_url="https://relay.test/live/index.m3u8",
+            health_url="https://relay.test/health",
+        )
+        client = _health_client({"live": False}, _playlist(age_seconds=3))
+        with patch.object(radio_live.httpx, "AsyncClient", return_value=client):
+            result = await radio_live.get_live_broadcast(source)
+        assert result is not None
+        assert result.stream_url == "https://relay.test/live/index.m3u8"
+
+    async def test_a_stale_playlist_stays_off_air(self) -> None:
+        radio_live.reset_cache()
+        source = stations.LiveSource(
+            stream_url="https://relay.test/live/index.m3u8",
+            health_url="https://relay.test/health",
+        )
+        client = _health_client({"live": False}, _playlist(age_seconds=600))
+        with patch.object(radio_live.httpx, "AsyncClient", return_value=client):
+            assert await radio_live.get_live_broadcast(source) is None
+
+    async def test_an_ended_playlist_stays_off_air(self) -> None:
+        radio_live.reset_cache()
+        source = stations.LiveSource(
+            stream_url="https://relay.test/live/index.m3u8",
+            health_url="https://relay.test/health",
+        )
+        client = _health_client({"live": False}, _playlist(age_seconds=1, ended=True))
+        with patch.object(radio_live.httpx, "AsyncClient", return_value=client):
+            assert await radio_live.get_live_broadcast(source) is None
+
+    async def test_a_healthy_report_never_fetches_the_playlist(self) -> None:
+        """the second opinion is only for a *negative* report."""
+        radio_live.reset_cache()
+        source = stations.LiveSource(
+            stream_url="https://relay.test/live/index.m3u8",
+            health_url="https://relay.test/health",
+        )
+        client = _health_client({"live": True, "artwork_url": "https://a.test/c.png"})
+        with patch.object(radio_live.httpx, "AsyncClient", return_value=client):
+            result = await radio_live.get_live_broadcast(source)
+        assert result is not None
+        assert result.artwork_url == "https://a.test/c.png"
+        assert client.get.await_count == 1
