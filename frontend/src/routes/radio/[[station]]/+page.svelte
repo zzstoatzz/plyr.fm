@@ -18,6 +18,14 @@
 	let { data }: { data: PageData } = $props();
 
 	const endpoint = `${API_URL}/radio/state`;
+	// the cover's own aspect ratio, read on load. drives the frame so a square
+	// cover reads square and a widescreen one reads wide — see `.art-link`.
+	let coverRatio = $state(1);
+
+	function readCoverRatio(event: Event) {
+		const img = event.currentTarget as HTMLImageElement;
+		if (img.naturalHeight > 0) coverRatio = img.naturalWidth / img.naturalHeight;
+	}
 
 	// the URL path is the source of truth for the selected station (bookmarkable).
 	// `/radio` (no slug) shows the remembered/default station; `/radio/<slug>` pins it.
@@ -166,7 +174,7 @@
 					onSelect={tuneToStation}
 				/>
 				<div class="now-block" class:tuning={radio.switching}>
-				<div class="art-stage">
+				<div class="art-stage" style={`--cover-ratio: ${coverRatio}`}>
 					{#if radio.current}
 						{#if radio.current.artwork_url}
 							<img class="art-bg" src={resizedImageUrl(radio.current.artwork_url, IMAGE_WIDTHS.tile)} alt="" aria-hidden="true" />
@@ -174,7 +182,12 @@
 						<SensitiveImage src={radio.current.artwork_url} tooltipPosition="center">
 							<a class="art-link" href={`/track/${radio.current.id}`} aria-label={`view ${radio.current.title}`}>
 								{#if radio.current.artwork_url}
-									<img src={resizedImageUrl(radio.current.artwork_url, IMAGE_WIDTHS.hero)} alt="" class="art" />
+									<img
+									src={resizedImageUrl(radio.current.artwork_url, IMAGE_WIDTHS.hero)}
+									alt=""
+									class="art"
+									onload={readCoverRatio}
+								/>
 								{:else}
 									<div class="art fallback"></div>
 								{/if}
@@ -183,7 +196,12 @@
 					{:else if radio.state?.live?.artwork_url}
 						<img class="art-bg" src={radio.state.live.artwork_url} alt="" aria-hidden="true" />
 						<div class="art-link">
-							<img src={radio.state.live.artwork_url} alt="" class="art" />
+							<img
+								src={radio.state.live.artwork_url}
+								alt=""
+								class="art"
+								onload={readCoverRatio}
+							/>
 						</div>
 					{:else}
 						<!-- no cover published for this broadcast: a placeholder sized like
@@ -501,6 +519,8 @@
 	   the ambient backdrop so wide/tall leftovers look intentional instead of
 	   cropping the square cover into a weird slice */
 	.art-stage {
+		/* a size container, so the cover can be sized against both of its axes */
+		container-type: size;
 		flex: 1 1 auto;
 		min-height: clamp(7rem, 22vh, 18rem);
 		width: 100%;
@@ -529,16 +549,24 @@
 		pointer-events: none;
 	}
 
-	/* foreground cover: a contained square (never cropped to a slice) */
+	/* foreground cover: fits inside the stage at its own aspect ratio, never
+	   cropped. sizing is driven by the image rather than a fixed square box —
+	   `height: 100%` used to resolve against the stage and beat `aspect-ratio`,
+	   so a square cover came out as a tall slice on a tall viewport. shrink-
+	   wrapping the image means a square cover reads square, a widescreen one
+	   reads wide, and neither loses edges. */
 	.art-link {
 		position: relative;
 		z-index: 1;
 		flex: 0 0 auto;
 		display: block;
-		height: 100%;
+		/* fit inside the stage at the cover's own ratio: take the full height
+		   unless that would overflow the width, in which case width wins.
+		   percentage max-heights can't express this — they don't resolve against
+		   an auto-height parent, which is how a square cover became a tall slice. */
+		height: min(100cqh, calc(100cqw / var(--cover-ratio, 1)));
+		aspect-ratio: var(--cover-ratio, 1);
 		width: auto;
-		max-width: 100%;
-		aspect-ratio: 1 / 1;
 		text-decoration: none;
 		border-radius: var(--radius-md);
 		overflow: hidden;
@@ -557,7 +585,9 @@
 		display: block;
 		width: 100%;
 		height: 100%;
-		object-fit: cover;
+		/* `contain` is belt-and-braces: the box already matches the image's ratio,
+		   so there is nothing to crop or letterbox. */
+		object-fit: contain;
 		border-radius: var(--radius-md);
 		box-shadow: 0 0.75rem 2.5rem rgba(0, 0, 0, 0.34);
 		transition:
@@ -580,9 +610,9 @@
 	   square. a placeholder has none, so drive this one from width and cap it —
 	   otherwise it stretches to whatever vertical space the stage has. */
 	.art-link.art-tile-live {
-		height: auto;
+		/* no intrinsic size to shrink-wrap, so give it one */
 		width: min(100%, 18rem);
-		max-height: 100%;
+		height: auto;
 		aspect-ratio: 1 / 1;
 	}
 
