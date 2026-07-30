@@ -2,24 +2,26 @@
 
 ## summary
 
-Twenty tracks across seven artists served no audio. The R2 objects had existed
-and been played — every affected track has `play_count >= 1`, and track 53 had
-59 plays and a like — and were then **deleted by plyr itself**.
+A fleet probe of all 943 discovery-eligible tracks found **twenty serving no
+audio**, across seven artists, with breakage dating back to 2025-11. Thirteen
+were recovered the same day; seven cannot be recovered from anything plyr
+controls.
 
-A `file_id` is a content hash (`hash_file_chunked(file)[:16]`). So re-uploading a
-file you already published stages the *exact R2 key your live track is served
-from*. Phase 3 of the upload pipeline (`_check_duplicate`) rejects the upload,
-and the orchestrator's failure cleanup then deletes "its" staged object — which
-is the published track's only copy.
+**One mechanism is proven, and it does not account for all twenty.** See
+"what we could not determine" below — this is the correction to the first
+version of this document, which asserted a single cause for all of them.
 
-The duplicate path is the one failure mode where the staged object is
-**guaranteed** to belong to someone else: you only reach it because a track
-already owns that key.
+The proven bug: a `file_id` is a content hash
+(`hash_file_chunked(file)[:16]`), so re-uploading a file you already published
+stages the *exact R2 key your live track is served from*. Phase 3 of the upload
+pipeline (`_check_duplicate`) rejects the upload, and the orchestrator's failure
+cleanup then deletes "its" staged object — the published track's only copy. The
+duplicate path is the one failure mode where the staged object is **guaranteed**
+to belong to someone else: you only reach it because a track already owns that
+key.
 
 Found on 2026-07-30 when `@fpst.uk`'s tracks were noticed broken **while the
-operator was streaming live**. Twelve tracks were recovered the same day from
-the artists' PDS blobs (hash-verified byte-identical); eight had no PDS copy and
-are unrecoverable.
+operator was streaming live**.
 
 ## timeline (UTC)
 
@@ -33,6 +35,28 @@ are unrecoverable.
 | 2026-07-18 15:26:57.6 | `R2 file deleted audio/b9deb36a0475b377.wav` — same trace, `run_track_upload` → `_process_upload_background`. Repeats for 1181, 1186, 1187 that afternoon. |
 | 2026-07-30 | reported: "the tracks by this guy also seem broken and are showing in radio", during a live stream |
 | 2026-07-30 | fix released (#1733, `2026.0730.064616`); PDS fallback released (#1734); 12 objects restored from PDS blobs + edge cache purged; 20 broken → 8 |
+
+## what we could not determine
+
+Logfire retains ~14 days, so `R2 file deleted` spans only exist from 2026-07-17.
+Attribution therefore splits three ways:
+
+| tracks | cause | basis |
+|---|---|---|
+| 1180, 1181, 1186, 1187 (`boulyprod`, 07-18) | staged-cleanup deletion | **proven** — one trace per track: upload → play → re-upload (same content hash) → `attempting R2 delete refcount=1` → `R2 file deleted` |
+| 53 (`zzstoatzz.io`, 2025-11) | **not a deletion** — the object was never in `audio-prod` | **proven** — found intact in `audio-dev`, and the ATProto record still names the old `pub-…r2.dev` URL. Predates `audio-prod` (created 2026-04-18). A bucket-migration gap. |
+| 1029–1035 (`fpst.uk`), 930–934 (`flo.by`), 831, 1016, 1136 | **unknown** | outside retention. 831 (2026-03-18) also predates `audio-prod` and may be migration; the rest postdate it and are consistent with the deletion bug, but consistency is not evidence. |
+
+A useful negative result: across the full retention window there were 19
+`R2 file deleted` events, and only those 4 hit a row that still referenced the
+key. The other 15 were genuine orphans. **The bug is real but fires rarely** —
+it needs a re-upload of an already-published file — which is why it took eight
+months to be noticed and why a fleet probe found so few.
+
+Two things would have made this answerable and are worth having next time: a
+longer retention tier for storage-mutation spans specifically, and recording
+*why* an object was deleted (call site + the row that authorized it) rather than
+just `file_id` and `key`.
 
 ## root causes
 
@@ -95,14 +119,33 @@ in logs from a permission denial. Both incidents were found by a human noticing.
 
 ## recovery
 
-All 12 mirrored tracks restored: blob fetched from the artist's real PDS
-(resolved from the DB, never assumed), `sha256(blob)[:16]` verified to equal the
-`file_id` for all 12, written to `audio-prod`, then the cached 404s purged —
-**restoring the object is not enough**, since the "Cache R2 media assets" rule
-pins a 1-year edge TTL and some edges kept serving the negative response.
+**13 of 20 recovered. 20 broken → 7.**
 
-Unrecoverable (no PDS copy, `audio_storage="r2"`): 930–934 (`flo.by`), 1136
-(`bismark.blacksky.app`), 831 (`jdhitsolutions.com`), 53 (`zzstoatzz.io`).
+Twelve mirrored tracks (`fpst.uk` ×7, `boulyprod` ×4, `woody.fm` ×1) restored
+from PDS blobs: blob fetched from the artist's real PDS (resolved from the DB,
+never assumed), `sha256(blob)[:16]` verified to equal the `file_id` for all
+twelve — byte-identical to what the artist uploaded — written to `audio-prod`.
+
+Track 53 restored by copying from `audio-dev`, where it had been all along.
+
+Then the cached 404s were purged. **Restoring the object is not enough**: the
+"Cache R2 media assets" rule pins a 1-year edge TTL, and after the writes only 2
+of 12 served — the rest were edges still replaying the negative response.
+
+Not recoverable by us: 930–934 (`flo.by`), 831 (`jdhitsolutions.com`), 1136
+(`bismark.blacksky.app`). For these, no object exists in any of our seven
+buckets (searched by `audio/<file_id>` prefix, so any extension), and the
+ATProto record carries only an `audioUrl` — **no `audioBlob`**, since these
+predate PDS mirroring. Note the distinction: `pds_blob_cid IS NULL` in our DB
+only means *we* recorded no blob; the records were checked directly to confirm.
+
+The accurate statement is "we cannot recover these from anything we control,"
+not "the audio is gone" — the artists almost certainly still hold their source
+files, so the remedy is asking them to re-upload.
+
+Separately: track 930's ATProto record returns `RecordNotFound` on
+`eurosky.social` while our row survives. Unrelated to this incident and not yet
+investigated.
 
 ## prevention / follow-ups
 
@@ -117,5 +160,13 @@ Unrecoverable (no PDS copy, `audio_storage="r2"`): 930–934 (`flo.by`), 1136
 - **open**: dedup is scoped per-artist (`uploads.py`), so two artists uploading
   identical bytes legitimately share one object. Serving already assumes that;
   deletion should be audited against it everywhere.
-- **note**: the eight unrecoverable tracks belong to four artists who have not
+- **open**: `audit_media_integrity.py` only checks the bucket a row's key
+  implies. Track 53 proves that is too narrow — a legacy object can be sitting
+  in `audio-dev`. It should search every bucket before reporting a row missing,
+  and there may be other pre-2026-04-18 tracks in the same state that a
+  discovery-scoped probe wouldn't surface.
+- **open**: instrument *why* an object is deleted (call site, authorizing row),
+  and retain storage-mutation spans longer than 14 days. Without both, 15 of
+  these 20 tracks are permanently unattributable.
+- **note**: the seven unrecoverable tracks belong to three artists who have not
   been told.
