@@ -753,6 +753,83 @@ class TestAudioPdsRedirect:
         assert f"did={artist.did}" in location
         assert f"cid={pds_track.pds_blob_cid}" in location
 
+    async def test_mirrored_track_falls_back_to_pds_when_r2_is_empty(
+        self, db_session: AsyncSession, client: object
+    ) -> None:
+        """a mirrored track whose R2 object went missing serves from the PDS.
+
+        Regression: #1732 deleted R2 objects out from under published tracks.
+        The PDS branch used to require `audio_storage == "pds"` exactly, so a
+        `both` track with an intact blob 404'd anyway — 12 tracks across three
+        artists were dead in the player while their audio sat in their own PDS.
+        """
+        from fastapi.testclient import TestClient
+
+        assert isinstance(client, TestClient)
+
+        artist = Artist(
+            did="did:plc:mirrored",
+            handle="mirrored.bsky.social",
+            display_name="Mirrored Artist",
+            pds_url=self.PDS_URL,
+        )
+        db_session.add(artist)
+        await db_session.flush()
+
+        track = Track(
+            title="R2 copy deleted",
+            file_id="mirrored_file_001",
+            file_type="wav",
+            artist_did=artist.did,
+            r2_url=None,
+            audio_storage="both",
+            pds_blob_cid="bafymirroredcid",
+        )
+        db_session.add(track)
+        await db_session.commit()
+
+        with patch("backend.api.audio.storage.get_url", AsyncMock(return_value=None)):
+            response = client.get(f"/audio/{track.file_id}", follow_redirects=False)
+
+        assert response.status_code == 307
+        location = response.headers["location"]
+        assert "com.atproto.sync.getBlob" in location
+        assert f"cid={track.pds_blob_cid}" in location
+
+    async def test_track_with_no_copy_anywhere_still_404s(
+        self, db_session: AsyncSession, client: object
+    ) -> None:
+        """the fallback must not paper over a track we genuinely lost."""
+        from fastapi.testclient import TestClient
+
+        assert isinstance(client, TestClient)
+
+        artist = Artist(
+            did="did:plc:noblob",
+            handle="noblob.bsky.social",
+            display_name="No Blob",
+            pds_url=self.PDS_URL,
+        )
+        db_session.add(artist)
+        await db_session.flush()
+        db_session.add(
+            Track(
+                title="gone",
+                file_id="noblob_file_001",
+                file_type="wav",
+                artist_did=artist.did,
+                r2_url=None,
+                audio_storage="r2",
+                pds_blob_cid=None,
+            )
+        )
+        await db_session.commit()
+
+        with patch("backend.api.audio.storage.get_url", AsyncMock(return_value=None)):
+            response = client.get("/audio/noblob_file_001", follow_redirects=False)
+
+        assert response.status_code == 404
+
     async def test_gated_pds_redirect(
         self,
         db_session: AsyncSession,

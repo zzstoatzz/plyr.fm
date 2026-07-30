@@ -144,12 +144,21 @@ async def stream_audio(
             )
 
     # get URL for the requested file (original or transcoded)
-    url = await storage.get_url(
+    if url := await storage.get_url(
         serve_file_id, file_type="audio", extension=serve_file_type
-    )
-    if not url:
-        raise HTTPException(status_code=404, detail="audio file not found")
-    return RedirectResponse(url=url)
+    ):
+        return RedirectResponse(url=url)
+
+    # R2 has nothing. For anything we mirrored, the artist's own PDS holds a
+    # copy that is by definition still theirs — serve it rather than 404. Since
+    # #1732 deleted R2 objects out from under published tracks, a missing bucket
+    # copy is our failure, not evidence the audio is gone.
+    if pds_blob_cid and (artist_pds_url := await _resolve_pds_url(artist_did)):
+        return RedirectResponse(
+            url=pds_blob_url(artist_pds_url, artist_did, pds_blob_cid)
+        )
+
+    raise HTTPException(status_code=404, detail="audio file not found")
 
 
 async def _check_gate_access(
@@ -339,13 +348,22 @@ async def get_audio_url(
             )
 
     # otherwise, resolve it
-    url = await storage.get_url(
+    if url := await storage.get_url(
         serve_file_id, file_type="audio", extension=serve_file_type
-    )
-    if not url:
-        raise HTTPException(status_code=404, detail="audio file not found")
+    ):
+        return AudioUrlResponse(
+            url=url, file_id=serve_file_id, file_type=serve_file_type
+        )
 
-    return AudioUrlResponse(url=url, file_id=serve_file_id, file_type=serve_file_type)
+    # R2 has nothing — fall back to the artist's own copy (see `stream_audio`).
+    if pds_blob_cid and (artist_pds_url := await _resolve_pds_url(artist_did)):
+        return AudioUrlResponse(
+            url=pds_blob_url(artist_pds_url, artist_did, pds_blob_cid),
+            file_id=serve_file_id,
+            file_type=serve_file_type,
+        )
+
+    raise HTTPException(status_code=404, detail="audio file not found")
 
 
 def _relay_headers(resp) -> dict[str, str]:
