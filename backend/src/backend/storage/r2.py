@@ -1,7 +1,9 @@
 """cloudflare R2 storage for audio files."""
 
+import operator
 import time
 from collections.abc import AsyncIterator, Callable
+from functools import reduce
 from io import BytesIO
 from pathlib import Path, PurePosixPath
 from typing import BinaryIO
@@ -16,6 +18,8 @@ from sqlalchemy import func, or_, select
 from backend._internal.audio import AudioFormat
 from backend._internal.image import ImageFormat
 from backend.config import settings
+from backend.models.album import Album
+from backend.models.playlist import Playlist
 from backend.models.track import Track
 from backend.storage.keys import AudioKey, ImageKey, InvalidMediaExtension
 from backend.utilities.database import db_session
@@ -28,6 +32,16 @@ STREAM_CHUNK_SIZE = 1024 * 1024
 
 # content-hashed files never change — cache forever
 IMMUTABLE_CACHE_CONTROL = "public, max-age=31536000, immutable"
+
+# every column that can name a stored object. `_reference_count` walks all of
+# them, because a content hash makes "these bytes" and "this row's media"
+# different questions — see its docstring.
+_MEDIA_REFERENCES: list[tuple[type, Callable[[str], object]]] = [
+    (Track, lambda fid: or_(Track.file_id == fid, Track.original_file_id == fid)),
+    (Track, lambda fid: Track.image_id == fid),
+    (Album, lambda fid: Album.image_id == fid),
+    (Playlist, lambda fid: Playlist.image_id == fid),
+]
 
 
 class UploadProgressTracker:
@@ -436,19 +450,25 @@ class R2Storage:
             return int(size) if size is not None else None
 
     async def _reference_count(self, file_id: str) -> int:
-        """how many live tracks point at ``file_id``.
+        """how many live rows point at ``file_id``, across every media column.
 
-        Counts `original_file_id` as well as `file_id`: a track's lossless source
-        is an object too, and a file_id is a content hash, so two rows can name
-        the same bytes through different columns.
+        A file_id is a content hash, so the same bytes are reachable through
+        several columns and several tables: a track's lossless source, an album
+        or playlist cover, another artist's byte-identical upload. Deletion has
+        to ask "does anything still need these bytes", not "does this one column
+        mention them" — the narrower question is what let staged cleanup delete
+        a published track's audio (#1732).
         """
+        totals = [
+            select(func.count())
+            .select_from(model)
+            .where(condition(file_id))
+            .scalar_subquery()
+            for model, condition in _MEDIA_REFERENCES
+        ]
         async with db_session() as db:
-            stmt = (
-                select(func.count())
-                .select_from(Track)
-                .where(or_(Track.file_id == file_id, Track.original_file_id == file_id))
-            )
-            return (await db.execute(stmt)).scalar_one()
+            result = await db.execute(select(reduce(operator.add, totals)))
+            return result.scalar_one()
 
     async def discard_staged(
         self, file_id: str, file_type: str | None = None, *, gated: bool = False
