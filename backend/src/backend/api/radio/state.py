@@ -228,6 +228,7 @@ async def list_stations() -> StationsResponse:
                 name=station.name,
                 description=station.description,
                 is_default=station.slug == stations.DEFAULT_STATION_SLUG,
+                source_url=station.source_url,
             )
             for station in stations.STATIONS
         ],
