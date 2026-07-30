@@ -134,6 +134,18 @@ class Radio {
 		this.switching = true;
 		try {
 			await this.loadState();
+			// bare /radio restores whatever was last picked. a station can be empty
+			// — a live one goes quiet, and `firehose` has no recorded rotation behind
+			// it — so an implicit restore must not strand the listener on silence.
+			// an explicit /radio/<slug> is respected either way: asking for a station
+			// and being shown another would be worse than being told it is off air.
+			if (slug === null && target !== null && !this.hasSomethingOnAir) {
+				this.station = null;
+				if (typeof localStorage !== 'undefined') {
+					localStorage.removeItem(STATION_STORAGE_KEY);
+				}
+				await this.loadState();
+			}
 		} finally {
 			this.switching = false;
 		}

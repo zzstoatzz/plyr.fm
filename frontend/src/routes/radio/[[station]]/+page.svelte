@@ -268,7 +268,18 @@
 				{/if}
 			</div>
 		{:else}
-			<div class="status">no tracks in rotation yet</div>
+			<!-- a station can be legitimately empty: its broadcaster is off air and it
+			     has no recorded rotation behind it. the tuner comes along so this is
+			     never a dead end — the station choice persists, so landing here on a
+			     later visit must still offer a way out. -->
+			<div class="off-air">
+				<TunerDial stations={radio.stations} {activeSlug} onSelect={tuneToStation} />
+				<p class="off-air-label">off air</p>
+				<p class="off-air-detail">
+					nothing is on air on {radio.activeStation?.name ?? 'this station'} right now.
+					pick another above.
+				</p>
+			</div>
 		{/if}
 	</section>
 
@@ -518,6 +529,29 @@
 	/* the artwork "stage" fills the leftover space; a blurred copy of the cover is
 	   the ambient backdrop so wide/tall leftovers look intentional instead of
 	   cropping the square cover into a weird slice */
+	.off-air {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 1rem;
+		padding-bottom: clamp(2rem, 8vh, 5rem);
+	}
+
+	.off-air-label {
+		font-size: 0.75rem;
+		letter-spacing: 0.16em;
+		text-transform: uppercase;
+		color: var(--text-secondary);
+		margin: 1rem 0 0;
+	}
+
+	.off-air-detail {
+		margin: 0;
+		color: var(--text-secondary);
+		text-align: center;
+		max-width: 26rem;
+	}
+
 	.art-stage {
 		/* a size container, so the cover can be sized against both of its axes */
 		container-type: size;
