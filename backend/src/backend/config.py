@@ -973,14 +973,41 @@ class JetstreamSettings(AppSettingsSection):
         default=False,
         description="Enable Jetstream consumer for real-time ATProto event ingestion",
     )
-    url: str = Field(
-        default="wss://jetstream1.us-east.bsky.network/subscribe",
-        # jetstream2 served `app.bsky.actor.profile` normally while emitting
-        # nothing at all for `fm.plyr.*` — 10h of silent blackout on 2026-07-30,
-        # confirmed by subscribing to both instances for the same DID at once
-        # (jetstream1: 10 track commits, jetstream2: zero). A partial view looks
-        # exactly like a quiet network, so prefer the instance that was right.
-        description="Jetstream WebSocket URL",
+    url: str | None = Field(
+        default=None,
+        description=(
+            "Pin a single Jetstream WebSocket URL. Unset (the default) rotates "
+            "through `hosts` on reconnect."
+        ),
+    )
+    hosts: list[str] = Field(
+        # mirrors the default host list in zat's jetstream client. one instance
+        # can serve some collections and silently drop others (jetstream2 did
+        # exactly that for 10h on 2026-07-30), and a partial view is
+        # indistinguishable from a quiet network — so never depend on one.
+        default=[
+            "jetstream1.us-east.bsky.network",
+            "jetstream2.us-east.bsky.network",
+            "jetstream1.us-west.bsky.network",
+            "jetstream2.us-west.bsky.network",
+            "jetstream.waow.tech",
+            "jetstream.fire.hose.cam",
+            "jet.firehose.stream",
+            "sfo.firehose.stream",
+            "nyc.firehose.stream",
+            "london.firehose.stream",
+            "frankfurt.firehose.stream",
+            "chennai.firehose.stream",
+        ],
+        description="Jetstream hosts, tried round-robin on each reconnect",
+    )
+    blind_host_timeout_seconds: float = Field(
+        default=1800.0,
+        description=(
+            "Rotate hosts when no record in our own collections arrives for this "
+            "long while other traffic is still flowing (a host serving some "
+            "collections but not ours). 0 disables the check."
+        ),
     )
     cursor_key: str = Field(
         default="plyr:jetstream:cursor",

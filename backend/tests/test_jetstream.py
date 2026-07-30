@@ -1,5 +1,6 @@
 """tests for Jetstream consumer and ingest tasks."""
 
+import time
 import uuid
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -29,6 +30,7 @@ from backend._internal.tasks.ingest import (
     ingest_track_delete,
     ingest_track_update,
 )
+from backend.config import settings
 from backend.models import Artist, Playlist, Track, TrackComment, TrackLike
 from backend.models.session import UserSession
 
@@ -2682,3 +2684,88 @@ class TestAudioExistenceOnUpdate:
         assert updated is not None
         assert updated.title == "metadata still lands"
         assert updated.r2_url == original
+
+
+# --- host failover (#1739 follow-up) ---
+
+
+class TestHostRotation:
+    """one instance can serve some collections and silently drop others.
+
+    jetstream2 did exactly that for 10h on 2026-07-30 without ever
+    disconnecting, so reconnect-driven rotation alone would not have caught it.
+    """
+
+    def test_rotates_through_configured_hosts(self) -> None:
+        consumer = JetstreamConsumer()
+        with patch.object(settings.jetstream, "url", None):
+            hosts = settings.jetstream.hosts
+            seen = []
+            for _ in range(len(hosts) + 2):
+                seen.append(consumer._current_endpoint())
+                consumer._rotate_host()
+
+        assert seen[0] == f"wss://{hosts[0]}/subscribe"
+        assert seen[1] == f"wss://{hosts[1]}/subscribe"
+        # wraps rather than running off the end
+        assert seen[len(hosts)] == seen[0]
+        assert len(set(seen)) == len(hosts)
+
+    def test_a_pinned_url_is_never_rotated_away_from(self) -> None:
+        consumer = JetstreamConsumer()
+        with patch.object(settings.jetstream, "url", "wss://pinned.example/sub"):
+            consumer._rotate_host()
+            consumer._rotate_host()
+            assert consumer._current_endpoint() == "wss://pinned.example/sub"
+
+    def test_rotation_rewinds_the_cursor_for_instance_lag(self) -> None:
+        """the host we move to may sit behind the one we left."""
+        consumer = JetstreamConsumer()
+        consumer._cursor = 1_000_000_000
+        with patch.object(settings.jetstream, "url", None):
+            consumer._rotate_host()
+        assert consumer._cursor == 1_000_000_000 - 10_000_000
+
+
+class TestBlindHostDetection:
+    def test_other_traffic_flowing_but_ours_silent_is_blind(self) -> None:
+        consumer = JetstreamConsumer()
+        now = time.monotonic()
+        with patch.object(settings.jetstream, "blind_host_timeout_seconds", 1800.0):
+            consumer._last_own_event = now - 3600  # an hour of nothing from us
+            consumer._last_any_event = now - 5  # bsky events still arriving
+            assert consumer._is_blind() is True
+
+    def test_a_quiet_network_is_not_blind(self) -> None:
+        """both silent means no traffic, not a bad host — don't rotate."""
+        consumer = JetstreamConsumer()
+        now = time.monotonic()
+        with patch.object(settings.jetstream, "blind_host_timeout_seconds", 1800.0):
+            consumer._last_own_event = now - 3600
+            consumer._last_any_event = now - 3600
+            assert consumer._is_blind() is False
+
+    def test_recent_own_traffic_is_not_blind(self) -> None:
+        consumer = JetstreamConsumer()
+        now = time.monotonic()
+        with patch.object(settings.jetstream, "blind_host_timeout_seconds", 1800.0):
+            consumer._last_own_event = now - 10
+            consumer._last_any_event = now - 5
+            assert consumer._is_blind() is False
+
+    def test_detection_can_be_disabled(self) -> None:
+        consumer = JetstreamConsumer()
+        now = time.monotonic()
+        with patch.object(settings.jetstream, "blind_host_timeout_seconds", 0.0):
+            consumer._last_own_event = now - 86400
+            consumer._last_any_event = now - 1
+            assert consumer._is_blind() is False
+
+    def test_bsky_profile_events_do_not_count_as_ours(self) -> None:
+        """the exact traffic that made the blind host look alive."""
+        consumer = JetstreamConsumer()
+        bsky = {"commit": {"collection": BSKY_PROFILE_COLLECTION}}
+        ours = {"commit": {"collection": settings.atproto.track_collection}}
+        assert consumer._is_own_collection_event(bsky) is False
+        assert consumer._is_own_collection_event(ours) is True
+        assert consumer._is_own_collection_event({"kind": "identity"}) is False
