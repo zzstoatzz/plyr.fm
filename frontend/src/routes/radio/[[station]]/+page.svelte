@@ -41,7 +41,7 @@
 	let autoTuned = false;
 	$effect(() => {
 		if (!autoplayRequested || autoTuned) return;
-		if (!radio.current || radio.active) return;
+		if (!radio.hasSomethingOnAir || radio.active) return;
 		autoTuned = true;
 		// play/pause button infinite loops without setTimeout
 		setTimeout(() => radio.tuneIn(), 0);
@@ -137,7 +137,7 @@
 			<div class="status"><WaveLoading size="lg" message="tuning..." /></div>
 		{:else if radio.error}
 			<div class="status error">{radio.error}</div>
-		{:else if radio.current}
+		{:else if radio.hasSomethingOnAir}
 			<div class="radio-player" {@attach horizontalSwipe((dir) => flip(dir === 'left' ? 'next' : 'prev'))}>
 				<div class="station-title">
 					<span class="live">live radio</span>
@@ -167,25 +167,37 @@
 				/>
 				<div class="now-block" class:tuning={radio.switching}>
 				<div class="art-stage">
-					{#if radio.current.artwork_url}
-						<img class="art-bg" src={resizedImageUrl(radio.current.artwork_url, IMAGE_WIDTHS.tile)} alt="" aria-hidden="true" />
+					{#if radio.current}
+						{#if radio.current.artwork_url}
+							<img class="art-bg" src={resizedImageUrl(radio.current.artwork_url, IMAGE_WIDTHS.tile)} alt="" aria-hidden="true" />
+						{/if}
+						<SensitiveImage src={radio.current.artwork_url} tooltipPosition="center">
+							<a class="art-link" href={`/track/${radio.current.id}`} aria-label={`view ${radio.current.title}`}>
+								{#if radio.current.artwork_url}
+									<img src={resizedImageUrl(radio.current.artwork_url, IMAGE_WIDTHS.hero)} alt="" class="art" />
+								{:else}
+									<div class="art fallback"></div>
+								{/if}
+							</a>
+						</SensitiveImage>
+					{:else}
+						<div class="art fallback"></div>
 					{/if}
-					<SensitiveImage src={radio.current.artwork_url} tooltipPosition="center">
-						<a class="art-link" href={`/track/${radio.current.id}`} aria-label={`view ${radio.current.title}`}>
-							{#if radio.current.artwork_url}
-								<img src={resizedImageUrl(radio.current.artwork_url, IMAGE_WIDTHS.hero)} alt="" class="art" />
-							{:else}
-								<div class="art fallback"></div>
-							{/if}
-						</a>
-					</SensitiveImage>
 				</div>
 				<div class="now-meta">
-					<p class="label">{radio.active ? 'on air' : "what's on"}</p>
-					<h2>
-						<a href={`/track/${radio.current.id}`}>{radio.current.title}</a>
-					</h2>
-					<a class="artist" href={`/u/${radio.current.artist_handle}`}>{radio.current.artist}</a>
+					<p class="label">
+						{#if radio.isLive}live{:else if radio.active}on air{:else}what's on{/if}
+					</p>
+					{#if radio.current}
+						<h2>
+							<a href={`/track/${radio.current.id}`}>{radio.current.title}</a>
+						</h2>
+						<a class="artist" href={`/u/${radio.current.artist_handle}`}>{radio.current.artist}</a>
+					{:else}
+						<!-- a broadcast has no track page or uploader to link to -->
+						<h2>{radio.state?.station ?? 'live'}</h2>
+						<span class="artist">{radio.activeStation?.description ?? ''}</span>
+					{/if}
 				</div>
 				</div>
 				<div class="controls">
@@ -199,7 +211,7 @@
 							tune in
 						</button>
 					{/if}
-					{#if auth.isAuthenticated}
+					{#if auth.isAuthenticated && radio.current}
 						{#key radio.current.id}
 							<AddToMenu
 								trackId={radio.current.id}
@@ -211,6 +223,7 @@
 						{/key}
 					{/if}
 				</div>
+				{#if radio.current && !radio.isLive}
 				<div class="progress-wrap">
 					<div class="progress" aria-label="track progress">
 						<div class="progress-fill" style={`width: ${progressPercent}%`}></div>
@@ -220,6 +233,7 @@
 						<span>{formatTime(radio.current.duration)}</span>
 					</div>
 				</div>
+				{/if}
 			</div>
 		{:else}
 			<div class="status">no tracks in rotation yet</div>
