@@ -103,7 +103,7 @@ class PlayerState {
 		this.unlockPlayCount();
 		const el = this.audioElement;
 		if (!el) return;
-		void this.attachRadioSource(el, np, assigned);
+		void this.attachRadioSource(el, np, assigned, autoplay);
 		if (autoplay) {
 			// play immediately (preserve the gesture), then align to station position
 			el.play().catch((err: unknown) => {
@@ -137,24 +137,29 @@ class PlayerState {
 
 	/** point the shared element at a radio source, via hls.js when required.
 	 *
-	 * Safari and iOS play HLS natively from `src`; Chrome and Firefox do not, so
-	 * hls.js is imported only when a live station is actually tuned. everyone
-	 * else never downloads it.
+	 * hls.js comes first wherever it works, and native `src` is the fallback —
+	 * not the other way round. `canPlayType('application/vnd.apple.mpegurl')`
+	 * answers "maybe" in Chrome, which cannot actually demux MPEG-TS, so
+	 * trusting it hands the element a playlist it will never decode: on air,
+	 * cover showing, silent. Where hls.js is unsupported (iOS Safari, no MSE)
+	 * native playback is real, and that is exactly the fallback.
+	 *
+	 * hls.js is imported only when a live station is actually tuned.
 	 */
 	private async attachRadioSource(
 		el: HTMLAudioElement,
 		np: RadioNowPlaying,
-		assigned: RadioNowPlaying | null
+		assigned: RadioNowPlaying | null,
+		autoplay: boolean
 	) {
 		this.detachHls();
-		const needsHlsJs =
-			np.live &&
-			np.streamKind === 'hls' &&
-			!el.canPlayType('application/vnd.apple.mpegurl');
-
-		if (!needsHlsJs) {
+		const playNative = () => {
 			el.src = np.stream_url;
 			el.load();
+		};
+
+		if (!np.live || np.streamKind !== 'hls') {
+			playNative();
 			return;
 		}
 
@@ -164,14 +169,20 @@ class PlayerState {
 			// raw object and never equals `this.radio`.
 			if (this.radio !== assigned) return; // tuned away while the chunk loaded
 			if (!Hls.isSupported()) {
-				el.src = np.stream_url;
-				el.load();
+				playNative();
 				return;
 			}
 			const hls = new Hls({ enableWorker: true });
 			this.hls = hls;
 			hls.loadSource(np.stream_url);
 			hls.attachMedia(el);
+			// the gesture's own play() ran against an element with no source yet
+			// (the import is async), so it was rejected. start once media exists.
+			if (autoplay) {
+				el.play().catch(() => {
+					this.paused = true;
+				});
+			}
 		} catch (e) {
 			console.error('failed to load hls.js for live radio:', e);
 			this.paused = true;

@@ -1,5 +1,5 @@
-// a live broadcast preempts the rotation: no position to resume, and hls.js is
-// only fetched when the browser can't play HLS natively.
+// a live broadcast preempts the rotation: no position to resume, and hls.js
+// drives it wherever hls.js works — native HLS is the fallback, not the default.
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { player, type RadioNowPlaying } from '$lib/player.svelte';
 import type { Track } from '$lib/types';
@@ -9,8 +9,9 @@ vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {});
 vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue(undefined);
 
 const hlsInstance = { loadSource: vi.fn(), attachMedia: vi.fn(), destroy: vi.fn() };
+let hlsSupported = true;
 class HlsCtor {
-	static isSupported = () => true;
+	static isSupported = () => hlsSupported;
 	loadSource = hlsInstance.loadSource;
 	attachMedia = hlsInstance.attachMedia;
 	destroy = hlsInstance.destroy;
@@ -48,13 +49,16 @@ describe('live radio', () => {
 
 	beforeEach(() => {
 		vi.clearAllMocks();
+		hlsSupported = true;
 		el = document.createElement('audio');
 		player.audioElement = el;
 		player.stopRadio();
 	});
 
-	it('uses hls.js when the browser cannot play HLS natively', async () => {
-		vi.spyOn(el, 'canPlayType').mockReturnValue('');
+	it('uses hls.js even where canPlayType claims native HLS support', async () => {
+		// Chrome answers "maybe" for the HLS mime type and then cannot demux the
+		// MPEG-TS segments — trusting it left the station on-air and silent.
+		vi.spyOn(el, 'canPlayType').mockReturnValue('maybe');
 		player.playRadio(live());
 		await vi.waitFor(() => expect(hlsInstance.attachMedia).toHaveBeenCalled());
 		expect(hlsInstance.loadSource).toHaveBeenCalledWith('https://relay.test/live/index.m3u8');
@@ -62,7 +66,17 @@ describe('live radio', () => {
 		expect(el.src).toBe('');
 	});
 
-	it('plays natively on Safari/iOS without loading hls.js', async () => {
+	it('starts playback once hls.js has media, not before the async import', async () => {
+		vi.spyOn(el, 'canPlayType').mockReturnValue('maybe');
+		player.playRadio(live());
+		await vi.waitFor(() => expect(hlsInstance.attachMedia).toHaveBeenCalled());
+		const playOrder = (el.play as ReturnType<typeof vi.fn>).mock.invocationCallOrder;
+		const attachOrder = hlsInstance.attachMedia.mock.invocationCallOrder[0];
+		expect(playOrder.some((order) => order > attachOrder)).toBe(true);
+	});
+
+	it('falls back to native playback where hls.js is unsupported (iOS Safari)', async () => {
+		hlsSupported = false;
 		vi.spyOn(el, 'canPlayType').mockReturnValue('maybe');
 		player.playRadio(live());
 		await vi.waitFor(() => expect(el.src).toContain('index.m3u8'));
@@ -83,7 +97,7 @@ describe('live radio', () => {
 		const np = live();
 		np.start_at = 300; // a stale rotation position must be ignored
 		player.playRadio(np);
-		await vi.waitFor(() => expect(el.src).toContain('index.m3u8'));
+		await vi.waitFor(() => expect(hlsInstance.attachMedia).toHaveBeenCalled());
 		expect(el.currentTime).toBe(0);
 	});
 
