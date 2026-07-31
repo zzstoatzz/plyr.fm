@@ -6,6 +6,10 @@ exclude = [
     ".git/**",
     ".claude/worktrees/**",
     ".status_history/**",
+    # STATUS.md is a living log. its length is managed by the status-maintenance
+    # workflow, which archives old sections into .status_history/ — not by a
+    # line limit that pressures whoever is writing an entry into truncating it.
+    "STATUS.md",
 ]
 
 # lock files don't need line limits
@@ -16,11 +20,6 @@ max_lines = 10000
 [[rules]]
 path = "**/package-lock.json"
 max_lines = 10000
-
-# STATUS.md grows over time as we document work
-[[rules]]
-path = "STATUS.md"
-max_lines = 612
 
 [[rules]]
 path = "backend/src/backend/_internal/jams.py"
