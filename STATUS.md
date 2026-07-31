@@ -171,385 +171,126 @@ prune reference-safety considers the URL a row actually *serves*.
   quiet and we stay put. Bluesky's profile collection is excluded from "ours" on
   purpose, since that is exactly the traffic that made a blind host look alive.
 
+#### we had been deleting listeners' audio (#1732–#1735, #1737, July 30 — releases `2026.0730.064616` → `.072900`)
+
+**why**: chasing the `0:00 / 0:00` report above surfaced a separate, older
+defect — 20 tracks across 7 artists dead in production. A `file_id` is a content
+hash, so re-uploading a file you already published stages *the exact R2 key the
+published track is served from*. The duplicate check then rejects the upload and
+the orchestrator's failure cleanup deletes "its" staged object: the live track's
+only copy. Eight months unnoticed, because it needs a re-upload of an
+already-published file to fire.
+
+**what shipped**:
+- staged cleanup refuses to delete an object with **any** reference (#1733).
+  `delete()` tolerates exactly one, because a track being deleted *is* that
+  reference; nothing legitimately references a staged object, so one reference
+  means the bytes are someone else's.
+- `/audio/{file_id}` falls back to the artist's PDS blob when R2 has no object
+  (#1734) — root cause #2 of the 2026-06-30 retrospective, still verbatim true,
+  which is why 12 tracks with perfectly good PDS blobs were dead.
+- the refcount walks **every** media column — `Track` audio *and* image, `Album`,
+  `Playlist` — in one query (#1735). Images had been protected by nothing at
+  all: the audio-only refcount returns 0 for an image, and `delete_image()` had
+  no refcount whatsoever, so two tracks sharing a cover could each delete the
+  other's object. `scripts/audit_media_integrity.py` now answers "does the object
+  each row points at exist", exiting 1 so it can be scheduled and page.
+- the retrospective's own claims were corrected (#1737): only 4 of the 20 are
+  *proven* to be this bug — Logfire retains ~14 days — track 53 was a
+  bucket-migration gap (found intact in `audio-dev`, copied over, 20 broken → 7),
+  and "permanently lost" became "not recoverable by us", which is a materially
+  different thing to tell an artist.
+
+**the class, not the instance**: three incidents now — the "banana mix"
+refcount, the 2026-06-30 dead `audioUrl`, and this one — share a shape.
+*Something referenced bytes it didn't own, or trusted a pointer it hadn't
+verified.* Content-addressed keys give bytes no owner, so "these bytes" and
+"this row's media" are different questions and every deletion path was asking
+the narrow one.
+
 #### an artist can't air twice in a row (#1730, July 29 — release `2026.0729.213641`)
 
-**why**: the `loved` station played the same artist three tracks in a row,
-during a live stream. The sampler had a per-artist *airtime* cap (~20 minutes)
-and no notion of *clustering*, so a heavily-weighted creator's tracks could all
-land adjacent — measured up to six consecutive on a synthetic corpus.
-
-**what shipped**: `build_rotation` draws only from artists outside a 3-entry
-spacing window, and repairs the tail→head seam (the rotation is a loop, so its
-last entries are neighbours of its first). Longest same-artist run 6 → 1,
-verified on live prod `loved` after the release.
-
-**technical notes**:
-- **draw from an eligible subset, don't draw-then-reject.** The old loop popped a
-  track and skipped it if its artist was over budget, so a dominant artist burned
-  the draws that should have aired someone else. Eligibility is now computed
-  before the draw, and both the weighted path and the exploration floor use it.
-- **spacing relaxes rather than starves**: with no other artist drawable the
-  window is dropped for that draw, so a thin corpus still fills a rotation. Seam
-  repair is likewise bounded, and skipped entirely when there is only one artist.
-- the cap still lets one long mix be a large share of a single loop — unchanged
-  and deliberate. This bounds how *clustered* an artist is, not how *much*.
+the `loved` station played the same artist three tracks in a row, during a live
+stream. The sampler had a per-artist *airtime* cap (~20 minutes) and no notion
+of *clustering*, so a heavily-weighted creator's tracks could all land adjacent
+— measured up to six consecutive on a synthetic corpus. `build_rotation` now
+draws only from artists outside a 3-entry spacing window and repairs the
+tail→head seam (the rotation is a loop, so its last entries neighbour its
+first). Longest same-artist run 6 → 1, verified on live prod `loved` after the
+release. The change that mattered was drawing from an eligible subset rather
+than draw-then-reject: the old loop popped a track and skipped it if its artist
+was over budget, so a dominant artist burned the draws that should have aired
+someone else. Spacing relaxes rather than starves when no other artist is
+drawable, and the airtime cap still bounds how *much* one artist gets — this
+bounds only how *clustered*.
 
 #### what an `#account` event actually says, and the task that never ran (#1725–#1729, July 29 — releases `2026.0729.193914`, `.213641`)
 
-**why**: [@brookie.blog](https://plyr.fm/u/brookie.blog)'s avatar rendered as
-broken alt text. Pulling that thread found five live artists — 12 tracks —
-hidden from radio, the home feed, and for-you, one of whom had uploaded two days
-earlier and one of whom filed the platform's first user report.
+[@brookie.blog](https://plyr.fm/u/brookie.blog)'s avatar rendered as broken alt
+text. Pulling that thread found five live artists — 12 tracks — hidden from
+radio, the home feed, and for-you, one of whom had uploaded two days earlier and
+one of whom filed the platform's first user report. The lexicon says it plainly:
+an `#account` event describes *the host that emitted it*, "not necessarily that
+at the currently active PDS". Leaving a PDS deactivates your repo on the host
+you left, which then truthfully reports `active=false, status=deactivated` about
+itself and misleadingly about you. All five had migrated off a Bluesky-hosted
+PDS.
 
-**what shipped**:
-- **avatars mirror from Bluesky** (#1726). Nothing subscribed to
-  `app.bsky.actor.profile` — all five jetstream subscriptions were our own
-  lexicons — so a profile-picture change never reached us and the superseded blob
-  CID 404s on the CDN. Measured cost before subscribing: 2.3 events/s network-wide,
-  ~110 MB/month, and zero extra network calls (the commit embeds the blob ref).
-- **`ingest_identity_update` had never once executed in production** (#1726). It
-  was never registered with the docket worker; docket resolves tasks by name at
-  execution time, so it was dropped with a log line *on the worker* while the
-  dispatch site succeeded and looked healthy. 35 `Unknown task` drops over two
-  weeks → 0 after.
-- **account status is per-host, and six statuses are not one boolean** (#1727,
-  #1728). `hides_content(active, status)` in
-  `_internal/atproto/account_status.py` hides only for account-level statuses;
-  `throttled`/`desynchronized` are infrastructure and now change nothing. The
-  status is stored alongside the flag, so a hidden artist can be *explained*.
-- **a tag containing a slash is reachable** (#1725). The ASGI layer decodes
-  percent-escapes before routing, so `7%2F4` became the path `/tracks/tags/7/4`
-  and matched no route; `{tag_name:path}` fixes it. Slash was the only character
-  that broke, because it is the only structural path separator.
+Fixed at three levels: `hides_content(active, status)` hides only for
+account-level statuses, so `throttled`/`desynchronized` (infrastructure) now
+change nothing; the *current* PDS is asked rather than a cached one; and
+`ingest_identity_update` — the task that maintains that cache — was finally
+registered with the docket worker. It had **never once executed in production**:
+docket resolves tasks by name at execution time, so it was dropped with a log
+line on the *worker* while the dispatch site succeeded and looked healthy (35
+`Unknown task` drops over two weeks → 0). The two bugs compounded —
+`Artist.pds_url` was stale *because* the dropped task was the one PDS migration
+would have refreshed. The dry run earned its keep: the reconciliation script
+asked the *cached* PDS and proposed 15 updates, 12 of them live artists who had
+simply moved.
 
-**technical notes**:
-- **the lexicon says it plainly**: an `#account` event describes the host that
-  emitted it, "not necessarily that at the currently active PDS". Leaving a PDS
-  deactivates your repo *on the host you left*, which then truthfully reports
-  `active=false, status=deactivated` about itself — and misleadingly about you.
-  All five hidden artists had migrated off a Bluesky-hosted PDS. #1727 first
-  attributed this to PDS flapping (real, in the logs, but not the cause); #1728
-  corrected it.
-- **the two bugs compounded.** `Artist.pds_url` was stale *because*
-  `ingest_identity_update` was the dropped task — PDS migration fires `#identity`,
-  which would have refreshed the cache. One bug kept the cache pointing at the
-  host that would go on to report them deactivated.
-- **the dry run earned its keep**: the reconciliation script asked the *cached*
-  PDS and proposed 15 updates, 12 of which were live artists who had simply moved.
-  Running it would have applied the exact bug in bulk.
-- **"cannot tell" must never mean "gone."** The flag is no longer sticky on a
-  missed reactivation edge, and an unreachable host does not hide anyone.
+Also in the cluster: Bluesky avatars mirror through jetstream (#1726 — nothing
+had subscribed to `app.bsky.actor.profile`, measured at 2.3 events/s
+network-wide, ~110 MB/month, zero extra network calls), and a tag containing a
+slash is reachable (#1725) via `{tag_name:path}`, since ASGI decodes
+percent-escapes before routing. Full detail in `.status_history/2026-07.md`.
 
-#### a label's reach: where filtering applies, and where it doesn't (#1709–#1713, July 25–27 — release `2026.0725.172537`)
+#### a label's reach, and operational hygiene (#1709–#1718, July 25–27 — releases `2026.0725.172537`, `2026.0728.043224`)
 
-**why**: #1697 made `copyright-violation` de-list, and the filter was applied
-wherever tracks were queried — including an artist's own detail page, which
-quietly removed tracks from the one page whose entire purpose is to show that
-artist's catalogue. The question that broke it open: if you are *already on the
-artist's page*, discovery has happened. Hiding there isn't protecting anyone
-from an unwanted encounter; it is telling a visitor the artist has less work
-than they do.
+`LabelContext.LIST` vs `VIEW` splits surfaces we chose for you (feeds, search,
+radio) from destinations you navigated to (artist page, album, permalink). Adult
+labels filter LIST only, which stopped an artist's own detail page from hiding
+tracks from the one page whose entire purpose is to show that catalogue;
+copyright filters both, because it is a hosting obligation rather than a
+listener preference; and neither ever gates audio bytes. Applied at every
+filtering call site, with count queries using the same clause as the list they
+count. One public answer at [docs.plyr.fm/moderation](https://docs.plyr.fm/moderation).
 
-**what shipped**:
-- `LabelContext.LIST` vs `LabelContext.VIEW` in
-  `backend/_internal/content_labels.py`. LIST is a surface we chose for you
-  (feeds, search, radio); VIEW is a destination you navigated to (artist page,
-  album, playlist, permalink). Adult labels filter LIST only (#1709).
-- the context applied at *every* filtering call site, not just the ones that
-  were obviously wrong — and count queries fixed to use the same clause as the
-  list they count, so a page no longer says "12 tracks" above nine rows (#1712).
-- [docs.plyr.fm/moderation](https://docs.plyr.fm/moderation): one surface-by-surface
-  table answering "does a label hide this?", plus the internal counterpart
-  enumerating each call site and its context (#1710, #1713).
+Alongside it: published contact moved to `help@plyr.fm` / `dmca@plyr.fm` with
+the DMCA agent filing updated and the privacy policy corrected to describe what
+is actually collected (#1716); and rate limits are keyed per client rather than
+per site (#1718) — the old key was Fly's proxy address, so `default_limits` was
+one bucket for the entire site, and prod returned 298 429s on `/radio/state`
+alone as radio listeners polling every 30s knocked each other offline. Full
+detail in `.status_history/2026-07.md`.
 
-**technical notes**:
-- **this mirrors ATProto's own `contentList`/`contentView` split** — a post can
-  be blurred in a feed and fully visible when opened directly. The difference is
-  where the decision is made: Bluesky's client decides per render; plyr decides
-  per query, because filtering has to be a WHERE clause to compose with cursor
-  pagination (the #1688 lesson).
-- **copyright ignores the context; adult labels don't.** An adult label is a
-  listener preference, so a listener who navigated somewhere deliberately has
-  already expressed it. Copyright is a hosting obligation — we serve the bytes,
-  and no listener's preference discharges that. So the LIST/VIEW branch wraps
-  only the adult half.
-- **the artist always sees their own catalogue**: the adult clause carries an
-  owner exemption. This made the first end-to-end test vacuous — run as the
-  track's owner, every LIST check passed regardless of the label.
-- **labels never gate bytes.** `may_stream_sensitive_audio` returns `True`
-  unconditionally. A label changes what we *put in front of you*, never whether
-  a link you already hold resolves.
+#### earlier July (#1620–#1706, July 1–25)
 
-#### contact addresses, and rate limits that are actually per client (#1716, #1718, July 27 — #1716 in prod as `2026.0728.043224`; #1718 staging only)
-
-**why**: a pass over what a hobby project with no legal entity is actually
-obliged to have. Two things were wrong. Published contact addresses pointed at a
-personal mailbox and the DMCA agent filing named it. And the privacy policy
-described collecting IP addresses "for rate limiting and abuse prevention" —
-boilerplate that had never been true, which is the worse kind of policy error:
-it describes a practice you don't have rather than omitting one you do.
-
-**what shipped**:
-- `help@plyr.fm` and `dmca@plyr.fm` via Cloudflare Email Routing, forwarding to
-  the project mailbox; every published address switched; the registered DMCA
-  agent record updated to match. Verified by a real SMTP conversation to
-  `RCPT TO` against Cloudflare's MX, including a control address that must be
-  refused (it is — no catch-all).
-- the privacy policy now describes what is actually collected (#1716).
-- rate limits keyed per client (#1718). The key was `get_remote_address` →
-  `request.client.host`, which behind Fly's proxy is the same `172.16.7.50` for
-  everyone. With shared Redis storage, `default_limits` was one bucket for the
-  *entire site*: prod peaked at 124 requests/minute against a 100/minute ceiling
-  and returned 298 429s on `/radio/state` alone — radio listeners polling every
-  30 seconds, knocking each other offline.
-
-**technical notes**:
-- **a global limiter is worse than no limiter for availability**: it converts
-  one busy client into a site-wide outage while doing nothing about the client.
-- the key prefers session, then bearer token, then IP — all hashed. A session
-  follows the person rather than the network, so it is both more accurate (two
-  people behind one NAT stop throttling each other) and better for privacy: an
-  authenticated request never has its address used for anything. An IP is the
-  key only for anonymous callers, lives as a Redis key carrying the window's
-  TTL, and is never written to the database or the logs. That is the practice
-  the policy now describes.
-- verified on staging end-to-end: 130 concurrent anonymous requests → exactly
-  100 served, 30 refused, and a credential-carrying request served immediately
-  after. **Not yet in prod** — #1718 needs `just release`.
-
-#### the moderation event log, and decisions in public (#1699–#1706, July 25 — releases `2026.0725.061813`, `.064312`, `.065535`)
-
-**why**: #1697 made labels do something, which exposed what was underneath them.
-There was no way to say "the match is real, it's a cover, surface it anyway" —
-the only lever against a false positive was negating the label, i.e. claiming
-the assertion was wrong. Worse, the moderation dashboard could not see its own
-work: its queue read *labels*, but post-#703 a scan never emits one, so
-thirteen flagged tracks and the platform's first real user report sat behind a
-queue that rendered **0**.
-
-**what shipped**:
-- `moderation_events` in the moderation service — append-only, one table
-  covering the review queue, per-track overrides, the audit trail, and a
-  proposed-action object for future automation (#1699).
-- scan flags and user reports now open review items (#1700, #1702). Reports
-  needed fixing in two places — the service recorded no event *and* the backend
-  never sent `target_uri`, so the log had nothing to key on. Either alone was a
-  no-op.
-- `tracks.moderation_override` (`allow` / `exclude`) projected alongside labels
-  and honoured by `discovery_visible_clause` (#1700).
-- the dashboard's primary tab reads `/admin/queue`, embeds
-  `plyr.fm/embed/track/{id}` so a copyright call is made by *listening*, and
-  requires an "acting as" handle on every decision (#1701).
-- moderation decisions publish from
-  [@moderation.plyr.fm](https://bsky.app/profile/moderation.plyr.fm) (#1703–#1705).
-- the 13 pre-existing flags were backfilled into the queue. Nobody was notified.
-
-**technical notes**:
-- **the override is the point.** Negating a label says the assertion was wrong;
-  `override_allow` says it was right and we are surfacing the track anyway.
-  Different statements. `allow` deliberately does *not* override the adult half
-  — that is a listener preference, and an operator deciding what someone else
-  may be *shown* is a different power from deciding what we *host*.
-- **emitting a label neither opens nor closes review.** Asserting something is
-  not the same as being finished with it; collapsing the two is how an empty
-  queue came to mean "no work".
-- **publish actions taken, never suspicions held.** Flags and reports are never
-  posted — announcing a flag is the "knowledge without action" of the
-  2026-01-02 review, and announcing a report would make the report button a way
-  to publicly stain a rival. Posts never name an uploader.
-- **the publisher cannot backfill**: its cursor initialises at the log's head,
-  so the 17 events predating it were never narrated. It is enabled on
-  `relay-api` only — staging shares the Bluesky account. When disabled it still
-  logs rendered posts, which is how it was verified before going live.
-- **attribution is not authentication.** `actor` is required on every write, but
-  the service still trusts one shared key, so the log records a *claim*. Real
-  per-actor auth is what actually gates letting an agent act rather than
-  propose.
-
-**bugs found by shipping it**: `NOT (NULL = 'exclude')` is NULL, which a WHERE
-clause drops, so the first override cut hid the entire catalogue (12 failing
-tests caught it); an autogenerated migration proposed dropping two tables and
-four indexes from local dev drift; and transparency posts shipped first with a
-404 policy link, then with no link facets at all — Bluesky does not infer links
-from text. Detail in `.status_history/2026-07.md`.
-
-#### labels that act: copyright enforcement + adult sharing (#1697, July 25)
-
-**why**: user report #5 — the first genuine user report on the platform —
-flagged track 64 as containing copyrighted material heard on a live stream.
-Rescanning flagged it (249 matches, `highest_score = 0`: #1689's mix detection
-working correctly, since no single song dominates a mix). Then nothing
-happened, because `copyright-violation` did not do anything. Investigating
-found the inverse problem next to it: adult labels blocked audio *bytes* for
-anonymous listeners, so a creator could not share their own labeled track with
-anyone signed out.
-
-**what shipped**:
-- `copyright-violation` is projected onto `tracks.operator_labels` and excluded
-  from radio, feeds, search, and collections — for everyone, with no preference
-  and no owner exemption on shared surfaces. Creators still see and manage
-  their own flagged tracks; `list_my_tracks` filters on `artist_did` alone.
-- adult labels no longer gate audio bytes. Permalinks play for everyone; what a
-  listener is *shown* is still theirs to control.
-- `discovery_visible_clause()` composes both families so a caller cannot apply
-  one and not the other.
-- the ten pre-#703 public copyright labels were retracted (seq 728–737).
-- policy written up in `docs/internal/moderation/label-policy.md`.
-
-**technical notes**:
-- **the model**: a label is a *portable assertion* — signed, public, and free
-  for any client to interpret. Enforcement is *plyr-local hosting policy* keyed
-  off that assertion, binding on nobody else. Conflating the two is what let
-  "we labeled it" and "we did something about it" both be true and unrelated.
-- **the two families differ in who decides.** Adult is a rendering default a
-  listener may override for themselves. Copyright is a hosting obligation — we
-  serve the bytes, so the duty to act on knowledge is ours and no listener
-  preference discharges it.
-- **neither gates bytes.** The adult gate looked like age verification and was
-  not: any account satisfied it, and plyr verifies nobody's age. Copyright does
-  not gate bytes either, because a fingerprint match is not a finding — several
-  flagged tracks read as covers or remixes the uploader performed. De-listing
-  is reversible; a dead permalink is not. Removing the gate also deleted a
-  strict labeler read, and its 503 failure mode, from every audio request.
-- **a composition bug was caught on the way**: the old call site skipped the
-  whole visibility predicate for viewers who opted into sensitive audio, so
-  folding copyright into it without composing would have leaked copyright
-  tracks to exactly those viewers. Regression test pins it.
-- **#1695 re-justified**: it invalidated the redis label cache, but the SQL
-  filters read the projection, not that cache — so once bytes stopped being
-  gated it would have been dead weight. It now refreshes the projection, so a
-  copyright label de-lists in seconds instead of on the 5-minute sync.
-
-**the history, because it explains the shape**: this was not drift. The
-2026-01-02 legal review concluded *"either don't flag it, or flag it and act on
-it."* #703 did the first half and deferred the second to a pipeline nobody
-built, leaving ten published labels publicly queryable for ~7 months, while
-adult enforcement was built end-to-end in July during a live incident. Two
-systems built under opposite pressures, reconciled here (full account in
-`.status_history/2026-07.md`).
-
-**deliberately not done**: no uploader notification — pointing a new
-notification pipeline at a backlog would DM people about December flags, so any
-notification must fire on new events only. No per-track override yet (see
-known issues). Not adopting Ozone: Acorn's moderation is a customized Ozone
-fork, but Ozone wants to own the labeler DID we already run, adds a VPS and
-Postgres, and its UI targets Bluesky posts rather than audio — borrowing its
-event-log model instead.
-
-#### moderation service boundary + a fail-open label cache (#1691–#1695, July 24–25 — release `2026.0725.035625`)
-
-the moderation service's `/admin/*` prefix mixed two unrelated consumers behind
-one auth middleware — the htmx dashboard a human opens, and the hot-path
-endpoints the backend calls. The six service-to-service endpoints moved to
-`/internal/*` (#1692, #1693), served from one route table nested at both
-prefixes so the deprecated aliases cannot drift; the operator surface
-deliberately stayed put, and the three moderation scripts collapsed onto one
-shared client (#1694, −146/+25).
-
-**the thing worth remembering**: verifying the rename end-to-end on staging
-surfaced a fail-open window unrelated to it. The label cache is keyed by subject
-URI and is **viewer-independent**, so one playback by anyone caches "no labels"
-for everyone; `emit_label` invalidates only for labels *the backend* emitted,
-and operators emit straight to the labeler. A track labeled while its cache
-entry was warm kept serving audio for the full 300s TTL — on the one endpoint
-designed to fail closed. A `subscribeLabels` consumer now invalidates each
-subject as the labeler commits it (#1695), measured at **0.8s instead of ~300s**,
-reading the stream rather than having the labeler call back so the dependency
-points one way. Full detail, including the `POST /admin/batches` empty-list
-lesson, in `.status_history/2026-07.md`.
-
-#### at-tags meta + copyright mix detection (#1689, #1690, July 23–24)
-
-track, album, playlist, and artist pages emit at-tags meta (#1690). Copyright
-scanning now flags mixes of copyrighted songs rather than only single-song rips
-(#1689) — a sustained-match count threshold, so a DJ mix stitched from several
-commercial tracks no longer slips through a per-song score gate.
-
-#### operator labels projected into SQL (#1688, July 23 — release `2026.0723.190620`)
-
-logged-out pagination of the home feed had been broken since #1676 (July 16):
-adult-label visibility could not be expressed in SQL — operator labels lived
-only in the moderation service, reachable per-request over HTTP — so #1676
-filtered app-side *after* the query, which corrupts cursor bookkeeping. Any page
-containing a labeled track reported `has_more: false` and everything older
-silently vanished. Fixed at the storage layer rather than the symptom: a
-`tracks.operator_labels` JSONB column, reconciled every 5 minutes by a docket
-Perpetual task against a new `/labels-by-value` labeler endpoint, following the
-`copyright_scans.is_flagged` precedent. Visibility is a WHERE clause again and
-pagination is back to plain `limit + 1`. The sync client **raises** on labeler
-failure so an outage can never be read as "nothing is labeled" and wipe the
-projection; byte-serving authorization still queries the labeler live. ~12
-filter call sites stopped making transitive HTTP calls.
-
-#### adult-audio labels + sensitive-content policy (#1676, #1677, #1682, July 16–17)
-
-See `.status_history/2026-07.md` — generic signed labels, the separate
-`show_sensitive_audio` preference, creator self-labels, and the operator/access
-runbook gaps the live incident exposed. The byte-level gate it introduced was
-removed on July 25 (#1697); its app-side filtering caused the #1688 pagination
-bug.
-
-#### playlist composite covers, edge image renditions, and a radio compute incident (#1660–#1675, July 10–16)
-
-**playlist composite covers** (#1663–#1665, #1675): playlists without an explicit
-cover now adopt their member tracks' artwork — a 2×2 mosaic at 4+ distinct
-artworks, the first track's art below that (spotify's thresholds, so nothing
-novel to tune). Public playlists keep their items on the PDS, so the list
-endpoint has no member tracks to derive art from; a cached
-`playlists.preview_thumbnails` (JSONB) column solves it, refreshed on item
-mutations and self-healed on detail reads — which also catches edits made against
-the PDS record by other ATProto clients. Two follow-ups: nothing could *unset* an
-explicit cover, so composites could never take over (#1664), and the first cut
-cached 96px thumbnails and stretched four across a 400-device-px hero (#1675).
-
-**display-sized artwork from the CDN edge** (#1672): the radio page served
-artists' full-resolution originals — the live rotation included **5.3MB and 4.1MB
-JPEGs** rendered into a ~400px hero and 40px thumbnails. Zone-level Cloudflare
-image transformations are now on, and a provider-abstracted `resizedImageUrl`
-helper requests per-slot renditions: 34× smaller at 640w, ~2000× at 96w on the
-worst offender. `SensitiveImage` still receives the canonical URL, so moderation
-matching is unaffected.
-
-**radio rotation caching after a prod incident** (#1671): on July 14 radio-poll
-volume tripled and every `/radio/state` poll rebuilt the station rotation from
-the full eligible catalog — `pg_stat_statements` showed the no-LIMIT
-eligible-tracks query had run **61,615 times returning 55.7M rows**, saturating
-the 2-CU prod Neon compute and dragging unrelated routes' p95 to ~1.9s (one
-traced request spent 20.7s inside a single SELECT). The rotation is
-deterministic per (station, limit, period) by design, so it is now cached in
-redis at a 60s TTL with a `SET NX EX` single-flight lock so expiry can't
-stampede. Only the *anonymous* rotation is cached; the viewer's likes are
-overlaid per request, so a signed-in warmup cannot leak `liked=True` to
-anonymous listeners. #1620's full-catalog corpus load is unchanged — its
-frequency was the bug, not its shape.
-
-**the staging integration suite is green again** (#1660, #1661): red since ~June
-4, last green May 14. #1660 found two workflow defects — an `always()` prune step
-killed skipped runs with exit 127, and a missing mint secret *skipped* rather
-than failed, which is what hid the fact that #1630's JIT token pipeline had never
-been wired at all. Wired and un-skipped, the suite ran for the first time in a
-month and surfaced a month of rot: deferred transcodes asserted too early, a
-moved supporter-gate contract, an SDK lock bump across a namespace redesign.
-**22 passed** on the July 25 runs. `test_private_media.py` stays excluded — it
-needs local postgres/redis fixtures.
-
-**queue and radio polish** (#1667–#1670): "clear queue" no longer vetoes
-keep-playing (clearing your picks is not opting out of continuation); the empty
-up-next region accepts drops; the radio like button opens the same add-to menu as
-everywhere else (−163 lines); the redundant queue chip and dishonest shuffle
-tooltip are gone.
-
-#### earlier July (#1620–#1657, July 1–9)
-
-See `.status_history/2026-07.md` for detailed history: radio rotation breadth
-(#1620 — per-station rank decay, 4h reseeding, exploration floor: `loved` and
-`deep-cuts` went from 8% to ~55% of the catalog aired); radio play counts + teal
-scrobbles (#1622 — signed-in radio listening had never fired `/play`);
-post-login intent preservation (#1624); collection continuity (#1626, #1627,
-#1632); browserless + JIT dev-token minting (#1629–#1631); the storybook harness
-and enforced axe accessibility gate (#1634–#1642); the subsonic `/rest` surface
-built client-by-client (#1644–#1651); the radio embed boundary fix (#1652); and
-repeat-one on the player (#1653, #1654, #1657).
+See `.status_history/2026-07.md` for detailed history: the moderation arc —
+**labels that act** (#1697: `copyright-violation` de-lists, adult labels stopped
+gating bytes, the ten pre-#703 published labels retracted), the **moderation
+event log** (#1699–#1706: an append-only `moderation_events` table behind the
+dashboard queue, per-track overrides, and public decision posts from
+@moderation.plyr.fm), and the **service boundary + fail-open label cache**
+(#1691–#1695). Before that: **at-tags meta** (#1690) and **copyright mix
+detection** (#1689); **operator labels projected into SQL** (#1688, which fixed
+a week of broken logged-out pagination); **adult-audio labels** (#1676, #1677,
+#1682); **playlist composite covers**, **edge image renditions**, and the **July
+14 radio compute incident** (#1660–#1675); and the July 1–9 cluster — radio
+rotation breadth (#1620), radio play counts + teal scrobbles (#1622),
+post-login intent preservation (#1624), collection continuity (#1626, #1627,
+#1632), the storybook + enforced axe accessibility gate (#1634–#1642), the
+subsonic `/rest` surface (#1644–#1651), and repeat-one (#1653, #1654, #1657).
 
 ### June 2026
 
@@ -565,19 +306,19 @@ See `.status_history/` for detailed history, one file per month:
 
 ### current focus
 
-**moderation: from inert labels to recorded decisions** (#1697–#1706, July 25): the arc of the window. `copyright-violation` de-lists instead of doing nothing; adult labels stopped gating permalinks; and underneath both, `moderation_events` now carries the review queue, per-track overrides, the audit trail, and the source of public transparency posts from @moderation.plyr.fm. The dashboard finally shows the work it exists to show — it had been reading labels, so scan flags were structurally invisible. **next in this arc**: triage the 13 queued tracks; per-actor authentication, which is what gates agent participation; then a proposed/applied split so an agent can propose a decision a human approves.
+**radio has a live source** (#1741–#1746, July 30 — prod `2026.0730.225420`): the `firehose` station airs relay-eval's sonified atproto firehose live over HLS, modelled as *preemption* of the rotation rather than an entry in it — the loop's position is derived from wall-clock time, and an unbounded broadcast inside it would dissolve that. A broadcast carries its own cover and credits its source, a negative liveness report gets a second opinion from the playlist, and the broadcaster is CDN-fronted so 1000 listeners cost its origin ~5 req/s instead of ~255. **next in this arc**: the station has no recorded fallback while its segments stay unlisted (see known issues); opening preemption to other broadcasters is gated on moderation, since live audio cannot be fingerprinted before it airs.
 
-**moderation service boundary + label-cache correctness** (#1691–#1695, July 24–25 — prod `2026.0725.035625`): the labeler's service-to-service endpoints now live under `/internal/*`, structurally separate from the `/admin/*` moderator dashboard, with aliases retained for one deploy cycle. Verifying that rename end-to-end turned up the more important bug: the label cache is keyed by subject URI and viewer-independent, so any playback cached "no labels" for everyone and an operator-emitted label had no effect on audio byte authorization for up to 300s — fail-open on the endpoint designed to fail closed. A `subscribeLabels` subscriber closes it to ~0.8s. (both follow-ups shipped the same day: the stream now refreshes the `operator_labels` projection, and the remaining `/admin/*` aliases cover only the six pre-split endpoints.)
+**the firehose promises neither order nor delivery** (#1736, #1738–#1740, July 30 — prod `2026.0730.181756`): a repo's commit history was re-emitted upstream and ingest applied each replayed state as current, walking one track's `r2_url` back 19 minutes and another's title back an hour. Commits are now ordered by repo `rev`, which survives re-delivery where jetstream's `time_us` cannot. Then the same instance stopped delivering `fm.plyr.*` for 11 hours while still serving Bluesky profile events, so nothing looked wrong — the consumer now rotates across twelve hosts and detects a host gone blind on *our* collections specifically. **next in this arc**: an alert, because none of this pages anyone.
 
-**pagination, page weight, and poll cost** (#1660–#1675, #1688, July 10–23 — prod `2026.0723.190620`): three defects with the same shape — work done in the wrong layer. Adult-label filtering ran app-side after the query and broke logged-out cursor pagination for a week (#1688, now a WHERE clause against a projected column); artwork was served at full resolution into 40px thumbnails (#1672, now edge renditions — up to 34× smaller on the 640w hero); and the station rotation was rebuilt from the whole catalog on every `/radio/state` poll, which saturated prod Neon compute on July 14 (#1671, now a 60s redis cache with single-flight). Also: playlists without a cover adopt their tracks' artwork as a 2×2 mosaic (#1663–#1665, #1675), and **the staging integration suite is green again** after five weeks red (#1660/#1661).
+**media integrity** (#1732–#1735, #1737, July 30 — prod `2026.0730.072900`): staged-upload cleanup had been deleting published tracks' audio, because a content-hash `file_id` means re-uploading a file you already published stages the exact key it is served from. 20 tracks across 7 artists were broken; 13 recovered. Playback now falls back to the artist's PDS blob, the refcount covers every media column rather than audio alone, and `scripts/audit_media_integrity.py` can page on a row pointing at a missing object. **next in this arc**: schedule that audit, and give `_MEDIA_REFERENCES` awareness of `r2_url` (see known issues).
+
+**moderation: from inert labels to recorded decisions** (#1691–#1718, July 24–27 — prod `2026.0725.035625` → `2026.0728.043224`): `copyright-violation` de-lists instead of doing nothing; adult labels stopped gating permalinks; `LabelContext.LIST` vs `VIEW` keeps labels shaping discovery rather than destinations; and underneath all of it `moderation_events` carries the review queue, per-track overrides, the audit trail, and the source of public transparency posts from @moderation.plyr.fm. The labeler's service-to-service endpoints moved to `/internal/*`, and a `subscribeLabels` subscriber closed a fail-open label cache from ~300s to ~0.8s. **next in this arc**: triage the 13 queued tracks; per-actor authentication, which is what gates agent participation; then a proposed/applied split so an agent can propose a decision a human approves.
+
+**operational hygiene** (#1716, #1718, July 27 — prod `2026.0728.043224`, `2026.0729.193914`): published contact is `help@plyr.fm` / `dmca@plyr.fm` with the DMCA agent filing updated, the privacy policy describes what is actually collected, and rate limits are keyed per client rather than per site. The DMCA surface itself is still incomplete (see known issues).
 
 **still experimental — private media on permissioned spaces** (#1557→#1574, #1684, epic #1384): private audio in an artist-owned permissioned space (never R2), owner-only, credential-gated playback — end-to-end on staging, **in prod but inert** (only ZDS implements this experimental surface). The July Proposal-0016 alignment replaces the obsolete `ats://` draft addresses with canonical `at://{authority}/space/{type}/{skey}` addresses, separates the space-type lexicon from the OAuth permission set, resolves dedicated space hosts with PDS fallback, and sends a confidential-client attestation separately from the user's delegation token. The current owner-only policy remains intentionally narrow; interoperable catalog sharing needs a product policy and UX on top of the protocol primitives. See `docs/internal/architecture/permissioned-private-media.md` and `.status_history/2026-06.md`.
 
 **subsonic surface** (#1644–#1651, July 4–6): an experimental `/rest` shim so off-the-shelf subsonic clients (Symfonium, Amperfy, Shelv, ...) play plyr libraries with a developer token as the password. built client-by-client against real failures; expect gaps until more clients are exercised. **collection continuity shipped** (#1626, July 2): tapping a track inside an album/playlist now queues the rest as a labeled "next from" context — Part B of continuous playback, previously held pending the queueable-surfaces design call (albums & playlists in; artist catalogs #1353 and feeds/search still open). **repeat-one shipped** (#1653/#1654/#1657, July 9), reviving @AilaScott's #1518; repeat-all deliberately deferred until the loop-vs-continuation interaction is designed.
-
-**where a label reaches** (#1709–#1713, July 25–27 — prod `2026.0725.172537`): labels shape discovery, not destinations. `LabelContext.LIST` vs `VIEW` splits surfaces we chose for you (feeds, search, radio) from surfaces you navigated to (artist page, album, permalink); adult labels filter the former only, copyright filters both, and neither ever gates audio bytes. Documented once, publicly, at [docs.plyr.fm/moderation](https://docs.plyr.fm/moderation) so the question has one accurate answer.
-
-**operational hygiene** (#1716, #1718, July 27 — prod `2026.0728.043224`): published contact is now `help@plyr.fm` / `dmca@plyr.fm` (Cloudflare Email Routing, DMCA agent filing updated), and the privacy policy describes what is actually collected. Rate limits are keyed per client instead of per site — the old key was Fly's proxy address, making `default_limits` one bucket for everyone. Both are now in prod (#1718 shipped in `2026.0729.193914`).
 
 **identity is not a single host's opinion** (#1725–#1730, July 29 — prod `2026.0729.193914`, `.213641`): a broken avatar led to five live artists hidden from every discovery surface because we read one host's `#account` event as a statement about the person. Fixed at three levels: only account-level statuses hide anyone, the *current* PDS is asked rather than a cached one, and the identity task that maintains that cache is now actually registered with the worker — it had never run in production. Bluesky avatars now mirror through jetstream. Also: tags containing a slash resolve (#1725), and the radio no longer plays one artist back-to-back (#1730).
 
@@ -589,6 +330,7 @@ See `.status_history/` for detailed history, one file per month:
 - **the rev guard has a one-event window per track** (#1736): `atproto_record_rev` starts `NULL`, and ingest applies-and-learns rather than rejecting when it has no baseline — rejecting would silently drop legitimate edits from other clients. So each track's first update after the release is itself unordered. 3 of 997 tracks have a rev so far; the rest acquire one when they are next edited. Backfilling from each PDS record would close the window.
 - **comment and list updates are still unordered** (#1736): the same last-writer-wins defect exists in `ingest_comment_update` and `ingest_list_update`. Only the track path was fixed, because that is the one that can strand audio bytes.
 - **`_reference_count` cannot see `r2_url`** (#1735/#1736): the refcount that guards deletion matches `file_id`-shaped columns, so it cannot protect a row whose `r2_url` and `file_id` name different objects. `prune_revisions` now compensates locally; the general fix belongs in `_MEDIA_REFERENCES`.
+- **seven tracks are still dead, and `audit_media_integrity.py` is not scheduled** (#1735/#1737): of the 20 broken by staged-cleanup deletion, 13 were recovered; the remaining 7 have no object in any of our buckets and no PDS blob, because they predate PDS mirroring. Not recoverable by us — the artists almost certainly still hold their source files, so the remedy is asking them to re-upload. The audit script exists and exits 1 on a missing object, but nothing runs it on a schedule yet.
 - **the account-status reconciliation script has not been run against prod** (#1729): a dry run reports 5 artists whose `account_status` reason is `NULL` and would be filled in, with zero flags changed. Until it runs, those rows say an artist is hidden without saying why.
 - **13 tracks await triage in the review queue**, including track 64 (user report #5 from @vicwalker.dev.br). They are visible and playable in the dashboard now; nobody has made a call on any of them. A fingerprint match is not a finding — several read as covers or remixes the uploader performed.
 - **no per-actor authentication**: the moderation service trusts one shared `MODERATION_AUTH_TOKEN`, so the event log's `actor` is a claim rather than a verified identity. This is the gate on letting an agent *act* rather than propose, and on review genuinely not always being one person.
@@ -736,4 +478,4 @@ see the [contributing guide](https://docs.plyr.fm/contributing/) for setup instr
 
 ---
 
-this is a living document. last updated 2026-07-31 (**radio grew a live source**. Documented #1741–#1746: `firehose` airs relay-eval's sonified atproto firehose live over HLS, modelled as *preemption* rather than a rotation entry — the rotation's position is derived from wall-clock time, and an unbounded broadcast in the loop would dissolve that, so the loop keeps running as the clock it is and the broadcast interrupts it. A broadcast carries its own cover and credits its source. Three self-inflicted bugs along the way, every one caught by loading the page rather than by an endpoint: an empty live station rendered a dead end with the tuner hidden and the station choice persisted, covers were cropped to a slice (pre-existing on all four stations), and fixing that left a dead band where the stretched artwork used to be. The broadcaster is now CDN-fronted, so 1000 concurrent listeners cost the origin ~5 req/s instead of ~255. Also extended the #1736 entry: jetstream2 stopped delivering `fm.plyr.*` for 11 hours while still serving Bluesky profile events, so the consumer looked healthy and nothing alerted — the client now rotates across twelve hosts and detects a host gone blind on our own collections, since that outage never disconnected. New known issues: nothing pages a human when ingest goes quiet, and `firehose` has no recorded fallback while its segments stay unlisted. Resolved: track 1201's stale title, overwritten by the publisher's own later writes.) previously 2026-07-30 (**the firehose does not promise order**. Documented #1736: a continuous publisher's tracks started showing `0:00 / 0:00`, and the cause was none of the obvious suspects — not the retention cap (#1732), not the staged-cleanup incident (#1733/#1734), not a frontend race. The PDS records were correct throughout; a repo's commit history was re-emitted upstream and `ingest_track_update` applied each replayed state as current, walking one track's `r2_url` back to a 19-minute-old revision and another's title back by an hour. Commits are now ordered by repo `rev`, which survives re-delivery where jetstream's `time_us` does not. The doc's claim that all ingest tasks are idempotent under cursor rewind held for create and delete but never for update. Also extended the #1616 existence check to the update path and made prune reference-safety consider the URL a row actually serves. New known issues: track 1201's indexed title is stale pending a production write, the guard has a one-event window on rows with no recorded rev, comment/list updates are still unordered, and `_reference_count` cannot see `r2_url`.) previously 2026-07-29 (**identity is not a single host's opinion**. Documented #1725–#1729: a broken avatar on @brookie.blog led to five live artists — 12 tracks — hidden from radio, feeds, and for-you, because an `#account` event describes *the host that emitted it*, not the person, and leaving a PDS makes the host you left report you deactivated. All five had migrated. Fixed at three levels: `hides_content(active, status)` so infrastructure statuses hide nobody, asking the current PDS instead of a cached one, and registering `ingest_identity_update` — the task that maintains that cache, which had never once executed in production. Bluesky avatars now mirror through jetstream (#1726), and a tag containing a slash resolves (#1725). Also #1730: the radio's per-artist airtime cap bounded how *much* one artist got but not how *clustered*, so `loved` played the same artist three in a row on stream — draws are now artist-spaced, longest run 6 → 1. Corrected the stale note that #1718 was staging-only; it reached prod in `2026.0729.193914`. New known issue: the account-status reconciliation script hasn't been run against prod, so 5 hidden artists carry a `NULL` reason.) previously 2026-07-28 (**where a label reaches, and operational hygiene**. Documented #1709–#1713: the `LabelContext.LIST` vs `VIEW` split, which stopped adult labels from hiding tracks on the artist's own detail page — labels shape discovery, not destinations — applied the context at every filtering call site so counts agree with the rows they count, and published one accurate public answer at docs.plyr.fm/moderation. Also #1716/#1718: published contact moved to `help@plyr.fm` / `dmca@plyr.fm` with the DMCA agent filing updated and the privacy policy corrected to describe what is actually collected; and rate limits keyed per client rather than per site, closing a bug where Fly's proxy address made `default_limits` one bucket for the entire site (298 429s on `/radio/state`). New known issue: the DMCA surface is incomplete (#1715) — no published notice requirements, no counter-notice procedure, no repeat-infringer counter. #1718 is verified on staging but not yet released to prod.) previously 2026-07-25 (**status maintenance for the July 2–25 window**. Archived the July 1–17 entries to `.status_history/2026-07.md` and collapsed the November 2025–May 2026 cross-references, since STATUS.md had gone over its 500-line ceiling. Backfilled the previously undocumented July 10–23 cluster: the **operator-label SQL projection** #1688, which fixed a week of broken logged-out pagination caused by app-side filtering after #1676; **playlist composite covers** #1663–#1665/#1675; **edge artwork renditions** #1672 (5.3MB JPEGs were being served into a 400px hero and 40px thumbnails); the **July 14 radio compute incident** #1671, where rebuilding the rotation on every poll saturated prod Neon compute; and **queue polish** #1667–#1670. Removed the integration-suite known issue — it is green again after five weeks red (#1660/#1661, 22 passed). Recorded the podcast recap for July 2–25.) previously 2026-07-25 (**labels that act** #1697 — `copyright-violation` now de-lists from radio and discovery instead of doing nothing, and adult labels stopped gating audio bytes so creators' permalinks work for signed-out listeners; the organizing idea is that a label is a portable assertion while enforcement is local hosting policy, which is why adult defers to the listener and copyright cannot. Retracted the ten pre-#703 public labels. Traced the asymmetry to the 2026-01-02 legal review, whose "flag it and act on it" half was deferred in #703 and never built. New known issues: no per-track override, and three flagged-but-unlabeled tracks needing triage). previously 2026-07-25 (documented the July 23–25 window and the `2026.0725.035625` prod release: the **moderation service boundary** #1691–#1694 — service-to-service endpoints moved to `/internal/*` with `/admin/*` aliases for one deploy cycle, the operator surface deliberately left in place, and the three moderation scripts collapsed onto one shared client; the **fail-open label cache** #1695 — found while verifying the rename end-to-end on staging, a URI-keyed viewer-independent cache meant an operator-emitted label had no effect on audio byte authorization for up to 300s, now closed to ~0.8s by a `subscribeLabels` subscriber; plus **at-tags meta** #1690 and **copyright mix detection** #1689. New known issue: negation recovery still waits on the ~5-minute `operator_labels` projection sync). previously 2026-07-20 (aligned private media with ATProto permissioned-data Proposal 0016: canonical addresses, space-type/permission-set separation, client attestations, host resolution, and sync read foundations; #1684). previously 2026-07-16 (documented the sensitive-audio response, labeler rollout, affected tracks 1177–1179, and the access/operator-tooling gaps). earlier entries (2026-07-09 and before) are preserved in `.status_history/2026-07.md`.
+this is a living document. last updated 2026-07-31 (**status maintenance for the July 25–31 window**. STATUS.md had grown back to 739 lines, so the July 10–29 detail moved to `.status_history/2026-07.md`: the label-context split #1709–#1713, contact addresses and per-client rate limits #1716/#1718, the moderation event log #1699–#1706, labels-that-act #1697, the operator-label SQL projection #1688, and the playlist-covers / edge-renditions / July-14-compute-incident cluster #1660–#1675, plus the account-status and artist-spacing write-ups #1725–#1730. Backfilled the one thing this window had shipped and never recorded here: **#1732–#1735/#1737**, where staged-upload cleanup had been deleting published tracks' audio — a content-hash `file_id` means re-uploading a file you already published stages the exact key it is served from, so the duplicate check rejected the upload and the failure cleanup deleted the live track's only copy. 20 tracks across 7 artists broken, 13 recovered, and the retrospective's own over-claims corrected in #1737. Rewrote current focus around the live-radio, firehose-ordering and media-integrity arcs and dropped the four moderation bullets that had become history. New known issue: seven tracks are not recoverable by us, and the media-integrity audit is not scheduled. Recorded the podcast recap for July 25–31.) previously 2026-07-31 (**radio grew a live source**. Documented #1741–#1746: `firehose` airs relay-eval's sonified atproto firehose live over HLS, modelled as *preemption* rather than a rotation entry, because the rotation's position is derived from wall-clock time and an unbounded broadcast in the loop would dissolve that. Also extended the #1736 entry: jetstream2 stopped delivering `fm.plyr.*` for 11 hours while still serving Bluesky profile events, so the consumer looked healthy and nothing alerted; the client now rotates across twelve hosts and detects a host gone blind on our own collections.) previously 2026-07-30 (**the firehose does not promise order**. Documented #1736: a repo's commit history was re-emitted upstream and `ingest_track_update` applied each replayed state as current. Commits are now ordered by repo `rev`, which survives re-delivery where jetstream's `time_us` does not.) previously 2026-07-29 (**identity is not a single host's opinion**. Documented #1725–#1730: an `#account` event describes the host that emitted it, not the person, and five migrated artists were hidden from every discovery surface as a result; `ingest_identity_update` had never once executed in production.) previously 2026-07-28 (**where a label reaches, and operational hygiene** — #1709–#1718). previously 2026-07-25 (**status maintenance for the July 2–25 window**, and **labels that act** #1697). earlier entries are preserved in `.status_history/2026-07.md`.
