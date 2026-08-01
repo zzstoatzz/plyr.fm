@@ -50,6 +50,9 @@ describe('live radio', () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
 		hlsSupported = true;
+		// the player is a module singleton — start every case with a cold module
+		// so the preload-warmed path is only exercised where it's the subject.
+		Object.assign(player, { hlsModule: null, hlsLoad: null });
 		el = document.createElement('audio');
 		player.audioElement = el;
 		player.stopRadio();
@@ -73,6 +76,24 @@ describe('live radio', () => {
 		const playOrder = (el.play as ReturnType<typeof vi.fn>).mock.invocationCallOrder;
 		const attachOrder = hlsInstance.attachMedia.mock.invocationCallOrder[0];
 		expect(playOrder.some((order) => order > attachOrder)).toBe(true);
+	});
+
+	it('attaches synchronously once preloaded, keeping the tap gesture intact', async () => {
+		// mobile only honours a play() in the same task as the tap, so a warmed
+		// module must not push the attach onto a later microtask.
+		vi.spyOn(el, 'canPlayType').mockReturnValue('maybe');
+		await player.preloadHls();
+		vi.clearAllMocks();
+		player.playRadio(live());
+		expect(hlsInstance.attachMedia).toHaveBeenCalled(); // no await
+		expect(el.play).toHaveBeenCalledTimes(1); // the gesture's own play, not a replay
+	});
+
+	it('disables remote playback so iOS ManagedMediaSource will attach', async () => {
+		vi.spyOn(el, 'canPlayType').mockReturnValue('maybe');
+		player.playRadio(live());
+		await vi.waitFor(() => expect(hlsInstance.attachMedia).toHaveBeenCalled());
+		expect(el.disableRemotePlayback).toBe(true);
 	});
 
 	it('falls back to native playback where hls.js is unsupported (iOS Safari)', async () => {
