@@ -21,6 +21,16 @@ interface RadioPlaybackOptions {
 	autoplay?: boolean;
 }
 
+/** the slice of hls.js's default export the player uses. */
+type HlsModule = {
+	isSupported(): boolean;
+	new (config: { enableWorker: boolean }): {
+		loadSource(url: string): void;
+		attachMedia(el: HTMLMediaElement): void;
+		destroy(): void;
+	};
+};
+
 // natural timeupdate steps are sub-second; a larger jump is a seek, scrub, or a
 // restored hydration position — none of which is listened time.
 const PLAY_PROGRESS_SEEK_THRESHOLD_S = 5;
@@ -34,6 +44,10 @@ class PlayerState {
 	/** live hls.js instance, when a broadcast needs one. not reactive — it is a
 	 * teardown handle, never rendered. */
 	private hls: { destroy(): void } | null = null;
+	/** hls.js itself, once fetched, plus the in-flight fetch. cached so a tune-in
+	 * can attach synchronously inside the tap that asked for it. */
+	private hlsModule: HlsModule | null = null;
+	private hlsLoad: Promise<HlsModule | null> | null = null;
 	paused = $state(true);
 
 	currentTime = $state(0);
@@ -135,23 +149,44 @@ class PlayerState {
 		else el.onloadedmetadata = seek;
 	}
 
+	/** fetch hls.js ahead of a tune-in, so attaching can happen synchronously.
+	 *
+	 * Mobile autoplay policy only honours a play() that runs in the same task as
+	 * the tap. Awaiting the dynamic import inside the tap handler spends that
+	 * permission, so the module is warmed as soon as the station's state says a
+	 * broadcast is live — long before anyone taps. Idempotent; the in-flight
+	 * promise is shared. Callers that don't have a live HLS source never call
+	 * this and never download the chunk.
+	 */
+	preloadHls(): Promise<HlsModule | null> {
+		this.hlsLoad ??= import('hls.js')
+			.then(({ default: Hls }) => (this.hlsModule = Hls as unknown as HlsModule))
+			.catch((e: unknown) => {
+				console.error('failed to load hls.js for live radio:', e);
+				this.hlsLoad = null; // let a later tune-in retry
+				return null;
+			});
+		return this.hlsLoad;
+	}
+
 	/** point the shared element at a radio source, via hls.js when required.
 	 *
 	 * hls.js comes first wherever it works, and native `src` is the fallback —
 	 * not the other way round. `canPlayType('application/vnd.apple.mpegurl')`
 	 * answers "maybe" in Chrome, which cannot actually demux MPEG-TS, so
 	 * trusting it hands the element a playlist it will never decode: on air,
-	 * cover showing, silent. Where hls.js is unsupported (iOS Safari, no MSE)
-	 * native playback is real, and that is exactly the fallback.
+	 * cover showing, silent. Where hls.js is unsupported native playback is
+	 * real, and that is exactly the fallback.
 	 *
-	 * hls.js is imported only when a live station is actually tuned.
+	 * Synchronous whenever `preloadHls()` has already resolved, which is what
+	 * keeps the tap's autoplay permission intact on mobile.
 	 */
-	private async attachRadioSource(
+	private attachRadioSource(
 		el: HTMLAudioElement,
 		np: RadioNowPlaying,
 		assigned: RadioNowPlaying | null,
 		autoplay: boolean
-	) {
+	): void {
 		this.detachHls();
 		const playNative = () => {
 			el.src = np.stream_url;
@@ -163,30 +198,40 @@ class PlayerState {
 			return;
 		}
 
-		try {
-			const { default: Hls } = await import('hls.js');
+		if (this.hlsModule) {
+			this.attachHls(this.hlsModule, el, np, playNative);
+			return;
+		}
+
+		// cold module: the tap's own play() will have failed against a sourceless
+		// element, so replay it once media exists.
+		void this.preloadHls().then((Hls) => {
 			// compare against the $state proxy captured at tune-in — `np` is the
 			// raw object and never equals `this.radio`.
 			if (this.radio !== assigned) return; // tuned away while the chunk loaded
-			if (!Hls.isSupported()) {
-				playNative();
-				return;
-			}
-			const hls = new Hls({ enableWorker: true });
-			this.hls = hls;
-			hls.loadSource(np.stream_url);
-			hls.attachMedia(el);
-			// the gesture's own play() ran against an element with no source yet
-			// (the import is async), so it was rejected. start once media exists.
-			if (autoplay) {
-				el.play().catch(() => {
-					this.paused = true;
-				});
-			}
-		} catch (e) {
-			console.error('failed to load hls.js for live radio:', e);
-			this.paused = true;
+			if (!Hls) return void (this.paused = true);
+			this.attachHls(Hls, el, np, playNative);
+			if (autoplay) el.play().catch(() => (this.paused = true));
+		});
+	}
+
+	private attachHls(
+		Hls: HlsModule,
+		el: HTMLAudioElement,
+		np: RadioNowPlaying,
+		playNative: () => void
+	): void {
+		if (!Hls.isSupported()) {
+			playNative();
+			return;
 		}
+		// iOS drives HLS through ManagedMediaSource, which the platform refuses to
+		// hand to an element that still advertises AirPlay.
+		el.disableRemotePlayback = true;
+		const hls = new Hls({ enableWorker: true });
+		this.hls = hls;
+		hls.loadSource(np.stream_url);
+		hls.attachMedia(el);
 	}
 
 	/** tear down any hls.js instance so its buffers and timers stop. */

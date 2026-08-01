@@ -232,6 +232,9 @@ class Radio {
 			this.state = await response.json();
 			this.station = this.state?.station_slug ?? this.station;
 			this.error = null;
+			// warm hls.js now so tuning in can attach inside the tap itself —
+			// mobile only grants autoplay to a play() in the gesture's own task.
+			if (this.state?.live?.kind === 'hls') void player.preloadHls();
 		} catch (e) {
 			console.error('failed to load radio state:', e);
 			this.error = 'radio is off air right now';
