@@ -9,6 +9,9 @@
 	import { radio } from '$lib/radio.svelte';
 	import { horizontalSwipe } from '$lib/horizontal-swipe';
 	import TunerDial from '$lib/components/radio/TunerDial.svelte';
+	import AccentWash from '$lib/components/radio/AccentWash.svelte';
+	import ScrollingText from '$lib/components/ScrollingText.svelte';
+	import { extractArtworkAccent, type ArtworkAccent } from '$lib/utils/artwork-accent';
 	import WaveLoading from '$lib/components/WaveLoading.svelte';
 	import SensitiveImage from '$lib/components/SensitiveImage.svelte';
 	import { IMAGE_WIDTHS, resizedImageUrl } from '$lib/utils/display-image';
@@ -26,6 +29,41 @@
 		const img = event.currentTarget as HTMLImageElement;
 		if (img.naturalHeight > 0) coverRatio = img.naturalWidth / img.naturalHeight;
 	}
+
+	// ambient accent from the on-air artwork. loads a thumbnail with CORS and
+	// samples it; any failure (host without ACAO, tainted canvas, no artwork)
+	// means no accent — the page keeps its neutral look.
+	let accent = $state<ArtworkAccent | null>(null);
+	let onAirArtworkUrl = $derived(
+		radio.current?.artwork_url ?? radio.state?.live?.artwork_url ?? null
+	);
+	$effect(() => {
+		const src = onAirArtworkUrl && resizedImageUrl(onAirArtworkUrl, IMAGE_WIDTHS.thumb);
+		if (!src) {
+			accent = null;
+			return;
+		}
+		let cancelled = false;
+		const image = new window.Image();
+		image.crossOrigin = 'anonymous';
+		image.src = src;
+		image.onload = () => {
+			if (cancelled) return;
+			try {
+				accent = extractArtworkAccent(image);
+			} catch {
+				accent = null;
+			}
+		};
+		image.onerror = () => {
+			if (!cancelled) accent = null;
+		};
+		return () => {
+			cancelled = true;
+			image.onload = null;
+			image.onerror = null;
+		};
+	});
 
 	// the URL path is the source of truth for the selected station (bookmarkable).
 	// `/radio` (no slug) shows the remembered/default station; `/radio/<slug>` pins it.
@@ -138,6 +176,8 @@
 
 <Header user={auth.user} isAuthenticated={auth.isAuthenticated} onLogout={handleLogout} />
 
+<AccentWash {accent} />
+
 <main class="radio-page">
 	<div class="tuner">
 	<section class="station">
@@ -146,6 +186,17 @@
 		{:else if radio.error}
 			<div class="status error">{radio.error}</div>
 		{:else if radio.hasSomethingOnAir}
+			<!-- broadcast-set treatment over the on-air artwork: scanline texture, a
+			     slow sweep, a vignette, and a scan-load wipe on track change. purely
+			     decorative; reduced-motion stills the animated pieces. -->
+			{#snippet crtOverlays()}
+				{#key radio.current?.id ?? activeSlug}
+					<div class="crt-scanload" aria-hidden="true"></div>
+				{/key}
+				<div class="crt-scanlines" aria-hidden="true"></div>
+				<div class="crt-sweep" aria-hidden="true"></div>
+				<div class="crt-vignette" aria-hidden="true"></div>
+			{/snippet}
 			<div class="radio-player" {@attach horizontalSwipe((dir) => flip(dir === 'left' ? 'next' : 'prev'))}>
 				<div class="station-title">
 					<span class="live">live radio</span>
@@ -191,6 +242,7 @@
 								{:else}
 									<div class="art fallback"></div>
 								{/if}
+								{@render crtOverlays()}
 							</a>
 						</SensitiveImage>
 					{:else if radio.state?.live?.artwork_url}
@@ -202,6 +254,7 @@
 								class="art"
 								onload={readCoverRatio}
 							/>
+							{@render crtOverlays()}
 						</div>
 					{:else}
 						<!-- no cover published for this broadcast: a placeholder sized like
@@ -213,6 +266,7 @@
 									<path d="M16.24 7.76a6 6 0 0 1 0 8.49M7.76 16.24a6 6 0 0 1 0-8.49M19.07 4.93a10 10 0 0 1 0 14.14M4.93 19.07a10 10 0 0 1 0-14.14" />
 								</svg>
 							</div>
+							{@render crtOverlays()}
 						</div>
 					{/if}
 				</div>
@@ -222,7 +276,7 @@
 					</p>
 					{#if radio.current}
 						<h2>
-							<a href={`/track/${radio.current.id}`}>{radio.current.title}</a>
+							<a href={`/track/${radio.current.id}`}><ScrollingText text={radio.current.title} trigger="always" /></a>
 						</h2>
 						<a class="artist" href={`/u/${radio.current.artist_handle}`}>{radio.current.artist}</a>
 					{:else}
@@ -327,6 +381,8 @@
 <style>
 	.radio-page {
 		position: relative;
+		/* sit above the fixed ambient wash */
+		z-index: 1;
 		max-width: 980px;
 		/* the global header has a 2rem margin-bottom; cancel most of it so the tuner
 		   sits just under the header (a small breathing gap, not a dead band) */
@@ -650,6 +706,125 @@
 		transform: translateY(-1px);
 	}
 
+	/* ── CRT treatment ──────────────────────────────────────────────────────
+	   the on-air artwork reads as a broadcast monitor: hairline scanlines, a
+	   slow phosphor sweep, a corner vignette, and a scan-load wipe whenever
+	   the on-air track changes. all layers are pure CSS gradients (no SVG
+	   noise — it bands), pointer-events: none, and clipped by .art-link. */
+	.crt-scanlines,
+	.crt-sweep,
+	.crt-vignette,
+	.crt-scanload {
+		position: absolute;
+		inset: 0;
+		border-radius: inherit;
+		pointer-events: none;
+		z-index: 2;
+	}
+
+	.crt-scanlines {
+		background: repeating-linear-gradient(
+			0deg,
+			rgba(0, 0, 0, 0.16) 0px,
+			rgba(0, 0, 0, 0.16) 1px,
+			transparent 1px,
+			transparent 3px
+		);
+		opacity: 0.5;
+	}
+
+	/* a faint highlight band drifting down the tube */
+	.crt-sweep {
+		overflow: hidden;
+	}
+
+	.crt-sweep::before {
+		content: '';
+		position: absolute;
+		left: 0;
+		right: 0;
+		top: -30%;
+		height: 22%;
+		background: linear-gradient(
+			to bottom,
+			transparent,
+			rgba(255, 255, 255, 0.045) 50%,
+			transparent
+		);
+		animation: crt-sweep-drift 9s linear infinite;
+	}
+
+	@keyframes crt-sweep-drift {
+		to {
+			transform: translateY(590%);
+		}
+	}
+
+	.crt-vignette {
+		background: radial-gradient(
+			120% 120% at 50% 50%,
+			transparent 58%,
+			rgba(0, 0, 0, 0.22) 100%
+		);
+	}
+
+	/* one-shot wipe when the on-air track changes: a bright scanline sweeps
+	   down once, trailing a brief dim, then the layer goes inert */
+	.crt-scanload {
+		overflow: hidden;
+		animation: crt-scanload-fade 0.9s ease-out forwards;
+	}
+
+	.crt-scanload::before {
+		content: '';
+		position: absolute;
+		left: 0;
+		right: 0;
+		top: -12%;
+		height: 10%;
+		background: linear-gradient(
+			to bottom,
+			transparent,
+			rgba(255, 255, 255, 0.28) 55%,
+			rgba(255, 255, 255, 0.06)
+		);
+		animation: crt-scanload-sweep 0.65s ease-in forwards;
+	}
+
+	@keyframes crt-scanload-sweep {
+		to {
+			transform: translateY(1150%);
+		}
+	}
+
+	@keyframes crt-scanload-fade {
+		0% {
+			background: rgba(0, 0, 0, 0.35);
+		}
+		60% {
+			background: rgba(0, 0, 0, 0.08);
+		}
+		100% {
+			background: transparent;
+		}
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.crt-sweep::before,
+		.crt-scanload,
+		.crt-scanload::before {
+			animation: none;
+		}
+
+		.crt-scanload {
+			background: transparent;
+		}
+
+		.crt-scanload::before {
+			content: none;
+		}
+	}
+
 	.art.fallback {
 		background:
 			linear-gradient(135deg, rgba(255, 255, 255, 0.08), transparent 45%),
@@ -687,14 +862,16 @@
 		margin: 0;
 		font-size: clamp(1.5rem, 4.6vw, 2.65rem);
 		line-height: 1.1;
-		/* long titles (e.g. DJ-set names with dates) must not blow up the
-		   fixed-height layout: wrap hard, then clamp to two lines with an ellipsis */
+		/* long titles must not blow up the fixed-height layout: track titles
+		   stay on one line and marquee (ScrollingText); the broadcast fallback
+		   below has no marquee, so it still wraps */
 		overflow-wrap: anywhere;
-		display: -webkit-box;
-		-webkit-box-orient: vertical;
-		-webkit-line-clamp: 2;
-		line-clamp: 2;
 		overflow: hidden;
+	}
+
+	.now-meta h2 a {
+		display: block;
+		max-width: 100%;
 	}
 
 	.now-meta h2 a {
