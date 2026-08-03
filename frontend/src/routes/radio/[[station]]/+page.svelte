@@ -199,25 +199,29 @@
 			{/snippet}
 			<div class="radio-player" {@attach horizontalSwipe((dir) => flip(dir === 'left' ? 'next' : 'prev'))}>
 				<div class="station-title">
-					<span class="live">live radio</span>
-					<span class="radio-mark" aria-hidden="true">
-						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-							<circle cx="12" cy="12" r="2" />
-							<path d="M16.24 7.76a6 6 0 0 1 0 8.49M7.76 16.24a6 6 0 0 1 0-8.49M19.07 4.93a10 10 0 0 1 0 14.14M4.93 19.07a10 10 0 0 1 0-14.14" />
-						</svg>
-					</span>
-					<span class="title-sep" aria-hidden="true"></span>
-					<span class="credit">inspired by <a href="https://radio.wisp.place" target="_blank" rel="noopener">radio.wisp.place</a></span>
-					<details class="integration">
-						<summary>integration</summary>
+					<div class="station-title-main">
+						<span class="live">live radio</span>
+						<span class="radio-mark" aria-hidden="true">
+							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+								<circle cx="12" cy="12" r="2" />
+								<path d="M16.24 7.76a6 6 0 0 1 0 8.49M7.76 16.24a6 6 0 0 1 0-8.49M19.07 4.93a10 10 0 0 1 0 14.14M4.93 19.07a10 10 0 0 1 0-14.14" />
+							</svg>
+						</span>
+					</div>
+					<div class="station-title-meta">
+						<span class="credit">inspired by <a href="https://radio.wisp.place" target="_blank" rel="noopener">radio.wisp.place</a></span>
+						<span class="title-sep" aria-hidden="true"></span>
+						<details class="integration">
+							<summary>integration</summary>
 						<div class="integration-panel">
 							<p>poll <code>{endpoint}</code> for the shared station state.</p>
 							<p>play <code>current.stream_url</code>, seek to <code>progress_seconds</code>.</p>
 							<p>refresh when <code>current_ends_at</code> passes, or poll every 30s.</p>
 							<p>embedding this page? add <code>?autoplay=1</code> to start playback automatically.</p>
-							<p>or use the compact widget: <code>/embed/radio</code> takes <code>?station=</code> and <code>?autoplay=1</code> too.</p>
-						</div>
-					</details>
+								<p>or use the compact widget: <code>/embed/radio</code> takes <code>?station=</code> and <code>?autoplay=1</code> too.</p>
+							</div>
+						</details>
+					</div>
 				</div>
 				<TunerDial
 					stations={radio.stations}
@@ -485,7 +489,10 @@
 	}
 
 	.station {
-		flex: 1 1 auto;
+		/* content-sized: growing here absorbed all viewport slack, pinning the
+		   rotation deck to the container's bottom edge with a dead band between.
+		   the deck now follows the player; slack falls below both. */
+		flex: 0 1 auto;
 		min-height: 0;
 		/* fixed-width column so the dial + controls never resize with the
 		   (height-driven) artwork — the artwork is capped to this width too */
@@ -496,16 +503,30 @@
 		padding-top: 0;
 	}
 
+	/* two deliberate centered rows — the heading, then the meta links — instead
+	   of one wrapping row that orphaned "integration" with a dangling separator
+	   at narrow column widths */
 	.station-title {
 		display: flex;
-		flex-wrap: wrap;
+		flex-direction: column;
 		align-items: center;
-		justify-content: center;
-		gap: 0.35rem 0.7rem;
+		gap: 0.4rem;
 		margin: 0;
 		color: var(--text-secondary);
 		line-height: 1;
 		text-transform: lowercase;
+	}
+
+	.station-title-main,
+	.station-title-meta {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 0.7rem;
+	}
+
+	.station-title-meta {
+		gap: 0.6rem;
 	}
 
 	.station-title .live {
