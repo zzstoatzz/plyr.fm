@@ -620,8 +620,10 @@
 			// nothing else claimed the element, restage the queue's current track
 			// paused, and let the loader's hydration path restore the saved
 			// position — "stop" means silence, not "resume the queue at full
-			// volume from wherever it was".
-			if (!player.currentTrack && queue.currentTrack) {
+			// volume from wherever it was". a jam session is the exception: jam
+			// state drives playback (below), and intercepting here would leave
+			// this participant paused while the jam plays on without them.
+			if (!jam.active && !player.currentTrack && queue.currentTrack) {
 				player.currentTrack = queue.currentTrack;
 				previousQueueIndex = queue.currentIndex;
 				player.paused = true;
