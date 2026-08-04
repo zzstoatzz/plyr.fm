@@ -363,7 +363,7 @@ max_lines = 1444
 
 [[rules]]
 path = "scripts/build_atlas.py"
-max_lines = 582
+max_lines = 584
 
 [[rules]]
 path = "frontend/src/routes/atlas/renderer.ts"

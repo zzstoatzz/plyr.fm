@@ -146,6 +146,8 @@ def tpuf_export(settings: Settings) -> list[dict]:
 
 def load_corpus(db_url: str) -> dict[int, dict]:
     """load atlas-eligible tracks keyed by id."""
+    # the CI secret carries a sqlalchemy driver suffix psycopg can't parse
+    db_url = re.sub(r"postgresql\+\w+://", "postgresql://", db_url)
     with psycopg.connect(db_url) as conn, conn.cursor() as cur:
         cur.execute(CORPUS_SQL, {"labels": EXCLUDED_LABELS})
         cols = [d.name for d in cur.description]
