@@ -395,7 +395,7 @@ export class AtlasRenderer {
 		let cv = this.dotSprites.get(step);
 		if (cv) return cv;
 		const c = this.hueColors(step);
-		const s = Math.max(4, Math.ceil(2.8 * this.dpr));
+		const s = Math.max(6, Math.ceil(4.6 * this.dpr));
 		cv = document.createElement('canvas');
 		cv.width = s;
 		cv.height = s;
@@ -412,7 +412,7 @@ export class AtlasRenderer {
 		grad.addColorStop(0, rgba(coreCol, 1));
 		grad.addColorStop(0.4, rgba(c.mid, 0.5));
 		grad.addColorStop(1, rgba(c.mid, 0));
-		g.globalAlpha = 0.6;
+		g.globalAlpha = 0.75;
 		g.fillStyle = grad;
 		g.beginPath();
 		g.arc(half, half, half, 0, Math.PI * 2);
@@ -582,7 +582,14 @@ export class AtlasRenderer {
 	}
 
 	private artistRadiusPx(a: AtlasArtist): number {
-		return Math.min(26, Math.sqrt(a.count) * this.view.zoom * 0.9);
+		// visible from the whole-map view; grows with sqrt(zoom) so walking in
+		// makes an artist more present without ballooning past the tracks.
+		// the zoom-scaled cap keeps a dominant catalog from owning the overview.
+		return Math.min(
+			12 + this.view.zoom * 5,
+			34,
+			(3.5 + Math.sqrt(a.count) * 1.2) * Math.sqrt(this.view.zoom)
+		);
 	}
 
 	private findArtistAt(sx: number, sy: number): number {
@@ -710,7 +717,7 @@ export class AtlasRenderer {
 		// --- points ---
 		const coverAlpha = fadeIn(zoom, TUNE.covers.start, TUNE.covers.range);
 		const useStar = zoom >= 2;
-		const pointR = Math.min(6, 1.0 + zoom * 0.18);
+		const pointR = Math.min(8, 1.8 + zoom * 0.22);
 		ctx.globalAlpha = 1;
 		for (let i = 0; i < n; i++) {
 			const x = this.px[i];
@@ -789,11 +796,11 @@ export class AtlasRenderer {
 
 		// --- artist circles ---
 		const artistCands: { name: string; x: number; y: number }[] = [];
-		if (zoom >= 2.5) {
+		{
 			let avatarBudget = small ? 8 : 20;
 			for (const a of this.data.artists) {
 				const pr = this.artistRadiusPx(a);
-				if (pr < 5) continue;
+				if (pr < 7) continue;
 				const ax = this.cx + a.cx * this.scale;
 				const ay = this.cy + a.cy * this.scale;
 				if (ax < -40 || ax > W + 40 || ay < -40 || ay > H + 40) continue;
@@ -833,7 +840,7 @@ export class AtlasRenderer {
 				ctx.strokeStyle = this.dark ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.4)';
 				ctx.lineWidth = 1.5;
 				ctx.stroke();
-				if (zoom >= 3.5 && pr >= 9 && artistCands.length < 30) {
+				if (zoom >= 2 && pr >= 9 && artistCands.length < 30) {
 					artistCands.push({ name: a.handle, x: ax, y: ay + pr + 9 });
 				}
 			}
@@ -947,7 +954,7 @@ export class AtlasRenderer {
 		if (artistCands.length) {
 			const fontSize = small ? 8 : 10;
 			ctx.font = `${fontSize}px monospace`;
-			ctx.globalAlpha = Math.min(0.8, fadeIn(zoom, 3.5, 1.0));
+			ctx.globalAlpha = Math.min(0.8, fadeIn(zoom, 2, 1.0));
 			ctx.fillStyle = this.dark ? 'rgba(255,255,255,0.85)' : 'rgba(0,0,0,0.75)';
 			const max = small ? TUNE.labels.artists.s : TUNE.labels.artists.l;
 			let shown = 0;
