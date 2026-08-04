@@ -1,11 +1,17 @@
 """Public live radio state for simple clients and games.
 
-The response is a stateless, deterministic wall-clock loop: every client gets the
-same current track for a given instant, per station. Station selection (which
-tracks, in what order) lives in ``corpus`` / ``lenses`` / ``sampler``; this module
-owns only the HTTP surface and the loop arithmetic.
+The response is a deterministic wall-clock loop: every client gets the same
+current track for a given instant, per station. Determinism is anchored in the
+shared cache — the first rotation built in a period is pinned for that period,
+and each period's loop starts from a pinned anchor (the moment the previous
+period's in-flight track ended), so nothing ever changes or jumps mid-song.
+Without Redis this degrades to per-period start anchoring: still deterministic
+per instant, with a clean track start at each period boundary. Station
+selection (which tracks, in what order) lives in ``corpus`` / ``lenses`` /
+``sampler``; this module owns the HTTP surface and the loop arithmetic.
 """
 
+from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime, timedelta
 from typing import Annotated
 from urllib.parse import urljoin
@@ -16,7 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend._internal import Session as AuthSession
 from backend._internal import get_optional_session
 from backend.api.radio import stations
-from backend.api.radio.cache import get_rotation
+from backend.api.radio.cache import get_period_anchor, get_rotation, peek_rotation
 from backend.api.radio.corpus import load_corpus
 from backend.api.radio.lenses import LensContext
 from backend.api.radio.live import get_live_broadcast
@@ -45,6 +51,9 @@ MAX_ROTATION_SIZE = 75
 # on the same slice of the same rotation every day, while every client still
 # computes the identical rotation within a period.
 ROTATION_PERIOD_SECONDS = 4 * 60 * 60
+# rotation cache entries must survive their own period plus the next one, so
+# the boundary handover can look back at the previous period's rotation.
+ROTATION_CACHE_MARGIN_SECONDS = 10 * 60
 
 
 def _stream_url(track: Track) -> str:
@@ -144,21 +153,30 @@ async def _load_rotation(
     station: stations.Station,
     limit: int,
     now: datetime,
+    period_index: int,
 ) -> list[RadioTrack]:
     """Return the station's anonymous rotation, cached per (station, limit, period).
 
-    The rotation is deterministic within a period, so recomputing it on every
-    poll only reloads the same full catalog from the database; under real
-    listener volume that recomputation was enough to saturate the database and
-    slow every other endpoint down (2026-07-14).
+    The cache is what makes the rotation actually stable within a period: the
+    sampler's ranking reads live signals (plays, likes, corpus order), so a
+    rebuild would produce a different sequence and teleport the wall-clock
+    playhead mid-song (the pre-2026-08 60s TTL did exactly that). The first
+    build in a period is therefore pinned for the whole period, plus one more
+    period so the boundary handover can look back at it. Caching also bounds
+    the full-catalog recomputation that saturated the database (2026-07-14).
     """
 
     async def build() -> list[RadioTrack]:
         tracks, like_counts = await _select_rotation(db, station, limit, now)
         return await _to_radio_tracks(db, tracks, like_counts)
 
-    period = str(int(now.timestamp()) // ROTATION_PERIOD_SECONDS)
-    return await get_rotation(station.slug, limit, period, build)
+    period_end = (period_index + 1) * ROTATION_PERIOD_SECONDS
+    ttl = (
+        max(0, period_end - int(now.timestamp()))
+        + ROTATION_PERIOD_SECONDS
+        + ROTATION_CACHE_MARGIN_SECONDS
+    )
+    return await get_rotation(station.slug, limit, str(period_index), build, ttl)
 
 
 async def _with_liked_state(
@@ -182,8 +200,14 @@ async def _with_liked_state(
 def _live_window(
     now: datetime,
     rotation: list[RadioTrack],
+    anchor_epoch: float,
 ) -> tuple[int | None, int, datetime | None, datetime | None]:
-    """Locate the current track in the deterministic station loop."""
+    """Locate the current track in the station loop anchored at ``anchor_epoch``.
+
+    The loop starts from track 0 at the anchor instant (the period handover),
+    so track boundaries fall wherever the durations say — never at an
+    arbitrary modulus of the raw epoch.
+    """
     if not rotation:
         return None, 0, None, None
 
@@ -192,8 +216,7 @@ def _live_window(
     if loop_duration <= 0:
         return None, 0, None, None
 
-    epoch_seconds = int(now.timestamp())
-    loop_offset = epoch_seconds % loop_duration
+    loop_offset = int(now.timestamp() - anchor_epoch) % loop_duration
     cursor = 0
     for index, duration in enumerate(durations):
         next_cursor = cursor + duration
@@ -207,8 +230,115 @@ def _live_window(
     return 0, 0, now, now + timedelta(seconds=durations[0])
 
 
-def _up_next(rotation: list[RadioTrack], current_index: int | None) -> list[RadioTrack]:
-    """Return the next few tracks after the current one."""
+def _crossing_track_end(
+    rotation: list[RadioTrack],
+    anchor_epoch: float,
+    boundary_epoch: float,
+) -> float:
+    """When the track playing at ``boundary_epoch`` (under this loop) ends.
+
+    Returns the boundary itself when the loop is empty/degenerate or a track
+    boundary happens to coincide with the period boundary.
+    """
+    durations = [track.duration for track in rotation]
+    loop_duration = sum(durations)
+    if loop_duration <= 0:
+        return boundary_epoch
+    offset = int(boundary_epoch - anchor_epoch) % loop_duration
+    cursor = 0
+    for duration in durations:
+        next_cursor = cursor + duration
+        if offset < next_cursor:
+            return boundary_epoch + (next_cursor - offset)
+        cursor = next_cursor
+    return boundary_epoch
+
+
+async def _station_clock(
+    db: AsyncSession,
+    station: stations.Station,
+    limit: int,
+    now: datetime,
+) -> tuple[list[RadioTrack], float, list[RadioTrack] | None]:
+    """Resolve the rotation and loop anchor governing this instant.
+
+    Period handovers land on track boundaries: the first request of a new
+    period pins an anchor at the moment the previous period's in-flight track
+    ends. Until that instant the previous rotation keeps playing (grace
+    window) and the new rotation's head is exposed as what's next. Without
+    Redis this degrades to anchoring every period at its own start — a clean
+    track start at each boundary, never a mid-song landing.
+
+    Returns ``(rotation, anchor_epoch, upcoming)`` where ``rotation`` is the
+    loop governing *now* and ``upcoming`` is the next rotation's head during a
+    grace window (else None).
+    """
+    period_index = int(now.timestamp()) // ROTATION_PERIOD_SECONDS
+    period_start = float(period_index * ROTATION_PERIOD_SECONDS)
+    rotation = await _load_rotation(db, station, limit, now, period_index)
+    if not rotation:
+        return rotation, period_start, None
+
+    anchor_ttl = 2 * ROTATION_PERIOD_SECONDS + ROTATION_CACHE_MARGIN_SECONDS
+    prev_period = str(period_index - 1)
+    prev_period_start = float((period_index - 1) * ROTATION_PERIOD_SECONDS)
+
+    async def prev_period_anchor() -> float:
+        # the previous period's anchor should already be pinned; if it is gone
+        # (redis restart), fall back to that period's start.
+        anchor = await get_period_anchor(
+            station.slug, limit, prev_period, _value(prev_period_start), anchor_ttl
+        )
+        return prev_period_start if anchor is None else anchor
+
+    async def compute_anchor() -> float:
+        # only what was *actually airing* can hand over; a rebuilt guess of a
+        # lost rotation can't, so an uncached previous period anchors here.
+        prev_rotation = await peek_rotation(station.slug, limit, prev_period)
+        if not prev_rotation:
+            return period_start
+        return _crossing_track_end(
+            prev_rotation, await prev_period_anchor(), period_start
+        )
+
+    anchor = await get_period_anchor(
+        station.slug, limit, str(period_index), compute_anchor, anchor_ttl
+    )
+    if anchor is None:
+        return rotation, period_start, None
+
+    if now.timestamp() < anchor:
+        # grace window: the previous period's track is still finishing.
+        prev_rotation = await peek_rotation(station.slug, limit, prev_period)
+        if prev_rotation:
+            return prev_rotation, await prev_period_anchor(), rotation
+        # degraded (rotation evicted but anchor kept): start the new loop now.
+        return rotation, period_start, None
+    return rotation, anchor, None
+
+
+def _value(value: float) -> Callable[[], Awaitable[float]]:
+    """A compute callback that just returns ``value``."""
+
+    async def compute() -> float:
+        return value
+
+    return compute
+
+
+def _up_next(
+    rotation: list[RadioTrack],
+    current_index: int | None,
+    upcoming: list[RadioTrack] | None,
+) -> list[RadioTrack]:
+    """Return the next few tracks after the current one.
+
+    During a period-handover grace window the current track is the old
+    rotation's last stand — what actually plays next is the head of the new
+    rotation, so that's what gets shown.
+    """
+    if upcoming:
+        return upcoming[:4]
     if current_index is None or not rotation:
         return []
     return [
@@ -254,10 +384,9 @@ async def radio_state(
         raise HTTPException(status_code=404, detail=f"unknown station: {station}")
 
     now = datetime.now(UTC)
-    rotation = await _with_liked_state(
-        db, await _load_rotation(db, resolved, limit, now), session
-    )
-    current_index, progress, started_at, ends_at = _live_window(now, rotation)
+    raw_rotation, anchor, upcoming = await _station_clock(db, resolved, limit, now)
+    rotation = await _with_liked_state(db, raw_rotation, session)
+    current_index, progress, started_at, ends_at = _live_window(now, rotation, anchor)
     current = rotation[current_index] if current_index is not None else None
 
     # the rotation is still computed and still described even while a broadcast
@@ -275,7 +404,7 @@ async def radio_state(
         current_ends_at=ends_at.isoformat() if ends_at else None,
         progress_seconds=progress,
         current=current,
-        up_next=_up_next(rotation, current_index),
+        up_next=_up_next(rotation, current_index, upcoming),
         rotation=rotation,
         live=(
             LiveBroadcastInfo(

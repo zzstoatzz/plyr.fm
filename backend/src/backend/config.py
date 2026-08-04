@@ -952,9 +952,12 @@ class RadioSettings(AppSettingsSection):
     rotation_cache_ttl_seconds: int = Field(
         default=60,
         description=(
-            "TTL for the cached per-station rotation. Every /radio/state poll "
-            "rebuilds the rotation from the full eligible catalog, so this "
-            "bounds that work to once per station per TTL. 0 disables caching."
+            "Kill switch for the rotation/anchor cache: 0 disables caching "
+            "entirely (each request rebuilds; used by tests). Any positive "
+            "value enables it — the actual entry TTLs are period-scoped and "
+            "computed by the radio state module, because the rotation must "
+            "stay pinned for its whole period (a rebuild mid-period reshuffles "
+            "the loop and teleports the playhead mid-song)."
         ),
     )
 
