@@ -186,17 +186,6 @@
 		{:else if radio.error}
 			<div class="status error">{radio.error}</div>
 		{:else if radio.hasSomethingOnAir}
-			<!-- broadcast-set treatment over the on-air artwork: scanline texture, a
-			     slow sweep, a vignette, and a scan-load wipe on track change. purely
-			     decorative; reduced-motion stills the animated pieces. -->
-			{#snippet crtOverlays()}
-				{#key radio.current?.id ?? activeSlug}
-					<div class="crt-scanload" aria-hidden="true"></div>
-				{/key}
-				<div class="crt-scanlines" aria-hidden="true"></div>
-				<div class="crt-sweep" aria-hidden="true"></div>
-				<div class="crt-vignette" aria-hidden="true"></div>
-			{/snippet}
 			<div class="radio-player" {@attach horizontalSwipe((dir) => flip(dir === 'left' ? 'next' : 'prev'))}>
 				<div class="station-title">
 					<div class="station-title-main">
@@ -246,7 +235,6 @@
 								{:else}
 									<div class="art fallback"></div>
 								{/if}
-								{@render crtOverlays()}
 							</a>
 						</SensitiveImage>
 					{:else if radio.state?.live?.artwork_url}
@@ -258,7 +246,6 @@
 								class="art"
 								onload={readCoverRatio}
 							/>
-							{@render crtOverlays()}
 						</div>
 					{:else}
 						<!-- no cover published for this broadcast: a placeholder sized like
@@ -270,7 +257,6 @@
 									<path d="M16.24 7.76a6 6 0 0 1 0 8.49M7.76 16.24a6 6 0 0 1 0-8.49M19.07 4.93a10 10 0 0 1 0 14.14M4.93 19.07a10 10 0 0 1 0-14.14" />
 								</svg>
 							</div>
-							{@render crtOverlays()}
 						</div>
 					{/if}
 				</div>
@@ -645,7 +631,17 @@
 	}
 
 	.art-stage {
-		--cover-max-height: clamp(7rem, 42vh, 26rem);
+		/* the artwork is the page's one flexible element: it gets whatever height
+		   remains after the fixed chrome (header, docked player, title, dial,
+		   meta, controls, progress, rotation deck ≈ the rem constant below), so
+		   the whole tuner fits the viewport with no vertical scroll. floor keeps
+		   the cover recognizable on extreme windows; cap keeps it tasteful on
+		   huge ones. */
+		--cover-max-height: clamp(
+			4.5rem,
+			calc(100dvh - var(--header-height, 0px) - var(--player-height, 0px) - 31rem),
+			26rem
+		);
 		/* hug the cover exactly: don't grow (that left a dead band between the
 		   artwork and the title once covers stopped being stretched to fit) and
 		   don't shrink below it (that let a wide cover overlap the title). */
@@ -728,154 +724,7 @@
 		transform: translateY(-1px);
 	}
 
-	/* ── CRT treatment ──────────────────────────────────────────────────────
-	   the on-air artwork reads as a broadcast monitor: hairline scanlines, a
-	   slow phosphor sweep, a corner vignette, and a scan-load wipe whenever
-	   the on-air track changes. all layers are pure CSS gradients (no SVG
-	   noise — it bands), pointer-events: none, and clipped by .art-link. */
-	.crt-scanlines,
-	.crt-sweep,
-	.crt-vignette,
-	.crt-scanload {
-		position: absolute;
-		inset: 0;
-		border-radius: inherit;
-		pointer-events: none;
-		z-index: 2;
-	}
-
-	.crt-scanlines {
-		background: repeating-linear-gradient(
-			0deg,
-			rgba(0, 0, 0, 0.16) 0px,
-			rgba(0, 0, 0, 0.16) 1px,
-			transparent 1px,
-			transparent 3px
-		);
-		opacity: 0.5;
-	}
-
-	/* a faint highlight band drifting down the tube */
-	.crt-sweep {
-		overflow: hidden;
-	}
-
-	.crt-sweep::before {
-		content: '';
-		position: absolute;
-		left: 0;
-		right: 0;
-		top: -30%;
-		height: 22%;
-		background: linear-gradient(
-			to bottom,
-			transparent,
-			rgba(255, 255, 255, 0.045) 50%,
-			transparent
-		);
-		animation: crt-sweep-drift 9s linear infinite;
-	}
-
-	@keyframes crt-sweep-drift {
-		to {
-			transform: translateY(590%);
-		}
-	}
-
-	.crt-vignette {
-		background: radial-gradient(
-			120% 120% at 50% 50%,
-			transparent 58%,
-			rgba(0, 0, 0, 0.22) 100%
-		);
-	}
-
-	/* one-shot wipe when the on-air track changes: a bright scanline sweeps
-	   down once, trailing a brief dim, then the layer goes inert */
-	.crt-scanload {
-		overflow: hidden;
-		animation: crt-scanload-fade 0.9s ease-out forwards;
-	}
-
-	.crt-scanload::before {
-		content: '';
-		position: absolute;
-		left: 0;
-		right: 0;
-		top: -12%;
-		height: 10%;
-		background: linear-gradient(
-			to bottom,
-			transparent,
-			rgba(255, 255, 255, 0.28) 55%,
-			rgba(255, 255, 255, 0.06)
-		);
-		animation: crt-scanload-sweep 0.65s ease-in forwards;
-	}
-
-	@keyframes crt-scanload-sweep {
-		to {
-			transform: translateY(1150%);
-		}
-	}
-
-	@keyframes crt-scanload-fade {
-		0% {
-			background: rgba(0, 0, 0, 0.35);
-		}
-		60% {
-			background: rgba(0, 0, 0, 0.08);
-		}
-		100% {
-			background: transparent;
-		}
-	}
-
-	@media (prefers-reduced-motion: reduce) {
-		.crt-sweep::before,
-		.crt-scanload,
-		.crt-scanload::before {
-			animation: none;
-		}
-
-		.crt-scanload {
-			background: transparent;
-		}
-
-		.crt-scanload::before {
-			content: none;
-		}
-	}
-
-	.art.fallback {
-		background:
-			linear-gradient(135deg, rgba(255, 255, 255, 0.08), transparent 45%),
-			var(--bg-secondary);
-	}
-
-	/* the cover path is height-driven, which needs an intrinsic image to stay
-	   square. a placeholder has none, so drive this one from width and cap it —
-	   otherwise it stretches to whatever vertical space the stage has. */
-	.art-link.art-tile-live {
-		/* no intrinsic size to shrink-wrap, so give it one */
-		width: min(100%, 18rem);
-		height: auto;
-		aspect-ratio: 1 / 1;
-	}
-
-	.art.live-art {
-		display: grid;
-		place-items: center;
-		color: var(--text-secondary);
-	}
-
-	.art.live-art svg {
-		width: 38%;
-		height: 38%;
-		opacity: 0.55;
-	}
-
-	.now-meta {
+.now-meta {
 		width: min(100%, 48rem);
 		min-width: 0;
 	}
@@ -1267,18 +1116,33 @@
 
 	/* short viewports (landscape phones, small windows) — width breakpoints miss
 	   these, so shrink by HEIGHT; scroll is the fallback below the smallest case */
+	/* short viewports: the art already shrinks via the available-height calc;
+	   compress the fixed chrome too so the art keeps as much of the budget as
+	   possible. tighter chrome = smaller constant in the calc. */
 	@media (max-height: 740px) {
 		.tuner { gap: 0.6rem; }
 		.radio-player { gap: 0.4rem; }
 		.now-block { gap: 0.35rem; }
 		.now-meta h2 { font-size: clamp(1.35rem, 4.2vh, 2rem); }
-		.art-stage { --cover-max-height: clamp(5rem, 15vh, 11rem); }
+		.art-stage {
+			--cover-max-height: clamp(
+				4.5rem,
+				calc(100dvh - var(--header-height, 0px) - var(--player-height, 0px) - 26rem),
+				26rem
+			);
+		}
 	}
 
 	@media (max-height: 560px) {
 		.now-meta h2 { font-size: 1.2rem; }
-		.art-stage { --cover-max-height: 4.5rem; }
 		/* no room for the deck on a very short screen */
 		.station-board { display: none; }
+		.art-stage {
+			--cover-max-height: clamp(
+				4.5rem,
+				calc(100dvh - var(--header-height, 0px) - var(--player-height, 0px) - 20rem),
+				26rem
+			);
+		}
 	}
 </style>
