@@ -18,7 +18,7 @@
 <div class="legal-container">
 	<article class="legal-content">
 		<h1>Privacy Policy</h1>
-		<p class="last-updated">Last updated: July 28, 2026</p>
+		<p class="last-updated">Last updated: August 4, 2026</p>
 
 		<p class="intro">
 			{APP_NAME} ("we", "us", or "our") is an audio streaming application built on the
@@ -80,6 +80,10 @@
 			<h2>3. How We Use It</h2>
 			<p>We use your data to provide the service, maintain your session, and improve the
 				platform. We do not sell your data or use it for advertising.</p>
+			<p>Public audio is analyzed automatically — audio embeddings for search and
+				recommendations, genre classification, and copyright fingerprinting. Derived data
+				from that analysis (similarity coordinates, suggested genres, cluster labels) powers
+				public features like search and the catalog map.</p>
 		</section>
 
 		<section>
