@@ -489,11 +489,12 @@
 	}
 
 	.station {
-		/* content-sized: growing here absorbed all viewport slack, pinning the
-		   rotation deck to the container's bottom edge with a dead band between.
-		   the deck now follows the player; slack falls below both. */
-		flex: 0 1 auto;
-		min-height: 0;
+		/* content-sized, and never compressed: growing here absorbed all viewport
+		   slack, pinning the rotation deck to the container's bottom edge with a
+		   dead band between; shrinking let a short viewport (docked player)
+		   squeeze the station so the progress bar spilled out underneath the
+		   deck. hold intrinsic height — the page scrolls when it must. */
+		flex: 0 0 auto;
 		/* fixed-width column so the dial + controls never resize with the
 		   (height-driven) artwork — the artwork is capped to this width too */
 		width: min(100%, 30rem);
