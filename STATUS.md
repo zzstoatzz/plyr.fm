@@ -45,6 +45,106 @@ plyr.fm should become:
 
 ## recent work
 
+### August 2026
+
+#### learning from sister-radio, and what we kept (#1752–#1756, August 3)
+
+**why**: [sister-radio](https://tangled.org/okami.mom/sister-radio) (the radio behind
+radio.wisp.place, which `/radio` already credits) does several things on its listener
+page worth adopting. #1752 tracks the full adoption list; the first slice shipped —
+and half of it was then deliberately removed.
+
+**what shipped**:
+- an ambient wash derived from the on-air artwork (#1753): accent colors sampled from
+  the cover drive a page-level glow through two cross-fading layers, plus a
+  `theme-color` tint for mobile chrome. **currently inert in production** — the images
+  hosts send no `Access-Control-Allow-Origin`, so the canvas sampling fails closed and
+  the page keeps its neutral look until a CORS header is added (deliberately held for
+  an infra sign-off).
+- long track titles marquee via the existing `ScrollingText` instead of clamping.
+- layout repairs the work surfaced (#1754, #1755): the rotation deck no longer pins to
+  the viewport bottom with a dead band above it, the station title is two deliberate
+  rows instead of an orphaned wrap, and a short viewport (docked player) can no longer
+  compress the station column until the progress bar renders under the deck.
+- `/radio` fits its viewport with **no vertical scrolling** (#1756): the artwork is the
+  page's one flexible element, sized from the space left after the fixed chrome.
+
+**decisions** (both are standing rules now):
+- the CRT treatment (scanlines, sweep, vignette, scan-load) shipped in #1753 and was
+  removed in #1756: it drew on top of artists' cover art, and the artwork is the
+  artist's intentional presentation — never the platform's to decorate. effects derived
+  *from* the art (the wash) are fine; effects *over* the art are not.
+- `/radio` is an appliance, not a document: if space runs short, content scales —
+  scrolling is not the fallback.
+
+#### three player bugs, one disease (#1757, #1759, #1762, August 3–4)
+
+**why**: toggling radio tune-in/stop with tracks in the queue made the player "eagerly
+consume and skip" through up-next; separately, switching stations while tuned in could
+leave the radio on-air but silent. all three bugs were work outliving the load it
+belonged to, on the one shared `<audio>` element.
+
+**what shipped**:
+- #1757: `playRadio`'s station-position seek waited on `loadedmetadata` via a bare
+  handler that was never removed — after stopping radio, the *queue track* that
+  re-attached got seeked to `min(station position, duration)` = its own end, fired
+  `ended`, advanced, and repeated: the queue eaten one track per boundary, with a
+  spurious play count each time. also fixed there: radio's clock was overwriting the
+  listener's saved queue position (no radio guard on progress persistence), and
+  stopping radio autoplayed the queue — stop now re-stages the queue track paused at
+  its saved position.
+- #1759: the #1757 restage ran before the jam sync branch and stranded jam
+  participants paused when radio released the player; jam keeps its pre-#1757 behavior.
+- #1762: a rapid station flip supersedes a load before its `play()` settles, and the
+  dead load's rejection (`AbortError`) ran an unguarded catch that paused the *new*
+  station — on-air, silent, footer showing play. rejections now bail unless their load
+  still owns the element.
+
+**technical notes**: the pattern (stale handler, stale clock, stale rejection) is
+structural: 22 writers to `player.paused` across 4 files, mode as three unrelated
+flags, coordination via effect ordering. `docs/research/2026-08-03-player-architecture.md`
+(#1758) surveys how MPD, mpv, ExoPlayer, AVFoundation, vidstack, shaka, hls.js,
+feishin, and jellyfin-web structure the same problem — they converge on single-funnel
+element ownership, per-load lifecycles, and explicit mode — and proposes five
+incremental adoptions, starting with load-session scoping. jam remains the
+least-exercised mode with no automated coverage.
+
+#### the radio switched tracks mid-song, by design (#1760, August 4)
+
+**why**: multiple listeners reported the radio randomly changing track deep into long
+songs. two server-side discontinuities: the rotation cache TTL was 60s while the
+sampler's ranking reads live signals (plays, likes, corpus order), so a rebuild could
+reshuffle the loop **any minute** and teleport `epoch % loop` mid-song; and the 4h
+period reseed replaced the loop wholesale at an arbitrary offset — a 64-minute mix has
+a ~27% chance of straddling any given boundary, which is why long tracks were the
+victims.
+
+**what shipped**: rotations are pinned for their entire period (the first build IS the
+rotation; the TTL setting is now just a kill switch), and period handovers land on
+track boundaries: the first request of a new period pins an anchor (redis `SET NX`, so
+every instance serves the same clock) at the moment the previous period's in-flight
+track ends, computed from the *cached* previous rotation — a peek, never a rebuild,
+because only what actually aired can hand over. during the grace window the old
+rotation finishes its track while `up_next` advertises the new rotation's head, so the
+client's natural ended→next flow rolls straight into the new period.
+
+**technical notes**: `/radio/state` determinism is now anchored in the shared cache
+rather than being a pure function of the clock; without redis it degrades to a clean
+track start at each period boundary — never a mid-song landing. rotation metadata
+(play/like counts in the payload) is now up to 4h stale; the per-request `liked`
+overlay stays fresh.
+
+#### the tag selection stays put (#1763, August 4)
+
+**why**: the homepage tag row was one flat scroller — browsing tags carried the clear
+chip and the selection itself out of view, and a selection restored from a previous
+session that wasn't in the fetched top-15 was invisible and undismissable.
+
+**what shipped**: the active selection (clear + every selected chip) is pinned left,
+always visible and individually deselectable, wrapping when many tags are selected;
+unselected tags scroll in the remaining space. selected chips render from the
+selection itself rather than the fetched list.
+
 ### July 2026
 
 #### the live station was on air and silent (#1749, #1750, July 31 — frontend-only releases)
@@ -517,4 +617,4 @@ see the [contributing guide](https://docs.plyr.fm/contributing/) for setup instr
 
 ---
 
-this is a living document. last updated 2026-07-31 (**the live station was on air and silent**. Documented #1749/#1750: the `firehose` station shipped and then played nothing. `canPlayType('application/vnd.apple.mpegurl')` answers "maybe" in Chrome, which cannot demux the MPEG-TS behind it, so hls.js now drives the broadcast wherever it is supported and native HLS is the fallback rather than the default. That fix then broke mobile, where autoplay is only granted to a `play()` in the same task as the tap and the dynamic `import('hls.js')` spent it — hls.js is warmed when `/radio/state` reports a live broadcast instead. New known issues: a failed radio play retries forever, and live playback is verified under WebKit emulation rather than on a real phone.) previously 2026-07-31 (**status maintenance for the July 25–31 window**. STATUS.md had grown back to 739 lines, so the July 10–29 detail moved to `.status_history/2026-07.md`: the label-context split #1709–#1713, contact addresses and per-client rate limits #1716/#1718, the moderation event log #1699–#1706, labels-that-act #1697, the operator-label SQL projection #1688, and the playlist-covers / edge-renditions / July-14-compute-incident cluster #1660–#1675, plus the account-status and artist-spacing write-ups #1725–#1730. Backfilled the one thing this window had shipped and never recorded here: **#1732–#1735/#1737**, where staged-upload cleanup had been deleting published tracks' audio — a content-hash `file_id` means re-uploading a file you already published stages the exact key it is served from, so the duplicate check rejected the upload and the failure cleanup deleted the live track's only copy. 20 tracks across 7 artists broken, 13 recovered, and the retrospective's own over-claims corrected in #1737. Rewrote current focus around the live-radio, firehose-ordering and media-integrity arcs and dropped the four moderation bullets that had become history. New known issue: seven tracks are not recoverable by us, and the media-integrity audit is not scheduled. Recorded the podcast recap for July 25–31.) previously 2026-07-31 (**radio grew a live source**. Documented #1741–#1746: `firehose` airs relay-eval's sonified atproto firehose live over HLS, modelled as *preemption* rather than a rotation entry, because the rotation's position is derived from wall-clock time and an unbounded broadcast in the loop would dissolve that. Also extended the #1736 entry: jetstream2 stopped delivering `fm.plyr.*` for 11 hours while still serving Bluesky profile events, so the consumer looked healthy and nothing alerted; the client now rotates across twelve hosts and detects a host gone blind on our own collections.) previously 2026-07-30 (**the firehose does not promise order**. Documented #1736: a repo's commit history was re-emitted upstream and `ingest_track_update` applied each replayed state as current. Commits are now ordered by repo `rev`, which survives re-delivery where jetstream's `time_us` does not.) previously 2026-07-29 (**identity is not a single host's opinion**. Documented #1725–#1730: an `#account` event describes the host that emitted it, not the person, and five migrated artists were hidden from every discovery surface as a result; `ingest_identity_update` had never once executed in production.) previously 2026-07-28 (**where a label reaches, and operational hygiene** — #1709–#1718). previously 2026-07-25 (**status maintenance for the July 2–25 window**, and **labels that act** #1697). earlier entries are preserved in `.status_history/2026-07.md`.
+this is a living document. last updated 2026-08-04 (**a radio day**. adopted the first slice of sister-radio's listener-page ideas (#1752–#1756) and established two standing rules out of it: never draw on artists' cover art, and `/radio` never scrolls vertically. fixed three player bugs that were all stale work outliving its load on the shared audio element — the queue-eating stale seek #1757, the jam restage regression #1759, the silent-but-on-air station flip #1762 — and wrote up why this class recurs plus what nine mature players do differently in `docs/research/2026-08-03-player-architecture.md` (#1758). fixed the server-side mid-song track switches (#1760): rotations were rebuilt with live scores every 60s and replaced wholesale every 4h; they're now pinned per period with track-boundary handovers anchored in redis. pinned the homepage tag selection (#1763). the artwork accent wash is inert pending a CORS header on the images hosts.) previously 2026-07-31 (**the live station was on air and silent**. Documented #1749/#1750: the `firehose` station shipped and then played nothing. `canPlayType('application/vnd.apple.mpegurl')` answers "maybe" in Chrome, which cannot demux the MPEG-TS behind it, so hls.js now drives the broadcast wherever it is supported and native HLS is the fallback rather than the default. That fix then broke mobile, where autoplay is only granted to a `play()` in the same task as the tap and the dynamic `import('hls.js')` spent it — hls.js is warmed when `/radio/state` reports a live broadcast instead. New known issues: a failed radio play retries forever, and live playback is verified under WebKit emulation rather than on a real phone.) previously 2026-07-31 (**status maintenance for the July 25–31 window**. STATUS.md had grown back to 739 lines, so the July 10–29 detail moved to `.status_history/2026-07.md`: the label-context split #1709–#1713, contact addresses and per-client rate limits #1716/#1718, the moderation event log #1699–#1706, labels-that-act #1697, the operator-label SQL projection #1688, and the playlist-covers / edge-renditions / July-14-compute-incident cluster #1660–#1675, plus the account-status and artist-spacing write-ups #1725–#1730. Backfilled the one thing this window had shipped and never recorded here: **#1732–#1735/#1737**, where staged-upload cleanup had been deleting published tracks' audio — a content-hash `file_id` means re-uploading a file you already published stages the exact key it is served from, so the duplicate check rejected the upload and the failure cleanup deleted the live track's only copy. 20 tracks across 7 artists broken, 13 recovered, and the retrospective's own over-claims corrected in #1737. Rewrote current focus around the live-radio, firehose-ordering and media-integrity arcs and dropped the four moderation bullets that had become history. New known issue: seven tracks are not recoverable by us, and the media-integrity audit is not scheduled. Recorded the podcast recap for July 25–31.) previously 2026-07-31 (**radio grew a live source**. Documented #1741–#1746: `firehose` airs relay-eval's sonified atproto firehose live over HLS, modelled as *preemption* rather than a rotation entry, because the rotation's position is derived from wall-clock time and an unbounded broadcast in the loop would dissolve that. Also extended the #1736 entry: jetstream2 stopped delivering `fm.plyr.*` for 11 hours while still serving Bluesky profile events, so the consumer looked healthy and nothing alerted; the client now rotates across twelve hosts and detects a host gone blind on our own collections.) previously 2026-07-30 (**the firehose does not promise order**. Documented #1736: a repo's commit history was re-emitted upstream and `ingest_track_update` applied each replayed state as current. Commits are now ordered by repo `rev`, which survives re-delivery where jetstream's `time_us` does not.) previously 2026-07-29 (**identity is not a single host's opinion**. Documented #1725–#1730: an `#account` event describes the host that emitted it, not the person, and five migrated artists were hidden from every discovery surface as a result; `ingest_identity_update` had never once executed in production.) previously 2026-07-28 (**where a label reaches, and operational hygiene** — #1709–#1718). previously 2026-07-25 (**status maintenance for the July 2–25 window**, and **labels that act** #1697). earlier entries are preserved in `.status_history/2026-07.md`.
