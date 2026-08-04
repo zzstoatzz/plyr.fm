@@ -1,5 +1,6 @@
 // ambient weather theme — location-aware atmospheric background + full tinting
 import { browser } from '$app/environment';
+import { safeLocalStorage } from './utils/safe-storage';
 
 type TemperatureUnit = 'fahrenheit' | 'celsius';
 
@@ -202,12 +203,12 @@ function blendColor(base: RGBA, tint: RGB, strength: number): string {
 }
 
 function cacheWeather(w: WeatherData): void {
-	try { localStorage.setItem('ambient_weather', JSON.stringify(w)); } catch { /* quota */ }
+	try { safeLocalStorage.setItem('ambient_weather', JSON.stringify(w)); } catch { /* quota */ }
 }
 
 function getCachedWeather(): WeatherData | null {
 	try {
-		const raw = localStorage.getItem('ambient_weather');
+		const raw = safeLocalStorage.getItem('ambient_weather');
 		return raw ? JSON.parse(raw) as WeatherData : null;
 	} catch { return null; }
 }
@@ -249,17 +250,17 @@ class AmbientManager {
 
 		try {
 			// check device-global location cache first
-			let locStr = localStorage.getItem('ambient_location');
+			let locStr = safeLocalStorage.getItem('ambient_location');
 
 			// migrate from old DID-scoped keys if needed
 			if (!locStr) {
-				for (let i = 0; i < localStorage.length; i++) {
-					const k = localStorage.key(i);
+				for (let i = 0; i < safeLocalStorage.length; i++) {
+					const k = safeLocalStorage.key(i);
 					if (k && k.startsWith('ambient_location:')) {
-						locStr = localStorage.getItem(k);
+						locStr = safeLocalStorage.getItem(k);
 						if (locStr) {
-							localStorage.setItem('ambient_location', locStr);
-							localStorage.removeItem(k);
+							safeLocalStorage.setItem('ambient_location', locStr);
+							safeLocalStorage.removeItem(k);
 						}
 						break;
 					}
@@ -278,7 +279,7 @@ class AmbientManager {
 			if (!this.location) {
 				const coords = await this.requestLocation();
 				this.location = coords;
-				localStorage.setItem('ambient_location', JSON.stringify(coords));
+				safeLocalStorage.setItem('ambient_location', JSON.stringify(coords));
 			}
 
 			// restore cached weather for instant gradient, then refresh in background
@@ -322,10 +323,10 @@ class AmbientManager {
 		this.clearFromDOM();
 
 		// clean up old DID-scoped enabled keys
-		for (let i = localStorage.length - 1; i >= 0; i--) {
-			const k = localStorage.key(i);
+		for (let i = safeLocalStorage.length - 1; i >= 0; i--) {
+			const k = safeLocalStorage.key(i);
 			if (k && k.startsWith('ambient_enabled')) {
-				localStorage.removeItem(k);
+				safeLocalStorage.removeItem(k);
 			}
 		}
 	}

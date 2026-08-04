@@ -1,3 +1,4 @@
+import { safeSessionStorage } from './utils/safe-storage';
 import { browser } from '$app/environment';
 import type { QueueResponse, QueueState, RepeatMode, Track } from './types';
 import { API_URL } from './config';
@@ -145,12 +146,12 @@ class Queue {
 		if (!browser || this.initialized) return;
 		this.initialized = true;
 
-		const storedTabId = sessionStorage.getItem('queue_tab_id');
+		const storedTabId = safeSessionStorage.getItem('queue_tab_id');
 		if (storedTabId) {
 			this.tabId = storedTabId;
 		} else {
 			this.tabId = this.createTabId();
-			sessionStorage.setItem('queue_tab_id', this.tabId);
+			safeSessionStorage.setItem('queue_tab_id', this.tabId);
 		}
 
 		// set up cross-tab synchronization
@@ -472,7 +473,7 @@ class Queue {
 			const sourceTabId = this.tabId ?? this.createTabId();
 			this.tabId = sourceTabId;
 			try {
-				sessionStorage.setItem('queue_tab_id', sourceTabId);
+				safeSessionStorage.setItem('queue_tab_id', sourceTabId);
 			} catch (error) {
 				console.warn('failed to persist queue tab id', error);
 			}

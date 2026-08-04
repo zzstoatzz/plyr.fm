@@ -1,3 +1,4 @@
+import { safeLocalStorage } from './utils/safe-storage';
 import { API_URL } from './config';
 import type { Track } from './types';
 
@@ -11,7 +12,7 @@ interface ForYouApiResponse {
 function loadSavedTags(): string[] {
 	if (typeof window === 'undefined') return [];
 	try {
-		const saved = localStorage.getItem('active_tags');
+		const saved = safeLocalStorage.getItem('active_tags');
 		return saved ? JSON.parse(saved) : [];
 	} catch {
 		return [];

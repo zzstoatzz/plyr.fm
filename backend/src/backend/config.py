@@ -231,11 +231,15 @@ class FrontendSettings(AppSettingsSection):
         parsed = urlparse(self.url)
         hostname = parsed.hostname or "localhost"
 
+        # "null" is the literal Origin sent by sandboxed iframes (embeds inside
+        # documents sandboxed without allow-same-origin) — since any https
+        # origin is already allowed in prod/staging, permitting it loosens
+        # nothing, and local dev needs it to test embeds.
         if hostname in ("localhost", "127.0.0.1"):
-            return r"^http://localhost:\d+$"
+            return r"^(http://localhost:\d+|null)$"
         else:
             # production / staging: any HTTPS origin + localhost for dev
-            return r"^(https://.+|http://localhost:\d+)$"
+            return r"^(https://.+|http://localhost:\d+|null)$"
 
 
 def normalize_postgres_driver(url: str) -> str:
