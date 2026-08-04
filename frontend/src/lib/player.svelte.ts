@@ -128,16 +128,20 @@ class PlayerState {
 		if (autoplay) {
 			// play immediately (preserve the gesture), then align to station position
 			el.play().catch((err: unknown) => {
+				// a rapid station flip supersedes this load before its play() settles;
+				// the rejection belongs to the DEAD load and must not touch state —
+				// unguarded, it flipped `paused` under the successor and left the
+				// radio on-air but silent (firehose → deep-cuts report, 2026-08-04)
+				if (this.radio !== assigned) return;
+				// the element aborting this play() because a new load started means
+				// a successor owns playback now — nothing to record here either
+				if ((err as { name?: string })?.name === 'AbortError') return;
 				this.paused = true;
 				// autoplay policy blocked a fresh tune-in: roll back to the pre-tune
 				// state so the ui reads "tune in" again instead of a silent on-air
 				// state ("stop" + LIVE). mid-session failures (station flips, track
 				// boundaries) keep radio mode — only the entry is rolled back.
-				if (
-					!wasActive &&
-					this.radio === assigned &&
-					(err as { name?: string })?.name === 'NotAllowedError'
-				) {
+				if (!wasActive && (err as { name?: string })?.name === 'NotAllowedError') {
 					this.radio = null;
 					this.currentTrack = previousTrack;
 				}
@@ -233,7 +237,13 @@ class PlayerState {
 			if (this.radio !== assigned) return; // tuned away while the chunk loaded
 			if (!Hls) return void (this.paused = true);
 			this.attachHls(Hls, el, np, playNative);
-			if (autoplay) el.play().catch(() => (this.paused = true));
+			if (autoplay) {
+				el.play().catch(() => {
+					// same staleness rule as the main play path: only the load that
+					// still owns the element may record its failure
+					if (this.radio === assigned) this.paused = true;
+				});
+			}
 		});
 	}
 

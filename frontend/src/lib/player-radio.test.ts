@@ -71,6 +71,45 @@ describe('playRadio under autoplay policy', () => {
 		await vi.waitFor(() => expect(player.paused).toBe(true));
 		expect(player.radio?.track.id).toBe(1);
 	});
+
+	// a rapid station flip supersedes the first load before its play() settles.
+	// the dead load's rejection must not pause the successor: unguarded, it left
+	// the radio on-air ("stop" shown) but silent (firehose → deep-cuts, 2026-08-04)
+	it('ignores a superseded load play() rejection during a station flip', async () => {
+		let rejectFirst: (err: unknown) => void = () => {};
+		playSpy.mockImplementationOnce(
+			() => new Promise((_, reject) => (rejectFirst = reject))
+		);
+		player.playRadio(nowPlaying(1));
+
+		playSpy.mockResolvedValueOnce(undefined);
+		player.playRadio(nowPlaying(2));
+		expect(player.paused).toBe(false);
+
+		// the first station's play() now rejects — after it was superseded
+		rejectFirst(new DOMException('interrupted by a new load request', 'AbortError'));
+		await Promise.resolve();
+		await Promise.resolve();
+
+		expect(player.paused).toBe(false);
+		expect(player.radio?.track.id).toBe(2);
+	});
+
+	it('ignores an AbortError even for the current load (a successor owns playback)', async () => {
+		playSpy.mockResolvedValueOnce(undefined);
+		player.playRadio(nowPlaying(1));
+
+		playSpy.mockRejectedValueOnce(
+			new DOMException('interrupted by a new load request', 'AbortError')
+		);
+		player.playRadio(nowPlaying(2));
+		// let the rejection propagate
+		await Promise.resolve();
+		await Promise.resolve();
+
+		expect(player.paused).toBe(false);
+		expect(player.radio?.track.id).toBe(2);
+	});
 });
 
 // the station-position seek waits on `loadedmetadata` of the radio source. it
