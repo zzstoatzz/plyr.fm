@@ -18,7 +18,7 @@
 <div class="legal-container">
 	<article class="legal-content">
 		<h1>Terms of Service</h1>
-		<p class="last-updated">Last updated: February 4, 2026</p>
+		<p class="last-updated">Last updated: August 4, 2026</p>
 
 		<p class="intro">
 			{APP_NAME} ("we", "us", or "our") is an audio streaming application built on the
@@ -57,6 +57,13 @@
 				You retain ownership of content you upload. By uploading, you grant us a non-exclusive,
 				worldwide, royalty-free license to use, reproduce, modify, and distribute your content
 				(including copies stored on your PDS) as necessary to provide the service.
+			</p>
+			<p>
+				Public content is analyzed automatically to power features of the service — including
+				audio embeddings for search and recommendations, genre classification, copyright
+				fingerprinting, and aggregate views of the catalog (such as a similarity map). Derived
+				data from this analysis (for example similarity coordinates, suggested genres, and
+				cluster labels) may be publicly visible.
 			</p>
 			<p>
 				You represent that you own or have the necessary rights to the content you upload, and that

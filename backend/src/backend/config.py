@@ -174,7 +174,7 @@ class LegalSettings(AppSettingsSection):
         description="USPTO DMCA agent registration number",
     )
     terms_last_updated: datetime = Field(
-        default=datetime(2026, 7, 28),
+        default=datetime(2026, 8, 4),
         description="Date the terms/privacy were last materially updated. "
         "Users who accepted before this date will be prompted to re-accept.",
     )

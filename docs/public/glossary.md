@@ -85,6 +85,10 @@ a shared listening room where multiple users control playback together in real t
 
 semantic search powered by [CLAP](https://github.com/LAION-AI/CLAP) audio embeddings. instead of matching keywords, it understands descriptions like "rainy afternoon jazz" and finds tracks with similar audio characteristics. currently feature-flagged (`vibe-search`) — not available to all users.
 
+### atlas
+
+a 2D map of the public catalog at [plyr.fm/atlas](https://plyr.fm/atlas). every public track is a point, positioned by audio similarity (the same CLAP embeddings that power mood search), with regions named from cluster analysis. zoom in and click a track to play it.
+
 ### portal
 
 the artist dashboard at [plyr.fm/portal](https://plyr.fm/portal). manage your tracks, albums, and playlists. (developer tokens and account settings live in [settings](https://plyr.fm/settings).)

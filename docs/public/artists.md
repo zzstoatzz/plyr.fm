@@ -37,7 +37,7 @@ your catalog isn't trapped here — other apps can access your tracks without pl
 
    <span id="auto-tagging"></span>when you add tags, you can opt in to **auto-tag with recommended genres** — plyr.fm runs [ML genre classification](https://github.com/zzstoatzz/plyr.fm/blob/main/docs/internal/backend/genre-classification.md) on the audio using the [effnet-discogs](https://replicate.com/mtg/effnet-discogs) model and suggests tags automatically. you can accept, remove, or add your own. auto-suggested tags typically appear within a few seconds of upload.
 
-5. **see it live** — your track is playable immediately and indexed for discovery
+5. **see it live** — your track is playable immediately and indexed for discovery — search, radio, and the [catalog map](https://plyr.fm/atlas)
 6. **embed it** — copy the embed code to put a player on your website or blog (see [embeds](#embeds) below)
 
 ## adult audio and content notices
