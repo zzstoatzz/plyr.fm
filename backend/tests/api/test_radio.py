@@ -52,6 +52,7 @@ class _FakeRedis:
 
     def __init__(self) -> None:
         self.store: dict[str, bytes | str] = {}
+        self.ttls: dict[str, int | None] = {}
 
     async def get(self, key: str) -> bytes | str | None:
         return self.store.get(key)
@@ -66,6 +67,7 @@ class _FakeRedis:
         if nx and key in self.store:
             return None
         self.store[key] = value
+        self.ttls[key] = ex
         return True
 
     async def delete(self, key: str) -> None:
@@ -831,7 +833,7 @@ async def test_concurrent_cache_misses_build_once(
         ]
 
     results = await asyncio.gather(
-        *(radio_cache.get_rotation("loved", 40, "period", build) for _ in range(10))
+        *(radio_cache.get_rotation("loved", 40, "period", build, 60) for _ in range(10))
     )
 
     assert builds == 1
@@ -1193,3 +1195,194 @@ async def test_a_station_can_credit_where_its_audio_comes_from(
     assert by_slug["firehose"]["source_url"] == "https://relay-eval.waow.tech/sonify"
     # a station built from the local catalog has no elsewhere to point at
     assert by_slug["loved"]["source_url"] is None
+
+
+# --- rotation continuity (mid-song switches) ---------------------------------
+# regression for the "radio randomly changes track mid-song" reports: the
+# rotation must stay pinned for its whole period (rebuilds see moved scores and
+# reshuffle the loop), and period handovers must land on track boundaries
+# instead of dropping the wall-clock into the middle of an arbitrary track.
+
+
+def _rotation_track(track_id: int, duration: int) -> RadioTrack:
+    return RadioTrack(
+        id=track_id,
+        title=f"t{track_id}",
+        artist="a",
+        artist_handle="a.plyr.fm",
+        artist_did="did:plc:a",
+        stream_url=f"https://api.plyr.fm/audio/t{track_id}",
+        file_type="mp3",
+        duration=duration,
+        artwork_url=None,
+        thumbnail_url=None,
+        atproto_record_uri=None,
+        atproto_record_cid=None,
+        created_at="2026-07-14T00:00:00+00:00",
+        tags=[],
+        like_count=0,
+        play_count=0,
+    )
+
+
+def _epoch(seconds: float) -> datetime:
+    return datetime.fromtimestamp(seconds, UTC)
+
+
+def test_live_window_is_anchored_not_epoch_modulus() -> None:
+    """track boundaries derive from the anchor, so a loop starts at track 0."""
+    rotation = [_rotation_track(1, 100), _rotation_track(2, 200)]
+    anchor = 1_000_000.0
+
+    index, progress, _, _ = radio_state._live_window(
+        _epoch(anchor + 30), rotation, anchor
+    )
+    assert (index, progress) == (0, 30)
+
+    index, progress, _, _ = radio_state._live_window(
+        _epoch(anchor + 150), rotation, anchor
+    )
+    assert (index, progress) == (1, 50)
+
+    # wraps on the loop, still anchored
+    index, progress, _, _ = radio_state._live_window(
+        _epoch(anchor + 300 + 10), rotation, anchor
+    )
+    assert (index, progress) == (0, 10)
+
+
+def test_crossing_track_end_extends_past_the_boundary() -> None:
+    """a track straddling the period boundary finishes before handover."""
+    rotation = [_rotation_track(1, 100), _rotation_track(2, 200)]
+    anchor = 0.0
+    # boundary lands 40s into track 2 (offset 140 of the 300s loop)
+    boundary = 300.0 * 7 + 140
+    assert radio_state._crossing_track_end(rotation, anchor, boundary) == boundary + 160
+
+    # a boundary exactly on a track edge hands over immediately
+    edge = 300.0 * 7 + 100
+    assert radio_state._crossing_track_end(rotation, anchor, edge) == edge + 200
+
+
+async def test_rotation_cache_pins_for_the_full_period(
+    rotation_cache: _FakeRedis,
+) -> None:
+    """a rebuild mid-period must serve the pinned rotation, not a reshuffle.
+
+    the sampler's ranking reads live signals, so the second build here returns
+    a different sequence — the cache must never let that reach listeners
+    within the period.
+    """
+    first = [_rotation_track(1, 100), _rotation_track(2, 200)]
+    second = [_rotation_track(2, 200), _rotation_track(1, 100)]
+    builds = iter([first, second])
+
+    async def build() -> list[RadioTrack]:
+        return next(builds)
+
+    got_first = await radio_cache.get_rotation("loved", 40, "p1", build, 15_000)
+    got_again = await radio_cache.get_rotation("loved", 40, "p1", build, 15_000)
+    assert [t.id for t in got_again] == [t.id for t in got_first] == [1, 2]
+
+    # and the entry's TTL is period-scale, not the old 60s
+    key = radio_cache.rotation_cache_key("loved", 40, "p1")
+    assert rotation_cache.ttls[key] == 15_000
+
+
+async def test_period_handover_lands_on_track_boundary(
+    rotation_cache: _FakeRedis,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """crossing a period boundary finishes the in-flight track, then starts the
+    new rotation from track 0 — never a mid-song teleport."""
+    from pydantic import TypeAdapter
+
+    period = radio_state.ROTATION_PERIOD_SECONDS
+    prev_rotation = [_rotation_track(1, 1000), _rotation_track(2, 3600)]
+    new_rotation = [_rotation_track(3, 500), _rotation_track(4, 700)]
+
+    async def fake_load_rotation(
+        db: object,
+        station: stations.Station,
+        limit: int,
+        now: datetime,
+        period_index: int,
+    ) -> list[RadioTrack]:
+        return new_rotation
+
+    monkeypatch.setattr(radio_state, "_load_rotation", fake_load_rotation)
+    station = stations.get_station(None)
+    assert station is not None
+
+    period_index = 1000
+    boundary = float(period_index * period)
+
+    # the previous period actually aired: its rotation sits in the cache and
+    # its loop was anchored at its own period start.
+    adapter = TypeAdapter(list[RadioTrack])
+    rotation_cache.store[
+        radio_cache.rotation_cache_key(station.slug, 40, str(period_index - 1))
+    ] = adapter.dump_json(prev_rotation)
+
+    # the previous loop is 4600s; the boundary lands 14400 % 4600 = 600s in,
+    # i.e. 600s into track 1 (1000s long), which has 400s left to play.
+    offset_at_boundary = period % 4600
+    assert offset_at_boundary == 600
+    expected_anchor = boundary + 400
+
+    # just after the boundary: still the previous rotation's in-flight track,
+    # and the new rotation's head is advertised as what's next
+    now = _epoch(boundary + 5)
+    rotation, anchor, upcoming = await radio_state._station_clock(
+        MagicMock(spec=AsyncSession), station, 40, now
+    )
+    assert [t.id for t in rotation] == [1, 2]
+    index, progress, _, _ = radio_state._live_window(now, rotation, anchor)
+    assert index is not None
+    assert (rotation[index].id, progress) == (1, 605)
+    assert upcoming is not None and upcoming[0].id == 3
+
+    # after the crossing track ends: the new rotation, starting at track 0
+    now = _epoch(expected_anchor + 5)
+    rotation, anchor, upcoming = await radio_state._station_clock(
+        MagicMock(spec=AsyncSession), station, 40, now
+    )
+    assert [t.id for t in rotation] == [3, 4]
+    assert anchor == expected_anchor
+    assert upcoming is None
+    index, progress, _, _ = radio_state._live_window(now, rotation, anchor)
+    assert index is not None
+    assert (rotation[index].id, progress) == (3, 5)
+
+
+async def test_cold_cache_boundary_anchors_at_period_start(
+    rotation_cache: _FakeRedis,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """with no record of the previous period, the new loop starts cleanly at
+    the boundary — a rebuilt guess of a lost rotation must not hand over."""
+    new_rotation = [_rotation_track(3, 500), _rotation_track(4, 700)]
+
+    async def fake_load_rotation(
+        db: object,
+        station: stations.Station,
+        limit: int,
+        now: datetime,
+        period_index: int,
+    ) -> list[RadioTrack]:
+        return new_rotation
+
+    monkeypatch.setattr(radio_state, "_load_rotation", fake_load_rotation)
+    station = stations.get_station(None)
+    assert station is not None
+
+    boundary = float(1000 * radio_state.ROTATION_PERIOD_SECONDS)
+    now = _epoch(boundary + 30)
+    rotation, anchor, upcoming = await radio_state._station_clock(
+        MagicMock(spec=AsyncSession), station, 40, now
+    )
+    assert anchor == boundary
+    assert upcoming is None
+    index, progress, _, _ = radio_state._live_window(now, rotation, anchor)
+    assert index is not None
+    assert (rotation[index].id, progress) == (3, 30)

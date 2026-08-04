@@ -47,8 +47,16 @@ async def get_rotation(
     limit: int,
     period: str,
     build: Callable[[], Awaitable[list[RadioTrack]]],
+    ttl_seconds: int,
 ) -> list[RadioTrack]:
-    """Return the anonymous rotation, building it at most once per TTL.
+    """Return the anonymous rotation, building it at most once per period.
+
+    The first build within a period IS the rotation: the sampler's ranking
+    reads live signals (plays, likes, corpus order), so a rebuild minutes
+    later can produce a *different* sequence, and any sequence change makes
+    the wall-clock playhead land mid-song somewhere else. ``ttl_seconds``
+    must therefore cover the rest of the period (plus the lookback the
+    boundary handover needs) — the caller computes it.
 
     ``build`` runs on a cache miss, guarded by a single-flight lock so
     concurrent misses don't each hit the database. Any Redis failure falls
@@ -82,7 +90,7 @@ async def get_rotation(
                 await redis.set(
                     key,
                     _rotation_adapter.dump_json(rotation),
-                    ex=settings.radio.rotation_cache_ttl_seconds,
+                    ex=ttl_seconds,
                 )
             except Exception:
                 logger.debug("failed to write rotation cache for %s", station_slug)
@@ -92,6 +100,67 @@ async def get_rotation(
             await redis.delete(f"{key}:build")
         except Exception:
             logger.debug("failed to release rotation build lock for %s", station_slug)
+
+
+async def peek_rotation(
+    station_slug: str, limit: int, period: str
+) -> list[RadioTrack] | None:
+    """Return a cached rotation without building on miss.
+
+    The period-handover anchor derives from what was *actually airing* in the
+    previous period; if that rotation is no longer cached, rebuilding it now
+    would produce a guess (the sampler reads live signals), so callers treat a
+    miss as "unknown" instead.
+    """
+    if settings.radio.rotation_cache_ttl_seconds <= 0:
+        return None
+    try:
+        redis = get_async_redis_client()
+        if cached := await redis.get(rotation_cache_key(station_slug, limit, period)):
+            return _rotation_adapter.validate_json(cached)
+    except Exception:
+        logger.debug("rotation cache unavailable for %s peek", station_slug)
+    return None
+
+
+def anchor_cache_key(station_slug: str, limit: int, period: str) -> str:
+    return f"{ROTATION_CACHE_PREFIX}anchor:{station_slug}:{limit}:{period}"
+
+
+async def get_period_anchor(
+    station_slug: str,
+    limit: int,
+    period: str,
+    compute: Callable[[], Awaitable[float]],
+    ttl_seconds: int,
+) -> float | None:
+    """Return the period's loop anchor (epoch seconds), pinning the first value.
+
+    The anchor is when the period's rotation starts playing from track 0 —
+    normally the moment the previous period's in-flight track ends, so period
+    handovers land on track boundaries instead of cutting a song. It is
+    computed once per period and pinned with SET NX so every instance serves
+    the same clock. Returns None when Redis is unavailable (or caching is
+    disabled); the caller falls back to anchoring at the period start.
+    """
+    if settings.radio.rotation_cache_ttl_seconds <= 0:
+        return None
+    key = anchor_cache_key(station_slug, limit, period)
+    try:
+        redis = get_async_redis_client()
+        if cached := await redis.get(key):
+            return float(cached)
+        value = await compute()
+        # NX: if another instance computed concurrently, theirs wins — reread.
+        stored = await redis.set(key, repr(value), nx=True, ex=ttl_seconds)
+        if stored:
+            return value
+        if cached := await redis.get(key):
+            return float(cached)
+        return value
+    except Exception:
+        logger.debug("anchor cache unavailable for %s", station_slug)
+        return None
 
 
 async def _wait_for_rotation(key: str) -> list[RadioTrack] | None:
