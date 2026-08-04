@@ -43,7 +43,7 @@ max_lines = 1868
 
 [[rules]]
 path = "backend/src/backend/config.py"
-max_lines = 1257
+max_lines = 1262
 
 [[rules]]
 path = "backend/src/backend/storage/r2.py"
@@ -360,3 +360,11 @@ max_lines = 634
 [[rules]]
 path = "frontend/src/routes/u/[[]handle[]]/+page.svelte"
 max_lines = 1444
+
+[[rules]]
+path = "scripts/build_atlas.py"
+max_lines = 582
+
+[[rules]]
+path = "frontend/src/routes/atlas/renderer.ts"
+max_lines = 1171

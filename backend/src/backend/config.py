@@ -365,6 +365,11 @@ class StorageSettings(AppSettingsSection):
         validation_alias="COSTS_JSON_URL",
         description="URL for public costs dashboard JSON",
     )
+    atlas_json_url: str = Field(
+        default="https://pub-68f2c7379f204d81bdf65152b0ff0207.r2.dev/atlas.json",
+        validation_alias="ATLAS_JSON_URL",
+        description="URL for the /atlas semantic map JSON",
+    )
 
     @computed_field
     @property

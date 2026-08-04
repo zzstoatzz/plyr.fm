@@ -44,6 +44,10 @@ export default [
 				location: 'readonly',
 				history: 'readonly',
 				crypto: 'readonly',
+				Image: 'readonly',
+				MutationObserver: 'readonly',
+				requestAnimationFrame: 'readonly',
+				performance: 'readonly',
 				// svelte 5 runes
 				$state: 'readonly',
 				$derived: 'readonly',

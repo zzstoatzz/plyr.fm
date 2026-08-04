@@ -76,3 +76,31 @@ async def get_costs() -> Response:
         media_type="application/json",
         headers={"Cache-Control": "public, max-age=3600"},
     )
+
+
+@router.get("/atlas")
+async def get_atlas() -> Response:
+    """proxy the atlas JSON from R2 to avoid CORS issues.
+
+    atlas.json is rebuilt daily by a GitHub Action (scripts/build_atlas.py)
+    and uploaded to the stats bucket. this endpoint proxies it so the /atlas
+    page can fetch without CORS.
+    """
+    atlas_url = settings.storage.atlas_json_url
+    if not atlas_url:
+        raise HTTPException(status_code=404, detail="atlas not configured")
+
+    async with httpx.AsyncClient() as client:
+        try:
+            resp = await client.get(atlas_url, timeout=10)
+            resp.raise_for_status()
+        except httpx.HTTPError as e:
+            raise HTTPException(
+                status_code=502, detail=f"failed to fetch atlas: {e}"
+            ) from e
+
+    return Response(
+        content=resp.content,
+        media_type="application/json",
+        headers={"Cache-Control": "public, max-age=900"},
+    )
