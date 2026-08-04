@@ -71,3 +71,5 @@ simple-build.log
 # status-maintenance audio + transcript (carried between workflow phases as artifacts, never committed)
 update.wav
 podcast_script.txt
+frontend/static/atlas.json
+atlas.json
