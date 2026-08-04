@@ -18,6 +18,7 @@
 	import { afterNavigate, goto } from '$app/navigation';
 	import { auth } from '$lib/auth.svelte';
 	import { preferences, getContrastColor } from '$lib/preferences.svelte';
+	import { safeLocalStorage } from '$lib/utils/safe-storage';
 	import { ambient } from '$lib/ambient.svelte';
 	import { moderation } from '$lib/moderation.svelte';
 	import { player } from '$lib/player.svelte';
@@ -101,7 +102,7 @@
 			untrack(() => {
 				if (!showQueue) {
 					showQueue = true;
-					localStorage.setItem('showQueue', 'true');
+					safeLocalStorage.setItem('showQueue', 'true');
 				}
 			});
 		}
@@ -373,7 +374,7 @@
 
 	onMount(() => {
 		// apply saved accent color from localStorage
-		const savedAccent = localStorage.getItem('accentColor');
+		const savedAccent = safeLocalStorage.getItem('accentColor');
 		if (savedAccent) {
 			document.documentElement.style.setProperty('--accent', savedAccent);
 			document.documentElement.style.setProperty('--accent-hover', getHoverColor(savedAccent));
@@ -381,7 +382,7 @@
 		}
 
 		// apply saved theme from localStorage
-		const savedTheme = localStorage.getItem('theme') as 'dark' | 'light' | 'system' | 'live' | null;
+		const savedTheme = safeLocalStorage.getItem('theme') as 'dark' | 'light' | 'system' | 'live' | null;
 		if (savedTheme) {
 			preferences.applyTheme(savedTheme);
 		} else {
@@ -390,7 +391,7 @@
 		}
 
 		// restore queue visibility preference
-		const savedQueueVisibility = localStorage.getItem('showQueue');
+		const savedQueueVisibility = safeLocalStorage.getItem('showQueue');
 		if (savedQueueVisibility !== null) {
 			showQueue = savedQueueVisibility === 'true';
 		}
@@ -401,7 +402,7 @@
 		// listen for system theme changes
 		const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
 		const handleSystemThemeChange = () => {
-			const currentTheme = localStorage.getItem('theme');
+			const currentTheme = safeLocalStorage.getItem('theme');
 			if (currentTheme === 'system') {
 				preferences.applyTheme('system');
 			}
@@ -430,7 +431,7 @@
 
 	function toggleQueue() {
 		showQueue = !showQueue;
-		localStorage.setItem('showQueue', showQueue.toString());
+		safeLocalStorage.setItem('showQueue', showQueue.toString());
 	}
 </script>
 
@@ -476,13 +477,22 @@
 	{/if}
 
 	<script>
-		// prevent flash by applying saved settings immediately
+		// prevent flash by applying saved settings immediately.
+		// inline script — can't import the safe-storage helper, so read via a
+		// local shim (localStorage access throws in sandboxed embeds).
 		if (typeof window !== 'undefined') {
 			(function() {
 				const root = document.documentElement;
+				const getItem = (key) => {
+					try {
+						return localStorage.getItem(key);
+					} catch {
+						return null;
+					}
+				};
 
 				// apply accent color
-				const savedAccent = localStorage.getItem('accentColor');
+				const savedAccent = getItem('accentColor');
 				if (savedAccent) {
 					root.style.setProperty('--accent', savedAccent);
 					// simple lightening for hover state
@@ -494,7 +504,7 @@
 				}
 
 				// apply font
-				const savedFont = localStorage.getItem('fontFamily');
+				const savedFont = getItem('fontFamily');
 				if (savedFont) {
 					const fonts = {
 						'mono': "'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', 'Consolas', monospace",
@@ -508,7 +518,7 @@
 				}
 
 				// apply theme
-				const savedTheme = localStorage.getItem('theme') || 'dark';
+				const savedTheme = getItem('theme') || 'dark';
 				let effectiveTheme = savedTheme;
 				if (savedTheme === 'live') {
 					effectiveTheme = 'dark';

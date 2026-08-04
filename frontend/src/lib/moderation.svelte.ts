@@ -1,5 +1,6 @@
 // content moderation state - tracks sensitive images
 import { browser } from '$app/environment';
+import { safeLocalStorage } from './utils/safe-storage';
 import { API_URL } from '$lib/config';
 
 const STORAGE_KEY = 'plyr:sensitive-images';
@@ -78,7 +79,7 @@ class ModerationManager {
 	 */
 	private loadFromStorage(): void {
 		try {
-			const stored = localStorage.getItem(STORAGE_KEY);
+			const stored = safeLocalStorage.getItem(STORAGE_KEY);
 			if (stored) {
 				const parsed: SensitiveImagesData = JSON.parse(stored);
 				this.data = {
@@ -96,7 +97,7 @@ class ModerationManager {
 	 */
 	private saveToStorage(data: SensitiveImagesData): void {
 		try {
-			localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+			safeLocalStorage.setItem(STORAGE_KEY, JSON.stringify(data));
 		} catch {
 			// ignore storage errors (quota exceeded, etc)
 		}

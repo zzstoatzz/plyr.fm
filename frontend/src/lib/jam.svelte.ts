@@ -1,3 +1,4 @@
+import { safeSessionStorage } from './utils/safe-storage';
 import { browser } from '$app/environment';
 import { API_URL } from './config';
 import { auth } from '$lib/auth.svelte';
@@ -35,8 +36,8 @@ class JamState {
 	constructor() {
 		if (browser) {
 			this.clientId =
-				sessionStorage.getItem('jam_client_id') ?? crypto.randomUUID();
-			sessionStorage.setItem('jam_client_id', this.clientId);
+				safeSessionStorage.getItem('jam_client_id') ?? crypto.randomUUID();
+			safeSessionStorage.setItem('jam_client_id', this.clientId);
 		}
 	}
 

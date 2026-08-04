@@ -4,6 +4,7 @@
 // single source of truth.
 import { API_URL } from './config';
 import { player, type RadioNowPlaying } from './player.svelte';
+import { safeLocalStorage } from './utils/safe-storage';
 import type { Track } from './types';
 
 export interface RadioTrack {
@@ -107,7 +108,7 @@ class Radio {
 
 	/** the last station the listener picked, if any (drives bare /radio) */
 	private remembered(): string | null {
-		return typeof localStorage !== 'undefined' ? localStorage.getItem(STATION_STORAGE_KEY) : null;
+		return typeof window !== 'undefined' ? safeLocalStorage.getItem(STATION_STORAGE_KEY) : null;
 	}
 
 	/** slug of the next/previous station in the lineup (wraps); null if <2 stations.
@@ -130,8 +131,8 @@ class Radio {
 		// fall through, or it never matches station_slug and reloads endlessly.
 		if (this.state && (target === null || target === this.state.station_slug)) return;
 		this.station = target;
-		if (slug && typeof localStorage !== 'undefined') {
-			localStorage.setItem(STATION_STORAGE_KEY, slug);
+		if (slug && typeof window !== 'undefined') {
+			safeLocalStorage.setItem(STATION_STORAGE_KEY, slug);
 		}
 		this.switching = true;
 		try {
@@ -143,8 +144,8 @@ class Radio {
 			// and being shown another would be worse than being told it is off air.
 			if (slug === null && target !== null && !this.hasSomethingOnAir) {
 				this.station = null;
-				if (typeof localStorage !== 'undefined') {
-					localStorage.removeItem(STATION_STORAGE_KEY);
+				if (typeof window !== 'undefined') {
+					safeLocalStorage.removeItem(STATION_STORAGE_KEY);
 				}
 				await this.loadState();
 			}
@@ -225,7 +226,7 @@ class Radio {
 				// a persisted station slug no longer exists (e.g. renamed) — drop it
 				// and fall back to the server default rather than going "off air".
 				this.station = null;
-				if (typeof localStorage !== 'undefined') localStorage.removeItem(STATION_STORAGE_KEY);
+				if (typeof window !== 'undefined') safeLocalStorage.removeItem(STATION_STORAGE_KEY);
 				return this.loadState();
 			}
 			if (!response.ok) throw new Error(`radio returned ${response.status}`);

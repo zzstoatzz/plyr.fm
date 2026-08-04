@@ -1,3 +1,4 @@
+import { safeLocalStorage } from './utils/safe-storage';
 import { API_URL } from './config';
 import type { Track } from './types';
 import { preferences } from './preferences.svelte';
@@ -22,12 +23,12 @@ function loadCachedTracks(): CachedTracksData {
 		return { tracks: [], nextCursor: null, hasMore: true };
 	}
 	try {
-		const cached = localStorage.getItem('tracks_cache');
+		const cached = safeLocalStorage.getItem('tracks_cache');
 		if (cached) {
 			const data = JSON.parse(cached);
 			// check if cache has the new is_liked field, if not invalidate
 			if (data.tracks && data.tracks.length > 0 && !('is_liked' in data.tracks[0])) {
-				localStorage.removeItem('tracks_cache');
+				safeLocalStorage.removeItem('tracks_cache');
 				return { tracks: [], nextCursor: null, hasMore: true };
 			}
 			return {
@@ -45,7 +46,7 @@ function loadCachedTracks(): CachedTracksData {
 function loadSavedTags(): string[] {
 	if (typeof window === 'undefined') return [];
 	try {
-		const saved = localStorage.getItem('active_tags');
+		const saved = safeLocalStorage.getItem('active_tags');
 		return saved ? JSON.parse(saved) : [];
 	} catch {
 		return [];
@@ -64,7 +65,7 @@ class TracksCache {
 	private persistToStorage(): void {
 		if (typeof window !== 'undefined' && this.activeTags.length === 0) {
 			try {
-				localStorage.setItem(
+				safeLocalStorage.setItem(
 					'tracks_cache',
 					JSON.stringify({
 						tracks: this.tracks,
@@ -143,7 +144,7 @@ class TracksCache {
 	invalidate(): void {
 		// clear cache and reset pagination state - next fetch will get fresh data
 		if (typeof window !== 'undefined') {
-			localStorage.removeItem('tracks_cache');
+			safeLocalStorage.removeItem('tracks_cache');
 		}
 		this.nextCursor = null;
 		this.hasMore = true;
@@ -155,9 +156,9 @@ class TracksCache {
 		this.hasMore = true;
 		if (typeof window !== 'undefined') {
 			if (tags.length > 0) {
-				localStorage.setItem('active_tags', JSON.stringify(tags));
+				safeLocalStorage.setItem('active_tags', JSON.stringify(tags));
 			} else {
-				localStorage.removeItem('active_tags');
+				safeLocalStorage.removeItem('active_tags');
 			}
 		}
 		this.fetch(true);

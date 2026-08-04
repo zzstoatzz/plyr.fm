@@ -41,6 +41,7 @@ class TestProductionCorsOrigins:
             "https://example.com",
             "http://localhost:5173",
             "http://localhost:3000",
+            "null",  # sandboxed iframes (embeds) send the literal Origin: null
         ],
     )
     def test_allowed(self, regex: str, origin: str) -> None:
@@ -71,6 +72,7 @@ class TestStagingCorsOrigins:
             "https://docs.stg.plyr.fm",
             "https://any-site.example.com",
             "http://localhost:5173",
+            "null",
         ],
     )
     def test_allowed(self, regex: str, origin: str) -> None:
@@ -101,3 +103,6 @@ class TestLocalDevCorsOrigins:
 
     def test_rejects_remote(self, regex: str) -> None:
         assert not _matches(regex, "https://plyr.fm")
+
+    def test_allows_null(self, regex: str) -> None:
+        assert _matches(regex, "null")

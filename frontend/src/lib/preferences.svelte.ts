@@ -1,5 +1,6 @@
 // user preferences state management
 import { browser } from '$app/environment';
+import { safeLocalStorage } from './utils/safe-storage';
 import { API_URL, getServerConfig } from '$lib/config';
 import { auth } from '$lib/auth.svelte';
 import { ambient } from '$lib/ambient.svelte';
@@ -185,7 +186,7 @@ class PreferencesManager {
 
 	setAutoDownloadLiked(enabled: boolean): void {
 		if (browser) {
-			localStorage.setItem('autoDownloadLiked', enabled ? '1' : '0');
+			safeLocalStorage.setItem('autoDownloadLiked', enabled ? '1' : '0');
 		}
 		if (this.data) {
 			this.data = { ...this.data, auto_download_liked: enabled };
@@ -198,7 +199,7 @@ class PreferencesManager {
 				// attempt activation — revert to dark if geolocation denied
 				const ok = await ambient.activate();
 				if (!ok) {
-					localStorage.setItem('theme', 'dark');
+					safeLocalStorage.setItem('theme', 'dark');
 					this.applyTheme('dark');
 					this.update({ theme: 'dark' });
 					return;
@@ -206,7 +207,7 @@ class PreferencesManager {
 			} else {
 				ambient.deactivate();
 			}
-			localStorage.setItem('theme', theme);
+			safeLocalStorage.setItem('theme', theme);
 			this.applyTheme(theme);
 		}
 		this.update({ theme });
@@ -266,7 +267,7 @@ class PreferencesManager {
 				const data = await response.json();
 				// theme comes from server (per-account), localStorage is just a flash-prevention cache
 				const serverTheme = (data.theme as Theme) ?? DEFAULT_PREFERENCES.theme;
-				const storedAutoDownload = localStorage.getItem('autoDownloadLiked') === '1';
+				const storedAutoDownload = safeLocalStorage.getItem('autoDownloadLiked') === '1';
 				this.data = {
 					accent_color: data.accent_color ?? null,
 					auto_advance: data.auto_advance ?? DEFAULT_PREFERENCES.auto_advance,
@@ -285,19 +286,19 @@ class PreferencesManager {
 				};
 			} else {
 				// server error — fall back to localStorage cache
-				const storedTheme = localStorage.getItem('theme') as Theme | null;
-				const storedAutoDownload = localStorage.getItem('autoDownloadLiked') === '1';
+				const storedTheme = safeLocalStorage.getItem('theme') as Theme | null;
+				const storedAutoDownload = safeLocalStorage.getItem('autoDownloadLiked') === '1';
 				this.data = { ...DEFAULT_PREFERENCES, theme: storedTheme ?? DEFAULT_PREFERENCES.theme, auto_download_liked: storedAutoDownload };
 			}
 			// sync localStorage cache and apply
 			if (browser) {
-				localStorage.setItem('theme', this.data.theme);
+				safeLocalStorage.setItem('theme', this.data.theme);
 				if (this.data.accent_color) {
-					localStorage.setItem('accentColor', this.data.accent_color);
+					safeLocalStorage.setItem('accentColor', this.data.accent_color);
 					this.applyAccentColor(this.data.accent_color);
 				}
 				const font = this.data.ui_settings?.font_family ?? DEFAULT_FONT;
-				localStorage.setItem('fontFamily', font);
+				safeLocalStorage.setItem('fontFamily', font);
 				this.applyFont(font);
 				this.applyTheme(this.data.theme);
 				if (this.data.theme === 'live') {
@@ -309,7 +310,7 @@ class PreferencesManager {
 		} catch (error) {
 			console.error('failed to fetch preferences:', error);
 			// network error — fall back to localStorage cache
-			const storedTheme = localStorage.getItem('theme') as Theme | null;
+			const storedTheme = safeLocalStorage.getItem('theme') as Theme | null;
 			this.data = { ...DEFAULT_PREFERENCES, theme: storedTheme ?? DEFAULT_PREFERENCES.theme };
 		} finally {
 			this.loading = false;

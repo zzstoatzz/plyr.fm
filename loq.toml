@@ -43,7 +43,7 @@ max_lines = 1868
 
 [[rules]]
 path = "backend/src/backend/config.py"
-max_lines = 1262
+max_lines = 1266
 
 [[rules]]
 path = "backend/src/backend/storage/r2.py"
@@ -131,7 +131,7 @@ max_lines = 955
 
 [[rules]]
 path = "frontend/src/routes/+layout.svelte"
-max_lines = 846
+max_lines = 856
 
 [[rules]]
 path = "frontend/src/routes/costs/+page.svelte"
