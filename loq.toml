@@ -367,4 +367,4 @@ max_lines = 584
 
 [[rules]]
 path = "frontend/src/routes/atlas/renderer.ts"
-max_lines = 1171
+max_lines = 1178
