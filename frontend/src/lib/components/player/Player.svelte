@@ -120,10 +120,27 @@
 		}
 	});
 
-	// sync playback position to queue for persistence (skip in jam mode — server owns position)
+	// sync playback position to queue for persistence. only while the element is
+	// actually wired to the current queue track: in jam mode the server owns the
+	// position; in radio mode the element's clock is the station's; and in the
+	// gap around a source swap (tuning out of radio, hydration before attach)
+	// the element still reads the OLD source's time — persisting any of those
+	// overwrites the listener's saved queue position with garbage that then
+	// syncs to the server.
 	$effect(() => {
-		if (!jam.active) {
-			queue.progressMs = Math.round(player.currentTime * 1000);
+		// read the position FIRST: it is this effect's re-run trigger, and a
+		// guard that short-circuits before reading it would never subscribe
+		const positionMs = Math.round(player.currentTime * 1000);
+		if (
+			!jam.active &&
+			!player.radio &&
+			player.currentTrack &&
+			attachedTrackId === player.currentTrack.id &&
+			// a pending restore reads progressMs on `loadeddata`; persisting the
+			// element's transient 0 before that would erase the saved position
+			positionRestored
+		) {
+			queue.progressMs = positionMs;
 		}
 	});
 
@@ -375,15 +392,18 @@
 		audio.addEventListener(
 			'loadeddata',
 			() => {
-				// restore position on initial hydration only
+				// restore the saved position (hydration, or re-staging the queue
+				// after radio releases the player). always mark the attempt done —
+				// with nothing to restore there is still nothing pending, and
+				// progress persistence stays paused until this flips true.
 				if (!positionRestored && queue.progressMs > 0 && player.audioElement) {
 					const positionSec = queue.progressMs / 1000;
 					// don't restore if near the end (within 5s of duration)
 					if (player.duration === 0 || positionSec < player.duration - 5) {
 						player.audioElement.currentTime = positionSec;
 					}
-					positionRestored = true;
 				}
+				positionRestored = true;
 				isLoadingTrack = false;
 				// unlock play counting now that new audio is ready
 				// (prevents spurious fires from stale currentTime during transitions)
@@ -582,10 +602,34 @@
 	let previousQueueIndex = $state<number>(-1);
 	let shouldAutoPlay = $state(false);
 
+	// whether the player is coming out of radio mode this flush — set while radio
+	// holds the player, consumed by the sync below so releasing back to the queue
+	// restages the listener's track paused instead of blasting into playback.
+	let leavingRadio = false;
+
 	$effect(() => {
 		// radio owns the player while active — don't let passive queue syncs
 		// (cross-tab, refetch, hydration) pull a track in underneath it.
-		if (player.radio) return;
+		if (player.radio) {
+			leavingRadio = true;
+			return;
+		}
+		if (leavingRadio) {
+			leavingRadio = false;
+			// radio released the player (stop, or a queue action took over). when
+			// nothing else claimed the element, restage the queue's current track
+			// paused, and let the loader's hydration path restore the saved
+			// position — "stop" means silence, not "resume the queue at full
+			// volume from wherever it was".
+			if (!player.currentTrack && queue.currentTrack) {
+				player.currentTrack = queue.currentTrack;
+				previousQueueIndex = queue.currentIndex;
+				player.paused = true;
+				shouldAutoPlay = false;
+				positionRestored = false;
+				return;
+			}
+		}
 		// in jam mode, jam state drives the player directly
 		if (jam.active && jam.currentTrack) {
 			const trackChanged = jam.currentTrack.id !== player.currentTrack?.id;

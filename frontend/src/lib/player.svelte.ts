@@ -44,6 +44,12 @@ class PlayerState {
 	/** live hls.js instance, when a broadcast needs one. not reactive — it is a
 	 * teardown handle, never rendered. */
 	private hls: { destroy(): void } | null = null;
+	/** pending station-position seek, waiting on the radio source's metadata.
+	 * tracked so it can be removed the moment the element points anywhere else —
+	 * left attached, it fires on the NEXT source (a queue track after stopping
+	 * radio) and seeks it to min(station position, duration): the end of the
+	 * track, which then fires `ended` and eats the queue one track at a time. */
+	private radioSeek: (() => void) | null = null;
 	/** hls.js itself, once fetched, plus the in-flight fetch. cached so a tune-in
 	 * can attach synchronously inside the tap that asked for it. */
 	private hlsModule: HlsModule | null = null;
@@ -117,6 +123,7 @@ class PlayerState {
 		this.unlockPlayCount();
 		const el = this.audioElement;
 		if (!el) return;
+		this.clearRadioSeek(el);
 		void this.attachRadioSource(el, np, assigned, autoplay);
 		if (autoplay) {
 			// play immediately (preserve the gesture), then align to station position
@@ -141,12 +148,27 @@ class PlayerState {
 		// a broadcast has no position to resume — it is wherever it is.
 		if (np.live) return;
 		const seek = () => {
+			this.radioSeek = null;
+			// tuned away or stopped while metadata loaded — this seek belongs to a
+			// source the element no longer plays.
+			if (this.radio !== assigned) return;
 			if (np.start_at > 0 && Number.isFinite(el.duration)) {
 				el.currentTime = Math.min(np.start_at, el.duration);
 			}
 		};
 		if (el.readyState >= 1) seek();
-		else el.onloadedmetadata = seek;
+		else {
+			this.radioSeek = seek;
+			el.addEventListener('loadedmetadata', seek, { once: true });
+		}
+	}
+
+	/** drop any pending station-position seek so it can't fire against a source
+	 * it wasn't meant for. */
+	private clearRadioSeek(el: HTMLAudioElement) {
+		if (!this.radioSeek) return;
+		el.removeEventListener('loadedmetadata', this.radioSeek);
+		this.radioSeek = null;
 	}
 
 	/** fetch hls.js ahead of a tune-in, so attaching can happen synchronously.
@@ -248,7 +270,10 @@ class PlayerState {
 	stopRadio() {
 		this.radio = null;
 		this.paused = true;
-		this.audioElement?.pause();
+		if (this.audioElement) {
+			this.audioElement.pause();
+			this.clearRadioSeek(this.audioElement);
+		}
 		this.detachHls();
 	}
 

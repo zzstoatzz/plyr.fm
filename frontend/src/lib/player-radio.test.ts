@@ -21,8 +21,8 @@ function track(id: number): Track {
 	};
 }
 
-function nowPlaying(id: number): RadioNowPlaying {
-	return { track: track(id), stream_url: `https://audio.test/${id}.mp3`, start_at: 0 };
+function nowPlaying(id: number, startAt = 0): RadioNowPlaying {
+	return { track: track(id), stream_url: `https://audio.test/${id}.mp3`, start_at: startAt };
 }
 
 const blocked = () =>
@@ -70,6 +70,50 @@ describe('playRadio under autoplay policy', () => {
 		player.playRadio(nowPlaying(1));
 		await vi.waitFor(() => expect(player.paused).toBe(true));
 		expect(player.radio?.track.id).toBe(1);
+	});
+});
+
+// the station-position seek waits on `loadedmetadata` of the radio source. it
+// must never fire against whatever the element plays NEXT: left attached after
+// stopping radio, it seeked the listener's queue track to min(station position,
+// duration) — the end of the track — which fired `ended` and ate the queue one
+// track at a time on every radio toggle.
+describe('station-position seek lifecycle', () => {
+	function setDuration(el: HTMLAudioElement, seconds: number): void {
+		Object.defineProperty(el, 'duration', { value: seconds, configurable: true });
+	}
+
+	it('seeks the radio source to the station position on metadata', () => {
+		playSpy.mockResolvedValue(undefined);
+		const el = player.audioElement!;
+		setDuration(el, 3600);
+		player.playRadio(nowPlaying(1, 1200));
+		el.dispatchEvent(new Event('loadedmetadata'));
+		expect(el.currentTime).toBe(1200);
+	});
+
+	it('does not seek the next source after radio stops', () => {
+		playSpy.mockResolvedValue(undefined);
+		const el = player.audioElement!;
+		player.playRadio(nowPlaying(1, 1200));
+		player.stopRadio();
+
+		// the element now loads a 200s queue track; its metadata arriving must
+		// not trigger the stale station seek (which would clamp to 200 = ended)
+		setDuration(el, 200);
+		el.currentTime = 0;
+		el.dispatchEvent(new Event('loadedmetadata'));
+		expect(el.currentTime).toBe(0);
+	});
+
+	it('drops the pending seek when tuning to another station', () => {
+		playSpy.mockResolvedValue(undefined);
+		const el = player.audioElement!;
+		player.playRadio(nowPlaying(1, 1200));
+		player.playRadio(nowPlaying(2, 300));
+		setDuration(el, 3600);
+		el.dispatchEvent(new Event('loadedmetadata'));
+		expect(el.currentTime).toBe(300);
 	});
 });
 
