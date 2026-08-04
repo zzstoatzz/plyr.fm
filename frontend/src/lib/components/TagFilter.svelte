@@ -21,15 +21,21 @@
 	let selectedTags = new SvelteSet<string>(tracksCache.activeTags);
 	let loaded = $state(false);
 
-	// selected tags sort to the front, then by track count
-	let visibleTags = $derived(
+	// the selected chips render from the selection itself, not the fetched tag
+	// list — a selection restored from a previous session may not be in the
+	// current top tags, and it must still be visible and deselectable. counts
+	// come from the fetched list when known.
+	let selectedList = $derived(
+		[...selectedTags].map(
+			(name) => tags.find((t) => t.name === name) ?? { name, track_count: null }
+		)
+	);
+
+	// the scroller holds only what isn't already pinned, by popularity
+	let unselectedTags = $derived(
 		tags
-			.filter((t) => !hiddenTags.includes(t.name))
-			.toSorted((a, b) => {
-				const aSelected = selectedTags.has(a.name) ? 1 : 0;
-				const bSelected = selectedTags.has(b.name) ? 1 : 0;
-				return bSelected - aSelected || b.total_plays - a.total_plays;
-			})
+			.filter((t) => !hiddenTags.includes(t.name) && !selectedTags.has(t.name))
+			.toSorted((a, b) => b.total_plays - a.total_plays)
 	);
 
 	/** deterministic hue from tag name (0–360) */
@@ -77,41 +83,82 @@
 	}
 </script>
 
-{#if loaded && visibleTags.length > 0}
+{#if loaded && (unselectedTags.length > 0 || selectedTags.size > 0)}
 	<div class="tag-filter-row">
 		{#if selectedTags.size > 0}
-			<button type="button" class="chip clear-chip" onclick={clearSelection}>
-				clear
-			</button>
+			<!-- the active selection is pinned: clear + every selected chip stay
+			     visible (and individually deselectable) no matter how far the
+			     tag scroller is scrolled -->
+			<div class="pinned">
+				<button type="button" class="chip clear-chip" onclick={clearSelection}>
+					clear
+				</button>
+				{#each selectedList as tag (tag.name)}
+					<button
+						type="button"
+						class="chip selected"
+						style={chipStyle(tag.name, true)}
+						onclick={() => toggle(tag.name)}
+						title={`deselect ${tag.name}`}
+					>
+						{tag.name}
+						{#if tag.track_count !== null}
+							<span class="count">({tag.track_count})</span>
+						{/if}
+					</button>
+				{/each}
+			</div>
 		{/if}
-		{#each visibleTags as tag (tag.name)}
-			<button
-				type="button"
-				class="chip"
-				class:selected={selectedTags.has(tag.name)}
-				style={chipStyle(tag.name, selectedTags.has(tag.name))}
-				onclick={() => toggle(tag.name)}
-			>
-				{tag.name}
-				<span class="count">({tag.track_count})</span>
-			</button>
-		{/each}
+		<div class="scroller">
+			{#each unselectedTags as tag (tag.name)}
+				<button
+					type="button"
+					class="chip"
+					style={chipStyle(tag.name, false)}
+					onclick={() => toggle(tag.name)}
+				>
+					{tag.name}
+					<span class="count">({tag.track_count})</span>
+				</button>
+			{/each}
+		</div>
 	</div>
 {/if}
 
 <style>
 	.tag-filter-row {
 		display: flex;
+		align-items: flex-start;
 		gap: 0.5rem;
-		overflow-x: auto;
-		scrollbar-width: none;
-		scroll-snap-type: x proximity;
 		padding-bottom: 0.25rem;
 		flex: 1;
 		min-width: 0;
 	}
 
-	.tag-filter-row::-webkit-scrollbar {
+	/* the active selection: never scrolls away. wraps onto more lines when many
+	   tags are selected, and yields at most ~2/3 of the row so the scroller
+	   always keeps discoverable space. */
+	.pinned {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.5rem;
+		flex: 0 1 auto;
+		max-width: 66%;
+		padding-right: 0.5rem;
+		border-right: 1px solid var(--border-subtle);
+	}
+
+	.scroller {
+		display: flex;
+		gap: 0.5rem;
+		overflow-x: auto;
+		scrollbar-width: none;
+		scroll-snap-type: x proximity;
+		flex: 1;
+		min-width: 0;
+	}
+
+	.scroller::-webkit-scrollbar {
 		display: none;
 	}
 
