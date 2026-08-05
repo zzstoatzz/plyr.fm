@@ -57,7 +57,7 @@ repos:
 
       - id: check-legal-dates
         name: check legal dates
-        entry: uv run scripts/check_legal_dates.py
+        entry: python3 scripts/check_legal_dates.py
         language: system
         files: ^frontend/src/routes/privacy/\+page\.svelte$
         pass_filenames: true
