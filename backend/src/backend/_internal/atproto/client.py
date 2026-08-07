@@ -10,6 +10,7 @@ from typing import Any, BinaryIO
 
 import httpcore
 import httpx
+import logfire
 from atproto import AtUri
 from atproto_oauth.models import OAuthSession
 from atproto_oauth.security import is_safe_url
@@ -22,6 +23,7 @@ from backend._internal.auth import (
     get_client_auth_method,
     get_refresh_token_lifetime_days,
 )
+from backend.config import settings
 from backend.utilities.redis import get_async_redis_client
 
 # factory that produces a fresh async iterator over the request body. used
@@ -523,6 +525,34 @@ async def _app_password_upload_blob(
     )
 
 
+_RECORD_WRITE_OPERATIONS = {
+    "com.atproto.repo.createRecord": "create",
+    "com.atproto.repo.putRecord": "put",
+    "com.atproto.repo.deleteRecord": "delete",
+}
+
+
+def _log_own_record_write(endpoint: str, payload: dict[str, Any] | None) -> None:
+    """emit the write half of the jetstream echo signal.
+
+    every record plyr writes to a PDS in its own namespace must come back
+    through the jetstream consumer as a `jetstream dispatched` log. alerting
+    on "writes happened but zero dispatches" is the only quiet-immune way to
+    detect an ingest blackout: fm.plyr.* traffic is user writes, so a silent
+    window alone cannot distinguish an outage from a quiet night (#1739).
+    """
+    operation = _RECORD_WRITE_OPERATIONS.get(endpoint)
+    collection = (payload or {}).get("collection", "")
+    if operation is None or not collection.startswith(settings.atproto.app_namespace):
+        return
+    logfire.info(
+        "pds record write {collection}.{operation}",
+        collection=collection,
+        operation=operation,
+        repo=(payload or {}).get("repo"),
+    )
+
+
 async def make_pds_request(
     auth_session: AuthSession,
     method: str,
@@ -558,7 +588,7 @@ async def make_pds_request(
         )
 
     if oauth_data.get("auth_type") == "app_password":
-        return await _app_password_request(
+        result = await _app_password_request(
             auth_session,
             method,
             endpoint,
@@ -567,6 +597,8 @@ async def make_pds_request(
             success_codes,
             parse_response,
         )
+        _log_own_record_write(endpoint, payload)
+        return result
 
     oauth_session = reconstruct_oauth_session(oauth_data)
     url = f"{oauth_data['pds_url']}/xrpc/{endpoint}"
@@ -602,6 +634,7 @@ async def make_pds_request(
             ) from e
 
         if response.status_code in success_codes:
+            _log_own_record_write(endpoint, payload)
             if response.status_code == 204 or not parse_response:
                 return {}
             return response.json()
