@@ -176,7 +176,10 @@ class JetstreamConsumer:
                     await self._maybe_refresh_dids()
 
                     if self._is_blind():
-                        logfire.warn(
+                        # info, not warn: this fires on every quiet fm.plyr
+                        # window (see _is_blind), so it is a breadcrumb for
+                        # rotation history, not a failure signal.
+                        logfire.info(
                             "jetstream host is serving other collections but "
                             "none of ours, rotating",
                             endpoint=self._current_endpoint(),
@@ -381,9 +384,15 @@ class JetstreamConsumer:
 
         the failure this catches never disconnects: jetstream2 kept serving
         `app.bsky.actor.profile` for 10h on 2026-07-30 while dropping every
-        `fm.plyr.*` event. requiring recent *other* traffic is what separates a
-        blind host from a quiet network — on a genuinely quiet stream both go
-        silent together and we stay put.
+        `fm.plyr.*` event. requiring recent *other* traffic separates a blind
+        host from a fully quiet stream — but NOT from an organically quiet
+        fm.plyr window, because the profile mirror flows constantly and keeps
+        `_last_any_event` fresh. so on any night with no fm.plyr writes this
+        trips on every host, one rotation per timeout, by design: rotating is
+        cheap and the false positive costs a reconnect. it does mean a
+        rotation is not evidence of a broken host — the trustworthy outage
+        signal is the write echo ("pds record write" with no matching
+        "jetstream dispatched"), which is quiet-immune.
         """
         timeout = settings.jetstream.blind_host_timeout_seconds
         if timeout <= 0 or not self._last_own_event or not self._last_any_event:
