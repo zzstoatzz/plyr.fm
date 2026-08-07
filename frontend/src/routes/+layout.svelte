@@ -1,5 +1,5 @@
 <script lang="ts">
-	import logo from '$lib/assets/logo.png';
+	import favicon from '$lib/assets/favicon.png';
 	import {
 		APP_NAME,
 		APP_TAGLINE,
@@ -436,7 +436,7 @@
 </script>
 
 <svelte:head>
-	<link rel="icon" href={logo} />
+	<link rel="icon" href={favicon} />
 	<link rel="manifest" href="/manifest.webmanifest" />
 	<meta name="theme-color" content="#0a0a0a" />
 	<link rel="preconnect" href="https://fonts.googleapis.com" />
