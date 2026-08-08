@@ -12,8 +12,15 @@ from sqlalchemy.engine import make_url
 from alembic import command
 
 PRIOR_REVISION = "4aaed6c819f1"
-HEAD_REVISION = "6d43f59bca12"
-EXPECTED_TABLES = {"list_members", "list_records"}
+HEAD_REVISION = "7f1f760c57c1"
+EXPECTED_TABLES = {"list_members", "list_records", "repo_heads"}
+EXPECTED_HEAD_COLUMNS = {
+    "repo_did",
+    "commit_rev",
+    "commit_cid",
+    "data_cid",
+    "indexed_at_us",
+}
 
 
 def sync_database_url() -> str:
@@ -72,6 +79,23 @@ def projection_schema_exists(database_url: str) -> bool:
         engine.dispose()
 
 
+def repo_head_columns(database_url: str) -> set[str]:
+    """Return the exact durable chain-state columns created by the head."""
+    engine = create_engine(database_url)
+    try:
+        with engine.connect() as connection:
+            rows = connection.execute(
+                text(
+                    "SELECT column_name FROM information_schema.columns "
+                    "WHERE table_schema = 'plyr_index' "
+                    "AND table_name = 'repo_heads'"
+                )
+            )
+            return {str(row[0]) for row in rows}
+    finally:
+        engine.dispose()
+
+
 def main() -> None:
     """Apply, inspect, and reverse the migration through the real Alembic env."""
     database_url = sync_database_url()
@@ -91,6 +115,9 @@ def main() -> None:
         tables = projected_tables(database_url)
         if tables != EXPECTED_TABLES:
             raise AssertionError(f"unexpected plyr_index tables: {sorted(tables)!r}")
+        columns = repo_head_columns(database_url)
+        if columns != EXPECTED_HEAD_COLUMNS:
+            raise AssertionError(f"unexpected repo_heads columns: {sorted(columns)!r}")
     finally:
         if upgraded:
             command.downgrade(config, PRIOR_REVISION)

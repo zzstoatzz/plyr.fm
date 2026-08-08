@@ -74,7 +74,10 @@ test {
     _ = @import("internal/http/query.zig");
     _ = @import("internal/index/postgres_track_store.zig");
     _ = @import("internal/projection/list_change.zig");
+    _ = @import("internal/projection/commit_verifier.zig");
     _ = @import("internal/projection/list_store.zig");
     _ = @import("internal/projection/postgres_list_store.zig");
+    _ = @import("internal/projection/postgres_verified_commit_store.zig");
+    _ = @import("internal/projection/verified_commit.zig");
     _ = @import("server.zig");
 }

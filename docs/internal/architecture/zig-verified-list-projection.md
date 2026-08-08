@@ -84,14 +84,50 @@ state. Runtime SQL always qualifies `plyr_index`; it never relies on session
 Migration smoke coverage applies and reverses the real revision against the
 disposable `relay_test` database.
 
+## verified commit transaction
+
+A list operation is never persisted in isolation from repository-chain state.
+The `verified_commit` boundary groups every relevant operation from one signed
+repository commit with its authenticated prior MST root, post-state MST root,
+commit CID, revision, DID, and indexing timestamp. The Postgres adapter locks
+the repository's row in `plyr_index.repo_heads`, applies the entire batch, and
+advances the head in the same transaction.
+
+The compare-and-swap outcomes are intentionally explicit:
+
+- no head means `needs_bootstrap`; a live diff cannot establish an initial
+  trust root;
+- an older revision is a harmless stale replay;
+- the exact current revision, commit CID, and data root is idempotent;
+- the same revision with different signed state is a conflict;
+- a successor whose claimed prior data root differs from the locked head is a
+  chain gap and requires authoritative repair.
+
+If any list mutation fails, neither earlier mutations from that commit nor the
+new repository head are committed. Tests induce a failure on the second
+mutation and assert that the first mutation and head advance both roll back.
+This is stricter and simpler than making per-record idempotence repair a
+partially applied repository commit after a crash.
+
+`commit_verifier.zig` is the only constructor for a live verified batch. It
+uses `zat.verifyCommitDiff` with inversion enabled, validates the outer event
+against the signed inner commit, and independently checks every operation CID
+against the authenticated post-state MST. It accepts at most 200 operations and
+2,000,000 CAR bytes. There is deliberately no legacy Sync 1.0 acceptance and no
+lenient inversion fallback: missing `prevData`, rebase/too-big events, or an MST
+gap route to full-repository repair rather than becoming projected data.
+
 The same projection serves album detail first and later playlist and liked-list
 reads without exposing its physical schema through the REST model.
 
 ## next slice
 
-Connect the adapter to a verified repository ingestion/backfill process, then
-expose album detail by joining list members to independently indexed track
-records. Missing, private, or moderated tracks must retain their position
-semantics without silently substituting unrelated local rows. The first API
-canary remains read-only and does not gain an ingestion process merely because
-the persistence adapter now exists.
+Implement the authoritative full-repository bootstrap/repair path that can
+authenticate a complete `com.atproto.sync.getRepo` CAR, reconcile records absent
+from the snapshot, and seed `repo_heads`. Only then connect live firehose
+consumption to the verified commit transaction. Album detail follows by joining
+list members to independently indexed track records. Missing, private, or
+moderated tracks must retain their position semantics without silently
+substituting unrelated local rows. The first API canary remains read-only and
+does not gain an ingestion process merely because this library foundation now
+exists.

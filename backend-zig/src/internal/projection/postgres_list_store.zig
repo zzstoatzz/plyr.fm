@@ -43,15 +43,28 @@ pub const PostgresListStore = struct {
             std.log.err("list projection rollback failed: {}", .{err});
         };
 
-        const result = switch (change) {
-            .upsert => |upsert| try self.applyUpsert(conn, allocator, upsert),
-            .delete => |delete| try self.applyDelete(conn, allocator, delete),
-        };
+        const result = try self.applyInTransaction(conn, allocator, change);
         conn.commit() catch |err| {
             std.log.err("list projection commit failed: {}", .{err});
             return error.ProjectionUnavailable;
         };
         return result;
+    }
+
+    /// Apply one list change using a transaction owned by the caller.
+    ///
+    /// The verified-commit sink uses this boundary so every selected operation
+    /// and the repository chain head become visible in one database commit.
+    pub fn applyInTransaction(
+        self: *PostgresListStore,
+        conn: *pg.Conn,
+        allocator: std.mem.Allocator,
+        change: list_change.Change,
+    ) ListStore.Error!ApplyResult {
+        return switch (change) {
+            .upsert => |upsert| try self.applyUpsert(conn, allocator, upsert),
+            .delete => |delete| try self.applyDelete(conn, allocator, delete),
+        };
     }
 
     fn applyUpsert(
@@ -385,7 +398,7 @@ fn cidString(allocator: std.mem.Allocator, seed: []const u8) ![]const u8 {
     return cid.toString(allocator);
 }
 
-fn createTestSchema(pool: *pg.Pool) !void {
+pub fn createTestSchema(pool: *pg.Pool) !void {
     _ = try pool.exec("CREATE SCHEMA plyr_index", .{});
     _ = try pool.exec(
         \\CREATE TABLE plyr_index.list_records (

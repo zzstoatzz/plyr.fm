@@ -23,10 +23,10 @@ DATABASE_URL=postgresql://... just zig bench-http --with-index --path '/v1/track
 `test-postgres` starts the repository's disposable Postgres 14 test container,
 waits for it to accept connections, creates minimal projection schemas, and
 exercises the real `pg.zig` adapters. It covers atomic ordered-list replacement,
-replay and tombstone semantics, and rollback, then applies and reverses the real
-Alembic projection migration. It only destroys objects in the dedicated
-`relay_test` database on port 5433; both test paths refuse any other database
-name.
+replay and tombstone semantics, whole-commit chain gap/conflict handling, and
+rollback across multiple mutations, then applies and reverses the real Alembic
+projection migrations. It only destroys objects in the dedicated `relay_test`
+database on port 5433; both test paths refuse any other database name.
 
 ## API configuration
 
