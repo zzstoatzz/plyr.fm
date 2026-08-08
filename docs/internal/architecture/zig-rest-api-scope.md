@@ -53,8 +53,8 @@ decision.
 | `GET /v1/tracks` | covered | anonymous discovery or artist-scoped public catalogue with strict keyset pagination | viewer context, tag filters, hidden-tag preferences, search and other collection views |
 | `GET /v1/tracks/{track_id}` | covered | public, published track detail from the projection | authenticated viewer state, private/gated tracks, playback, list/search views, publication and mutations |
 | `GET /v1/artists/{identifier}` | covered | public artist detail by canonical DID or case-insensitive handle alias | verified repository ingestion, collections, follows, profile writes, account state, viewer context |
-| `GET /v1/albums?artist_did={did}` | covered | canonical list-record albums for one artist with strict keyset pagination | verified ingestion transport, global discovery, writes, viewer state |
-| `GET /v1/albums/{album_id}` | covered | verified album record and position-complete strong-reference membership with policy-safe hydration | deployed ingestion transport, writes, artwork, private/gated authorization, viewer state |
+| `GET /v1/albums?artist_did={did}` | covered | canonical list-record albums for one artist with strict keyset pagination | continuous verified ingestion, global discovery, writes, viewer state |
+| `GET /v1/albums/{album_id}` | covered | verified album record and position-complete strong-reference membership with policy-safe hydration | continuous verified ingestion, writes, artwork, private/gated authorization, viewer state |
 | `GET /health` | covered | process liveness | none for liveness |
 | `GET /ready` | covered | index configuration and a live database probe | readiness for dependencies required by future routes |
 | `GET /` | covered | points clients at `/v1` | protocol metadata remains separate |

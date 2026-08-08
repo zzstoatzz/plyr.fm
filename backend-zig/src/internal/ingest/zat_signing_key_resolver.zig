@@ -25,7 +25,10 @@ pub const ZatSigningKeyResolver = struct {
             else => return error.IdentityUnavailable,
         };
         defer document.deinit();
+        if (!std.mem.eql(u8, document.id, did_text)) return error.InvalidIdentity;
         const method = document.signingKey() orelse return error.InvalidSigningKey;
+        if (!validSigningMethod(did_text, method.id, method.controller))
+            return error.InvalidSigningKey;
         const decoded = zat.multibase.decode(allocator, method.public_key_multibase) catch |err| switch (err) {
             error.OutOfMemory => return error.OutOfMemory,
             else => return error.InvalidSigningKey,
@@ -41,3 +44,28 @@ pub const ZatSigningKeyResolver = struct {
         return .{ .key_type = key.key_type, .raw = owned };
     }
 };
+
+fn validSigningMethod(did: []const u8, method_id: []const u8, controller: []const u8) bool {
+    return std.mem.eql(u8, controller, did) and
+        method_id.len == did.len + "#atproto".len and
+        std.mem.startsWith(u8, method_id, did) and
+        std.mem.endsWith(u8, method_id, "#atproto");
+}
+
+test "ATProto signing methods are bound to the resolved DID" {
+    try std.testing.expect(validSigningMethod(
+        "did:plc:alice",
+        "did:plc:alice#atproto",
+        "did:plc:alice",
+    ));
+    try std.testing.expect(!validSigningMethod(
+        "did:plc:alice",
+        "did:plc:mallory#atproto",
+        "did:plc:alice",
+    ));
+    try std.testing.expect(!validSigningMethod(
+        "did:plc:alice",
+        "did:plc:alice#atproto",
+        "did:plc:mallory",
+    ));
+}

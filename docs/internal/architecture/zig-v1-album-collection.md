@@ -89,8 +89,9 @@ It is a localhost regression baseline, not a Neon production capacity claim.
 
 The verified album-detail contract is documented in
 [`zig-v1-album-detail.md`](zig-v1-album-detail.md). The remaining ingestion gap
-is operational: destination-safe relay/PDS transport and the separately
-deployable firehose role must feed the verifier already implemented. Mutations
+is operational: destination-safe one-shot PDS repair is wired, while the
+separately deployable firehose role must continuously feed the verifier already
+implemented. Mutations
 must write source-authoritative records and are not added on top of the legacy
 local-first finalization flow. Global discovery, viewer state, artwork
 mirroring, and description authorship remain separate design work.

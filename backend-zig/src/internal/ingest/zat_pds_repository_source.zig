@@ -53,6 +53,10 @@ pub const ZatPdsRepositorySource = struct {
             .{ endpoint.base_url, did_text },
         ) catch return error.OutOfMemory;
         defer request_allocator.free(url);
+        self.preparePinnedTls() catch |err| switch (err) {
+            error.OutOfMemory => return error.OutOfMemory,
+            else => return error.RepositoryUnavailable,
+        };
         const result = self.transport.fetch(.{
             .url = url,
             .accept = "application/vnd.ipld.car",
@@ -89,6 +93,28 @@ pub const ZatPdsRepositorySource = struct {
     fn releaseOpaque(context: *anyopaque, bytes: []const u8) void {
         const self: *ZatPdsRepositorySource = @ptrCast(@alignCast(context));
         self.transport.allocator.free(bytes);
+    }
+
+    /// Zat's pinned-address branch connects before `Client.request`, while
+    /// std.http normally initializes its CA bundle and clock inside request.
+    /// Prepare that shared state explicitly before the lower-level TLS dial.
+    fn preparePinnedTls(self: *ZatPdsRepositorySource) !void {
+        const client = &self.transport.http_client;
+        try client.ca_bundle_lock.lockShared(self.io);
+        const initialized = client.now != null;
+        client.ca_bundle_lock.unlockShared(self.io);
+        if (initialized) return;
+
+        var bundle: std.crypto.Certificate.Bundle = .empty;
+        defer bundle.deinit(client.allocator);
+        const now = std.Io.Clock.real.now(self.io);
+        try bundle.rescan(client.allocator, self.io, now);
+        try client.ca_bundle_lock.lock(self.io);
+        defer client.ca_bundle_lock.unlock(self.io);
+        if (client.now == null) {
+            client.now = now;
+            std.mem.swap(std.crypto.Certificate.Bundle, &client.ca_bundle, &bundle);
+        }
     }
 };
 

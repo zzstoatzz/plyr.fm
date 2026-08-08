@@ -5,6 +5,7 @@ const postgres = @import("internal/index/postgres_track_store.zig");
 const postgres_artists = @import("internal/index/postgres_artist_store.zig");
 const postgres_albums = @import("internal/index/postgres_album_store.zig");
 const postgres_album_detail = @import("internal/index/postgres_album_detail_store.zig");
+const repair_runner = @import("internal/ingest/repair_runner.zig");
 
 var threaded_io: std.Io.Threaded = undefined;
 pub const std_options_debug_threaded_io: ?*std.Io.Threaded = &threaded_io;
@@ -51,6 +52,20 @@ pub fn main() !void {
             .list_collection = settings.list_collection,
             .cors = .{ .allowed_origins = settings.cors_allowed_origins },
         }),
+        .repair => {
+            const store = if (postgres_store) |*value| value else return error.RepairDatabaseRequired;
+            const did = settings.repair_did orelse return error.RepairDidRequired;
+            const outcome = try repair_runner.run(
+                io,
+                allocator,
+                store.pool,
+                did,
+                settings.list_collection,
+                settings.track_collection,
+            );
+            std.log.info("verified repository repair for {s}: {s}", .{ did, @tagName(outcome) });
+            if (!repair_runner.succeeded(outcome)) return error.RepairNotApplied;
+        },
     }
 }
 
@@ -87,6 +102,7 @@ test {
     _ = @import("internal/cache/lru.zig");
     _ = @import("internal/ingest/cached_signing_key_resolver.zig");
     _ = @import("internal/ingest/repository_source.zig");
+    _ = @import("internal/ingest/repair_runner.zig");
     _ = @import("internal/ingest/safe_endpoint.zig");
     _ = @import("internal/ingest/projector.zig");
     _ = @import("internal/ingest/signing_key.zig");

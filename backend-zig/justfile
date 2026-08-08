@@ -13,6 +13,10 @@ image:
 run:
     MODE=api TRACK_COLLECTION_NSID=${TRACK_COLLECTION_NSID:?set TRACK_COLLECTION_NSID} LIST_COLLECTION_NSID=${LIST_COLLECTION_NSID:?set LIST_COLLECTION_NSID} zig build run
 
+# Authenticates and atomically reconciles one repository into the configured DB.
+repair-repo DID:
+    MODE=repair INDEX_MODE=required INGEST_REPAIR_DID={{ DID }} TRACK_COLLECTION_NSID=${TRACK_COLLECTION_NSID:?set TRACK_COLLECTION_NSID} LIST_COLLECTION_NSID=${LIST_COLLECTION_NSID:?set LIST_COLLECTION_NSID} DATABASE_URL=${DATABASE_URL:?set DATABASE_URL} zig build run
+
 test:
     zig build test
 

@@ -185,13 +185,14 @@ cache allocation failure preserves the already resolved key instead of turning
 successful identity resolution into an ingest outage.
 
 Fetched CAR ownership is explicit and released on every verification outcome.
-The initial Zat HTTP adapter accepts bytes only from an operator-configured
-trusted endpoint and refuses redirects. Following a relay redirect to an
-untrusted PDS without destination and resolved-IP validation would create an
-SSRF path into the Fly private network. Direct relay-to-PDS operation therefore
-remains disabled until that safety boundary is implemented and tested; this
-fail-closed adapter is suitable for a trusted fetch proxy or local fixture.
+The trusted-endpoint Zat adapter still refuses redirects. The direct PDS
+adapter now resolves the DID service itself, requires an HTTPS origin, rejects
+every non-global or mixed DNS answer, pins a checked address while retaining
+the TLS hostname, refuses redirects, and preserves endpoint-safety failures as
+explicit outcomes. The complete policy and exercised path are in
+[`zig-ingestion-transport.md`](zig-ingestion-transport.md).
 
-These modules are library code and do not add a worker mode to the canary. The
-first deployed API process remains read-only and cannot resolve identities,
-fetch repositories, consume the firehose, or mutate `plyr_index`.
+`MODE=repair` now wires this library into a one-shot authenticated repository
+reconciliation process. It is separate from `MODE=api`; the canary API remains
+read-only and cannot resolve identities, fetch repositories, consume the
+firehose, or mutate `plyr_index`. Continuous firehose consumption is still open.

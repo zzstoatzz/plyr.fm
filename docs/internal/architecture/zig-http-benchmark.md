@@ -114,9 +114,10 @@ is deliberately small, so they are not a Neon or production capacity claim.
 The handle path validates and normalizes the alias before querying and detects
 case-insensitive ambiguity. Its result staying within one percent of DID lookup
 shows that compatibility does not introduce a distinct application bottleneck
-in this fixture. After the album-detail slice, the rebuilt amd64 canary image
-is 33,237,999 bytes, 29,436 bytes larger than the preceding image, and still
-uses the existing Postgres pool rather than opening a pool per resource.
+in this fixture. After the verified repair runtime was linked, the rebuilt
+amd64 canary image is 34,864,321 bytes, 1,626,322 bytes larger than the
+album-detail image. The API and repair roles share that binary, but only the
+selected role initializes its network or write-capable dependencies.
 
 The artist-filtered track collection, returning five complete track resources,
 recorded 2,770.5 responses/s at concurrency one (0.906 ms p99) and 9,318.0 at

@@ -77,10 +77,12 @@ state and expire or reconcile; they are not unpublished canonical tracks.
 
 ## implementation boundary
 
-This branch implements the versioned REST appview. The `plyr-backend` binary
-has one explicit `MODE=api` role. It does not implement an ingester or Docket
-worker merely because the Python deployment currently contains those process
-groups.
+This branch implements the versioned REST appview plus a deliberately separate
+one-shot ingestion role. `MODE=api` serves read-only HTTP; `MODE=repair`
+authenticates and reconciles one complete repository with network and
+projection-write authority, then exits. They share libraries but never start
+each other. A continuous ingester and Docket workers remain separate future
+process roles.
 
 The REST layer depends on interfaces for indexed state, PDS commands, blobs,
 moderation, and asynchronous work. Those implementations can remain Python
