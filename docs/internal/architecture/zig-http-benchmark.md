@@ -52,3 +52,47 @@ The similar saturation point for health and the larger route suggests this run
 is dominated by the localhost/Python load generator rather than application
 routing. Future comparisons must use the same harness and machine, and should
 add a database-backed benchmark before optimizing the PostgreSQL adapter.
+
+## Python comparison and resource budget — 2026-08-08
+
+This comparison uses `oha 1.15.0` against native localhost processes on the
+same Apple M5 Pro. The Python process is the complete FastAPI application under
+Uvicorn with its normal import graph and startup hooks. `RELAY_TEST_MODE=1`
+isolates external behavior, `RATE_LIMIT_ENABLED=false` prevents the global
+100/minute policy from turning the benchmark into a 429 benchmark, and access
+logging is disabled for both sides. The Zig process is a `ReleaseFast` build
+with its index explicitly disabled. Both serve a small JSON health response;
+this is a runtime-boundary comparison, not evidence of track-route parity.
+
+| concurrency | implementation | requests/sec | p50 | p99 | RSS after load |
+|---:|---|---:|---:|---:|---:|
+| 1 | Zig | 24,055 | 0.039 ms | 0.086 ms | 3.28 MiB |
+| 1 | Python | 3,139 | 0.300 ms | 0.626 ms | 466.1 MiB |
+| 32 | Zig | 111,196 | 0.284 ms | 0.369 ms | 3.28 MiB |
+| 32 | Python | 6,298 | 4.690 ms | 7.178 ms | 466.1 MiB |
+
+At concurrency one, the server CPU-time deltas were 1.77 seconds for 120,321
+Zig responses and 3.20 seconds for 15,698 Python responses. That is about
+67,978 versus 4,906 responses per CPU-second, a **13.9× CPU-efficiency gain**.
+Wall-clock throughput is 7.7× higher at one connection and 17.7× higher at 32.
+Loaded native RSS is **142× smaller**.
+
+The Linux measurements provide a production-shaped memory comparison:
+
+- the live staging Uvicorn process reported 453.5 MiB RSS and a 454.1 MiB
+  high-water mark from `/proc`;
+- the final amd64 Zig container idled at 7.05 MiB working set, a 64.4×
+  application-process reduction;
+- a five-second, 32-connection container run peaked at 25.2 MiB of total
+  cgroup memory and settled to a 16.7 MiB working set;
+- that run sustained 50,857 requests/sec while executing through amd64
+  emulation on the arm64 development machine, so it is a packaging/load memory
+  check rather than a native Linux CPU result;
+- the executable is 4,507,320 bytes and the Debian/CA/OpenSSL runtime image is
+  33,077,196 bytes.
+
+These numbers establish the first resource gate, not a permanent victory. A
+database-backed track benchmark and Fly-native CPU/memory measurements are
+required before routing canary traffic. Every added subsystem must keep the
+service within a 256 MiB machine rather than spending the current headroom by
+default.
