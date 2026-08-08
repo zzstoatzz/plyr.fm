@@ -73,7 +73,10 @@ if you need to tune worker settings:
 2. verify ALL task types execute (not just perpetual tasks)
 3. check logfire for task execution spans
 
-when `DOCKET_URL` is not set, docket is disabled and tasks fall back to `asyncio.create_task()` (fire-and-forget).
+When `DOCKET_URL` is not set, settings select pydocket's process-local
+`memory://` backend. The HTTP process does not run a worker, and a separate
+worker process cannot share that in-memory queue. Durable local execution
+therefore requires Redis plus the worker entrypoint below.
 
 ### local development
 
@@ -90,10 +93,8 @@ DOCKET_URL=redis://localhost:6379 just backend run
 does not run a Worker. for local dev this is usually fine: the API can
 enqueue tasks but they sit in Redis until consumed. options:
 
-- skip Redis entirely (omit `DOCKET_URL`) → tasks fall back to
-  `asyncio.create_task()` and run in-process (fire-and-forget, no retries).
-  this is the default when no Redis is configured — sufficient for most
-  feature work.
+- skip Redis entirely (omit `DOCKET_URL`) when no exercised request needs its
+  queued work to run. The HTTP process's `memory://` queue has no consumer.
 - run a worker locally to mirror production:
   ```bash
   DOCKET_URL=redis://localhost:6379 uv run python -m backend.worker
@@ -112,8 +113,8 @@ Redis instances are self-hosted on Fly.io (redis:7-alpine):
 
 set `DOCKET_URL` in fly.io secrets:
 ```bash
-flyctl secrets set DOCKET_URL=redis://plyr-redis.internal:6379 -a relay-api
-flyctl secrets set DOCKET_URL=redis://plyr-redis-stg.internal:6379 -a relay-api-staging
+flyctl secrets set DOCKET_URL='redis://:<pw>@plyr-redis.internal:6379' -a relay-api
+flyctl secrets set DOCKET_URL='redis://:<pw>@plyr-redis-stg.internal:6379' -a relay-api-staging
 ```
 
 note: uses Fly internal networking (`.internal` domain), no TLS needed within private network.
@@ -144,7 +145,7 @@ await schedule_embedding_generation(track_id, audio_url)
 ```python
 # e.g., backend/_internal/tasks/ml.py
 async def my_new_task(arg1: str, arg2: int) -> None:
-    """task functions must be async and JSON-serializable args only."""
+    """Keep task arguments to stable, small primitives."""
     # do work here
     pass
 ```
@@ -182,12 +183,13 @@ async def schedule_my_task(arg1: str, arg2: int) -> None:
 
 this replaced Upstash pay-per-command pricing which was costing ~$75/month at scale (37M commands/month).
 
-## fallback behavior
+## in-memory behavior
 
-when docket is disabled (`DOCKET_URL` not set):
-- `schedule_copyright_scan()` uses `asyncio.create_task()` instead
-- tasks are fire-and-forget (no retries, no durability)
-- suitable for local dev without Redis
+Without `DOCKET_URL`, each process gets an isolated pydocket `memory://`
+backend. The deployed app always uses authenticated Redis. For local behavior
+that includes task execution, run Redis and `python -m backend.worker`; do not
+infer successful background work from a successful enqueue into the HTTP
+process's unconsumed memory queue.
 
 ## monitoring
 

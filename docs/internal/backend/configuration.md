@@ -64,7 +64,7 @@ settings.notify.bot.password                   # from NOTIFY_BOT_PASSWORD
 
 # background task settings (docket/redis)
 settings.docket.name                           # "plyr" (queue namespace)
-settings.docket.url                            # from DOCKET_URL (empty = disabled)
+settings.docket.url                            # from DOCKET_URL (default: process-local memory://)
 settings.docket.worker_concurrency             # 10 (concurrent tasks)
 ```
 

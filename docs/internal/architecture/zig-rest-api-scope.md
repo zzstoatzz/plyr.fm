@@ -177,8 +177,11 @@ The 40 Docket tasks fall into seven workloads:
 7. transparency: publishing moderation decisions.
 
 These are dependencies behind REST operations, not automatically part of the
-Zig REST server. The API needs an asynchronous-command interface whose first
-implementation may continue to enqueue the existing Docket tasks.
+Zig REST server. The API needs an asynchronous-command interface. Python
+pydocket and Zig Docket are not wire-compatible, so a producer and its worker
+move as one slice under a separate `plyr-zig` namespace; the Zig API does not
+emit Python pickle or share the Python worker stream. The full boundary is in
+[`zig-background-work.md`](zig-background-work.md).
 
 ### External services
 

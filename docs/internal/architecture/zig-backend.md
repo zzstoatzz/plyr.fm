@@ -88,6 +88,11 @@ services during migration or become Zig libraries/services later. Keeping the
 interfaces explicit lets the API advance without silently expanding this
 branch into a second big-bang backend rewrite.
 
+Redis and Docket remain target infrastructure. Python pydocket and Zig Docket
+are not wire-compatible, so they use separate namespaces and migrate complete
+producer/worker slices rather than sharing task messages. See
+[`zig-background-work.md`](zig-background-work.md).
+
 The API process treats its index as required configuration. `INDEX_MODE=disabled`
 exists only for deliberate contract tests and indexless development; it does not
 silently turn a production configuration mistake into a healthy deployment.
