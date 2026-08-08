@@ -97,17 +97,25 @@ plyr.fm uses Neon PostgreSQL, which can scale to zero after periods of inactivit
 |---------|---------------|--------|
 | plyr-prd | **disabled** | customer-facing, no cold starts |
 | plyr-stg | enabled | ok to have cold starts on staging |
-
-> **keep `pool_recycle` below the suspend timeout.** Where scale-to-zero is
-> enabled, the compute goes away while pooled connections are still considered
-> live. The default `pool_recycle` of 1800s against staging's
-> `suspend_timeout_seconds` of 300 means a connection can outlive its database by
-> 25 minutes. `pool_pre_ping` recovers from this transparently, so requests still
-> succeed — but every stale checkout is stamped as an error-level span with an
-> empty message (the exception stringifies to `""`), which reads as a database
-> fault and is not one. `relay-api-staging` sets `DATABASE_POOL_RECYCLE=240`.
-> Production is unaffected: its compute has `suspend_timeout_seconds: -1`.
 | plyr-dev | enabled | ok to have cold starts on dev |
+
+> **do not lower `pool_recycle` to chase a suspend timeout.** Where scale-to-zero
+> is enabled the compute goes away while pooled connections are still considered
+> live, and the next checkout is stamped as an error-level span with an empty
+> message (the exception stringifies to `""`), which reads as a database fault.
+> `pool_pre_ping` already recovers from this transparently — requests succeed —
+> so what is at stake is log noise, not correctness.
+>
+> Shortening `pool_recycle` to get rid of that noise costs more than the noise
+> does. `DATABASE_POOL_RECYCLE=240` was set on `relay-api-staging` on 2026-08-08
+> and silenced the spans, but forced reconnects often enough that concurrent
+> uploads — already gated to 3 per artist — stalled past ten minutes. The
+> stuck-upload reaper fired repeatedly and the integration suite timed out at
+> 300s. Unsetting it made those failures disappear the same day.
+>
+> If the noise genuinely needs to stop, disable scale-to-zero on that compute
+> (`suspend_timeout_seconds: -1`, as production runs) rather than fighting the
+> suspend from the pool side. Production is unaffected either way.
 
 **to verify via Neon MCP:**
 

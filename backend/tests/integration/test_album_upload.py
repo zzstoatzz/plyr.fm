@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import uuid
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -25,6 +26,16 @@ if TYPE_CHECKING:
 
 pytestmark = [pytest.mark.integration, pytest.mark.timeout(300)]
 
+# album creation is idempotent on (artist_did, slug), and the slug comes from
+# the title — so a fixed title makes every run share one album on the shared
+# staging backend. a run killed by the timeout above never finishes its
+# cleanup, and the next run then inherits its tracks and counts double
+# (`assert 20 == 10`), turning one failure into a streak of them.
+#
+# the suffix is per-run, not per-call: the append test creates the same title
+# twice on purpose and depends on getting the same album back.
+_RUN_ID = uuid.uuid4().hex[:8]
+
 
 async def _create_album(
     client: AsyncPlyrClient,
@@ -32,8 +43,12 @@ async def _create_album(
     title: str,
     description: str | None = None,
 ) -> dict[str, Any]:
-    """POST /albums/ via raw http. returns the album metadata payload."""
-    body: dict[str, Any] = {"title": title}
+    """POST /albums/ via raw http. returns the album metadata payload.
+
+    the title is scoped to this run so albums are never shared across runs;
+    see `_RUN_ID`.
+    """
+    body: dict[str, Any] = {"title": f"{title} {_RUN_ID}"}
     if description:
         body["description"] = description
     response = await client._client.post(
