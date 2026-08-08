@@ -5,40 +5,22 @@
 //! rebuild exactly the same identifier without coordinating with plyr.fm.
 
 const std = @import("std");
-const zat = @import("zat");
+const record_id = @import("record_id.zig");
 
 pub const prefix = "trk_";
-const encoder = std.base64.url_safe_no_pad.Encoder;
-const decoder = std.base64.url_safe_no_pad.Decoder;
-
 pub fn encodedLength(at_uri: []const u8) usize {
-    return prefix.len + encoder.calcSize(at_uri.len);
+    return record_id.encodedLength(prefix, at_uri);
 }
 
 pub fn encode(destination: []u8, at_uri: []const u8) ![]const u8 {
-    const parsed = zat.AtUri.parse(at_uri) orelse return error.InvalidAtUri;
-    if (!parsed.hasRkey()) return error.RecordUriRequired;
-    if (zat.Did.parse(parsed.authority()) == null) return error.DidAuthorityRequired;
-    const required = encodedLength(at_uri);
-    if (destination.len < required) return error.NoSpaceLeft;
-
-    @memcpy(destination[0..prefix.len], prefix);
-    _ = encoder.encode(destination[prefix.len..required], at_uri);
-    return destination[0..required];
+    return record_id.encode(prefix, destination, at_uri);
 }
 
 pub fn decode(destination: []u8, id: []const u8) ![]const u8 {
-    if (!std.mem.startsWith(u8, id, prefix)) return error.InvalidTrackId;
-    const payload = id[prefix.len..];
-    const required = decoder.calcSizeForSlice(payload) catch return error.InvalidTrackId;
-    if (destination.len < required) return error.NoSpaceLeft;
-    decoder.decode(destination[0..required], payload) catch return error.InvalidTrackId;
-
-    const at_uri = destination[0..required];
-    const parsed = zat.AtUri.parse(at_uri) orelse return error.InvalidTrackId;
-    if (!parsed.hasRkey()) return error.InvalidTrackId;
-    if (zat.Did.parse(parsed.authority()) == null) return error.InvalidTrackId;
-    return at_uri;
+    return record_id.decode(prefix, destination, id) catch |err| switch (err) {
+        error.InvalidRecordId => error.InvalidTrackId,
+        else => |other| other,
+    };
 }
 
 test "track IDs round trip a canonical record URI" {

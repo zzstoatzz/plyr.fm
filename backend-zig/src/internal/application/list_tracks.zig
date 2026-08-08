@@ -3,6 +3,7 @@ const zat = @import("zat");
 const track = @import("../domain/track.zig");
 const track_list = @import("../domain/track_list.zig");
 const track_cursor = @import("../identity/track_cursor.zig");
+const query = @import("../http/query.zig");
 const store_module = @import("../index/track_store.zig");
 const TrackStore = store_module.TrackStore;
 
@@ -76,59 +77,32 @@ pub fn execute(
 }
 
 fn parseOptions(allocator: std.mem.Allocator, target: []const u8) !Options {
-    const query_start = std.mem.indexOfScalar(u8, target, '?') orelse return .{};
-    const query = target[query_start + 1 ..];
-    if (query.len == 0) return .{};
-
     var result: Options = .{};
     var saw_limit = false;
     var saw_cursor = false;
     var saw_artist_did = false;
-    var pairs = std.mem.splitScalar(u8, query, '&');
-    while (pairs.next()) |pair| {
-        if (pair.len == 0) return error.InvalidQuery;
-        const separator = std.mem.indexOfScalar(u8, pair, '=') orelse return error.InvalidQuery;
-        const name = pair[0..separator];
-        const value = pair[separator + 1 ..];
-        if (std.mem.eql(u8, name, "limit")) {
+    var pairs = query.Iterator.init(allocator, target);
+    while (try pairs.next()) |pair| {
+        if (std.mem.eql(u8, pair.name, "limit")) {
+            const value = pair.value;
             if (saw_limit or value.len == 0) return error.InvalidQuery;
             saw_limit = true;
             const parsed = std.fmt.parseInt(usize, value, 10) catch return error.InvalidQuery;
             if (parsed < 1 or parsed > max_limit) return error.InvalidQuery;
             result.limit = parsed;
-        } else if (std.mem.eql(u8, name, "cursor")) {
-            if (saw_cursor or value.len == 0) return error.InvalidQuery;
+        } else if (std.mem.eql(u8, pair.name, "cursor")) {
+            if (saw_cursor or pair.value.len == 0) return error.InvalidQuery;
             saw_cursor = true;
-            result.cursor = try decodeQueryValue(allocator, value);
-        } else if (std.mem.eql(u8, name, "artist_did")) {
-            if (saw_artist_did or value.len == 0) return error.InvalidQuery;
+            result.cursor = pair.value;
+        } else if (std.mem.eql(u8, pair.name, "artist_did")) {
+            if (saw_artist_did or pair.value.len == 0) return error.InvalidQuery;
             saw_artist_did = true;
-            result.artist_did = try decodeQueryValue(allocator, value);
+            result.artist_did = pair.value;
         } else {
             return error.InvalidQuery;
         }
     }
     return result;
-}
-
-fn decodeQueryValue(allocator: std.mem.Allocator, encoded: []const u8) ![]const u8 {
-    if (std.mem.indexOfAny(u8, encoded, "%+") == null) return encoded;
-    const decoded = try allocator.alloc(u8, encoded.len);
-    var read: usize = 0;
-    var written: usize = 0;
-    while (read < encoded.len) {
-        if (encoded[read] == '%') {
-            if (read + 2 >= encoded.len) return error.InvalidQuery;
-            decoded[written] = std.fmt.parseInt(u8, encoded[read + 1 .. read + 3], 16) catch
-                return error.InvalidQuery;
-            read += 3;
-        } else {
-            decoded[written] = if (encoded[read] == '+') ' ' else encoded[read];
-            read += 1;
-        }
-        written += 1;
-    }
-    return decoded[0..written];
 }
 
 fn classifyStoreError(err: TrackStore.Error) Result {
