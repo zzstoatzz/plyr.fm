@@ -25,6 +25,10 @@ from backend._internal.tasks.hooks import (
     run_post_track_create_hooks,
 )
 from backend._internal.tasks.labels import sync_operator_labels
+from backend._internal.tasks.pds_mirror import (
+    mirror_pds_blob,
+    schedule_pds_blob_mirror,
+)
 from backend._internal.tasks.transparency import publish_moderation_decisions
 from backend._internal.tasks.moderation import (
     scan_image_moderation,
@@ -98,6 +102,7 @@ def _build_background_tasks() -> list:
     from backend.api.tracks.uploads import run_track_upload
 
     return [
+        mirror_pds_blob,
         scan_copyright,
         sync_copyright_resolutions,
         sync_operator_labels,
@@ -175,6 +180,7 @@ __all__ = [
     "ingest_track_delete",
     "ingest_track_update",
     "invalidate_tracks_discovery_cache",
+    "mirror_pds_blob",
     "move_track_audio",
     "pds_create_comment",
     "pds_create_like",
@@ -195,6 +201,7 @@ __all__ = [
     "schedule_genre_classification",
     "schedule_image_moderation_scan",
     "schedule_move_track_audio",
+    "schedule_pds_blob_mirror",
     "schedule_pds_create_comment",
     "schedule_pds_create_like",
     "schedule_pds_delete_comment",
