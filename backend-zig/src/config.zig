@@ -1,4 +1,5 @@
 const std = @import("std");
+const zat = @import("zat");
 
 pub const Role = enum {
     api,
@@ -11,14 +12,23 @@ pub const Role = enum {
 pub const Config = struct {
     role: Role,
     port: u16,
+    database_url: ?[]const u8,
+    track_collection: []const u8,
+    cors_allowed_origins: []const u8,
 
     pub fn fromEnvironment() !Config {
         const role_value = getenv("MODE") orelse return error.RoleRequired;
         const port_value = getenv("PORT") orelse "8001";
+        const track_collection = getenv("TRACK_COLLECTION_NSID") orelse
+            return error.TrackCollectionRequired;
+        if (zat.Nsid.parse(track_collection) == null) return error.InvalidTrackCollection;
 
         return .{
             .role = try Role.parse(role_value),
             .port = std.fmt.parseInt(u16, port_value, 10) catch return error.InvalidPort,
+            .database_url = getenv("DATABASE_URL"),
+            .track_collection = track_collection,
+            .cors_allowed_origins = getenv("CORS_ALLOWED_ORIGINS") orelse "",
         };
     }
 };

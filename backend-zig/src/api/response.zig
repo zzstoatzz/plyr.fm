@@ -3,24 +3,45 @@ const std = @import("std");
 const http = std.http;
 
 pub const ApiError = enum {
+    invalid_request,
     not_found,
     method_not_allowed,
     internal_error,
+    service_unavailable,
 
     fn message(self: ApiError) []const u8 {
         return switch (self) {
+            .invalid_request => "The request is invalid.",
             .not_found => "The requested resource was not found.",
             .method_not_allowed => "The resource does not support this method.",
             .internal_error => "The request could not be completed.",
+            .service_unavailable => "The service is temporarily unavailable.",
         };
     }
 
     fn status(self: ApiError) http.Status {
         return switch (self) {
+            .invalid_request => .bad_request,
             .not_found => .not_found,
             .method_not_allowed => .method_not_allowed,
             .internal_error => .internal_server_error,
+            .service_unavailable => .service_unavailable,
         };
+    }
+};
+
+pub const CorsPolicy = struct {
+    /// Comma-separated exact origins. Empty means browser cross-origin access
+    /// is disabled; wildcard origins are never compatible with auth cookies.
+    allowed_origins: []const u8,
+
+    fn allows(self: CorsPolicy, candidate: []const u8) bool {
+        var origins = std.mem.splitScalar(u8, self.allowed_origins, ',');
+        while (origins.next()) |raw| {
+            const origin = std.mem.trim(u8, raw, " \t");
+            if (origin.len != 0 and std.mem.eql(u8, origin, candidate)) return true;
+        }
+        return false;
     }
 };
 
@@ -29,8 +50,9 @@ pub fn json(
     status: http.Status,
     body: []const u8,
     request_id: []const u8,
+    cors: CorsPolicy,
 ) !void {
-    const origin = requestOrigin(request);
+    const origin = requestOrigin(request, cors);
     if (origin) |allowed_origin| {
         try request.respond(body, .{
             .status = status,
@@ -40,7 +62,7 @@ pub fn json(
                 .{ .name = "access-control-allow-origin", .value = allowed_origin },
                 .{ .name = "access-control-allow-credentials", .value = "true" },
                 .{ .name = "access-control-allow-methods", .value = "GET, POST, PUT, PATCH, DELETE, OPTIONS" },
-                .{ .name = "access-control-allow-headers", .value = "*" },
+                .{ .name = "access-control-allow-headers", .value = "authorization, content-type, dpop, idempotency-key, x-request-id" },
                 .{ .name = "vary", .value = "origin" },
                 .{ .name = "x-content-type-options", .value = "nosniff" },
                 .{ .name = "referrer-policy", .value = "strict-origin-when-cross-origin" },
@@ -64,18 +86,20 @@ pub fn empty(
     request: *http.Server.Request,
     status: http.Status,
     request_id: []const u8,
+    cors: CorsPolicy,
 ) !void {
-    try json(request, status, "", request_id);
+    try json(request, status, "", request_id, cors);
 }
 
 pub fn apiError(
     request: *http.Server.Request,
     kind: ApiError,
     request_id: []const u8,
+    cors: CorsPolicy,
 ) !void {
     var buffer: [384]u8 = undefined;
     const body = try formatError(&buffer, kind, request_id);
-    try json(request, kind.status(), body, request_id);
+    try json(request, kind.status(), body, request_id, cors);
 }
 
 fn formatError(buffer: []u8, kind: ApiError, request_id: []const u8) ![]const u8 {
@@ -86,21 +110,14 @@ fn formatError(buffer: []u8, kind: ApiError, request_id: []const u8) ![]const u8
     );
 }
 
-fn requestOrigin(request: *const http.Server.Request) ?[]const u8 {
+fn requestOrigin(request: *const http.Server.Request, cors: CorsPolicy) ?[]const u8 {
     var headers = request.iterateHeaders();
     while (headers.next()) |header| {
-        if (std.ascii.eqlIgnoreCase(header.name, "origin") and isAllowedOrigin(header.value)) {
+        if (std.ascii.eqlIgnoreCase(header.name, "origin") and cors.allows(header.value)) {
             return header.value;
         }
     }
     return null;
-}
-
-fn isAllowedOrigin(origin: []const u8) bool {
-    return std.mem.eql(u8, origin, "null") or
-        std.mem.startsWith(u8, origin, "https://") or
-        std.mem.startsWith(u8, origin, "http://localhost:") or
-        std.mem.startsWith(u8, origin, "http://127.0.0.1:");
 }
 
 test "error envelopes are stable and include the request id" {
@@ -112,10 +129,13 @@ test "error envelopes are stable and include the request id" {
     );
 }
 
-test "credentialed CORS reflects only intentional origins" {
-    try std.testing.expect(isAllowedOrigin("https://plyr.fm"));
-    try std.testing.expect(isAllowedOrigin("https://example.test"));
-    try std.testing.expect(isAllowedOrigin("http://localhost:5173"));
-    try std.testing.expect(isAllowedOrigin("null"));
-    try std.testing.expect(!isAllowedOrigin("http://example.test"));
+test "credentialed CORS uses exact configured origins" {
+    const cors: CorsPolicy = .{
+        .allowed_origins = "https://plyr.fm, http://localhost:5173",
+    };
+    try std.testing.expect(cors.allows("https://plyr.fm"));
+    try std.testing.expect(cors.allows("http://localhost:5173"));
+    try std.testing.expect(!cors.allows("https://example.test"));
+    try std.testing.expect(!cors.allows("https://plyr.fm.attacker.example"));
+    try std.testing.expect(!(CorsPolicy{ .allowed_origins = "" }).allows("null"));
 }

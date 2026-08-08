@@ -84,13 +84,16 @@ branch into a second big-bang backend rewrite.
 
 ## first vertical slice
 
-The first REST slice is a read-only public track resource under `/v1`:
+The first REST slice is the read-only public
+[`GET /v1/tracks/{track_id}` resource](zig-v1-track.md):
 
 1. define the canonical public representation and error envelope;
 2. read through an index interface rather than a concrete legacy table;
 3. expose canonical AT URI/CID and derived playback availability separately;
-4. use cursor pagination and stable filters;
-5. prove behavior with API-level contract tests.
+4. prove the complete HTTP-to-Postgres path with unit and integration tests.
+
+Cursor pagination and stable filters begin with the subsequent track collection
+endpoint; they are not smuggled into the detail resource.
 
 Verified ingestion and blob mirroring are dependencies of a trustworthy
 projection, but their implementation is outside the REST-focused first slice.

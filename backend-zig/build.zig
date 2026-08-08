@@ -9,6 +9,15 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
+    root_module.addImport("zat", b.dependency("zat", .{
+        .target = target,
+        .optimize = optimize,
+    }).module("zat"));
+    root_module.addImport("pg", b.dependency("pg", .{
+        .target = target,
+        .optimize = optimize,
+        .openssl = true,
+    }).module("pg"));
 
     const executable = b.addExecutable(.{
         .name = "plyr-backend",

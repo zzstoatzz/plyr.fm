@@ -1,0 +1,285 @@
+//! PostgreSQL adapter for the rebuildable track projection.
+//!
+//! This query only reads the app-view index. Its key is the canonical AT-URI;
+//! no local integer identity crosses the boundary into the domain model.
+
+const std = @import("std");
+const pg = @import("pg");
+const zat = @import("zat");
+const track = @import("../domain/track.zig");
+const track_id = @import("../identity/track_id.zig");
+const TrackStore = @import("track_store.zig").TrackStore;
+
+pub const PostgresTrackStore = struct {
+    pool: *pg.Pool,
+
+    pub fn init(allocator: std.mem.Allocator, io: std.Io, database_url: []const u8) !PostgresTrackStore {
+        return initWithPoolSize(allocator, io, database_url, 8);
+    }
+
+    fn initWithPoolSize(
+        allocator: std.mem.Allocator,
+        io: std.Io,
+        database_url: []const u8,
+        pool_size: u16,
+    ) !PostgresTrackStore {
+        const uri = try std.Uri.parse(database_url);
+        return .{ .pool = try pg.Pool.initUri(io, allocator, uri, .{ .size = pool_size }) };
+    }
+
+    pub fn deinit(self: *PostgresTrackStore) void {
+        self.pool.deinit();
+    }
+
+    pub fn store(self: *PostgresTrackStore) TrackStore {
+        return .{ .context = self, .get_by_uri_fn = getByUriOpaque };
+    }
+
+    fn getByUriOpaque(
+        context: *anyopaque,
+        allocator: std.mem.Allocator,
+        at_uri: []const u8,
+    ) !?track.Track {
+        const self: *PostgresTrackStore = @ptrCast(@alignCast(context));
+        return self.getByUri(allocator, at_uri);
+    }
+
+    fn getByUri(
+        self: *PostgresTrackStore,
+        allocator: std.mem.Allocator,
+        at_uri: []const u8,
+    ) !?track.Track {
+        var query_row = try self.pool.row(query, .{at_uri}) orelse return null;
+        errdefer query_row.deinit() catch {};
+        const row = &query_row.row;
+
+        const uri = try duplicate(allocator, try row.get([]const u8, 0));
+        const parsed_uri = zat.AtUri.parse(uri) orelse return error.CorruptTrackUri;
+        const collection = parsed_uri.collection() orelse return error.CorruptTrackUri;
+        const rkey = parsed_uri.rkey() orelse return error.CorruptTrackUri;
+        const artist_did = try duplicate(allocator, try row.get([]const u8, 8));
+        if (!std.mem.eql(u8, parsed_uri.authority(), artist_did)) return error.CorruptTrackAuthority;
+
+        const id = try allocator.alloc(u8, track_id.encodedLength(uri));
+        _ = try track_id.encode(id, uri);
+
+        const pds_blob_cid = try duplicateOptional(allocator, try row.get(?[]const u8, 12));
+        const playback_url = try duplicateOptional(allocator, try row.get(?[]const u8, 14));
+
+        const deliveries = if (playback_url) |url| blk: {
+            const values = try allocator.alloc(track.Delivery, 1);
+            values[0] = .{
+                .url = url,
+                .file_type = try duplicate(allocator, try row.get([]const u8, 15)),
+                // The existing R2 URL is a delivery projection, never source authority.
+                .authoritative = false,
+            };
+            break :blk values;
+        } else &.{};
+
+        const result: track.Track = .{
+            .id = id,
+            .record = .{
+                .uri = uri,
+                .cid = try duplicateOptional(allocator, try row.get(?[]const u8, 1)),
+                .revision = try duplicateOptional(allocator, try row.get(?[]const u8, 2)),
+                .collection = collection,
+                .rkey = rkey,
+            },
+            .metadata = .{
+                .title = try duplicate(allocator, try row.get([]const u8, 3)),
+                .description = try duplicateOptional(allocator, try row.get(?[]const u8, 4)),
+                .album = try duplicateOptional(allocator, try row.get(?[]const u8, 5)),
+                .duration_seconds = try row.get(?i64, 6),
+                .created_at = try duplicate(allocator, try row.get([]const u8, 7)),
+            },
+            .artist = .{
+                .did = artist_did,
+                .profile = .{
+                    .handle = try duplicate(allocator, try row.get([]const u8, 9)),
+                    .display_name = try duplicate(allocator, try row.get([]const u8, 10)),
+                    .avatar_url = try duplicateOptional(allocator, try row.get(?[]const u8, 11)),
+                },
+            },
+            .media = .{
+                .source = if (pds_blob_cid) |cid| .{
+                    .blob_cid = cid,
+                    .byte_length = try row.get(?i64, 13),
+                    .file_type = try duplicate(allocator, try row.get([]const u8, 15)),
+                } else null,
+                .deliveries = deliveries,
+            },
+            .access = .{
+                .visibility = try parseEnum(track.Visibility, try row.get([]const u8, 16)),
+                .in_discovery = try row.get(bool, 17),
+                .gate = if (try row.get(?[]const u8, 18)) |gate_type| .{
+                    .type = try parseEnum(track.GateType, gate_type),
+                } else null,
+                .space_uri = try duplicateOptional(allocator, try row.get(?[]const u8, 19)),
+            },
+            .moderation = .{
+                .self_labels = try parseLabels(allocator, try row.get([]const u8, 20)),
+                .operator_labels = try parseLabels(allocator, try row.get([]const u8, 21)),
+                .override = if (try row.get(?[]const u8, 22)) |value|
+                    try parseEnum(track.ModerationOverride, value)
+                else
+                    null,
+            },
+            .metrics = .{ .play_count = try row.get(i64, 23) },
+        };
+        try query_row.deinit();
+        return result;
+    }
+};
+
+const query =
+    \\SELECT
+    \\  t.atproto_record_uri,
+    \\  t.atproto_record_cid,
+    \\  t.atproto_record_rev,
+    \\  t.title,
+    \\  t.description,
+    \\  t.extra ->> 'album',
+    \\  CASE WHEN jsonb_typeof(t.extra -> 'duration') = 'number'
+    \\       THEN (t.extra ->> 'duration')::bigint END,
+    \\  to_char(t.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'),
+    \\  a.did,
+    \\  a.handle,
+    \\  a.display_name,
+    \\  a.avatar_url,
+    \\  t.pds_blob_cid,
+    \\  t.pds_blob_size::bigint,
+    \\  t.r2_url,
+    \\  t.file_type,
+    \\  t.visibility,
+    \\  t.visibility IN ('public', 'supporters'),
+    \\  t.support_gate ->> 'type',
+    \\  t.space_uri,
+    \\  t.self_labels::text,
+    \\  t.operator_labels::text,
+    \\  t.moderation_override,
+    \\  t.play_count::bigint
+    \\FROM tracks AS t
+    \\JOIN artists AS a ON a.did = t.artist_did
+    \\WHERE t.atproto_record_uri = $1
+    \\  AND t.visibility <> 'private'
+    \\  AND COALESCE(t.publish_state, 'published') = 'published'
+    \\LIMIT 1
+;
+
+fn duplicate(allocator: std.mem.Allocator, value: []const u8) ![]const u8 {
+    return allocator.dupe(u8, value);
+}
+
+fn duplicateOptional(allocator: std.mem.Allocator, value: ?[]const u8) !?[]const u8 {
+    return if (value) |present| try duplicate(allocator, present) else null;
+}
+
+fn parseLabels(allocator: std.mem.Allocator, raw: []const u8) ![]const []const u8 {
+    const parsed = try std.json.parseFromSlice([]const []const u8, allocator, raw, .{});
+    // The request arena owns the parse tree, so intentionally do not deinit it.
+    return parsed.value;
+}
+
+fn parseEnum(comptime T: type, value: []const u8) !T {
+    return std.meta.stringToEnum(T, value) orelse error.CorruptProjectionEnum;
+}
+
+test "PostgreSQL adapter reads a complete derived projection" {
+    const url_z = std.c.getenv("PLYR_ZIG_TEST_DATABASE_URL") orelse return error.SkipZigTest;
+    const database_url = std.mem.span(url_z);
+    const allocator = std.testing.allocator;
+    var threaded = std.Io.Threaded.init(allocator, .{});
+    const io = threaded.io();
+
+    var store_impl = try PostgresTrackStore.initWithPoolSize(allocator, io, database_url, 1);
+    defer store_impl.deinit();
+
+    var database_row = (try store_impl.pool.row("SELECT current_database()", .{})).?;
+    const database_name = try allocator.dupe(u8, try database_row.get([]const u8, 0));
+    defer allocator.free(database_name);
+    try database_row.deinit();
+    if (!std.mem.eql(u8, database_name, "relay_test")) return error.UnsafeTestDatabase;
+
+    _ = try store_impl.pool.exec("DROP TABLE IF EXISTS tracks", .{});
+    _ = try store_impl.pool.exec("DROP TABLE IF EXISTS artists", .{});
+    _ = try store_impl.pool.exec(
+        \\CREATE TABLE artists (
+        \\  did text PRIMARY KEY,
+        \\  handle text NOT NULL,
+        \\  display_name text NOT NULL,
+        \\  avatar_url text
+        \\)
+    , .{});
+    _ = try store_impl.pool.exec(
+        \\CREATE TABLE tracks (
+        \\  atproto_record_uri text PRIMARY KEY,
+        \\  atproto_record_cid text,
+        \\  atproto_record_rev text,
+        \\  title text NOT NULL,
+        \\  description text,
+        \\  extra jsonb NOT NULL DEFAULT '{}',
+        \\  created_at timestamptz NOT NULL,
+        \\  artist_did text NOT NULL REFERENCES artists(did),
+        \\  pds_blob_cid text,
+        \\  pds_blob_size integer,
+        \\  r2_url text,
+        \\  file_type text NOT NULL,
+        \\  visibility text NOT NULL,
+        \\  support_gate jsonb,
+        \\  space_uri text,
+        \\  self_labels jsonb NOT NULL DEFAULT '[]',
+        \\  operator_labels jsonb NOT NULL DEFAULT '[]',
+        \\  moderation_override text,
+        \\  play_count integer NOT NULL DEFAULT 0,
+        \\  publish_state text
+        \\)
+    , .{});
+    _ = try store_impl.pool.exec(
+        "INSERT INTO artists VALUES ($1, $2, $3, $4)",
+        .{ "did:plc:artist", "artist.example", "Artist", @as(?[]const u8, null) },
+    );
+    const uri = "at://did:plc:artist/fm.plyr.dev.track/3m123abc";
+    _ = try store_impl.pool.exec(
+        \\INSERT INTO tracks (
+        \\  atproto_record_uri, atproto_record_cid, atproto_record_rev,
+        \\  title, description, extra, created_at, artist_did,
+        \\  pds_blob_cid, pds_blob_size, r2_url, file_type, visibility,
+        \\  support_gate, self_labels, operator_labels, play_count, publish_state
+        \\) VALUES (
+        \\  $1, $2, $3, $4, $5, $6::jsonb, $7::timestamptz, $8,
+        \\  $9, $10, $11, $12, $13, $14::jsonb, $15::jsonb, $16::jsonb, $17, $18
+        \\)
+    , .{
+        uri,
+        "bafyretrack",
+        "3m123rev",
+        "First Slice",
+        "Canonical where it matters",
+        "{\"album\":\"Architecture\",\"duration\":181}",
+        "2026-08-08T12:00:00Z",
+        "did:plc:artist",
+        "bafkblob",
+        @as(i32, 12345),
+        "https://cdn.example/audio.mp3",
+        "audio/mpeg",
+        "public",
+        "{\"type\":\"copyright\"}",
+        "[\"self-label\"]",
+        "[\"operator-label\"]",
+        @as(i32, 7),
+        "published",
+    });
+
+    var arena = std.heap.ArenaAllocator.init(allocator);
+    defer arena.deinit();
+    const value = (try store_impl.getByUri(arena.allocator(), uri)).?;
+    try std.testing.expectEqualStrings(uri, value.record.uri);
+    try std.testing.expectEqualStrings("Architecture", value.metadata.album.?);
+    try std.testing.expectEqual(@as(?i64, 181), value.metadata.duration_seconds);
+    try std.testing.expectEqualStrings("bafkblob", value.media.source.?.blob_cid);
+    try std.testing.expectEqual(@as(usize, 1), value.media.deliveries.len);
+    try std.testing.expect(!value.media.deliveries[0].authoritative);
+    try std.testing.expectEqualStrings("self-label", value.moderation.self_labels[0]);
+    try std.testing.expectEqual(@as(i64, 7), value.metrics.play_count);
+}

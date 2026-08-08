@@ -7,7 +7,7 @@ const http = std.http;
 const buffer_size = 16 * 1024;
 var request_sequence = std.atomic.Value(u64).init(0);
 
-pub fn run(io: Io, port: u16) !void {
+pub fn run(io: Io, port: u16, app: router.App) !void {
     const address = Io.net.Ip4Address.unspecified(port);
     var listener = try (Io.net.IpAddress{ .ip4 = address }).listen(io, .{
         .reuse_address = true,
@@ -22,7 +22,7 @@ pub fn run(io: Io, port: u16) !void {
             continue;
         };
 
-        const thread = std.Thread.spawn(.{}, handleConnection, .{ stream, io }) catch |err| {
+        const thread = std.Thread.spawn(.{}, handleConnection, .{ stream, io, app }) catch |err| {
             std.log.err("failed to spawn connection handler: {}", .{err});
             stream.close(io);
             continue;
@@ -31,7 +31,7 @@ pub fn run(io: Io, port: u16) !void {
     }
 }
 
-fn handleConnection(stream: Io.net.Stream, io: Io) void {
+fn handleConnection(stream: Io.net.Stream, io: Io, app: router.App) void {
     defer stream.close(io);
 
     var read_buffer: [buffer_size]u8 = undefined;
@@ -54,7 +54,10 @@ fn handleConnection(stream: Io.net.Stream, io: Io) void {
             return;
         };
 
-        router.handle(&request, request_id) catch |err| {
+        var request_arena = std.heap.ArenaAllocator.init(std.heap.smp_allocator);
+        defer request_arena.deinit();
+
+        router.handle(&request, request_arena.allocator(), app, request_id) catch |err| {
             std.log.err("request failed: {}", .{err});
             return;
         };
