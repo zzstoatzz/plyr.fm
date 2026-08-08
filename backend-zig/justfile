@@ -1,0 +1,17 @@
+# Zig backend development commands.
+set shell := ["bash", "-eu", "-o", "pipefail", "-c"]
+
+default: check
+
+build:
+    zig build
+
+run:
+    MODE=api zig build run
+
+test:
+    zig build test
+
+check:
+    zig fmt --check build.zig src
+    zig build test

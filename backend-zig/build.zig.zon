@@ -1,0 +1,11 @@
+.{
+    .name = .plyr_backend,
+    .version = "0.0.1",
+    .fingerprint = 0x4fd7f1002bfb4cee,
+    .minimum_zig_version = "0.16.0",
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "src",
+    },
+}
