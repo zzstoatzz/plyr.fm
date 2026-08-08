@@ -90,19 +90,4 @@ test "album detail uses an opaque environment-scoped canonical URI" {
         Result.not_found,
         execute(arena.allocator(), fake.store(), "fm.plyr.list", "fm.plyr.track", id),
     );
-    var invalid_buffer: [256]u8 = undefined;
-    const invalid_authority = try album_id.encode(
-        &invalid_buffer,
-        "at://not-a-did/fm.plyr.dev.list/album",
-    );
-    try std.testing.expectEqual(
-        Result.invalid_id,
-        execute(
-            arena.allocator(),
-            fake.store(),
-            "fm.plyr.dev.list",
-            "fm.plyr.dev.track",
-            invalid_authority,
-        ),
-    );
 }

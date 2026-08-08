@@ -87,9 +87,11 @@ test {
     _ = @import("internal/cache/lru.zig");
     _ = @import("internal/ingest/cached_signing_key_resolver.zig");
     _ = @import("internal/ingest/repository_source.zig");
+    _ = @import("internal/ingest/safe_endpoint.zig");
     _ = @import("internal/ingest/projector.zig");
     _ = @import("internal/ingest/signing_key.zig");
     _ = @import("internal/ingest/zat_repository_source.zig");
+    _ = @import("internal/ingest/zat_pds_repository_source.zig");
     _ = @import("internal/ingest/zat_signing_key_resolver.zig");
     _ = @import("internal/projection/list_change.zig");
     _ = @import("internal/projection/commit_verifier.zig");

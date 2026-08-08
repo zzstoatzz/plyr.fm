@@ -102,6 +102,10 @@ pub const Projector = struct {
             error.RepositoryRateLimited => return .rate_limited,
             error.RepositoryUnavailable => return .unavailable,
             error.RepositoryTooLarge => return .too_large,
+            error.RepositoryIdentityUnavailable => return .unverified_identity,
+            error.RepositoryEndpointMissing => return .endpoint_missing,
+            error.UnsafeRepositoryEndpoint => return .unsafe_endpoint,
+            error.UnsupportedRepositoryEndpoint => return .unsupported_endpoint,
             error.InvalidIdentity, error.EmptyRepository => return .invalid_repository,
         };
         defer fetched.release();
@@ -165,6 +169,9 @@ pub const RepairOutcome = enum {
     rate_limited,
     unavailable,
     too_large,
+    endpoint_missing,
+    unsafe_endpoint,
+    unsupported_endpoint,
     unverified_identity,
     invalid_signature,
     invalid_repository,

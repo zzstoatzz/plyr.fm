@@ -26,7 +26,7 @@ pub const ZatRepositorySource = struct {
         const url = std.fmt.allocPrint(
             request_allocator,
             "{s}/xrpc/com.atproto.sync.getRepo?did={s}",
-            .{ std.mem.trimRight(u8, self.base_url, "/"), did },
+            .{ std.mem.trimEnd(u8, self.base_url, "/"), did },
         ) catch return error.OutOfMemory;
         defer request_allocator.free(url);
         const result = self.transport.fetch(.{

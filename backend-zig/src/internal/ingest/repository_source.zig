@@ -39,5 +39,9 @@ pub const Error = error{
     RepositoryRateLimited,
     RepositoryUnavailable,
     RepositoryTooLarge,
+    RepositoryIdentityUnavailable,
+    RepositoryEndpointMissing,
+    UnsafeRepositoryEndpoint,
+    UnsupportedRepositoryEndpoint,
     OutOfMemory,
 };
