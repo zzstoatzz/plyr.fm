@@ -9,7 +9,7 @@
 	import WaveLoading from "$lib/components/WaveLoading.svelte";
 	import TagInput from "$lib/components/TagInput.svelte";
 	import CopyrightRightsPanel from "$lib/components/CopyrightRightsPanel.svelte";
-	import LuminframePicker from "$lib/components/LuminframePicker.svelte";
+	import ArtworkField from "$lib/components/ArtworkField.svelte";
 	import type { TrackRights } from "$lib/components/CopyrightRightsPanel.svelte";
 	import type { FeaturedArtist, AlbumSummary, Artist } from "$lib/types";
 	import { API_URL, getServerConfig } from "$lib/config";
@@ -75,9 +75,6 @@
 	let albumTitle = $state("");
 	let file = $state<File | null>(null);
 	let imageFile = $state<File | null>(null);
-	let imagePreviewUrl = $state<string | null>(null);
-	let imageSource = $state<"file" | "luminframe" | null>(null);
-	let imageInputEl = $state<HTMLInputElement | null>(null);
 	let featuredArtists = $state<FeaturedArtist[]>([]);
 	let uploadTags = $state<string[]>([]);
 	let description = $state("");
@@ -241,7 +238,7 @@
 			albumTitle = "";
 			description = "";
 			file = null;
-			setImageFile(null);
+			imageFile = null;
 			featuredArtists = [];
 			uploadTags = [];
 			attestedRights = false;
@@ -332,53 +329,6 @@
 
 			file = selected;
 		}
-	}
-
-	async function validateImageSize(selected: File): Promise<boolean> {
-		try {
-			const config = await getServerConfig();
-			const sizeMB = selected.size / (1024 * 1024);
-			if (sizeMB > config.max_image_size_mb) {
-				toast.error(
-					`image too large (${sizeMB.toFixed(1)}MB). max: ${config.max_image_size_mb}MB`,
-				);
-				return false;
-			}
-		} catch (_e) {
-			console.error("failed to validate image size:", _e);
-		}
-		return true;
-	}
-
-	// the one place artwork is set, whichever source it came from. the slot
-	// holds exactly one image, so every set clears the other source's residue:
-	// the object URL, and the native input's own filename display.
-	function setImageFile(selected: File | null, source?: "file" | "luminframe") {
-		if (imagePreviewUrl) URL.revokeObjectURL(imagePreviewUrl);
-		imagePreviewUrl = selected ? URL.createObjectURL(selected) : null;
-		imageSource = selected ? (source ?? null) : null;
-		imageFile = selected;
-		if (imageInputEl && source !== "file") imageInputEl.value = "";
-	}
-
-	async function handleImageChange(e: Event) {
-		const target = e.target as HTMLInputElement;
-		if (target.files && target.files[0]) {
-			const selected = target.files[0];
-
-			if (!(await validateImageSize(selected))) {
-				target.value = "";
-				setImageFile(null);
-				return;
-			}
-
-			setImageFile(selected, "file");
-		}
-	}
-
-	async function handleLuminframeSelect(selected: File) {
-		if (!(await validateImageSize(selected))) return;
-		setImageFile(selected, "luminframe");
 	}
 
 	async function logout() {
@@ -515,84 +465,7 @@
 			</div>
 
 			<div class="form-group">
-				<span class="artwork-label" id="artwork-label">artwork (optional)</span>
-				<!-- two ways to fill one slot, presented as peers. the native
-				     input stays in the DOM (it does the file dialog) but the
-				     visible affordance is a button that matches the picker's. -->
-				<div
-					class="artwork-sources"
-					role="group"
-					aria-labelledby="artwork-label"
-				>
-					<button
-						type="button"
-						class="source-btn"
-						onclick={() => imageInputEl?.click()}
-					>
-						{imageFile ? "replace with a file" : "choose a file"}
-					</button>
-					{#if auth.user}
-						<LuminframePicker
-							did={auth.user.did}
-							onSelect={handleLuminframeSelect}
-						/>
-					{/if}
-				</div>
-				<input
-					bind:this={imageInputEl}
-					id="image-input"
-					type="file"
-					accept="image/*"
-					tabindex="-1"
-					aria-hidden="true"
-					class="hidden-file-input"
-					onchange={handleImageChange}
-				/>
-				<p class="format-hint">supported: jpg, png, webp, gif</p>
-				{#if imageFile}
-					<div class="artwork-chosen">
-						{#if imagePreviewUrl}
-							<img
-								class="artwork-preview"
-								src={imagePreviewUrl}
-								alt="chosen artwork preview"
-							/>
-						{/if}
-						<div class="artwork-meta">
-							<p class="file-info">
-								{imageFile.name} ({(
-									imageFile.size /
-									1024 /
-									1024
-								).toFixed(2)} MB)
-							</p>
-							<p class="artwork-source">
-								from {imageSource === "luminframe"
-									? "luminframe"
-									: "your device"}
-							</p>
-						</div>
-						<button
-							type="button"
-							class="artwork-remove"
-							onclick={() => setImageFile(null)}
-							title="remove artwork"
-							aria-label="remove artwork"
-						>
-							<svg
-								width="16"
-								height="16"
-								viewBox="0 0 24 24"
-								fill="none"
-								stroke="currentColor"
-								stroke-width="2"
-							>
-								<line x1="18" y1="6" x2="6" y2="18"></line>
-								<line x1="6" y1="6" x2="18" y2="18"></line>
-							</svg>
-						</button>
-					</div>
-				{/if}
+				<ArtworkField did={auth.user?.did} bind:file={imageFile} />
 			</div>
 
 			<CopyrightRightsPanel
@@ -878,97 +751,6 @@
 		margin-top: 0.5rem;
 		font-size: var(--text-sm);
 		color: var(--text-muted);
-	}
-
-	.artwork-label {
-		display: block;
-		margin-bottom: 0.5rem;
-	}
-
-	.artwork-sources {
-		display: flex;
-		flex-wrap: wrap;
-		align-items: center;
-		gap: 0.5rem;
-	}
-
-	/* width/weight/hover undo the page-wide `button` rule below, which
-	   otherwise leaks full-width accent styling into these; the child
-	   LuminframePicker button is out of this page's scope and unaffected,
-	   so without the undo the two "peer" buttons render differently */
-	.source-btn {
-		width: auto;
-		padding: 0.5rem 0.875rem;
-		background: var(--bg-secondary);
-		border: 1px solid var(--border-default);
-		border-radius: var(--radius-md);
-		color: var(--text-secondary);
-		font-family: inherit;
-		font-size: var(--text-sm);
-		font-weight: 400;
-		cursor: pointer;
-		transition: all 0.15s;
-	}
-
-	.source-btn:hover:not(:disabled) {
-		background: var(--bg-hover);
-		color: var(--text-primary);
-		transform: none;
-	}
-
-	/* the input still opens the file dialog; the button above is its face */
-	.hidden-file-input {
-		display: none;
-	}
-
-	.artwork-chosen {
-		display: flex;
-		align-items: center;
-		gap: 0.75rem;
-		margin-top: 0.75rem;
-	}
-
-	.artwork-preview {
-		width: 3.5rem;
-		height: 3.5rem;
-		object-fit: cover;
-		border-radius: var(--radius-sm);
-		border: 1px solid var(--border-subtle);
-		flex-shrink: 0;
-	}
-
-	.artwork-meta {
-		min-width: 0;
-	}
-
-	.artwork-meta .file-info {
-		margin-top: 0;
-		overflow-wrap: anywhere;
-	}
-
-	.artwork-source {
-		margin-top: 0.125rem;
-		font-size: var(--text-xs);
-		color: var(--text-tertiary);
-	}
-
-	.artwork-remove {
-		width: auto;
-		margin-left: auto;
-		display: flex;
-		align-items: center;
-		padding: 0.375rem;
-		background: none;
-		border: none;
-		color: var(--text-tertiary);
-		cursor: pointer;
-		flex-shrink: 0;
-	}
-
-	.artwork-remove:hover:not(:disabled) {
-		background: none;
-		color: var(--text-primary);
-		transform: none;
 	}
 
 	button {
