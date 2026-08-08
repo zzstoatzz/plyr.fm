@@ -1,6 +1,10 @@
 # plyr-redis
 
-self-hosted Redis on Fly.io for docket background tasks.
+self-hosted Redis on Fly.io. backs docket background tasks, the session cache,
+rate-limit counters, and the discovery cache.
+
+two apps, one per environment — `plyr-redis` (prod, used by `relay-api`) and
+`plyr-redis-stg` (staging, used by `relay-api-staging`). they are not shared.
 
 ## deployment
 
@@ -9,30 +13,49 @@ self-hosted Redis on Fly.io for docket background tasks.
 fly apps create plyr-redis
 fly volumes create redis_data --region iad --size 1 -a plyr-redis
 
-# deploy
+# deploy (staging: -c fly.staging.toml -a plyr-redis-stg)
 fly deploy -a plyr-redis
 ```
 
+## authentication
+
+Redis requires a password. it is read from the `REDIS_PASSWORD` secret and
+applied via `--requirepass` in `[processes]`, which is why the command is
+wrapped in `sh -c` — Fly exec's the process args rather than running them
+through a shell, so an unwrapped `$REDIS_PASSWORD` would be taken literally.
+
+neither app has a public IP (`fly ips list` is empty), so this is defense in
+depth against anything that reaches the org's private network — see #1782.
+
 ## connecting from other fly apps
 
-Redis is accessible via Fly's private network:
+the password belongs in the connection string:
 
 ```
-redis://plyr-redis.internal:6379
+redis://:<REDIS_PASSWORD>@plyr-redis.internal:6379
 ```
-
-Update `DOCKET_URL` secret on backend apps:
 
 ```bash
-fly secrets set DOCKET_URL=redis://plyr-redis.internal:6379 -a relay-api
-fly secrets set DOCKET_URL=redis://plyr-redis.internal:6379 -a relay-api-staging
+fly secrets set DOCKET_URL='redis://:<pw>@plyr-redis.internal:6379' -a relay-api
+fly secrets set DOCKET_URL='redis://:<pw>@plyr-redis-stg.internal:6379' -a relay-api-staging
 ```
+
+**the password and the connection string must change together.** Redis rejects
+`AUTH` when no password is set, and rejects unauthenticated clients once one is,
+so whichever side moves first, the other is broken until it catches up. plan for
+a brief window: the session cache degrades gracefully (every Redis call falls
+through to Postgres), but in-flight docket tasks can fail.
+
+> verifying with `redis-cli`? use `-a <pw>`, not `-u redis://:<pw>@host` — the
+> URL form sends an empty ACL username and fails with `WRONGPASS` even when the
+> password is right. the Python client parses the same URL correctly.
 
 ## configuration
 
 - **persistence**: AOF (append-only file) enabled for durability
 - **memory**: 200MB max with LRU eviction
 - **storage**: 1GB volume mounted at /data
+- **auth**: `--requirepass` from the `REDIS_PASSWORD` secret
 
 ## cost
 

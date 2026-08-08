@@ -12,7 +12,10 @@ primary_region = "iad"
   # redis config via command line args in [processes]
 
 [processes]
-  app = "--appendonly yes --maxmemory 200mb --maxmemory-policy allkeys-lru"
+  # wrapped in `sh -c` so $REDIS_PASSWORD expands — [processes] args are exec'd,
+  # not shell-interpreted, so `--requirepass $REDIS_PASSWORD` would set the
+  # password to the literal string
+  app = "sh -c 'redis-server --appendonly yes --maxmemory 200mb --maxmemory-policy allkeys-lru --requirepass \"$REDIS_PASSWORD\"'"
 
 [[services]]
   protocol = "tcp"
