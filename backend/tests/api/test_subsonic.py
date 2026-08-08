@@ -100,6 +100,12 @@ async def dev_token(db_session: AsyncSession) -> str:
 
 
 @pytest.fixture
+async def browser_session_id(db_session: AsyncSession) -> str:
+    """an ordinary cookie session — the same opaque string, not a developer token."""
+    return await create_session(DID, HANDLE, dict(OAUTH_SESSION))
+
+
+@pytest.fixture
 async def library(db_session: AsyncSession, audio_origin: str) -> dict[str, object]:
     """an artist with two tracks and a private playlist ordering them [2, 1]."""
     artist = Artist(did=DID, handle=HANDLE, display_name="Subsonic Tester")
@@ -169,6 +175,23 @@ async def test_ping_rejects_bad_token(live_server: str, dev_token: str) -> None:
     conn = _connection(live_server, "not-a-real-token")
     with pytest.raises(CredentialError):
         await asyncio.to_thread(conn.ping)
+
+
+async def test_browser_session_is_not_a_subsonic_credential(
+    live_server: str, browser_session_id: str
+) -> None:
+    """#1779: only developer tokens authenticate /rest, never a cookie session.
+
+    the legacy `p=` scheme resolved any session id, so a leaked browser cookie
+    worked here even though it was never meant to leave the browser.
+    """
+    conn = _connection(live_server, browser_session_id, legacyAuth=True)
+    with pytest.raises(CredentialError):
+        await asyncio.to_thread(conn.ping)
+
+    token_scheme = _connection(live_server, browser_session_id)
+    with pytest.raises(CredentialError):
+        await asyncio.to_thread(token_scheme.ping)
 
 
 async def test_get_playlists(

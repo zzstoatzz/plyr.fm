@@ -27,7 +27,7 @@ async def authenticate(params: Mapping[str, str]) -> Session:
     """resolve subsonic credential params to a plyr.fm session or raise SubsonicError."""
 
     if password := params.get("p"):
-        if session := await get_session(_decode_password(password)):
+        if session := await _developer_session(_decode_password(password)):
             return session
         raise SubsonicError(ERROR_WRONG_CREDENTIALS, "wrong username or password")
 
@@ -46,6 +46,21 @@ async def authenticate(params: Mapping[str, str]) -> Session:
     raise SubsonicError(
         ERROR_MISSING_PARAMETER, "required parameter is missing: p or u+t+s"
     )
+
+
+async def _developer_session(session_id: str) -> Session | None:
+    """resolve a session id, but only if it belongs to a developer token.
+
+    a browser cookie session and a developer token are the same opaque string;
+    only the latter is a credential the user meant to hand to a subsonic client.
+    """
+    async with db_session() as db:
+        is_developer_token = await db.scalar(
+            select(UserSession.is_developer_token).where(
+                UserSession.session_id == session_id
+            )
+        )
+    return await get_session(session_id) if is_developer_token else None
 
 
 def _decode_password(password: str) -> str:
