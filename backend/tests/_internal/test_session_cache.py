@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from backend._internal.auth.session import (
+    SESSION_CACHE_PREFIX,
     SESSION_CACHE_TTL_SECONDS,
     _session_cache_key,
     create_session,
@@ -54,7 +55,6 @@ async def test_cache_miss_then_hit(session_id: str) -> None:
     assert cached_raw is not None
     cached = json.loads(cached_raw)
     assert cached["did"] == "did:plc:testcache"
-    assert cached["session_id"] == session_id
 
     # second call — should come from cache (we verify by checking TTL exists)
     session2 = await get_session(session_id)
@@ -62,6 +62,67 @@ async def test_cache_miss_then_hit(session_id: str) -> None:
     assert session2.did == session.did
     ttl = await redis.ttl(cache_key)
     assert 0 < ttl <= SESSION_CACHE_TTL_SECONDS
+
+
+async def test_cache_holds_no_replayable_credentials(
+    session_id: str, oauth_data: dict
+) -> None:
+    """#1782: Redis must hold neither the bearer session id nor OAuth tokens.
+
+    plyr-redis is reachable without authentication from the private network, so
+    anything cached here is readable by any workload that lands there. the key is
+    hashed and the OAuth payload stays Fernet-encrypted end to end.
+    """
+    redis = get_async_redis_client()
+    cache_key = _session_cache_key(session_id)
+
+    session = await get_session(session_id)
+    assert session is not None
+
+    assert session_id not in cache_key
+
+    cached_raw = await redis.get(cache_key)
+    assert cached_raw is not None
+    blob = cached_raw if isinstance(cached_raw, str) else cached_raw.decode()
+
+    assert session_id not in blob
+    assert oauth_data["access_token"] not in blob
+    assert oauth_data["refresh_token"] not in blob
+    assert oauth_data["session_id"] not in blob
+
+    # a scan of the whole keyspace must not surface the credential either
+    keys = [
+        k if isinstance(k, str) else k.decode()
+        for k in await redis.keys(f"{SESSION_CACHE_PREFIX}*")
+    ]
+    assert all(session_id not in k for k in keys)
+
+    # and the round trip still returns usable tokens from cache
+    from_cache = await get_session(session_id)
+    assert from_cache is not None
+    assert from_cache.session_id == session_id
+    assert from_cache.oauth_session["access_token"] == oauth_data["access_token"]
+    assert from_cache.oauth_session["refresh_token"] == oauth_data["refresh_token"]
+
+
+async def test_cache_entry_with_undecryptable_payload_is_dropped(
+    session_id: str,
+) -> None:
+    """a cache entry we cannot decrypt is evicted rather than trusted."""
+    redis = get_async_redis_client()
+    cache_key = _session_cache_key(session_id)
+
+    await get_session(session_id)
+    cached_raw = await redis.get(cache_key)
+    assert cached_raw is not None
+    data = json.loads(cached_raw)
+    data["oauth_session"] = "not-a-valid-fernet-token"
+    await redis.set(cache_key, json.dumps(data), ex=SESSION_CACHE_TTL_SECONDS)
+
+    # falls through to the DB rather than returning a broken session
+    session = await get_session(session_id)
+    assert session is not None
+    assert session.oauth_session["access_token"] == "at_test"
 
 
 async def test_delete_session_invalidates_cache(session_id: str) -> None:
