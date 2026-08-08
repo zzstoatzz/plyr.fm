@@ -15,6 +15,19 @@ from backend.models import Track
 logger = logging.getLogger(__name__)
 
 
+def _origin() -> str:
+    """the app name, qualified by environment everywhere but production.
+
+    `settings.app.name` is the public-facing name and is identical in every
+    environment, so a reaper DM fired by staging read "fired on plyr.fm" --
+    indistinguishable from the same alert fired by production, which is the
+    one thing an operator needs to know first.
+    """
+    if (env := settings.observability.environment) == "production":
+        return settings.app.name
+    return f"{settings.app.name} [{env}]"
+
+
 @dataclass
 class NotificationResult:
     """result of a notification attempt."""
@@ -247,7 +260,7 @@ class NotificationService:
             track_url = f"{frontend_url}/track/{track_id}"
 
         message_text = (
-            f"copyright flag on {settings.app.name}\n\n"
+            f"copyright flag on {_origin()}\n\n"
             f"track: '{track_title}'\n"
             f"artist: @{artist_handle}\n"
             f"matches: {len(matches)}\n"
@@ -284,7 +297,7 @@ class NotificationService:
 
         categories_str = ", ".join(categories) if categories else "unspecified"
         message_text = (
-            f"🚨 image flagged on {settings.app.name}\n\n"
+            f"🚨 image flagged on {_origin()}\n\n"
             f"context: {context}\n"
             f"image_id: {image_id}\n"
             f"severity: {severity}\n"
@@ -325,7 +338,7 @@ class NotificationService:
             target_link = f"\n{frontend_url}{target_url}"
 
         message_text = (
-            f"📋 new user report on {settings.app.name}\n\n"
+            f"📋 new user report on {_origin()}\n\n"
             f"from: {reporter_display}\n"
             f"target: {target_display}{target_link}\n"
             f"reason: {reason}\n"
@@ -357,7 +370,7 @@ class NotificationService:
 
         if track_url:
             message_text = (
-                f"🎵 new track on {settings.app.name}!\n\n"
+                f"🎵 new track on {_origin()}!\n\n"
                 f"'{track.title}' by @{artist_handle}\n\n"
                 f"listen: {track_url}\n"
                 f"uploaded: {track.created_at.strftime('%b %d at %H:%M UTC')}"
@@ -365,7 +378,7 @@ class NotificationService:
         else:
             # dev environment - no link
             message_text = (
-                f"🎵 new track on {settings.app.name}!\n\n"
+                f"🎵 new track on {_origin()}!\n\n"
                 f"'{track.title}' by @{artist_handle}\n"
                 f"uploaded: {track.created_at.strftime('%b %d at %H:%M UTC')}"
             )
@@ -407,7 +420,7 @@ class NotificationService:
             ids_str = ", ".join(job_ids[:3]) + f" (+{len(job_ids) - 3} more)"
 
         message_text = (
-            f"⚠️ stuck-upload reaper fired on {settings.app.name}\n\n"
+            f"⚠️ stuck-upload reaper fired on {_origin()}\n\n"
             f"reaped {reaped_count} upload job"
             f"{'s' if reaped_count != 1 else ''} stuck >{threshold_minutes} min\n"
             f"affected: {handles_str}\n"

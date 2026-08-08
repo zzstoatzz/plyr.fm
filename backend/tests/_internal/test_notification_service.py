@@ -11,7 +11,9 @@ doesn't permanently break the service.
 
 from unittest.mock import patch
 
-from backend._internal.notifications import NotificationService
+import pytest
+
+from backend._internal.notifications import NotificationService, _origin
 
 NOTIF_SETTINGS = "backend._internal.notifications.settings"
 
@@ -78,3 +80,25 @@ class TestEnsureReady:
         ):
             mock_settings.notify.enabled = True
             assert await service.ensure_ready() is None
+
+
+class TestAlertOrigin:
+    """operator alerts must say which environment fired them.
+
+    `settings.app.name` is the public-facing name and identical everywhere, so
+    a staging reaper DM read "fired on plyr.fm" — the same text production
+    sends, which is the first thing an operator needs to distinguish.
+    """
+
+    def test_production_is_the_bare_app_name(self) -> None:
+        with patch(NOTIF_SETTINGS) as mock_settings:
+            mock_settings.app.name = "plyr.fm"
+            mock_settings.observability.environment = "production"
+            assert _origin() == "plyr.fm"
+
+    @pytest.mark.parametrize("env", ["staging", "local", "development"])
+    def test_every_other_environment_is_labelled(self, env: str) -> None:
+        with patch(NOTIF_SETTINGS) as mock_settings:
+            mock_settings.app.name = "plyr.fm"
+            mock_settings.observability.environment = env
+            assert _origin() == f"plyr.fm [{env}]"
