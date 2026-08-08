@@ -7,22 +7,29 @@ const http = std.http;
 const buffer_size = 16 * 1024;
 var request_sequence = std.atomic.Value(u64).init(0);
 
-pub fn run(io: Io, port: u16, app: router.App) !void {
+pub fn run(io: Io, port: u16, max_connections: usize, app: router.App) !void {
     const address = Io.net.Ip4Address.unspecified(port);
     var listener = try (Io.net.IpAddress{ .ip4 = address }).listen(io, .{
         .reuse_address = true,
     });
     defer listener.deinit(io);
 
-    std.log.info("plyr api listening on port {d}", .{port});
+    std.log.info("plyr api listening on port {d} (max connections: {d})", .{ port, max_connections });
+
+    var capacity: Io.Semaphore = .{ .permits = max_connections };
 
     while (true) {
+        // Stop accepting before allocating another thread. The kernel backlog
+        // supplies bounded backpressure while all permits are in use.
+        capacity.waitUncancelable(io);
         const stream = listener.accept(io) catch |err| {
+            capacity.post(io);
             std.log.err("accept failed: {}", .{err});
             continue;
         };
 
-        const thread = std.Thread.spawn(.{}, handleConnection, .{ stream, io, app }) catch |err| {
+        const thread = std.Thread.spawn(.{}, handleConnection, .{ stream, io, app, &capacity }) catch |err| {
+            capacity.post(io);
             std.log.err("failed to spawn connection handler: {}", .{err});
             stream.close(io);
             continue;
@@ -31,7 +38,8 @@ pub fn run(io: Io, port: u16, app: router.App) !void {
     }
 }
 
-fn handleConnection(stream: Io.net.Stream, io: Io, app: router.App) void {
+fn handleConnection(stream: Io.net.Stream, io: Io, app: router.App, capacity: *Io.Semaphore) void {
+    defer capacity.post(io);
     defer stream.close(io);
 
     var read_buffer: [buffer_size]u8 = undefined;

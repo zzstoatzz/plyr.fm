@@ -12,7 +12,8 @@ Run commands from the repository root through the root justfile:
 just zig check
 just zig test-http
 just zig test-postgres
-TRACK_COLLECTION_NSID=fm.plyr.dev.track just zig run
+INDEX_MODE=disabled TRACK_COLLECTION_NSID=fm.plyr.dev.track just zig run
+just zig bench-http --duration 5 --concurrency 16
 ```
 
 `check` includes a black-box HTTP contract smoke test on an ephemeral port.
@@ -27,9 +28,16 @@ exercises the real `pg.zig` adapter. It only destroys tables in the dedicated
 |---|---:|---|
 | `MODE` | yes | must be `api`; set by `just zig run` |
 | `TRACK_COLLECTION_NSID` | yes | exact environment-aware track-record NSID |
-| `DATABASE_URL` | no | PostgreSQL projection; track reads return `503` when absent |
+| `DATABASE_URL` | in normal API mode | PostgreSQL projection; missing configuration fails startup |
+| `INDEX_MODE` | no | `required` by default; `disabled` is an explicit test/development mode whose readiness is `503` |
+| `MAX_CONNECTIONS` | no | hard cap on accepted connection handlers, default `128` |
 | `PORT` | no | listener port, default `8001` |
 | `CORS_ALLOWED_ORIGINS` | no | comma-separated exact browser origins; empty disables CORS |
+
+`/health` is process liveness. `/ready` is product readiness and requires a
+configured track index. The listener acquires a connection permit before
+`accept`, so saturation applies kernel-backlog backpressure instead of creating
+unbounded detached threads.
 
 Do not source or copy the root `.env` into a worktree. Point a command at the
 existing environment through the normal settings mechanism, and never print

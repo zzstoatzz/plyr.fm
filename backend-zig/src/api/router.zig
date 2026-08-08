@@ -39,6 +39,16 @@ pub fn handle(
             return;
         }
         try response.json(request, .ok, "{\"status\":\"ok\",\"role\":\"api\"}", request_id, app.cors);
+    } else if (mem.eql(u8, path, "/ready")) {
+        if (request.head.method != .GET) {
+            try response.apiError(request, .method_not_allowed, request_id, app.cors);
+            return;
+        }
+        if (app.track_store == null) {
+            try response.apiError(request, .service_unavailable, request_id, app.cors);
+            return;
+        }
+        try response.json(request, .ok, "{\"status\":\"ready\",\"index\":\"configured\"}", request_id, app.cors);
     } else if (trackId(path)) |id| {
         if (request.head.method != .GET) {
             try response.apiError(request, .method_not_allowed, request_id, app.cors);

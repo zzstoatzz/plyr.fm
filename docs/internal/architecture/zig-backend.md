@@ -88,6 +88,12 @@ services during migration or become Zig libraries/services later. Keeping the
 interfaces explicit lets the API advance without silently expanding this
 branch into a second big-bang backend rewrite.
 
+The API process treats its index as required configuration. `INDEX_MODE=disabled`
+exists only for deliberate contract tests and indexless development; it does not
+silently turn a production configuration mistake into a healthy deployment.
+`/health` reports liveness and `/ready` reports whether the product dependency is
+configured. Connection handlers are bounded by `MAX_CONNECTIONS` before accept.
+
 ## migration rules
 
 - Preserve an existing HTTP behavior when it is useful and consistent with the

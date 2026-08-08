@@ -12,7 +12,7 @@ pub fn main() !void {
     const io = threaded_io.io();
 
     const settings = config.Config.fromEnvironment() catch |err| {
-        std.log.err("invalid configuration: {} (MODE must be api)", .{err});
+        std.log.err("invalid configuration: {}", .{err});
         return err;
     };
 
@@ -24,7 +24,7 @@ pub fn main() !void {
 
     const track_store = if (postgres_store) |*store| store.store() else null;
     switch (settings.role) {
-        .api => try server.run(io, settings.port, .{
+        .api => try server.run(io, settings.port, settings.max_connections, .{
             .track_store = track_store,
             .track_collection = settings.track_collection,
             .cors = .{ .allowed_origins = settings.cors_allowed_origins },

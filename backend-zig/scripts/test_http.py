@@ -66,6 +66,32 @@ def _wait_until_ready(base_url: str, process: subprocess.Popen[bytes]) -> None:
     raise TimeoutError("Zig API did not become ready")
 
 
+def _assert_connection_backpressure(port: int) -> None:
+    blockers = [socket.create_connection(("127.0.0.1", port)) for _ in range(2)]
+    queued = socket.create_connection(("127.0.0.1", port))
+    try:
+        time.sleep(0.05)
+        queued.sendall(
+            b"GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n"
+        )
+        queued.settimeout(0.1)
+        try:
+            queued.recv(1)
+        except TimeoutError:
+            pass
+        else:
+            raise AssertionError("connection limit accepted a third active handler")
+
+        blockers[0].close()
+        blockers = blockers[1:]
+        queued.settimeout(1)
+        assert b"HTTP/1.1 200" in queued.recv(4096)
+    finally:
+        queued.close()
+        for blocker in blockers:
+            blocker.close()
+
+
 def main() -> None:
     port = _unused_port()
     base_url = f"http://127.0.0.1:{port}"
@@ -74,6 +100,8 @@ def main() -> None:
         "MODE": "api",
         "PORT": str(port),
         "TRACK_COLLECTION_NSID": COLLECTION,
+        "INDEX_MODE": "disabled",
+        "MAX_CONNECTIONS": "2",
         "CORS_ALLOWED_ORIGINS": ALLOWED_ORIGIN,
     }
     # This smoke test intentionally exercises the unavailable-index contract.
@@ -88,9 +116,13 @@ def main() -> None:
     )
     try:
         _wait_until_ready(base_url, process)
+        _assert_connection_backpressure(port)
 
         status, _, api = _request(base_url, "/v1")
         assert status == 200 and api == {"object": "api", "version": "v1"}
+
+        status, _, readiness = _request(base_url, "/ready")
+        assert status == 503 and readiness["error"]["code"] == "service_unavailable"
 
         status, _, invalid = _request(base_url, "/v1/tracks/42")
         assert status == 400 and invalid["error"]["code"] == "invalid_request"
