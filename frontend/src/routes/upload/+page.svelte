@@ -9,6 +9,7 @@
 	import WaveLoading from "$lib/components/WaveLoading.svelte";
 	import TagInput from "$lib/components/TagInput.svelte";
 	import CopyrightRightsPanel from "$lib/components/CopyrightRightsPanel.svelte";
+	import ArtworkField from "$lib/components/ArtworkField.svelte";
 	import type { TrackRights } from "$lib/components/CopyrightRightsPanel.svelte";
 	import type { FeaturedArtist, AlbumSummary, Artist } from "$lib/types";
 	import { API_URL, getServerConfig } from "$lib/config";
@@ -330,30 +331,6 @@
 		}
 	}
 
-	async function handleImageChange(e: Event) {
-		const target = e.target as HTMLInputElement;
-		if (target.files && target.files[0]) {
-			const selected = target.files[0];
-
-			try {
-				const config = await getServerConfig();
-				const sizeMB = selected.size / (1024 * 1024);
-				if (sizeMB > config.max_image_size_mb) {
-					toast.error(
-						`image too large (${sizeMB.toFixed(1)}MB). max: ${config.max_image_size_mb}MB`,
-					);
-					target.value = "";
-					imageFile = null;
-					return;
-				}
-			} catch (_e) {
-				console.error("failed to validate image size:", _e);
-			}
-
-			imageFile = selected;
-		}
-	}
-
 	async function logout() {
 		await auth.logout();
 		window.location.href = "/";
@@ -488,23 +465,7 @@
 			</div>
 
 			<div class="form-group">
-				<label for="image-input">artwork (optional)</label>
-				<input
-					id="image-input"
-					type="file"
-					accept="image/*"
-					onchange={handleImageChange}
-				/>
-				<p class="format-hint">supported: jpg, png, webp, gif</p>
-				{#if imageFile}
-					<p class="file-info">
-						{imageFile.name} ({(
-							imageFile.size /
-							1024 /
-							1024
-						).toFixed(2)} MB)
-					</p>
-				{/if}
+				<ArtworkField did={auth.user?.did} bind:file={imageFile} />
 			</div>
 
 			<CopyrightRightsPanel
