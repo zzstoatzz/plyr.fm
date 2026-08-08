@@ -211,7 +211,7 @@ max_lines = 544
 
 [[rules]]
 path = "backend/src/backend/_internal/tasks/ingest.py"
-max_lines = 1092
+max_lines = 1099
 
 [[rules]]
 path = "backend/tests/test_jetstream.py"
@@ -303,7 +303,7 @@ max_lines = 649
 
 [[rules]]
 path = "backend/tests/test_post_create_hooks.py"
-max_lines = 505
+max_lines = 523
 
 [[rules]]
 path = "backend/tests/api/test_audio_optimize.py"

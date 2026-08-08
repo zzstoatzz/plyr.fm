@@ -7,6 +7,7 @@ both the API upload path and Jetstream ingest call run_post_track_create_hooks()
 import logging
 
 import logfire
+from atproto_oauth.security import is_safe_url
 from redis.exceptions import RedisError
 from sqlalchemy import delete, select
 from sqlalchemy.orm import joinedload
@@ -63,7 +64,10 @@ async def resolve_audio_url(track_id: int) -> str | None:
                 select(Artist.pds_url).where(Artist.did == artist_did).limit(1)
             )
             artist_pds_url = artist_result.scalar_one_or_none()
-            if artist_pds_url:
+            # rows written before the resolution-time check (#1778) can still
+            # hold an unsafe endpoint, and this URL is handed to third-party
+            # fetchers, so re-check what we stored rather than trusting it
+            if artist_pds_url and is_safe_url(artist_pds_url):
                 return pds_blob_url(artist_pds_url, artist_did, pds_blob_cid)
 
         return None
