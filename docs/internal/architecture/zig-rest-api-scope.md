@@ -16,9 +16,14 @@ useful part of [OpenAI's REST compatibility policy](https://developers.openai.co
 which currently keeps its REST API under `v1` and names additive changes that
 do not require a new major version.
 
-## measured Python surface
+## live surface inventory
 
-Snapshot from `origin/main` at `dbfcfb2b`:
+The inventory is derived from the running FastAPI router, SQLAlchemy metadata,
+and Docket registry. Run `just zig inventory` for the summary,
+`just zig inventory --routes` for every route, or `just zig inventory --json`
+for machine-readable output.
+
+Snapshot from `origin/main` at `87a3ced0`:
 
 | measure | count | meaning |
 |---|---:|---|
@@ -26,13 +31,82 @@ Snapshot from `origin/main` at `dbfcfb2b`:
 | method operations | 221 | routes expanded across their accepted methods |
 | Subsonic routes | 37 | compatibility aliases and fallback under `/rest` |
 | Postgres tables | 27 | content, sessions, jobs, interactions, and operational state mixed together |
-| registered Docket tasks | 39 | ingestion, PDS writes, media, ML, moderation, exports, and repair |
+| registered Docket tasks | 40 | ingestion, record writes, media, ML, moderation, exports, and repair |
 | settings sections | 23 | infrastructure and product integrations mediated by the process |
 | Python test cases | 1,448 passed, 25 skipped | current local baseline including parametrized cases |
 
 The raw route count overstates the product API because protocol endpoints,
 compatibility aliases, repair operations, and internal proxies are mounted on
 the same application.
+
+### coverage ledger
+
+“Covered” means the Zig route exists and its contract is exercised locally. It
+does not mean the corresponding Python response was copied. The new API is
+allowed to replace several old operations with one coherent resource, or to
+retire an operation entirely, but every old capability still needs an explicit
+decision.
+
+| Zig surface | state | capability covered | important gaps |
+|---|---|---|---|
+| `GET /v1` | covered | API namespace discovery | generated API description/OpenAPI |
+| `GET /v1/tracks/{track_id}` | covered | public, published track detail from the projection | authenticated viewer state, private/gated tracks, playback, list/search views, publication and mutations |
+| `GET /health` | covered | process liveness | none for liveness |
+| `GET /ready` | covered | index configuration and a live database probe | readiness for dependencies required by future routes |
+| `GET /` | covered | points clients at `/v1` | protocol metadata remains separate |
+
+`OPTIONS` handling, bounded connections, CORS, request IDs, and the common JSON
+error envelope are covered cross-cutting behavior, not product capabilities.
+
+The product coverage count is therefore **one read capability**: track detail.
+It overlaps Python's `GET /tracks/{track_id}`, but semantic parity is still
+partial because the Zig route deliberately excludes viewer-specific and
+delivery behavior. Of the 221 Python operations, root discovery and liveness
+have covered successor behavior, track detail has partial coverage, and the
+remaining 218 have no implemented Zig mapping yet.
+
+### legacy surface by resource
+
+This table is the queue of capabilities to account for. Counts are route
+objects first and method-level operations second; `/rest` is larger in the
+second column because every Subsonic route accepts both `GET` and `POST`.
+
+| resource | routes | operations | Zig v1 status |
+|---|---:|---:|---|
+| `/rest` | 37 | 74 | not started; separate compatibility adapter |
+| `/tracks` | 33 | 33 | track detail partial; all other capabilities open |
+| `/lists` | 18 | 18 | not started |
+| `/auth` | 15 | 15 | not started |
+| `/artists` | 9 | 9 | not started |
+| `/albums` | 9 | 9 | not started |
+| `/jams` | 9 | 9 | not started |
+| `/copyright` | 8 | 8 | not started |
+| `/now-playing` | 4 | 4 | not started |
+| `/audio` | 3 | 3 | not started |
+| `/radio` | 3 | 3 | not started |
+| `/exports` | 3 | 3 | not started |
+| `/stats` | 3 | 3 | not started |
+| `/account` | 2 | 2 | not started |
+| `/activity` | 2 | 2 | not started |
+| `/search` | 2 | 2 | not started |
+| `/preferences` | 2 | 2 | not started |
+| `/queue` | 2 | 2 | not started |
+| `/migration` | 2 | 2 | candidate for retirement/internal tooling |
+| `/pds-save` | 2 | 2 | candidate for retirement/internal tooling |
+| `/moderation` | 2 | 2 | not started |
+| `/.well-known` | 2 | 2 | protocol surface; not started |
+| `/discover` | 1 | 1 | not started |
+| `/for-you` | 1 | 1 | not started |
+| `/oembed` | 1 | 1 | protocol surface; not started |
+| `/users` | 1 | 1 | not started |
+| `/` | 1 | 1 | covered with a new response contract |
+| `/health` | 1 | 1 | covered; readiness split into `/ready` |
+| `/config` | 1 | 1 | not started |
+| `/oauth-client-metadata.json` | 1 | 1 | protocol surface; not started |
+| `/robots.txt` | 1 | 1 | protocol surface; not started |
+| `/sitemap-data` | 1 | 1 | indexing surface; not started |
+| `/logfire-proxy` | 1 | 1 | candidate for retirement |
+| `/xrpc` | 1 | 1 | protocol surface; not started |
 
 ## current capability families
 
@@ -43,7 +117,7 @@ the same application.
 | tracks | 33 `/tracks/*` routes | PDS records/blobs, Postgres, R2, transcoder, Docket, moderation, ML | split catalog reads, publishing commands, interactions, playback, and repair; retire repair verbs from public API |
 | albums | `/albums/*` | ATProto list/track records, Postgres, R2 images | model as collection resources; eliminate local-first finalization semantics |
 | playlists and liked list | 18 `/lists/*` routes | ATProto list records, Postgres hydration, Redis cache, recommendations | expose `/v1/playlists`; liked tracks are an interaction collection, not a magic list subtype |
-| likes and comments | nested track routes | PDS records, local projections, Docket write-behind, Redis tombstones | PDS-first interaction resources; no success based only on local mutation |
+| likes and comments | nested track routes | PDS records, local projections, Docket write-behind, Redis tombstones | source-authoritative interaction resources; no success based only on local mutation |
 | uploads and revisions | track upload/audio/revision routes | temporary jobs, R2, PDS uploadBlob, transcoder, Docket | redesign as asynchronous `/v1/uploads` and publication operations with idempotency |
 | playback | `/audio/*`, track play | R2/PDS/space blob resolution, supporter checks, counters | `/v1/tracks/{id}/playback`; separate authorization and availability from catalog metadata |
 | discovery | `/search`, `/for-you`, `/discover`, tags | SQL, Redis, follow graph, Turbopuffer, CLAP/Replicate-derived data | preserve as query resources after catalog reads; recommendations are derived and explainable as such |
@@ -88,7 +162,7 @@ the same application.
 
 ### Background execution
 
-The 39 Docket tasks fall into seven workloads:
+The 40 Docket tasks fall into seven workloads:
 
 1. verified-state projection candidates: track/like/comment/list/profile,
    identity, and account-event ingestion;
@@ -184,7 +258,7 @@ remain in `plyr-backend` rather than becoming generic libraries prematurely.
 2. Read-only catalog: tracks, artists, albums, playlists, and playback
    availability.
 3. Search, tags, activity, and derived recommendation surfaces.
-4. Session-aware viewer state and PDS-first interactions.
+4. Session-aware viewer state and source-authoritative interactions.
 5. Upload/publication operations and their asynchronous status resources.
 6. Exports, moderation reports, queues, and other stateful product workflows.
 7. Separate adapters for Subsonic and any retained legacy clients.
