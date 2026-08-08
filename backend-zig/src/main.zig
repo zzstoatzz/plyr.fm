@@ -61,6 +61,7 @@ test {
     _ = @import("internal/domain/artist.zig");
     _ = @import("internal/domain/album.zig");
     _ = @import("internal/domain/album_list.zig");
+    _ = @import("internal/atproto/list_record.zig");
     _ = @import("internal/index/artist_store.zig");
     _ = @import("internal/index/album_store.zig");
     _ = @import("internal/index/postgres_album_store.zig");
@@ -72,5 +73,6 @@ test {
     _ = @import("internal/identity/album_id.zig");
     _ = @import("internal/http/query.zig");
     _ = @import("internal/index/postgres_track_store.zig");
+    _ = @import("internal/projection/list_change.zig");
     _ = @import("server.zig");
 }

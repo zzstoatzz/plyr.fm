@@ -88,7 +88,10 @@ It is a localhost regression baseline, not a Neon production capacity claim.
 ## intentionally open
 
 Album detail and ordered membership need a verified projection of the list
-record's strong references. Mutations must write source-authoritative records
-and are not added on top of the legacy local-first finalization flow. Global
-discovery, viewer state, artwork mirroring, and description authorship remain
-separate design work.
+record's strong references. The schema-independent DAG-CBOR decoder and atomic
+projection command are now defined in
+[`zig-verified-list-projection.md`](zig-verified-list-projection.md); verified
+ingestion and its Postgres adapter remain before the detail route. Mutations
+must write source-authoritative records and are not added on top of the legacy
+local-first finalization flow. Global discovery, viewer state, artwork
+mirroring, and description authorship remain separate design work.
