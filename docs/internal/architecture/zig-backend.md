@@ -125,5 +125,11 @@ The first REST slice is the read-only public
 Cursor pagination and stable filters begin with the subsequent track collection
 endpoint; they are not smuggled into the detail resource.
 
+The same boundary now supports the anonymous track collection and
+[`GET /v1/artists/{identifier}`](zig-v1-artist.md). Artist lookup keeps DID as
+canonical identity, treats handles as aliases, and exposes the provenance of
+legacy profile and preference fields rather than presenting the current tables
+as authoritative.
+
 Verified ingestion and blob mirroring are dependencies of a trustworthy
 projection, but their implementation is outside the REST-focused first slice.

@@ -8,6 +8,8 @@ const pg = @import("pg");
 const zat = @import("zat");
 const track = @import("../domain/track.zig");
 const track_id = @import("../identity/track_id.zig");
+const artist_index = @import("artist_store.zig");
+const PostgresArtistStore = @import("postgres_artist_store.zig").PostgresArtistStore;
 const TrackStore = @import("track_store.zig").TrackStore;
 
 pub const PostgresTrackStore = struct {
@@ -386,14 +388,25 @@ test "PostgreSQL adapter reads a complete derived projection" {
     if (!std.mem.eql(u8, database_name, "relay_test")) return error.UnsafeTestDatabase;
 
     _ = try store_impl.pool.exec("DROP TABLE IF EXISTS tracks", .{});
+    _ = try store_impl.pool.exec("DROP TABLE IF EXISTS user_preferences", .{});
     _ = try store_impl.pool.exec("DROP TABLE IF EXISTS artists", .{});
     _ = try store_impl.pool.exec(
         \\CREATE TABLE artists (
         \\  did text PRIMARY KEY,
         \\  handle text NOT NULL,
         \\  display_name text NOT NULL,
+        \\  bio text,
         \\  avatar_url text,
-        \\  deactivated boolean NOT NULL DEFAULT false
+        \\  deactivated boolean NOT NULL DEFAULT false,
+        \\  created_at timestamptz NOT NULL DEFAULT now(),
+        \\  updated_at timestamptz NOT NULL DEFAULT now()
+        \\)
+    , .{});
+    _ = try store_impl.pool.exec(
+        \\CREATE TABLE user_preferences (
+        \\  did text PRIMARY KEY REFERENCES artists(did),
+        \\  show_liked_on_profile boolean NOT NULL DEFAULT false,
+        \\  support_url text
         \\)
     , .{});
     _ = try store_impl.pool.exec(
@@ -421,8 +434,16 @@ test "PostgreSQL adapter reads a complete derived projection" {
         \\)
     , .{});
     _ = try store_impl.pool.exec(
-        "INSERT INTO artists VALUES ($1, $2, $3, $4)",
+        "INSERT INTO artists (did, handle, display_name, avatar_url) VALUES ($1, $2, $3, $4)",
         .{ "did:plc:artist", "artist.example", "Artist", @as(?[]const u8, null) },
+    );
+    _ = try store_impl.pool.exec(
+        "UPDATE artists SET bio = 'sound maker', created_at = '2026-08-08T10:00:00Z', updated_at = '2026-08-08T11:00:00Z' WHERE did = 'did:plc:artist'",
+        .{},
+    );
+    _ = try store_impl.pool.exec(
+        "INSERT INTO user_preferences VALUES ('did:plc:artist', true, 'atprotofans')",
+        .{},
     );
     const uri = "at://did:plc:artist/fm.plyr.dev.track/3m123abc";
     _ = try store_impl.pool.exec(
@@ -473,6 +494,33 @@ test "PostgreSQL adapter reads a complete derived projection" {
     try std.testing.expectEqual(track.ProjectionVerification.legacy_unverified, value.projection.verification);
     try std.testing.expectEqualStrings("self-label", value.moderation.self_labels[0]);
     try std.testing.expectEqual(@as(i64, 7), value.metrics.play_count);
+
+    var artist_store_impl: PostgresArtistStore = .{ .pool = store_impl.pool };
+    const artist_store = artist_store_impl.store();
+    const artist_value = (try artist_store.get(arena.allocator(), .{ .did = "did:plc:artist" })).?;
+    try std.testing.expectEqualStrings("artist.example", artist_value.handle);
+    try std.testing.expectEqualStrings("sound maker", artist_value.bio.?);
+    try std.testing.expect(artist_value.show_liked_on_profile);
+    try std.testing.expectEqualStrings("atprotofans", artist_value.support_url.?);
+    try std.testing.expectEqualStrings("2026-08-08T10:00:00.000000Z", artist_value.created_at);
+    try std.testing.expectEqual(@import("../domain/artist.zig").ClaimSource.legacy_projection, artist_value.sources.profile);
+    try std.testing.expectEqual(@import("../domain/artist.zig").ClaimSource.legacy_local, artist_value.sources.public_preferences);
+
+    const by_handle = (try artist_store.get(arena.allocator(), .{ .handle = "artist.example" })).?;
+    try std.testing.expectEqualStrings("did:plc:artist", by_handle.did);
+    try std.testing.expect((try artist_store.get(arena.allocator(), .{ .did = "did:plc:missing" })) == null);
+
+    _ = try store_impl.pool.exec(
+        \\INSERT INTO artists (did, handle, display_name, deactivated) VALUES
+        \\  ('did:plc:inactive', 'inactive.example', 'Inactive', true),
+        \\  ('did:plc:alias-one', 'shared.example', 'One', false),
+        \\  ('did:plc:alias-two', 'SHARED.EXAMPLE', 'Two', false)
+    , .{});
+    try std.testing.expect((try artist_store.get(arena.allocator(), .{ .did = "did:plc:inactive" })) == null);
+    try std.testing.expectError(
+        artist_index.ArtistStore.Error.CorruptProjection,
+        artist_store.get(arena.allocator(), .{ .handle = "shared.example" }),
+    );
 
     const newer_uri = "at://did:plc:artist/fm.plyr.dev.track/3m123abe";
     const tied_uri = "at://did:plc:artist/fm.plyr.dev.track/3m123abd";

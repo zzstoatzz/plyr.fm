@@ -2,6 +2,7 @@ const std = @import("std");
 const config = @import("config.zig");
 const server = @import("server.zig");
 const postgres = @import("internal/index/postgres_track_store.zig");
+const postgres_artists = @import("internal/index/postgres_artist_store.zig");
 
 var threaded_io: std.Io.Threaded = undefined;
 pub const std_options_debug_threaded_io: ?*std.Io.Threaded = &threaded_io;
@@ -23,9 +24,15 @@ pub fn main() !void {
     defer if (postgres_store) |*store| store.deinit();
 
     const track_store = if (postgres_store) |*store| store.store() else null;
+    var postgres_artist_store: ?postgres_artists.PostgresArtistStore = if (postgres_store) |*store|
+        .{ .pool = store.pool }
+    else
+        null;
+    const artist_store = if (postgres_artist_store) |*store| store.store() else null;
     switch (settings.role) {
         .api => try server.run(io, settings.port, settings.max_connections, .{
             .track_store = track_store,
+            .artist_store = artist_store,
             .track_collection = settings.track_collection,
             .cors = .{ .allowed_origins = settings.cors_allowed_origins },
         }),
@@ -35,10 +42,15 @@ pub fn main() !void {
 test {
     _ = @import("api/response.zig");
     _ = @import("api/router.zig");
+    _ = @import("api/artists.zig");
     _ = @import("api/tracks.zig");
     _ = @import("config.zig");
+    _ = @import("internal/application/get_artist.zig");
     _ = @import("internal/application/get_track.zig");
     _ = @import("internal/application/list_tracks.zig");
+    _ = @import("internal/domain/artist.zig");
+    _ = @import("internal/index/artist_store.zig");
+    _ = @import("internal/index/postgres_artist_store.zig");
     _ = @import("internal/identity/track_id.zig");
     _ = @import("internal/identity/track_cursor.zig");
     _ = @import("internal/index/postgres_track_store.zig");

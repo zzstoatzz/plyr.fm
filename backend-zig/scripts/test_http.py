@@ -145,6 +145,23 @@ def main() -> None:
         status, _, invalid = _request(base_url, "/v1/tracks/42")
         assert status == 400 and invalid["error"]["code"] == "invalid_request"
 
+        status, _, invalid_artist = _request(base_url, "/v1/artists/not-an-identifier")
+        assert status == 400
+        assert invalid_artist["error"]["code"] == "invalid_request"
+
+        for identifier in ("did:plc:artist", "Artist.Example"):
+            status, _, unavailable_artist = _request(
+                base_url, f"/v1/artists/{identifier}"
+            )
+            assert status == 503
+            assert unavailable_artist["error"]["code"] == "service_unavailable"
+
+        status, _, artist_method = _request(
+            base_url, "/v1/artists/did:plc:artist", method="POST"
+        )
+        assert status == 405
+        assert artist_method["error"]["code"] == "method_not_allowed"
+
         uri = f"at://did:plc:artist/{COLLECTION}/3m123abc"
         status, headers, unavailable = _request(
             base_url,

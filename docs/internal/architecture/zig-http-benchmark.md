@@ -96,3 +96,24 @@ database-backed track benchmark and Fly-native CPU/memory measurements are
 required before routing canary traffic. Every added subsystem must keep the
 service within a 256 MiB machine rather than spending the current headroom by
 default.
+
+## database-backed artist baseline — 2026-08-08
+
+The first artist slice was measured against the disposable Postgres 14
+projection used by `just zig test-postgres`. Each response includes the complete
+artist JSON representation and performs a pooled database query. These numbers
+are a local regression baseline; the database is on localhost and the fixture
+is deliberately small, so they are not a Neon or production capacity claim.
+
+| identifier | concurrency | requests/sec | p50 | p95 | p99 | unexpected responses |
+|---|---:|---:|---:|---:|---:|---:|
+| DID | 1 | 4,742 | 0.204 ms | 0.252 ms | 0.361 ms | 0 |
+| DID | 16 | 12,995 | 1.098 ms | 2.393 ms | 3.362 ms | 0 |
+| mixed-case handle | 16 | 12,920 | 1.111 ms | 2.351 ms | 3.283 ms | 0 |
+
+The handle path validates and normalizes the alias before querying and detects
+case-insensitive ambiguity. Its result staying within one percent of DID lookup
+shows that compatibility does not introduce a distinct application bottleneck
+in this fixture. The rebuilt amd64 canary image is 33,179,003 bytes, about 102
+kB larger than the initial image, and still uses the existing Postgres pool
+rather than opening a pool per resource.
