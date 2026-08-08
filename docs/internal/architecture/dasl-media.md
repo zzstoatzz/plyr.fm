@@ -4,9 +4,10 @@ title: "DASL media identity and Streamplace prior art"
 
 ## purpose
 
-This note records the protocol properties that constrain plyr.fm's Zig media
-model. It is not a commitment to MUXL for every audio object. It is a commitment
-not to confuse content identity, authored claims, retrieval, and availability.
+This note records useful prior art, not a protocol choice for plyr.fm. DASL and
+Streamplace are concrete examples of keeping content identity, authored claims,
+retrieval, and availability separate. The Zig API should preserve that
+separation without copying their wire formats by default.
 
 ## DASL and DRISL
 
@@ -64,17 +65,15 @@ Important implementation references:
 - [`pkg/vod/transfer.go`](https://github.com/streamplace/streamplace/blob/b6e7c43d84e14d7c03cb7a6f6eed035c5cf9aeeb/pkg/vod/transfer.go)
   demonstrates verify-before-visible storage.
 
-## plyr.fm v1 consequence
+## lesson for plyr.fm
 
-The v1 response uses `media.artifacts` and `media.origins`. An artifact is a CID
-claim; an origin is a retrieval claim. The legacy Python row supplies neither a
-signed origin attestation nor a persisted proof that the R2 URL still serves the
-declared CID, so the adapter leaves that relationship null.
+The reusable idea is the split, not any particular CID codec:
 
-The current Zig PostgreSQL adapter validates legacy PDS blob references with
-`zat.Cid`. Those references use ATProto's strict CIDv1/raw/SHA-256 profile; plyr
-does not maintain a second CID parser for them. BDASL is relevant to a future
-streaming-media artifact format, but it is not accepted at this legacy PDS-blob
-boundary. If plyr adopts BDASL artifacts, their BLAKE3 construction and
-streaming verification must live in a reusable protocol library rather than a
-storage-specific backend helper.
+- an artifact identifies media content;
+- an authored record makes a claim about that artifact;
+- an origin says where it may be retrieved;
+- verification determines whether bytes from an origin satisfy the claim;
+- an index records observed state without becoming its authority.
+
+Any future media protocol decision needs its own design and interoperability
+case. This note does not make that decision.

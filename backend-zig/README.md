@@ -1,8 +1,9 @@
 # plyr.fm Zig REST backend
 
-This is the PDS-first `/v1` app-view API. It is intentionally a separate
-contract from the Python API; Postgres is a derived index and R2 is a delivery
-mirror, not content authority.
+This is the source-authoritative `/v1` app-view API. It is intentionally a
+separate contract from the Python API: user-owned records remain authoritative,
+Postgres is a rebuildable index, and R2 is a delivery mirror rather than a
+second source of truth.
 
 ## local commands
 
