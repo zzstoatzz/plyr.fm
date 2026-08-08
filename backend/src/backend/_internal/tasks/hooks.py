@@ -7,6 +7,7 @@ both the API upload path and Jetstream ingest call run_post_track_create_hooks()
 import logging
 
 import logfire
+from atproto_oauth.security import is_safe_url
 from redis.exceptions import RedisError
 from sqlalchemy import delete, select
 from sqlalchemy.orm import joinedload
@@ -17,6 +18,7 @@ from backend._internal.tasks.ml import (
     schedule_embedding_generation,
     schedule_genre_classification,
 )
+from backend._internal.tasks.pds_mirror import schedule_pds_blob_mirror
 from backend.config import settings
 from backend.models import Artist, CopyrightScan, Track
 from backend.utilities.database import db_session
@@ -63,10 +65,19 @@ async def resolve_audio_url(track_id: int) -> str | None:
                 select(Artist.pds_url).where(Artist.did == artist_did).limit(1)
             )
             artist_pds_url = artist_result.scalar_one_or_none()
-            if artist_pds_url:
+            # rows written before the resolution-time check (#1778) can still
+            # hold an unsafe endpoint, and this URL is handed to third-party
+            # fetchers, so re-check what we stored rather than trusting it
+            if artist_pds_url and is_safe_url(artist_pds_url):
                 return pds_blob_url(artist_pds_url, artist_did, pds_blob_cid)
 
         return None
+
+
+async def _has_own_audio_object(track_id: int) -> bool:
+    """whether the track's audio is stored by us rather than only on a PDS."""
+    async with db_session() as db:
+        return bool(await db.scalar(select(Track.r2_url).where(Track.id == track_id)))
 
 
 async def run_post_track_create_hooks(
@@ -102,6 +113,15 @@ async def run_post_track_create_hooks(
         await _mark_notification_sent(track_id)
     else:
         await _send_track_notification(track_id)
+
+    # 1b. audio that lives only on the artist's PDS is mirrored and verified
+    # against its CID before any vendor sees it — a PDS serves its blobs fresh
+    # per request, so scanning that URL scans whatever it feels like returning
+    # at that moment (#1778). the mirror re-enters here once we hold a copy.
+    if audio_url and not await _has_own_audio_object(track_id):
+        await schedule_pds_blob_mirror(track_id)
+        await invalidate_tracks_discovery_cache()
+        return
 
     # 2. copyright scan
     if audio_url and not skip_copyright:

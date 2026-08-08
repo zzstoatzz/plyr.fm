@@ -90,6 +90,24 @@ class TestResolveAudioUrl:
         expected = pds_blob_url("https://pds.example.com", artist.did, "bafyblob")
         assert url == expected
 
+    async def test_none_for_unsafe_stored_pds_url(
+        self, db_session: AsyncSession
+    ) -> None:
+        """rows predating the resolution-time check can hold a hostile endpoint.
+
+        this URL is handed to AudD, Modal, and Replicate, so a stored value is
+        re-checked rather than trusted (#1778).
+        """
+        artist = await _create_artist(db_session, pds_url="http://169.254.169.254")
+        track = await _create_track(
+            db_session,
+            artist,
+            r2_url=None,
+            audio_storage="pds",
+            pds_blob_cid="bafyblob",
+        )
+        assert await resolve_audio_url(track.id) is None
+
     async def test_none_when_no_audio(self, db_session: AsyncSession) -> None:
         artist = await _create_artist(db_session)
         track = await _create_track(

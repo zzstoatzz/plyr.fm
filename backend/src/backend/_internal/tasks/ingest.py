@@ -13,6 +13,7 @@ from pathlib import PurePosixPath
 from urllib.parse import urlparse
 
 import logfire
+from atproto_oauth.security import is_safe_url
 from docket import ConcurrencyLimit, ExponentialRetry
 from sqlalchemy import delete, select, update
 from sqlalchemy.exc import IntegrityError, OperationalError
@@ -219,6 +220,7 @@ async def ingest_track_create(
                     not resolved_audio_url
                     and existing_track.pds_blob_cid
                     and artist.pds_url
+                    and is_safe_url(artist.pds_url)
                 ):
                     resolved_audio_url = pds_blob_url(
                         artist.pds_url, did, existing_track.pds_blob_cid
@@ -352,7 +354,12 @@ async def ingest_track_create(
             return
 
         resolved_audio_url = track.r2_url
-        if not resolved_audio_url and pds_blob_cid and artist.pds_url:
+        if (
+            not resolved_audio_url
+            and pds_blob_cid
+            and artist.pds_url
+            and is_safe_url(artist.pds_url)
+        ):
             resolved_audio_url = pds_blob_url(artist.pds_url, did, pds_blob_cid)
 
         logfire.info(
