@@ -22,12 +22,6 @@ COPY lexicons ./lexicons
 COPY backend/alembic.ini .
 COPY backend/alembic ./alembic
 
-# operator scripts (backfills, audits). they need the environment's database
-# and R2 credentials, which live on the machine and nowhere else, so this is
-# where they have to run from. only scripts importing `backend` alone work --
-# nothing installs their PEP 723 dependencies.
-COPY scripts ./scripts
-
 # install the project itself with bytecode compilation
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev --compile-bytecode
