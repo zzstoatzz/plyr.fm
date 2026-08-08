@@ -146,13 +146,13 @@ reads without exposing its physical schema through the REST model.
 
 ## next slice
 
-Connect destination-safe `getRepo` fetching and live firehose consumption to
-the verified snapshot and commit transactions as an independently deployable
-ingestion role. Album detail now joins list members to independently indexed
-track records while retaining missing, private, and moderated positions without
-silently substituting unrelated local rows. The first API canary remains
-read-only and does not gain an ingestion process merely because this library
-foundation now exists.
+The independently deployable ingester now connects destination-safe `getRepo`
+repair and live firehose consumption to the verified snapshot and commit
+transactions. The next projection work is source-authoritative account and
+track state, followed by verified blob mirroring. Album detail joins list
+members to independently indexed track records while retaining missing,
+private, and moderated positions without silently substituting unrelated local
+rows. The first API canary remains read-only and never starts the ingester.
 
 ## verifier resource baseline
 
@@ -192,7 +192,10 @@ the TLS hostname, refuses redirects, and preserves endpoint-safety failures as
 explicit outcomes. The complete policy and exercised path are in
 [`zig-ingestion-transport.md`](zig-ingestion-transport.md).
 
-`MODE=repair` now wires this library into a one-shot authenticated repository
-reconciliation process. It is separate from `MODE=api`; the canary API remains
-read-only and cannot resolve identities, fetch repositories, consume the
-firehose, or mutate `plyr_index`. Continuous firehose consumption is still open.
+`MODE=repair` wires this library into a one-shot authenticated repository
+reconciliation process. `MODE=ingester` uses Zat's fallible raw-frame boundary,
+a monotonic Postgres cursor, an authenticated-head interest set, key eviction,
+and synchronous bootstrap/repair to consume the signed firehose continuously.
+Both are separate from `MODE=api`; the canary API remains read-only and cannot
+resolve identities, fetch repositories, consume the firehose, or mutate
+`plyr_index`.

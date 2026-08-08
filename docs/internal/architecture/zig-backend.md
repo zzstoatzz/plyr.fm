@@ -77,12 +77,12 @@ state and expire or reconcile; they are not unpublished canonical tracks.
 
 ## implementation boundary
 
-This branch implements the versioned REST appview plus a deliberately separate
-one-shot ingestion role. `MODE=api` serves read-only HTTP; `MODE=repair`
-authenticates and reconciles one complete repository with network and
-projection-write authority, then exits. They share libraries but never start
-each other. A continuous ingester and Docket workers remain separate future
-process roles.
+This branch implements the versioned REST appview plus two deliberately
+separate ingestion roles. `MODE=api` serves read-only HTTP; `MODE=repair`
+authenticates and reconciles one complete repository, then exits;
+`MODE=ingester` continuously consumes signed relay frames and owns verified
+projection writes and repair. They share libraries but never start each other.
+Docket workers remain separate future process roles.
 
 The REST layer depends on interfaces for indexed state, PDS commands, blobs,
 moderation, and asynchronous work. Those implementations can remain Python

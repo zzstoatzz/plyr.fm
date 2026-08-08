@@ -3,6 +3,7 @@ const zat = @import("zat");
 
 pub const Role = enum {
     api,
+    ingester,
     repair,
 
     pub fn parse(value: []const u8) !Role {
@@ -29,6 +30,8 @@ pub const Config = struct {
     list_collection: []const u8,
     cors_allowed_origins: []const u8,
     repair_did: ?[]const u8,
+    relay_hosts: []const u8,
+    relay_name: []const u8,
 
     pub fn fromEnvironment() !Config {
         const role_value = getenv("MODE") orelse return error.RoleRequired;
@@ -50,6 +53,8 @@ pub const Config = struct {
             if (repair_did == null) return error.RepairDidRequired;
             if (zat.Did.parse(repair_did.?) == null) return error.InvalidRepairDid;
         }
+        if (role == .ingester and (database_url == null or index_mode != .required))
+            return error.IngesterDatabaseRequired;
 
         return .{
             .role = role,
@@ -61,6 +66,8 @@ pub const Config = struct {
             .list_collection = list_collection,
             .cors_allowed_origins = getenv("CORS_ALLOWED_ORIGINS") orelse "",
             .repair_did = repair_did,
+            .relay_hosts = getenv("INGEST_RELAY_HOSTS") orelse "wss://bsky.network",
+            .relay_name = getenv("INGEST_RELAY_NAME") orelse "bsky.network",
         };
     }
 };
@@ -79,7 +86,7 @@ fn parsePositiveUsize(value: []const u8) !usize {
 test "process roles are explicit" {
     try std.testing.expectEqual(Role.api, try Role.parse("api"));
     try std.testing.expectEqual(Role.repair, try Role.parse("repair"));
-    try std.testing.expectError(error.InvalidRole, Role.parse("ingester"));
+    try std.testing.expectEqual(Role.ingester, try Role.parse("ingester"));
     try std.testing.expectError(error.InvalidRole, Role.parse("worker"));
     try std.testing.expectError(error.InvalidRole, Role.parse("all"));
 }

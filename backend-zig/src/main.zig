@@ -6,6 +6,7 @@ const postgres_artists = @import("internal/index/postgres_artist_store.zig");
 const postgres_albums = @import("internal/index/postgres_album_store.zig");
 const postgres_album_detail = @import("internal/index/postgres_album_detail_store.zig");
 const repair_runner = @import("internal/ingest/repair_runner.zig");
+const continuous_runner = @import("internal/ingest/continuous_runner.zig");
 
 var threaded_io: std.Io.Threaded = undefined;
 pub const std_options_debug_threaded_io: ?*std.Io.Threaded = &threaded_io;
@@ -66,6 +67,18 @@ pub fn main() !void {
             std.log.info("verified repository repair for {s}: {s}", .{ did, @tagName(outcome) });
             if (!repair_runner.succeeded(outcome)) return error.RepairNotApplied;
         },
+        .ingester => {
+            const store = if (postgres_store) |*value| value else return error.IngesterDatabaseRequired;
+            try continuous_runner.run(
+                io,
+                allocator,
+                store.pool,
+                settings.relay_hosts,
+                settings.relay_name,
+                settings.list_collection,
+                settings.track_collection,
+            );
+        },
     }
 }
 
@@ -101,6 +114,9 @@ test {
     _ = @import("internal/index/postgres_track_store.zig");
     _ = @import("internal/cache/lru.zig");
     _ = @import("internal/ingest/cached_signing_key_resolver.zig");
+    _ = @import("internal/ingest/continuous_runner.zig");
+    _ = @import("internal/ingest/postgres_relay_cursor.zig");
+    _ = @import("internal/ingest/relay_cursor.zig");
     _ = @import("internal/ingest/repository_source.zig");
     _ = @import("internal/ingest/repair_runner.zig");
     _ = @import("internal/ingest/safe_endpoint.zig");
@@ -109,6 +125,7 @@ test {
     _ = @import("internal/ingest/zat_repository_source.zig");
     _ = @import("internal/ingest/zat_pds_repository_source.zig");
     _ = @import("internal/ingest/zat_signing_key_resolver.zig");
+    _ = @import("internal/ingest/watched_repositories.zig");
     _ = @import("internal/projection/list_change.zig");
     _ = @import("internal/projection/commit_verifier.zig");
     _ = @import("internal/projection/snapshot_verifier.zig");

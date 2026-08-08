@@ -114,10 +114,13 @@ is deliberately small, so they are not a Neon or production capacity claim.
 The handle path validates and normalizes the alias before querying and detects
 case-insensitive ambiguity. Its result staying within one percent of DID lookup
 shows that compatibility does not introduce a distinct application bottleneck
-in this fixture. After the verified repair runtime was linked, the rebuilt
-amd64 canary image is 34,864,321 bytes, 1,626,322 bytes larger than the
-album-detail image. The API and repair roles share that binary, but only the
-selected role initializes its network or write-capable dependencies.
+in this fixture. After the verified repair runtime was linked, the amd64 canary
+image was 34,864,321 bytes, 1,626,322 bytes larger than the album-detail image.
+Linking the exercised continuous firehose role produces a 35,152,308-byte
+image, a further 287,987 compressed bytes. Its uncompressed ReleaseSafe
+executable is 12,531,312 bytes because the firehose/WebSocket paths are no
+longer dead code. The API, repair, and ingester roles share that artifact, but
+only the selected role initializes its network or write-capable dependencies.
 
 The artist-filtered track collection, returning five complete track resources,
 recorded 2,770.5 responses/s at concurrency one (0.906 ms p99) and 9,318.0 at

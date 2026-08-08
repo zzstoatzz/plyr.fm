@@ -94,8 +94,8 @@ This is a local regression baseline, not a Neon or Fly capacity claim.
 ## intentionally open
 
 The endpoint can read projections produced by the verified commit and complete
-repository snapshot stores. Destination-safe one-shot PDS repair is now wired,
-but the continuous relay/firehose ingestion process is not deployed yet. Album
-writes, artwork, viewer state, private/gated authorization, and
+repository snapshot stores. Destination-safe repair and the separately
+deployable continuous relay consumer are wired but not deployed. Album writes,
+artwork, viewer state, private/gated authorization, and
 presentation-field authorship remain separate capability work rather than
 being grafted onto this read.

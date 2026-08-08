@@ -10,7 +10,10 @@ The API and ingestion processes are explicit roles of the same binary:
   fetches repositories, or writes `plyr_index`;
 - `MODE=repair` performs one authenticated complete-repository reconciliation
   for `INGEST_REPAIR_DID`, then exits. It requires `INDEX_MODE=required`, a
-  database URL, and environment-aware track/list NSIDs.
+  database URL, and environment-aware track/list NSIDs;
+- `MODE=ingester` owns the continuous signed `subscribeRepos` connection,
+  verified projection writes, authoritative repair, and one source-scoped
+  relay checkpoint. It never serves HTTP.
 
 The repair role does not run migrations. Its database principal must be allowed
 to update the Zig-owned projection tables, while the canary API keeps its
@@ -25,6 +28,51 @@ TRACK_COLLECTION_NSID=fm.plyr.dev.track \
 LIST_COLLECTION_NSID=fm.plyr.dev.list \
 just zig repair-repo did:plc:example
 ```
+
+Run the continuous role with `just zig ingest`. `INGEST_RELAY_HOSTS` is a
+comma-separated ordered set of `wss://` endpoints and defaults to
+`wss://bsky.network`. `INGEST_RELAY_NAME` is the durable identity of their
+shared sequence space; it defaults to `bsky.network` and deliberately does not
+change when Zat rotates to another regional host.
+
+## continuous acceptance boundary
+
+The relay is consumed through Zat's fallible raw-frame callback. A decoded
+callback would advance Zat's reconnect cursor before projection could report a
+failure. The raw callback advances only after the application accepts the
+frame, so malformed input, invalid proof, failed repair, and failed checkpoint
+persistence all leave that sequence replayable.
+
+The first scheduler is intentionally FIFO with exactly one borrowed frame and
+one projection operation in flight. The WebSocket reader, TCP receive window,
+and upstream provide bounded backpressure; there is no application queue to
+overflow, drop, reorder, or watermark incorrectly. This preserves ordering for
+every repository and follows the Zig Zen's preference for simple, explicit
+control flow. Parallel per-DID chains are warranted only if measurements show
+that verified repositories cannot keep up.
+
+`plyr_index.relay_cursors` stores a monotonic sequence per configured relay
+identity. Accepted progress is coalesced for four seconds. A crash can
+therefore replay a short idempotent suffix, but cannot skip work: the cursor is
+changed only after the frame's projection/repair succeeds, and a database write
+never replaces a greater sequence with a smaller replay.
+
+The process does not bootstrap every DID on the public network. At startup it
+loads the interest set from authenticated `repo_heads`. Unknown repositories
+are decoded and ignored until an operation touches the configured track or
+list collection. The first such event triggers a complete authenticated PDS
+snapshot and adds that DID to the interest set. Every later commit for that DID
+is verified and advances its repository head even when the commit contains no
+selected record, preserving MST continuity. Identity events evict cached
+signing keys; watched sync events trigger authoritative repair; an
+`OutdatedCursor` control frame fails the role rather than silently creating an
+unfillable gap.
+
+Account control events are outside this list/track projection and currently
+advance only the relay checkpoint. Before this role can become the sole source
+for discovery availability, account status needs its own source-authoritative
+projection. That boundary is explicit rather than coupling signed list state
+to the legacy `artists` table.
 
 ## direct PDS threat model
 
@@ -97,16 +145,38 @@ clock. The adapter now performs the same locked one-time initialization before
 the pinned TLS dial. Without the live local exercise, the code compiled and its
 pure safety tests passed but the first production fetch would have panicked.
 
+## live relay baseline
+
+On 2026-08-08 the `MODE=ingester` role connected to `bsky.network` against the
+disposable `relay_test` database, persisted cursor `32574925168`, restarted,
+and resumed with that exact cursor in the subscribe URL. With an empty interest
+set it used 14.2 MiB RSS on the Apple M5 Pro host. This is 32.8 times smaller
+than the 466.1 MiB complete local FastAPI process, but the roles do different
+work and the comparison is a resource guardrail rather than functional parity.
+
+`just zig bench-ingest-dispatch` measures raw commit-frame decode plus
+collection discovery. The one-million-frame ReleaseFast run processed a
+240-byte irrelevant commit in 219 ns, or 4.57 million frames/second. It excludes
+the network, cryptographic verification, PDS repair, and Postgres persistence;
+its purpose is to prove that filtering the public firehose is not itself the
+bottleneck.
+
+The rebuilt production-shaped amd64 artifact is a 35,152,308-byte image, only
+287,987 compressed bytes above the repair-enabled artifact. The uncompressed
+ReleaseSafe executable is 12,531,312 bytes now that the firehose and WebSocket
+code is reachable.
+
 ## still open
 
-The one-shot role proves destination-safe bootstrap and repair. Continuous
-operation still needs a separately supervised relay/firehose consumer with:
+The separately supervised consumer, cursor, identity eviction, and synchronous
+gap repair are implemented. Continuous deployment still needs:
 
-- bounded frame and work queues;
-- durable cursor/checkpoint semantics;
-- identity-event key eviction;
-- gap-triggered repair scheduling and retry/backoff;
-- shutdown/drain behavior and ingestion health metrics;
-- staging-native resource and failure testing.
+- signal-driven graceful stop and final checkpoint flush;
+- retry/backoff and observable state for PDS repairs that cannot complete
+  synchronously;
+- account-state and track-record projections, blob mirroring, and tombstone
+  policy beyond verified list state;
+- ingestion health/lag metrics and an operator-visible poison-event policy;
+- staging-native resource, failure, and large-CAR testing.
 
 None of that belongs in `MODE=api`.

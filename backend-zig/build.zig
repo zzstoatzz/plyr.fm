@@ -56,4 +56,24 @@ pub fn build(b: *std.Build) void {
         "Benchmark authenticated complete-repository list extraction",
     );
     snapshot_bench_step.dependOn(&run_snapshot_bench.step);
+
+    const ingest_bench_module = b.createModule(.{
+        .root_source_file = b.path("src/bench_ingest_dispatch.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    ingest_bench_module.addImport("zat", b.dependency("zat", .{
+        .target = target,
+        .optimize = optimize,
+    }).module("zat"));
+    const ingest_bench = b.addExecutable(.{
+        .name = "bench-ingest-dispatch",
+        .root_module = ingest_bench_module,
+    });
+    const run_ingest_bench = b.addRunArtifact(ingest_bench);
+    const ingest_bench_step = b.step(
+        "bench-ingest-dispatch",
+        "Benchmark raw relay frame decode and collection discovery",
+    );
+    ingest_bench_step.dependOn(&run_ingest_bench.step);
 }
