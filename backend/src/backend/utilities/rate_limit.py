@@ -68,4 +68,12 @@ limiter = Limiter(
     enabled=settings.rate_limit.enabled,
     default_limits=[settings.rate_limit.default_limit],
     storage_uri=settings.docket.url or "memory://",
+    # a Redis outage must not take the API down with it. slowapi hands any
+    # storage exception to its rate-limit handler, which reads `exc.detail` --
+    # absent on redis errors -- so an unreachable Redis 500s every request,
+    # including /health, which then fails the platform health check.
+    # the fallback keeps limits enforced per-process and probes for recovery;
+    # swallow_errors is the backstop for paths the fallback does not cover.
+    in_memory_fallback_enabled=True,
+    swallow_errors=True,
 )
