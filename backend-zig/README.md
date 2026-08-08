@@ -14,7 +14,7 @@ just zig check
 just zig test-http
 just zig test-postgres
 just zig image
-INDEX_MODE=disabled TRACK_COLLECTION_NSID=fm.plyr.dev.track just zig run
+INDEX_MODE=disabled TRACK_COLLECTION_NSID=fm.plyr.dev.track LIST_COLLECTION_NSID=fm.plyr.dev.list just zig run
 just zig bench-http --duration 5 --concurrency 16
 DATABASE_URL=postgresql://... just zig bench-http --with-index --path '/v1/tracks?limit=50'
 ```
@@ -31,6 +31,7 @@ exercises the real `pg.zig` adapter. It only destroys tables in the dedicated
 |---|---:|---|
 | `MODE` | yes | must be `api`; set by `just zig run` |
 | `TRACK_COLLECTION_NSID` | yes | exact environment-aware track-record NSID |
+| `LIST_COLLECTION_NSID` | yes | exact environment-aware list-record NSID used by albums |
 | `DATABASE_URL` | in normal API mode | PostgreSQL projection; missing configuration fails startup |
 | `INDEX_MODE` | no | `required` by default; `disabled` is an explicit test/development mode whose readiness is `503` |
 | `MAX_CONNECTIONS` | no | hard cap on accepted connection handlers, default `128` |
@@ -43,12 +44,15 @@ configured track index. The listener acquires a connection permit before
 unbounded detached threads.
 
 The current product surface is `GET /v1/tracks`,
-`GET /v1/tracks/{track_id}`, and `GET /v1/artists/{identifier}`. The track
-collection accepts a strict `limit` from 1 to 100 and an opaque `cursor`; it
+`GET /v1/tracks/{track_id}`, `GET /v1/artists/{identifier}`, and
+`GET /v1/albums?artist_did={did}`. The track collection accepts a strict
+`limit` from 1 to 100 and an opaque `cursor`; it
 accepts an optional canonical `artist_did`, applies discovery or artist-view
 policy before keyset pagination, and returns the same track representation as
 detail. Artist lookup accepts a canonical DID or a case-insensitive handle
-alias and exposes the transitional source of each profile field.
+alias and exposes the transitional source of each profile field. The album
+collection exposes only canonical list-record albums and keeps local
+presentation fields explicitly separate from record identity.
 
 Do not source or copy the root `.env` into a worktree. Point a command at the
 existing environment through the normal settings mechanism, and never print

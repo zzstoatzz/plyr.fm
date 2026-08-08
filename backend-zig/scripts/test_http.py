@@ -100,6 +100,7 @@ def main() -> None:
         "MODE": "api",
         "PORT": str(port),
         "TRACK_COLLECTION_NSID": COLLECTION,
+        "LIST_COLLECTION_NSID": "fm.plyr.dev.list",
         "INDEX_MODE": "disabled",
         "MAX_CONNECTIONS": "2",
         "CORS_ALLOWED_ORIGINS": ALLOWED_ORIGIN,
@@ -150,6 +151,28 @@ def main() -> None:
         )
         assert status == 503
         assert unavailable_artist_tracks["error"]["code"] == "service_unavailable"
+
+        for invalid_target in (
+            "/v1/albums",
+            "/v1/albums?artist_did=not-a-did",
+            "/v1/albums?artist_did=did:plc:artist&limit=0",
+            "/v1/albums?artist_did=did:plc:a&artist_did=did:plc:b",
+        ):
+            status, _, invalid_albums = _request(base_url, invalid_target)
+            assert status == 400
+            assert invalid_albums["error"]["code"] == "invalid_request"
+
+        status, _, unavailable_albums = _request(
+            base_url, "/v1/albums?artist_did=did%3Aplc%3Aartist&limit=5"
+        )
+        assert status == 503
+        assert unavailable_albums["error"]["code"] == "service_unavailable"
+
+        status, _, album_method = _request(
+            base_url, "/v1/albums?artist_did=did:plc:artist", method="POST"
+        )
+        assert status == 405
+        assert album_method["error"]["code"] == "method_not_allowed"
 
         status, _, invalid = _request(base_url, "/v1/tracks/42")
         assert status == 400 and invalid["error"]["code"] == "invalid_request"

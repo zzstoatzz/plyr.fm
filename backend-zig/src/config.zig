@@ -25,6 +25,7 @@ pub const Config = struct {
     index_mode: IndexMode,
     max_connections: usize,
     track_collection: []const u8,
+    list_collection: []const u8,
     cors_allowed_origins: []const u8,
 
     pub fn fromEnvironment() !Config {
@@ -33,6 +34,9 @@ pub const Config = struct {
         const track_collection = getenv("TRACK_COLLECTION_NSID") orelse
             return error.TrackCollectionRequired;
         if (zat.Nsid.parse(track_collection) == null) return error.InvalidTrackCollection;
+        const list_collection = getenv("LIST_COLLECTION_NSID") orelse
+            return error.ListCollectionRequired;
+        if (zat.Nsid.parse(list_collection) == null) return error.InvalidListCollection;
         const index_mode = try IndexMode.parse(getenv("INDEX_MODE") orelse "required");
         const database_url = getenv("DATABASE_URL");
         if (index_mode == .required and database_url == null) return error.DatabaseUrlRequired;
@@ -44,6 +48,7 @@ pub const Config = struct {
             .index_mode = index_mode,
             .max_connections = try parsePositiveUsize(getenv("MAX_CONNECTIONS") orelse "128"),
             .track_collection = track_collection,
+            .list_collection = list_collection,
             .cors_allowed_origins = getenv("CORS_ALLOWED_ORIGINS") orelse "",
         };
     }

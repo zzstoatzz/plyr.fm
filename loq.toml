@@ -371,4 +371,4 @@ max_lines = 1178
 
 [[rules]]
 path = "backend-zig/src/internal/index/postgres_track_store.zig"
-max_lines = 665
+max_lines = 754

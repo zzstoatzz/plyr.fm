@@ -19,7 +19,8 @@ must not make a health-only deployment look like a supported API.
 The initial canary has exactly one process role: REST API. It has no migration,
 background-worker, jetstream, Redis, Docket, R2 write, PDS write, or production
 database authority. It reads the staging projection through a dedicated
-credential and uses the staging `fm.plyr.stg.track` namespace.
+credential and uses the staging `fm.plyr.stg.track` and `fm.plyr.stg.list`
+namespaces.
 
 The machine:
 

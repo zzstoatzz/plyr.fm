@@ -131,5 +131,9 @@ canonical identity, treats handles as aliases, and exposes the provenance of
 legacy profile and preference fields rather than presenting the current tables
 as authoritative.
 
+[`GET /v1/albums?artist_did={did}`](zig-v1-album-collection.md) applies the
+same rule to albums: the list-record AT-URI is identity, while local UUIDs and
+presentation fields are never mistaken for PDS-authored state.
+
 Verified ingestion and blob mirroring are dependencies of a trustworthy
 projection, but their implementation is outside the REST-focused first slice.

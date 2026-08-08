@@ -1,8 +1,10 @@
 const std = @import("std");
+const albums = @import("albums.zig");
 const artists = @import("artists.zig");
 const response = @import("response.zig");
 const tracks = @import("tracks.zig");
 const ArtistStore = @import("../internal/index/artist_store.zig").ArtistStore;
+const AlbumStore = @import("../internal/index/album_store.zig").AlbumStore;
 const TrackStore = @import("../internal/index/track_store.zig").TrackStore;
 
 const http = std.http;
@@ -13,7 +15,9 @@ pub const prefix = "/v1";
 pub const App = struct {
     track_store: ?TrackStore,
     artist_store: ?ArtistStore,
+    album_store: ?AlbumStore,
     track_collection: []const u8,
+    list_collection: []const u8,
     cors: response.CorsPolicy,
 };
 
@@ -56,6 +60,19 @@ pub fn handle(
             return;
         }
         try response.json(request, .ok, "{\"status\":\"ready\",\"index\":\"reachable\"}", request_id, app.cors);
+    } else if (mem.eql(u8, path, prefix ++ "/albums")) {
+        if (request.head.method != .GET) {
+            try response.apiError(request, .method_not_allowed, request_id, app.cors);
+            return;
+        }
+        try albums.list(
+            request,
+            allocator,
+            app.album_store,
+            app.list_collection,
+            app.cors,
+            request_id,
+        );
     } else if (mem.eql(u8, path, prefix ++ "/tracks")) {
         if (request.head.method != .GET) {
             try response.apiError(request, .method_not_allowed, request_id, app.cors);

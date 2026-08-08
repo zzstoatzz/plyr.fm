@@ -10,6 +10,7 @@ const track = @import("../domain/track.zig");
 const track_id = @import("../identity/track_id.zig");
 const artist_index = @import("artist_store.zig");
 const PostgresArtistStore = @import("postgres_artist_store.zig").PostgresArtistStore;
+const PostgresAlbumStore = @import("postgres_album_store.zig").PostgresAlbumStore;
 const TrackStore = @import("track_store.zig").TrackStore;
 
 pub const PostgresTrackStore = struct {
@@ -439,6 +440,7 @@ test "PostgreSQL adapter reads a complete derived projection" {
     if (!std.mem.eql(u8, database_name, "relay_test")) return error.UnsafeTestDatabase;
 
     _ = try store_impl.pool.exec("DROP TABLE IF EXISTS tracks", .{});
+    _ = try store_impl.pool.exec("DROP TABLE IF EXISTS albums", .{});
     _ = try store_impl.pool.exec("DROP TABLE IF EXISTS user_preferences", .{});
     _ = try store_impl.pool.exec("DROP TABLE IF EXISTS artists", .{});
     _ = try store_impl.pool.exec(
@@ -461,6 +463,21 @@ test "PostgreSQL adapter reads a complete derived projection" {
         \\)
     , .{});
     _ = try store_impl.pool.exec(
+        \\CREATE TABLE albums (
+        \\  id text PRIMARY KEY,
+        \\  artist_did text NOT NULL REFERENCES artists(did),
+        \\  slug text NOT NULL,
+        \\  title text NOT NULL,
+        \\  description text,
+        \\  image_id text,
+        \\  image_url text,
+        \\  atproto_record_uri text,
+        \\  atproto_record_cid text,
+        \\  created_at timestamptz NOT NULL,
+        \\  updated_at timestamptz NOT NULL
+        \\)
+    , .{});
+    _ = try store_impl.pool.exec(
         \\CREATE TABLE tracks (
         \\  atproto_record_uri text PRIMARY KEY,
         \\  atproto_record_cid text,
@@ -470,6 +487,7 @@ test "PostgreSQL adapter reads a complete derived projection" {
         \\  extra jsonb NOT NULL DEFAULT '{}',
         \\  created_at timestamptz NOT NULL,
         \\  artist_did text NOT NULL REFERENCES artists(did),
+        \\  album_id text REFERENCES albums(id),
         \\  pds_blob_cid text,
         \\  pds_blob_size integer,
         \\  r2_url text,
@@ -573,6 +591,28 @@ test "PostgreSQL adapter reads a complete derived projection" {
         artist_store.get(arena.allocator(), .{ .handle = "shared.example" }),
     );
 
+    const record_cid = "bafyreihdwdcefgh4dqkjv67uzcmw7ojee6xedzdetojuzjevtenxquvyku";
+    const album_a_uri = "at://did:plc:artist/fm.plyr.dev.list/albuma";
+    const album_b_uri = "at://did:plc:artist/fm.plyr.dev.list/albumb";
+    const other_album_uri = "at://did:plc:alias-one/fm.plyr.dev.list/other";
+    _ = try store_impl.pool.exec(
+        \\INSERT INTO albums (
+        \\  id, artist_did, slug, title, description, image_url,
+        \\  atproto_record_uri, atproto_record_cid, created_at, updated_at
+        \\) VALUES
+        \\  ('album-a', 'did:plc:artist', 'album-a', 'Album A', 'liner notes',
+        \\   'https://cdn.example/album-a.jpg', $1, $4, '2026-08-08T17:00:00Z', '2026-08-08T18:00:00Z'),
+        \\  ('album-b', 'did:plc:artist', 'album-b', 'Album B', NULL,
+        \\   NULL, $2, $4, '2026-08-08T16:00:00Z', '2026-08-08T16:00:00Z'),
+        \\  ('local-only', 'did:plc:artist', 'local-only', 'Local Only', NULL,
+        \\   NULL, NULL, NULL, '2026-08-08T19:00:00Z', '2026-08-08T19:00:00Z'),
+        \\  ('empty', 'did:plc:artist', 'empty', 'Empty', NULL,
+        \\   NULL, 'at://did:plc:artist/fm.plyr.dev.list/empty', $4,
+        \\   '2026-08-08T20:00:00Z', '2026-08-08T20:00:00Z'),
+        \\  ('other-album', 'did:plc:alias-one', 'other', 'Other', NULL,
+        \\   NULL, $3, $4, '2026-08-08T15:00:00Z', '2026-08-08T15:00:00Z')
+    , .{ album_a_uri, album_b_uri, other_album_uri, record_cid });
+
     const newer_uri = "at://did:plc:artist/fm.plyr.dev.track/3m123abe";
     const tied_uri = "at://did:plc:artist/fm.plyr.dev.track/3m123abd";
     const older_uri = "at://did:plc:artist/fm.plyr.dev.track/3m123abb";
@@ -601,6 +641,14 @@ test "PostgreSQL adapter reads a complete derived projection" {
         \\  ($7, 'Other Artist', '{}', '2026-08-08T10:00:00Z', 'did:plc:alias-one',
         \\   'audio/mpeg', 'public', '[]', '[]', 0, 'published')
     , .{ newer_uri, tied_uri, older_uri, hidden_uri, unlisted_uri, private_uri, other_uri });
+    _ = try store_impl.pool.exec(
+        \\UPDATE tracks SET album_id = CASE
+        \\  WHEN atproto_record_uri IN ($1, $2) THEN 'album-a'
+        \\  WHEN atproto_record_uri IN ($3, $4, $5) THEN 'album-b'
+        \\  WHEN atproto_record_uri = $6 THEN 'local-only'
+        \\  WHEN atproto_record_uri = $7 THEN 'other-album'
+        \\END
+    , .{ uri, newer_uri, hidden_uri, unlisted_uri, private_uri, older_uri, other_uri });
 
     var page_arena = std.heap.ArenaAllocator.init(allocator);
     defer page_arena.deinit();
@@ -662,4 +710,44 @@ test "PostgreSQL adapter reads a complete derived projection" {
     });
     try std.testing.expectEqual(@as(usize, 1), other_artist_page.len);
     try std.testing.expectEqualStrings(other_uri, other_artist_page[0].value.record.uri);
+
+    var album_store_impl: PostgresAlbumStore = .{ .pool = store_impl.pool };
+    const album_store = album_store_impl.store();
+    const first_album_page = try album_store.listByArtist(page_arena.allocator(), .{
+        .collection = "fm.plyr.dev.list",
+        .artist_did = "did:plc:artist",
+        .limit = 1,
+        .after = null,
+    });
+    try std.testing.expectEqual(@as(usize, 1), first_album_page.len);
+    try std.testing.expectEqualStrings(album_a_uri, first_album_page[0].value.record.uri);
+    try std.testing.expectEqualStrings("Album A", first_album_page[0].value.metadata.name);
+    try std.testing.expectEqualStrings("liner notes", first_album_page[0].value.presentation.description.?);
+    try std.testing.expectEqual(@as(i64, 2), first_album_page[0].value.metrics.track_count);
+    try std.testing.expectEqual(@as(i64, 7), first_album_page[0].value.metrics.total_plays);
+    try std.testing.expect(std.mem.startsWith(u8, first_album_page[0].value.id, "alb_"));
+
+    const second_album_page = try album_store.listByArtist(page_arena.allocator(), .{
+        .collection = "fm.plyr.dev.list",
+        .artist_did = "did:plc:artist",
+        .limit = 10,
+        .after = .{
+            .created_at_us = first_album_page[0].created_at_us,
+            .at_uri = first_album_page[0].value.record.uri,
+        },
+    });
+    try std.testing.expectEqual(@as(usize, 1), second_album_page.len);
+    try std.testing.expectEqualStrings(album_b_uri, second_album_page[0].value.record.uri);
+    // Adult-labeled tracks remain visible in a direct album/catalogue view;
+    // its private member is not counted.
+    try std.testing.expectEqual(@as(i64, 2), second_album_page[0].value.metrics.track_count);
+
+    const other_albums = try album_store.listByArtist(page_arena.allocator(), .{
+        .collection = "fm.plyr.dev.list",
+        .artist_did = "did:plc:alias-one",
+        .limit = 10,
+        .after = null,
+    });
+    try std.testing.expectEqual(@as(usize, 1), other_albums.len);
+    try std.testing.expectEqualStrings(other_album_uri, other_albums[0].value.record.uri);
 }

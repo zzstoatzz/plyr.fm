@@ -11,7 +11,7 @@ image:
     docker build --platform linux/amd64 --tag plyr-backend-zig:canary .
 
 run:
-    MODE=api TRACK_COLLECTION_NSID=${TRACK_COLLECTION_NSID:?set TRACK_COLLECTION_NSID} zig build run
+    MODE=api TRACK_COLLECTION_NSID=${TRACK_COLLECTION_NSID:?set TRACK_COLLECTION_NSID} LIST_COLLECTION_NSID=${LIST_COLLECTION_NSID:?set LIST_COLLECTION_NSID} zig build run
 
 test:
     zig build test
