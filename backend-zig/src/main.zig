@@ -73,6 +73,13 @@ test {
     _ = @import("internal/identity/album_id.zig");
     _ = @import("internal/http/query.zig");
     _ = @import("internal/index/postgres_track_store.zig");
+    _ = @import("internal/cache/lru.zig");
+    _ = @import("internal/ingest/cached_signing_key_resolver.zig");
+    _ = @import("internal/ingest/repository_source.zig");
+    _ = @import("internal/ingest/projector.zig");
+    _ = @import("internal/ingest/signing_key.zig");
+    _ = @import("internal/ingest/zat_repository_source.zig");
+    _ = @import("internal/ingest/zat_signing_key_resolver.zig");
     _ = @import("internal/projection/list_change.zig");
     _ = @import("internal/projection/commit_verifier.zig");
     _ = @import("internal/projection/snapshot_verifier.zig");
@@ -80,6 +87,7 @@ test {
     _ = @import("internal/projection/postgres_list_store.zig");
     _ = @import("internal/projection/postgres_verified_commit_store.zig");
     _ = @import("internal/projection/postgres_verified_snapshot_store.zig");
+    _ = @import("internal/projection/repository_head.zig");
     _ = @import("internal/projection/verified_commit.zig");
     _ = @import("internal/projection/verified_snapshot.zig");
     _ = @import("server.zig");

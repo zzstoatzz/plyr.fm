@@ -168,3 +168,30 @@ a network, Postgres, large-repository, or production-capacity claim. The
 fixture intentionally makes regression measurement cheap enough to run locally;
 larger CAR-size sweeps and ingestion-role working-set measurements remain part
 of deployment validation.
+
+## runtime ingestion seam
+
+The runtime coordinator is transport-independent and consumes five narrow
+ports: durable repository-head reads, verified live-commit writes, verified
+snapshot writes, signing-key resolution, and bounded complete-repository
+fetches. It reports replay, bootstrap, repair, unavailable identity, invalid
+signature, and invalid commit as different outcomes. None is an alias for
+success.
+
+A signature mismatch causes exactly one signing-key refresh and verification
+retry for DID-key rotation. Ordinary commits use a bounded thread-safe LRU of
+public signing keys; an ATProto identity event explicitly evicts that DID. A
+cache allocation failure preserves the already resolved key instead of turning
+successful identity resolution into an ingest outage.
+
+Fetched CAR ownership is explicit and released on every verification outcome.
+The initial Zat HTTP adapter accepts bytes only from an operator-configured
+trusted endpoint and refuses redirects. Following a relay redirect to an
+untrusted PDS without destination and resolved-IP validation would create an
+SSRF path into the Fly private network. Direct relay-to-PDS operation therefore
+remains disabled until that safety boundary is implemented and tested; this
+fail-closed adapter is suitable for a trusted fetch proxy or local fixture.
+
+These modules are library code and do not add a worker mode to the canary. The
+first deployed API process remains read-only and cannot resolve identities,
+fetch repositories, consume the firehose, or mutate `plyr_index`.

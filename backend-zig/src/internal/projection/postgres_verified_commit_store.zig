@@ -6,6 +6,7 @@ const zat = @import("zat");
 const list_change = @import("list_change.zig");
 const list_store = @import("list_store.zig");
 const postgres_list = @import("postgres_list_store.zig");
+const repository_head = @import("repository_head.zig");
 const verified = @import("verified_commit.zig");
 
 pub const PostgresVerifiedCommitStore = struct {
@@ -13,6 +14,56 @@ pub const PostgresVerifiedCommitStore = struct {
 
     pub fn store(self: *PostgresVerifiedCommitStore) verified.Store {
         return .{ .context = self, .apply_fn = applyOpaque };
+    }
+
+    pub fn reader(self: *PostgresVerifiedCommitStore) repository_head.Reader {
+        return .{ .context = self, .load_fn = loadOpaque };
+    }
+
+    fn loadOpaque(
+        context: *anyopaque,
+        allocator: std.mem.Allocator,
+        repo_did: []const u8,
+    ) repository_head.Error!?repository_head.Head {
+        const self: *PostgresVerifiedCommitStore = @ptrCast(@alignCast(context));
+        return self.load(allocator, repo_did);
+    }
+
+    fn load(
+        self: *PostgresVerifiedCommitStore,
+        allocator: std.mem.Allocator,
+        repo_did: []const u8,
+    ) repository_head.Error!?repository_head.Head {
+        var row = self.pool.row(load_head_sql, .{repo_did}) catch |err| {
+            std.log.err("verified repository head read failed: {}", .{err});
+            return error.ProjectionUnavailable;
+        } orelse return null;
+        defer row.deinit() catch {};
+        const commit_rev = allocator.dupe(
+            u8,
+            row.get([]const u8, 0) catch return error.CorruptProjection,
+        ) catch return error.OutOfMemory;
+        errdefer allocator.free(commit_rev);
+        const commit_text = row.get([]const u8, 1) catch return error.CorruptProjection;
+        const data_text = row.get([]const u8, 2) catch return error.CorruptProjection;
+        const indexed_at_us = row.get(i64, 3) catch return error.CorruptProjection;
+        const owned_did = allocator.dupe(u8, repo_did) catch return error.OutOfMemory;
+        errdefer allocator.free(owned_did);
+        const commit_cid = zat.Cid.fromString(allocator, commit_text) catch
+            return error.CorruptProjection;
+        errdefer allocator.free(commit_cid.raw);
+        const data_cid = zat.Cid.fromString(allocator, data_text) catch
+            return error.CorruptProjection;
+        errdefer allocator.free(data_cid.raw);
+        const head: repository_head.Head = .{
+            .repo_did = owned_did,
+            .commit_rev = commit_rev,
+            .commit_cid = commit_cid,
+            .data_cid = data_cid,
+            .indexed_at_us = indexed_at_us,
+        };
+        try head.validate();
+        return head;
     }
 
     fn applyOpaque(
@@ -163,6 +214,12 @@ const lock_head_sql =
     \\FOR UPDATE
 ;
 
+const load_head_sql =
+    \\SELECT commit_rev, commit_cid, data_cid, indexed_at_us
+    \\FROM plyr_index.repo_heads
+    \\WHERE repo_did = $1
+;
+
 const advance_head_sql =
     \\UPDATE plyr_index.repo_heads SET
     \\  commit_rev = $1,
@@ -213,6 +270,7 @@ test "PostgreSQL verified commit sink is atomic, strict, and replay safe" {
 
     var implementation: PostgresVerifiedCommitStore = .{ .pool = pool };
     const store = implementation.store();
+    try std.testing.expect((try implementation.reader().load(a, did)) == null);
     const first_change = listDelete("one", rev_1.str(), commit_1, 2_000);
     const first: verified.Commit = .{
         .repo_did = did,
@@ -232,6 +290,9 @@ test "PostgreSQL verified commit sink is atomic, strict, and replay safe" {
     try std.testing.expectEqual(verified.ApplyResult.applied, try store.apply(a, first));
     try std.testing.expectEqual(verified.ApplyResult.idempotent, try store.apply(a, first));
     try expectHead(pool, rev_1.str(), try data_1.toString(a));
+    const loaded_head = (try implementation.reader().load(a, did)).?;
+    try std.testing.expectEqualStrings(rev_1.str(), loaded_head.commit_rev);
+    try std.testing.expectEqualSlices(u8, data_1.raw, loaded_head.data_cid.raw);
 
     var stale = first;
     stale.commit_rev = initial_rev.str();
