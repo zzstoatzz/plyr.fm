@@ -146,13 +146,13 @@ reads without exposing its physical schema through the REST model.
 
 ## next slice
 
-Connect DID signing-key resolution, `getRepo` fetching, and live firehose
-consumption to the verified snapshot and commit transactions as an independently
-deployable ingestion role. Album detail follows by joining list members to
-independently indexed track records. Missing, private, or moderated tracks must
-retain their position semantics without silently substituting unrelated local
-rows. The first API canary remains read-only and does not gain an ingestion
-process merely because this library foundation now exists.
+Connect destination-safe `getRepo` fetching and live firehose consumption to
+the verified snapshot and commit transactions as an independently deployable
+ingestion role. Album detail now joins list members to independently indexed
+track records while retaining missing, private, and moderated positions without
+silently substituting unrelated local rows. The first API canary remains
+read-only and does not gain an ingestion process merely because this library
+foundation now exists.
 
 ## verifier resource baseline
 

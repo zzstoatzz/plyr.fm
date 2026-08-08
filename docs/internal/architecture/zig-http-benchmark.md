@@ -114,9 +114,9 @@ is deliberately small, so they are not a Neon or production capacity claim.
 The handle path validates and normalizes the alias before querying and detects
 case-insensitive ambiguity. Its result staying within one percent of DID lookup
 shows that compatibility does not introduce a distinct application bottleneck
-in this fixture. The rebuilt amd64 canary image is 33,208,563 bytes, about 131
-kB larger than the initial image, and still uses the existing Postgres pool
-rather than opening a pool per resource.
+in this fixture. After the album-detail slice, the rebuilt amd64 canary image
+is 33,237,999 bytes, 29,436 bytes larger than the preceding image, and still
+uses the existing Postgres pool rather than opening a pool per resource.
 
 The artist-filtered track collection, returning five complete track resources,
 recorded 2,770.5 responses/s at concurrency one (0.906 ms p99) and 9,318.0 at
@@ -128,3 +128,9 @@ The artist album collection, returning two canonical list-record summaries,
 recorded 2,769.6 responses/s at concurrency one (0.596 ms p99) and 8,838.9 at
 concurrency 16 (4.799 ms p99), with zero unexpected responses. This path adds
 pooled aggregate SQL plus strict record URI and DAG-CBOR CID validation.
+
+The verified album-detail route has its own guarded, reproducible fixture via
+`just zig bench-album-detail`. It returns 20 ordered strong references and 20
+complete hydrated tracks from one query while validating every URI and CID.
+It recorded 1,867.3 responses/s at concurrency one (0.894 ms p99) and 6,961.2
+at concurrency 16 (5.907 ms p99), with zero unexpected responses.

@@ -37,6 +37,15 @@ bench-http *ARGS:
     zig build -Doptimize=ReleaseFast
     python3 scripts/bench_http.py "$@"
 
+# Destructive only to the dedicated Docker test database on port 5433.
+bench-album-detail:
+    docker compose -f ../backend/tests/docker-compose.yml up -d test-db
+    @for attempt in {1..100}; do docker compose -f ../backend/tests/docker-compose.yml exec -T test-db pg_isready -U relay_test -d relay_test >/dev/null && break; sleep 0.1; done
+    docker compose -f ../backend/tests/docker-compose.yml exec -T test-db psql -v ON_ERROR_STOP=1 -U relay_test -d relay_test < scripts/album_detail_bench.sql
+    zig build -Doptimize=ReleaseFast
+    DATABASE_URL=postgresql://relay_test:relay_test@127.0.0.1:5433/relay_test python3 scripts/bench_http.py --with-index --duration 5 --concurrency 1 --path '/v1/albums/alb_YXQ6Ly9kaWQ6cGxjOmJlbmNoL2ZtLnBseXIuZGV2Lmxpc3QvYWxidW0'
+    DATABASE_URL=postgresql://relay_test:relay_test@127.0.0.1:5433/relay_test python3 scripts/bench_http.py --with-index --duration 5 --concurrency 16 --path '/v1/albums/alb_YXQ6Ly9kaWQ6cGxjOmJlbmNoL2ZtLnBseXIuZGV2Lmxpc3QvYWxidW0'
+
 bench-snapshot:
     zig build bench-snapshot -Doptimize=ReleaseFast
 

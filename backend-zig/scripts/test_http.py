@@ -29,6 +29,11 @@ def _track_id(uri: str) -> str:
     return f"trk_{payload}"
 
 
+def _album_id(uri: str) -> str:
+    payload = base64.urlsafe_b64encode(uri.encode()).decode().rstrip("=")
+    return f"alb_{payload}"
+
+
 def _request(
     base_url: str,
     path: str,
@@ -173,6 +178,30 @@ def main() -> None:
         )
         assert status == 405
         assert album_method["error"]["code"] == "method_not_allowed"
+
+        status, _, invalid_album = _request(base_url, "/v1/albums/42")
+        assert status == 400
+        assert invalid_album["error"]["code"] == "invalid_request"
+
+        album_uri = "at://did:plc:artist/fm.plyr.dev.list/album"
+        status, _, unavailable_album = _request(
+            base_url, f"/v1/albums/{_album_id(album_uri)}"
+        )
+        assert status == 503
+        assert unavailable_album["error"]["code"] == "service_unavailable"
+
+        foreign_album_uri = "at://did:plc:artist/fm.plyr.list/album"
+        status, _, missing_album = _request(
+            base_url, f"/v1/albums/{_album_id(foreign_album_uri)}"
+        )
+        assert status == 404
+        assert missing_album["error"]["code"] == "not_found"
+
+        status, _, album_detail_method = _request(
+            base_url, f"/v1/albums/{_album_id(album_uri)}", method="POST"
+        )
+        assert status == 405
+        assert album_detail_method["error"]["code"] == "method_not_allowed"
 
         status, _, invalid = _request(base_url, "/v1/tracks/42")
         assert status == 400 and invalid["error"]["code"] == "invalid_request"

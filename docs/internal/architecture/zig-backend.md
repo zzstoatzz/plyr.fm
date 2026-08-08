@@ -135,11 +135,11 @@ as authoritative.
 same rule to albums: the list-record AT-URI is identity, while local UUIDs and
 presentation fields are never mistaken for PDS-authored state.
 
-The next album-detail dependency is the shared
+[`GET /v1/albums/{album_id}`](zig-v1-album-detail.md) now reads the shared
 [`verified list projection boundary`](zig-verified-list-projection.md). It
-preserves ordered strong references from verified DAG-CBOR repository blocks
-as an atomic, schema-independent index change rather than fetching or inventing
-membership during a REST request.
+preserves every ordered strong reference from verified DAG-CBOR repository
+blocks and hydrates only exact public URI/CID matches, rather than fetching or
+inventing membership during a REST request.
 
 Verified ingestion and blob mirroring are dependencies of a trustworthy
 projection, but their implementation is outside the REST-focused first slice.

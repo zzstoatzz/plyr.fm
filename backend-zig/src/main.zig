@@ -4,6 +4,7 @@ const server = @import("server.zig");
 const postgres = @import("internal/index/postgres_track_store.zig");
 const postgres_artists = @import("internal/index/postgres_artist_store.zig");
 const postgres_albums = @import("internal/index/postgres_album_store.zig");
+const postgres_album_detail = @import("internal/index/postgres_album_detail_store.zig");
 
 var threaded_io: std.Io.Threaded = undefined;
 pub const std_options_debug_threaded_io: ?*std.Io.Threaded = &threaded_io;
@@ -35,11 +36,17 @@ pub fn main() !void {
     else
         null;
     const album_store = if (postgres_album_store) |*store| store.store() else null;
+    var postgres_album_detail_store: ?postgres_album_detail.PostgresAlbumDetailStore = if (postgres_store) |*store|
+        .{ .pool = store.pool }
+    else
+        null;
+    const album_detail_store = if (postgres_album_detail_store) |*store| store.store() else null;
     switch (settings.role) {
         .api => try server.run(io, settings.port, settings.max_connections, .{
             .track_store = track_store,
             .artist_store = artist_store,
             .album_store = album_store,
+            .album_detail_store = album_detail_store,
             .track_collection = settings.track_collection,
             .list_collection = settings.list_collection,
             .cors = .{ .allowed_origins = settings.cors_allowed_origins },
@@ -55,17 +62,21 @@ test {
     _ = @import("api/tracks.zig");
     _ = @import("config.zig");
     _ = @import("internal/application/get_artist.zig");
+    _ = @import("internal/application/get_album.zig");
     _ = @import("internal/application/list_albums.zig");
     _ = @import("internal/application/get_track.zig");
     _ = @import("internal/application/list_tracks.zig");
     _ = @import("internal/domain/artist.zig");
+    _ = @import("internal/domain/album_detail.zig");
     _ = @import("internal/domain/album.zig");
     _ = @import("internal/domain/album_list.zig");
     _ = @import("internal/atproto/list_record.zig");
     _ = @import("internal/index/artist_store.zig");
+    _ = @import("internal/index/album_detail_store.zig");
     _ = @import("internal/index/album_store.zig");
     _ = @import("internal/index/postgres_album_store.zig");
     _ = @import("internal/index/postgres_artist_store.zig");
+    _ = @import("internal/index/postgres_album_detail_store.zig");
     _ = @import("internal/identity/track_id.zig");
     _ = @import("internal/identity/track_cursor.zig");
     _ = @import("internal/identity/record_id.zig");

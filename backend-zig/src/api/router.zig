@@ -4,6 +4,7 @@ const artists = @import("artists.zig");
 const response = @import("response.zig");
 const tracks = @import("tracks.zig");
 const ArtistStore = @import("../internal/index/artist_store.zig").ArtistStore;
+const AlbumDetailStore = @import("../internal/index/album_detail_store.zig").AlbumDetailStore;
 const AlbumStore = @import("../internal/index/album_store.zig").AlbumStore;
 const TrackStore = @import("../internal/index/track_store.zig").TrackStore;
 
@@ -16,6 +17,7 @@ pub const App = struct {
     track_store: ?TrackStore,
     artist_store: ?ArtistStore,
     album_store: ?AlbumStore,
+    album_detail_store: ?AlbumDetailStore,
     track_collection: []const u8,
     list_collection: []const u8,
     cors: response.CorsPolicy,
@@ -86,6 +88,21 @@ pub fn handle(
             app.cors,
             request_id,
         );
+    } else if (albumId(path)) |id| {
+        if (request.head.method != .GET) {
+            try response.apiError(request, .method_not_allowed, request_id, app.cors);
+            return;
+        }
+        try albums.get(
+            request,
+            allocator,
+            app.album_detail_store,
+            app.list_collection,
+            app.track_collection,
+            app.cors,
+            id,
+            request_id,
+        );
     } else if (trackId(path)) |id| {
         if (request.head.method != .GET) {
             try response.apiError(request, .method_not_allowed, request_id, app.cors);
@@ -138,6 +155,14 @@ fn trackId(path: []const u8) ?[]const u8 {
     return id;
 }
 
+fn albumId(path: []const u8) ?[]const u8 {
+    const albums_prefix = prefix ++ "/albums/";
+    if (!mem.startsWith(u8, path, albums_prefix)) return null;
+    const id = path[albums_prefix.len..];
+    if (id.len == 0 or mem.indexOfScalar(u8, id, '/') != null) return null;
+    return id;
+}
+
 fn artistIdentifier(path: []const u8) ?[]const u8 {
     const artists_prefix = prefix ++ "/artists/";
     if (!mem.startsWith(u8, path, artists_prefix)) return null;
@@ -165,6 +190,12 @@ test "track detail routes accept exactly one opaque path segment" {
     try std.testing.expect(trackId("/v1/tracks/") == null);
     try std.testing.expect(trackId("/v1/tracks/trk_abc/play") == null);
     try std.testing.expect(trackId("/tracks/trk_abc") == null);
+}
+
+test "album detail routes accept exactly one opaque path segment" {
+    try std.testing.expectEqualStrings("alb_abc", albumId("/v1/albums/alb_abc").?);
+    try std.testing.expect(albumId("/v1/albums/") == null);
+    try std.testing.expect(albumId("/v1/albums/artist/slug") == null);
 }
 
 test "artist detail routes accept exactly one DID or handle segment" {

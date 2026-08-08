@@ -53,10 +53,10 @@ Those useful compatibility fields therefore remain visibly local presentation
 state rather than being mislabeled as PDS-owned metadata. `image_id` and the
 local UUID are omitted entirely.
 
-The initial membership source is also labeled `legacy_local`: `album_id` is not
-proof that the projected relationship matches the strong-reference order in
-the list record. Album detail remains open until verified ingestion persists
-that membership and order.
+The collection summary still labels membership `legacy_local`: `album_id` is
+not proof that the projected relationship matches the strong-reference order
+in the list record. The separate album-detail resource now reads the verified
+ordered-membership projection and does not inherit this summary compromise.
 
 ## public catalogue policy
 
@@ -87,11 +87,10 @@ It is a localhost regression baseline, not a Neon production capacity claim.
 
 ## intentionally open
 
-Album detail and ordered membership need a verified projection of the list
-record's strong references. The schema-independent DAG-CBOR decoder and atomic
-projection command are now defined in
-[`zig-verified-list-projection.md`](zig-verified-list-projection.md); verified
-ingestion and its Postgres adapter remain before the detail route. Mutations
+The verified album-detail contract is documented in
+[`zig-v1-album-detail.md`](zig-v1-album-detail.md). The remaining ingestion gap
+is operational: destination-safe relay/PDS transport and the separately
+deployable firehose role must feed the verifier already implemented. Mutations
 must write source-authoritative records and are not added on top of the legacy
 local-first finalization flow. Global discovery, viewer state, artwork
 mirroring, and description authorship remain separate design work.

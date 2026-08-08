@@ -177,18 +177,27 @@ pub const PostgresTrackStore = struct {
         allocator: std.mem.Allocator,
         row: anytype,
     ) !track.Track {
-        const uri = try duplicate(allocator, try row.get([]const u8, 0));
+        return decodeRowAt(allocator, row, 0);
+    }
+
+    /// Decode the shared track projection from a wider joined result.
+    pub fn decodeRowAt(
+        allocator: std.mem.Allocator,
+        row: anytype,
+        base: usize,
+    ) !track.Track {
+        const uri = try duplicate(allocator, try row.get([]const u8, base + 0));
         const parsed_uri = zat.AtUri.parse(uri) orelse return error.CorruptTrackUri;
         const collection = parsed_uri.collection() orelse return error.CorruptTrackUri;
         const rkey = parsed_uri.rkey() orelse return error.CorruptTrackUri;
-        const artist_did = try duplicate(allocator, try row.get([]const u8, 8));
+        const artist_did = try duplicate(allocator, try row.get([]const u8, base + 8));
         if (!std.mem.eql(u8, parsed_uri.authority(), artist_did)) return error.CorruptTrackAuthority;
 
         const id = try allocator.alloc(u8, track_id.encodedLength(uri));
         _ = try track_id.encode(id, uri);
 
-        const pds_blob_cid = try duplicateOptional(allocator, try row.get(?[]const u8, 12));
-        const playback_url = try duplicateOptional(allocator, try row.get(?[]const u8, 14));
+        const pds_blob_cid = try duplicateOptional(allocator, try row.get(?[]const u8, base + 12));
+        const playback_url = try duplicateOptional(allocator, try row.get(?[]const u8, base + 14));
 
         const artifacts = if (pds_blob_cid) |cid| blk: {
             const parsed_cid = zat.Cid.fromString(allocator, cid) catch return error.CorruptArtifactCid;
@@ -197,8 +206,8 @@ pub const PostgresTrackStore = struct {
             const values = try allocator.alloc(track.Artifact, 1);
             values[0] = .{
                 .cid = cid,
-                .byte_length = try row.get(?i64, 13),
-                .media_type = try duplicate(allocator, try row.get([]const u8, 15)),
+                .byte_length = try row.get(?i64, base + 13),
+                .media_type = try duplicate(allocator, try row.get([]const u8, base + 15)),
                 .declared_by = uri,
                 // The legacy row persists the authored CID but not the evidence
                 // that a mirror was verified against it.
@@ -211,7 +220,7 @@ pub const PostgresTrackStore = struct {
             const values = try allocator.alloc(track.Origin, 1);
             values[0] = .{
                 .url = url,
-                .media_type = try duplicate(allocator, try row.get([]const u8, 15)),
+                .media_type = try duplicate(allocator, try row.get([]const u8, base + 15)),
                 // The legacy table has neither a signed origin attestation nor
                 // a persisted proof tying this URL's bytes to the artifact CID.
                 .artifact_cid = null,
@@ -224,24 +233,24 @@ pub const PostgresTrackStore = struct {
             .id = id,
             .record = .{
                 .uri = uri,
-                .cid = try duplicateOptional(allocator, try row.get(?[]const u8, 1)),
-                .revision = try duplicateOptional(allocator, try row.get(?[]const u8, 2)),
+                .cid = try duplicateOptional(allocator, try row.get(?[]const u8, base + 1)),
+                .revision = try duplicateOptional(allocator, try row.get(?[]const u8, base + 2)),
                 .collection = collection,
                 .rkey = rkey,
             },
             .metadata = .{
-                .title = try duplicate(allocator, try row.get([]const u8, 3)),
-                .description = try duplicateOptional(allocator, try row.get(?[]const u8, 4)),
-                .album = try duplicateOptional(allocator, try row.get(?[]const u8, 5)),
-                .duration_seconds = try row.get(?i64, 6),
-                .created_at = try duplicate(allocator, try row.get([]const u8, 7)),
+                .title = try duplicate(allocator, try row.get([]const u8, base + 3)),
+                .description = try duplicateOptional(allocator, try row.get(?[]const u8, base + 4)),
+                .album = try duplicateOptional(allocator, try row.get(?[]const u8, base + 5)),
+                .duration_seconds = try row.get(?i64, base + 6),
+                .created_at = try duplicate(allocator, try row.get([]const u8, base + 7)),
             },
             .artist = .{
                 .did = artist_did,
                 .profile = .{
-                    .handle = try duplicate(allocator, try row.get([]const u8, 9)),
-                    .display_name = try duplicate(allocator, try row.get([]const u8, 10)),
-                    .avatar_url = try duplicateOptional(allocator, try row.get(?[]const u8, 11)),
+                    .handle = try duplicate(allocator, try row.get([]const u8, base + 9)),
+                    .display_name = try duplicate(allocator, try row.get([]const u8, base + 10)),
+                    .avatar_url = try duplicateOptional(allocator, try row.get(?[]const u8, base + 11)),
                 },
             },
             .media = .{
@@ -249,22 +258,22 @@ pub const PostgresTrackStore = struct {
                 .origins = origins,
             },
             .access = .{
-                .visibility = try parseEnum(track.Visibility, try row.get([]const u8, 16)),
-                .in_discovery = try row.get(bool, 17),
-                .gate = if (try row.get(?[]const u8, 18)) |gate_type| .{
+                .visibility = try parseEnum(track.Visibility, try row.get([]const u8, base + 16)),
+                .in_discovery = try row.get(bool, base + 17),
+                .gate = if (try row.get(?[]const u8, base + 18)) |gate_type| .{
                     .type = try parseEnum(track.GateType, gate_type),
                 } else null,
-                .space_uri = try duplicateOptional(allocator, try row.get(?[]const u8, 19)),
+                .space_uri = try duplicateOptional(allocator, try row.get(?[]const u8, base + 19)),
             },
             .moderation = .{
-                .self_labels = try parseLabels(allocator, try row.get([]const u8, 20)),
-                .operator_labels = try parseLabels(allocator, try row.get([]const u8, 21)),
-                .override = if (try row.get(?[]const u8, 22)) |value|
+                .self_labels = try parseLabels(allocator, try row.get([]const u8, base + 20)),
+                .operator_labels = try parseLabels(allocator, try row.get([]const u8, base + 21)),
+                .override = if (try row.get(?[]const u8, base + 22)) |value|
                     try parseEnum(track.ModerationOverride, value)
                 else
                     null,
             },
-            .metrics = .{ .play_count = try row.get(i64, 23) },
+            .metrics = .{ .play_count = try row.get(i64, base + 23) },
             .projection = .{
                 .indexed_at = null,
                 .verification = .legacy_unverified,
@@ -289,8 +298,7 @@ fn forceReleaseQueryRow(query_row: *pg.QueryRow) void {
     };
 }
 
-const select_fields =
-    \\SELECT
+pub const projected_columns =
     \\  t.atproto_record_uri,
     \\  t.atproto_record_cid,
     \\  t.atproto_record_rev,
@@ -318,19 +326,21 @@ const select_fields =
     \\  t.play_count::bigint
 ;
 
+pub const projected_fields = "SELECT\n" ++ projected_columns;
+
 const from_tracks =
     \\FROM tracks AS t
     \\JOIN artists AS a ON a.did = t.artist_did
 ;
 
-const detail_query = select_fields ++ "\n" ++ from_tracks ++ "\n" ++
+const detail_query = projected_fields ++ "\n" ++ from_tracks ++ "\n" ++
     \\WHERE t.atproto_record_uri = $1
     \\  AND t.visibility <> 'private'
     \\  AND COALESCE(t.publish_state, 'published') = 'published'
     \\LIMIT 1
 ;
 
-const list_projection = select_fields ++
+const list_projection = projected_fields ++
     "\n, (extract(epoch FROM t.created_at) * 1000000)::bigint\n" ++
     from_tracks;
 
