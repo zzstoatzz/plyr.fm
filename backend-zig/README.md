@@ -12,6 +12,7 @@ Run commands from the repository root through the root justfile:
 just zig check
 just zig test-http
 just zig test-postgres
+just zig image
 INDEX_MODE=disabled TRACK_COLLECTION_NSID=fm.plyr.dev.track just zig run
 just zig bench-http --duration 5 --concurrency 16
 ```
@@ -42,3 +43,16 @@ unbounded detached threads.
 Do not source or copy the root `.env` into a worktree. Point a command at the
 existing environment through the normal settings mechanism, and never print
 secret values while checking configuration.
+
+## canary deployment
+
+`fly.canary.toml` defines an API-only Fly service named
+`plyr-api-zig-canary`. It uses one 256 MiB shared-CPU machine, scales to zero,
+and has no worker, jetstream, migration, Redis, R2, or production traffic
+responsibilities. `DATABASE_URL` is its only secret and must point at the
+staging projection.
+
+The `deploy Zig canary` GitHub workflow is manual-only. Local development may
+build and run the image, but deployment goes through that workflow. The Fly
+hostname is the initial verification surface; `canary.plyr.fm` should be added
+only after the service passes its resource and semantic-parity gates.

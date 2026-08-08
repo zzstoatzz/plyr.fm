@@ -6,6 +6,9 @@ default: check
 build:
     zig build
 
+image:
+    docker build --platform linux/amd64 --tag plyr-backend-zig:canary .
+
 run:
     MODE=api TRACK_COLLECTION_NSID=${TRACK_COLLECTION_NSID:?set TRACK_COLLECTION_NSID} zig build run
 

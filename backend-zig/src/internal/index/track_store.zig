@@ -4,6 +4,7 @@ const track = @import("../domain/track.zig");
 pub const TrackStore = struct {
     context: *anyopaque,
     get_by_uri_fn: *const fn (*anyopaque, std.mem.Allocator, []const u8) Error!?track.Track,
+    ready_fn: *const fn (*anyopaque) bool,
 
     pub const Error = error{
         IndexUnavailable,
@@ -17,5 +18,9 @@ pub const TrackStore = struct {
         at_uri: []const u8,
     ) Error!?track.Track {
         return self.get_by_uri_fn(self.context, allocator, at_uri);
+    }
+
+    pub fn ready(self: TrackStore) bool {
+        return self.ready_fn(self.context);
     }
 };

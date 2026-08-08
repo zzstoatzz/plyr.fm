@@ -51,7 +51,11 @@ const FakeStore = struct {
     value: ?track.Track,
 
     fn asStore(self: *FakeStore) TrackStore {
-        return .{ .context = self, .get_by_uri_fn = getOpaque };
+        return .{ .context = self, .get_by_uri_fn = getOpaque, .ready_fn = readyOpaque };
+    }
+
+    fn readyOpaque(_: *anyopaque) bool {
+        return true;
     }
 
     fn getOpaque(context: *anyopaque, _: std.mem.Allocator, uri: []const u8) TrackStore.Error!?track.Track {

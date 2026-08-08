@@ -32,7 +32,24 @@ pub const PostgresTrackStore = struct {
     }
 
     pub fn store(self: *PostgresTrackStore) TrackStore {
-        return .{ .context = self, .get_by_uri_fn = getByUriOpaque };
+        return .{
+            .context = self,
+            .get_by_uri_fn = getByUriOpaque,
+            .ready_fn = readyOpaque,
+        };
+    }
+
+    fn readyOpaque(context: *anyopaque) bool {
+        const self: *PostgresTrackStore = @ptrCast(@alignCast(context));
+        var query_row = self.pool.row("SELECT 1", .{}) catch |err| {
+            std.log.err("PostgreSQL readiness probe failed: {}", .{err});
+            return false;
+        } orelse return false;
+        finishQueryRow(&query_row) catch |err| {
+            std.log.err("PostgreSQL readiness cleanup failed: {}", .{err});
+            return false;
+        };
+        return true;
     }
 
     fn getByUriOpaque(
@@ -252,6 +269,7 @@ test "PostgreSQL adapter reads a complete derived projection" {
 
     var store_impl = try PostgresTrackStore.initWithPoolSize(allocator, io, database_url, 1);
     defer store_impl.deinit();
+    try std.testing.expect(store_impl.store().ready());
 
     var database_row = (try store_impl.pool.row("SELECT current_database()", .{})).?;
     const database_name = try allocator.dupe(u8, try database_row.get([]const u8, 0));

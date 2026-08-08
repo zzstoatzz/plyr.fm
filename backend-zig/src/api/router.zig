@@ -44,11 +44,15 @@ pub fn handle(
             try response.apiError(request, .method_not_allowed, request_id, app.cors);
             return;
         }
-        if (app.track_store == null) {
+        const store = app.track_store orelse {
+            try response.apiError(request, .service_unavailable, request_id, app.cors);
+            return;
+        };
+        if (!store.ready()) {
             try response.apiError(request, .service_unavailable, request_id, app.cors);
             return;
         }
-        try response.json(request, .ok, "{\"status\":\"ready\",\"index\":\"configured\"}", request_id, app.cors);
+        try response.json(request, .ok, "{\"status\":\"ready\",\"index\":\"reachable\"}", request_id, app.cors);
     } else if (trackId(path)) |id| {
         if (request.head.method != .GET) {
             try response.apiError(request, .method_not_allowed, request_id, app.cors);

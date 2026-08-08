@@ -1,0 +1,37 @@
+app = "plyr-api-zig-canary"
+primary_region = "sea"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  CORS_ALLOWED_ORIGINS = "https://stg.plyr.fm"
+  INDEX_MODE = "required"
+  MAX_CONNECTIONS = "128"
+  MODE = "api"
+  PORT = "8000"
+  TRACK_COLLECTION_NSID = "fm.plyr.stg.track"
+
+[http_service]
+  internal_port = 8000
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+  [http_service.concurrency]
+    type = "connections"
+    soft_limit = 96
+    hard_limit = 128
+
+  [[http_service.checks]]
+    interval = "10s"
+    timeout = "2s"
+    grace_period = "5s"
+    method = "GET"
+    path = "/ready"
+
+[[vm]]
+  cpu_kind = "shared"
+  cpus = 1
+  memory = "256mb"
