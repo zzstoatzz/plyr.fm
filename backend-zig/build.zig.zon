@@ -3,8 +3,8 @@
     .version = "0.0.1",
     .dependencies = .{
         .zat = .{
-            .url = "https://tangled.org/zat.dev/zat/archive/v0.3.25.tar.gz",
-            .hash = "zat-0.3.25-5PuC7m6hDACATZx3rZ7XzXstEe_THLs8L4a2MXnXBuuH",
+            .url = "https://tangled.org/zat.dev/zat/archive/v0.3.26.tar.gz",
+            .hash = "zat-0.3.26-5PuC7ny_DAA318Hv1iAxAJyMeFkrSM3oIZr_yPgV84TS",
         },
         .pg = .{
             .url = "git+https://github.com/karlseguin/pg.zig#52b9f8a59bfd60a3aa75943a14366d859ea11f26",

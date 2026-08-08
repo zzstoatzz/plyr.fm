@@ -6,7 +6,6 @@
 const std = @import("std");
 const pg = @import("pg");
 const zat = @import("zat");
-const content_cid = @import("../content/cid.zig");
 const track = @import("../domain/track.zig");
 const track_id = @import("../identity/track_id.zig");
 const TrackStore = @import("track_store.zig").TrackStore;
@@ -93,8 +92,9 @@ pub const PostgresTrackStore = struct {
         const playback_url = try duplicateOptional(allocator, try row.get(?[]const u8, 14));
 
         const artifacts = if (pds_blob_cid) |cid| blk: {
-            const parsed_cid = content_cid.parse(cid) catch return error.CorruptArtifactCid;
-            if (parsed_cid.codec != .raw) return error.CorruptArtifactCid;
+            const parsed_cid = zat.Cid.fromString(allocator, cid) catch return error.CorruptArtifactCid;
+            defer allocator.free(parsed_cid.raw);
+            if (parsed_cid.codec() != zat.cbor.Codec.raw) return error.CorruptArtifactCid;
             const values = try allocator.alloc(track.Artifact, 1);
             values[0] = .{
                 .cid = cid,

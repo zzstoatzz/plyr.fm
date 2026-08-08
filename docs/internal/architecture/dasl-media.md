@@ -71,6 +71,10 @@ claim; an origin is a retrieval claim. The legacy Python row supplies neither a
 signed origin attestation nor a persisted proof that the R2 URL still serves the
 declared CID, so the adapter leaves that relationship null.
 
-The Zig `internal/content/cid.zig` module validates the exact DASL/BDASL framing
-we accept. Future ingestion and mirroring code can share it for streaming
-verification rather than inventing storage-specific hashes.
+The current Zig PostgreSQL adapter validates legacy PDS blob references with
+`zat.Cid`. Those references use ATProto's strict CIDv1/raw/SHA-256 profile; plyr
+does not maintain a second CID parser for them. BDASL is relevant to a future
+streaming-media artifact format, but it is not accepted at this legacy PDS-blob
+boundary. If plyr adopts BDASL artifacts, their BLAKE3 construction and
+streaming verification must live in a reusable protocol library rather than a
+storage-specific backend helper.
