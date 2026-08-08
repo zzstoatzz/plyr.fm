@@ -114,6 +114,12 @@ is deliberately small, so they are not a Neon or production capacity claim.
 The handle path validates and normalizes the alias before querying and detects
 case-insensitive ambiguity. Its result staying within one percent of DID lookup
 shows that compatibility does not introduce a distinct application bottleneck
-in this fixture. The rebuilt amd64 canary image is 33,179,003 bytes, about 102
+in this fixture. The rebuilt amd64 canary image is 33,187,300 bytes, about 110
 kB larger than the initial image, and still uses the existing Postgres pool
 rather than opening a pool per resource.
+
+The artist-filtered track collection, returning five complete track resources,
+recorded 2,770.5 responses/s at concurrency one (0.906 ms p99) and 9,318.0 at
+concurrency 16 (4.934 ms p99), with zero unexpected responses. The request used
+a percent-encoded DID and therefore exercises strict query decoding, artist
+scope, content-view policy, SQL pagination, and serialization together.

@@ -4,8 +4,14 @@ const track_cursor = @import("../identity/track_cursor.zig");
 
 pub const ListRequest = struct {
     collection: []const u8,
+    scope: ListScope,
     limit: usize,
     after: ?track_cursor.Cursor,
+};
+
+pub const ListScope = union(enum) {
+    discovery,
+    artist: []const u8,
 };
 
 pub const ListItem = struct {
@@ -16,7 +22,7 @@ pub const ListItem = struct {
 pub const TrackStore = struct {
     context: *anyopaque,
     get_by_uri_fn: *const fn (*anyopaque, std.mem.Allocator, []const u8) Error!?track.Track,
-    list_discovery_fn: *const fn (*anyopaque, std.mem.Allocator, ListRequest) Error![]ListItem,
+    list_public_fn: *const fn (*anyopaque, std.mem.Allocator, ListRequest) Error![]ListItem,
     ready_fn: *const fn (*anyopaque) bool,
 
     pub const Error = error{
@@ -33,12 +39,12 @@ pub const TrackStore = struct {
         return self.get_by_uri_fn(self.context, allocator, at_uri);
     }
 
-    pub fn listDiscovery(
+    pub fn listPublic(
         self: TrackStore,
         allocator: std.mem.Allocator,
         request: ListRequest,
     ) Error![]ListItem {
-        return self.list_discovery_fn(self.context, allocator, request);
+        return self.list_public_fn(self.context, allocator, request);
     }
 
     pub fn ready(self: TrackStore) bool {

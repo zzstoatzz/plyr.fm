@@ -37,7 +37,7 @@ pub const PostgresTrackStore = struct {
         return .{
             .context = self,
             .get_by_uri_fn = getByUriOpaque,
-            .list_discovery_fn = listDiscoveryOpaque,
+            .list_public_fn = listPublicOpaque,
             .ready_fn = readyOpaque,
         };
     }
@@ -64,13 +64,13 @@ pub const PostgresTrackStore = struct {
         return self.getByUri(allocator, at_uri);
     }
 
-    fn listDiscoveryOpaque(
+    fn listPublicOpaque(
         context: *anyopaque,
         allocator: std.mem.Allocator,
         request: @import("track_store.zig").ListRequest,
     ) TrackStore.Error![]@import("track_store.zig").ListItem {
         const self: *PostgresTrackStore = @ptrCast(@alignCast(context));
-        return self.listDiscovery(allocator, request);
+        return self.listPublic(allocator, request);
     }
 
     fn getByUri(
@@ -101,27 +101,49 @@ pub const PostgresTrackStore = struct {
         return result;
     }
 
-    fn listDiscovery(
+    fn listPublic(
         self: *PostgresTrackStore,
         allocator: std.mem.Allocator,
         request: @import("track_store.zig").ListRequest,
     ) TrackStore.Error![]@import("track_store.zig").ListItem {
         const limit: i64 = @intCast(request.limit);
-        var result = if (request.after) |after|
-            self.pool.query(list_after_query, .{
-                request.collection,
-                after.created_at_us,
-                after.at_uri,
-                limit,
-            }) catch |err| {
-                std.log.err("PostgreSQL track collection query failed: {}", .{err});
-                return error.IndexUnavailable;
-            }
-        else
-            self.pool.query(list_query, .{ request.collection, limit }) catch |err| {
-                std.log.err("PostgreSQL track collection query failed: {}", .{err});
-                return error.IndexUnavailable;
-            };
+        var result = switch (request.scope) {
+            .discovery => if (request.after) |after|
+                self.pool.query(discovery_after_query, .{
+                    request.collection,
+                    after.created_at_us,
+                    after.at_uri,
+                    limit,
+                }) catch |err| {
+                    std.log.err("PostgreSQL discovery collection query failed: {}", .{err});
+                    return error.IndexUnavailable;
+                }
+            else
+                self.pool.query(discovery_query, .{ request.collection, limit }) catch |err| {
+                    std.log.err("PostgreSQL discovery collection query failed: {}", .{err});
+                    return error.IndexUnavailable;
+                },
+            .artist => |artist_did| if (request.after) |after|
+                self.pool.query(artist_after_query, .{
+                    request.collection,
+                    artist_did,
+                    after.created_at_us,
+                    after.at_uri,
+                    limit,
+                }) catch |err| {
+                    std.log.err("PostgreSQL artist track collection query failed: {}", .{err});
+                    return error.IndexUnavailable;
+                }
+            else
+                self.pool.query(artist_query, .{
+                    request.collection,
+                    artist_did,
+                    limit,
+                }) catch |err| {
+                    std.log.err("PostgreSQL artist track collection query failed: {}", .{err});
+                    return error.IndexUnavailable;
+                },
+        };
         defer result.deinit();
 
         var items: std.ArrayListUnmanaged(@import("track_store.zig").ListItem) = .empty;
@@ -311,10 +333,9 @@ const list_projection = select_fields ++
     "\n, (extract(epoch FROM t.created_at) * 1000000)::bigint\n" ++
     from_tracks;
 
-const discovery_policy =
+const public_policy =
     \\  AND t.atproto_record_uri IS NOT NULL
     \\  AND split_part(t.atproto_record_uri, '/', 4) = $1
-    \\  AND t.visibility IN ('public', 'supporters')
     \\  AND COALESCE(t.publish_state, 'published') = 'published'
     \\  AND a.deactivated = false
     \\  AND t.moderation_override IS DISTINCT FROM 'exclude'
@@ -325,20 +346,29 @@ const discovery_policy =
     \\      OR t.operator_labels ?| ARRAY['copyright-violation']
     \\    )
     \\  )
+;
+
+const discovery_policy = public_policy ++
+    \\  AND t.visibility IN ('public', 'supporters')
     \\  AND NOT (
     \\    t.self_labels ?| ARRAY['sexual', 'porn']
     \\    OR t.operator_labels ?| ARRAY['sexual', 'porn']
     \\  )
 ;
 
-const list_query = list_projection ++ "\n" ++
+const artist_policy = public_policy ++
+    \\  AND t.artist_did = $2
+    \\  AND t.visibility <> 'private'
+;
+
+const discovery_query = list_projection ++ "\n" ++
     \\WHERE true
 ++ discovery_policy ++ "\n" ++
     \\ORDER BY t.created_at DESC, t.atproto_record_uri DESC
     \\LIMIT $2::bigint
 ;
 
-const list_after_query = list_projection ++ "\n" ++
+const discovery_after_query = list_projection ++ "\n" ++
     \\WHERE true
 ++ discovery_policy ++ "\n" ++
     \\  AND (
@@ -350,6 +380,27 @@ const list_after_query = list_projection ++ "\n" ++
     \\  )
     \\ORDER BY t.created_at DESC, t.atproto_record_uri DESC
     \\LIMIT $4::bigint
+;
+
+const artist_query = list_projection ++ "\n" ++
+    \\WHERE true
+++ artist_policy ++ "\n" ++
+    \\ORDER BY t.created_at DESC, t.atproto_record_uri DESC
+    \\LIMIT $3::bigint
+;
+
+const artist_after_query = list_projection ++ "\n" ++
+    \\WHERE true
+++ artist_policy ++ "\n" ++
+    \\  AND (
+    \\    t.created_at < TIMESTAMPTZ 'epoch' + ($3::bigint * INTERVAL '1 microsecond')
+    \\    OR (
+    \\      t.created_at = TIMESTAMPTZ 'epoch' + ($3::bigint * INTERVAL '1 microsecond')
+    \\      AND t.atproto_record_uri < $4
+    \\    )
+    \\  )
+    \\ORDER BY t.created_at DESC, t.atproto_record_uri DESC
+    \\LIMIT $5::bigint
 ;
 
 fn duplicate(allocator: std.mem.Allocator, value: []const u8) ![]const u8 {
@@ -526,6 +577,9 @@ test "PostgreSQL adapter reads a complete derived projection" {
     const tied_uri = "at://did:plc:artist/fm.plyr.dev.track/3m123abd";
     const older_uri = "at://did:plc:artist/fm.plyr.dev.track/3m123abb";
     const hidden_uri = "at://did:plc:artist/fm.plyr.dev.track/3m123abf";
+    const unlisted_uri = "at://did:plc:artist/fm.plyr.dev.track/3m123abg";
+    const private_uri = "at://did:plc:artist/fm.plyr.dev.track/3m123abh";
+    const other_uri = "at://did:plc:alias-one/fm.plyr.dev.track/3m123abi";
     _ = try store_impl.pool.exec(
         \\INSERT INTO tracks (
         \\  atproto_record_uri, title, extra, created_at, artist_did,
@@ -539,13 +593,20 @@ test "PostgreSQL adapter reads a complete derived projection" {
         \\  ($3, 'Older', '{}', '2026-08-08T11:00:00Z', 'did:plc:artist',
         \\   'audio/mpeg', 'public', '[]', '[]', 0, 'published'),
         \\  ($4, 'Hidden', '{}', '2026-08-08T14:00:00Z', 'did:plc:artist',
-        \\   'audio/mpeg', 'public', '["sexual"]', '[]', 0, 'published')
-    , .{ newer_uri, tied_uri, older_uri, hidden_uri });
+        \\   'audio/mpeg', 'public', '["sexual"]', '[]', 0, 'published'),
+        \\  ($5, 'Unlisted', '{}', '2026-08-08T15:00:00Z', 'did:plc:artist',
+        \\   'audio/mpeg', 'unlisted', '[]', '[]', 0, 'published'),
+        \\  ($6, 'Private', '{}', '2026-08-08T16:00:00Z', 'did:plc:artist',
+        \\   'audio/mpeg', 'private', '[]', '[]', 0, 'published'),
+        \\  ($7, 'Other Artist', '{}', '2026-08-08T10:00:00Z', 'did:plc:alias-one',
+        \\   'audio/mpeg', 'public', '[]', '[]', 0, 'published')
+    , .{ newer_uri, tied_uri, older_uri, hidden_uri, unlisted_uri, private_uri, other_uri });
 
     var page_arena = std.heap.ArenaAllocator.init(allocator);
     defer page_arena.deinit();
-    const first_page = try store_impl.listDiscovery(page_arena.allocator(), .{
+    const first_page = try store_impl.listPublic(page_arena.allocator(), .{
         .collection = "fm.plyr.dev.track",
+        .scope = .discovery,
         .limit = 2,
         .after = null,
     });
@@ -553,8 +614,9 @@ test "PostgreSQL adapter reads a complete derived projection" {
     try std.testing.expectEqualStrings(newer_uri, first_page[0].value.record.uri);
     try std.testing.expectEqualStrings(tied_uri, first_page[1].value.record.uri);
 
-    const second_page = try store_impl.listDiscovery(page_arena.allocator(), .{
+    const second_page = try store_impl.listPublic(page_arena.allocator(), .{
         .collection = "fm.plyr.dev.track",
+        .scope = .discovery,
         .limit = 2,
         .after = .{
             .created_at_us = first_page[1].created_at_us,
@@ -564,4 +626,40 @@ test "PostgreSQL adapter reads a complete derived projection" {
     try std.testing.expectEqual(@as(usize, 2), second_page.len);
     try std.testing.expectEqualStrings(uri, second_page[0].value.record.uri);
     try std.testing.expectEqualStrings(older_uri, second_page[1].value.record.uri);
+
+    const artist_page = try store_impl.listPublic(page_arena.allocator(), .{
+        .collection = "fm.plyr.dev.track",
+        .scope = .{ .artist = "did:plc:artist" },
+        .limit = 20,
+        .after = null,
+    });
+    try std.testing.expectEqual(@as(usize, 6), artist_page.len);
+    // An artist catalogue is a content-view context: adult labels remain
+    // visible and unlisted public links remain addressable, while discovery
+    // above excludes both rows. Private rows remain owner-only.
+    try std.testing.expectEqualStrings(unlisted_uri, artist_page[0].value.record.uri);
+    try std.testing.expectEqualStrings(hidden_uri, artist_page[1].value.record.uri);
+    try std.testing.expectEqualStrings(newer_uri, artist_page[2].value.record.uri);
+
+    const continued_artist_page = try store_impl.listPublic(page_arena.allocator(), .{
+        .collection = "fm.plyr.dev.track",
+        .scope = .{ .artist = "did:plc:artist" },
+        .limit = 2,
+        .after = .{
+            .created_at_us = artist_page[1].created_at_us,
+            .at_uri = artist_page[1].value.record.uri,
+        },
+    });
+    try std.testing.expectEqual(@as(usize, 2), continued_artist_page.len);
+    try std.testing.expectEqualStrings(newer_uri, continued_artist_page[0].value.record.uri);
+    try std.testing.expectEqualStrings(tied_uri, continued_artist_page[1].value.record.uri);
+
+    const other_artist_page = try store_impl.listPublic(page_arena.allocator(), .{
+        .collection = "fm.plyr.dev.track",
+        .scope = .{ .artist = "did:plc:alias-one" },
+        .limit = 20,
+        .after = null,
+    });
+    try std.testing.expectEqual(@as(usize, 1), other_artist_page.len);
+    try std.testing.expectEqualStrings(other_uri, other_artist_page[0].value.record.uri);
 }

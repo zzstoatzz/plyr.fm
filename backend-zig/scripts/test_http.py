@@ -136,11 +136,20 @@ def main() -> None:
             "/v1/tracks?limit=0",
             "/v1/tracks?limit=101",
             "/v1/tracks?cursor=not-a-cursor",
+            "/v1/tracks?artist_did=not-a-did",
+            "/v1/tracks?artist_did=did%3Xplc",
+            "/v1/tracks?artist_did=did:plc:a&artist_did=did:plc:b",
             "/v1/tracks?offset=10",
         ):
             status, _, invalid_list = _request(base_url, invalid_target)
             assert status == 400
             assert invalid_list["error"]["code"] == "invalid_request"
+
+        status, _, unavailable_artist_tracks = _request(
+            base_url, "/v1/tracks?artist_did=did%3Aplc%3Aartist&limit=5"
+        )
+        assert status == 503
+        assert unavailable_artist_tracks["error"]["code"] == "service_unavailable"
 
         status, _, invalid = _request(base_url, "/v1/tracks/42")
         assert status == 400 and invalid["error"]["code"] == "invalid_request"

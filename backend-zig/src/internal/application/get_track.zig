@@ -54,7 +54,7 @@ const FakeStore = struct {
         return .{
             .context = self,
             .get_by_uri_fn = getOpaque,
-            .list_discovery_fn = listOpaque,
+            .list_public_fn = listOpaque,
             .ready_fn = readyOpaque,
         };
     }

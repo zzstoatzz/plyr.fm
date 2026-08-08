@@ -1,5 +1,6 @@
 # Zig backend development commands.
 set shell := ["bash", "-eu", "-o", "pipefail", "-c"]
+set positional-arguments := true
 
 default: check
 
@@ -33,8 +34,8 @@ test-http: build
 
 bench-http *ARGS:
     zig build -Doptimize=ReleaseFast
-    python3 scripts/bench_http.py {{ ARGS }}
+    python3 scripts/bench_http.py "$@"
 
 # Snapshot the Python surface that informs parity decisions.
 inventory *ARGS:
-    cd ../backend && RELAY_TEST_MODE=1 OAUTH_ENCRYPTION_KEY=hnSkDmgbbuK0rt7Ab3eJHAktb18gmebsdwKdTmq9mes= LOGFIRE_IGNORE_NO_CONFIG=1 uv run python ../backend-zig/scripts/inventory_python_api.py {{ ARGS }}
+    cd ../backend && RELAY_TEST_MODE=1 OAUTH_ENCRYPTION_KEY=hnSkDmgbbuK0rt7Ab3eJHAktb18gmebsdwKdTmq9mes= LOGFIRE_IGNORE_NO_CONFIG=1 uv run python ../backend-zig/scripts/inventory_python_api.py "$@"

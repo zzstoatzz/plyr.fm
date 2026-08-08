@@ -45,10 +45,10 @@ unbounded detached threads.
 The current product surface is `GET /v1/tracks`,
 `GET /v1/tracks/{track_id}`, and `GET /v1/artists/{identifier}`. The track
 collection accepts a strict `limit` from 1 to 100 and an opaque `cursor`; it
-applies anonymous discovery policy before keyset pagination and returns the
-same track representation as detail. Artist lookup accepts a canonical DID or
-a case-insensitive handle alias and exposes the transitional source of each
-profile field.
+accepts an optional canonical `artist_did`, applies discovery or artist-view
+policy before keyset pagination, and returns the same track representation as
+detail. Artist lookup accepts a canonical DID or a case-insensitive handle
+alias and exposes the transitional source of each profile field.
 
 Do not source or copy the root `.env` into a worktree. Point a command at the
 existing environment through the normal settings mechanism, and never print

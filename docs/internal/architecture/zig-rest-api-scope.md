@@ -50,7 +50,7 @@ decision.
 | Zig surface | state | capability covered | important gaps |
 |---|---|---|---|
 | `GET /v1` | covered | API namespace discovery | generated API description/OpenAPI |
-| `GET /v1/tracks` | covered | anonymous discovery collection with strict keyset pagination | viewer context, artist/tag filters, hidden-tag preferences, search and other collection views |
+| `GET /v1/tracks` | covered | anonymous discovery or artist-scoped public catalogue with strict keyset pagination | viewer context, tag filters, hidden-tag preferences, search and other collection views |
 | `GET /v1/tracks/{track_id}` | covered | public, published track detail from the projection | authenticated viewer state, private/gated tracks, playback, list/search views, publication and mutations |
 | `GET /v1/artists/{identifier}` | covered | public artist detail by canonical DID or case-insensitive handle alias | verified repository ingestion, collections, follows, profile writes, account state, viewer context |
 | `GET /health` | covered | process liveness | none for liveness |
@@ -78,7 +78,7 @@ second column because every Subsonic route accepts both `GET` and `POST`.
 | resource | routes | operations | Zig v1 status |
 |---|---:|---:|---|
 | `/rest` | 37 | 74 | not started; separate compatibility adapter |
-| `/tracks` | 33 | 33 | discovery collection and track detail partial; all other capabilities open |
+| `/tracks` | 33 | 33 | discovery/artist collection and track detail partial; all other capabilities open |
 | `/lists` | 18 | 18 | not started |
 | `/auth` | 15 | 15 | not started |
 | `/artists` | 9 | 9 | public DID/handle lookup covered by one v1 resource; all other capabilities open |
@@ -118,7 +118,7 @@ second column because every Subsonic route accepts both `GET` and `POST`.
 |---|---|---|---|
 | identity and sessions | `/auth/*`, `/account/*` | ATProto OAuth/DPoP, encrypted Postgres sessions, Redis session cache | redesign as session and current-user resources; keep OAuth redirects outside normal resource semantics |
 | artists | `/artists/*` | PDS profiles, Postgres projection, image storage, follow graph | public detail started with canonical DID identity, handle aliases, and explicit field provenance |
-| tracks | 33 `/tracks/*` routes | PDS records/blobs, Postgres, R2, transcoder, Docket, moderation, ML | discovery collection and detail started; split publishing commands, interactions, playback, and repair; retire repair verbs from public API |
+| tracks | 33 `/tracks/*` routes | PDS records/blobs, Postgres, R2, transcoder, Docket, moderation, ML | discovery/artist collection and detail started; split publishing commands, interactions, playback, and repair; retire repair verbs from public API |
 | albums | `/albums/*` | ATProto list/track records, Postgres, R2 images | model as collection resources; eliminate local-first finalization semantics |
 | playlists and liked list | 18 `/lists/*` routes | ATProto list records, Postgres hydration, Redis cache, recommendations | expose `/v1/playlists`; liked tracks are an interaction collection, not a magic list subtype |
 | likes and comments | nested track routes | PDS records, local projections, Docket write-behind, Redis tombstones | source-authoritative interaction resources; no success based only on local mutation |

@@ -9,12 +9,13 @@ read-only discovery view over public and supporter-gated tracks. It reuses the
 complete v1 track representation; list and detail cannot quietly disagree
 about identity, provenance, media, access, moderation, or projection state.
 
-This first slice accepts two query parameters:
+The collection accepts three query parameters:
 
 | parameter | contract |
 |---|---|
 | `limit` | optional integer from 1 through 100; defaults to 50 |
 | `cursor` | optional opaque cursor returned by the preceding page |
+| `artist_did` | optional canonical artist DID; switches from discovery to that artist's public catalogue |
 
 Unknown, duplicate, empty, malformed, and out-of-range parameters return
 `400 invalid_request`. The server does not clamp a caller mistake or interpret
@@ -66,17 +67,38 @@ The initial anonymous collection includes only rows that:
 Supporter visibility means discoverable metadata, not permission to stream the
 audio. Playback remains a separate authorization resource.
 
-Viewer preferences, artist-scoped catalogues, tags, hidden-tag defaults, search,
-and other filters are not smuggled into this anonymous slice. They remain open
-contract work. In particular, the appview should not hard-code a default tag
-preference into the canonical catalogue query merely because Python currently
-does so for one client feed.
+Viewer preferences, tags, hidden-tag defaults, search, and other filters are not
+smuggled into this collection. They remain open contract work. In particular,
+the appview should not hard-code a default tag preference into the canonical
+catalogue query merely because Python currently does so for one client feed.
+
+## artist catalogue policy
+
+`artist_did` is retained because it is an explicit, canonical filter already
+used by the current clients. It is validated with `zat` before any index access;
+raw and percent-encoded DIDs are accepted, while duplicate or malformed values
+return `400`. The cursor and ordering contract is identical to discovery.
+
+An artist catalogue is a content-view context rather than a feed chosen for the
+listener. It still requires the configured record collection, a published row,
+an active account, and no active copyright or operator exclusion. It differs in
+two deliberate ways:
+
+- `unlisted` tracks are included because an artist profile is a direct
+  destination rather than discovery;
+- adult-audio labels remain visible in the catalogue representation, allowing
+  the client to render the label rather than misrepresenting the catalogue.
+
+Private tracks remain excluded without an authenticated owner context. The SQL
+predicate includes the artist DID before ordering and `LIMIT`, so pagination
+cannot leak another artist or report a false `has_more` value.
 
 ## implementation boundary
 
-The application layer owns strict query parsing, cursor validation, page
-construction, and error classification. `TrackStore` owns a bounded discovery
-read and returns the internal timestamp sort key beside each domain track. The
+The application layer owns strict query parsing, percent decoding, DID and
+cursor validation, page construction, and error classification. `TrackStore`
+owns a bounded public-collection read with an explicit discovery-or-artist
+scope and returns the internal timestamp sort key beside each domain track. The
 PostgreSQL adapter owns SQL policy and copies every row into the request arena
 before advancing the streaming result.
 
@@ -104,3 +126,15 @@ This exercises HTTP, routing, strict query parsing, PostgreSQL pool/query/row
 decoding, policy filtering, track serialization, and cursor generation. It is
 not a staging-data, network-TLS, memory, or Python-parity measurement; those
 remain canary gates.
+
+The artist-filtered path was recorded against the expanded fixture with five
+returned records and a percent-encoded DID:
+
+| concurrency | responses/s | p50 | p95 | p99 | errors |
+|---:|---:|---:|---:|---:|---:|
+| 1 | 2,770.5 | 0.328 ms | 0.528 ms | 0.906 ms | 0 |
+| 16 | 9,318.0 | 1.507 ms | 3.416 ms | 4.934 ms | 0 |
+
+This baseline additionally exercises URL decoding, DID validation, the artist
+scope, content-view policy, and the wider response page. It remains a localhost
+regression measurement rather than a Neon capacity claim.

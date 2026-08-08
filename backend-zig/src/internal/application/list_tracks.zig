@@ -12,6 +12,7 @@ pub const max_limit: usize = 100;
 const Options = struct {
     limit: usize = default_limit,
     cursor: ?[]const u8 = null,
+    artist_did: ?[]const u8 = null,
 };
 
 pub const Result = union(enum) {
@@ -27,7 +28,10 @@ pub fn execute(
     expected_collection: []const u8,
     target: []const u8,
 ) Result {
-    const options = parseOptions(target) catch return .invalid_request;
+    const options = parseOptions(allocator, target) catch |err| return switch (err) {
+        error.OutOfMemory => .unavailable,
+        else => .invalid_request,
+    };
     const after: ?track_cursor.Cursor = if (options.cursor) |token| blk: {
         const storage = allocator.alloc(u8, token.len) catch return .unavailable;
         const decoded = track_cursor.decode(storage, token) catch return .invalid_request;
@@ -37,10 +41,15 @@ pub fn execute(
         break :blk decoded;
     } else null;
 
+    const scope: store_module.ListScope = if (options.artist_did) |did| blk: {
+        if (zat.Did.parse(did) == null) return .invalid_request;
+        break :blk .{ .artist = did };
+    } else .discovery;
     const configured_store = store orelse return .unavailable;
     const requested = options.limit + 1;
-    const items = configured_store.listDiscovery(allocator, .{
+    const items = configured_store.listPublic(allocator, .{
         .collection = expected_collection,
+        .scope = scope,
         .limit = requested,
         .after = after,
     }) catch |err| return classifyStoreError(err);
@@ -66,7 +75,7 @@ pub fn execute(
     } };
 }
 
-fn parseOptions(target: []const u8) !Options {
+fn parseOptions(allocator: std.mem.Allocator, target: []const u8) !Options {
     const query_start = std.mem.indexOfScalar(u8, target, '?') orelse return .{};
     const query = target[query_start + 1 ..];
     if (query.len == 0) return .{};
@@ -74,6 +83,7 @@ fn parseOptions(target: []const u8) !Options {
     var result: Options = .{};
     var saw_limit = false;
     var saw_cursor = false;
+    var saw_artist_did = false;
     var pairs = std.mem.splitScalar(u8, query, '&');
     while (pairs.next()) |pair| {
         if (pair.len == 0) return error.InvalidQuery;
@@ -89,12 +99,36 @@ fn parseOptions(target: []const u8) !Options {
         } else if (std.mem.eql(u8, name, "cursor")) {
             if (saw_cursor or value.len == 0) return error.InvalidQuery;
             saw_cursor = true;
-            result.cursor = value;
+            result.cursor = try decodeQueryValue(allocator, value);
+        } else if (std.mem.eql(u8, name, "artist_did")) {
+            if (saw_artist_did or value.len == 0) return error.InvalidQuery;
+            saw_artist_did = true;
+            result.artist_did = try decodeQueryValue(allocator, value);
         } else {
             return error.InvalidQuery;
         }
     }
     return result;
+}
+
+fn decodeQueryValue(allocator: std.mem.Allocator, encoded: []const u8) ![]const u8 {
+    if (std.mem.indexOfAny(u8, encoded, "%+") == null) return encoded;
+    const decoded = try allocator.alloc(u8, encoded.len);
+    var read: usize = 0;
+    var written: usize = 0;
+    while (read < encoded.len) {
+        if (encoded[read] == '%') {
+            if (read + 2 >= encoded.len) return error.InvalidQuery;
+            decoded[written] = std.fmt.parseInt(u8, encoded[read + 1 .. read + 3], 16) catch
+                return error.InvalidQuery;
+            read += 3;
+        } else {
+            decoded[written] = if (encoded[read] == '+') ' ' else encoded[read];
+            read += 1;
+        }
+        written += 1;
+    }
+    return decoded[0..written];
 }
 
 fn classifyStoreError(err: TrackStore.Error) Result {
@@ -112,7 +146,7 @@ const FakeStore = struct {
         return .{
             .context = self,
             .get_by_uri_fn = getOpaque,
-            .list_discovery_fn = listOpaque,
+            .list_public_fn = listOpaque,
             .ready_fn = readyOpaque,
         };
     }
@@ -132,6 +166,10 @@ const FakeStore = struct {
     ) TrackStore.Error![]store_module.ListItem {
         const self: *FakeStore = @ptrCast(@alignCast(context));
         if (!std.mem.eql(u8, request.collection, self.expected_collection)) return error.CorruptProjection;
+        switch (request.scope) {
+            .discovery => {},
+            .artist => |did| if (!std.mem.eql(u8, did, "did:plc:artist")) return error.CorruptProjection,
+        }
         return self.items[0..@min(self.items.len, request.limit)];
     }
 };
@@ -166,12 +204,36 @@ fn exampleTrack(uri: []const u8, title: []const u8) track.Track {
 }
 
 test "collection options are strict and bounded" {
-    try std.testing.expectEqual(default_limit, (try parseOptions("/v1/tracks")).limit);
-    try std.testing.expectEqual(@as(usize, 100), (try parseOptions("/v1/tracks?limit=100")).limit);
-    try std.testing.expectError(error.InvalidQuery, parseOptions("/v1/tracks?limit=0"));
-    try std.testing.expectError(error.InvalidQuery, parseOptions("/v1/tracks?limit=101"));
-    try std.testing.expectError(error.InvalidQuery, parseOptions("/v1/tracks?limit=2&limit=3"));
-    try std.testing.expectError(error.InvalidQuery, parseOptions("/v1/tracks?offset=10"));
+    const allocator = std.testing.allocator;
+    try std.testing.expectEqual(default_limit, (try parseOptions(allocator, "/v1/tracks")).limit);
+    try std.testing.expectEqual(@as(usize, 100), (try parseOptions(allocator, "/v1/tracks?limit=100")).limit);
+    try std.testing.expectError(error.InvalidQuery, parseOptions(allocator, "/v1/tracks?limit=0"));
+    try std.testing.expectError(error.InvalidQuery, parseOptions(allocator, "/v1/tracks?limit=101"));
+    try std.testing.expectError(error.InvalidQuery, parseOptions(allocator, "/v1/tracks?limit=2&limit=3"));
+    try std.testing.expectError(error.InvalidQuery, parseOptions(allocator, "/v1/tracks?offset=10"));
+}
+
+test "artist filters accept raw and percent-encoded DIDs only once" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    try std.testing.expectEqualStrings(
+        "did:plc:artist",
+        (try parseOptions(allocator, "/v1/tracks?artist_did=did:plc:artist")).artist_did.?,
+    );
+    try std.testing.expectEqualStrings(
+        "did:plc:artist",
+        (try parseOptions(allocator, "/v1/tracks?artist_did=did%3Aplc%3Aartist")).artist_did.?,
+    );
+    try std.testing.expectError(
+        error.InvalidQuery,
+        parseOptions(allocator, "/v1/tracks?artist_did=did:plc:a&artist_did=did:plc:b"),
+    );
+    try std.testing.expectError(
+        error.InvalidQuery,
+        parseOptions(allocator, "/v1/tracks?artist_did=did%3Xplc"),
+    );
 }
 
 test "collection returns one page and a cursor from the last visible row" {
@@ -209,4 +271,29 @@ test "collection returns one page and a cursor from the last visible row" {
     try std.testing.expectEqual(@as(usize, 2), parsed.object.get("data").?.array.items.len);
     try std.testing.expect(parsed.object.get("has_more").?.bool);
     try std.testing.expect(parsed.object.get("next_cursor") != null);
+}
+
+test "collection passes a validated artist scope to the index" {
+    var fake = FakeStore{ .items = &.{}, .expected_collection = "fm.plyr.dev.track" };
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+
+    switch (execute(
+        arena.allocator(),
+        fake.asStore(),
+        "fm.plyr.dev.track",
+        "/v1/tracks?artist_did=did%3Aplc%3Aartist",
+    )) {
+        .found => |page| try std.testing.expectEqual(@as(usize, 0), page.data.len),
+        else => return error.UnexpectedResult,
+    }
+    try std.testing.expectEqual(
+        Result.invalid_request,
+        execute(
+            arena.allocator(),
+            fake.asStore(),
+            "fm.plyr.dev.track",
+            "/v1/tracks?artist_did=not-a-did",
+        ),
+    );
 }
