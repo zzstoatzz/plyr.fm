@@ -56,16 +56,18 @@ An API request may coordinate or prepare the PDS write. It must not declare
 success merely because Postgres or R2 accepted data. Pending rows are operation
 state and expire or reconcile; they are not unpublished canonical tracks.
 
-## process roles
+## implementation boundary
 
-One `plyr-backend` binary has explicit roles selected by `MODE`:
+This branch implements the versioned REST appview. The `plyr-backend` binary
+has one explicit `MODE=api` role. It does not implement an ingester or Docket
+worker merely because the Python deployment currently contains those process
+groups.
 
-- `api`: stateless HTTP and WebSocket appview surface;
-- `ingester`: verified relay/repository ingestion and reconciliation;
-- `worker`: Docket task execution for mirrors, analysis, exports, and repair.
-
-There is deliberately no implicit "all" role. Each process owns a bounded
-resource and failure domain, matching the existing Fly process-group split.
+The REST layer depends on interfaces for indexed state, PDS commands, blobs,
+moderation, and asynchronous work. Those implementations can remain Python
+services during migration or become Zig libraries/services later. Keeping the
+interfaces explicit lets the API advance without silently expanding this
+branch into a second big-bang backend rewrite.
 
 ## migration rules
 
@@ -82,14 +84,13 @@ resource and failure domain, matching the existing Fly process-group split.
 
 ## first vertical slice
 
-The first end-to-end content slice is a public track projection:
+The first REST slice is a read-only public track resource under `/v1`:
 
-1. consume and verify an `fm.plyr.*` repository commit;
-2. validate the track record and referenced blob;
-3. project it into a new derived track index;
-4. mirror verified audio by content digest;
-5. serve the indexed track and mirror URL;
-6. remove it from serving after a verified delete.
+1. define the canonical public representation and error envelope;
+2. read through an index interface rather than a concrete legacy table;
+3. expose canonical AT URI/CID and derived playback availability separately;
+4. use cursor pagination and stable filters;
+5. prove behavior with API-level contract tests.
 
-That slice proves the authority, trust, index, storage, and deletion boundaries
-before OAuth-coordinated publishing or the full legacy API surface is added.
+Verified ingestion and blob mirroring are dependencies of a trustworthy
+projection, but their implementation is outside the REST-focused first slice.

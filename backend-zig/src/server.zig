@@ -1,10 +1,11 @@
 const std = @import("std");
+const router = @import("api/router.zig");
 
 const Io = std.Io;
 const http = std.http;
-const mem = std.mem;
 
 const buffer_size = 16 * 1024;
+var request_sequence = std.atomic.Value(u64).init(0);
 
 pub fn run(io: Io, port: u16) !void {
     const address = Io.net.Ip4Address.unspecified(port);
@@ -47,7 +48,13 @@ fn handleConnection(stream: Io.net.Stream, io: Io) void {
             return;
         };
 
-        handleRequest(&request) catch |err| {
+        var request_id_buffer: [64]u8 = undefined;
+        const request_id = makeRequestId(io, &request_id_buffer) catch {
+            std.log.err("request id generation failed", .{});
+            return;
+        };
+
+        router.handle(&request, request_id) catch |err| {
             std.log.err("request failed: {}", .{err});
             return;
         };
@@ -56,42 +63,8 @@ fn handleConnection(stream: Io.net.Stream, io: Io) void {
     }
 }
 
-fn handleRequest(request: *http.Server.Request) !void {
-    const target = request.head.target;
-    const path = if (mem.indexOfScalar(u8, target, '?')) |index| target[0..index] else target;
-
-    if (request.head.method == .OPTIONS) {
-        try respond(request, .no_content, "", "text/plain");
-    } else if (request.head.method == .GET and mem.eql(u8, path, "/health")) {
-        try respond(request, .ok, "{\"status\":\"ok\",\"role\":\"api\"}", "application/json");
-    } else if (request.head.method == .GET and mem.eql(u8, path, "/")) {
-        try respond(request, .ok, "{\"name\":\"plyr.fm\",\"backend\":\"zig\"}", "application/json");
-    } else {
-        try respond(request, .not_found, "{\"detail\":\"Not Found\"}", "application/json");
-    }
-}
-
-fn respond(
-    request: *http.Server.Request,
-    status: http.Status,
-    body: []const u8,
-    content_type: []const u8,
-) !void {
-    try request.respond(body, .{
-        .status = status,
-        .extra_headers = &.{
-            .{ .name = "content-type", .value = content_type },
-            .{ .name = "access-control-allow-origin", .value = "*" },
-            .{ .name = "access-control-allow-methods", .value = "GET, POST, PUT, PATCH, DELETE, OPTIONS" },
-            .{ .name = "access-control-allow-headers", .value = "*" },
-            .{ .name = "x-content-type-options", .value = "nosniff" },
-            .{ .name = "referrer-policy", .value = "strict-origin-when-cross-origin" },
-        },
-    });
-}
-
-test "query strings do not participate in route matching" {
-    const target = "/health?probe=fly";
-    const index = mem.indexOfScalar(u8, target, '?').?;
-    try std.testing.expectEqualStrings("/health", target[0..index]);
+fn makeRequestId(io: Io, buffer: []u8) ![]const u8 {
+    const timestamp = Io.Timestamp.now(io, .real).toMicroseconds();
+    const sequence = request_sequence.fetchAdd(1, .monotonic);
+    return std.fmt.bufPrint(buffer, "req_{x}_{x}", .{ timestamp, sequence });
 }

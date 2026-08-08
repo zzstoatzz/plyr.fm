@@ -2,8 +2,6 @@ const std = @import("std");
 
 pub const Role = enum {
     api,
-    ingester,
-    worker,
 
     pub fn parse(value: []const u8) !Role {
         return std.meta.stringToEnum(Role, value) orelse error.InvalidRole;
@@ -32,7 +30,7 @@ fn getenv(name: [*:0]const u8) ?[]const u8 {
 
 test "process roles are explicit" {
     try std.testing.expectEqual(Role.api, try Role.parse("api"));
-    try std.testing.expectEqual(Role.ingester, try Role.parse("ingester"));
-    try std.testing.expectEqual(Role.worker, try Role.parse("worker"));
+    try std.testing.expectError(error.InvalidRole, Role.parse("ingester"));
+    try std.testing.expectError(error.InvalidRole, Role.parse("worker"));
     try std.testing.expectError(error.InvalidRole, Role.parse("all"));
 }

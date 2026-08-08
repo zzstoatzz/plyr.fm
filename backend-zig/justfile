@@ -15,3 +15,7 @@ test:
 check:
     zig fmt --check build.zig src
     zig build test
+
+# Snapshot the Python surface that informs parity decisions.
+inventory *ARGS:
+    cd ../backend && RELAY_TEST_MODE=1 OAUTH_ENCRYPTION_KEY=hnSkDmgbbuK0rt7Ab3eJHAktb18gmebsdwKdTmq9mes= LOGFIRE_IGNORE_NO_CONFIG=1 uv run python ../backend-zig/scripts/inventory_python_api.py {{ ARGS }}

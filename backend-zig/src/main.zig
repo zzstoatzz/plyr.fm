@@ -11,20 +11,18 @@ pub fn main() !void {
     const io = threaded_io.io();
 
     const settings = config.Config.fromEnvironment() catch |err| {
-        std.log.err("invalid configuration: {} (MODE must be api, ingester, or worker)", .{err});
+        std.log.err("invalid configuration: {} (MODE must be api)", .{err});
         return err;
     };
 
     switch (settings.role) {
         .api => try server.run(io, settings.port),
-        .ingester, .worker => {
-            std.log.err("MODE={s} is scaffolded but not implemented", .{@tagName(settings.role)});
-            return error.RoleNotImplemented;
-        },
     }
 }
 
 test {
+    _ = @import("api/response.zig");
+    _ = @import("api/router.zig");
     _ = @import("config.zig");
     _ = @import("server.zig");
 }
