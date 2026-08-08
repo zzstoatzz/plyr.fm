@@ -39,6 +39,7 @@ from atproto_oauth.security import get_hardened_async_client, is_safe_url
 from sqlalchemy import select
 
 from backend._internal.atproto.client import pds_blob_url
+from backend._internal.background import docket_client_lifespan
 from backend._internal.tasks.pds_mirror import BlobVerificationError, mirror_pds_blob
 from backend.models import Artist, Track
 from backend.utilities.database import db_session
@@ -110,12 +111,22 @@ async def main() -> None:
     if not candidates:
         return
 
-    mirrored = skipped = failed = 0
-    for track_id, title, cid, did, pds in candidates:
-        if args.dry_run:
+    if args.dry_run:
+        for track_id, title, cid, did, pds in candidates:
             await _report(track_id, title, cid, did, pds)
-            continue
+        return
 
+    # a successful mirror re-enters the post-create hooks to schedule the scans
+    # against the copy we now hold, and those enqueue onto docket. without a
+    # client the mirror stores the bytes and then raises, leaving the track
+    # mirrored but never scanned.
+    async with docket_client_lifespan():
+        await _mirror_all(candidates)
+
+
+async def _mirror_all(candidates: list[tuple[int, str, str, str, str]]) -> None:
+    mirrored = skipped = failed = 0
+    for track_id, title, _cid, _did, _pds in candidates:
         try:
             await mirror_pds_blob(track_id)
         except BlobVerificationError as exc:
@@ -139,10 +150,7 @@ async def main() -> None:
             logger.warning("track %s (%r): not mirrored", track_id, title)
             skipped += 1
 
-    if not args.dry_run:
-        logger.info(
-            "done: %d mirrored, %d skipped, %d failed", mirrored, skipped, failed
-        )
+    logger.info("done: %d mirrored, %d skipped, %d failed", mirrored, skipped, failed)
 
 
 if __name__ == "__main__":

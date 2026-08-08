@@ -91,6 +91,53 @@ class TestMirrorPdsBlob:
         reentry.assert_awaited_once()
         assert reentry.await_args.kwargs["skip_notification"] is True
 
+    async def test_staging_does_not_spend_audd_credits(
+        self, db_session: AsyncSession
+    ) -> None:
+        """`ingest` skips copyright on staging; the mirror's re-entry must too."""
+        audio = b"staging audio"
+        track = await _track_on_pds(db_session, cid=cid_for_blob(audio))
+
+        storage_mock = AsyncMock()
+        storage_mock.save.return_value = "deadbeefdeadbeef"
+        storage_mock.get_url.return_value = "https://r2.example.com/audio/x.mp3"
+
+        with (
+            patch(MOCK_FETCH_PATH, AsyncMock(return_value=audio)),
+            patch(MOCK_STORAGE_PATH, storage_mock),
+            patch(
+                "backend._internal.tasks.pds_mirror.settings.observability.environment",
+                "staging",
+            ),
+            patch(MOCK_REENTRY_PATH, AsyncMock()) as reentry,
+        ):
+            await mirror_pds_blob(track.id)
+
+        assert reentry.await_args.kwargs["skip_copyright"] is True
+
+    async def test_production_does_scan_the_mirrored_copy(
+        self, db_session: AsyncSession
+    ) -> None:
+        audio = b"production audio"
+        track = await _track_on_pds(db_session, cid=cid_for_blob(audio))
+
+        storage_mock = AsyncMock()
+        storage_mock.save.return_value = "deadbeefdeadbeef"
+        storage_mock.get_url.return_value = "https://r2.example.com/audio/x.mp3"
+
+        with (
+            patch(MOCK_FETCH_PATH, AsyncMock(return_value=audio)),
+            patch(MOCK_STORAGE_PATH, storage_mock),
+            patch(
+                "backend._internal.tasks.pds_mirror.settings.observability.environment",
+                "production",
+            ),
+            patch(MOCK_REENTRY_PATH, AsyncMock()) as reentry,
+        ):
+            await mirror_pds_blob(track.id)
+
+        assert reentry.await_args.kwargs["skip_copyright"] is False
+
     async def test_rejects_bytes_that_do_not_match_the_cid(
         self, db_session: AsyncSession
     ) -> None:

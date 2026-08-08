@@ -148,8 +148,13 @@ async def mirror_pds_blob(track_id: int) -> None:
 
     # now that the track has an audio object of ours, the hooks resolve to it
     # and the vendor-facing steps run against bytes we verified. followers were
-    # already notified on the first pass.
-    await run_post_track_create_hooks(track_id, skip_notification=True)
+    # already notified on the first pass, and staging does not spend AudD
+    # credits on ingested tracks -- both mirroring what `ingest` passes.
+    await run_post_track_create_hooks(
+        track_id,
+        skip_notification=True,
+        skip_copyright=settings.observability.environment == "staging",
+    )
 
 
 async def _fetch_blob(pds_url: str, did: str, cid: str) -> bytes | None:
