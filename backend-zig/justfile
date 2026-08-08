@@ -37,6 +37,9 @@ bench-http *ARGS:
     zig build -Doptimize=ReleaseFast
     python3 scripts/bench_http.py "$@"
 
+bench-snapshot:
+    zig build bench-snapshot -Doptimize=ReleaseFast
+
 # Snapshot the Python surface that informs parity decisions.
 inventory *ARGS:
     cd ../backend && RELAY_TEST_MODE=1 OAUTH_ENCRYPTION_KEY=hnSkDmgbbuK0rt7Ab3eJHAktb18gmebsdwKdTmq9mes= LOGFIRE_IGNORE_NO_CONFIG=1 uv run python ../backend-zig/scripts/inventory_python_api.py "$@"

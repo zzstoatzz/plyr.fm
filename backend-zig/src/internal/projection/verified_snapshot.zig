@@ -1,0 +1,112 @@
+//! Authenticated complete-repository snapshot ready for atomic reconciliation.
+
+const std = @import("std");
+const zat = @import("zat");
+const list_change = @import("list_change.zig");
+
+pub const Snapshot = struct {
+    repo_did: []const u8,
+    commit_rev: []const u8,
+    commit_cid: zat.Cid,
+    data_cid: zat.Cid,
+    list_collection: []const u8,
+    indexed_at_us: i64,
+    list_changes: []const list_change.Change,
+
+    pub fn validate(self: Snapshot) Error!void {
+        if (zat.Did.parse(self.repo_did) == null or
+            zat.Tid.parse(self.commit_rev) == null or
+            zat.Nsid.parse(self.list_collection) == null or
+            self.indexed_at_us < 0) return error.InvalidSnapshot;
+        try validateDagCborCid(self.commit_cid);
+        try validateDagCborCid(self.data_cid);
+        for (self.list_changes, 0..) |change, index| {
+            const upsert = switch (change) {
+                .upsert => |value| value,
+                .delete => return error.InvalidSnapshot,
+            };
+            if (!std.mem.eql(u8, upsert.owner_did, self.repo_did) or
+                !std.mem.eql(u8, upsert.collection, self.list_collection) or
+                !std.mem.eql(u8, upsert.proof.commit_rev, self.commit_rev) or
+                upsert.proof.indexed_at_us != self.indexed_at_us or
+                !std.mem.eql(u8, upsert.proof.commit_cid.raw, self.commit_cid.raw))
+                return error.InvalidSnapshot;
+            for (self.list_changes[0..index]) |prior| {
+                const prior_uri = switch (prior) {
+                    .upsert => |value| value.record_uri,
+                    .delete => return error.InvalidSnapshot,
+                };
+                if (std.mem.eql(u8, upsert.record_uri, prior_uri))
+                    return error.DuplicateRecord;
+            }
+        }
+    }
+};
+
+pub const ApplyResult = enum { applied, idempotent, stale };
+
+pub const Store = struct {
+    context: *anyopaque,
+    apply_fn: *const fn (*anyopaque, std.mem.Allocator, Snapshot) Error!ApplyResult,
+
+    pub fn apply(
+        self: Store,
+        allocator: std.mem.Allocator,
+        snapshot: Snapshot,
+    ) Error!ApplyResult {
+        try snapshot.validate();
+        return self.apply_fn(self.context, allocator, snapshot);
+    }
+};
+
+pub const Error = error{
+    InvalidSnapshot,
+    DuplicateRecord,
+    RevisionConflict,
+    CorruptProjection,
+    ProjectionUnavailable,
+    OutOfMemory,
+};
+
+fn validateDagCborCid(cid: zat.Cid) Error!void {
+    const parsed = zat.Cid.fromBytes(cid.raw) catch return error.InvalidSnapshot;
+    if (parsed.codec() != zat.cbor.Codec.dag_cbor) return error.InvalidSnapshot;
+}
+
+test "complete snapshot accepts only unique upserts with one proof" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    const commit = try zat.Cid.forDagCbor(a, "commit");
+    const root = try zat.Cid.forDagCbor(a, "root");
+    const change: list_change.Change = .{ .upsert = .{
+        .record_uri = "at://did:plc:a/fm.plyr.dev.list/r",
+        .record_cid = "bafyreiaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        .owner_did = "did:plc:a",
+        .collection = "fm.plyr.dev.list",
+        .rkey = "r",
+        .list_type = .album,
+        .name = null,
+        .created_at = "2026-08-08T12:00:00Z",
+        .updated_at = null,
+        .members = &.{},
+        .proof = .{
+            .commit_cid = commit,
+            .commit_rev = "3jqfcqzm3fo2j",
+            .indexed_at_us = 1,
+        },
+    } };
+    const snapshot: Snapshot = .{
+        .repo_did = "did:plc:a",
+        .commit_rev = "3jqfcqzm3fo2j",
+        .commit_cid = commit,
+        .data_cid = root,
+        .list_collection = "fm.plyr.dev.list",
+        .indexed_at_us = 1,
+        .list_changes = &.{change},
+    };
+    try snapshot.validate();
+    var duplicate = snapshot;
+    duplicate.list_changes = &.{ change, change };
+    try std.testing.expectError(error.DuplicateRecord, duplicate.validate());
+}

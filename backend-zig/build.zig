@@ -36,4 +36,24 @@ pub fn build(b: *std.Build) void {
     const run_tests = b.addRunArtifact(tests);
     const test_step = b.step("test", "Run Zig backend tests");
     test_step.dependOn(&run_tests.step);
+
+    const snapshot_bench_module = b.createModule(.{
+        .root_source_file = b.path("src/bench_snapshot.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    snapshot_bench_module.addImport("zat", b.dependency("zat", .{
+        .target = target,
+        .optimize = optimize,
+    }).module("zat"));
+    const snapshot_bench = b.addExecutable(.{
+        .name = "bench-snapshot",
+        .root_module = snapshot_bench_module,
+    });
+    const run_snapshot_bench = b.addRunArtifact(snapshot_bench);
+    const snapshot_bench_step = b.step(
+        "bench-snapshot",
+        "Benchmark authenticated complete-repository list extraction",
+    );
+    snapshot_bench_step.dependOn(&run_snapshot_bench.step);
 }

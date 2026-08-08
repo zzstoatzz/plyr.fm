@@ -17,6 +17,7 @@ just zig image
 INDEX_MODE=disabled TRACK_COLLECTION_NSID=fm.plyr.dev.track LIST_COLLECTION_NSID=fm.plyr.dev.list just zig run
 just zig bench-http --duration 5 --concurrency 16
 DATABASE_URL=postgresql://... just zig bench-http --with-index --path '/v1/tracks?limit=50'
+just zig bench-snapshot
 ```
 
 `check` includes a black-box HTTP contract smoke test on an ephemeral port.
@@ -24,9 +25,11 @@ DATABASE_URL=postgresql://... just zig bench-http --with-index --path '/v1/track
 waits for it to accept connections, creates minimal projection schemas, and
 exercises the real `pg.zig` adapters. It covers atomic ordered-list replacement,
 replay and tombstone semantics, whole-commit chain gap/conflict handling, and
-rollback across multiple mutations, then applies and reverses the real Alembic
-projection migrations. It only destroys objects in the dedicated `relay_test`
-database on port 5433; both test paths refuse any other database name.
+rollback across multiple mutations. It also covers authenticated complete-repo
+bootstrap, absence reconciliation, and repair replay before applying and
+reversing the real Alembic projection migrations. It only destroys objects in
+the dedicated `relay_test` database on port 5433; both test paths refuse any
+other database name.
 
 ## API configuration
 

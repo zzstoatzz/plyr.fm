@@ -117,17 +117,54 @@ against the authenticated post-state MST. It accepts at most 200 operations and
 lenient inversion fallback: missing `prevData`, rebase/too-big events, or an MST
 gap route to full-repository repair rather than becoming projected data.
 
+## complete repository bootstrap and repair
+
+An unknown repository or live-chain gap is repaired only from a complete
+`com.atproto.sync.getRepo` CAR. `snapshot_verifier.zig` asks Zat to verify the
+commit signature, every block hash, deterministic MST layer structure, and the
+presence of every record block before it extracts the configured list
+collection. A malformed target-namespace record rejects the complete snapshot;
+it is never silently dropped into a partially authoritative index.
+
+The initial implementation bounds a repository CAR at 64 MiB and 250,000
+blocks. Proof-pass allocations are released before the retained extraction
+parse, so the two validation passes do not overlap in memory. Repositories over
+that bound need a future streamed/spooled verifier rather than unbounded heap
+growth in the ingestion process.
+
+The snapshot Postgres adapter serializes concurrent bootstrap attempts per DID,
+locks an existing head before repair, replaces every present list from the
+authenticated snapshot, and turns any previously active list absent from that
+snapshot into a tombstone at the snapshot revision. Its ordered members are
+removed in the same transaction. The repository head becomes visible only with
+the complete reconciliation; a newer local head makes the fetched snapshot
+stale, and same-revision divergence is a conflict. This gives authenticated
+absence the same durability as an observed live delete.
+
 The same projection serves album detail first and later playlist and liked-list
 reads without exposing its physical schema through the REST model.
 
 ## next slice
 
-Implement the authoritative full-repository bootstrap/repair path that can
-authenticate a complete `com.atproto.sync.getRepo` CAR, reconcile records absent
-from the snapshot, and seed `repo_heads`. Only then connect live firehose
-consumption to the verified commit transaction. Album detail follows by joining
-list members to independently indexed track records. Missing, private, or
-moderated tracks must retain their position semantics without silently
-substituting unrelated local rows. The first API canary remains read-only and
-does not gain an ingestion process merely because this library foundation now
-exists.
+Connect DID signing-key resolution, `getRepo` fetching, and live firehose
+consumption to the verified snapshot and commit transactions as an independently
+deployable ingestion role. Album detail follows by joining list members to
+independently indexed track records. Missing, private, or moderated tracks must
+retain their position semantics without silently substituting unrelated local
+rows. The first API canary remains read-only and does not gain an ingestion
+process merely because this library foundation now exists.
+
+## verifier resource baseline
+
+`just zig bench-snapshot` builds a deterministic signed full-repository CAR with
+100 valid list records and measures 50 complete proof-and-extraction passes in
+`ReleaseFast`. On the Apple M5 Pro development host with Zig 0.16.0, five warm
+runs had a median of 286,853 ns per repository: 3,486 repositories/s or 348,611
+records/s. The 9,024-byte fixture process peaked at 2,310,144 bytes RSS under
+`/usr/bin/time -l`.
+
+This is a CPU and allocation baseline for the authenticated snapshot core, not
+a network, Postgres, large-repository, or production-capacity claim. The
+fixture intentionally makes regression measurement cheap enough to run locally;
+larger CAR-size sweeps and ingestion-role working-set measurements remain part
+of deployment validation.
