@@ -11,19 +11,22 @@ for boundaries that made Postgres or R2 into accidental sources of truth.
 
 ## authority model
 
-1. **the PDS is canonical.** User-authored music metadata, collections,
-   interactions, and referenced blobs belong in signed ATProto records and the
-   user's PDS. A successful local database write never makes a user action
-   canonical.
+1. **authority belongs to a claim, not a database.** User-authored music
+   metadata, collections, interactions, and media references belong in signed
+   ATProto records. Content CIDs identify bytes. A media service may attest that
+   it hosts those bytes. Plyr's labeler owns its operator assertions. A
+   successful local database write never makes any of those claims canonical.
 2. **ingestion establishes trust.** Records entering the index must come through
    a verified repository path: commit signature, MST diff, record operation,
    and blob CID. Jetstream delivery alone is notification, not proof.
 3. **Postgres is derived.** It is a query-optimized materialized view of verified
    repository state plus explicitly local operational state. The content index
    must be rebuildable without treating an old Postgres row as truth.
-4. **R2 is a verified mirror.** Mirrored audio is keyed by the digest of bytes
-   that match the blob CID. R2 improves playback, scanning, and resilience; it
-   does not decide what a track is or whether it exists.
+4. **R2 is a retrieval origin.** Mirrored audio becomes eligible for playback
+   only after its bytes match the declared content CID. R2 improves playback,
+   scanning, and resilience; its URL is neither content identity nor proof that
+   the current bytes were verified. That relationship must be persisted as an
+   explicit fact before the API claims it.
 5. **deletion follows authority.** A canonical delete or account state change
    removes the object from discovery. Cleanup of derived rows and mirrored
    bytes may be asynchronous, but stale storage must not keep content live.
@@ -42,6 +45,22 @@ the content model:
 If product state cannot yet be represented on the PDS, that is a schema or
 protocol gap. A local column may bridge the gap temporarily only when the gap,
 owner, reconciliation rule, and deletion behavior are explicit.
+
+## claim authority matrix
+
+| claim | authority | appview treatment |
+|---|---|---|
+| artist-authored track metadata | signed artist repository record | verified, rebuildable projection |
+| artifact identity | CID of the complete bytes | validate the narrow DASL/BDASL profile |
+| media-key authorization or derivation | signed repository record and provenance chain | retain signer and parent references |
+| current artifact availability | service-owned origin attestation | index separately from the artifact |
+| plyr moderation assertion | signed label or append-only moderation event | project for policy, preserve issuer |
+| rank, count, cached profile | appview computation | explicitly derived and timestamped |
+| queue, task, session | owning operational service | local state with explicit lifecycle |
+
+This follows DASL's retrieval model: the CID is the authority for returned
+bytes, while a hostname is only a retrieval hint. See
+[`dasl-media.md`](dasl-media.md) for the protocol and Streamplace prior art.
 
 ## write path
 

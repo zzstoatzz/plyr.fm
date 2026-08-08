@@ -6,6 +6,7 @@
 const std = @import("std");
 const pg = @import("pg");
 const zat = @import("zat");
+const content_cid = @import("../content/cid.zig");
 const track = @import("../domain/track.zig");
 const track_id = @import("../identity/track_id.zig");
 const TrackStore = @import("track_store.zig").TrackStore;
@@ -66,13 +67,31 @@ pub const PostgresTrackStore = struct {
         const pds_blob_cid = try duplicateOptional(allocator, try row.get(?[]const u8, 12));
         const playback_url = try duplicateOptional(allocator, try row.get(?[]const u8, 14));
 
-        const deliveries = if (playback_url) |url| blk: {
-            const values = try allocator.alloc(track.Delivery, 1);
+        const artifacts = if (pds_blob_cid) |cid| blk: {
+            const parsed_cid = content_cid.parse(cid) catch return error.CorruptArtifactCid;
+            if (parsed_cid.codec != .raw) return error.CorruptArtifactCid;
+            const values = try allocator.alloc(track.Artifact, 1);
+            values[0] = .{
+                .cid = cid,
+                .byte_length = try row.get(?i64, 13),
+                .media_type = try duplicate(allocator, try row.get([]const u8, 15)),
+                .declared_by = uri,
+                // The legacy row persists the authored CID but not the evidence
+                // that a mirror was verified against it.
+                .verification = .declared,
+            };
+            break :blk values;
+        } else &.{};
+
+        const origins = if (playback_url) |url| blk: {
+            const values = try allocator.alloc(track.Origin, 1);
             values[0] = .{
                 .url = url,
-                .file_type = try duplicate(allocator, try row.get([]const u8, 15)),
-                // The existing R2 URL is a delivery projection, never source authority.
-                .authoritative = false,
+                .media_type = try duplicate(allocator, try row.get([]const u8, 15)),
+                // The legacy table has neither a signed origin attestation nor
+                // a persisted proof tying this URL's bytes to the artifact CID.
+                .artifact_cid = null,
+                .attestation = null,
             };
             break :blk values;
         } else &.{};
@@ -102,12 +121,8 @@ pub const PostgresTrackStore = struct {
                 },
             },
             .media = .{
-                .source = if (pds_blob_cid) |cid| .{
-                    .blob_cid = cid,
-                    .byte_length = try row.get(?i64, 13),
-                    .file_type = try duplicate(allocator, try row.get([]const u8, 15)),
-                } else null,
-                .deliveries = deliveries,
+                .artifacts = artifacts,
+                .origins = origins,
             },
             .access = .{
                 .visibility = try parseEnum(track.Visibility, try row.get([]const u8, 16)),
@@ -126,6 +141,10 @@ pub const PostgresTrackStore = struct {
                     null,
             },
             .metrics = .{ .play_count = try row.get(i64, 23) },
+            .projection = .{
+                .indexed_at = null,
+                .verification = .legacy_unverified,
+            },
         };
         try query_row.deinit();
         return result;
@@ -259,7 +278,7 @@ test "PostgreSQL adapter reads a complete derived projection" {
         "{\"album\":\"Architecture\",\"duration\":181}",
         "2026-08-08T12:00:00Z",
         "did:plc:artist",
-        "bafkblob",
+        "bafkreihdwdcefgh4dqkjv67uzcmw7ojee6xedzdetojuzjevtenxquvyku",
         @as(i32, 12345),
         "https://cdn.example/audio.mp3",
         "audio/mpeg",
@@ -277,9 +296,15 @@ test "PostgreSQL adapter reads a complete derived projection" {
     try std.testing.expectEqualStrings(uri, value.record.uri);
     try std.testing.expectEqualStrings("Architecture", value.metadata.album.?);
     try std.testing.expectEqual(@as(?i64, 181), value.metadata.duration_seconds);
-    try std.testing.expectEqualStrings("bafkblob", value.media.source.?.blob_cid);
-    try std.testing.expectEqual(@as(usize, 1), value.media.deliveries.len);
-    try std.testing.expect(!value.media.deliveries[0].authoritative);
+    try std.testing.expectEqualStrings(
+        "bafkreihdwdcefgh4dqkjv67uzcmw7ojee6xedzdetojuzjevtenxquvyku",
+        value.media.artifacts[0].cid,
+    );
+    try std.testing.expectEqual(track.ArtifactVerification.declared, value.media.artifacts[0].verification);
+    try std.testing.expectEqual(@as(usize, 1), value.media.origins.len);
+    try std.testing.expect(value.media.origins[0].artifact_cid == null);
+    try std.testing.expect(value.media.origins[0].attestation == null);
+    try std.testing.expectEqual(track.ProjectionVerification.legacy_unverified, value.projection.verification);
     try std.testing.expectEqualStrings("self-label", value.moderation.self_labels[0]);
     try std.testing.expectEqual(@as(i64, 7), value.metrics.play_count);
 }

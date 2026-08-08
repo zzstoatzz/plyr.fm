@@ -14,6 +14,7 @@ pub const Track = struct {
     access: Access,
     moderation: Moderation,
     metrics: Metrics,
+    projection: Projection,
 };
 
 pub const Record = struct {
@@ -44,21 +45,38 @@ pub const ArtistProfile = struct {
 };
 
 pub const Media = struct {
-    source: ?Source,
-    deliveries: []const Delivery,
+    artifacts: []const Artifact,
+    origins: []const Origin,
 };
 
-pub const Source = struct {
-    blob_cid: []const u8,
+/// A content-addressed media object declared by an authored record. The CID is
+/// the identity. Storage locations are separate origin claims.
+pub const Artifact = struct {
+    cid: []const u8,
+    role: ArtifactRole = .source,
     byte_length: ?i64,
-    file_type: []const u8,
+    media_type: []const u8,
+    declared_by: []const u8,
+    verification: ArtifactVerification,
 };
 
-pub const Delivery = struct {
-    role: []const u8 = "playback",
+pub const ArtifactRole = enum { source, derived };
+pub const ArtifactVerification = enum { declared, verified };
+
+/// A place from which an artifact may be retrieved. Legacy URLs have no
+/// attestation and no persisted CID proof, so both relationships remain null.
+pub const Origin = struct {
     url: []const u8,
-    file_type: []const u8,
-    authoritative: bool,
+    media_type: []const u8,
+    artifact_cid: ?[]const u8,
+    attestation: ?OriginAttestation,
+};
+
+pub const OriginAttestation = struct {
+    uri: []const u8,
+    cid: []const u8,
+    issuer_did: []const u8,
+    indexed_at: []const u8,
 };
 
 pub const Access = struct {
@@ -87,3 +105,12 @@ pub const ModerationOverride = enum { allow, exclude };
 pub const Metrics = struct {
     play_count: i64,
 };
+
+/// Facts about this appview row, not the authored record. A null indexed_at is
+/// an honest marker for the legacy table, which never persisted ingest time.
+pub const Projection = struct {
+    indexed_at: ?[]const u8,
+    verification: ProjectionVerification,
+};
+
+pub const ProjectionVerification = enum { legacy_unverified, verified_repo };

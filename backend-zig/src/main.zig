@@ -38,6 +38,7 @@ test {
     _ = @import("api/tracks.zig");
     _ = @import("config.zig");
     _ = @import("internal/application/get_track.zig");
+    _ = @import("internal/content/cid.zig");
     _ = @import("internal/identity/track_id.zig");
     _ = @import("internal/index/postgres_track_store.zig");
     _ = @import("server.zig");

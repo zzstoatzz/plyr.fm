@@ -47,22 +47,31 @@ The response separates facts by ownership:
 | `metadata` | projection of record-authored track metadata |
 | `artist.did` | canonical portable artist identity |
 | `artist.profile` | mutable profile projection resolved for presentation |
-| `media.source` | canonical PDS blob reference when the index can prove one |
-| `media.deliveries` | non-authoritative playback locations, including the current R2/CDN mirror |
+| `media.artifacts` | content-addressed media claims, including who declared them and what has been verified |
+| `media.origins` | retrieval locations and optional service-owned availability attestations |
 | `access` | app-view visibility, discovery, gate, and permissioned-space projection |
 | `moderation` | author self-labels, operator labels, and overrides with provenance kept separate |
 | `metrics` | explicitly derived app-view aggregates |
+| `projection` | appview freshness and verification state, never record-authored data |
 
 Legacy implementation fields do not appear: local integer ID, `file_id`,
-`original_file_id`, `audio_storage`, and `r2_url`. In particular, the old R2
-URL becomes a delivery entry with `authoritative: false`; absence of a known PDS
-blob produces `source: null` instead of promoting the mirror to source.
+`original_file_id`, `audio_storage`, and `r2_url`. A PDS blob reference becomes
+an artifact with `verification: declared`. The old R2 URL becomes an origin, but
+both its `artifact_cid` and `attestation` are null: the legacy row did not persist
+either proof, so v1 does not infer them from co-located columns.
 
 The Python mirror now verifies PDS bytes against their blob CID before writing
 R2, but the legacy track row does not persist that verification as an explicit
 fact. V1 therefore does not claim a delivery is verified merely because
 `r2_url` and `pds_blob_cid` coexist. A future projection should store the
-verified CID/digest relationship; the API can add that proof compatibly.
+verified CID/digest relationship. Once a new projection persists the proof, it
+can mark the artifact verified and bind an origin to that artifact without
+changing the ownership model.
+
+The legacy table also lacks an ingest timestamp and proof that the row came
+through verified repository ingestion. Its `projection.indexed_at` is therefore
+null and its `projection.verification` is `legacy_unverified`. New indexes must
+persist both facts rather than reconstructing them from track creation time.
 
 ## adapter invariants
 

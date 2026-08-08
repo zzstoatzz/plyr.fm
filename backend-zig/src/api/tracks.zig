@@ -50,7 +50,7 @@ test "v1 track JSON keeps authority and projections separate" {
                 .avatar_url = null,
             },
         },
-        .media = .{ .source = null, .deliveries = &.{} },
+        .media = .{ .artifacts = &.{}, .origins = &.{} },
         .access = .{
             .visibility = .public,
             .in_discovery = true,
@@ -63,6 +63,7 @@ test "v1 track JSON keeps authority and projections separate" {
             .override = null,
         },
         .metrics = .{ .play_count = 0 },
+        .projection = .{ .indexed_at = null, .verification = .legacy_unverified },
     };
 
     const json = try std.json.Stringify.valueAlloc(allocator, value, .{});
@@ -74,6 +75,7 @@ test "v1 track JSON keeps authority and projections separate" {
     try std.testing.expect(root.get("record") != null);
     try std.testing.expect(root.get("media") != null);
     try std.testing.expect(root.get("metrics") != null);
+    try std.testing.expect(root.get("projection") != null);
     try std.testing.expect(root.get("file_id") == null);
     try std.testing.expect(root.get("r2_url") == null);
 }
