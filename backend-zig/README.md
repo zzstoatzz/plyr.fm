@@ -21,9 +21,12 @@ DATABASE_URL=postgresql://... just zig bench-http --with-index --path '/v1/track
 
 `check` includes a black-box HTTP contract smoke test on an ephemeral port.
 `test-postgres` starts the repository's disposable Postgres 14 test container,
-waits for it to accept connections, creates a minimal projection schema, and
-exercises the real `pg.zig` adapter. It only destroys tables in the dedicated
-`relay_test` database on port 5433; the test refuses any other database name.
+waits for it to accept connections, creates minimal projection schemas, and
+exercises the real `pg.zig` adapters. It covers atomic ordered-list replacement,
+replay and tombstone semantics, and rollback, then applies and reverses the real
+Alembic projection migration. It only destroys objects in the dedicated
+`relay_test` database on port 5433; both test paths refuse any other database
+name.
 
 ## API configuration
 

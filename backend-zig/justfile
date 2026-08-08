@@ -28,6 +28,7 @@ test-postgres:
     docker compose -f ../backend/tests/docker-compose.yml up -d test-db
     @for attempt in {1..100}; do docker compose -f ../backend/tests/docker-compose.yml exec -T test-db pg_isready -U relay_test -d relay_test >/dev/null && exit 0; sleep 0.1; done; echo 'test Postgres did not become ready' >&2; exit 1
     PLYR_ZIG_TEST_DATABASE_URL=postgresql://relay_test:relay_test@127.0.0.1:5433/relay_test zig build test
+    cd ../backend && DATABASE_URL=postgresql://relay_test:relay_test@127.0.0.1:5433/relay_test RELAY_TEST_MODE=1 OAUTH_ENCRYPTION_KEY=hnSkDmgbbuK0rt7Ab3eJHAktb18gmebsdwKdTmq9mes= uv run python ../backend-zig/scripts/test_list_migration.py
 
 test-http: build
     python3 scripts/test_http.py

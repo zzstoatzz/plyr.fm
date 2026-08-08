@@ -51,26 +51,47 @@ verified list version exists, that album is not ready for canonical detail; it
 does not fabricate a track list. PDS reconciliation may refresh the projection,
 but the REST request is not the ingestion or trust boundary.
 
-## storage contract
+## storage implementation
 
-The target Postgres shape is deliberately left to the adapter. It needs to
-support, at minimum:
+The domain and projection command remain independent of storage. The initial
+Postgres adapter persists them in two tables under a dedicated `plyr_index`
+schema:
 
-- canonical list URI and current record CID;
-- owner DID, collection, record key, semantic list type, and authored metadata;
-- ordered members keyed by list URI and position, each retaining track URI and
-  strong-reference CID;
-- commit CID, commit revision, and indexed timestamp;
-- atomic replacement and cascading deletion.
+- `list_records` stores canonical repo-path identity, current record fields,
+  commit CID/revision, indexing time, and durable deletion state;
+- `list_members` stores the exact zero-based order and each track strong
+  reference, keyed by list URI and position.
 
-This can become dedicated list and membership projection tables without binding
-the REST domain to legacy `albums.id`, `tracks.album_id`, `playlists.items_json`,
-or cached counts. The same projection serves album detail first and later
-playlist and liked-list reads.
+An accepted upsert replaces the record and complete member set in one
+transaction. Member arrays are sent with one `unnest` insert rather than one
+round trip per item. A revision compare-and-swap makes a replay either
+`applied`, `idempotent`, or `stale`; the same revision with different commit or
+record identity is a conflict rather than last-write-wins corruption.
+
+Deletes are durable tombstones, not physical record deletion. Retaining the
+latest commit revision prevents an older create or update replay from
+resurrecting a deleted list. Member rows are removed in the same transaction.
+The tables deliberately have no foreign keys to legacy artists, albums,
+playlists, or tracks because verified repository operations can arrive in
+different orders and the projection must remain rebuildable.
+
+The schema is managed by the existing Alembic release path but intentionally
+is not represented as a Python ORM model. Alembic's default-schema
+autogeneration therefore cannot turn the Zig projection into legacy domain
+state. Runtime SQL always qualifies `plyr_index`; it never relies on session
+`search_path`, which is also the safe form for
+[Neon's transaction-mode pooler](https://neon.com/docs/connect/connection-pooling).
+Migration smoke coverage applies and reverses the real revision against the
+disposable `relay_test` database.
+
+The same projection serves album detail first and later playlist and liked-list
+reads without exposing its physical schema through the REST model.
 
 ## next slice
 
-Add an adapter that atomically persists these changes from a verified ingestion
-process, then expose album detail by joining list members to independently
-verified track projections. Missing, private, or moderated tracks must retain
-their position semantics without silently substituting unrelated local rows.
+Connect the adapter to a verified repository ingestion/backfill process, then
+expose album detail by joining list members to independently indexed track
+records. Missing, private, or moderated tracks must retain their position
+semantics without silently substituting unrelated local rows. The first API
+canary remains read-only and does not gain an ingestion process merely because
+the persistence adapter now exists.

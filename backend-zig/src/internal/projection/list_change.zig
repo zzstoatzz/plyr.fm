@@ -31,7 +31,7 @@ pub const Upsert = struct {
     name: ?[]const u8,
     created_at: []const u8,
     updated_at: ?[]const u8,
-    members: []Member,
+    members: []const Member,
     proof: Proof,
 };
 
