@@ -1,7 +1,27 @@
 const std = @import("std");
 const get_track = @import("../internal/application/get_track.zig");
+const list_tracks = @import("../internal/application/list_tracks.zig");
 const TrackStore = @import("../internal/index/track_store.zig").TrackStore;
 const response = @import("response.zig");
+
+pub fn list(
+    request: *std.http.Server.Request,
+    allocator: std.mem.Allocator,
+    store: ?TrackStore,
+    collection: []const u8,
+    cors: response.CorsPolicy,
+    request_id: []const u8,
+) !void {
+    switch (list_tracks.execute(allocator, store, collection, request.head.target)) {
+        .found => |value| {
+            const body = try std.json.Stringify.valueAlloc(allocator, value, .{});
+            try response.json(request, .ok, body, request_id, cors);
+        },
+        .invalid_request => try response.apiError(request, .invalid_request, request_id, cors),
+        .internal_error => try response.apiError(request, .internal_error, request_id, cors),
+        .unavailable => try response.apiError(request, .service_unavailable, request_id, cors),
+    }
+}
 
 pub fn get(
     request: *std.http.Server.Request,

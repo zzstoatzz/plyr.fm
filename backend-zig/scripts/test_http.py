@@ -124,6 +124,24 @@ def main() -> None:
         status, _, readiness = _request(base_url, "/ready")
         assert status == 503 and readiness["error"]["code"] == "service_unavailable"
 
+        status, _, unavailable_list = _request(base_url, "/v1/tracks?limit=2")
+        assert status == 503
+        assert unavailable_list["error"]["code"] == "service_unavailable"
+
+        status, _, list_method = _request(base_url, "/v1/tracks", method="POST")
+        assert status == 405
+        assert list_method["error"]["code"] == "method_not_allowed"
+
+        for invalid_target in (
+            "/v1/tracks?limit=0",
+            "/v1/tracks?limit=101",
+            "/v1/tracks?cursor=not-a-cursor",
+            "/v1/tracks?offset=10",
+        ):
+            status, _, invalid_list = _request(base_url, invalid_target)
+            assert status == 400
+            assert invalid_list["error"]["code"] == "invalid_request"
+
         status, _, invalid = _request(base_url, "/v1/tracks/42")
         assert status == 400 and invalid["error"]["code"] == "invalid_request"
 

@@ -35,6 +35,7 @@ pub const PostgresTrackStore = struct {
         return .{
             .context = self,
             .get_by_uri_fn = getByUriOpaque,
+            .list_discovery_fn = listDiscoveryOpaque,
             .ready_fn = readyOpaque,
         };
     }
@@ -61,19 +62,28 @@ pub const PostgresTrackStore = struct {
         return self.getByUri(allocator, at_uri);
     }
 
+    fn listDiscoveryOpaque(
+        context: *anyopaque,
+        allocator: std.mem.Allocator,
+        request: @import("track_store.zig").ListRequest,
+    ) TrackStore.Error![]@import("track_store.zig").ListItem {
+        const self: *PostgresTrackStore = @ptrCast(@alignCast(context));
+        return self.listDiscovery(allocator, request);
+    }
+
     fn getByUri(
         self: *PostgresTrackStore,
         allocator: std.mem.Allocator,
         at_uri: []const u8,
     ) TrackStore.Error!?track.Track {
-        var query_row = self.pool.row(query, .{at_uri}) catch |err| {
+        var query_row = self.pool.row(detail_query, .{at_uri}) catch |err| {
             std.log.err("PostgreSQL track lookup failed: {}", .{err});
             return error.IndexUnavailable;
         } orelse return null;
         var query_row_active = true;
         defer if (query_row_active) forceReleaseQueryRow(&query_row);
 
-        const result = decodeRow(allocator, &query_row) catch |err| switch (err) {
+        const result = decodeRow(allocator, &query_row.row) catch |err| switch (err) {
             error.OutOfMemory => return error.OutOfMemory,
             else => {
                 std.log.err("track projection decode failed: {}", .{err});
@@ -89,12 +99,59 @@ pub const PostgresTrackStore = struct {
         return result;
     }
 
+    fn listDiscovery(
+        self: *PostgresTrackStore,
+        allocator: std.mem.Allocator,
+        request: @import("track_store.zig").ListRequest,
+    ) TrackStore.Error![]@import("track_store.zig").ListItem {
+        const limit: i64 = @intCast(request.limit);
+        var result = if (request.after) |after|
+            self.pool.query(list_after_query, .{
+                request.collection,
+                after.created_at_us,
+                after.at_uri,
+                limit,
+            }) catch |err| {
+                std.log.err("PostgreSQL track collection query failed: {}", .{err});
+                return error.IndexUnavailable;
+            }
+        else
+            self.pool.query(list_query, .{ request.collection, limit }) catch |err| {
+                std.log.err("PostgreSQL track collection query failed: {}", .{err});
+                return error.IndexUnavailable;
+            };
+        defer result.deinit();
+
+        var items: std.ArrayListUnmanaged(@import("track_store.zig").ListItem) = .empty;
+        errdefer items.deinit(allocator);
+        while (result.next() catch |err| {
+            std.log.err("PostgreSQL track collection read failed: {}", .{err});
+            return error.IndexUnavailable;
+        }) |row_value| {
+            const row = &row_value;
+            const value = decodeRow(allocator, row) catch |err| switch (err) {
+                error.OutOfMemory => return error.OutOfMemory,
+                else => {
+                    std.log.err("track collection projection decode failed: {}", .{err});
+                    return error.CorruptProjection;
+                },
+            };
+            const created_at_us = row.get(i64, 24) catch |err| {
+                std.log.err("track collection sort key decode failed: {}", .{err});
+                return error.CorruptProjection;
+            };
+            items.append(allocator, .{
+                .value = value,
+                .created_at_us = created_at_us,
+            }) catch return error.OutOfMemory;
+        }
+        return items.toOwnedSlice(allocator) catch return error.OutOfMemory;
+    }
+
     fn decodeRow(
         allocator: std.mem.Allocator,
-        query_row: *pg.QueryRow,
+        row: anytype,
     ) !track.Track {
-        const row = &query_row.row;
-
         const uri = try duplicate(allocator, try row.get([]const u8, 0));
         const parsed_uri = zat.AtUri.parse(uri) orelse return error.CorruptTrackUri;
         const collection = parsed_uri.collection() orelse return error.CorruptTrackUri;
@@ -207,7 +264,7 @@ fn forceReleaseQueryRow(query_row: *pg.QueryRow) void {
     };
 }
 
-const query =
+const select_fields =
     \\SELECT
     \\  t.atproto_record_uri,
     \\  t.atproto_record_cid,
@@ -234,12 +291,63 @@ const query =
     \\  t.operator_labels::text,
     \\  t.moderation_override,
     \\  t.play_count::bigint
+;
+
+const from_tracks =
     \\FROM tracks AS t
     \\JOIN artists AS a ON a.did = t.artist_did
+;
+
+const detail_query = select_fields ++ "\n" ++ from_tracks ++ "\n" ++
     \\WHERE t.atproto_record_uri = $1
     \\  AND t.visibility <> 'private'
     \\  AND COALESCE(t.publish_state, 'published') = 'published'
     \\LIMIT 1
+;
+
+const list_projection = select_fields ++
+    "\n, (extract(epoch FROM t.created_at) * 1000000)::bigint\n" ++
+    from_tracks;
+
+const discovery_policy =
+    \\  AND t.atproto_record_uri IS NOT NULL
+    \\  AND split_part(t.atproto_record_uri, '/', 4) = $1
+    \\  AND t.visibility IN ('public', 'supporters')
+    \\  AND COALESCE(t.publish_state, 'published') = 'published'
+    \\  AND a.deactivated = false
+    \\  AND t.moderation_override IS DISTINCT FROM 'exclude'
+    \\  AND (
+    \\    t.moderation_override IS NOT DISTINCT FROM 'allow'
+    \\    OR NOT (
+    \\      t.self_labels ?| ARRAY['copyright-violation']
+    \\      OR t.operator_labels ?| ARRAY['copyright-violation']
+    \\    )
+    \\  )
+    \\  AND NOT (
+    \\    t.self_labels ?| ARRAY['sexual', 'porn']
+    \\    OR t.operator_labels ?| ARRAY['sexual', 'porn']
+    \\  )
+;
+
+const list_query = list_projection ++ "\n" ++
+    \\WHERE true
+++ discovery_policy ++ "\n" ++
+    \\ORDER BY t.created_at DESC, t.atproto_record_uri DESC
+    \\LIMIT $2::bigint
+;
+
+const list_after_query = list_projection ++ "\n" ++
+    \\WHERE true
+++ discovery_policy ++ "\n" ++
+    \\  AND (
+    \\    t.created_at < TIMESTAMPTZ 'epoch' + ($2::bigint * INTERVAL '1 microsecond')
+    \\    OR (
+    \\      t.created_at = TIMESTAMPTZ 'epoch' + ($2::bigint * INTERVAL '1 microsecond')
+    \\      AND t.atproto_record_uri < $3
+    \\    )
+    \\  )
+    \\ORDER BY t.created_at DESC, t.atproto_record_uri DESC
+    \\LIMIT $4::bigint
 ;
 
 fn duplicate(allocator: std.mem.Allocator, value: []const u8) ![]const u8 {
@@ -284,7 +392,8 @@ test "PostgreSQL adapter reads a complete derived projection" {
         \\  did text PRIMARY KEY,
         \\  handle text NOT NULL,
         \\  display_name text NOT NULL,
-        \\  avatar_url text
+        \\  avatar_url text,
+        \\  deactivated boolean NOT NULL DEFAULT false
         \\)
     , .{});
     _ = try store_impl.pool.exec(
@@ -364,4 +473,47 @@ test "PostgreSQL adapter reads a complete derived projection" {
     try std.testing.expectEqual(track.ProjectionVerification.legacy_unverified, value.projection.verification);
     try std.testing.expectEqualStrings("self-label", value.moderation.self_labels[0]);
     try std.testing.expectEqual(@as(i64, 7), value.metrics.play_count);
+
+    const newer_uri = "at://did:plc:artist/fm.plyr.dev.track/3m123abe";
+    const tied_uri = "at://did:plc:artist/fm.plyr.dev.track/3m123abd";
+    const older_uri = "at://did:plc:artist/fm.plyr.dev.track/3m123abb";
+    const hidden_uri = "at://did:plc:artist/fm.plyr.dev.track/3m123abf";
+    _ = try store_impl.pool.exec(
+        \\INSERT INTO tracks (
+        \\  atproto_record_uri, title, extra, created_at, artist_did,
+        \\  file_type, visibility, self_labels, operator_labels,
+        \\  play_count, publish_state
+        \\) VALUES
+        \\  ($1, 'Newer', '{}', '2026-08-08T13:00:00Z', 'did:plc:artist',
+        \\   'audio/mpeg', 'public', '[]', '[]', 0, 'published'),
+        \\  ($2, 'Tied', '{}', '2026-08-08T12:00:00Z', 'did:plc:artist',
+        \\   'audio/mpeg', 'public', '[]', '[]', 0, 'published'),
+        \\  ($3, 'Older', '{}', '2026-08-08T11:00:00Z', 'did:plc:artist',
+        \\   'audio/mpeg', 'public', '[]', '[]', 0, 'published'),
+        \\  ($4, 'Hidden', '{}', '2026-08-08T14:00:00Z', 'did:plc:artist',
+        \\   'audio/mpeg', 'public', '["sexual"]', '[]', 0, 'published')
+    , .{ newer_uri, tied_uri, older_uri, hidden_uri });
+
+    var page_arena = std.heap.ArenaAllocator.init(allocator);
+    defer page_arena.deinit();
+    const first_page = try store_impl.listDiscovery(page_arena.allocator(), .{
+        .collection = "fm.plyr.dev.track",
+        .limit = 2,
+        .after = null,
+    });
+    try std.testing.expectEqual(@as(usize, 2), first_page.len);
+    try std.testing.expectEqualStrings(newer_uri, first_page[0].value.record.uri);
+    try std.testing.expectEqualStrings(tied_uri, first_page[1].value.record.uri);
+
+    const second_page = try store_impl.listDiscovery(page_arena.allocator(), .{
+        .collection = "fm.plyr.dev.track",
+        .limit = 2,
+        .after = .{
+            .created_at_us = first_page[1].created_at_us,
+            .at_uri = first_page[1].value.record.uri,
+        },
+    });
+    try std.testing.expectEqual(@as(usize, 2), second_page.len);
+    try std.testing.expectEqualStrings(uri, second_page[0].value.record.uri);
+    try std.testing.expectEqualStrings(older_uri, second_page[1].value.record.uri);
 }

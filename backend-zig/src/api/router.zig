@@ -53,6 +53,19 @@ pub fn handle(
             return;
         }
         try response.json(request, .ok, "{\"status\":\"ready\",\"index\":\"reachable\"}", request_id, app.cors);
+    } else if (mem.eql(u8, path, prefix ++ "/tracks")) {
+        if (request.head.method != .GET) {
+            try response.apiError(request, .method_not_allowed, request_id, app.cors);
+            return;
+        }
+        try tracks.list(
+            request,
+            allocator,
+            app.track_store,
+            app.track_collection,
+            app.cors,
+            request_id,
+        );
     } else if (trackId(path)) |id| {
         if (request.head.method != .GET) {
             try response.apiError(request, .method_not_allowed, request_id, app.cors);

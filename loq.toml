@@ -368,3 +368,7 @@ max_lines = 586
 [[rules]]
 path = "frontend/src/routes/atlas/renderer.ts"
 max_lines = 1178
+
+[[rules]]
+path = "backend-zig/src/internal/index/postgres_track_store.zig"
+max_lines = 519

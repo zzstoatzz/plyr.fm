@@ -90,6 +90,7 @@ def benchmark(
     concurrency: int,
     path: str,
     expected_status: int,
+    database_url: str | None,
 ) -> dict[str, object]:
     port = _unused_port()
     environment = {
@@ -97,10 +98,13 @@ def benchmark(
         "MODE": "api",
         "PORT": str(port),
         "TRACK_COLLECTION_NSID": "fm.plyr.dev.track",
-        "INDEX_MODE": "disabled",
+        "INDEX_MODE": "required" if database_url else "disabled",
         "MAX_CONNECTIONS": str(max(concurrency, 8)),
     }
-    environment.pop("DATABASE_URL", None)
+    if database_url:
+        environment["DATABASE_URL"] = database_url
+    else:
+        environment.pop("DATABASE_URL", None)
     process = subprocess.Popen(
         [ROOT / "zig-out/bin/plyr-backend"],
         cwd=ROOT,
@@ -161,9 +165,17 @@ def main() -> None:
     parser.add_argument("--concurrency", type=int, default=8)
     parser.add_argument("--path", default="/health")
     parser.add_argument("--expect-status", type=int, default=200)
+    parser.add_argument(
+        "--with-index",
+        action="store_true",
+        help="use DATABASE_URL from the environment and require index readiness",
+    )
     args = parser.parse_args()
     if args.duration <= 0 or args.concurrency <= 0:
         parser.error("duration and concurrency must be positive")
+    database_url = os.environ.get("DATABASE_URL") if args.with_index else None
+    if args.with_index and not database_url:
+        parser.error("--with-index requires DATABASE_URL in the environment")
     print(
         json.dumps(
             benchmark(
@@ -171,6 +183,7 @@ def main() -> None:
                 args.concurrency,
                 args.path,
                 args.expect_status,
+                database_url,
             ),
             indent=2,
         )

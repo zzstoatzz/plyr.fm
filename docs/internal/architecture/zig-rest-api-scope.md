@@ -50,6 +50,7 @@ decision.
 | Zig surface | state | capability covered | important gaps |
 |---|---|---|---|
 | `GET /v1` | covered | API namespace discovery | generated API description/OpenAPI |
+| `GET /v1/tracks` | covered | anonymous discovery collection with strict keyset pagination | viewer context, artist/tag filters, hidden-tag preferences, search and other collection views |
 | `GET /v1/tracks/{track_id}` | covered | public, published track detail from the projection | authenticated viewer state, private/gated tracks, playback, list/search views, publication and mutations |
 | `GET /health` | covered | process liveness | none for liveness |
 | `GET /ready` | covered | index configuration and a live database probe | readiness for dependencies required by future routes |
@@ -58,12 +59,13 @@ decision.
 `OPTIONS` handling, bounded connections, CORS, request IDs, and the common JSON
 error envelope are covered cross-cutting behavior, not product capabilities.
 
-The product coverage count is therefore **one read capability**: track detail.
-It overlaps Python's `GET /tracks/{track_id}`, but semantic parity is still
-partial because the Zig route deliberately excludes viewer-specific and
-delivery behavior. Of the 221 Python operations, root discovery and liveness
-have covered successor behavior, track detail has partial coverage, and the
-remaining 218 have no implemented Zig mapping yet.
+The product coverage count is therefore **two read capabilities**: anonymous
+track discovery and track detail. They overlap Python's `GET /tracks/` and
+`GET /tracks/{track_id}`, but semantic parity remains partial because the Zig
+routes deliberately exclude viewer-specific and delivery behavior. Of the 221
+Python operations, root discovery and liveness have covered successor behavior,
+two track reads have partial coverage, and the remaining 217 have no implemented
+Zig mapping yet.
 
 ### legacy surface by resource
 
@@ -74,7 +76,7 @@ second column because every Subsonic route accepts both `GET` and `POST`.
 | resource | routes | operations | Zig v1 status |
 |---|---:|---:|---|
 | `/rest` | 37 | 74 | not started; separate compatibility adapter |
-| `/tracks` | 33 | 33 | track detail partial; all other capabilities open |
+| `/tracks` | 33 | 33 | discovery collection and track detail partial; all other capabilities open |
 | `/lists` | 18 | 18 | not started |
 | `/auth` | 15 | 15 | not started |
 | `/artists` | 9 | 9 | not started |
@@ -114,7 +116,7 @@ second column because every Subsonic route accepts both `GET` and `POST`.
 |---|---|---|---|
 | identity and sessions | `/auth/*`, `/account/*` | ATProto OAuth/DPoP, encrypted Postgres sessions, Redis session cache | redesign as session and current-user resources; keep OAuth redirects outside normal resource semantics |
 | artists | `/artists/*` | PDS profiles, Postgres projection, image storage, follow graph | preserve capability with canonical DID identity and explicit derived fields |
-| tracks | 33 `/tracks/*` routes | PDS records/blobs, Postgres, R2, transcoder, Docket, moderation, ML | split catalog reads, publishing commands, interactions, playback, and repair; retire repair verbs from public API |
+| tracks | 33 `/tracks/*` routes | PDS records/blobs, Postgres, R2, transcoder, Docket, moderation, ML | discovery collection and detail started; split publishing commands, interactions, playback, and repair; retire repair verbs from public API |
 | albums | `/albums/*` | ATProto list/track records, Postgres, R2 images | model as collection resources; eliminate local-first finalization semantics |
 | playlists and liked list | 18 `/lists/*` routes | ATProto list records, Postgres hydration, Redis cache, recommendations | expose `/v1/playlists`; liked tracks are an interaction collection, not a magic list subtype |
 | likes and comments | nested track routes | PDS records, local projections, Docket write-behind, Redis tombstones | source-authoritative interaction resources; no success based only on local mutation |

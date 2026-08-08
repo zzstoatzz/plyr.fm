@@ -51,7 +51,12 @@ const FakeStore = struct {
     value: ?track.Track,
 
     fn asStore(self: *FakeStore) TrackStore {
-        return .{ .context = self, .get_by_uri_fn = getOpaque, .ready_fn = readyOpaque };
+        return .{
+            .context = self,
+            .get_by_uri_fn = getOpaque,
+            .list_discovery_fn = listOpaque,
+            .ready_fn = readyOpaque,
+        };
     }
 
     fn readyOpaque(_: *anyopaque) bool {
@@ -62,6 +67,14 @@ const FakeStore = struct {
         const self: *FakeStore = @ptrCast(@alignCast(context));
         if (!std.mem.eql(u8, self.expected_uri, uri)) return error.CorruptProjection;
         return self.value;
+    }
+
+    fn listOpaque(
+        _: *anyopaque,
+        _: std.mem.Allocator,
+        _: @import("../index/track_store.zig").ListRequest,
+    ) TrackStore.Error![]@import("../index/track_store.zig").ListItem {
+        return &.{};
     }
 };
 

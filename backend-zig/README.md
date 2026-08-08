@@ -16,6 +16,7 @@ just zig test-postgres
 just zig image
 INDEX_MODE=disabled TRACK_COLLECTION_NSID=fm.plyr.dev.track just zig run
 just zig bench-http --duration 5 --concurrency 16
+DATABASE_URL=postgresql://... just zig bench-http --with-index --path '/v1/tracks?limit=50'
 ```
 
 `check` includes a black-box HTTP contract smoke test on an ephemeral port.
@@ -40,6 +41,11 @@ exercises the real `pg.zig` adapter. It only destroys tables in the dedicated
 configured track index. The listener acquires a connection permit before
 `accept`, so saturation applies kernel-backlog backpressure instead of creating
 unbounded detached threads.
+
+The current product surface is `GET /v1/tracks` and
+`GET /v1/tracks/{track_id}`. The collection accepts a strict `limit` from 1 to
+100 and an opaque `cursor`; it applies anonymous discovery policy before
+keyset pagination and returns the same track representation as detail.
 
 Do not source or copy the root `.env` into a worktree. Point a command at the
 existing environment through the normal settings mechanism, and never print
