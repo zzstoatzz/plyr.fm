@@ -19,6 +19,7 @@ pub fn get(
         },
         .invalid_id => try response.apiError(request, .invalid_request, request_id, cors),
         .not_found => try response.apiError(request, .not_found, request_id, cors),
+        .internal_error => try response.apiError(request, .internal_error, request_id, cors),
         .unavailable => try response.apiError(request, .service_unavailable, request_id, cors),
     }
 }

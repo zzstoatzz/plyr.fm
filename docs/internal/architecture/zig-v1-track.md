@@ -17,6 +17,11 @@ The endpoint returns:
   different configured collection;
 - `503 service_unavailable` when the derived index is unavailable.
 
+Projection corruption is not reported as temporary unavailability. Invalid
+row types, malformed persisted JSON, authority mismatches, and invalid content
+CIDs return `500 internal_error` and emit an invariant log. The `TrackStore`
+port uses an explicit error set so new adapters must make this distinction.
+
 Every response carries `x-request-id`; errors also include it in the stable JSON
 error envelope. Credentialed CORS reflects only exact origins listed in
 `CORS_ALLOWED_ORIGINS`.
@@ -85,6 +90,8 @@ The PostgreSQL adapter:
 6. parses label JSON into typed string arrays rather than passing raw JSON
    through the API;
 7. exposes the storage implementation only through a small `TrackStore` port.
+8. releases or poisons the pooled connection even when draining a result fails;
+   cleanup errors are never silently swallowed.
 
 The integration test brings up the existing disposable Postgres container and
 exercises the real SQL decoder. Unit tests cover ID round trips, collection

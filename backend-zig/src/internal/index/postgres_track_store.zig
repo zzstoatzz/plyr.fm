@@ -40,7 +40,7 @@ pub const PostgresTrackStore = struct {
         context: *anyopaque,
         allocator: std.mem.Allocator,
         at_uri: []const u8,
-    ) !?track.Track {
+    ) TrackStore.Error!?track.Track {
         const self: *PostgresTrackStore = @ptrCast(@alignCast(context));
         return self.getByUri(allocator, at_uri);
     }
@@ -49,9 +49,34 @@ pub const PostgresTrackStore = struct {
         self: *PostgresTrackStore,
         allocator: std.mem.Allocator,
         at_uri: []const u8,
-    ) !?track.Track {
-        var query_row = try self.pool.row(query, .{at_uri}) orelse return null;
-        errdefer query_row.deinit() catch {};
+    ) TrackStore.Error!?track.Track {
+        var query_row = self.pool.row(query, .{at_uri}) catch |err| {
+            std.log.err("PostgreSQL track lookup failed: {}", .{err});
+            return error.IndexUnavailable;
+        } orelse return null;
+        var query_row_active = true;
+        defer if (query_row_active) forceReleaseQueryRow(&query_row);
+
+        const result = decodeRow(allocator, &query_row) catch |err| switch (err) {
+            error.OutOfMemory => return error.OutOfMemory,
+            else => {
+                std.log.err("track projection decode failed: {}", .{err});
+                return error.CorruptProjection;
+            },
+        };
+        finishQueryRow(&query_row) catch |err| {
+            std.log.err("PostgreSQL track result cleanup failed: {}", .{err});
+            query_row_active = false;
+            return error.IndexUnavailable;
+        };
+        query_row_active = false;
+        return result;
+    }
+
+    fn decodeRow(
+        allocator: std.mem.Allocator,
+        query_row: *pg.QueryRow,
+    ) !track.Track {
         const row = &query_row.row;
 
         const uri = try duplicate(allocator, try row.get([]const u8, 0));
@@ -96,7 +121,7 @@ pub const PostgresTrackStore = struct {
             break :blk values;
         } else &.{};
 
-        const result: track.Track = .{
+        return .{
             .id = id,
             .record = .{
                 .uri = uri,
@@ -146,10 +171,24 @@ pub const PostgresTrackStore = struct {
                 .verification = .legacy_unverified,
             },
         };
-        try query_row.deinit();
-        return result;
     }
 };
+
+/// Drain and release a successful result. pg.zig's QueryRow.deinit can fail
+/// before releasing its connection, so force the Result cleanup on that path.
+fn finishQueryRow(query_row: *pg.QueryRow) !void {
+    query_row.deinit() catch |err| {
+        query_row.result.deinit();
+        return err;
+    };
+}
+
+fn forceReleaseQueryRow(query_row: *pg.QueryRow) void {
+    finishQueryRow(query_row) catch |err| {
+        // finishQueryRow already released or poisoned the pooled connection.
+        std.log.err("forced PostgreSQL result cleanup after error: {}", .{err});
+    };
+}
 
 const query =
     \\SELECT

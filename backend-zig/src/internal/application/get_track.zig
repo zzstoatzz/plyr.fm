@@ -8,6 +8,7 @@ pub const Result = union(enum) {
     found: track.Track,
     invalid_id,
     not_found,
+    internal_error,
     unavailable,
 };
 
@@ -28,10 +29,21 @@ pub fn execute(
 
     const configured_store = store orelse return .unavailable;
     const value = configured_store.getByUri(allocator, at_uri) catch |err| {
-        std.log.err("track index lookup failed for {s}: {}", .{ at_uri, err });
-        return .unavailable;
+        switch (err) {
+            error.CorruptProjection => std.log.err("corrupt track projection for {s}", .{at_uri}),
+            error.IndexUnavailable => std.log.err("track index unavailable for {s}", .{at_uri}),
+            error.OutOfMemory => {},
+        }
+        return classifyStoreError(err);
     };
     return if (value) |found| .{ .found = found } else .not_found;
+}
+
+fn classifyStoreError(err: TrackStore.Error) Result {
+    return switch (err) {
+        error.CorruptProjection => .internal_error,
+        error.IndexUnavailable, error.OutOfMemory => .unavailable,
+    };
 }
 
 const FakeStore = struct {
@@ -42,9 +54,9 @@ const FakeStore = struct {
         return .{ .context = self, .get_by_uri_fn = getOpaque };
     }
 
-    fn getOpaque(context: *anyopaque, _: std.mem.Allocator, uri: []const u8) !?track.Track {
+    fn getOpaque(context: *anyopaque, _: std.mem.Allocator, uri: []const u8) TrackStore.Error!?track.Track {
         const self: *FakeStore = @ptrCast(@alignCast(context));
-        if (!std.mem.eql(u8, self.expected_uri, uri)) return error.UnexpectedUri;
+        if (!std.mem.eql(u8, self.expected_uri, uri)) return error.CorruptProjection;
         return self.value;
     }
 };
@@ -70,4 +82,10 @@ test "lookup is canonical-URI keyed and environment scoped" {
         Result.invalid_id,
         execute(arena.allocator(), fake.asStore(), "fm.plyr.dev.track", "42"),
     );
+}
+
+test "store errors preserve corruption versus availability semantics" {
+    try std.testing.expectEqual(Result.internal_error, classifyStoreError(error.CorruptProjection));
+    try std.testing.expectEqual(Result.unavailable, classifyStoreError(error.IndexUnavailable));
+    try std.testing.expectEqual(Result.unavailable, classifyStoreError(error.OutOfMemory));
 }
