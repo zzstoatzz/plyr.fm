@@ -1,5 +1,6 @@
 """Session dataclass, CRUD, token update, and teal check."""
 
+import hashlib
 import json
 import logging
 import secrets
@@ -25,8 +26,12 @@ SESSION_CACHE_TTL_SECONDS = 60
 
 
 def _session_cache_key(session_id: str) -> str:
-    """build Redis cache key for a session."""
-    return f"{SESSION_CACHE_PREFIX}{session_id}"
+    """build Redis cache key for a session.
+
+    the session id is a bearer credential, so it is hashed rather than used
+    directly: a `KEYS plyr:session:*` scan must not yield replayable tokens.
+    """
+    return f"{SESSION_CACHE_PREFIX}{hashlib.sha256(session_id.encode()).hexdigest()}"
 
 
 async def _invalidate_session_cache(session_id: str) -> None:
@@ -35,7 +40,7 @@ async def _invalidate_session_cache(session_id: str) -> None:
         redis = get_async_redis_client()
         await redis.delete(_session_cache_key(session_id))
     except Exception:
-        logger.debug("failed to invalidate session cache for %s", session_id)
+        logger.debug("failed to invalidate session cache for %s", session_id[:8])
 
 
 @dataclass
@@ -190,14 +195,18 @@ async def get_session(session_id: str) -> Session | None:
             ) and now > datetime.fromisoformat(rexp):
                 await redis.delete(cache_key)
                 return None
-            return Session(
-                session_id=data["session_id"],
-                did=data["did"],
-                handle=data["handle"],
-                oauth_session=data["oauth_session"],
-            )
+            if decrypted_cached := _decrypt_data(data["oauth_session"]):
+                return Session(
+                    session_id=session_id,
+                    did=data["did"],
+                    handle=data["handle"],
+                    oauth_session=json.loads(decrypted_cached),
+                )
+            # unreadable payload (key rotation, corruption, tampering): evict and
+            # fall through to the DB rather than treating it as "no session"
+            await redis.delete(cache_key)
     except Exception:
-        logger.debug("redis cache read failed for session %s", session_id)
+        logger.debug("redis cache read failed for session %s", session_id[:8])
 
     # cache miss — fall back to DB
     async with db_session() as db:
@@ -219,6 +228,7 @@ async def get_session(session_id: str) -> Session | None:
             return None
 
         oauth_session_data = json.loads(decrypted_data)
+        encrypted_oauth = user_session.oauth_session_data
 
         refresh_expires_at = _get_refresh_token_expires_at(
             user_session, oauth_session_data
@@ -241,10 +251,9 @@ async def get_session(session_id: str) -> Session | None:
             cache_key,
             json.dumps(
                 {
-                    "session_id": session.session_id,
                     "did": session.did,
                     "handle": session.handle,
-                    "oauth_session": session.oauth_session,
+                    "oauth_session": encrypted_oauth,
                     "expires_at": user_session.expires_at.isoformat()
                     if user_session.expires_at
                     else None,
@@ -256,7 +265,7 @@ async def get_session(session_id: str) -> Session | None:
             ex=SESSION_CACHE_TTL_SECONDS,
         )
     except Exception:
-        logger.debug("redis cache write failed for session %s", session_id)
+        logger.debug("redis cache write failed for session %s", session_id[:8])
 
     return session
 

@@ -1,5 +1,7 @@
 """stateless smoke tests for auth package modules."""
 
+import hashlib
+
 from backend._internal.auth.encryption import _decrypt_data, _encrypt_data
 from backend._internal.auth.exchange import (
     consume_exchange_token,
@@ -65,10 +67,13 @@ def test_exchange_token_functions_exist():
 
 
 def test_session_cache_key_format():
-    """cache key uses plyr:session: prefix."""
+    """cache key is the prefix plus a hash of the session id, never the id itself."""
     key = _session_cache_key("abc-123")
-    assert key == "plyr:session:abc-123"
     assert key.startswith(SESSION_CACHE_PREFIX)
+    assert "abc-123" not in key
+    assert key == SESSION_CACHE_PREFIX + hashlib.sha256(b"abc-123").hexdigest()
+    # stable across calls, or cache reads would never hit
+    assert key == _session_cache_key("abc-123")
 
 
 def test_session_cache_constants():
