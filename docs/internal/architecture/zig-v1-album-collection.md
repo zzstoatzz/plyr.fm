@@ -60,6 +60,21 @@ therefore share account admission, profile attribution, cursor ordering, record
 validation, and metric rules. Replacing Postgres or its table layout does not
 change the REST application contract.
 
+## local baseline
+
+Recorded 2026-08-09 with the native ReleaseFast binary and disposable Postgres
+fixture, returning one 1,000-byte verified album summary:
+
+| concurrency | responses/s | p50 | p95 | p99 | RSS | errors |
+|---:|---:|---:|---:|---:|---:|---:|
+| 1 | 1,172.9 | 0.788 ms | 1.200 ms | 1.621 ms | 3,872 KiB | 0 |
+| 16 | 7,416.8 | 2.096 ms | 3.341 ms | 4.322 ms | 5,056 KiB | 0 |
+
+Run `just zig bench-album-collection` to reproduce it. This covers HTTP,
+scope/cursor parsing, pooled SQL, verified record and account admission, signed
+membership availability, canonical metrics, provenance, and serialization. It
+is a localhost regression baseline, not a Neon capacity claim.
+
 ## intentionally open
 
 Artwork, descriptions, human-readable routing aliases, global discovery,
