@@ -125,7 +125,10 @@ secret values while checking configuration.
 `plyr-api-zig-canary`. It uses one 256 MiB shared-CPU machine, scales to zero,
 and has no worker, jetstream, migration, Redis, R2, or production traffic
 responsibilities. `DATABASE_URL` is its only runtime secret and points at the
-isolated `next-zig-backend` Neon branch through the `plyr_zig_canary` database role. Migrations grant
+isolated `next-zig-backend` Neon branch through Neon's direct endpoint and the
+`plyr_zig_canary` database role. The application owns a bounded connection pool;
+the Neon transaction-pooler endpoint is incompatible with pg.zig's two-cycle
+unnamed extended-protocol statements and must not be used. Migrations grant
 that role schema usage and reads on current and future projection tables. During
 the compatibility phase it also has read-only access to `tracks`, `artists`,
 `albums`, and `user_preferences` in the isolated clone; it has no write authority.

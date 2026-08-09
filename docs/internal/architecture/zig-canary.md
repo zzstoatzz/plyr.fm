@@ -36,6 +36,11 @@ to PostgreSQL's effective `current_user` and refuses to serve if the staged
 credential has more or different authority than intended.
 The canary uses a 16-connection PostgreSQL pool so its 16-worker product-read
 benchmark measures application work rather than pool admission.
+Its `DATABASE_URL` uses Neon's direct endpoint. `pg.zig` describes and binds an
+unnamed extended-protocol statement across separate synchronization cycles;
+Neon's transaction pooler may assign those cycles to different backend sessions.
+Layering that pooler beneath the application's already bounded pool is therefore
+both redundant and incorrect for this client protocol.
 
 The machine:
 
