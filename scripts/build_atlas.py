@@ -25,8 +25,9 @@ rationale on 10D clustering and core-only label evidence), scaled down to a
 catalog of ~1k tracks.
 
 eligibility mirrors the radio corpus (backend/api/radio/corpus.py): public
-discovery visibility, ungated, active artist, and no adult-audio or
-copyright labels — the atlas is an anonymous chosen-for-you surface.
+discovery visibility, ungated, active artist, no adult-audio or
+copyright labels, and no standing `exclude` override — the atlas is an
+anonymous chosen-for-you surface.
 
 the output uploads to the dedicated stats bucket (same pattern as
 scripts/costs/export_costs.py); the backend proxies it at /stats/atlas and
@@ -87,6 +88,7 @@ where t.visibility in ('public', 'supporters')
   and t.support_gate is null
   and a.deactivated = false
   and not (t.self_labels ?| %(labels)s or t.operator_labels ?| %(labels)s)
+  and t.moderation_override is distinct from 'exclude'
 """
 
 

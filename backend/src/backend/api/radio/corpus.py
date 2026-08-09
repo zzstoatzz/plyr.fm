@@ -27,6 +27,10 @@ async def load_corpus(db: AsyncSession) -> list[Track]:
         .where(
             Track.in_discovery,
             Track.support_gate.is_(None),
+            # a standing operator `exclude` keeps a track off shared surfaces
+            # with no label needed; NULL-safe because the column is null for
+            # almost every track (see label_visible_clause).
+            Track.moderation_override.is_distinct_from("exclude"),
             Artist.deactivated == False,  # noqa: E712
         )
         .order_by(Track.created_at.desc(), Track.id.desc())
