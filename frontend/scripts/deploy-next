@@ -22,6 +22,7 @@ bun run build
 
 commit_hash=$(git rev-parse HEAD)
 commit_message=$(git log -1 --pretty=%s)
+CLOUDFLARE_ACCOUNT_ID=3e9ba01cd687b3c4d29033908177072e \
 exec bunx wrangler pages deploy .svelte-kit/cloudflare \
     --project-name plyr-fm-next \
     --branch "$expected_branch" \

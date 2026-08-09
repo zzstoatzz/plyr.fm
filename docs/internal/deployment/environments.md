@@ -116,6 +116,8 @@ just frontend deploy-next
 
 `deploy-next` rebuilds the existing SvelteKit app with the Zig v1 client enabled
 and publishes only to the dedicated `plyr-fm-next` Cloudflare Pages project.
+The recipe pins the plyr.fm Cloudflare account so non-interactive deploys cannot
+accidentally select another configured account.
 It never modifies `stg.plyr.fm`, `plyr.fm`, or either project's configuration.
 
 ## configuration files
