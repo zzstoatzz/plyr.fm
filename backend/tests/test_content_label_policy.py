@@ -176,13 +176,13 @@ async def test_override_allow_surfaces_a_copyright_labeled_track(
 async def test_override_exclude_hides_an_unlabeled_track(
     db_session: AsyncSession,
 ) -> None:
-    """The other direction: keep something off shared surfaces with no label."""
+    """The other direction: keep something off chosen surfaces with no label."""
     track = await _track(db_session, file_id="ov2")
     track.moderation_override = "exclude"
     await db_session.commit()
 
     visible, _ = await filter_sensitive_audio_tracks_for_viewer(
-        db_session, [track], OWNER
+        db_session, [track], OWNER, context=LabelContext.LIST
     )
     assert visible == []
 
@@ -248,18 +248,48 @@ async def test_copyright_hides_in_every_context(db_session: AsyncSession) -> Non
         }, context
 
 
-async def test_exclude_override_hides_in_every_context(
+async def test_exclude_override_is_curation_not_removal(
     db_session: AsyncSession,
 ) -> None:
+    """`exclude` empties chosen surfaces, never a page someone navigated to.
+
+    Regression: exclude once applied in every context, so excluding an
+    artist's tracks from radio also blanked their public profile ("no
+    tracks") — a curation decision presented as a takedown. Removal outright
+    is `takedown`'s job.
+    """
     hidden = await _track(db_session, file_id="dest7")
     hidden.moderation_override = "exclude"
     plain = await _track(db_session, file_id="dest8")
     await db_session.commit()
 
-    for context in (LabelContext.LIST, LabelContext.VIEW):
-        assert await _visible(db_session, context, shows_sensitive=True) == {
-            plain.id
-        }, context
+    assert await _visible(db_session, LabelContext.LIST, shows_sensitive=True) == {
+        plain.id
+    }
+    assert await _visible(db_session, LabelContext.VIEW, shows_sensitive=True) == {
+        hidden.id,
+        plain.id,
+    }
+
+
+async def test_app_side_filter_agrees_exclude_is_list_only(
+    db_session: AsyncSession,
+) -> None:
+    """The Python filter and the SQL clause must agree on exclude's reach."""
+    hidden = await _track(db_session, file_id="dest9")
+    hidden.moderation_override = "exclude"
+    plain = await _track(db_session, file_id="dest10")
+    await db_session.commit()
+
+    shown, _ = await filter_sensitive_audio_tracks_for_viewer(
+        db_session, [hidden, plain], VIEWER, context=LabelContext.VIEW
+    )
+    assert {t.id for t in shown} == {hidden.id, plain.id}
+
+    listed, _ = await filter_sensitive_audio_tracks_for_viewer(
+        db_session, [hidden, plain], VIEWER, context=LabelContext.LIST
+    )
+    assert {t.id for t in listed} == {plain.id}
 
 
 async def test_app_side_filter_honours_view_context(db_session: AsyncSession) -> None:
@@ -305,8 +335,8 @@ async def test_album_card_count_matches_what_the_album_will_show(
     """A card promising more tracks than the page lists is the reported bug.
 
     The count is viewer-independent on purpose, so it excludes only what no
-    viewer can see: copyright labels and exclude overrides. Adult-labeled
-    tracks stay counted because a VIEW context shows them.
+    viewer can see: copyright labels. Adult-labeled and override-excluded
+    tracks stay counted because a VIEW context shows both.
     """
     from backend.models import Album
 
@@ -331,7 +361,6 @@ async def test_album_card_count_matches_what_the_album_will_show(
                 Track.album_id == album.id,
                 Track.visibility != "private",
                 copyright_visible_clause(),
-                Track.moderation_override.is_distinct_from("exclude"),
             )
         )
     ).scalar_one()
@@ -342,7 +371,7 @@ async def test_album_card_count_matches_what_the_album_will_show(
         None,
         context=LabelContext.VIEW,
     )
-    assert counted == len(shown) == 2
+    assert counted == len(shown) == 3
 
 
 async def test_owner_sees_their_own_adult_track_but_not_their_own_copyright_one(

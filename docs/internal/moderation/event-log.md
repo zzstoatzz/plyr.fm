@@ -66,7 +66,11 @@ track has a higher id than the acknowledgement, so it surfaces again.
 
 **overrides** — the latest `override_*` per subject wins. Projected onto
 `tracks.moderation_override` by `sync_operator_labels` and read by
-`discovery_visible_clause`.
+`label_visible_clause` / `filter_tracks_for_viewer` and the radio corpus.
+`exclude` applies only in LIST contexts — feeds, search, radio, the atlas —
+never on destinations (an artist's own page, an album, a permalink). Hiding
+a navigated-to catalogue would misrepresent what is there; removal outright
+is `takedown`'s job, not `exclude`'s.
 
 ## attribution is not authentication
 
