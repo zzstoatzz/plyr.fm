@@ -51,6 +51,14 @@ the process averaged only 1.8% of one core. The roughly 128 ms added by a single
 Machine uses the same region so an explicit repair does not reintroduce that
 cross-country path.
 
+Changing `primary_region` does not relocate an existing Fly Machine. The manual
+deployment therefore performs a health-gated replacement after publishing and
+deploying the immutable image: it clones the exact service Machine into `iad`,
+cordons the old region, and runs the complete semantic smoke through Fly routing.
+Only a successful smoke destroys the superseded Machine; failure uncordons the
+old Machine. Subsequent deployments already have one `iad` Machine and skip the
+replacement path.
+
 The machine:
 
 - is capped at one shared CPU and 256 MiB;

@@ -129,9 +129,42 @@ jobs:
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_ZIG_NEXT }}
 
+      - name: place the canary beside Neon
+        id: placement
+        working-directory: backend-zig
+        run: >-
+          python3 scripts/canary_placement.py prepare
+          --app plyr-api-zig-canary
+          --target-region iad
+          --github-output "$GITHUB_OUTPUT"
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_ZIG_NEXT }}
+
       - name: prove the anonymous read surface
         working-directory: backend-zig
         run: python3 scripts/canary_smoke.py https://plyr-api-zig-canary.fly.dev
+
+      - name: restore old routing after a failed placement smoke
+        if: failure() && steps.placement.outputs.old_ids != ''
+        working-directory: backend-zig
+        run: >-
+          python3 scripts/canary_placement.py restore
+          --app plyr-api-zig-canary
+          $OLD_IDS
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_ZIG_NEXT }}
+          OLD_IDS: ${{ steps.placement.outputs.old_ids }}
+
+      - name: remove superseded canary Machines
+        if: success() && steps.placement.outputs.old_ids != ''
+        working-directory: backend-zig
+        run: >-
+          python3 scripts/canary_placement.py complete
+          --app plyr-api-zig-canary
+          $OLD_IDS
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_ZIG_NEXT }}
+          OLD_IDS: ${{ steps.placement.outputs.old_ids }}
 
       - name: let the canary return to idle
         run: sleep 5
