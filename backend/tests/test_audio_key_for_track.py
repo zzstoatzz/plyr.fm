@@ -64,3 +64,31 @@ def test_foreign_urls_never_become_our_storage_key(url: str) -> None:
 )
 def test_unusable_urls_return_none(url: str) -> None:
     assert AudioKey.from_url(url) is None
+
+
+def test_no_storage_call_is_keyed_by_a_track_row_file_id() -> None:
+    """the invariant behind the audit, enforced on the source.
+
+    `Track.file_id` is a storage key only for uploads that came through us; on
+    the ingest path it is the record's `fileId`/rkey. handing it straight to a
+    storage call addresses nothing for those rows — the "6 failed" PDS save,
+    audio orphaned on delete, tracks silently missing from exports. every such
+    call must go through `AudioKey.for_track`, which prefers `r2_url`.
+    """
+    import re
+    from pathlib import Path
+
+    src = Path(__file__).resolve().parents[1] / "src" / "backend"
+    ops = "head_file|stream_file_data|delete|get_url"
+    holders = r"track\.file_id|track_data\[.file_id.\]|revision\.file_id"
+    offenders = []
+
+    for path in src.rglob("*.py"):
+        # collapse wrapped calls so multi-line arguments are still matched
+        flat = re.sub(r"\s+", " ", path.read_text())
+        for match in re.finditer(rf"storage\.({ops})\( *({holders})", flat):
+            offenders.append(f"{path.relative_to(src)}: {match.group(0).strip()}")
+
+    assert not offenders, "storage calls keyed by a track row file_id: " + "; ".join(
+        offenders
+    )

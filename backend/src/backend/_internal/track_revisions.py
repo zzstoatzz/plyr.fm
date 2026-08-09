@@ -19,6 +19,7 @@ from sqlalchemy import select
 
 from backend.models import MAX_REVISIONS_PER_TRACK, Track, TrackRevision
 from backend.storage import storage
+from backend.storage.keys import AudioKey
 from backend.utilities.database import db_session
 
 logger = logging.getLogger(__name__)
@@ -111,11 +112,19 @@ async def _maybe_delete_blob(
     if revision.audio_storage == "pds":
         return  # not ours to delete
 
-    # primary playable file: routed to gated bucket if it was gated at the time
+    # primary playable file: routed to gated bucket if it was gated at the time.
+    # the key comes from the snapshot's `audio_url` when present — a revision of
+    # an ingested track carries that track's rkey in `file_id`, which addresses
+    # no object of ours (see AudioKey.for_track).
     if revision.file_id and revision.file_id not in in_use_file_ids:
         delete_fn = storage.delete_gated if revision.was_gated else storage.delete
         try:
-            await delete_fn(revision.file_id, revision.file_type)
+            key = AudioKey.for_track(
+                file_id=revision.file_id,
+                file_type=revision.file_type,
+                r2_url=revision.audio_url,
+            )
+            await delete_fn(key.file_id, key.extension)
         except Exception:
             logger.exception(
                 "failed to delete pruned revision blob (file_id=%s, gated=%s)",

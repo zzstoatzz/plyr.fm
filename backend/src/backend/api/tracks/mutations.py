@@ -44,7 +44,7 @@ from backend.config import settings
 from backend.models import Artist, Track, TrackTag, get_db
 from backend.schemas import MessageResponse, TrackResponse
 from backend.storage import storage
-from backend.utilities.audio_formats import AudioFormat
+from backend.storage.keys import AudioKey, InvalidMediaExtension
 from backend.utilities.tags import get_or_create_tag, parse_tags_json
 
 from .metadata_service import apply_album_update
@@ -107,10 +107,17 @@ async def delete_track(
                     detail=f"failed to delete ATProto record: {e}",
                 ) from e
 
-    # delete audio file from storage
+    # delete audio file from storage. the key comes from `r2_url` when the row
+    # was ingested — deleting by `file_id` there addresses nothing and silently
+    # orphans the real object.
     if not track.is_private:
         try:
-            await storage.delete(track.file_id, track.file_type)
+            delete_key = AudioKey.for_track(
+                file_id=track.file_id,
+                file_type=track.file_type,
+                r2_url=track.r2_url,
+            )
+            await storage.delete(delete_key.file_id, delete_key.extension)
         except Exception as e:
             # log but don't fail - maybe file was already deleted
             logger.warning(f"failed to delete file {track.file_id}: {e}", exc_info=True)
@@ -673,19 +680,24 @@ async def migrate_track_to_pds(
             detail="supporter-gated tracks cannot be migrated to PDS",
         )
 
-    # determine content type from file type
-    audio_format = AudioFormat.from_extension(track.file_type)
-    if not audio_format:
+    # `file_id` addresses storage only for uploads that came through us — an
+    # ingested row carries the record's `fileId`/rkey, and `r2_url` is what
+    # points at the bytes (see AudioKey.for_track).
+    try:
+        audio_key = AudioKey.for_track(
+            file_id=track.file_id, file_type=track.file_type, r2_url=track.r2_url
+        )
+    except InvalidMediaExtension as e:
         raise HTTPException(
             status_code=400,
             detail=f"unsupported audio format: {track.file_type}",
-        )
-    content_type = audio_format.media_type
+        ) from e
+    content_type = audio_key.format.media_type
 
     # confirm the audio object exists and capture its size for Content-Length;
     # the body itself is streamed from R2 to the PDS, never buffered here.
     try:
-        content_length = await storage.head_file(track.file_id, track.file_type)
+        content_length = await storage.head_file(audio_key.file_id, audio_key.extension)
     except Exception as e:
         logger.error(f"failed to head audio for track {track_id}: {e}", exc_info=True)
         raise HTTPException(
@@ -698,11 +710,10 @@ async def migrate_track_to_pds(
             detail="audio file not found in storage",
         )
 
-    file_id = track.file_id
-    file_type = track.file_type
+    stream_key = audio_key
 
     def body_factory() -> AsyncIterable[bytes]:
-        return storage.stream_file_data(file_id, file_type)
+        return storage.stream_file_data(stream_key.file_id, stream_key.extension)
 
     # upload blob to PDS
     try:

@@ -81,13 +81,18 @@ async def process_export(export_id: str, artist_did: str) -> None:
                     )
                     continue
 
-                # prefer original file for export (lossless if available)
+                # prefer original file for export (lossless if available).
+                # `original_file_id` is only ever written by our own upload
+                # pipeline, so it always addresses storage directly; the
+                # playable pointer does not, on rows that came from ingest.
+                export_from_url: str | None = None
                 if track.original_file_id and track.original_file_type:
                     export_file_id = track.original_file_id
                     export_file_type = track.original_file_type
                 else:
                     export_file_id = track.file_id
                     export_file_type = track.file_type
+                    export_from_url = track.r2_url
 
                 # create safe filename with duplicate handling
                 base_filename = f"{track.title}.{export_file_type}"
@@ -108,7 +113,11 @@ async def process_export(export_id: str, artist_did: str) -> None:
                 # route through the typed-key path: same R2 key derivation
                 # as every other read/write site. see backend/storage/keys.py.
                 try:
-                    audio_key = AudioKey.for_file(export_file_id, export_file_type)
+                    audio_key = AudioKey.for_track(
+                        file_id=export_file_id,
+                        file_type=export_file_type,
+                        r2_url=export_from_url,
+                    )
                 except InvalidMediaExtension:
                     logfire.warn(
                         "skipping track: unsupported file_type for export",

@@ -24,6 +24,7 @@ from backend.models import (
     get_db,
 )
 from backend.storage import storage
+from backend.storage.keys import AudioKey, InvalidMediaExtension
 from backend.utilities.tags import DEFAULT_HIDDEN_TAGS
 
 logger = logging.getLogger(__name__)
@@ -113,12 +114,22 @@ async def delete_account(
 
     # track audio and images
     tracks_result = await db.execute(
-        select(Track.file_id, Track.file_type, Track.image_id).where(
+        select(Track.file_id, Track.file_type, Track.r2_url, Track.image_id).where(
             Track.artist_did == session.did
         )
     )
-    for file_id, file_type, image_id in tracks_result.fetchall():
-        r2_audio_files.append((file_id, file_type))
+    for file_id, file_type, r2_url, image_id in tracks_result.fetchall():
+        # an ingested row's `file_id` is the record's `fileId`/rkey and names no
+        # object of ours; `r2_url` holds the real key. deleting by `file_id`
+        # there leaves the audio behind after the account is gone.
+        try:
+            key = AudioKey.for_track(
+                file_id=file_id, file_type=file_type, r2_url=r2_url
+            )
+        except InvalidMediaExtension:
+            logger.warning("skipping unstorable audio key for %s", file_id)
+        else:
+            r2_audio_files.append((key.file_id, key.extension))
         if image_id:
             r2_image_ids.append(image_id)
 
