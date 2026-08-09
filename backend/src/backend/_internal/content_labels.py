@@ -113,29 +113,36 @@ def label_visible_clause(
     whole predicate for viewers who opted into sensitive audio, which would
     have leaked copyright-labeled tracks to exactly those viewers.
 
-    `exclude` hides a track with no label needed. `allow` surfaces one whose
-    copyright label we reviewed and decided not to act on — a cover, say —
-    without negating the label and thereby claiming the match never happened.
-    `allow` deliberately does not lift the adult half: that is a listener
-    preference, and an operator deciding what someone else may be *shown* is a
-    different power from deciding what we *host*.
+    `exclude` is a curation decision, not a removal: it keeps a track out of
+    the surfaces where we choose what to put in front of someone (feeds,
+    search, radio), and nothing else. An artist's own catalogue is theirs —
+    hiding part of it would misrepresent what is there, the same principle
+    that keeps labels from gutting destinations (#1709). Only `takedown`
+    removes a track outright. `allow` surfaces one whose copyright label we
+    reviewed and decided not to act on — a cover, say — without negating the
+    label and thereby claiming the match never happened. `allow` deliberately
+    does not lift the adult half: that is a listener preference, and an
+    operator deciding what someone else may be *shown* is a different power
+    from deciding what we *host*.
     """
     # NULL-safe: the column is null for almost every track, and `NOT (NULL =
     # 'exclude')` is NULL, which a WHERE clause drops. That would have hidden
     # the entire catalogue.
     allowed = Track.moderation_override.is_not_distinct_from("allow")
-    not_excluded = Track.moderation_override.is_distinct_from("exclude")
 
     # copyright is a hosting obligation, so it applies in every context and
     # only an explicit operator decision lifts it
     visible = allowed | copyright_visible_clause()
 
-    # adult labels are a rendering default, so they apply only where we are
-    # choosing what to surface
-    if context is LabelContext.LIST and not shows_sensitive_audio:
-        visible = visible & sensitive_audio_visible_clause(viewer_did)
+    if context is LabelContext.LIST:
+        # adult labels are a rendering default, so they apply only where we
+        # are choosing what to surface
+        if not shows_sensitive_audio:
+            visible = visible & sensitive_audio_visible_clause(viewer_did)
+        # `exclude` is likewise a choosing-time decision only
+        visible = visible & Track.moderation_override.is_distinct_from("exclude")
 
-    return not_excluded & visible
+    return visible
 
 
 async def get_operator_label_values(
@@ -231,7 +238,9 @@ async def filter_sensitive_audio_tracks_for_viewer(
     for track in track_list:
         labels = labels_by_id.get(track.id, set())
         override = track.moderation_override
-        if override == "exclude":
+        # exclude is a curation decision: it empties our chosen surfaces,
+        # never a page someone navigated to (see label_visible_clause)
+        if override == "exclude" and context is LabelContext.LIST:
             continue
         # copyright applies to everyone; no preference and no owner exemption,
         # unless an operator reviewed it and decided to surface it anyway

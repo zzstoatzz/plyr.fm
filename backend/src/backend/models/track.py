@@ -98,8 +98,9 @@ class Track(Base):
     )
     # Standing operator decision projected from the moderation event log:
     # "allow" surfaces the track despite a copyright label, "exclude" keeps it
-    # off shared surfaces regardless of labels. Distinct from negating a label,
-    # which claims the assertion itself was wrong.
+    # out of chosen surfaces (feeds, search, radio) regardless of labels —
+    # never out of destinations like the artist's own page. Distinct from
+    # negating a label, which claims the assertion itself was wrong.
     moderation_override: Mapped[str | None] = mapped_column(String, nullable=True)
 
     # PDS blob storage (for audio stored on user's PDS)

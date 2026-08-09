@@ -59,10 +59,12 @@ async def list_albums(
         )
         .join(Artist, Album.artist_did == Artist.did)
         # count only tracks the album view will actually show. Private uploads
-        # drop out via the having clause; copyright-labeled and
-        # override-excluded tracks are counted out too, because a card
-        # promising three tracks over a page that lists two is the mismatch
-        # that made the artist page unreadable (#1709).
+        # drop out via the having clause; copyright-labeled tracks are counted
+        # out too, because a card promising three tracks over a page that
+        # lists two is the mismatch that made the artist page unreadable
+        # (#1709). Override-excluded tracks stay counted: exclude is a
+        # curation decision that never touches destination pages, and the
+        # album view shows them.
         #
         # Deliberately viewer-independent: adult labels are a preference, and
         # a per-viewer count could not be cached or agreed on. In a VIEW
@@ -73,7 +75,6 @@ async def list_albums(
                 Track.album_id == Album.id,
                 Track.visibility != "private",
                 copyright_visible_clause(),
-                Track.moderation_override.is_distinct_from("exclude"),
             ),
         )
         .group_by(Album.id, Artist.did)
