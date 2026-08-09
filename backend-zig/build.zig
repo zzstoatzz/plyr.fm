@@ -18,6 +18,10 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
         .openssl = true,
     }).module("pg"));
+    root_module.addImport("graphemes", b.dependency("zg", .{
+        .target = target,
+        .optimize = optimize,
+    }).module("Graphemes"));
 
     const executable = b.addExecutable(.{
         .name = "plyr-backend",
@@ -46,6 +50,10 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     }).module("zat"));
+    snapshot_bench_module.addImport("graphemes", b.dependency("zg", .{
+        .target = target,
+        .optimize = optimize,
+    }).module("Graphemes"));
     const snapshot_bench = b.addExecutable(.{
         .name = "bench-snapshot",
         .root_module = snapshot_bench_module,

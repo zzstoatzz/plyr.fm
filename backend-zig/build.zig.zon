@@ -10,6 +10,10 @@
             .url = "git+https://github.com/karlseguin/pg.zig#52b9f8a59bfd60a3aa75943a14366d859ea11f26",
             .hash = "pg-0.0.0-Wp_7gRanBgC-ixWJ42gQIxD9fajdSZEJwzmCGPBSD0Q9",
         },
+        .zg = .{
+            .url = "https://codeberg.org/atman/zg/archive/v0.16.2.tar.gz",
+            .hash = "zg-0.16.2-oGqU3HqftgI6rwFS90ypwfjgToH8Pz829OKuFURlm773",
+        },
     },
     .fingerprint = 0x4fd7f1002bfb4cee,
     .minimum_zig_version = "0.16.0",

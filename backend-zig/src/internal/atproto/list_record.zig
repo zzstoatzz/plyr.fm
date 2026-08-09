@@ -7,6 +7,7 @@
 
 const std = @import("std");
 const zat = @import("zat");
+const lexicon_string = @import("../text/lexicon_string.zig");
 
 pub const max_items: usize = 500;
 
@@ -37,6 +38,7 @@ pub const Error = error{
     InvalidRecord,
     WrongRecordType,
     UnknownListType,
+    InvalidName,
     TooManyItems,
     InvalidStrongRef,
     WrongItemCollection,
@@ -61,6 +63,9 @@ pub fn parse(
     if (created_at.len == 0) return error.InvalidRecord;
     const updated_at = optionalString(value, "updatedAt") catch return error.InvalidRecord;
     const name = optionalString(value, "name") catch return error.InvalidRecord;
+    if (name) |text| {
+        lexicon_string.validate(text, 256, 64) catch return error.InvalidName;
+    }
 
     const items = try allocator.alloc(StrongRef, raw_items.len);
     for (raw_items, items) |raw_item, *item| {
@@ -158,5 +163,50 @@ test "list record rejects text CIDs and cross-environment members" {
     try std.testing.expectError(
         error.WrongItemCollection,
         parse(a, fixtureRecord(&foreign_items), "fm.plyr.dev.list", "fm.plyr.dev.track"),
+    );
+}
+
+test "list name observes lexicon byte and grapheme limits" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+
+    var combining_name: std.ArrayList(u8) = .empty;
+    defer combining_name.deinit(a);
+    for (0..64) |_| try combining_name.appendSlice(a, "e\u{301}");
+
+    const valid: zat.cbor.Value = .{ .map = &.{
+        .{ .key = "$type", .value = .{ .text = "fm.plyr.dev.list" } },
+        .{ .key = "listType", .value = .{ .text = "album" } },
+        .{ .key = "name", .value = .{ .text = combining_name.items } },
+        .{ .key = "items", .value = .{ .array = &.{} } },
+        .{ .key = "createdAt", .value = .{ .text = "2026-08-08T12:00:00Z" } },
+    } };
+    _ = try parse(a, valid, "fm.plyr.dev.list", "fm.plyr.dev.track");
+
+    try combining_name.appendSlice(a, "x");
+    const too_many: zat.cbor.Value = .{ .map = &.{
+        .{ .key = "$type", .value = .{ .text = "fm.plyr.dev.list" } },
+        .{ .key = "listType", .value = .{ .text = "album" } },
+        .{ .key = "name", .value = .{ .text = combining_name.items } },
+        .{ .key = "items", .value = .{ .array = &.{} } },
+        .{ .key = "createdAt", .value = .{ .text = "2026-08-08T12:00:00Z" } },
+    } };
+    try std.testing.expectError(
+        error.InvalidName,
+        parse(a, too_many, "fm.plyr.dev.list", "fm.plyr.dev.track"),
+    );
+
+    const too_wide = "x" ** 257;
+    const too_wide_record: zat.cbor.Value = .{ .map = &.{
+        .{ .key = "$type", .value = .{ .text = "fm.plyr.dev.list" } },
+        .{ .key = "listType", .value = .{ .text = "album" } },
+        .{ .key = "name", .value = .{ .text = too_wide } },
+        .{ .key = "items", .value = .{ .array = &.{} } },
+        .{ .key = "createdAt", .value = .{ .text = "2026-08-08T12:00:00Z" } },
+    } };
+    try std.testing.expectError(
+        error.InvalidName,
+        parse(a, too_wide_record, "fm.plyr.dev.list", "fm.plyr.dev.track"),
     );
 }
