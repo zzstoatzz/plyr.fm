@@ -257,7 +257,7 @@ def main() -> None:
         assert status == 400
         assert invalid_artist["error"]["code"] == "invalid_request"
 
-        for identifier in ("did:plc:artist", "Artist.Example"):
+        for identifier in ("did:plc:artist", "did%3Aplc%3Aartist", "Artist.Example"):
             status, _, unavailable_artist = _request(
                 base_url, f"/v1/artists/{identifier}"
             )
@@ -269,6 +269,25 @@ def main() -> None:
         )
         assert status == 405
         assert artist_method["error"]["code"] == "method_not_allowed"
+
+        status, _, invalid_artist_metrics = _request(
+            base_url, "/v1/artists/not-an-identifier/metrics"
+        )
+        assert status == 400
+        assert invalid_artist_metrics["error"]["code"] == "invalid_request"
+
+        for identifier in ("did:plc:artist", "did%3Aplc%3Aartist", "Artist.Example"):
+            status, _, unavailable_artist_metrics = _request(
+                base_url, f"/v1/artists/{identifier}/metrics"
+            )
+            assert status == 503
+            assert unavailable_artist_metrics["error"]["code"] == "service_unavailable"
+
+        status, _, artist_metrics_method = _request(
+            base_url, "/v1/artists/did:plc:artist/metrics", method="POST"
+        )
+        assert status == 405
+        assert artist_metrics_method["error"]["code"] == "method_not_allowed"
 
         for invalid_target in (
             "/v1/search",

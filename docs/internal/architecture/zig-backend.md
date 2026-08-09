@@ -163,6 +163,12 @@ win; numeric similarity remains internal; every hit preserves canonical record
 identity and provenance. PostgreSQL is the current rebuildable search engine,
 not the metadata authority.
 
+[`GET /v1/artists/{identifier}/metrics`](zig-v1-artist-metrics.md) keeps
+application aggregates separate from artist identity. A public artist resolves
+to its canonical DID first; the metrics port then combines admitted verified
+track records with canonical-URI play counters without depending on legacy
+track identifiers, timestamps, or counters.
+
 Signed commit and snapshot ingestion now persist the
 [`verified track projection`](zig-verified-track-projection.md) and
 [`verified authored-profile projection`](zig-verified-profile-projection.md)

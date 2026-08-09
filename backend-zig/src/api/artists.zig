@@ -1,6 +1,8 @@
 const std = @import("std");
 const get_artist = @import("../internal/application/get_artist.zig");
+const get_artist_metrics = @import("../internal/application/get_artist_metrics.zig");
 const ArtistStore = @import("../internal/index/artist_store.zig").ArtistStore;
+const ArtistMetricStore = @import("../internal/metrics/artist_metric_store.zig").ArtistMetricStore;
 const response = @import("response.zig");
 
 pub fn get(
@@ -12,6 +14,34 @@ pub fn get(
     request_id: []const u8,
 ) !void {
     switch (get_artist.execute(allocator, store, identifier)) {
+        .found => |value| {
+            const body = try std.json.Stringify.valueAlloc(allocator, value, .{});
+            try response.json(request, .ok, body, request_id, cors);
+        },
+        .invalid_identifier => try response.apiError(request, .invalid_request, request_id, cors),
+        .not_found => try response.apiError(request, .not_found, request_id, cors),
+        .internal_error => try response.apiError(request, .internal_error, request_id, cors),
+        .unavailable => try response.apiError(request, .service_unavailable, request_id, cors),
+    }
+}
+
+pub fn getMetrics(
+    request: *std.http.Server.Request,
+    allocator: std.mem.Allocator,
+    artist_store: ?ArtistStore,
+    metric_store: ?ArtistMetricStore,
+    track_collection: []const u8,
+    cors: response.CorsPolicy,
+    identifier: []const u8,
+    request_id: []const u8,
+) !void {
+    switch (get_artist_metrics.execute(
+        allocator,
+        artist_store,
+        metric_store,
+        track_collection,
+        identifier,
+    )) {
         .found => |value| {
             const body = try std.json.Stringify.valueAlloc(allocator, value, .{});
             try response.json(request, .ok, body, request_id, cors);
@@ -68,4 +98,32 @@ test "v1 artist JSON preserves compatible fields and exposes their provenance" {
     try std.testing.expect(root.get("sources") != null);
     try std.testing.expect(root.get("projection") != null);
     try std.testing.expect(root.get("pds_url") == null);
+}
+
+test "artist metric JSON uses opaque track identity and explicit sources" {
+    const domain = @import("../internal/domain/artist_metrics.zig");
+    const value: domain.ArtistMetrics = .{
+        .artist_did = "did:plc:artist",
+        .totals = .{ .plays = 42, .tracks = 2, .duration_seconds = 300 },
+        .top_track = .{
+            .id = "trk_opaque",
+            .record = .{
+                .uri = "at://did:plc:artist/fm.plyr.dev.track/one",
+                .cid = "bafyrecord",
+            },
+            .title = "One",
+            .play_count = 30,
+        },
+    };
+    const json = try std.json.Stringify.valueAlloc(std.testing.allocator, value, .{});
+    defer std.testing.allocator.free(json);
+    const parsed = try std.json.parseFromSlice(std.json.Value, std.testing.allocator, json, .{});
+    defer parsed.deinit();
+    const root = parsed.value.object;
+    try std.testing.expectEqualStrings("artist_metrics", root.get("object").?.string);
+    try std.testing.expectEqualStrings("trk_opaque", root.get("top_track").?.object.get("id").?.string);
+    try std.testing.expectEqualStrings(
+        "application_metrics",
+        root.get("sources").?.object.get("plays").?.string,
+    );
 }

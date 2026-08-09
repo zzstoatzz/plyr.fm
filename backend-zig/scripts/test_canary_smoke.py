@@ -44,6 +44,26 @@ PLAYLIST_DETAIL = {
     "members": [],
     "metrics": {"member_count": 0, "available_count": 0, "total_plays": 0},
 }
+ARTIST_METRICS = {
+    "object": "artist_metrics",
+    "artist_did": "did:plc:artist",
+    "totals": {"plays": 7, "tracks": 1, "duration_seconds": 180},
+    "top_track": {
+        "id": "trk_verified",
+        "record": {
+            "uri": "at://did:plc:artist/fm.plyr.track/one",
+            "cid": "bafyrecord",
+        },
+        "title": "Verified Song",
+        "play_count": 7,
+    },
+    "sources": {
+        "catalog": "verified_repo",
+        "duration": "verified_repo",
+        "plays": "application_metrics",
+    },
+    "projection": {"verification": "verified_repo"},
+}
 
 
 def test_request_identifies_the_smoke_client() -> None:
@@ -94,6 +114,7 @@ def test_real_product_reads_traverse_projected_track_and_artist() -> None:
         "/v1/artists/did:plc:artist": _response(
             {"object": "artist", "did": "did:plc:artist"}
         ),
+        "/v1/artists/did%3Aplc%3Aartist/metrics": _response(ARTIST_METRICS),
         "/v1/search?q=Verified%20Song&types=track&limit=10": _response(
             {
                 "object": "list",
@@ -171,6 +192,7 @@ def test_real_product_reads_traverse_album_when_present() -> None:
         "/v1/artists/did:plc:artist": _response(
             {"object": "artist", "did": "did:plc:artist"}
         ),
+        "/v1/artists/did%3Aplc%3Aartist/metrics": _response(ARTIST_METRICS),
         "/v1/search?q=Verified%20Song&types=track&limit=10": _response(
             {
                 "object": "list",

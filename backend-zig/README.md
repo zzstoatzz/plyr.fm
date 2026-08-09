@@ -80,7 +80,7 @@ unbounded detached threads.
 
 The current product surface is `GET /v1/tracks`,
 `GET /v1/tracks/{track_id}`, `GET /v1/tracks/{track_id}/playback`,
-`GET /v1/artists/{identifier}`, and the collection and detail forms of
+`GET /v1/artists/{identifier}`, `GET /v1/artists/{identifier}/metrics`, and the collection and detail forms of
 `GET /v1/albums` and `GET /v1/playlists`, plus `GET /v1/search`. Search accepts
 one strict query, a bounded global limit, and an optional type set; it returns
 verified record references with match class and provenance but no unstable
@@ -113,6 +113,13 @@ read the same authenticated list projection. Collection summaries contain only
 verified record metadata, verified ordered-membership counts, attributed owner
 profiles, and derived metrics; detail preserves every strong-reference position
 and hydrates only an exact public URI/CID match.
+
+Artist metrics are a separate public capability rather than extra fields on the
+artist identity resource. They resolve a handle alias through the verified
+artist boundary, then aggregate admitted verified track records and canonical-
+URI application play metrics. They never read legacy numeric track IDs or the
+legacy play-count column; likes and global rank remain absent until their
+authority is designed.
 
 Playlist collection and detail read only authenticated `playlist` list records;
 they do not join the Python playlist table or fetch a mutable PDS record during

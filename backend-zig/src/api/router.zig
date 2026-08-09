@@ -5,7 +5,9 @@ const playlists = @import("playlists.zig");
 const response = @import("response.zig");
 const search = @import("search.zig");
 const tracks = @import("tracks.zig");
+const path_segment = @import("../internal/http/path_segment.zig");
 const ArtistStore = @import("../internal/index/artist_store.zig").ArtistStore;
+const ArtistMetricStore = @import("../internal/metrics/artist_metric_store.zig").ArtistMetricStore;
 const PlaybackStore = @import("../internal/index/playback_store.zig").PlaybackStore;
 const SearchStore = @import("../internal/index/search_store.zig").SearchStore;
 const PlayDedupStore = @import("../internal/metrics/play_dedup_store.zig").PlayDedupStore;
@@ -23,6 +25,7 @@ pub const App = struct {
     track_store: ?TrackStore,
     playback_store: ?PlaybackStore,
     artist_store: ?ArtistStore,
+    artist_metric_store: ?ArtistMetricStore,
     verified_list_store: ?VerifiedListStore,
     search_store: ?SearchStore,
     play_metric_store: ?PlayMetricStore,
@@ -204,17 +207,40 @@ pub fn handle(
             id,
             request_id,
         );
+    } else if (artistMetricsIdentifier(path)) |identifier| {
+        if (request.head.method != .GET) {
+            try response.apiError(request, .method_not_allowed, request_id, app.cors);
+            return;
+        }
+        const decoded_identifier = path_segment.decode(allocator, identifier) catch {
+            try response.apiError(request, .invalid_request, request_id, app.cors);
+            return;
+        };
+        try artists.getMetrics(
+            request,
+            allocator,
+            app.artist_store,
+            app.artist_metric_store,
+            app.track_collection,
+            app.cors,
+            decoded_identifier,
+            request_id,
+        );
     } else if (artistIdentifier(path)) |identifier| {
         if (request.head.method != .GET) {
             try response.apiError(request, .method_not_allowed, request_id, app.cors);
             return;
         }
+        const decoded_identifier = path_segment.decode(allocator, identifier) catch {
+            try response.apiError(request, .invalid_request, request_id, app.cors);
+            return;
+        };
         try artists.get(
             request,
             allocator,
             app.artist_store,
             app.cors,
-            identifier,
+            decoded_identifier,
             request_id,
         );
     } else if (mem.eql(u8, path, prefix)) {
@@ -288,6 +314,17 @@ fn artistIdentifier(path: []const u8) ?[]const u8 {
     return identifier;
 }
 
+fn artistMetricsIdentifier(path: []const u8) ?[]const u8 {
+    const artists_prefix = prefix ++ "/artists/";
+    const metrics_suffix = "/metrics";
+    if (!mem.startsWith(u8, path, artists_prefix) or
+        !mem.endsWith(u8, path, metrics_suffix)) return null;
+    if (path.len <= artists_prefix.len + metrics_suffix.len) return null;
+    const identifier = path[artists_prefix.len .. path.len - metrics_suffix.len];
+    if (identifier.len == 0 or mem.indexOfScalar(u8, identifier, '/') != null) return null;
+    return identifier;
+}
+
 fn pathFromTarget(target: []const u8) []const u8 {
     const index = mem.indexOfScalar(u8, target, '?') orelse return target;
     return target[0..index];
@@ -346,4 +383,17 @@ test "artist detail routes accept exactly one DID or handle segment" {
     try std.testing.expect(artistIdentifier("/v1/artists/") == null);
     try std.testing.expect(artistIdentifier("/v1/artists/artist.example/tracks") == null);
     try std.testing.expect(artistIdentifier("/artists/artist.example") == null);
+}
+
+test "artist metric routes accept exactly one DID or handle segment" {
+    try std.testing.expectEqualStrings(
+        "did:plc:artist",
+        artistMetricsIdentifier("/v1/artists/did:plc:artist/metrics").?,
+    );
+    try std.testing.expectEqualStrings(
+        "artist.example",
+        artistMetricsIdentifier("/v1/artists/artist.example/metrics").?,
+    );
+    try std.testing.expect(artistMetricsIdentifier("/v1/artists/metrics") == null);
+    try std.testing.expect(artistMetricsIdentifier("/v1/artists/a/b/metrics") == null);
 }

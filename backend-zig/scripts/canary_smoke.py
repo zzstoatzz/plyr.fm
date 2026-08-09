@@ -142,6 +142,29 @@ def _verify_real_product_reads(base_url: str) -> dict[str, Any]:
     assert artist.body["object"] == "artist", artist.body
     assert artist.body["did"] == artist_did, artist.body
 
+    metrics = _request(base_url, f"/v1/artists/{encoded_did}/metrics")
+    assert metrics.status == 200, (metrics.status, metrics.body)
+    _expect_request_id(metrics)
+    assert metrics.body["object"] == "artist_metrics", metrics.body
+    assert metrics.body["artist_did"] == artist_did, metrics.body
+    totals = metrics.body["totals"]
+    assert all(
+        isinstance(totals[field], int) and totals[field] >= 0
+        for field in ("plays", "tracks", "duration_seconds")
+    ), metrics.body
+    assert totals["tracks"] >= 1, metrics.body
+    assert metrics.body["sources"] == {
+        "catalog": "verified_repo",
+        "duration": "verified_repo",
+        "plays": "application_metrics",
+    }, metrics.body
+    assert metrics.body["projection"] == {"verification": "verified_repo"}, metrics.body
+    top_track = metrics.body["top_track"]
+    assert isinstance(top_track, dict), metrics.body
+    assert top_track["id"].startswith("trk_"), top_track
+    assert top_track["record"]["uri"].startswith(f"at://{artist_did}/"), top_track
+    assert isinstance(top_track["play_count"], int) and top_track["play_count"] >= 0
+
     search_query = urllib.parse.quote(listed_track["metadata"]["title"], safe="")
     search = _request(
         base_url,
