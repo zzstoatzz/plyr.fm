@@ -56,3 +56,23 @@ changing `stg.plyr.fm` or `api-stg.plyr.fm`. Traffic experiments should begin
 with explicit test clients, then opt-in shadow/comparison tooling. General
 percentage routing belongs to a later decision because the v1 API is a new
 contract rather than a drop-in implementation of the Python surface.
+
+## initial catalog reconciliation
+
+A fresh `plyr_index` schema is intentionally empty. Before a useful read-only
+canary can exist, the separately invoked `MODE=catalog_reconciler` process reads
+distinct DIDs from legacy rows that already claim canonical track or album
+records. Those rows are discovery hints only. For each DID, the process resolves
+the current identity and PDS, fetches the complete repository, verifies its
+signature, blocks, MST, record CIDs, and selected lexicons, then atomically
+projects the authenticated snapshot. It shares one bounded resolver, transport,
+signing-key cache, and PostgreSQL pool across the batch.
+
+The first run against the temporary staging migration branch found four candidate
+repositories. One verified and projected successfully. Three valid repositories
+contained historical list items whose strongRef CID was encoded as DAG-CBOR text
+instead of a CID link, so strict list decoding rejected them and the process
+exited nonzero. This is now an explicit migration gate: malformed application
+records must be quarantined at record granularity so valid tracks and profiles in
+the same authenticated repository remain usable. The verifier must not reinterpret
+the text as a verified CID, and it must not silently report a complete catalog.

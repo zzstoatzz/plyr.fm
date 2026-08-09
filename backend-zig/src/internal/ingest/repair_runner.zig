@@ -10,6 +10,81 @@ const zat_keys = @import("zat_signing_key_resolver.zig");
 const commit_store = @import("../projection/postgres_verified_commit_store.zig");
 const snapshot_store = @import("../projection/postgres_verified_snapshot_store.zig");
 
+pub const Error = projector_module.Error || error{InvalidSystemClock};
+
+pub const Runner = struct {
+    io: std.Io,
+    identity: zat.DidResolver,
+    repository_transport: zat.HttpTransport,
+    key_upstream: zat_keys.ZatSigningKeyResolver,
+    key_cache: cached_keys.CachedSigningKeyResolver,
+    repositories: pds_source.ZatPdsRepositorySource,
+    commits: commit_store.PostgresVerifiedCommitStore,
+    snapshots: snapshot_store.PostgresVerifiedSnapshotStore,
+    projector: projector_module.Projector,
+
+    pub fn init(
+        self: *Runner,
+        io: std.Io,
+        allocator: std.mem.Allocator,
+        pool: *pg.Pool,
+        list_collection: []const u8,
+        track_collection: []const u8,
+        profile_collection: []const u8,
+    ) void {
+        self.io = io;
+        self.identity = zat.DidResolver.init(io, allocator);
+        self.identity.transport.user_agent = "plyr.fm-zig-ingester/0.1 (+https://plyr.fm)";
+        self.repository_transport = zat.HttpTransport.initWithUserAgent(
+            io,
+            allocator,
+            "plyr.fm-zig-ingester/0.1 (+https://plyr.fm)",
+        );
+        self.key_upstream = .{ .resolver = &self.identity };
+        self.key_cache = cached_keys.CachedSigningKeyResolver.init(
+            allocator,
+            io,
+            1024,
+            self.key_upstream.port(),
+        );
+        self.repositories = .{
+            .io = io,
+            .identity_resolver = &self.identity,
+            .transport = &self.repository_transport,
+        };
+        self.commits = .{ .pool = pool };
+        self.snapshots = .{ .pool = pool };
+        self.projector = .{
+            .heads = self.commits.reader(),
+            .commits = self.commits.store(),
+            .snapshots = self.snapshots.store(),
+            .keys = self.key_cache.port(),
+            .repositories = self.repositories.port(),
+            .list_collection = list_collection,
+            .track_collection = track_collection,
+            .profile_collection = profile_collection,
+        };
+    }
+
+    pub fn deinit(self: *Runner) void {
+        self.key_cache.deinit();
+        self.repository_transport.deinit();
+        self.identity.deinit();
+    }
+
+    pub fn repair(
+        self: *Runner,
+        allocator: std.mem.Allocator,
+        did: []const u8,
+    ) Error!projector_module.RepairOutcome {
+        const now = std.Io.Timestamp.now(self.io, .real).nanoseconds;
+        if (now < 0) return error.InvalidSystemClock;
+        const indexed_at_us = std.math.cast(i64, @divFloor(now, 1000)) orelse
+            return error.InvalidSystemClock;
+        return self.projector.repair(allocator, did, indexed_at_us);
+    }
+};
+
 pub fn run(
     io: std.Io,
     allocator: std.mem.Allocator,
@@ -19,46 +94,17 @@ pub fn run(
     track_collection: []const u8,
     profile_collection: []const u8,
 ) !projector_module.RepairOutcome {
-    var identity = zat.DidResolver.init(io, allocator);
-    defer identity.deinit();
-    identity.transport.user_agent = "plyr.fm-zig-ingester/0.1 (+https://plyr.fm)";
-    var repository_transport = zat.HttpTransport.initWithUserAgent(
+    var runner: Runner = undefined;
+    runner.init(
         io,
         allocator,
-        "plyr.fm-zig-ingester/0.1 (+https://plyr.fm)",
+        pool,
+        list_collection,
+        track_collection,
+        profile_collection,
     );
-    defer repository_transport.deinit();
-
-    var key_upstream: zat_keys.ZatSigningKeyResolver = .{ .resolver = &identity };
-    var key_cache = cached_keys.CachedSigningKeyResolver.init(
-        allocator,
-        io,
-        1024,
-        key_upstream.port(),
-    );
-    defer key_cache.deinit();
-    var repositories: pds_source.ZatPdsRepositorySource = .{
-        .io = io,
-        .identity_resolver = &identity,
-        .transport = &repository_transport,
-    };
-    var commits: commit_store.PostgresVerifiedCommitStore = .{ .pool = pool };
-    var snapshots: snapshot_store.PostgresVerifiedSnapshotStore = .{ .pool = pool };
-    const projector: projector_module.Projector = .{
-        .heads = commits.reader(),
-        .commits = commits.store(),
-        .snapshots = snapshots.store(),
-        .keys = key_cache.port(),
-        .repositories = repositories.port(),
-        .list_collection = list_collection,
-        .track_collection = track_collection,
-        .profile_collection = profile_collection,
-    };
-    const now = std.Io.Timestamp.now(io, .real).nanoseconds;
-    if (now < 0) return error.InvalidSystemClock;
-    const indexed_at_us = std.math.cast(i64, @divFloor(now, 1000)) orelse
-        return error.InvalidSystemClock;
-    return projector.repair(allocator, did, indexed_at_us);
+    defer runner.deinit();
+    return runner.repair(allocator, did);
 }
 
 pub fn succeeded(outcome: projector_module.RepairOutcome) bool {

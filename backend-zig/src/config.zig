@@ -4,6 +4,7 @@ const zat = @import("zat");
 pub const Role = enum {
     account_reconciler,
     api,
+    catalog_reconciler,
     ingester,
     repair,
 
@@ -67,6 +68,8 @@ pub const Config = struct {
             return error.IngesterDatabaseRequired;
         if (role == .account_reconciler and (database_url == null or index_mode != .required))
             return error.AccountReconcilerDatabaseRequired;
+        if (role == .catalog_reconciler and (database_url == null or index_mode != .required))
+            return error.CatalogReconcilerDatabaseRequired;
 
         return .{
             .role = role,
@@ -127,6 +130,7 @@ fn parseSecondsMicros(value: []const u8) !i64 {
 test "process roles are explicit" {
     try std.testing.expectEqual(Role.api, try Role.parse("api"));
     try std.testing.expectEqual(Role.account_reconciler, try Role.parse("account_reconciler"));
+    try std.testing.expectEqual(Role.catalog_reconciler, try Role.parse("catalog_reconciler"));
     try std.testing.expectEqual(Role.repair, try Role.parse("repair"));
     try std.testing.expectEqual(Role.ingester, try Role.parse("ingester"));
     try std.testing.expectError(error.InvalidRole, Role.parse("worker"));

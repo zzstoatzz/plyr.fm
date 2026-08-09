@@ -4,6 +4,7 @@
 //! an invalid signature, or an incomplete repository into projected data.
 
 const std = @import("std");
+const builtin = @import("builtin");
 const zat = @import("zat");
 const repository_source = @import("repository_source.zig");
 const signing_key = @import("signing_key.zig");
@@ -12,6 +13,8 @@ const repository_head = @import("../projection/repository_head.zig");
 const snapshot_verifier = @import("../projection/snapshot_verifier.zig");
 const verified_commit = @import("../projection/verified_commit.zig");
 const verified_snapshot = @import("../projection/verified_snapshot.zig");
+
+const log = std.log.scoped(.projector);
 
 pub const Projector = struct {
     heads: repository_head.Reader,
@@ -123,8 +126,11 @@ pub const Projector = struct {
             self.profile_collection,
             indexed_at_us,
         ) catch |first_error| blk: {
-            if (first_error != error.SignatureVerificationFailed)
+            if (first_error != error.SignatureVerificationFailed) {
+                if (!builtin.is_test)
+                    log.warn("repository snapshot for {s} was rejected: {}", .{ did, first_error });
                 return classifySnapshotVerification(first_error);
+            }
             key = self.keys.resolve(allocator, did, true) catch |err| switch (err) {
                 error.OutOfMemory => return error.OutOfMemory,
                 else => return .unverified_identity,
@@ -138,7 +144,11 @@ pub const Projector = struct {
                 self.track_collection,
                 self.profile_collection,
                 indexed_at_us,
-            ) catch |second_error| return classifySnapshotVerification(second_error);
+            ) catch |second_error| {
+                if (!builtin.is_test)
+                    log.warn("repository snapshot for {s} was rejected after key refresh: {}", .{ did, second_error });
+                return classifySnapshotVerification(second_error);
+            };
         };
         const result = self.snapshots.apply(allocator, snapshot) catch |err| switch (err) {
             error.OutOfMemory => return error.OutOfMemory,

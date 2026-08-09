@@ -40,7 +40,9 @@ pub const Error = error{
     UnknownListType,
     InvalidName,
     TooManyItems,
-    InvalidStrongRef,
+    InvalidStrongRefSubject,
+    InvalidStrongRefUri,
+    InvalidStrongRefCid,
     WrongItemCollection,
     OutOfMemory,
 };
@@ -90,18 +92,18 @@ fn optionalString(value: zat.cbor.Value, key: []const u8) !?[]const u8 {
 }
 
 fn parseItem(value: zat.cbor.Value, track_collection: []const u8) Error!StrongRef {
-    const subject = value.get("subject") orelse return error.InvalidStrongRef;
-    const uri = subject.getString("uri") orelse return error.InvalidStrongRef;
-    const cid = subject.getCid("cid") orelse return error.InvalidStrongRef;
+    const subject = value.get("subject") orelse return error.InvalidStrongRefSubject;
+    const uri = subject.getString("uri") orelse return error.InvalidStrongRefUri;
+    const cid = subject.getCid("cid") orelse return error.InvalidStrongRefCid;
 
-    const parsed_uri = zat.AtUri.parse(uri) orelse return error.InvalidStrongRef;
+    const parsed_uri = zat.AtUri.parse(uri) orelse return error.InvalidStrongRefUri;
     if (zat.Did.parse(parsed_uri.authority()) == null or !parsed_uri.hasRkey())
-        return error.InvalidStrongRef;
-    const collection = parsed_uri.collection() orelse return error.InvalidStrongRef;
+        return error.InvalidStrongRefUri;
+    const collection = parsed_uri.collection() orelse return error.InvalidStrongRefUri;
     if (!std.mem.eql(u8, collection, track_collection)) return error.WrongItemCollection;
-    const parsed_cid = zat.Cid.fromBytes(cid.raw) catch return error.InvalidStrongRef;
+    const parsed_cid = zat.Cid.fromBytes(cid.raw) catch return error.InvalidStrongRefCid;
     if (parsed_cid.codec() != zat.cbor.Codec.dag_cbor)
-        return error.InvalidStrongRef;
+        return error.InvalidStrongRefCid;
 
     return .{ .uri = uri, .cid = cid };
 }
@@ -152,7 +154,7 @@ test "list record rejects text CIDs and cross-environment members" {
         .{ .key = "cid", .value = .{ .text = "bafy-not-a-link" } },
     } } }} }};
     try std.testing.expectError(
-        error.InvalidStrongRef,
+        error.InvalidStrongRefCid,
         parse(a, fixtureRecord(&text_cid_items), "fm.plyr.dev.list", "fm.plyr.dev.track"),
     );
 

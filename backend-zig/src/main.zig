@@ -8,6 +8,7 @@ const postgres_albums = @import("internal/index/postgres_album_store.zig");
 const postgres_album_detail = @import("internal/index/postgres_album_detail_store.zig");
 const repair_runner = @import("internal/ingest/repair_runner.zig");
 const continuous_runner = @import("internal/ingest/continuous_runner.zig");
+const catalog_reconcile_runner = @import("internal/ingest/catalog_reconcile_runner.zig");
 const account_reconciler = @import("internal/account/reconciler.zig");
 
 var threaded_io: std.Io.Threaded = undefined;
@@ -69,6 +70,22 @@ pub fn main() !void {
             .list_collection = settings.list_collection,
             .cors = .{ .allowed_origins = settings.cors_allowed_origins },
         }),
+        .catalog_reconciler => {
+            const store = if (postgres_store) |*value| value else return error.CatalogReconcilerDatabaseRequired;
+            const report = try catalog_reconcile_runner.run(
+                io,
+                allocator,
+                store.pool,
+                settings.list_collection,
+                settings.track_collection,
+                settings.profile_collection,
+            );
+            std.log.info(
+                "catalog reconciliation: {d} candidates, {d} verified, {d} absent, {d} retryable, {d} rejected",
+                .{ report.candidates, report.verified, report.absent, report.retryable, report.rejected },
+            );
+            if (!report.complete()) return error.CatalogReconciliationIncomplete;
+        },
         .repair => {
             const store = if (postgres_store) |*value| value else return error.RepairDatabaseRequired;
             const did = settings.repair_did orelse return error.RepairDidRequired;
@@ -143,11 +160,15 @@ test {
     _ = @import("internal/index/postgres_composed_track_store.zig");
     _ = @import("internal/cache/lru.zig");
     _ = @import("internal/ingest/cached_signing_key_resolver.zig");
+    _ = @import("internal/ingest/catalog_reconciler.zig");
+    _ = @import("internal/ingest/catalog_reconcile_runner.zig");
     _ = @import("internal/ingest/continuous_runner.zig");
     _ = @import("internal/ingest/postgres_relay_cursor.zig");
+    _ = @import("internal/ingest/postgres_repository_candidates.zig");
     _ = @import("internal/ingest/pinned_tls.zig");
     _ = @import("internal/ingest/relay_cursor.zig");
     _ = @import("internal/ingest/repository_source.zig");
+    _ = @import("internal/ingest/repository_candidates.zig");
     _ = @import("internal/ingest/repair_runner.zig");
     _ = @import("internal/ingest/safe_endpoint.zig");
     _ = @import("internal/ingest/projector.zig");

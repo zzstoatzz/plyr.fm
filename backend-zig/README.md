@@ -15,6 +15,7 @@ just zig test-http
 just zig test-postgres
 just zig image
 just zig smoke-canary
+DATABASE_URL=... TRACK_COLLECTION_NSID=... LIST_COLLECTION_NSID=... PROFILE_COLLECTION_NSID=... just zig reconcile-catalog
 INDEX_MODE=disabled TRACK_COLLECTION_NSID=fm.plyr.dev.track LIST_COLLECTION_NSID=fm.plyr.dev.list PROFILE_COLLECTION_NSID=fm.plyr.dev.actor.profile just zig run
 just zig bench-http --duration 5 --concurrency 16
 DATABASE_URL=postgresql://... just zig bench-http --with-index --path '/v1/tracks?limit=50'
@@ -110,3 +111,11 @@ discovery, track collection/detail, artist lookup, and album collection/detail
 all prove their expected anonymous semantics and request-ID contract. Run the
 same check with `just zig smoke-canary`. `canary.plyr.fm` should be added
 only after the service passes its resource and semantic-parity gates.
+
+Before the first useful canary deployment, `just zig reconcile-catalog` seeds a
+new projection from current authenticated repositories. Existing canonical-looking
+track and album rows supply candidate DIDs only; none of their metadata, CIDs, PDS
+locations, or account state is trusted. The one-shot role verifies each complete
+repository through the same signature/MST/CID path as continuous ingestion and
+fails if no repository verifies or any candidate is retryable or rejected. It is
+separate from the read-only API role and requires projection-write authority.
