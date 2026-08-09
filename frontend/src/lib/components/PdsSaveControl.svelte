@@ -1,9 +1,18 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
+	import { page } from '$app/stores';
+	import { replaceState } from '$app/navigation';
 	import PdsSaveModal from './PdsSaveModal.svelte';
 	import { API_URL } from '$lib/config';
 	import { toast } from '$lib/toast.svelte';
 	import type { Track } from '$lib/types';
 	import { isOptimizing } from '$lib/utils/track-audio';
+
+	// `?save=pds` opens the picker straight away — the control sits below the
+	// profile, rights, and sharing sections, so landing at the top of /manage
+	// leaves the caller scrolling for the thing they just asked for.
+	const DEEP_LINK_PARAM = 'save';
+	const DEEP_LINK_VALUE = 'pds';
 
 	let {
 		tracks,
@@ -15,6 +24,7 @@
 
 	let showModal = $state(false);
 	let saving = $state(false);
+	let controlEl = $state<HTMLDivElement | null>(null);
 
 	let savableTrackCount = $derived(
 		tracks.filter(
@@ -28,6 +38,21 @@
 		tracks.filter((track) => ['both', 'pds'].includes(track.audio_storage ?? 'r2')).length
 	);
 	let gatedTrackCount = $derived(tracks.filter((track) => track.support_gate).length);
+
+	onMount(() => {
+		if ($page.url.searchParams.get(DEEP_LINK_PARAM) !== DEEP_LINK_VALUE) return;
+
+		// the parent resolves the full catalog before rendering this control, so
+		// the count is final here. nothing savable => the all-caught-up card is
+		// showing and an empty picker would be a dead end.
+		if (savableTrackCount > 0) showModal = true;
+		controlEl?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+
+		// drop the param so a refresh or back-navigation doesn't reopen it
+		const url = new URL($page.url);
+		url.searchParams.delete(DEEP_LINK_PARAM);
+		replaceState(url.pathname + url.search, {});
+	});
 
 	async function handleSave(trackIds: number[]) {
 		saving = true;
@@ -107,7 +132,7 @@
 </script>
 
 {#if savableTrackCount > 0}
-	<div class="data-control">
+	<div class="data-control" bind:this={controlEl}>
 		<div class="control-info">
 			<h3>save audio to your PDS</h3>
 			<p class="control-description">
@@ -125,7 +150,7 @@
 		</button>
 	</div>
 {:else if savedTrackCount > 0}
-	<div class="data-control all-saved">
+	<div class="data-control all-saved" bind:this={controlEl}>
 		<div class="control-info">
 			<h3>
 				<svg

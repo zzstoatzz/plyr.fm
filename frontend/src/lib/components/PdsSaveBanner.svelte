@@ -36,7 +36,7 @@
 			<span>save the audio to your PDS so your work lives on your own server</span>
 		</div>
 		<div class="banner-actions">
-			<a href="/portal/manage" class="banner-cta">move it to your PDS</a>
+			<a href="/portal/manage?save=pds" class="banner-cta">move it to your PDS</a>
 			<button class="banner-dismiss" onclick={dismiss} disabled={dismissing} title="don't show this again">
 				dismiss
 			</button>
