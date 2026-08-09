@@ -410,17 +410,21 @@ async def _setup_database_direct(database_url: str) -> None:
         await engine.dispose()
 
 
-@pytest.fixture(scope="session", autouse=True)
+@pytest.fixture(scope="session")
 def _database_setup(test_database_url: str) -> None:
     """marker fixture - database is set up by test_database_url fixture.
 
-    autouse because `test_database_url` is what repoints
-    `settings.database.url` at this worker's database. a test that touches the
-    DB *without* requesting a db fixture (code under test opening its own
-    session) would otherwise run against the unpatched base URL — which has a
-    schema serially, but never under xdist, where the base database is only
-    the source the template was built from. that asymmetry is invisible
-    locally and shows up as `relation "artists" does not exist` in CI.
+    deliberately NOT autouse: `check-oauth-scope-universe` runs a DB-free test
+    file as a pre-commit hook, with no postgres anywhere, and autouse here
+    would make every pytest invocation require one.
+
+    the consequence is that a test whose *code under test* opens its own
+    session must still request a db fixture — `test_database_url` is what
+    repoints `settings.database.url` at this worker's database, so without it
+    the session goes to the unpatched base URL. that URL has a schema serially
+    and never under xdist, where the base database is only the source the
+    template was built from, which is why the asymmetry reads as
+    `relation "artists" does not exist` and only in parallel.
     """
     _ = test_database_url  # ensure dependency chain
 

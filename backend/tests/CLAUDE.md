@@ -20,6 +20,10 @@ structure:
 - `conftest.py` - shared fixtures (db session, test client, mock auth)
 
 adding tests:
+- if the code under test opens its own DB session, request a db fixture even
+  when the test never touches it directly. that fixture is what points
+  `settings.database.url` at your xdist worker's database; without it you get
+  the base URL, which has a schema serially and never in parallel
 - always add regression test when fixing bugs
 - use `mock_auth_session` fixture for authenticated endpoints
 - check existing tests for patterns before writing new ones
