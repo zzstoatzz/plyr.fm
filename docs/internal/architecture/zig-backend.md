@@ -145,6 +145,11 @@ preserves every ordered strong reference from verified DAG-CBOR repository
 blocks and hydrates only exact public URI/CID matches, rather than fetching or
 inventing membership during a REST request.
 
+[`GET /v1/tracks/{track_id}/playback`](zig-v1-playback.md) resolves an explicit
+playback capability independently of catalog metadata. It prefers exact
+record-CID-bound delivery evidence, labels author-declared HTTPS fallbacks as
+unverified, and makes authorization and byte availability distinct states.
+
 Signed commit and snapshot ingestion now persist the
 [`verified track projection`](zig-verified-track-projection.md) and
 [`verified authored-profile projection`](zig-verified-profile-projection.md)

@@ -3,6 +3,7 @@ const config = @import("config.zig");
 const server = @import("server.zig");
 const postgres = @import("internal/index/postgres_track_store.zig");
 const postgres_composed_tracks = @import("internal/index/postgres_composed_track_store.zig");
+const postgres_playback = @import("internal/index/postgres_playback_store.zig");
 const postgres_artists = @import("internal/index/postgres_artist_store.zig");
 const postgres_albums = @import("internal/index/postgres_album_store.zig");
 const postgres_album_detail = @import("internal/index/postgres_album_detail_store.zig");
@@ -39,6 +40,11 @@ pub fn main() !void {
     else
         null;
     const track_store = if (postgres_composed_track_store) |*store| store.store() else null;
+    var postgres_playback_store: ?postgres_playback.PostgresPlaybackStore = if (postgres_store) |*store|
+        .{ .pool = store.pool }
+    else
+        null;
+    const playback_store = if (postgres_playback_store) |*store| store.store() else null;
     var postgres_artist_store: ?postgres_artists.PostgresArtistStore = if (postgres_store) |*store|
         .{ .pool = store.pool }
     else
@@ -67,6 +73,7 @@ pub fn main() !void {
         },
         .api => try server.run(io, settings.port, settings.max_connections, .{
             .track_store = track_store,
+            .playback_store = playback_store,
             .artist_store = artist_store,
             .album_store = album_store,
             .album_detail_store = album_detail_store,
@@ -139,11 +146,13 @@ test {
     _ = @import("internal/application/get_album.zig");
     _ = @import("internal/application/list_albums.zig");
     _ = @import("internal/application/get_track.zig");
+    _ = @import("internal/application/get_playback.zig");
     _ = @import("internal/application/list_tracks.zig");
     _ = @import("internal/domain/artist.zig");
     _ = @import("internal/domain/album_detail.zig");
     _ = @import("internal/domain/album.zig");
     _ = @import("internal/domain/album_list.zig");
+    _ = @import("internal/domain/playback.zig");
     _ = @import("internal/atproto/list_record.zig");
     _ = @import("internal/atproto/lexicon_value.zig");
     _ = @import("internal/atproto/profile_record.zig");
@@ -162,6 +171,8 @@ test {
     _ = @import("internal/http/query.zig");
     _ = @import("internal/index/postgres_track_store.zig");
     _ = @import("internal/index/postgres_composed_track_store.zig");
+    _ = @import("internal/index/playback_store.zig");
+    _ = @import("internal/index/postgres_playback_store.zig");
     _ = @import("internal/cache/lru.zig");
     _ = @import("internal/ingest/cached_signing_key_resolver.zig");
     _ = @import("internal/ingest/catalog_reconciler.zig");

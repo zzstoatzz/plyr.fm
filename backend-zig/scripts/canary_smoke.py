@@ -55,14 +55,35 @@ def _expect_request_id(response: Response) -> None:
 
 
 def _verify_real_product_reads(base_url: str) -> None:
-    tracks = _request(base_url, "/v1/tracks?limit=1")
+    tracks = _request(base_url, "/v1/tracks?limit=20")
     assert tracks.status == 200, (tracks.status, tracks.body)
     assert tracks.body["object"] == "list"
     data = tracks.body["data"]
     assert isinstance(data, list) and data, "staging projection has no public tracks"
     _expect_request_id(tracks)
 
-    listed_track = data[0]
+    listed_track: dict[str, Any] | None = None
+    playback: Response | None = None
+    for candidate in data:
+        candidate_id = urllib.parse.quote(candidate["id"], safe="_-")
+        candidate_playback = _request(base_url, f"/v1/tracks/{candidate_id}/playback")
+        if candidate_playback.status == 401:
+            assert (
+                candidate_playback.body["error"]["code"] == "authentication_required"
+            ), candidate_playback.body
+            continue
+        assert candidate_playback.status == 200, (
+            candidate_playback.status,
+            candidate_playback.body,
+        )
+        if candidate_playback.body["availability"]["status"] == "available":
+            listed_track = candidate
+            playback = candidate_playback
+            break
+    assert listed_track is not None and playback is not None, (
+        "projection has no anonymously playable track in its first page"
+    )
+
     assert listed_track["object"] == "track", listed_track
     assert listed_track["projection"]["verification"] == "verified_repo", listed_track
     assert listed_track["sources"]["record"] == "verified_repo", listed_track
@@ -72,6 +93,26 @@ def _verify_real_product_reads(base_url: str) -> None:
     }, listed_track
     assert isinstance(listed_track["metrics"]["play_count"], int), listed_track
     assert listed_track["metrics"]["play_count"] >= 0, listed_track
+
+    _expect_request_id(playback)
+    assert playback.body["object"] == "playback", playback.body
+    assert playback.body["track_id"] == listed_track["id"], playback.body
+    assert playback.body["record"]["uri"] == listed_track["record"]["uri"], (
+        playback.body,
+        listed_track,
+    )
+    assert playback.body["record"]["cid"] == listed_track["record"]["cid"], (
+        playback.body,
+        listed_track,
+    )
+    assert playback.body["authorization"] == {
+        "audience": "anonymous",
+        "status": "granted",
+    }, playback.body
+    delivery = playback.body["availability"]["delivery"]
+    assert delivery["url"].startswith("https://"), delivery
+    assert delivery["source"] in {"verified_delivery", "authored_record"}, delivery
+    assert delivery["integrity"] in {"verified_blob_cid", "unverified"}, delivery
 
     track_id = urllib.parse.quote(listed_track["id"], safe="_-")
     detail = _request(base_url, f"/v1/tracks/{track_id}")
@@ -142,6 +183,11 @@ def verify(base_url: str, timeout_seconds: float = 90) -> None:
     track_uri = f"at://{absent_did}/fm.plyr.stg.track/smoke"
     track = _request(base_url, f"/v1/tracks/{_opaque_id('trk_', track_uri)}")
     assert track.status == 404 and track.body["error"]["code"] == "not_found"
+    playback = _request(
+        base_url, f"/v1/tracks/{_opaque_id('trk_', track_uri)}/playback"
+    )
+    assert playback.status == 404
+    assert playback.body["error"]["code"] == "not_found"
 
     album_uri = f"at://{absent_did}/fm.plyr.stg.list/smoke"
     album = _request(base_url, f"/v1/albums/{_opaque_id('alb_', album_uri)}")

@@ -6,6 +6,7 @@ const tracks = @import("tracks.zig");
 const ArtistStore = @import("../internal/index/artist_store.zig").ArtistStore;
 const AlbumDetailStore = @import("../internal/index/album_detail_store.zig").AlbumDetailStore;
 const AlbumStore = @import("../internal/index/album_store.zig").AlbumStore;
+const PlaybackStore = @import("../internal/index/playback_store.zig").PlaybackStore;
 const TrackStore = @import("../internal/index/track_store.zig").TrackStore;
 
 const http = std.http;
@@ -15,6 +16,7 @@ pub const prefix = "/v1";
 
 pub const App = struct {
     track_store: ?TrackStore,
+    playback_store: ?PlaybackStore,
     artist_store: ?ArtistStore,
     album_store: ?AlbumStore,
     album_detail_store: ?AlbumDetailStore,
@@ -103,6 +105,20 @@ pub fn handle(
             id,
             request_id,
         );
+    } else if (trackPlaybackId(path)) |id| {
+        if (request.head.method != .GET) {
+            try response.apiError(request, .method_not_allowed, request_id, app.cors);
+            return;
+        }
+        try tracks.playback(
+            request,
+            allocator,
+            app.playback_store,
+            app.track_collection,
+            app.cors,
+            id,
+            request_id,
+        );
     } else if (trackId(path)) |id| {
         if (request.head.method != .GET) {
             try response.apiError(request, .method_not_allowed, request_id, app.cors);
@@ -145,6 +161,17 @@ pub fn handle(
     } else {
         try response.apiError(request, .not_found, request_id, app.cors);
     }
+}
+
+fn trackPlaybackId(path: []const u8) ?[]const u8 {
+    const tracks_prefix = prefix ++ "/tracks/";
+    const playback_suffix = "/playback";
+    if (!mem.startsWith(u8, path, tracks_prefix) or
+        !mem.endsWith(u8, path, playback_suffix)) return null;
+    if (path.len <= tracks_prefix.len + playback_suffix.len) return null;
+    const id = path[tracks_prefix.len .. path.len - playback_suffix.len];
+    if (id.len == 0 or mem.indexOfScalar(u8, id, '/') != null) return null;
+    return id;
 }
 
 fn trackId(path: []const u8) ?[]const u8 {
@@ -190,6 +217,13 @@ test "track detail routes accept exactly one opaque path segment" {
     try std.testing.expect(trackId("/v1/tracks/") == null);
     try std.testing.expect(trackId("/v1/tracks/trk_abc/play") == null);
     try std.testing.expect(trackId("/tracks/trk_abc") == null);
+}
+
+test "track playback routes accept one opaque track segment" {
+    try std.testing.expectEqualStrings("trk_abc", trackPlaybackId("/v1/tracks/trk_abc/playback").?);
+    try std.testing.expect(trackPlaybackId("/v1/tracks/playback") == null);
+    try std.testing.expect(trackPlaybackId("/v1/tracks/trk_abc/playback/more") == null);
+    try std.testing.expect(trackPlaybackId("/tracks/trk_abc/playback") == null);
 }
 
 test "album detail routes accept exactly one opaque path segment" {

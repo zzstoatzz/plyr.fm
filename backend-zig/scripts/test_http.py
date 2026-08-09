@@ -250,6 +250,20 @@ def main() -> None:
             base_url, f"/v1/tracks/{_track_id(uri)}", method="POST"
         )
         assert status == 405 and method["error"]["code"] == "method_not_allowed"
+
+        status, _, unavailable_playback = _request(
+            base_url, f"/v1/tracks/{_track_id(uri)}/playback"
+        )
+        assert status == 503
+        assert unavailable_playback["error"]["code"] == "service_unavailable"
+
+        status, _, playback_method = _request(
+            base_url,
+            f"/v1/tracks/{_track_id(uri)}/playback",
+            method="POST",
+        )
+        assert status == 405
+        assert playback_method["error"]["code"] == "method_not_allowed"
     finally:
         process.terminate()
         try:

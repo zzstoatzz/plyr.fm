@@ -51,7 +51,8 @@ decision.
 |---|---|---|---|
 | `GET /v1` | covered | API namespace discovery | generated API description/OpenAPI |
 | `GET /v1/tracks` | covered | anonymous discovery or artist-scoped public catalogue with strict keyset pagination | viewer context, tag filters, hidden-tag preferences, search and other collection views |
-| `GET /v1/tracks/{track_id}` | covered | public, published track detail from the projection | authenticated viewer state, private/gated tracks, playback, list/search views, publication and mutations |
+| `GET /v1/tracks/{track_id}` | covered | public, published track detail from the projection | authenticated viewer state, private/gated tracks, list/search views, publication and mutations |
+| `GET /v1/tracks/{track_id}/playback` | covered | anonymous authorization and delivery resolution with explicit integrity | sessions, supporter/copyright authorization, private-space proxying, PDS blob resolution, play metrics |
 | `GET /v1/artists/{identifier}` | covered | public artist detail by canonical DID or case-insensitive handle alias | verified repository ingestion, collections, follows, profile writes, account state, viewer context |
 | `GET /v1/albums?artist_did={did}` | covered | canonical list-record albums for one artist with strict keyset pagination | continuous verified ingestion, global discovery, writes, viewer state |
 | `GET /v1/albums/{album_id}` | covered | verified album record and position-complete strong-reference membership with policy-safe hydration | continuous verified ingestion, writes, artwork, private/gated authorization, viewer state |
@@ -62,12 +63,12 @@ decision.
 `OPTIONS` handling, bounded connections, CORS, request IDs, and the common JSON
 error envelope are covered cross-cutting behavior, not product capabilities.
 
-The product coverage count is therefore **five read capabilities**: anonymous
-track discovery, track detail, artist detail, artist album discovery, and
-verified album detail. The
+The product coverage count is therefore **six read capabilities**: anonymous
+track discovery, track detail, playback resolution, artist detail, artist album
+discovery, and verified album detail. The
 artist resource replaces both Python lookup routes with one DID-or-handle
 contract. Semantic parity remains partial because the Zig routes deliberately
-exclude viewer-specific and delivery behavior. Of the 221 Python operations,
+exclude most viewer-specific behavior. Of the 221 Python operations,
 root discovery and liveness
 have covered successor behavior, two track reads have partial coverage, two
 artist lookups have one covered successor, one album listing and one album
@@ -83,7 +84,7 @@ second column because every Subsonic route accepts both `GET` and `POST`.
 | resource | routes | operations | Zig v1 status |
 |---|---:|---:|---|
 | `/rest` | 37 | 74 | not started; separate compatibility adapter |
-| `/tracks` | 33 | 33 | discovery/artist collection and track detail partial; all other capabilities open |
+| `/tracks` | 33 | 33 | discovery/artist collection, detail, and anonymous playback partial; all other capabilities open |
 | `/lists` | 18 | 18 | not started |
 | `/auth` | 15 | 15 | not started |
 | `/artists` | 9 | 9 | public DID/handle lookup covered by one v1 resource; all other capabilities open |
@@ -91,7 +92,7 @@ second column because every Subsonic route accepts both `GET` and `POST`.
 | `/jams` | 9 | 9 | not started |
 | `/copyright` | 8 | 8 | not started |
 | `/now-playing` | 4 | 4 | not started |
-| `/audio` | 3 | 3 | not started |
+| `/audio` | 3 | 3 | anonymous delivery resolution has a v1 successor; legacy path and authenticated/private behavior open |
 | `/radio` | 3 | 3 | not started |
 | `/exports` | 3 | 3 | not started |
 | `/stats` | 3 | 3 | not started |
@@ -123,12 +124,12 @@ second column because every Subsonic route accepts both `GET` and `POST`.
 |---|---|---|---|
 | identity and sessions | `/auth/*`, `/account/*` | ATProto OAuth/DPoP, encrypted Postgres sessions, Redis session cache | redesign as session and current-user resources; keep OAuth redirects outside normal resource semantics |
 | artists | `/artists/*` | PDS profiles, Postgres projection, image storage, follow graph | public detail started with canonical DID identity, handle aliases, and explicit field provenance |
-| tracks | 33 `/tracks/*` routes | PDS records/blobs, Postgres, R2, transcoder, Docket, moderation, ML | discovery/artist collection and detail started; split publishing commands, interactions, playback, and repair; retire repair verbs from public API |
+| tracks | 33 `/tracks/*` routes | PDS records/blobs, Postgres, R2, transcoder, Docket, moderation, ML | discovery/artist collection and detail started; split publishing commands, interactions, and repair; retire repair verbs from public API |
 | albums | `/albums/*` | ATProto list/track records, Postgres, R2 images | canonical artist collection and verified membership/detail started; eliminate local-first finalization semantics |
 | playlists and liked list | 18 `/lists/*` routes | ATProto list records, Postgres hydration, Redis cache, recommendations | expose `/v1/playlists`; liked tracks are an interaction collection, not a magic list subtype |
 | likes and comments | nested track routes | PDS records, local projections, Docket write-behind, Redis tombstones | source-authoritative interaction resources; no success based only on local mutation |
 | uploads and revisions | track upload/audio/revision routes | temporary jobs, R2, PDS uploadBlob, transcoder, Docket | redesign as asynchronous `/v1/uploads` and publication operations with idempotency |
-| playback | `/audio/*`, track play | R2/PDS/space blob resolution, supporter checks, counters | `/v1/tracks/{id}/playback`; separate authorization and availability from catalog metadata |
+| playback | `/audio/*`, track play | R2/PDS/space blob resolution, supporter checks, counters | anonymous `/v1/tracks/{id}/playback` started; authorization, availability, origin, and integrity are separate from catalog metadata |
 | discovery | `/search`, `/for-you`, `/discover`, tags | SQL, Redis, follow graph, Turbopuffer, CLAP/Replicate-derived data | preserve as query resources after catalog reads; recommendations are derived and explainable as such |
 | personal playback state | `/queue`, `/now-playing` | Postgres, LISTEN/NOTIFY, Teal PDS records | defer until catalog/auth foundations; decide which state belongs on PDS before designing routes |
 | live jams | `/jams` plus WebSocket | Postgres, Redis Streams, in-process fan-out | defer; REST lifecycle and realtime event transport need a separate design |

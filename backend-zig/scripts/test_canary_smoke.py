@@ -17,14 +17,31 @@ def test_real_product_reads_traverse_projected_track_and_artist() -> None:
     track = {
         "object": "track",
         "id": "trk_verified",
+        "record": {"uri": "at://did:plc:artist/fm.plyr.track/one", "cid": "bafyrecord"},
         "artist": {"did": "did:plc:artist"},
         "metrics": {"play_count": 7},
         "sources": {"record": "verified_repo", "metrics": "application_metrics"},
         "projection": {"verification": "verified_repo"},
     }
     responses = {
-        "/v1/tracks?limit=1": _response({"object": "list", "data": [track]}),
+        "/v1/tracks?limit=20": _response({"object": "list", "data": [track]}),
         "/v1/tracks/trk_verified": _response(track),
+        "/v1/tracks/trk_verified/playback": _response(
+            {
+                "object": "playback",
+                "track_id": "trk_verified",
+                "record": track["record"],
+                "authorization": {"audience": "anonymous", "status": "granted"},
+                "availability": {
+                    "status": "available",
+                    "delivery": {
+                        "url": "https://audio.example/one.mp3",
+                        "source": "authored_record",
+                        "integrity": "unverified",
+                    },
+                },
+            }
+        ),
         "/v1/artists/did:plc:artist": _response(
             {"object": "artist", "did": "did:plc:artist"}
         ),
@@ -44,6 +61,7 @@ def test_real_product_reads_traverse_album_when_present() -> None:
     track = {
         "object": "track",
         "id": "trk_verified",
+        "record": {"uri": "at://did:plc:artist/fm.plyr.track/one", "cid": "bafyrecord"},
         "artist": {"did": "did:plc:artist"},
         "metrics": {"play_count": 0},
         "sources": {"record": "verified_repo", "metrics": "derived"},
@@ -51,8 +69,24 @@ def test_real_product_reads_traverse_album_when_present() -> None:
     }
     album_summary = {"object": "album", "id": "alb_verified"}
     responses = {
-        "/v1/tracks?limit=1": _response({"object": "list", "data": [track]}),
+        "/v1/tracks?limit=20": _response({"object": "list", "data": [track]}),
         "/v1/tracks/trk_verified": _response(track),
+        "/v1/tracks/trk_verified/playback": _response(
+            {
+                "object": "playback",
+                "track_id": "trk_verified",
+                "record": track["record"],
+                "authorization": {"audience": "anonymous", "status": "granted"},
+                "availability": {
+                    "status": "available",
+                    "delivery": {
+                        "url": "https://audio.example/one.mp3",
+                        "source": "authored_record",
+                        "integrity": "unverified",
+                    },
+                },
+            }
+        ),
         "/v1/artists/did:plc:artist": _response(
             {"object": "artist", "did": "did:plc:artist"}
         ),

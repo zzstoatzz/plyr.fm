@@ -77,8 +77,9 @@ configured track index. The listener acquires a connection permit before
 unbounded detached threads.
 
 The current product surface is `GET /v1/tracks`,
-`GET /v1/tracks/{track_id}`, `GET /v1/artists/{identifier}`, and the collection
-and detail forms of `GET /v1/albums`. The track collection accepts a strict
+`GET /v1/tracks/{track_id}`, `GET /v1/tracks/{track_id}/playback`,
+`GET /v1/artists/{identifier}`, and the collection and detail forms of
+`GET /v1/albums`. The track collection accepts a strict
 `limit` from 1 to 100 and an opaque `cursor`; it
 accepts an optional canonical `artist_did`, applies discovery or artist-view
 policy before keyset pagination, and returns the same track representation as
@@ -93,7 +94,12 @@ mirrors them back to the Python column only for compatibility. Verified PDS
 blob mirrors live in a separate,
 record-CID-bound delivery projection. A legacy track row is optional enrichment:
 a verified PDS record without one remains readable with a derived-public default
-rather than inheriting local publish state. Artist lookup
+rather than inheriting local publish state. Playback is a separate capability:
+it prefers an exact record-CID-bound verified delivery origin, otherwise exposes
+a safe author-declared HTTPS URL with explicitly unverified integrity, and
+represents missing delivery without hiding the catalog record. Anonymous gates
+return `authentication_required`; private and moderated records remain hidden.
+Artist lookup
 accepts a canonical DID or a case-insensitive handle alias and exposes the
 transitional source of each profile field. The album
 collection exposes only canonical list-record albums and keeps local
@@ -148,11 +154,12 @@ Later deployments leave reconciliation disabled unless source state needs a
 deliberate refresh. The Fly hostname is the initial infrastructure verification
 surface. The job runs
 `scripts/canary_smoke.py` after deployment and fails unless readiness, API
-discovery, track collection/detail, artist lookup, and album collection/detail
-all prove their expected anonymous semantics and request-ID contract. The gate
-requires a real verified track, round-trips its collection representation
-through detail, and resolves its artist; an empty projection cannot pass. Run the
-same check with `just zig smoke-canary`.
+discovery, track collection/detail, anonymous playback, artist lookup, and album
+collection/detail all prove their expected semantics and request-ID contract.
+The gate requires a real verified track with an available HTTPS playback
+capability, round-trips its collection representation through detail, and
+resolves its artist; an empty or wholly unavailable projection cannot pass. Run
+the same check with `just zig smoke-canary`.
 
 The same manual job then measures—not estimates—the deployed process. A tiny
 read-only helper in the image locates the actual Zig executable through `/proc`

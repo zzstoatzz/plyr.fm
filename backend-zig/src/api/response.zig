@@ -4,6 +4,7 @@ const http = std.http;
 
 pub const ApiError = enum {
     invalid_request,
+    authentication_required,
     not_found,
     method_not_allowed,
     internal_error,
@@ -12,6 +13,7 @@ pub const ApiError = enum {
     fn message(self: ApiError) []const u8 {
         return switch (self) {
             .invalid_request => "The request is invalid.",
+            .authentication_required => "Authentication is required for this resource.",
             .not_found => "The requested resource was not found.",
             .method_not_allowed => "The resource does not support this method.",
             .internal_error => "The request could not be completed.",
@@ -22,6 +24,7 @@ pub const ApiError = enum {
     fn status(self: ApiError) http.Status {
         return switch (self) {
             .invalid_request => .bad_request,
+            .authentication_required => .unauthorized,
             .not_found => .not_found,
             .method_not_allowed => .method_not_allowed,
             .internal_error => .internal_server_error,

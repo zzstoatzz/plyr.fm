@@ -82,6 +82,8 @@ bench-composed-tracks:
     DATABASE_URL=postgresql://zig_bench:zig_bench@127.0.0.1:5434/zig_bench python3 scripts/bench_http.py --with-index --duration 5 --concurrency 16 --path '/v1/tracks?limit=50'
     DATABASE_URL=postgresql://zig_bench:zig_bench@127.0.0.1:5434/zig_bench python3 scripts/bench_http.py --with-index --duration 5 --concurrency 1 --path '/v1/tracks/trk_YXQ6Ly9kaWQ6cGxjOmJlbmNoL2ZtLnBseXIuZGV2LnRyYWNrL3RyYWNrLTEwMA'
     DATABASE_URL=postgresql://zig_bench:zig_bench@127.0.0.1:5434/zig_bench python3 scripts/bench_http.py --with-index --duration 5 --concurrency 16 --path '/v1/tracks/trk_YXQ6Ly9kaWQ6cGxjOmJlbmNoL2ZtLnBseXIuZGV2LnRyYWNrL3RyYWNrLTEwMA'
+    DATABASE_URL=postgresql://zig_bench:zig_bench@127.0.0.1:5434/zig_bench python3 scripts/bench_http.py --with-index --duration 5 --concurrency 1 --path '/v1/tracks/trk_YXQ6Ly9kaWQ6cGxjOmJlbmNoL2ZtLnBseXIuZGV2LnRyYWNrL3RyYWNrLTEwMA/playback'
+    DATABASE_URL=postgresql://zig_bench:zig_bench@127.0.0.1:5434/zig_bench python3 scripts/bench_http.py --with-index --duration 5 --concurrency 16 --path '/v1/tracks/trk_YXQ6Ly9kaWQ6cGxjOmJlbmNoL2ZtLnBseXIuZGV2LnRyYWNrL3RyYWNrLTEwMA/playback'
 
 bench-snapshot:
     zig build bench-snapshot -Doptimize=ReleaseFast

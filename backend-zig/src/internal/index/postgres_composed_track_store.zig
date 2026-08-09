@@ -550,6 +550,7 @@ test "composed PostgreSQL reads use verified records and authoritative account s
     const projected_profiles = @import("../projection/postgres_profile_store.zig");
     const projected_availability = @import("../account/postgres_availability_store.zig");
     const track_change = @import("../projection/track_change.zig");
+    const postgres_playback = @import("postgres_playback_store.zig");
     const url_z = std.c.getenv("PLYR_ZIG_TEST_DATABASE_URL") orelse return error.SkipZigTest;
     const allocator = std.testing.allocator;
     var threaded = std.Io.Threaded.init(allocator, .{});
@@ -739,6 +740,22 @@ test "composed PostgreSQL reads use verified records and authoritative account s
     try std.testing.expectEqual(track.Source.mixed, delivered.sources.media_artifacts);
     try std.testing.expectEqual(track.Source.verified_delivery, delivered.media.origins[1].source);
     try std.testing.expectEqual(track.Source.mixed, delivered.sources.media_origins);
+    var playback_implementation: postgres_playback.PostgresPlaybackStore = .{ .pool = pool };
+    const playback_candidate = (try playback_implementation.store().getByUri(a, record_uri)).?;
+    try std.testing.expectEqualStrings(record_uri, playback_candidate.record_uri);
+    try std.testing.expectEqualStrings("future-gate", playback_candidate.gate_type.?);
+    try std.testing.expectEqualStrings(
+        "https://r2.example/verified.flac",
+        playback_candidate.verified_delivery.?.url,
+    );
+    try std.testing.expectEqual(
+        @import("../domain/playback.zig").Integrity.verified_blob_cid,
+        playback_candidate.verified_delivery.?.integrity,
+    );
+    try std.testing.expectEqualStrings(
+        "https://pds.example/audio.flac",
+        playback_candidate.authored_delivery.?.url,
+    );
 
     _ = try pool.exec(
         "UPDATE plyr_index.track_delivery_origins SET origin_url = 'https://pds.example/audio.flac'",
@@ -759,6 +776,9 @@ test "composed PostgreSQL reads use verified records and authoritative account s
     const stale_delivery = (try implementation.store().getByUri(a, record_uri)).?;
     try std.testing.expectEqual(@as(usize, 2), stale_delivery.media.origins.len);
     try std.testing.expectEqual(track.ArtifactVerification.declared, stale_delivery.media.artifacts[0].verification);
+    const stale_playback = (try playback_implementation.store().getByUri(a, record_uri)).?;
+    try std.testing.expect(stale_playback.verified_delivery == null);
+    try std.testing.expect(stale_playback.authored_delivery != null);
 
     const pds_only_uri = "at://did:plc:artist/fm.plyr.dev.track/pds-only";
     var pds_only = change;
@@ -805,6 +825,7 @@ test "composed PostgreSQL reads use verified records and authoritative account s
         .{record_uri},
     );
     try std.testing.expect((try implementation.store().getByUri(a, record_uri)) == null);
+    try std.testing.expect((try playback_implementation.store().getByUri(a, record_uri)) == null);
     _ = try pool.exec(
         "UPDATE plyr_index.track_policies SET visibility = 'public' WHERE record_uri = $1",
         .{record_uri},
@@ -884,6 +905,7 @@ test "composed PostgreSQL reads use verified records and authoritative account s
         }),
     );
     try std.testing.expect((try implementation.store().getByUri(a, record_uri)) == null);
+    try std.testing.expect((try playback_implementation.store().getByUri(a, record_uri)) == null);
 }
 
 fn requireDisposableDatabase(pool: *pg.Pool, allocator: std.mem.Allocator) !void {
