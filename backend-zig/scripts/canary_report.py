@@ -9,6 +9,9 @@ from typing import Any
 
 IDLE_RSS_LIMIT_KIB = 16 * 1024
 PEAK_RSS_LIMIT_KIB = 64 * 1024
+MIN_COMPARISON_IDLE_RSS_MULTIPLE = 50.0
+MIN_COMPARISON_PEAK_RSS_MULTIPLE = 50.0
+MIN_COMPARISON_THROUGHPUT_MULTIPLE = 10.0
 
 
 def _read_object(path: Path) -> dict[str, Any]:
@@ -49,7 +52,12 @@ def build_report(
         "passed": idle_passed and peak_passed,
     }
     if comparison is not None:
-        report["comparison"] = _build_comparison(idle, loaded, benchmarks, comparison)
+        comparison_report = _build_comparison(idle, loaded, benchmarks, comparison)
+        report["comparison"] = comparison_report
+        report["efficiency_gates"] = _efficiency_gates(comparison_report)
+        report["passed"] = report["passed"] and all(
+            gate["passed"] for gate in report["efficiency_gates"].values()
+        )
     return report
 
 
@@ -60,6 +68,11 @@ def _resource_observation(
         raise ValueError("measured process restarted during observation")
     if idle["clock_ticks_per_second"] != loaded["clock_ticks_per_second"]:
         raise ValueError("process clock resolution changed during measurement")
+    for name, snapshot in (("idle", idle), ("loaded", loaded)):
+        if snapshot["application_peak_rss_kib"] < snapshot["application_rss_kib"]:
+            raise ValueError(f"{name} peak RSS is below current RSS")
+    if loaded["application_peak_rss_kib"] < idle["application_peak_rss_kib"]:
+        raise ValueError("application peak RSS decreased during observation")
     elapsed = loaded["machine_uptime_seconds"] - idle["machine_uptime_seconds"]
     cpu_ticks = loaded["process_cpu_ticks"] - idle["process_cpu_ticks"]
     if elapsed <= 0 or cpu_ticks < 0:
@@ -77,6 +90,9 @@ def _validate_benchmarks(
 ) -> None:
     if not benchmarks:
         raise ValueError("at least one benchmark is required")
+    concurrencies = [benchmark.get("concurrency") for benchmark in benchmarks]
+    if len(set(concurrencies)) != len(concurrencies):
+        raise ValueError("benchmark concurrency levels must be unique")
     for benchmark in benchmarks:
         if benchmark.get("requests", 0) <= 0:
             raise ValueError("every benchmark must complete at least one request")
@@ -107,18 +123,18 @@ def _build_comparison(
     by_concurrency = {
         benchmark["concurrency"]: benchmark for benchmark in comparison_benchmarks
     }
+    expected_concurrencies = {benchmark["concurrency"] for benchmark in benchmarks}
+    if set(by_concurrency) != expected_concurrencies:
+        raise ValueError("comparison concurrency levels must exactly match the canary")
     relative_benchmarks = []
     for benchmark in benchmarks:
         baseline = by_concurrency.get(benchmark["concurrency"])
-        if baseline is None:
-            raise ValueError("comparison is missing a matching concurrency")
+        assert baseline is not None
         relative_benchmarks.append(
             {
                 "concurrency": benchmark["concurrency"],
-                "throughput_multiple": round(
-                    benchmark["requests_per_second"] / baseline["requests_per_second"],
-                    2,
-                ),
+                "throughput_multiple": benchmark["requests_per_second"]
+                / baseline["requests_per_second"],
                 "latency_speedup": {
                     percentile: round(
                         baseline["latency_ms"][percentile]
@@ -140,18 +156,40 @@ def _build_comparison(
         "observation": comparison_observation,
         "benchmarks": comparison_benchmarks,
         "relative_to_canary": {
-            "idle_application_rss_multiple": round(
-                comparison_idle["application_rss_kib"] / idle["application_rss_kib"],
-                2,
-            ),
-            "peak_application_rss_multiple": round(
-                comparison_loaded["application_peak_rss_kib"]
-                / loaded["application_peak_rss_kib"],
-                2,
-            ),
+            "idle_application_rss_multiple": comparison_idle["application_rss_kib"]
+            / idle["application_rss_kib"],
+            "peak_application_rss_multiple": comparison_loaded[
+                "application_peak_rss_kib"
+            ]
+            / loaded["application_peak_rss_kib"],
             "benchmarks": relative_benchmarks,
         },
     }
+
+
+def _efficiency_gates(comparison: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    relative = comparison["relative_to_canary"]
+    gates: dict[str, dict[str, Any]] = {
+        "idle_application_rss_multiple": _minimum_gate(
+            relative["idle_application_rss_multiple"],
+            MIN_COMPARISON_IDLE_RSS_MULTIPLE,
+        ),
+        "peak_application_rss_multiple": _minimum_gate(
+            relative["peak_application_rss_multiple"],
+            MIN_COMPARISON_PEAK_RSS_MULTIPLE,
+        ),
+    }
+    for benchmark in relative["benchmarks"]:
+        concurrency = benchmark["concurrency"]
+        gates[f"throughput_multiple_at_concurrency_{concurrency}"] = _minimum_gate(
+            benchmark["throughput_multiple"],
+            MIN_COMPARISON_THROUGHPUT_MULTIPLE,
+        )
+    return gates
+
+
+def _minimum_gate(actual: float, minimum: float) -> dict[str, float | bool]:
+    return {"minimum": minimum, "actual": actual, "passed": actual >= minimum}
 
 
 def render_markdown(report: dict[str, Any]) -> str:
@@ -192,15 +230,30 @@ def render_markdown(report: dict[str, Any]) -> str:
     comparison = report.get("comparison")
     if comparison is not None:
         relative = comparison["relative_to_canary"]
+        efficiency_gates = report["efficiency_gates"]
         lines.extend(
             [
                 "",
                 f"### Comparison: {comparison['name']}",
                 "",
                 f"Comparison idle RSS is "
-                f"{relative['idle_application_rss_multiple']}x the Zig canary; "
+                f"{relative['idle_application_rss_multiple']:.2f}x the Zig canary; "
                 f"comparison peak RSS is "
-                f"{relative['peak_application_rss_multiple']}x the Zig canary.",
+                f"{relative['peak_application_rss_multiple']:.2f}x the Zig canary.",
+                "",
+                "| Efficiency gate | Actual | Minimum | Result |",
+                "| --- | ---: | ---: | :---: |",
+            ]
+        )
+        for name, gate in efficiency_gates.items():
+            label = name.replace("_", " ")
+            result = "pass" if gate["passed"] else "fail"
+            lines.append(
+                f"| {label} | {gate['actual']:.2f}x | "
+                f"{gate['minimum']:.2f}x | {result} |"
+            )
+        lines.extend(
+            [
                 "",
                 "| Concurrency | Zig req/s | Comparison req/s | Zig throughput multiple | Zig p95 | Comparison p95 | p95 speedup | Zig bytes | Comparison bytes | Comparison errors |",
                 "| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
@@ -220,7 +273,7 @@ def render_markdown(report: dict[str, Any]) -> str:
                 f"| {benchmark['concurrency']} | "
                 f"{benchmark['requests_per_second']} | "
                 f"{baseline['requests_per_second']} | "
-                f"{ratio['throughput_multiple']}x | "
+                f"{ratio['throughput_multiple']:.2f}x | "
                 f"{benchmark['latency_ms']['p95']} ms | "
                 f"{baseline['latency_ms']['p95']} ms | "
                 f"{ratio['latency_speedup']['p95']}x | "

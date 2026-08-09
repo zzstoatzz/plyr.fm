@@ -158,7 +158,10 @@ throughput and latency ratios cannot quietly conceal materially different
 payload sizes. Deployment fails above 16 MiB idle application RSS, above 64 MiB
 peak application RSS, after a Zig process restart, or on any Zig load-test HTTP
 error; baseline errors are retained rather than making the successor inherit a
-legacy failure. This instrumentation exists only in the explicitly dispatched
+legacy failure. The deployed comparison is also a gate: Python staging must use
+at least 50x the Zig process's idle and peak RSS, and Zig must serve at least 10x
+its successful request rate at both measured concurrency levels. This
+instrumentation exists only in the explicitly dispatched
 canary job; ordinary PR checks do not run remote load or deployment measurements.
 Run the same HTTP load driver against an already deployed target with
 `just zig bench-canary -- ...`.
