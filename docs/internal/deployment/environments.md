@@ -2,7 +2,7 @@
 title: "environment separation strategy"
 ---
 
-plyr.fm uses a simple three-tier deployment strategy: development → staging → production.
+plyr.fm uses three release environments plus an isolated, manually deployed Zig canary.
 
 ## environments
 
@@ -11,6 +11,13 @@ plyr.fm uses a simple three-tier deployment strategy: development → staging �
 | **development** | local | localhost:8001 | plyr-dev (neon) | localhost:6379 (docker) | localhost:5173 | audio-dev, images-dev (r2) |
 | **staging** | push to main | api-stg.plyr.fm | plyr-stg (neon) | plyr-redis-stg (fly.io) | stg.plyr.fm (main branch) | audio-staging, images-staging (r2) |
 | **production** | GitHub release (backend) or `production-fe` push (frontend) | api.plyr.fm | plyr-prd (neon) | plyr-redis (fly.io) | plyr.fm (production-fe branch) | audio-prod, images-prod (r2) |
+| **next canary** | manual from `codex/zig-backend` | same-origin `/api/v1/*` proxy to `plyr-api-zig-canary.fly.dev` | isolated read-only Neon branch | none yet | next.plyr.fm (existing Svelte app) | source-authoritative media URLs |
+
+The canary does not share a deployment path with staging or production. It runs
+the existing Svelte frontend in `zig-v1` mode; a small client boundary maps the
+new API's authoritative track representation into the UI without adding legacy
+Python-shaped routes to the Zig backend. Unsupported write/auth surfaces remain
+disabled until they have deliberate Zig semantics.
 
 ## workflow
 
@@ -98,6 +105,19 @@ not by itself proof of deployment.
 - database: `plyr-prod` (neon)
 - storage: `audio-prod`, `images-prod` (r2)
 
+### next canary deployment (manual)
+
+From a clean `codex/zig-backend` worktree:
+
+```bash
+just frontend check-next
+just frontend deploy-next
+```
+
+`deploy-next` rebuilds the existing SvelteKit app with the Zig v1 client enabled
+and publishes only to the dedicated `plyr-fm-next` Cloudflare Pages project.
+It never modifies `stg.plyr.fm`, `plyr.fm`, or either project's configuration.
+
 ## configuration files
 
 ### backend
@@ -108,7 +128,7 @@ not by itself proof of deployment.
 
 ### frontend
 
-**cloudflare pages** (two separate projects):
+**cloudflare pages** (three separate projects):
 
 **plyr-fm** (production):
 - framework: sveltekit
@@ -125,6 +145,13 @@ not by itself proof of deployment.
 - production branch: `main`
 - production environment: `PUBLIC_API_URL=https://api-stg.plyr.fm`, `SKIP_DEPENDENCY_INSTALL=1`
 - custom domain: `stg.plyr.fm`
+
+**plyr-fm-next** (Zig canary):
+- source: manual `just frontend deploy-next` from `codex/zig-backend`
+- build output: `frontend/.svelte-kit/cloudflare`
+- custom domain: `next.plyr.fm`
+- build mode: `PUBLIC_API_URL=https://next.plyr.fm/api`, `VITE_API_GENERATION=zig-v1`
+- backend origin: fixed server-side proxy to `https://plyr-api-zig-canary.fly.dev`
 
 ### docs
 

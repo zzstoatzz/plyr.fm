@@ -28,3 +28,15 @@ storybook:
 # build the static storybook (used to sanity-check stories in CI)
 build-storybook:
     PUBLIC_API_URL="${PUBLIC_API_URL:-https://api.plyr.fm}" bun run build-storybook
+
+# check the existing Svelte app against the Zig v1 canary API contract
+check-next:
+    PUBLIC_API_URL=https://next.plyr.fm/api VITE_API_GENERATION=zig-v1 VITE_ZIG_API_ORIGIN=https://plyr-api-zig-canary.fly.dev VITE_APP_CANONICAL_HOST=next.plyr.fm VITE_APP_CANONICAL_URL=https://next.plyr.fm bun run check
+
+# build the existing Svelte app for next.plyr.fm
+build-next:
+    PUBLIC_API_URL=https://next.plyr.fm/api VITE_API_GENERATION=zig-v1 VITE_ZIG_API_ORIGIN=https://plyr-api-zig-canary.fly.dev VITE_APP_CANONICAL_HOST=next.plyr.fm VITE_APP_CANONICAL_URL=https://next.plyr.fm bun run build
+
+# manually publish the current branch to the isolated next Pages project
+deploy-next:
+    ./scripts/deploy-next

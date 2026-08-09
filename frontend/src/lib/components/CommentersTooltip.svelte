@@ -8,9 +8,10 @@
 	} from '$lib/avatar-refresh.svelte';
 	import { fade } from 'svelte/transition';
 	import SensitiveImage from './SensitiveImage.svelte';
+	import type { TrackId } from '$lib/types';
 
 	interface Props {
-		trackId: number;
+		trackId: TrackId;
 		commentCount: number;
 		onMouseEnter?: () => void;
 		onMouseLeave?: () => void;

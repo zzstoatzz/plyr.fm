@@ -1,4 +1,5 @@
-import { API_URL } from '$lib/config';
+import { API_URL, IS_ZIG_V1 } from '$lib/config';
+import { getZigTrack } from '$lib/api/zig-v1';
 import type { Track } from '$lib/types';
 import type { PageServerLoad } from './$types';
 
@@ -9,6 +10,9 @@ export const load: PageServerLoad = async ({ params, fetch }) => {
 	// in that case return a null track and let the page refetch client-side with
 	// the user's session, which can read an owner's own private track.
 	try {
+		if (IS_ZIG_V1) {
+			return { track: await getZigTrack(API_URL, params.id, fetch) };
+		}
 		const response = await fetch(`${API_URL}/tracks/${params.id}`);
 		if (!response.ok) {
 			return { track: null };

@@ -1,20 +1,20 @@
 <script lang="ts">
 	import { SvelteSet } from 'svelte/reactivity';
 	import { API_URL } from '$lib/config';
-	import type { Track } from '$lib/types';
+	import type { Track, TrackId } from '$lib/types';
 	import { isOptimizing } from '$lib/utils/track-audio';
 
 	interface Props {
 		tracks: Track[];
 		open: boolean;
 		onClose: () => void;
-		onSave?: (trackIds: number[]) => void;
+		onSave?: (trackIds: TrackId[]) => void;
 	}
 
 	let { tracks, open = $bindable(), onClose, onSave }: Props = $props();
 
-	let selected = new SvelteSet<number>();
-	let fileSizes = $state<Record<number, number>>({});
+	let selected = new SvelteSet<TrackId>();
+	let fileSizes = $state<Record<string, number>>({});
 
 	let eligible = $derived(
 		tracks.filter(
@@ -31,7 +31,7 @@
 	);
 
 	let selectedBytes = $derived(
-		[...selected].reduce((sum, id) => sum + (fileSizes[id] ?? 0), 0)
+		[...selected].reduce<number>((sum, id) => sum + (fileSizes[id] ?? 0), 0)
 	);
 
 	function formatBytes(bytes: number): string {
@@ -80,7 +80,7 @@
 		}
 	}
 
-	function toggleTrack(id: number) {
+	function toggleTrack(id: TrackId) {
 		if (selected.has(id)) selected.delete(id);
 		else selected.add(id);
 	}

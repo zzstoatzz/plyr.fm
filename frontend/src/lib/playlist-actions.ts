@@ -2,11 +2,11 @@
 // callers own UI state and toasts; these functions own endpoints, payloads, and
 // error extraction, throwing Error with the server's detail when available.
 import { API_URL } from '$lib/config';
-import type { Playlist, Track } from '$lib/types';
+import type { Playlist, Track, TrackId } from '$lib/types';
 
 /** a track candidate for adding to the playlist (search result or recommendation). */
 export interface PlaylistTrackCandidate {
-	id: number;
+	id: TrackId;
 	title: string;
 	artist_display_name: string;
 	/** present on search results ("track" | "artist" | ...), absent on recommendations */
@@ -62,7 +62,7 @@ export async function fetchRecommendations(
 }
 
 /** fetch full track details, validate its ATProto record, and add it to the playlist. */
-export async function addTrack(playlistId: string, trackId: number): Promise<Track> {
+export async function addTrack(playlistId: string, trackId: TrackId): Promise<Track> {
 	const trackResponse = await fetch(`${API_URL}/tracks/${trackId}`, {
 		credentials: 'include'
 	});

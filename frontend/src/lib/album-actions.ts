@@ -3,7 +3,7 @@
 // extraction, throwing Error with the server's detail when available.
 import { AtUri } from '@atproto/api';
 import { API_URL } from '$lib/config';
-import type { Track } from '$lib/types';
+import type { Track, TrackId } from '$lib/types';
 
 async function detailFrom(response: Response, fallback: string): Promise<string> {
 	const data = await response.json().catch(() => null);
@@ -40,7 +40,7 @@ export async function uploadCover(albumId: string, file: File): Promise<{ image_
 	return response.json();
 }
 
-export async function removeTrack(albumId: string, trackId: number): Promise<void> {
+export async function removeTrack(albumId: string, trackId: TrackId): Promise<void> {
 	const response = await fetch(`${API_URL}/albums/${albumId}/tracks/${trackId}`, {
 		method: 'DELETE',
 		credentials: 'include'

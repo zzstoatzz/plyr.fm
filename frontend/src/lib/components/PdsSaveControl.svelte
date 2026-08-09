@@ -5,7 +5,7 @@
 	import PdsSaveModal from './PdsSaveModal.svelte';
 	import { API_URL } from '$lib/config';
 	import { toast } from '$lib/toast.svelte';
-	import type { Track } from '$lib/types';
+	import type { Track, TrackId } from '$lib/types';
 	import { isOptimizing } from '$lib/utils/track-audio';
 
 	// `?save=pds` opens the picker straight away — the control sits below the
@@ -54,7 +54,7 @@
 		replaceState(url.pathname + url.search, {});
 	});
 
-	async function handleSave(trackIds: number[]) {
+	async function handleSave(trackIds: TrackId[]) {
 		saving = true;
 		const count = trackIds.length;
 		const toastId = toast.info(`saving ${count} track${count !== 1 ? 's' : ''}...`, 0);

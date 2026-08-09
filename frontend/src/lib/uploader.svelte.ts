@@ -3,7 +3,7 @@ import { goto } from '$app/navigation';
 import { API_URL } from './config';
 import { toast } from './toast.svelte';
 import { tracksCache } from './tracks.svelte';
-import type { FeaturedArtist } from './types';
+import type { FeaturedArtist, TrackId } from './types';
 import { setReturnUrl } from './utils/return-url';
 
 interface UploadTask {
@@ -26,7 +26,7 @@ interface UploadProgressCallback {
 }
 
 export interface UploadResult {
-	trackId: number;
+	trackId: TrackId;
 	atprotoUri: string | null;
 	atprotoCid: string | null;
 }
@@ -365,10 +365,10 @@ class UploaderState {
 	 *   refresh local caches and the player.
 	 */
 	replaceAudio(
-		trackId: number,
+		trackId: TrackId,
 		file: File,
 		title: string,
-		onComplete?: (_result: { trackId: number; atprotoCid: string | null }) => void
+		onComplete?: (_result: { trackId: TrackId; atprotoCid: string | null }) => void
 	): void {
 		if (!browser) return;
 

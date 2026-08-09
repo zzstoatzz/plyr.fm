@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import { player } from '$lib/player.svelte';
 	import { queue } from '$lib/queue.svelte';
+	import type { TrackId } from '$lib/types';
 
 	// radio mode: live stream — no prev/next or scrubbing, just play/pause + volume
 	let { radioMode = false }: { radioMode?: boolean } = $props();
@@ -9,7 +10,7 @@
 	let seekValue = $state(0);
 	let isScrubbing = $state(false);
 	let rafId: number | null = null;
-	let lastTrackId: number | null = null;
+	let lastTrackId: TrackId | null = null;
 
 	let formattedCurrentTime = $derived(formatTime(seekValue));
 	let formattedDuration = $derived(formatTime(player.duration));

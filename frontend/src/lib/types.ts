@@ -32,8 +32,10 @@ export interface SupportGate {
 	type: 'any' | string;
 }
 
+export type TrackId = string | number;
+
 export interface Track {
-	id: number;
+	id: TrackId;
 	title: string;
 	artist: string;
 	album?: AlbumSummary | null;

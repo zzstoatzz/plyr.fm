@@ -1,4 +1,5 @@
-import { API_URL } from '$lib/config';
+import { API_URL, IS_ZIG_V1 } from '$lib/config';
+import { getZigPlayback } from '$lib/api/zig-v1';
 import { getCachedAudioUrl } from '$lib/storage';
 import { canPlayFormat, hasPlayableLossless } from '$lib/audio-support';
 import { isOptimizing } from '$lib/utils/track-audio';
@@ -16,20 +17,20 @@ import type { Track } from '$lib/types';
 export type ResolvedSource =
 	| {
 			kind: 'ready';
-			trackId: number;
+			trackId: Track['id'];
 			fileIdUsed: string;
 			src: string;
 			ownsBlob: boolean;
 	  }
 	| {
 			kind: 'gated-denied';
-			trackId: number;
+			trackId: Track['id'];
 			requiresAuth: boolean;
 			artistDid: string;
 			artistHandle: string;
 	  }
-	| { kind: 'processing'; trackId: number }
-	| { kind: 'failed'; trackId: number; error: unknown };
+	| { kind: 'processing'; trackId: Track['id'] }
+	| { kind: 'failed'; trackId: Track['id']; error: unknown };
 
 /**
  * Gated-denial shape emitted to the toast/CTA layer. Kept distinct
@@ -106,6 +107,21 @@ export async function resolveAudioSource(
 	fileIdUsed: string
 ): Promise<ResolvedSource> {
 	const hasAdultLabel = track.labels?.some((label) => label === 'sexual' || label === 'porn') ?? false;
+	if (IS_ZIG_V1) {
+		if (typeof track.id !== 'string') {
+			return { kind: 'failed', trackId: track.id, error: new TypeError('invalid Zig track id') };
+		}
+		try {
+			const playback = await getZigPlayback(API_URL, track.id);
+			const delivery = playback.availability.delivery;
+			if (playback.availability.status !== 'available' || !delivery) {
+				return { kind: 'failed', trackId: track.id, error: new Error('audio unavailable') };
+			}
+			return { kind: 'ready', trackId: track.id, fileIdUsed, src: delivery.url, ownsBlob: false };
+		} catch (error) {
+			return { kind: 'failed', trackId: track.id, error };
+		}
+	}
 	// the interim raw source isn't playable in this browser yet — surface a
 	// "processing" outcome rather than handing `<audio>` a file it can't decode.
 	// checked before the cache lookup: a cached interim blob is just as

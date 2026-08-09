@@ -131,7 +131,7 @@ max_lines = 955
 
 [[rules]]
 path = "frontend/src/routes/+layout.svelte"
-max_lines = 856
+max_lines = 861
 
 [[rules]]
 path = "frontend/src/routes/costs/+page.svelte"
@@ -339,7 +339,7 @@ max_lines = 509
 
 [[rules]]
 path = "frontend/src/routes/track/[[]id[]]/+page.svelte"
-max_lines = 1793
+max_lines = 1800
 
 [[rules]]
 path = "frontend/src/lib/components/playlist/PlaylistTrackList.svelte"
@@ -347,7 +347,7 @@ max_lines = 668
 
 [[rules]]
 path = "frontend/src/lib/components/player/PlaybackControls.svelte"
-max_lines = 512
+max_lines = 513
 
 [[rules]]
 path = "backend/src/backend/_internal/clients/moderation.py"

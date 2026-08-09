@@ -5,7 +5,8 @@
 	import { page } from '$app/stores';
 	import type { PageData } from './$types';
 	import { APP_NAME, APP_CANONICAL_URL } from '$lib/branding';
-	import { API_URL } from '$lib/config';
+	import { API_URL, IS_ZIG_V1 } from '$lib/config';
+	import { getZigTrack } from '$lib/api/zig-v1';
 	import Header from '$lib/components/Header.svelte';
 	import AddToMenu from '$lib/components/AddToMenu.svelte';
 	import TagEffects from '$lib/components/TagEffects.svelte';
@@ -24,7 +25,7 @@
 	import { toast } from '$lib/toast.svelte';
 	import { trackCoverUrl } from '$lib/track-cover';
 	import { redirectToLogin } from '$lib/utils/auth-redirect';
-	import type { Track } from '$lib/types';
+	import type { Track, TrackId } from '$lib/types';
 
 	interface Comment {
 		id: number;
@@ -391,9 +392,9 @@
 	}
 
 // track which track we've loaded data for to detect navigation
-let loadedForTrackId = $state<number | null>(null);
+let loadedForTrackId = $state<TrackId | null>(null);
 // track if we've loaded liked state for this track (separate from general load)
-let likedStateLoadedForTrackId = $state<number | null>(null);
+let likedStateLoadedForTrackId = $state<TrackId | null>(null);
 
 // pending seek time from ?t= URL param (milliseconds)
 let pendingSeekMs = $state<number | null>(null);
@@ -448,6 +449,12 @@ $effect(() => {
 	triedClientFetch = true;
 	void (async () => {
 		try {
+			if (IS_ZIG_V1) {
+				const trackId = $page.params.id;
+				track = trackId ? await getZigTrack(API_URL, trackId) : null;
+				notFound = track === null;
+				return;
+			}
 			const r = await fetch(`${API_URL}/tracks/${$page.params.id}`, {
 				credentials: 'include'
 			});

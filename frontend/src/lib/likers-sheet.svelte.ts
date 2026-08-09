@@ -1,15 +1,16 @@
 import { API_URL } from '$lib/config';
 import { getLikers, setLikers, type LikerData } from '$lib/tooltip-cache.svelte';
+import type { TrackId } from '$lib/types';
 
 class LikersSheetState {
 	isOpen = $state(false);
-	trackId = $state<number | null>(null);
+	trackId = $state<TrackId | null>(null);
 	likeCount = $state(0);
 	likers = $state<LikerData[]>([]);
 	loading = $state(false);
 	error = $state<string | null>(null);
 
-	open(trackId: number, likeCount: number) {
+	open(trackId: TrackId, likeCount: number) {
 		this.trackId = trackId;
 		this.likeCount = likeCount;
 		this.isOpen = true;
@@ -31,7 +32,7 @@ class LikersSheetState {
 		this.isOpen = false;
 	}
 
-	private async fetchLikers(trackId: number) {
+	private async fetchLikers(trackId: TrackId) {
 		try {
 			const response = await fetch(`${API_URL}/tracks/${trackId}/likes`, {
 				credentials: 'include'

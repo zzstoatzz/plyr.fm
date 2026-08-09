@@ -209,12 +209,12 @@ the deployment workflow remains the authoritative Fly image build.
 not a percentage canary. It always means a frontend backed by the Zig `/v1`
 surface. The initial A/AAAA records exposing the bare Fly service were a
 temporary backend-verification state, not the completed next application. The
-dedicated `frontend-next` Pages project claims the hostname only after its
-same-origin `/api/v1/*` transport and native v1 client pass locally and on the
-Pages deployment. It evolves beside `plyr.fm` without changing the existing
-production or staging applications. The deployed checkpoint is served by the
-isolated `plyr-fm-next` Pages project; `next.plyr.fm` has one proxied CNAME to
-that project and no longer exposes the Fly API as a website.
+dedicated `plyr-fm-next` Pages project claims the hostname only after the
+existing Svelte frontend's `zig-v1` client boundary and same-origin `/api/v1/*`
+transport pass locally and on the Pages deployment. It evolves beside
+`plyr.fm` without changing the existing production or staging applications.
+`next.plyr.fm` has one proxied CNAME to that project and does not expose the Fly
+API as a website.
 
 Before the first useful canary deployment, select the workflow's
 `reconcile_catalog` input to seed the new projection from current authenticated

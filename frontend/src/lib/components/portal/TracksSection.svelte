@@ -5,7 +5,7 @@
 	import TagInput from '$lib/components/TagInput.svelte';
 	import CopyrightRightsPanel from '$lib/components/CopyrightRightsPanel.svelte';
 	import type { TrackRights } from '$lib/components/CopyrightRightsPanel.svelte';
-	import type { Track, FeaturedArtist, AlbumSummary } from '$lib/types';
+	import type { Track, TrackId, FeaturedArtist, AlbumSummary } from '$lib/types';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import CopyrightFlag from '$lib/components/portal/CopyrightFlag.svelte';
 	import AudioRevisionsSheet from '$lib/components/AudioRevisionsSheet.svelte';
@@ -68,7 +68,7 @@
 	}
 
 	// track editing state
-	let editingTrackId = $state<number | null>(null);
+	let editingTrackId = $state<TrackId | null>(null);
 	let savingTrackEdit = $state(false);
 	let editTitle = $state('');
 	let editDescription = $state('');
@@ -117,12 +117,12 @@
 	let hasUnresolvedEditFeaturesInput = $state(false);
 	let recommendedTags = $state<{name: string; score: number}[]>([]);
 	let loadingRecommendedTags = $state(false);
-	let recommendedTagsTrackId = $state<number | null>(null);
+	let recommendedTagsTrackId = $state<TrackId | null>(null);
 	let visibleRecommendedTags = $derived(
 		recommendedTags.filter(r => !editTags.includes(r.name.toLowerCase()))
 	);
 
-	async function deleteTrack(trackId: number, trackTitle: string) {
+	async function deleteTrack(trackId: TrackId, trackTitle: string) {
 		if (!confirm(`delete "${trackTitle}"?`)) return;
 
 		try {
@@ -178,7 +178,7 @@
 		return (track.operator_labels ?? []).some((label) => ADULT_SELF_LABELS.has(label));
 	}
 
-	async function fetchRecommendedTags(trackId: number) {
+	async function fetchRecommendedTags(trackId: TrackId) {
 		loadingRecommendedTags = true;
 		recommendedTags = [];
 		recommendedTagsTrackId = trackId;
@@ -247,7 +247,7 @@
 		replaceConfirm = { track, file: editAudioFile };
 	}
 
-	async function reloadCurrentPlayingTrack(trackId: number) {
+	async function reloadCurrentPlayingTrack(trackId: TrackId) {
 		if (player.currentTrack?.id !== trackId) return;
 		try {
 			const resp = await fetch(`${API_URL}/tracks/${trackId}`, {
@@ -338,7 +338,7 @@
 		}
 	}
 
-	async function saveTrackEdit(trackId: number) {
+	async function saveTrackEdit(trackId: TrackId) {
 		if (savingTrackEdit) return;
 		savingTrackEdit = true;
 		const formData = new FormData();

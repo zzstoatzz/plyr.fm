@@ -15,7 +15,7 @@
 	import { APP_NAME, APP_CANONICAL_URL } from '$lib/branding';
 	import { createListReorder, moveItem } from '$lib/list-reorder.svelte';
 	import * as albumActions from '$lib/album-actions';
-	import type { Track } from '$lib/types';
+	import type { Track, TrackId } from '$lib/types';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -61,7 +61,7 @@
 	let uploadingCover = $state(false);
 
 	// track removal
-	let removingTrackId = $state<number | null>(null);
+	let removingTrackId = $state<TrackId | null>(null);
 
 	// drag-to-reorder (desktop + touch)
 	const reorder = createListReorder((from, to) => {

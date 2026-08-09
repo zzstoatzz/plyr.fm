@@ -12,7 +12,7 @@
 	import { queue } from '$lib/queue.svelte';
 	import { tracksCache, fetchTopTracks } from '$lib/tracks.svelte';
 	import { forYouCache } from '$lib/for-you.svelte';
-	import { API_URL } from '$lib/config';
+	import { API_URL, IS_ZIG_V1 } from '$lib/config';
 	import { networkArtistsCache } from '$lib/network-artists.svelte';
 	import type { Track } from '$lib/types';
 	import { auth } from '$lib/auth.svelte';
@@ -209,7 +209,7 @@
 		const trackId = $page.url.searchParams.get('track');
 		// only auto-play if we have a track ID, tracks are loaded, and we haven't already played this track
 		if (trackId && tracks.length > 0 && trackId !== autoPlayedTrackId) {
-			const track = tracks.find(t => t.id === parseInt(trackId));
+			const track = tracks.find(t => String(t.id) === trackId);
 			if (track) {
 				queue.playNow(track);
 				autoPlayedTrackId = trackId; // mark as played to prevent re-triggering
@@ -352,6 +352,7 @@
 				{/if}
 			</h2>
 		</div>
+		{#if !IS_ZIG_V1}
 		<div class="filter-row">
 			<TagFilter
 				onTagsChange={(tags) => {
@@ -371,6 +372,7 @@
 			/>
 			<HiddenTagsFilter />
 		</div>
+		{/if}
 		{#if showLoading}
 			<div class="loading-container">
 				<WaveLoading size="lg" message="loading tracks..." />

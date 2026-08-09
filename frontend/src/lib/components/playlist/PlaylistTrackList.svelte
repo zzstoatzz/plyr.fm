@@ -4,7 +4,7 @@
 	import { player } from '$lib/player.svelte';
 	import type { createListReorder } from '$lib/list-reorder.svelte';
 	import type { PlaylistTrackCandidate } from '$lib/playlist-actions';
-	import type { Track } from '$lib/types';
+	import type { Track, TrackId } from '$lib/types';
 
 	interface Props {
 		tracks: Track[];
@@ -12,8 +12,8 @@
 		isOwner: boolean;
 		isEditMode: boolean;
 		reorder: ReturnType<typeof createListReorder>;
-		removingTrackId: number | null;
-		addingTrackId: number | null;
+		removingTrackId: TrackId | null;
+		addingTrackId: TrackId | null;
 		recommendations: PlaylistTrackCandidate[];
 		recommendationsAvailable: boolean;
 		loadingRecommendations: boolean;

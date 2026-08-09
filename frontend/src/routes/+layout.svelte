@@ -27,7 +27,7 @@
 	import { search } from '$lib/search.svelte';
 	import { browser } from '$app/environment';
 	import { initObservability } from '$lib/observability';
-	import { getServerConfig } from '$lib/config';
+	import { getServerConfig, IS_ZIG_V1 } from '$lib/config';
 	let { children } = $props<{ children: any }>();
 	let showQueue = $state(false);
 
@@ -62,6 +62,11 @@
 	// initialize auth and preferences once on mount (not on every navigation)
 	// this prevents repeated /auth/me calls for unauthenticated users
 	onMount(async () => {
+		if (IS_ZIG_V1) {
+			await auth.initialize();
+			return;
+		}
+
 		// set up browser observability if enabled by backend config
 		getServerConfig()
 			.then((config) => {

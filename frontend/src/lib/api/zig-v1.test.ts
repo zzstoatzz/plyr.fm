@@ -1,0 +1,103 @@
+import { describe, expect, it, vi } from 'vitest';
+import { getZigPlayback, getZigTrack, listZigTracks } from './zig-v1';
+
+const record = {
+	uri: 'at://did:plc:artist/fm.plyr.track/song',
+	cid: 'bafytrack',
+	revision: '3msrevision',
+	collection: 'fm.plyr.track',
+	rkey: 'song'
+};
+
+const track = {
+	object: 'track',
+	id: 'trk_opaque',
+	record,
+	metadata: {
+		title: 'Song',
+		artist_name: null,
+		description: 'Notes',
+		album: null,
+		duration_seconds: 42,
+		created_at: '2026-08-09T00:00:00Z'
+	},
+	artist: {
+		did: 'did:plc:artist',
+		profile: { handle: 'artist.test', display_name: 'Artist', avatar_url: null, bio: null }
+	},
+	media: {
+		origins: [
+			{
+				url: 'https://audio.test/song.mp3',
+				media_type: 'audio/mpeg',
+				artifact_cid: null,
+				source: 'verified_repo'
+			}
+		]
+	},
+	access: { visibility: 'public', in_discovery: true, gate: null },
+	moderation: { self_labels: [], operator_labels: [] },
+	metrics: { play_count: 3 },
+	projection: { verification: 'verified_repo' }
+};
+
+function json(value: unknown, status = 200): Response {
+	return new Response(JSON.stringify(value), {
+		status,
+		headers: { 'content-type': 'application/json' }
+	});
+}
+
+describe('Zig v1 compatibility boundary', () => {
+	it('maps verified collection resources without inventing numeric identity', async () => {
+		let requestedInput: RequestInfo | URL | null = null;
+		const fetcher = vi.fn(async (input: RequestInfo | URL) => {
+			requestedInput = input;
+			return json({ object: 'list', data: [track], has_more: false, next_cursor: null });
+		});
+		const page = await listZigTracks('https://next.plyr.fm/api', { limit: 7 }, fetcher);
+		const requested = new URL(String(requestedInput));
+		expect(requested.pathname).toBe('/api/v1/tracks');
+		expect(requested.searchParams.get('limit')).toBe('7');
+		expect(page.tracks[0]?.id).toBe('trk_opaque');
+		expect(page.tracks[0]?.file_id).toBe('trk_opaque');
+		expect(page.tracks[0]?.atproto_record_uri).toBe(record.uri);
+	});
+
+	it('requires detail to round-trip the opaque resource identity', async () => {
+		const fetcher = vi.fn(async () => json({ ...track, id: 'trk_other' }));
+		await expect(getZigTrack('https://next.plyr.fm/api', 'trk_expected', fetcher)).rejects.toThrow(
+			'changed resource identity'
+		);
+	});
+
+	it('keeps playback resolution separate from catalog metadata', async () => {
+		let requestedInput: RequestInfo | URL | null = null;
+		const fetcher = vi.fn(async (input: RequestInfo | URL) => {
+			requestedInput = input;
+			return json({
+				object: 'playback',
+				track_id: 'trk_opaque',
+				availability: {
+					status: 'available',
+					delivery: {
+						url: 'https://audio.test/song.mp3',
+						media_type: 'audio/mpeg',
+						source: 'verified_delivery',
+						integrity: 'verified_blob_cid'
+					}
+				}
+			});
+		});
+		const playback = await getZigPlayback('https://next.plyr.fm/api', 'trk_opaque', fetcher);
+		expect(playback.availability.delivery?.url).toBe('https://audio.test/song.mp3');
+		expect(String(requestedInput)).toContain('/v1/tracks/trk_opaque/playback');
+	});
+
+	it('rejects Python-shaped collections instead of silently adapting them', async () => {
+		const fetcher = vi.fn(async () => json({ tracks: [track], has_more: false }));
+		await expect(listZigTracks('https://next.plyr.fm/api', {}, fetcher)).rejects.toThrow(
+			'invalid Zig track collection'
+		);
+	});
+});

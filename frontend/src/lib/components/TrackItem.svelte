@@ -9,7 +9,7 @@
 	import { hasPlayableLossless, isLosslessFormat } from '$lib/audio-support';
 	import { likersSheet } from '$lib/likers-sheet.svelte';
 	import { trackCoverUrl, trackThumbnailUrl } from '$lib/track-cover';
-	import type { Track } from '$lib/types';
+	import type { Track, TrackId } from '$lib/types';
 	import { queue } from '$lib/queue.svelte';
 	import { toast } from '$lib/toast.svelte';
 	import { playTrack, guardGatedTrack } from '$lib/playback.svelte';
@@ -68,7 +68,7 @@
 	let trackImageError = $state(false);
 	let avatarError = $state(false);
 	let tagsExpanded = $state(false);
-	let prevTrackId: number | undefined;
+	let prevTrackId: TrackId | undefined;
 
 	// get refreshed avatar URL if available
 	let refreshedAvatarUrl = $derived(getRefreshedAvatar(track.artist_did));

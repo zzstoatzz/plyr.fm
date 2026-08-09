@@ -13,9 +13,16 @@ if [ -n "$(git status --porcelain)" ]; then
     exit 1
 fi
 
+PUBLIC_API_URL=https://next.plyr.fm/api \
+VITE_API_GENERATION=zig-v1 \
+VITE_ZIG_API_ORIGIN=https://plyr-api-zig-canary.fly.dev \
+VITE_APP_CANONICAL_HOST=next.plyr.fm \
+VITE_APP_CANONICAL_URL=https://next.plyr.fm \
+bun run build
+
 commit_hash=$(git rev-parse HEAD)
 commit_message=$(git log -1 --pretty=%s)
-exec bunx wrangler pages deploy public \
+exec bunx wrangler pages deploy .svelte-kit/cloudflare \
     --project-name plyr-fm-next \
     --branch "$expected_branch" \
     --commit-hash "$commit_hash" \

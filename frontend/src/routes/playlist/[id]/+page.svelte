@@ -24,7 +24,7 @@
 	import * as playlistActions from '$lib/playlist-actions';
 	import type { PlaylistTrackCandidate } from '$lib/playlist-actions';
 	import type { PageData } from './$types';
-	import type { PlaylistWithTracks, Track } from '$lib/types';
+	import type { PlaylistWithTracks, Track, TrackId } from '$lib/types';
 
 	let { data }: { data: PageData } = $props();
 	let playlist = $state<PlaylistWithTracks>(data.playlist);
@@ -72,7 +72,7 @@
 		}
 	}
 
-	function applyLikedFlags(likedIds: Set<number>) {
+	function applyLikedFlags(likedIds: Set<TrackId>) {
 		let changed = false;
 
 		const nextTracks = tracks.map((track) => {
@@ -116,9 +116,9 @@
 
 	// UI state
 	let deleting = $state(false);
-	let addingTrack = $state<number | null>(null);
+	let addingTrack = $state<TrackId | null>(null);
 	let showDeleteConfirm = $state(false);
-	let removingTrackId = $state<number | null>(null);
+	let removingTrackId = $state<TrackId | null>(null);
 
 	// unified edit mode state
 	let isEditMode = $state(false);

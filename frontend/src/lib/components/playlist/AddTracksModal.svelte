@@ -1,12 +1,13 @@
 <script lang="ts">
 	import { searchTracks, type PlaylistTrackCandidate } from '$lib/playlist-actions';
+	import type { TrackId } from '$lib/types';
 
 	interface Props {
 		open: boolean;
 		/** track ids already in the playlist — matching results are hidden */
-		excludeTrackIds: number[];
+		excludeTrackIds: TrackId[];
 		/** id of the candidate currently being added (shows a spinner) */
-		addingTrackId: number | null;
+		addingTrackId: TrackId | null;
 		onAdd: (candidate: PlaylistTrackCandidate) => void;
 	}
 

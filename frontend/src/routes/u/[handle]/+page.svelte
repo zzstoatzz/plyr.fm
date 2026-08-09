@@ -2,7 +2,7 @@
 	import { fade } from 'svelte/transition';
 	import { API_URL, getAtprotofansSupportUrl } from '$lib/config';
 	import { browser } from '$app/environment';
-	import type { Analytics, Track, Playlist } from '$lib/types';
+	import type { Analytics, Track, TrackId, Playlist } from '$lib/types';
 	import { formatDuration } from '$lib/stats.svelte';
 	import TrackItem from '$lib/components/TrackItem.svelte';
 	import ShareButton from '$lib/components/ShareButton.svelte';
@@ -323,7 +323,7 @@ $effect(() => {
 		}
 	}
 
-	function applyLikedFlags(likedIds: Set<number>) {
+	function applyLikedFlags(likedIds: Set<TrackId>) {
 		let changed = false;
 
 		const nextTracks = tracks.map(track => {
