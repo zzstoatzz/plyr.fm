@@ -27,7 +27,7 @@ async function loadInitial() {
 		try {
 			const artist = await getArtist(requestedArtist);
 			artistDid = artist.did;
-			heading.textContent = artist.profile.display_name || artist.profile.handle;
+			heading.textContent = artist.display_name || artist.handle;
 			clearArtist.hidden = false;
 		} catch (error) {
 			reportError(error, 'That artist is not available in the verified index.');

@@ -8,7 +8,7 @@ export const API_ORIGIN = typeof location === 'undefined' ? 'https://next.plyr.f
 /** @typedef {{visibility: string, in_discovery: boolean, gate: {type: string} | null}} TrackAccess */
 /** @typedef {{object: 'track', id: string, record: RecordRef, metadata: {title: string, artist_name: string | null, description: string | null, album: string | null, duration_seconds: number | null, created_at: string}, artist: TrackArtist, media: {origins: MediaOrigin[]}, access: TrackAccess, metrics: {play_count: number}, projection: {verification: string}}} Track */
 /** @typedef {{object: 'list', data: Track[], has_more: boolean, next_cursor: string | null}} TrackPage */
-/** @typedef {{object: 'artist', did: string, profile: ArtistProfile}} Artist */
+/** @typedef {{object: 'artist', did: string, handle: string, display_name: string, avatar_url: string | null, bio: string | null}} Artist */
 /** @typedef {{object: 'playback', track_id: string, availability: {status: 'available' | 'unavailable', delivery: {url: string, media_type: string, source: string, integrity: string} | null}}} Playback */
 /** @typedef {(input: string | URL | Request, init?: RequestInit) => Promise<Response>} Fetcher */
 
@@ -49,7 +49,13 @@ export async function listTracks(options = {}, fetcher = fetch) {
 /** @param {string} identifier @param {Fetcher} [fetcher] @returns {Promise<Artist>} */
 export async function getArtist(identifier, fetcher = fetch) {
 	const data = await getJson(`/v1/artists/${encodeIdentifier(identifier)}`, fetcher);
-	if (!isObject(data) || data.object !== 'artist' || typeof data.did !== 'string') {
+	if (
+		!isObject(data) ||
+		data.object !== 'artist' ||
+		typeof data.did !== 'string' ||
+		typeof data.handle !== 'string' ||
+		typeof data.display_name !== 'string'
+	) {
 		throw new TypeError('invalid artist response');
 	}
 	return /** @type {Artist} */ (data);

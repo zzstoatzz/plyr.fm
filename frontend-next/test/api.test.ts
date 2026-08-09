@@ -33,7 +33,14 @@ function jsonResponse(value: unknown, status = 200): Response {
 		let path = '';
 		const fetcher = async (input: string | URL | Request): Promise<Response> => {
 			path = new URL(String(input)).pathname;
-			return jsonResponse({ object: 'artist', did: 'did:plc:abc', profile: { handle: 'artist.test', display_name: 'Artist' } });
+			return jsonResponse({
+				object: 'artist',
+				did: 'did:plc:abc',
+				handle: 'artist.test',
+				display_name: 'Artist',
+				avatar_url: null,
+				bio: null
+			});
 		};
 		await getArtist('did:plc:abc', fetcher);
 		expect(path).toBe('/api/v1/artists/did:plc:abc');
@@ -41,6 +48,15 @@ function jsonResponse(value: unknown, status = 200): Response {
 
 	test('rejects artist identifiers that can change route shape', async () => {
 		await expect(getArtist('did:plc:a/b')).rejects.toThrow('invalid artist identifier');
+	});
+
+	test('rejects an embedded-profile shape for the flat artist resource', async () => {
+		const fetcher = async (): Promise<Response> => jsonResponse({
+			object: 'artist',
+			did: 'did:plc:abc',
+			profile: { handle: 'artist.test', display_name: 'Artist' }
+		});
+		await expect(getArtist('did:plc:abc', fetcher)).rejects.toThrow('invalid artist response');
 	});
 
 	test('requires playback to round-trip the requested track identity', async () => {
