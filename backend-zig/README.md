@@ -187,6 +187,13 @@ canary job; ordinary PR checks do not run remote load or deployment measurements
 Run the same HTTP load driver against an already deployed target with
 `just zig bench-canary -- ...`.
 
+The deployed `93989ab0` checkpoint passes the complete smoke gate through both
+the Fly hostname and `next.plyr.fm`. Its retained 50-track evidence reports
+9,948 KiB idle RSS, 16,672 KiB peak RSS, 0.41 application CPU-seconds across
+23.4 seconds, and zero load-test errors. See
+`docs/internal/architecture/zig-canary.md` for the exact throughput, latency,
+and workflow artifact.
+
 The iteration loop is native by default. `just zig check` uses the host Zig
 toolchain and `just zig image-check` builds and starts a host-architecture Linux
 container, proves `/health`, and exercises the same `/proc` snapshot helper used

@@ -124,6 +124,32 @@ pointing only to the dedicated Fly ingress addresses for
 `plyr-api-zig-canary`. Existing production and staging DNS records and Pages
 projects were not changed.
 
+## deployed playlist checkpoint
+
+Workflow run
+[`31332239532`](https://github.com/zzstoatzz/plyr.fm/actions/runs/31332239532)
+deployed immutable image `93989ab02b0d01df3736a168c0e8e48d9687ac1a`
+on 2026-08-09. The Python staging job and authenticated catalog reconciliation
+were both skipped. The expanded semantic gate passed against the Fly hostname,
+and the same gate then passed independently through `https://next.plyr.fm`,
+including track collection/detail, anonymous playback, artist lookup, album
+collection/detail, and verified playlist collection/detail.
+
+The retained commit-addressed artifact records the real 117,990-byte 50-track
+response:
+
+| concurrency | responses/s | p50 | p95 | p99 | errors |
+|---:|---:|---:|---:|---:|---:|
+| 1 | 2.8 | 308.237 ms | 469.928 ms | 597.699 ms | 0 |
+| 16 | 11.4 | 1,435.326 ms | 1,959.052 ms | 2,043.598 ms | 0 |
+
+Idle application RSS was 9,948 KiB. Loaded RSS was 11,296 KiB and the process
+peak was 16,672 KiB, passing the 16 MiB idle and 64 MiB peak budgets without a
+PID change. The process used 0.41 CPU-seconds across the 23.4-second observation
+window, or 1.8% of one core. These are Fly/Neon path measurements rather than a
+local throughput claim; their durable value is the semantic traversal, zero
+errors, and bounded process resources for the exact deployed commit.
+
 ## initial catalog reconciliation
 
 A fresh `plyr_index` schema is intentionally empty. Before a useful read-only
