@@ -76,12 +76,16 @@ CREATE TABLE plyr_index.track_delivery_origins (
     observed_at_us bigint NOT NULL,
     PRIMARY KEY (record_uri, service)
 );
-CREATE TABLE plyr_index.track_access_policies (
+CREATE TABLE plyr_index.track_policies (
     record_uri text PRIMARY KEY,
-    visibility text NOT NULL,
+    visibility text,
     space_uri text,
-    write_source text NOT NULL,
-    observed_at_us bigint NOT NULL
+    access_write_source text,
+    access_observed_at_us bigint,
+    operator_labels jsonb NOT NULL DEFAULT '[]',
+    moderation_decision text,
+    moderation_write_source text,
+    moderation_observed_at_us bigint
 );
 CREATE TABLE artists (
     did text PRIMARY KEY,
@@ -150,7 +154,10 @@ SELECT
     1786208400000000 + n
 FROM generate_series(1, 100) AS n;
 
-INSERT INTO plyr_index.track_access_policies
+INSERT INTO plyr_index.track_policies (
+    record_uri, visibility, space_uri,
+    access_write_source, access_observed_at_us
+)
 SELECT
     format('at://did:plc:bench/fm.plyr.dev.track/track-%s', n),
     'public', NULL, 'legacy_import', 1786208400000000 + n

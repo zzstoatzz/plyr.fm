@@ -23,7 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend._internal import Session, require_auth
 from backend.main import app
-from backend.models import Artist, Track, TrackAccessPolicy
+from backend.models import Artist, Track, TrackPolicy
 
 _ARTIST_DID = "did:plc:edit_sync_artist"
 
@@ -112,13 +112,13 @@ async def test_editing_track_title_syncs_to_pds(
     await db_session.refresh(published_track)
     assert published_track.title == "renamed track"
     policy = await db_session.scalar(
-        select(TrackAccessPolicy).where(
-            TrackAccessPolicy.record_uri == published_track.atproto_record_uri
+        select(TrackPolicy).where(
+            TrackPolicy.record_uri == published_track.atproto_record_uri
         )
     )
     assert policy is not None
     assert policy.visibility == "public"
-    assert policy.write_source == "local_command"
+    assert policy.access_write_source == "local_command"
 
 
 async def test_editing_creator_self_label_syncs_to_pds(

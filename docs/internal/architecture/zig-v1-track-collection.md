@@ -158,8 +158,8 @@ host with the ReleaseFast binary and local PostgreSQL:
 
 RSS is sampled after each five-second request pass. These measurements include
 HTTP serialization and the joins across authenticated records, profile,
-account evidence, local policy, moderation, metrics, and delivery. They are a
-repeatable local regression baseline, not a Neon or Python comparison.
+account evidence, canonical-URI application policy, metrics, and delivery. They
+are a repeatable local regression baseline, not a Neon or Python comparison.
 
 The production-shaped linux/amd64 ReleaseSafe image is 35,281,923 bytes and
 contains a 13,025,696-byte executable. Relative to the preceding account-worker

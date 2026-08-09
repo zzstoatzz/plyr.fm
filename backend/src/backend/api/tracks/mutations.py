@@ -40,7 +40,7 @@ from backend._internal.tasks import (
 )
 from backend._internal.tasks.hooks import invalidate_tracks_discovery_cache
 from backend._internal.tasks.ingest import _write_tombstone
-from backend._internal.track_access_policy import upsert_track_access_policy
+from backend._internal.track_policy import upsert_track_access_policy
 from backend.config import settings
 from backend.models import Artist, Track, TrackTag, get_db
 from backend.schemas import MessageResponse, TrackResponse

@@ -12,7 +12,7 @@ from sqlalchemy.engine import make_url
 from alembic import command
 
 PRIOR_REVISION = "4aaed6c819f1"
-HEAD_REVISION = "d42f8c5b103e"
+HEAD_REVISION = "e53a9d6c214f"
 EXPECTED_TABLES = {
     "account_availability",
     "account_status_checks",
@@ -24,7 +24,7 @@ EXPECTED_TABLES = {
     "repo_heads",
     "track_records",
     "track_delivery_origins",
-    "track_access_policies",
+    "track_policies",
 }
 EXPECTED_AVAILABILITY_COLUMNS = {
     "available",
@@ -71,12 +71,16 @@ EXPECTED_DELIVERY_COLUMNS = {
     "service",
     "verification",
 }
-EXPECTED_ACCESS_POLICY_COLUMNS = {
-    "observed_at_us",
+EXPECTED_POLICY_COLUMNS = {
+    "access_observed_at_us",
+    "access_write_source",
+    "moderation_decision",
+    "moderation_observed_at_us",
+    "moderation_write_source",
+    "operator_labels",
     "record_uri",
     "space_uri",
     "visibility",
-    "write_source",
 }
 EXPECTED_HEAD_COLUMNS = {
     "repo_did",
@@ -152,16 +156,20 @@ def assert_test_database_and_drop_schema(database_url: str) -> None:
             connection.execute(
                 text(
                     "CREATE TABLE public.tracks ("
-                    "atproto_record_uri text, visibility text NOT NULL, space_uri text)"
+                    "atproto_record_uri text, visibility text NOT NULL, space_uri text, "
+                    "operator_labels jsonb NOT NULL DEFAULT '[]', moderation_override text)"
                 )
             )
             connection.execute(
                 text(
                     "INSERT INTO public.tracks VALUES "
-                    "('at://did:plc:test/fm.plyr.track/public', 'public', NULL), "
+                    "('at://did:plc:test/fm.plyr.track/public', 'public', NULL, "
+                    "'[\"sexual\"]', NULL), "
                     "('at://did:plc:test/fm.plyr.track/private', 'private', "
-                    "'at://did:plc:test/fm.plyr.space/private/test'), "
-                    "(NULL, 'public', NULL)"
+                    "'at://did:plc:test/fm.plyr.space/private/test', '[]', NULL), "
+                    "('at://did:plc:test/fm.plyr.track/unrelated', 'public', NULL, "
+                    "'[\"unrelated-label\"]', 'unsupported'), "
+                    "(NULL, 'public', NULL, '[]', NULL)"
                 )
             )
     finally:
@@ -279,24 +287,34 @@ def main() -> None:
                 "unexpected track_delivery_origins columns: "
                 f"{sorted(delivery_columns)!r}"
             )
-        access_columns = table_columns(database_url, "track_access_policies")
-        if access_columns != EXPECTED_ACCESS_POLICY_COLUMNS:
+        policy_columns = table_columns(database_url, "track_policies")
+        if policy_columns != EXPECTED_POLICY_COLUMNS:
             raise AssertionError(
-                f"unexpected track_access_policies columns: {sorted(access_columns)!r}"
+                f"unexpected track_policies columns: {sorted(policy_columns)!r}"
             )
         engine = create_engine(database_url)
         try:
             with engine.connect() as connection:
                 imported = connection.execute(
                     text(
-                        "SELECT record_uri, visibility, space_uri, write_source "
-                        "FROM plyr_index.track_access_policies ORDER BY record_uri"
+                        "SELECT record_uri, visibility, space_uri, "
+                        "access_write_source, operator_labels, "
+                        "moderation_decision, moderation_write_source "
+                        "FROM plyr_index.track_policies ORDER BY record_uri"
                     )
                 ).all()
-            if len(imported) != 2 or any(
-                row.write_source != "legacy_import" for row in imported
+            if len(imported) != 3 or any(
+                row.access_write_source != "legacy_import" for row in imported
             ):
-                raise AssertionError(f"unexpected access-policy backfill: {imported!r}")
+                raise AssertionError(f"unexpected policy backfill: {imported!r}")
+            moderated = [row for row in imported if row.operator_labels]
+            if (
+                len(moderated) != 1
+                or moderated[0].operator_labels != ["sexual"]
+                or moderated[0].moderation_decision is not None
+                or moderated[0].moderation_write_source != "legacy_import"
+            ):
+                raise AssertionError(f"unexpected policy backfill: {moderated!r}")
         finally:
             engine.dispose()
     finally:

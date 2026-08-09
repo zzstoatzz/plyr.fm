@@ -150,7 +150,10 @@ alongside list state. The separate
 [`account-availability evidence boundary`](zig-account-availability.md) records
 verified repository activity atomically and defines destination-safe
 current-PDS checks. The track REST adapter now composes those verified sources
-with explicitly attributed transitional publication, moderation, metric, and R2
-delivery fields. Blob mirroring and independent policy/delivery projections
-remain separate work; field-level provenance prevents verified authored fields
-from laundering those local claims into source truth.
+with a canonical-URI application-policy projection, plus explicitly attributed
+transitional metric and R2 delivery fields. Access and operator moderation
+share one physical row to keep reads cheap, but retain independent source and
+observation fields so their writers cannot overwrite one another. Blob
+mirroring and policy/delivery projections remain independent; field-level
+provenance prevents verified authored fields from laundering those local claims
+into source truth.

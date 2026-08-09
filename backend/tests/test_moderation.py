@@ -22,7 +22,7 @@ from backend._internal.moderation import (
     scan_track_for_copyright,
 )
 from backend.main import app
-from backend.models import Artist, CopyrightScan, Track
+from backend.models import Artist, CopyrightScan, Track, TrackPolicy
 
 
 @pytest.fixture
@@ -832,6 +832,9 @@ async def test_sync_operator_labels_reconciles_projection(
         mock_client = AsyncMock()
         mock_client.get_active_labels_by_value.return_value = {
             "at://did:plc:labelsync/fm.plyr.track/1": {"sexual"},
+            "at://did:plc:pds-only/fm.plyr.track/4": {"copyright-violation"},
+            "at://did:plc:not-a-track/app.bsky.actor.profile/self": {"sexual"},
+            "at://did:plc:missing-rkey/fm.plyr.track": {"sexual"},
         }
         mock_client.get_moderation_overrides.return_value = {
             "at://did:plc:labelsync/fm.plyr.track/3": "allow",
@@ -850,6 +853,19 @@ async def test_sync_operator_labels_reconciles_projection(
     # overrides ride the same reconciliation as labels
     assert track1.moderation_override is None
     assert track3.moderation_override == "allow"
+
+    policies = {
+        policy.record_uri: (policy.operator_labels, policy.moderation_decision)
+        for policy in (await db_session.scalars(select(TrackPolicy))).all()
+    }
+    assert policies == {
+        "at://did:plc:labelsync/fm.plyr.track/1": (["sexual"], None),
+        "at://did:plc:labelsync/fm.plyr.track/3": ([], "allow"),
+        "at://did:plc:pds-only/fm.plyr.track/4": (
+            ["copyright-violation"],
+            None,
+        ),
+    }
 
 
 async def test_sync_operator_labels_skips_pass_on_labeler_outage(

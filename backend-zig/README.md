@@ -81,11 +81,12 @@ and detail forms of `GET /v1/albums`. The track collection accepts a strict
 accepts an optional canonical `artist_did`, applies discovery or artist-view
 policy before keyset pagination, and returns the same track representation as
 detail. Track reads require an authenticated record and authoritative account
-availability, then compose separately attributed authored profile, local
-access policy, operator moderation/metric, and unverified R2 delivery fields.
-Access policy is keyed by canonical record URI and dual-written by the Python
-upload, edit, and pending-record reconciliation paths; the migration imports
-existing decisions once. Verified PDS blob mirrors live in a separate,
+availability, then compose separately attributed authored profile, application
+policy, metrics, and unverified R2 delivery fields. One canonical-URI policy
+row carries access and operator-moderation claims with independent provenance;
+the Python write paths maintain access while labeler reconciliation owns
+moderation, and neither can overwrite the other. The migration imports existing
+decisions once. Verified PDS blob mirrors live in a separate,
 record-CID-bound delivery projection. A legacy track row is optional enrichment:
 a verified PDS record without one remains readable with a derived-public default
 rather than inheriting local publish state. Artist lookup

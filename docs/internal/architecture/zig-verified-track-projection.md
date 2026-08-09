@@ -89,10 +89,11 @@ cannot resurrect a track after the cache TTL expires.
 ## REST transition
 
 The current `/v1/tracks` reads compose the authenticated record and profile
-projections with canonical account-availability evidence. Matching legacy rows
-are optional enrichments for publication/visibility policy, current
-handle/display presentation, operator moderation, counters, and unverified R2
-delivery. The public domain object attributes each field family through `sources`; its
+projections with canonical account-availability evidence. A separate
+canonical-URI application-policy row owns access and operator-moderation claims
+with independent provenance. Matching legacy rows are optional enrichments for
+current handle/display presentation, counters, and unverified R2 delivery. The
+public domain object attributes each field family through `sources`; its
 `projection.verification: verified_repo` describes only the record path and
 cannot launder transitional fields into authored truth.
 

@@ -31,7 +31,7 @@ from backend._internal.tasks.origin_trust import (
     is_trusted_image_origin,
 )
 from backend._internal.tasks.pds import is_like_uri_cancelled
-from backend._internal.track_access_policy import upsert_track_access_policy
+from backend._internal.track_policy import upsert_track_access_policy
 from backend.config import settings
 from backend.models import Artist, Playlist, Track, TrackComment, TrackLike
 from backend.models.session import UserSession
