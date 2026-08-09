@@ -315,7 +315,7 @@ max_lines = 1879
 
 [[rules]]
 path = "frontend/src/lib/components/portal/SharesSection.svelte"
-max_lines = 585
+max_lines = 589
 
 [[rules]]
 path = "frontend/src/lib/components/portal/ProfileSection.svelte"

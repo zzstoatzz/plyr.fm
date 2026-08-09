@@ -24,6 +24,10 @@
 				!isOptimizing(track)
 		).length
 	);
+	let savedTrackCount = $derived(
+		tracks.filter((track) => ['both', 'pds'].includes(track.audio_storage ?? 'r2')).length
+	);
+	let gatedTrackCount = $derived(tracks.filter((track) => track.support_gate).length);
 
 	async function handleSave(trackIds: number[]) {
 		saving = true;
@@ -116,6 +120,34 @@
 			{saving ? 'saving...' : 'choose tracks'}
 		</button>
 	</div>
+{:else if savedTrackCount > 0}
+	<div class="data-control all-saved">
+		<div class="control-info">
+			<h3>
+				<svg
+					width="16"
+					height="16"
+					viewBox="0 0 24 24"
+					fill="none"
+					stroke="currentColor"
+					stroke-width="2.5"
+					stroke-linecap="round"
+					stroke-linejoin="round"
+				>
+					<polyline points="20 6 9 17 4 12"></polyline>
+				</svg>
+				all your audio is on your PDS
+			</h3>
+			<p class="control-description">
+				{savedTrackCount === 1
+					? 'your track'
+					: `all ${savedTrackCount} tracks`} live on your personal data server, with the CDN as fallback{gatedTrackCount >
+				0
+					? ` (${gatedTrackCount} gated ${gatedTrackCount === 1 ? 'track streams' : 'tracks stream'} through plyr.fm and ${gatedTrackCount === 1 ? "isn't" : "aren't"} mirrored)`
+					: ''}
+			</p>
+		</div>
+	</div>
 {/if}
 
 {#if showModal}
@@ -156,6 +188,21 @@
 		font-size: var(--text-xs);
 		color: var(--text-tertiary);
 		margin: 0;
+	}
+
+	.all-saved {
+		border-color: color-mix(in srgb, var(--success) 25%, transparent);
+	}
+
+	.all-saved h3 {
+		display: flex;
+		align-items: center;
+		gap: 0.4rem;
+	}
+
+	.all-saved h3 svg {
+		color: var(--success);
+		flex-shrink: 0;
 	}
 
 	.save-trigger-btn {
