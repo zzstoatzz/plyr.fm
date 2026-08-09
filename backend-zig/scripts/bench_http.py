@@ -223,6 +223,7 @@ def benchmark(
         "LIST_COLLECTION_NSID": "fm.plyr.dev.list",
         "PROFILE_COLLECTION_NSID": "fm.plyr.dev.actor.profile",
         "INDEX_MODE": "required" if database_url else "disabled",
+        "DATABASE_POOL_SIZE": str(max(concurrency, 8)),
         "MAX_CONNECTIONS": str(max(concurrency, 8)),
     }
     if database_url:

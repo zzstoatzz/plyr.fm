@@ -18,11 +18,7 @@ const TrackStore = @import("track_store.zig").TrackStore;
 pub const PostgresTrackStore = struct {
     pool: *pg.Pool,
 
-    pub fn init(allocator: std.mem.Allocator, io: std.Io, database_url: []const u8) !PostgresTrackStore {
-        return initWithPoolSize(allocator, io, database_url, 8);
-    }
-
-    fn initWithPoolSize(
+    pub fn init(
         allocator: std.mem.Allocator,
         io: std.Io,
         database_url: []const u8,
@@ -469,7 +465,7 @@ test "PostgreSQL adapter reads a complete derived projection" {
     postgres_test_lock.lock(io);
     defer postgres_test_lock.unlock(io);
 
-    var store_impl = try PostgresTrackStore.initWithPoolSize(allocator, io, database_url, 1);
+    var store_impl = try PostgresTrackStore.init(allocator, io, database_url, 1);
     defer store_impl.deinit();
     try store_impl.requireRole("zig_test");
     try std.testing.expectError(

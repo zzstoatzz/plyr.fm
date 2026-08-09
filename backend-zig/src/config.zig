@@ -28,6 +28,7 @@ pub const Config = struct {
     database_url: ?[]const u8,
     database_role: ?[]const u8,
     index_mode: IndexMode,
+    database_pool_size: u16,
     max_connections: usize,
     track_collection: []const u8,
     list_collection: []const u8,
@@ -83,6 +84,7 @@ pub const Config = struct {
             .database_url = database_url,
             .database_role = database_role,
             .index_mode = index_mode,
+            .database_pool_size = try parsePositiveU16(getenv("DATABASE_POOL_SIZE") orelse "8"),
             .max_connections = try parsePositiveUsize(getenv("MAX_CONNECTIONS") orelse "128"),
             .track_collection = track_collection,
             .list_collection = list_collection,
@@ -117,6 +119,12 @@ fn getenv(name: [*:0]const u8) ?[]const u8 {
 
 fn parsePositiveUsize(value: []const u8) !usize {
     const parsed = std.fmt.parseInt(usize, value, 10) catch return error.InvalidPositiveInteger;
+    if (parsed == 0) return error.InvalidPositiveInteger;
+    return parsed;
+}
+
+fn parsePositiveU16(value: []const u8) !u16 {
+    const parsed = std.fmt.parseInt(u16, value, 10) catch return error.InvalidPositiveInteger;
     if (parsed == 0) return error.InvalidPositiveInteger;
     return parsed;
 }
@@ -159,8 +167,10 @@ test "index mode and connection bounds are explicit" {
     try std.testing.expectEqual(IndexMode.disabled, try IndexMode.parse("disabled"));
     try std.testing.expectError(error.InvalidIndexMode, IndexMode.parse("optional"));
     try std.testing.expectEqual(@as(usize, 128), try parsePositiveUsize("128"));
+    try std.testing.expectEqual(@as(u16, 16), try parsePositiveU16("16"));
     try std.testing.expectEqual(@as(i64, 6_000_000), try parseSecondsMicros("6"));
     try std.testing.expectError(error.InvalidPositiveInteger, parsePositiveUsize("0"));
+    try std.testing.expectError(error.InvalidPositiveInteger, parsePositiveU16("65536"));
 }
 
 test "database role expectations use unquoted PostgreSQL identifiers" {

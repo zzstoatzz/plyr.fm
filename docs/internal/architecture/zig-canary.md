@@ -34,6 +34,8 @@ local and unrelated environments do not acquire an ambient principal. The Fly
 configuration also declares `DATABASE_ROLE=plyr_zig_canary`; startup compares it
 to PostgreSQL's effective `current_user` and refuses to serve if the staged
 credential has more or different authority than intended.
+The canary uses a 16-connection PostgreSQL pool so its 16-worker product-read
+benchmark measures application work rather than pool admission.
 
 The machine:
 

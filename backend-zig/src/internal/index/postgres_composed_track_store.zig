@@ -89,29 +89,34 @@ pub const PostgresComposedTrackStore = struct {
     ) TrackStore.Error![]store_module.ListItem {
         const self: *PostgresComposedTrackStore = @ptrCast(@alignCast(context));
         const limit: i64 = @intCast(request.limit);
+        const conn = self.pool.acquire() catch |err| {
+            std.log.err("composed track connection failed: {}", .{err});
+            return error.IndexUnavailable;
+        };
+        defer self.pool.release(conn);
         var result = switch (request.scope) {
             .discovery => if (request.after) |after|
-                self.pool.query(discovery_after_query, .{
+                conn.query(discovery_after_query, .{
                     request.collection,
                     self.profile_collection,
                     after.created_at_us,
                     after.at_uri,
                     limit,
                 }) catch |err| {
-                    std.log.err("composed discovery query failed: {}", .{err});
+                    logQueryError(conn, "composed discovery query failed", err);
                     return error.IndexUnavailable;
                 }
             else
-                self.pool.query(discovery_query, .{
+                conn.query(discovery_query, .{
                     request.collection,
                     self.profile_collection,
                     limit,
                 }) catch |err| {
-                    std.log.err("composed discovery query failed: {}", .{err});
+                    logQueryError(conn, "composed discovery query failed", err);
                     return error.IndexUnavailable;
                 },
             .artist => |artist_did| if (request.after) |after|
-                self.pool.query(artist_after_query, .{
+                conn.query(artist_after_query, .{
                     request.collection,
                     self.profile_collection,
                     artist_did,
@@ -119,17 +124,17 @@ pub const PostgresComposedTrackStore = struct {
                     after.at_uri,
                     limit,
                 }) catch |err| {
-                    std.log.err("composed artist catalogue query failed: {}", .{err});
+                    logQueryError(conn, "composed artist catalogue query failed", err);
                     return error.IndexUnavailable;
                 }
             else
-                self.pool.query(artist_query, .{
+                conn.query(artist_query, .{
                     request.collection,
                     self.profile_collection,
                     artist_did,
                     limit,
                 }) catch |err| {
-                    std.log.err("composed artist catalogue query failed: {}", .{err});
+                    logQueryError(conn, "composed artist catalogue query failed", err);
                     return error.IndexUnavailable;
                 },
         };
@@ -156,6 +161,13 @@ pub const PostgresComposedTrackStore = struct {
         return items.toOwnedSlice(allocator) catch return error.OutOfMemory;
     }
 };
+
+fn logQueryError(conn: *pg.Conn, message: []const u8, err: anyerror) void {
+    if (conn.err) |pg_err|
+        std.log.err("{s}: {}: {s}", .{ message, err, pg_err.message })
+    else
+        std.log.err("{s}: {}", .{ message, err });
+}
 
 fn decodeRow(allocator: std.mem.Allocator, row: anytype) !track.Track {
     const uri = try duplicate(allocator, try row.get([]const u8, 0));

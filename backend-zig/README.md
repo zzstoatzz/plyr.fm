@@ -59,6 +59,7 @@ Python suite's `relay_test` schema.
 | `PROFILE_COLLECTION_NSID` | yes | exact environment-aware authored profile-record NSID |
 | `DATABASE_URL` | in normal API mode | PostgreSQL projection; canonical Postgres URLs and the existing SQLAlchemy `psycopg`, `psycopg2`, and `asyncpg` driver-qualified forms are accepted; missing or unknown configuration fails startup |
 | `DATABASE_ROLE` | no | expected effective PostgreSQL role; startup opens the pool and fails closed if `current_user` differs |
+| `DATABASE_POOL_SIZE` | no | bounded PostgreSQL connection pool size, default `8` |
 | `INDEX_MODE` | no | `required` by default; `disabled` is an explicit test/development mode whose readiness is `503` |
 | `MAX_CONNECTIONS` | no | hard cap on accepted connection handlers, default `128` |
 | `PORT` | no | listener port, default `8001` |

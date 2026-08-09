@@ -25,7 +25,7 @@ pub fn main() !void {
     };
 
     var postgres_store: ?postgres.PostgresTrackStore = if (settings.database_url) |url|
-        try postgres.PostgresTrackStore.init(allocator, io, url)
+        try postgres.PostgresTrackStore.init(allocator, io, url, settings.database_pool_size)
     else
         null;
     defer if (postgres_store) |*store| store.deinit();
