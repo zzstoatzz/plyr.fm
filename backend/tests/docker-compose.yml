@@ -18,4 +18,8 @@ services:
     image: redis:7-alpine
     ports:
       - "6380:6379"
-    command: redis-server --appendonly no --save ""
+    # --databases: each xdist worker claims db (1 + gwN) for isolation; the
+    # redis default of 16 breaks past gw14 ("DB index is out of range") on
+    # many-core machines. CI's redis service container keeps the default but
+    # its 4-core runners stay far below the limit.
+    command: redis-server --appendonly no --save "" --databases 128
