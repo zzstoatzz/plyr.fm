@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { getZigArtist, getZigPlayback, getZigTrack, listZigTracks, recordZigPlay } from './zig-v1';
 import { getZigAlbum, listZigAlbums } from './zig-v1-albums';
 import { searchZigCatalog } from './zig-v1-search';
+import { getZigArtistMetrics } from './zig-v1-artist-metrics';
 
 const record = {
 	uri: 'at://did:plc:artist/fm.plyr.track/song',
@@ -283,6 +284,72 @@ describe('Zig v1 compatibility boundary', () => {
 		await expect(getZigArtist('https://next.plyr.fm/api', artist.did, fetcher)).rejects.toThrow(
 			'invalid Zig artist resource'
 		);
+	});
+
+	it('maps verified artist metrics without inventing legacy identity', async () => {
+		let requestedInput: RequestInfo | URL | null = null;
+		const fetcher = vi.fn(async (input: RequestInfo | URL) => {
+			requestedInput = input;
+			return json({
+				object: 'artist_metrics',
+				artist_did: 'did:plc:artist',
+				totals: { plays: 42, tracks: 2, duration_seconds: 300 },
+				top_track: {
+					id: 'trk_opaque',
+					record: {
+						uri: 'at://did:plc:artist/fm.plyr.track/one',
+						cid: 'bafyrecord'
+					},
+					title: 'One',
+					play_count: 30
+				},
+				sources: {
+					catalog: 'verified_repo',
+					duration: 'verified_repo',
+					plays: 'application_metrics'
+				},
+				projection: { verification: 'verified_repo' }
+			});
+		});
+		const metrics = await getZigArtistMetrics(
+			'https://next.plyr.fm/api',
+			'did:plc:artist',
+			fetcher
+		);
+		expect(metrics).toEqual({
+			total_plays: 42,
+			total_items: 2,
+			total_duration_seconds: 300,
+			top_item: { id: 'trk_opaque', title: 'One', play_count: 30 },
+			top_liked: null,
+			rank: null
+		});
+		expect(String(requestedInput)).toContain('/v1/artists/did%3Aplc%3Aartist/metrics');
+	});
+
+	it('rejects artist metrics whose top track escapes the artist', async () => {
+		const fetcher = vi.fn(async () =>
+			json({
+				object: 'artist_metrics',
+				artist_did: 'did:plc:artist',
+				totals: { plays: 1, tracks: 1, duration_seconds: 10 },
+				top_track: {
+					id: 'trk_opaque',
+					record: { uri: 'at://did:plc:other/fm.plyr.track/one', cid: 'bafyrecord' },
+					title: 'Wrong',
+					play_count: 1
+				},
+				sources: {
+					catalog: 'verified_repo',
+					duration: 'verified_repo',
+					plays: 'application_metrics'
+				},
+				projection: { verification: 'verified_repo' }
+			})
+		);
+		await expect(
+			getZigArtistMetrics('https://next.plyr.fm/api', 'did:plc:artist', fetcher)
+		).rejects.toThrow('invalid Zig artist metrics');
 	});
 
 	it('maps verified collection resources without inventing numeric identity', async () => {

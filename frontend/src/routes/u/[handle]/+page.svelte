@@ -2,6 +2,7 @@
 	import { fade } from 'svelte/transition';
 	import { API_URL, IS_ZIG_V1, getAtprotofansSupportUrl } from '$lib/config';
 	import { listZigTracks } from '$lib/api/zig-v1';
+	import { getZigArtistMetrics } from '$lib/api/zig-v1-artist-metrics';
 	import { browser } from '$app/environment';
 	import type { Analytics, Track, TrackId, Playlist } from '$lib/types';
 	import { formatDuration } from '$lib/stats.svelte';
@@ -117,6 +118,10 @@ $effect(() => {
 		const minDisplayTime = 300; // minimum 300ms to avoid flicker
 
 		try {
+			if (IS_ZIG_V1) {
+				analytics = await getZigArtistMetrics(API_URL, artist.did);
+				return;
+			}
 			const response = await fetch(`${API_URL}/artists/${artist.did}/analytics`, {
 				credentials: 'include'
 			});
@@ -259,8 +264,8 @@ $effect(() => {
 			loadedForDid = currentDid;
 
 			// The canary only calls API surfaces implemented by the Zig backend.
+			loadAnalytics();
 			if (!IS_ZIG_V1) {
-				loadAnalytics();
 				primeLikesFromCache();
 				void hydrateTracksWithLikes();
 				void loadLikedTracksCount();
@@ -519,7 +524,6 @@ $effect(() => {
 			</section>
 		{/if}
 
-		{#if !IS_ZIG_V1}
 		<section class="analytics">
 			<h2>analytics</h2>
 			<div class="analytics-grid">
@@ -568,7 +572,6 @@ $effect(() => {
 				{/key}
 			</div>
 		</section>
-		{/if}
 
 		<section class="tracks">
 			<div class="section-header">

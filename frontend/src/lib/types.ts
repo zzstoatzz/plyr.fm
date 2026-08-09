@@ -126,7 +126,7 @@ export interface QueueResponse {
 }
 
 export interface TopItem {
-	id: number;
+	id: TrackId;
 	title: string;
 	play_count: number;
 }
