@@ -11,6 +11,9 @@
 	let dismissing = $state(false);
 
 	let dismissed = $derived(preferences.data?.ui_settings?.pds_save_banner_dismissed === true);
+	// opting out of PDS audio uploads is already a statement that plyr.fm
+	// storage is intentional — don't nudge those users at all
+	let optedOut = $derived(preferences.data?.ui_settings?.pds_audio_uploads_enabled === false);
 
 	async function dismiss() {
 		dismissing = true;
@@ -22,7 +25,7 @@
 	}
 </script>
 
-{#if savableCount > 0 && preferences.data && !dismissed}
+{#if savableCount > 0 && preferences.data && !dismissed && !optedOut}
 	<div class="pds-save-banner" role="status">
 		<div class="banner-text">
 			<strong>
