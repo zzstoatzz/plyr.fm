@@ -44,6 +44,10 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     }).module("Graphemes"));
+    root_module.addImport("redis", b.dependency("redis", .{
+        .target = target,
+        .optimize = optimize,
+    }).module("redis"));
 
     const executable = b.addExecutable(.{
         .name = "plyr-backend",

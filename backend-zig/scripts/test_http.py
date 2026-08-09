@@ -337,6 +337,41 @@ def main() -> None:
         )
         assert status == 405
         assert playback_method["error"]["code"] == "method_not_allowed"
+
+        play_path = f"/v1/tracks/{_track_id(uri)}/plays"
+        status, _, play_method = _request(base_url, play_path)
+        assert status == 405
+        assert play_method["error"]["code"] == "method_not_allowed"
+
+        status, _, unavailable_play = _request(
+            base_url,
+            play_path,
+            method="POST",
+        )
+        assert status == 503
+        assert unavailable_play["error"]["code"] == "service_unavailable"
+
+        for invalid_play_path in (
+            "/v1/tracks/42/plays",
+            f"{play_path}?ref=short",
+            f"{play_path}?ref=share123&ref=again123",
+            f"{play_path}?unknown=value",
+        ):
+            status, _, invalid_play = _request(
+                base_url,
+                invalid_play_path,
+                method="POST",
+            )
+            assert status == 400
+            assert invalid_play["error"]["code"] == "invalid_request"
+
+        status, _, foreign_play = _request(
+            base_url,
+            f"/v1/tracks/{_track_id(foreign_uri)}/plays",
+            method="POST",
+        )
+        assert status == 404
+        assert foreign_play["error"]["code"] == "not_found"
     finally:
         process.terminate()
         try:

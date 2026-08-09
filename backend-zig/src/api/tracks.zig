@@ -2,8 +2,12 @@ const std = @import("std");
 const get_track = @import("../internal/application/get_track.zig");
 const get_playback = @import("../internal/application/get_playback.zig");
 const list_tracks = @import("../internal/application/list_tracks.zig");
+const record_play = @import("../internal/application/record_play.zig");
 const PlaybackStore = @import("../internal/index/playback_store.zig").PlaybackStore;
 const TrackStore = @import("../internal/index/track_store.zig").TrackStore;
+const PlayDedupStore = @import("../internal/metrics/play_dedup_store.zig").PlayDedupStore;
+const PlayMetricStore = @import("../internal/metrics/play_metric_store.zig").PlayMetricStore;
+const query = @import("../internal/http/query.zig");
 const response = @import("response.zig");
 
 pub fn list(
@@ -66,6 +70,140 @@ pub fn playback(
         .internal_error => try response.apiError(request, .internal_error, request_id, cors),
         .unavailable => try response.apiError(request, .service_unavailable, request_id, cors),
     }
+}
+
+pub fn recordPlay(
+    request: *std.http.Server.Request,
+    allocator: std.mem.Allocator,
+    metric_store: ?PlayMetricStore,
+    dedup_store: ?PlayDedupStore,
+    collection: []const u8,
+    cors: response.CorsPolicy,
+    io: std.Io,
+    id: []const u8,
+    request_id: []const u8,
+) !void {
+    const ref_code = parsePlayQuery(allocator, request.head.target) catch {
+        try response.apiError(request, .invalid_request, request_id, cors);
+        return;
+    };
+    const identity = listenerIdentity(request, allocator, io) catch {
+        try response.apiError(request, .service_unavailable, request_id, cors);
+        return;
+    };
+    switch (record_play.execute(
+        allocator,
+        metric_store,
+        dedup_store,
+        collection,
+        id,
+        identity.listener,
+        ref_code,
+    )) {
+        .recorded => |value| {
+            if (value.dedup.status == .unavailable)
+                std.log.warn("play dedup unavailable; counted {s}", .{value.record.uri});
+            const body = try std.json.Stringify.valueAlloc(allocator, value, .{});
+            if (identity.set_cookie) |cookie| {
+                try response.jsonWithHeaders(
+                    request,
+                    .ok,
+                    body,
+                    request_id,
+                    cors,
+                    &.{.{ .name = "set-cookie", .value = cookie }},
+                );
+            } else try response.json(request, .ok, body, request_id, cors);
+        },
+        .invalid_id, .invalid_request => try response.apiError(request, .invalid_request, request_id, cors),
+        .not_found => try response.apiError(request, .not_found, request_id, cors),
+        .internal_error => try response.apiError(request, .internal_error, request_id, cors),
+        .unavailable => try response.apiError(request, .service_unavailable, request_id, cors),
+    }
+}
+
+const ListenerIdentity = struct {
+    listener: record_play.Listener,
+    set_cookie: ?[]const u8,
+};
+
+fn listenerIdentity(
+    request: *const std.http.Server.Request,
+    allocator: std.mem.Allocator,
+    io: std.Io,
+) !ListenerIdentity {
+    if (playCookie(request)) |cookie| return .{
+        .listener = .{ .dedup_key = try std.fmt.allocPrint(allocator, "anon:{s}", .{cookie}) },
+        .set_cookie = null,
+    };
+
+    var random: [16]u8 = undefined;
+    io.random(&random);
+    const encoded_length = std.base64.url_safe_no_pad.Encoder.calcSize(random.len);
+    const token_buffer = try allocator.alloc(u8, encoded_length);
+    const token = std.base64.url_safe_no_pad.Encoder.encode(token_buffer, &random);
+    return .{
+        .listener = .{ .dedup_key = try std.fmt.allocPrint(allocator, "anon:{s}", .{token}) },
+        .set_cookie = try std.fmt.allocPrint(
+            allocator,
+            "plyr_play_id={s}; Max-Age=15552000; Path=/; HttpOnly; Secure; SameSite=Lax",
+            .{token},
+        ),
+    };
+}
+
+fn playCookie(request: *const std.http.Server.Request) ?[]const u8 {
+    var headers = request.iterateHeaders();
+    while (headers.next()) |header| {
+        if (!std.ascii.eqlIgnoreCase(header.name, "cookie")) continue;
+        var cookies = std.mem.splitScalar(u8, header.value, ';');
+        while (cookies.next()) |raw| {
+            const cookie = std.mem.trim(u8, raw, " \t");
+            const prefix = "plyr_play_id=";
+            if (!std.mem.startsWith(u8, cookie, prefix)) continue;
+            const value = cookie[prefix.len..];
+            if (validPlayCookie(value)) return value;
+        }
+    }
+    return null;
+}
+
+fn validPlayCookie(value: []const u8) bool {
+    if (value.len != 22) return false;
+    for (value) |byte| if (!(std.ascii.isAlphanumeric(byte) or byte == '-' or byte == '_'))
+        return false;
+    return true;
+}
+
+fn parsePlayQuery(allocator: std.mem.Allocator, target: []const u8) !?[]const u8 {
+    var iterator = query.Iterator.init(allocator, target);
+    var ref_code: ?[]const u8 = null;
+    while (try iterator.next()) |pair| {
+        if (!std.mem.eql(u8, pair.name, "ref") or ref_code != null or pair.value.len == 0)
+            return error.InvalidQuery;
+        ref_code = pair.value;
+    }
+    return ref_code;
+}
+
+test "play query accepts at most one non-empty share reference" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    try std.testing.expect((try parsePlayQuery(arena.allocator(), "/v1/tracks/x/plays")) == null);
+    try std.testing.expectEqualStrings(
+        "abcdEF_1",
+        (try parsePlayQuery(arena.allocator(), "/v1/tracks/x/plays?ref=abcdEF_1")).?,
+    );
+    try std.testing.expectError(
+        error.InvalidQuery,
+        parsePlayQuery(arena.allocator(), "/v1/tracks/x/plays?ref=a&ref=b"),
+    );
+}
+
+test "anonymous play cookies require one canonical 128-bit token" {
+    try std.testing.expect(validPlayCookie("abcdefghijklmnopqrstuv"));
+    try std.testing.expect(!validPlayCookie("short"));
+    try std.testing.expect(!validPlayCookie("abcdefghijklmnopqrstu/"));
 }
 
 test "v1 track JSON keeps authority and projections separate" {

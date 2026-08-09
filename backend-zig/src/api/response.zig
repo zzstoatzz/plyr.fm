@@ -55,33 +55,48 @@ pub fn json(
     request_id: []const u8,
     cors: CorsPolicy,
 ) !void {
-    const origin = requestOrigin(request, cors);
-    if (origin) |allowed_origin| {
-        try request.respond(body, .{
-            .status = status,
-            .extra_headers = &.{
-                .{ .name = "content-type", .value = "application/json" },
-                .{ .name = "x-request-id", .value = request_id },
-                .{ .name = "access-control-allow-origin", .value = allowed_origin },
-                .{ .name = "access-control-allow-credentials", .value = "true" },
-                .{ .name = "access-control-allow-methods", .value = "GET, POST, PUT, PATCH, DELETE, OPTIONS" },
-                .{ .name = "access-control-allow-headers", .value = "authorization, content-type, dpop, idempotency-key, x-request-id" },
-                .{ .name = "vary", .value = "origin" },
-                .{ .name = "x-content-type-options", .value = "nosniff" },
-                .{ .name = "referrer-policy", .value = "strict-origin-when-cross-origin" },
-            },
-        });
-        return;
-    }
+    return jsonWithHeaders(request, status, body, request_id, cors, &.{});
+}
 
+pub fn jsonWithHeaders(
+    request: *http.Server.Request,
+    status: http.Status,
+    body: []const u8,
+    request_id: []const u8,
+    cors: CorsPolicy,
+    additional_headers: []const http.Header,
+) !void {
+    const origin = requestOrigin(request, cors);
+    var headers: [16]http.Header = undefined;
+    var count: usize = 0;
+    headers[count] = .{ .name = "content-type", .value = "application/json" };
+    count += 1;
+    headers[count] = .{ .name = "x-request-id", .value = request_id };
+    count += 1;
+    headers[count] = .{ .name = "x-content-type-options", .value = "nosniff" };
+    count += 1;
+    headers[count] = .{ .name = "referrer-policy", .value = "strict-origin-when-cross-origin" };
+    count += 1;
+    if (origin) |allowed_origin| {
+        headers[count] = .{ .name = "access-control-allow-origin", .value = allowed_origin };
+        count += 1;
+        headers[count] = .{ .name = "access-control-allow-credentials", .value = "true" };
+        count += 1;
+        headers[count] = .{ .name = "access-control-allow-methods", .value = "GET, POST, PUT, PATCH, DELETE, OPTIONS" };
+        count += 1;
+        headers[count] = .{ .name = "access-control-allow-headers", .value = "authorization, content-type, dpop, idempotency-key, x-request-id" };
+        count += 1;
+        headers[count] = .{ .name = "vary", .value = "origin" };
+        count += 1;
+    }
+    if (count + additional_headers.len > headers.len) return error.TooManyResponseHeaders;
+    for (additional_headers) |header| {
+        headers[count] = header;
+        count += 1;
+    }
     try request.respond(body, .{
         .status = status,
-        .extra_headers = &.{
-            .{ .name = "content-type", .value = "application/json" },
-            .{ .name = "x-request-id", .value = request_id },
-            .{ .name = "x-content-type-options", .value = "nosniff" },
-            .{ .name = "referrer-policy", .value = "strict-origin-when-cross-origin" },
-        },
+        .extra_headers = headers[0..count],
     });
 }
 

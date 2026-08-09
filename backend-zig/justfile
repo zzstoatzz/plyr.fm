@@ -50,6 +50,19 @@ test-postgres:
     PLYR_ZIG_TEST_DATABASE_URL=postgresql://zig_test:zig_test@127.0.0.1:5435/zig_test zig build test
     cd ../backend && DATABASE_URL=postgresql://zig_test:zig_test@127.0.0.1:5435/zig_test RELAY_TEST_MODE=1 OAUTH_ENCRYPTION_KEY=hnSkDmgbbuK0rt7Ab3eJHAktb18gmebsdwKdTmq9mes= uv run python ../backend-zig/scripts/test_list_migration.py
 
+# Uses only random, namespaced keys in the dedicated local test Redis.
+test-redis:
+    docker compose -f ../backend/tests/docker-compose.yml up -d test-redis
+    @for attempt in {1..100}; do docker compose -f ../backend/tests/docker-compose.yml exec -T test-redis redis-cli ping >/dev/null && exit 0; sleep 0.1; done; echo 'test Redis did not become ready' >&2; exit 1
+    PLYR_ZIG_TEST_REDIS_URL=redis://127.0.0.1:6380/0 zig build test
+
+# Full HTTP -> application -> Redis/Postgres contract on disposable services.
+test-play-http: build
+    docker compose -f ../backend/tests/docker-compose.yml --profile zig up -d zig-db test-redis
+    @for attempt in {1..100}; do docker compose -f ../backend/tests/docker-compose.yml exec -T zig-db pg_isready -U zig_test -d zig_test >/dev/null && break; sleep 0.1; done
+    @for attempt in {1..100}; do docker compose -f ../backend/tests/docker-compose.yml exec -T test-redis redis-cli ping >/dev/null && exit 0; sleep 0.1; done; echo 'integration services did not become ready' >&2; exit 1
+    cd ../backend && uv run python ../backend-zig/scripts/test_play_http.py
+
 test-http: build
     python3 scripts/test_http.py
 

@@ -7,6 +7,8 @@ const postgres_playback = @import("internal/index/postgres_playback_store.zig");
 const postgres_search = @import("internal/index/postgres_search_store.zig");
 const postgres_artists = @import("internal/index/postgres_artist_store.zig");
 const postgres_verified_lists = @import("internal/index/postgres_verified_list_store.zig");
+const postgres_play_metrics = @import("internal/metrics/postgres_play_metric_store.zig");
+const redis_play_dedup = @import("internal/metrics/redis_play_dedup_store.zig");
 const repair_runner = @import("internal/ingest/repair_runner.zig");
 const continuous_runner = @import("internal/ingest/continuous_runner.zig");
 const catalog_reconcile_runner = @import("internal/ingest/catalog_reconcile_runner.zig");
@@ -60,6 +62,11 @@ pub fn main() !void {
     else
         null;
     const search_store = if (postgres_search_store) |*store| store.store() else null;
+    var postgres_play_metric_store: ?postgres_play_metrics.PostgresPlayMetricStore = if (postgres_store) |*store|
+        .{ .pool = store.pool }
+    else
+        null;
+    const play_metric_store = if (postgres_play_metric_store) |*store| store.store() else null;
     switch (settings.role) {
         .account_reconciler => {
             const store = if (postgres_store) |*value| value else return error.AccountReconcilerDatabaseRequired;
@@ -71,17 +78,28 @@ pub fn main() !void {
                 .idle_sleep_ms = settings.account_check_idle_ms,
             });
         },
-        .api => try server.run(io, settings.port, settings.max_connections, .{
-            .track_store = track_store,
-            .playback_store = playback_store,
-            .artist_store = artist_store,
-            .verified_list_store = verified_list_store,
-            .search_store = search_store,
-            .track_collection = settings.track_collection,
-            .list_collection = settings.list_collection,
-            .profile_collection = settings.profile_collection,
-            .cors = .{ .allowed_origins = settings.cors_allowed_origins },
-        }),
+        .api => {
+            var redis_play_dedup_store: ?redis_play_dedup.RedisPlayDedupStore = if (settings.redis_url) |url|
+                try redis_play_dedup.RedisPlayDedupStore.init(allocator, io, url)
+            else
+                null;
+            defer if (redis_play_dedup_store) |*store| store.deinit();
+            const play_dedup_store = if (redis_play_dedup_store) |*store| store.store() else null;
+            try server.run(io, settings.port, settings.max_connections, .{
+                .io = io,
+                .track_store = track_store,
+                .playback_store = playback_store,
+                .artist_store = artist_store,
+                .verified_list_store = verified_list_store,
+                .search_store = search_store,
+                .play_metric_store = play_metric_store,
+                .play_dedup_store = play_dedup_store,
+                .track_collection = settings.track_collection,
+                .list_collection = settings.list_collection,
+                .profile_collection = settings.profile_collection,
+                .cors = .{ .allowed_origins = settings.cors_allowed_origins },
+            });
+        },
         .catalog_reconciler => {
             const store = if (postgres_store) |*value| value else return error.CatalogReconcilerDatabaseRequired;
             const report = try catalog_reconcile_runner.run(
@@ -154,6 +172,7 @@ test {
     _ = @import("internal/application/get_playlist.zig");
     _ = @import("internal/application/list_playlists.zig");
     _ = @import("internal/application/search_catalog.zig");
+    _ = @import("internal/application/record_play.zig");
     _ = @import("internal/domain/artist.zig");
     _ = @import("internal/domain/playback.zig");
     _ = @import("internal/domain/verified_list.zig");
@@ -178,6 +197,10 @@ test {
     _ = @import("internal/index/search_store.zig");
     _ = @import("internal/index/postgres_search_store.zig");
     _ = @import("internal/index/postgres_verified_list_store.zig");
+    _ = @import("internal/metrics/play_dedup_store.zig");
+    _ = @import("internal/metrics/play_metric_store.zig");
+    _ = @import("internal/metrics/postgres_play_metric_store.zig");
+    _ = @import("internal/metrics/redis_play_dedup_store.zig");
     _ = @import("internal/identity/playlist_id.zig");
     _ = @import("internal/identity/scoped_record_cursor.zig");
     _ = @import("internal/cache/lru.zig");

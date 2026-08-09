@@ -14,6 +14,10 @@
             .url = "https://codeberg.org/atman/zg/archive/v0.16.2.tar.gz",
             .hash = "zg-0.16.2-oGqU3HqftgI6rwFS90ypwfjgToH8Pz829OKuFURlm773",
         },
+        .redis = .{
+            .url = "https://tangled.org/zzstoatzz.io/redis/archive/37a4e0f.tar.gz",
+            .hash = "redis-0.2.0-NGPovkBgAgBaNRYuv4ehQPyJZcU84y0aLzRwIfiH2jpo",
+        },
     },
     .fingerprint = 0x4fd7f1002bfb4cee,
     .minimum_zig_version = "0.16.0",

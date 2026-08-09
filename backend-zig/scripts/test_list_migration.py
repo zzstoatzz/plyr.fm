@@ -12,7 +12,7 @@ from sqlalchemy.engine import make_url
 from alembic import command
 
 PRIOR_REVISION = "4aaed6c819f1"
-HEAD_REVISION = "b58f2a7c91d4"
+HEAD_REVISION = "c69d4e8a217f"
 CANARY_ROLE = "plyr_zig_canary"
 COMPATIBILITY_TABLES = {"tracks", "artists", "albums", "user_preferences"}
 EXPECTED_TABLES = {
@@ -173,18 +173,41 @@ def assert_test_database_and_drop_schema(database_url: str) -> None:
                 connection.execute(text(f"DROP OWNED BY {CANARY_ROLE}"))
                 connection.execute(text(f"DROP ROLE {CANARY_ROLE}"))
             connection.execute(text(f"CREATE ROLE {CANARY_ROLE} NOLOGIN"))
+            connection.execute(
+                text("DROP TABLE IF EXISTS public.share_link_events CASCADE")
+            )
+            connection.execute(text("DROP TABLE IF EXISTS public.share_links CASCADE"))
             connection.execute(text("DROP TABLE IF EXISTS public.tracks CASCADE"))
             connection.execute(
                 text(
                     "CREATE TABLE public.tracks ("
-                    "atproto_record_uri text, visibility text NOT NULL, space_uri text, "
+                    "id serial PRIMARY KEY, atproto_record_uri text, "
+                    "visibility text NOT NULL, space_uri text, "
                     "operator_labels jsonb NOT NULL DEFAULT '[]', "
                     "moderation_override text, play_count integer NOT NULL DEFAULT 0)"
                 )
             )
             connection.execute(
                 text(
-                    "INSERT INTO public.tracks VALUES "
+                    "CREATE TABLE public.share_links ("
+                    "id serial PRIMARY KEY, code text UNIQUE NOT NULL, "
+                    "track_id integer NOT NULL REFERENCES public.tracks(id), "
+                    "creator_did text NOT NULL)"
+                )
+            )
+            connection.execute(
+                text(
+                    "CREATE TABLE public.share_link_events ("
+                    "id serial PRIMARY KEY, "
+                    "share_link_id integer NOT NULL REFERENCES public.share_links(id), "
+                    "visitor_did text, event_type text NOT NULL)"
+                )
+            )
+            connection.execute(
+                text(
+                    "INSERT INTO public.tracks ("
+                    "atproto_record_uri, visibility, space_uri, operator_labels, "
+                    "moderation_override, play_count) VALUES "
                     "('at://did:plc:test/fm.plyr.track/public', 'public', NULL, "
                     "'[\"sexual\"]', NULL, 7), "
                     "('at://did:plc:test/fm.plyr.track/private', 'private', "
@@ -293,15 +316,70 @@ def role_has_privilege(database_url: str, object_name: str, privilege: str) -> b
         engine.dispose()
 
 
-def assert_canary_read_only(database_url: str) -> None:
-    """Prove existing and subsequently created projection tables stay read-only."""
+def role_has_column_privilege(
+    database_url: str, object_name: str, column_name: str, privilege: str
+) -> bool:
+    """Return one effective column privilege for the disposable canary role."""
+    engine = create_engine(database_url)
+    try:
+        with engine.connect() as connection:
+            return bool(
+                connection.scalar(
+                    text(
+                        "SELECT has_column_privilege("
+                        ":role, :object, :column, :privilege)"
+                    ),
+                    {
+                        "role": CANARY_ROLE,
+                        "object": object_name,
+                        "column": column_name,
+                        "privilege": privilege,
+                    },
+                )
+            )
+    finally:
+        engine.dispose()
+
+
+def role_has_sequence_privilege(
+    database_url: str, object_name: str, privilege: str
+) -> bool:
+    """Return one effective sequence privilege for the disposable canary role."""
+    engine = create_engine(database_url)
+    try:
+        with engine.connect() as connection:
+            return bool(
+                connection.scalar(
+                    text("SELECT has_sequence_privilege(:role, :object, :privilege)"),
+                    {
+                        "role": CANARY_ROLE,
+                        "object": object_name,
+                        "privilege": privilege,
+                    },
+                )
+            )
+    finally:
+        engine.dispose()
+
+
+def assert_canary_least_privilege(database_url: str) -> None:
+    """Prove the API role can write only the sustained-play state."""
     if not role_has_privilege(database_url, "plyr_index", "USAGE"):
         raise AssertionError("canary role cannot use the projection schema")
     for table_name in EXPECTED_TABLES:
         object_name = f"plyr_index.{table_name}"
         if not role_has_privilege(database_url, object_name, "SELECT"):
             raise AssertionError(f"canary role cannot read {object_name}")
+        expected_writes = (
+            {"INSERT", "UPDATE"} if table_name == "track_metrics" else set()
+        )
         for privilege in ("INSERT", "UPDATE", "DELETE"):
+            if privilege in expected_writes:
+                if not role_has_privilege(database_url, object_name, privilege):
+                    raise AssertionError(
+                        f"canary role cannot {privilege} {object_name}"
+                    )
+                continue
             if role_has_privilege(database_url, object_name, privilege):
                 raise AssertionError(f"canary role can {privilege} {object_name}")
     for table_name in COMPATIBILITY_TABLES:
@@ -311,6 +389,29 @@ def assert_canary_read_only(database_url: str) -> None:
         for privilege in ("INSERT", "UPDATE", "DELETE"):
             if role_has_privilege(database_url, object_name, privilege):
                 raise AssertionError(f"canary role can {privilege} {object_name}")
+
+    if not role_has_column_privilege(
+        database_url, "public.tracks", "play_count", "UPDATE"
+    ):
+        raise AssertionError("canary cannot mirror the legacy play count")
+    for column_name in ("atproto_record_uri", "visibility", "space_uri"):
+        if role_has_column_privilege(
+            database_url, "public.tracks", column_name, "UPDATE"
+        ):
+            raise AssertionError(f"canary can update tracks.{column_name}")
+    if not role_has_privilege(database_url, "public.share_links", "SELECT"):
+        raise AssertionError("canary cannot resolve share attribution")
+    if not role_has_privilege(database_url, "public.share_link_events", "INSERT"):
+        raise AssertionError("canary cannot record share attribution")
+    for privilege in ("SELECT", "UPDATE", "DELETE"):
+        if role_has_privilege(database_url, "public.share_link_events", privilege):
+            raise AssertionError(f"canary can {privilege} public.share_link_events")
+    sequence_name = "public.share_link_events_id_seq"
+    if not role_has_sequence_privilege(database_url, sequence_name, "USAGE"):
+        raise AssertionError("canary cannot allocate share attribution ids")
+    for privilege in ("SELECT", "UPDATE"):
+        if role_has_sequence_privilege(database_url, sequence_name, privilege):
+            raise AssertionError(f"canary can {privilege} {sequence_name}")
 
     engine = create_engine(database_url)
     try:
@@ -363,7 +464,7 @@ def main() -> None:
             raise AssertionError(
                 f"missing projection search indexes: {sorted(indexes)!r}"
             )
-        assert_canary_read_only(database_url)
+        assert_canary_least_privilege(database_url)
         columns = table_columns(database_url, "repo_heads")
         if columns != EXPECTED_HEAD_COLUMNS:
             raise AssertionError(f"unexpected repo_heads columns: {sorted(columns)!r}")
@@ -468,6 +569,20 @@ def main() -> None:
     for table_name in COMPATIBILITY_TABLES:
         if role_has_privilege(database_url, f"public.{table_name}", "SELECT"):
             raise AssertionError(f"downgrade left compatibility read: {table_name}")
+    for object_name, privilege in (
+        ("public.tracks", "UPDATE"),
+        ("public.share_links", "SELECT"),
+        ("public.share_link_events", "INSERT"),
+    ):
+        if role_has_privilege(database_url, object_name, privilege):
+            raise AssertionError(
+                f"downgrade left {privilege} privilege on {object_name}"
+            )
+    for privilege in ("USAGE", "SELECT", "UPDATE"):
+        if role_has_sequence_privilege(
+            database_url, "public.share_link_events_id_seq", privilege
+        ):
+            raise AssertionError("downgrade left share attribution sequence privilege")
 
     engine = create_engine(database_url)
     try:
