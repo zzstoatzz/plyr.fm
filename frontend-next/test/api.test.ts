@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { ApiError, getArtist, getPlayback, listTracks } from '../public/api.js';
+import { ApiError, getArtist, getPlayback, getPlaylist, listPlaylists, listTracks } from '../public/api.js';
 
 function jsonResponse(value: unknown, status = 200): Response {
 	return new Response(JSON.stringify(value), {
@@ -8,7 +8,7 @@ function jsonResponse(value: unknown, status = 200): Response {
 	});
 }
 
-	describe('Zig v1 client', () => {
+describe('Zig v1 client', () => {
 	test('encodes cursor and artist scope without changing the REST contract', async () => {
 		const requests: URL[] = [];
 		const fetcher = async (input: string | URL | Request): Promise<Response> => {
@@ -66,6 +66,81 @@ function jsonResponse(value: unknown, status = 200): Response {
 			availability: { status: 'unavailable', delivery: null }
 		});
 		await expect(getPlayback('trk_expected', fetcher)).rejects.toThrow('invalid playback response');
+	});
+
+	test('keeps playlist pagination and owner scope in the v1 query', async () => {
+		const requests: URL[] = [];
+		const fetcher = async (input: string | URL | Request): Promise<Response> => {
+			requests.push(new URL(String(input)));
+			return jsonResponse({ object: 'list', data: [], has_more: false, next_cursor: null });
+		};
+
+		await listPlaylists({ limit: 7, cursor: 'plscur_+/=', ownerDid: 'did:plc:owner' }, fetcher);
+
+		expect(requests[0]?.pathname).toBe('/api/v1/playlists');
+		expect(requests[0]?.searchParams.get('limit')).toBe('7');
+		expect(requests[0]?.searchParams.get('cursor')).toBe('plscur_+/=');
+		expect(requests[0]?.searchParams.get('owner_did')).toBe('did:plc:owner');
+	});
+
+	test('rejects a legacy playlist collection shape', async () => {
+		const fetcher = async (): Promise<Response> => jsonResponse({ playlists: [], has_more: false });
+		await expect(listPlaylists({}, fetcher)).rejects.toThrow('invalid playlist collection response');
+	});
+
+	test('preserves every ordered playlist position and its availability', async () => {
+		const playlistId = 'pls_example';
+		const track = {
+			object: 'track',
+			id: 'trk_example',
+			record: { uri: 'at://did:plc:a/fm.plyr.track/t', cid: 'bafytrack' },
+			metadata: { title: 'A track' }
+		};
+		const fetcher = async (): Promise<Response> => jsonResponse({
+			object: 'playlist',
+			id: playlistId,
+			record: { uri: 'at://did:plc:a/fm.plyr.list/p', cid: 'bafylist' },
+			metadata: { name: 'A list', created_at: '2026-08-09T00:00:00Z' },
+			owner: { did: 'did:plc:a', profile: null },
+			metrics: { member_count: 2, available_count: 1 },
+			projection: { verification: 'verified_repo' },
+			members: [
+				{ position: 0, subject: track.record, availability: 'available', track },
+				{ position: 1, subject: { uri: 'at://did:plc:a/fm.plyr.track/gone', cid: 'bafygone' }, availability: 'unavailable', track: null }
+			]
+		});
+
+		const playlist = await getPlaylist(playlistId, fetcher);
+		expect(playlist.members.map((member) => member.position)).toEqual([0, 1]);
+		expect(playlist.members[1]?.track).toBeNull();
+	});
+
+	test('rejects playlist details that collapse or reorder source positions', async () => {
+		const fetcher = async (): Promise<Response> => jsonResponse({
+			object: 'playlist',
+			id: 'pls_example',
+			record: { uri: 'at://did:plc:a/fm.plyr.list/p', cid: 'bafylist' },
+			metadata: { name: null, created_at: '2026-08-09T00:00:00Z' },
+			owner: { did: 'did:plc:a' },
+			metrics: { member_count: 1, available_count: 0 },
+			projection: { verification: 'verified_repo' },
+			members: [{ position: 2, subject: { uri: 'at://x', cid: 'bafy' }, availability: 'unavailable', track: null }]
+		});
+		await expect(getPlaylist('pls_example', fetcher)).rejects.toThrow('invalid playlist member response');
+	});
+
+	test('requires playlist detail to round-trip the requested identity', async () => {
+		const fetcher = async (): Promise<Response> => jsonResponse({
+			object: 'playlist',
+			id: 'pls_other',
+			record: { uri: 'at://did:plc:a/fm.plyr.list/p', cid: 'bafylist' },
+			metadata: { name: null, created_at: '2026-08-09T00:00:00Z' },
+			owner: { did: 'did:plc:a' },
+			metrics: { member_count: 0, available_count: 0 },
+			projection: { verification: 'verified_repo' },
+			members: []
+		});
+		await expect(getPlaylist('pls_expected', fetcher)).rejects.toThrow('invalid playlist response');
 	});
 
 	test('keeps HTTP failures typed', async () => {
