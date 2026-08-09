@@ -73,8 +73,9 @@ advance only the relay checkpoint. The
 [`account-availability evidence boundary`](zig-account-availability.md) now
 records authenticated repository activity and classifies destination-safe
 current-PDS status responses without coupling signed records to the legacy
-`artists` table. A separately supervised checker and periodic reconciliation
-remain open; untrusted PDS latency will not block this firehose loop.
+`artists` table. Relay account events now write only deduplicated schedule hints;
+the separately supervised checker and periodic sweep own network reconciliation,
+so untrusted PDS latency cannot block this firehose loop.
 
 ## direct PDS threat model
 

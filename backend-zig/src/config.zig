@@ -2,6 +2,7 @@ const std = @import("std");
 const zat = @import("zat");
 
 pub const Role = enum {
+    account_reconciler,
     api,
     ingester,
     repair,
@@ -33,6 +34,11 @@ pub const Config = struct {
     repair_did: ?[]const u8,
     relay_hosts: []const u8,
     relay_name: []const u8,
+    account_check_interval_us: i64,
+    account_check_retry_us: i64,
+    account_check_lease_us: i64,
+    account_check_seed_us: i64,
+    account_check_idle_ms: i64,
 
     pub fn fromEnvironment() !Config {
         const role_value = getenv("MODE") orelse return error.RoleRequired;
@@ -59,6 +65,8 @@ pub const Config = struct {
         }
         if (role == .ingester and (database_url == null or index_mode != .required))
             return error.IngesterDatabaseRequired;
+        if (role == .account_reconciler and (database_url == null or index_mode != .required))
+            return error.AccountReconcilerDatabaseRequired;
 
         return .{
             .role = role,
@@ -73,6 +81,21 @@ pub const Config = struct {
             .repair_did = repair_did,
             .relay_hosts = getenv("INGEST_RELAY_HOSTS") orelse "wss://bsky.network",
             .relay_name = getenv("INGEST_RELAY_NAME") orelse "bsky.network",
+            .account_check_interval_us = try parseSecondsMicros(
+                getenv("ACCOUNT_CHECK_INTERVAL_SECONDS") orelse "21600",
+            ),
+            .account_check_retry_us = try parseSecondsMicros(
+                getenv("ACCOUNT_CHECK_RETRY_SECONDS") orelse "300",
+            ),
+            .account_check_lease_us = try parseSecondsMicros(
+                getenv("ACCOUNT_CHECK_LEASE_SECONDS") orelse "120",
+            ),
+            .account_check_seed_us = try parseSecondsMicros(
+                getenv("ACCOUNT_CHECK_SEED_SECONDS") orelse "300",
+            ),
+            .account_check_idle_ms = try parsePositiveI64(
+                getenv("ACCOUNT_CHECK_IDLE_MILLISECONDS") orelse "1000",
+            ),
         };
     }
 };
@@ -88,8 +111,22 @@ fn parsePositiveUsize(value: []const u8) !usize {
     return parsed;
 }
 
+fn parsePositiveI64(value: []const u8) !i64 {
+    const parsed = std.fmt.parseInt(i64, value, 10) catch return error.InvalidPositiveInteger;
+    if (parsed <= 0) return error.InvalidPositiveInteger;
+    return parsed;
+}
+
+fn parseSecondsMicros(value: []const u8) !i64 {
+    const seconds = std.fmt.parseInt(i64, value, 10) catch return error.InvalidPositiveInteger;
+    if (seconds <= 0) return error.InvalidPositiveInteger;
+    return std.math.mul(i64, seconds, std.time.us_per_s) catch
+        error.InvalidPositiveInteger;
+}
+
 test "process roles are explicit" {
     try std.testing.expectEqual(Role.api, try Role.parse("api"));
+    try std.testing.expectEqual(Role.account_reconciler, try Role.parse("account_reconciler"));
     try std.testing.expectEqual(Role.repair, try Role.parse("repair"));
     try std.testing.expectEqual(Role.ingester, try Role.parse("ingester"));
     try std.testing.expectError(error.InvalidRole, Role.parse("worker"));
@@ -101,5 +138,6 @@ test "index mode and connection bounds are explicit" {
     try std.testing.expectEqual(IndexMode.disabled, try IndexMode.parse("disabled"));
     try std.testing.expectError(error.InvalidIndexMode, IndexMode.parse("optional"));
     try std.testing.expectEqual(@as(usize, 128), try parsePositiveUsize("128"));
+    try std.testing.expectEqual(@as(i64, 6_000_000), try parseSecondsMicros("6"));
     try std.testing.expectError(error.InvalidPositiveInteger, parsePositiveUsize("0"));
 }

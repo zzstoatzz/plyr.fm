@@ -7,6 +7,7 @@ const postgres_albums = @import("internal/index/postgres_album_store.zig");
 const postgres_album_detail = @import("internal/index/postgres_album_detail_store.zig");
 const repair_runner = @import("internal/ingest/repair_runner.zig");
 const continuous_runner = @import("internal/ingest/continuous_runner.zig");
+const account_reconciler = @import("internal/account/reconciler.zig");
 
 var threaded_io: std.Io.Threaded = undefined;
 pub const std_options_debug_threaded_io: ?*std.Io.Threaded = &threaded_io;
@@ -44,6 +45,16 @@ pub fn main() !void {
         null;
     const album_detail_store = if (postgres_album_detail_store) |*store| store.store() else null;
     switch (settings.role) {
+        .account_reconciler => {
+            const store = if (postgres_store) |*value| value else return error.AccountReconcilerDatabaseRequired;
+            try account_reconciler.run(io, allocator, store.pool, .{
+                .normal_interval_us = settings.account_check_interval_us,
+                .retry_interval_us = settings.account_check_retry_us,
+                .lease_duration_us = settings.account_check_lease_us,
+                .seed_interval_us = settings.account_check_seed_us,
+                .idle_sleep_ms = settings.account_check_idle_ms,
+            });
+        },
         .api => try server.run(io, settings.port, settings.max_connections, .{
             .track_store = track_store,
             .artist_store = artist_store,
@@ -87,7 +98,10 @@ pub fn main() !void {
 test {
     _ = @import("internal/account/availability.zig");
     _ = @import("internal/account/current_pds_status_source.zig");
+    _ = @import("internal/account/check_schedule.zig");
     _ = @import("internal/account/postgres_availability_store.zig");
+    _ = @import("internal/account/postgres_check_schedule.zig");
+    _ = @import("internal/account/reconciler.zig");
     _ = @import("internal/account/repo_status.zig");
     _ = @import("api/response.zig");
     _ = @import("api/router.zig");

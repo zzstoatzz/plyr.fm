@@ -55,13 +55,30 @@ transaction as selected records and the authenticated repository head. Tests
 prove that a later projection conflict rolls all of them back together. The
 real Alembic upgrade and downgrade are exercised against `relay_test`.
 
-## intentionally open
+## reconciliation runtime
 
-Relay account frames still only advance the relay checkpoint. They will become
-deduplicated hints to a separately supervised current-PDS checker; they will
-never write this table directly or make the signed firehose loop wait on an
-untrusted PDS. A periodic reconciliation sweep is also required so a dropped
-hint cannot leave availability stale forever.
+`MODE=account_reconciler` is a separate process role. It does not run inside
+the API or signed-firehose processes. `plyr_index.account_status_checks` stores
+only operational scheduling state: the next attempt, most recent relay hint,
+lease, attempt/failure counters, response classification, and completion time.
+It is not account truth.
+
+Each worker atomically claims one due DID with `FOR UPDATE SKIP LOCKED`, records
+the attempt time before network I/O, and holds a renewable-by-expiry lease. A
+crashed worker's DID becomes claimable after the configured lease window.
+Completion requires the exact attempt and lease, so a late worker cannot
+overwrite its successor. A hint arriving during an in-flight request remains
+due after completion rather than being postponed by the ordinary interval.
+
+Relay `#account` events for repositories with authenticated heads only move the
+schedule forward; they never write availability and failure to record a hint
+does not reject the relay frame. Every five minutes the reconciler seeds missing
+schedule rows from authenticated repository heads, making hints a latency
+optimization rather than a correctness dependency. Transport failures and
+non-authoritative statuses retry on the shorter interval without changing
+canonical evidence.
+
+## intentionally open
 
 REST composition remains open. Artist, album, and track reads should join this
 fact by DID and distinguish account availability from media-delivery
@@ -69,16 +86,18 @@ availability, moderation, discovery policy, and viewer authorization.
 
 ## measured cost
 
-The production-shaped linux/amd64 ReleaseSafe image is 35,221,550 bytes and
-contains a 12,827,232-byte executable. Relative to the preceding verified
-profile artifact, the availability model, strict status decoder,
-destination-safe current-PDS adapter, Postgres adapter, and transaction wiring
-added 10,186 image bytes and 37,352 executable bytes. The cold Docker compile
-completed in 314.8 seconds, below the previously recorded 337.4-second Unicode
-build; generated grapheme data remains the dominant cold-build cost.
+The production-shaped linux/amd64 ReleaseSafe image is now 35,272,654 bytes and
+contains a 13,013,792-byte executable. Adding the durable schedule,
+separately supervised reconciler, relay-hint adapter, and runtime configuration
+to the preceding availability artifact added 51,104 image bytes and 186,560
+executable bytes. The cold Docker compile completed in 319.5 seconds, within the
+previously recorded 314.8–337.4-second range; generated grapheme data remains
+the dominant cold-build cost.
 
-No background checker is running in this artifact, so this slice adds no idle
-network requests, queue, thread, or Redis dependency. Its steady-state cost is
-one monotonic Postgres upsert inside an already-open verified commit or snapshot
-transaction. End-to-end checker throughput and memory belong to the worker
-slice, where they can be measured rather than guessed.
+The host ReleaseSafe reconciler used 3,008 KiB RSS while idle and 13,392 KiB
+after one real DID resolution, pinned-TLS current-PDS request, Postgres evidence
+write, and lease completion. The loaded figure retains the CA bundle and is
+34.8 times smaller than the previously recorded 466.1 MiB complete FastAPI
+process, though that is a process-footprint comparison rather than functional
+parity. The worker is sequential and has no in-memory queue, Redis dependency,
+or unbounded task creation; Postgres leases are its work bound.

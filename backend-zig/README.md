@@ -18,6 +18,7 @@ INDEX_MODE=disabled TRACK_COLLECTION_NSID=fm.plyr.dev.track LIST_COLLECTION_NSID
 just zig bench-http --duration 5 --concurrency 16
 DATABASE_URL=postgresql://... just zig bench-http --with-index --path '/v1/tracks?limit=50'
 DATABASE_URL=postgresql://... TRACK_COLLECTION_NSID=fm.plyr.dev.track LIST_COLLECTION_NSID=fm.plyr.dev.list PROFILE_COLLECTION_NSID=fm.plyr.dev.actor.profile just zig repair-repo did:plc:example
+DATABASE_URL=postgresql://... TRACK_COLLECTION_NSID=fm.plyr.dev.track LIST_COLLECTION_NSID=fm.plyr.dev.list PROFILE_COLLECTION_NSID=fm.plyr.dev.actor.profile just zig reconcile-accounts
 just zig bench-snapshot
 ```
 
@@ -37,7 +38,7 @@ other database name.
 
 | variable | required | purpose |
 |---|---:|---|
-| `MODE` | yes | `api` for read-only HTTP or `repair` for one authenticated repository reconciliation |
+| `MODE` | yes | `api`, `ingester`, `repair`, or separately supervised `account_reconciler` |
 | `TRACK_COLLECTION_NSID` | yes | exact environment-aware track-record NSID |
 | `LIST_COLLECTION_NSID` | yes | exact environment-aware list-record NSID used by albums |
 | `PROFILE_COLLECTION_NSID` | yes | exact environment-aware authored profile-record NSID |
@@ -47,6 +48,11 @@ other database name.
 | `PORT` | no | listener port, default `8001` |
 | `CORS_ALLOWED_ORIGINS` | no | comma-separated exact browser origins; empty disables CORS |
 | `INGEST_REPAIR_DID` | in repair mode | canonical DID whose complete repository is fetched, verified, and atomically reconciled |
+| `ACCOUNT_CHECK_INTERVAL_SECONDS` | no | authoritative current-PDS recheck interval, default 21600 (six hours) |
+| `ACCOUNT_CHECK_RETRY_SECONDS` | no | retry interval after transport or non-authoritative status, default 300 |
+| `ACCOUNT_CHECK_LEASE_SECONDS` | no | expired-worker claim recovery window, default 120 |
+| `ACCOUNT_CHECK_SEED_SECONDS` | no | periodic sweep from authenticated repository heads, default 300 |
+| `ACCOUNT_CHECK_IDLE_MILLISECONDS` | no | idle claim-poll interval, default 1000 |
 
 `/health` is process liveness. `/ready` is product readiness and requires a
 configured track index. The listener acquires a connection permit before
@@ -71,6 +77,14 @@ rejects unsafe or mixed DNS destinations, pins a checked address for TLS,
 verifies the complete signed repository, reconciles `plyr_index`, and exits.
 It never runs migrations; use a write-capable projection role distinct from
 the read-only canary credential.
+
+`MODE=account_reconciler` is also independent of the API and firehose roles.
+It leases due DIDs from Postgres, resolves each DID's current PDS, and persists
+only authoritative account evidence. Relay account frames merely make an
+existing authenticated repository due sooner. A periodic sweep is the
+correctness backstop, and transport/infrastructure failures schedule retries
+without hiding content. Multiple reconcilers coordinate with `SKIP LOCKED` and
+expired leases; an untrusted PDS never blocks signed firehose progress.
 
 Do not source or copy the root `.env` into a worktree. Point a command at the
 existing environment through the normal settings mechanism, and never print

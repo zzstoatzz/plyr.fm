@@ -16,6 +16,7 @@ const zat_keys = @import("zat_signing_key_resolver.zig");
 const watched_module = @import("watched_repositories.zig");
 const commit_store = @import("../projection/postgres_verified_commit_store.zig");
 const snapshot_store = @import("../projection/postgres_verified_snapshot_store.zig");
+const account_schedule = @import("../account/postgres_check_schedule.zig");
 
 const log = std.log.scoped(.ingester);
 
@@ -66,6 +67,7 @@ pub fn run(
     };
     var commits: commit_store.PostgresVerifiedCommitStore = .{ .pool = pool };
     var snapshots: snapshot_store.PostgresVerifiedSnapshotStore = .{ .pool = pool };
+    var status_checks: account_schedule.PostgresCheckSchedule = .{ .pool = pool };
     const projector: projector_module.Projector = .{
         .heads = commits.reader(),
         .commits = commits.store(),
@@ -87,6 +89,7 @@ pub fn run(
         .list_collection = list_collection,
         .track_collection = track_collection,
         .profile_collection = profile_collection,
+        .account_checks = status_checks.port(),
     };
     var client = zat.FirehoseClient.init(io, allocator, .{
         .hosts = hosts,
@@ -113,6 +116,7 @@ const Handler = struct {
     list_collection: []const u8,
     track_collection: []const u8,
     profile_collection: []const u8,
+    account_checks: @import("../account/check_schedule.zig").Schedule,
     fatal_error: ?anyerror = null,
 
     pub fn onRawFrame(self: *Handler, frame: []const u8) !void {
@@ -150,10 +154,12 @@ const Handler = struct {
             .sync => |sync| if (self.watched.contains(sync.did))
                 try self.repairAndWatch(arena.allocator(), sync.did, indexed_at_us),
             .identity => |identity| self.key_cache.evict(identity.did),
-            // Account availability is a distinct projection. It must not
-            // mutate signed list state or make list cursor progress depend on
-            // a legacy artist table.
-            .account => {},
+            // Relay state is only a low-latency hint. A separately supervised
+            // worker resolves the current DID document and checks its PDS;
+            // periodic seeding makes this best-effort write non-authoritative.
+            .account => |account| if (self.watched.contains(account.did))
+                self.account_checks.hint(account.did, indexed_at_us) catch |err|
+                    log.warn("account status hint for {s} was not recorded: {}", .{ account.did, err }),
             .info => |info| if (info.name) |name| {
                 if (std.mem.eql(u8, name, "OutdatedCursor"))
                     return error.OutdatedRelayCursor;
