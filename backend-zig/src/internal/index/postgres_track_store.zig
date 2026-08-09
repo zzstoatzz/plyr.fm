@@ -12,7 +12,6 @@ const track = @import("../domain/track.zig");
 const track_id = @import("../identity/track_id.zig");
 const artist_index = @import("artist_store.zig");
 const PostgresArtistStore = @import("postgres_artist_store.zig").PostgresArtistStore;
-const PostgresAlbumStore = @import("postgres_album_store.zig").PostgresAlbumStore;
 const TrackStore = @import("track_store.zig").TrackStore;
 
 pub const PostgresTrackStore = struct {
@@ -829,44 +828,4 @@ test "PostgreSQL adapter reads a complete derived projection" {
     });
     try std.testing.expectEqual(@as(usize, 1), other_artist_page.len);
     try std.testing.expectEqualStrings(other_uri, other_artist_page[0].value.record.uri);
-
-    var album_store_impl: PostgresAlbumStore = .{ .pool = store_impl.pool };
-    const album_store = album_store_impl.store();
-    const first_album_page = try album_store.listByArtist(page_arena.allocator(), .{
-        .collection = "fm.plyr.dev.list",
-        .artist_did = "did:plc:artist",
-        .limit = 1,
-        .after = null,
-    });
-    try std.testing.expectEqual(@as(usize, 1), first_album_page.len);
-    try std.testing.expectEqualStrings(album_a_uri, first_album_page[0].value.record.uri);
-    try std.testing.expectEqualStrings("Album A", first_album_page[0].value.metadata.name);
-    try std.testing.expectEqualStrings("liner notes", first_album_page[0].value.presentation.description.?);
-    try std.testing.expectEqual(@as(i64, 2), first_album_page[0].value.metrics.track_count);
-    try std.testing.expectEqual(@as(i64, 7), first_album_page[0].value.metrics.total_plays);
-    try std.testing.expect(std.mem.startsWith(u8, first_album_page[0].value.id, "alb_"));
-
-    const second_album_page = try album_store.listByArtist(page_arena.allocator(), .{
-        .collection = "fm.plyr.dev.list",
-        .artist_did = "did:plc:artist",
-        .limit = 10,
-        .after = .{
-            .created_at_us = first_album_page[0].created_at_us,
-            .at_uri = first_album_page[0].value.record.uri,
-        },
-    });
-    try std.testing.expectEqual(@as(usize, 1), second_album_page.len);
-    try std.testing.expectEqualStrings(album_b_uri, second_album_page[0].value.record.uri);
-    // Adult-labeled tracks remain visible in a direct album/catalogue view;
-    // its private member is not counted.
-    try std.testing.expectEqual(@as(i64, 2), second_album_page[0].value.metrics.track_count);
-
-    const other_albums = try album_store.listByArtist(page_arena.allocator(), .{
-        .collection = "fm.plyr.dev.list",
-        .artist_did = "did:plc:alias-one",
-        .limit = 10,
-        .after = null,
-    });
-    try std.testing.expectEqual(@as(usize, 1), other_albums.len);
-    try std.testing.expectEqualStrings(other_album_uri, other_albums[0].value.record.uri);
 }

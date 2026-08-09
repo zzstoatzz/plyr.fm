@@ -87,7 +87,13 @@ def test_real_product_reads_traverse_album_when_present() -> None:
         "sources": {"record": "verified_repo", "metrics": "derived"},
         "projection": {"verification": "verified_repo"},
     }
-    album_summary = {"object": "album", "id": "alb_verified"}
+    album_summary = {
+        "object": "album",
+        "id": "alb_verified",
+        "owner": {"did": "did:plc:artist"},
+        "sources": {"record": "verified_repo"},
+        "projection": {"verification": "verified_repo"},
+    }
     responses = {
         "/v1/tracks?limit=20": _response({"object": "list", "data": [track]}),
         "/v1/tracks/trk_verified": _response(track),

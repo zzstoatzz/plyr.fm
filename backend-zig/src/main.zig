@@ -5,7 +5,6 @@ const postgres = @import("internal/index/postgres_track_store.zig");
 const postgres_composed_tracks = @import("internal/index/postgres_composed_track_store.zig");
 const postgres_playback = @import("internal/index/postgres_playback_store.zig");
 const postgres_artists = @import("internal/index/postgres_artist_store.zig");
-const postgres_albums = @import("internal/index/postgres_album_store.zig");
 const postgres_verified_lists = @import("internal/index/postgres_verified_list_store.zig");
 const repair_runner = @import("internal/ingest/repair_runner.zig");
 const continuous_runner = @import("internal/ingest/continuous_runner.zig");
@@ -50,11 +49,6 @@ pub fn main() !void {
     else
         null;
     const artist_store = if (postgres_artist_store) |*store| store.store() else null;
-    var postgres_album_store: ?postgres_albums.PostgresAlbumStore = if (postgres_store) |*store|
-        .{ .pool = store.pool }
-    else
-        null;
-    const album_store = if (postgres_album_store) |*store| store.store() else null;
     var postgres_verified_list_store: ?postgres_verified_lists.PostgresVerifiedListStore = if (postgres_store) |*store|
         .{ .pool = store.pool }
     else
@@ -75,7 +69,6 @@ pub fn main() !void {
             .track_store = track_store,
             .playback_store = playback_store,
             .artist_store = artist_store,
-            .album_store = album_store,
             .verified_list_store = verified_list_store,
             .track_collection = settings.track_collection,
             .list_collection = settings.list_collection,
@@ -153,8 +146,6 @@ test {
     _ = @import("internal/application/get_playlist.zig");
     _ = @import("internal/application/list_playlists.zig");
     _ = @import("internal/domain/artist.zig");
-    _ = @import("internal/domain/album.zig");
-    _ = @import("internal/domain/album_list.zig");
     _ = @import("internal/domain/playback.zig");
     _ = @import("internal/domain/verified_list.zig");
     _ = @import("internal/atproto/list_record.zig");
@@ -162,8 +153,6 @@ test {
     _ = @import("internal/atproto/profile_record.zig");
     _ = @import("internal/atproto/track_record.zig");
     _ = @import("internal/index/artist_store.zig");
-    _ = @import("internal/index/album_store.zig");
-    _ = @import("internal/index/postgres_album_store.zig");
     _ = @import("internal/index/postgres_artist_store.zig");
     _ = @import("internal/identity/track_id.zig");
     _ = @import("internal/identity/track_cursor.zig");

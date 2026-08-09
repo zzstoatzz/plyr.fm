@@ -135,6 +135,12 @@ def _verify_real_product_reads(base_url: str) -> None:
     album_data = albums.body["data"]
     assert isinstance(album_data, list), albums.body
     if album_data:
+        summary = album_data[0]
+        assert summary["object"] == "album", summary
+        assert summary["owner"]["did"] == artist_did, summary
+        assert summary["projection"]["verification"] == "verified_repo", summary
+        assert summary["sources"]["record"] == "verified_repo", summary
+        assert "presentation" not in summary, summary
         album_id = urllib.parse.quote(album_data[0]["id"], safe="_-")
         album = _request(base_url, f"/v1/albums/{album_id}")
         assert album.status == 200, (album.status, album.body)

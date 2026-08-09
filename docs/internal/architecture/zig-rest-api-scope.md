@@ -54,7 +54,7 @@ decision.
 | `GET /v1/tracks/{track_id}` | covered | public, published track detail from the projection | authenticated viewer state, private/gated tracks, list/search views, publication and mutations |
 | `GET /v1/tracks/{track_id}/playback` | covered | anonymous authorization and delivery resolution with explicit integrity | sessions, supporter/copyright authorization, private-space proxying, PDS blob resolution, play metrics |
 | `GET /v1/artists/{identifier}` | covered | public artist detail by canonical DID or case-insensitive handle alias | verified repository ingestion, collections, follows, profile writes, account state, viewer context |
-| `GET /v1/albums?artist_did={did}` | covered | canonical list-record albums for one artist with strict keyset pagination | continuous verified ingestion, global discovery, writes, viewer state |
+| `GET /v1/albums?artist_did={did}` | covered | verified list-record albums for one artist with strict scope-bound pagination | global discovery, writes, viewer state, presentation resources |
 | `GET /v1/albums/{album_id}` | covered | verified album record and position-complete strong-reference membership with policy-safe hydration | continuous verified ingestion, writes, artwork, private/gated authorization, viewer state |
 | `GET /v1/playlists` | covered | global or owner-scoped verified public playlists with scope-bound keyset pagination | session-owned private lists, liked lists, presentation, writes |
 | `GET /v1/playlists/{playlist_id}` | covered | verified playlist record and position-complete exact-CID member hydration | private authorization, cover presentation, recommendations, writes |

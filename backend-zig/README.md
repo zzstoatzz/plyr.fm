@@ -103,11 +103,11 @@ Artist lookup requires a verified, non-deleted profile record plus affirmative
 account availability, accepts a canonical DID or a case-insensitive handle
 alias, and exposes the transitional source of each field. Authored bio, avatar,
 and timestamps come from the repository projection; legacy presentation and
-preference fields cannot admit a resource. The album
-collection exposes only canonical list-record albums and keeps local
-presentation fields explicitly separate from record identity. Album detail
-preserves every verified strong-reference position and hydrates only an exact
-public URI/CID match.
+preference fields cannot admit a resource. Album collection and detail both
+read the same authenticated list projection. Collection summaries contain only
+verified record metadata, verified ordered-membership counts, attributed owner
+profiles, and derived metrics; detail preserves every strong-reference position
+and hydrates only an exact public URI/CID match.
 
 Playlist collection and detail read only authenticated `playlist` list records;
 they do not join the Python playlist table or fetch a mutable PDS record during

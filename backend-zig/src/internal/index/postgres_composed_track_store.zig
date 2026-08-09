@@ -12,6 +12,7 @@ const pg = @import("pg");
 const zat = @import("zat");
 const lexicon_value = @import("../atproto/lexicon_value.zig");
 const track = @import("../domain/track.zig");
+const verified_list = @import("../domain/verified_list.zig");
 const track_id = @import("../identity/track_id.zig");
 const store_module = @import("track_store.zig");
 
@@ -760,6 +761,22 @@ test "composed PostgreSQL reads use verified records and authoritative account s
     try std.testing.expectEqual(@as(usize, 1), playlist_page[0].value.metrics.available_count);
     try std.testing.expectEqual(@as(i64, 7), playlist_page[0].value.metrics.total_plays);
     try std.testing.expectEqualStrings("artist.example", playlist_page[0].value.owner.profile.?.handle);
+    const album_page = try list_store.listByOwner(a, .{
+        .collection = "fm.plyr.dev.list",
+        .profile_collection = "fm.plyr.dev.actor.profile",
+        .kind = .album,
+        .owner_did = did,
+        .limit = 2,
+        .after = null,
+    });
+    try std.testing.expectEqual(@as(usize, 1), album_page.len);
+    try std.testing.expectEqual(verified_list.Kind.album, album_page[0].value.object);
+    try std.testing.expectEqualStrings(album_list_uri, album_page[0].value.record.uri);
+    try std.testing.expectEqualStrings("Verified Album", album_page[0].value.metadata.name.?);
+    try std.testing.expectEqual(@as(usize, 1), album_page[0].value.metrics.member_count);
+    try std.testing.expectEqual(@as(usize, 1), album_page[0].value.metrics.available_count);
+    try std.testing.expectEqual(track.Source.verified_repo, album_page[0].value.sources.record);
+    try std.testing.expectEqualStrings("verified_repo", album_page[0].value.projection.verification);
     const playlist_detail = (try list_store.getByUri(a, .{
         .uri = list_uri,
         .list_collection = "fm.plyr.dev.list",

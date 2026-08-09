@@ -1,7 +1,6 @@
 const std = @import("std");
 const get_album = @import("../internal/application/get_album.zig");
 const list_albums = @import("../internal/application/list_albums.zig");
-const AlbumStore = @import("../internal/index/album_store.zig").AlbumStore;
 const VerifiedListStore = @import("../internal/index/verified_list_store.zig").VerifiedListStore;
 const response = @import("response.zig");
 
@@ -38,12 +37,19 @@ pub fn get(
 pub fn list(
     request: *std.http.Server.Request,
     allocator: std.mem.Allocator,
-    store: ?AlbumStore,
+    store: ?VerifiedListStore,
     collection: []const u8,
+    profile_collection: []const u8,
     cors: response.CorsPolicy,
     request_id: []const u8,
 ) !void {
-    switch (list_albums.execute(allocator, store, collection, request.head.target)) {
+    switch (list_albums.execute(
+        allocator,
+        store,
+        collection,
+        profile_collection,
+        request.head.target,
+    )) {
         .found => |value| {
             const body = try std.json.Stringify.valueAlloc(allocator, value, .{});
             try response.json(request, .ok, body, request_id, cors);
@@ -54,9 +60,10 @@ pub fn list(
     }
 }
 
-test "v1 album JSON separates record identity from local presentation" {
-    const domain = @import("../internal/domain/album.zig");
-    const value: domain.Album = .{
+test "v1 album collection JSON exposes only verified list summaries" {
+    const domain = @import("../internal/domain/verified_list.zig");
+    const value: domain.Summary = .{
+        .object = .album,
         .id = "alb_example",
         .record = .{
             .uri = "at://did:plc:artist/fm.plyr.dev.list/3m123abc",
@@ -69,20 +76,21 @@ test "v1 album JSON separates record identity from local presentation" {
             .created_at = "2026-08-08T12:00:00.000000Z",
             .updated_at = "2026-08-08T13:00:00.000000Z",
         },
-        .presentation = .{
-            .slug = "album",
-            .description = "local liner notes",
-            .artwork_url = "https://cdn.example/album.jpg",
+        .owner = .{
+            .did = "did:plc:artist",
+            .profile = .{ .handle = "artist.example", .display_name = "Artist", .avatar_url = null },
         },
-        .artist = .{ .did = "did:plc:artist", .handle = "artist.example", .display_name = "Artist" },
-        .metrics = .{ .track_count = 2, .total_plays = 3 },
+        .metrics = .{ .member_count = 2, .available_count = 2, .total_plays = 3 },
         .sources = .{
-            .metadata = .legacy_projection,
-            .presentation = .legacy_local,
-            .membership = .legacy_local,
+            .owner_profile = .mixed,
             .metrics = .derived,
+            .account_availability = .verified_repo,
         },
-        .projection = .{ .indexed_at = null, .verification = .legacy_unverified },
+        .projection = .{
+            .commit_cid = "bafycommit",
+            .commit_rev = "3jqfcqzm3fo2j",
+            .indexed_at_us = 42,
+        },
     };
 
     const json = try std.json.Stringify.valueAlloc(std.testing.allocator, value, .{});
@@ -92,8 +100,9 @@ test "v1 album JSON separates record identity from local presentation" {
     const root = parsed.value.object;
     try std.testing.expectEqualStrings("album", root.get("object").?.string);
     try std.testing.expect(root.get("record") != null);
-    try std.testing.expect(root.get("presentation") != null);
+    try std.testing.expectEqualStrings("verified_repo", root.get("projection").?.object.get("verification").?.string);
     try std.testing.expect(root.get("metrics") != null);
+    try std.testing.expect(root.get("presentation") == null);
     try std.testing.expect(root.get("atproto_record_uri") == null);
     try std.testing.expect(root.get("image_id") == null);
 }

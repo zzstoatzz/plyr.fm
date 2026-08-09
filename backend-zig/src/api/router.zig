@@ -5,7 +5,6 @@ const playlists = @import("playlists.zig");
 const response = @import("response.zig");
 const tracks = @import("tracks.zig");
 const ArtistStore = @import("../internal/index/artist_store.zig").ArtistStore;
-const AlbumStore = @import("../internal/index/album_store.zig").AlbumStore;
 const PlaybackStore = @import("../internal/index/playback_store.zig").PlaybackStore;
 const TrackStore = @import("../internal/index/track_store.zig").TrackStore;
 const VerifiedListStore = @import("../internal/index/verified_list_store.zig").VerifiedListStore;
@@ -19,7 +18,6 @@ pub const App = struct {
     track_store: ?TrackStore,
     playback_store: ?PlaybackStore,
     artist_store: ?ArtistStore,
-    album_store: ?AlbumStore,
     verified_list_store: ?VerifiedListStore,
     track_collection: []const u8,
     list_collection: []const u8,
@@ -74,8 +72,9 @@ pub fn handle(
         try albums.list(
             request,
             allocator,
-            app.album_store,
+            app.verified_list_store,
             app.list_collection,
+            app.profile_collection,
             app.cors,
             request_id,
         );
