@@ -53,7 +53,7 @@ projection is corruption and fails the whole response.
 | `metadata` | list name and authored timestamps | verified repository record |
 | `members[].subject` | ordered track URI/CID strong reference | verified repository record |
 | `members[].track` | optional public track hydration | rebuildable app-view projection |
-| `metrics` | member count, available count, and visible-track play sum | derived per response |
+| `metrics` | member count, available count, and visible-track play sum | derived per response from membership and canonical metrics rollups |
 | `projection` | verified commit CID/revision and ingest time | verified ingestion evidence |
 
 Local description, slug, artwork, UUID, and `album_id` are absent. Those fields

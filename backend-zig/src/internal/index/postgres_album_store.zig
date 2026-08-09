@@ -149,7 +149,7 @@ const select_and_join =
     \\  a.handle,
     \\  a.display_name,
     \\  count(t.atproto_record_uri)::bigint,
-    \\  COALESCE(sum(t.play_count), 0)::bigint,
+    \\  COALESCE(sum(metrics.play_count), 0)::bigint,
     \\  (extract(epoch FROM al.created_at) * 1000000)::bigint
     \\FROM albums AS al
     \\JOIN artists AS a ON a.did = al.artist_did
@@ -165,6 +165,8 @@ const select_and_join =
     \\      OR t.operator_labels ?| ARRAY['copyright-violation']
     \\    )
     \\  )
+    \\LEFT JOIN plyr_index.track_metrics AS metrics
+    \\  ON metrics.record_uri = t.atproto_record_uri
 ;
 
 const where_policy =

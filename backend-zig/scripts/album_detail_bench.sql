@@ -36,6 +36,12 @@ CREATE TABLE plyr_index.list_members (
     track_cid text NOT NULL,
     PRIMARY KEY (list_uri, position)
 );
+CREATE TABLE plyr_index.track_metrics (
+    record_uri text PRIMARY KEY,
+    play_count bigint NOT NULL,
+    write_source text NOT NULL,
+    observed_at_us bigint NOT NULL
+);
 CREATE TABLE artists (
     did text PRIMARY KEY,
     handle text NOT NULL,
@@ -90,8 +96,16 @@ SELECT
     'did:plc:bench',
     'audio/mpeg',
     'public',
-    n,
+    10000 + n,
     'published'
+FROM generate_series(1, 20) AS n;
+
+INSERT INTO plyr_index.track_metrics
+SELECT
+    format('at://did:plc:bench/fm.plyr.dev.track/track-%s', n),
+    n,
+    'legacy_import',
+    1786208400000000 + n
 FROM generate_series(1, 20) AS n;
 
 INSERT INTO plyr_index.list_records VALUES (

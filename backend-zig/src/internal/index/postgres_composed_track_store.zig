@@ -274,6 +274,7 @@ fn decodeRow(allocator: std.mem.Allocator, row: anytype) !track.Track {
     const has_legacy_track = try row.get(bool, 35);
     const has_access_policy = try row.get(bool, 41);
     const has_moderation_policy = try row.get(bool, 42);
+    const has_metrics = try row.get(bool, 43);
     return .{
         .id = id,
         .record = .{
@@ -342,7 +343,7 @@ fn decodeRow(allocator: std.mem.Allocator, row: anytype) !track.Track {
             .access = if (has_access_policy) .application_policy else .derived,
             .self_labels = .verified_repo,
             .operator_labels = if (has_moderation_policy) .moderation_service else .derived,
-            .metrics = .derived,
+            .metrics = if (has_metrics) .application_metrics else .derived,
             .account_availability = availability_source,
         },
         .projection = .{
@@ -385,7 +386,7 @@ const projected_columns =
     \\  pol.space_uri,
     \\  COALESCE(pol.operator_labels, '[]'::jsonb)::text,
     \\  pol.moderation_decision,
-    \\  COALESCE(t.play_count, 0)::bigint,
+    \\  COALESCE(metrics.play_count, 0)::bigint,
     \\  to_char(
     \\    TIMESTAMPTZ 'epoch' + (v.indexed_at_us * INTERVAL '1 microsecond'),
     \\    'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'
@@ -398,7 +399,8 @@ const projected_columns =
     \\  d.artifact_cid,
     \\  d.verification,
     \\  pol.visibility IS NOT NULL,
-    \\  pol.moderation_write_source IS NOT NULL
+    \\  pol.moderation_write_source IS NOT NULL,
+    \\  metrics.record_uri IS NOT NULL
 ;
 
 const joined_projection = "SELECT\n" ++ projected_columns ++ "\n" ++
@@ -411,6 +413,8 @@ const joined_projection = "SELECT\n" ++ projected_columns ++ "\n" ++
     \\  AND d.service = 'r2' AND d.verification = 'verified_blob_cid'
     \\LEFT JOIN plyr_index.track_policies AS pol
     \\  ON pol.record_uri = v.record_uri
+    \\LEFT JOIN plyr_index.track_metrics AS metrics
+    \\  ON metrics.record_uri = v.record_uri
     \\JOIN artists AS a ON a.did = v.owner_did
     \\LEFT JOIN plyr_index.profile_records AS p
     \\  ON p.owner_did = v.owner_did AND p.collection = $2
@@ -488,6 +492,7 @@ const readiness_sql =
     \\  AND to_regclass('plyr_index.profile_records') IS NOT NULL
     \\  AND to_regclass('plyr_index.track_delivery_origins') IS NOT NULL
     \\  AND to_regclass('plyr_index.track_policies') IS NOT NULL
+    \\  AND to_regclass('plyr_index.track_metrics') IS NOT NULL
     \\  AND to_regclass('tracks') IS NOT NULL
     \\  AND to_regclass('artists') IS NOT NULL
 ;
@@ -568,6 +573,12 @@ test "composed PostgreSQL reads use verified records and authoritative account s
         \\)
     , .{});
     _ = try pool.exec(
+        \\CREATE TABLE plyr_index.track_metrics (
+        \\  record_uri text PRIMARY KEY, play_count bigint NOT NULL,
+        \\  write_source text NOT NULL, observed_at_us bigint NOT NULL
+        \\)
+    , .{});
+    _ = try pool.exec(
         \\CREATE TABLE artists (
         \\  did text PRIMARY KEY, handle text NOT NULL, display_name text NOT NULL,
         \\  bio text, avatar_url text
@@ -596,11 +607,15 @@ test "composed PostgreSQL reads use verified records and authoritative account s
     _ = try pool.exec(
         \\INSERT INTO tracks VALUES (
         \\  $1, '2026-08-08T12:00:00Z', 'https://r2.example/audio.flac',
-        \\  'audio/flac', 'public', NULL, '["legacy-note"]', NULL, 7, 'published'
+        \\  'audio/flac', 'public', NULL, '["legacy-note"]', NULL, 700, 'published'
         \\)
     , .{record_uri});
     _ = try pool.exec(
         "INSERT INTO plyr_index.track_policies VALUES ($1, 'public', NULL, 'legacy_import', 1000, '[\"copyright-violation\"]', 'allow', 'legacy_import', 1000)",
+        .{record_uri},
+    );
+    _ = try pool.exec(
+        "INSERT INTO plyr_index.track_metrics VALUES ($1, 7, 'legacy_import', 1000)",
         .{record_uri},
     );
 
@@ -685,6 +700,7 @@ test "composed PostgreSQL reads use verified records and authoritative account s
     try std.testing.expectEqual(track.Source.authored_profile, value.sources.artist_bio);
     try std.testing.expectEqual(track.Source.verified_repo, value.sources.account_availability);
     try std.testing.expectEqual(track.Source.application_policy, value.sources.access);
+    try std.testing.expectEqual(track.Source.application_metrics, value.sources.metrics);
     try std.testing.expectEqual(track.Source.moderation_service, value.sources.operator_labels);
     try std.testing.expectEqual(track.ProjectionVerification.verified_repo, value.projection.verification);
     try std.testing.expectEqualStrings("self-note", value.moderation.self_labels[0]);

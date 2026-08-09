@@ -22,6 +22,7 @@ from backend._internal.content_labels import (
     filter_sensitive_audio_tracks_for_viewer,
 )
 from backend._internal.tasks import schedule_teal_scrobble
+from backend._internal.track_metrics import increment_track_play_count
 from backend._internal.track_visibility import track_visible_filter
 from backend.api.lists.playlists import _can_view, _read_playlist_items
 from backend.api.subsonic.auth import authenticate
@@ -329,7 +330,11 @@ async def scrobble(request: Request) -> Response:
             )
             if not await _claim_play(f"did:{session.did}", track.id, ttl):
                 return {}
-            track.play_count += 1
+            await increment_track_play_count(
+                db,
+                track,
+                source="subsonic_scrobble",
+            )
             await db.commit()
             prefs = await db.scalar(
                 select(UserPreferences).where(UserPreferences.did == session.did)

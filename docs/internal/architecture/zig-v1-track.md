@@ -68,7 +68,9 @@ The adapter's authority map is explicit:
 | account availability | verified repository activity or a current-PDS check |
 | authored avatar and bio | independently authenticated profile record |
 | handle and display name | transitional legacy artist projection |
-| publication, visibility, operator moderation, plays | transitional local app-view policy |
+| publication and visibility | canonical-URI application access policy |
+| operator moderation | canonical-URI labeler projection with independent provenance |
+| plays | canonical-URI application metrics rollup |
 | R2 URL verified against a record blob | dedicated delivery-origin projection |
 | other R2 URL | transitional legacy projection, without a verification claim |
 
@@ -114,6 +116,7 @@ isolation, JSON shape, routing, error envelopes, and exact-origin CORS.
 The REST read now requires an authenticated record and authoritative account
 availability. A matching legacy row can enrich the response but is not required,
 so a valid PDS-only track is readable with derived public defaults. Verified R2
-mirrors no longer depend on the legacy row for their evidence. The next boundary
-is to replace the remaining transitional publication, moderation, and metrics
-join with explicit projections while preserving the response contract.
+mirrors no longer depend on the legacy row for their evidence. The remaining
+legacy row is optional presentation/delivery enrichment rather than record
+admission, moderation, ordering, or metric authority. The next boundary is to
+replace those final compatibility fields while preserving the response contract.

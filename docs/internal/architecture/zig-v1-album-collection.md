@@ -45,7 +45,7 @@ The response separates:
 | `metadata` | projected list name and timestamps | legacy unverified projection |
 | `presentation` | slug, description, and artwork URL | legacy app-local state |
 | `artist` | canonical DID plus projected profile fields | derived join |
-| `metrics` | visible member count and summed plays | derived from the legacy local membership relationship |
+| `metrics` | visible member count and summed plays | membership-derived count plus canonical-URI metrics rollups |
 
 The current `fm.plyr.list` lexicon authors `name`, `listType`, ordered strong
 references, and timestamps. It does not author description, slug, or artwork.

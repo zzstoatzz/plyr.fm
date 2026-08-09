@@ -133,6 +133,7 @@ pub const Source = enum {
     current_pds,
     verified_delivery,
     application_policy,
+    application_metrics,
     moderation_service,
     legacy_projection,
     legacy_local,

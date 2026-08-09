@@ -87,6 +87,12 @@ CREATE TABLE plyr_index.track_policies (
     moderation_write_source text,
     moderation_observed_at_us bigint
 );
+CREATE TABLE plyr_index.track_metrics (
+    record_uri text PRIMARY KEY,
+    play_count bigint NOT NULL,
+    write_source text NOT NULL,
+    observed_at_us bigint NOT NULL
+);
 CREATE TABLE artists (
     did text PRIMARY KEY,
     handle text NOT NULL,
@@ -163,12 +169,18 @@ SELECT
     'public', NULL, 'legacy_import', 1786208400000000 + n
 FROM generate_series(1, 100) AS n;
 
+INSERT INTO plyr_index.track_metrics
+SELECT
+    format('at://did:plc:bench/fm.plyr.dev.track/track-%s', n),
+    n, 'legacy_import', 1786208400000000 + n
+FROM generate_series(1, 100) AS n;
+
 INSERT INTO tracks
 SELECT
     format('at://did:plc:bench/fm.plyr.dev.track/track-%s', n),
     TIMESTAMPTZ '2026-08-08 12:00:00+00' + n * INTERVAL '1 second',
     format('https://r2.example/audio-%s.flac', n), 'audio/flac', 'public',
-    NULL, '[]', NULL, n, 'published'
+    NULL, '[]', NULL, 10000 + n, 'published'
 FROM generate_series(1, 100) AS n;
 
 CREATE INDEX track_records_owner_created_bench

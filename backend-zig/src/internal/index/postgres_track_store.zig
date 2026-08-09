@@ -162,7 +162,7 @@ pub const PostgresTrackStore = struct {
                     return error.CorruptProjection;
                 },
             };
-            const created_at_us = row.get(i64, 24) catch |err| {
+            const created_at_us = row.get(i64, 25) catch |err| {
                 std.log.err("track collection sort key decode failed: {}", .{err});
                 return error.CorruptProjection;
             };
@@ -275,6 +275,12 @@ pub const PostgresTrackStore = struct {
                     null,
             },
             .metrics = .{ .play_count = try row.get(i64, base + 23) },
+            .sources = .{
+                .metrics = if (try row.get(bool, base + 24))
+                    .application_metrics
+                else
+                    .derived,
+            },
             .projection = .{
                 .indexed_at = null,
                 .verification = .legacy_unverified,
@@ -324,7 +330,8 @@ pub const projected_columns =
     \\  t.self_labels::text,
     \\  t.operator_labels::text,
     \\  t.moderation_override,
-    \\  t.play_count::bigint
+    \\  COALESCE(tm.play_count, 0)::bigint,
+    \\  tm.record_uri IS NOT NULL
 ;
 
 pub const projected_fields = "SELECT\n" ++ projected_columns;
@@ -332,6 +339,8 @@ pub const projected_fields = "SELECT\n" ++ projected_columns;
 const from_tracks =
     \\FROM tracks AS t
     \\JOIN artists AS a ON a.did = t.artist_did
+    \\LEFT JOIN plyr_index.track_metrics AS tm
+    \\  ON tm.record_uri = t.atproto_record_uri
 ;
 
 const detail_query = projected_fields ++ "\n" ++ from_tracks ++ "\n" ++
@@ -456,6 +465,14 @@ test "PostgreSQL adapter reads a complete derived projection" {
     _ = try store_impl.pool.exec("DROP TABLE IF EXISTS albums CASCADE", .{});
     _ = try store_impl.pool.exec("DROP TABLE IF EXISTS user_preferences CASCADE", .{});
     _ = try store_impl.pool.exec("DROP TABLE IF EXISTS artists CASCADE", .{});
+    _ = try store_impl.pool.exec("CREATE SCHEMA IF NOT EXISTS plyr_index", .{});
+    _ = try store_impl.pool.exec("DROP TABLE IF EXISTS plyr_index.track_metrics", .{});
+    _ = try store_impl.pool.exec(
+        \\CREATE TABLE plyr_index.track_metrics (
+        \\  record_uri text PRIMARY KEY, play_count bigint NOT NULL,
+        \\  write_source text NOT NULL, observed_at_us bigint NOT NULL
+        \\)
+    , .{});
     _ = try store_impl.pool.exec(
         \\CREATE TABLE artists (
         \\  did text PRIMARY KEY,
@@ -555,9 +572,13 @@ test "PostgreSQL adapter reads a complete derived projection" {
         "{\"type\":\"copyright\"}",
         "[\"self-label\"]",
         "[\"operator-label\"]",
-        @as(i32, 7),
+        @as(i32, 700),
         "published",
     });
+    _ = try store_impl.pool.exec(
+        "INSERT INTO plyr_index.track_metrics VALUES ($1, 7, 'legacy_import', 1000)",
+        .{uri},
+    );
 
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
@@ -576,6 +597,7 @@ test "PostgreSQL adapter reads a complete derived projection" {
     try std.testing.expectEqual(track.ProjectionVerification.legacy_unverified, value.projection.verification);
     try std.testing.expectEqualStrings("self-label", value.moderation.self_labels[0]);
     try std.testing.expectEqual(@as(i64, 7), value.metrics.play_count);
+    try std.testing.expectEqual(track.Source.application_metrics, value.sources.metrics);
 
     var artist_store_impl: PostgresArtistStore = .{ .pool = store_impl.pool };
     const artist_store = artist_store_impl.store();

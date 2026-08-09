@@ -12,7 +12,7 @@ from sqlalchemy.engine import make_url
 from alembic import command
 
 PRIOR_REVISION = "4aaed6c819f1"
-HEAD_REVISION = "e53a9d6c214f"
+HEAD_REVISION = "f64b0e7d325a"
 EXPECTED_TABLES = {
     "account_availability",
     "account_status_checks",
@@ -24,6 +24,7 @@ EXPECTED_TABLES = {
     "repo_heads",
     "track_records",
     "track_delivery_origins",
+    "track_metrics",
     "track_policies",
 }
 EXPECTED_AVAILABILITY_COLUMNS = {
@@ -81,6 +82,12 @@ EXPECTED_POLICY_COLUMNS = {
     "record_uri",
     "space_uri",
     "visibility",
+}
+EXPECTED_METRIC_COLUMNS = {
+    "observed_at_us",
+    "play_count",
+    "record_uri",
+    "write_source",
 }
 EXPECTED_HEAD_COLUMNS = {
     "repo_did",
@@ -157,19 +164,20 @@ def assert_test_database_and_drop_schema(database_url: str) -> None:
                 text(
                     "CREATE TABLE public.tracks ("
                     "atproto_record_uri text, visibility text NOT NULL, space_uri text, "
-                    "operator_labels jsonb NOT NULL DEFAULT '[]', moderation_override text)"
+                    "operator_labels jsonb NOT NULL DEFAULT '[]', "
+                    "moderation_override text, play_count integer NOT NULL DEFAULT 0)"
                 )
             )
             connection.execute(
                 text(
                     "INSERT INTO public.tracks VALUES "
                     "('at://did:plc:test/fm.plyr.track/public', 'public', NULL, "
-                    "'[\"sexual\"]', NULL), "
+                    "'[\"sexual\"]', NULL, 7), "
                     "('at://did:plc:test/fm.plyr.track/private', 'private', "
-                    "'at://did:plc:test/fm.plyr.space/private/test', '[]', NULL), "
+                    "'at://did:plc:test/fm.plyr.space/private/test', '[]', NULL, 11), "
                     "('at://did:plc:test/fm.plyr.track/unrelated', 'public', NULL, "
-                    "'[\"unrelated-label\"]', 'unsupported'), "
-                    "(NULL, 'public', NULL, '[]', NULL)"
+                    "'[\"unrelated-label\"]', 'unsupported', 0), "
+                    "(NULL, 'public', NULL, '[]', NULL, 99)"
                 )
             )
     finally:
@@ -315,6 +323,26 @@ def main() -> None:
                 or moderated[0].moderation_write_source != "legacy_import"
             ):
                 raise AssertionError(f"unexpected policy backfill: {moderated!r}")
+        finally:
+            engine.dispose()
+        metric_columns = table_columns(database_url, "track_metrics")
+        if metric_columns != EXPECTED_METRIC_COLUMNS:
+            raise AssertionError(
+                f"unexpected track_metrics columns: {sorted(metric_columns)!r}"
+            )
+        engine = create_engine(database_url)
+        try:
+            with engine.connect() as connection:
+                metrics = connection.execute(
+                    text(
+                        "SELECT record_uri, play_count, write_source "
+                        "FROM plyr_index.track_metrics ORDER BY record_uri"
+                    )
+                ).all()
+            if [row.play_count for row in metrics] != [11, 7, 0] or any(
+                row.write_source != "legacy_import" for row in metrics
+            ):
+                raise AssertionError(f"unexpected metrics backfill: {metrics!r}")
         finally:
             engine.dispose()
     finally:

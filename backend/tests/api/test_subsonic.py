@@ -22,7 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend._internal import create_session
 from backend.main import app
-from backend.models import Artist, Playlist, Track
+from backend.models import Artist, Playlist, Track, TrackMetric
 
 AUDIO_BYTES = b"ID3\x03\x00fake-mp3-payload-for-subsonic-stream-test"
 DID = "did:plc:subsonicuser"
@@ -317,6 +317,10 @@ async def test_scrobble_increments_play_count(
     await asyncio.to_thread(lambda: conn.scrobble(sid=str(track.id), submission=True))
     await db_session.refresh(track)
     assert track.play_count == 1
+    metric = await db_session.get(TrackMetric, track.atproto_record_uri)
+    assert metric is not None
+    assert metric.play_count == 1
+    assert metric.write_source == "subsonic_scrobble"
     # now-playing notifications (submission=false) are acknowledged, not counted
     await asyncio.to_thread(lambda: conn.scrobble(sid=str(track.id), submission=False))
     await db_session.refresh(track)

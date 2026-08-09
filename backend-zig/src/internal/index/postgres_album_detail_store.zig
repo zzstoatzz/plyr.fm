@@ -248,6 +248,8 @@ const detail_query =
     \\      OR t.operator_labels ?| ARRAY['copyright-violation']
     \\    )
     \\  )
+    \\LEFT JOIN plyr_index.track_metrics AS tm
+    \\  ON tm.record_uri = t.atproto_record_uri
     \\LEFT JOIN artists AS a ON a.did = t.artist_did AND a.deactivated = false
     \\WHERE records.record_uri = $1
     \\  AND records.collection = $2
@@ -304,8 +306,12 @@ test "PostgreSQL verified album detail preserves unavailable positions" {
         "INSERT INTO artists (did, handle, display_name) VALUES ('did:plc:artist', 'artist.test', 'Artist')",
         .{},
     );
-    try insertTrack(pool, track_uri, track_cid, "public", 7);
+    try insertTrack(pool, track_uri, track_cid, "public", 700);
     try insertTrack(pool, private_uri, private_cid, "private", 11);
+    _ = try pool.exec(
+        "INSERT INTO plyr_index.track_metrics VALUES ($1, 7, 'legacy_import', 1000)",
+        .{track_uri},
+    );
 
     var implementation: PostgresAlbumDetailStore = .{ .pool = pool };
     const detail = (try implementation.store().getByUri(a, .{
@@ -342,6 +348,12 @@ fn cidString(allocator: std.mem.Allocator, seed: []const u8) ![]const u8 {
 }
 
 fn createTrackSchema(pool: *pg.Pool) !void {
+    _ = try pool.exec(
+        \\CREATE TABLE plyr_index.track_metrics (
+        \\  record_uri text PRIMARY KEY, play_count bigint NOT NULL,
+        \\  write_source text NOT NULL, observed_at_us bigint NOT NULL
+        \\)
+    , .{});
     _ = try pool.exec(
         \\CREATE TABLE artists (
         \\  did text PRIMARY KEY, handle text NOT NULL, display_name text NOT NULL,

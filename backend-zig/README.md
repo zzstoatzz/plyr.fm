@@ -86,7 +86,9 @@ policy, metrics, and unverified R2 delivery fields. One canonical-URI policy
 row carries access and operator-moderation claims with independent provenance;
 the Python write paths maintain access while labeler reconciliation owns
 moderation, and neither can overwrite the other. The migration imports existing
-decisions once. Verified PDS blob mirrors live in a separate,
+decisions once. A separate canonical-URI metrics rollup owns play counts and
+mirrors them back to the Python column only for compatibility. Verified PDS
+blob mirrors live in a separate,
 record-CID-bound delivery projection. A legacy track row is optional enrichment:
 a verified PDS record without one remains readable with a derived-public default
 rather than inheriting local publish state. Artist lookup
