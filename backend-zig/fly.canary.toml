@@ -1,5 +1,5 @@
 app = "plyr-api-zig-canary"
-primary_region = "sea"
+primary_region = "sjc"
 
 [build]
   dockerfile = "Dockerfile"

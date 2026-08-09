@@ -101,7 +101,7 @@ jobs:
         run: >-
           flyctl machine run "registry.fly.io/plyr-api-zig-canary:${GITHUB_SHA}"
           --app plyr-api-zig-canary
-          --region sea
+          --region sjc
           --rm
           --restart no
           --skip-dns-registration
@@ -124,6 +124,7 @@ jobs:
           flyctl deploy
           --config fly.canary.toml
           --app plyr-api-zig-canary
+          --ha=false
           --image "registry.fly.io/plyr-api-zig-canary:${GITHUB_SHA}"
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_ZIG_NEXT }}
