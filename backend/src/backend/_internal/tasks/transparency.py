@@ -26,7 +26,7 @@ from datetime import timedelta
 import logfire
 from docket import Perpetual
 
-from backend._internal.transparency import TransparencyPost, render
+from backend._internal.transparency import is_publishable, render_group
 from backend.config import settings
 from backend.utilities.redis import get_async_redis_client
 
@@ -67,30 +67,53 @@ async def publish_moderation_decisions(
 
     posted = 0
     skipped = 0
-    for event in events:
-        post: TransparencyPost | None = render(event)
-        if post is None:
-            skipped += 1
-        elif settings.notify.publish_moderation_decisions:
-            if await notification_service.post_publicly(post.segments):
-                posted += 1
+    group: list[dict] = []
+    group_key: tuple[str, str | None] | None = None
+
+    async def _flush() -> bool:
+        """Post the pending group; False stops the pass at the failure.
+
+        The cursor only advances past a group's events once their post lands,
+        so a failure never skips a decision that was never announced.
+        """
+        nonlocal posted, cursor
+        for post in render_group(group):
+            if settings.notify.publish_moderation_decisions:
+                if not await notification_service.post_publicly(post.segments):
+                    logger.warning(
+                        "transparency post failed at event %d; stopping batch",
+                        post.event_id,
+                    )
+                    return False
             else:
-                # stop at the failure so the cursor does not skip past a
-                # decision that was never announced
-                logger.warning(
-                    "transparency post failed at event %d; stopping batch",
-                    event["id"],
+                logfire.info(
+                    "transparency post (publishing disabled)",
+                    event_id=post.event_id,
+                    action=group[0]["action"],
+                    text=post.text,
                 )
-                break
-        else:
-            logfire.info(
-                "transparency post (publishing disabled)",
-                event_id=event["id"],
-                action=event["action"],
-                text=post.text,
-            )
             posted += 1
-        cursor = event["id"]
+            cursor = post.event_id
+        group.clear()
+        return True
+
+    stopped = False
+    for event in events:
+        # one decision applied to many subjects arrives as adjacent events
+        # with the same action and reason; announce it once, not per subject
+        key = (event["action"], event.get("reason")) if is_publishable(event) else None
+        if group and key != group_key:
+            if not await _flush():
+                stopped = True
+                break
+        if key is None:
+            skipped += 1
+            cursor = event["id"]
+        else:
+            group_key = key
+            group.append(event)
+    if not stopped and group:
+        await _flush()
 
     await redis.set(CURSOR_KEY, str(cursor))
     logfire.info(

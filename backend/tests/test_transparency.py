@@ -15,10 +15,12 @@ from backend._internal.tasks.transparency import (
     publish_moderation_decisions,
 )
 from backend._internal.transparency import (
+    MAX_POST_CHARS,
     POLICY_URL,
     PUBLISHABLE_ACTIONS,
     is_publishable,
     render,
+    render_group,
 )
 
 
@@ -155,6 +157,52 @@ def test_a_long_reason_is_bounded_without_truncating_the_post() -> None:
     assert post.segments[-1].link == POLICY_URL
 
 
+def test_one_decision_on_many_subjects_is_one_post() -> None:
+    """Six exclusions of one uploader's catalog are one announcement.
+
+    A post per subject turns a single curation call into a feed flood that
+    reads as six separate incidents.
+    """
+    events = [
+        _event("override_exclude", id=10 + i, track_id=660 + i, reason="not_music")
+        for i in range(6)
+    ]
+    posts = render_group(events)
+    assert len(posts) == 1
+    post = posts[0]
+    assert "removed 6 tracks from discovery and radio" in post.text
+    assert "not music" in post.text
+    assert len(post.text) <= MAX_POST_CHARS
+    assert post.event_id == 15
+    track_links = [link for link in _links(post) if "/track/" in link]
+    assert track_links == [f"https://plyr.fm/track/{660 + i}" for i in range(6)]
+
+
+def test_a_group_over_the_post_budget_splits_and_stays_ordered() -> None:
+    """Splitting is the budget's problem, not the caller's.
+
+    Each post must fit Bluesky's limit, cover its events in id order, and
+    carry the last covered id so the cursor can land between chunks.
+    """
+    events = [
+        _event("takedown", id=100 + i, track_id=10_000_000 + i, reason="x" * 120)
+        for i in range(20)
+    ]
+    posts = render_group(events)
+    assert len(posts) > 1
+    assert all(len(post.text) <= MAX_POST_CHARS for post in posts)
+    covered = [link for post in posts for link in _links(post) if "/track/" in link]
+    assert covered == [f"https://plyr.fm/track/{10_000_000 + i}" for i in range(20)]
+    assert [post.event_id for post in posts] == sorted(post.event_id for post in posts)
+    assert posts[-1].event_id == 119
+
+
+def test_a_single_event_group_keeps_the_singular_headline() -> None:
+    posts = render_group([_event("override_exclude", id=1, track_id=64)])
+    assert len(posts) == 1
+    assert "removed a track from discovery and radio" in posts[0].text
+
+
 async def test_first_run_starts_at_head_and_posts_nothing() -> None:
     """The publisher must never announce decisions that predate it.
 
@@ -281,3 +329,100 @@ async def test_unpublishable_events_advance_the_cursor() -> None:
 
     mock_notifier.post_publicly.assert_not_awaited()
     redis.set.assert_awaited_with(CURSOR_KEY, "7")
+
+
+async def test_adjacent_same_decision_events_publish_as_one_post() -> None:
+    """The publisher groups a batch decision instead of posting per subject."""
+    redis = AsyncMock()
+    redis.get.return_value = "5"
+
+    with (
+        patch(
+            "backend._internal.tasks.transparency.get_async_redis_client",
+            return_value=redis,
+        ),
+        patch(
+            "backend._internal.clients.moderation.get_moderation_client"
+        ) as mock_get_client,
+        patch("backend._internal.notifications.notification_service") as mock_notifier,
+        patch("backend._internal.tasks.transparency.settings") as mock_settings,
+    ):
+        mock_settings.moderation.auth_token = "token"
+        mock_settings.notify.publish_moderation_decisions = True
+        client = AsyncMock()
+        client.get_events_since.return_value = [
+            _event("override_exclude", id=6 + i, track_id=660 + i, reason="not_music")
+            for i in range(6)
+        ]
+        mock_get_client.return_value = client
+        mock_notifier.post_publicly = AsyncMock(return_value=True)
+
+        await publish_moderation_decisions()
+
+    assert mock_notifier.post_publicly.await_count == 1
+    redis.set.assert_awaited_with(CURSOR_KEY, "11")
+
+
+async def test_a_reason_change_breaks_the_group() -> None:
+    """Different reasons are different decisions and announce separately."""
+    redis = AsyncMock()
+    redis.get.return_value = "5"
+
+    with (
+        patch(
+            "backend._internal.tasks.transparency.get_async_redis_client",
+            return_value=redis,
+        ),
+        patch(
+            "backend._internal.clients.moderation.get_moderation_client"
+        ) as mock_get_client,
+        patch("backend._internal.notifications.notification_service") as mock_notifier,
+        patch("backend._internal.tasks.transparency.settings") as mock_settings,
+    ):
+        mock_settings.moderation.auth_token = "token"
+        mock_settings.notify.publish_moderation_decisions = True
+        client = AsyncMock()
+        client.get_events_since.return_value = [
+            _event("override_exclude", id=6, track_id=1, reason="not_music"),
+            _event("override_exclude", id=7, track_id=2, reason="fingerprint_match"),
+        ]
+        mock_get_client.return_value = client
+        mock_notifier.post_publicly = AsyncMock(return_value=True)
+
+        await publish_moderation_decisions()
+
+    assert mock_notifier.post_publicly.await_count == 2
+    redis.set.assert_awaited_with(CURSOR_KEY, "7")
+
+
+async def test_a_failed_group_post_leaves_the_cursor_before_the_group() -> None:
+    """A grouped announcement that never landed must be retried whole."""
+    redis = AsyncMock()
+    redis.get.return_value = "5"
+
+    with (
+        patch(
+            "backend._internal.tasks.transparency.get_async_redis_client",
+            return_value=redis,
+        ),
+        patch(
+            "backend._internal.clients.moderation.get_moderation_client"
+        ) as mock_get_client,
+        patch("backend._internal.notifications.notification_service") as mock_notifier,
+        patch("backend._internal.tasks.transparency.settings") as mock_settings,
+    ):
+        mock_settings.moderation.auth_token = "token"
+        mock_settings.notify.publish_moderation_decisions = True
+        client = AsyncMock()
+        client.get_events_since.return_value = [
+            _event("flagged_by_scan", id=6),
+            _event("override_exclude", id=7, track_id=1, reason="not_music"),
+            _event("override_exclude", id=8, track_id=2, reason="not_music"),
+        ]
+        mock_get_client.return_value = client
+        mock_notifier.post_publicly = AsyncMock(return_value=False)
+
+        await publish_moderation_decisions()
+
+    # the unpublishable flag at 6 is passed, but the unannounced group is not
+    redis.set.assert_awaited_with(CURSOR_KEY, "6")

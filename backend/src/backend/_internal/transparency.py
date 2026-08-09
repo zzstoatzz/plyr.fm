@@ -51,12 +51,25 @@ _HEADLINE = {
     "label_negated": "withdrew a label from a track",
 }
 
+# One decision applied to many subjects reads as one decision, not a feed
+# flood: six exclusions of one uploader's catalog are a single announcement.
+_HEADLINE_MANY = {
+    "takedown": "removed {n} tracks",
+    "override_exclude": "removed {n} tracks from discovery and radio",
+    "label_applied": "labeled {n} tracks",
+    "label_negated": "withdrew a label from {n} tracks",
+}
+
 TRACK_URL = "https://plyr.fm/track/{track_id}"
 # every post carries this, so a dead link would be a dead link on all of them.
 POLICY_URL = "https://docs.plyr.fm/moderation"
 
 # operator-supplied, so bounded. the rest of the post is fixed-length.
 REASON_MAX_CHARS = 120
+
+# Bluesky's limit is 300 graphemes; len() counts codepoints, which is never
+# fewer, so staying under it in len() terms is safe without a grapheme library.
+MAX_POST_CHARS = 300
 
 
 @dataclass(frozen=True)
@@ -98,35 +111,68 @@ def _display(url: str) -> str:
     return url.removeprefix("https://").removeprefix("http://")
 
 
-def render(event: dict[str, Any]) -> TransparencyPost | None:
-    """Render one event, or None when it is not publishable.
+def _render_chunk(events: list[dict[str, Any]]) -> TransparencyPost:
+    """Render one post for a run of events sharing an action and reason.
 
-    Never names the uploader and never mentions a reporter. The track is
-    already public and is identified by link; @-mentioning the artist would
+    Never names the uploader and never mentions a reporter. The tracks are
+    already public and are identified by link; @-mentioning the artist would
     notify and amplify a moderation action against them, which is punishment
     rather than transparency.
 
     No external embed card either. A card would re-surface the artwork and
     title of content we just removed, which is the opposite of the point.
     """
-    if not is_publishable(event):
-        return None
+    action = events[0]["action"]
+    headline = (
+        _HEADLINE[action]
+        if len(events) == 1
+        else _HEADLINE_MANY[action].format(n=len(events))
+    )
+    segments: list[Segment] = [Segment(f"moderation: {headline}")]
 
-    segments: list[Segment] = [Segment(f"moderation: {_HEADLINE[event['action']]}")]
-
-    if reason := event.get("reason"):
+    if reason := events[0].get("reason"):
         # bounded here rather than by truncating the finished post: facets are
         # byte offsets into the text, so trimming the assembled string would
         # leave every link pointing at the wrong range.
         pretty = reason.replace("_", " ")[:REASON_MAX_CHARS]
         segments.append(Segment(f"\nreason: {pretty}"))
 
-    if track_id := event.get("subject_track_id"):
-        url = TRACK_URL.format(track_id=track_id)
-        segments.append(Segment("\n"))
-        segments.append(Segment(_display(url), link=url))
+    for event in events:
+        if track_id := event.get("subject_track_id"):
+            url = TRACK_URL.format(track_id=track_id)
+            segments.append(Segment("\n"))
+            segments.append(Segment(_display(url), link=url))
 
     segments.append(Segment("\n\n"))
     segments.append(Segment(_display(POLICY_URL), link=POLICY_URL))
 
-    return TransparencyPost(event_id=event["id"], segments=tuple(segments))
+    return TransparencyPost(event_id=events[-1]["id"], segments=tuple(segments))
+
+
+def render_group(events: list[dict[str, Any]]) -> list[TransparencyPost]:
+    """Render a run of same-decision events as the fewest posts that fit.
+
+    Callers group adjacent events sharing (action, reason); one decision
+    applied to a batch of subjects becomes one announcement. Splits only when
+    the post budget forces it, keeping events in id order so each post's
+    `event_id` (the last event it covers) is a valid cursor position.
+    """
+    group = [event for event in events if is_publishable(event)]
+    posts: list[TransparencyPost] = []
+    while group:
+        take = 1
+        while take < len(group):
+            candidate = _render_chunk(group[: take + 1])
+            if len(candidate.text) > MAX_POST_CHARS:
+                break
+            take += 1
+        posts.append(_render_chunk(group[:take]))
+        group = group[take:]
+    return posts
+
+
+def render(event: dict[str, Any]) -> TransparencyPost | None:
+    """Render one event, or None when it is not publishable."""
+    if not is_publishable(event):
+        return None
+    return _render_chunk([event])
