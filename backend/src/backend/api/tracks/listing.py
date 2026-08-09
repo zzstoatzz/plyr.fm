@@ -34,6 +34,7 @@ from backend.models import (
 )
 from backend.schemas import TrackResponse
 from backend.storage import storage
+from backend.storage.keys import AudioKey, InvalidMediaExtension
 from backend.utilities.aggregations import (
     get_comment_counts,
     get_copyright_info,
@@ -617,7 +618,7 @@ async def get_my_file_sizes(
     auth_session: AuthSession = Depends(require_auth),
 ) -> FileSizesResponse:
     """Get file sizes for the authenticated user's tracks via R2 HEAD requests."""
-    stmt = select(Track.id, Track.file_id, Track.file_type).where(
+    stmt = select(Track.id, Track.file_id, Track.file_type, Track.r2_url).where(
         Track.artist_did == auth_session.did,
         Track.file_id.isnot(None),
     )
@@ -630,19 +631,28 @@ async def get_my_file_sizes(
     semaphore = asyncio.Semaphore(10)
     sizes: dict[int, int] = {}
 
-    async def get_size(track_id: int, file_id: str, file_type: str) -> None:
-        # routes through the typed-key path: head_file builds the R2 key via
-        # AudioKey.for_file(file_id, file_type), so this endpoint can't drift
-        # from how save() wrote the object. see backend/storage/keys.py.
+    async def get_size(
+        track_id: int, file_id: str, file_type: str, r2_url: str | None
+    ) -> None:
+        # routes through the typed-key path so this endpoint can't drift from
+        # how save() wrote the object; `for_track` additionally resolves the key
+        # from `r2_url` for ingested rows, whose `file_id` is the record's
+        # rkey and addresses nothing. see backend/storage/keys.py.
+        try:
+            key = AudioKey.for_track(
+                file_id=file_id, file_type=file_type, r2_url=r2_url
+            )
+        except InvalidMediaExtension:
+            return
         async with semaphore:
-            size = await storage.head_file(file_id, file_type)
+            size = await storage.head_file(key.file_id, key.extension)
         if size is not None:
             sizes[track_id] = size
 
     await asyncio.gather(
         *(
-            get_size(track_id, file_id, file_type)
-            for track_id, file_id, file_type in tracks
+            get_size(track_id, file_id, file_type, r2_url)
+            for track_id, file_id, file_type, r2_url in tracks
         )
     )
 

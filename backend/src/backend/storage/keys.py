@@ -17,6 +17,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import PurePosixPath
+from urllib.parse import urlsplit
 
 from backend._internal.image import ImageFormat
 from backend.utilities.audio_formats import AudioFormat
@@ -61,8 +62,57 @@ class AudioKey:
 
     @classmethod
     def for_file(cls, file_id: str, file_type: str) -> AudioKey:
-        """build from `(file_id, file_type)` as stored in the tracks table."""
+        """build from `(file_id, file_type)` as stored in the tracks table.
+
+        NOTE: `Track.file_id` is only a storage key for audio *we* stored. on
+        the jetstream ingest path it is `record["fileId"]` falling back to the
+        rkey — a value the record's author chose, which generally addresses
+        nothing in our bucket. for a row that carries an `r2_url`, that URL is
+        the authoritative pointer: use `from_url` (see `for_track`).
+        """
         return cls(file_id=file_id, extension=_strip_ext(file_type))
+
+    @classmethod
+    def from_url(cls, url: str) -> AudioKey | None:
+        """recover the key from one of *our own* public audio URLs.
+
+        the origin must match this deployment's configured audio bucket. a
+        record's `audioUrl` is written by whoever authored the record, and a
+        path lifted from a foreign origin would name one of our objects while
+        claiming to describe someone else's bytes (#1778: never treat an
+        uploader-controlled endpoint as our storage). returns None for a
+        foreign origin, another environment's bucket, or a shape we don't
+        store — callers decide whether that's a fallback or a failure.
+        """
+        from backend.config import settings
+
+        bucket_url = settings.storage.r2_public_bucket_url
+        if not bucket_url:
+            return None
+        parsed = urlsplit(url)
+        ours = urlsplit(bucket_url)
+        if (parsed.scheme, parsed.netloc) != (ours.scheme, ours.netloc):
+            return None
+
+        path = PurePosixPath(parsed.path)
+        if path.parent.name != "audio" or not path.stem:
+            return None
+        try:
+            return cls(file_id=path.stem, extension=_strip_ext(path.suffix))
+        except InvalidMediaExtension:
+            return None
+
+    @classmethod
+    def for_track(cls, *, file_id: str, file_type: str, r2_url: str | None) -> AudioKey:
+        """the key that actually locates a track's audio.
+
+        prefers the key encoded in `r2_url` — set by whoever stored the bytes —
+        over `(file_id, file_type)`, which only addresses storage for uploads
+        that went through us.
+        """
+        if r2_url and (from_url := cls.from_url(r2_url)):
+            return from_url
+        return cls.for_file(file_id, file_type)
 
     @property
     def key(self) -> str:

@@ -36,6 +36,7 @@ from backend.api.albums import invalidate_album_cache_by_id
 from backend.config import settings
 from backend.models import Track, TrackRevision
 from backend.storage import storage
+from backend.storage.keys import AudioKey
 from backend.utilities.audio_formats import AudioFormat
 from backend.utilities.database import db_session
 
@@ -259,16 +260,19 @@ async def restore_track_revision(
             )
             reupload_blob_ref: dict | None = None
             try:
+                revision_key = AudioKey.for_track(
+                    file_id=revision.file_id,
+                    file_type=revision.file_type,
+                    r2_url=revision.audio_url,
+                )
                 content_length = await storage.head_file(
-                    revision.file_id, revision.file_type
+                    revision_key.file_id, revision_key.extension
                 )
                 if content_length is not None:
-                    revision_file_id = revision.file_id
-                    revision_file_type = revision.file_type
 
                     def body_factory() -> AsyncIterable[bytes]:
                         return storage.stream_file_data(
-                            revision_file_id, revision_file_type
+                            revision_key.file_id, revision_key.extension
                         )
 
                     reupload_blob_ref = await upload_blob(

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections import Counter
 from collections.abc import AsyncIterable
 
 import logfire
@@ -19,7 +20,7 @@ from backend.config import settings
 from backend.models import Track
 from backend.models.job import JobStatus
 from backend.storage import storage
-from backend.utilities.audio_formats import AudioFormat
+from backend.storage.keys import AudioKey, InvalidMediaExtension
 from backend.utilities.database import db_session
 
 logger = logging.getLogger(__name__)
@@ -84,6 +85,9 @@ async def save_tracks_to_pds(
     failed_count = 0
     processed_count = 0
     errors: list[str] = []
+    # failures grouped by cause — a batch usually fails for one reason across
+    # many tracks, and "6 tracks: <reason>" beats six near-identical toasts
+    reason_counts: Counter[str] = Counter()
     last_processed_track_id: int | None = None
     last_status: str | None = None
     progress_lock = asyncio.Lock()
@@ -116,6 +120,27 @@ async def save_tracks_to_pds(
         async with semaphore:
             track_data: dict | None = None
             one_status = "skipped"
+
+            def fail(reason: str, title: str | None = None) -> None:
+                """record a failure together with WHY.
+
+                every failure path goes through here. a bare `failed_count += 1`
+                leaves the caller with a number and no explanation — that is how
+                a save reported "6 failed" with an empty error list and nothing
+                in telemetry to reconstruct it from.
+                """
+                nonlocal failed_count, one_status
+                failed_count += 1
+                one_status = "failed"
+                reason_counts[reason] += 1
+                errors.append(f"{title or f'track {track_id}'}: {reason}")
+                logfire.warn(
+                    "pds save failed for track",
+                    track_id=track_id,
+                    reason=reason,
+                    did=auth_session.did,
+                )
+
             try:
                 async with db_session() as db:
                     result = await db.execute(
@@ -142,7 +167,7 @@ async def save_tracks_to_pds(
                         return
 
                     if not track.file_id or not track.file_type:
-                        failed_count += 1
+                        fail("track has no stored audio file", track.title)
                         return
 
                     track_data = {
@@ -167,41 +192,59 @@ async def save_tracks_to_pds(
                     skipped_count += 1
                     return
 
-                audio_format = AudioFormat.from_extension(track_data["file_type"])
-                if not audio_format:
-                    failed_count += 1
+                # `file_id` addresses storage only for uploads that went through
+                # us; an ingested row carries the record's `fileId`/rkey, and its
+                # `r2_url` is what actually points at the bytes.
+                try:
+                    audio_key = AudioKey.for_track(
+                        file_id=track_data["file_id"],
+                        file_type=track_data["file_type"],
+                        r2_url=track_data["r2_url"],
+                    )
+                except InvalidMediaExtension:
+                    fail(
+                        f"unsupported audio format ({track_data['file_type']})",
+                        track_data["title"],
+                    )
                     return
 
                 audio_url = track_data["r2_url"]
                 if not audio_url:
                     audio_url = await storage.get_url(
-                        track_data["file_id"],
+                        audio_key.file_id,
                         file_type="audio",
-                        extension=track_data["file_type"],
+                        extension=audio_key.extension,
                     )
                 if not audio_url:
-                    failed_count += 1
+                    fail("no audio URL to copy from", track_data["title"])
                     return
 
                 content_length = await storage.head_file(
-                    track_data["file_id"],
-                    track_data["file_type"],
+                    audio_key.file_id,
+                    audio_key.extension,
                 )
                 if content_length is None:
-                    failed_count += 1
+                    # the row references audio this deployment can't read — most
+                    # often a track ingested from the firehose, whose bytes live
+                    # wherever it was uploaded, not in this environment's bucket.
+                    fail(
+                        "audio isn't in plyr.fm storage, so there's nothing to copy",
+                        track_data["title"],
+                    )
                     return
 
-                track_file_id = track_data["file_id"]
-                track_file_type = track_data["file_type"]
+                stream_key = audio_key
 
                 def body_factory() -> AsyncIterable[bytes]:
-                    return storage.stream_file_data(track_file_id, track_file_type)
+                    return storage.stream_file_data(
+                        stream_key.file_id, stream_key.extension
+                    )
 
                 blob_ref = await upload_blob(
                     auth_session,
                     body_factory=body_factory,
                     content_length=content_length,
-                    content_type=audio_format.media_type,
+                    content_type=audio_key.format.media_type,
                 )
                 blob_cid = blob_ref.get("ref", {}).get("$link")
                 blob_size = blob_ref.get("size")
@@ -239,7 +282,7 @@ async def save_tracks_to_pds(
                     result = await db.execute(select(Track).where(Track.id == track_id))
                     track = result.scalar_one_or_none()
                     if not track:
-                        failed_count += 1
+                        fail("track disappeared mid-save", track_data["title"])
                         return
 
                     track.audio_storage = "both"
@@ -262,10 +305,7 @@ async def save_tracks_to_pds(
                     e,
                     exc_info=True,
                 )
-                failed_count += 1
-                one_status = "failed"
-                title = track_data["title"] if track_data else f"track {track_id}"
-                errors.append(f"{title}: {str(e)[:200]}")
+                fail(str(e)[:200], track_data["title"] if track_data else None)
             finally:
                 async with progress_lock:
                     processed_count += 1
@@ -274,6 +314,11 @@ async def save_tracks_to_pds(
                     await update_progress(f"saved {saved_count}/{total_count} tracks")
 
     await asyncio.gather(*(save_one(track_id) for track_id in track_ids))
+
+    failure_summary = [
+        f"{n} track{'s' if n != 1 else ''}: {reason}"
+        for reason, n in reason_counts.most_common()
+    ]
 
     if saved_count == 0 and failed_count > 0 and skipped_count == 0:
         await job_service.update_progress(
@@ -287,6 +332,7 @@ async def save_tracks_to_pds(
                 "skipped_count": skipped_count,
                 "failed_count": failed_count,
                 "errors": errors[:5],
+                "failure_summary": failure_summary,
             },
         )
         return
@@ -307,6 +353,7 @@ async def save_tracks_to_pds(
             "skipped_count": skipped_count,
             "failed_count": failed_count,
             "errors": errors[:5],
+            "failure_summary": failure_summary,
         },
     )
 
