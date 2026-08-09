@@ -29,6 +29,10 @@ pub fn main() !void {
     else
         null;
     defer if (postgres_store) |*store| store.deinit();
+    if (settings.database_role) |expected_role| {
+        const store = if (postgres_store) |*value| value else return error.DatabaseRoleWithoutDatabase;
+        try store.requireRole(expected_role);
+    }
 
     var postgres_composed_track_store: ?postgres_composed_tracks.PostgresComposedTrackStore = if (postgres_store) |*store|
         .{ .pool = store.pool, .profile_collection = settings.profile_collection }

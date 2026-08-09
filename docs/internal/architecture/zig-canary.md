@@ -26,7 +26,10 @@ database authority. It reads the staging projection through a dedicated
 on every current projection table, establishes the same default for projection
 tables created later, and grants no schema creation or table-write privilege.
 Online upgrades skip this deployment-only grant where that role is absent, so
-local and unrelated environments do not acquire an ambient principal.
+local and unrelated environments do not acquire an ambient principal. The Fly
+configuration also declares `DATABASE_ROLE=plyr_zig_canary`; startup compares it
+to PostgreSQL's effective `current_user` and refuses to serve if the staged
+credential has more or different authority than intended.
 
 The machine:
 

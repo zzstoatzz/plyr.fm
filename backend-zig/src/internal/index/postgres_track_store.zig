@@ -38,6 +38,21 @@ pub const PostgresTrackStore = struct {
         self.pool.deinit();
     }
 
+    pub fn requireRole(self: *PostgresTrackStore, expected_role: []const u8) !void {
+        var query_row = (self.pool.row(
+            "SELECT current_user = $1",
+            .{expected_role},
+        ) catch return error.DatabaseRoleUnavailable) orelse
+            return error.DatabaseRoleUnavailable;
+        var query_row_active = true;
+        defer if (query_row_active) forceReleaseQueryRow(&query_row);
+
+        const matches = query_row.get(bool, 0) catch return error.DatabaseRoleUnavailable;
+        finishQueryRow(&query_row) catch return error.DatabaseRoleUnavailable;
+        query_row_active = false;
+        if (!matches) return error.UnexpectedDatabaseRole;
+    }
+
     pub fn store(self: *PostgresTrackStore) TrackStore {
         return .{
             .context = self,
@@ -456,6 +471,11 @@ test "PostgreSQL adapter reads a complete derived projection" {
 
     var store_impl = try PostgresTrackStore.initWithPoolSize(allocator, io, database_url, 1);
     defer store_impl.deinit();
+    try store_impl.requireRole("zig_test");
+    try std.testing.expectError(
+        error.UnexpectedDatabaseRole,
+        store_impl.requireRole("plyr_zig_canary"),
+    );
     try std.testing.expect(store_impl.store().ready());
 
     var database_row = (try store_impl.pool.row("SELECT current_database()", .{})).?;

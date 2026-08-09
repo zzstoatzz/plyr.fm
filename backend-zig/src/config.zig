@@ -26,6 +26,7 @@ pub const Config = struct {
     role: Role,
     port: u16,
     database_url: ?[]const u8,
+    database_role: ?[]const u8,
     index_mode: IndexMode,
     max_connections: usize,
     track_collection: []const u8,
@@ -57,6 +58,11 @@ pub const Config = struct {
         const index_mode = try IndexMode.parse(getenv("INDEX_MODE") orelse "required");
         const database_url = getenv("DATABASE_URL");
         if (index_mode == .required and database_url == null) return error.DatabaseUrlRequired;
+        const database_role = getenv("DATABASE_ROLE");
+        if (database_role) |value| {
+            if (database_url == null) return error.DatabaseRoleWithoutDatabase;
+            try validateDatabaseRole(value);
+        }
         const repair_did = getenv("INGEST_REPAIR_DID");
         if (role == .repair) {
             if (database_url == null or index_mode != .required)
@@ -75,6 +81,7 @@ pub const Config = struct {
             .role = role,
             .port = std.fmt.parseInt(u16, port_value, 10) catch return error.InvalidPort,
             .database_url = database_url,
+            .database_role = database_role,
             .index_mode = index_mode,
             .max_connections = try parsePositiveUsize(getenv("MAX_CONNECTIONS") orelse "128"),
             .track_collection = track_collection,
@@ -127,6 +134,16 @@ fn parseSecondsMicros(value: []const u8) !i64 {
         error.InvalidPositiveInteger;
 }
 
+fn validateDatabaseRole(value: []const u8) !void {
+    if (value.len == 0 or value.len > 63) return error.InvalidDatabaseRole;
+    if (!(std.ascii.isLower(value[0]) or value[0] == '_'))
+        return error.InvalidDatabaseRole;
+    for (value[1..]) |byte| {
+        if (!(std.ascii.isLower(byte) or std.ascii.isDigit(byte) or byte == '_'))
+            return error.InvalidDatabaseRole;
+    }
+}
+
 test "process roles are explicit" {
     try std.testing.expectEqual(Role.api, try Role.parse("api"));
     try std.testing.expectEqual(Role.account_reconciler, try Role.parse("account_reconciler"));
@@ -144,4 +161,16 @@ test "index mode and connection bounds are explicit" {
     try std.testing.expectEqual(@as(usize, 128), try parsePositiveUsize("128"));
     try std.testing.expectEqual(@as(i64, 6_000_000), try parseSecondsMicros("6"));
     try std.testing.expectError(error.InvalidPositiveInteger, parsePositiveUsize("0"));
+}
+
+test "database role expectations use unquoted PostgreSQL identifiers" {
+    try validateDatabaseRole("plyr_zig_canary");
+    try validateDatabaseRole("_service2");
+    try std.testing.expectError(error.InvalidDatabaseRole, validateDatabaseRole(""));
+    try std.testing.expectError(error.InvalidDatabaseRole, validateDatabaseRole("Owner"));
+    try std.testing.expectError(error.InvalidDatabaseRole, validateDatabaseRole("plyr-zig"));
+    try std.testing.expectError(
+        error.InvalidDatabaseRole,
+        validateDatabaseRole("a" ** 64),
+    );
 }
