@@ -146,58 +146,51 @@ blind-host rotation, rewind to the start of the blind window, not 10s.
 The alert re-fired once more before the orphaned write aged out of its 1h
 window — expected, and exactly the cost of detection without recovery.
 
-#### redis had no password, and a redis blip took the whole API down (#1782, #1786, #1787, August 8)
+#### the scan was pointed at a host the uploader controls (#1778 → #1790, August 8)
 
-**why**: #1783 encrypted what the session cache *held*, but `plyr-redis` itself
-still accepted connections with no authentication — the payoff step in the #1782
-chain, and a standing multiplier on any future foothold. Closing it meant a
-coordinated password rotation, the kind of change worth rehearsing on staging
-first. Rehearsing it is what found the second bug.
+**why**: `Artist.pds_url` comes from a DID document, and for `did:web` that
+document is served from the subject's own domain. We interpolated it into a
+`getBlob` URL and handed it to AudD, Modal, and Replicate — each of which
+fetches it server-side. The regression test on `main` built
+`http://169.254.169.254/xrpc/com.atproto.sync.getBlob?...` from a stored
+`pds_url` and sent it to three third-party fetchers: the cloud metadata
+endpoint, reached by proxy. And a PDS serves blobs *fresh on every request*, so
+"scan the track" meant "scan whatever that host returns at that moment".
 
-**what shipped**:
-- **`plyr-redis` requires a password** (#1786). `--requirepass` from a
-  `REDIS_PASSWORD` secret on both `plyr-redis` and `plyr-redis-stg`. The command is
-  wrapped in `sh -c` because Fly **exec's** `[processes]` args rather than running
-  them through a shell — unwrapped, `--requirepass $REDIS_PASSWORD` sets the
-  password to that literal 16-character string and looks like it worked. Verified
-  against `redis:7-alpine` locally before deploying anywhere.
-- **a redis outage no longer 500s the API** (#1787). `slowapi` hands any storage
-  exception to its rate-limit handler, which reads `exc.detail`; redis errors have
-  no such attribute, so an unreachable Redis returned
-  `AttributeError: 'ConnectionError' object has no attribute 'detail'` on *every*
-  request, `/health` included — which fails the platform health check and gets
-  machines cycled. `in_memory_fallback_enabled` keeps limits enforced per-process
-  and probes for recovery; `swallow_errors` backstops the header path the fallback
-  misses.
-- the README no longer tells you to point both environments at production redis,
-  and now records the cutover ordering constraint.
+**what shipped**: `is_safe_url` now runs where an untrusted endpoint enters the
+system (`slingshot.resolve_mini_doc`, accepted or rejected whole, so a hostile
+PDS also blocks the handle update it arrived with) and at both `pds_blob_url`
+construction sites, since rows written earlier can still hold a hostile
+endpoint. Then `mirror_pds_blob` fetches the blob once through the hardened
+client with a size cap, checks it hashes to the `pds_blob_cid` the record
+commits to, and stores our verified copy — the vendor steps re-enter against
+bytes we can vouch for. Validation alone would have left the TOCTOU intact plus
+a reassuring log line. The object is keyed by the content hash `storage.save`
+computes, never by the record's attacker-supplied `fileId`; `content_hash_ownership`
+has caused three incidents already. The verification is self-securing: the fetch
+targets the PDS slingshot resolved for the DID, so a record naming bytes that
+PDS won't serve simply fails to mirror — an unverified jetstream event can cause
+a *failed* mirror, never a wrong one.
 
-**technical notes**:
-- **staging is what caught the second bug.** The `requirepass` cutover took 51s end
-  to end with ~25s of client disruption, and telemetry showed the predicted
-  sequence — `ConnectionError` while redis restarted, then `AuthenticationError`
-  once it returned with a password but before `DOCKET_URL` propagated. What was
-  *not* predicted: every request 500'd during that window. The earlier claim that
-  this "degrades gracefully" was half right — the session cache does, since every
-  call falls through to Postgres, but the rate limiter sits in middleware in front
-  of everything and had no such handling.
-- **there is no zero-downtime ordering.** Redis rejects `AUTH` when no password is
-  set and rejects unauthenticated clients once one is, so whichever side moves
-  first the other is briefly broken. The fix is to make the window survivable, not
-  to eliminate it.
-- **verified by restarting staging redis under load.** After #1787 deployed,
-  `plyr-redis-stg` was restarted while polling the API: **150/150 requests returned
-  200**, against the same scenario that produced blanket 500s an hour earlier. Redis
-  came back with auth enforced, 44 docket workers re-registered, and telemetry
-  recorded zero 5xx and zero `AttributeError` across 552 records.
-- `redis-cli -u redis://:pw@host` fails with `WRONGPASS` — it sends an empty ACL
-  username, while the Python client parses the same URL correctly. Worth knowing:
-  it makes a working deployment look broken during verification, and the wrong
-  reaction to that is rolling back a correct change.
-- **the production cutover ran on August 8** (plyr-redis v2 + `REDIS_PASSWORD`)
-  and was re-verified August 9 from inside the prod network: an unauthenticated
-  connection to `plyr-redis.internal` gets `AuthenticationError`. #1782 is
-  closed on both environments.
+**scope**: 2 of 1001 prod tracks are `audio_storage='pds'` with no R2 copy, but
+that population is the one that grows — 75% of August uploads carry a PDS blob,
+up from 3% in December. The scan-integrity half of #1778 is still open (see
+known issues); this closes the SSRF half.
+
+#### smaller things, August 8
+
+- **operator alerts say which environment fired** (#1793). Discord notifications
+  carried no environment tag, so a staging page and a production page were
+  indistinguishable at 2am.
+- **the PDS mirror backfill script got a docket client** (#1791), and the attempt
+  to ship `scripts/` inside the backend image was reverted the same day (#1792) —
+  admin scripts run from a checkout, not from the deployed container.
+- **the `DATABASE_POOL_RECYCLE=240` staging mitigation was unset** (#1794): forcing
+  a reconnect every 240s starved concurrent uploads behind the 3-per-artist gate
+  and timed out three album integration tests. Integration albums are now isolated
+  per run, because `_create_album` is idempotent on `(artist_did, slug)` and a
+  timed-out run leaves its album behind for the next one to double-count.
+- **a transparent favicon for Safari tabs** (#1777).
 
 #### the session cache was handing out PDS credentials (#1778–#1784, August 7–8 — prod `2026.0808.035148`)
 
@@ -255,291 +248,38 @@ bytes into `ffmpeg`; code execution there lands on the Fly private network; wher
 and five were unconditional and permanent — they hand the same payoff to any future
 foothold — which is why the cache was fixed first.
 
-#### the blackout finally pages someone — after the obvious alert was proven wrong twice (#1775, August 6–7 — prod `2026.0807.043507`)
+**what followed** (archived — see `.status_history/2026-08.md`): `plyr-redis` now
+requires a password (#1786), closing step four of the chain on both environments;
+rehearsing that cutover on staging found that `slowapi` hands storage exceptions
+to a handler reading `exc.detail`, so an unreachable Redis returned `AttributeError`
+on *every* request including `/health` — fixed in #1787 with an in-memory fallback,
+verified by restarting staging redis under load (150/150 requests returned 200).
 
-**why**: the #1739 incident — 11 hours of `fm.plyr.*` ingest blackout that looked
-healthy — left a standing known issue: nothing alerts a human. The obvious alert
-("zero `fm.plyr.*` dispatches in N minutes") was built and then discarded on first
-contact: dispatches are user writes, legitimately zero for hours overnight, so
-silence proves nothing. The second attempt — counting #1740 blind-host rotations —
-fired the same night and was discarded too, after the firing itself supplied the
-diagnosis: `silent_seconds: 1801` against an 1800s timeout, one rotation every 30
-minutes like clockwork. `_is_blind()` requires "no own event while other traffic
-flows", but the subscription's bsky profile mirror flows constantly, so its
-quiet-network escape hatch ("both go silent together and we stay put") describes a
-state that cannot occur. Every quiet `fm.plyr` half-hour trips the detector on
-every host, forever. Rotation count measures user inactivity, not host health.
+#### August 3 – 8 (archived)
 
-**what shipped**: the write-echo signal. plyr writes `fm.plyr.*` records to PDSes
-itself and ingests its own echoes (that loop has existed since #1068), so every
-successful own-namespace `createRecord`/`putRecord`/`deleteRecord` now emits a
-`pds record write` log at the single funnel all record writes pass through
-(`make_pds_request`, both OAuth and app-password paths). Two Logfire alerts stand,
-both notifying Discord:
-- **`jetstream ingest blackout (writes without echoes)`**: writes > 0 and zero
-  dispatches in 1h, with a 5-minute tail guard so a write at the window edge waits
-  for its echo. Quiet-immune — no user activity, no fire; any real user action,
-  blackout paged within the hour.
-- **`jetstream consumer silent`**: the consumer's known-DIDs refresh logs every
-  ~5 minutes regardless of traffic; zero of those in 30m means the process is dead
-  or stuck.
+See `.status_history/2026-08.md` for detailed history: redis growing a password and
+a redis blip taking the whole API down (#1782, #1786, #1787); the blackout alert
+that finally pages someone, after the obvious alert was proven wrong twice (#1775);
+the third-party-broadcaster design shape read out of sister-radio's syndication
+write-up (#1774); 502 followers and the first full usage accounting; `/atlas`, the
+2D semantic map of the catalog (#1766–#1768); the legal codification that public
+audio is analyzed and derived data published (#1769); embeds surviving sandboxed
+iframes (#1770); counting users from the network instead of the database (#1761);
+the sister-radio listener-page adoptions and the two rules they produced
+(#1752–#1756); three player bugs with one disease (#1757, #1759, #1762); the radio
+switching tracks mid-song by design (#1760); and the pinned tag selection (#1763).
 
-**technical notes**:
-- the rotation log is demoted warn → info and `_is_blind()`'s docstring now tells
-  the truth: rotating on a quiet window is routine (~20×/night), costs one
-  reconnect with a rewound cursor, and a rotation is not evidence of a broken host.
-- the tests pin the echo contract from the write side: if the log stops matching
-  plyr's namespace, the downstream alert goes permanently silent — that is the
-  regression they guard.
-- found along the way: the Logfire MCP's `query_run` silently clamps every query
-  to a rolling ~30-minute window, intersecting explicit `start_timestamp`
-  predicates without any indication. It briefly manufactured a false "all
-  telemetry history is gone" finding (the giveaway: `min(start_timestamp)`
-  advancing in lockstep with the clock). Alert-engine queries are unaffected.
+### November 2025 – July 2026
 
-#### reading the sister-radio author's catalog, and capturing the broadcaster design (#1774, August 5–6)
-
-**why**: nekomimi.pet — the builder behind sister-radio/radio.wisp.place (which
-`/radio` credits), wisp.place, and Slingshot — wrote up the syndication design
-their network actually runs (["syndicating radio with evil
-atproto"](https://nekomimi.leaflet.pub/3mqovvmc4jk2i)): each station embeds a tiny
-read-only PDS serving one signed `pet.nkp.radio.station/self` record under a
-`did:web`, bootstrapped by a bare `com.atproto.sync.requestCrawl`; a minimal
-directory worker health-checks, introduces, and steps out of the audio path.
-
-**what changed**: #1774 captures the plyr-side design shape before it is needed —
-**advertisement vs. admission**. Discovery (a broadcaster announcing itself with a
-signed record) and admission (who actually airs, which stays the curated
-`STATIONS` tuple per #1743, because live audio cannot be fingerprinted before it
-airs) are separable concerns that must not be conflated. Their ["How do we trust a
-DID?"](https://nekomimi.leaflet.pub/3m5wx7izaps2o) post independently lands on the
-same conclusion from the other side: atproto has no decentralized trust tooling,
-labelers are the least-bad gate — and plyr already runs one. #1752's parked
-syndication bullet now points at the leaflet as its design reference.
-
-#### 502 followers, and the first full accounting (August 5)
-
-**why**: the @plyr.fm account crossed 500 followers with very little self-promotion,
-which prompted the first end-to-end usage accounting since launch — recorded for the
-numbers, and for what trying to measure them exposed.
-
-**the numbers** (August 5, 2026):
-- lifetime, from the prod DB and `GET /stats`: 999 tracks / 121 hours of audio from 97
-  publishing artists; 442 atproto accounts have signed in, accruing ~40–50/month with no
-  dead months; 13,384 plays; 474 likes; 141 albums; 44 playlists; 48 jams. December's
-  432-track month was one artist (pyxorium.com) uploading a 379-track back catalog —
-  checked in the DB before annotating, because the first guess ("the continuous
-  publisher") was wrong.
-- last 30 days, from the Cloudflare edge and Logfire: 564k edge requests, 184 GB served,
-  ~74% of bytes from cache; peak 1,599 unique visitors/day (avg ~899) against 90 distinct
-  signed-in users; 109 5xx (~0.05%). A 96k-request burst (Jul 19) and a 4,278-threat bot
-  swarm from one NL source (Aug 4) were both absorbed at the edge; the app saw neither.
-
-**what measuring revealed**: **plays over time is historically unknowable.** `play_count`
-is a counter on the track row, not an event stream, so the only trend window is Logfire's
-14-day retention on `/tracks/{id}/play` — ~73 plays/day, flat, and not comparable to the
-~48/day lifetime average because radio plays only started counting on July 1 (#1622). A
-real curve needs a play-events table or a daily snapshot of `/stats` whose deltas become
-the series; deliberately not built, since it is new surface. The honest read on the rest
-is accumulation, not acceleration.
-
-#### /atlas — a 2D semantic map of the catalog (#1766–#1768, August 4)
-
-**why**: discovery has been lists all the way down — feeds, tags, radio. But every public
-track already has a 512-dim CLAP embedding in turbopuffer for mood search, which is
-exactly the input a spatial surface needs. `/atlas` (unlisted, noindex) puts the catalog
-on a pan/zoom canvas positioned by how tracks *sound*, adapted from pub-search's atlas,
-which pioneered the pipeline and the renderer.
-
-**what shipped**:
-- `scripts/build_atlas.py` (standalone uv script): eligibility mirrors the radio corpus —
-  public/supporters, ungated, active artist, no adult-audio or copyright label —
-  replicated in raw SQL against the projected label columns, because an anonymous
-  chosen-for-you surface should follow radio's rules. Vectors export from turbopuffer,
-  then PCA→50, UMAP→2D for display, and a **separate** UMAP→10D for HDBSCAN.
-- two cluster tiers, named by c-TF-IDF over titles and tags of core members, refined into
-  2–4 word region names by claude haiku (keyword fallback with no API key).
-- daily rebuild via `.github/workflows/build-atlas.yml` → `atlas.json` in the stats
-  bucket, proxied by a new `GET /stats/atlas` exactly like `/stats/costs`. The pub-search
-  lesson is that a static map fossilizes.
-- canvas 2D renderer: sprite-stamped points over a spatial grid index, gaussian nebulae
-  per cluster, and one shared label-collision economy in priority order (regions → fine
-  clusters → track titles by plays+likes → artist handles). Semantic zoom ends at actual
-  cover art, drawn flat — the #1756 rule holds. Click a track and the normal footer
-  player takes it; artists with 2+ tracks are avatar circles at their catalog centroid.
-- two follow-ups: the first CI dispatch failed because `NEON_DATABASE_URL_PRD` is in
-  sqlalchemy form and psycopg rejects it (#1767), and review on prod produced bigger
-  sprites plus artist circles visible from the whole-map view under a zoom-scaled cap, so
-  one dominant catalog can't own the overview (#1768).
-
-**technical notes**: clustering runs on the 10D projection rather than the 2D display,
-because clustering the display projection turns its artifacts into cluster boundaries
-(measured in pub-search: the fine tier scored worse than chance in 2D). PCA is float64 —
-randomized SVD overflows in float32 at these magnitudes. Live payload as of August 5: 921
-points, 13 coarse regions, 61 fine clusters, 44 artist circles; tier granularity is
-`n//60` / `n//160`, so it drifts as the catalog grows and relabels daily. Deferred on
-purpose: a nav link, a live-radio overlay, the atlas as a PDS blob, deep links, on-map
-search, and pub-search's WebGL rotating-planet layer.
-
-#### public audio is analyzed, and derived data is published (#1769, August 4)
-
-the atlas crossed a line the legal pages hadn't. Everyone whose tracks sit in the vector
-store had accepted the Feb 2026 terms — the embedding pipeline and version-aware
-re-acceptance shipped together in #848 — but the atlas publishes embedding-*derived* data
-about the whole public catalog to anonymous visitors, with no per-artist ask. That stance
-is now written down instead of implied: terms §2 states that public content is analyzed
-automatically (embeddings, genre classification, copyright fingerprinting, aggregate
-catalog views) and that derived data (similarity coordinates, suggested genres, cluster
-labels) may be publicly visible; privacy §3 says the same from the data-use side.
-`terms_last_updated` moved to 2026-08-04, so existing users are re-prompted — consent to
-the new state is collected, not assumed. Deliberately unchanged: auto-tag stays opt-in per
-upload, because writing tags to your track is mutation consent; and the jetstream
-known-DID ingest gate stays, since opening ingest beyond signed-in artists is a separate
-product decision.
-
-#### embeds die in sandboxed iframes (#1770, August 4)
-
-**why**: a radio embed nested inside a sandboxed iframe (a Leaflet document, in the
-report) never hydrated — it sat frozen on its SSR'd "tuning…" state. An iframe sandboxed
-without `allow-same-origin` gets an opaque origin, where merely *accessing*
-`window.localStorage` throws `SecurityError` — which `typeof localStorage !== 'undefined'`
-and `browser` guards don't catch. `jam.svelte.ts` touched `sessionStorage` in a
-module-level singleton constructor, so the whole bundle threw at import time and hydration
-never ran.
-
-**what shipped**: `safe-storage.ts` wraps both storages with every access — including the
-property access itself — in try/catch (the MDN idiom), and every call site in the root
-layout and the state modules it imports was swapped; the inline flash-prevention script in
-`<svelte:head>`, which can't import, got a local shim. Backend CORS now accepts the
-literal `Origin: null` those iframes send, without which the embed hydrates and every
-fetch is blocked. That loosens nothing: prod and staging already allow any https origin,
-and session cookies are HttpOnly and scoped to plyr.fm. No in-memory persistence
-fallback — an embed not remembering preferences is correct behavior for an embed.
-
-#### counting users from the network instead of the database (#1761, August 4)
-
-`scripts/users_over_time.py` counts plyr.fm users straight from atproto: every signed-in
-user gets an `fm.plyr.actor.profile` record in their own PDS, so `listReposByCollection`
-on lightrail → slingshot `resolveMiniDoc` → each PDS's `getRecord` yields a `createdAt`
-per user and a cumulative plotext curve in the terminal, with no database and no
-credentials. 351 repos held the collection at the time, fewer than the `artists` table,
-because the record's `createdAt` is when the *record* was written — users predating the
-profile upsert are time-shifted or absent. That gap is documented in the module docstring
-rather than smoothed over: it is the atproto-native number.
-
-#### learning from sister-radio, and what we kept (#1752–#1756, August 3)
-
-**why**: [sister-radio](https://tangled.org/okami.mom/sister-radio) (the radio behind
-radio.wisp.place, which `/radio` already credits) does several things on its listener page
-worth adopting. #1752 tracks the full list; the first slice shipped — and half of it was
-then deliberately removed.
-
-**what shipped**:
-- an ambient wash derived from the on-air artwork (#1753): accent colors sampled from the
-  cover drive a page-level glow, plus a `theme-color` tint for mobile chrome.
-  **currently inert in production** — the images hosts send no
-  `Access-Control-Allow-Origin`, so the canvas sampling fails closed and the page keeps
-  its neutral look until a CORS header is added (held for an infra sign-off).
-- long track titles marquee via the existing `ScrollingText` instead of clamping.
-- layout repairs the work surfaced (#1754, #1755): the rotation deck no longer pins to the
-  viewport bottom with a dead band above it, the station title is two deliberate rows, and
-  a short viewport can no longer compress the station column under the deck.
-- `/radio` fits its viewport with **no vertical scrolling** (#1756): the artwork is the
-  page's one flexible element, sized from the space left after the fixed chrome.
-
-**decisions** (both standing rules now): the CRT treatment shipped in #1753 and was
-removed in #1756 — it drew on top of artists' cover art, which is the artist's intentional
-presentation, never the platform's to decorate; effects derived *from* the art are fine,
-effects *over* it are not. And `/radio` is an appliance, not a document: if space runs
-short, content scales — scrolling is not the fallback.
-
-#### three player bugs, one disease (#1757, #1759, #1762, August 3–4)
-
-**why**: toggling radio tune-in/stop with tracks in the queue made the player "eagerly
-consume and skip" through up-next; separately, switching stations while tuned in could
-leave the radio on-air but silent. all three bugs were work outliving the load it
-belonged to, on the one shared `<audio>` element.
-
-**what shipped**:
-- #1757: `playRadio`'s station-position seek waited on `loadedmetadata` via a bare handler
-  that was never removed — after stopping radio, the *queue track* that re-attached got
-  seeked to `min(station position, duration)` = its own end, fired `ended`, advanced, and
-  repeated: the queue eaten one track per boundary, with a spurious play count each time.
-  Also fixed there: radio's clock was overwriting the listener's saved queue position, and
-  stopping radio autoplayed the queue — stop now re-stages it paused where it was.
-- #1759: the #1757 restage ran before the jam sync branch and stranded jam
-  participants paused when radio released the player; jam keeps its pre-#1757 behavior.
-- #1762: a rapid station flip supersedes a load before its `play()` settles, and the
-  dead load's rejection (`AbortError`) ran an unguarded catch that paused the *new*
-  station — on-air, silent, footer showing play. rejections now bail unless their load
-  still owns the element.
-
-**technical notes**: the pattern (stale handler, stale clock, stale rejection) is
-structural, and `docs/research/2026-08-03-player-architecture.md` (#1758) writes up why
-it recurs and what nine mature players do instead — see current focus. jam remains the
-least-exercised mode with no automated coverage.
-
-#### the radio switched tracks mid-song, by design (#1760, August 4)
-
-**why**: multiple listeners reported the radio randomly changing track deep into long
-songs. Two server-side discontinuities: the rotation cache TTL was 60s while the sampler's
-ranking reads live signals, so a rebuild could reshuffle the loop **any minute** and
-teleport `epoch % loop` mid-song; and the 4h period reseed replaced the loop wholesale at
-an arbitrary offset — a 64-minute mix has a ~27% chance of straddling any given boundary,
-which is why long tracks were the victims.
-
-**what shipped**: rotations are pinned for their entire period (the first build IS the
-rotation; the TTL setting is now just a kill switch), and period handovers land on
-track boundaries: the first request of a new period pins an anchor (redis `SET NX`, so
-every instance serves the same clock) at the moment the previous period's in-flight
-track ends, computed from the *cached* previous rotation — a peek, never a rebuild,
-because only what actually aired can hand over. during the grace window the old
-rotation finishes its track while `up_next` advertises the new rotation's head, so the
-client's natural ended→next flow rolls straight into the new period.
-
-**technical notes**: `/radio/state` determinism is now anchored in the shared cache
-rather than being a pure function of the clock; without redis it degrades to a clean
-track start at each period boundary — never a mid-song landing. rotation metadata
-(play/like counts in the payload) is now up to 4h stale; the per-request `liked`
-overlay stays fresh.
-
-**verified against a real boundary** (staging, 08:00 UTC, August 4): the in-flight track
-played through the boundary and ended naturally at 08:00:05, the new rotation started at
-track 0 at that instant, and 12 minutes of 30s sampling recorded zero mid-song switches.
-The watcher initially flagged a false violation by diffing two stale snapshots — a check
-on a shared clock has to re-derive what *should* be playing at the later instant.
-
-#### the tag selection stays put (#1763, August 4)
-
-the homepage tag row was one flat scroller, so browsing carried the clear chip and the
-selection itself out of view — and a selection restored from a previous session that
-wasn't in the fetched top-15 was invisible and undismissable. The active selection is now
-pinned left, always visible and individually deselectable, rendered from the selection
-itself rather than the fetched list; unselected tags scroll in the space that's left.
-
-### July 2026
-
-See `.status_history/2026-07.md` for detailed history: the live station that was on
-air and silent (#1749, #1750); radio growing a live source with the `firehose`
-station modelled as preemption (#1741–#1746); the firehose promising neither order
-nor delivery (#1736, #1739, #1740); the staged-cleanup deletions of published audio
-(#1732–#1735, #1737); artist spacing in the rotation (#1730); what an `#account`
-event actually says and the identity task that never ran (#1725–#1729); label reach
-and operational hygiene (#1709–#1718); and the July 1–25 moderation arc (#1620–#1706).
-
-### June 2026
-
-See `.status_history/2026-06.md` for detailed history (firehose dead-audioUrl verification #1616; copyright flags no longer silently wiped #1615; status-recap transcript #1613; client-logo keyline #1608/#1609; CF Pages lockfile incident #1606/#1607; live-infra costs feed #1599 + jetstream identity propagation #1603/#1604; ALAC-in-m4a transcode + radio/embed autoplay hardening #1596/#1597/#1598; local-dev fresh-DB onboarding #1584–#1586 + collections/design-system refactor #1579–#1591; the permissioned-data member-list pivot #1573/#1574; the June 10 prod release `2026.0610.034454`; radio embed station switching #1571; lexicon docs #1569; the private-media probe #1557→#1567; and the radio-stations + tuner-dial cluster #1530→#1548).
-
-### November 2025 – May 2026
-
-See `.status_history/` for detailed history, one file per month:
-`2026-05.md`, `2026-04.md`, `2026-03.md`, `2026-02.md`, `2026-01.md`,
-`2025-12.md`, `2025-11.md`.
+See `.status_history/` for detailed history, one file per month: `2026-07.md`,
+`2026-06.md`, `2026-05.md`, `2026-04.md`, `2026-03.md`, `2026-02.md`,
+`2026-01.md`, `2025-12.md`, `2025-11.md`.
 
 ## priorities
 
 ### current focus
+
+**the credential chain, closed one step at a time** (#1778–#1790, August 7–8): an external security assessment led with a CSRF finding that did not survive contact with the source, but asking "what do these compose into" instead of "is each one severe" found a live one — the session cache was writing decrypted OAuth tokens *and the DPoP private key* into an unauthenticated Redis, keyed by the bearer token itself. Four steps of that chain are now closed: the cache holds ciphertext (#1783), `/rest` requires a developer token (#1784), `plyr-redis` requires a password (#1786), and the copyright/genre vendors are no longer pointed at an uploader-controlled endpoint (#1790). Every fix was verified against the running system rather than the diff — connect to Redis, assert on real entries, confirm production failed the check before the release and passed it after. **next in this arc**: the scan-integrity half of #1778 (a `did:web` track's bytes are still served fresh on every request, so a clean scan does not pin what listeners hear) and the transcoder's fail-open auth (#1780), both in known issues; and a habit of auditing what a *blob* contains rather than what a field is named — the DPoP key was never classified as a credential, which is why it rode along for months.
 
 **the catalog has a spatial surface** (#1766–#1768, August 4): `/atlas` is an unlisted pan/zoom map of every public track, positioned by CLAP-embedding similarity, with haiku-named regions, cover art at deep zoom, and click-to-play through the normal footer player. Rebuilt daily by a GitHub Actions workflow into the stats bucket and proxied at `GET /stats/atlas`. The legal pages were updated in the same window to say plainly that public audio is analyzed and that derived data may be published (#1769), with `terms_last_updated` bumped so existing users are re-prompted. **next in this arc**: a live-radio overlay, deep links, on-map search, and the question of whether the atlas should exist as an ATProto artifact rather than only a page — all deliberately out of v1.
 
@@ -549,7 +289,7 @@ See `.status_history/` for detailed history, one file per month:
 
 **the firehose promises neither order nor delivery, and bytes need owners** (#1732–#1740, July 30 — prod `2026.0730.072900`, `.181756`): a repo's commit history was re-emitted upstream and ingest applied each replayed state as current, so commits are now ordered by repo `rev`, which survives re-delivery where jetstream's `time_us` cannot; then the same instance stopped delivering `fm.plyr.*` for 11 hours while still serving Bluesky profile events, so the consumer now rotates across twelve hosts and detects a host gone blind on *our* collections specifically. Separately, staged-upload cleanup had been deleting published tracks' audio — a content-hash `file_id` means re-uploading a file you already published stages the exact key it is served from. 20 tracks across 7 artists broken, 13 recovered; playback now falls back to the artist's PDS blob and the refcount covers every media column. **next in this arc**: ~~an alert~~ shipped (#1775, August 7 — the write-echo blackout alert plus a consumer-liveness heartbeat); schedule `audit_media_integrity.py`; give `_MEDIA_REFERENCES` awareness of `r2_url`.
 
-**moderation: from inert labels to recorded decisions** (#1691–#1718, July 24–27 — prod `2026.0725.035625` → `2026.0728.043224`): `copyright-violation` de-lists instead of doing nothing; adult labels stopped gating permalinks; `LabelContext.LIST` vs `VIEW` keeps labels shaping discovery rather than destinations; and underneath all of it `moderation_events` carries the review queue, per-track overrides, the audit trail, and the source of public transparency posts from @moderation.plyr.fm. Published contact is now `help@plyr.fm` / `dmca@plyr.fm`, and rate limits are keyed per client rather than per site (#1716, #1718). **next in this arc**: triage the 13 queued tracks; per-actor authentication, which is what gates agent participation; then a proposed/applied split so an agent can propose a decision a human approves. The DMCA surface itself is still incomplete (see known issues).
+**moderation: from inert labels to recorded decisions** (#1691–#1718, July 24–27 — prod `2026.0725.035625` → `2026.0728.043224`): `copyright-violation` de-lists instead of doing nothing; adult labels stopped gating permalinks; `LabelContext.LIST` vs `VIEW` keeps labels shaping discovery rather than destinations; and underneath all of it `moderation_events` carries the review queue, per-track overrides, the audit trail, and the source of public transparency posts from @moderation.plyr.fm. Published contact is now `help@plyr.fm` / `dmca@plyr.fm`, and rate limits are keyed per client rather than per site (#1716, #1718). August 8–9 sharpened what those decisions *mean*: `override_exclude` is curation, not removal, so it empties chosen surfaces (feeds, search, radio, atlas) and never a destination anyone navigated to (#1799), and radio and the atlas actually honor it now (#1797). **next in this arc**: triage the 18 queued subjects; merge or discard the transparency-post batching work parked on `feat/batched-transparency-posts` (six curation events currently mean six posts); per-actor authentication, which is what gates agent participation; then a proposed/applied split so an agent can propose a decision a human approves. The DMCA surface itself is still incomplete (see known issues).
 
 **still experimental — private media on permissioned spaces** (#1557→#1574, #1684, epic #1384): private audio in an artist-owned permissioned space (never R2), owner-only, credential-gated playback — end-to-end on staging, **in prod but inert** (only ZDS implements this experimental surface). The July Proposal-0016 alignment replaces the obsolete `ats://` draft addresses with canonical `at://{authority}/space/{type}/{skey}` addresses, separates the space-type lexicon from the OAuth permission set, resolves dedicated space hosts with PDS fallback, and sends a confidential-client attestation separately from the user's delegation token. The current owner-only policy remains intentionally narrow; interoperable catalog sharing needs a product policy and UX on top of the protocol primitives. See `docs/internal/architecture/permissioned-private-media.md`.
 
@@ -718,4 +458,4 @@ see the [contributing guide](https://docs.plyr.fm/contributing/) for setup instr
 
 ---
 
-this is a living document. last updated 2026-08-09 (**staleness sweep of known issues, verified against reality**. Retired the #1782 production-requirepass entry — the cutover ran August 8 (plyr-redis v2 + `REDIS_PASSWORD`) and an unauthenticated connection from inside the prod network now gets `AuthenticationError`; the issue is closed. Retired the "write-echo alert unexercised" entry — it fired for real on August 8 as a verified true positive (see the #1796 entry). Recounted the review queue: 18 subjects now await triage (was 13; the scanner keeps opening fingerprint flags), track 64 still among them. Updated the rev-guard coverage to 6 of 1005 tracks. Confirmed still true before keeping: the artwork accent wash stays inert (images hosts still send no `Access-Control-Allow-Origin`), and #1778/#1780 remain open.) previously 2026-08-09 (**search ranks lexical intent above trigram fuzz**. Closed #1523 via #1801, prod `2026.0809.034121`: one tiered relevance — exact > prefix > substring > fuzz — across all five search helpers, `word_similarity()` for intra-tier ties, quotes normalized on both sides; verified on prod that "you don't kn", "you don’t kn", and "you dont kn" all rank the reported title first. Also recorded the discovery that every checkout shares one compose project named `tests`, so concurrent agent sessions recreate each other's test databases — the source of the evening's "stale schema" ghosts, now a known issue.) previously 2026-08-09 (**exclude is curation, not removal, and the blackout alert's first firing**. Applied the override_exclude runbook to a user report of prayer recordings on radio, which surfaced two defects in the paradigm itself: radio never honored the projection (#1797), and exclude applied in every context, briefly blanking the artist's public profile before #1799 made it LIST-only — chosen surfaces exclude, destinations never do. Six events recorded with the transparency publisher paused so one curation call didn't become six posts; a batching implementation is parked on `feat/batched-transparency-posts`. Separately, the #1775 write-echo alert fired for real: jetstream2.us-east was externally verified blind to our collections while three sibling hosts served the same commit, and the 10s rotation rewind permanently skipped the event — #1796 filed for rewinding to the blind-window start. Also confirmed the #1523 search-ranking mechanism: bare trigram `similarity` structurally punishes long titles.) previously 2026-08-08 (**the staging db errors were a pool/suspend mismatch**. Diagnosed the error-level `SELECT neondb` spans that had been written off as restart noise: staging Neon suspends after 300s idle while `pool_recycle` defaults to 1800s, so pooled connections outlive the compute. SQLAlchemy recovers transparently via `pool_pre_ping` -- all 95 affected traces had succeeding root spans -- but the instrumentation stamps the failed attempt `ERROR` with an empty message, because the exception stringifies to "". Production is immune: scale-to-zero is disabled there (`suspend_timeout_seconds: -1`). Set `DATABASE_POOL_RECYCLE=240` on staging. The clusters track integration-test runs, not deploys.) previously 2026-08-08 (**redis had no password, and a redis blip took the whole API down**. Closed the remaining half of #1782: `plyr-redis` now requires a password (#1786), wrapped in `sh -c` because Fly exec's `[processes]` args rather than shelling them — unwrapped, `--requirepass $REDIS_PASSWORD` sets the password to that literal string and looks like it worked. Rehearsing the cutover on staging found a second, worse bug: `slowapi` hands storage exceptions to its rate-limit handler, which reads `exc.detail`, so an unreachable Redis returned `AttributeError` on every request including `/health` — a blip took the whole API down and failed the platform health check. Fixed in #1787 with an in-memory fallback that keeps limits enforced and probes for recovery. Verified by restarting staging redis under load: 150/150 requests returned 200, against the same scenario that produced blanket 500s an hour earlier. The production cutover is staged but not run — held for sign-off.) previously 2026-08-08 (**the session cache was handing out PDS credentials**. An external security assessment led with CSRF, which did not survive contact with the source — the API and frontend are same-site, so `SameSite=Lax` already withholds the cookie cross-site. Chasing "what do these compose into" instead of "is each one severe" found the real thing: `get_session()` decrypted the Fernet-encrypted OAuth blob and cached the plaintext in an unauthenticated Redis for 60s, keyed by the bearer token itself — and the payload included `dpop_private_key_pem`, which collapses DPoP's proof-of-possession back to bearer semantics. Fixed in #1783 (cache the ciphertext, key on sha256, drop the redundant id), #1784 (subsonic `/rest` had accepted any session id, not just developer tokens), #1781 (full session ids in debug logs). Verified by connecting to Redis in both environments and asserting on real entries: production failed every check before the release and passed all of them after. The regression test caught a bug in the fix — returning `None` on an undecryptable entry would have made an OAuth key rotation a mass logout. Transferable lessons in `docs/research/2026-08-08-credential-handling-in-atproto-appviews.md`. Four new known issues recorded rather than quietly carried: unauthenticated `plyr-redis` (#1782), the `did:web` SSRF-by-proxy and mutable-source scan (#1778), the transcoder's fail-open auth (#1780), and a CORS regex admitting every HTTPS origin that #208 closed as "CORS validation" in February.) previously 2026-08-07 (**the blackout finally pages someone**. Documented #1775: the #1739 "nothing alerts a human" known issue is closed, but only after the obvious alert was proven wrong twice — zero-dispatch counting is activity-confounded, and the #1740 blind-host detector trips on every quiet half-hour because the bsky profile mirror keeps "other traffic" perpetually fresh (its quiet-network escape hatch describes a state that cannot occur; rotation log demoted to info). The signal that works is the write-echo: plyr ingests its own PDS writes, so "writes happened AND zero dispatches followed" is quiet-immune; shipped as a `pds record write` log at the `make_pds_request` funnel plus two Logfire alerts (write-echo blackout, consumer heartbeat), prod `2026.0807.043507`. New known issue: the alert's write side is unexercised until the first real user write. Also recorded #1774, capturing the third-party-broadcaster design shape — advertisement vs. admission — from reading the sister-radio author's full leaflet catalog, and noted the Logfire MCP's silent ~30-minute query clamp, which briefly manufactured a false "telemetry history is gone" finding.) previously 2026-08-05 (**status maintenance for the July 31 – August 5 window**. Archived the whole July detail block to `.status_history/2026-07.md`, taking STATUS.md from 630 lines to ~445. Documented the four things that had shipped since the last maintenance run and never been recorded here: **`/atlas`** (#1766–#1768), an unlisted 2D map of the catalog positioned by CLAP-embedding similarity — PCA→UMAP for display, a *separate* 10D UMAP for clustering, haiku-named regions, daily rebuild into the stats bucket behind `GET /stats/atlas`; the **legal codification** that public audio is analyzed and derived data may be published (#1769), with `terms_last_updated` bumped so consent is collected rather than assumed; **embeds surviving sandboxed iframes** (#1770), where merely *accessing* `localStorage` in an opaque origin throws and killed hydration at import time, plus `Origin: null` CORS; and **`users_over_time.py`** (#1761), which counts users from atproto records rather than the database. Also recorded the **502-follower milestone and the first full usage accounting** — 999 tracks / 121 hours from 97 artists, 442 accounts, 13,384 plays, 564k edge requests in 30 days — and the measurement gap it exposed: plays are a counter, not events, so the history is unknowable. Retired two known issues verified fixed against reality (private-media `loadComments` already sends `credentials`; track 1045's CDN URL now serves 206 with bytes) and added two new ones (nothing records listening over time; the artwork wash is inert pending a CORS header). Rewrote current focus around the atlas and the player-architecture arc. Recorded the podcast recap for July 31 – August 5.) previously 2026-08-04 (**the handover, observed**. Appended live verification to the #1760 entry: at the first real 4h boundary on the fixed code, the in-flight track played through the boundary and ended naturally, the new rotation started at track 0 at that instant, and 12 minutes of sampling recorded zero mid-song switches.) previously 2026-08-04 (**a radio day**. Adopted the first slice of sister-radio's listener-page ideas (#1752–#1756) and two standing rules out of it: never draw on artists' cover art, and `/radio` never scrolls vertically. Fixed three player bugs that were all stale work outliving its load on the shared audio element (#1757, #1759, #1762), wrote up the class in `docs/research/2026-08-03-player-architecture.md` (#1758), fixed the server-side mid-song track switches (#1760), and pinned the homepage tag selection (#1763).) previously 2026-07-31 (**the live station was on air and silent** — #1749/#1750: `canPlayType` lies in Chrome, and an `await` inside a tap handler spends mobile's autoplay permission). previously 2026-07-31 (**status maintenance for the July 25–31 window**, and the staged-cleanup audio deletions #1732–#1735/#1737). earlier entries are preserved in `.status_history/2026-07.md`.
+this is a living document. last updated 2026-08-09 (**status maintenance for the August 5–9 window**. Archived the August 3–8 detail block to `.status_history/2026-08.md`, taking STATUS.md from 722 lines to ~460 — including the redis-password cutover and the write-echo alert's design write-up, both now history rather than current state. Backfilled the one thing this window shipped and never recorded here: **#1790**, which stopped handing AudD, Modal, and Replicate a `getBlob` URL built from an uploader-controlled `did:web` endpoint — a regression test on `main` produced the cloud metadata address from a stored `pds_url` — and replaced it with `mirror_pds_blob`, which fetches once through the hardened client, verifies the bytes hash to the `pds_blob_cid` the record commits to, and keys the copy by content hash rather than the record's attacker-supplied `fileId`. Also recorded the smaller August 8 changes that had no entry: environment-tagged operator alerts (#1793), the PDS-mirror backfill's docket client (#1791/#1792), and the `DATABASE_POOL_RECYCLE=240` staging mitigation being unset after it starved concurrent uploads (#1794). Rewrote current focus around the credential chain and folded the exclude-semantics work into the moderation arc. Recorded the podcast recap for August 5–9.) previously 2026-08-09 (**staleness sweep of known issues, verified against reality**. Retired the #1782 production-requirepass entry — the cutover ran August 8 (plyr-redis v2 + `REDIS_PASSWORD`) and an unauthenticated connection from inside the prod network now gets `AuthenticationError`; the issue is closed. Retired the "write-echo alert unexercised" entry — it fired for real on August 8 as a verified true positive (see the #1796 entry). Recounted the review queue: 18 subjects now await triage (was 13; the scanner keeps opening fingerprint flags), track 64 still among them. Updated the rev-guard coverage to 6 of 1005 tracks. Confirmed still true before keeping: the artwork accent wash stays inert (images hosts still send no `Access-Control-Allow-Origin`), and #1778/#1780 remain open.) previously 2026-08-09 (**search ranks lexical intent above trigram fuzz**. Closed #1523 via #1801, prod `2026.0809.034121`: one tiered relevance — exact > prefix > substring > fuzz — across all five search helpers, `word_similarity()` for intra-tier ties, quotes normalized on both sides; verified on prod that "you don't kn", "you don’t kn", and "you dont kn" all rank the reported title first. Also recorded the discovery that every checkout shares one compose project named `tests`, so concurrent agent sessions recreate each other's test databases — the source of the evening's "stale schema" ghosts, now a known issue.) previously 2026-08-09 (**exclude is curation, not removal, and the blackout alert's first firing**. Applied the override_exclude runbook to a user report of prayer recordings on radio, which surfaced two defects in the paradigm itself: radio never honored the projection (#1797), and exclude applied in every context, briefly blanking the artist's public profile before #1799 made it LIST-only — chosen surfaces exclude, destinations never do. Six events recorded with the transparency publisher paused so one curation call didn't become six posts; a batching implementation is parked on `feat/batched-transparency-posts`. Separately, the #1775 write-echo alert fired for real: jetstream2.us-east was externally verified blind to our collections while three sibling hosts served the same commit, and the 10s rotation rewind permanently skipped the event — #1796 filed for rewinding to the blind-window start. Also confirmed the #1523 search-ranking mechanism: bare trigram `similarity` structurally punishes long titles.) previously 2026-08-08 (**the staging db errors were a pool/suspend mismatch**. Diagnosed the error-level `SELECT neondb` spans that had been written off as restart noise: staging Neon suspends after 300s idle while `pool_recycle` defaults to 1800s, so pooled connections outlive the compute. SQLAlchemy recovers transparently via `pool_pre_ping` -- all 95 affected traces had succeeding root spans -- but the instrumentation stamps the failed attempt `ERROR` with an empty message, because the exception stringifies to "". Production is immune: scale-to-zero is disabled there (`suspend_timeout_seconds: -1`). Set `DATABASE_POOL_RECYCLE=240` on staging. The clusters track integration-test runs, not deploys.) previously 2026-08-08 (**redis had no password, and a redis blip took the whole API down**. Closed the remaining half of #1782: `plyr-redis` now requires a password (#1786), wrapped in `sh -c` because Fly exec's `[processes]` args rather than shelling them — unwrapped, `--requirepass $REDIS_PASSWORD` sets the password to that literal string and looks like it worked. Rehearsing the cutover on staging found a second, worse bug: `slowapi` hands storage exceptions to its rate-limit handler, which reads `exc.detail`, so an unreachable Redis returned `AttributeError` on every request including `/health` — a blip took the whole API down and failed the platform health check. Fixed in #1787 with an in-memory fallback that keeps limits enforced and probes for recovery. Verified by restarting staging redis under load: 150/150 requests returned 200, against the same scenario that produced blanket 500s an hour earlier. The production cutover is staged but not run — held for sign-off.) previously 2026-08-08 (**the session cache was handing out PDS credentials**. An external security assessment led with CSRF, which did not survive contact with the source — the API and frontend are same-site, so `SameSite=Lax` already withholds the cookie cross-site. Chasing "what do these compose into" instead of "is each one severe" found the real thing: `get_session()` decrypted the Fernet-encrypted OAuth blob and cached the plaintext in an unauthenticated Redis for 60s, keyed by the bearer token itself — and the payload included `dpop_private_key_pem`, which collapses DPoP's proof-of-possession back to bearer semantics. Fixed in #1783 (cache the ciphertext, key on sha256, drop the redundant id), #1784 (subsonic `/rest` had accepted any session id, not just developer tokens), #1781 (full session ids in debug logs). Verified by connecting to Redis in both environments and asserting on real entries: production failed every check before the release and passed all of them after. The regression test caught a bug in the fix — returning `None` on an undecryptable entry would have made an OAuth key rotation a mass logout. Transferable lessons in `docs/research/2026-08-08-credential-handling-in-atproto-appviews.md`. Four new known issues recorded rather than quietly carried: unauthenticated `plyr-redis` (#1782), the `did:web` SSRF-by-proxy and mutable-source scan (#1778), the transcoder's fail-open auth (#1780), and a CORS regex admitting every HTTPS origin that #208 closed as "CORS validation" in February.) earlier entries are preserved in `.status_history/2026-08.md`.
