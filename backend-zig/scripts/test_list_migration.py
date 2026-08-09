@@ -12,9 +12,10 @@ from sqlalchemy.engine import make_url
 from alembic import command
 
 PRIOR_REVISION = "4aaed6c819f1"
-HEAD_REVISION = "e6b08d3f2a71"
+HEAD_REVISION = "f7c19e4a3b82"
 EXPECTED_TABLES = {
     "account_availability",
+    "account_status_checks",
     "list_members",
     "list_records",
     "profile_records",
@@ -31,6 +32,19 @@ EXPECTED_AVAILABILITY_COLUMNS = {
     "repo_did",
     "repository_rev",
     "unavailable_reason",
+}
+EXPECTED_STATUS_CHECK_COLUMNS = {
+    "attempt_count",
+    "consecutive_failures",
+    "hinted_at_us",
+    "last_attempt_at_us",
+    "last_completed_at_us",
+    "last_outcome",
+    "last_response_authoritative",
+    "last_success_at_us",
+    "lease_until_us",
+    "next_attempt_at_us",
+    "repo_did",
 }
 EXPECTED_HEAD_COLUMNS = {
     "repo_did",
@@ -199,6 +213,12 @@ def main() -> None:
             raise AssertionError(
                 "unexpected account_availability columns: "
                 f"{sorted(availability_columns)!r}"
+            )
+        status_check_columns = table_columns(database_url, "account_status_checks")
+        if status_check_columns != EXPECTED_STATUS_CHECK_COLUMNS:
+            raise AssertionError(
+                "unexpected account_status_checks columns: "
+                f"{sorted(status_check_columns)!r}"
             )
     finally:
         if upgraded:
