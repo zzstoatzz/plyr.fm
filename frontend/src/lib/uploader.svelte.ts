@@ -249,7 +249,7 @@ class UploaderState {
 
 							const warnings: string[] = update.warnings ?? [];
 							const warningAction = update.pds_blob_failed
-								? { label: 'save to your PDS', href: '/portal/manage' }
+								? { label: 'save to your PDS', href: '/portal/manage?save=pds' }
 								: undefined;
 							for (const w of warnings) {
 								toast.warning(w, 0, warningAction);
