@@ -8,7 +8,10 @@ build:
     zig build
 
 image:
-    docker build --platform linux/amd64 --tag plyr-backend-zig:canary .
+    docker build --tag plyr-backend-zig:canary .
+
+image-check: image
+    scripts/check_canary_image plyr-backend-zig:canary
 
 run:
     MODE=api TRACK_COLLECTION_NSID=${TRACK_COLLECTION_NSID:?set TRACK_COLLECTION_NSID} LIST_COLLECTION_NSID=${LIST_COLLECTION_NSID:?set LIST_COLLECTION_NSID} PROFILE_COLLECTION_NSID=${PROFILE_COLLECTION_NSID:?set PROFILE_COLLECTION_NSID} zig build run
@@ -38,7 +41,7 @@ check:
     zig build test
     python3 scripts/test_http.py
     cd ../backend && uv run ruff check ../backend-zig/scripts
-    cd ../backend && uv run pytest -q ../backend-zig/scripts/test_canary_smoke.py
+    cd ../backend && uv run pytest -q ../backend-zig/scripts/test_bench_http.py ../backend-zig/scripts/test_canary_report.py ../backend-zig/scripts/test_canary_smoke.py
 
 # Destructive only to the dedicated Zig test database on port 5435.
 test-postgres:
@@ -56,6 +59,9 @@ smoke-canary URL="https://plyr-api-zig-canary.fly.dev":
 bench-http *ARGS:
     zig build -Doptimize=ReleaseFast
     python3 scripts/bench_http.py "$@"
+
+bench-canary URL="https://plyr-api-zig-canary.fly.dev" *ARGS:
+    python3 scripts/bench_http.py --url "{{ URL }}" "$@"
 
 # Destructive only to the dedicated benchmark database on port 5434.
 bench-album-detail:

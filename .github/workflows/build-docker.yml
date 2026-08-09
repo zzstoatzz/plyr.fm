@@ -9,10 +9,25 @@ on:
       - "backend/uv.lock"
       - "README.md"
       - ".github/workflows/build-docker.yml"
+  workflow_dispatch:
+    inputs:
+      target:
+        description: image to validate on the native Linux/amd64 runner
+        required: true
+        type: choice
+        default: zig-canary
+        options:
+          - zig-canary
+          - python-backend
+
+concurrency:
+  group: validate-docker-${{ github.event.pull_request.number || github.ref }}-${{ inputs.target || 'python-backend' }}
+  cancel-in-progress: true
 
 jobs:
-  build:
+  build-python:
     name: build backend image
+    if: github.event_name == 'pull_request' || inputs.target == 'python-backend'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -23,3 +38,25 @@ jobs:
       - name: build docker image
         # Build from root context using backend/Dockerfile
         run: docker build -f backend/Dockerfile .
+
+  build-zig:
+    name: build and start Zig canary image
+    if: github.event_name == 'workflow_dispatch' && inputs.target == 'zig-canary'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: set up docker buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: build native Linux image
+        uses: docker/build-push-action@v6
+        with:
+          context: backend-zig
+          load: true
+          tags: plyr-backend-zig:ci
+          cache-from: type=gha,scope=zig-canary-image
+          cache-to: type=gha,mode=max,scope=zig-canary-image
+
+      - name: prove image startup and resource introspection
+        run: backend-zig/scripts/check_canary_image plyr-backend-zig:ci

@@ -145,6 +145,28 @@ requires a real verified staging track, round-trips its collection representatio
 through detail, and resolves its artist; an empty projection cannot pass. Run the
 same check with `just zig smoke-canary`.
 
+The same manual job then measures—not estimates—the deployed process. A tiny
+read-only helper in the image locates the actual Zig executable through `/proc`
+and records its current/peak RSS and CPU ticks alongside cgroup current/peak
+memory. The runner benchmarks the real 50-track product read for ten seconds at
+concurrency 1 and 16, retaining request rate and p50/p95/p99 latency. A combined,
+commit-addressed artifact and workflow summary are produced even when a gate
+fails. Deployment fails above 16 MiB idle application RSS, above 64 MiB peak
+application RSS, after a process restart, or on any load-test HTTP error. This
+instrumentation exists only in the explicitly dispatched canary job; ordinary PR
+checks do not run remote load or deployment measurements. Run the same HTTP load
+driver against an already deployed target with `just zig bench-canary -- ...`.
+
+The iteration loop is native by default. `just zig check` uses the host Zig
+toolchain and `just zig image-check` builds and starts a host-architecture Linux
+container, proves `/health`, and exercises the same `/proc` snapshot helper used
+on Fly. It never requests amd64 emulation on an arm64 development machine. When
+an amd64 image sanity check is useful before deployment, manually dispatch
+`validate docker build` with `target=zig-canary`; that registered workflow runs
+one cached Zig image job on a native Linux/amd64 runner. Superseded PR checks are
+cancelled. Cross-architecture assurance belongs on the matching runner, while
+the deployment workflow remains the authoritative Fly image build.
+
 `next.plyr.fm` is the eventual public parallel deployment of the successor
 application, not an alias for the bare API and not a percentage canary. It gets
 its own frontend configuration pointed at the Zig `/v1` surface and can evolve
