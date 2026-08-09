@@ -5,8 +5,9 @@ from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
-from sqlalchemy import func, or_, select
+from sqlalchemy import ColumnElement, case, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import InstrumentedAttribute
 
 from backend._internal import Session, get_optional_session
 from backend._internal.clients.clap import get_clap_client
@@ -18,6 +19,61 @@ from backend.models import Album, Artist, Playlist, Tag, Track, TrackTag, get_db
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/search", tags=["search"])
+
+# Quote characters users type interchangeably: titles carry curly quotes from
+# phone keyboards while search queries arrive straight (or vice versa). Both
+# sides are normalized before any comparison, in Python for the query and via
+# translate() for the column.
+_QUOTE_NORMALIZATION = str.maketrans({"’": "'", "‘": "'", "“": '"', "”": '"'})  # noqa: RUF001
+_SQL_QUOTE_FROM = "’‘“”"  # noqa: RUF001
+_SQL_QUOTE_TO = "''\"\""
+
+# a model attribute at class level is an InstrumentedAttribute, not yet a
+# ColumnElement; both are valid search targets
+_SearchColumn = (
+    ColumnElement[str] | InstrumentedAttribute[str] | InstrumentedAttribute[str | None]
+)
+
+
+def _normalized(column: _SearchColumn) -> ColumnElement[str]:
+    return func.lower(func.translate(column, _SQL_QUOTE_FROM, _SQL_QUOTE_TO))
+
+
+def _like_escaped(text: str) -> str:
+    return text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
+def _lexical_relevance(column: _SearchColumn, query: str) -> ColumnElement[float]:
+    """Rank lexical intent above trigram fuzz (#1523).
+
+    Bare `similarity()` divides shared trigrams by the union of both strings'
+    trigram sets, so a long target is structurally punished: "you don't kn"
+    scored its exact-prefix title below three short fuzzy matches. Tiers fix
+    the ordering — exact match, then prefix, then substring, then fuzz — and
+    `word_similarity()` breaks ties within a tier, because it scores the query
+    against the best-matching *segment* of the target rather than the whole
+    string, so it is not diluted by target length.
+    """
+    normalized_query = query.translate(_QUOTE_NORMALIZATION).lower().strip()
+    normalized = _normalized(column)
+    pattern = _like_escaped(normalized_query)
+    word_sim = func.word_similarity(normalized_query, normalized)
+    return case(
+        (normalized == normalized_query, 5.0),
+        (normalized.like(f"{pattern}%", escape="\\"), 3.0 + word_sim),
+        (normalized.like(f"%{pattern}%", escape="\\"), 1.5 + word_sim),
+        else_=word_sim,
+    )
+
+
+def _matches(column: _SearchColumn, query: str) -> ColumnElement[bool]:
+    """Candidate qualifier: normalized substring or trigram similarity."""
+    normalized_query = query.translate(_QUOTE_NORMALIZATION).lower().strip()
+    pattern = _like_escaped(normalized_query)
+    return or_(
+        func.similarity(column, query) > 0.1,
+        _normalized(column).like(f"%{pattern}%", escape="\\"),
+    )
 
 
 # response models
@@ -166,19 +222,16 @@ async def unified_search(
 async def _search_tracks(
     db: AsyncSession, query: str, limit: int, session: Session | None = None
 ) -> list[TrackSearchResult]:
-    """search tracks by title using trigram similarity + substring matching."""
-    # use pg_trgm similarity function for fuzzy matching
-    similarity = func.similarity(Track.title, query)
-    # also match substrings (e.g. "real" in "really")
-    substring_match = Track.title.ilike(f"%{query}%")
+    """search tracks by title, lexical intent ranked above trigram fuzz."""
+    relevance = _lexical_relevance(Track.title, query)
 
     stmt = (
-        select(Track, Artist, similarity.label("relevance"))
+        select(Track, Artist, relevance.label("relevance"))
         .join(Artist, Track.artist_did == Artist.did)
-        .where(or_(similarity > 0.1, substring_match))
+        .where(_matches(Track.title, query))
         # private (permissioned-space) media is never publicly searchable
         .where(Track.visibility != "private")
-        .order_by(similarity.desc())
+        .order_by(relevance.desc())
         .limit(limit)
     )
 
@@ -206,21 +259,19 @@ async def _search_tracks(
 async def _search_artists(
     db: AsyncSession, query: str, limit: int
 ) -> list[ArtistSearchResult]:
-    """search artists by handle and display_name using trigram similarity + substring."""
-    # combine similarity scores from handle and display_name (take max)
-    handle_sim = func.similarity(Artist.handle, query)
-    name_sim = func.similarity(Artist.display_name, query)
-    combined_sim = func.greatest(handle_sim, name_sim)
-    # also match substrings
-    substring_match = or_(
-        Artist.handle.ilike(f"%{query}%"),
-        Artist.display_name.ilike(f"%{query}%"),
+    """search artists by handle and display_name, lexical intent first."""
+    # greatest() ignores NULLs, so a missing display_name defers to the handle
+    relevance = func.greatest(
+        _lexical_relevance(Artist.handle, query),
+        _lexical_relevance(Artist.display_name, query),
     )
 
     stmt = (
-        select(Artist, combined_sim.label("relevance"))
-        .where(or_(combined_sim > 0.1, substring_match))
-        .order_by(combined_sim.desc())
+        select(Artist, relevance.label("relevance"))
+        .where(
+            or_(_matches(Artist.handle, query), _matches(Artist.display_name, query))
+        )
+        .order_by(relevance.desc())
         .limit(limit)
     )
 
@@ -242,17 +293,16 @@ async def _search_artists(
 async def _search_albums(
     db: AsyncSession, query: str, limit: int
 ) -> list[AlbumSearchResult]:
-    """search albums by title using trigram similarity + substring."""
-    similarity = func.similarity(Album.title, query)
-    substring_match = Album.title.ilike(f"%{query}%")
+    """search albums by title, lexical intent ranked above trigram fuzz."""
+    relevance = _lexical_relevance(Album.title, query)
 
     # filter out empty albums (unfinalized drafts or legacy rows awaiting sync)
     has_tracks = select(Track.id).where(Track.album_id == Album.id).limit(1).exists()
     stmt = (
-        select(Album, Artist, similarity.label("relevance"))
+        select(Album, Artist, relevance.label("relevance"))
         .join(Artist, Album.artist_did == Artist.did)
-        .where(or_(similarity > 0.1, substring_match), has_tracks)
-        .order_by(similarity.desc())
+        .where(_matches(Album.title, query), has_tracks)
+        .order_by(relevance.desc())
         .limit(limit)
     )
 
@@ -277,8 +327,7 @@ async def _search_tags(
     db: AsyncSession, query: str, limit: int
 ) -> list[TagSearchResult]:
     """search tags by name using trigram similarity + substring."""
-    similarity = func.similarity(Tag.name, query)
-    substring_match = Tag.name.ilike(f"%{query}%")
+    relevance = _lexical_relevance(Tag.name, query)
 
     # count tracks per tag
     track_count_subq = (
@@ -291,11 +340,11 @@ async def _search_tags(
         select(
             Tag,
             func.coalesce(track_count_subq.c.track_count, 0).label("track_count"),
-            similarity.label("relevance"),
+            relevance.label("relevance"),
         )
         .outerjoin(track_count_subq, Tag.id == track_count_subq.c.tag_id)
-        .where(or_(similarity > 0.1, substring_match))
-        .order_by(similarity.desc())
+        .where(_matches(Tag.name, query))
+        .order_by(relevance.desc())
         .limit(limit)
     )
 
@@ -316,16 +365,15 @@ async def _search_tags(
 async def _search_playlists(
     db: AsyncSession, query: str, limit: int
 ) -> list[PlaylistSearchResult]:
-    """search playlists by name using trigram similarity + substring."""
-    similarity = func.similarity(Playlist.name, query)
-    substring_match = Playlist.name.ilike(f"%{query}%")
+    """search playlists by name, lexical intent ranked above trigram fuzz."""
+    relevance = _lexical_relevance(Playlist.name, query)
 
     stmt = (
-        select(Playlist, Artist, similarity.label("relevance"))
+        select(Playlist, Artist, relevance.label("relevance"))
         .join(Artist, Playlist.owner_did == Artist.did)
-        .where(or_(similarity > 0.1, substring_match))
+        .where(_matches(Playlist.name, query))
         .where(Playlist.is_private == False)  # noqa: E712
-        .order_by(similarity.desc())
+        .order_by(relevance.desc())
         .limit(limit)
     )
 
