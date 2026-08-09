@@ -1,5 +1,6 @@
 import type { Track, TrackId } from './types';
 import { API_URL, IS_ZIG_V1 } from './config';
+import { recordZigPlay } from './api/zig-v1';
 
 // radio is a distinct *source* on the same player: when set, the one <audio>
 // element plays this stream instead of a queue track, and the normal player
@@ -323,14 +324,15 @@ class PlayerState {
 
 			// include ref if it's for this track (for share link tracking)
 			const refForTrack = this._refTrackId === track.id ? this.ref : null;
-			if (IS_ZIG_V1) return;
-
-			fetch(`${API_URL}/tracks/${track.id}/play`, {
-				method: 'POST',
-				credentials: 'include',
-				headers: refForTrack ? { 'Content-Type': 'application/json' } : undefined,
-				body: refForTrack ? JSON.stringify({ ref: refForTrack }) : undefined
-			}).catch(err => {
+			const playRequest = IS_ZIG_V1
+				? recordZigPlay(API_URL, String(track.id), refForTrack)
+				: fetch(`${API_URL}/tracks/${track.id}/play`, {
+						method: 'POST',
+						credentials: 'include',
+						headers: refForTrack ? { 'Content-Type': 'application/json' } : undefined,
+						body: refForTrack ? JSON.stringify({ ref: refForTrack }) : undefined
+					});
+			playRequest.catch((err) => {
 				console.error('failed to increment play count:', err);
 			});
 		}

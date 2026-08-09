@@ -101,6 +101,19 @@ export interface ZigPlayback {
 	};
 }
 
+export interface ZigPlayReceipt {
+	object: 'play_receipt';
+	track_id: string;
+	record: { uri: string };
+	play_count: number;
+	counted: boolean;
+	dedup: {
+		status: 'claimed' | 'duplicate' | 'unavailable';
+		window_seconds: number;
+	};
+	sources: { metrics: 'application_metrics'; dedup: 'redis_ephemeral' };
+}
+
 interface ListOptions {
 	limit?: number;
 	cursor?: string | null;
@@ -189,6 +202,29 @@ export async function getZigPlayback(
 		throw new TypeError('invalid Zig playback capability');
 	}
 	return value as unknown as ZigPlayback;
+}
+
+export async function recordZigPlay(
+	apiUrl: string,
+	trackId: string,
+	ref: string | null = null,
+	fetcher: Fetcher = fetch
+): Promise<ZigPlayReceipt> {
+	assertOpaqueId(trackId, 'track');
+	const url = new URL(`${apiUrl}/v1/tracks/${encodeURIComponent(trackId)}/plays`);
+	if (ref !== null) {
+		if (!/^[A-Za-z0-9_-]{8}$/.test(ref)) throw new TypeError('invalid share reference');
+		url.searchParams.set('ref', ref);
+	}
+	const response = await fetcher(url, {
+		method: 'POST',
+		credentials: 'include',
+		headers: { accept: 'application/json' }
+	});
+	if (!response.ok) throw new Error(`Zig play recording returned ${response.status}`);
+	const value: unknown = await response.json();
+	assertPlayReceipt(value, trackId);
+	return value;
 }
 
 export function toFrontendTrack(value: ZigTrack): Track {
@@ -305,6 +341,33 @@ export function assertZigTrack(value: unknown): asserts value is ZigTrack {
 		value.projection.verification !== 'verified_repo'
 	) {
 		throw new TypeError('invalid Zig track resource');
+	}
+}
+
+function assertPlayReceipt(value: unknown, trackId: string): asserts value is ZigPlayReceipt {
+	if (
+		!isObject(value) ||
+		value.object !== 'play_receipt' ||
+		value.track_id !== trackId ||
+		!isObject(value.record) ||
+		typeof value.record.uri !== 'string' ||
+		!value.record.uri.startsWith('at://') ||
+		!Number.isInteger(value.play_count) ||
+		Number(value.play_count) < 0 ||
+		typeof value.counted !== 'boolean' ||
+		!isObject(value.dedup) ||
+		!['claimed', 'duplicate', 'unavailable'].includes(String(value.dedup.status)) ||
+		!Number.isInteger(value.dedup.window_seconds) ||
+		Number(value.dedup.window_seconds) < 30 ||
+		Number(value.dedup.window_seconds) > 3600 ||
+		!isObject(value.sources) ||
+		value.sources.metrics !== 'application_metrics' ||
+		value.sources.dedup !== 'redis_ephemeral'
+	) {
+		throw new TypeError('invalid Zig play receipt');
+	}
+	if (value.counted === (value.dedup.status === 'duplicate')) {
+		throw new TypeError('invalid Zig play receipt');
 	}
 }
 

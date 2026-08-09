@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { getZigArtist, getZigPlayback, getZigTrack, listZigTracks } from './zig-v1';
+import { getZigArtist, getZigPlayback, getZigTrack, listZigTracks, recordZigPlay } from './zig-v1';
 import { getZigAlbum, listZigAlbums } from './zig-v1-albums';
 import { searchZigCatalog } from './zig-v1-search';
 
@@ -328,6 +328,55 @@ describe('Zig v1 compatibility boundary', () => {
 		const playback = await getZigPlayback('https://next.plyr.fm/api', 'trk_opaque', fetcher);
 		expect(playback.availability.delivery?.url).toBe('https://audio.test/song.mp3');
 		expect(String(requestedInput)).toContain('/v1/tracks/trk_opaque/playback');
+	});
+
+	it('records sustained plays through the v1 write boundary with share attribution', async () => {
+		let requestedInput: RequestInfo | URL | null = null;
+		let requestedInit: RequestInit | undefined;
+		const fetcher = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+			requestedInput = input;
+			requestedInit = init;
+			return json({
+				object: 'play_receipt',
+				track_id: 'trk_opaque',
+				record: { uri: record.uri },
+				play_count: 4,
+				counted: true,
+				dedup: { status: 'claimed', window_seconds: 42 },
+				sources: { metrics: 'application_metrics', dedup: 'redis_ephemeral' }
+			});
+		});
+		const receipt = await recordZigPlay(
+			'https://next.plyr.fm/api',
+			'trk_opaque',
+			'share123',
+			fetcher
+		);
+		const requested = new URL(String(requestedInput));
+		expect(requested.pathname).toBe('/api/v1/tracks/trk_opaque/plays');
+		expect(requested.searchParams.get('ref')).toBe('share123');
+		expect(requestedInit).toMatchObject({ method: 'POST', credentials: 'include' });
+		expect(receipt.play_count).toBe(4);
+	});
+
+	it('rejects malformed share references and contradictory play receipts', async () => {
+		await expect(
+			recordZigPlay('https://next.plyr.fm/api', 'trk_opaque', 'bad/ref', vi.fn())
+		).rejects.toThrow('invalid share reference');
+		const fetcher = vi.fn(async () =>
+			json({
+				object: 'play_receipt',
+				track_id: 'trk_opaque',
+				record: { uri: record.uri },
+				play_count: 4,
+				counted: false,
+				dedup: { status: 'claimed', window_seconds: 42 },
+				sources: { metrics: 'application_metrics', dedup: 'redis_ephemeral' }
+			})
+		);
+		await expect(
+			recordZigPlay('https://next.plyr.fm/api', 'trk_opaque', null, fetcher)
+		).rejects.toThrow('invalid Zig play receipt');
 	});
 
 	it('rejects Python-shaped collections instead of silently adapting them', async () => {
