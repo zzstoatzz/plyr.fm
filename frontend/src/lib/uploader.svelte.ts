@@ -248,8 +248,11 @@ class UploaderState {
 							} : undefined);
 
 							const warnings: string[] = update.warnings ?? [];
+							const warningAction = update.pds_blob_failed
+								? { label: 'save to your PDS', href: '/portal/manage' }
+								: undefined;
 							for (const w of warnings) {
-								toast.warning(w, 8000);
+								toast.warning(w, 0, warningAction);
 							}
 
 							tracksCache.invalidate();

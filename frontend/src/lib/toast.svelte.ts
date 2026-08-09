@@ -65,8 +65,8 @@ class ToastState {
 		return this.add(message, 'info', duration, action);
 	}
 
-	warning(message: string, duration = 4000): string {
-		return this.add(message, 'warning', duration);
+	warning(message: string, duration = 4000, action?: ToastAction): string {
+		return this.add(message, 'warning', duration, action);
 	}
 }
 

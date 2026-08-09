@@ -75,6 +75,9 @@
 					if (data.skipped_count) parts.push(`${data.skipped_count} skipped`);
 					if (data.failed_count) parts.push(`${data.failed_count} failed`);
 					toast.success(parts.join(', ') || 'saved to your PDS');
+					for (const err of data.errors ?? []) {
+						toast.warning(err, 0);
+					}
 					onComplete?.();
 				}
 
@@ -82,7 +85,8 @@
 					eventSource.close();
 					saving = false;
 					toast.dismiss(toastId);
-					toast.error(data.error || 'save failed');
+					const firstError: string | undefined = (data.errors ?? [])[0];
+					toast.error(firstError || data.error || 'save failed', 0);
 				}
 			} catch {
 				/* ignore parse errors */

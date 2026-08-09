@@ -1297,6 +1297,7 @@ async def _process_upload_background(ctx: UploadContext) -> None:
             }
             if pds_result and pds_result.warning:
                 result["warnings"] = [pds_result.warning]
+                result["pds_blob_failed"] = True
 
             await job_service.update_progress(
                 ctx.upload_id,
@@ -1837,6 +1838,8 @@ async def upload_progress(upload_id: str) -> StreamingResponse:
                     payload["track_id"] = job.result["track_id"]
                 if job.result and "warnings" in job.result:
                     payload["warnings"] = job.result["warnings"]
+                if job.result and "pds_blob_failed" in job.result:
+                    payload["pds_blob_failed"] = job.result["pds_blob_failed"]
                 # surface the PDS strongRef so album upload callers can build
                 # items[] arrays without a follow-up DB query (see #1260).
                 # background writes these to job.result in _process_upload_background;
