@@ -1,0 +1,86 @@
+from __future__ import annotations
+
+from typing import Any
+
+import pytest
+from canary_report import build_report, render_markdown
+
+
+def _snapshot(
+    *,
+    rss_kib: int,
+    peak_rss_kib: int,
+    cpu_ticks: int,
+    uptime: float,
+) -> dict[str, int | float]:
+    return {
+        "pid": 42,
+        "application_rss_kib": rss_kib,
+        "application_peak_rss_kib": peak_rss_kib,
+        "process_cpu_ticks": cpu_ticks,
+        "clock_ticks_per_second": 100,
+        "machine_uptime_seconds": uptime,
+        "cgroup_current_bytes": rss_kib * 1024,
+        "cgroup_peak_bytes": peak_rss_kib * 1024,
+    }
+
+
+def _benchmark(*, errors: int = 0) -> dict[str, Any]:
+    return {
+        "path": "/v1/tracks?limit=1",
+        "concurrency": 16,
+        "requests": 1000,
+        "errors": errors,
+        "requests_per_second": 100.0,
+        "latency_ms": {"p50": 1.0, "p95": 2.0, "p99": 3.0},
+    }
+
+
+def test_report_enforces_budgets_and_calculates_cpu() -> None:
+    report = build_report(
+        _snapshot(rss_kib=8_000, peak_rss_kib=8_500, cpu_ticks=100, uptime=10),
+        _snapshot(rss_kib=9_000, peak_rss_kib=20_000, cpu_ticks=250, uptime=20),
+        [_benchmark()],
+    )
+
+    assert report["passed"] is True
+    assert report["observation"] == {
+        "wall_seconds": 10,
+        "application_cpu_seconds": 1.5,
+        "mean_single_core_cpu_percent": 15.0,
+    }
+    markdown = render_markdown(report)
+    assert "Zig canary evidence" in markdown
+    assert "100.0" in markdown
+    assert "p99" in markdown
+
+
+@pytest.mark.parametrize(
+    ("idle_rss", "peak_rss", "failed_gate"),
+    [
+        (16 * 1024 + 1, 20_000, "idle_application_rss_kib"),
+        (8_000, 64 * 1024 + 1, "peak_application_rss_kib"),
+    ],
+)
+def test_report_records_a_failed_resource_gate(
+    idle_rss: int, peak_rss: int, failed_gate: str
+) -> None:
+    report = build_report(
+        _snapshot(rss_kib=idle_rss, peak_rss_kib=idle_rss, cpu_ticks=100, uptime=10),
+        _snapshot(rss_kib=9_000, peak_rss_kib=peak_rss, cpu_ticks=200, uptime=20),
+        [_benchmark()],
+    )
+
+    assert report["passed"] is False
+    assert report["budgets"][failed_gate]["passed"] is False
+
+
+def test_report_rejects_restarts_and_request_errors() -> None:
+    idle = _snapshot(rss_kib=8_000, peak_rss_kib=8_000, cpu_ticks=100, uptime=10)
+    loaded = _snapshot(rss_kib=9_000, peak_rss_kib=9_000, cpu_ticks=200, uptime=20)
+    loaded["pid"] = 43
+    with pytest.raises(ValueError, match="restarted"):
+        build_report(idle, loaded, [_benchmark()])
+    loaded["pid"] = 42
+    with pytest.raises(ValueError, match="without errors"):
+        build_report(idle, loaded, [_benchmark(errors=1)])

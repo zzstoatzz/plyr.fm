@@ -125,9 +125,19 @@ and has no worker, jetstream, migration, Redis, R2, or production traffic
 responsibilities. `DATABASE_URL` is its only secret and must point at the
 staging projection.
 
-The `deploy Zig canary` GitHub workflow is manual-only. Local development may
-build and run the image, but deployment goes through that workflow. The Fly
-hostname is the initial infrastructure verification surface. The workflow runs
+The registered `deploy staging` GitHub workflow exposes an explicit manual
+`zig-canary` target. Local development may build and run the image, but deployment
+goes through that target. Keeping it in a workflow already present on the default
+branch lets this long-lived PR deploy its own ref before merge; a newly added
+standalone workflow cannot be dispatched until it reaches the default branch.
+The job builds and publishes one commit-addressed image before deployment. On the
+first run, its explicit `reconcile_catalog` input launches that image as an
+unmanaged `--rm` Machine in `relay-api-staging`: it inherits staging's existing
+database secret, authenticates current repositories, writes only the projection,
+and is destroyed on exit. The canary app never receives that writer credential.
+Later deployments leave reconciliation disabled unless source state needs a
+deliberate refresh. The Fly hostname is the initial infrastructure verification
+surface. The job runs
 `scripts/canary_smoke.py` after deployment and fails unless readiness, API
 discovery, track collection/detail, artist lookup, and album collection/detail
 all prove their expected anonymous semantics and request-ID contract. The gate
@@ -142,13 +152,15 @@ beside `plyr.fm` until it is capable of replacing it. The internal Fly hostname
 comes first; the `next` application is exposed only after the backend passes its
 resource and semantic gates.
 
-Before the first useful canary deployment, `just zig reconcile-catalog` seeds a
-new projection from current authenticated repositories. Existing canonical-looking
-track and album rows supply candidate DIDs only; none of their metadata, CIDs, PDS
-locations, or account state is trusted. The one-shot role verifies each complete
-repository through the same signature/MST/CID path as continuous ingestion and
-fails if no repository verifies or any candidate repository is retryable or
-rejected. An authenticated repository can still succeed when individual selected
-records are malformed: those records are atomically quarantined with their CID,
-reason, and commit proof while valid siblings project normally. It is
-separate from the read-only API role and requires projection-write authority.
+Before the first useful canary deployment, select the workflow's
+`reconcile_catalog` input to seed the new projection from current authenticated
+repositories. Existing canonical-looking track and album rows supply candidate
+DIDs only; none of their metadata, CIDs, PDS locations, or account state is
+trusted. The one-shot role verifies each complete repository through the same
+signature/MST/CID path as continuous ingestion and fails if no repository verifies
+or any candidate repository is retryable or rejected. An authenticated repository
+can still succeed when individual selected records are malformed: those records
+are atomically quarantined with their CID, reason, and commit proof while valid
+siblings project normally. Local `just zig reconcile-catalog` remains a development
+command; staging reconciliation uses the disposable Fly Machine so its writer
+credential never leaves the staging app.

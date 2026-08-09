@@ -1,4 +1,4 @@
-"""Repeatable local throughput/latency benchmark for the Zig HTTP boundary."""
+"""Repeatable local or deployed throughput benchmark for the Zig HTTP boundary."""
 
 from __future__ import annotations
 
@@ -12,6 +12,7 @@ import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
+from urllib.parse import SplitResult, urlsplit
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -20,6 +21,40 @@ ROOT = Path(__file__).resolve().parents[1]
 class WorkerResult:
     latencies_ns: list[int]
     errors: int
+
+
+@dataclass(frozen=True)
+class HttpTarget:
+    scheme: str
+    host: str
+    port: int
+
+    def connect(self) -> http.client.HTTPConnection:
+        connection_type = (
+            http.client.HTTPSConnection
+            if self.scheme == "https"
+            else http.client.HTTPConnection
+        )
+        return connection_type(self.host, self.port, timeout=5)
+
+
+def parse_target(value: str) -> HttpTarget:
+    parsed: SplitResult = urlsplit(value)
+    if parsed.scheme not in {"http", "https"}:
+        raise ValueError("benchmark URL must use http or https")
+    if not parsed.hostname or parsed.username or parsed.password:
+        raise ValueError("benchmark URL must contain an unauthenticated host")
+    if parsed.path not in {"", "/"} or parsed.query or parsed.fragment:
+        raise ValueError("benchmark URL must not contain a path, query, or fragment")
+    try:
+        port = parsed.port
+    except ValueError as error:
+        raise ValueError("benchmark URL has an invalid port") from error
+    return HttpTarget(
+        parsed.scheme,
+        parsed.hostname,
+        port or (443 if parsed.scheme == "https" else 80),
+    )
 
 
 def _unused_port() -> int:
@@ -47,7 +82,7 @@ def _wait_until_ready(port: int, process: subprocess.Popen[bytes]) -> None:
 
 
 def _worker(
-    port: int,
+    target: HttpTarget,
     path: str,
     expected_status: int,
     duration: float,
@@ -55,7 +90,7 @@ def _worker(
 ) -> WorkerResult:
     latencies: list[int] = []
     errors = 0
-    connection = http.client.HTTPConnection("127.0.0.1", port, timeout=2)
+    connection = target.connect()
     start.wait()
     deadline = time.perf_counter() + duration
     try:
@@ -72,7 +107,7 @@ def _worker(
             except (OSError, http.client.HTTPException):
                 errors += 1
                 connection.close()
-                connection = http.client.HTTPConnection("127.0.0.1", port, timeout=2)
+                connection = target.connect()
     finally:
         connection.close()
     return WorkerResult(latencies, errors)
@@ -95,6 +130,56 @@ def _resident_set_kib(process: subprocess.Popen[bytes]) -> int | None:
     if measured.returncode != 0 or not measured.stdout.strip().isdigit():
         return None
     return int(measured.stdout.strip())
+
+
+def benchmark_target(
+    target: HttpTarget,
+    duration: float,
+    concurrency: int,
+    path: str,
+    expected_status: int,
+) -> dict[str, object]:
+    start = threading.Event()
+    threads: list[threading.Thread] = []
+    results: list[WorkerResult | None] = [None] * concurrency
+
+    def run(index: int) -> None:
+        results[index] = _worker(target, path, expected_status, duration, start)
+
+    for index in range(concurrency):
+        thread = threading.Thread(target=run, args=(index,))
+        thread.start()
+        threads.append(thread)
+    began = time.perf_counter()
+    start.set()
+    for thread in threads:
+        thread.join()
+    elapsed = time.perf_counter() - began
+
+    completed = [result for result in results if result is not None]
+    latencies = sorted(
+        latency for result in completed for latency in result.latencies_ns
+    )
+    workers_completed = len(completed)
+    errors = (
+        sum(result.errors for result in completed) + concurrency - workers_completed
+    )
+    return {
+        "target": f"{target.scheme}://{target.host}:{target.port}",
+        "path": path,
+        "expected_status": expected_status,
+        "duration_seconds": round(elapsed, 3),
+        "concurrency": concurrency,
+        "workers_completed": workers_completed,
+        "requests": len(latencies),
+        "errors": errors,
+        "requests_per_second": round(len(latencies) / elapsed, 1),
+        "latency_ms": {
+            "p50": round(_percentile(latencies, 0.50), 3),
+            "p95": round(_percentile(latencies, 0.95), 3),
+            "p99": round(_percentile(latencies, 0.99), 3),
+        },
+    }
 
 
 def benchmark(
@@ -128,43 +213,15 @@ def benchmark(
     )
     try:
         _wait_until_ready(port, process)
-        start = threading.Event()
-        threads: list[threading.Thread] = []
-        results: list[WorkerResult | None] = [None] * concurrency
-
-        def run(index: int) -> None:
-            results[index] = _worker(port, path, expected_status, duration, start)
-
-        for index in range(concurrency):
-            thread = threading.Thread(target=run, args=(index,))
-            thread.start()
-            threads.append(thread)
-        began = time.perf_counter()
-        start.set()
-        for thread in threads:
-            thread.join()
-        elapsed = time.perf_counter() - began
-
-        completed = [result for result in results if result is not None]
-        latencies = sorted(
-            latency for result in completed for latency in result.latencies_ns
+        result = benchmark_target(
+            HttpTarget("http", "127.0.0.1", port),
+            duration,
+            concurrency,
+            path,
+            expected_status,
         )
-        errors = sum(result.errors for result in completed)
-        return {
-            "path": path,
-            "expected_status": expected_status,
-            "duration_seconds": round(elapsed, 3),
-            "concurrency": concurrency,
-            "requests": len(latencies),
-            "errors": errors,
-            "resident_set_kib": _resident_set_kib(process),
-            "requests_per_second": round(len(latencies) / elapsed, 1),
-            "latency_ms": {
-                "p50": round(_percentile(latencies, 0.50), 3),
-                "p95": round(_percentile(latencies, 0.95), 3),
-                "p99": round(_percentile(latencies, 0.99), 3),
-            },
-        }
+        result["resident_set_kib"] = _resident_set_kib(process)
+        return result
     finally:
         process.terminate()
         try:
@@ -181,6 +238,10 @@ def main() -> None:
     parser.add_argument("--path", default="/health")
     parser.add_argument("--expect-status", type=int, default=200)
     parser.add_argument(
+        "--url",
+        help="benchmark a deployed base URL instead of starting a local Zig process",
+    )
+    parser.add_argument(
         "--with-index",
         action="store_true",
         help="use DATABASE_URL from the environment and require index readiness",
@@ -188,12 +249,26 @@ def main() -> None:
     args = parser.parse_args()
     if args.duration <= 0 or args.concurrency <= 0:
         parser.error("duration and concurrency must be positive")
+    if args.url and args.with_index:
+        parser.error("--url and --with-index are mutually exclusive")
+    try:
+        target = parse_target(args.url) if args.url else None
+    except ValueError as error:
+        parser.error(str(error))
     database_url = os.environ.get("DATABASE_URL") if args.with_index else None
     if args.with_index and not database_url:
         parser.error("--with-index requires DATABASE_URL in the environment")
     print(
         json.dumps(
-            benchmark(
+            benchmark_target(
+                target,
+                args.duration,
+                args.concurrency,
+                args.path,
+                args.expect_status,
+            )
+            if target
+            else benchmark(
                 args.duration,
                 args.concurrency,
                 args.path,

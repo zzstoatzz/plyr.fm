@@ -2,4 +2,5 @@
 .zig-cache
 zig-out
 zig-pkg
-scripts
+scripts/*
+!scripts/canary-resource-snapshot

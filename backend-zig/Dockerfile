@@ -41,6 +41,7 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /build/zig-out/bin/plyr-backend /usr/local/bin/plyr-backend
+COPY --chmod=755 scripts/canary-resource-snapshot /usr/local/bin/canary-resource-snapshot
 
 EXPOSE 8000
 ENTRYPOINT ["/usr/local/bin/plyr-backend"]

@@ -14,10 +14,25 @@ on:
       - "backend/alembic.ini"
       - ".github/workflows/deploy-staging.yml"
   workflow_dispatch:
+    inputs:
+      target:
+        description: deployment target
+        required: true
+        type: choice
+        default: python-staging
+        options:
+          - python-staging
+          - zig-canary
+      reconcile_catalog:
+        description: reconcile authenticated repositories before a Zig canary deploy
+        required: true
+        type: boolean
+        default: false
 
 jobs:
   deploy:
     name: deploy staging
+    if: github.event_name == 'push' || inputs.target == 'python-staging'
     runs-on: ubuntu-latest
     concurrency: deploy-backend-staging
     steps:
@@ -39,3 +54,134 @@ jobs:
           flyctl deploy --config backend/fly.staging.toml --remote-only -a relay-api-staging .
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_STAGING }}
+
+  deploy-zig-canary:
+    name: deploy Zig canary
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      inputs.target == 'zig-canary' &&
+      github.ref == 'refs/heads/codex/zig-backend'
+    runs-on: ubuntu-latest
+    concurrency: deploy-zig-canary
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: build and publish immutable Zig image
+        working-directory: backend-zig
+        run: >-
+          flyctl deploy
+          --config fly.canary.toml
+          --remote-only
+          --app plyr-api-zig-canary
+          --build-only
+          --push
+          --image-label "$GITHUB_SHA"
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_STAGING }}
+
+      - name: reconcile authenticated staging catalog
+        if: inputs.reconcile_catalog
+        run: >-
+          flyctl machine run "registry.fly.io/plyr-api-zig-canary:${GITHUB_SHA}"
+          --app relay-api-staging
+          --region sea
+          --rm
+          --restart no
+          --skip-dns-registration
+          --vm-cpu-kind shared
+          --vm-cpus 1
+          --vm-memory 256
+          --metadata purpose=zig-catalog-reconciliation
+          --env MODE=catalog_reconciler
+          --env INDEX_MODE=required
+          --env TRACK_COLLECTION_NSID=fm.plyr.stg.track
+          --env LIST_COLLECTION_NSID=fm.plyr.stg.list
+          --env PROFILE_COLLECTION_NSID=fm.plyr.stg.actor.profile
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_STAGING }}
+
+      - name: deploy immutable image to Fly.io
+        working-directory: backend-zig
+        run: >-
+          flyctl deploy
+          --config fly.canary.toml
+          --app plyr-api-zig-canary
+          --image "registry.fly.io/plyr-api-zig-canary:${GITHUB_SHA}"
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_STAGING }}
+
+      - name: prove the anonymous read surface
+        working-directory: backend-zig
+        run: python3 scripts/canary_smoke.py https://plyr-api-zig-canary.fly.dev
+
+      - name: let the canary return to idle
+        run: sleep 5
+
+      - name: capture idle application resources
+        working-directory: backend-zig
+        run: |
+          mkdir -p canary-evidence
+          flyctl ssh console \
+            --app plyr-api-zig-canary \
+            --quiet \
+            --pty=false \
+            --command /usr/local/bin/canary-resource-snapshot \
+            > canary-evidence/idle.json
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_STAGING }}
+
+      - name: measure deployed product reads
+        working-directory: backend-zig
+        run: |
+          python3 scripts/bench_http.py \
+            --url https://plyr-api-zig-canary.fly.dev \
+            --duration 10 \
+            --concurrency 1 \
+            --path '/v1/tracks?limit=50' \
+            > canary-evidence/tracks-c1.json
+          python3 scripts/bench_http.py \
+            --url https://plyr-api-zig-canary.fly.dev \
+            --duration 10 \
+            --concurrency 16 \
+            --path '/v1/tracks?limit=50' \
+            > canary-evidence/tracks-c16.json
+
+      - name: capture loaded application resources
+        working-directory: backend-zig
+        run: >-
+          flyctl ssh console
+          --app plyr-api-zig-canary
+          --quiet
+          --pty=false
+          --command /usr/local/bin/canary-resource-snapshot
+          > canary-evidence/loaded.json
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_STAGING }}
+
+      - name: enforce and summarize canary evidence
+        working-directory: backend-zig
+        run: |
+          set +e
+          python3 scripts/canary_report.py \
+            --idle canary-evidence/idle.json \
+            --loaded canary-evidence/loaded.json \
+            --benchmark canary-evidence/tracks-c1.json \
+            --benchmark canary-evidence/tracks-c16.json \
+            --output canary-evidence/report.json \
+            --markdown-output canary-evidence/report.md
+          status=$?
+          if [ -f canary-evidence/report.md ]; then
+            cat canary-evidence/report.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+          exit "$status"
+
+      - name: retain commit-addressed canary evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: zig-canary-evidence-${{ github.sha }}
+          path: backend-zig/canary-evidence
+          if-no-files-found: warn
+          retention-days: 30

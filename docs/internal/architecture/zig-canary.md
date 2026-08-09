@@ -31,8 +31,41 @@ The machine:
 - scales to zero and has no minimum running-machine cost;
 - uses `/ready`, which performs `SELECT 1` through the application pool, for
   deployment health;
-- is deployed only by the manual `deploy Zig canary` GitHub workflow. Local
-  `fly deploy` is not part of the operating procedure.
+- is deployed only by the manual `zig-canary` target in the registered
+  `deploy staging` GitHub workflow. Local `fly deploy` is not part of the
+  operating procedure.
+
+The canary target deliberately lives in a workflow already registered on the
+default branch. GitHub does not expose a newly introduced `workflow_dispatch`
+file until that file exists on the default branch, which would make a standalone
+canary workflow in this long-lived unmerged PR impossible to launch. Dispatching
+the existing workflow with `ref=codex/zig-backend` and `target=zig-canary` loads
+this branch's guarded canary job. Push-triggered Python staging deploys retain
+their existing job and cannot select the canary path. The canary job also checks
+the exact branch ref before receiving the staging Fly token; dispatching the
+target from an arbitrary branch is a skipped job, not an arbitrary-code path into
+staging authority.
+
+The canary job builds and pushes a commit-addressed image before changing the API
+Machine. Its optional `reconcile_catalog` input runs that exact image once as an
+unmanaged `--rm` Machine in the existing `relay-api-staging` app. Fly injects the
+staging app's already-deployed `DATABASE_URL`; the process receives only explicit
+staging NSIDs, writes authenticated projections, and is destroyed when it exits.
+Only after successful reconciliation does the workflow deploy the same immutable
+image to `plyr-api-zig-canary`, whose own database credential remains read-only.
+Routine canary deployments leave reconciliation disabled, avoiding repeated PDS
+fetches and projection writes.
+
+After semantic smoke, the same job captures the application process at idle,
+drives `/v1/tracks?limit=50` over the public Fly hostname for ten seconds each at
+concurrency 1 and 16, and captures it again. The retained commit-addressed JSON
+artifact includes application current/peak RSS, cgroup current/peak memory,
+application CPU time during the observation window, requests per second, and
+p50/p95/p99 latency. The workflow summary renders the same evidence. The job
+fails on any request error, process restart, idle RSS above 16 MiB, or application
+peak RSS above 64 MiB. This is deliberately part of the manually dispatched
+deployment path, not the PR workflows, so ordinary checkpoints never generate
+remote load or repeated infrastructure runs.
 
 ## next-environment gates
 
@@ -48,8 +81,9 @@ Before exposing `next.plyr.fm`:
    detail, resolves its artist, and traverses that artist's album collection;
    empty projection tables cannot satisfy this gate.
 4. Fly-native measurements must record idle RSS, loaded peak memory, CPU time,
-   throughput, and p50/p95/p99 latency. The first budget is at most 16 MiB idle
-   application RSS and 64 MiB working set under the agreed load scenario.
+   throughput, and p50/p95/p99 latency. The agreed load scenario is the public
+   50-track collection for ten seconds at concurrency 1 and 16. The first budget
+   is at most 16 MiB idle application RSS and 64 MiB application peak RSS.
 5. The service must remain well below its 256 MiB machine ceiling with the
    connection pool established; the ceiling is a guardrail, not a target.
 6. No route receives user traffic until its authentication, visibility,
