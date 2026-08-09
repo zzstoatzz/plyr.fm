@@ -1,0 +1,6 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "plyr-fm-next",
+  "pages_build_output_dir": "./public",
+  "compatibility_date": "2026-08-08"
+}

@@ -187,10 +187,11 @@ canary job; ordinary PR checks do not run remote load or deployment measurements
 Run the same HTTP load driver against an already deployed target with
 `just zig bench-canary -- ...`.
 
-The deployed `93989ab0` checkpoint passes the complete smoke gate through both
-the Fly hostname and `next.plyr.fm`. Its retained 50-track evidence reports
-9,948 KiB idle RSS, 16,672 KiB peak RSS, 0.41 application CPU-seconds across
-23.4 seconds, and zero load-test errors. See
+The deployed `4026da4f` checkpoint passes the complete smoke gate after moving
+the only service Machine from `sjc` to `iad` behind clone, cordon, smoke, and
+destroy gates. Its retained 50-track evidence reports 9,748 KiB idle RSS,
+15,504 KiB peak RSS, 0.45 application CPU-seconds across 24.03 seconds, and zero
+load-test errors. See
 `docs/internal/architecture/zig-canary.md` for the exact throughput, latency,
 and workflow artifact.
 
@@ -205,10 +206,13 @@ cancelled. Cross-architecture assurance belongs on the matching runner, while
 the deployment workflow remains the authoritative Fly image build.
 
 `next.plyr.fm` is the public parallel deployment of the successor application,
-not a percentage canary. During the backend phase it routes directly to this Zig
-API; a separate next frontend can later claim the hostname and route to the `/v1`
-surface. It evolves beside `plyr.fm` without changing the existing production or
-staging applications.
+not a percentage canary. It always means a frontend backed by the Zig `/v1`
+surface. The initial A/AAAA records exposing the bare Fly service were a
+temporary backend-verification state, not the completed next application. The
+dedicated `frontend-next` Pages project claims the hostname only after its
+same-origin `/api/v1/*` transport and native v1 client pass locally and on the
+Pages deployment. It evolves beside `plyr.fm` without changing the existing
+production or staging applications.
 
 Before the first useful canary deployment, select the workflow's
 `reconcile_catalog` input to seed the new projection from current authenticated

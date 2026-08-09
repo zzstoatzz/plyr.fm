@@ -130,16 +130,21 @@ Before exposing `next.plyr.fm`:
    moderation, and content-authority semantics are explicit. A fast wrong
    response is a regression.
 
-During the backend phase, `next.plyr.fm` routes directly to the isolated Zig API.
-A separately configured frontend can later claim that hostname and route its API
-calls to the same service without changing any existing environment. Users and
-test clients opt into next explicitly; percentage routing is not the model for a
-versioned contract and UI that are being replaced together.
+`next.plyr.fm` is reserved for the complete successor application: a frontend
+whose data and playback capabilities come from Zig `/v1`. Directly exposing the
+isolated Fly API there was useful only as a temporary backend-verification state;
+it is not a shippable interpretation of next. The dedicated Pages frontend uses
+a fixed-target, read-only `/api/v1/*` transport so previews are testable and the
+future session boundary stays same-site. It passes the Zig status, body,
+request-ID, and source-rich JSON through without adapting it to the Python API.
+Users and test clients opt into next explicitly; percentage routing is not the
+model for a versioned contract and UI that are being replaced together.
 
-On 2026-08-09 Cloudflare A and AAAA records were created for `next.plyr.fm`,
-pointing only to the dedicated Fly ingress addresses for
-`plyr-api-zig-canary`. Existing production and staging DNS records and Pages
-projects were not changed.
+On 2026-08-09 temporary Cloudflare A and AAAA records were created for
+`next.plyr.fm`, pointing only to the dedicated Fly ingress addresses for
+`plyr-api-zig-canary`. They exist to verify the backend before the Pages cutover;
+they are not the intended steady topology. Existing production and staging DNS
+records and Pages projects were not changed.
 
 ## deployed playlist checkpoint
 
@@ -166,6 +171,29 @@ PID change. The process used 0.41 CPU-seconds across the 23.4-second observation
 window, or 1.8% of one core. These are Fly/Neon path measurements rather than a
 local throughput claim; their durable value is the semantic traversal, zero
 errors, and bounded process resources for the exact deployed commit.
+
+## iad placement checkpoint
+
+Workflow run
+[`31332921142`](https://github.com/zzstoatzz/plyr.fm/actions/runs/31332921142)
+deployed immutable image `4026da4ff14c169c60b6d95826846ba989c7bef8`
+and performed the first health-gated regional replacement. It cloned the exact
+service Machine into `iad`, cordoned the `sjc` Machine, passed the complete
+semantic smoke through Fly routing, and only then destroyed the superseded
+Machine. The Python staging and repository-reconciliation jobs were skipped.
+
+The retained commit-addressed 117,990-byte track-read evidence is:
+
+| concurrency | responses/s | p50 | p95 | p99 | errors |
+|---:|---:|---:|---:|---:|---:|
+| 1 | 4.7 | 201.458 ms | 245.785 ms | 347.644 ms | 0 |
+| 16 | 11.5 | 1,318.764 ms | 1,838.750 ms | 1,893.560 ms | 0 |
+
+Idle application RSS was 9,748 KiB. Loaded RSS was 10,596 KiB and process peak
+RSS was 15,504 KiB. The application used 0.45 CPU-seconds across 24.03 seconds,
+or 1.9% of one core. The artifact therefore passes both resource budgets after
+the topology correction, while the concurrency-1 median improves by 106.779 ms
+over the `sjc` checkpoint.
 
 ## initial catalog reconciliation
 

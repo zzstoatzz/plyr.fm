@@ -1,0 +1,11 @@
+set dotenv-load := false
+
+check:
+    bun test
+    bunx tsc --noEmit
+
+run:
+    bunx wrangler pages dev public --port 4179 --show-interactive-dev-session=false
+
+deploy:
+    bunx wrangler pages deploy public --project-name plyr-fm-next --branch codex/zig-backend

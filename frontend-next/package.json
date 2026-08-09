@@ -1,0 +1,16 @@
+{
+  "name": "@plyr-fm/next-frontend",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check": "bun test && tsc --noEmit",
+    "test": "bun test",
+    "deploy": "wrangler pages deploy public --project-name plyr-fm-next --branch codex/zig-backend"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "serve": "latest",
+    "typescript": "latest",
+    "wrangler": "latest"
+  }
+}

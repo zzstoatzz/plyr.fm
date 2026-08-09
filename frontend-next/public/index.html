@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta name="theme-color" content="#090b0d" />
+		<meta name="description" content="The next plyr.fm client, powered by the source-authoritative Zig backend." />
+		<link rel="icon" href="/icon.svg" />
+		<link rel="stylesheet" href="/styles.css" />
+		<title>plyr.fm next</title>
+	</head>
+	<body>
+		<header class="masthead">
+			<a class="wordmark" href="/" aria-label="plyr.fm next home">plyr.fm <span>next</span></a>
+			<p>the source-authoritative client, backed by Zig</p>
+		</header>
+
+		<main>
+			<section class="intro" aria-labelledby="catalog-heading">
+				<div>
+					<p class="eyebrow">parallel deployment</p>
+					<h1 id="catalog-heading">latest music</h1>
+					<p id="catalog-status" aria-live="polite">loading verified catalog…</p>
+				</div>
+				<button id="clear-artist" class="quiet-button" type="button" hidden>all artists</button>
+			</section>
+
+			<section id="catalog" class="catalog" aria-live="polite"></section>
+			<button id="load-more" class="load-more" type="button" hidden>load more</button>
+		</main>
+
+		<footer class="player" aria-label="audio player">
+			<div class="now-playing">
+				<strong id="now-title">choose a track</strong>
+				<span id="now-artist">playback is resolved separately from metadata</span>
+				<small id="now-evidence"></small>
+			</div>
+			<audio id="audio" controls preload="none"></audio>
+		</footer>
+
+		<script type="module" src="/app.js"></script>
+	</body>
+</html>
