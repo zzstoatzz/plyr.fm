@@ -10,6 +10,7 @@ const list_change = @import("list_change.zig");
 const postgres_list = @import("postgres_list_store.zig");
 const postgres_track = @import("postgres_track_store.zig");
 const postgres_profile = @import("postgres_profile_store.zig");
+const postgres_like = @import("postgres_like_store.zig");
 const postgres_rejections = @import("postgres_record_rejection_store.zig");
 const profile_change = @import("profile_change.zig");
 const profile_store = @import("profile_store.zig");
@@ -161,6 +162,16 @@ pub const PostgresVerifiedCommitStore = struct {
             };
             if (result != .applied) return error.CorruptProjection;
         }
+        var likes: postgres_like.PostgresLikeStore = .{ .pool = self.pool };
+        for (commit.like_changes) |change| {
+            const result = likes.applyInTransaction(conn, allocator, change) catch |err| switch (err) {
+                error.RevisionConflict => return error.RevisionConflict,
+                error.CorruptProjection => return error.CorruptProjection,
+                error.ProjectionUnavailable => return error.ProjectionUnavailable,
+                error.OutOfMemory => return error.OutOfMemory,
+            };
+            if (result != .applied) return error.CorruptProjection;
+        }
         const touched = collectTouchedUris(allocator, commit) catch return error.OutOfMemory;
         defer allocator.free(touched);
         var rejection_store: postgres_rejections.PostgresRecordRejectionStore = .{ .pool = self.pool };
@@ -227,7 +238,8 @@ fn collectTouchedUris(
     allocator: std.mem.Allocator,
     commit: verified.Commit,
 ) ![][]const u8 {
-    const count = commit.list_changes.len + commit.track_changes.len + commit.profile_changes.len;
+    const count = commit.list_changes.len + commit.track_changes.len +
+        commit.profile_changes.len + commit.like_changes.len;
     const uris = try allocator.alloc([]const u8, count);
     var index: usize = 0;
     for (commit.list_changes) |change| {
@@ -245,6 +257,13 @@ fn collectTouchedUris(
         index += 1;
     }
     for (commit.profile_changes) |change| {
+        uris[index] = switch (change) {
+            .upsert => |value| value.record_uri,
+            .delete => |value| value.record_uri,
+        };
+        index += 1;
+    }
+    for (commit.like_changes) |change| {
         uris[index] = switch (change) {
             .upsert => |value| value.record_uri,
             .delete => |value| value.record_uri,

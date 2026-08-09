@@ -112,6 +112,7 @@ def main() -> None:
         "TRACK_COLLECTION_NSID": COLLECTION,
         "LIST_COLLECTION_NSID": "fm.plyr.dev.list",
         "PROFILE_COLLECTION_NSID": "fm.plyr.dev.actor.profile",
+        "LIKE_COLLECTION_NSID": "fm.plyr.dev.like",
         "INDEX_MODE": "disabled",
         "MAX_CONNECTIONS": "2",
         "CORS_ALLOWED_ORIGINS": ALLOWED_ORIGIN,

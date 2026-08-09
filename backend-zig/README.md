@@ -15,12 +15,12 @@ just zig test-http
 just zig test-postgres
 just zig image
 just zig smoke-canary
-DATABASE_URL=... TRACK_COLLECTION_NSID=... LIST_COLLECTION_NSID=... PROFILE_COLLECTION_NSID=... just zig reconcile-catalog
-INDEX_MODE=disabled TRACK_COLLECTION_NSID=fm.plyr.dev.track LIST_COLLECTION_NSID=fm.plyr.dev.list PROFILE_COLLECTION_NSID=fm.plyr.dev.actor.profile just zig run
+DATABASE_URL=... TRACK_COLLECTION_NSID=... LIST_COLLECTION_NSID=... PROFILE_COLLECTION_NSID=... LIKE_COLLECTION_NSID=... just zig reconcile-catalog
+INDEX_MODE=disabled TRACK_COLLECTION_NSID=fm.plyr.dev.track LIST_COLLECTION_NSID=fm.plyr.dev.list PROFILE_COLLECTION_NSID=fm.plyr.dev.actor.profile LIKE_COLLECTION_NSID=fm.plyr.dev.like just zig run
 just zig bench-http --duration 5 --concurrency 16
 DATABASE_URL=postgresql://... just zig bench-http --with-index --path '/v1/tracks?limit=50'
-DATABASE_URL=postgresql://... TRACK_COLLECTION_NSID=fm.plyr.dev.track LIST_COLLECTION_NSID=fm.plyr.dev.list PROFILE_COLLECTION_NSID=fm.plyr.dev.actor.profile just zig repair-repo did:plc:example
-DATABASE_URL=postgresql://... TRACK_COLLECTION_NSID=fm.plyr.dev.track LIST_COLLECTION_NSID=fm.plyr.dev.list PROFILE_COLLECTION_NSID=fm.plyr.dev.actor.profile just zig reconcile-accounts
+DATABASE_URL=postgresql://... TRACK_COLLECTION_NSID=fm.plyr.dev.track LIST_COLLECTION_NSID=fm.plyr.dev.list PROFILE_COLLECTION_NSID=fm.plyr.dev.actor.profile LIKE_COLLECTION_NSID=fm.plyr.dev.like just zig repair-repo did:plc:example
+DATABASE_URL=postgresql://... TRACK_COLLECTION_NSID=fm.plyr.dev.track LIST_COLLECTION_NSID=fm.plyr.dev.list PROFILE_COLLECTION_NSID=fm.plyr.dev.actor.profile LIKE_COLLECTION_NSID=fm.plyr.dev.like just zig reconcile-accounts
 just zig bench-snapshot
 ```
 
@@ -59,6 +59,7 @@ Python suite's `relay_test` schema.
 | `TRACK_COLLECTION_NSID` | yes | exact environment-aware track-record NSID |
 | `LIST_COLLECTION_NSID` | yes | exact environment-aware list-record NSID used by albums and playlists |
 | `PROFILE_COLLECTION_NSID` | yes | exact environment-aware authored profile-record NSID |
+| `LIKE_COLLECTION_NSID` | yes | exact environment-aware authored like-record NSID |
 | `DATABASE_URL` | in normal API mode | PostgreSQL projection; canonical Postgres URLs and the existing SQLAlchemy `psycopg`, `psycopg2`, and `asyncpg` driver-qualified forms are accepted; missing or unknown configuration fails startup |
 | `DATABASE_ROLE` | no | expected effective PostgreSQL role; startup opens the pool and fails closed if `current_user` differs |
 | `DATABASE_POOL_SIZE` | no | bounded PostgreSQL connection pool size, default `8` |

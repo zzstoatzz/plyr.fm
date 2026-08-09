@@ -29,6 +29,7 @@ pub fn run(
     list_collection: []const u8,
     track_collection: []const u8,
     profile_collection: []const u8,
+    like_collection: []const u8,
 ) !void {
     const hosts = try parseHosts(allocator, relay_hosts);
     defer allocator.free(hosts);
@@ -77,6 +78,7 @@ pub fn run(
         .list_collection = list_collection,
         .track_collection = track_collection,
         .profile_collection = profile_collection,
+        .like_collection = like_collection,
     };
 
     var handler: Handler = .{
@@ -89,6 +91,7 @@ pub fn run(
         .list_collection = list_collection,
         .track_collection = track_collection,
         .profile_collection = profile_collection,
+        .like_collection = like_collection,
         .account_checks = status_checks.port(),
     };
     var client = zat.FirehoseClient.init(io, allocator, .{
@@ -116,6 +119,7 @@ const Handler = struct {
     list_collection: []const u8,
     track_collection: []const u8,
     profile_collection: []const u8,
+    like_collection: []const u8,
     account_checks: @import("../account/check_schedule.zig").Schedule,
     fatal_error: ?anyerror = null,
 
@@ -180,6 +184,7 @@ const Handler = struct {
                 self.list_collection,
                 self.track_collection,
                 self.profile_collection,
+                self.like_collection,
             )) return;
             return self.repairAndWatch(allocator, commit.repo, indexed_at_us);
         }
@@ -215,11 +220,13 @@ fn hasRelevantOperation(
     list_collection: []const u8,
     track_collection: []const u8,
     profile_collection: []const u8,
+    like_collection: []const u8,
 ) bool {
     for (commit.ops) |operation| {
         if (std.mem.eql(u8, operation.collection, list_collection) or
             std.mem.eql(u8, operation.collection, track_collection) or
-            std.mem.eql(u8, operation.collection, profile_collection)) return true;
+            std.mem.eql(u8, operation.collection, profile_collection) or
+            std.mem.eql(u8, operation.collection, like_collection)) return true;
     }
     return false;
 }
@@ -268,6 +275,7 @@ test "unknown repositories become interesting only through selected collections"
         "fm.plyr.list",
         "fm.plyr.track",
         "fm.plyr.actor.profile",
+        "fm.plyr.like",
     ));
     var other = base;
     other.ops = &unrelated;
@@ -276,6 +284,7 @@ test "unknown repositories become interesting only through selected collections"
         "fm.plyr.list",
         "fm.plyr.track",
         "fm.plyr.actor.profile",
+        "fm.plyr.like",
     ));
 }
 

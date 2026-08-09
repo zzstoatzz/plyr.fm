@@ -114,6 +114,7 @@ jobs:
           --env INDEX_MODE=required
           --env TRACK_COLLECTION_NSID=fm.plyr.track
           --env LIST_COLLECTION_NSID=fm.plyr.list
+          --env LIKE_COLLECTION_NSID=fm.plyr.like
           --env PROFILE_COLLECTION_NSID=fm.plyr.actor.profile
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_ZIG_NEXT }}

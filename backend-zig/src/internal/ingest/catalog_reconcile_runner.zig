@@ -13,6 +13,7 @@ pub fn run(
     list_collection: []const u8,
     track_collection: []const u8,
     profile_collection: []const u8,
+    like_collection: []const u8,
 ) !catalog.Report {
     var candidate_adapter: candidates.PostgresRepositoryCandidates = .{ .pool = pool };
     var repairs: repair_runner.Runner = undefined;
@@ -23,6 +24,7 @@ pub fn run(
         list_collection,
         track_collection,
         profile_collection,
+        like_collection,
     );
     defer repairs.deinit();
 

@@ -25,6 +25,7 @@ Run a one-shot repair with:
 ```sh
 DATABASE_URL=... \
 TRACK_COLLECTION_NSID=fm.plyr.dev.track \
+LIKE_COLLECTION_NSID=fm.plyr.dev.like \
 LIST_COLLECTION_NSID=fm.plyr.dev.list \
 just zig repair-repo did:plc:example
 ```

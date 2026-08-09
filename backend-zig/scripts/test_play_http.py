@@ -188,6 +188,7 @@ def main() -> None:
         "TRACK_COLLECTION_NSID": COLLECTION,
         "LIST_COLLECTION_NSID": "fm.plyr.dev.list",
         "PROFILE_COLLECTION_NSID": "fm.plyr.dev.actor.profile",
+        "LIKE_COLLECTION_NSID": "fm.plyr.dev.like",
         "INDEX_MODE": "required",
         "DATABASE_URL": DATABASE_URL,
         "DOCKET_URL": REDIS_URL,

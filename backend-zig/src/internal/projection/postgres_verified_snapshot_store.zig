@@ -11,6 +11,7 @@ const list_store = @import("list_store.zig");
 const postgres_list = @import("postgres_list_store.zig");
 const postgres_track = @import("postgres_track_store.zig");
 const postgres_profile = @import("postgres_profile_store.zig");
+const postgres_like = @import("postgres_like_store.zig");
 const postgres_rejections = @import("postgres_record_rejection_store.zig");
 const track_change = @import("track_change.zig");
 const record_rejection = @import("record_rejection.zig");
@@ -70,6 +71,15 @@ pub const PostgresVerifiedSnapshotStore = struct {
                 .delete => return error.InvalidSnapshot,
             };
         }
+        const like_uris = allocator.alloc([]const u8, snapshot.like_changes.len) catch
+            return error.OutOfMemory;
+        defer allocator.free(like_uris);
+        for (snapshot.like_changes, like_uris) |change, *uri| {
+            uri.* = switch (change) {
+                .upsert => |value| value.record_uri,
+                .delete => return error.InvalidSnapshot,
+            };
+        }
 
         var conn = self.pool.acquire() catch |err| {
             std.log.err("verified snapshot connection acquisition failed: {}", .{err});
@@ -107,6 +117,7 @@ pub const PostgresVerifiedSnapshotStore = struct {
             snapshot.list_collection,
             snapshot.track_collection,
             snapshot.profile_collection,
+            snapshot.like_collection,
             snapshot.commit_rev,
         }) catch |err| {
             std.log.err("verified snapshot future-record check failed: {}", .{err});
@@ -149,12 +160,22 @@ pub const PostgresVerifiedSnapshotStore = struct {
             };
             if (result != .applied) return error.CorruptProjection;
         }
+        var likes: postgres_like.PostgresLikeStore = .{ .pool = self.pool };
+        for (snapshot.like_changes) |change| {
+            const result = likes.applyInTransaction(conn, allocator, change) catch |err| switch (err) {
+                error.RevisionConflict => return error.RevisionConflict,
+                error.CorruptProjection => return error.CorruptProjection,
+                error.ProjectionUnavailable => return error.ProjectionUnavailable,
+                error.OutOfMemory => return error.OutOfMemory,
+            };
+            if (result != .applied) return error.CorruptProjection;
+        }
         var rejection_store: postgres_rejections.PostgresRecordRejectionStore = .{ .pool = self.pool };
         rejection_store.replaceForSnapshot(
             conn,
             allocator,
             snapshot.repo_did,
-            &.{ snapshot.list_collection, snapshot.track_collection, snapshot.profile_collection },
+            &.{ snapshot.list_collection, snapshot.track_collection, snapshot.profile_collection, snapshot.like_collection },
             snapshot.rejections,
         ) catch |err| return mapRejectionError(err);
         var accounts: postgres_availability.PostgresAvailabilityStore = .{ .pool = self.pool };
@@ -210,6 +231,17 @@ pub const PostgresVerifiedSnapshotStore = struct {
             snapshot.indexed_at_us,
         }) catch |err| {
             std.log.err("verified snapshot profile absence reconciliation failed: {}", .{err});
+            return error.ProjectionUnavailable;
+        };
+        _ = conn.exec(tombstone_absent_likes_sql, .{
+            snapshot.repo_did,
+            snapshot.like_collection,
+            like_uris,
+            commit_cid,
+            snapshot.commit_rev,
+            snapshot.indexed_at_us,
+        }) catch |err| {
+            std.log.err("verified snapshot like absence reconciliation failed: {}", .{err});
             return error.ProjectionUnavailable;
         };
         const advanced = conn.exec(install_head_sql, .{
@@ -319,7 +351,10 @@ const has_future_records_sql =
     \\  WHERE owner_did = $1 AND collection = $3 AND commit_rev > $5
     \\  UNION ALL
     \\  SELECT 1 FROM plyr_index.profile_records
-    \\  WHERE owner_did = $1 AND collection = $4 AND commit_rev > $5
+    \\  WHERE owner_did = $1 AND collection = $4 AND commit_rev > $6
+    \\  UNION ALL
+    \\  SELECT 1 FROM plyr_index.like_records
+    \\  WHERE owner_did = $1 AND collection = $5 AND commit_rev > $6
     \\)
 ;
 
@@ -390,6 +425,21 @@ const tombstone_absent_profiles_sql =
     \\  AND commit_rev <= $5
 ;
 
+const tombstone_absent_likes_sql =
+    \\UPDATE plyr_index.like_records SET
+    \\  record_cid = NULL,
+    \\  subject_uri = NULL,
+    \\  subject_cid = NULL,
+    \\  record_created_at = NULL,
+    \\  deleted = TRUE,
+    \\  commit_cid = $4,
+    \\  commit_rev = $5,
+    \\  indexed_at_us = $6
+    \\WHERE owner_did = $1 AND collection = $2
+    \\  AND NOT (record_uri = ANY($3::text[]))
+    \\  AND commit_rev <= $5
+;
+
 const install_head_sql =
     \\INSERT INTO plyr_index.repo_heads (
     \\  repo_did, commit_rev, commit_cid, data_cid, indexed_at_us
@@ -418,6 +468,7 @@ test "PostgreSQL complete snapshot bootstraps and reconciles atomically" {
     try postgres_list.createTestSchema(pool);
     try postgres_track.createTestTable(pool);
     try postgres_profile.createTestTable(pool);
+    try postgres_like.createTestTable(pool);
     try postgres_availability.createTestTable(pool);
     try postgres_rejections.createTestTable(pool);
     _ = try pool.exec(
@@ -465,6 +516,7 @@ test "PostgreSQL complete snapshot bootstraps and reconciles atomically" {
         commit_1,
         1_000,
     )};
+    initial.like_changes = &.{likeUpsert(rev_1.str(), commit_1, 1_000)};
     var implementation: PostgresVerifiedSnapshotStore = .{ .pool = pool };
     const store = implementation.store();
     try std.testing.expectEqual(verified.ApplyResult.applied, try store.apply(a, initial));
@@ -474,6 +526,7 @@ test "PostgreSQL complete snapshot bootstraps and reconciles atomically" {
     try expectTrackState(pool, "track-one", rev_1.str(), false);
     try expectTrackState(pool, "track-two", rev_1.str(), false);
     try expectProfileState(pool, "first bio", rev_1.str(), false);
+    try expectLikeState(pool, rev_1.str(), false);
     try expectAvailability(pool, rev_1.str(), 1_000);
 
     const one_2 = listUpsert("one", record_cid, rev_2.str(), commit_2, 2_000);
@@ -498,6 +551,7 @@ test "PostgreSQL complete snapshot bootstraps and reconciles atomically" {
     try expectTrackState(pool, "track-one", rev_2.str(), false);
     try expectTrackState(pool, "track-two", rev_2.str(), true);
     try expectProfileState(pool, null, rev_2.str(), true);
+    try expectLikeState(pool, rev_2.str(), true);
     try expectAvailability(pool, rev_2.str(), 2_000);
     try expectRejection(pool, rejected.record_uri, "InvalidStrongRefCid");
 
@@ -544,6 +598,7 @@ fn makeSnapshot(
         .list_collection = "fm.plyr.dev.list",
         .track_collection = "fm.plyr.dev.track",
         .profile_collection = "fm.plyr.dev.actor.profile",
+        .like_collection = "fm.plyr.dev.like",
         .indexed_at_us = indexed_at_us,
         .list_changes = changes,
     };
@@ -616,6 +671,28 @@ fn trackUpsert(
     } };
 }
 
+fn likeUpsert(
+    rev: []const u8,
+    commit_cid: zat.Cid,
+    indexed_at_us: i64,
+) @import("like_change.zig").Change {
+    return .{ .upsert = .{
+        .record_uri = "at://did:plc:artist/fm.plyr.dev.like/like-one",
+        .record_cid = "bafyreiaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        .owner_did = "did:plc:artist",
+        .collection = "fm.plyr.dev.like",
+        .rkey = "like-one",
+        .subject_uri = "at://did:plc:artist/fm.plyr.dev.track/track-one",
+        .subject_cid = "bafyreihdcss27ihlhmjofustbdvksrwyxnjj3hhk7azqs2626paka66c2a",
+        .created_at = "2026-08-08T12:00:00Z",
+        .proof = .{
+            .commit_cid = commit_cid,
+            .commit_rev = rev,
+            .indexed_at_us = indexed_at_us,
+        },
+    } };
+}
+
 fn requireDisposableDatabase(pool: *pg.Pool, allocator: std.mem.Allocator) !void {
     var row = (try pool.row("SELECT current_database()", .{})).?;
     const database_name = try allocator.dupe(u8, try row.get([]const u8, 0));
@@ -637,6 +714,16 @@ fn expectState(pool: *pg.Pool, head_rev: []const u8, rkey: []const u8, deleted: 
     )).?;
     defer row.deinit() catch {};
     try std.testing.expectEqualStrings(head_rev, try row.get([]const u8, 0));
+    try std.testing.expectEqual(deleted, try row.get(bool, 1));
+}
+
+fn expectLikeState(pool: *pg.Pool, rev: []const u8, deleted: bool) !void {
+    var row = (try pool.row(
+        "SELECT commit_rev, deleted FROM plyr_index.like_records WHERE rkey = 'like-one'",
+        .{},
+    )).?;
+    defer row.deinit() catch {};
+    try std.testing.expectEqualStrings(rev, try row.get([]const u8, 0));
     try std.testing.expectEqual(deleted, try row.get(bool, 1));
 }
 

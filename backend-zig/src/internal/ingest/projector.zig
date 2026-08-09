@@ -25,6 +25,7 @@ pub const Projector = struct {
     list_collection: []const u8,
     track_collection: []const u8,
     profile_collection: []const u8,
+    like_collection: []const u8,
 
     pub fn ingestLive(
         self: Projector,
@@ -55,6 +56,7 @@ pub const Projector = struct {
             self.list_collection,
             self.track_collection,
             self.profile_collection,
+            self.like_collection,
             indexed_at_us,
         ) catch |first_error| blk: {
             if (first_error != error.SignatureVerificationFailed)
@@ -71,6 +73,7 @@ pub const Projector = struct {
                 self.list_collection,
                 self.track_collection,
                 self.profile_collection,
+                self.like_collection,
                 indexed_at_us,
             ) catch |second_error| return classifyLiveVerification(second_error);
         };
@@ -124,6 +127,7 @@ pub const Projector = struct {
             self.list_collection,
             self.track_collection,
             self.profile_collection,
+            self.like_collection,
             indexed_at_us,
         ) catch |first_error| blk: {
             if (first_error != error.SignatureVerificationFailed) {
@@ -143,6 +147,7 @@ pub const Projector = struct {
                 self.list_collection,
                 self.track_collection,
                 self.profile_collection,
+                self.like_collection,
                 indexed_at_us,
             ) catch |second_error| {
                 if (!builtin.is_test)
@@ -285,6 +290,7 @@ test "runtime projector short-circuits unknown and replayed repositories" {
         .list_collection = "fm.plyr.dev.list",
         .track_collection = "fm.plyr.dev.track",
         .profile_collection = "fm.plyr.dev.actor.profile",
+        .like_collection = "fm.plyr.dev.like",
     };
     const event: zat.firehose.CommitEvent = .{
         .seq = 1,
@@ -382,6 +388,7 @@ test "repair releases an invalid fetched repository without projecting it" {
         .list_collection = "fm.plyr.dev.list",
         .track_collection = "fm.plyr.dev.track",
         .profile_collection = "fm.plyr.dev.actor.profile",
+        .like_collection = "fm.plyr.dev.like",
     };
     try std.testing.expectEqual(
         RepairOutcome.invalid_repository,
@@ -495,6 +502,7 @@ test "repair refreshes a rotated signing key before one atomic snapshot apply" {
         .list_collection = "fm.plyr.dev.list",
         .track_collection = "fm.plyr.dev.track",
         .profile_collection = "fm.plyr.dev.actor.profile",
+        .like_collection = "fm.plyr.dev.like",
     };
     try std.testing.expectEqual(
         RepairOutcome.applied,

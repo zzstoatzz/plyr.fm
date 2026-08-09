@@ -56,6 +56,10 @@ const candidate_query =
     \\  SELECT artist_did AS did
     \\  FROM public.albums
     \\  WHERE atproto_record_uri IS NOT NULL AND atproto_record_cid IS NOT NULL
+    \\  UNION
+    \\  SELECT user_did AS did
+    \\  FROM public.track_likes
+    \\  WHERE atproto_like_uri IS NOT NULL
     \\) AS source
     \\ORDER BY source.did
 ;
@@ -80,8 +84,10 @@ test "PostgreSQL candidates are distinct hints from canonical-looking legacy row
 
     _ = try pool.exec("DROP TABLE IF EXISTS tracks CASCADE", .{});
     _ = try pool.exec("DROP TABLE IF EXISTS albums CASCADE", .{});
+    _ = try pool.exec("DROP TABLE IF EXISTS track_likes CASCADE", .{});
     _ = try pool.exec("CREATE TABLE tracks (artist_did text NOT NULL, atproto_record_uri text, atproto_record_cid text)", .{});
     _ = try pool.exec("CREATE TABLE albums (artist_did text NOT NULL, atproto_record_uri text, atproto_record_cid text)", .{});
+    _ = try pool.exec("CREATE TABLE track_likes (user_did text NOT NULL, atproto_like_uri text)", .{});
     _ = try pool.exec(
         "INSERT INTO tracks VALUES ('did:plc:two', 'at://two/track/one', 'bafy'), ('did:plc:one', 'at://one/track/one', 'bafy'), ('did:plc:ignored', NULL, NULL)",
         .{},
@@ -90,11 +96,16 @@ test "PostgreSQL candidates are distinct hints from canonical-looking legacy row
         "INSERT INTO albums VALUES ('did:plc:one', 'at://one/list/one', 'bafy')",
         .{},
     );
+    _ = try pool.exec(
+        "INSERT INTO track_likes VALUES ('did:plc:three', 'at://three/like/one'), ('did:plc:ignored', NULL)",
+        .{},
+    );
 
     var adapter: PostgresRepositoryCandidates = .{ .pool = pool };
     var found = try adapter.source().list(allocator);
     defer found.deinit(allocator);
-    try std.testing.expectEqual(@as(usize, 2), found.items.len);
+    try std.testing.expectEqual(@as(usize, 3), found.items.len);
     try std.testing.expectEqualStrings("did:plc:one", found.items[0]);
-    try std.testing.expectEqualStrings("did:plc:two", found.items[1]);
+    try std.testing.expectEqualStrings("did:plc:three", found.items[1]);
+    try std.testing.expectEqualStrings("did:plc:two", found.items[2]);
 }

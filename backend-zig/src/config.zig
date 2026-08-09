@@ -34,6 +34,7 @@ pub const Config = struct {
     track_collection: []const u8,
     list_collection: []const u8,
     profile_collection: []const u8,
+    like_collection: []const u8,
     cors_allowed_origins: []const u8,
     repair_did: ?[]const u8,
     relay_hosts: []const u8,
@@ -57,6 +58,15 @@ pub const Config = struct {
         const profile_collection = getenv("PROFILE_COLLECTION_NSID") orelse
             return error.ProfileCollectionRequired;
         if (zat.Nsid.parse(profile_collection) == null) return error.InvalidProfileCollection;
+        const like_collection = getenv("LIKE_COLLECTION_NSID") orelse
+            return error.LikeCollectionRequired;
+        if (zat.Nsid.parse(like_collection) == null) return error.InvalidLikeCollection;
+        try validateDistinctCollections(.{
+            track_collection,
+            list_collection,
+            profile_collection,
+            like_collection,
+        });
         const index_mode = try IndexMode.parse(getenv("INDEX_MODE") orelse "required");
         const database_url = getenv("DATABASE_URL");
         if (index_mode == .required and database_url == null) return error.DatabaseUrlRequired;
@@ -91,6 +101,7 @@ pub const Config = struct {
             .track_collection = track_collection,
             .list_collection = list_collection,
             .profile_collection = profile_collection,
+            .like_collection = like_collection,
             .cors_allowed_origins = getenv("CORS_ALLOWED_ORIGINS") orelse "",
             .repair_did = repair_did,
             .relay_hosts = getenv("INGEST_RELAY_HOSTS") orelse "wss://bsky.network",
@@ -154,6 +165,14 @@ fn validateDatabaseRole(value: []const u8) !void {
     }
 }
 
+fn validateDistinctCollections(collections: [4][]const u8) !void {
+    for (collections, 0..) |collection, index| {
+        for (collections[0..index]) |prior| {
+            if (std.mem.eql(u8, collection, prior)) return error.DuplicateCollection;
+        }
+    }
+}
+
 test "process roles are explicit" {
     try std.testing.expectEqual(Role.api, try Role.parse("api"));
     try std.testing.expectEqual(Role.account_reconciler, try Role.parse("account_reconciler"));
@@ -184,5 +203,13 @@ test "database role expectations use unquoted PostgreSQL identifiers" {
     try std.testing.expectError(
         error.InvalidDatabaseRole,
         validateDatabaseRole("a" ** 64),
+    );
+}
+
+test "record collections are distinct routing keys" {
+    try validateDistinctCollections(.{ "a.b.track", "a.b.list", "a.b.profile", "a.b.like" });
+    try std.testing.expectError(
+        error.DuplicateCollection,
+        validateDistinctCollections(.{ "a.b.track", "a.b.list", "a.b.profile", "a.b.track" }),
     );
 }

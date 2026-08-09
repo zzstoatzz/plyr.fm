@@ -5,6 +5,7 @@ const zat = @import("zat");
 const list_change = @import("list_change.zig");
 const track_change = @import("track_change.zig");
 const profile_change = @import("profile_change.zig");
+const like_change = @import("like_change.zig");
 const record_rejection = @import("record_rejection.zig");
 const verified = @import("verified_snapshot.zig");
 
@@ -19,6 +20,7 @@ pub fn verify(
     list_collection: []const u8,
     track_collection: []const u8,
     profile_collection: []const u8,
+    like_collection: []const u8,
     indexed_at_us: i64,
 ) !verified.Snapshot {
     if (car_bytes.len > max_repo_bytes) return error.RepositoryTooLarge;
@@ -26,6 +28,7 @@ pub fn verify(
         zat.Nsid.parse(list_collection) == null or
         zat.Nsid.parse(track_collection) == null or
         zat.Nsid.parse(profile_collection) == null or
+        zat.Nsid.parse(like_collection) == null or
         indexed_at_us < 0) return error.InvalidSnapshot;
 
     // The specialized Zat verifier proves signature, block hashes, MST layer
@@ -84,6 +87,7 @@ pub fn verify(
         .list_collection = list_collection,
         .track_collection = track_collection,
         .profile_collection = profile_collection,
+        .like_collection = like_collection,
         .proof = .{
             .commit_cid = commit_cid,
             .commit_rev = commit_rev,
@@ -99,10 +103,12 @@ pub fn verify(
         .list_collection = list_collection,
         .track_collection = track_collection,
         .profile_collection = profile_collection,
+        .like_collection = like_collection,
         .indexed_at_us = indexed_at_us,
         .list_changes = try collector.changes.toOwnedSlice(allocator),
         .track_changes = try collector.track_changes.toOwnedSlice(allocator),
         .profile_changes = try collector.profile_changes.toOwnedSlice(allocator),
+        .like_changes = try collector.like_changes.toOwnedSlice(allocator),
         .rejections = try collector.rejections.toOwnedSlice(allocator),
     };
     try snapshot.validate();
@@ -116,10 +122,12 @@ const Collector = struct {
     list_collection: []const u8,
     track_collection: []const u8,
     profile_collection: []const u8,
+    like_collection: []const u8,
     proof: list_change.Proof,
     changes: std.ArrayList(list_change.Change) = .empty,
     track_changes: std.ArrayList(track_change.Change) = .empty,
     profile_changes: std.ArrayList(profile_change.Change) = .empty,
+    like_changes: std.ArrayList(like_change.Change) = .empty,
     rejections: std.ArrayList(record_rejection.Rejection) = .empty,
 
     fn entry(context: *anyopaque, item: zat.mst.WalkEntry) anyerror!void {
@@ -131,7 +139,8 @@ const Collector = struct {
         const collection = item.key[0..separator];
         if (!std.mem.eql(u8, collection, self.list_collection) and
             !std.mem.eql(u8, collection, self.track_collection) and
-            !std.mem.eql(u8, collection, self.profile_collection)) return;
+            !std.mem.eql(u8, collection, self.profile_collection) and
+            !std.mem.eql(u8, collection, self.like_collection)) return;
         const rkey = item.key[separator + 1 ..];
         if (zat.Rkey.parse(rkey) == null) return error.InvalidRepoPath;
         const record_bytes = zat.car.findBlock(self.repo_car, item.value.raw) orelse
@@ -169,7 +178,7 @@ const Collector = struct {
             ) catch |err| return self.rejectOperation(collection, rkey, item.value, err)) orelse
                 return error.InvalidProjectedRecord;
             try self.track_changes.append(self.allocator, change);
-        } else {
+        } else if (std.mem.eql(u8, collection, self.profile_collection)) {
             const change = (profile_change.fromVerifiedOperation(
                 self.allocator,
                 self.repo_did,
@@ -179,6 +188,17 @@ const Collector = struct {
             ) catch |err| return self.rejectOperation(collection, rkey, item.value, err)) orelse
                 return error.InvalidProjectedRecord;
             try self.profile_changes.append(self.allocator, change);
+        } else {
+            const change = (like_change.fromVerifiedOperation(
+                self.allocator,
+                self.repo_did,
+                operation,
+                self.like_collection,
+                self.track_collection,
+                self.proof,
+            ) catch |err| return self.rejectOperation(collection, rkey, item.value, err)) orelse
+                return error.InvalidProjectedRecord;
+            try self.like_changes.append(self.allocator, change);
         }
     }
 
@@ -230,11 +250,13 @@ test "complete repo verifier authenticates and extracts selected records" {
         "fm.plyr.dev.list",
         "fm.plyr.dev.track",
         "fm.plyr.dev.actor.profile",
+        "fm.plyr.dev.like",
         42,
     );
     try std.testing.expectEqual(@as(usize, 1), snapshot.list_changes.len);
     try std.testing.expectEqual(@as(usize, 1), snapshot.track_changes.len);
     try std.testing.expectEqual(@as(usize, 1), snapshot.profile_changes.len);
+    try std.testing.expectEqual(@as(usize, 1), snapshot.like_changes.len);
     try std.testing.expectEqualStrings("Verified", snapshot.track_changes[0].upsert.title);
     try std.testing.expectEqualStrings("Verified artist", snapshot.profile_changes[0].upsert.bio.?);
     try std.testing.expectEqualStrings(fixture.did, snapshot.repo_did);
@@ -251,6 +273,7 @@ test "complete repo verifier authenticates and extracts selected records" {
             "fm.plyr.dev.list",
             "fm.plyr.dev.track",
             "fm.plyr.dev.actor.profile",
+            "fm.plyr.dev.like",
             42,
         ),
     );
@@ -269,11 +292,13 @@ test "complete repo quarantines malformed selected records without losing valid 
         "fm.plyr.dev.list",
         "fm.plyr.dev.track",
         "fm.plyr.dev.actor.profile",
+        "fm.plyr.dev.like",
         42,
     );
     try std.testing.expectEqual(@as(usize, 0), snapshot.list_changes.len);
     try std.testing.expectEqual(@as(usize, 1), snapshot.track_changes.len);
     try std.testing.expectEqual(@as(usize, 1), snapshot.profile_changes.len);
+    try std.testing.expectEqual(@as(usize, 1), snapshot.like_changes.len);
     try std.testing.expectEqual(@as(usize, 1), snapshot.rejections.len);
     try std.testing.expectEqual(
         record_rejection.Reason.invalid_schema,
@@ -341,10 +366,26 @@ fn buildFixture(
     } };
     const profile_bytes = try zat.cbor.encodeAlloc(allocator, profile_record);
     const profile_cid = try zat.Cid.forDagCbor(allocator, profile_bytes);
+    const subject_uri = try std.fmt.allocPrint(
+        allocator,
+        "at://{s}/fm.plyr.dev.track/3m123abd",
+        .{did},
+    );
+    const like_record: zat.cbor.Value = .{ .map = &.{
+        .{ .key = "$type", .value = .{ .text = "fm.plyr.dev.like" } },
+        .{ .key = "subject", .value = .{ .map = &.{
+            .{ .key = "uri", .value = .{ .text = subject_uri } },
+            .{ .key = "cid", .value = .{ .cid = track_cid } },
+        } } },
+        .{ .key = "createdAt", .value = .{ .text = "2026-08-08T12:00:00Z" } },
+    } };
+    const like_bytes = try zat.cbor.encodeAlloc(allocator, like_record);
+    const like_cid = try zat.Cid.forDagCbor(allocator, like_bytes);
     var tree = zat.mst.Mst.init(allocator);
     try tree.put("fm.plyr.dev.list/3m123abc", record_cid);
     try tree.put("fm.plyr.dev.track/3m123abd", track_cid);
     try tree.put("fm.plyr.dev.actor.profile/self", profile_cid);
+    try tree.put("fm.plyr.dev.like/3m123abe", like_cid);
     const root = try tree.rootCid();
     const signed = try zat.signCommit(allocator, .{
         .did = did,
@@ -358,6 +399,7 @@ fn buildFixture(
         try blocks.append(allocator, .{ .cid_raw = record_cid.raw, .data = record_bytes });
         try blocks.append(allocator, .{ .cid_raw = track_cid.raw, .data = track_bytes });
         try blocks.append(allocator, .{ .cid_raw = profile_cid.raw, .data = profile_bytes });
+        try blocks.append(allocator, .{ .cid_raw = like_cid.raw, .data = like_bytes });
     }
     return .{
         .car_bytes = try zat.car.writeAlloc(allocator, .{

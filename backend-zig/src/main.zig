@@ -116,6 +116,7 @@ pub fn main() !void {
                 settings.list_collection,
                 settings.track_collection,
                 settings.profile_collection,
+                settings.like_collection,
             );
             std.log.info(
                 "catalog reconciliation: {d} candidates, {d} verified, {d} absent, {d} retryable, {d} rejected",
@@ -134,6 +135,7 @@ pub fn main() !void {
                 settings.list_collection,
                 settings.track_collection,
                 settings.profile_collection,
+                settings.like_collection,
             );
             std.log.info("verified repository repair for {s}: {s}", .{ did, @tagName(outcome) });
             if (!repair_runner.succeeded(outcome)) return error.RepairNotApplied;
@@ -149,6 +151,7 @@ pub fn main() !void {
                 settings.list_collection,
                 settings.track_collection,
                 settings.profile_collection,
+                settings.like_collection,
             );
         },
     }
@@ -190,6 +193,7 @@ test {
     _ = @import("internal/atproto/list_record.zig");
     _ = @import("internal/atproto/lexicon_value.zig");
     _ = @import("internal/atproto/profile_record.zig");
+    _ = @import("internal/atproto/like_record.zig");
     _ = @import("internal/atproto/track_record.zig");
     _ = @import("internal/index/artist_store.zig");
     _ = @import("internal/index/postgres_artist_store.zig");
@@ -236,6 +240,7 @@ test {
     _ = @import("internal/ingest/watched_repositories.zig");
     _ = @import("internal/projection/list_change.zig");
     _ = @import("internal/projection/profile_change.zig");
+    _ = @import("internal/projection/like_change.zig");
     _ = @import("internal/projection/track_change.zig");
     _ = @import("internal/projection/commit_verifier.zig");
     _ = @import("internal/projection/snapshot_verifier.zig");
@@ -245,6 +250,8 @@ test {
     _ = @import("internal/projection/postgres_track_store.zig");
     _ = @import("internal/projection/profile_store.zig");
     _ = @import("internal/projection/postgres_profile_store.zig");
+    _ = @import("internal/projection/like_store.zig");
+    _ = @import("internal/projection/postgres_like_store.zig");
     _ = @import("internal/projection/postgres_record_rejection_store.zig");
     _ = @import("internal/projection/postgres_verified_commit_store.zig");
     _ = @import("internal/projection/postgres_verified_snapshot_store.zig");

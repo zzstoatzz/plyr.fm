@@ -31,6 +31,7 @@ pub const Runner = struct {
         list_collection: []const u8,
         track_collection: []const u8,
         profile_collection: []const u8,
+        like_collection: []const u8,
     ) void {
         self.io = io;
         self.identity = zat.DidResolver.init(io, allocator);
@@ -63,6 +64,7 @@ pub const Runner = struct {
             .list_collection = list_collection,
             .track_collection = track_collection,
             .profile_collection = profile_collection,
+            .like_collection = like_collection,
         };
     }
 
@@ -93,6 +95,7 @@ pub fn run(
     list_collection: []const u8,
     track_collection: []const u8,
     profile_collection: []const u8,
+    like_collection: []const u8,
 ) !projector_module.RepairOutcome {
     var runner: Runner = undefined;
     runner.init(
@@ -102,6 +105,7 @@ pub fn run(
         list_collection,
         track_collection,
         profile_collection,
+        like_collection,
     );
     defer runner.deinit();
     return runner.repair(allocator, did);

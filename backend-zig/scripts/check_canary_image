@@ -16,6 +16,7 @@ docker run \
     --env INDEX_MODE=disabled \
     --env LIST_COLLECTION_NSID=fm.plyr.dev.list \
     --env PROFILE_COLLECTION_NSID=fm.plyr.dev.actor.profile \
+    --env LIKE_COLLECTION_NSID=fm.plyr.dev.like \
     --env TRACK_COLLECTION_NSID=fm.plyr.dev.track \
     --env MODE=api \
     --env PORT=8000 \

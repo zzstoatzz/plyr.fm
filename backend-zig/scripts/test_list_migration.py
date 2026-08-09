@@ -12,7 +12,7 @@ from sqlalchemy.engine import make_url
 from alembic import command
 
 PRIOR_REVISION = "4aaed6c819f1"
-HEAD_REVISION = "c69d4e8a217f"
+HEAD_REVISION = "d71a2c9e4f83"
 CANARY_ROLE = "plyr_zig_canary"
 COMPATIBILITY_TABLES = {"tracks", "artists", "albums", "user_preferences"}
 EXPECTED_TABLES = {
@@ -20,6 +20,7 @@ EXPECTED_TABLES = {
     "account_status_checks",
     "list_members",
     "list_records",
+    "like_records",
     "profile_records",
     "record_rejections",
     "relay_cursors",
@@ -92,8 +93,24 @@ EXPECTED_METRIC_COLUMNS = {
     "write_source",
 }
 EXPECTED_SEARCH_INDEXES = {
+    "ix_like_records_owner_live",
+    "ix_like_records_subject_live",
     "ix_plyr_index_list_records_name_trgm",
     "ix_plyr_index_track_records_title_trgm",
+}
+EXPECTED_LIKE_COLUMNS = {
+    "collection",
+    "commit_cid",
+    "commit_rev",
+    "deleted",
+    "indexed_at_us",
+    "owner_did",
+    "record_cid",
+    "record_created_at",
+    "record_uri",
+    "rkey",
+    "subject_cid",
+    "subject_uri",
 }
 EXPECTED_HEAD_COLUMNS = {
     "repo_did",
@@ -482,6 +499,11 @@ def main() -> None:
         if profile_columns != EXPECTED_PROFILE_COLUMNS:
             raise AssertionError(
                 f"unexpected profile_records columns: {sorted(profile_columns)!r}"
+            )
+        like_columns = table_columns(database_url, "like_records")
+        if like_columns != EXPECTED_LIKE_COLUMNS:
+            raise AssertionError(
+                f"unexpected like_records columns: {sorted(like_columns)!r}"
             )
         availability_columns = table_columns(database_url, "account_availability")
         if availability_columns != EXPECTED_AVAILABILITY_COLUMNS:
