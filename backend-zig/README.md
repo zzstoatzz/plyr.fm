@@ -212,7 +212,9 @@ temporary backend-verification state, not the completed next application. The
 dedicated `frontend-next` Pages project claims the hostname only after its
 same-origin `/api/v1/*` transport and native v1 client pass locally and on the
 Pages deployment. It evolves beside `plyr.fm` without changing the existing
-production or staging applications.
+production or staging applications. The deployed checkpoint is served by the
+isolated `plyr-fm-next` Pages project; `next.plyr.fm` has one proxied CNAME to
+that project and no longer exposes the Fly API as a website.
 
 Before the first useful canary deployment, select the workflow's
 `reconcile_catalog` input to seed the new projection from current authenticated

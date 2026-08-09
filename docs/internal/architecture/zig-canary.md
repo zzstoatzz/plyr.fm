@@ -140,11 +140,41 @@ request-ID, and source-rich JSON through without adapting it to the Python API.
 Users and test clients opt into next explicitly; percentage routing is not the
 model for a versioned contract and UI that are being replaced together.
 
-On 2026-08-09 temporary Cloudflare A and AAAA records were created for
-`next.plyr.fm`, pointing only to the dedicated Fly ingress addresses for
-`plyr-api-zig-canary`. They exist to verify the backend before the Pages cutover;
-they are not the intended steady topology. Existing production and staging DNS
-records and Pages projects were not changed.
+On 2026-08-09 temporary Cloudflare A and AAAA records exposed the dedicated Fly
+ingress long enough to verify the backend. The frontend checkpoint replaced
+those exact records with one proxied CNAME from `next.plyr.fm` to the isolated
+`plyr-fm-next.pages.dev` project. Existing production and staging DNS records and
+Pages projects were not changed.
+
+## deployed frontend checkpoint
+
+Commit `d5df432604d9ca7b1832785240250fe5d1a99875` is deployed to the manual,
+direct-upload Pages project `plyr-fm-next`. The project has no Git integration,
+so branch pushes do not create automatic Pages builds. Deployments remain
+intentional checkpoints through `just next deploy`.
+
+The first client slice is an anonymous verified catalog and player. It consumes
+the v1 response shapes natively rather than manufacturing Python-era numeric
+track IDs or `file_id` audio routes. Catalog visibility and playback capability
+remain separate: clicking play resolves
+`GET /v1/tracks/{track_id}/playback`, checks the returned track identity and
+availability, and only then attaches the returned delivery URL.
+
+The Pages Function is a fixed-target transport from same-origin `/api/v1/*` to
+`plyr-api-zig-canary.fly.dev`. It permits only `GET` and `HEAD`, refuses paths
+outside `v1`, and does not rewrite JSON. This makes the Pages preview testable
+without adding preview origins to backend CORS and leaves a same-site seam for
+future sessions.
+
+The deployed `https://next.plyr.fm` verification proved:
+
+- the page renders 20 verified tracks from Zig;
+- a playback response round-trips the selected opaque track ID and attaches its
+  delivery URL;
+- a canonical DID resolves through the flat artist resource and scopes the
+  catalog to nine matching tracks;
+- writes through the transport return 405 and non-v1 paths return 404;
+- the final DNS set contains one proxied CNAME to `plyr-fm-next.pages.dev`.
 
 ## deployed playlist checkpoint
 
