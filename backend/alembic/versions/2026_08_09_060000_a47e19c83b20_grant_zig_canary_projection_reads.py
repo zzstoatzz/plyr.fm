@@ -21,7 +21,7 @@ CANARY_ROLE = "plyr_zig_canary"
 
 
 def _role_exists() -> bool:
-    """Resolve the deployment role online; offline SQL targets staging."""
+    """Resolve the deployment role online; offline SQL targets next."""
     if context.is_offline_mode():
         return True
     return bool(

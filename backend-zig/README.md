@@ -123,28 +123,29 @@ secret values while checking configuration.
 `fly.canary.toml` defines an API-only Fly service named
 `plyr-api-zig-canary`. It uses one 256 MiB shared-CPU machine, scales to zero,
 and has no worker, jetstream, migration, Redis, R2, or production traffic
-responsibilities. `DATABASE_URL` is its only secret and must point at the
-staging projection through the `plyr_zig_canary` database role. Migrations grant
+responsibilities. `DATABASE_URL` is its only runtime secret and points at the
+isolated `next-zig-backend` Neon branch through the `plyr_zig_canary` database role. Migrations grant
 that role schema usage and reads on current and future projection tables, but no
 write authority.
 
-The registered `deploy staging` GitHub workflow exposes an explicit manual
+The already-registered `deploy staging` GitHub workflow exposes an explicit manual
 `zig-canary` target. Local development may build and run the image, but deployment
 goes through that target. Keeping it in a workflow already present on the default
 branch lets this long-lived PR deploy its own ref before merge; a newly added
 standalone workflow cannot be dispatched until it reaches the default branch.
 The job builds and publishes one commit-addressed image before deployment. On the
 first run, its explicit `reconcile_catalog` input launches that image as an
-unmanaged `--rm` Machine in `relay-api-staging`: it inherits staging's existing
-database secret, authenticates current repositories, writes only the projection,
-and is destroyed on exit. The canary app never receives that writer credential.
+unmanaged `--rm` Machine in the canary app with a dedicated next-branch writer
+credential: it authenticates current production-namespace repositories, writes
+only the projection, and is destroyed on exit. The API service receives only the
+read-only credential.
 Later deployments leave reconciliation disabled unless source state needs a
 deliberate refresh. The Fly hostname is the initial infrastructure verification
 surface. The job runs
 `scripts/canary_smoke.py` after deployment and fails unless readiness, API
 discovery, track collection/detail, artist lookup, and album collection/detail
 all prove their expected anonymous semantics and request-ID contract. The gate
-requires a real verified staging track, round-trips its collection representation
+requires a real verified track, round-trips its collection representation
 through detail, and resolves its artist; an empty projection cannot pass. Run the
 same check with `just zig smoke-canary`.
 
@@ -154,16 +155,10 @@ and records its current/peak RSS and CPU ticks alongside cgroup current/peak
 memory. The runner benchmarks the real 50-track product read for ten seconds at
 concurrency 1 and 16, retaining request rate and p50/p95/p99 latency. A combined,
 commit-addressed artifact and workflow summary are produced even when a gate
-fails. The job then streams the same snapshot helper into the live Python staging
-API Machine and drives its current 50-track route from the same runner at the
-same concurrency levels. Both benchmark records include mean response bytes, so
-throughput and latency ratios cannot quietly conceal materially different
-payload sizes. Deployment fails above 16 MiB idle application RSS, above 64 MiB
-peak application RSS, after a Zig process restart, or on any Zig load-test HTTP
-error; baseline errors are retained rather than making the successor inherit a
-legacy failure. The deployed comparison is also a gate: Python staging must use
-at least 50x the Zig process's idle and peak RSS, and Zig must serve at least 10x
-its successful request rate at both measured concurrency levels. This
+fails. Deployment fails above 16 MiB idle application RSS, above 64 MiB peak
+application RSS, after a Zig process restart, or on any Zig load-test HTTP error.
+The deployment job touches only the isolated next environment; it does not load,
+SSH into, or configure the existing Python staging or production applications. This
 instrumentation exists only in the explicitly dispatched
 canary job; ordinary PR checks do not run remote load or deployment measurements.
 Run the same HTTP load driver against an already deployed target with
@@ -179,22 +174,22 @@ one cached Zig image job on a native Linux/amd64 runner. Superseded PR checks ar
 cancelled. Cross-architecture assurance belongs on the matching runner, while
 the deployment workflow remains the authoritative Fly image build.
 
-`next.plyr.fm` is the eventual public parallel deployment of the successor
-application, not an alias for the bare API and not a percentage canary. It gets
-its own frontend configuration pointed at the Zig `/v1` surface and can evolve
-beside `plyr.fm` until it is capable of replacing it. The internal Fly hostname
-comes first; the `next` application is exposed only after the backend passes its
-resource and semantic gates.
+`next.plyr.fm` is the public parallel deployment of the successor application,
+not a percentage canary. During the backend phase it routes directly to this Zig
+API; a separate next frontend can later claim the hostname and route to the `/v1`
+surface. It evolves beside `plyr.fm` without changing the existing production or
+staging applications.
 
 Before the first useful canary deployment, select the workflow's
 `reconcile_catalog` input to seed the new projection from current authenticated
-repositories. Existing canonical-looking track and album rows supply candidate
-DIDs only; none of their metadata, CIDs, PDS locations, or account state is
+repositories. Existing canonical-looking track and album rows in the isolated
+production clone supply candidate DIDs only; none of their metadata, CIDs, PDS
+locations, or account state is
 trusted. The one-shot role verifies each complete repository through the same
 signature/MST/CID path as continuous ingestion and fails if no repository verifies
 or any candidate repository is retryable or rejected. An authenticated repository
 can still succeed when individual selected records are malformed: those records
 are atomically quarantined with their CID, reason, and commit proof while valid
 siblings project normally. Local `just zig reconcile-catalog` remains a development
-command; staging reconciliation uses the disposable Fly Machine so its writer
-credential never leaves the staging app.
+command; remote reconciliation uses the disposable Fly Machine and a dedicated
+next-branch writer credential that cannot mutate legacy tables.

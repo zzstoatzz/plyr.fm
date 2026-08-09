@@ -20,9 +20,9 @@ Zig API configuration, not an alias that exposes the bare API as a website.
 
 The initial canary has exactly one process role: REST API. It has no migration,
 background-worker, jetstream, Redis, Docket, R2 write, PDS write, or production
-database authority. It reads the staging projection through a dedicated
-`plyr_zig_canary` credential and uses the staging `fm.plyr.stg.track` and
-`fm.plyr.stg.list` namespaces. The migration grants schema usage and `SELECT`
+database authority. It reads a dedicated Neon branch cloned from production
+through a `plyr_zig_canary` credential and uses the production `fm.plyr.track`
+and `fm.plyr.list` namespaces. The migration grants schema usage and `SELECT`
 on every current projection table, establishes the same default for projection
 tables created later, and grants no schema creation or table-write privilege.
 Online upgrades skip this deployment-only grant where that role is absent, so
@@ -49,15 +49,16 @@ canary workflow in this long-lived unmerged PR impossible to launch. Dispatching
 the existing workflow with `ref=codex/zig-backend` and `target=zig-canary` loads
 this branch's guarded canary job. Push-triggered Python staging deploys retain
 their existing job and cannot select the canary path. The canary job also checks
-the exact branch ref before receiving the staging Fly token; dispatching the
+the exact branch ref before receiving the Fly token; dispatching the
 target from an arbitrary branch is a skipped job, not an arbitrary-code path into
-staging authority.
+deployment authority.
 
 The canary job builds and pushes a commit-addressed image before changing the API
 Machine. Its optional `reconcile_catalog` input runs that exact image once as an
-unmanaged `--rm` Machine in the existing `relay-api-staging` app. Fly injects the
-staging app's already-deployed `DATABASE_URL`; the process receives only explicit
-staging NSIDs, writes authenticated projections, and is destroyed when it exits.
+unmanaged `--rm` Machine in the canary app. The process receives a dedicated
+next-branch writer credential and production NSIDs, writes authenticated
+projections, and is destroyed when it exits. The writer can read the two legacy
+candidate tables and mutate `plyr_index`; it cannot mutate legacy tables.
 Only after successful reconciliation does the workflow deploy the same immutable
 image to `plyr-api-zig-canary`, whose own database credential remains read-only.
 Routine canary deployments leave reconciliation disabled, avoiding repeated PDS
@@ -68,16 +69,10 @@ drives `/v1/tracks?limit=50` over the public Fly hostname for ten seconds each a
 concurrency 1 and 16, and captures it again. The retained commit-addressed JSON
 artifact includes application current/peak RSS, cgroup current/peak memory,
 application CPU time during the observation window, requests per second, and
-p50/p95/p99 latency. It streams the same snapshot helper into the current Python
-staging API Machine and drives Python's 50-track route from the same runner at
-the same concurrency levels. Mean response bytes are retained for both APIs, and
-the summary reports resource, throughput, and latency ratios without pretending
-different payload sizes are equivalent work. The job fails on any Zig request
-error, process restart, idle RSS above 16 MiB, or application peak RSS above
-64 MiB. It also fails unless Python staging uses at least 50 times the Zig
-process's idle and peak RSS and Zig serves at least 10 times Python's successful
-request rate at both concurrency levels. A Python baseline error remains evidence
-but does not lower the Zig gate. This is deliberately part of the manually
+p50/p95/p99 latency. The job fails on any Zig request error, process restart,
+idle RSS above 16 MiB, or application peak RSS above 64 MiB. It touches only the
+isolated next environment; it does not load, SSH into, or configure the existing
+staging or production applications. This is deliberately part of the manually
 dispatched deployment path, not the PR workflows, so ordinary checkpoints never
 generate remote load or repeated infrastructure runs.
 
@@ -89,7 +84,7 @@ Before exposing `next.plyr.fm`:
 2. The first public-track endpoint must pass fixture-based semantic comparisons
    against the intended v1 contract, including missing, private, malformed,
    corrupt-projection, and unavailable-index behavior.
-3. A real staging track lookup must prove that the published image can reach
+3. A real track lookup must prove that the published image can reach
    Neon with TLS and decode the current projection. The deployment smoke gate
    requires a nonempty verified collection, round-trips its first track through
    detail, resolves its artist, and traverses that artist's album collection;
@@ -97,28 +92,25 @@ Before exposing `next.plyr.fm`:
 4. Fly-native measurements must record idle RSS, loaded peak memory, CPU time,
    throughput, and p50/p95/p99 latency. The agreed load scenario is the public
    50-track collection for ten seconds at concurrency 1 and 16. The first budget
-   is at most 16 MiB idle application RSS and 64 MiB application peak RSS. The
-   comparative gate requires at least 50x lower idle and peak RSS and at least
-   10x greater successful throughput than Python staging at both concurrencies.
+   is at most 16 MiB idle application RSS and 64 MiB application peak RSS. These
+   absolute budgets are enforced without coupling next to either existing
+   environment.
 5. The service must remain well below its 256 MiB machine ceiling with the
    connection pool established; the ceiling is a guardrail, not a target.
 6. No route receives user traffic until its authentication, visibility,
    moderation, and content-authority semantics are explicit. A fast wrong
    response is a regression.
 
-After those gates pass, deploy a separately configured frontend at
-`next.plyr.fm` and route its API calls to the Zig service without changing
-`plyr.fm`, `stg.plyr.fm`, or `api-stg.plyr.fm`. Prefer a same-origin API path or a
-dedicated successor API origin over making `next.plyr.fm` itself return API JSON.
-Users and test clients opt into the complete next environment explicitly;
-percentage routing is not the model for a versioned contract and UI that are
-being replaced together.
+During the backend phase, `next.plyr.fm` routes directly to the isolated Zig API.
+A separately configured frontend can later claim that hostname and route its API
+calls to the same service without changing any existing environment. Users and
+test clients opt into next explicitly; percentage routing is not the model for a
+versioned contract and UI that are being replaced together.
 
-The Cloudflare preflight on 2026-08-09 found the `plyr.fm` zone active with no
-`next.plyr.fm` DNS record and no Pages project claiming that hostname. Production
-(`plyr-fm`) and staging (`plyr-fm-stg`) remain separate Pages projects. The next
-namespace is therefore available for a third parallel application; it should
-remain empty until the Fly-hostname gates above pass.
+On 2026-08-09 Cloudflare A and AAAA records were created for `next.plyr.fm`,
+pointing only to the dedicated Fly ingress addresses for
+`plyr-api-zig-canary`. Existing production and staging DNS records and Pages
+projects were not changed.
 
 ## initial catalog reconciliation
 
@@ -151,3 +143,11 @@ enrich access, verified delivery, operator moderation, and metrics independently
 An absent metrics row is an attributed derived zero rather than a fallback to
 the legacy track counter, and none of these application projections determine
 whether the authored record exists.
+
+The first production-shaped run used the isolated Neon branch
+`next-zig-backend`, not the production database itself. Of 99 candidate
+repositories, 91 verified and produced 978 live tracks and 82 authored profiles.
+Three candidates were retryable because their PDS was unavailable, and five were
+rejected by the repository-size guard. The strict reconciler therefore exited
+nonzero after preserving all verified progress; the next environment can serve
+that authenticated subset while the size and retry cases remain explicit work.

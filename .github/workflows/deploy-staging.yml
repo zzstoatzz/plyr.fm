@@ -96,11 +96,11 @@ jobs:
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_STAGING }}
 
-      - name: reconcile authenticated staging catalog
+      - name: reconcile authenticated next catalog
         if: inputs.reconcile_catalog
         run: >-
           flyctl machine run "registry.fly.io/plyr-api-zig-canary:${GITHUB_SHA}"
-          --app relay-api-staging
+          --app plyr-api-zig-canary
           --region sea
           --rm
           --restart no
@@ -109,11 +109,12 @@ jobs:
           --vm-cpus 1
           --vm-memory 256
           --metadata purpose=zig-catalog-reconciliation
+          --env "DATABASE_URL=${{ secrets.ZIG_NEXT_WRITER_DATABASE_URL }}"
           --env MODE=catalog_reconciler
           --env INDEX_MODE=required
-          --env TRACK_COLLECTION_NSID=fm.plyr.stg.track
-          --env LIST_COLLECTION_NSID=fm.plyr.stg.list
-          --env PROFILE_COLLECTION_NSID=fm.plyr.stg.actor.profile
+          --env TRACK_COLLECTION_NSID=fm.plyr.track
+          --env LIST_COLLECTION_NSID=fm.plyr.list
+          --env PROFILE_COLLECTION_NSID=fm.plyr.actor.profile
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_STAGING }}
 
@@ -175,75 +176,6 @@ jobs:
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_STAGING }}
 
-      - name: locate the current Python staging API machine
-        id: python-api
-        working-directory: backend-zig
-        run: |
-          machine_id=$(
-            flyctl machine list --app relay-api-staging --json |
-              jq -er '
-                [
-                  .[]
-                  | select(
-                      .state == "started" and
-                      .config.env.FLY_PROCESS_GROUP == "app"
-                    )
-                ]
-                | if length == 1 then
-                    .[0].id
-                  else
-                    error("expected exactly one started Python API machine")
-                  end
-              '
-          )
-          echo "machine=$machine_id" >> "$GITHUB_OUTPUT"
-        env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_STAGING }}
-
-      - name: capture Python staging API idle resources
-        working-directory: backend-zig
-        run: |
-          flyctl ssh console \
-            --app relay-api-staging \
-            --machine "${{ steps.python-api.outputs.machine }}" \
-            --quiet \
-            --pty=false \
-            --command "env PROCESS_EXE=/usr/local/bin/python3.12 sh" \
-            < scripts/canary-resource-snapshot \
-            > canary-evidence/python-idle.json
-        env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_STAGING }}
-
-      - name: measure current Python staging product reads
-        working-directory: backend-zig
-        run: |
-          python3 scripts/bench_http.py \
-            --url https://api-stg.plyr.fm \
-            --duration 10 \
-            --concurrency 1 \
-            --path '/tracks/?limit=50' \
-            > canary-evidence/python-tracks-c1.json
-          python3 scripts/bench_http.py \
-            --url https://api-stg.plyr.fm \
-            --duration 10 \
-            --concurrency 16 \
-            --path '/tracks/?limit=50' \
-            > canary-evidence/python-tracks-c16.json
-
-      - name: capture Python staging API loaded resources
-        working-directory: backend-zig
-        run: |
-          flyctl ssh console \
-            --app relay-api-staging \
-            --machine "${{ steps.python-api.outputs.machine }}" \
-            --quiet \
-            --pty=false \
-            --command "env PROCESS_EXE=/usr/local/bin/python3.12 sh" \
-            < scripts/canary-resource-snapshot \
-            > canary-evidence/python-loaded.json
-        env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_STAGING }}
-
       - name: enforce and summarize canary evidence
         working-directory: backend-zig
         run: |
@@ -254,12 +186,7 @@ jobs:
             --benchmark canary-evidence/tracks-c1.json \
             --benchmark canary-evidence/tracks-c16.json \
             --output canary-evidence/report.json \
-            --markdown-output canary-evidence/report.md \
-            --comparison-name 'Python staging API' \
-            --comparison-idle canary-evidence/python-idle.json \
-            --comparison-loaded canary-evidence/python-loaded.json \
-            --comparison-benchmark canary-evidence/python-tracks-c1.json \
-            --comparison-benchmark canary-evidence/python-tracks-c16.json
+            --markdown-output canary-evidence/report.md
           status=$?
           if [ -f canary-evidence/report.md ]; then
             cat canary-evidence/report.md >> "$GITHUB_STEP_SUMMARY"
