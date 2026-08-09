@@ -12,7 +12,8 @@ from sqlalchemy.engine import make_url
 from alembic import command
 
 PRIOR_REVISION = "4aaed6c819f1"
-HEAD_REVISION = "f64b0e7d325a"
+HEAD_REVISION = "a47e19c83b20"
+CANARY_ROLE = "plyr_zig_canary"
 EXPECTED_TABLES = {
     "account_availability",
     "account_status_checks",
@@ -159,6 +160,14 @@ def assert_test_database_and_drop_schema(database_url: str) -> None:
             if database_name != "zig_test":
                 raise RuntimeError(f"unsafe migration test database: {database_name!r}")
             connection.execute(text("DROP SCHEMA IF EXISTS plyr_index CASCADE"))
+            role_exists = connection.scalar(
+                text("SELECT EXISTS (SELECT FROM pg_roles WHERE rolname = :role)"),
+                {"role": CANARY_ROLE},
+            )
+            if role_exists:
+                connection.execute(text(f"DROP OWNED BY {CANARY_ROLE}"))
+                connection.execute(text(f"DROP ROLE {CANARY_ROLE}"))
+            connection.execute(text(f"CREATE ROLE {CANARY_ROLE} NOLOGIN"))
             connection.execute(text("DROP TABLE IF EXISTS public.tracks CASCADE"))
             connection.execute(
                 text(
@@ -235,6 +244,69 @@ def table_columns(database_url: str, table_name: str) -> set[str]:
         engine.dispose()
 
 
+def role_has_privilege(database_url: str, object_name: str, privilege: str) -> bool:
+    """Return one effective privilege for the disposable canary role."""
+    engine = create_engine(database_url)
+    try:
+        with engine.connect() as connection:
+            function = (
+                "has_schema_privilege"
+                if object_name == "plyr_index"
+                else "has_table_privilege"
+            )
+            return bool(
+                connection.scalar(
+                    text(f"SELECT {function}(:role, :object, :privilege)"),
+                    {
+                        "role": CANARY_ROLE,
+                        "object": object_name,
+                        "privilege": privilege,
+                    },
+                )
+            )
+    finally:
+        engine.dispose()
+
+
+def assert_canary_read_only(database_url: str) -> None:
+    """Prove existing and subsequently created projection tables stay read-only."""
+    if not role_has_privilege(database_url, "plyr_index", "USAGE"):
+        raise AssertionError("canary role cannot use the projection schema")
+    for table_name in EXPECTED_TABLES:
+        object_name = f"plyr_index.{table_name}"
+        if not role_has_privilege(database_url, object_name, "SELECT"):
+            raise AssertionError(f"canary role cannot read {object_name}")
+        for privilege in ("INSERT", "UPDATE", "DELETE"):
+            if role_has_privilege(database_url, object_name, privilege):
+                raise AssertionError(f"canary role can {privilege} {object_name}")
+
+    engine = create_engine(database_url)
+    try:
+        with engine.begin() as connection:
+            connection.execute(
+                text("CREATE TABLE plyr_index.future_projection (id int)")
+            )
+        if not role_has_privilege(
+            database_url, "plyr_index.future_projection", "SELECT"
+        ):
+            raise AssertionError("canary default privileges omit future tables")
+        for privilege in ("INSERT", "UPDATE", "DELETE"):
+            if role_has_privilege(
+                database_url,
+                "plyr_index.future_projection",
+                privilege,
+            ):
+                raise AssertionError(
+                    f"canary default privileges permit future-table {privilege}"
+                )
+    finally:
+        with engine.begin() as connection:
+            connection.execute(
+                text("DROP TABLE IF EXISTS plyr_index.future_projection")
+            )
+        engine.dispose()
+
+
 def main() -> None:
     """Apply, inspect, and reverse the migration through the real Alembic env."""
     database_url = sync_database_url()
@@ -254,6 +326,7 @@ def main() -> None:
         tables = projected_tables(database_url)
         if tables != EXPECTED_TABLES:
             raise AssertionError(f"unexpected plyr_index tables: {sorted(tables)!r}")
+        assert_canary_read_only(database_url)
         columns = table_columns(database_url, "repo_heads")
         if columns != EXPECTED_HEAD_COLUMNS:
             raise AssertionError(f"unexpected repo_heads columns: {sorted(columns)!r}")
@@ -355,6 +428,34 @@ def main() -> None:
         raise AssertionError("migration downgrade left plyr_index schema")
     if remaining := projected_tables(database_url):
         raise AssertionError(f"migration downgrade left tables: {sorted(remaining)!r}")
+
+    engine = create_engine(database_url)
+    try:
+        with engine.begin() as connection:
+            connection.execute(text("CREATE SCHEMA plyr_index"))
+            connection.execute(
+                text("CREATE TABLE plyr_index.future_projection (id int)")
+            )
+        if role_has_privilege(database_url, "plyr_index", "USAGE"):
+            raise AssertionError("downgrade left canary schema usage")
+        if role_has_privilege(database_url, "plyr_index.future_projection", "SELECT"):
+            raise AssertionError("downgrade left canary default table reads")
+    finally:
+        with engine.begin() as connection:
+            connection.execute(text("DROP SCHEMA plyr_index CASCADE"))
+            connection.execute(text(f"DROP OWNED BY {CANARY_ROLE}"))
+            connection.execute(text(f"DROP ROLE {CANARY_ROLE}"))
+        engine.dispose()
+
+    # Developer databases do not need the deployment-only role. The same
+    # migration chain must remain usable there without granting to or creating
+    # an ambient principal.
+    command.upgrade(config, HEAD_REVISION)
+    try:
+        if not projection_schema_exists(database_url):
+            raise AssertionError("role-absent migration did not create the projection")
+    finally:
+        command.downgrade(config, PRIOR_REVISION)
 
 
 if __name__ == "__main__":

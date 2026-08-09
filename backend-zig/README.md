@@ -123,7 +123,9 @@ secret values while checking configuration.
 `plyr-api-zig-canary`. It uses one 256 MiB shared-CPU machine, scales to zero,
 and has no worker, jetstream, migration, Redis, R2, or production traffic
 responsibilities. `DATABASE_URL` is its only secret and must point at the
-staging projection.
+staging projection through the `plyr_zig_canary` database role. Migrations grant
+that role schema usage and reads on current and future projection tables, but no
+write authority.
 
 The registered `deploy staging` GitHub workflow exposes an explicit manual
 `zig-canary` target. Local development may build and run the image, but deployment

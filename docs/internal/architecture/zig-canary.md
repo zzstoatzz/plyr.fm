@@ -21,8 +21,12 @@ Zig API configuration, not an alias that exposes the bare API as a website.
 The initial canary has exactly one process role: REST API. It has no migration,
 background-worker, jetstream, Redis, Docket, R2 write, PDS write, or production
 database authority. It reads the staging projection through a dedicated
-credential and uses the staging `fm.plyr.stg.track` and `fm.plyr.stg.list`
-namespaces.
+`plyr_zig_canary` credential and uses the staging `fm.plyr.stg.track` and
+`fm.plyr.stg.list` namespaces. The migration grants schema usage and `SELECT`
+on every current projection table, establishes the same default for projection
+tables created later, and grants no schema creation or table-write privilege.
+Online upgrades skip this deployment-only grant where that role is absent, so
+local and unrelated environments do not acquire an ambient principal.
 
 The machine:
 
@@ -67,10 +71,12 @@ the same concurrency levels. Mean response bytes are retained for both APIs, and
 the summary reports resource, throughput, and latency ratios without pretending
 different payload sizes are equivalent work. The job fails on any Zig request
 error, process restart, idle RSS above 16 MiB, or application peak RSS above
-64 MiB. A Python baseline error remains evidence but does not lower the Zig gate.
-This is deliberately part of the manually dispatched deployment path, not the
-PR workflows, so ordinary checkpoints never generate remote load or repeated
-infrastructure runs.
+64 MiB. It also fails unless Python staging uses at least 50 times the Zig
+process's idle and peak RSS and Zig serves at least 10 times Python's successful
+request rate at both concurrency levels. A Python baseline error remains evidence
+but does not lower the Zig gate. This is deliberately part of the manually
+dispatched deployment path, not the PR workflows, so ordinary checkpoints never
+generate remote load or repeated infrastructure runs.
 
 ## next-environment gates
 
@@ -88,7 +94,9 @@ Before exposing `next.plyr.fm`:
 4. Fly-native measurements must record idle RSS, loaded peak memory, CPU time,
    throughput, and p50/p95/p99 latency. The agreed load scenario is the public
    50-track collection for ten seconds at concurrency 1 and 16. The first budget
-   is at most 16 MiB idle application RSS and 64 MiB application peak RSS.
+   is at most 16 MiB idle application RSS and 64 MiB application peak RSS. The
+   comparative gate requires at least 50x lower idle and peak RSS and at least
+   10x greater successful throughput than Python staging at both concurrencies.
 5. The service must remain well below its 256 MiB machine ceiling with the
    connection pool established; the ceiling is a guardrail, not a target.
 6. No route receives user traffic until its authentication, visibility,
