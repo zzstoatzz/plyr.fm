@@ -5,6 +5,7 @@
 
 const std = @import("std");
 const pg = @import("pg");
+const postgres_url = @import("postgres_url.zig");
 const postgres_test_lock = @import("../testing/postgres_lock.zig");
 const zat = @import("zat");
 const track = @import("../domain/track.zig");
@@ -27,7 +28,9 @@ pub const PostgresTrackStore = struct {
         database_url: []const u8,
         pool_size: u16,
     ) !PostgresTrackStore {
-        const uri = try std.Uri.parse(database_url);
+        var normalized = try postgres_url.normalize(allocator, database_url);
+        defer normalized.deinit(allocator);
+        const uri = try std.Uri.parse(normalized.value);
         return .{ .pool = try pg.Pool.initUri(io, allocator, uri, .{ .size = pool_size }) };
     }
 

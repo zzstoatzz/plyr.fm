@@ -57,7 +57,7 @@ Python suite's `relay_test` schema.
 | `TRACK_COLLECTION_NSID` | yes | exact environment-aware track-record NSID |
 | `LIST_COLLECTION_NSID` | yes | exact environment-aware list-record NSID used by albums |
 | `PROFILE_COLLECTION_NSID` | yes | exact environment-aware authored profile-record NSID |
-| `DATABASE_URL` | in normal API mode | PostgreSQL projection; missing configuration fails startup |
+| `DATABASE_URL` | in normal API mode | PostgreSQL projection; canonical Postgres URLs and the existing SQLAlchemy `psycopg`, `psycopg2`, and `asyncpg` driver-qualified forms are accepted; missing or unknown configuration fails startup |
 | `INDEX_MODE` | no | `required` by default; `disabled` is an explicit test/development mode whose readiness is `503` |
 | `MAX_CONNECTIONS` | no | hard cap on accepted connection handlers, default `128` |
 | `PORT` | no | listener port, default `8001` |
