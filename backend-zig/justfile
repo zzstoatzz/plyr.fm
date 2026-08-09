@@ -38,6 +38,7 @@ check:
     zig build test
     python3 scripts/test_http.py
     cd ../backend && uv run ruff check ../backend-zig/scripts
+    cd ../backend && uv run pytest -q ../backend-zig/scripts/test_canary_smoke.py
 
 # Destructive only to the dedicated Zig test database on port 5435.
 test-postgres:

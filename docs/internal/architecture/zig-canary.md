@@ -43,7 +43,10 @@ Before exposing `next.plyr.fm`:
    against the intended v1 contract, including missing, private, malformed,
    corrupt-projection, and unavailable-index behavior.
 3. A real staging track lookup must prove that the published image can reach
-   Neon with TLS and decode the current projection.
+   Neon with TLS and decode the current projection. The deployment smoke gate
+   requires a nonempty verified collection, round-trips its first track through
+   detail, resolves its artist, and traverses that artist's album collection;
+   empty projection tables cannot satisfy this gate.
 4. Fly-native measurements must record idle RSS, loaded peak memory, CPU time,
    throughput, and p50/p95/p99 latency. The first budget is at most 16 MiB idle
    application RSS and 64 MiB working set under the agreed load scenario.
@@ -60,6 +63,12 @@ dedicated successor API origin over making `next.plyr.fm` itself return API JSON
 Users and test clients opt into the complete next environment explicitly;
 percentage routing is not the model for a versioned contract and UI that are
 being replaced together.
+
+The Cloudflare preflight on 2026-08-09 found the `plyr.fm` zone active with no
+`next.plyr.fm` DNS record and no Pages project claiming that hostname. Production
+(`plyr-fm`) and staging (`plyr-fm-stg`) remain separate Pages projects. The next
+namespace is therefore available for a third parallel application; it should
+remain empty until the Fly-hostname gates above pass.
 
 ## initial catalog reconciliation
 
@@ -88,5 +97,7 @@ quarantined seven list records (five invalid strongRefs and two unknown list
 types). Product reads then returned all 19 tracks even though none had an exact
 legacy `tracks.atproto_record_uri` match. That last result is intentional: the
 verified PDS record is authoritative. Canonical-URI application projections
-enrich access and verified delivery independently; remaining legacy moderation
-and metrics cannot determine whether the record exists.
+enrich access, verified delivery, operator moderation, and metrics independently.
+An absent metrics row is an attributed derived zero rather than a fallback to
+the legacy track counter, and none of these application projections determine
+whether the authored record exists.

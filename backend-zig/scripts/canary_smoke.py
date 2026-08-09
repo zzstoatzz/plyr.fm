@@ -50,6 +50,58 @@ def _expect(response: Response, status: int, body: dict[str, Any]) -> None:
         assert response.body["error"]["request_id"] == request_id
 
 
+def _expect_request_id(response: Response) -> None:
+    assert response.headers.get("x-request-id"), response.headers
+
+
+def _verify_real_product_reads(base_url: str) -> None:
+    tracks = _request(base_url, "/v1/tracks?limit=1")
+    assert tracks.status == 200, (tracks.status, tracks.body)
+    assert tracks.body["object"] == "list"
+    data = tracks.body["data"]
+    assert isinstance(data, list) and data, "staging projection has no public tracks"
+    _expect_request_id(tracks)
+
+    listed_track = data[0]
+    assert listed_track["object"] == "track", listed_track
+    assert listed_track["projection"]["verification"] == "verified_repo", listed_track
+    assert listed_track["sources"]["record"] == "verified_repo", listed_track
+    assert listed_track["sources"]["metrics"] in {
+        "application_metrics",
+        "derived",
+    }, listed_track
+    assert isinstance(listed_track["metrics"]["play_count"], int), listed_track
+    assert listed_track["metrics"]["play_count"] >= 0, listed_track
+
+    track_id = urllib.parse.quote(listed_track["id"], safe="_-")
+    detail = _request(base_url, f"/v1/tracks/{track_id}")
+    assert detail.status == 200, (detail.status, detail.body)
+    _expect_request_id(detail)
+    assert detail.body == listed_track, (detail.body, listed_track)
+
+    artist_did = listed_track["artist"]["did"]
+    encoded_did = urllib.parse.quote(artist_did, safe="")
+    artist = _request(base_url, f"/v1/artists/{artist_did}")
+    assert artist.status == 200, (artist.status, artist.body)
+    _expect_request_id(artist)
+    assert artist.body["object"] == "artist", artist.body
+    assert artist.body["did"] == artist_did, artist.body
+
+    albums = _request(base_url, f"/v1/albums?artist_did={encoded_did}&limit=1")
+    assert albums.status == 200, (albums.status, albums.body)
+    _expect_request_id(albums)
+    assert albums.body["object"] == "list", albums.body
+    album_data = albums.body["data"]
+    assert isinstance(album_data, list), albums.body
+    if album_data:
+        album_id = urllib.parse.quote(album_data[0]["id"], safe="_-")
+        album = _request(base_url, f"/v1/albums/{album_id}")
+        assert album.status == 200, (album.status, album.body)
+        _expect_request_id(album)
+        assert album.body["object"] == "album", album.body
+        assert album.body["id"] == album_data[0]["id"], album.body
+
+
 def _wait_for_product_readiness(base_url: str, timeout_seconds: float) -> None:
     deadline = time.monotonic() + timeout_seconds
     last: object = "no response"
@@ -75,12 +127,7 @@ def verify(base_url: str, timeout_seconds: float = 90) -> None:
     _wait_for_product_readiness(base_url, timeout_seconds)
     _expect(_request(base_url, "/health"), 200, {"status": "ok", "role": "api"})
     _expect(_request(base_url, "/v1"), 200, {"object": "api", "version": "v1"})
-
-    tracks = _request(base_url, "/v1/tracks?limit=1")
-    assert tracks.status == 200, (tracks.status, tracks.body)
-    assert tracks.body["object"] == "list"
-    assert isinstance(tracks.body["data"], list)
-    assert tracks.headers.get("x-request-id")
+    _verify_real_product_reads(base_url)
 
     absent_did = "did:plc:canarysmoke"
     artist = _request(base_url, f"/v1/artists/{absent_did}")

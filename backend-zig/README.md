@@ -130,7 +130,9 @@ build and run the image, but deployment goes through that workflow. The Fly
 hostname is the initial infrastructure verification surface. The workflow runs
 `scripts/canary_smoke.py` after deployment and fails unless readiness, API
 discovery, track collection/detail, artist lookup, and album collection/detail
-all prove their expected anonymous semantics and request-ID contract. Run the
+all prove their expected anonymous semantics and request-ID contract. The gate
+requires a real verified staging track, round-trips its collection representation
+through detail, and resolves its artist; an empty projection cannot pass. Run the
 same check with `just zig smoke-canary`.
 
 `next.plyr.fm` is the eventual public parallel deployment of the successor
