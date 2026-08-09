@@ -46,7 +46,7 @@ pub fn main() !void {
         null;
     const playback_store = if (postgres_playback_store) |*store| store.store() else null;
     var postgres_artist_store: ?postgres_artists.PostgresArtistStore = if (postgres_store) |*store|
-        .{ .pool = store.pool }
+        .{ .pool = store.pool, .profile_collection = settings.profile_collection }
     else
         null;
     const artist_store = if (postgres_artist_store) |*store| store.store() else null;

@@ -5,9 +5,11 @@ title: "Zig v1 artist resource"
 ## endpoint
 
 `GET /v1/artists/{identifier}` resolves a public artist by canonical DID or by
-their current handle. One resource replaces the Python API's separate
+their current handle alias. One resource replaces the Python API's separate
 `/artists/{did}` and `/artists/by-handle/{handle}` routes while retaining the
-flat profile fields the current frontend consumes.
+flat fields the current frontend consumes. A legacy artist row cannot admit a
+resource: a live verified `fm.plyr.actor.profile/self` record and affirmative
+account-availability evidence are both required.
 
 The endpoint returns:
 
@@ -37,36 +39,44 @@ The response retains these current-client fields at the top level:
 
 - `did`, `handle`, `display_name`, `bio`, and `avatar_url`;
 - `show_liked_on_profile` and `support_url`;
-- `created_at` and `updated_at`.
+- profile-record `created_at` and `updated_at`;
+- canonical profile-record URI, CID, repository revision, collection, and key.
 
-That shape is compatibility, not an authority claim. The response also exposes
-`sources` and `projection` so callers can distinguish the current transitional
-state:
+That flat shape is compatibility, not an authority shortcut. The response also
+exposes `record`, `sources`, and `projection` so callers can distinguish the
+current transitional state:
 
 | field group | current source |
 |---|---|
-| identity | legacy Postgres projection |
-| profile | legacy Postgres projection |
+| canonical DID and resource admission | verified repository profile plus affirmative account evidence |
+| handle alias | legacy identity cache |
+| display name | legacy app-local presentation |
+| bio, avatar, and profile timestamps | verified authored profile record |
 | public preferences | legacy app-local state |
-| projection verification | legacy, unverified |
+| projection verification | verified repository |
 
 The adapter deliberately omits `pds_url` and other storage topology. A PDS
-location is resolution metadata, not part of an artist's public identity.
-Future verified repository ingestion can change the source and verification
-values without changing the useful profile fields or the route.
+location is resolution metadata, not part of an artist's public identity. The
+handle and display name remain explicit migration gaps: they do not inherit the
+profile record's verification merely because they appear beside it. A future
+identity/presentation projection can replace those two fields without changing
+resource admission or the route.
 
 ## adapter boundary
 
 `ArtistStore` accepts only a typed DID-or-handle identifier and returns the
-public artist read model. The initial Postgres adapter is the only layer that
-knows the existing `artists` and `user_preferences` tables. It:
+public artist read model. The Postgres adapter is the only layer that knows the
+verified projection and transitional table layout. It:
 
 1. borrows the catalog's existing connection pool rather than opening another
    Neon pool;
-2. filters deactivated accounts before they cross the application boundary;
-3. validates projected DIDs and handles with `zat`;
-4. copies row data into the request arena before releasing the query result;
-5. treats ambiguous handles and malformed identity data as corruption rather
+2. joins a non-deleted literal-key profile record to currently available
+   account evidence before considering legacy presentation data;
+3. filters locally deactivated aliases before they cross the application boundary;
+4. validates profile AT-URI/CID/revision, authored timestamps and avatar URI,
+   projected DID, and handle;
+5. copies row data into the request arena before releasing the query result;
+6. treats ambiguous handles and malformed identity data as corruption rather
    than temporary unavailability.
 
 This permits the projection schema and ingestion path to be replaced without

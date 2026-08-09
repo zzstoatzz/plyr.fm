@@ -99,9 +99,11 @@ it prefers an exact record-CID-bound verified delivery origin, otherwise exposes
 a safe author-declared HTTPS URL with explicitly unverified integrity, and
 represents missing delivery without hiding the catalog record. Anonymous gates
 return `authentication_required`; private and moderated records remain hidden.
-Artist lookup
-accepts a canonical DID or a case-insensitive handle alias and exposes the
-transitional source of each profile field. The album
+Artist lookup requires a verified, non-deleted profile record plus affirmative
+account availability, accepts a canonical DID or a case-insensitive handle
+alias, and exposes the transitional source of each field. Authored bio, avatar,
+and timestamps come from the repository projection; legacy presentation and
+preference fields cannot admit a resource. The album
 collection exposes only canonical list-record albums and keeps local
 presentation fields explicitly separate from record identity. Album detail
 preserves every verified strong-reference position and hydrates only an exact

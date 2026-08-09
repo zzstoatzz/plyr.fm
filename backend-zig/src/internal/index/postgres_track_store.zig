@@ -485,6 +485,8 @@ test "PostgreSQL adapter reads a complete derived projection" {
     _ = try store_impl.pool.exec("DROP TABLE IF EXISTS user_preferences CASCADE", .{});
     _ = try store_impl.pool.exec("DROP TABLE IF EXISTS artists CASCADE", .{});
     _ = try store_impl.pool.exec("CREATE SCHEMA IF NOT EXISTS plyr_index", .{});
+    _ = try store_impl.pool.exec("DROP TABLE IF EXISTS plyr_index.profile_records", .{});
+    _ = try store_impl.pool.exec("DROP TABLE IF EXISTS plyr_index.account_availability", .{});
     _ = try store_impl.pool.exec("DROP TABLE IF EXISTS plyr_index.track_metrics", .{});
     _ = try store_impl.pool.exec("DROP TABLE IF EXISTS plyr_index.list_records", .{});
     _ = try store_impl.pool.exec(
@@ -572,6 +574,24 @@ test "PostgreSQL adapter reads a complete derived projection" {
         "INSERT INTO user_preferences VALUES ('did:plc:artist', true, 'atprotofans')",
         .{},
     );
+    try @import("../projection/postgres_profile_store.zig").createTestTable(store_impl.pool);
+    try @import("../account/postgres_availability_store.zig").createTestTable(store_impl.pool);
+    const profile_cid = "bafyreihdwdcefgh4dqkjv67uzcmw7ojee6xedzdetojuzjevtenxquvyku";
+    _ = try store_impl.pool.exec(
+        \\INSERT INTO plyr_index.profile_records VALUES (
+        \\  'at://did:plc:artist/fm.plyr.dev.actor.profile/self', $1,
+        \\  'did:plc:artist', 'fm.plyr.dev.actor.profile', 'self',
+        \\  'https://media.example/avatar.png', 'authored bio',
+        \\  '2026-08-08T10:00:00Z', '2026-08-08T11:00:00Z', false,
+        \\  $1, '3jqfcqzm3fo2j', 1000
+        \\)
+    , .{profile_cid});
+    _ = try store_impl.pool.exec(
+        \\INSERT INTO plyr_index.account_availability VALUES (
+        \\  'did:plc:artist', true, NULL, 'verified_repository',
+        \\  '3jqfcqzm3fo2j', $1, NULL, 1000
+        \\)
+    , .{profile_cid});
     const uri = "at://did:plc:artist/fm.plyr.dev.track/3m123abc";
     _ = try store_impl.pool.exec(
         \\INSERT INTO tracks (
@@ -627,20 +647,38 @@ test "PostgreSQL adapter reads a complete derived projection" {
     try std.testing.expectEqual(@as(i64, 7), value.metrics.play_count);
     try std.testing.expectEqual(track.Source.application_metrics, value.sources.metrics);
 
-    var artist_store_impl: PostgresArtistStore = .{ .pool = store_impl.pool };
+    var artist_store_impl: PostgresArtistStore = .{
+        .pool = store_impl.pool,
+        .profile_collection = "fm.plyr.dev.actor.profile",
+    };
     const artist_store = artist_store_impl.store();
     const artist_value = (try artist_store.get(arena.allocator(), .{ .did = "did:plc:artist" })).?;
     try std.testing.expectEqualStrings("artist.example", artist_value.handle);
-    try std.testing.expectEqualStrings("sound maker", artist_value.bio.?);
+    try std.testing.expectEqualStrings("authored bio", artist_value.bio.?);
     try std.testing.expect(artist_value.show_liked_on_profile);
     try std.testing.expectEqualStrings("atprotofans", artist_value.support_url.?);
-    try std.testing.expectEqualStrings("2026-08-08T10:00:00.000000Z", artist_value.created_at);
-    try std.testing.expectEqual(@import("../domain/artist.zig").ClaimSource.legacy_projection, artist_value.sources.profile);
+    try std.testing.expectEqualStrings("2026-08-08T10:00:00Z", artist_value.created_at);
+    try std.testing.expectEqual(@import("../domain/artist.zig").ClaimSource.verified_repo, artist_value.sources.profile);
     try std.testing.expectEqual(@import("../domain/artist.zig").ClaimSource.legacy_local, artist_value.sources.public_preferences);
+    try std.testing.expectEqual(@import("../domain/artist.zig").ProjectionVerification.verified_repo, artist_value.projection.verification);
+    try std.testing.expectEqualStrings("3jqfcqzm3fo2j", artist_value.record.revision);
 
     const by_handle = (try artist_store.get(arena.allocator(), .{ .handle = "artist.example" })).?;
     try std.testing.expectEqualStrings("did:plc:artist", by_handle.did);
     try std.testing.expect((try artist_store.get(arena.allocator(), .{ .did = "did:plc:missing" })) == null);
+    _ = try store_impl.pool.exec(
+        "INSERT INTO artists (did, handle, display_name) VALUES ('did:plc:legacy-only', 'legacy-only.example', 'Legacy Only')",
+        .{},
+    );
+    try std.testing.expect((try artist_store.get(arena.allocator(), .{ .did = "did:plc:legacy-only" })) == null);
+    _ = try store_impl.pool.exec(
+        \\UPDATE plyr_index.account_availability SET
+        \\  available = false, unavailable_reason = 'deactivated',
+        \\  evidence_source = 'current_pds', repository_rev = NULL,
+        \\  commit_cid = NULL, pds_origin = 'https://pds.example', observed_at_us = 2000
+        \\WHERE repo_did = 'did:plc:artist'
+    , .{});
+    try std.testing.expect((try artist_store.get(arena.allocator(), .{ .did = "did:plc:artist" })) == null);
 
     _ = try store_impl.pool.exec(
         \\INSERT INTO artists (did, handle, display_name, deactivated) VALUES
@@ -648,6 +686,18 @@ test "PostgreSQL adapter reads a complete derived projection" {
         \\  ('did:plc:alias-one', 'shared.example', 'One', false),
         \\  ('did:plc:alias-two', 'SHARED.EXAMPLE', 'Two', false)
     , .{});
+    _ = try store_impl.pool.exec(
+        \\INSERT INTO plyr_index.profile_records VALUES
+        \\  ('at://did:plc:inactive/fm.plyr.dev.actor.profile/self', $1, 'did:plc:inactive', 'fm.plyr.dev.actor.profile', 'self', NULL, NULL, '2026-08-08T10:00:00Z', NULL, false, $1, '3jqfcqzm3fo2j', 1000),
+        \\  ('at://did:plc:alias-one/fm.plyr.dev.actor.profile/self', $1, 'did:plc:alias-one', 'fm.plyr.dev.actor.profile', 'self', NULL, NULL, '2026-08-08T10:00:00Z', NULL, false, $1, '3jqfcqzm3fo2j', 1000),
+        \\  ('at://did:plc:alias-two/fm.plyr.dev.actor.profile/self', $1, 'did:plc:alias-two', 'fm.plyr.dev.actor.profile', 'self', NULL, NULL, '2026-08-08T10:00:00Z', NULL, false, $1, '3jqfcqzm3fo2j', 1000)
+    , .{profile_cid});
+    _ = try store_impl.pool.exec(
+        \\INSERT INTO plyr_index.account_availability VALUES
+        \\  ('did:plc:inactive', true, NULL, 'verified_repository', '3jqfcqzm3fo2j', $1, NULL, 1000),
+        \\  ('did:plc:alias-one', true, NULL, 'verified_repository', '3jqfcqzm3fo2j', $1, NULL, 1000),
+        \\  ('did:plc:alias-two', true, NULL, 'verified_repository', '3jqfcqzm3fo2j', $1, NULL, 1000)
+    , .{profile_cid});
     try std.testing.expect((try artist_store.get(arena.allocator(), .{ .did = "did:plc:inactive" })) == null);
     try std.testing.expectError(
         artist_index.ArtistStore.Error.CorruptProjection,

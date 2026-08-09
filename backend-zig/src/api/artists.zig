@@ -35,12 +35,25 @@ test "v1 artist JSON preserves compatible fields and exposes their provenance" {
         .support_url = "https://artist.example/support",
         .created_at = "2026-08-08T12:00:00.000000Z",
         .updated_at = "2026-08-08T13:00:00.000000Z",
-        .sources = .{
-            .identity = .legacy_projection,
-            .profile = .legacy_projection,
-            .public_preferences = .legacy_local,
+        .record = .{
+            .uri = "at://did:plc:artist/fm.plyr.dev.actor.profile/self",
+            .cid = "bafyreiaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            .revision = "3jqfcqzm3fo2j",
+            .collection = "fm.plyr.dev.actor.profile",
+            .rkey = "self",
         },
-        .projection = .{ .indexed_at = null, .verification = .legacy_unverified },
+        .sources = .{
+            .did = .verified_repo,
+            .handle = .legacy_projection,
+            .display_name = .legacy_local,
+            .profile = .verified_repo,
+            .public_preferences = .legacy_local,
+            .account_availability = .verified_repo,
+        },
+        .projection = .{
+            .indexed_at = "2026-08-08T13:00:00.000000Z",
+            .verification = .verified_repo,
+        },
     };
 
     const json = try std.json.Stringify.valueAlloc(std.testing.allocator, value, .{});
@@ -51,6 +64,7 @@ test "v1 artist JSON preserves compatible fields and exposes their provenance" {
     try std.testing.expectEqualStrings("artist", root.get("object").?.string);
     try std.testing.expectEqualStrings("did:plc:artist", root.get("did").?.string);
     try std.testing.expectEqualStrings("Artist", root.get("display_name").?.string);
+    try std.testing.expect(root.get("record") != null);
     try std.testing.expect(root.get("sources") != null);
     try std.testing.expect(root.get("projection") != null);
     try std.testing.expect(root.get("pds_url") == null);
