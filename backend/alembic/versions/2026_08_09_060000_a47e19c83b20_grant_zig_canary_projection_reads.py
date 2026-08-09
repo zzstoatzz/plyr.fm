@@ -18,6 +18,7 @@ branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
 CANARY_ROLE = "plyr_zig_canary"
+COMPATIBILITY_TABLES = ("tracks", "artists", "albums", "user_preferences")
 
 
 def _role_exists() -> bool:
@@ -39,6 +40,11 @@ def upgrade() -> None:
     op.execute(f"GRANT USAGE ON SCHEMA plyr_index TO {CANARY_ROLE}")
     op.execute(f"GRANT SELECT ON ALL TABLES IN SCHEMA plyr_index TO {CANARY_ROLE}")
     op.execute(
+        "GRANT SELECT ON "
+        + ", ".join(f"public.{table}" for table in COMPATIBILITY_TABLES)
+        + f" TO {CANARY_ROLE}"
+    )
+    op.execute(
         "ALTER DEFAULT PRIVILEGES IN SCHEMA plyr_index "
         f"GRANT SELECT ON TABLES TO {CANARY_ROLE}"
     )
@@ -51,6 +57,11 @@ def downgrade() -> None:
     op.execute(
         "ALTER DEFAULT PRIVILEGES IN SCHEMA plyr_index "
         f"REVOKE SELECT ON TABLES FROM {CANARY_ROLE}"
+    )
+    op.execute(
+        "REVOKE SELECT ON "
+        + ", ".join(f"public.{table}" for table in COMPATIBILITY_TABLES)
+        + f" FROM {CANARY_ROLE}"
     )
     op.execute(f"REVOKE SELECT ON ALL TABLES IN SCHEMA plyr_index FROM {CANARY_ROLE}")
     op.execute(f"REVOKE USAGE ON SCHEMA plyr_index FROM {CANARY_ROLE}")

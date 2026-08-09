@@ -14,6 +14,7 @@ from alembic import command
 PRIOR_REVISION = "4aaed6c819f1"
 HEAD_REVISION = "a47e19c83b20"
 CANARY_ROLE = "plyr_zig_canary"
+COMPATIBILITY_TABLES = {"tracks", "artists", "albums", "user_preferences"}
 EXPECTED_TABLES = {
     "account_availability",
     "account_status_checks",
@@ -189,6 +190,13 @@ def assert_test_database_and_drop_schema(database_url: str) -> None:
                     "(NULL, 'public', NULL, '[]', NULL, 99)"
                 )
             )
+            for table_name in COMPATIBILITY_TABLES - {"tracks"}:
+                connection.execute(
+                    text(f"DROP TABLE IF EXISTS public.{table_name} CASCADE")
+                )
+                connection.execute(
+                    text(f"CREATE TABLE public.{table_name} (id integer)")
+                )
     finally:
         engine.dispose()
 
@@ -274,6 +282,13 @@ def assert_canary_read_only(database_url: str) -> None:
         raise AssertionError("canary role cannot use the projection schema")
     for table_name in EXPECTED_TABLES:
         object_name = f"plyr_index.{table_name}"
+        if not role_has_privilege(database_url, object_name, "SELECT"):
+            raise AssertionError(f"canary role cannot read {object_name}")
+        for privilege in ("INSERT", "UPDATE", "DELETE"):
+            if role_has_privilege(database_url, object_name, privilege):
+                raise AssertionError(f"canary role can {privilege} {object_name}")
+    for table_name in COMPATIBILITY_TABLES:
+        object_name = f"public.{table_name}"
         if not role_has_privilege(database_url, object_name, "SELECT"):
             raise AssertionError(f"canary role cannot read {object_name}")
         for privilege in ("INSERT", "UPDATE", "DELETE"):
@@ -428,6 +443,9 @@ def main() -> None:
         raise AssertionError("migration downgrade left plyr_index schema")
     if remaining := projected_tables(database_url):
         raise AssertionError(f"migration downgrade left tables: {sorted(remaining)!r}")
+    for table_name in COMPATIBILITY_TABLES:
+        if role_has_privilege(database_url, f"public.{table_name}", "SELECT"):
+            raise AssertionError(f"downgrade left compatibility read: {table_name}")
 
     engine = create_engine(database_url)
     try:

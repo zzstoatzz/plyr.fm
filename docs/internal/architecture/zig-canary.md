@@ -25,6 +25,10 @@ through a `plyr_zig_canary` credential and uses the production `fm.plyr.track`
 and `fm.plyr.list` namespaces. The migration grants schema usage and `SELECT`
 on every current projection table, establishes the same default for projection
 tables created later, and grants no schema creation or table-write privilege.
+The transitional REST adapters additionally receive `SELECT` on the clone's
+`tracks`, `artists`, `albums`, and `user_preferences` tables. This is an explicit
+compatibility seam for handles, presentation, and local policy—not content
+authority—and is confined to the isolated branch.
 Online upgrades skip this deployment-only grant where that role is absent, so
 local and unrelated environments do not acquire an ambient principal. The Fly
 configuration also declares `DATABASE_ROLE=plyr_zig_canary`; startup compares it

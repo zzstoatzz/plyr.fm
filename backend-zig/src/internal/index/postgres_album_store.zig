@@ -1,7 +1,9 @@
 //! PostgreSQL adapter for canonical public album-list summaries.
 //!
-//! The adapter borrows the catalog pool and is the only layer aware of the
-//! legacy `albums` relationship and presentation columns.
+//! The adapter borrows the catalog pool. Legacy presentation and relationship
+//! columns remain transitional inputs, but a summary is emitted only when the
+//! same album URI and CID exist in the authenticated list projection. This
+//! keeps collection and detail reads closed over one verified record set.
 
 const std = @import("std");
 const pg = @import("pg");
@@ -152,6 +154,11 @@ const select_and_join =
     \\  COALESCE(sum(metrics.play_count), 0)::bigint,
     \\  (extract(epoch FROM al.created_at) * 1000000)::bigint
     \\FROM albums AS al
+    \\JOIN plyr_index.list_records AS verified_list
+    \\  ON verified_list.record_uri = al.atproto_record_uri
+    \\  AND verified_list.record_cid = al.atproto_record_cid
+    \\  AND verified_list.list_type = 'album'
+    \\  AND NOT verified_list.deleted
     \\JOIN artists AS a ON a.did = al.artist_did
     \\LEFT JOIN tracks AS t ON t.album_id = al.id
     \\  AND t.atproto_record_uri IS NOT NULL

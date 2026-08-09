@@ -490,10 +490,19 @@ test "PostgreSQL adapter reads a complete derived projection" {
     _ = try store_impl.pool.exec("DROP TABLE IF EXISTS artists CASCADE", .{});
     _ = try store_impl.pool.exec("CREATE SCHEMA IF NOT EXISTS plyr_index", .{});
     _ = try store_impl.pool.exec("DROP TABLE IF EXISTS plyr_index.track_metrics", .{});
+    _ = try store_impl.pool.exec("DROP TABLE IF EXISTS plyr_index.list_records", .{});
     _ = try store_impl.pool.exec(
         \\CREATE TABLE plyr_index.track_metrics (
         \\  record_uri text PRIMARY KEY, play_count bigint NOT NULL,
         \\  write_source text NOT NULL, observed_at_us bigint NOT NULL
+        \\)
+    , .{});
+    _ = try store_impl.pool.exec(
+        \\CREATE TABLE plyr_index.list_records (
+        \\  record_uri text PRIMARY KEY,
+        \\  record_cid text,
+        \\  list_type text,
+        \\  deleted boolean NOT NULL
         \\)
     , .{});
     _ = try store_impl.pool.exec(
@@ -669,6 +678,12 @@ test "PostgreSQL adapter reads a complete derived projection" {
         \\   '2026-08-08T20:00:00Z', '2026-08-08T20:00:00Z'),
         \\  ('other-album', 'did:plc:alias-one', 'other', 'Other', NULL,
         \\   NULL, $3, $4, '2026-08-08T15:00:00Z', '2026-08-08T15:00:00Z')
+    , .{ album_a_uri, album_b_uri, other_album_uri, record_cid });
+    _ = try store_impl.pool.exec(
+        \\INSERT INTO plyr_index.list_records VALUES
+        \\  ($1, $4, 'album', false),
+        \\  ($2, $4, 'album', false),
+        \\  ($3, $4, 'album', false)
     , .{ album_a_uri, album_b_uri, other_album_uri, record_cid });
 
     const newer_uri = "at://did:plc:artist/fm.plyr.dev.track/3m123abe";

@@ -125,8 +125,9 @@ secret values while checking configuration.
 and has no worker, jetstream, migration, Redis, R2, or production traffic
 responsibilities. `DATABASE_URL` is its only runtime secret and points at the
 isolated `next-zig-backend` Neon branch through the `plyr_zig_canary` database role. Migrations grant
-that role schema usage and reads on current and future projection tables, but no
-write authority.
+that role schema usage and reads on current and future projection tables. During
+the compatibility phase it also has read-only access to `tracks`, `artists`,
+`albums`, and `user_preferences` in the isolated clone; it has no write authority.
 
 The already-registered `deploy staging` GitHub workflow exposes an explicit manual
 `zig-canary` target. Local development may build and run the image, but deployment
