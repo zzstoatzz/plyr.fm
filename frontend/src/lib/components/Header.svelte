@@ -61,7 +61,6 @@
 			<p>{APP_TAGLINE}</p>
 		</a>
 
-		{#if !IS_ZIG_V1}
 		<button class="nav-link" onclick={() => search.open()} title="search (Cmd+K)">
 			<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
 				<circle cx="11" cy="11" r="8"></circle>
@@ -69,7 +68,6 @@
 			</svg>
 			<span>search</span>
 		</button>
-		{/if}
 
 		{#if isAuthenticated}
 			{#if !$page.url.pathname.startsWith('/library')}
@@ -109,14 +107,12 @@
 		</div>
 
 		<div class="mobile-center">
-			{#if !IS_ZIG_V1}
 			<button class="nav-icon" onclick={() => search.open()} title="search (Cmd+K)">
 				<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
 					<circle cx="11" cy="11" r="8"></circle>
 					<line x1="21" y1="21" x2="16.65" y2="16.65"></line>
 				</svg>
 			</button>
-			{/if}
 			{#if isAuthenticated}
 				{#if !$page.url.pathname.startsWith('/library')}
 					<a href="/library" class="nav-icon" title="library">

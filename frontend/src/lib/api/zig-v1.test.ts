@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { getZigArtist, getZigPlayback, getZigTrack, listZigTracks } from './zig-v1';
 import { getZigAlbum, listZigAlbums } from './zig-v1-albums';
+import { searchZigCatalog } from './zig-v1-search';
 
 const record = {
 	uri: 'at://did:plc:artist/fm.plyr.track/song',
@@ -124,6 +125,29 @@ const albumDetail = {
 	]
 };
 
+const searchTrack = {
+	object: 'search_result',
+	type: 'track',
+	id: 'trk_opaque',
+	record: { uri: record.uri, cid: record.cid },
+	title: 'Song',
+	owner: { did: 'did:plc:artist', handle: 'artist.test', display_name: 'Artist' },
+	image_url: null,
+	metrics: { play_count: 3, member_count: null },
+	match: { kind: 'exact', field: 'title' },
+	sources: {
+		record: 'verified_repo',
+		title: 'verified_repo',
+		owner_identity: 'verified_repo',
+		owner_handle: 'legacy_projection',
+		owner_display_name: 'legacy_projection',
+		image: 'derived',
+		metrics: 'application_metrics',
+		account_availability: 'verified_repo'
+	},
+	projection: { verification: 'verified_repo', indexed_at_us: 42 }
+};
+
 function json(value: unknown, status = 200): Response {
 	return new Response(JSON.stringify(value), {
 		status,
@@ -132,6 +156,77 @@ function json(value: unknown, status = 200): Response {
 }
 
 describe('Zig v1 compatibility boundary', () => {
+	it('maps verified search references into the existing search modal model', async () => {
+		let requestedInput: RequestInfo | URL | null = null;
+		const fetcher = vi.fn(async (input: RequestInfo | URL) => {
+			requestedInput = input;
+			return json({
+				object: 'list',
+				data: [searchTrack],
+				query: 'Song',
+				counts: { tracks: 1, artists: 0, albums: 0, playlists: 0 }
+			});
+		});
+		const result = await searchZigCatalog(
+			'https://next.plyr.fm/api',
+			'Song',
+			{ limit: 7 },
+			fetcher
+		);
+		const requested = new URL(String(requestedInput));
+		expect(requested.pathname).toBe('/api/v1/search');
+		expect(requested.searchParams.get('types')).toBe('track,artist,album');
+		expect(requested.searchParams.get('limit')).toBe('7');
+		expect(result.results[0]).toEqual({
+			type: 'track',
+			id: 'trk_opaque',
+			title: 'Song',
+			artist_handle: 'artist.test',
+			artist_display_name: 'Artist',
+			image_url: null
+		});
+		expect(result.counts).toEqual({ tracks: 1, artists: 0, albums: 0, tags: 0, playlists: 0 });
+	});
+
+	it('rejects search results that lose provenance or escape the requested scope', async () => {
+		const unverified = vi.fn(async () =>
+			json({
+				object: 'list',
+				data: [
+					{
+						...searchTrack,
+						sources: { ...searchTrack.sources, record: 'legacy_projection' }
+					}
+				],
+				query: 'Song',
+				counts: { tracks: 1, artists: 0, albums: 0, playlists: 0 }
+			})
+		);
+		await expect(
+			searchZigCatalog('https://next.plyr.fm/api', 'Song', {}, unverified)
+		).rejects.toThrow('invalid Zig search result');
+
+		const playlist = vi.fn(async () =>
+			json({
+				object: 'list',
+				data: [
+					{
+						...searchTrack,
+						type: 'playlist',
+						id: 'pls_opaque',
+						metrics: { play_count: null, member_count: 3 },
+						match: { kind: 'prefix', field: 'name' }
+					}
+				],
+				query: 'Song',
+				counts: { tracks: 0, artists: 0, albums: 0, playlists: 1 }
+			})
+		);
+		await expect(
+			searchZigCatalog('https://next.plyr.fm/api', 'Song', {}, playlist)
+		).rejects.toThrow('escaped requested type scope');
+	});
+
 	it('maps verified album summaries without inventing local presentation', async () => {
 		const fetcher = vi.fn(async () =>
 			json({ object: 'list', data: [albumSummary], has_more: false, next_cursor: null })
