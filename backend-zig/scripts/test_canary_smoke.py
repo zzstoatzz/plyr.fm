@@ -34,6 +34,7 @@ def test_real_product_reads_traverse_projected_track_and_artist() -> None:
         "object": "track",
         "id": "trk_verified",
         "record": {"uri": "at://did:plc:artist/fm.plyr.track/one", "cid": "bafyrecord"},
+        "metadata": {"title": "Verified Song"},
         "artist": {"did": "did:plc:artist"},
         "metrics": {"play_count": 7},
         "sources": {"record": "verified_repo", "metrics": "application_metrics"},
@@ -61,6 +62,20 @@ def test_real_product_reads_traverse_projected_track_and_artist() -> None:
         "/v1/artists/did:plc:artist": _response(
             {"object": "artist", "did": "did:plc:artist"}
         ),
+        "/v1/search?q=Verified%20Song&types=track&limit=10": _response(
+            {
+                "object": "list",
+                "query": "Verified Song",
+                "data": [
+                    {
+                        "id": "trk_verified",
+                        "record": track["record"],
+                        "sources": {"record": "verified_repo"},
+                        "projection": {"verification": "verified_repo"},
+                    }
+                ],
+            }
+        ),
         "/v1/albums?artist_did=did%3Aplc%3Aartist&limit=1": _response(
             {"object": "list", "data": []}
         ),
@@ -82,6 +97,7 @@ def test_real_product_reads_traverse_album_when_present() -> None:
         "object": "track",
         "id": "trk_verified",
         "record": {"uri": "at://did:plc:artist/fm.plyr.track/one", "cid": "bafyrecord"},
+        "metadata": {"title": "Verified Song"},
         "artist": {"did": "did:plc:artist"},
         "metrics": {"play_count": 0},
         "sources": {"record": "verified_repo", "metrics": "derived"},
@@ -115,6 +131,20 @@ def test_real_product_reads_traverse_album_when_present() -> None:
         ),
         "/v1/artists/did:plc:artist": _response(
             {"object": "artist", "did": "did:plc:artist"}
+        ),
+        "/v1/search?q=Verified%20Song&types=track&limit=10": _response(
+            {
+                "object": "list",
+                "query": "Verified Song",
+                "data": [
+                    {
+                        "id": "trk_verified",
+                        "record": track["record"],
+                        "sources": {"record": "verified_repo"},
+                        "projection": {"verification": "verified_repo"},
+                    }
+                ],
+            }
         ),
         "/v1/albums?artist_did=did%3Aplc%3Aartist&limit=1": _response(
             {"object": "list", "data": [album_summary]}

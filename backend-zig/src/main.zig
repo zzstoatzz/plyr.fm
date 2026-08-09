@@ -4,6 +4,7 @@ const server = @import("server.zig");
 const postgres = @import("internal/index/postgres_track_store.zig");
 const postgres_composed_tracks = @import("internal/index/postgres_composed_track_store.zig");
 const postgres_playback = @import("internal/index/postgres_playback_store.zig");
+const postgres_search = @import("internal/index/postgres_search_store.zig");
 const postgres_artists = @import("internal/index/postgres_artist_store.zig");
 const postgres_verified_lists = @import("internal/index/postgres_verified_list_store.zig");
 const repair_runner = @import("internal/ingest/repair_runner.zig");
@@ -54,6 +55,11 @@ pub fn main() !void {
     else
         null;
     const verified_list_store = if (postgres_verified_list_store) |*store| store.store() else null;
+    var postgres_search_store: ?postgres_search.PostgresSearchStore = if (postgres_store) |*store|
+        .{ .pool = store.pool }
+    else
+        null;
+    const search_store = if (postgres_search_store) |*store| store.store() else null;
     switch (settings.role) {
         .account_reconciler => {
             const store = if (postgres_store) |*value| value else return error.AccountReconcilerDatabaseRequired;
@@ -70,6 +76,7 @@ pub fn main() !void {
             .playback_store = playback_store,
             .artist_store = artist_store,
             .verified_list_store = verified_list_store,
+            .search_store = search_store,
             .track_collection = settings.track_collection,
             .list_collection = settings.list_collection,
             .profile_collection = settings.profile_collection,
@@ -136,6 +143,7 @@ test {
     _ = @import("api/albums.zig");
     _ = @import("api/tracks.zig");
     _ = @import("api/playlists.zig");
+    _ = @import("api/search.zig");
     _ = @import("config.zig");
     _ = @import("internal/application/get_artist.zig");
     _ = @import("internal/application/get_album.zig");
@@ -145,9 +153,11 @@ test {
     _ = @import("internal/application/list_tracks.zig");
     _ = @import("internal/application/get_playlist.zig");
     _ = @import("internal/application/list_playlists.zig");
+    _ = @import("internal/application/search_catalog.zig");
     _ = @import("internal/domain/artist.zig");
     _ = @import("internal/domain/playback.zig");
     _ = @import("internal/domain/verified_list.zig");
+    _ = @import("internal/domain/search.zig");
     _ = @import("internal/atproto/list_record.zig");
     _ = @import("internal/atproto/lexicon_value.zig");
     _ = @import("internal/atproto/profile_record.zig");
@@ -165,6 +175,8 @@ test {
     _ = @import("internal/index/playback_store.zig");
     _ = @import("internal/index/postgres_playback_store.zig");
     _ = @import("internal/index/verified_list_store.zig");
+    _ = @import("internal/index/search_store.zig");
+    _ = @import("internal/index/postgres_search_store.zig");
     _ = @import("internal/index/postgres_verified_list_store.zig");
     _ = @import("internal/identity/playlist_id.zig");
     _ = @import("internal/identity/scoped_record_cursor.zig");

@@ -128,6 +128,24 @@ def _verify_real_product_reads(base_url: str) -> None:
     assert artist.body["object"] == "artist", artist.body
     assert artist.body["did"] == artist_did, artist.body
 
+    search_query = urllib.parse.quote(listed_track["metadata"]["title"], safe="")
+    search = _request(
+        base_url,
+        f"/v1/search?q={search_query}&types=track&limit=10",
+    )
+    assert search.status == 200, (search.status, search.body)
+    _expect_request_id(search)
+    assert search.body["object"] == "list", search.body
+    assert search.body["query"] == listed_track["metadata"]["title"], search.body
+    search_hits = search.body["data"]
+    matching_hits = [hit for hit in search_hits if hit["id"] == listed_track["id"]]
+    assert len(matching_hits) == 1, (search.body, listed_track)
+    search_hit = matching_hits[0]
+    assert search_hit["record"] == listed_track["record"], search_hit
+    assert search_hit["sources"]["record"] == "verified_repo", search_hit
+    assert search_hit["projection"]["verification"] == "verified_repo", search_hit
+    assert "score" not in search_hit and "relevance" not in search_hit, search_hit
+
     albums = _request(base_url, f"/v1/albums?artist_did={encoded_did}&limit=1")
     assert albums.status == 200, (albums.status, albums.body)
     _expect_request_id(albums)

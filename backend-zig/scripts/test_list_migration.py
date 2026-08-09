@@ -12,7 +12,7 @@ from sqlalchemy.engine import make_url
 from alembic import command
 
 PRIOR_REVISION = "4aaed6c819f1"
-HEAD_REVISION = "a47e19c83b20"
+HEAD_REVISION = "b58f2a7c91d4"
 CANARY_ROLE = "plyr_zig_canary"
 COMPATIBILITY_TABLES = {"tracks", "artists", "albums", "user_preferences"}
 EXPECTED_TABLES = {
@@ -90,6 +90,10 @@ EXPECTED_METRIC_COLUMNS = {
     "play_count",
     "record_uri",
     "write_source",
+}
+EXPECTED_SEARCH_INDEXES = {
+    "ix_plyr_index_list_records_name_trgm",
+    "ix_plyr_index_track_records_title_trgm",
 }
 EXPECTED_HEAD_COLUMNS = {
     "repo_did",
@@ -252,6 +256,19 @@ def table_columns(database_url: str, table_name: str) -> set[str]:
         engine.dispose()
 
 
+def projection_indexes(database_url: str) -> set[str]:
+    """Return named indexes in the rebuildable projection schema."""
+    engine = create_engine(database_url)
+    try:
+        with engine.connect() as connection:
+            rows = connection.execute(
+                text("SELECT indexname FROM pg_indexes WHERE schemaname = 'plyr_index'")
+            )
+            return {str(row[0]) for row in rows}
+    finally:
+        engine.dispose()
+
+
 def role_has_privilege(database_url: str, object_name: str, privilege: str) -> bool:
     """Return one effective privilege for the disposable canary role."""
     engine = create_engine(database_url)
@@ -341,6 +358,11 @@ def main() -> None:
         tables = projected_tables(database_url)
         if tables != EXPECTED_TABLES:
             raise AssertionError(f"unexpected plyr_index tables: {sorted(tables)!r}")
+        indexes = projection_indexes(database_url)
+        if not indexes >= EXPECTED_SEARCH_INDEXES:
+            raise AssertionError(
+                f"missing projection search indexes: {sorted(indexes)!r}"
+            )
         assert_canary_read_only(database_url)
         columns = table_columns(database_url, "repo_heads")
         if columns != EXPECTED_HEAD_COLUMNS:

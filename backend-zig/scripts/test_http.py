@@ -270,6 +270,33 @@ def main() -> None:
         assert status == 405
         assert artist_method["error"]["code"] == "method_not_allowed"
 
+        for invalid_target in (
+            "/v1/search",
+            "/v1/search?q=a",
+            "/v1/search?q=okay&q=again",
+            "/v1/search?q=okay&types=track,track",
+            "/v1/search?q=okay&types=tag",
+            "/v1/search?q=okay&limit=0",
+            "/v1/search?q=okay&limit=51",
+            "/v1/search?q=okay&offset=1",
+        ):
+            status, _, invalid_search = _request(base_url, invalid_target)
+            assert status == 400
+            assert invalid_search["error"]["code"] == "invalid_request"
+
+        status, _, unavailable_search = _request(
+            base_url,
+            "/v1/search?q=artist.example&types=artist,track&limit=10",
+        )
+        assert status == 503
+        assert unavailable_search["error"]["code"] == "service_unavailable"
+
+        status, _, search_method = _request(
+            base_url, "/v1/search?q=artist.example", method="POST"
+        )
+        assert status == 405
+        assert search_method["error"]["code"] == "method_not_allowed"
+
         uri = f"at://did:plc:artist/{COLLECTION}/3m123abc"
         status, headers, unavailable = _request(
             base_url,

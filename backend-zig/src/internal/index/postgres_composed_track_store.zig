@@ -556,6 +556,7 @@ test "composed PostgreSQL reads use verified records and authoritative account s
     const projected_lists = @import("../projection/postgres_list_store.zig");
     const track_change = @import("../projection/track_change.zig");
     const postgres_playback = @import("postgres_playback_store.zig");
+    const postgres_search = @import("postgres_search_store.zig");
     const postgres_verified_lists = @import("postgres_verified_list_store.zig");
     const url_z = std.c.getenv("PLYR_ZIG_TEST_DATABASE_URL") orelse return error.SkipZigTest;
     const allocator = std.testing.allocator;
@@ -572,6 +573,7 @@ test "composed PostgreSQL reads use verified records and authoritative account s
     _ = try pool.exec("DROP TABLE IF EXISTS tracks CASCADE", .{});
     _ = try pool.exec("DROP TABLE IF EXISTS artists CASCADE", .{});
     _ = try pool.exec("CREATE SCHEMA plyr_index", .{});
+    _ = try pool.exec("CREATE EXTENSION IF NOT EXISTS pg_trgm", .{});
     try projected_tracks.createTestTable(pool);
     try projected_profiles.createTestTable(pool);
     try projected_availability.createTestTable(pool);
@@ -746,6 +748,38 @@ test "composed PostgreSQL reads use verified records and authoritative account s
         "INSERT INTO plyr_index.list_members VALUES ($1, 0, $2, $3)",
         .{ album_list_uri, record_uri, try record.toString(a) },
     );
+    var search_implementation: postgres_search.PostgresSearchStore = .{ .pool = pool };
+    const search_store = search_implementation.store();
+    const search_request = @import("search_store.zig").Request{
+        .query = "artist.example",
+        .types = .{},
+        .limit = 20,
+        .track_collection = "fm.plyr.dev.track",
+        .list_collection = "fm.plyr.dev.list",
+        .profile_collection = "fm.plyr.dev.actor.profile",
+    };
+    const exact_handle_hits = try search_store.search(a, search_request);
+    try std.testing.expectEqual(@as(usize, 1), exact_handle_hits.len);
+    try std.testing.expectEqual(@import("../domain/search.zig").Kind.artist, exact_handle_hits[0].type);
+    try std.testing.expectEqual(@import("../domain/search.zig").MatchKind.exact, exact_handle_hits[0].match.kind);
+    try std.testing.expectEqual(@import("../domain/search.zig").MatchField.handle, exact_handle_hits[0].match.field);
+    try std.testing.expectEqualStrings(did, exact_handle_hits[0].id);
+    try std.testing.expectEqualStrings("verified_repo", exact_handle_hits[0].projection.verification);
+
+    var verified_query = search_request;
+    verified_query.query = "Verified";
+    verified_query.types = .{ .artist = false, .playlist = false };
+    const verified_hits = try search_store.search(a, verified_query);
+    try std.testing.expectEqual(@as(usize, 2), verified_hits.len);
+    try std.testing.expectEqual(@import("../domain/search.zig").Kind.album, verified_hits[0].type);
+    try std.testing.expectEqual(@import("../domain/search.zig").Kind.track, verified_hits[1].type);
+    try std.testing.expect(std.mem.startsWith(u8, verified_hits[0].id, "alb_"));
+    try std.testing.expect(std.mem.startsWith(u8, verified_hits[1].id, "trk_"));
+    try std.testing.expectEqual(@as(?usize, 1), verified_hits[0].metrics.member_count);
+    try std.testing.expectEqual(@as(?i64, 7), verified_hits[1].metrics.play_count);
+    var wildcard_query = search_request;
+    wildcard_query.query = "%%";
+    try std.testing.expectEqual(@as(usize, 0), (try search_store.search(a, wildcard_query)).len);
     var verified_list_implementation: postgres_verified_lists.PostgresVerifiedListStore = .{ .pool = pool };
     const list_store = verified_list_implementation.store();
     const playlist_page = try list_store.listByOwner(a, .{
@@ -906,6 +940,10 @@ test "composed PostgreSQL reads use verified records and authoritative account s
     );
     try std.testing.expect((try implementation.store().getByUri(a, record_uri)) == null);
     try std.testing.expect((try playback_implementation.store().getByUri(a, record_uri)) == null);
+    var private_query = search_request;
+    private_query.query = "Verified Title";
+    private_query.types = .{ .artist = false, .album = false, .playlist = false };
+    try std.testing.expectEqual(@as(usize, 0), (try search_store.search(a, private_query)).len);
     _ = try pool.exec(
         "UPDATE plyr_index.track_policies SET visibility = 'public' WHERE record_uri = $1",
         .{record_uri},
@@ -916,6 +954,7 @@ test "composed PostgreSQL reads use verified records and authoritative account s
         .{record_uri},
     );
     try std.testing.expect((try implementation.store().getByUri(a, record_uri)) != null);
+    try std.testing.expectEqual(@as(usize, 0), (try search_store.search(a, private_query)).len);
     try std.testing.expectEqual(@as(usize, 1), (try implementation.store().listPublic(a, .{
         .collection = "fm.plyr.dev.track",
         .scope = .discovery,
@@ -960,6 +999,7 @@ test "composed PostgreSQL reads use verified records and authoritative account s
         "UPDATE plyr_index.track_records SET self_labels = ARRAY['sexual']::text[] WHERE record_uri = $1",
         .{record_uri},
     );
+    try std.testing.expectEqual(@as(usize, 0), (try search_store.search(a, private_query)).len);
     try std.testing.expectEqual(@as(usize, 1), (try implementation.store().listPublic(a, .{
         .collection = "fm.plyr.dev.track",
         .scope = .discovery,
@@ -986,6 +1026,7 @@ test "composed PostgreSQL reads use verified records and authoritative account s
     );
     try std.testing.expect((try implementation.store().getByUri(a, record_uri)) == null);
     try std.testing.expect((try playback_implementation.store().getByUri(a, record_uri)) == null);
+    try std.testing.expectEqual(@as(usize, 0), (try search_store.search(a, search_request)).len);
     try std.testing.expect((try list_store.getByUri(a, .{
         .uri = list_uri,
         .list_collection = "fm.plyr.dev.list",

@@ -3,9 +3,11 @@ const albums = @import("albums.zig");
 const artists = @import("artists.zig");
 const playlists = @import("playlists.zig");
 const response = @import("response.zig");
+const search = @import("search.zig");
 const tracks = @import("tracks.zig");
 const ArtistStore = @import("../internal/index/artist_store.zig").ArtistStore;
 const PlaybackStore = @import("../internal/index/playback_store.zig").PlaybackStore;
+const SearchStore = @import("../internal/index/search_store.zig").SearchStore;
 const TrackStore = @import("../internal/index/track_store.zig").TrackStore;
 const VerifiedListStore = @import("../internal/index/verified_list_store.zig").VerifiedListStore;
 
@@ -19,6 +21,7 @@ pub const App = struct {
     playback_store: ?PlaybackStore,
     artist_store: ?ArtistStore,
     verified_list_store: ?VerifiedListStore,
+    search_store: ?SearchStore,
     track_collection: []const u8,
     list_collection: []const u8,
     profile_collection: []const u8,
@@ -102,6 +105,21 @@ pub fn handle(
             allocator,
             app.track_store,
             app.track_collection,
+            app.cors,
+            request_id,
+        );
+    } else if (mem.eql(u8, path, prefix ++ "/search")) {
+        if (request.head.method != .GET) {
+            try response.apiError(request, .method_not_allowed, request_id, app.cors);
+            return;
+        }
+        try search.list(
+            request,
+            allocator,
+            app.search_store,
+            app.track_collection,
+            app.list_collection,
+            app.profile_collection,
             app.cors,
             request_id,
         );
@@ -250,6 +268,11 @@ test "query strings do not participate in route matching" {
 test "product API paths use a major-version namespace" {
     try std.testing.expect(mem.startsWith(u8, "/v1/tracks", prefix ++ "/"));
     try std.testing.expect(!mem.startsWith(u8, "/tracks", prefix ++ "/"));
+}
+
+test "search is one versioned collection route" {
+    try std.testing.expectEqualStrings("/v1/search", pathFromTarget("/v1/search?q=plyr"));
+    try std.testing.expect(!std.mem.eql(u8, "/search", prefix ++ "/search"));
 }
 
 test "track detail routes accept exactly one opaque path segment" {
