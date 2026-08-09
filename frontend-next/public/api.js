@@ -48,11 +48,23 @@ export async function listTracks(options = {}, fetcher = fetch) {
 
 /** @param {string} identifier @param {Fetcher} [fetcher] @returns {Promise<Artist>} */
 export async function getArtist(identifier, fetcher = fetch) {
-	const data = await getJson(`/v1/artists/${encodeURIComponent(identifier)}`, fetcher);
+	const data = await getJson(`/v1/artists/${encodeIdentifier(identifier)}`, fetcher);
 	if (!isObject(data) || data.object !== 'artist' || typeof data.did !== 'string') {
 		throw new TypeError('invalid artist response');
 	}
 	return /** @type {Artist} */ (data);
+}
+
+/**
+ * Zig routes on the raw path and DIDs use literal colons. Preserve those legal
+ * separators while still preventing an identifier from changing route shape.
+ * @param {string} identifier
+ */
+function encodeIdentifier(identifier) {
+	if (identifier.length === 0 || identifier.includes('/') || identifier.includes('?') || identifier.includes('#')) {
+		throw new TypeError('invalid artist identifier');
+	}
+	return encodeURIComponent(identifier).replaceAll('%3A', ':');
 }
 
 /** @param {string} trackId @param {Fetcher} [fetcher] @returns {Promise<Playback>} */

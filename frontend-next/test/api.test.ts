@@ -33,10 +33,14 @@ function jsonResponse(value: unknown, status = 200): Response {
 		let path = '';
 		const fetcher = async (input: string | URL | Request): Promise<Response> => {
 			path = new URL(String(input)).pathname;
-			return jsonResponse({ object: 'artist', did: 'did:plc:a/b', profile: { handle: 'artist.test', display_name: 'Artist' } });
+			return jsonResponse({ object: 'artist', did: 'did:plc:abc', profile: { handle: 'artist.test', display_name: 'Artist' } });
 		};
-		await getArtist('did:plc:a/b', fetcher);
-		expect(path).toBe('/api/v1/artists/did%3Aplc%3Aa%2Fb');
+		await getArtist('did:plc:abc', fetcher);
+		expect(path).toBe('/api/v1/artists/did:plc:abc');
+	});
+
+	test('rejects artist identifiers that can change route shape', async () => {
+		await expect(getArtist('did:plc:a/b')).rejects.toThrow('invalid artist identifier');
 	});
 
 	test('requires playback to round-trip the requested track identity', async () => {
