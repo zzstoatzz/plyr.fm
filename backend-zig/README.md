@@ -82,10 +82,13 @@ accepts an optional canonical `artist_did`, applies discovery or artist-view
 policy before keyset pagination, and returns the same track representation as
 detail. Track reads require an authenticated record and authoritative account
 availability, then compose separately attributed authored profile, local
-publication/moderation/metric, and unverified R2 delivery fields. Verified PDS
-blob mirrors live in a separate, record-CID-bound delivery projection. A legacy
-track row is optional enrichment: a verified PDS record without one remains
-readable and uses explicit derived policy defaults rather than disappearing. Artist lookup
+access policy, operator moderation/metric, and unverified R2 delivery fields.
+Access policy is keyed by canonical record URI and dual-written by the Python
+upload, edit, and pending-record reconciliation paths; the migration imports
+existing decisions once. Verified PDS blob mirrors live in a separate,
+record-CID-bound delivery projection. A legacy track row is optional enrichment:
+a verified PDS record without one remains readable with a derived-public default
+rather than inheriting local publish state. Artist lookup
 accepts a canonical DID or a case-insensitive handle alias and exposes the
 transitional source of each profile field. The album
 collection exposes only canonical list-record albums and keeps local

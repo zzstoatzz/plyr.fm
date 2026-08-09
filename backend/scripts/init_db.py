@@ -25,6 +25,7 @@ async def create_schema() -> bool:
             )
             if already_migrated:
                 return False
+            await conn.execute(sa.text("CREATE SCHEMA IF NOT EXISTS plyr_index"))
             await conn.run_sync(Base.metadata.create_all)
             return True
     finally:

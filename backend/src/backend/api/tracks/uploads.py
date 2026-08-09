@@ -63,6 +63,7 @@ from backend._internal.image_uploads import (
 from backend._internal.jobs import job_service
 from backend._internal.tasks import schedule_album_list_sync
 from backend._internal.tasks.hooks import run_post_track_create_hooks
+from backend._internal.track_access_policy import upsert_track_access_policy
 from backend.config import settings
 from backend.models import Album, Artist, Track, UserPreferences
 from backend.models.job import JobStatus, JobType
@@ -1088,6 +1089,12 @@ async def _create_records(
             update(Track)
             .where(Track.id == track_id, Track.publish_state == "pending")
             .values(**values)
+        )
+        await upsert_track_access_policy(
+            db,
+            record_uri=uri,
+            visibility=ctx.visibility,
+            space_uri=space_uri,
         )
         await db.commit()
         published_by_us = result.rowcount == 1  # type: ignore[union-attr]

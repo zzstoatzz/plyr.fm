@@ -12,7 +12,7 @@ from sqlalchemy.engine import make_url
 from alembic import command
 
 PRIOR_REVISION = "4aaed6c819f1"
-HEAD_REVISION = "c31e7b4a902d"
+HEAD_REVISION = "d42f8c5b103e"
 EXPECTED_TABLES = {
     "account_availability",
     "account_status_checks",
@@ -24,6 +24,7 @@ EXPECTED_TABLES = {
     "repo_heads",
     "track_records",
     "track_delivery_origins",
+    "track_access_policies",
 }
 EXPECTED_AVAILABILITY_COLUMNS = {
     "available",
@@ -69,6 +70,13 @@ EXPECTED_DELIVERY_COLUMNS = {
     "record_uri",
     "service",
     "verification",
+}
+EXPECTED_ACCESS_POLICY_COLUMNS = {
+    "observed_at_us",
+    "record_uri",
+    "space_uri",
+    "visibility",
+    "write_source",
 }
 EXPECTED_HEAD_COLUMNS = {
     "repo_did",
@@ -140,6 +148,22 @@ def assert_test_database_and_drop_schema(database_url: str) -> None:
             if database_name != "zig_test":
                 raise RuntimeError(f"unsafe migration test database: {database_name!r}")
             connection.execute(text("DROP SCHEMA IF EXISTS plyr_index CASCADE"))
+            connection.execute(text("DROP TABLE IF EXISTS public.tracks CASCADE"))
+            connection.execute(
+                text(
+                    "CREATE TABLE public.tracks ("
+                    "atproto_record_uri text, visibility text NOT NULL, space_uri text)"
+                )
+            )
+            connection.execute(
+                text(
+                    "INSERT INTO public.tracks VALUES "
+                    "('at://did:plc:test/fm.plyr.track/public', 'public', NULL), "
+                    "('at://did:plc:test/fm.plyr.track/private', 'private', "
+                    "'at://did:plc:test/fm.plyr.space/private/test'), "
+                    "(NULL, 'public', NULL)"
+                )
+            )
     finally:
         engine.dispose()
 
@@ -255,6 +279,26 @@ def main() -> None:
                 "unexpected track_delivery_origins columns: "
                 f"{sorted(delivery_columns)!r}"
             )
+        access_columns = table_columns(database_url, "track_access_policies")
+        if access_columns != EXPECTED_ACCESS_POLICY_COLUMNS:
+            raise AssertionError(
+                f"unexpected track_access_policies columns: {sorted(access_columns)!r}"
+            )
+        engine = create_engine(database_url)
+        try:
+            with engine.connect() as connection:
+                imported = connection.execute(
+                    text(
+                        "SELECT record_uri, visibility, space_uri, write_source "
+                        "FROM plyr_index.track_access_policies ORDER BY record_uri"
+                    )
+                ).all()
+            if len(imported) != 2 or any(
+                row.write_source != "legacy_import" for row in imported
+            ):
+                raise AssertionError(f"unexpected access-policy backfill: {imported!r}")
+        finally:
+            engine.dispose()
     finally:
         if upgraded:
             command.downgrade(config, PRIOR_REVISION)

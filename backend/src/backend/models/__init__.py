@@ -21,6 +21,7 @@ from backend.models.session import UserSession
 from backend.models.share_link import ShareLink, ShareLinkEvent
 from backend.models.tag import Tag, TrackTag
 from backend.models.track import Track
+from backend.models.track_access_policy import TrackAccessPolicy
 from backend.models.track_comment import TrackComment
 from backend.models.track_like import TrackLike
 from backend.models.track_revision import MAX_REVISIONS_PER_TRACK, TrackRevision
@@ -50,6 +51,7 @@ __all__ = [
     "ShareLinkEvent",
     "Tag",
     "Track",
+    "TrackAccessPolicy",
     "TrackComment",
     "TrackLike",
     "TrackRevision",

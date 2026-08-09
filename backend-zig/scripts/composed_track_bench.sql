@@ -76,6 +76,13 @@ CREATE TABLE plyr_index.track_delivery_origins (
     observed_at_us bigint NOT NULL,
     PRIMARY KEY (record_uri, service)
 );
+CREATE TABLE plyr_index.track_access_policies (
+    record_uri text PRIMARY KEY,
+    visibility text NOT NULL,
+    space_uri text,
+    write_source text NOT NULL,
+    observed_at_us bigint NOT NULL
+);
 CREATE TABLE artists (
     did text PRIMARY KEY,
     handle text NOT NULL,
@@ -141,6 +148,12 @@ SELECT
     'bafkreihdwdcefgh4dqkjv67uzcmw7ojee6xedzdetojuzjevtenxquvyku',
     'verified_blob_cid',
     1786208400000000 + n
+FROM generate_series(1, 100) AS n;
+
+INSERT INTO plyr_index.track_access_policies
+SELECT
+    format('at://did:plc:bench/fm.plyr.dev.track/track-%s', n),
+    'public', NULL, 'legacy_import', 1786208400000000 + n
 FROM generate_series(1, 100) AS n;
 
 INSERT INTO tracks

@@ -18,11 +18,12 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend._internal import Session, require_auth
 from backend.main import app
-from backend.models import Artist, Track
+from backend.models import Artist, Track, TrackAccessPolicy
 
 _ARTIST_DID = "did:plc:edit_sync_artist"
 
@@ -110,6 +111,14 @@ async def test_editing_track_title_syncs_to_pds(
     # and the edit persisted (no rollback)
     await db_session.refresh(published_track)
     assert published_track.title == "renamed track"
+    policy = await db_session.scalar(
+        select(TrackAccessPolicy).where(
+            TrackAccessPolicy.record_uri == published_track.atproto_record_uri
+        )
+    )
+    assert policy is not None
+    assert policy.visibility == "public"
+    assert policy.write_source == "local_command"
 
 
 async def test_editing_creator_self_label_syncs_to_pds(

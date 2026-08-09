@@ -31,7 +31,14 @@ from backend._internal.tasks.ingest import (
     ingest_track_update,
 )
 from backend.config import settings
-from backend.models import Artist, Playlist, Track, TrackComment, TrackLike
+from backend.models import (
+    Artist,
+    Playlist,
+    Track,
+    TrackAccessPolicy,
+    TrackComment,
+    TrackLike,
+)
 from backend.models.session import UserSession
 
 
@@ -802,6 +809,12 @@ class TestIngestPendingReconciliation:
         assert track.id == original_id
         assert track.publish_state == "published"
         assert track.atproto_record_cid == "bafyfinalized"
+        policy = await db_session.scalar(
+            select(TrackAccessPolicy).where(TrackAccessPolicy.record_uri == uri)
+        )
+        assert policy is not None
+        assert policy.visibility == "public"
+        assert policy.write_source == "local_command"
 
     async def test_finalize_pending_runs_hooks(
         self, db_session: AsyncSession, artist: Artist
