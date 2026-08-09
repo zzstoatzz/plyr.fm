@@ -39,8 +39,10 @@
 			loadingShares = true;
 		}
 		try {
+			// keep the first page short — old links shouldn't dominate the portal
+			const limit = append ? 20 : 5;
 			const offset = append ? shares.length : 0;
-			const response = await fetch(`${API_URL}/tracks/me/shares?limit=20&offset=${offset}`, {
+			const response = await fetch(`${API_URL}/tracks/me/shares?limit=${limit}&offset=${offset}`, {
 				credentials: 'include'
 			});
 			if (response.ok) {
@@ -227,7 +229,9 @@
 				onclick={() => loadShares(true)}
 				disabled={loadingMoreShares}
 			>
-				{loadingMoreShares ? 'loading...' : 'load more'}
+				{loadingMoreShares
+					? 'loading...'
+					: `load more (${sharesTotal - shares.length} older)`}
 			</button>
 		{/if}
 	{/if}
