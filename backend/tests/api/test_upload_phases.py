@@ -1,12 +1,12 @@
 """stateless unit tests for upload pipeline phase dataclasses."""
 
-from backend._internal.audio import AudioFormat
 from backend.api.tracks.uploads import (
     AudioInfo,
     PdsBlobResult,
     StorageResult,
     UploadPhaseError,
 )
+from backend.utilities.audio_formats import AudioFormat
 
 
 def test_audio_info_dataclass():

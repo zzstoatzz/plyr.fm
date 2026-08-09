@@ -33,7 +33,6 @@ from backend._internal.atproto.records import (
 from backend._internal.atproto.self_labels import parse_self_label_values_json
 from backend._internal.atproto.spaces.client import delete_space_record
 from backend._internal.atproto.tid import datetime_to_tid
-from backend._internal.audio import AudioFormat
 from backend._internal.image_uploads import process_image_upload
 from backend._internal.tasks import (
     schedule_album_list_sync,
@@ -45,6 +44,7 @@ from backend.config import settings
 from backend.models import Artist, Track, TrackTag, get_db
 from backend.schemas import MessageResponse, TrackResponse
 from backend.storage import storage
+from backend.utilities.audio_formats import AudioFormat
 from backend.utilities.tags import get_or_create_tag, parse_tags_json
 
 from .metadata_service import apply_album_update

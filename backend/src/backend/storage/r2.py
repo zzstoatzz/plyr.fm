@@ -15,13 +15,13 @@ from botocore.config import Config
 from botocore.exceptions import ClientError
 from sqlalchemy import func, or_, select
 
-from backend._internal.audio import AudioFormat
 from backend._internal.image import ImageFormat
 from backend.config import settings
 from backend.models.album import Album
 from backend.models.playlist import Playlist
 from backend.models.track import Track
 from backend.storage.keys import AudioKey, ImageKey, InvalidMediaExtension
+from backend.utilities.audio_formats import AudioFormat
 from backend.utilities.database import db_session
 from backend.utilities.hashing import hash_file_chunked
 

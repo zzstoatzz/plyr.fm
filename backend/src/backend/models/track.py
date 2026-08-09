@@ -9,6 +9,7 @@ from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from backend.models.database import Base
+from backend.utilities.audio_formats import AudioFormat
 
 if TYPE_CHECKING:
     from backend.models.album import Album
@@ -194,9 +195,6 @@ class Track(Base):
         when the mp3 lands, so optimizing tracks are never offered for manual
         PDS saves. a directly-uploaded web-playable track (no original) is
         never in this state."""
-        # deferred to dodge the models ↔ _internal import cycle
-        from backend._internal.audio import AudioFormat
-
         return (
             self.file_type != AudioFormat.MP3.value
             and self.original_file_id is not None
@@ -206,8 +204,6 @@ class Track(Base):
     @is_optimizing.inplace.expression
     @classmethod
     def _is_optimizing_expr(cls) -> ColumnElement[bool]:
-        from backend._internal.audio import AudioFormat
-
         return (
             (cls.file_type != AudioFormat.MP3.value)
             & cls.original_file_id.isnot(None)

@@ -31,7 +31,6 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend._internal import Session
-from backend._internal.audio import AudioFormat
 from backend.api.tracks.audio_optimize import optimize_track_audio
 from backend.api.tracks.uploads import (
     AudioInfo,
@@ -47,6 +46,7 @@ from backend.api.tracks.uploads import (
 )
 from backend.config import settings
 from backend.models import Artist, Track
+from backend.utilities.audio_formats import AudioFormat
 
 OWNER_DID = "did:plc:optimizeowner"
 TRACK_URI = f"at://{OWNER_DID}/fm.plyr.track/3koptimize001"

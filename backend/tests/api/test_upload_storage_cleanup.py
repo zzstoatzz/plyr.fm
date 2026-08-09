@@ -24,7 +24,6 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, patch
 
 from backend._internal import Session as AuthSession
-from backend._internal.audio import AudioFormat
 from backend.api.tracks.uploads import (
     AudioInfo,
     StorageResult,
@@ -33,6 +32,7 @@ from backend.api.tracks.uploads import (
     UploadPhaseError,
     _process_upload_background,
 )
+from backend.utilities.audio_formats import AudioFormat
 
 
 def _session() -> AuthSession:

@@ -31,7 +31,6 @@ from sqlalchemy.orm import selectinload
 
 from backend._internal import get_session
 from backend._internal.atproto.records import build_track_record, update_record
-from backend._internal.audio import AudioFormat
 from backend._internal.background import get_docket
 from backend._internal.jobs import job_service
 from backend._internal.tasks.hooks import invalidate_tracks_discovery_cache
@@ -47,6 +46,7 @@ from backend.config import settings
 from backend.models import Track
 from backend.models.job import JobStatus, JobType
 from backend.storage import storage
+from backend.utilities.audio_formats import AudioFormat
 from backend.utilities.database import db_session
 
 logger = logging.getLogger(__name__)

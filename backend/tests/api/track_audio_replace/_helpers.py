@@ -11,7 +11,6 @@ from collections.abc import Iterator
 from unittest.mock import AsyncMock, patch
 
 from backend._internal import Session
-from backend._internal.audio import AudioFormat
 from backend.api.tracks.audio_replace import ReplaceContext
 from backend.api.tracks.uploads import (
     AudioInfo,
@@ -19,6 +18,7 @@ from backend.api.tracks.uploads import (
     StorageResult,
 )
 from backend.models import Track
+from backend.utilities.audio_formats import AudioFormat
 
 OWNER_DID = "did:plc:owner"
 OTHER_DID = "did:plc:someone-else"
