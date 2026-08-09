@@ -24,6 +24,17 @@ DATABASE_URL=postgresql://... TRACK_COLLECTION_NSID=fm.plyr.dev.track LIST_COLLE
 just zig bench-snapshot
 ```
 
+pg.zig uses system OpenSSL by default. On Apple Silicon with Homebrew's keg-only
+OpenSSL, forward both paths explicitly when invoking `zig build`:
+
+```console
+zig build \
+  -Dopenssl_include_path=/opt/homebrew/opt/openssl@3/include \
+  -Dopenssl_lib_path=/opt/homebrew/opt/openssl@3/lib
+```
+
+The two options are a pair; supplying only one is a configuration error.
+
 `check` includes a black-box HTTP contract smoke test on an ephemeral port.
 `test-postgres` starts the repository's disposable Postgres 14 test container,
 waits for it to accept connections, creates minimal projection schemas, and
@@ -31,16 +42,16 @@ exercises the real `pg.zig` adapters. It covers atomic ordered-list replacement,
 source-authoritative track replacement, replay and durable tombstone semantics,
 whole-commit chain gap/conflict handling, and rollback across projection types.
 It also covers authenticated complete-repo bootstrap, list and track absence
-reconciliation, and repair replay before applying and
-reversing the real Alembic projection migrations. It only destroys objects in
-the dedicated `relay_test` database on port 5433; both test paths refuse any
-other database name.
+reconciliation, durable malformed-record quarantine and repair, and repair
+replay before applying and reversing the real Alembic projection migrations.
+It only destroys objects in the dedicated `relay_test` database on port 5433;
+both test paths refuse any other database name.
 
 ## API configuration
 
 | variable | required | purpose |
 |---|---:|---|
-| `MODE` | yes | `api`, `ingester`, `repair`, or separately supervised `account_reconciler` |
+| `MODE` | yes | `api`, `ingester`, `repair`, `catalog_reconciler`, or separately supervised `account_reconciler` |
 | `TRACK_COLLECTION_NSID` | yes | exact environment-aware track-record NSID |
 | `LIST_COLLECTION_NSID` | yes | exact environment-aware list-record NSID used by albums |
 | `PROFILE_COLLECTION_NSID` | yes | exact environment-aware authored profile-record NSID |
@@ -69,9 +80,11 @@ accepts an optional canonical `artist_did`, applies discovery or artist-view
 policy before keyset pagination, and returns the same track representation as
 detail. Track reads require an authenticated record and authoritative account
 availability, then compose separately attributed authored profile, local
-publication/moderation/metric, and R2 delivery fields. Artist lookup accepts a
-canonical DID or a case-insensitive handle
-alias and exposes the transitional source of each profile field. The album
+publication/moderation/metric, and R2 delivery fields. A legacy track row is
+optional enrichment: a verified PDS record without one remains readable and
+uses explicit derived policy defaults rather than disappearing. Artist lookup
+accepts a canonical DID or a case-insensitive handle alias and exposes the
+transitional source of each profile field. The album
 collection exposes only canonical list-record albums and keeps local
 presentation fields explicitly separate from record identity. Album detail
 preserves every verified strong-reference position and hydrates only an exact
@@ -117,5 +130,8 @@ new projection from current authenticated repositories. Existing canonical-looki
 track and album rows supply candidate DIDs only; none of their metadata, CIDs, PDS
 locations, or account state is trusted. The one-shot role verifies each complete
 repository through the same signature/MST/CID path as continuous ingestion and
-fails if no repository verifies or any candidate is retryable or rejected. It is
+fails if no repository verifies or any candidate repository is retryable or
+rejected. An authenticated repository can still succeed when individual selected
+records are malformed: those records are atomically quarantined with their CID,
+reason, and commit proof while valid siblings project normally. It is
 separate from the read-only API role and requires projection-write authority.

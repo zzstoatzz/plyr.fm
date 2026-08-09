@@ -3,6 +3,18 @@ const std = @import("std");
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
+    const openssl_include_path = b.option(
+        std.Build.LazyPath,
+        "openssl_include_path",
+        "OpenSSL include directory forwarded to pg.zig",
+    );
+    const openssl_lib_path = b.option(
+        std.Build.LazyPath,
+        "openssl_lib_path",
+        "OpenSSL library directory forwarded to pg.zig",
+    );
+    if ((openssl_include_path == null) != (openssl_lib_path == null))
+        @panic("openssl_include_path and openssl_lib_path must be supplied together");
 
     const root_module = b.createModule(.{
         .root_source_file = b.path("src/main.zig"),
@@ -13,11 +25,21 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     }).module("zat"));
-    root_module.addImport("pg", b.dependency("pg", .{
-        .target = target,
-        .optimize = optimize,
-        .openssl = true,
-    }).module("pg"));
+    const pg_dependency = if (openssl_include_path) |include_path|
+        b.dependency("pg", .{
+            .target = target,
+            .optimize = optimize,
+            .openssl = true,
+            .openssl_include_path = include_path,
+            .openssl_lib_path = openssl_lib_path.?,
+        })
+    else
+        b.dependency("pg", .{
+            .target = target,
+            .optimize = optimize,
+            .openssl = true,
+        });
+    root_module.addImport("pg", pg_dependency.module("pg"));
     root_module.addImport("graphemes", b.dependency("zg", .{
         .target = target,
         .optimize = optimize,
