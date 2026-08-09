@@ -153,10 +153,12 @@ Pages projects were not changed.
 
 ## deployed frontend checkpoint
 
-Commit `d5df432604d9ca7b1832785240250fe5d1a99875` is deployed to the manual,
+Commit `a922f59fae866b3e2c5c76b3382f3361531c67d4` is deployed to the manual,
 direct-upload Pages project `plyr-fm-next`. The project has no Git integration,
 so branch pushes do not create automatic Pages builds. Deployments remain
-intentional checkpoints through `just next deploy`.
+intentional checkpoints through `just frontend deploy-next`. Pages deployment
+`26efff6d-6a0d-40f8-9253-9e2dc6fee27f` serves the existing SvelteKit application,
+not a second frontend package.
 
 The first client slice is an anonymous verified catalog and player. It consumes
 the v1 response shapes natively rather than manufacturing Python-era numeric
@@ -179,9 +181,46 @@ The deployed `https://next.plyr.fm` verification proved:
   delivery URL;
 - a canonical DID resolves through the flat artist resource and scopes the
   catalog to nine matching tracks;
-- writes through the currently deployed transport return 405 and non-v1 paths
-  return 404; the play-write checkpoint is not deployed yet;
+- verified keyword search resolves canonical track identity;
+- one anonymous sustained play is counted, returns a host-only HttpOnly listener
+  cookie, and a second request with that cookie is rejected by Redis as a
+  duplicate without incrementing the canonical Postgres metric again;
+- non-v1 proxy paths return 404, keeping infrastructure health and unrelated Fly
+  routes outside the frontend transport;
+- the rendered page is the existing `plyr.fm - audio streaming app`, contains
+  the Zig-backed track catalog, and emits no browser console errors;
 - the final DNS set contains one proxied CNAME to `plyr-fm-next.pages.dev`.
+
+Run `just zig smoke-next` to repeat the public product-contract traversal through
+the same-origin `/api` transport. Infrastructure readiness remains a separate
+direct-Fly gate through `just zig smoke-canary`; next does not broaden its proxy
+solely to make the verifier convenient.
+
+## deployed search and play checkpoint
+
+Workflow run
+[`31340463635`](https://github.com/zzstoatzz/plyr.fm/actions/runs/31340463635)
+deployed immutable Zig image `a922f59fae866b3e2c5c76b3382f3361531c67d4`
+on 2026-08-09. The Python staging job and authenticated catalog reconciliation
+were skipped. The semantic gate covered verified search plus a real scoped
+write: the first sustained play claimed an expiring key in the dedicated
+`plyr-redis-next`, incremented canonical metrics in the isolated Neon branch,
+and the repeated cookie was returned as a non-counting duplicate. Existing
+staging and production applications, databases, Redis instances, Pages projects,
+and DNS records were not changed.
+
+The retained commit-addressed artifact records the real 117,990-byte 50-track
+response:
+
+| concurrency | responses/s | p50 | p95 | p99 | errors |
+|---:|---:|---:|---:|---:|---:|
+| 1 | 7.4 | 128.625 ms | 182.079 ms | 203.908 ms | 0 |
+| 16 | 11.8 | 1,289.594 ms | 1,866.857 ms | 1,886.838 ms | 0 |
+
+Idle application RSS was 9,812 KiB. Loaded RSS was 10,596 KiB and process peak
+RSS was 15,412 KiB. The application used 0.51 CPU-seconds across 22.36 seconds,
+or 2.3% of one core, and retained the same PID. Both the 16 MiB idle and 64 MiB
+peak gates passed with zero HTTP errors.
 
 ## deployed playlist checkpoint
 

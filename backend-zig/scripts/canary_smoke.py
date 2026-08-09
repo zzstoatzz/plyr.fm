@@ -32,7 +32,10 @@ def _request(
     method: str = "GET",
     cookie: str | None = None,
 ) -> Response:
-    headers = {"Accept": "application/json"}
+    headers = {
+        "Accept": "application/json",
+        "User-Agent": "plyr-zig-canary-smoke/1",
+    }
     if cookie:
         headers["Cookie"] = cookie
     request = urllib.request.Request(
@@ -262,49 +265,68 @@ def _wait_for_product_readiness(base_url: str, timeout_seconds: float) -> None:
     raise TimeoutError(f"canary did not become product-ready: {last}")
 
 
-def verify(base_url: str, timeout_seconds: float = 90) -> None:
-    base_url = base_url.rstrip("/")
-    _wait_for_product_readiness(base_url, timeout_seconds)
-    _expect(_request(base_url, "/health"), 200, {"status": "ok", "role": "api"})
-    _expect(_request(base_url, "/v1"), 200, {"object": "api", "version": "v1"})
-    track = _verify_real_product_reads(base_url)
-    _verify_sustained_play(base_url, track)
+def verify_product(api_base_url: str) -> None:
+    """Verify v1 through either Fly or next's deliberately narrow transport."""
+
+    api_base_url = api_base_url.rstrip("/")
+    _expect(
+        _request(api_base_url, "/v1"),
+        200,
+        {"object": "api", "version": "v1"},
+    )
+    track = _verify_real_product_reads(api_base_url)
+    _verify_sustained_play(api_base_url, track)
 
     absent_did = "did:plc:canarysmoke"
-    artist = _request(base_url, f"/v1/artists/{absent_did}")
+    artist = _request(api_base_url, f"/v1/artists/{absent_did}")
     assert artist.status == 404 and artist.body["error"]["code"] == "not_found"
     assert artist.body["error"]["request_id"] == artist.headers.get("x-request-id")
 
     encoded_did = urllib.parse.quote(absent_did, safe="")
-    albums = _request(base_url, f"/v1/albums?artist_did={encoded_did}&limit=1")
+    albums = _request(api_base_url, f"/v1/albums?artist_did={encoded_did}&limit=1")
     assert albums.status == 200, (albums.status, albums.body)
     assert albums.body["object"] == "list" and albums.body["data"] == []
 
     track_uri = f"at://{absent_did}/fm.plyr.stg.track/smoke"
-    track = _request(base_url, f"/v1/tracks/{_opaque_id('trk_', track_uri)}")
+    track = _request(api_base_url, f"/v1/tracks/{_opaque_id('trk_', track_uri)}")
     assert track.status == 404 and track.body["error"]["code"] == "not_found"
     playback = _request(
-        base_url, f"/v1/tracks/{_opaque_id('trk_', track_uri)}/playback"
+        api_base_url, f"/v1/tracks/{_opaque_id('trk_', track_uri)}/playback"
     )
     assert playback.status == 404
     assert playback.body["error"]["code"] == "not_found"
 
     album_uri = f"at://{absent_did}/fm.plyr.stg.list/smoke"
-    album = _request(base_url, f"/v1/albums/{_opaque_id('alb_', album_uri)}")
+    album = _request(api_base_url, f"/v1/albums/{_opaque_id('alb_', album_uri)}")
     assert album.status == 404 and album.body["error"]["code"] == "not_found"
+
+
+def verify(base_url: str, timeout_seconds: float = 90) -> None:
+    base_url = base_url.rstrip("/")
+    _wait_for_product_readiness(base_url, timeout_seconds)
+    _expect(_request(base_url, "/health"), 200, {"status": "ok", "role": "api"})
+    verify_product(base_url)
 
 
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("base_url")
     parser.add_argument("--timeout", type=float, default=90)
+    parser.add_argument(
+        "--product-only",
+        action="store_true",
+        help="verify v1 without requiring infrastructure health routes",
+    )
     parser.add_argument("--allow-http", action="store_true")
     args = parser.parse_args()
     if not args.allow_http and not args.base_url.startswith("https://"):
         parser.error("canary base URL must use HTTPS")
     if args.timeout <= 0:
         parser.error("--timeout must be positive")
-    verify(args.base_url, args.timeout)
+    if args.product_only:
+        verify_product(args.base_url)
+    else:
+        verify(args.base_url, args.timeout)
     print(json.dumps({"status": "ok", "base_url": args.base_url.rstrip("/")}))
 
 

@@ -199,11 +199,13 @@ canary job; ordinary PR checks do not run remote load or deployment measurements
 Run the same HTTP load driver against an already deployed target with
 `just zig bench-canary -- ...`.
 
-The deployed `4026da4f` checkpoint passes the complete smoke gate after moving
-the only service Machine from `sjc` to `iad` behind clone, cordon, smoke, and
-destroy gates. Its retained 50-track evidence reports 9,748 KiB idle RSS,
-15,504 KiB peak RSS, 0.45 application CPU-seconds across 24.03 seconds, and zero
-load-test errors. See
+The deployed `a922f59f` checkpoint passes the complete smoke gate in `iad`,
+including verified search, a real canonical play-metric increment through the
+isolated Neon role, and Redis duplicate suppression. Its retained 50-track
+evidence reports 9,812 KiB idle RSS, 15,412 KiB peak RSS, 0.51 application
+CPU-seconds across 22.36 seconds, and zero load-test errors. The same product
+contract passes through the existing frontend's narrow Pages transport with
+`just zig smoke-next`; infrastructure health remains direct-Fly only. See
 `docs/internal/architecture/zig-canary.md` for the exact throughput, latency,
 and workflow artifact.
 

@@ -1,8 +1,25 @@
 """Contract tests for the post-deploy canary traversal."""
 
+import json
+from io import BytesIO
+from typing import ClassVar
 from unittest.mock import patch
 
 import canary_smoke
+
+
+class _UrlResponse:
+    status = 200
+    headers: ClassVar[dict[str, str]] = {"x-request-id": "req-test"}
+
+    def __enter__(self) -> "_UrlResponse":
+        return self
+
+    def __exit__(self, *_: object) -> None:
+        return None
+
+    def read(self) -> bytes:
+        return BytesIO(json.dumps({"status": "ok"}).encode()).read()
 
 
 def _response(body: dict[str, object], status: int = 200) -> canary_smoke.Response:
@@ -27,6 +44,17 @@ PLAYLIST_DETAIL = {
     "members": [],
     "metrics": {"member_count": 0, "available_count": 0, "total_plays": 0},
 }
+
+
+def test_request_identifies_the_smoke_client() -> None:
+    with patch.object(
+        canary_smoke.urllib.request, "urlopen", return_value=_UrlResponse()
+    ) as urlopen:
+        response = canary_smoke._request("https://next.plyr.fm/api", "/v1")
+
+    assert response.status == 200
+    request = urlopen.call_args.args[0]
+    assert request.get_header("User-agent") == "plyr-zig-canary-smoke/1"
 
 
 def test_real_product_reads_traverse_projected_track_and_artist() -> None:
@@ -238,3 +266,25 @@ def test_sustained_play_requires_redis_claim_and_duplicate_receipt() -> None:
         "method": "POST",
         "cookie": "plyr_play_id=abcdefghijklmnopqrstuv",
     }
+
+
+def test_product_only_transport_does_not_probe_infrastructure_routes() -> None:
+    api = _response({"object": "api", "version": "v1"})
+
+    with (
+        patch.object(canary_smoke, "_request", return_value=api) as request,
+        patch.object(
+            canary_smoke,
+            "_verify_real_product_reads",
+            side_effect=RuntimeError("stop after transport assertion"),
+        ) as reads,
+    ):
+        try:
+            canary_smoke.verify_product("https://next.plyr.fm/api/")
+        except RuntimeError as error:
+            assert str(error) == "stop after transport assertion"
+        else:
+            raise AssertionError("product verification unexpectedly continued")
+
+    request.assert_called_once_with("https://next.plyr.fm/api", "/v1")
+    reads.assert_called_once_with("https://next.plyr.fm/api")

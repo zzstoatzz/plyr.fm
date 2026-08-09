@@ -69,6 +69,10 @@ test-http: build
 smoke-canary URL="https://plyr-api-zig-canary.fly.dev":
     python3 scripts/canary_smoke.py "{{ URL }}"
 
+# Verify v1 through next's same-origin Pages transport.
+smoke-next URL="https://next.plyr.fm/api":
+    python3 scripts/canary_smoke.py --product-only "{{ URL }}"
+
 bench-http *ARGS:
     zig build -Doptimize=ReleaseFast
     python3 scripts/bench_http.py "$@"
