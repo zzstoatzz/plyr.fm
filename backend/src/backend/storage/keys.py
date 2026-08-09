@@ -18,8 +18,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import PurePosixPath
 
-from backend._internal.audio import AudioFormat
 from backend._internal.image import ImageFormat
+from backend.utilities.audio_formats import AudioFormat
 
 
 class InvalidMediaExtension(ValueError):

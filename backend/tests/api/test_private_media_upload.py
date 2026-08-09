@@ -15,9 +15,9 @@ from fastapi.testclient import TestClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend._internal import Session, require_artist_profile
-from backend._internal.audio import AudioFormat
 from backend.config import settings
 from backend.main import app
+from backend.utilities.audio_formats import AudioFormat
 
 # the granted token carries the expanded space scope (what the preflight checks for),
 # not the requested `include:` form

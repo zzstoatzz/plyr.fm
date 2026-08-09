@@ -23,9 +23,11 @@ import type { Track } from '$lib/types';
  * is what distinguishes a transcoded interim from a real direct upload.
  */
 export function isOptimizing(track: Track): boolean {
+	// the server computes this on the Track model (`Track.is_optimizing`, also
+	// used in SQL for /tracks/me `pds_savable_count`) — prefer its answer; the
+	// local heuristic remains only for cached payloads that predate the field.
 	return (
-		track.file_type !== 'mp3' &&
-		!!track.original_file_id &&
-		!!track.original_file_type
+		track.is_optimizing ??
+		(track.file_type !== 'mp3' && !!track.original_file_id && !!track.original_file_type)
 	);
 }

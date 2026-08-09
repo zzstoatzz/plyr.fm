@@ -9,7 +9,6 @@ from dataclasses import dataclass
 from unittest.mock import AsyncMock, patch
 
 from backend._internal import Session as AuthSession
-from backend._internal.audio import AudioFormat
 from backend.api.tracks.uploads import (
     AudioInfo,
     PdsBlobResult,
@@ -17,6 +16,7 @@ from backend.api.tracks.uploads import (
     UploadContext,
     _process_upload_background,
 )
+from backend.utilities.audio_formats import AudioFormat
 
 
 def _make_session(token: str = "old-token") -> AuthSession:

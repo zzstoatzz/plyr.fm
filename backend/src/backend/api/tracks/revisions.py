@@ -31,12 +31,12 @@ from backend._internal import Session as AuthSession
 from backend._internal import require_auth
 from backend._internal.atproto import PayloadTooLargeError, upload_blob
 from backend._internal.atproto.records import build_track_record, update_record
-from backend._internal.audio import AudioFormat
 from backend._internal.track_revisions import prune_revisions
 from backend.api.albums import invalidate_album_cache_by_id
 from backend.config import settings
 from backend.models import Track, TrackRevision
 from backend.storage import storage
+from backend.utilities.audio_formats import AudioFormat
 from backend.utilities.database import db_session
 
 from .router import router

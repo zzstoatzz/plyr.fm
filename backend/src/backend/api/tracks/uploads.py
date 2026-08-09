@@ -50,7 +50,6 @@ from backend._internal.atproto.spaces.client import (
     create_space_record,
     ensure_personal_space,
 )
-from backend._internal.audio import AudioFormat
 from backend._internal.background import get_docket
 from backend._internal.clients.transcoder import (
     TranscoderClient,
@@ -69,6 +68,7 @@ from backend.models import Album, Artist, Track, UserPreferences
 from backend.models.job import JobStatus, JobType
 from backend.storage import storage
 from backend.utilities.audio import extract_duration, is_alac
+from backend.utilities.audio_formats import AudioFormat
 from backend.utilities.database import db_session
 from backend.utilities.hashing import CHUNK_SIZE, hash_file_chunked
 from backend.utilities.progress import R2ProgressTracker

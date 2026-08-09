@@ -231,3 +231,34 @@ async def test_tie_breaker_keeps_pagination_stable(
         seen.append(data["tracks"][0]["id"])
 
     assert len(set(seen)) == 3  # every page returned a distinct row
+
+
+async def test_pds_savable_count_semantics(
+    test_app: FastAPI, db_session: AsyncSession, artist: Artist
+) -> None:
+    """pds_savable_count counts unmirrored, ungated, non-optimizing tracks
+    across the whole catalog, unaffected by the q filter."""
+    await _make_track(db_session, title="alpha unmirrored", file_id="sv_1")
+    await _make_track(db_session, title="beta unmirrored", file_id="sv_2")
+
+    mirrored = await _make_track(db_session, title="mirrored", file_id="sv_3")
+    mirrored.pds_blob_cid = "bafkreiFakeCid"
+    mirrored.audio_storage = "both"
+
+    gated = await _make_track(db_session, title="gated", file_id="sv_4")
+    gated.support_gate = {"type": "any"}
+
+    optimizing = await _make_track(db_session, title="optimizing", file_id="sv_5")
+    optimizing.file_type = "wav"
+    optimizing.original_file_id = "orig_5"
+    optimizing.original_file_type = "aiff"
+
+    await db_session.commit()
+
+    data = await _get(test_app)
+    assert data["pds_savable_count"] == 2
+
+    # the count ignores the search filter — it describes the whole catalog
+    filtered = await _get(test_app, "?q=alpha")
+    assert filtered["total"] == 1
+    assert filtered["pds_savable_count"] == 2

@@ -47,7 +47,6 @@ from backend._internal.atproto.records import (
     build_track_record,
     update_record,
 )
-from backend._internal.audio import AudioFormat
 from backend._internal.background import get_docket
 from backend._internal.jobs import job_service
 from backend._internal.tasks import schedule_album_list_sync
@@ -75,6 +74,7 @@ from backend.models import Track, TrackRevision
 from backend.models.job import JobStatus, JobType
 from backend.storage import storage
 from backend.utilities.audio import extract_duration
+from backend.utilities.audio_formats import AudioFormat
 from backend.utilities.database import db_session
 from backend.utilities.hashing import CHUNK_SIZE
 from backend.utilities.rate_limit import limiter

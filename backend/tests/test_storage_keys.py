@@ -10,9 +10,9 @@ from dataclasses import FrozenInstanceError
 
 import pytest
 
-from backend._internal.audio import AudioFormat
 from backend._internal.image import ImageFormat
 from backend.storage.keys import AudioKey, ImageKey, InvalidMediaExtension
+from backend.utilities.audio_formats import AudioFormat
 
 
 class TestAudioKey:
