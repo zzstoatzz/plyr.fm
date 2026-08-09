@@ -20,7 +20,7 @@ from backend.config import settings
 from backend.models import Track
 from backend.models.job import JobStatus
 from backend.storage import storage
-from backend.utilities.audio_formats import AudioFormat
+from backend.storage.keys import AudioKey, InvalidMediaExtension
 from backend.utilities.database import db_session
 
 logger = logging.getLogger(__name__)
@@ -192,8 +192,16 @@ async def save_tracks_to_pds(
                     skipped_count += 1
                     return
 
-                audio_format = AudioFormat.from_extension(track_data["file_type"])
-                if not audio_format:
+                # `file_id` addresses storage only for uploads that went through
+                # us; an ingested row carries the record's `fileId`/rkey, and its
+                # `r2_url` is what actually points at the bytes.
+                try:
+                    audio_key = AudioKey.for_track(
+                        file_id=track_data["file_id"],
+                        file_type=track_data["file_type"],
+                        r2_url=track_data["r2_url"],
+                    )
+                except InvalidMediaExtension:
                     fail(
                         f"unsupported audio format ({track_data['file_type']})",
                         track_data["title"],
@@ -203,17 +211,17 @@ async def save_tracks_to_pds(
                 audio_url = track_data["r2_url"]
                 if not audio_url:
                     audio_url = await storage.get_url(
-                        track_data["file_id"],
+                        audio_key.file_id,
                         file_type="audio",
-                        extension=track_data["file_type"],
+                        extension=audio_key.extension,
                     )
                 if not audio_url:
                     fail("no audio URL to copy from", track_data["title"])
                     return
 
                 content_length = await storage.head_file(
-                    track_data["file_id"],
-                    track_data["file_type"],
+                    audio_key.file_id,
+                    audio_key.extension,
                 )
                 if content_length is None:
                     # the row references audio this deployment can't read — most
@@ -225,17 +233,18 @@ async def save_tracks_to_pds(
                     )
                     return
 
-                track_file_id = track_data["file_id"]
-                track_file_type = track_data["file_type"]
+                stream_key = audio_key
 
                 def body_factory() -> AsyncIterable[bytes]:
-                    return storage.stream_file_data(track_file_id, track_file_type)
+                    return storage.stream_file_data(
+                        stream_key.file_id, stream_key.extension
+                    )
 
                 blob_ref = await upload_blob(
                     auth_session,
                     body_factory=body_factory,
                     content_length=content_length,
-                    content_type=audio_format.media_type,
+                    content_type=audio_key.format.media_type,
                 )
                 blob_cid = blob_ref.get("ref", {}).get("$link")
                 blob_size = blob_ref.get("size")
