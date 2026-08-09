@@ -101,7 +101,7 @@ jobs:
         run: >-
           flyctl machine run "registry.fly.io/plyr-api-zig-canary:${GITHUB_SHA}"
           --app plyr-api-zig-canary
-          --region sjc
+          --region iad
           --rm
           --restart no
           --skip-dns-registration

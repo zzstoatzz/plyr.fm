@@ -42,6 +42,15 @@ Neon's transaction pooler may assign those cycles to different backend sessions.
 Layering that pooler beneath the application's already bounded pool is therefore
 both redundant and incorrect for this client protocol.
 
+The API's primary Fly region is `iad`, adjacent to the isolated Neon's
+`aws-us-east-1` compute. The initial `sjc` deployment made the placement cost
+directly measurable: public `/health` had a 74 ms median, one database-backed
+`/ready` probe had a 202 ms median, and a 50-track read had a 338 ms median while
+the process averaged only 1.8% of one core. The roughly 128 ms added by a single
+`SELECT 1` is network distance, not application work. The optional reconciliation
+Machine uses the same region so an explicit repair does not reintroduce that
+cross-country path.
+
 The machine:
 
 - is capped at one shared CPU and 256 MiB;
