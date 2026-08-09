@@ -45,6 +45,9 @@ test-postgres:
 test-http: build
     python3 scripts/test_http.py
 
+smoke-canary URL="https://plyr-api-zig-canary.fly.dev":
+    python3 scripts/canary_smoke.py "{{ URL }}"
+
 bench-http *ARGS:
     zig build -Doptimize=ReleaseFast
     python3 scripts/bench_http.py "$@"

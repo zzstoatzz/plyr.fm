@@ -14,6 +14,7 @@ just zig check
 just zig test-http
 just zig test-postgres
 just zig image
+just zig smoke-canary
 INDEX_MODE=disabled TRACK_COLLECTION_NSID=fm.plyr.dev.track LIST_COLLECTION_NSID=fm.plyr.dev.list PROFILE_COLLECTION_NSID=fm.plyr.dev.actor.profile just zig run
 just zig bench-http --duration 5 --concurrency 16
 DATABASE_URL=postgresql://... just zig bench-http --with-index --path '/v1/tracks?limit=50'
@@ -103,5 +104,9 @@ staging projection.
 
 The `deploy Zig canary` GitHub workflow is manual-only. Local development may
 build and run the image, but deployment goes through that workflow. The Fly
-hostname is the initial verification surface; `canary.plyr.fm` should be added
+hostname is the initial verification surface. The workflow runs
+`scripts/canary_smoke.py` after deployment and fails unless readiness, API
+discovery, track collection/detail, artist lookup, and album collection/detail
+all prove their expected anonymous semantics and request-ID contract. Run the
+same check with `just zig smoke-canary`. `canary.plyr.fm` should be added
 only after the service passes its resource and semantic-parity gates.
