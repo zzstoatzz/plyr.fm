@@ -135,6 +135,14 @@ pooled aggregate SQL plus strict record URI and DAG-CBOR CID validation.
 
 The verified album-detail route has its own guarded, reproducible fixture via
 `just zig bench-album-detail`. It returns 20 ordered strong references and 20
-complete hydrated tracks from one query while validating every URI and CID.
-It recorded 1,867.3 responses/s at concurrency one (0.894 ms p99) and 6,961.2
-at concurrency 16 (5.907 ms p99), with zero unexpected responses.
+complete composed-track resources from one query while validating every URI and
+CID. The common verified-list adapter recorded 341.9 responses/s at concurrency
+one (5.690 ms p99) and 1,905.9 at concurrency 16 (21.020 ms p99), with zero
+unexpected responses and 3,440–6,320 KiB RSS. This supersedes the simplified
+album-only adapter measurement, which did not share standalone track policy.
+
+`just zig bench-playlists` exercises the same adapter for global collection and
+detail. The one-summary collection recorded 264.9 responses/s at concurrency
+one and 2,595.4 at concurrency 16; the 20-track detail recorded 287.7 and
+3,042.1 responses/s respectively. All four scenarios completed without errors
+and held the Zig process between 3,504 and 6,400 KiB RSS.

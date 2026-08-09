@@ -403,6 +403,10 @@ fn cidString(allocator: std.mem.Allocator, seed: []const u8) ![]const u8 {
 
 pub fn createTestSchema(pool: *pg.Pool) !void {
     _ = try pool.exec("CREATE SCHEMA plyr_index", .{});
+    try createTestTables(pool);
+}
+
+pub fn createTestTables(pool: *pg.Pool) !void {
     _ = try pool.exec(
         \\CREATE TABLE plyr_index.list_records (
         \\  record_uri text PRIMARY KEY,

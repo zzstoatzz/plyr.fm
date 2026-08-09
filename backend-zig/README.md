@@ -55,7 +55,7 @@ Python suite's `relay_test` schema.
 |---|---:|---|
 | `MODE` | yes | `api`, `ingester`, `repair`, `catalog_reconciler`, or separately supervised `account_reconciler` |
 | `TRACK_COLLECTION_NSID` | yes | exact environment-aware track-record NSID |
-| `LIST_COLLECTION_NSID` | yes | exact environment-aware list-record NSID used by albums |
+| `LIST_COLLECTION_NSID` | yes | exact environment-aware list-record NSID used by albums and playlists |
 | `PROFILE_COLLECTION_NSID` | yes | exact environment-aware authored profile-record NSID |
 | `DATABASE_URL` | in normal API mode | PostgreSQL projection; canonical Postgres URLs and the existing SQLAlchemy `psycopg`, `psycopg2`, and `asyncpg` driver-qualified forms are accepted; missing or unknown configuration fails startup |
 | `DATABASE_ROLE` | no | expected effective PostgreSQL role; startup opens the pool and fails closed if `current_user` differs |
@@ -79,7 +79,7 @@ unbounded detached threads.
 The current product surface is `GET /v1/tracks`,
 `GET /v1/tracks/{track_id}`, `GET /v1/tracks/{track_id}/playback`,
 `GET /v1/artists/{identifier}`, and the collection and detail forms of
-`GET /v1/albums`. The track collection accepts a strict
+`GET /v1/albums` and `GET /v1/playlists`. The track collection accepts a strict
 `limit` from 1 to 100 and an opaque `cursor`; it
 accepts an optional canonical `artist_did`, applies discovery or artist-view
 policy before keyset pagination, and returns the same track representation as
@@ -106,6 +106,16 @@ collection exposes only canonical list-record albums and keeps local
 presentation fields explicitly separate from record identity. Album detail
 preserves every verified strong-reference position and hydrates only an exact
 public URI/CID match.
+
+Playlist collection and detail read only authenticated `playlist` list records;
+they do not join the Python playlist table or fetch a mutable PDS record during
+the request. The collection supports global discovery or an optional canonical
+`owner_did`, with cursors cryptographically opaque and bound to that exact query
+scope. Detail preserves the signed order and strong references, reuses the same
+composed-track decoder as standalone reads, and marks missing, stale-CID,
+private, moderated, or unavailable members uniformly unavailable. Private
+app-local playlists remain intentionally absent until session-aware private
+storage is designed.
 
 `MODE=repair` is not part of the API service. It resolves the DID's PDS,
 rejects unsafe or mixed DNS destinations, pins a checked address for TLS,
@@ -154,8 +164,9 @@ Later deployments leave reconciliation disabled unless source state needs a
 deliberate refresh. The Fly hostname is the initial infrastructure verification
 surface. The job runs
 `scripts/canary_smoke.py` after deployment and fails unless readiness, API
-discovery, track collection/detail, anonymous playback, artist lookup, and album
-collection/detail all prove their expected semantics and request-ID contract.
+discovery, track collection/detail, anonymous playback, artist lookup, album
+collection/detail, and verified playlist collection/detail all prove their
+expected semantics and request-ID contract.
 The gate requires a real verified track with an available HTTPS playback
 capability, round-trips its collection representation through detail, and
 resolves its artist; an empty or wholly unavailable projection cannot pass. Run

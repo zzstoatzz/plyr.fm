@@ -97,9 +97,10 @@ Before exposing `next.plyr.fm`:
    corrupt-projection, and unavailable-index behavior.
 3. A real track lookup must prove that the published image can reach
    Neon with TLS and decode the current projection. The deployment smoke gate
-   requires a nonempty verified collection, round-trips its first track through
-   detail, resolves its artist, and traverses that artist's album collection;
-   empty projection tables cannot satisfy this gate.
+   requires a nonempty verified track collection, round-trips a playable track
+   through detail and playback, resolves its artist, traverses that artist's
+   album collection, and round-trips a verified public playlist through detail;
+   empty required projection tables cannot satisfy this gate.
 4. Fly-native measurements must record idle RSS, loaded peak memory, CPU time,
    throughput, and p50/p95/p99 latency. The agreed load scenario is the public
    50-track collection for ten seconds at concurrency 1 and 16. The first budget

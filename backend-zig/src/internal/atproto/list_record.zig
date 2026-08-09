@@ -7,6 +7,7 @@
 
 const std = @import("std");
 const zat = @import("zat");
+const lexicon_value = @import("lexicon_value.zig");
 const lexicon_string = @import("../text/lexicon_string.zig");
 
 pub const max_items: usize = 500;
@@ -39,6 +40,7 @@ pub const Error = error{
     WrongRecordType,
     UnknownListType,
     InvalidName,
+    InvalidDatetime,
     TooManyItems,
     InvalidStrongRefSubject,
     InvalidStrongRefUri,
@@ -62,8 +64,11 @@ pub fn parse(
     if (raw_items.len > max_items) return error.TooManyItems;
 
     const created_at = value.getString("createdAt") orelse return error.InvalidRecord;
-    if (created_at.len == 0) return error.InvalidRecord;
+    if (!lexicon_value.validDatetime(created_at)) return error.InvalidDatetime;
     const updated_at = optionalString(value, "updatedAt") catch return error.InvalidRecord;
+    if (updated_at) |timestamp| {
+        if (!lexicon_value.validDatetime(timestamp)) return error.InvalidDatetime;
+    }
     const name = optionalString(value, "name") catch return error.InvalidRecord;
     if (name) |text| {
         lexicon_string.validate(text, 256, 64) catch return error.InvalidName;
@@ -210,5 +215,21 @@ test "list name observes lexicon byte and grapheme limits" {
     try std.testing.expectError(
         error.InvalidName,
         parse(a, too_wide_record, "fm.plyr.dev.list", "fm.plyr.dev.track"),
+    );
+}
+
+test "list timestamps use the ATProto datetime profile" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    const malformed: zat.cbor.Value = .{ .map = &.{
+        .{ .key = "$type", .value = .{ .text = "fm.plyr.dev.list" } },
+        .{ .key = "listType", .value = .{ .text = "playlist" } },
+        .{ .key = "items", .value = .{ .array = &.{} } },
+        .{ .key = "createdAt", .value = .{ .text = "yesterday" } },
+    } };
+    try std.testing.expectError(
+        error.InvalidDatetime,
+        parse(a, malformed, "fm.plyr.dev.list", "fm.plyr.dev.track"),
     );
 }

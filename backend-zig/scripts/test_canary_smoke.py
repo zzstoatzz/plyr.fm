@@ -13,6 +13,22 @@ def _response(body: dict[str, object], status: int = 200) -> canary_smoke.Respon
     )
 
 
+PLAYLIST_SUMMARY = {
+    "object": "playlist",
+    "id": "pls_verified",
+    "record": {
+        "uri": "at://did:plc:owner/fm.plyr.list/playlist",
+        "cid": "bafyplaylist",
+    },
+    "sources": {"record": "verified_repo", "membership": "verified_repo"},
+}
+PLAYLIST_DETAIL = {
+    **PLAYLIST_SUMMARY,
+    "members": [],
+    "metrics": {"member_count": 0, "available_count": 0, "total_plays": 0},
+}
+
+
 def test_real_product_reads_traverse_projected_track_and_artist() -> None:
     track = {
         "object": "track",
@@ -48,6 +64,10 @@ def test_real_product_reads_traverse_projected_track_and_artist() -> None:
         "/v1/albums?artist_did=did%3Aplc%3Aartist&limit=1": _response(
             {"object": "list", "data": []}
         ),
+        "/v1/playlists?limit=1": _response(
+            {"object": "list", "data": [PLAYLIST_SUMMARY]}
+        ),
+        "/v1/playlists/pls_verified": _response(PLAYLIST_DETAIL),
     }
 
     def request(_: str, path: str) -> canary_smoke.Response:
@@ -94,6 +114,10 @@ def test_real_product_reads_traverse_album_when_present() -> None:
             {"object": "list", "data": [album_summary]}
         ),
         "/v1/albums/alb_verified": _response(album_summary),
+        "/v1/playlists?limit=1": _response(
+            {"object": "list", "data": [PLAYLIST_SUMMARY]}
+        ),
+        "/v1/playlists/pls_verified": _response(PLAYLIST_DETAIL),
     }
 
     def request(_: str, path: str) -> canary_smoke.Response:
@@ -112,6 +136,6 @@ def test_real_product_reads_reject_empty_projection() -> None:
         try:
             canary_smoke._verify_real_product_reads("https://canary.example")
         except AssertionError as error:
-            assert str(error) == "staging projection has no public tracks"
+            assert str(error) == "next projection has no public tracks"
         else:
             raise AssertionError("empty projection unexpectedly passed")

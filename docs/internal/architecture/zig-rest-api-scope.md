@@ -56,6 +56,8 @@ decision.
 | `GET /v1/artists/{identifier}` | covered | public artist detail by canonical DID or case-insensitive handle alias | verified repository ingestion, collections, follows, profile writes, account state, viewer context |
 | `GET /v1/albums?artist_did={did}` | covered | canonical list-record albums for one artist with strict keyset pagination | continuous verified ingestion, global discovery, writes, viewer state |
 | `GET /v1/albums/{album_id}` | covered | verified album record and position-complete strong-reference membership with policy-safe hydration | continuous verified ingestion, writes, artwork, private/gated authorization, viewer state |
+| `GET /v1/playlists` | covered | global or owner-scoped verified public playlists with scope-bound keyset pagination | session-owned private lists, liked lists, presentation, writes |
+| `GET /v1/playlists/{playlist_id}` | covered | verified playlist record and position-complete exact-CID member hydration | private authorization, cover presentation, recommendations, writes |
 | `GET /health` | covered | process liveness | none for liveness |
 | `GET /ready` | covered | index configuration and a live database probe | readiness for dependencies required by future routes |
 | `GET /` | covered | points clients at `/v1` | protocol metadata remains separate |
@@ -63,16 +65,18 @@ decision.
 `OPTIONS` handling, bounded connections, CORS, request IDs, and the common JSON
 error envelope are covered cross-cutting behavior, not product capabilities.
 
-The product coverage count is therefore **six read capabilities**: anonymous
+The product coverage count is therefore **eight read capabilities**: anonymous
 track discovery, track detail, playback resolution, artist detail, artist album
-discovery, and verified album detail. The
+discovery, verified album detail, public playlist discovery, and verified
+playlist detail. The
 artist resource replaces both Python lookup routes with one DID-or-handle
 contract. Semantic parity remains partial because the Zig routes deliberately
 exclude most viewer-specific behavior. Of the 221 Python operations,
 root discovery and liveness
 have covered successor behavior, two track reads have partial coverage, two
 artist lookups have one covered successor, one album listing and one album
-detail have partial coverage, and the remaining 213 have no implemented Zig
+detail have partial coverage, five public playlist lookup/listing operations
+have two covered successors, and the remaining 207 have no implemented Zig
 mapping yet.
 
 ### legacy surface by resource
@@ -85,7 +89,7 @@ second column because every Subsonic route accepts both `GET` and `POST`.
 |---|---:|---:|---|
 | `/rest` | 37 | 74 | not started; separate compatibility adapter |
 | `/tracks` | 33 | 33 | discovery/artist collection, detail, and anonymous playback partial; all other capabilities open |
-| `/lists` | 18 | 18 | not started |
+| `/lists` | 18 | 18 | verified public playlist collection/detail started; private lists, liked lists, presentation, recommendations, and mutations open |
 | `/auth` | 15 | 15 | not started |
 | `/artists` | 9 | 9 | public DID/handle lookup covered by one v1 resource; all other capabilities open |
 | `/albums` | 9 | 9 | canonical collection plus verified ordered detail partial; mutations and other views open |
@@ -126,7 +130,7 @@ second column because every Subsonic route accepts both `GET` and `POST`.
 | artists | `/artists/*` | PDS profiles, Postgres projection, image storage, follow graph | public detail started with canonical DID identity, handle aliases, and explicit field provenance |
 | tracks | 33 `/tracks/*` routes | PDS records/blobs, Postgres, R2, transcoder, Docket, moderation, ML | discovery/artist collection and detail started; split publishing commands, interactions, and repair; retire repair verbs from public API |
 | albums | `/albums/*` | ATProto list/track records, Postgres, R2 images | canonical artist collection and verified membership/detail started; eliminate local-first finalization semantics |
-| playlists and liked list | 18 `/lists/*` routes | ATProto list records, Postgres hydration, Redis cache, recommendations | expose `/v1/playlists`; liked tracks are an interaction collection, not a magic list subtype |
+| playlists and liked list | 18 `/lists/*` routes | ATProto list records, Postgres hydration, Redis cache, recommendations | verified public playlist collection/detail started; private session state and writes remain separate; liked tracks are an interaction collection, not a magic list subtype |
 | likes and comments | nested track routes | PDS records, local projections, Docket write-behind, Redis tombstones | source-authoritative interaction resources; no success based only on local mutation |
 | uploads and revisions | track upload/audio/revision routes | temporary jobs, R2, PDS uploadBlob, transcoder, Docket | redesign as asynchronous `/v1/uploads` and publication operations with idempotency |
 | playback | `/audio/*`, track play | R2/PDS/space blob resolution, supporter checks, counters | anonymous `/v1/tracks/{id}/playback` started; authorization, availability, origin, and integrity are separate from catalog metadata |

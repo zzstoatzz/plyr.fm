@@ -1,21 +1,29 @@
 const std = @import("std");
 const get_album = @import("../internal/application/get_album.zig");
 const list_albums = @import("../internal/application/list_albums.zig");
-const AlbumDetailStore = @import("../internal/index/album_detail_store.zig").AlbumDetailStore;
 const AlbumStore = @import("../internal/index/album_store.zig").AlbumStore;
+const VerifiedListStore = @import("../internal/index/verified_list_store.zig").VerifiedListStore;
 const response = @import("response.zig");
 
 pub fn get(
     request: *std.http.Server.Request,
     allocator: std.mem.Allocator,
-    store: ?AlbumDetailStore,
+    store: ?VerifiedListStore,
     list_collection: []const u8,
     track_collection: []const u8,
+    profile_collection: []const u8,
     cors: response.CorsPolicy,
     id: []const u8,
     request_id: []const u8,
 ) !void {
-    switch (get_album.execute(allocator, store, list_collection, track_collection, id)) {
+    switch (get_album.execute(
+        allocator,
+        store,
+        list_collection,
+        track_collection,
+        profile_collection,
+        id,
+    )) {
         .found => |value| {
             const body = try std.json.Stringify.valueAlloc(allocator, value, .{});
             try response.json(request, .ok, body, request_id, cors);
@@ -91,7 +99,7 @@ test "v1 album JSON separates record identity from local presentation" {
 }
 
 test "verified album detail JSON preserves every strong-reference position" {
-    const domain = @import("../internal/domain/album_detail.zig");
+    const domain = @import("../internal/domain/verified_list.zig");
     const members = [_]domain.Member{
         .{
             .position = 0,
@@ -106,7 +114,8 @@ test "verified album detail JSON preserves every strong-reference position" {
             .track = null,
         },
     };
-    const value: domain.AlbumDetail = .{
+    const value: domain.Detail = .{
+        .object = .album,
         .id = "alb_example",
         .record = .{
             .uri = "at://did:plc:artist/fm.plyr.dev.list/album",
@@ -115,8 +124,14 @@ test "verified album detail JSON preserves every strong-reference position" {
             .rkey = "album",
         },
         .metadata = .{ .name = "Album", .created_at = "2026-08-08T12:00:00Z", .updated_at = null },
+        .owner = .{ .did = "did:plc:artist", .profile = null },
         .members = &members,
         .metrics = .{ .member_count = 2, .available_count = 0, .total_plays = 0 },
+        .sources = .{
+            .owner_profile = .derived,
+            .metrics = .derived,
+            .account_availability = .verified_repo,
+        },
         .projection = .{ .commit_cid = "bafycommit", .commit_rev = "3jqfcqzm3fo2j", .indexed_at_us = 42 },
     };
 

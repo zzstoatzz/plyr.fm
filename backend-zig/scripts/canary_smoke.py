@@ -59,7 +59,7 @@ def _verify_real_product_reads(base_url: str) -> None:
     assert tracks.status == 200, (tracks.status, tracks.body)
     assert tracks.body["object"] == "list"
     data = tracks.body["data"]
-    assert isinstance(data, list) and data, "staging projection has no public tracks"
+    assert isinstance(data, list) and data, "next projection has no public tracks"
     _expect_request_id(tracks)
 
     listed_track: dict[str, Any] | None = None
@@ -141,6 +141,43 @@ def _verify_real_product_reads(base_url: str) -> None:
         _expect_request_id(album)
         assert album.body["object"] == "album", album.body
         assert album.body["id"] == album_data[0]["id"], album.body
+
+    playlists = _request(base_url, "/v1/playlists?limit=1")
+    assert playlists.status == 200, (playlists.status, playlists.body)
+    _expect_request_id(playlists)
+    assert playlists.body["object"] == "list", playlists.body
+    playlist_data = playlists.body["data"]
+    assert isinstance(playlist_data, list) and playlist_data, (
+        "next projection has no public verified playlists"
+    )
+    playlist_summary = playlist_data[0]
+    assert playlist_summary["object"] == "playlist", playlist_summary
+    assert playlist_summary["sources"]["record"] == "verified_repo", playlist_summary
+    assert playlist_summary["sources"]["membership"] == "verified_repo", (
+        playlist_summary
+    )
+    playlist_id = urllib.parse.quote(playlist_summary["id"], safe="_-")
+    playlist = _request(base_url, f"/v1/playlists/{playlist_id}")
+    assert playlist.status == 200, (playlist.status, playlist.body)
+    _expect_request_id(playlist)
+    assert playlist.body["object"] == "playlist", playlist.body
+    assert playlist.body["id"] == playlist_summary["id"], playlist.body
+    assert playlist.body["record"] == playlist_summary["record"], (
+        playlist.body,
+        playlist_summary,
+    )
+    members = playlist.body["members"]
+    assert isinstance(members, list), playlist.body
+    assert playlist.body["metrics"]["member_count"] == len(members), playlist.body
+    assert [member["position"] for member in members] == list(range(len(members))), (
+        playlist.body
+    )
+    for member in members:
+        assert member["availability"] in {"available", "unavailable"}, member
+        if member["availability"] == "available":
+            assert member["track"]["record"] == member["subject"], member
+        else:
+            assert member["track"] is None, member
 
 
 def _wait_for_product_readiness(base_url: str, timeout_seconds: float) -> None:

@@ -6,7 +6,7 @@ const postgres_composed_tracks = @import("internal/index/postgres_composed_track
 const postgres_playback = @import("internal/index/postgres_playback_store.zig");
 const postgres_artists = @import("internal/index/postgres_artist_store.zig");
 const postgres_albums = @import("internal/index/postgres_album_store.zig");
-const postgres_album_detail = @import("internal/index/postgres_album_detail_store.zig");
+const postgres_verified_lists = @import("internal/index/postgres_verified_list_store.zig");
 const repair_runner = @import("internal/ingest/repair_runner.zig");
 const continuous_runner = @import("internal/ingest/continuous_runner.zig");
 const catalog_reconcile_runner = @import("internal/ingest/catalog_reconcile_runner.zig");
@@ -55,11 +55,11 @@ pub fn main() !void {
     else
         null;
     const album_store = if (postgres_album_store) |*store| store.store() else null;
-    var postgres_album_detail_store: ?postgres_album_detail.PostgresAlbumDetailStore = if (postgres_store) |*store|
+    var postgres_verified_list_store: ?postgres_verified_lists.PostgresVerifiedListStore = if (postgres_store) |*store|
         .{ .pool = store.pool }
     else
         null;
-    const album_detail_store = if (postgres_album_detail_store) |*store| store.store() else null;
+    const verified_list_store = if (postgres_verified_list_store) |*store| store.store() else null;
     switch (settings.role) {
         .account_reconciler => {
             const store = if (postgres_store) |*value| value else return error.AccountReconcilerDatabaseRequired;
@@ -76,9 +76,10 @@ pub fn main() !void {
             .playback_store = playback_store,
             .artist_store = artist_store,
             .album_store = album_store,
-            .album_detail_store = album_detail_store,
+            .verified_list_store = verified_list_store,
             .track_collection = settings.track_collection,
             .list_collection = settings.list_collection,
+            .profile_collection = settings.profile_collection,
             .cors = .{ .allowed_origins = settings.cors_allowed_origins },
         }),
         .catalog_reconciler => {
@@ -141,6 +142,7 @@ test {
     _ = @import("api/artists.zig");
     _ = @import("api/albums.zig");
     _ = @import("api/tracks.zig");
+    _ = @import("api/playlists.zig");
     _ = @import("config.zig");
     _ = @import("internal/application/get_artist.zig");
     _ = @import("internal/application/get_album.zig");
@@ -148,21 +150,21 @@ test {
     _ = @import("internal/application/get_track.zig");
     _ = @import("internal/application/get_playback.zig");
     _ = @import("internal/application/list_tracks.zig");
+    _ = @import("internal/application/get_playlist.zig");
+    _ = @import("internal/application/list_playlists.zig");
     _ = @import("internal/domain/artist.zig");
-    _ = @import("internal/domain/album_detail.zig");
     _ = @import("internal/domain/album.zig");
     _ = @import("internal/domain/album_list.zig");
     _ = @import("internal/domain/playback.zig");
+    _ = @import("internal/domain/verified_list.zig");
     _ = @import("internal/atproto/list_record.zig");
     _ = @import("internal/atproto/lexicon_value.zig");
     _ = @import("internal/atproto/profile_record.zig");
     _ = @import("internal/atproto/track_record.zig");
     _ = @import("internal/index/artist_store.zig");
-    _ = @import("internal/index/album_detail_store.zig");
     _ = @import("internal/index/album_store.zig");
     _ = @import("internal/index/postgres_album_store.zig");
     _ = @import("internal/index/postgres_artist_store.zig");
-    _ = @import("internal/index/postgres_album_detail_store.zig");
     _ = @import("internal/identity/track_id.zig");
     _ = @import("internal/identity/track_cursor.zig");
     _ = @import("internal/identity/record_id.zig");
@@ -173,6 +175,10 @@ test {
     _ = @import("internal/index/postgres_composed_track_store.zig");
     _ = @import("internal/index/playback_store.zig");
     _ = @import("internal/index/postgres_playback_store.zig");
+    _ = @import("internal/index/verified_list_store.zig");
+    _ = @import("internal/index/postgres_verified_list_store.zig");
+    _ = @import("internal/identity/playlist_id.zig");
+    _ = @import("internal/identity/scoped_record_cursor.zig");
     _ = @import("internal/cache/lru.zig");
     _ = @import("internal/ingest/cached_signing_key_resolver.zig");
     _ = @import("internal/ingest/catalog_reconciler.zig");

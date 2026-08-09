@@ -93,12 +93,35 @@ CREATE TABLE plyr_index.track_metrics (
     write_source text NOT NULL,
     observed_at_us bigint NOT NULL
 );
+CREATE TABLE plyr_index.list_records (
+    record_uri text PRIMARY KEY,
+    record_cid text NOT NULL,
+    owner_did text NOT NULL,
+    collection text NOT NULL,
+    rkey text NOT NULL,
+    list_type text NOT NULL,
+    name text,
+    record_created_at text NOT NULL,
+    record_updated_at text,
+    deleted boolean NOT NULL,
+    commit_cid text NOT NULL,
+    commit_rev text NOT NULL,
+    indexed_at_us bigint NOT NULL
+);
+CREATE TABLE plyr_index.list_members (
+    list_uri text NOT NULL,
+    position smallint NOT NULL,
+    track_uri text NOT NULL,
+    track_cid text NOT NULL,
+    PRIMARY KEY (list_uri, position)
+);
 CREATE TABLE artists (
     did text PRIMARY KEY,
     handle text NOT NULL,
     display_name text NOT NULL,
     bio text,
-    avatar_url text
+    avatar_url text,
+    deactivated boolean NOT NULL DEFAULT false
 );
 CREATE TABLE tracks (
     atproto_record_uri text PRIMARY KEY,
@@ -175,6 +198,36 @@ SELECT
     n, 'legacy_import', 1786208400000000 + n
 FROM generate_series(1, 100) AS n;
 
+INSERT INTO plyr_index.list_records VALUES (
+    'at://did:plc:bench/fm.plyr.dev.list/playlist',
+    'bafyreihdwdcefgh4dqkjv67uzcmw7ojee6xedzdetojuzjevtenxquvyku',
+    'did:plc:bench', 'fm.plyr.dev.list', 'playlist', 'playlist',
+    'Benchmark Playlist', '2026-08-09T12:00:00Z', NULL, false,
+    'bafyreihdwdcefgh4dqkjv67uzcmw7ojee6xedzdetojuzjevtenxquvyku',
+    '3jqfcqzm3fo2j', 1786294800000000
+), (
+    'at://did:plc:bench/fm.plyr.dev.list/album',
+    'bafyreihdwdcefgh4dqkjv67uzcmw7ojee6xedzdetojuzjevtenxquvyku',
+    'did:plc:bench', 'fm.plyr.dev.list', 'album', 'album',
+    'Benchmark Album', '2026-08-08T12:00:00Z', NULL, false,
+    'bafyreihdwdcefgh4dqkjv67uzcmw7ojee6xedzdetojuzjevtenxquvyku',
+    '3jqfcqzm3fo2j', 1786208400000000
+);
+INSERT INTO plyr_index.list_members
+SELECT
+    'at://did:plc:bench/fm.plyr.dev.list/playlist',
+    n - 1,
+    format('at://did:plc:bench/fm.plyr.dev.track/track-%s', n),
+    'bafyreihdwdcefgh4dqkjv67uzcmw7ojee6xedzdetojuzjevtenxquvyku'
+FROM generate_series(1, 20) AS n;
+INSERT INTO plyr_index.list_members
+SELECT
+    'at://did:plc:bench/fm.plyr.dev.list/album',
+    n - 1,
+    format('at://did:plc:bench/fm.plyr.dev.track/track-%s', n),
+    'bafyreihdwdcefgh4dqkjv67uzcmw7ojee6xedzdetojuzjevtenxquvyku'
+FROM generate_series(1, 20) AS n;
+
 INSERT INTO tracks
 SELECT
     format('at://did:plc:bench/fm.plyr.dev.track/track-%s', n),
@@ -188,3 +241,6 @@ CREATE INDEX track_records_owner_created_bench
     WHERE NOT deleted;
 CREATE INDEX tracks_created_uri_bench
     ON tracks (created_at DESC, atproto_record_uri DESC);
+CREATE INDEX list_records_owner_type_bench
+    ON plyr_index.list_records (owner_did, list_type, record_created_at, record_uri)
+    WHERE NOT deleted;

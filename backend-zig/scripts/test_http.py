@@ -34,6 +34,11 @@ def _album_id(uri: str) -> str:
     return f"alb_{payload}"
 
 
+def _playlist_id(uri: str) -> str:
+    payload = base64.urlsafe_b64encode(uri.encode()).decode().rstrip("=")
+    return f"pls_{payload}"
+
+
 def _request(
     base_url: str,
     path: str,
@@ -203,6 +208,47 @@ def main() -> None:
         )
         assert status == 405
         assert album_detail_method["error"]["code"] == "method_not_allowed"
+
+        for invalid_target in (
+            "/v1/playlists?owner_did=not-a-did",
+            "/v1/playlists?owner_did=did:plc:owner&limit=0",
+            "/v1/playlists?owner_did=did:plc:a&owner_did=did:plc:b",
+        ):
+            status, _, invalid_playlists = _request(base_url, invalid_target)
+            assert status == 400
+            assert invalid_playlists["error"]["code"] == "invalid_request"
+
+        status, _, unavailable_global_playlists = _request(
+            base_url, "/v1/playlists?limit=5"
+        )
+        assert status == 503
+        assert unavailable_global_playlists["error"]["code"] == "service_unavailable"
+
+        status, _, unavailable_playlists = _request(
+            base_url, "/v1/playlists?owner_did=did%3Aplc%3Aowner&limit=5"
+        )
+        assert status == 503
+        assert unavailable_playlists["error"]["code"] == "service_unavailable"
+
+        playlist_uri = "at://did:plc:owner/fm.plyr.dev.list/playlist"
+        status, _, unavailable_playlist = _request(
+            base_url, f"/v1/playlists/{_playlist_id(playlist_uri)}"
+        )
+        assert status == 503
+        assert unavailable_playlist["error"]["code"] == "service_unavailable"
+
+        foreign_playlist_uri = "at://did:plc:owner/fm.plyr.list/playlist"
+        status, _, missing_playlist = _request(
+            base_url, f"/v1/playlists/{_playlist_id(foreign_playlist_uri)}"
+        )
+        assert status == 404
+        assert missing_playlist["error"]["code"] == "not_found"
+
+        status, _, playlist_method = _request(
+            base_url, f"/v1/playlists/{_playlist_id(playlist_uri)}", method="POST"
+        )
+        assert status == 405
+        assert playlist_method["error"]["code"] == "method_not_allowed"
 
         status, _, invalid = _request(base_url, "/v1/tracks/42")
         assert status == 400 and invalid["error"]["code"] == "invalid_request"

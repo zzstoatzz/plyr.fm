@@ -1,13 +1,14 @@
 const std = @import("std");
 const albums = @import("albums.zig");
 const artists = @import("artists.zig");
+const playlists = @import("playlists.zig");
 const response = @import("response.zig");
 const tracks = @import("tracks.zig");
 const ArtistStore = @import("../internal/index/artist_store.zig").ArtistStore;
-const AlbumDetailStore = @import("../internal/index/album_detail_store.zig").AlbumDetailStore;
 const AlbumStore = @import("../internal/index/album_store.zig").AlbumStore;
 const PlaybackStore = @import("../internal/index/playback_store.zig").PlaybackStore;
 const TrackStore = @import("../internal/index/track_store.zig").TrackStore;
+const VerifiedListStore = @import("../internal/index/verified_list_store.zig").VerifiedListStore;
 
 const http = std.http;
 const mem = std.mem;
@@ -19,9 +20,10 @@ pub const App = struct {
     playback_store: ?PlaybackStore,
     artist_store: ?ArtistStore,
     album_store: ?AlbumStore,
-    album_detail_store: ?AlbumDetailStore,
+    verified_list_store: ?VerifiedListStore,
     track_collection: []const u8,
     list_collection: []const u8,
+    profile_collection: []const u8,
     cors: response.CorsPolicy,
 };
 
@@ -77,6 +79,20 @@ pub fn handle(
             app.cors,
             request_id,
         );
+    } else if (mem.eql(u8, path, prefix ++ "/playlists")) {
+        if (request.head.method != .GET) {
+            try response.apiError(request, .method_not_allowed, request_id, app.cors);
+            return;
+        }
+        try playlists.list(
+            request,
+            allocator,
+            app.verified_list_store,
+            app.list_collection,
+            app.profile_collection,
+            app.cors,
+            request_id,
+        );
     } else if (mem.eql(u8, path, prefix ++ "/tracks")) {
         if (request.head.method != .GET) {
             try response.apiError(request, .method_not_allowed, request_id, app.cors);
@@ -98,9 +114,26 @@ pub fn handle(
         try albums.get(
             request,
             allocator,
-            app.album_detail_store,
+            app.verified_list_store,
             app.list_collection,
             app.track_collection,
+            app.profile_collection,
+            app.cors,
+            id,
+            request_id,
+        );
+    } else if (playlistId(path)) |id| {
+        if (request.head.method != .GET) {
+            try response.apiError(request, .method_not_allowed, request_id, app.cors);
+            return;
+        }
+        try playlists.get(
+            request,
+            allocator,
+            app.verified_list_store,
+            app.list_collection,
+            app.track_collection,
+            app.profile_collection,
             app.cors,
             id,
             request_id,
@@ -190,6 +223,14 @@ fn albumId(path: []const u8) ?[]const u8 {
     return id;
 }
 
+fn playlistId(path: []const u8) ?[]const u8 {
+    const playlists_prefix = prefix ++ "/playlists/";
+    if (!mem.startsWith(u8, path, playlists_prefix)) return null;
+    const id = path[playlists_prefix.len..];
+    if (id.len == 0 or mem.indexOfScalar(u8, id, '/') != null) return null;
+    return id;
+}
+
 fn artistIdentifier(path: []const u8) ?[]const u8 {
     const artists_prefix = prefix ++ "/artists/";
     if (!mem.startsWith(u8, path, artists_prefix)) return null;
@@ -230,6 +271,13 @@ test "album detail routes accept exactly one opaque path segment" {
     try std.testing.expectEqualStrings("alb_abc", albumId("/v1/albums/alb_abc").?);
     try std.testing.expect(albumId("/v1/albums/") == null);
     try std.testing.expect(albumId("/v1/albums/artist/slug") == null);
+}
+
+test "playlist detail routes accept exactly one opaque path segment" {
+    try std.testing.expectEqualStrings("pls_abc", playlistId("/v1/playlists/pls_abc").?);
+    try std.testing.expect(playlistId("/v1/playlists/") == null);
+    try std.testing.expect(playlistId("/v1/playlists/pls_abc/tracks") == null);
+    try std.testing.expect(playlistId("/playlists/pls_abc") == null);
 }
 
 test "artist detail routes accept exactly one DID or handle segment" {

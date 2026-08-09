@@ -169,7 +169,10 @@ fn logQueryError(conn: *pg.Conn, message: []const u8, err: anyerror) void {
         std.log.err("{s}: {}", .{ message, err });
 }
 
-fn decodeRow(allocator: std.mem.Allocator, row: anytype) !track.Track {
+/// Decode the composed projection from a result whose first column is the
+/// first field in `projected_columns`. Verified list hydration reuses this
+/// exact decoder so standalone and member reads cannot drift semantically.
+pub fn decodeRow(allocator: std.mem.Allocator, row: anytype) !track.Track {
     const uri = try duplicate(allocator, try row.get([]const u8, 0));
     const parsed_uri = zat.AtUri.parse(uri) orelse return error.CorruptTrackUri;
     const owner_did = try duplicate(allocator, try row.get([]const u8, 18));
@@ -365,7 +368,7 @@ fn decodeRow(allocator: std.mem.Allocator, row: anytype) !track.Track {
     };
 }
 
-const projected_columns =
+pub const projected_columns =
     \\  v.record_uri,
     \\  v.record_cid,
     \\  v.commit_rev,
@@ -549,8 +552,10 @@ test "composed PostgreSQL reads use verified records and authoritative account s
     const projected_tracks = @import("../projection/postgres_track_store.zig");
     const projected_profiles = @import("../projection/postgres_profile_store.zig");
     const projected_availability = @import("../account/postgres_availability_store.zig");
+    const projected_lists = @import("../projection/postgres_list_store.zig");
     const track_change = @import("../projection/track_change.zig");
     const postgres_playback = @import("postgres_playback_store.zig");
+    const postgres_verified_lists = @import("postgres_verified_list_store.zig");
     const url_z = std.c.getenv("PLYR_ZIG_TEST_DATABASE_URL") orelse return error.SkipZigTest;
     const allocator = std.testing.allocator;
     var threaded = std.Io.Threaded.init(allocator, .{});
@@ -569,6 +574,7 @@ test "composed PostgreSQL reads use verified records and authoritative account s
     try projected_tracks.createTestTable(pool);
     try projected_profiles.createTestTable(pool);
     try projected_availability.createTestTable(pool);
+    try projected_lists.createTestTables(pool);
     _ = try pool.exec(
         \\CREATE TABLE plyr_index.track_delivery_origins (
         \\  record_uri text NOT NULL, service text NOT NULL, record_cid text NOT NULL,
@@ -594,7 +600,7 @@ test "composed PostgreSQL reads use verified records and authoritative account s
     _ = try pool.exec(
         \\CREATE TABLE artists (
         \\  did text PRIMARY KEY, handle text NOT NULL, display_name text NOT NULL,
-        \\  bio text, avatar_url text
+        \\  bio text, avatar_url text, deactivated boolean NOT NULL DEFAULT false
         \\)
     , .{});
     _ = try pool.exec(
@@ -719,6 +725,63 @@ test "composed PostgreSQL reads use verified records and authoritative account s
     try std.testing.expectEqualStrings("self-note", value.moderation.self_labels[0]);
     try std.testing.expectEqualStrings("copyright-violation", value.moderation.operator_labels[0]);
     try std.testing.expectEqual(@as(i64, 7), value.metrics.play_count);
+
+    const list_uri = "at://did:plc:artist/fm.plyr.dev.list/road-mix";
+    const album_list_uri = "at://did:plc:artist/fm.plyr.dev.list/album";
+    const list_cid = try (try zat.Cid.forDagCbor(a, "playlist")).toString(a);
+    const stale_member_cid = try (try zat.Cid.forDagCbor(a, "stale-track")).toString(a);
+    _ = try pool.exec(
+        \\INSERT INTO plyr_index.list_records VALUES
+        \\  ($1, $2, $3, 'fm.plyr.dev.list', 'road-mix', 'playlist', 'Road Mix',
+        \\   '2026-08-09T12:00:00Z', NULL, false, $4, $5, 1000),
+        \\  ($6, $2, $3, 'fm.plyr.dev.list', 'album', 'album', 'Verified Album',
+        \\   '2026-08-08T12:00:00Z', NULL, false, $4, $5, 1000)
+    , .{ list_uri, list_cid, did, try commit.toString(a), rev.str(), album_list_uri });
+    _ = try pool.exec(
+        \\INSERT INTO plyr_index.list_members VALUES
+        \\  ($1, 0, $2, $3), ($1, 1, $2, $4)
+    , .{ list_uri, record_uri, try record.toString(a), stale_member_cid });
+    _ = try pool.exec(
+        "INSERT INTO plyr_index.list_members VALUES ($1, 0, $2, $3)",
+        .{ album_list_uri, record_uri, try record.toString(a) },
+    );
+    var verified_list_implementation: postgres_verified_lists.PostgresVerifiedListStore = .{ .pool = pool };
+    const list_store = verified_list_implementation.store();
+    const playlist_page = try list_store.listByOwner(a, .{
+        .collection = "fm.plyr.dev.list",
+        .profile_collection = "fm.plyr.dev.actor.profile",
+        .kind = .playlist,
+        .owner_did = did,
+        .limit = 2,
+        .after = null,
+    });
+    try std.testing.expectEqual(@as(usize, 1), playlist_page.len);
+    try std.testing.expectEqual(@as(usize, 2), playlist_page[0].value.metrics.member_count);
+    try std.testing.expectEqual(@as(usize, 1), playlist_page[0].value.metrics.available_count);
+    try std.testing.expectEqual(@as(i64, 7), playlist_page[0].value.metrics.total_plays);
+    try std.testing.expectEqualStrings("artist.example", playlist_page[0].value.owner.profile.?.handle);
+    const playlist_detail = (try list_store.getByUri(a, .{
+        .uri = list_uri,
+        .list_collection = "fm.plyr.dev.list",
+        .track_collection = "fm.plyr.dev.track",
+        .profile_collection = "fm.plyr.dev.actor.profile",
+        .kind = .playlist,
+    })).?;
+    try std.testing.expectEqual(@as(usize, 2), playlist_detail.members.len);
+    try std.testing.expectEqual(@import("../domain/verified_list.zig").Availability.available, playlist_detail.members[0].availability);
+    try std.testing.expectEqual(@import("../domain/verified_list.zig").Availability.unavailable, playlist_detail.members[1].availability);
+    try std.testing.expectEqualStrings("Verified Title", playlist_detail.members[0].track.?.metadata.title);
+    try std.testing.expectEqual(@as(i64, 7), playlist_detail.metrics.total_plays);
+    const album_detail = (try list_store.getByUri(a, .{
+        .uri = album_list_uri,
+        .list_collection = "fm.plyr.dev.list",
+        .track_collection = "fm.plyr.dev.track",
+        .profile_collection = "fm.plyr.dev.actor.profile",
+        .kind = .album,
+    })).?;
+    try std.testing.expectEqual(@import("../domain/verified_list.zig").Kind.album, album_detail.object);
+    try std.testing.expect(std.mem.startsWith(u8, album_detail.id, "alb_"));
+    try std.testing.expectEqualStrings("Verified Title", album_detail.members[0].track.?.metadata.title);
 
     _ = try pool.exec(
         \\INSERT INTO plyr_index.track_delivery_origins VALUES (
@@ -906,6 +969,13 @@ test "composed PostgreSQL reads use verified records and authoritative account s
     );
     try std.testing.expect((try implementation.store().getByUri(a, record_uri)) == null);
     try std.testing.expect((try playback_implementation.store().getByUri(a, record_uri)) == null);
+    try std.testing.expect((try list_store.getByUri(a, .{
+        .uri = list_uri,
+        .list_collection = "fm.plyr.dev.list",
+        .track_collection = "fm.plyr.dev.track",
+        .profile_collection = "fm.plyr.dev.actor.profile",
+        .kind = .playlist,
+    })) == null);
 }
 
 fn requireDisposableDatabase(pool: *pg.Pool, allocator: std.mem.Allocator) !void {

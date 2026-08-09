@@ -150,6 +150,13 @@ playback capability independently of catalog metadata. It prefers exact
 record-CID-bound delivery evidence, labels author-declared HTTPS fallbacks as
 unverified, and makes authorization and byte availability distinct states.
 
+[`GET /v1/playlists`](zig-v1-playlist.md) and
+[`GET /v1/playlists/{playlist_id}`](zig-v1-playlist.md) read the same verified
+list substrate without consulting local playlist rows or fetching live PDS
+state during an HTTP request. Collection cursors bind to global or owner scope;
+detail preserves every strong-reference position and hydrates through the
+standalone composed-track policy on an exact URI/CID match.
+
 Signed commit and snapshot ingestion now persist the
 [`verified track projection`](zig-verified-track-projection.md) and
 [`verified authored-profile projection`](zig-verified-profile-projection.md)

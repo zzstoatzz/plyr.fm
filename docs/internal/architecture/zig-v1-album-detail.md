@@ -63,8 +63,10 @@ is preferable to representing local compatibility state as PDS-authored data.
 ## one-query adapter
 
 The PostgreSQL adapter performs one ordered query over
-`plyr_index.list_records`, `plyr_index.list_members`, and the current
-track/artist projection. It validates:
+`plyr_index.list_records`, `plyr_index.list_members`, and the same composed
+track/artist projection used by standalone track reads. Albums and playlists
+share this verified-list adapter; list kind and opaque resource identity are
+application inputs rather than separate SQL implementations. It validates:
 
 1. list URI authority, environment collection, record key, and DAG-CBOR CID;
 2. verified commit DAG-CBOR CID, TID revision, and non-negative ingest time;
@@ -73,23 +75,30 @@ track/artist projection. It validates:
 5. exact URI/CID equality before hydrating a public track;
 6. overflow-safe metric aggregation.
 
-The application depends only on `AlbumDetailStore`; legacy table names and SQL
-policy remain inside this replaceable adapter.
+The application depends only on `VerifiedListStore`; legacy table names and SQL
+policy remain inside this replaceable adapter. Track decoding and public-view
+admission are exported once by `PostgresComposedTrackStore`, so a track cannot
+silently be visible standalone but unavailable in an album, or vice versa.
 
 ## local baseline
 
-Recorded 2026-08-08 on an Apple M5 Pro with Zig 0.16.0, ReleaseFast, and the
-guarded disposable Postgres 14 `relay_test` fixture. The response contains 20
+Recorded 2026-08-09 on an Apple M5 Pro with Zig 0.16.0, ReleaseFast, and the
+guarded disposable Postgres 14 `zig_bench` fixture. The response contains 20
 ordered members and 20 complete hydrated track resources:
 
 | concurrency | responses/s | p50 | p95 | p99 | errors |
 |---:|---:|---:|---:|---:|---:|
-| 1 | 1,867.3 | 0.502 ms | 0.689 ms | 0.894 ms | 0 |
-| 16 | 6,961.2 | 2.064 ms | 4.313 ms | 5.907 ms | 0 |
+| 1 | 341.9 | 2.797 ms | 4.129 ms | 5.690 ms | 0 |
+| 16 | 1,905.9 | 6.521 ms | 12.116 ms | 21.020 ms | 0 |
+
+The 44,229-byte response used the shared composed-track representation. The Zig
+process held 3,440 KiB RSS at concurrency one and 6,320 KiB at concurrency 16.
 
 Run `just zig bench-album-detail` to recreate the fixture and both measurements.
-The command refuses destructive setup outside the database named `relay_test`.
-This is a local regression baseline, not a Neon or Fly capacity claim.
+The command refuses destructive setup outside the database named `zig_bench`.
+This is a local regression baseline, not a Neon or Fly capacity claim. It
+supersedes the faster simplified album-only adapter baseline, which did not run
+the canonical composed-track admission and decoding path.
 
 ## intentionally open
 
