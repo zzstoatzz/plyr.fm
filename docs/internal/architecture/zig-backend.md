@@ -157,6 +157,12 @@ state during an HTTP request. Collection cursors bind to global or owner scope;
 detail preserves every strong-reference position and hydrates through the
 standalone composed-track policy on an exact URI/CID match.
 
+[`GET /v1/search`](zig-v1-search.md) ranks references across authenticated
+track, profile, and list projections behind a `SearchStore` port. Exact handles
+win; numeric similarity remains internal; every hit preserves canonical record
+identity and provenance. PostgreSQL is the current rebuildable search engine,
+not the metadata authority.
+
 Signed commit and snapshot ingestion now persist the
 [`verified track projection`](zig-verified-track-projection.md) and
 [`verified authored-profile projection`](zig-verified-profile-projection.md)

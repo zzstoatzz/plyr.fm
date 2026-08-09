@@ -114,6 +114,16 @@ bench-playlists:
     DATABASE_URL=postgresql://zig_bench:zig_bench@127.0.0.1:5434/zig_bench python3 scripts/bench_http.py --with-index --duration 5 --concurrency 1 --path '/v1/playlists/pls_YXQ6Ly9kaWQ6cGxjOmJlbmNoL2ZtLnBseXIuZGV2Lmxpc3QvcGxheWxpc3Q'
     DATABASE_URL=postgresql://zig_bench:zig_bench@127.0.0.1:5434/zig_bench python3 scripts/bench_http.py --with-index --duration 5 --concurrency 16 --path '/v1/playlists/pls_YXQ6Ly9kaWQ6cGxjOmJlbmNoL2ZtLnBseXIuZGV2Lmxpc3QvcGxheWxpc3Q'
 
+# Destructive only to the dedicated benchmark database on port 5434.
+bench-search:
+    docker compose -f ../backend/tests/docker-compose.yml --profile bench up -d bench-db
+    @for attempt in {1..100}; do docker compose -f ../backend/tests/docker-compose.yml exec -T bench-db pg_isready -U zig_bench -d zig_bench >/dev/null && break; sleep 0.1; done
+    docker compose -f ../backend/tests/docker-compose.yml exec -T bench-db psql -v ON_ERROR_STOP=1 -U zig_bench -d zig_bench < scripts/composed_track_bench.sql
+    docker compose -f ../backend/tests/docker-compose.yml exec -T bench-db psql -v ON_ERROR_STOP=1 -U zig_bench -d zig_bench < scripts/search_bench.sql
+    zig build -Doptimize=ReleaseFast
+    DATABASE_URL=postgresql://zig_bench:zig_bench@127.0.0.1:5434/zig_bench python3 scripts/bench_http.py --with-index --duration 5 --concurrency 1 --path '/v1/search?q=Distinctive%20Search%20Needle&types=track&limit=10'
+    DATABASE_URL=postgresql://zig_bench:zig_bench@127.0.0.1:5434/zig_bench python3 scripts/bench_http.py --with-index --duration 5 --concurrency 16 --path '/v1/search?q=Distinctive%20Search%20Needle&types=track&limit=10'
+
 bench-snapshot:
     zig build bench-snapshot -Doptimize=ReleaseFast
 

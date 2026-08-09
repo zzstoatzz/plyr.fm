@@ -50,7 +50,7 @@ decision.
 | Zig surface | state | capability covered | important gaps |
 |---|---|---|---|
 | `GET /v1` | covered | API namespace discovery | generated API description/OpenAPI |
-| `GET /v1/tracks` | covered | anonymous discovery or artist-scoped public catalogue with strict keyset pagination | viewer context, tag filters, hidden-tag preferences, search and other collection views |
+| `GET /v1/tracks` | covered | anonymous discovery or artist-scoped public catalogue with strict keyset pagination | viewer context, tag filters, hidden-tag preferences, and other collection views |
 | `GET /v1/tracks/{track_id}` | covered | public, published track detail from the projection | authenticated viewer state, private/gated tracks, list/search views, publication and mutations |
 | `GET /v1/tracks/{track_id}/playback` | covered | anonymous authorization and delivery resolution with explicit integrity | sessions, supporter/copyright authorization, private-space proxying, PDS blob resolution, play metrics |
 | `GET /v1/artists/{identifier}` | covered | public artist detail by canonical DID or case-insensitive handle alias | verified repository ingestion, collections, follows, profile writes, account state, viewer context |
@@ -58,6 +58,7 @@ decision.
 | `GET /v1/albums/{album_id}` | covered | verified album record and position-complete strong-reference membership with policy-safe hydration | continuous verified ingestion, writes, artwork, private/gated authorization, viewer state |
 | `GET /v1/playlists` | covered | global or owner-scoped verified public playlists with scope-bound keyset pagination | session-owned private lists, liked lists, presentation, writes |
 | `GET /v1/playlists/{playlist_id}` | covered | verified playlist record and position-complete exact-CID member hydration | private authorization, cover presentation, recommendations, writes |
+| `GET /v1/search` | covered | globally ranked keyword references across verified tracks, artists, albums, and playlists | tags, semantic/vector search, viewer-specific moderation, playlist-page client wiring |
 | `GET /health` | covered | process liveness | none for liveness |
 | `GET /ready` | covered | index configuration and a live database probe | readiness for dependencies required by future routes |
 | `GET /` | covered | points clients at `/v1` | protocol metadata remains separate |
@@ -65,10 +66,10 @@ decision.
 `OPTIONS` handling, bounded connections, CORS, request IDs, and the common JSON
 error envelope are covered cross-cutting behavior, not product capabilities.
 
-The product coverage count is therefore **eight read capabilities**: anonymous
+The product coverage count is therefore **nine read capabilities**: anonymous
 track discovery, track detail, playback resolution, artist detail, artist album
 discovery, verified album detail, public playlist discovery, and verified
-playlist detail. The
+playlist detail, and verified catalog keyword search. The
 artist resource replaces both Python lookup routes with one DID-or-handle
 contract. Semantic parity remains partial because the Zig routes deliberately
 exclude most viewer-specific behavior. Of the 221 Python operations,
@@ -76,7 +77,8 @@ root discovery and liveness
 have covered successor behavior, two track reads have partial coverage, two
 artist lookups have one covered successor, one album listing and one album
 detail have partial coverage, five public playlist lookup/listing operations
-have two covered successors, and the remaining 207 have no implemented Zig
+have two covered successors, keyword search has one covered successor while its
+semantic sibling remains open, and the remaining 206 have no implemented Zig
 mapping yet.
 
 ### legacy surface by resource
@@ -102,7 +104,7 @@ second column because every Subsonic route accepts both `GET` and `POST`.
 | `/stats` | 3 | 3 | not started |
 | `/account` | 2 | 2 | not started |
 | `/activity` | 2 | 2 | not started |
-| `/search` | 2 | 2 | not started |
+| `/search` | 2 | 2 | keyword search covered by `/v1/search`; semantic/vector search not started |
 | `/preferences` | 2 | 2 | not started |
 | `/queue` | 2 | 2 | not started |
 | `/migration` | 2 | 2 | candidate for retirement/internal tooling |

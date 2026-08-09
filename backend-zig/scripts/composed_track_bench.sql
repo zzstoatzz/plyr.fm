@@ -9,6 +9,8 @@ BEGIN
 END
 $$;
 
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+
 DROP SCHEMA IF EXISTS plyr_index CASCADE;
 DROP TABLE IF EXISTS tracks CASCADE;
 DROP TABLE IF EXISTS user_preferences CASCADE;
@@ -251,3 +253,9 @@ CREATE INDEX tracks_created_uri_bench
 CREATE INDEX list_records_owner_type_bench
     ON plyr_index.list_records (owner_did, list_type, record_created_at, record_uri)
     WHERE NOT deleted;
+CREATE INDEX ix_plyr_index_track_records_title_trgm
+    ON plyr_index.track_records USING gin (title gin_trgm_ops)
+    WHERE NOT deleted;
+CREATE INDEX ix_plyr_index_list_records_name_trgm
+    ON plyr_index.list_records USING gin (name gin_trgm_ops)
+    WHERE NOT deleted AND name IS NOT NULL;

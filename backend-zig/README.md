@@ -44,6 +44,8 @@ whole-commit chain gap/conflict handling, and rollback across projection types.
 It also covers authenticated complete-repo bootstrap, list and track absence
 reconciliation, durable malformed-record quarantine and repair, and repair
 replay before applying and reversing the real Alembic projection migrations.
+Search coverage exercises the real ranked Postgres adapter, discovery policy,
+literal wildcard handling, and the projection trigram-index migration.
 It only destroys objects in the dedicated `zig_test` database on port 5435;
 both test paths refuse any other database name. The HTTP benchmarks use a
 third `zig_bench` database on port 5434, so neither path can overwrite the
@@ -79,7 +81,10 @@ unbounded detached threads.
 The current product surface is `GET /v1/tracks`,
 `GET /v1/tracks/{track_id}`, `GET /v1/tracks/{track_id}/playback`,
 `GET /v1/artists/{identifier}`, and the collection and detail forms of
-`GET /v1/albums` and `GET /v1/playlists`. The track collection accepts a strict
+`GET /v1/albums` and `GET /v1/playlists`, plus `GET /v1/search`. Search accepts
+one strict query, a bounded global limit, and an optional type set; it returns
+verified record references with match class and provenance but no unstable
+numeric score. The track collection accepts a strict
 `limit` from 1 to 100 and an opaque `cursor`; it
 accepts an optional canonical `artist_did`, applies discovery or artist-view
 policy before keyset pagination, and returns the same track representation as
@@ -167,7 +172,8 @@ deliberate refresh. The Fly hostname is the initial infrastructure verification
 surface. The job runs
 `scripts/canary_smoke.py` after deployment and fails unless readiness, API
 discovery, track collection/detail, anonymous playback, artist lookup, album
-collection/detail, and verified playlist collection/detail all prove their
+collection/detail, verified playlist collection/detail, and a real track search
+all prove their
 expected semantics and request-ID contract.
 The gate requires a real verified track with an available HTTPS playback
 capability, round-trips its collection representation through detail, and
