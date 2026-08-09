@@ -99,6 +99,8 @@ test {
     _ = @import("internal/domain/album.zig");
     _ = @import("internal/domain/album_list.zig");
     _ = @import("internal/atproto/list_record.zig");
+    _ = @import("internal/atproto/lexicon_value.zig");
+    _ = @import("internal/atproto/profile_record.zig");
     _ = @import("internal/atproto/track_record.zig");
     _ = @import("internal/index/artist_store.zig");
     _ = @import("internal/index/album_detail_store.zig");
@@ -128,6 +130,7 @@ test {
     _ = @import("internal/ingest/zat_signing_key_resolver.zig");
     _ = @import("internal/ingest/watched_repositories.zig");
     _ = @import("internal/projection/list_change.zig");
+    _ = @import("internal/projection/profile_change.zig");
     _ = @import("internal/projection/track_change.zig");
     _ = @import("internal/projection/commit_verifier.zig");
     _ = @import("internal/projection/snapshot_verifier.zig");
