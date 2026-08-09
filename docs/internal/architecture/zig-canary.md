@@ -1,18 +1,20 @@
 ---
-title: "Zig API canary"
+title: "Zig next environment"
 ---
 
 ## purpose
 
-The Zig backend is deployed as an independent canary before it is allowed to
-share any client traffic with the Python API. Its first job is to make semantic
-and resource regressions observable without giving an incomplete service
-production authority.
+The Zig backend is deployed independently before it is allowed to replace any
+part of the Python-backed production application. Its first job is to make
+semantic and resource regressions observable without giving an incomplete
+service production authority.
 
 The Fly application is `plyr-api-zig-canary`. Its Fly hostname is the initial
-test surface. `canary.plyr.fm` is deliberately deferred until the service has a
-working staging index, stable health behavior, and a useful parity slice; DNS
-must not make a health-only deployment look like a supported API.
+infrastructure test surface. That internal name describes the rollout mechanism,
+not the public product. The eventual parallel application is `next.plyr.fm`,
+following Grain's successor-deployment pattern: users opt into the new stack
+directly while `plyr.fm` continues to run. `next.plyr.fm` is a frontend plus its
+Zig API configuration, not an alias that exposes the bare API as a website.
 
 ## authority boundary
 
@@ -32,9 +34,9 @@ The machine:
 - is deployed only by the manual `deploy Zig canary` GitHub workflow. Local
   `fly deploy` is not part of the operating procedure.
 
-## promotion gates
+## next-environment gates
 
-Before adding `canary.plyr.fm`:
+Before exposing `next.plyr.fm`:
 
 1. `/health` and database-backed `/ready` must remain stable across cold starts.
 2. The first public-track endpoint must pass fixture-based semantic comparisons
@@ -51,11 +53,13 @@ Before adding `canary.plyr.fm`:
    moderation, and content-authority semantics are explicit. A fast wrong
    response is a regression.
 
-After those gates pass, Cloudflare can proxy `canary.plyr.fm` to Fly without
-changing `stg.plyr.fm` or `api-stg.plyr.fm`. Traffic experiments should begin
-with explicit test clients, then opt-in shadow/comparison tooling. General
-percentage routing belongs to a later decision because the v1 API is a new
-contract rather than a drop-in implementation of the Python surface.
+After those gates pass, deploy a separately configured frontend at
+`next.plyr.fm` and route its API calls to the Zig service without changing
+`plyr.fm`, `stg.plyr.fm`, or `api-stg.plyr.fm`. Prefer a same-origin API path or a
+dedicated successor API origin over making `next.plyr.fm` itself return API JSON.
+Users and test clients opt into the complete next environment explicitly;
+percentage routing is not the model for a versioned contract and UI that are
+being replaced together.
 
 ## initial catalog reconciliation
 
@@ -83,6 +87,6 @@ verified all four repositories, projected 19 live tracks and four profiles, and
 quarantined seven list records (five invalid strongRefs and two unknown list
 types). Product reads then returned all 19 tracks even though none had an exact
 legacy `tracks.atproto_record_uri` match. That last result is intentional: the
-verified PDS record is authoritative, while a matching legacy row can enrich
-delivery, moderation, visibility, and metrics but cannot determine whether the
-record exists.
+verified PDS record is authoritative. Canonical-URI application projections
+enrich access and verified delivery independently; remaining legacy moderation
+and metrics cannot determine whether the record exists.

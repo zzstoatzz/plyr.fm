@@ -124,12 +124,18 @@ staging projection.
 
 The `deploy Zig canary` GitHub workflow is manual-only. Local development may
 build and run the image, but deployment goes through that workflow. The Fly
-hostname is the initial verification surface. The workflow runs
+hostname is the initial infrastructure verification surface. The workflow runs
 `scripts/canary_smoke.py` after deployment and fails unless readiness, API
 discovery, track collection/detail, artist lookup, and album collection/detail
 all prove their expected anonymous semantics and request-ID contract. Run the
-same check with `just zig smoke-canary`. `canary.plyr.fm` should be added
-only after the service passes its resource and semantic-parity gates.
+same check with `just zig smoke-canary`.
+
+`next.plyr.fm` is the eventual public parallel deployment of the successor
+application, not an alias for the bare API and not a percentage canary. It gets
+its own frontend configuration pointed at the Zig `/v1` surface and can evolve
+beside `plyr.fm` until it is capable of replacing it. The internal Fly hostname
+comes first; the `next` application is exposed only after the backend passes its
+resource and semantic gates.
 
 Before the first useful canary deployment, `just zig reconcile-catalog` seeds a
 new projection from current authenticated repositories. Existing canonical-looking
