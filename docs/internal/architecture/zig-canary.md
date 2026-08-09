@@ -18,13 +18,17 @@ Zig API configuration, not an alias that exposes the bare API as a website.
 
 ## authority boundary
 
-The initial canary has exactly one process role: REST API. It has no migration,
-background-worker, jetstream, Redis, Docket, R2 write, PDS write, or production
+The canary has exactly one process role: REST API. It has no runtime migration,
+background-worker, jetstream, Docket queue, R2 write, PDS write, or production
 database authority. It reads a dedicated Neon branch cloned from production
 through a `plyr_zig_canary` credential and uses the production `fm.plyr.track`
 and `fm.plyr.list` namespaces. The migration grants schema usage and `SELECT`
 on every current projection table, establishes the same default for projection
-tables created later, and grants no schema creation or table-write privilege.
+tables created later, and grants no schema creation privilege. The first scoped
+write capability grants only canonical play-metric insert/update, the isolated
+legacy play-count column mirror, share-link lookup/event insert, and the event
+sequence. A dedicated `plyr-redis-next` instance holds only expiring play-dedup
+keys; Redis failure counts fail open and cannot deny playback.
 The transitional REST adapters additionally receive `SELECT` on the clone's
 `tracks`, `artists`, `albums`, and `user_preferences` tables. This is an explicit
 compatibility seam for handles, presentation, and local policy—not content
@@ -88,7 +92,8 @@ next-branch writer credential and production NSIDs, writes authenticated
 projections, and is destroyed when it exits. The writer can read the two legacy
 candidate tables and mutate `plyr_index`; it cannot mutate legacy tables.
 Only after successful reconciliation does the workflow deploy the same immutable
-image to `plyr-api-zig-canary`, whose own database credential remains read-only.
+image to `plyr-api-zig-canary`, whose own database credential remains narrowly
+scoped to the tested REST capability set.
 Routine canary deployments leave reconciliation disabled, avoiding repeated PDS
 fetches and projection writes.
 
@@ -134,7 +139,7 @@ Before exposing `next.plyr.fm`:
 whose data and playback capabilities come from Zig `/v1`. Directly exposing the
 isolated Fly API there was useful only as a temporary backend-verification state;
 it is not a shippable interpretation of next. The dedicated Pages frontend uses
-a fixed-target, read-only `/api/v1/*` transport so previews are testable and the
+a fixed-target, least-authority `/api/v1/*` transport so previews are testable and the
 future session boundary stays same-site. It passes the Zig status, body,
 request-ID, and source-rich JSON through without adapting it to the Python API.
 Users and test clients opt into next explicitly; percentage routing is not the
@@ -161,8 +166,9 @@ remain separate: clicking play resolves
 availability, and only then attaches the returned delivery URL.
 
 The Pages Function is a fixed-target transport from same-origin `/api/v1/*` to
-`plyr-api-zig-canary.fly.dev`. It permits only `GET` and `HEAD`, refuses paths
-outside `v1`, and does not rewrite JSON. This makes the Pages preview testable
+`plyr-api-zig-canary.fly.dev`. It permits `GET`, `HEAD`, and scoped `POST`,
+refuses paths outside `v1`, forwards only the dedicated anonymous play cookie,
+and does not rewrite JSON. This makes the Pages preview testable
 without adding preview origins to backend CORS and leaves a same-site seam for
 future sessions.
 
@@ -173,7 +179,8 @@ The deployed `https://next.plyr.fm` verification proved:
   delivery URL;
 - a canonical DID resolves through the flat artist resource and scopes the
   catalog to nine matching tracks;
-- writes through the transport return 405 and non-v1 paths return 404;
+- writes through the currently deployed transport return 405 and non-v1 paths
+  return 404; the play-write checkpoint is not deployed yet;
 - the final DNS set contains one proxied CNAME to `plyr-fm-next.pages.dev`.
 
 ## deployed playlist checkpoint

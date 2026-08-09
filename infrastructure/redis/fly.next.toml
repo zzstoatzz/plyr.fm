@@ -1,0 +1,15 @@
+app = "plyr-redis-next"
+primary_region = "iad"
+
+[build]
+  image = "redis:7-alpine"
+
+[processes]
+  # Play deduplication is deliberately ephemeral. This next-only Redis owns no
+  # queue, session, rate-limit, staging, or production state.
+  app = "sh -c 'redis-server --appendonly no --save \"\" --maxmemory 32mb --maxmemory-policy allkeys-lru --requirepass \"$REDIS_PASSWORD\"'"
+
+[[vm]]
+  memory = "256mb"
+  cpu_kind = "shared"
+  cpus = 1

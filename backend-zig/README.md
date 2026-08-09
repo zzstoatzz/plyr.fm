@@ -128,7 +128,7 @@ storage is designed.
 rejects unsafe or mixed DNS destinations, pins a checked address for TLS,
 verifies the complete signed repository, reconciles `plyr_index`, and exits.
 It never runs migrations; use a write-capable projection role distinct from
-the read-only canary credential.
+the narrowly scoped canary API credential.
 
 `MODE=account_reconciler` is also independent of the API and firehose roles.
 It leases due DIDs from Postgres, resolves each DID's current PDS, and persists
@@ -146,15 +146,19 @@ secret values while checking configuration.
 
 `fly.canary.toml` defines an API-only Fly service named
 `plyr-api-zig-canary`. It uses one 256 MiB shared-CPU machine, scales to zero,
-and has no worker, jetstream, migration, Redis, R2, or production traffic
-responsibilities. `DATABASE_URL` is its only runtime secret and points at the
+and has no worker, jetstream, runtime-migration, Docket queue, R2, PDS-write, or
+production traffic responsibilities. `DATABASE_URL` points at the
 isolated `next-zig-backend` Neon branch through Neon's direct endpoint and the
-`plyr_zig_canary` database role. The application owns a bounded connection pool;
+`plyr_zig_canary` database role. `DOCKET_URL` points only at the dedicated
+`plyr-redis-next` instance for ephemeral play deduplication. The application owns a bounded connection pool;
 the Neon transaction-pooler endpoint is incompatible with pg.zig's two-cycle
 unnamed extended-protocol statements and must not be used. Migrations grant
 that role schema usage and reads on current and future projection tables. During
-the compatibility phase it also has read-only access to `tracks`, `artists`,
-`albums`, and `user_preferences` in the isolated clone; it has no write authority.
+the compatibility phase it also reads `tracks`, `artists`, `albums`, and
+`user_preferences` in the isolated clone. Its only writes are atomic
+canonical-URI play metrics, the temporary legacy count mirror, and optional
+share attribution; the migration test proves the column/table/sequence grant
+set and rejects broader authority.
 
 The already-registered `deploy staging` GitHub workflow exposes an explicit manual
 `zig-canary` target. Local development may build and run the image, but deployment
@@ -165,15 +169,15 @@ The job builds and publishes one commit-addressed image before deployment. On th
 first run, its explicit `reconcile_catalog` input launches that image as an
 unmanaged `--rm` Machine in the canary app with a dedicated next-branch writer
 credential: it authenticates current production-namespace repositories, writes
-only the projection, and is destroyed on exit. The API service receives only the
-read-only credential.
+only the projection, and is destroyed on exit. The API service receives only its
+least-privilege runtime credential.
 Later deployments leave reconciliation disabled unless source state needs a
 deliberate refresh. The Fly hostname is the initial infrastructure verification
 surface. The job runs
 `scripts/canary_smoke.py` after deployment and fails unless readiness, API
 discovery, track collection/detail, anonymous playback, artist lookup, album
-collection/detail, verified playlist collection/detail, and a real track search
-all prove their
+collection/detail, verified playlist collection/detail, a real track search,
+and a sustained play followed by a Redis-rejected duplicate all prove their
 expected semantics and request-ID contract.
 The gate requires a real verified track with an available HTTPS playback
 capability, round-trips its collection representation through detail, and

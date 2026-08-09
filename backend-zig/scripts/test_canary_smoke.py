@@ -175,3 +175,52 @@ def test_real_product_reads_reject_empty_projection() -> None:
             assert str(error) == "next projection has no public tracks"
         else:
             raise AssertionError("empty projection unexpectedly passed")
+
+
+def test_sustained_play_requires_redis_claim_and_duplicate_receipt() -> None:
+    track = {
+        "id": "trk_verified",
+        "record": {"uri": "at://did:plc:artist/fm.plyr.track/one"},
+        "metrics": {"play_count": 7},
+    }
+    responses = iter(
+        (
+            canary_smoke.Response(
+                status=200,
+                headers={
+                    "x-request-id": "req-first",
+                    "set-cookie": "plyr_play_id=abcdefghijklmnopqrstuv; Secure",
+                },
+                body={
+                    "object": "play_receipt",
+                    "track_id": "trk_verified",
+                    "record": track["record"],
+                    "play_count": 8,
+                    "counted": True,
+                    "dedup": {"status": "claimed", "window_seconds": 180},
+                },
+            ),
+            canary_smoke.Response(
+                status=200,
+                headers={"x-request-id": "req-duplicate"},
+                body={
+                    "object": "play_receipt",
+                    "track_id": "trk_verified",
+                    "record": track["record"],
+                    "play_count": 8,
+                    "counted": False,
+                    "dedup": {"status": "duplicate", "window_seconds": 180},
+                },
+            ),
+        )
+    )
+
+    with patch.object(canary_smoke, "_request", side_effect=responses) as request:
+        canary_smoke._verify_sustained_play("https://canary.example", track)
+
+    first_call, duplicate_call = request.call_args_list
+    assert first_call.kwargs == {"method": "POST"}
+    assert duplicate_call.kwargs == {
+        "method": "POST",
+        "cookie": "plyr_play_id=abcdefghijklmnopqrstuv",
+    }

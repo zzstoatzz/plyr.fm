@@ -1,4 +1,4 @@
-"""Post-deploy semantic smoke test for the read-only Zig canary."""
+"""Post-deploy semantic smoke test for the scoped Zig canary surface."""
 
 from __future__ import annotations
 
@@ -25,8 +25,19 @@ def _opaque_id(prefix: str, uri: str) -> str:
     return f"{prefix}{payload}"
 
 
-def _request(base_url: str, path: str) -> Response:
-    request = urllib.request.Request(f"{base_url}{path}", method="GET")
+def _request(
+    base_url: str,
+    path: str,
+    *,
+    method: str = "GET",
+    cookie: str | None = None,
+) -> Response:
+    headers = {"Accept": "application/json"}
+    if cookie:
+        headers["Cookie"] = cookie
+    request = urllib.request.Request(
+        f"{base_url}{path}", headers=headers, method=method
+    )
     try:
         response = urllib.request.urlopen(request, timeout=15)
     except urllib.error.HTTPError as error:
@@ -54,7 +65,7 @@ def _expect_request_id(response: Response) -> None:
     assert response.headers.get("x-request-id"), response.headers
 
 
-def _verify_real_product_reads(base_url: str) -> None:
+def _verify_real_product_reads(base_url: str) -> dict[str, Any]:
     tracks = _request(base_url, "/v1/tracks?limit=20")
     assert tracks.status == 200, (tracks.status, tracks.body)
     assert tracks.body["object"] == "list"
@@ -202,6 +213,32 @@ def _verify_real_product_reads(base_url: str) -> None:
             assert member["track"]["record"] == member["subject"], member
         else:
             assert member["track"] is None, member
+    return listed_track
+
+
+def _verify_sustained_play(base_url: str, track: dict[str, Any]) -> None:
+    track_id = urllib.parse.quote(track["id"], safe="_-")
+    path = f"/v1/tracks/{track_id}/plays"
+    first = _request(base_url, path, method="POST")
+    assert first.status == 200, (first.status, first.body)
+    _expect_request_id(first)
+    assert first.body["object"] == "play_receipt", first.body
+    assert first.body["track_id"] == track["id"], first.body
+    assert first.body["record"]["uri"] == track["record"]["uri"], first.body
+    assert first.body["counted"] is True, first.body
+    assert first.body["dedup"]["status"] == "claimed", first.body
+    assert first.body["play_count"] >= track["metrics"]["play_count"] + 1, first.body
+    cookie = first.headers.get("set-cookie", "").split(";", 1)[0]
+    assert cookie.startswith("plyr_play_id="), first.headers
+
+    duplicate = _request(base_url, path, method="POST", cookie=cookie)
+    assert duplicate.status == 200, (duplicate.status, duplicate.body)
+    _expect_request_id(duplicate)
+    assert duplicate.body["track_id"] == track["id"], duplicate.body
+    assert duplicate.body["counted"] is False, duplicate.body
+    assert duplicate.body["dedup"]["status"] == "duplicate", duplicate.body
+    assert duplicate.body["play_count"] >= first.body["play_count"], duplicate.body
+    assert "set-cookie" not in duplicate.headers, duplicate.headers
 
 
 def _wait_for_product_readiness(base_url: str, timeout_seconds: float) -> None:
@@ -229,7 +266,8 @@ def verify(base_url: str, timeout_seconds: float = 90) -> None:
     _wait_for_product_readiness(base_url, timeout_seconds)
     _expect(_request(base_url, "/health"), 200, {"status": "ok", "role": "api"})
     _expect(_request(base_url, "/v1"), 200, {"object": "api", "version": "v1"})
-    _verify_real_product_reads(base_url)
+    track = _verify_real_product_reads(base_url)
+    _verify_sustained_play(base_url, track)
 
     absent_did = "did:plc:canarysmoke"
     artist = _request(base_url, f"/v1/artists/{absent_did}")
