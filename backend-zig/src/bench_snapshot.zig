@@ -4,7 +4,9 @@ const std = @import("std");
 const zat = @import("zat");
 const snapshot_verifier = @import("internal/projection/snapshot_verifier.zig");
 
-const record_count = 100;
+const list_record_count = 100;
+const track_record_count = 100;
+const record_count = list_record_count + track_record_count;
 const iterations = 50;
 
 pub fn main() !void {
@@ -45,7 +47,8 @@ pub fn main() !void {
             "fm.plyr.dev.track",
             1,
         );
-        if (snapshot.list_changes.len != record_count) return error.BadBenchmarkFixture;
+        if (snapshot.list_changes.len != list_record_count or
+            snapshot.track_changes.len != track_record_count) return error.BadBenchmarkFixture;
     }
     const elapsed_ns: u64 = @intCast(@max(
         started.durationTo(std.Io.Timestamp.now(io, .awake)).nanoseconds,
@@ -91,14 +94,44 @@ fn buildFixture(allocator: std.mem.Allocator) !Fixture {
     } };
     const record_bytes = try zat.cbor.encodeAlloc(allocator, record);
     const record_cid = try zat.Cid.forDagCbor(allocator, record_bytes);
+    const blob_cid = try zat.Cid.create(
+        allocator,
+        1,
+        zat.cbor.Codec.raw,
+        zat.cbor.HashFn.sha2_256,
+        "audio",
+    );
+    const track_record: zat.cbor.Value = .{ .map = &.{
+        .{ .key = "$type", .value = .{ .text = "fm.plyr.dev.track" } },
+        .{ .key = "title", .value = .{ .text = "Benchmark Track" } },
+        .{ .key = "artist", .value = .{ .text = "Benchmark Artist" } },
+        .{ .key = "fileType", .value = .{ .text = "flac" } },
+        .{ .key = "createdAt", .value = .{ .text = "2026-08-08T12:00:00Z" } },
+        .{ .key = "audioBlob", .value = .{ .map = &.{
+            .{ .key = "$type", .value = .{ .text = "blob" } },
+            .{ .key = "ref", .value = .{ .cid = blob_cid } },
+            .{ .key = "mimeType", .value = .{ .text = "audio/flac" } },
+            .{ .key = "size", .value = .{ .unsigned = 5 } },
+        } } },
+    } };
+    const track_bytes = try zat.cbor.encodeAlloc(allocator, track_record);
+    const track_cid = try zat.Cid.forDagCbor(allocator, track_bytes);
     var tree = zat.mst.Mst.init(allocator);
-    for (0..record_count) |index| {
+    for (0..list_record_count) |index| {
         const path = try std.fmt.allocPrint(
             allocator,
             "fm.plyr.dev.list/bench-{d:0>8}",
             .{index},
         );
         try tree.put(path, record_cid);
+    }
+    for (0..track_record_count) |index| {
+        const path = try std.fmt.allocPrint(
+            allocator,
+            "fm.plyr.dev.track/bench-{d:0>8}",
+            .{index},
+        );
+        try tree.put(path, track_cid);
     }
     const root = try tree.rootCid();
     const signed = try zat.signCommit(allocator, .{
@@ -110,6 +143,7 @@ fn buildFixture(allocator: std.mem.Allocator) !Fixture {
     try blocks.append(allocator, .{ .cid_raw = signed.cid.raw, .data = signed.bytes });
     try tree.collectBlocks(&blocks);
     try blocks.append(allocator, .{ .cid_raw = record_cid.raw, .data = record_bytes });
+    try blocks.append(allocator, .{ .cid_raw = track_cid.raw, .data = track_bytes });
     return .{
         .car_bytes = try zat.car.writeAlloc(allocator, .{
             .roots = &.{signed.cid},

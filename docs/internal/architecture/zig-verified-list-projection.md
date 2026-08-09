@@ -144,24 +144,22 @@ absence the same durability as an observed live delete.
 The same projection serves album detail first and later playlist and liked-list
 reads without exposing its physical schema through the REST model.
 
-## next slice
+## adjacent track slice
 
-The independently deployable ingester now connects destination-safe `getRepo`
-repair and live firehose consumption to the verified snapshot and commit
-transactions. The next projection work is source-authoritative account and
-track state, followed by verified blob mirroring. Album detail joins list
-members to independently indexed track records while retaining missing,
-private, and moderated positions without silently substituting unrelated local
-rows. The first API canary remains read-only and never starts the ingester.
+The same authenticated commit and snapshot transactions now include the
+[`verified track projection`](zig-verified-track-projection.md). Account/profile
+state and verified blob mirroring remain separate projections. Album detail can
+eventually join list members to independently indexed track records while
+retaining missing, private, and moderated positions without silently
+substituting unrelated local rows. The first API canary remains read-only and
+never starts the ingester.
 
 ## verifier resource baseline
 
-`just zig bench-snapshot` builds a deterministic signed full-repository CAR with
-100 valid list records and measures 50 complete proof-and-extraction passes in
-`ReleaseFast`. On the Apple M5 Pro development host with Zig 0.16.0, five warm
-runs had a median of 286,853 ns per repository: 3,486 repositories/s or 348,611
-records/s. The 9,024-byte fixture process peaked at 2,310,144 bytes RSS under
-`/usr/bin/time -l`.
+The original list-only baseline was 100 records in a 9,024-byte CAR at a median
+286,853 ns per repository. The benchmark now covers 100 lists plus 100 tracks;
+current figures live with the track boundary so future changes compare like
+with like.
 
 This is a CPU and allocation baseline for the authenticated snapshot core, not
 a network, Postgres, large-repository, or production-capacity claim. The

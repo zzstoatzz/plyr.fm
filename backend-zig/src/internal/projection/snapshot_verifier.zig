@@ -3,6 +3,7 @@
 const std = @import("std");
 const zat = @import("zat");
 const list_change = @import("list_change.zig");
+const track_change = @import("track_change.zig");
 const verified = @import("verified_snapshot.zig");
 
 pub const max_repo_bytes = 64 * 1024 * 1024;
@@ -91,8 +92,10 @@ pub fn verify(
         .commit_cid = collector.proof.commit_cid,
         .data_cid = data_cid,
         .list_collection = list_collection,
+        .track_collection = track_collection,
         .indexed_at_us = indexed_at_us,
         .list_changes = try collector.changes.toOwnedSlice(allocator),
+        .track_changes = try collector.track_changes.toOwnedSlice(allocator),
     };
     try snapshot.validate();
     return snapshot;
@@ -106,6 +109,7 @@ const Collector = struct {
     track_collection: []const u8,
     proof: list_change.Proof,
     changes: std.ArrayList(list_change.Change) = .empty,
+    track_changes: std.ArrayList(track_change.Change) = .empty,
 
     fn entry(context: *anyopaque, item: zat.mst.WalkEntry) anyerror!void {
         const self: *Collector = @ptrCast(@alignCast(context));
@@ -114,29 +118,42 @@ const Collector = struct {
         if (std.mem.indexOfScalar(u8, item.key[separator + 1 ..], '/') != null)
             return error.InvalidRepoPath;
         const collection = item.key[0..separator];
-        if (!std.mem.eql(u8, collection, self.list_collection)) return;
+        if (!std.mem.eql(u8, collection, self.list_collection) and
+            !std.mem.eql(u8, collection, self.track_collection)) return;
         const rkey = item.key[separator + 1 ..];
         if (zat.Rkey.parse(rkey) == null) return error.InvalidRepoPath;
         const record_bytes = zat.car.findBlock(self.repo_car, item.value.raw) orelse
             return error.IncompleteRepo;
         const record = zat.cbor.decodeAll(self.allocator, record_bytes) catch
-            return error.InvalidListRecord;
-        const change = (try list_change.fromVerifiedOperation(
-            self.allocator,
-            self.repo_did,
-            .{
-                .action = .create,
-                .path = item.key,
-                .collection = collection,
-                .rkey = rkey,
-                .cid = item.value,
-                .record = record,
-            },
-            self.list_collection,
-            self.track_collection,
-            self.proof,
-        )) orelse return error.InvalidListRecord;
-        try self.changes.append(self.allocator, change);
+            return error.InvalidProjectedRecord;
+        const operation: zat.firehose.RepoOp = .{
+            .action = .create,
+            .path = item.key,
+            .collection = collection,
+            .rkey = rkey,
+            .cid = item.value,
+            .record = record,
+        };
+        if (std.mem.eql(u8, collection, self.list_collection)) {
+            const change = (try list_change.fromVerifiedOperation(
+                self.allocator,
+                self.repo_did,
+                operation,
+                self.list_collection,
+                self.track_collection,
+                self.proof,
+            )) orelse return error.InvalidProjectedRecord;
+            try self.changes.append(self.allocator, change);
+        } else {
+            const change = (try track_change.fromVerifiedOperation(
+                self.allocator,
+                self.repo_did,
+                operation,
+                self.track_collection,
+                self.proof,
+            )) orelse return error.InvalidProjectedRecord;
+            try self.track_changes.append(self.allocator, change);
+        }
     }
 };
 
@@ -155,6 +172,8 @@ test "complete repo verifier authenticates and extracts list records" {
         42,
     );
     try std.testing.expectEqual(@as(usize, 1), snapshot.list_changes.len);
+    try std.testing.expectEqual(@as(usize, 1), snapshot.track_changes.len);
+    try std.testing.expectEqualStrings("Verified", snapshot.track_changes[0].upsert.title);
     try std.testing.expectEqualStrings(fixture.did, snapshot.repo_did);
     try std.testing.expectEqualStrings("3jqfcqzm3fo2j", snapshot.commit_rev);
 
@@ -192,8 +211,31 @@ fn buildFixture(allocator: std.mem.Allocator, include_record: bool) !Fixture {
     } };
     const record_bytes = try zat.cbor.encodeAlloc(allocator, record);
     const record_cid = try zat.Cid.forDagCbor(allocator, record_bytes);
+    const blob_cid = try zat.Cid.create(
+        allocator,
+        1,
+        zat.cbor.Codec.raw,
+        zat.cbor.HashFn.sha2_256,
+        "audio",
+    );
+    const track_record: zat.cbor.Value = .{ .map = &.{
+        .{ .key = "$type", .value = .{ .text = "fm.plyr.dev.track" } },
+        .{ .key = "title", .value = .{ .text = "Verified" } },
+        .{ .key = "artist", .value = .{ .text = "Artist" } },
+        .{ .key = "fileType", .value = .{ .text = "flac" } },
+        .{ .key = "createdAt", .value = .{ .text = "2026-08-08T12:00:00Z" } },
+        .{ .key = "audioBlob", .value = .{ .map = &.{
+            .{ .key = "$type", .value = .{ .text = "blob" } },
+            .{ .key = "ref", .value = .{ .cid = blob_cid } },
+            .{ .key = "mimeType", .value = .{ .text = "audio/flac" } },
+            .{ .key = "size", .value = .{ .unsigned = 5 } },
+        } } },
+    } };
+    const track_bytes = try zat.cbor.encodeAlloc(allocator, track_record);
+    const track_cid = try zat.Cid.forDagCbor(allocator, track_bytes);
     var tree = zat.mst.Mst.init(allocator);
     try tree.put("fm.plyr.dev.list/3m123abc", record_cid);
+    try tree.put("fm.plyr.dev.track/3m123abd", track_cid);
     const root = try tree.rootCid();
     const signed = try zat.signCommit(allocator, .{
         .did = did,
@@ -203,8 +245,10 @@ fn buildFixture(allocator: std.mem.Allocator, include_record: bool) !Fixture {
     var blocks: std.ArrayList(zat.car.Block) = .empty;
     try blocks.append(allocator, .{ .cid_raw = signed.cid.raw, .data = signed.bytes });
     try tree.collectBlocks(&blocks);
-    if (include_record)
+    if (include_record) {
         try blocks.append(allocator, .{ .cid_raw = record_cid.raw, .data = record_bytes });
+        try blocks.append(allocator, .{ .cid_raw = track_cid.raw, .data = track_bytes });
+    }
     return .{
         .car_bytes = try zat.car.writeAlloc(allocator, .{
             .roots = &.{signed.cid},

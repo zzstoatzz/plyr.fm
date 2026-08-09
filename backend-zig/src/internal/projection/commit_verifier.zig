@@ -7,6 +7,7 @@
 const std = @import("std");
 const zat = @import("zat");
 const list_change = @import("list_change.zig");
+const track_change = @import("track_change.zig");
 const verified = @import("verified_commit.zig");
 
 pub const max_commit_blocks_bytes = 2_000_000;
@@ -59,6 +60,7 @@ pub fn verify(
     try checkOperationCids(allocator, event, result.data_cid);
 
     var changes: std.ArrayList(list_change.Change) = .empty;
+    var track_changes: std.ArrayList(track_change.Change) = .empty;
     for (event.ops) |operation| {
         if (try list_change.fromVerifiedOperation(
             allocator,
@@ -72,6 +74,17 @@ pub fn verify(
                 .indexed_at_us = indexed_at_us,
             },
         )) |change| try changes.append(allocator, change);
+        if (try track_change.fromVerifiedOperation(
+            allocator,
+            event.repo,
+            operation,
+            track_collection,
+            .{
+                .commit_cid = outer_commit,
+                .commit_rev = event.rev,
+                .indexed_at_us = indexed_at_us,
+            },
+        )) |change| try track_changes.append(allocator, change);
     }
 
     const commit: verified.Commit = .{
@@ -82,6 +95,7 @@ pub fn verify(
         .data_cid = try zat.Cid.fromBytes(result.data_cid),
         .indexed_at_us = indexed_at_us,
         .list_changes = try changes.toOwnedSlice(allocator),
+        .track_changes = try track_changes.toOwnedSlice(allocator),
     };
     try commit.validate();
     return commit;
@@ -132,6 +146,7 @@ test "strict verifier proves chain, envelope, op CID, and list record together" 
     const prior_rev = "3jqfcqzm3fo2j";
     const rev = "3jqfcqzm3fo2k";
     const path = "fm.plyr.dev.list/3m123abc";
+    const track_path = "fm.plyr.dev.track/3m123abd";
 
     var before = zat.mst.Mst.init(a);
     const before_root = try before.rootCid();
@@ -143,8 +158,25 @@ test "strict verifier proves chain, envelope, op CID, and list record together" 
     } };
     const record_bytes = try zat.cbor.encodeAlloc(a, record);
     const record_cid = try zat.Cid.forDagCbor(a, record_bytes);
+    const blob_cid = try zat.Cid.create(a, 1, zat.cbor.Codec.raw, zat.cbor.HashFn.sha2_256, "audio");
+    const track_record: zat.cbor.Value = .{ .map = &.{
+        .{ .key = "$type", .value = .{ .text = "fm.plyr.dev.track" } },
+        .{ .key = "title", .value = .{ .text = "Verified" } },
+        .{ .key = "artist", .value = .{ .text = "Artist" } },
+        .{ .key = "fileType", .value = .{ .text = "flac" } },
+        .{ .key = "createdAt", .value = .{ .text = "2026-08-08T12:00:00Z" } },
+        .{ .key = "audioBlob", .value = .{ .map = &.{
+            .{ .key = "$type", .value = .{ .text = "blob" } },
+            .{ .key = "ref", .value = .{ .cid = blob_cid } },
+            .{ .key = "mimeType", .value = .{ .text = "audio/flac" } },
+            .{ .key = "size", .value = .{ .unsigned = 5 } },
+        } } },
+    } };
+    const track_bytes = try zat.cbor.encodeAlloc(a, track_record);
+    const track_cid = try zat.Cid.forDagCbor(a, track_bytes);
     var after = zat.mst.Mst.init(a);
     try after.put(path, record_cid);
+    try after.put(track_path, track_cid);
     const after_root = try after.rootCid();
     const previous_commit = try zat.Cid.forDagCbor(a, "previous commit");
     const signed = try zat.signCommit(a, .{
@@ -157,6 +189,7 @@ test "strict verifier proves chain, envelope, op CID, and list record together" 
     try blocks.append(a, .{ .cid_raw = signed.cid.raw, .data = signed.bytes });
     try after.collectBlocks(&blocks);
     try blocks.append(a, .{ .cid_raw = record_cid.raw, .data = record_bytes });
+    try blocks.append(a, .{ .cid_raw = track_cid.raw, .data = track_bytes });
     const car_bytes = try zat.car.writeAlloc(a, .{
         .roots = &.{signed.cid},
         .blocks = blocks.items,
@@ -169,6 +202,14 @@ test "strict verifier proves chain, envelope, op CID, and list record together" 
         .cid = record_cid,
         .record = record,
     };
+    const track_operation: zat.firehose.RepoOp = .{
+        .action = .create,
+        .path = track_path,
+        .collection = "fm.plyr.dev.track",
+        .rkey = "3m123abd",
+        .cid = track_cid,
+        .record = track_record,
+    };
     const event: zat.firehose.CommitEvent = .{
         .seq = 1,
         .repo = did,
@@ -176,7 +217,7 @@ test "strict verifier proves chain, envelope, op CID, and list record together" 
         .time = "2026-08-08T12:00:00Z",
         .commit = signed.cid,
         .blocks = car_bytes,
-        .ops = &.{operation},
+        .ops = &.{ operation, track_operation },
         .prev_data = before_root,
     };
     const commit = try verify(
@@ -189,6 +230,8 @@ test "strict verifier proves chain, envelope, op CID, and list record together" 
         42,
     );
     try std.testing.expectEqual(@as(usize, 1), commit.list_changes.len);
+    try std.testing.expectEqual(@as(usize, 1), commit.track_changes.len);
+    try std.testing.expectEqualStrings("Verified", commit.track_changes[0].upsert.title);
     try std.testing.expectEqualStrings(rev, commit.commit_rev);
     try std.testing.expectEqualSlices(u8, after_root.raw, commit.data_cid.raw);
 

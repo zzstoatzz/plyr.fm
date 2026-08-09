@@ -4,8 +4,10 @@ const std = @import("std");
 const pg = @import("pg");
 const zat = @import("zat");
 const list_change = @import("list_change.zig");
-const list_store = @import("list_store.zig");
 const postgres_list = @import("postgres_list_store.zig");
+const postgres_track = @import("postgres_track_store.zig");
+const track_change = @import("track_change.zig");
+const track_store = @import("track_store.zig");
 const repository_head = @import("repository_head.zig");
 const verified = @import("verified_commit.zig");
 
@@ -131,6 +133,16 @@ pub const PostgresVerifiedCommitStore = struct {
             };
             if (result != .applied) return error.CorruptProjection;
         }
+        var tracks: postgres_track.PostgresTrackStore = .{ .pool = self.pool };
+        for (commit.track_changes) |change| {
+            const result = tracks.applyInTransaction(conn, allocator, change) catch |err| switch (err) {
+                error.RevisionConflict => return error.RevisionConflict,
+                error.CorruptProjection => return error.CorruptProjection,
+                error.ProjectionUnavailable => return error.ProjectionUnavailable,
+                error.OutOfMemory => return error.OutOfMemory,
+            };
+            if (result != .applied) return error.CorruptProjection;
+        }
 
         const advanced = conn.exec(advance_head_sql, .{
             commit.commit_rev,
@@ -242,6 +254,7 @@ test "PostgreSQL verified commit sink is atomic, strict, and replay safe" {
     _ = try pool.exec("DROP SCHEMA IF EXISTS plyr_index CASCADE", .{});
     defer _ = pool.exec("DROP SCHEMA IF EXISTS plyr_index CASCADE", .{}) catch null;
     try postgres_list.createTestSchema(pool);
+    try postgres_track.createTestTable(pool);
     _ = try pool.exec(
         \\CREATE TABLE plyr_index.repo_heads (
         \\  repo_did text PRIMARY KEY,
@@ -313,13 +326,11 @@ test "PostgreSQL verified commit sink is atomic, strict, and replay safe" {
     conflict.list_changes = &.{};
     try std.testing.expectError(error.RevisionConflict, store.apply(a, conflict));
 
-    var list_implementation: postgres_list.PostgresListStore = .{ .pool = pool };
-    const poison = listDelete("two", rev_3.str(), commit_3, 4_000);
-    try std.testing.expectEqual(list_store.ApplyResult.applied, try list_implementation.store().apply(a, poison));
-    const second_changes = [_]list_change.Change{
-        listDelete("one", rev_2.str(), commit_2, 3_000),
-        listDelete("two", rev_2.str(), commit_2, 3_000),
-    };
+    var track_implementation: postgres_track.PostgresTrackStore = .{ .pool = pool };
+    const poison = trackUpsert(rev_3.str(), commit_3, 4_000);
+    try std.testing.expectEqual(track_store.ApplyResult.applied, try track_implementation.store().apply(a, poison));
+    const second_changes = [_]list_change.Change{listDelete("one", rev_2.str(), commit_2, 3_000)};
+    const second_track_changes = [_]track_change.Change{trackUpsert(rev_2.str(), commit_2, 3_000)};
     const second: verified.Commit = .{
         .repo_did = did,
         .commit_rev = rev_2.str(),
@@ -328,10 +339,44 @@ test "PostgreSQL verified commit sink is atomic, strict, and replay safe" {
         .data_cid = data_2,
         .indexed_at_us = 3_000,
         .list_changes = &second_changes,
+        .track_changes = &second_track_changes,
     };
     try std.testing.expectError(error.CorruptProjection, store.apply(a, second));
     try expectHead(pool, rev_1.str(), try data_1.toString(a));
     try expectRecordRev(pool, "one", rev_1.str());
+    try expectTrackRev(pool, rev_3.str());
+}
+
+fn trackUpsert(
+    rev: []const u8,
+    commit_cid: zat.Cid,
+    indexed_at_us: i64,
+) track_change.Change {
+    return .{ .upsert = .{
+        .record_uri = "at://did:plc:artist/fm.plyr.dev.track/track",
+        .record_cid = "bafyreiaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        .owner_did = "did:plc:artist",
+        .collection = "fm.plyr.dev.track",
+        .rkey = "track",
+        .title = "Track",
+        .artist_name = "Artist",
+        .file_type = "flac",
+        .created_at = "2026-08-08T12:00:00Z",
+        .audio_url = "https://media.example/track.flac",
+        .audio_blob = null,
+        .album = null,
+        .duration_seconds = 42,
+        .featured_dids = &.{},
+        .image_url = null,
+        .support_gate_type = null,
+        .description = null,
+        .self_labels = &.{},
+        .proof = .{
+            .commit_cid = commit_cid,
+            .commit_rev = rev,
+            .indexed_at_us = indexed_at_us,
+        },
+    } };
 }
 
 fn listDelete(
@@ -384,6 +429,15 @@ fn expectRecordRev(pool: *pg.Pool, rkey: []const u8, rev: []const u8) !void {
     var row = (try pool.row(
         "SELECT commit_rev FROM plyr_index.list_records WHERE rkey = $1",
         .{rkey},
+    )).?;
+    defer row.deinit() catch {};
+    try std.testing.expectEqualStrings(rev, try row.get([]const u8, 0));
+}
+
+fn expectTrackRev(pool: *pg.Pool, rev: []const u8) !void {
+    var row = (try pool.row(
+        "SELECT commit_rev FROM plyr_index.track_records WHERE rkey = 'track'",
+        .{},
     )).?;
     defer row.deinit() catch {};
     try std.testing.expectEqualStrings(rev, try row.get([]const u8, 0));

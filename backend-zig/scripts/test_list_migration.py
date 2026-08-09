@@ -1,4 +1,4 @@
-"""Exercise the Zig-owned list projection migration against relay_test only."""
+"""Exercise the Zig-owned projection migrations against relay_test only."""
 
 from __future__ import annotations
 
@@ -12,8 +12,14 @@ from sqlalchemy.engine import make_url
 from alembic import command
 
 PRIOR_REVISION = "4aaed6c819f1"
-HEAD_REVISION = "91d8c4e7a2b6"
-EXPECTED_TABLES = {"list_members", "list_records", "relay_cursors", "repo_heads"}
+HEAD_REVISION = "b2e74a19c5d0"
+EXPECTED_TABLES = {
+    "list_members",
+    "list_records",
+    "relay_cursors",
+    "repo_heads",
+    "track_records",
+}
 EXPECTED_HEAD_COLUMNS = {
     "repo_did",
     "commit_rev",
@@ -22,6 +28,32 @@ EXPECTED_HEAD_COLUMNS = {
     "indexed_at_us",
 }
 EXPECTED_CURSOR_COLUMNS = {"source", "seq", "updated_at_us"}
+EXPECTED_TRACK_COLUMNS = {
+    "album",
+    "artist_name",
+    "audio_blob_cid",
+    "audio_blob_media_type",
+    "audio_blob_size",
+    "audio_url",
+    "collection",
+    "commit_cid",
+    "commit_rev",
+    "deleted",
+    "description",
+    "duration_seconds",
+    "featured_dids",
+    "file_type",
+    "image_url",
+    "indexed_at_us",
+    "owner_did",
+    "record_cid",
+    "record_created_at",
+    "record_uri",
+    "rkey",
+    "self_labels",
+    "support_gate_type",
+    "title",
+}
 
 
 def sync_database_url() -> str:
@@ -124,6 +156,11 @@ def main() -> None:
         if cursor_columns != EXPECTED_CURSOR_COLUMNS:
             raise AssertionError(
                 f"unexpected relay_cursors columns: {sorted(cursor_columns)!r}"
+            )
+        track_columns = table_columns(database_url, "track_records")
+        if track_columns != EXPECTED_TRACK_COLUMNS:
+            raise AssertionError(
+                f"unexpected track_records columns: {sorted(track_columns)!r}"
             )
     finally:
         if upgraded:

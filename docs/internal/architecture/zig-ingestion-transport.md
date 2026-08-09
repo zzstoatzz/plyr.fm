@@ -72,7 +72,7 @@ Account control events are outside this list/track projection and currently
 advance only the relay checkpoint. Before this role can become the sole source
 for discovery availability, account status needs its own source-authoritative
 projection. That boundary is explicit rather than coupling signed list state
-to the legacy `artists` table.
+or track state to the legacy `artists` table.
 
 ## direct PDS threat model
 
@@ -174,8 +174,8 @@ gap repair are implemented. Continuous deployment still needs:
 - signal-driven graceful stop and final checkpoint flush;
 - retry/backoff and observable state for PDS repairs that cannot complete
   synchronously;
-- account-state and track-record projections, blob mirroring, and tombstone
-  policy beyond verified list state;
+- account/profile projection and verified blob mirroring; signed track records
+  and durable track tombstones now share the repository transaction;
 - ingestion health/lag metrics and an operator-visible poison-event policy;
 - staging-native resource, failure, and large-CAR testing.
 

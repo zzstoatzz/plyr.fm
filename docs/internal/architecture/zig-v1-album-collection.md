@@ -91,7 +91,9 @@ The verified album-detail contract is documented in
 [`zig-v1-album-detail.md`](zig-v1-album-detail.md). Destination-safe repair and
 the separately deployable firehose role now feed the same verifier and atomic
 stores; deployment, account state, track projection, and blob ingestion remain
-open. Mutations
+stores. Deployment, account state, verified track reads, and blob ingestion
+remain open; signed track-record persistence is implemented independently.
+Mutations
 must write source-authoritative records and are not added on top of the legacy
 local-first finalization flow. Global discovery, viewer state, artwork
 mirroring, and description authorship remain separate design work.

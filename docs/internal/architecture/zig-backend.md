@@ -143,5 +143,8 @@ preserves every ordered strong reference from verified DAG-CBOR repository
 blocks and hydrates only exact public URI/CID matches, rather than fetching or
 inventing membership during a REST request.
 
-Verified ingestion and blob mirroring are dependencies of a trustworthy
-projection, but their implementation is outside the REST-focused first slice.
+Signed commit and snapshot ingestion now persist the
+[`verified track projection`](zig-verified-track-projection.md) alongside list
+state. Blob mirroring, account/profile state, and the REST adapter switch remain
+separate work so verified authored fields do not launder delivery or local
+policy into source truth.

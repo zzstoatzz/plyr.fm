@@ -6,6 +6,8 @@ const zat = @import("zat");
 const list_change = @import("list_change.zig");
 const list_store = @import("list_store.zig");
 const postgres_list = @import("postgres_list_store.zig");
+const postgres_track = @import("postgres_track_store.zig");
+const track_change = @import("track_change.zig");
 const verified = @import("verified_snapshot.zig");
 
 pub const PostgresVerifiedSnapshotStore = struct {
@@ -39,6 +41,15 @@ pub const PostgresVerifiedSnapshotStore = struct {
             return error.OutOfMemory;
         defer allocator.free(record_uris);
         for (snapshot.list_changes, record_uris) |change, *uri| {
+            uri.* = switch (change) {
+                .upsert => |value| value.record_uri,
+                .delete => return error.InvalidSnapshot,
+            };
+        }
+        const track_uris = allocator.alloc([]const u8, snapshot.track_changes.len) catch
+            return error.OutOfMemory;
+        defer allocator.free(track_uris);
+        for (snapshot.track_changes, track_uris) |change, *uri| {
             uri.* = switch (change) {
                 .upsert => |value| value.record_uri,
                 .delete => return error.InvalidSnapshot,
@@ -79,6 +90,7 @@ pub const PostgresVerifiedSnapshotStore = struct {
         var future_row = conn.row(has_future_records_sql, .{
             snapshot.repo_did,
             snapshot.list_collection,
+            snapshot.track_collection,
             snapshot.commit_rev,
         }) catch |err| {
             std.log.err("verified snapshot future-record check failed: {}", .{err});
@@ -94,6 +106,16 @@ pub const PostgresVerifiedSnapshotStore = struct {
         var lists: postgres_list.PostgresListStore = .{ .pool = self.pool };
         for (snapshot.list_changes) |change| {
             const result = lists.applyInTransaction(conn, allocator, change) catch |err| switch (err) {
+                error.RevisionConflict => return error.RevisionConflict,
+                error.CorruptProjection => return error.CorruptProjection,
+                error.ProjectionUnavailable => return error.ProjectionUnavailable,
+                error.OutOfMemory => return error.OutOfMemory,
+            };
+            if (result != .applied) return error.CorruptProjection;
+        }
+        var tracks: postgres_track.PostgresTrackStore = .{ .pool = self.pool };
+        for (snapshot.track_changes) |change| {
+            const result = tracks.applyInTransaction(conn, allocator, change) catch |err| switch (err) {
                 error.RevisionConflict => return error.RevisionConflict,
                 error.CorruptProjection => return error.CorruptProjection,
                 error.ProjectionUnavailable => return error.ProjectionUnavailable,
@@ -120,6 +142,17 @@ pub const PostgresVerifiedSnapshotStore = struct {
             commit_cid,
         }) catch |err| {
             std.log.err("verified snapshot tombstone member cleanup failed: {}", .{err});
+            return error.ProjectionUnavailable;
+        };
+        _ = conn.exec(tombstone_absent_tracks_sql, .{
+            snapshot.repo_did,
+            snapshot.track_collection,
+            track_uris,
+            commit_cid,
+            snapshot.commit_rev,
+            snapshot.indexed_at_us,
+        }) catch |err| {
+            std.log.err("verified snapshot track absence reconciliation failed: {}", .{err});
             return error.ProjectionUnavailable;
         };
         const advanced = conn.exec(install_head_sql, .{
@@ -205,7 +238,10 @@ const head_sql =
 const has_future_records_sql =
     \\SELECT EXISTS (
     \\  SELECT 1 FROM plyr_index.list_records
-    \\  WHERE owner_did = $1 AND collection = $2 AND commit_rev > $3
+    \\  WHERE owner_did = $1 AND collection = $2 AND commit_rev > $4
+    \\  UNION ALL
+    \\  SELECT 1 FROM plyr_index.track_records
+    \\  WHERE owner_did = $1 AND collection = $3 AND commit_rev > $4
     \\)
 ;
 
@@ -233,6 +269,33 @@ const delete_tombstoned_members_sql =
     \\  AND records.deleted AND records.commit_rev = $3 AND records.commit_cid = $4
 ;
 
+const tombstone_absent_tracks_sql =
+    \\UPDATE plyr_index.track_records SET
+    \\  record_cid = NULL,
+    \\  title = NULL,
+    \\  artist_name = NULL,
+    \\  file_type = NULL,
+    \\  record_created_at = NULL,
+    \\  audio_url = NULL,
+    \\  audio_blob_cid = NULL,
+    \\  audio_blob_media_type = NULL,
+    \\  audio_blob_size = NULL,
+    \\  album = NULL,
+    \\  duration_seconds = NULL,
+    \\  featured_dids = '{}',
+    \\  image_url = NULL,
+    \\  support_gate_type = NULL,
+    \\  description = NULL,
+    \\  self_labels = '{}',
+    \\  deleted = TRUE,
+    \\  commit_cid = $4,
+    \\  commit_rev = $5,
+    \\  indexed_at_us = $6
+    \\WHERE owner_did = $1 AND collection = $2
+    \\  AND NOT (record_uri = ANY($3::text[]))
+    \\  AND commit_rev <= $5
+;
+
 const install_head_sql =
     \\INSERT INTO plyr_index.repo_heads (
     \\  repo_did, commit_rev, commit_cid, data_cid, indexed_at_us
@@ -257,6 +320,7 @@ test "PostgreSQL complete snapshot bootstraps and reconciles atomically" {
     _ = try pool.exec("DROP SCHEMA IF EXISTS plyr_index CASCADE", .{});
     defer _ = pool.exec("DROP SCHEMA IF EXISTS plyr_index CASCADE", .{}) catch null;
     try postgres_list.createTestSchema(pool);
+    try postgres_track.createTestTable(pool);
     _ = try pool.exec(
         \\CREATE TABLE plyr_index.repo_heads (
         \\  repo_did text PRIMARY KEY,
@@ -289,25 +353,35 @@ test "PostgreSQL complete snapshot bootstraps and reconciles atomically" {
         .track_cid = record_cid,
     }};
     two_1.upsert.members = &two_members;
-    const initial = makeSnapshot(rev_1.str(), commit_1, data_1, 1_000, &.{ one_1, two_1 });
+    var initial = makeSnapshot(rev_1.str(), commit_1, data_1, 1_000, &.{ one_1, two_1 });
+    const track_one_1 = trackUpsert("track-one", rev_1.str(), commit_1, 1_000);
+    const track_two_1 = trackUpsert("track-two", rev_1.str(), commit_1, 1_000);
+    initial.track_changes = &.{ track_one_1, track_two_1 };
     var implementation: PostgresVerifiedSnapshotStore = .{ .pool = pool };
     const store = implementation.store();
     try std.testing.expectEqual(verified.ApplyResult.applied, try store.apply(a, initial));
     try std.testing.expectEqual(verified.ApplyResult.idempotent, try store.apply(a, initial));
     try expectState(pool, rev_1.str(), "one", false);
     try expectState(pool, rev_1.str(), "two", false);
+    try expectTrackState(pool, "track-one", rev_1.str(), false);
+    try expectTrackState(pool, "track-two", rev_1.str(), false);
 
     const one_2 = listUpsert("one", record_cid, rev_2.str(), commit_2, 2_000);
-    const repaired = makeSnapshot(rev_2.str(), commit_2, data_2, 2_000, &.{one_2});
+    var repaired = makeSnapshot(rev_2.str(), commit_2, data_2, 2_000, &.{one_2});
+    const track_one_2 = trackUpsert("track-one", rev_2.str(), commit_2, 2_000);
+    repaired.track_changes = &.{track_one_2};
     try std.testing.expectEqual(verified.ApplyResult.applied, try store.apply(a, repaired));
     try expectState(pool, rev_2.str(), "one", false);
     try expectState(pool, rev_2.str(), "two", true);
     try expectMemberCount(pool, "two", 0);
+    try expectTrackState(pool, "track-one", rev_2.str(), false);
+    try expectTrackState(pool, "track-two", rev_2.str(), true);
 
     try std.testing.expectEqual(verified.ApplyResult.stale, try store.apply(a, initial));
     var conflict = repaired;
     conflict.commit_cid = commit_3;
     conflict.list_changes = &.{};
+    conflict.track_changes = &.{};
     try std.testing.expectError(error.RevisionConflict, store.apply(a, conflict));
 
     var list_implementation: postgres_list.PostgresListStore = .{ .pool = pool };
@@ -334,6 +408,7 @@ fn makeSnapshot(
         .commit_cid = commit_cid,
         .data_cid = data_cid,
         .list_collection = "fm.plyr.dev.list",
+        .track_collection = "fm.plyr.dev.track",
         .indexed_at_us = indexed_at_us,
         .list_changes = changes,
     };
@@ -361,6 +436,43 @@ fn listUpsert(
         .created_at = "2026-08-08T12:00:00Z",
         .updated_at = null,
         .members = &.{},
+        .proof = .{
+            .commit_cid = commit_cid,
+            .commit_rev = rev,
+            .indexed_at_us = indexed_at_us,
+        },
+    } };
+}
+
+fn trackUpsert(
+    rkey: []const u8,
+    rev: []const u8,
+    commit_cid: zat.Cid,
+    indexed_at_us: i64,
+) track_change.Change {
+    const record_uri = if (std.mem.eql(u8, rkey, "track-one"))
+        "at://did:plc:artist/fm.plyr.dev.track/track-one"
+    else
+        "at://did:plc:artist/fm.plyr.dev.track/track-two";
+    return .{ .upsert = .{
+        .record_uri = record_uri,
+        .record_cid = "bafyreiaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        .owner_did = "did:plc:artist",
+        .collection = "fm.plyr.dev.track",
+        .rkey = rkey,
+        .title = rkey,
+        .artist_name = "Artist",
+        .file_type = "flac",
+        .created_at = "2026-08-08T12:00:00Z",
+        .audio_url = "https://media.example/track.flac",
+        .audio_blob = null,
+        .album = null,
+        .duration_seconds = 42,
+        .featured_dids = &.{},
+        .image_url = null,
+        .support_gate_type = null,
+        .description = null,
+        .self_labels = &.{},
         .proof = .{
             .commit_cid = commit_cid,
             .commit_rev = rev,
@@ -410,4 +522,14 @@ fn expectMemberCount(pool: *pg.Pool, rkey: []const u8, expected: i64) !void {
     , .{rkey})).?;
     defer row.deinit() catch {};
     try std.testing.expectEqual(expected, try row.get(i64, 0));
+}
+
+fn expectTrackState(pool: *pg.Pool, rkey: []const u8, rev: []const u8, deleted: bool) !void {
+    var row = (try pool.row(
+        "SELECT commit_rev, deleted FROM plyr_index.track_records WHERE rkey = $1",
+        .{rkey},
+    )).?;
+    defer row.deinit() catch {};
+    try std.testing.expectEqualStrings(rev, try row.get([]const u8, 0));
+    try std.testing.expectEqual(deleted, try row.get(bool, 1));
 }
