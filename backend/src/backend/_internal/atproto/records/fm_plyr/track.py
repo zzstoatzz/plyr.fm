@@ -86,8 +86,6 @@ async def build_track_record(
                 for p in profiles
             ]
     if image_url:
-        # validate image URL comes from allowed origin
-        settings.storage.validate_image_url(image_url)
         record["imageUrl"] = image_url
     if support_gate:
         record["supportGate"] = support_gate
