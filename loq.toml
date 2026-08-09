@@ -375,4 +375,8 @@ max_lines = 766
 
 [[rules]]
 path = "backend-zig/src/internal/projection/postgres_verified_snapshot_store.zig"
-max_lines = 615
+max_lines = 654
+
+[[rules]]
+path = "backend-zig/src/internal/projection/postgres_verified_commit_store.zig"
+max_lines = 526

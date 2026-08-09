@@ -146,6 +146,9 @@ inventing membership during a REST request.
 Signed commit and snapshot ingestion now persist the
 [`verified track projection`](zig-verified-track-projection.md) and
 [`verified authored-profile projection`](zig-verified-profile-projection.md)
-alongside list state. Blob mirroring, current-PDS account availability, and the
-REST adapter switch remain separate work so verified authored fields do not
-launder delivery or local policy into source truth.
+alongside list state. The separate
+[`account-availability evidence boundary`](zig-account-availability.md) records
+verified repository activity atomically and defines destination-safe
+current-PDS checks. Blob mirroring, the account-checking worker, and the REST
+adapter switch remain separate work so verified authored fields do not launder
+delivery or local policy into source truth.

@@ -2,6 +2,8 @@
 
 const std = @import("std");
 const pg = @import("pg");
+const availability = @import("../account/availability.zig");
+const postgres_availability = @import("../account/postgres_availability_store.zig");
 const postgres_test_lock = @import("../testing/postgres_lock.zig");
 const zat = @import("zat");
 const list_change = @import("list_change.zig");
@@ -145,6 +147,18 @@ pub const PostgresVerifiedSnapshotStore = struct {
             };
             if (result != .applied) return error.CorruptProjection;
         }
+        var accounts: postgres_availability.PostgresAvailabilityStore = .{ .pool = self.pool };
+        const account_result = accounts.applyInTransaction(conn, allocator, .{
+            .repo_did = snapshot.repo_did,
+            .available = true,
+            .source = .verified_repository,
+            .repository_rev = snapshot.commit_rev,
+            .commit_cid = snapshot.commit_cid,
+            .observed_at_us = snapshot.indexed_at_us,
+        }) catch |err| return mapAvailabilityError(err);
+        switch (account_result) {
+            .applied, .idempotent, .stale => {},
+        }
 
         _ = conn.exec(tombstone_absent_sql, .{
             snapshot.repo_did,
@@ -208,6 +222,15 @@ pub const PostgresVerifiedSnapshotStore = struct {
         return .applied;
     }
 };
+
+fn mapAvailabilityError(err: availability.Error) verified.Error {
+    return switch (err) {
+        error.EvidenceConflict => error.RevisionConflict,
+        error.OutOfMemory => error.OutOfMemory,
+        error.ProjectionUnavailable => error.ProjectionUnavailable,
+        error.InvalidEvidence, error.CorruptProjection => error.CorruptProjection,
+    };
+}
 
 fn classifyHead(
     conn: *pg.Conn,
@@ -376,6 +399,7 @@ test "PostgreSQL complete snapshot bootstraps and reconciles atomically" {
     try postgres_list.createTestSchema(pool);
     try postgres_track.createTestTable(pool);
     try postgres_profile.createTestTable(pool);
+    try postgres_availability.createTestTable(pool);
     _ = try pool.exec(
         \\CREATE TABLE plyr_index.repo_heads (
         \\  repo_did text PRIMARY KEY,
@@ -427,6 +451,7 @@ test "PostgreSQL complete snapshot bootstraps and reconciles atomically" {
     try expectTrackState(pool, "track-one", rev_1.str(), false);
     try expectTrackState(pool, "track-two", rev_1.str(), false);
     try expectProfileState(pool, "first bio", rev_1.str(), false);
+    try expectAvailability(pool, rev_1.str(), 1_000);
 
     const one_2 = listUpsert("one", record_cid, rev_2.str(), commit_2, 2_000);
     var repaired = makeSnapshot(rev_2.str(), commit_2, data_2, 2_000, &.{one_2});
@@ -439,6 +464,7 @@ test "PostgreSQL complete snapshot bootstraps and reconciles atomically" {
     try expectTrackState(pool, "track-one", rev_2.str(), false);
     try expectTrackState(pool, "track-two", rev_2.str(), true);
     try expectProfileState(pool, null, rev_2.str(), true);
+    try expectAvailability(pool, rev_2.str(), 2_000);
 
     try std.testing.expectEqual(verified.ApplyResult.stale, try store.apply(a, initial));
     var conflict = repaired;
@@ -456,6 +482,7 @@ test "PostgreSQL complete snapshot bootstraps and reconciles atomically" {
     try std.testing.expectError(error.RevisionConflict, store.apply(a, broken));
     try expectState(pool, rev_2.str(), "one", false);
     try expectHead(pool, rev_2.str());
+    try expectAvailability(pool, rev_2.str(), 2_000);
 }
 
 fn makeSnapshot(
@@ -567,6 +594,18 @@ fn expectState(pool: *pg.Pool, head_rev: []const u8, rkey: []const u8, deleted: 
     defer row.deinit() catch {};
     try std.testing.expectEqualStrings(head_rev, try row.get([]const u8, 0));
     try std.testing.expectEqual(deleted, try row.get(bool, 1));
+}
+
+fn expectAvailability(pool: *pg.Pool, rev: []const u8, observed_at_us: i64) !void {
+    var row = (try pool.row(
+        \\SELECT available, evidence_source, repository_rev, observed_at_us
+        \\FROM plyr_index.account_availability WHERE repo_did = 'did:plc:artist'
+    , .{})).?;
+    defer row.deinit() catch {};
+    try std.testing.expect(try row.get(bool, 0));
+    try std.testing.expectEqualStrings("verified_repository", try row.get([]const u8, 1));
+    try std.testing.expectEqualStrings(rev, (try row.get(?[]const u8, 2)).?);
+    try std.testing.expectEqual(observed_at_us, try row.get(i64, 3));
 }
 
 fn expectHead(pool: *pg.Pool, rev: []const u8) !void {

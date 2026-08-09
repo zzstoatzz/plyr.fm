@@ -59,13 +59,14 @@ the Zig test suite grows.
 
 Relay `#account` events describe an account as observed by the emitting relay.
 They are not sufficient evidence about the DID's current PDS. Canonical account
-availability will resolve the current DID document and query that PDS's
-`com.atproto.sync.getRepoStatus`; inability to resolve or check must not hide an
-account. Infrastructure conditions such as throttling or desynchronization also
-must not become account-level deletion.
+availability now has a separate
+[`evidence boundary`](zig-account-availability.md) that resolves the current DID
+document and queries that PDS's `com.atproto.sync.getRepoStatus`; inability to
+resolve or check does not hide an account. Infrastructure conditions such as
+throttling or desynchronization also do not become account-level deletion.
 
-Verified REST artist/track composition therefore waits for that separate
-availability projection. It will join independently attributed authored
+Verified REST artist/track composition still waits for that projection's read
+adapter. It will join independently attributed authored
 profile, DID identity, delivery, discovery, moderation, and local-preference
 facts rather than laundering the legacy artist row under one `verified` label.
 

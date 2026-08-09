@@ -68,11 +68,13 @@ signing keys; watched sync events trigger authoritative repair; an
 `OutdatedCursor` control frame fails the role rather than silently creating an
 unfillable gap.
 
-Account control events are outside this list/track projection and currently
-advance only the relay checkpoint. Before this role can become the sole source
-for discovery availability, account status needs its own source-authoritative
-projection. That boundary is explicit rather than coupling signed list state
-or track state to the legacy `artists` table.
+Account control events are outside the signed-record projection and currently
+advance only the relay checkpoint. The
+[`account-availability evidence boundary`](zig-account-availability.md) now
+records authenticated repository activity and classifies destination-safe
+current-PDS status responses without coupling signed records to the legacy
+`artists` table. A separately supervised checker and periodic reconciliation
+remain open; untrusted PDS latency will not block this firehose loop.
 
 ## direct PDS threat model
 

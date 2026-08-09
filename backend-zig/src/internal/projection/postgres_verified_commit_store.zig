@@ -2,6 +2,8 @@
 
 const std = @import("std");
 const pg = @import("pg");
+const availability = @import("../account/availability.zig");
+const postgres_availability = @import("../account/postgres_availability_store.zig");
 const postgres_test_lock = @import("../testing/postgres_lock.zig");
 const zat = @import("zat");
 const list_change = @import("list_change.zig");
@@ -157,6 +159,18 @@ pub const PostgresVerifiedCommitStore = struct {
             };
             if (result != .applied) return error.CorruptProjection;
         }
+        var accounts: postgres_availability.PostgresAvailabilityStore = .{ .pool = self.pool };
+        const account_result = accounts.applyInTransaction(conn, allocator, .{
+            .repo_did = commit.repo_did,
+            .available = true,
+            .source = .verified_repository,
+            .repository_rev = commit.commit_rev,
+            .commit_cid = commit.commit_cid,
+            .observed_at_us = commit.indexed_at_us,
+        }) catch |err| return mapAvailabilityError(err);
+        switch (account_result) {
+            .applied, .idempotent, .stale => {},
+        }
 
         const advanced = conn.exec(advance_head_sql, .{
             commit.commit_rev,
@@ -179,6 +193,15 @@ pub const PostgresVerifiedCommitStore = struct {
         return .applied;
     }
 };
+
+fn mapAvailabilityError(err: availability.Error) verified.Error {
+    return switch (err) {
+        error.EvidenceConflict => error.RevisionConflict,
+        error.OutOfMemory => error.OutOfMemory,
+        error.ProjectionUnavailable => error.ProjectionUnavailable,
+        error.InvalidEvidence, error.CorruptProjection => error.CorruptProjection,
+    };
+}
 
 /// Null means the caller owns the current successor and may apply it.
 fn lockAndClassify(
@@ -272,6 +295,7 @@ test "PostgreSQL verified commit sink is atomic, strict, and replay safe" {
     try postgres_list.createTestSchema(pool);
     try postgres_track.createTestTable(pool);
     try postgres_profile.createTestTable(pool);
+    try postgres_availability.createTestTable(pool);
     _ = try pool.exec(
         \\CREATE TABLE plyr_index.repo_heads (
         \\  repo_did text PRIMARY KEY,
@@ -320,6 +344,7 @@ test "PostgreSQL verified commit sink is atomic, strict, and replay safe" {
     try std.testing.expectEqual(verified.ApplyResult.applied, try store.apply(a, first));
     try std.testing.expectEqual(verified.ApplyResult.idempotent, try store.apply(a, first));
     try expectHead(pool, rev_1.str(), try data_1.toString(a));
+    try expectAvailability(pool, rev_1.str(), 2_000);
     const loaded_head = (try implementation.reader().load(a, did)).?;
     try std.testing.expectEqualStrings(rev_1.str(), loaded_head.commit_rev);
     try std.testing.expectEqualSlices(u8, data_1.raw, loaded_head.data_cid.raw);
@@ -362,6 +387,7 @@ test "PostgreSQL verified commit sink is atomic, strict, and replay safe" {
     try expectHead(pool, rev_1.str(), try data_1.toString(a));
     try expectRecordRev(pool, "one", rev_1.str());
     try expectTrackRev(pool, rev_3.str());
+    try expectAvailability(pool, rev_1.str(), 2_000);
 
     var profile_implementation: postgres_profile.PostgresProfileStore = .{ .pool = pool };
     const future_profile = postgres_profile.profileUpsert("future", rev_3.str(), commit_3, 4_000);
@@ -379,6 +405,19 @@ test "PostgreSQL verified commit sink is atomic, strict, and replay safe" {
     try expectHead(pool, rev_1.str(), try data_1.toString(a));
     try expectRecordRev(pool, "one", rev_1.str());
     try expectProfileRev(pool, rev_3.str());
+    try expectAvailability(pool, rev_1.str(), 2_000);
+}
+
+fn expectAvailability(pool: *pg.Pool, rev: []const u8, observed_at_us: i64) !void {
+    var row = (try pool.row(
+        \\SELECT available, evidence_source, repository_rev, observed_at_us
+        \\FROM plyr_index.account_availability WHERE repo_did = 'did:plc:artist'
+    , .{})).?;
+    defer row.deinit() catch {};
+    try std.testing.expect(try row.get(bool, 0));
+    try std.testing.expectEqualStrings("verified_repository", try row.get([]const u8, 1));
+    try std.testing.expectEqualStrings(rev, (try row.get(?[]const u8, 2)).?);
+    try std.testing.expectEqual(observed_at_us, try row.get(i64, 3));
 }
 
 fn trackUpsert(
