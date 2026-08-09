@@ -33,7 +33,11 @@ def test_real_product_reads_traverse_projected_track_and_artist() -> None:
     track = {
         "object": "track",
         "id": "trk_verified",
-        "record": {"uri": "at://did:plc:artist/fm.plyr.track/one", "cid": "bafyrecord"},
+        "record": {
+            "uri": "at://did:plc:artist/fm.plyr.track/one",
+            "cid": "bafyrecord",
+            "commit": "bafycommit",
+        },
         "metadata": {"title": "Verified Song"},
         "artist": {"did": "did:plc:artist"},
         "metrics": {"play_count": 7},
@@ -69,7 +73,10 @@ def test_real_product_reads_traverse_projected_track_and_artist() -> None:
                 "data": [
                     {
                         "id": "trk_verified",
-                        "record": track["record"],
+                        "record": {
+                            "uri": track["record"]["uri"],
+                            "cid": track["record"]["cid"],
+                        },
                         "sources": {"record": "verified_repo"},
                         "projection": {"verification": "verified_repo"},
                     }
@@ -96,7 +103,11 @@ def test_real_product_reads_traverse_album_when_present() -> None:
     track = {
         "object": "track",
         "id": "trk_verified",
-        "record": {"uri": "at://did:plc:artist/fm.plyr.track/one", "cid": "bafyrecord"},
+        "record": {
+            "uri": "at://did:plc:artist/fm.plyr.track/one",
+            "cid": "bafyrecord",
+            "commit": "bafycommit",
+        },
         "metadata": {"title": "Verified Song"},
         "artist": {"did": "did:plc:artist"},
         "metrics": {"play_count": 0},
@@ -139,7 +150,10 @@ def test_real_product_reads_traverse_album_when_present() -> None:
                 "data": [
                     {
                         "id": "trk_verified",
-                        "record": track["record"],
+                        "record": {
+                            "uri": track["record"]["uri"],
+                            "cid": track["record"]["cid"],
+                        },
                         "sources": {"record": "verified_repo"},
                         "projection": {"verification": "verified_repo"},
                     }

@@ -152,7 +152,8 @@ def _verify_real_product_reads(base_url: str) -> dict[str, Any]:
     matching_hits = [hit for hit in search_hits if hit["id"] == listed_track["id"]]
     assert len(matching_hits) == 1, (search.body, listed_track)
     search_hit = matching_hits[0]
-    assert search_hit["record"] == listed_track["record"], search_hit
+    assert search_hit["record"]["uri"] == listed_track["record"]["uri"], search_hit
+    assert search_hit["record"]["cid"] == listed_track["record"]["cid"], search_hit
     assert search_hit["sources"]["record"] == "verified_repo", search_hit
     assert search_hit["projection"]["verification"] == "verified_repo", search_hit
     assert "score" not in search_hit and "relevance" not in search_hit, search_hit
