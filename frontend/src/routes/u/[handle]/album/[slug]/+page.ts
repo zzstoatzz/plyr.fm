@@ -1,8 +1,16 @@
 import type { PageLoad } from './$types';
 import type { AlbumResponse } from '$lib/types';
-import { API_URL } from '$lib/config';
+import { getZigAlbum } from '$lib/api/zig-v1-albums';
+import { API_URL, IS_ZIG_V1 } from '$lib/config';
+import { error } from '@sveltejs/kit';
 
 export const load: PageLoad = async ({ params, fetch }) => {
+	if (IS_ZIG_V1) {
+		const album = await getZigAlbum(API_URL, params.slug, fetch);
+		if (!album) throw error(404, 'album not found');
+		return { album };
+	}
+
 	// resolve DID to handle if needed (albums endpoint expects handle)
 	let handle = params.handle;
 	if (handle.startsWith('did:')) {

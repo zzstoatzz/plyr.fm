@@ -163,7 +163,7 @@ export async function getZigTrack(
 	if (response.status === 404) return null;
 	if (!response.ok) throw new Error(`Zig track detail returned ${response.status}`);
 	const value: unknown = await response.json();
-	assertTrack(value);
+	assertZigTrack(value);
 	if (value.id !== trackId) throw new TypeError('Zig track detail changed resource identity');
 	return toFrontendTrack(value);
 }
@@ -281,10 +281,10 @@ function assertTrackPage(value: unknown): asserts value is ZigTrackPage {
 	) {
 		throw new TypeError('invalid Zig track collection');
 	}
-	for (const track of value.data) assertTrack(track);
+	for (const track of value.data) assertZigTrack(track);
 }
 
-function assertTrack(value: unknown): asserts value is ZigTrack {
+export function assertZigTrack(value: unknown): asserts value is ZigTrack {
 	if (
 		!isObject(value) ||
 		value.object !== 'track' ||

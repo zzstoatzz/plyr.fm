@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { getZigArtist, getZigPlayback, getZigTrack, listZigTracks } from './zig-v1';
+import { getZigAlbum, listZigAlbums } from './zig-v1-albums';
 
 const record = {
 	uri: 'at://did:plc:artist/fm.plyr.track/song',
@@ -70,6 +71,59 @@ const artist = {
 	projection: { indexed_at: '2026-08-09T00:00:00Z', verification: 'verified_repo' }
 };
 
+const albumSummary = {
+	object: 'album',
+	id: 'alb_opaque',
+	record: {
+		uri: 'at://did:plc:artist/fm.plyr.list/album',
+		cid: 'bafyalbum',
+		collection: 'fm.plyr.list',
+		rkey: 'album'
+	},
+	metadata: {
+		name: 'Verified Album',
+		created_at: '2026-08-09T00:00:00Z',
+		updated_at: null
+	},
+	owner: {
+		did: 'did:plc:artist',
+		profile: { handle: 'artist.test', display_name: 'Artist', avatar_url: null }
+	},
+	metrics: { member_count: 2, available_count: 1, total_plays: 3 },
+	sources: {
+		record: 'verified_repo',
+		membership: 'verified_repo',
+		owner_identity: 'verified_repo',
+		owner_profile: 'mixed',
+		metrics: 'application_metrics',
+		account_availability: 'verified_repo'
+	},
+	projection: {
+		verification: 'verified_repo',
+		commit_cid: 'bafycommit',
+		commit_rev: '3msrevision',
+		indexed_at_us: 42
+	}
+};
+
+const albumDetail = {
+	...albumSummary,
+	members: [
+		{
+			position: 0,
+			subject: { uri: record.uri, cid: record.cid },
+			availability: 'available',
+			track
+		},
+		{
+			position: 1,
+			subject: { uri: 'at://did:plc:artist/fm.plyr.track/missing', cid: 'bafymissing' },
+			availability: 'unavailable',
+			track: null
+		}
+	]
+};
+
 function json(value: unknown, status = 200): Response {
 	return new Response(JSON.stringify(value), {
 		status,
@@ -78,6 +132,41 @@ function json(value: unknown, status = 200): Response {
 }
 
 describe('Zig v1 compatibility boundary', () => {
+	it('maps verified album summaries without inventing local presentation', async () => {
+		const fetcher = vi.fn(async () =>
+			json({ object: 'list', data: [albumSummary], has_more: false, next_cursor: null })
+		);
+		const page = await listZigAlbums('https://next.plyr.fm/api', 'did:plc:artist', {}, fetcher);
+		expect(page.albums[0]).toEqual({
+			id: 'alb_opaque',
+			title: 'Verified Album',
+			slug: 'alb_opaque',
+			track_count: 2,
+			total_plays: 3
+		});
+	});
+
+	it('preserves unavailable signed membership when adapting album detail', async () => {
+		const fetcher = vi.fn(async () => json(albumDetail));
+		const album = await getZigAlbum('https://next.plyr.fm/api', 'alb_opaque', fetcher);
+		expect(album?.metadata.list_uri).toBe(albumSummary.record.uri);
+		expect(album?.tracks.map((value) => value.id)).toEqual(['trk_opaque']);
+		expect(album?.unavailable_track_count).toBe(1);
+	});
+
+	it('rejects legacy presentation and broken verified album ordering', async () => {
+		const fetcher = vi.fn(async () =>
+			json({
+				...albumDetail,
+				presentation: { slug: 'legacy' },
+				members: albumDetail.members.map((member, index) => ({ ...member, position: index + 1 }))
+			})
+		);
+		await expect(getZigAlbum('https://next.plyr.fm/api', 'alb_opaque', fetcher)).rejects.toThrow(
+			'invalid Zig album'
+		);
+	});
+
 	it('accepts only verified artist resources and maps authored profile fields', async () => {
 		const fetcher = vi.fn(async () => json(artist));
 		const value = await getZigArtist('https://next.plyr.fm/api', 'artist.test', fetcher);

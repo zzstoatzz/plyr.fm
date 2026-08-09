@@ -26,6 +26,8 @@ export interface AlbumMetadata extends AlbumSummary {
 export interface AlbumResponse {
 	metadata: AlbumMetadata;
 	tracks: Track[];
+	/** Signed members that are intentionally not hydrated into playable tracks. */
+	unavailable_track_count?: number;
 }
 
 export interface SupportGate {
@@ -217,7 +219,14 @@ export interface ActivityCollection {
 }
 
 export interface ActivityEvent {
-	type: 'like' | 'track' | 'comment' | 'join' | 'playlist_create' | 'album_release' | 'track_added_to_playlist';
+	type:
+		| 'like'
+		| 'track'
+		| 'comment'
+		| 'join'
+		| 'playlist_create'
+		| 'album_release'
+		| 'track_added_to_playlist';
 	actor: ActivityActor;
 	track: ActivityTrack | null;
 	comment_text: string | null;

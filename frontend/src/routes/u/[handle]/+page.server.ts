@@ -1,4 +1,5 @@
 import { getZigArtist, listZigTracks } from '$lib/api/zig-v1';
+import { listZigAlbums } from '$lib/api/zig-v1-albums';
 import { API_URL, IS_ZIG_V1 } from '$lib/config';
 import type { Artist, Track, ArtistAlbumSummary } from '$lib/types';
 import { error } from '@sveltejs/kit';
@@ -9,11 +10,14 @@ export const load: PageServerLoad = async ({ params, fetch }) => {
 		if (IS_ZIG_V1) {
 			const artist = await getZigArtist(API_URL, params.handle, fetch);
 			if (!artist) throw error(404, 'artist not found');
-			const page = await listZigTracks(API_URL, { artistDid: artist.did, limit: 5 }, fetch);
+			const [page, albumPage] = await Promise.all([
+				listZigTracks(API_URL, { artistDid: artist.did, limit: 5 }, fetch),
+				listZigAlbums(API_URL, artist.did, { limit: 100 }, fetch)
+			]);
 			return {
 				artist,
 				tracks: page.tracks,
-				albums: [],
+				albums: albumPage.albums,
 				hasMoreTracks: page.has_more,
 				nextCursor: page.next_cursor
 			};
