@@ -154,6 +154,7 @@ class TrackResponse(BaseModel):
     description: str | None = None  # track description (liner notes, show notes)
     audio_storage: str = "r2"  # "r2" | "pds" | "both"
     pds_blob_cid: str | None = None  # CID if stored on user's PDS
+    is_optimizing: bool = False  # deferred mp3 optimize still pending
     visibility: str = "public"  # public | unlisted | supporters | private
     unlisted: bool = False  # derived: excluded from discovery feeds
     self_labels: list[str] = Field(default_factory=list)
@@ -303,6 +304,7 @@ class TrackResponse(BaseModel):
             original_file_type=track.original_file_type,
             audio_storage=track.audio_storage,
             pds_blob_cid=track.pds_blob_cid,
+            is_optimizing=track.is_optimizing,
             visibility=track.visibility,
             unlisted=not track.in_discovery,
             copyright_song_uri=track.copyright_song_uri,

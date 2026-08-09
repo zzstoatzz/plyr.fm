@@ -187,6 +187,33 @@ class Track(Base):
     def _in_discovery_expr(cls) -> ColumnElement[bool]:
         return cls.visibility.in_(("public", "supporters"))
 
+    @hybrid_property
+    def is_optimizing(self) -> bool:
+        """published with an interim lossless rendition, deferred mp3 optimize
+        still pending. the optimize task writes the canonical PDS blob itself
+        when the mp3 lands, so optimizing tracks are never offered for manual
+        PDS saves. a directly-uploaded web-playable track (no original) is
+        never in this state."""
+        # deferred to dodge the models ↔ _internal import cycle
+        from backend._internal.audio import AudioFormat
+
+        return (
+            self.file_type != AudioFormat.MP3.value
+            and self.original_file_id is not None
+            and self.original_file_type is not None
+        )
+
+    @is_optimizing.inplace.expression
+    @classmethod
+    def _is_optimizing_expr(cls) -> ColumnElement[bool]:
+        from backend._internal.audio import AudioFormat
+
+        return (
+            (cls.file_type != AudioFormat.MP3.value)
+            & cls.original_file_id.isnot(None)
+            & cls.original_file_type.isnot(None)
+        )
+
     @property
     def is_gated(self) -> bool:
         """check if this track requires supporter access."""

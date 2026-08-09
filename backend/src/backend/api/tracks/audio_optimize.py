@@ -118,11 +118,7 @@ def _needs_optimization(track: Track) -> bool:
     remux for tracks still in flight from the prior scheme — both are caught by
     "not yet mp3, and an original exists". a directly-uploaded web-playable
     track (no `original_file_id`) is never optimized."""
-    return (
-        track.file_type != AudioFormat.MP3.value
-        and track.original_file_id is not None
-        and track.original_file_type is not None
-    )
+    return track.is_optimizing
 
 
 async def _load_audio_state(track_id: int) -> _AudioState | None:

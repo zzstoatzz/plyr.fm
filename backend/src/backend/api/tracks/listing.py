@@ -505,11 +505,7 @@ async def list_my_tracks(
             Track.support_gate.is_(None),
             Track.pds_blob_cid.is_(None),
             Track.file_id.isnot(None),
-            ~(
-                (Track.file_type != "mp3")
-                & Track.original_file_id.isnot(None)
-                & Track.original_file_type.isnot(None)
-            ),
+            ~Track.is_optimizing,
         )
     )
     pds_savable_count = (await db.execute(savable_stmt)).scalar_one()
