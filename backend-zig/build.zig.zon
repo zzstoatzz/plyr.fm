@@ -7,8 +7,8 @@
             .hash = "zat-0.3.26-5PuC7ny_DAA318Hv1iAxAJyMeFkrSM3oIZr_yPgV84TS",
         },
         .pg = .{
-            .url = "git+https://github.com/karlseguin/pg.zig#52b9f8a59bfd60a3aa75943a14366d859ea11f26",
-            .hash = "pg-0.0.0-Wp_7gRanBgC-ixWJ42gQIxD9fajdSZEJwzmCGPBSD0Q9",
+            .url = "git+https://github.com/zzstoatzz/pg.zig#44140add61d275ef01682105e5c7e56640475769",
+            .hash = "pg-0.0.0-Wp_7gRHrBgDcdC-KXXBI-Ga3QxmAoHmZXhGoNQOPDeQt",
         },
         .zg = .{
             .url = "https://codeberg.org/atman/zg/archive/v0.16.2.tar.gz",
