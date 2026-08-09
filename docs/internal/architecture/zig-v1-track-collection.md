@@ -59,7 +59,7 @@ The initial anonymous collection includes only rows that:
 - use the configured environment-aware track collection;
 - are published rather than pending;
 - have `public` or `supporters` visibility;
-- belong to an active artist account;
+- belong to an available account according to verified-repository or current-PDS evidence;
 - are not excluded by a moderation override;
 - carry no adult-audio label from either author or operator;
 - carry no active copyright label unless an operator explicitly allowed them.
@@ -102,8 +102,11 @@ scope and returns the internal timestamp sort key beside each domain track. The
 PostgreSQL adapter owns SQL policy and copies every row into the request arena
 before advancing the streaming result.
 
-The integration test covers equal timestamps across page boundaries and proves
-that a filtered, newer row does not displace visible results. Before canary
+The composed-store integration test proves that verified self-labels control
+discovery without erasing adult-labelled tracks from their artist catalogue,
+and that current-PDS deactivation removes both detail and collection reads. The
+legacy adapter tests still cover equal timestamps across page boundaries and
+prove that a filtered, newer row does not displace visible results. Before canary
 promotion, the staging query needs `EXPLAIN (ANALYZE, BUFFERS)` and a composite
 projection index appropriate for `(created_at, atproto_record_uri)` if the
 existing single-column timestamp index is insufficient.
@@ -138,3 +141,28 @@ returned records and a percent-encoded DID:
 This baseline additionally exercises URL decoding, DID validation, the artist
 scope, content-view policy, and the wider response page. It remains a localhost
 regression measurement rather than a Neon capacity claim.
+
+## composed-read baseline
+
+`just zig bench-composed-tracks` rebuilds a guarded `relay_test` fixture with
+100 authenticated track records, authored profile state, account evidence, and
+the transitional policy/delivery rows. Recorded 2026-08-08 on the Apple M5 Pro
+host with the ReleaseFast binary and local PostgreSQL:
+
+| resource | concurrency | responses/s | p50 | p95 | p99 | RSS | errors |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| 50-track collection | 1 | 368.5 | 2.676 ms | 3.006 ms | 3.876 ms | 3,360 KiB | 0 |
+| 50-track collection | 16 | 2,113.1 | 6.936 ms | 13.343 ms | 18.356 ms | 12,832 KiB | 0 |
+| track detail | 1 | 1,215.4 | 0.800 ms | 1.012 ms | 1.283 ms | 3,328 KiB | 0 |
+| track detail | 16 | 5,498.6 | 2.668 ms | 5.198 ms | 6.825 ms | 12,208 KiB | 0 |
+
+RSS is sampled after each five-second request pass. These measurements include
+HTTP serialization and the joins across authenticated records, profile,
+account evidence, local policy, moderation, metrics, and delivery. They are a
+repeatable local regression baseline, not a Neon or Python comparison.
+
+The production-shaped linux/amd64 ReleaseSafe image is 35,281,923 bytes and
+contains a 13,025,696-byte executable. Relative to the preceding account-worker
+artifact, composed reads added 9,269 image bytes and 11,904 executable bytes.
+The cold Docker compile completed in 320.6 seconds; this is a build-cost and
+artifact-size guardrail, not a runtime capacity result.

@@ -2,6 +2,7 @@ const std = @import("std");
 const config = @import("config.zig");
 const server = @import("server.zig");
 const postgres = @import("internal/index/postgres_track_store.zig");
+const postgres_composed_tracks = @import("internal/index/postgres_composed_track_store.zig");
 const postgres_artists = @import("internal/index/postgres_artist_store.zig");
 const postgres_albums = @import("internal/index/postgres_album_store.zig");
 const postgres_album_detail = @import("internal/index/postgres_album_detail_store.zig");
@@ -28,7 +29,11 @@ pub fn main() !void {
         null;
     defer if (postgres_store) |*store| store.deinit();
 
-    const track_store = if (postgres_store) |*store| store.store() else null;
+    var postgres_composed_track_store: ?postgres_composed_tracks.PostgresComposedTrackStore = if (postgres_store) |*store|
+        .{ .pool = store.pool, .profile_collection = settings.profile_collection }
+    else
+        null;
+    const track_store = if (postgres_composed_track_store) |*store| store.store() else null;
     var postgres_artist_store: ?postgres_artists.PostgresArtistStore = if (postgres_store) |*store|
         .{ .pool = store.pool }
     else
@@ -135,6 +140,7 @@ test {
     _ = @import("internal/identity/album_id.zig");
     _ = @import("internal/http/query.zig");
     _ = @import("internal/index/postgres_track_store.zig");
+    _ = @import("internal/index/postgres_composed_track_store.zig");
     _ = @import("internal/cache/lru.zig");
     _ = @import("internal/ingest/cached_signing_key_resolver.zig");
     _ = @import("internal/ingest/continuous_runner.zig");

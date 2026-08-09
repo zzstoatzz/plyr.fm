@@ -65,7 +65,10 @@ and detail forms of `GET /v1/albums`. The track collection accepts a strict
 `limit` from 1 to 100 and an opaque `cursor`; it
 accepts an optional canonical `artist_did`, applies discovery or artist-view
 policy before keyset pagination, and returns the same track representation as
-detail. Artist lookup accepts a canonical DID or a case-insensitive handle
+detail. Track reads require an authenticated record and authoritative account
+availability, then compose separately attributed authored profile, local
+publication/moderation/metric, and R2 delivery fields. Artist lookup accepts a
+canonical DID or a case-insensitive handle
 alias and exposes the transitional source of each profile field. The album
 collection exposes only canonical list-record albums and keeps local
 presentation fields explicitly separate from record identity. Album detail

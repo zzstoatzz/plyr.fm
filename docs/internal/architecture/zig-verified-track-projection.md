@@ -88,14 +88,18 @@ cannot resurrect a track after the cache TTL expires.
 
 ## REST transition
 
-The current `/v1/tracks` reads still use the legacy adapter and correctly mark
-their record projection `legacy_unverified`. They must not switch merely because
-`track_records` exists. The next read adapter needs independently sourced artist
-identity/account state, delivery availability, discovery policy, and moderation
-so one `verified` label does not launder local fields into authored truth.
+The current `/v1/tracks` reads compose the authenticated record and profile
+projections with canonical account-availability evidence. They retain matching
+legacy rows only for publication/visibility policy, current handle/display
+presentation, operator moderation, counters, and R2 delivery. The public domain
+object attributes each field family through `sources`; its
+`projection.verification: verified_repo` describes only the record path and
+cannot launder transitional fields into authored truth.
 
-Once those projections exist, REST can compose them behind the existing domain
-port and shadow-compare representations before the canary takes traffic.
+This deliberately means a new PDS-only record is not yet public without a
+matching local publication row. Replacing that constraint requires explicit
+policy and verified-blob availability projections, not weakening the composed
+read or pretending an R2 URL proves its bytes.
 
 ## measured verifier cost
 

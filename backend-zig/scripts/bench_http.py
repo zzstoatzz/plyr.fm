@@ -85,6 +85,18 @@ def _percentile(sorted_values: list[int], percentile: float) -> float:
     return sorted_values[index] / 1_000_000
 
 
+def _resident_set_kib(process: subprocess.Popen[bytes]) -> int | None:
+    measured = subprocess.run(
+        ["ps", "-o", "rss=", "-p", str(process.pid)],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if measured.returncode != 0 or not measured.stdout.strip().isdigit():
+        return None
+    return int(measured.stdout.strip())
+
+
 def benchmark(
     duration: float,
     concurrency: int,
@@ -145,6 +157,7 @@ def benchmark(
             "concurrency": concurrency,
             "requests": len(latencies),
             "errors": errors,
+            "resident_set_kib": _resident_set_kib(process),
             "requests_per_second": round(len(latencies) / elapsed, 1),
             "latency_ms": {
                 "p50": round(_percentile(latencies, 0.50), 3),

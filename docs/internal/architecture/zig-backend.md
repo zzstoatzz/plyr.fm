@@ -149,6 +149,8 @@ Signed commit and snapshot ingestion now persist the
 alongside list state. The separate
 [`account-availability evidence boundary`](zig-account-availability.md) records
 verified repository activity atomically and defines destination-safe
-current-PDS checks. Blob mirroring, the account-checking worker, and the REST
-adapter switch remain separate work so verified authored fields do not launder
-delivery or local policy into source truth.
+current-PDS checks. The track REST adapter now composes those verified sources
+with explicitly attributed transitional publication, moderation, metric, and R2
+delivery fields. Blob mirroring and independent policy/delivery projections
+remain separate work; field-level provenance prevents verified authored fields
+from laundering those local claims into source truth.

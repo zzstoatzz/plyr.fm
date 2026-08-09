@@ -1,0 +1,653 @@
+//! Transitional REST adapter composed from independently attributed sources.
+//!
+//! Authenticated repository rows own record metadata, blob declarations, and
+//! self-labels. Account evidence owns visibility of the repository. Existing
+//! app tables continue to supply mutable handles, local policy, operator
+//! moderation, counters, and R2 delivery until those projections are replaced.
+
+const std = @import("std");
+const pg = @import("pg");
+const zat = @import("zat");
+const lexicon_value = @import("../atproto/lexicon_value.zig");
+const track = @import("../domain/track.zig");
+const track_id = @import("../identity/track_id.zig");
+const store_module = @import("track_store.zig");
+
+const TrackStore = store_module.TrackStore;
+
+pub const PostgresComposedTrackStore = struct {
+    pool: *pg.Pool,
+    profile_collection: []const u8,
+
+    pub fn store(self: *PostgresComposedTrackStore) TrackStore {
+        return .{
+            .context = self,
+            .get_by_uri_fn = getByUriOpaque,
+            .list_public_fn = listPublicOpaque,
+            .ready_fn = readyOpaque,
+        };
+    }
+
+    fn readyOpaque(context: *anyopaque) bool {
+        const self: *PostgresComposedTrackStore = @ptrCast(@alignCast(context));
+        var row = self.pool.row(readiness_sql, .{}) catch |err| {
+            std.log.err("composed track readiness failed: {}", .{err});
+            return false;
+        } orelse return false;
+        finishQueryRow(&row) catch |err| {
+            std.log.err("composed track readiness cleanup failed: {}", .{err});
+            return false;
+        };
+        return true;
+    }
+
+    fn getByUriOpaque(
+        context: *anyopaque,
+        allocator: std.mem.Allocator,
+        at_uri: []const u8,
+    ) TrackStore.Error!?track.Track {
+        const self: *PostgresComposedTrackStore = @ptrCast(@alignCast(context));
+        const conn = self.pool.acquire() catch |err| {
+            std.log.err("composed track connection failed: {}", .{err});
+            return error.IndexUnavailable;
+        };
+        defer self.pool.release(conn);
+        var query_row = conn.row(detail_query, .{
+            at_uri,
+            self.profile_collection,
+        }) catch |err| {
+            if (conn.err) |pg_err|
+                std.log.err("composed track lookup failed: {}: {s}", .{ err, pg_err.message })
+            else
+                std.log.err("composed track lookup failed: {}", .{err});
+            return error.IndexUnavailable;
+        } orelse return null;
+        var active = true;
+        defer if (active) forceReleaseQueryRow(&query_row);
+        const value = decodeRow(allocator, &query_row.row) catch |err| switch (err) {
+            error.OutOfMemory => return error.OutOfMemory,
+            else => {
+                std.log.err("composed track decode failed: {}", .{err});
+                return error.CorruptProjection;
+            },
+        };
+        finishQueryRow(&query_row) catch |err| {
+            std.log.err("composed track result cleanup failed: {}", .{err});
+            active = false;
+            return error.IndexUnavailable;
+        };
+        active = false;
+        return value;
+    }
+
+    fn listPublicOpaque(
+        context: *anyopaque,
+        allocator: std.mem.Allocator,
+        request: store_module.ListRequest,
+    ) TrackStore.Error![]store_module.ListItem {
+        const self: *PostgresComposedTrackStore = @ptrCast(@alignCast(context));
+        const limit: i64 = @intCast(request.limit);
+        var result = switch (request.scope) {
+            .discovery => if (request.after) |after|
+                self.pool.query(discovery_after_query, .{
+                    request.collection,
+                    self.profile_collection,
+                    after.created_at_us,
+                    after.at_uri,
+                    limit,
+                }) catch |err| {
+                    std.log.err("composed discovery query failed: {}", .{err});
+                    return error.IndexUnavailable;
+                }
+            else
+                self.pool.query(discovery_query, .{
+                    request.collection,
+                    self.profile_collection,
+                    limit,
+                }) catch |err| {
+                    std.log.err("composed discovery query failed: {}", .{err});
+                    return error.IndexUnavailable;
+                },
+            .artist => |artist_did| if (request.after) |after|
+                self.pool.query(artist_after_query, .{
+                    request.collection,
+                    self.profile_collection,
+                    artist_did,
+                    after.created_at_us,
+                    after.at_uri,
+                    limit,
+                }) catch |err| {
+                    std.log.err("composed artist catalogue query failed: {}", .{err});
+                    return error.IndexUnavailable;
+                }
+            else
+                self.pool.query(artist_query, .{
+                    request.collection,
+                    self.profile_collection,
+                    artist_did,
+                    limit,
+                }) catch |err| {
+                    std.log.err("composed artist catalogue query failed: {}", .{err});
+                    return error.IndexUnavailable;
+                },
+        };
+        defer result.deinit();
+        var items: std.ArrayList(store_module.ListItem) = .empty;
+        errdefer items.deinit(allocator);
+        while (result.next() catch |err| {
+            std.log.err("composed track collection read failed: {}", .{err});
+            return error.IndexUnavailable;
+        }) |row| {
+            const value = decodeRow(allocator, row) catch |err| switch (err) {
+                error.OutOfMemory => return error.OutOfMemory,
+                else => {
+                    std.log.err("composed track collection decode failed: {}", .{err});
+                    return error.CorruptProjection;
+                },
+            };
+            items.append(allocator, .{
+                .value = value,
+                .created_at_us = row.get(i64, 35) catch
+                    return error.CorruptProjection,
+            }) catch return error.OutOfMemory;
+        }
+        return items.toOwnedSlice(allocator) catch return error.OutOfMemory;
+    }
+};
+
+fn decodeRow(allocator: std.mem.Allocator, row: anytype) !track.Track {
+    const uri = try duplicate(allocator, try row.get([]const u8, 0));
+    const parsed_uri = zat.AtUri.parse(uri) orelse return error.CorruptTrackUri;
+    const owner_did = try duplicate(allocator, try row.get([]const u8, 18));
+    const collection = try duplicate(allocator, try row.get([]const u8, 3));
+    const rkey = try duplicate(allocator, try row.get([]const u8, 4));
+    if (!std.mem.eql(u8, parsed_uri.authority(), owner_did) or
+        !std.mem.eql(u8, parsed_uri.collection() orelse return error.CorruptTrackUri, collection) or
+        !std.mem.eql(u8, parsed_uri.rkey() orelse return error.CorruptTrackUri, rkey))
+        return error.CorruptTrackUri;
+
+    const record_cid = try duplicate(allocator, try row.get([]const u8, 1));
+    const parsed_record_cid = zat.Cid.fromString(allocator, record_cid) catch
+        return error.CorruptRecordCid;
+    defer allocator.free(parsed_record_cid.raw);
+    if (parsed_record_cid.codec() != zat.cbor.Codec.dag_cbor)
+        return error.CorruptRecordCid;
+    const commit_rev = try duplicate(allocator, try row.get([]const u8, 2));
+    if (zat.Tid.parse(commit_rev) == null) return error.CorruptRevision;
+
+    const id = try allocator.alloc(u8, track_id.encodedLength(uri));
+    _ = try track_id.encode(id, uri);
+    const blob_cid = try duplicateOptional(allocator, try row.get(?[]const u8, 11));
+    const artifacts = if (blob_cid) |cid| blk: {
+        const parsed = zat.Cid.fromString(allocator, cid) catch
+            return error.CorruptArtifactCid;
+        defer allocator.free(parsed.raw);
+        if (parsed.codec() != zat.cbor.Codec.raw) return error.CorruptArtifactCid;
+        const values = try allocator.alloc(track.Artifact, 1);
+        values[0] = .{
+            .cid = cid,
+            .byte_length = try row.get(?i64, 13),
+            .media_type = try duplicate(allocator, (try row.get(?[]const u8, 12)) orelse
+                return error.CorruptArtifact),
+            .declared_by = uri,
+            .verification = .declared,
+        };
+        break :blk values;
+    } else &.{};
+
+    const authored_url = try duplicateOptional(allocator, try row.get(?[]const u8, 14));
+    if (authored_url) |url| {
+        if (!lexicon_value.validUri(url)) return error.CorruptOrigin;
+    }
+    const legacy_url = try duplicateOptional(allocator, try row.get(?[]const u8, 25));
+    if (legacy_url) |url| {
+        if (!lexicon_value.validUri(url)) return error.CorruptOrigin;
+    }
+    const origin_count = @as(usize, @intFromBool(authored_url != null)) +
+        @as(usize, @intFromBool(legacy_url != null));
+    const origins = try allocator.alloc(track.Origin, origin_count);
+    var origin_index: usize = 0;
+    if (authored_url) |url| {
+        origins[origin_index] = .{
+            .url = url,
+            .media_type = try duplicate(allocator, try row.get([]const u8, 15)),
+            .artifact_cid = null,
+            .attestation = null,
+            .source = .verified_repo,
+        };
+        origin_index += 1;
+    }
+    if (legacy_url) |url| {
+        origins[origin_index] = .{
+            .url = url,
+            .media_type = try duplicate(allocator, try row.get([]const u8, 26)),
+            .artifact_cid = null,
+            .attestation = null,
+            .source = .legacy_projection,
+        };
+    }
+
+    const authored_avatar = try row.get(bool, 22);
+    const authored_bio = try row.get(bool, 24);
+    const availability_source = try parseSource(try row.get([]const u8, 34));
+    return .{
+        .id = id,
+        .record = .{
+            .uri = uri,
+            .cid = record_cid,
+            .revision = commit_rev,
+            .collection = collection,
+            .rkey = rkey,
+        },
+        .metadata = .{
+            .title = try duplicate(allocator, try row.get([]const u8, 5)),
+            .artist_name = try duplicateOptional(allocator, try row.get(?[]const u8, 6)),
+            .description = try duplicateOptional(allocator, try row.get(?[]const u8, 7)),
+            .album = try duplicateOptional(allocator, try row.get(?[]const u8, 8)),
+            .duration_seconds = try row.get(?i64, 9),
+            .created_at = try duplicate(allocator, try row.get([]const u8, 10)),
+        },
+        .artist = .{
+            .did = owner_did,
+            .profile = .{
+                .handle = try duplicate(allocator, try row.get([]const u8, 19)),
+                .display_name = try duplicate(allocator, try row.get([]const u8, 20)),
+                .avatar_url = try duplicateOptional(allocator, try row.get(?[]const u8, 21)),
+                .bio = try duplicateOptional(allocator, try row.get(?[]const u8, 23)),
+            },
+        },
+        .media = .{ .artifacts = artifacts, .origins = origins },
+        .access = .{
+            .visibility = try parseEnum(track.Visibility, try row.get([]const u8, 27)),
+            .in_discovery = try row.get(bool, 28),
+            .gate = if (try row.get(?[]const u8, 16)) |gate_type| .{
+                .type = try duplicate(allocator, gate_type),
+            } else null,
+            .space_uri = try duplicateOptional(allocator, try row.get(?[]const u8, 29)),
+        },
+        .moderation = .{
+            .self_labels = try parseLabels(allocator, try row.get([]const u8, 17)),
+            .operator_labels = try parseLabels(allocator, try row.get([]const u8, 30)),
+            .override = if (try row.get(?[]const u8, 31)) |value|
+                try parseEnum(track.ModerationOverride, value)
+            else
+                null,
+        },
+        .metrics = .{ .play_count = try row.get(i64, 32) },
+        .sources = .{
+            .record = .verified_repo,
+            .metadata = .verified_repo,
+            .artist_identity = .verified_repo,
+            .artist_handle = .legacy_projection,
+            .artist_display_name = .legacy_projection,
+            .artist_avatar = if (authored_avatar) .authored_profile else .legacy_projection,
+            .artist_bio = if (authored_bio) .authored_profile else .legacy_projection,
+            .media_artifacts = .verified_repo,
+            .media_origins = if (authored_url != null and legacy_url != null)
+                .mixed
+            else if (authored_url != null)
+                .verified_repo
+            else
+                .legacy_projection,
+            .access = .mixed,
+            .self_labels = .verified_repo,
+            .operator_labels = .legacy_local,
+            .metrics = .derived,
+            .account_availability = availability_source,
+        },
+        .projection = .{
+            .indexed_at = try duplicate(allocator, try row.get([]const u8, 33)),
+            .verification = .verified_repo,
+        },
+    };
+}
+
+const projected_columns =
+    \\  v.record_uri,
+    \\  v.record_cid,
+    \\  v.commit_rev,
+    \\  v.collection,
+    \\  v.rkey,
+    \\  v.title,
+    \\  v.artist_name,
+    \\  v.description,
+    \\  v.album,
+    \\  v.duration_seconds,
+    \\  v.record_created_at,
+    \\  v.audio_blob_cid,
+    \\  v.audio_blob_media_type,
+    \\  v.audio_blob_size,
+    \\  v.audio_url,
+    \\  v.file_type,
+    \\  v.support_gate_type,
+    \\  array_to_json(v.self_labels)::text,
+    \\  v.owner_did,
+    \\  a.handle,
+    \\  a.display_name,
+    \\  COALESCE(p.avatar, a.avatar_url),
+    \\  p.avatar IS NOT NULL,
+    \\  COALESCE(p.bio, a.bio),
+    \\  p.bio IS NOT NULL,
+    \\  t.r2_url,
+    \\  t.file_type,
+    \\  t.visibility,
+    \\  t.visibility IN ('public', 'supporters'),
+    \\  t.space_uri,
+    \\  t.operator_labels::text,
+    \\  t.moderation_override,
+    \\  t.play_count::bigint,
+    \\  to_char(
+    \\    TIMESTAMPTZ 'epoch' + (v.indexed_at_us * INTERVAL '1 microsecond'),
+    \\    'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'
+    \\  ),
+    \\  aa.evidence_source,
+    \\  (extract(epoch FROM t.created_at) * 1000000)::bigint
+;
+
+const joined_projection = "SELECT\n" ++ projected_columns ++ "\n" ++
+    \\FROM plyr_index.track_records AS v
+    \\JOIN plyr_index.account_availability AS aa
+    \\  ON aa.repo_did = v.owner_did AND aa.available
+    \\JOIN tracks AS t ON t.atproto_record_uri = v.record_uri
+    \\JOIN artists AS a ON a.did = v.owner_did
+    \\LEFT JOIN plyr_index.profile_records AS p
+    \\  ON p.owner_did = v.owner_did AND p.collection = $2
+    \\  AND p.rkey = 'self' AND NOT p.deleted
+;
+
+const common_policy =
+    \\  AND NOT v.deleted
+    \\  AND COALESCE(t.publish_state, 'published') = 'published'
+    \\  AND t.moderation_override IS DISTINCT FROM 'exclude'
+    \\  AND (
+    \\    t.moderation_override IS NOT DISTINCT FROM 'allow'
+    \\    OR NOT (
+    \\      v.self_labels && ARRAY['copyright-violation']::text[]
+    \\      OR t.operator_labels ?| ARRAY['copyright-violation']
+    \\    )
+    \\  )
+;
+
+const detail_query = joined_projection ++ "\n" ++
+    \\WHERE v.record_uri = $1
+    \\  AND t.visibility <> 'private'
+++ common_policy ++ "\n" ++
+    \\LIMIT 1
+;
+
+const discovery_policy = common_policy ++
+    \\  AND v.collection = $1
+    \\  AND t.visibility IN ('public', 'supporters')
+    \\  AND NOT (
+    \\    v.self_labels && ARRAY['sexual', 'porn']::text[]
+    \\    OR t.operator_labels ?| ARRAY['sexual', 'porn']
+    \\  )
+;
+
+const artist_policy = common_policy ++
+    \\  AND v.collection = $1
+    \\  AND v.owner_did = $3
+    \\  AND t.visibility <> 'private'
+;
+
+const discovery_query = joined_projection ++ "\nWHERE true\n" ++ discovery_policy ++ "\n" ++
+    \\ORDER BY t.created_at DESC, v.record_uri DESC
+    \\LIMIT $3::bigint
+;
+
+const discovery_after_query = joined_projection ++ "\nWHERE true\n" ++ discovery_policy ++ "\n" ++
+    \\  AND (
+    \\    t.created_at < TIMESTAMPTZ 'epoch' + ($3::bigint * INTERVAL '1 microsecond')
+    \\    OR (t.created_at = TIMESTAMPTZ 'epoch' + ($3::bigint * INTERVAL '1 microsecond')
+    \\      AND v.record_uri < $4)
+    \\  )
+    \\ORDER BY t.created_at DESC, v.record_uri DESC
+    \\LIMIT $5::bigint
+;
+
+const artist_query = joined_projection ++ "\nWHERE true\n" ++ artist_policy ++ "\n" ++
+    \\ORDER BY t.created_at DESC, v.record_uri DESC
+    \\LIMIT $4::bigint
+;
+
+const artist_after_query = joined_projection ++ "\nWHERE true\n" ++ artist_policy ++ "\n" ++
+    \\  AND (
+    \\    t.created_at < TIMESTAMPTZ 'epoch' + ($4::bigint * INTERVAL '1 microsecond')
+    \\    OR (t.created_at = TIMESTAMPTZ 'epoch' + ($4::bigint * INTERVAL '1 microsecond')
+    \\      AND v.record_uri < $5)
+    \\  )
+    \\ORDER BY t.created_at DESC, v.record_uri DESC
+    \\LIMIT $6::bigint
+;
+
+const readiness_sql =
+    \\SELECT 1
+    \\WHERE to_regclass('plyr_index.track_records') IS NOT NULL
+    \\  AND to_regclass('plyr_index.account_availability') IS NOT NULL
+    \\  AND to_regclass('plyr_index.profile_records') IS NOT NULL
+    \\  AND to_regclass('tracks') IS NOT NULL
+    \\  AND to_regclass('artists') IS NOT NULL
+;
+
+fn finishQueryRow(query_row: *pg.QueryRow) !void {
+    query_row.deinit() catch |err| {
+        query_row.result.deinit();
+        return err;
+    };
+}
+
+fn forceReleaseQueryRow(query_row: *pg.QueryRow) void {
+    finishQueryRow(query_row) catch |err|
+        std.log.err("forced composed track result cleanup: {}", .{err});
+}
+
+fn duplicate(allocator: std.mem.Allocator, value: []const u8) ![]const u8 {
+    return allocator.dupe(u8, value);
+}
+
+fn duplicateOptional(allocator: std.mem.Allocator, value: ?[]const u8) !?[]const u8 {
+    return if (value) |present| try duplicate(allocator, present) else null;
+}
+
+fn parseLabels(allocator: std.mem.Allocator, raw: []const u8) ![]const []const u8 {
+    const parsed = try std.json.parseFromSlice([]const []const u8, allocator, raw, .{});
+    return parsed.value;
+}
+
+fn parseEnum(comptime T: type, value: []const u8) !T {
+    return std.meta.stringToEnum(T, value) orelse error.CorruptProjectionEnum;
+}
+
+fn parseSource(value: []const u8) !track.Source {
+    if (std.mem.eql(u8, value, "verified_repository")) return .verified_repo;
+    if (std.mem.eql(u8, value, "current_pds")) return .current_pds;
+    return error.CorruptAvailabilitySource;
+}
+
+test "composed PostgreSQL reads use verified records and authoritative account state" {
+    const postgres_test_lock = @import("../testing/postgres_lock.zig");
+    const projected_tracks = @import("../projection/postgres_track_store.zig");
+    const projected_profiles = @import("../projection/postgres_profile_store.zig");
+    const projected_availability = @import("../account/postgres_availability_store.zig");
+    const track_change = @import("../projection/track_change.zig");
+    const url_z = std.c.getenv("PLYR_ZIG_TEST_DATABASE_URL") orelse return error.SkipZigTest;
+    const allocator = std.testing.allocator;
+    var threaded = std.Io.Threaded.init(allocator, .{});
+    const io = threaded.io();
+    postgres_test_lock.lock(io);
+    defer postgres_test_lock.unlock(io);
+    const database_uri = try std.Uri.parse(std.mem.span(url_z));
+    var pool = try pg.Pool.initUri(io, allocator, database_uri, .{ .size = 1 });
+    defer pool.deinit();
+    try requireDisposableDatabase(pool, allocator);
+    _ = try pool.exec("DROP SCHEMA IF EXISTS plyr_index CASCADE", .{});
+    defer _ = pool.exec("DROP SCHEMA IF EXISTS plyr_index CASCADE", .{}) catch null;
+    _ = try pool.exec("DROP TABLE IF EXISTS tracks CASCADE", .{});
+    _ = try pool.exec("DROP TABLE IF EXISTS artists CASCADE", .{});
+    _ = try pool.exec("CREATE SCHEMA plyr_index", .{});
+    try projected_tracks.createTestTable(pool);
+    try projected_profiles.createTestTable(pool);
+    try projected_availability.createTestTable(pool);
+    _ = try pool.exec(
+        \\CREATE TABLE artists (
+        \\  did text PRIMARY KEY, handle text NOT NULL, display_name text NOT NULL,
+        \\  bio text, avatar_url text
+        \\)
+    , .{});
+    _ = try pool.exec(
+        \\CREATE TABLE tracks (
+        \\  atproto_record_uri text PRIMARY KEY,
+        \\  created_at timestamptz NOT NULL,
+        \\  r2_url text,
+        \\  file_type text NOT NULL,
+        \\  visibility text NOT NULL,
+        \\  space_uri text,
+        \\  operator_labels jsonb NOT NULL DEFAULT '[]',
+        \\  moderation_override text,
+        \\  play_count integer NOT NULL DEFAULT 0,
+        \\  publish_state text
+        \\)
+    , .{});
+    const did = "did:plc:artist";
+    const record_uri = "at://did:plc:artist/fm.plyr.dev.track/track";
+    _ = try pool.exec(
+        "INSERT INTO artists VALUES ($1, 'artist.example', 'Legacy Name', 'legacy bio', 'https://legacy.example/avatar.jpg')",
+        .{did},
+    );
+    _ = try pool.exec(
+        \\INSERT INTO tracks VALUES (
+        \\  $1, '2026-08-08T12:00:00Z', 'https://r2.example/audio.flac',
+        \\  'audio/flac', 'public', NULL, '["operator-note"]', NULL, 7, 'published'
+        \\)
+    , .{record_uri});
+
+    var arena = std.heap.ArenaAllocator.init(allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    const commit = try zat.Cid.forDagCbor(a, "commit");
+    const record = try zat.Cid.forDagCbor(a, "record");
+    const blob = try zat.Cid.create(a, 1, zat.cbor.Codec.raw, zat.cbor.HashFn.sha2_256, "audio");
+    const rev = zat.Tid.fromTimestamp(1_000, 1);
+    var track_writer: projected_tracks.PostgresTrackStore = .{ .pool = pool };
+    const change: track_change.Change = .{ .upsert = .{
+        .record_uri = record_uri,
+        .record_cid = try record.toString(a),
+        .owner_did = did,
+        .collection = "fm.plyr.dev.track",
+        .rkey = "track",
+        .title = "Verified Title",
+        .artist_name = "Authored Credit",
+        .file_type = "flac",
+        .created_at = "2026-08-08T11:00:00Z",
+        .audio_url = "https://pds.example/audio.flac",
+        .audio_blob = .{
+            .cid = try blob.toString(a),
+            .media_type = "audio/flac",
+            .size = 42,
+        },
+        .album = "Verified Album",
+        .duration_seconds = 180,
+        .featured_dids = &.{},
+        .image_url = null,
+        .support_gate_type = "future-gate",
+        .description = "verified description",
+        .self_labels = &.{"self-note"},
+        .proof = .{ .commit_cid = commit, .commit_rev = rev.str(), .indexed_at_us = 1_000 },
+    } };
+    try std.testing.expectEqual(
+        @import("../projection/track_store.zig").ApplyResult.applied,
+        try track_writer.store().apply(a, change),
+    );
+    var profile_writer: projected_profiles.PostgresProfileStore = .{ .pool = pool };
+    try std.testing.expectEqual(
+        @import("../projection/profile_store.zig").ApplyResult.applied,
+        try profile_writer.store().apply(a, projected_profiles.profileUpsert(
+            "authored bio",
+            rev.str(),
+            commit,
+            1_000,
+        )),
+    );
+    _ = try pool.exec(
+        "UPDATE plyr_index.profile_records SET avatar = 'https://pds.example/avatar.jpg'",
+        .{},
+    );
+    var availability_writer: projected_availability.PostgresAvailabilityStore = .{ .pool = pool };
+    try std.testing.expectEqual(
+        @import("../account/availability.zig").ApplyResult.applied,
+        try availability_writer.store().apply(a, .{
+            .repo_did = did,
+            .available = true,
+            .source = .verified_repository,
+            .repository_rev = rev.str(),
+            .commit_cid = commit,
+            .observed_at_us = 1_000,
+        }),
+    );
+
+    var implementation: PostgresComposedTrackStore = .{
+        .pool = pool,
+        .profile_collection = "fm.plyr.dev.actor.profile",
+    };
+    try std.testing.expect(implementation.store().ready());
+    const value = (try implementation.store().getByUri(a, record_uri)).?;
+    try std.testing.expectEqualStrings("Verified Title", value.metadata.title);
+    try std.testing.expectEqualStrings("Authored Credit", value.metadata.artist_name.?);
+    try std.testing.expectEqualStrings("authored bio", value.artist.profile.bio.?);
+    try std.testing.expectEqualStrings("https://pds.example/avatar.jpg", value.artist.profile.avatar_url.?);
+    try std.testing.expectEqualStrings("future-gate", value.access.gate.?.type);
+    try std.testing.expectEqual(@as(usize, 1), value.media.artifacts.len);
+    try std.testing.expectEqual(@as(usize, 2), value.media.origins.len);
+    try std.testing.expectEqual(track.Source.verified_repo, value.sources.record);
+    try std.testing.expectEqual(track.Source.authored_profile, value.sources.artist_bio);
+    try std.testing.expectEqual(track.Source.verified_repo, value.sources.account_availability);
+    try std.testing.expectEqual(track.ProjectionVerification.verified_repo, value.projection.verification);
+    try std.testing.expectEqualStrings("self-note", value.moderation.self_labels[0]);
+    try std.testing.expectEqualStrings("operator-note", value.moderation.operator_labels[0]);
+    try std.testing.expectEqual(@as(i64, 7), value.metrics.play_count);
+
+    const page = try implementation.store().listPublic(a, .{
+        .collection = "fm.plyr.dev.track",
+        .scope = .discovery,
+        .limit = 2,
+        .after = null,
+    });
+    try std.testing.expectEqual(@as(usize, 1), page.len);
+    _ = try pool.exec(
+        "UPDATE plyr_index.track_records SET self_labels = ARRAY['sexual']::text[]",
+        .{},
+    );
+    try std.testing.expectEqual(@as(usize, 0), (try implementation.store().listPublic(a, .{
+        .collection = "fm.plyr.dev.track",
+        .scope = .discovery,
+        .limit = 2,
+        .after = null,
+    })).len);
+    try std.testing.expectEqual(@as(usize, 1), (try implementation.store().listPublic(a, .{
+        .collection = "fm.plyr.dev.track",
+        .scope = .{ .artist = did },
+        .limit = 2,
+        .after = null,
+    })).len);
+
+    try std.testing.expectEqual(
+        @import("../account/availability.zig").ApplyResult.applied,
+        try availability_writer.store().apply(a, .{
+            .repo_did = did,
+            .available = false,
+            .reason = .deactivated,
+            .source = .current_pds,
+            .pds_origin = "https://pds.example.com",
+            .observed_at_us = 2_000,
+        }),
+    );
+    try std.testing.expect((try implementation.store().getByUri(a, record_uri)) == null);
+}
+
+fn requireDisposableDatabase(pool: *pg.Pool, allocator: std.mem.Allocator) !void {
+    var row = (try pool.row("SELECT current_database()", .{})).?;
+    defer row.deinit() catch {};
+    const database = try allocator.dupe(u8, try row.get([]const u8, 0));
+    defer allocator.free(database);
+    if (!std.mem.eql(u8, database, "relay_test")) return error.UnsafeTestDatabase;
+}

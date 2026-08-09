@@ -262,7 +262,7 @@ pub const PostgresTrackStore = struct {
                 .visibility = try parseEnum(track.Visibility, try row.get([]const u8, base + 16)),
                 .in_discovery = try row.get(bool, base + 17),
                 .gate = if (try row.get(?[]const u8, base + 18)) |gate_type| .{
-                    .type = try parseEnum(track.GateType, gate_type),
+                    .type = try duplicate(allocator, gate_type),
                 } else null,
                 .space_uri = try duplicateOptional(allocator, try row.get(?[]const u8, base + 19)),
             },

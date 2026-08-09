@@ -97,6 +97,7 @@ test "v1 track JSON keeps authority and projections separate" {
     try std.testing.expect(root.get("media") != null);
     try std.testing.expect(root.get("metrics") != null);
     try std.testing.expect(root.get("projection") != null);
+    try std.testing.expect(root.get("sources") != null);
     try std.testing.expect(root.get("file_id") == null);
     try std.testing.expect(root.get("r2_url") == null);
 }

@@ -14,6 +14,7 @@ pub const Track = struct {
     access: Access,
     moderation: Moderation,
     metrics: Metrics,
+    sources: Sources = .{},
     projection: Projection,
 };
 
@@ -27,6 +28,7 @@ pub const Record = struct {
 
 pub const Metadata = struct {
     title: []const u8,
+    artist_name: ?[]const u8 = null,
     description: ?[]const u8,
     album: ?[]const u8,
     duration_seconds: ?i64,
@@ -42,6 +44,7 @@ pub const ArtistProfile = struct {
     handle: []const u8,
     display_name: []const u8,
     avatar_url: ?[]const u8,
+    bio: ?[]const u8 = null,
 };
 
 pub const Media = struct {
@@ -70,6 +73,7 @@ pub const Origin = struct {
     media_type: []const u8,
     artifact_cid: ?[]const u8,
     attestation: ?OriginAttestation,
+    source: Source = .legacy_projection,
 };
 
 pub const OriginAttestation = struct {
@@ -89,10 +93,8 @@ pub const Access = struct {
 pub const Visibility = enum { public, unlisted, supporters };
 
 pub const Gate = struct {
-    type: GateType,
+    type: []const u8,
 };
-
-pub const GateType = enum { any, copyright };
 
 pub const Moderation = struct {
     self_labels: []const []const u8,
@@ -104,6 +106,35 @@ pub const ModerationOverride = enum { allow, exclude };
 
 pub const Metrics = struct {
     play_count: i64,
+};
+
+/// Per-claim provenance lets one transitional response compose authenticated
+/// repository data with explicitly local policy and presentation fields.
+pub const Sources = struct {
+    record: Source = .legacy_projection,
+    metadata: Source = .legacy_projection,
+    artist_identity: Source = .legacy_projection,
+    artist_handle: Source = .legacy_projection,
+    artist_display_name: Source = .legacy_projection,
+    artist_avatar: Source = .legacy_projection,
+    artist_bio: Source = .legacy_projection,
+    media_artifacts: Source = .legacy_projection,
+    media_origins: Source = .legacy_projection,
+    access: Source = .legacy_local,
+    self_labels: Source = .legacy_projection,
+    operator_labels: Source = .legacy_local,
+    metrics: Source = .derived,
+    account_availability: Source = .legacy_projection,
+};
+
+pub const Source = enum {
+    verified_repo,
+    authored_profile,
+    current_pds,
+    legacy_projection,
+    legacy_local,
+    derived,
+    mixed,
 };
 
 /// Facts about this appview row, not the authored record. A null indexed_at is
