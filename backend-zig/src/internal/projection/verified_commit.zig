@@ -9,6 +9,7 @@ const std = @import("std");
 const zat = @import("zat");
 const list_change = @import("list_change.zig");
 const track_change = @import("track_change.zig");
+const profile_change = @import("profile_change.zig");
 
 pub const Commit = struct {
     repo_did: []const u8,
@@ -19,6 +20,7 @@ pub const Commit = struct {
     indexed_at_us: i64,
     list_changes: []const list_change.Change,
     track_changes: []const track_change.Change = &.{},
+    profile_changes: []const profile_change.Change = &.{},
 
     pub fn validate(self: Commit) Error!void {
         if (zat.Did.parse(self.repo_did) == null or
@@ -53,6 +55,26 @@ pub const Commit = struct {
             }
             for (self.list_changes) |list| {
                 if (std.mem.eql(u8, identity.record_uri, identityOf(list).record_uri))
+                    return error.DuplicateRecord;
+            }
+        }
+        for (self.profile_changes, 0..) |change, index| {
+            const identity = profileIdentityOf(change);
+            if (!std.mem.eql(u8, identity.owner_did, self.repo_did) or
+                !std.mem.eql(u8, identity.proof.commit_rev, self.commit_rev) or
+                identity.proof.indexed_at_us != self.indexed_at_us or
+                !std.mem.eql(u8, identity.proof.commit_cid.raw, self.commit_cid.raw))
+                return error.InvalidCommit;
+            for (self.profile_changes[0..index]) |prior| {
+                if (std.mem.eql(u8, identity.record_uri, profileIdentityOf(prior).record_uri))
+                    return error.DuplicateRecord;
+            }
+            for (self.list_changes) |list| {
+                if (std.mem.eql(u8, identity.record_uri, identityOf(list).record_uri))
+                    return error.DuplicateRecord;
+            }
+            for (self.track_changes) |track| {
+                if (std.mem.eql(u8, identity.record_uri, trackIdentityOf(track).record_uri))
                     return error.DuplicateRecord;
             }
         }
@@ -112,6 +134,21 @@ fn identityOf(change: list_change.Change) Identity {
 }
 
 fn trackIdentityOf(change: track_change.Change) Identity {
+    return switch (change) {
+        .upsert => |value| .{
+            .record_uri = value.record_uri,
+            .owner_did = value.owner_did,
+            .proof = value.proof,
+        },
+        .delete => |value| .{
+            .record_uri = value.record_uri,
+            .owner_did = value.owner_did,
+            .proof = value.proof,
+        },
+    };
+}
+
+fn profileIdentityOf(change: profile_change.Change) Identity {
     return switch (change) {
         .upsert => |value| .{
             .record_uri = value.record_uri,

@@ -6,7 +6,8 @@ const snapshot_verifier = @import("internal/projection/snapshot_verifier.zig");
 
 const list_record_count = 100;
 const track_record_count = 100;
-const record_count = list_record_count + track_record_count;
+const profile_record_count = 1;
+const record_count = list_record_count + track_record_count + profile_record_count;
 const iterations = 50;
 
 pub fn main() !void {
@@ -29,6 +30,7 @@ pub fn main() !void {
             fixture.public_key,
             "fm.plyr.dev.list",
             "fm.plyr.dev.track",
+            "fm.plyr.dev.actor.profile",
             1,
         );
     }
@@ -45,10 +47,12 @@ pub fn main() !void {
             fixture.public_key,
             "fm.plyr.dev.list",
             "fm.plyr.dev.track",
+            "fm.plyr.dev.actor.profile",
             1,
         );
         if (snapshot.list_changes.len != list_record_count or
-            snapshot.track_changes.len != track_record_count) return error.BadBenchmarkFixture;
+            snapshot.track_changes.len != track_record_count or
+            snapshot.profile_changes.len != profile_record_count) return error.BadBenchmarkFixture;
     }
     const elapsed_ns: u64 = @intCast(@max(
         started.durationTo(std.Io.Timestamp.now(io, .awake)).nanoseconds,
@@ -116,6 +120,13 @@ fn buildFixture(allocator: std.mem.Allocator) !Fixture {
     } };
     const track_bytes = try zat.cbor.encodeAlloc(allocator, track_record);
     const track_cid = try zat.Cid.forDagCbor(allocator, track_bytes);
+    const profile_record: zat.cbor.Value = .{ .map = &.{
+        .{ .key = "$type", .value = .{ .text = "fm.plyr.dev.actor.profile" } },
+        .{ .key = "bio", .value = .{ .text = "Benchmark artist profile" } },
+        .{ .key = "createdAt", .value = .{ .text = "2026-08-08T12:00:00Z" } },
+    } };
+    const profile_bytes = try zat.cbor.encodeAlloc(allocator, profile_record);
+    const profile_cid = try zat.Cid.forDagCbor(allocator, profile_bytes);
     var tree = zat.mst.Mst.init(allocator);
     for (0..list_record_count) |index| {
         const path = try std.fmt.allocPrint(
@@ -133,6 +144,7 @@ fn buildFixture(allocator: std.mem.Allocator) !Fixture {
         );
         try tree.put(path, track_cid);
     }
+    try tree.put("fm.plyr.dev.actor.profile/self", profile_cid);
     const root = try tree.rootCid();
     const signed = try zat.signCommit(allocator, .{
         .did = did,
@@ -144,6 +156,7 @@ fn buildFixture(allocator: std.mem.Allocator) !Fixture {
     try tree.collectBlocks(&blocks);
     try blocks.append(allocator, .{ .cid_raw = record_cid.raw, .data = record_bytes });
     try blocks.append(allocator, .{ .cid_raw = track_cid.raw, .data = track_bytes });
+    try blocks.append(allocator, .{ .cid_raw = profile_cid.raw, .data = profile_bytes });
     return .{
         .car_bytes = try zat.car.writeAlloc(allocator, .{
             .roots = &.{signed.cid},

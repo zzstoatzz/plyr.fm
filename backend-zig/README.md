@@ -14,10 +14,10 @@ just zig check
 just zig test-http
 just zig test-postgres
 just zig image
-INDEX_MODE=disabled TRACK_COLLECTION_NSID=fm.plyr.dev.track LIST_COLLECTION_NSID=fm.plyr.dev.list just zig run
+INDEX_MODE=disabled TRACK_COLLECTION_NSID=fm.plyr.dev.track LIST_COLLECTION_NSID=fm.plyr.dev.list PROFILE_COLLECTION_NSID=fm.plyr.dev.actor.profile just zig run
 just zig bench-http --duration 5 --concurrency 16
 DATABASE_URL=postgresql://... just zig bench-http --with-index --path '/v1/tracks?limit=50'
-DATABASE_URL=postgresql://... TRACK_COLLECTION_NSID=fm.plyr.dev.track LIST_COLLECTION_NSID=fm.plyr.dev.list just zig repair-repo did:plc:example
+DATABASE_URL=postgresql://... TRACK_COLLECTION_NSID=fm.plyr.dev.track LIST_COLLECTION_NSID=fm.plyr.dev.list PROFILE_COLLECTION_NSID=fm.plyr.dev.actor.profile just zig repair-repo did:plc:example
 just zig bench-snapshot
 ```
 
@@ -40,6 +40,7 @@ other database name.
 | `MODE` | yes | `api` for read-only HTTP or `repair` for one authenticated repository reconciliation |
 | `TRACK_COLLECTION_NSID` | yes | exact environment-aware track-record NSID |
 | `LIST_COLLECTION_NSID` | yes | exact environment-aware list-record NSID used by albums |
+| `PROFILE_COLLECTION_NSID` | yes | exact environment-aware authored profile-record NSID |
 | `DATABASE_URL` | in normal API mode | PostgreSQL projection; missing configuration fails startup |
 | `INDEX_MODE` | no | `required` by default; `disabled` is an explicit test/development mode whose readiness is `503` |
 | `MAX_CONNECTIONS` | no | hard cap on accepted connection handlers, default `128` |

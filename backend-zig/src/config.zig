@@ -28,6 +28,7 @@ pub const Config = struct {
     max_connections: usize,
     track_collection: []const u8,
     list_collection: []const u8,
+    profile_collection: []const u8,
     cors_allowed_origins: []const u8,
     repair_did: ?[]const u8,
     relay_hosts: []const u8,
@@ -43,6 +44,9 @@ pub const Config = struct {
         const list_collection = getenv("LIST_COLLECTION_NSID") orelse
             return error.ListCollectionRequired;
         if (zat.Nsid.parse(list_collection) == null) return error.InvalidListCollection;
+        const profile_collection = getenv("PROFILE_COLLECTION_NSID") orelse
+            return error.ProfileCollectionRequired;
+        if (zat.Nsid.parse(profile_collection) == null) return error.InvalidProfileCollection;
         const index_mode = try IndexMode.parse(getenv("INDEX_MODE") orelse "required");
         const database_url = getenv("DATABASE_URL");
         if (index_mode == .required and database_url == null) return error.DatabaseUrlRequired;
@@ -64,6 +68,7 @@ pub const Config = struct {
             .max_connections = try parsePositiveUsize(getenv("MAX_CONNECTIONS") orelse "128"),
             .track_collection = track_collection,
             .list_collection = list_collection,
+            .profile_collection = profile_collection,
             .cors_allowed_origins = getenv("CORS_ALLOWED_ORIGINS") orelse "",
             .repair_did = repair_did,
             .relay_hosts = getenv("INGEST_RELAY_HOSTS") orelse "wss://bsky.network",

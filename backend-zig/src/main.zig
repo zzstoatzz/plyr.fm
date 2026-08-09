@@ -63,6 +63,7 @@ pub fn main() !void {
                 did,
                 settings.list_collection,
                 settings.track_collection,
+                settings.profile_collection,
             );
             std.log.info("verified repository repair for {s}: {s}", .{ did, @tagName(outcome) });
             if (!repair_runner.succeeded(outcome)) return error.RepairNotApplied;
@@ -77,6 +78,7 @@ pub fn main() !void {
                 settings.relay_name,
                 settings.list_collection,
                 settings.track_collection,
+                settings.profile_collection,
             );
         },
     }

@@ -99,6 +99,7 @@ def benchmark(
         "PORT": str(port),
         "TRACK_COLLECTION_NSID": "fm.plyr.dev.track",
         "LIST_COLLECTION_NSID": "fm.plyr.dev.list",
+        "PROFILE_COLLECTION_NSID": "fm.plyr.dev.actor.profile",
         "INDEX_MODE": "required" if database_url else "disabled",
         "MAX_CONNECTIONS": str(max(concurrency, 8)),
     }

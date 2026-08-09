@@ -27,6 +27,7 @@ pub fn run(
     relay_name: []const u8,
     list_collection: []const u8,
     track_collection: []const u8,
+    profile_collection: []const u8,
 ) !void {
     const hosts = try parseHosts(allocator, relay_hosts);
     defer allocator.free(hosts);
@@ -73,6 +74,7 @@ pub fn run(
         .repositories = repositories.port(),
         .list_collection = list_collection,
         .track_collection = track_collection,
+        .profile_collection = profile_collection,
     };
 
     var handler: Handler = .{
@@ -84,6 +86,7 @@ pub fn run(
         .checkpoint = &checkpoint,
         .list_collection = list_collection,
         .track_collection = track_collection,
+        .profile_collection = profile_collection,
     };
     var client = zat.FirehoseClient.init(io, allocator, .{
         .hosts = hosts,
@@ -109,6 +112,7 @@ const Handler = struct {
     checkpoint: *cursor_module.Checkpoint,
     list_collection: []const u8,
     track_collection: []const u8,
+    profile_collection: []const u8,
     fatal_error: ?anyerror = null,
 
     pub fn onRawFrame(self: *Handler, frame: []const u8) !void {
@@ -165,7 +169,12 @@ const Handler = struct {
         indexed_at_us: i64,
     ) !void {
         if (!self.watched.contains(commit.repo)) {
-            if (!hasRelevantOperation(commit, self.list_collection, self.track_collection)) return;
+            if (!hasRelevantOperation(
+                commit,
+                self.list_collection,
+                self.track_collection,
+                self.profile_collection,
+            )) return;
             return self.repairAndWatch(allocator, commit.repo, indexed_at_us);
         }
         const outcome = try self.projector.ingestLive(allocator, commit, indexed_at_us);
@@ -199,10 +208,12 @@ fn hasRelevantOperation(
     commit: zat.firehose.CommitEvent,
     list_collection: []const u8,
     track_collection: []const u8,
+    profile_collection: []const u8,
 ) bool {
     for (commit.ops) |operation| {
         if (std.mem.eql(u8, operation.collection, list_collection) or
-            std.mem.eql(u8, operation.collection, track_collection)) return true;
+            std.mem.eql(u8, operation.collection, track_collection) or
+            std.mem.eql(u8, operation.collection, profile_collection)) return true;
     }
     return false;
 }
@@ -246,10 +257,20 @@ test "unknown repositories become interesting only through selected collections"
         .time = "2026-08-08T00:00:00Z",
         .ops = &relevant,
     };
-    try std.testing.expect(hasRelevantOperation(base, "fm.plyr.list", "fm.plyr.track"));
+    try std.testing.expect(hasRelevantOperation(
+        base,
+        "fm.plyr.list",
+        "fm.plyr.track",
+        "fm.plyr.actor.profile",
+    ));
     var other = base;
     other.ops = &unrelated;
-    try std.testing.expect(!hasRelevantOperation(other, "fm.plyr.list", "fm.plyr.track"));
+    try std.testing.expect(!hasRelevantOperation(
+        other,
+        "fm.plyr.list",
+        "fm.plyr.track",
+        "fm.plyr.actor.profile",
+    ));
 }
 
 test "relay host parsing is explicit and rejects ambiguous entries" {

@@ -17,6 +17,7 @@ pub fn run(
     did: []const u8,
     list_collection: []const u8,
     track_collection: []const u8,
+    profile_collection: []const u8,
 ) !projector_module.RepairOutcome {
     var identity = zat.DidResolver.init(io, allocator);
     defer identity.deinit();
@@ -51,6 +52,7 @@ pub fn run(
         .repositories = repositories.port(),
         .list_collection = list_collection,
         .track_collection = track_collection,
+        .profile_collection = profile_collection,
     };
     const now = std.Io.Timestamp.now(io, .real).nanoseconds;
     if (now < 0) return error.InvalidSystemClock;

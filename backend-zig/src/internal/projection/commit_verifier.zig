@@ -8,6 +8,7 @@ const std = @import("std");
 const zat = @import("zat");
 const list_change = @import("list_change.zig");
 const track_change = @import("track_change.zig");
+const profile_change = @import("profile_change.zig");
 const verified = @import("verified_commit.zig");
 
 pub const max_commit_blocks_bytes = 2_000_000;
@@ -25,6 +26,7 @@ pub fn verify(
     prior: PriorHead,
     list_collection: []const u8,
     track_collection: []const u8,
+    profile_collection: []const u8,
     indexed_at_us: i64,
 ) !verified.Commit {
     if (event.rebase or event.too_big) return error.RequiresRepoRepair;
@@ -61,6 +63,7 @@ pub fn verify(
 
     var changes: std.ArrayList(list_change.Change) = .empty;
     var track_changes: std.ArrayList(track_change.Change) = .empty;
+    var profile_changes: std.ArrayList(profile_change.Change) = .empty;
     for (event.ops) |operation| {
         if (try list_change.fromVerifiedOperation(
             allocator,
@@ -85,6 +88,17 @@ pub fn verify(
                 .indexed_at_us = indexed_at_us,
             },
         )) |change| try track_changes.append(allocator, change);
+        if (try profile_change.fromVerifiedOperation(
+            allocator,
+            event.repo,
+            operation,
+            profile_collection,
+            .{
+                .commit_cid = outer_commit,
+                .commit_rev = event.rev,
+                .indexed_at_us = indexed_at_us,
+            },
+        )) |change| try profile_changes.append(allocator, change);
     }
 
     const commit: verified.Commit = .{
@@ -96,6 +110,7 @@ pub fn verify(
         .indexed_at_us = indexed_at_us,
         .list_changes = try changes.toOwnedSlice(allocator),
         .track_changes = try track_changes.toOwnedSlice(allocator),
+        .profile_changes = try profile_changes.toOwnedSlice(allocator),
     };
     try commit.validate();
     return commit;
@@ -132,7 +147,7 @@ fn checkOperationCids(
     }
 }
 
-test "strict verifier proves chain, envelope, op CID, and list record together" {
+test "strict verifier proves chain, envelope, op CIDs, and selected records together" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const a = arena.allocator();
@@ -147,6 +162,7 @@ test "strict verifier proves chain, envelope, op CID, and list record together" 
     const rev = "3jqfcqzm3fo2k";
     const path = "fm.plyr.dev.list/3m123abc";
     const track_path = "fm.plyr.dev.track/3m123abd";
+    const profile_path = "fm.plyr.dev.actor.profile/self";
 
     var before = zat.mst.Mst.init(a);
     const before_root = try before.rootCid();
@@ -174,9 +190,17 @@ test "strict verifier proves chain, envelope, op CID, and list record together" 
     } };
     const track_bytes = try zat.cbor.encodeAlloc(a, track_record);
     const track_cid = try zat.Cid.forDagCbor(a, track_bytes);
+    const profile_record: zat.cbor.Value = .{ .map = &.{
+        .{ .key = "$type", .value = .{ .text = "fm.plyr.dev.actor.profile" } },
+        .{ .key = "bio", .value = .{ .text = "Verified artist" } },
+        .{ .key = "createdAt", .value = .{ .text = "2026-08-08T12:00:00Z" } },
+    } };
+    const profile_bytes = try zat.cbor.encodeAlloc(a, profile_record);
+    const profile_cid = try zat.Cid.forDagCbor(a, profile_bytes);
     var after = zat.mst.Mst.init(a);
     try after.put(path, record_cid);
     try after.put(track_path, track_cid);
+    try after.put(profile_path, profile_cid);
     const after_root = try after.rootCid();
     const previous_commit = try zat.Cid.forDagCbor(a, "previous commit");
     const signed = try zat.signCommit(a, .{
@@ -190,6 +214,7 @@ test "strict verifier proves chain, envelope, op CID, and list record together" 
     try after.collectBlocks(&blocks);
     try blocks.append(a, .{ .cid_raw = record_cid.raw, .data = record_bytes });
     try blocks.append(a, .{ .cid_raw = track_cid.raw, .data = track_bytes });
+    try blocks.append(a, .{ .cid_raw = profile_cid.raw, .data = profile_bytes });
     const car_bytes = try zat.car.writeAlloc(a, .{
         .roots = &.{signed.cid},
         .blocks = blocks.items,
@@ -210,6 +235,14 @@ test "strict verifier proves chain, envelope, op CID, and list record together" 
         .cid = track_cid,
         .record = track_record,
     };
+    const profile_operation: zat.firehose.RepoOp = .{
+        .action = .create,
+        .path = profile_path,
+        .collection = "fm.plyr.dev.actor.profile",
+        .rkey = "self",
+        .cid = profile_cid,
+        .record = profile_record,
+    };
     const event: zat.firehose.CommitEvent = .{
         .seq = 1,
         .repo = did,
@@ -217,7 +250,7 @@ test "strict verifier proves chain, envelope, op CID, and list record together" 
         .time = "2026-08-08T12:00:00Z",
         .commit = signed.cid,
         .blocks = car_bytes,
-        .ops = &.{ operation, track_operation },
+        .ops = &.{ operation, track_operation, profile_operation },
         .prev_data = before_root,
     };
     const commit = try verify(
@@ -227,11 +260,14 @@ test "strict verifier proves chain, envelope, op CID, and list record together" 
         .{ .commit_rev = prior_rev, .data_cid = before_root },
         "fm.plyr.dev.list",
         "fm.plyr.dev.track",
+        "fm.plyr.dev.actor.profile",
         42,
     );
     try std.testing.expectEqual(@as(usize, 1), commit.list_changes.len);
     try std.testing.expectEqual(@as(usize, 1), commit.track_changes.len);
+    try std.testing.expectEqual(@as(usize, 1), commit.profile_changes.len);
     try std.testing.expectEqualStrings("Verified", commit.track_changes[0].upsert.title);
+    try std.testing.expectEqualStrings("Verified artist", commit.profile_changes[0].upsert.bio.?);
     try std.testing.expectEqualStrings(rev, commit.commit_rev);
     try std.testing.expectEqualSlices(u8, after_root.raw, commit.data_cid.raw);
 
@@ -246,6 +282,7 @@ test "strict verifier proves chain, envelope, op CID, and list record together" 
             .{ .commit_rev = prior_rev, .data_cid = before_root },
             "fm.plyr.dev.list",
             "fm.plyr.dev.track",
+            "fm.plyr.dev.actor.profile",
             42,
         ),
     );

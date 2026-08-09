@@ -409,6 +409,7 @@ fn makeSnapshot(
         .data_cid = data_cid,
         .list_collection = "fm.plyr.dev.list",
         .track_collection = "fm.plyr.dev.track",
+        .profile_collection = "fm.plyr.dev.actor.profile",
         .indexed_at_us = indexed_at_us,
         .list_changes = changes,
     };

@@ -21,6 +21,7 @@ pub const Projector = struct {
     repositories: repository_source.Source,
     list_collection: []const u8,
     track_collection: []const u8,
+    profile_collection: []const u8,
 
     pub fn ingestLive(
         self: Projector,
@@ -50,6 +51,7 @@ pub const Projector = struct {
             .{ .commit_rev = head.commit_rev, .data_cid = head.data_cid },
             self.list_collection,
             self.track_collection,
+            self.profile_collection,
             indexed_at_us,
         ) catch |first_error| blk: {
             if (first_error != error.SignatureVerificationFailed)
@@ -65,6 +67,7 @@ pub const Projector = struct {
                 .{ .commit_rev = head.commit_rev, .data_cid = head.data_cid },
                 self.list_collection,
                 self.track_collection,
+                self.profile_collection,
                 indexed_at_us,
             ) catch |second_error| return classifyLiveVerification(second_error);
         };
@@ -117,6 +120,7 @@ pub const Projector = struct {
             key.publicKey(),
             self.list_collection,
             self.track_collection,
+            self.profile_collection,
             indexed_at_us,
         ) catch |first_error| blk: {
             if (first_error != error.SignatureVerificationFailed)
@@ -132,6 +136,7 @@ pub const Projector = struct {
                 key.publicKey(),
                 self.list_collection,
                 self.track_collection,
+                self.profile_collection,
                 indexed_at_us,
             ) catch |second_error| return classifySnapshotVerification(second_error);
         };
@@ -269,6 +274,7 @@ test "runtime projector short-circuits unknown and replayed repositories" {
         .repositories = .{ .context = &context, .fetch_fn = Never.repo },
         .list_collection = "fm.plyr.dev.list",
         .track_collection = "fm.plyr.dev.track",
+        .profile_collection = "fm.plyr.dev.actor.profile",
     };
     const event: zat.firehose.CommitEvent = .{
         .seq = 1,
@@ -365,6 +371,7 @@ test "repair releases an invalid fetched repository without projecting it" {
         .repositories = .{ .context = &fixture, .fetch_fn = Fixture.repo },
         .list_collection = "fm.plyr.dev.list",
         .track_collection = "fm.plyr.dev.track",
+        .profile_collection = "fm.plyr.dev.actor.profile",
     };
     try std.testing.expectEqual(
         RepairOutcome.invalid_repository,
@@ -477,6 +484,7 @@ test "repair refreshes a rotated signing key before one atomic snapshot apply" {
         .repositories = .{ .context = &fixture, .fetch_fn = Fixture.repo },
         .list_collection = "fm.plyr.dev.list",
         .track_collection = "fm.plyr.dev.track",
+        .profile_collection = "fm.plyr.dev.actor.profile",
     };
     try std.testing.expectEqual(
         RepairOutcome.applied,

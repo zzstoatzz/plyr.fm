@@ -4,6 +4,7 @@ const std = @import("std");
 const zat = @import("zat");
 const list_change = @import("list_change.zig");
 const track_change = @import("track_change.zig");
+const profile_change = @import("profile_change.zig");
 
 pub const Snapshot = struct {
     repo_did: []const u8,
@@ -12,15 +13,18 @@ pub const Snapshot = struct {
     data_cid: zat.Cid,
     list_collection: []const u8,
     track_collection: []const u8,
+    profile_collection: []const u8,
     indexed_at_us: i64,
     list_changes: []const list_change.Change,
     track_changes: []const track_change.Change = &.{},
+    profile_changes: []const profile_change.Change = &.{},
 
     pub fn validate(self: Snapshot) Error!void {
         if (zat.Did.parse(self.repo_did) == null or
             zat.Tid.parse(self.commit_rev) == null or
             zat.Nsid.parse(self.list_collection) == null or
             zat.Nsid.parse(self.track_collection) == null or
+            zat.Nsid.parse(self.profile_collection) == null or
             self.indexed_at_us < 0) return error.InvalidSnapshot;
         try validateDagCborCid(self.commit_cid);
         try validateDagCborCid(self.data_cid);
@@ -56,6 +60,27 @@ pub const Snapshot = struct {
                 !std.mem.eql(u8, upsert.proof.commit_cid.raw, self.commit_cid.raw))
                 return error.InvalidSnapshot;
             for (self.track_changes[0..index]) |prior| {
+                const prior_uri = switch (prior) {
+                    .upsert => |value| value.record_uri,
+                    .delete => return error.InvalidSnapshot,
+                };
+                if (std.mem.eql(u8, upsert.record_uri, prior_uri))
+                    return error.DuplicateRecord;
+            }
+        }
+        for (self.profile_changes, 0..) |change, index| {
+            const upsert = switch (change) {
+                .upsert => |value| value,
+                .delete => return error.InvalidSnapshot,
+            };
+            if (!std.mem.eql(u8, upsert.owner_did, self.repo_did) or
+                !std.mem.eql(u8, upsert.collection, self.profile_collection) or
+                !std.mem.eql(u8, upsert.rkey, "self") or
+                !std.mem.eql(u8, upsert.proof.commit_rev, self.commit_rev) or
+                upsert.proof.indexed_at_us != self.indexed_at_us or
+                !std.mem.eql(u8, upsert.proof.commit_cid.raw, self.commit_cid.raw))
+                return error.InvalidSnapshot;
+            for (self.profile_changes[0..index]) |prior| {
                 const prior_uri = switch (prior) {
                     .upsert => |value| value.record_uri,
                     .delete => return error.InvalidSnapshot,
@@ -127,6 +152,7 @@ test "complete snapshot accepts only unique upserts with one proof" {
         .data_cid = root,
         .list_collection = "fm.plyr.dev.list",
         .track_collection = "fm.plyr.dev.track",
+        .profile_collection = "fm.plyr.dev.actor.profile",
         .indexed_at_us = 1,
         .list_changes = &.{change},
     };
