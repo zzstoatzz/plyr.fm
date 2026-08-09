@@ -104,8 +104,10 @@
 					if (data.skipped_count) parts.push(`${data.skipped_count} skipped`);
 					if (data.failed_count) parts.push(`${data.failed_count} failed`);
 					toast.success(parts.join(', ') || 'saved to your PDS');
-					for (const err of data.errors ?? []) {
-						toast.warning(err, 0);
+					// grouped by cause: a batch usually fails for one reason, and
+					// one line per reason beats one per track
+					for (const reason of data.failure_summary ?? data.errors ?? []) {
+						toast.warning(reason, 0);
 					}
 					onComplete?.();
 				}
@@ -114,8 +116,10 @@
 					eventSource.close();
 					saving = false;
 					toast.dismiss(toastId);
-					const firstError: string | undefined = (data.errors ?? [])[0];
-					toast.error(firstError || data.error || 'save failed', 0);
+					const firstReason: string | undefined = (data.failure_summary ??
+						data.errors ??
+						[])[0];
+					toast.error(firstReason || data.error || 'save failed', 0);
 				}
 			} catch {
 				/* ignore parse errors */
