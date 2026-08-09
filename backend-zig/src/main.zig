@@ -85,6 +85,10 @@ pub fn main() !void {
 }
 
 test {
+    _ = @import("internal/account/availability.zig");
+    _ = @import("internal/account/current_pds_status_source.zig");
+    _ = @import("internal/account/postgres_availability_store.zig");
+    _ = @import("internal/account/repo_status.zig");
     _ = @import("api/response.zig");
     _ = @import("api/router.zig");
     _ = @import("api/artists.zig");
@@ -121,6 +125,7 @@ test {
     _ = @import("internal/ingest/cached_signing_key_resolver.zig");
     _ = @import("internal/ingest/continuous_runner.zig");
     _ = @import("internal/ingest/postgres_relay_cursor.zig");
+    _ = @import("internal/ingest/pinned_tls.zig");
     _ = @import("internal/ingest/relay_cursor.zig");
     _ = @import("internal/ingest/repository_source.zig");
     _ = @import("internal/ingest/repair_runner.zig");
