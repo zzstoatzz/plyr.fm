@@ -10,11 +10,13 @@ const list_change = @import("list_change.zig");
 const postgres_list = @import("postgres_list_store.zig");
 const postgres_track = @import("postgres_track_store.zig");
 const postgres_profile = @import("postgres_profile_store.zig");
+const postgres_rejections = @import("postgres_record_rejection_store.zig");
 const profile_change = @import("profile_change.zig");
 const profile_store = @import("profile_store.zig");
 const track_change = @import("track_change.zig");
 const track_store = @import("track_store.zig");
 const repository_head = @import("repository_head.zig");
+const record_rejection = @import("record_rejection.zig");
 const verified = @import("verified_commit.zig");
 
 pub const PostgresVerifiedCommitStore = struct {
@@ -159,6 +161,15 @@ pub const PostgresVerifiedCommitStore = struct {
             };
             if (result != .applied) return error.CorruptProjection;
         }
+        const touched = collectTouchedUris(allocator, commit) catch return error.OutOfMemory;
+        defer allocator.free(touched);
+        var rejection_store: postgres_rejections.PostgresRecordRejectionStore = .{ .pool = self.pool };
+        rejection_store.replaceForCommit(
+            conn,
+            allocator,
+            touched,
+            commit.rejections,
+        ) catch |err| return mapRejectionError(err);
         var accounts: postgres_availability.PostgresAvailabilityStore = .{ .pool = self.pool };
         const account_result = accounts.applyInTransaction(conn, allocator, .{
             .repo_did = commit.repo_did,
@@ -201,6 +212,46 @@ fn mapAvailabilityError(err: availability.Error) verified.Error {
         error.ProjectionUnavailable => error.ProjectionUnavailable,
         error.InvalidEvidence, error.CorruptProjection => error.CorruptProjection,
     };
+}
+
+fn mapRejectionError(err: postgres_rejections.Error) verified.Error {
+    return switch (err) {
+        error.RevisionConflict => error.RevisionConflict,
+        error.OutOfMemory => error.OutOfMemory,
+        error.ProjectionUnavailable => error.ProjectionUnavailable,
+        error.InvalidRejection, error.CorruptProjection => error.CorruptProjection,
+    };
+}
+
+fn collectTouchedUris(
+    allocator: std.mem.Allocator,
+    commit: verified.Commit,
+) ![][]const u8 {
+    const count = commit.list_changes.len + commit.track_changes.len + commit.profile_changes.len;
+    const uris = try allocator.alloc([]const u8, count);
+    var index: usize = 0;
+    for (commit.list_changes) |change| {
+        uris[index] = switch (change) {
+            .upsert => |value| value.record_uri,
+            .delete => |value| value.record_uri,
+        };
+        index += 1;
+    }
+    for (commit.track_changes) |change| {
+        uris[index] = switch (change) {
+            .upsert => |value| value.record_uri,
+            .delete => |value| value.record_uri,
+        };
+        index += 1;
+    }
+    for (commit.profile_changes) |change| {
+        uris[index] = switch (change) {
+            .upsert => |value| value.record_uri,
+            .delete => |value| value.record_uri,
+        };
+        index += 1;
+    }
+    return uris;
 }
 
 /// Null means the caller owns the current successor and may apply it.
@@ -296,6 +347,7 @@ test "PostgreSQL verified commit sink is atomic, strict, and replay safe" {
     try postgres_track.createTestTable(pool);
     try postgres_profile.createTestTable(pool);
     try postgres_availability.createTestTable(pool);
+    try postgres_rejections.createTestTable(pool);
     _ = try pool.exec(
         \\CREATE TABLE plyr_index.repo_heads (
         \\  repo_did text PRIMARY KEY,
@@ -314,18 +366,31 @@ test "PostgreSQL verified commit sink is atomic, strict, and replay safe" {
     const rev_1 = zat.Tid.fromTimestamp(2_000, 1);
     const rev_2 = zat.Tid.fromTimestamp(3_000, 1);
     const rev_3 = zat.Tid.fromTimestamp(4_000, 1);
+    const rev_4 = zat.Tid.fromTimestamp(5_000, 1);
     const initial_commit = try cidString(a, "initial-commit");
     const initial_data = try zat.Cid.forDagCbor(a, "initial-data");
     const data_1 = try zat.Cid.forDagCbor(a, "data-1");
     const data_2 = try zat.Cid.forDagCbor(a, "data-2");
+    const data_3 = try zat.Cid.forDagCbor(a, "data-3");
     const commit_1 = try zat.Cid.forDagCbor(a, "commit-1");
     const commit_2 = try zat.Cid.forDagCbor(a, "commit-2");
     const commit_3 = try zat.Cid.forDagCbor(a, "commit-3");
+    const commit_4 = try zat.Cid.forDagCbor(a, "commit-4");
 
     var implementation: PostgresVerifiedCommitStore = .{ .pool = pool };
     const store = implementation.store();
     try std.testing.expect((try implementation.reader().load(a, did)) == null);
     const first_change = listDelete("one", rev_1.str(), commit_1, 2_000);
+    const rejected = try record_rejection.init(
+        a,
+        did,
+        "fm.plyr.dev.list",
+        "one",
+        try zat.Cid.forDagCbor(a, "malformed-one"),
+        .invalid_schema,
+        "InvalidStrongRefCid",
+        .{ .commit_cid = commit_1, .commit_rev = rev_1.str(), .indexed_at_us = 2_000 },
+    );
     const first: verified.Commit = .{
         .repo_did = did,
         .commit_rev = rev_1.str(),
@@ -334,6 +399,7 @@ test "PostgreSQL verified commit sink is atomic, strict, and replay safe" {
         .data_cid = data_1,
         .indexed_at_us = 2_000,
         .list_changes = &.{first_change},
+        .rejections = &.{rejected},
     };
     try std.testing.expectEqual(verified.ApplyResult.needs_bootstrap, try store.apply(a, first));
 
@@ -345,6 +411,7 @@ test "PostgreSQL verified commit sink is atomic, strict, and replay safe" {
     try std.testing.expectEqual(verified.ApplyResult.idempotent, try store.apply(a, first));
     try expectHead(pool, rev_1.str(), try data_1.toString(a));
     try expectAvailability(pool, rev_1.str(), 2_000);
+    try expectRejection(pool, rejected.record_uri, rev_1.str());
     const loaded_head = (try implementation.reader().load(a, did)).?;
     try std.testing.expectEqualStrings(rev_1.str(), loaded_head.commit_rev);
     try std.testing.expectEqualSlices(u8, data_1.raw, loaded_head.data_cid.raw);
@@ -352,6 +419,7 @@ test "PostgreSQL verified commit sink is atomic, strict, and replay safe" {
     var stale = first;
     stale.commit_rev = initial_rev.str();
     stale.list_changes = &.{};
+    stale.rejections = &.{};
     try std.testing.expectEqual(verified.ApplyResult.stale, try store.apply(a, stale));
 
     var gap = first;
@@ -361,11 +429,13 @@ test "PostgreSQL verified commit sink is atomic, strict, and replay safe" {
     gap.data_cid = data_2;
     gap.indexed_at_us = 3_000;
     gap.list_changes = &.{};
+    gap.rejections = &.{};
     try std.testing.expectError(error.ChainGap, store.apply(a, gap));
 
     var conflict = first;
     conflict.commit_cid = commit_2;
     conflict.list_changes = &.{};
+    conflict.rejections = &.{};
     try std.testing.expectError(error.RevisionConflict, store.apply(a, conflict));
 
     var track_implementation: postgres_track.PostgresTrackStore = .{ .pool = pool };
@@ -406,6 +476,20 @@ test "PostgreSQL verified commit sink is atomic, strict, and replay safe" {
     try expectRecordRev(pool, "one", rev_1.str());
     try expectProfileRev(pool, rev_3.str());
     try expectAvailability(pool, rev_1.str(), 2_000);
+
+    const resolved_changes = [_]list_change.Change{listDelete("one", rev_4.str(), commit_4, 5_000)};
+    const resolved: verified.Commit = .{
+        .repo_did = did,
+        .commit_rev = rev_4.str(),
+        .commit_cid = commit_4,
+        .prev_data_cid = data_1,
+        .data_cid = data_3,
+        .indexed_at_us = 5_000,
+        .list_changes = &resolved_changes,
+    };
+    try std.testing.expectEqual(verified.ApplyResult.applied, try store.apply(a, resolved));
+    try expectHead(pool, rev_4.str(), try data_3.toString(a));
+    try expectNoRejection(pool, rejected.record_uri);
 }
 
 fn expectAvailability(pool: *pg.Pool, rev: []const u8, observed_at_us: i64) !void {
@@ -418,6 +502,24 @@ fn expectAvailability(pool: *pg.Pool, rev: []const u8, observed_at_us: i64) !voi
     try std.testing.expectEqualStrings("verified_repository", try row.get([]const u8, 1));
     try std.testing.expectEqualStrings(rev, (try row.get(?[]const u8, 2)).?);
     try std.testing.expectEqual(observed_at_us, try row.get(i64, 3));
+}
+
+fn expectRejection(pool: *pg.Pool, uri: []const u8, rev: []const u8) !void {
+    var row = (try pool.row(
+        "SELECT reason, detail, commit_rev FROM plyr_index.record_rejections WHERE record_uri = $1",
+        .{uri},
+    )).?;
+    defer row.deinit() catch {};
+    try std.testing.expectEqualStrings("invalid_schema", try row.get([]const u8, 0));
+    try std.testing.expectEqualStrings("InvalidStrongRefCid", try row.get([]const u8, 1));
+    try std.testing.expectEqualStrings(rev, try row.get([]const u8, 2));
+}
+
+fn expectNoRejection(pool: *pg.Pool, uri: []const u8) !void {
+    try std.testing.expect((try pool.row(
+        "SELECT 1 FROM plyr_index.record_rejections WHERE record_uri = $1",
+        .{uri},
+    )) == null);
 }
 
 fn trackUpsert(

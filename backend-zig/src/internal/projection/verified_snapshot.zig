@@ -5,6 +5,7 @@ const zat = @import("zat");
 const list_change = @import("list_change.zig");
 const track_change = @import("track_change.zig");
 const profile_change = @import("profile_change.zig");
+const record_rejection = @import("record_rejection.zig");
 
 pub const Snapshot = struct {
     repo_did: []const u8,
@@ -18,6 +19,7 @@ pub const Snapshot = struct {
     list_changes: []const list_change.Change,
     track_changes: []const track_change.Change = &.{},
     profile_changes: []const profile_change.Change = &.{},
+    rejections: []const record_rejection.Rejection = &.{},
 
     pub fn validate(self: Snapshot) Error!void {
         if (zat.Did.parse(self.repo_did) == null or
@@ -89,6 +91,22 @@ pub const Snapshot = struct {
                     return error.DuplicateRecord;
             }
         }
+        for (self.rejections, 0..) |rejection, index| {
+            rejection.validate() catch return error.InvalidSnapshot;
+            if (!std.mem.eql(u8, rejection.owner_did, self.repo_did) or
+                (!std.mem.eql(u8, rejection.collection, self.list_collection) and
+                    !std.mem.eql(u8, rejection.collection, self.track_collection) and
+                    !std.mem.eql(u8, rejection.collection, self.profile_collection)) or
+                !std.mem.eql(u8, rejection.proof.commit_rev, self.commit_rev) or
+                rejection.proof.indexed_at_us != self.indexed_at_us or
+                !std.mem.eql(u8, rejection.proof.commit_cid.raw, self.commit_cid.raw))
+                return error.InvalidSnapshot;
+            for (self.rejections[0..index]) |prior| {
+                if (std.mem.eql(u8, rejection.record_uri, prior.record_uri))
+                    return error.DuplicateRecord;
+            }
+            if (containsProjectedUri(self, rejection.record_uri)) return error.DuplicateRecord;
+        }
     }
 };
 
@@ -120,6 +138,25 @@ pub const Error = error{
 fn validateDagCborCid(cid: zat.Cid) Error!void {
     const parsed = zat.Cid.fromBytes(cid.raw) catch return error.InvalidSnapshot;
     if (parsed.codec() != zat.cbor.Codec.dag_cbor) return error.InvalidSnapshot;
+}
+
+fn containsProjectedUri(snapshot: Snapshot, uri: []const u8) bool {
+    for (snapshot.list_changes) |change| if (std.mem.eql(
+        u8,
+        change.upsert.record_uri,
+        uri,
+    )) return true;
+    for (snapshot.track_changes) |change| if (std.mem.eql(
+        u8,
+        change.upsert.record_uri,
+        uri,
+    )) return true;
+    for (snapshot.profile_changes) |change| if (std.mem.eql(
+        u8,
+        change.upsert.record_uri,
+        uri,
+    )) return true;
+    return false;
 }
 
 test "complete snapshot accepts only unique upserts with one proof" {

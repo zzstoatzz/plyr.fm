@@ -5,6 +5,7 @@ const zat = @import("zat");
 const list_change = @import("list_change.zig");
 const track_change = @import("track_change.zig");
 const profile_change = @import("profile_change.zig");
+const record_rejection = @import("record_rejection.zig");
 const verified = @import("verified_snapshot.zig");
 
 pub const max_repo_bytes = 64 * 1024 * 1024;
@@ -102,6 +103,7 @@ pub fn verify(
         .list_changes = try collector.changes.toOwnedSlice(allocator),
         .track_changes = try collector.track_changes.toOwnedSlice(allocator),
         .profile_changes = try collector.profile_changes.toOwnedSlice(allocator),
+        .rejections = try collector.rejections.toOwnedSlice(allocator),
     };
     try snapshot.validate();
     return snapshot;
@@ -118,6 +120,7 @@ const Collector = struct {
     changes: std.ArrayList(list_change.Change) = .empty,
     track_changes: std.ArrayList(track_change.Change) = .empty,
     profile_changes: std.ArrayList(profile_change.Change) = .empty,
+    rejections: std.ArrayList(record_rejection.Rejection) = .empty,
 
     fn entry(context: *anyopaque, item: zat.mst.WalkEntry) anyerror!void {
         const self: *Collector = @ptrCast(@alignCast(context));
@@ -133,8 +136,10 @@ const Collector = struct {
         if (zat.Rkey.parse(rkey) == null) return error.InvalidRepoPath;
         const record_bytes = zat.car.findBlock(self.repo_car, item.value.raw) orelse
             return error.IncompleteRepo;
-        const record = zat.cbor.decodeAll(self.allocator, record_bytes) catch
-            return error.InvalidProjectedRecord;
+        const record = zat.cbor.decodeAll(self.allocator, record_bytes) catch |err| {
+            try self.reject(collection, rkey, item.value, .invalid_dag_cbor, @errorName(err));
+            return;
+        };
         const operation: zat.firehose.RepoOp = .{
             .action = .create,
             .path = item.key,
@@ -144,34 +149,71 @@ const Collector = struct {
             .record = record,
         };
         if (std.mem.eql(u8, collection, self.list_collection)) {
-            const change = (try list_change.fromVerifiedOperation(
+            const change = (list_change.fromVerifiedOperation(
                 self.allocator,
                 self.repo_did,
                 operation,
                 self.list_collection,
                 self.track_collection,
                 self.proof,
-            )) orelse return error.InvalidProjectedRecord;
+            ) catch |err| return self.rejectOperation(collection, rkey, item.value, err)) orelse
+                return error.InvalidProjectedRecord;
             try self.changes.append(self.allocator, change);
         } else if (std.mem.eql(u8, collection, self.track_collection)) {
-            const change = (try track_change.fromVerifiedOperation(
+            const change = (track_change.fromVerifiedOperation(
                 self.allocator,
                 self.repo_did,
                 operation,
                 self.track_collection,
                 self.proof,
-            )) orelse return error.InvalidProjectedRecord;
+            ) catch |err| return self.rejectOperation(collection, rkey, item.value, err)) orelse
+                return error.InvalidProjectedRecord;
             try self.track_changes.append(self.allocator, change);
         } else {
-            const change = (try profile_change.fromVerifiedOperation(
+            const change = (profile_change.fromVerifiedOperation(
                 self.allocator,
                 self.repo_did,
                 operation,
                 self.profile_collection,
                 self.proof,
-            )) orelse return error.InvalidProjectedRecord;
+            ) catch |err| return self.rejectOperation(collection, rkey, item.value, err)) orelse
+                return error.InvalidProjectedRecord;
             try self.profile_changes.append(self.allocator, change);
         }
+    }
+
+    fn rejectOperation(
+        self: *Collector,
+        collection: []const u8,
+        rkey: []const u8,
+        record_cid: zat.Cid,
+        err: anyerror,
+    ) anyerror!void {
+        switch (err) {
+            error.OutOfMemory => return error.OutOfMemory,
+            error.InvalidOperation, error.InvalidIdentity => return error.InvalidProjectedRecord,
+            else => try self.reject(collection, rkey, record_cid, .invalid_schema, @errorName(err)),
+        }
+    }
+
+    fn reject(
+        self: *Collector,
+        collection: []const u8,
+        rkey: []const u8,
+        record_cid: zat.Cid,
+        reason: record_rejection.Reason,
+        detail: []const u8,
+    ) !void {
+        try self.rejections.append(self.allocator, try record_rejection.init(
+            self.allocator,
+            self.repo_did,
+            collection,
+            rkey,
+            record_cid,
+            reason,
+            detail,
+            self.proof,
+        ));
     }
 };
 
@@ -179,7 +221,7 @@ test "complete repo verifier authenticates and extracts selected records" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const a = arena.allocator();
-    const fixture = try buildFixture(a, true);
+    const fixture = try buildFixture(a, true, false);
     const snapshot = try verify(
         a,
         fixture.car_bytes,
@@ -198,7 +240,7 @@ test "complete repo verifier authenticates and extracts selected records" {
     try std.testing.expectEqualStrings(fixture.did, snapshot.repo_did);
     try std.testing.expectEqualStrings("3jqfcqzm3fo2j", snapshot.commit_rev);
 
-    const incomplete = try buildFixture(a, false);
+    const incomplete = try buildFixture(a, false, false);
     try std.testing.expectError(
         error.IncompleteRepo,
         verify(
@@ -214,21 +256,58 @@ test "complete repo verifier authenticates and extracts selected records" {
     );
 }
 
+test "complete repo quarantines malformed selected records without losing valid siblings" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    const fixture = try buildFixture(a, true, true);
+    const snapshot = try verify(
+        a,
+        fixture.car_bytes,
+        fixture.did,
+        fixture.public_key,
+        "fm.plyr.dev.list",
+        "fm.plyr.dev.track",
+        "fm.plyr.dev.actor.profile",
+        42,
+    );
+    try std.testing.expectEqual(@as(usize, 0), snapshot.list_changes.len);
+    try std.testing.expectEqual(@as(usize, 1), snapshot.track_changes.len);
+    try std.testing.expectEqual(@as(usize, 1), snapshot.profile_changes.len);
+    try std.testing.expectEqual(@as(usize, 1), snapshot.rejections.len);
+    try std.testing.expectEqual(
+        record_rejection.Reason.invalid_schema,
+        snapshot.rejections[0].reason,
+    );
+    try std.testing.expectEqualStrings("InvalidStrongRefCid", snapshot.rejections[0].detail);
+}
+
 const Fixture = struct {
     car_bytes: []const u8,
     did: []const u8,
     public_key: zat.multicodec.PublicKey,
 };
 
-fn buildFixture(allocator: std.mem.Allocator, include_record: bool) !Fixture {
+fn buildFixture(
+    allocator: std.mem.Allocator,
+    include_record: bool,
+    malformed_list: bool,
+) !Fixture {
     const keypair = try zat.Keypair.fromSecretKey(.p256, .{23} ** 32);
     const did = try keypair.did(allocator);
     const public_key_bytes = try keypair.publicKey();
     const owned_key = try allocator.dupe(u8, &public_key_bytes);
+    const malformed_items = [_]zat.cbor.Value{.{ .map = &.{.{
+        .key = "subject",
+        .value = .{ .map = &.{
+            .{ .key = "uri", .value = .{ .text = "at://did:plc:other/fm.plyr.dev.track/one" } },
+            .{ .key = "cid", .value = .{ .text = "bafy-invalid-text-link" } },
+        } },
+    }} }};
     const record: zat.cbor.Value = .{ .map = &.{
         .{ .key = "$type", .value = .{ .text = "fm.plyr.dev.list" } },
         .{ .key = "listType", .value = .{ .text = "album" } },
-        .{ .key = "items", .value = .{ .array = &.{} } },
+        .{ .key = "items", .value = .{ .array = if (malformed_list) &malformed_items else &.{} } },
         .{ .key = "createdAt", .value = .{ .text = "2026-08-08T12:00:00Z" } },
     } };
     const record_bytes = try zat.cbor.encodeAlloc(allocator, record);

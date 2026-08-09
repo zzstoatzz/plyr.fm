@@ -188,9 +188,11 @@ test {
     _ = @import("internal/projection/postgres_track_store.zig");
     _ = @import("internal/projection/profile_store.zig");
     _ = @import("internal/projection/postgres_profile_store.zig");
+    _ = @import("internal/projection/postgres_record_rejection_store.zig");
     _ = @import("internal/projection/postgres_verified_commit_store.zig");
     _ = @import("internal/projection/postgres_verified_snapshot_store.zig");
     _ = @import("internal/projection/repository_head.zig");
+    _ = @import("internal/projection/record_rejection.zig");
     _ = @import("internal/projection/verified_commit.zig");
     _ = @import("internal/projection/verified_snapshot.zig");
     _ = @import("server.zig");

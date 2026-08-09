@@ -11,7 +11,9 @@ const list_store = @import("list_store.zig");
 const postgres_list = @import("postgres_list_store.zig");
 const postgres_track = @import("postgres_track_store.zig");
 const postgres_profile = @import("postgres_profile_store.zig");
+const postgres_rejections = @import("postgres_record_rejection_store.zig");
 const track_change = @import("track_change.zig");
+const record_rejection = @import("record_rejection.zig");
 const verified = @import("verified_snapshot.zig");
 
 pub const PostgresVerifiedSnapshotStore = struct {
@@ -147,6 +149,14 @@ pub const PostgresVerifiedSnapshotStore = struct {
             };
             if (result != .applied) return error.CorruptProjection;
         }
+        var rejection_store: postgres_rejections.PostgresRecordRejectionStore = .{ .pool = self.pool };
+        rejection_store.replaceForSnapshot(
+            conn,
+            allocator,
+            snapshot.repo_did,
+            &.{ snapshot.list_collection, snapshot.track_collection, snapshot.profile_collection },
+            snapshot.rejections,
+        ) catch |err| return mapRejectionError(err);
         var accounts: postgres_availability.PostgresAvailabilityStore = .{ .pool = self.pool };
         const account_result = accounts.applyInTransaction(conn, allocator, .{
             .repo_did = snapshot.repo_did,
@@ -229,6 +239,15 @@ fn mapAvailabilityError(err: availability.Error) verified.Error {
         error.OutOfMemory => error.OutOfMemory,
         error.ProjectionUnavailable => error.ProjectionUnavailable,
         error.InvalidEvidence, error.CorruptProjection => error.CorruptProjection,
+    };
+}
+
+fn mapRejectionError(err: postgres_rejections.Error) verified.Error {
+    return switch (err) {
+        error.RevisionConflict => error.RevisionConflict,
+        error.OutOfMemory => error.OutOfMemory,
+        error.ProjectionUnavailable => error.ProjectionUnavailable,
+        error.InvalidRejection, error.CorruptProjection => error.CorruptProjection,
     };
 }
 
@@ -400,6 +419,7 @@ test "PostgreSQL complete snapshot bootstraps and reconciles atomically" {
     try postgres_track.createTestTable(pool);
     try postgres_profile.createTestTable(pool);
     try postgres_availability.createTestTable(pool);
+    try postgres_rejections.createTestTable(pool);
     _ = try pool.exec(
         \\CREATE TABLE plyr_index.repo_heads (
         \\  repo_did text PRIMARY KEY,
@@ -416,13 +436,16 @@ test "PostgreSQL complete snapshot bootstraps and reconciles atomically" {
     const rev_1 = zat.Tid.fromTimestamp(1_000, 1);
     const rev_2 = zat.Tid.fromTimestamp(2_000, 1);
     const rev_3 = zat.Tid.fromTimestamp(3_000, 1);
+    const rev_4 = zat.Tid.fromTimestamp(4_000, 1);
     const commit_1 = try zat.Cid.forDagCbor(a, "commit-1");
     const commit_2 = try zat.Cid.forDagCbor(a, "commit-2");
     const commit_3 = try zat.Cid.forDagCbor(a, "commit-3");
     const commit_4 = try zat.Cid.forDagCbor(a, "commit-4");
+    const commit_5 = try zat.Cid.forDagCbor(a, "commit-5");
     const data_1 = try zat.Cid.forDagCbor(a, "data-1");
     const data_2 = try zat.Cid.forDagCbor(a, "data-2");
     const data_3 = try zat.Cid.forDagCbor(a, "data-3");
+    const data_4 = try zat.Cid.forDagCbor(a, "data-4");
     const record_cid = try cidString(a, "record");
     const one_1 = listUpsert("one", record_cid, rev_1.str(), commit_1, 1_000);
     var two_1 = listUpsert("two", record_cid, rev_1.str(), commit_1, 1_000);
@@ -457,6 +480,17 @@ test "PostgreSQL complete snapshot bootstraps and reconciles atomically" {
     var repaired = makeSnapshot(rev_2.str(), commit_2, data_2, 2_000, &.{one_2});
     const track_one_2 = trackUpsert("track-one", rev_2.str(), commit_2, 2_000);
     repaired.track_changes = &.{track_one_2};
+    const rejected = try record_rejection.init(
+        a,
+        "did:plc:artist",
+        "fm.plyr.dev.list",
+        "two",
+        try zat.Cid.forDagCbor(a, "malformed-two"),
+        .invalid_schema,
+        "InvalidStrongRefCid",
+        .{ .commit_cid = commit_2, .commit_rev = rev_2.str(), .indexed_at_us = 2_000 },
+    );
+    repaired.rejections = &.{rejected};
     try std.testing.expectEqual(verified.ApplyResult.applied, try store.apply(a, repaired));
     try expectState(pool, rev_2.str(), "one", false);
     try expectState(pool, rev_2.str(), "two", true);
@@ -465,12 +499,14 @@ test "PostgreSQL complete snapshot bootstraps and reconciles atomically" {
     try expectTrackState(pool, "track-two", rev_2.str(), true);
     try expectProfileState(pool, null, rev_2.str(), true);
     try expectAvailability(pool, rev_2.str(), 2_000);
+    try expectRejection(pool, rejected.record_uri, "InvalidStrongRefCid");
 
     try std.testing.expectEqual(verified.ApplyResult.stale, try store.apply(a, initial));
     var conflict = repaired;
     conflict.commit_cid = commit_3;
     conflict.list_changes = &.{};
     conflict.track_changes = &.{};
+    conflict.rejections = &.{};
     try std.testing.expectError(error.RevisionConflict, store.apply(a, conflict));
 
     var list_implementation: postgres_list.PostgresListStore = .{ .pool = pool };
@@ -483,6 +519,14 @@ test "PostgreSQL complete snapshot bootstraps and reconciles atomically" {
     try expectState(pool, rev_2.str(), "one", false);
     try expectHead(pool, rev_2.str());
     try expectAvailability(pool, rev_2.str(), 2_000);
+
+    const one_4 = listUpsert("one", record_cid, rev_4.str(), commit_5, 4_000);
+    const two_4 = listUpsert("two", record_cid, rev_4.str(), commit_5, 4_000);
+    const clean = makeSnapshot(rev_4.str(), commit_5, data_4, 4_000, &.{ one_4, two_4 });
+    try std.testing.expectEqual(verified.ApplyResult.applied, try store.apply(a, clean));
+    try expectState(pool, rev_4.str(), "two", false);
+    try expectHead(pool, rev_4.str());
+    try expectNoRejection(pool, rejected.record_uri);
 }
 
 fn makeSnapshot(
@@ -606,6 +650,23 @@ fn expectAvailability(pool: *pg.Pool, rev: []const u8, observed_at_us: i64) !voi
     try std.testing.expectEqualStrings("verified_repository", try row.get([]const u8, 1));
     try std.testing.expectEqualStrings(rev, (try row.get(?[]const u8, 2)).?);
     try std.testing.expectEqual(observed_at_us, try row.get(i64, 3));
+}
+
+fn expectRejection(pool: *pg.Pool, uri: []const u8, detail: []const u8) !void {
+    var row = (try pool.row(
+        "SELECT reason, detail FROM plyr_index.record_rejections WHERE record_uri = $1",
+        .{uri},
+    )).?;
+    defer row.deinit() catch {};
+    try std.testing.expectEqualStrings("invalid_schema", try row.get([]const u8, 0));
+    try std.testing.expectEqualStrings(detail, try row.get([]const u8, 1));
+}
+
+fn expectNoRejection(pool: *pg.Pool, uri: []const u8) !void {
+    try std.testing.expect((try pool.row(
+        "SELECT 1 FROM plyr_index.record_rejections WHERE record_uri = $1",
+        .{uri},
+    )) == null);
 }
 
 fn expectHead(pool: *pg.Pool, rev: []const u8) !void {

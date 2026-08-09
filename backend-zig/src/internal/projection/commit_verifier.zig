@@ -9,6 +9,7 @@ const zat = @import("zat");
 const list_change = @import("list_change.zig");
 const track_change = @import("track_change.zig");
 const profile_change = @import("profile_change.zig");
+const record_rejection = @import("record_rejection.zig");
 const verified = @import("verified_commit.zig");
 
 pub const max_commit_blocks_bytes = 2_000_000;
@@ -64,41 +65,57 @@ pub fn verify(
     var changes: std.ArrayList(list_change.Change) = .empty;
     var track_changes: std.ArrayList(track_change.Change) = .empty;
     var profile_changes: std.ArrayList(profile_change.Change) = .empty;
+    var rejections: std.ArrayList(record_rejection.Rejection) = .empty;
+    const proof: list_change.Proof = .{
+        .commit_cid = outer_commit,
+        .commit_rev = event.rev,
+        .indexed_at_us = indexed_at_us,
+    };
     for (event.ops) |operation| {
-        if (try list_change.fromVerifiedOperation(
-            allocator,
-            event.repo,
-            operation,
-            list_collection,
-            track_collection,
-            .{
-                .commit_cid = outer_commit,
-                .commit_rev = event.rev,
-                .indexed_at_us = indexed_at_us,
-            },
-        )) |change| try changes.append(allocator, change);
-        if (try track_change.fromVerifiedOperation(
-            allocator,
-            event.repo,
-            operation,
-            track_collection,
-            .{
-                .commit_cid = outer_commit,
-                .commit_rev = event.rev,
-                .indexed_at_us = indexed_at_us,
-            },
-        )) |change| try track_changes.append(allocator, change);
-        if (try profile_change.fromVerifiedOperation(
-            allocator,
-            event.repo,
-            operation,
-            profile_collection,
-            .{
-                .commit_cid = outer_commit,
-                .commit_rev = event.rev,
-                .indexed_at_us = indexed_at_us,
-            },
-        )) |change| try profile_changes.append(allocator, change);
+        if (std.mem.eql(u8, operation.collection, list_collection)) {
+            const change = list_change.fromVerifiedOperation(
+                allocator,
+                event.repo,
+                operation,
+                list_collection,
+                track_collection,
+                proof,
+            ) catch |err| {
+                const rejected = try rejectOperation(allocator, event.repo, operation, proof, err);
+                try rejections.append(allocator, rejected);
+                try changes.append(allocator, rejected.listDelete());
+                continue;
+            } orelse return error.InvalidProjectedRecord;
+            try changes.append(allocator, change);
+        } else if (std.mem.eql(u8, operation.collection, track_collection)) {
+            const change = track_change.fromVerifiedOperation(
+                allocator,
+                event.repo,
+                operation,
+                track_collection,
+                proof,
+            ) catch |err| {
+                const rejected = try rejectOperation(allocator, event.repo, operation, proof, err);
+                try rejections.append(allocator, rejected);
+                try track_changes.append(allocator, rejected.trackDelete());
+                continue;
+            } orelse return error.InvalidProjectedRecord;
+            try track_changes.append(allocator, change);
+        } else if (std.mem.eql(u8, operation.collection, profile_collection)) {
+            const change = profile_change.fromVerifiedOperation(
+                allocator,
+                event.repo,
+                operation,
+                profile_collection,
+                proof,
+            ) catch |err| {
+                const rejected = try rejectOperation(allocator, event.repo, operation, proof, err);
+                try rejections.append(allocator, rejected);
+                try profile_changes.append(allocator, rejected.profileDelete());
+                continue;
+            } orelse return error.InvalidProjectedRecord;
+            try profile_changes.append(allocator, change);
+        }
     }
 
     const commit: verified.Commit = .{
@@ -111,9 +128,36 @@ pub fn verify(
         .list_changes = try changes.toOwnedSlice(allocator),
         .track_changes = try track_changes.toOwnedSlice(allocator),
         .profile_changes = try profile_changes.toOwnedSlice(allocator),
+        .rejections = try rejections.toOwnedSlice(allocator),
     };
     try commit.validate();
     return commit;
+}
+
+fn rejectOperation(
+    allocator: std.mem.Allocator,
+    repo_did: []const u8,
+    operation: zat.firehose.RepoOp,
+    proof: list_change.Proof,
+    err: anyerror,
+) !record_rejection.Rejection {
+    switch (err) {
+        error.OutOfMemory => return error.OutOfMemory,
+        error.InvalidOperation, error.InvalidIdentity => return error.InvalidProjectedRecord,
+        else => {},
+    }
+    if (operation.action == .delete) return error.InvalidProjectedRecord;
+    const record_cid = operation.cid orelse return error.InvalidProjectedRecord;
+    return record_rejection.init(
+        allocator,
+        repo_did,
+        operation.collection,
+        operation.rkey,
+        record_cid,
+        .invalid_schema,
+        @errorName(err),
+        proof,
+    );
 }
 
 fn checkOperationCids(
@@ -300,5 +344,44 @@ test "strict verifier proves chain, envelope, op CIDs, and selected records toge
     try std.testing.expectError(
         error.InvalidOperationCid,
         checkOperationCids(a, tampered, after_root.raw),
+    );
+}
+
+test "malformed live app record becomes a proved rejection and projection delete" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    const record_cid = try zat.Cid.forDagCbor(a, "malformed list");
+    const commit_cid = try zat.Cid.forDagCbor(a, "commit");
+    const previous = try zat.Cid.forDagCbor(a, "previous");
+    const data = try zat.Cid.forDagCbor(a, "data");
+    const proof: list_change.Proof = .{
+        .commit_cid = commit_cid,
+        .commit_rev = "3jqfcqzm3fo2k",
+        .indexed_at_us = 42,
+    };
+    const rejected = try rejectOperation(a, "did:plc:owner", .{
+        .action = .create,
+        .path = "fm.plyr.dev.list/list",
+        .collection = "fm.plyr.dev.list",
+        .rkey = "list",
+        .cid = record_cid,
+        .record = .{ .map = &.{} },
+    }, proof, error.InvalidStrongRefCid);
+    const commit: verified.Commit = .{
+        .repo_did = "did:plc:owner",
+        .commit_rev = proof.commit_rev,
+        .commit_cid = commit_cid,
+        .prev_data_cid = previous,
+        .data_cid = data,
+        .indexed_at_us = proof.indexed_at_us,
+        .list_changes = &.{rejected.listDelete()},
+        .rejections = &.{rejected},
+    };
+    try commit.validate();
+    try std.testing.expectEqualStrings("InvalidStrongRefCid", rejected.detail);
+    try std.testing.expectEqualStrings(
+        rejected.record_uri,
+        commit.list_changes[0].delete.record_uri,
     );
 }

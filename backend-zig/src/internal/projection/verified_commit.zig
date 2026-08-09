@@ -10,6 +10,7 @@ const zat = @import("zat");
 const list_change = @import("list_change.zig");
 const track_change = @import("track_change.zig");
 const profile_change = @import("profile_change.zig");
+const record_rejection = @import("record_rejection.zig");
 
 pub const Commit = struct {
     repo_did: []const u8,
@@ -21,6 +22,7 @@ pub const Commit = struct {
     list_changes: []const list_change.Change,
     track_changes: []const track_change.Change = &.{},
     profile_changes: []const profile_change.Change = &.{},
+    rejections: []const record_rejection.Rejection = &.{},
 
     pub fn validate(self: Commit) Error!void {
         if (zat.Did.parse(self.repo_did) == null or
@@ -75,6 +77,18 @@ pub const Commit = struct {
             }
             for (self.track_changes) |track| {
                 if (std.mem.eql(u8, identity.record_uri, trackIdentityOf(track).record_uri))
+                    return error.DuplicateRecord;
+            }
+        }
+        for (self.rejections, 0..) |rejection, index| {
+            rejection.validate() catch return error.InvalidCommit;
+            if (!std.mem.eql(u8, rejection.owner_did, self.repo_did) or
+                !std.mem.eql(u8, rejection.proof.commit_rev, self.commit_rev) or
+                rejection.proof.indexed_at_us != self.indexed_at_us or
+                !std.mem.eql(u8, rejection.proof.commit_cid.raw, self.commit_cid.raw) or
+                !hasMatchingDelete(self, rejection.record_uri)) return error.InvalidCommit;
+            for (self.rejections[0..index]) |prior| {
+                if (std.mem.eql(u8, rejection.record_uri, prior.record_uri))
                     return error.DuplicateRecord;
             }
         }
@@ -166,6 +180,22 @@ fn profileIdentityOf(change: profile_change.Change) Identity {
 fn validateDagCborCid(cid: zat.Cid) Error!void {
     const parsed = zat.Cid.fromBytes(cid.raw) catch return error.InvalidCommit;
     if (parsed.codec() != zat.cbor.Codec.dag_cbor) return error.InvalidCommit;
+}
+
+fn hasMatchingDelete(commit: Commit, uri: []const u8) bool {
+    for (commit.list_changes) |change| switch (change) {
+        .upsert => {},
+        .delete => |value| if (std.mem.eql(u8, value.record_uri, uri)) return true,
+    };
+    for (commit.track_changes) |change| switch (change) {
+        .upsert => {},
+        .delete => |value| if (std.mem.eql(u8, value.record_uri, uri)) return true,
+    };
+    for (commit.profile_changes) |change| switch (change) {
+        .upsert => {},
+        .delete => |value| if (std.mem.eql(u8, value.record_uri, uri)) return true,
+    };
+    return false;
 }
 
 test "verified commit rejects mixed provenance and duplicate paths" {
