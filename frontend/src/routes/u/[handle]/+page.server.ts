@@ -1,10 +1,24 @@
-import { API_URL } from '$lib/config';
+import { getZigArtist, listZigTracks } from '$lib/api/zig-v1';
+import { API_URL, IS_ZIG_V1 } from '$lib/config';
 import type { Artist, Track, ArtistAlbumSummary } from '$lib/types';
 import { error } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ params, fetch }) => {
 	try {
+		if (IS_ZIG_V1) {
+			const artist = await getZigArtist(API_URL, params.handle, fetch);
+			if (!artist) throw error(404, 'artist not found');
+			const page = await listZigTracks(API_URL, { artistDid: artist.did, limit: 5 }, fetch);
+			return {
+				artist,
+				tracks: page.tracks,
+				albums: [],
+				hasMoreTracks: page.has_more,
+				nextCursor: page.next_cursor
+			};
+		}
+
 		// fetch artist info server-side for SEO/link previews
 		// support both handle and DID in the URL for permalinks
 		const isDid = params.handle.startsWith('did:');

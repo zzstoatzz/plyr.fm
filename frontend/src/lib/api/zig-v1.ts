@@ -1,4 +1,36 @@
-import type { Track } from '$lib/types';
+import type { Artist, Track } from '$lib/types';
+
+export interface ZigArtist {
+	object: 'artist';
+	did: string;
+	handle: string;
+	display_name: string;
+	bio: string | null;
+	avatar_url: string | null;
+	show_liked_on_profile: boolean;
+	support_url: string | null;
+	created_at: string;
+	updated_at: string;
+	record: {
+		uri: string;
+		cid: string;
+		revision: string;
+		collection: string;
+		rkey: 'self';
+	};
+	sources: {
+		did: 'verified_repo';
+		handle: 'legacy_projection';
+		display_name: 'legacy_local';
+		profile: 'verified_repo';
+		public_preferences: 'legacy_local';
+		account_availability: 'verified_repo' | 'current_pds';
+	};
+	projection: {
+		indexed_at: string | null;
+		verification: 'verified_repo';
+	};
+}
 
 export interface ZigTrackPage {
 	object: 'list';
@@ -76,6 +108,28 @@ interface ListOptions {
 }
 
 type Fetcher = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
+
+export async function getZigArtist(
+	apiUrl: string,
+	identifier: string,
+	fetcher: Fetcher = fetch
+): Promise<Artist | null> {
+	assertOpaqueId(identifier, 'artist');
+	const response = await fetcher(`${apiUrl}/v1/artists/${encodeURIComponent(identifier)}`, {
+		headers: { accept: 'application/json' }
+	});
+	if (response.status === 404) return null;
+	if (!response.ok) throw new Error(`Zig artist detail returned ${response.status}`);
+	const value: unknown = await response.json();
+	assertArtist(value);
+	if (identifier.startsWith('did:') && value.did !== identifier) {
+		throw new TypeError('Zig artist detail changed canonical identity');
+	}
+	if (!identifier.startsWith('did:') && value.handle.toLowerCase() !== identifier.toLowerCase()) {
+		throw new TypeError('Zig artist detail changed handle alias');
+	}
+	return toFrontendArtist(value);
+}
 
 export async function listZigTracks(
 	apiUrl: string,
@@ -168,6 +222,53 @@ export function toFrontendTrack(value: ZigTrack): Track {
 		description: value.metadata.description,
 		unlisted: !value.access.in_discovery
 	};
+}
+
+export function toFrontendArtist(value: ZigArtist): Artist {
+	return {
+		did: value.did,
+		handle: value.handle,
+		display_name: value.display_name,
+		avatar_url: value.avatar_url ?? undefined,
+		bio: value.bio ?? undefined,
+		show_liked_on_profile: value.show_liked_on_profile,
+		support_url: value.support_url ?? undefined
+	};
+}
+
+function assertArtist(value: unknown): asserts value is ZigArtist {
+	if (
+		!isObject(value) ||
+		value.object !== 'artist' ||
+		typeof value.did !== 'string' ||
+		typeof value.handle !== 'string' ||
+		typeof value.display_name !== 'string' ||
+		!(value.bio === null || typeof value.bio === 'string') ||
+		!(value.avatar_url === null || typeof value.avatar_url === 'string') ||
+		typeof value.show_liked_on_profile !== 'boolean' ||
+		!(value.support_url === null || typeof value.support_url === 'string') ||
+		typeof value.created_at !== 'string' ||
+		typeof value.updated_at !== 'string' ||
+		!isObject(value.record) ||
+		typeof value.record.uri !== 'string' ||
+		typeof value.record.cid !== 'string' ||
+		typeof value.record.revision !== 'string' ||
+		typeof value.record.collection !== 'string' ||
+		value.record.rkey !== 'self' ||
+		value.record.uri !== `at://${value.did}/${value.record.collection}/self` ||
+		!isObject(value.sources) ||
+		value.sources.did !== 'verified_repo' ||
+		value.sources.handle !== 'legacy_projection' ||
+		value.sources.display_name !== 'legacy_local' ||
+		value.sources.profile !== 'verified_repo' ||
+		value.sources.public_preferences !== 'legacy_local' ||
+		!['verified_repo', 'current_pds'].includes(String(value.sources.account_availability)) ||
+		!isObject(value.projection) ||
+		!(value.projection.indexed_at === null || typeof value.projection.indexed_at === 'string') ||
+		value.projection.verification !== 'verified_repo'
+	) {
+		throw new TypeError('invalid Zig artist resource');
+	}
 }
 
 function assertTrackPage(value: unknown): asserts value is ZigTrackPage {

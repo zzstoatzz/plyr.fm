@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { getZigPlayback, getZigTrack, listZigTracks } from './zig-v1';
+import { getZigArtist, getZigPlayback, getZigTrack, listZigTracks } from './zig-v1';
 
 const record = {
 	uri: 'at://did:plc:artist/fm.plyr.track/song',
@@ -41,6 +41,35 @@ const track = {
 	projection: { verification: 'verified_repo' }
 };
 
+const artist = {
+	object: 'artist',
+	did: 'did:plc:artist',
+	handle: 'artist.test',
+	display_name: 'Artist',
+	bio: 'authored bio',
+	avatar_url: null,
+	show_liked_on_profile: false,
+	support_url: null,
+	created_at: '2026-08-09T00:00:00Z',
+	updated_at: '2026-08-09T00:00:00Z',
+	record: {
+		uri: 'at://did:plc:artist/fm.plyr.actor.profile/self',
+		cid: 'bafyprofile',
+		revision: '3msrevision',
+		collection: 'fm.plyr.actor.profile',
+		rkey: 'self'
+	},
+	sources: {
+		did: 'verified_repo',
+		handle: 'legacy_projection',
+		display_name: 'legacy_local',
+		profile: 'verified_repo',
+		public_preferences: 'legacy_local',
+		account_availability: 'verified_repo'
+	},
+	projection: { indexed_at: '2026-08-09T00:00:00Z', verification: 'verified_repo' }
+};
+
 function json(value: unknown, status = 200): Response {
 	return new Response(JSON.stringify(value), {
 		status,
@@ -49,6 +78,29 @@ function json(value: unknown, status = 200): Response {
 }
 
 describe('Zig v1 compatibility boundary', () => {
+	it('accepts only verified artist resources and maps authored profile fields', async () => {
+		const fetcher = vi.fn(async () => json(artist));
+		const value = await getZigArtist('https://next.plyr.fm/api', 'artist.test', fetcher);
+		expect(value).toEqual({
+			did: 'did:plc:artist',
+			handle: 'artist.test',
+			display_name: 'Artist',
+			bio: 'authored bio',
+			avatar_url: undefined,
+			show_liked_on_profile: false,
+			support_url: undefined
+		});
+	});
+
+	it('rejects artist resources whose profile provenance is not verified', async () => {
+		const fetcher = vi.fn(async () =>
+			json({ ...artist, sources: { ...artist.sources, profile: 'legacy_projection' } })
+		);
+		await expect(getZigArtist('https://next.plyr.fm/api', artist.did, fetcher)).rejects.toThrow(
+			'invalid Zig artist resource'
+		);
+	});
+
 	it('maps verified collection resources without inventing numeric identity', async () => {
 		let requestedInput: RequestInfo | URL | null = null;
 		const fetcher = vi.fn(async (input: RequestInfo | URL) => {
