@@ -1,4 +1,4 @@
--- Deterministic fixture for `just zig bench-composed-tracks`.
+-- Deterministic fixture for the composed read-model benchmarks.
 -- This script is intentionally destructive and refuses every database except zig_bench.
 
 DO $$
@@ -11,6 +11,7 @@ $$;
 
 DROP SCHEMA IF EXISTS plyr_index CASCADE;
 DROP TABLE IF EXISTS tracks CASCADE;
+DROP TABLE IF EXISTS user_preferences CASCADE;
 DROP TABLE IF EXISTS artists CASCADE;
 
 CREATE SCHEMA plyr_index;
@@ -123,6 +124,11 @@ CREATE TABLE artists (
     avatar_url text,
     deactivated boolean NOT NULL DEFAULT false
 );
+CREATE TABLE user_preferences (
+    did text PRIMARY KEY,
+    show_liked_on_profile boolean NOT NULL DEFAULT false,
+    support_url text
+);
 CREATE TABLE tracks (
     atproto_record_uri text PRIMARY KEY,
     created_at timestamptz NOT NULL,
@@ -140,6 +146,7 @@ INSERT INTO artists VALUES (
     'did:plc:bench', 'benchmark.test', 'Benchmark Artist',
     'legacy fallback bio', 'https://legacy.example/avatar.jpg'
 );
+INSERT INTO user_preferences VALUES ('did:plc:bench', true, 'atprotofans');
 INSERT INTO plyr_index.profile_records VALUES (
     'at://did:plc:bench/fm.plyr.dev.actor.profile/self',
     'bafyreihdwdcefgh4dqkjv67uzcmw7ojee6xedzdetojuzjevtenxquvyku',

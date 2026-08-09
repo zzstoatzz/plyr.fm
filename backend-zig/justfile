@@ -73,6 +73,15 @@ bench-album-detail:
     DATABASE_URL=postgresql://zig_bench:zig_bench@127.0.0.1:5434/zig_bench python3 scripts/bench_http.py --with-index --duration 5 --concurrency 16 --path '/v1/albums/alb_YXQ6Ly9kaWQ6cGxjOmJlbmNoL2ZtLnBseXIuZGV2Lmxpc3QvYWxidW0'
 
 # Destructive only to the dedicated benchmark database on port 5434.
+bench-artist-detail:
+    docker compose -f ../backend/tests/docker-compose.yml --profile bench up -d bench-db
+    @for attempt in {1..100}; do docker compose -f ../backend/tests/docker-compose.yml exec -T bench-db pg_isready -U zig_bench -d zig_bench >/dev/null && break; sleep 0.1; done
+    docker compose -f ../backend/tests/docker-compose.yml exec -T bench-db psql -v ON_ERROR_STOP=1 -U zig_bench -d zig_bench < scripts/composed_track_bench.sql
+    zig build -Doptimize=ReleaseFast
+    DATABASE_URL=postgresql://zig_bench:zig_bench@127.0.0.1:5434/zig_bench python3 scripts/bench_http.py --with-index --duration 5 --concurrency 1 --path '/v1/artists/benchmark.test'
+    DATABASE_URL=postgresql://zig_bench:zig_bench@127.0.0.1:5434/zig_bench python3 scripts/bench_http.py --with-index --duration 5 --concurrency 16 --path '/v1/artists/benchmark.test'
+
+# Destructive only to the dedicated benchmark database on port 5434.
 bench-composed-tracks:
     docker compose -f ../backend/tests/docker-compose.yml --profile bench up -d bench-db
     @for attempt in {1..100}; do docker compose -f ../backend/tests/docker-compose.yml exec -T bench-db pg_isready -U zig_bench -d zig_bench >/dev/null && break; sleep 0.1; done
