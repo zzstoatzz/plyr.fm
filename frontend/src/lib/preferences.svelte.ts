@@ -45,6 +45,7 @@ export interface UiSettings {
 	atproto_client?: string;
 	keep_playing?: boolean;
 	play_through_collections?: boolean;
+	pds_save_banner_dismissed?: boolean;
 }
 
 export interface Preferences {

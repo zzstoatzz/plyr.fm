@@ -4,6 +4,7 @@
 	import Header from '$lib/components/Header.svelte';
 	import WaveLoading from '$lib/components/WaveLoading.svelte';
 	import MigrationBanner from '$lib/components/MigrationBanner.svelte';
+	import PdsSaveBanner from '$lib/components/PdsSaveBanner.svelte';
 	import BrokenTracks from '$lib/components/BrokenTracks.svelte';
 	import PortalIdentity from '$lib/components/portal/PortalIdentity.svelte';
 	import PagerTabs from '$lib/components/PagerTabs.svelte';
@@ -25,6 +26,7 @@
 	// reflects the active search/sort filter, so it can't be reused there.
 	let libraryTrackTotal = $state(0);
 	let tracksHasMore = $state(false);
+	let pdsSavableCount = $state(0);
 	let loadingTracks = $state(false);
 	let loadingMoreTracks = $state(false);
 	// server-side search/sort for the tracks tab (owned here since this fetches)
@@ -148,6 +150,7 @@
 				}
 				tracksTotal = data.total;
 				tracksHasMore = data.has_more;
+				pdsSavableCount = data.pds_savable_count ?? 0;
 				// only an unfiltered load reflects the true catalog size
 				if (!trackQuery) libraryTrackTotal = data.total;
 			}
@@ -211,6 +214,7 @@
 	<Header user={auth.user} isAuthenticated={auth.isAuthenticated} onLogout={logout} />
 	<main>
 		<MigrationBanner />
+		<PdsSaveBanner savableCount={pdsSavableCount} />
 		<BrokenTracks />
 
 		<PagerTabs tabs={[{ id: 'tracks', label: 'tracks' }, { id: 'albums', label: 'albums' }]}>

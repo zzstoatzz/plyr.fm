@@ -64,6 +64,7 @@ class MyTracksResponse(BaseModel):
     tracks: list[TrackResponse]
     total: int
     has_more: bool
+    pds_savable_count: int
 
 
 @router.get("/")
@@ -492,6 +493,27 @@ async def list_my_tracks(
     total_stmt = select(func.count()).select_from(Track).where(*where)
     total = (await db.execute(total_stmt)).scalar_one()
 
+    # whole-catalog count of tracks whose audio isn't mirrored to the user's
+    # PDS yet (ignores the search filter). matches the portal save control's
+    # eligibility: not gated, no blob, and not mid-optimization — optimizing
+    # tracks write their own canonical blob when the mp3 rendition lands.
+    savable_stmt = (
+        select(func.count())
+        .select_from(Track)
+        .where(
+            Track.artist_did == auth_session.did,
+            Track.support_gate.is_(None),
+            Track.pds_blob_cid.is_(None),
+            Track.file_id.isnot(None),
+            ~(
+                (Track.file_type != "mp3")
+                & Track.original_file_id.isnot(None)
+                & Track.original_file_type.isnot(None)
+            ),
+        )
+    )
+    pds_savable_count = (await db.execute(savable_stmt)).scalar_one()
+
     # id tie-breakers keep offset pagination stable when the primary key has ties
     order_by = {
         "recent": (Track.created_at.desc(), Track.id.desc()),
@@ -536,6 +558,7 @@ async def list_my_tracks(
         tracks=track_responses,
         total=total,
         has_more=offset + len(track_responses) < total,
+        pds_savable_count=pds_savable_count,
     )
 
 
