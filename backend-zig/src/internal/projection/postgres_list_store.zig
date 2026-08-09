@@ -2,6 +2,7 @@
 
 const std = @import("std");
 const pg = @import("pg");
+const postgres_test_lock = @import("../testing/postgres_lock.zig");
 const zat = @import("zat");
 const list_change = @import("list_change.zig");
 const list_store = @import("list_store.zig");
@@ -279,6 +280,8 @@ test "PostgreSQL list projection is atomic and replay safe" {
     const allocator = std.testing.allocator;
     var threaded = std.Io.Threaded.init(allocator, .{});
     const io = threaded.io();
+    postgres_test_lock.lock(io);
+    defer postgres_test_lock.unlock(io);
     const uri = try std.Uri.parse(database_url);
     var pool = try pg.Pool.initUri(io, allocator, uri, .{ .size = 1 });
     defer pool.deinit();

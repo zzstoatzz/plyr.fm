@@ -147,8 +147,9 @@ reads without exposing its physical schema through the REST model.
 ## adjacent track slice
 
 The same authenticated commit and snapshot transactions now include the
-[`verified track projection`](zig-verified-track-projection.md). Account/profile
-state and verified blob mirroring remain separate projections. Album detail can
+[`verified track projection`](zig-verified-track-projection.md) and
+[`verified authored-profile projection`](zig-verified-profile-projection.md).
+Current-PDS account state and verified blob mirroring remain separate projections. Album detail can
 eventually join list members to independently indexed track records while
 retaining missing, private, and moderated positions without silently
 substituting unrelated local rows. The first API canary remains read-only and
@@ -157,9 +158,9 @@ never starts the ingester.
 ## verifier resource baseline
 
 The original list-only baseline was 100 records in a 9,024-byte CAR at a median
-286,853 ns per repository. The benchmark now covers 100 lists plus 100 tracks;
-current figures live with the track boundary so future changes compare like
-with like.
+286,853 ns per repository. The benchmark now covers 100 lists, 100 tracks, and
+one profile; current figures live with the profile boundary so future changes
+compare like with like.
 
 This is a CPU and allocation baseline for the authenticated snapshot core, not
 a network, Postgres, large-repository, or production-capacity claim. The

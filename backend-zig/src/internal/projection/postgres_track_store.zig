@@ -2,6 +2,7 @@
 
 const std = @import("std");
 const pg = @import("pg");
+const postgres_test_lock = @import("../testing/postgres_lock.zig");
 const zat = @import("zat");
 const track_change = @import("track_change.zig");
 const track_store = @import("track_store.zig");
@@ -328,6 +329,8 @@ test "PostgreSQL track projection replaces complete records and keeps tombstones
     const allocator = std.testing.allocator;
     var threaded = std.Io.Threaded.init(allocator, .{});
     const io = threaded.io();
+    postgres_test_lock.lock(io);
+    defer postgres_test_lock.unlock(io);
     const uri = try std.Uri.parse(std.mem.span(url_z));
     var pool = try pg.Pool.initUri(io, allocator, uri, .{ .size = 1 });
     defer pool.deinit();

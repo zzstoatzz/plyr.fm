@@ -2,11 +2,13 @@
 
 const std = @import("std");
 const pg = @import("pg");
+const postgres_test_lock = @import("../testing/postgres_lock.zig");
 const zat = @import("zat");
 const list_change = @import("list_change.zig");
 const list_store = @import("list_store.zig");
 const postgres_list = @import("postgres_list_store.zig");
 const postgres_track = @import("postgres_track_store.zig");
+const postgres_profile = @import("postgres_profile_store.zig");
 const track_change = @import("track_change.zig");
 const verified = @import("verified_snapshot.zig");
 
@@ -55,6 +57,15 @@ pub const PostgresVerifiedSnapshotStore = struct {
                 .delete => return error.InvalidSnapshot,
             };
         }
+        const profile_uris = allocator.alloc([]const u8, snapshot.profile_changes.len) catch
+            return error.OutOfMemory;
+        defer allocator.free(profile_uris);
+        for (snapshot.profile_changes, profile_uris) |change, *uri| {
+            uri.* = switch (change) {
+                .upsert => |value| value.record_uri,
+                .delete => return error.InvalidSnapshot,
+            };
+        }
 
         var conn = self.pool.acquire() catch |err| {
             std.log.err("verified snapshot connection acquisition failed: {}", .{err});
@@ -91,6 +102,7 @@ pub const PostgresVerifiedSnapshotStore = struct {
             snapshot.repo_did,
             snapshot.list_collection,
             snapshot.track_collection,
+            snapshot.profile_collection,
             snapshot.commit_rev,
         }) catch |err| {
             std.log.err("verified snapshot future-record check failed: {}", .{err});
@@ -116,6 +128,16 @@ pub const PostgresVerifiedSnapshotStore = struct {
         var tracks: postgres_track.PostgresTrackStore = .{ .pool = self.pool };
         for (snapshot.track_changes) |change| {
             const result = tracks.applyInTransaction(conn, allocator, change) catch |err| switch (err) {
+                error.RevisionConflict => return error.RevisionConflict,
+                error.CorruptProjection => return error.CorruptProjection,
+                error.ProjectionUnavailable => return error.ProjectionUnavailable,
+                error.OutOfMemory => return error.OutOfMemory,
+            };
+            if (result != .applied) return error.CorruptProjection;
+        }
+        var profiles: postgres_profile.PostgresProfileStore = .{ .pool = self.pool };
+        for (snapshot.profile_changes) |change| {
+            const result = profiles.applyInTransaction(conn, allocator, change) catch |err| switch (err) {
                 error.RevisionConflict => return error.RevisionConflict,
                 error.CorruptProjection => return error.CorruptProjection,
                 error.ProjectionUnavailable => return error.ProjectionUnavailable,
@@ -153,6 +175,17 @@ pub const PostgresVerifiedSnapshotStore = struct {
             snapshot.indexed_at_us,
         }) catch |err| {
             std.log.err("verified snapshot track absence reconciliation failed: {}", .{err});
+            return error.ProjectionUnavailable;
+        };
+        _ = conn.exec(tombstone_absent_profiles_sql, .{
+            snapshot.repo_did,
+            snapshot.profile_collection,
+            profile_uris,
+            commit_cid,
+            snapshot.commit_rev,
+            snapshot.indexed_at_us,
+        }) catch |err| {
+            std.log.err("verified snapshot profile absence reconciliation failed: {}", .{err});
             return error.ProjectionUnavailable;
         };
         const advanced = conn.exec(install_head_sql, .{
@@ -238,10 +271,13 @@ const head_sql =
 const has_future_records_sql =
     \\SELECT EXISTS (
     \\  SELECT 1 FROM plyr_index.list_records
-    \\  WHERE owner_did = $1 AND collection = $2 AND commit_rev > $4
+    \\  WHERE owner_did = $1 AND collection = $2 AND commit_rev > $5
     \\  UNION ALL
     \\  SELECT 1 FROM plyr_index.track_records
-    \\  WHERE owner_did = $1 AND collection = $3 AND commit_rev > $4
+    \\  WHERE owner_did = $1 AND collection = $3 AND commit_rev > $5
+    \\  UNION ALL
+    \\  SELECT 1 FROM plyr_index.profile_records
+    \\  WHERE owner_did = $1 AND collection = $4 AND commit_rev > $5
     \\)
 ;
 
@@ -296,6 +332,22 @@ const tombstone_absent_tracks_sql =
     \\  AND commit_rev <= $5
 ;
 
+const tombstone_absent_profiles_sql =
+    \\UPDATE plyr_index.profile_records SET
+    \\  record_cid = NULL,
+    \\  avatar = NULL,
+    \\  bio = NULL,
+    \\  record_created_at = NULL,
+    \\  record_updated_at = NULL,
+    \\  deleted = TRUE,
+    \\  commit_cid = $4,
+    \\  commit_rev = $5,
+    \\  indexed_at_us = $6
+    \\WHERE owner_did = $1 AND collection = $2
+    \\  AND NOT (record_uri = ANY($3::text[]))
+    \\  AND commit_rev <= $5
+;
+
 const install_head_sql =
     \\INSERT INTO plyr_index.repo_heads (
     \\  repo_did, commit_rev, commit_cid, data_cid, indexed_at_us
@@ -313,6 +365,8 @@ test "PostgreSQL complete snapshot bootstraps and reconciles atomically" {
     const allocator = std.testing.allocator;
     var threaded = std.Io.Threaded.init(allocator, .{});
     const io = threaded.io();
+    postgres_test_lock.lock(io);
+    defer postgres_test_lock.unlock(io);
     const uri = try std.Uri.parse(std.mem.span(url_z));
     var pool = try pg.Pool.initUri(io, allocator, uri, .{ .size = 1 });
     defer pool.deinit();
@@ -321,6 +375,7 @@ test "PostgreSQL complete snapshot bootstraps and reconciles atomically" {
     defer _ = pool.exec("DROP SCHEMA IF EXISTS plyr_index CASCADE", .{}) catch null;
     try postgres_list.createTestSchema(pool);
     try postgres_track.createTestTable(pool);
+    try postgres_profile.createTestTable(pool);
     _ = try pool.exec(
         \\CREATE TABLE plyr_index.repo_heads (
         \\  repo_did text PRIMARY KEY,
@@ -357,6 +412,12 @@ test "PostgreSQL complete snapshot bootstraps and reconciles atomically" {
     const track_one_1 = trackUpsert("track-one", rev_1.str(), commit_1, 1_000);
     const track_two_1 = trackUpsert("track-two", rev_1.str(), commit_1, 1_000);
     initial.track_changes = &.{ track_one_1, track_two_1 };
+    initial.profile_changes = &.{postgres_profile.profileUpsert(
+        "first bio",
+        rev_1.str(),
+        commit_1,
+        1_000,
+    )};
     var implementation: PostgresVerifiedSnapshotStore = .{ .pool = pool };
     const store = implementation.store();
     try std.testing.expectEqual(verified.ApplyResult.applied, try store.apply(a, initial));
@@ -365,6 +426,7 @@ test "PostgreSQL complete snapshot bootstraps and reconciles atomically" {
     try expectState(pool, rev_1.str(), "two", false);
     try expectTrackState(pool, "track-one", rev_1.str(), false);
     try expectTrackState(pool, "track-two", rev_1.str(), false);
+    try expectProfileState(pool, "first bio", rev_1.str(), false);
 
     const one_2 = listUpsert("one", record_cid, rev_2.str(), commit_2, 2_000);
     var repaired = makeSnapshot(rev_2.str(), commit_2, data_2, 2_000, &.{one_2});
@@ -376,6 +438,7 @@ test "PostgreSQL complete snapshot bootstraps and reconciles atomically" {
     try expectMemberCount(pool, "two", 0);
     try expectTrackState(pool, "track-one", rev_2.str(), false);
     try expectTrackState(pool, "track-two", rev_2.str(), true);
+    try expectProfileState(pool, null, rev_2.str(), true);
 
     try std.testing.expectEqual(verified.ApplyResult.stale, try store.apply(a, initial));
     var conflict = repaired;
@@ -533,4 +596,20 @@ fn expectTrackState(pool: *pg.Pool, rkey: []const u8, rev: []const u8, deleted: 
     defer row.deinit() catch {};
     try std.testing.expectEqualStrings(rev, try row.get([]const u8, 0));
     try std.testing.expectEqual(deleted, try row.get(bool, 1));
+}
+
+fn expectProfileState(pool: *pg.Pool, bio: ?[]const u8, rev: []const u8, deleted: bool) !void {
+    var row = (try pool.row(
+        "SELECT bio, commit_rev, deleted FROM plyr_index.profile_records WHERE rkey = 'self'",
+        .{},
+    )).?;
+    defer row.deinit() catch {};
+    const actual_bio = try row.get(?[]const u8, 0);
+    if (actual_bio == null or bio == null) {
+        try std.testing.expect(actual_bio == null and bio == null);
+    } else {
+        try std.testing.expectEqualStrings(bio.?, actual_bio.?);
+    }
+    try std.testing.expectEqualStrings(rev, try row.get([]const u8, 1));
+    try std.testing.expectEqual(deleted, try row.get(bool, 2));
 }

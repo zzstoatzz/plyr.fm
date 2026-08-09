@@ -2,6 +2,7 @@
 
 const std = @import("std");
 const pg = @import("pg");
+const postgres_test_lock = @import("../testing/postgres_lock.zig");
 const zat = @import("zat");
 const album_detail = @import("../domain/album_detail.zig");
 const album_id = @import("../identity/album_id.zig");
@@ -260,6 +261,8 @@ test "PostgreSQL verified album detail preserves unavailable positions" {
     const allocator = std.testing.allocator;
     var threaded = std.Io.Threaded.init(allocator, .{});
     const io = threaded.io();
+    postgres_test_lock.lock(io);
+    defer postgres_test_lock.unlock(io);
     const uri = try std.Uri.parse(std.mem.span(url_z));
     var pool = try pg.Pool.initUri(io, allocator, uri, .{ .size = 1 });
     defer pool.deinit();
@@ -270,7 +273,7 @@ test "PostgreSQL verified album detail preserves unavailable positions" {
     if (!std.mem.eql(u8, database_name, "relay_test")) return error.UnsafeTestDatabase;
 
     _ = try pool.exec("DROP SCHEMA IF EXISTS plyr_index CASCADE", .{});
-    _ = try pool.exec("DROP TABLE IF EXISTS tracks", .{});
+    _ = try pool.exec("DROP TABLE IF EXISTS tracks CASCADE", .{});
     _ = try pool.exec("DROP TABLE IF EXISTS artists CASCADE", .{});
     defer _ = pool.exec("DROP SCHEMA IF EXISTS plyr_index CASCADE", .{}) catch null;
     try postgres_list.createTestSchema(pool);

@@ -2,6 +2,7 @@
 
 const std = @import("std");
 const pg = @import("pg");
+const postgres_test_lock = @import("../testing/postgres_lock.zig");
 const relay_cursor = @import("relay_cursor.zig");
 
 pub const PostgresRelayCursor = struct {
@@ -70,8 +71,11 @@ test "PostgreSQL cursor persistence is source-scoped and monotonic" {
     const allocator = std.testing.allocator;
     var threaded = std.Io.Threaded.init(allocator, .{});
     defer threaded.deinit();
+    const io = threaded.io();
+    postgres_test_lock.lock(io);
+    defer postgres_test_lock.unlock(io);
     const uri = try std.Uri.parse(std.mem.span(url_z));
-    var pool = try pg.Pool.initUri(threaded.io(), allocator, uri, .{ .size = 1 });
+    var pool = try pg.Pool.initUri(io, allocator, uri, .{ .size = 1 });
     defer pool.deinit();
     try requireDisposableDatabase(pool);
     _ = try pool.exec("DROP SCHEMA IF EXISTS plyr_index CASCADE", .{});

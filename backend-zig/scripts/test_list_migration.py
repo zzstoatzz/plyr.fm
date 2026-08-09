@@ -12,10 +12,11 @@ from sqlalchemy.engine import make_url
 from alembic import command
 
 PRIOR_REVISION = "4aaed6c819f1"
-HEAD_REVISION = "b2e74a19c5d0"
+HEAD_REVISION = "d5a97c8f1e42"
 EXPECTED_TABLES = {
     "list_members",
     "list_records",
+    "profile_records",
     "relay_cursors",
     "repo_heads",
     "track_records",
@@ -53,6 +54,21 @@ EXPECTED_TRACK_COLUMNS = {
     "self_labels",
     "support_gate_type",
     "title",
+}
+EXPECTED_PROFILE_COLUMNS = {
+    "avatar",
+    "bio",
+    "collection",
+    "commit_cid",
+    "commit_rev",
+    "deleted",
+    "indexed_at_us",
+    "owner_did",
+    "record_cid",
+    "record_created_at",
+    "record_updated_at",
+    "record_uri",
+    "rkey",
 }
 
 
@@ -161,6 +177,11 @@ def main() -> None:
         if track_columns != EXPECTED_TRACK_COLUMNS:
             raise AssertionError(
                 f"unexpected track_records columns: {sorted(track_columns)!r}"
+            )
+        profile_columns = table_columns(database_url, "profile_records")
+        if profile_columns != EXPECTED_PROFILE_COLUMNS:
+            raise AssertionError(
+                f"unexpected profile_records columns: {sorted(profile_columns)!r}"
             )
     finally:
         if upgraded:

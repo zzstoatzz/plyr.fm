@@ -29,7 +29,8 @@ It does not infer or attest:
 
 - that a declared URL has an allowed origin or a live object behind it;
 - that R2 mirrors the blob or is allowed to serve it;
-- current DID handle, display name, avatar, PDS, or account availability;
+- current DID handle, display name, PDS, or account availability; the
+  separately authored plyr profile is projected independently;
 - public, unlisted, or private discovery policy not represented by this record;
 - operator moderation, copyright analysis, plays, likes, or other derived data.
 
@@ -99,18 +100,16 @@ port and shadow-compare representations before the canary takes traffic.
 ## measured verifier cost
 
 `just zig bench-snapshot` now builds one deterministic signed CAR containing
-100 lists and 100 tracks. Each measured pass verifies the signature, every
+100 lists, 100 tracks, and one authored profile. Each measured pass verifies the signature, every
 block hash and MST layer, walks the complete tree, strictly decodes both record
-types, and constructs 200 projection commands.
+types, and constructs 201 projection commands.
 
-On the Apple M5 Pro development host with Zig 0.16.0, the 17,741-byte fixture
-completed 50 `ReleaseFast` passes at 531,691 ns per repository: 1,880.79
-repositories/s or 376,158.33 records/s. This is a local CPU regression baseline,
+On the Apple M5 Pro development host with Zig 0.16.0, the 17,945-byte fixture's
+median across five 50-pass `ReleaseFast` samples was 546,768 ns per repository:
+1,828.93 repositories/s or 367,614.78 records/s. This is a local CPU regression baseline,
 not a Postgres, network, large-CAR, or Fly capacity claim.
 
-The production-shaped linux/amd64 ReleaseSafe image is 35,184,838 bytes and
-contains a 12,670,576-byte executable. Relative to the immediately preceding
-continuous-ingester image, this complete track decoder, verifier, snapshot,
-transactional adapter, and tests added 32,530 image bytes and 139,264 executable
-bytes. The image comparison uses identical Docker inputs and is an artifact-size
-guardrail, not a runtime RSS measurement.
+The production-shaped linux/amd64 ReleaseSafe image is now 35,211,364 bytes and
+contains a 12,789,880-byte executable. Current profile and Unicode costs are
+recorded with the [`verified authored-profile projection`](zig-verified-profile-projection.md).
+The image comparison is an artifact-size guardrail, not a runtime RSS measurement.

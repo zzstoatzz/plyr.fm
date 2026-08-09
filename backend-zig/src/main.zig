@@ -140,6 +140,8 @@ test {
     _ = @import("internal/projection/postgres_list_store.zig");
     _ = @import("internal/projection/track_store.zig");
     _ = @import("internal/projection/postgres_track_store.zig");
+    _ = @import("internal/projection/profile_store.zig");
+    _ = @import("internal/projection/postgres_profile_store.zig");
     _ = @import("internal/projection/postgres_verified_commit_store.zig");
     _ = @import("internal/projection/postgres_verified_snapshot_store.zig");
     _ = @import("internal/projection/repository_head.zig");

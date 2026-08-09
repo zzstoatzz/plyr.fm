@@ -2,10 +2,14 @@
 
 const std = @import("std");
 const pg = @import("pg");
+const postgres_test_lock = @import("../testing/postgres_lock.zig");
 const zat = @import("zat");
 const list_change = @import("list_change.zig");
 const postgres_list = @import("postgres_list_store.zig");
 const postgres_track = @import("postgres_track_store.zig");
+const postgres_profile = @import("postgres_profile_store.zig");
+const profile_change = @import("profile_change.zig");
+const profile_store = @import("profile_store.zig");
 const track_change = @import("track_change.zig");
 const track_store = @import("track_store.zig");
 const repository_head = @import("repository_head.zig");
@@ -143,6 +147,16 @@ pub const PostgresVerifiedCommitStore = struct {
             };
             if (result != .applied) return error.CorruptProjection;
         }
+        var profiles: postgres_profile.PostgresProfileStore = .{ .pool = self.pool };
+        for (commit.profile_changes) |change| {
+            const result = profiles.applyInTransaction(conn, allocator, change) catch |err| switch (err) {
+                error.RevisionConflict => return error.RevisionConflict,
+                error.CorruptProjection => return error.CorruptProjection,
+                error.ProjectionUnavailable => return error.ProjectionUnavailable,
+                error.OutOfMemory => return error.OutOfMemory,
+            };
+            if (result != .applied) return error.CorruptProjection;
+        }
 
         const advanced = conn.exec(advance_head_sql, .{
             commit.commit_rev,
@@ -246,6 +260,8 @@ test "PostgreSQL verified commit sink is atomic, strict, and replay safe" {
     const allocator = std.testing.allocator;
     var threaded = std.Io.Threaded.init(allocator, .{});
     const io = threaded.io();
+    postgres_test_lock.lock(io);
+    defer postgres_test_lock.unlock(io);
     const uri = try std.Uri.parse(std.mem.span(url_z));
     var pool = try pg.Pool.initUri(io, allocator, uri, .{ .size = 1 });
     defer pool.deinit();
@@ -255,6 +271,7 @@ test "PostgreSQL verified commit sink is atomic, strict, and replay safe" {
     defer _ = pool.exec("DROP SCHEMA IF EXISTS plyr_index CASCADE", .{}) catch null;
     try postgres_list.createTestSchema(pool);
     try postgres_track.createTestTable(pool);
+    try postgres_profile.createTestTable(pool);
     _ = try pool.exec(
         \\CREATE TABLE plyr_index.repo_heads (
         \\  repo_did text PRIMARY KEY,
@@ -345,6 +362,23 @@ test "PostgreSQL verified commit sink is atomic, strict, and replay safe" {
     try expectHead(pool, rev_1.str(), try data_1.toString(a));
     try expectRecordRev(pool, "one", rev_1.str());
     try expectTrackRev(pool, rev_3.str());
+
+    var profile_implementation: postgres_profile.PostgresProfileStore = .{ .pool = pool };
+    const future_profile = postgres_profile.profileUpsert("future", rev_3.str(), commit_3, 4_000);
+    try std.testing.expectEqual(
+        profile_store.ApplyResult.applied,
+        try profile_implementation.store().apply(a, future_profile),
+    );
+    var profile_conflict = second;
+    profile_conflict.track_changes = &.{};
+    const profile_changes = [_]profile_change.Change{
+        postgres_profile.profileUpsert("older", rev_2.str(), commit_2, 3_000),
+    };
+    profile_conflict.profile_changes = &profile_changes;
+    try std.testing.expectError(error.CorruptProjection, store.apply(a, profile_conflict));
+    try expectHead(pool, rev_1.str(), try data_1.toString(a));
+    try expectRecordRev(pool, "one", rev_1.str());
+    try expectProfileRev(pool, rev_3.str());
 }
 
 fn trackUpsert(
@@ -437,6 +471,15 @@ fn expectRecordRev(pool: *pg.Pool, rkey: []const u8, rev: []const u8) !void {
 fn expectTrackRev(pool: *pg.Pool, rev: []const u8) !void {
     var row = (try pool.row(
         "SELECT commit_rev FROM plyr_index.track_records WHERE rkey = 'track'",
+        .{},
+    )).?;
+    defer row.deinit() catch {};
+    try std.testing.expectEqualStrings(rev, try row.get([]const u8, 0));
+}
+
+fn expectProfileRev(pool: *pg.Pool, rev: []const u8) !void {
+    var row = (try pool.row(
+        "SELECT commit_rev FROM plyr_index.profile_records WHERE rkey = 'self'",
         .{},
     )).?;
     defer row.deinit() catch {};

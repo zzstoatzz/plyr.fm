@@ -5,6 +5,7 @@
 
 const std = @import("std");
 const pg = @import("pg");
+const postgres_test_lock = @import("../testing/postgres_lock.zig");
 const zat = @import("zat");
 const track = @import("../domain/track.zig");
 const track_id = @import("../identity/track_id.zig");
@@ -438,6 +439,8 @@ test "PostgreSQL adapter reads a complete derived projection" {
     const allocator = std.testing.allocator;
     var threaded = std.Io.Threaded.init(allocator, .{});
     const io = threaded.io();
+    postgres_test_lock.lock(io);
+    defer postgres_test_lock.unlock(io);
 
     var store_impl = try PostgresTrackStore.initWithPoolSize(allocator, io, database_url, 1);
     defer store_impl.deinit();
@@ -449,10 +452,10 @@ test "PostgreSQL adapter reads a complete derived projection" {
     try database_row.deinit();
     if (!std.mem.eql(u8, database_name, "relay_test")) return error.UnsafeTestDatabase;
 
-    _ = try store_impl.pool.exec("DROP TABLE IF EXISTS tracks", .{});
-    _ = try store_impl.pool.exec("DROP TABLE IF EXISTS albums", .{});
-    _ = try store_impl.pool.exec("DROP TABLE IF EXISTS user_preferences", .{});
-    _ = try store_impl.pool.exec("DROP TABLE IF EXISTS artists", .{});
+    _ = try store_impl.pool.exec("DROP TABLE IF EXISTS tracks CASCADE", .{});
+    _ = try store_impl.pool.exec("DROP TABLE IF EXISTS albums CASCADE", .{});
+    _ = try store_impl.pool.exec("DROP TABLE IF EXISTS user_preferences CASCADE", .{});
+    _ = try store_impl.pool.exec("DROP TABLE IF EXISTS artists CASCADE", .{});
     _ = try store_impl.pool.exec(
         \\CREATE TABLE artists (
         \\  did text PRIMARY KEY,

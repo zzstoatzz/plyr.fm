@@ -144,7 +144,8 @@ blocks and hydrates only exact public URI/CID matches, rather than fetching or
 inventing membership during a REST request.
 
 Signed commit and snapshot ingestion now persist the
-[`verified track projection`](zig-verified-track-projection.md) alongside list
-state. Blob mirroring, account/profile state, and the REST adapter switch remain
-separate work so verified authored fields do not launder delivery or local
-policy into source truth.
+[`verified track projection`](zig-verified-track-projection.md) and
+[`verified authored-profile projection`](zig-verified-profile-projection.md)
+alongside list state. Blob mirroring, current-PDS account availability, and the
+REST adapter switch remain separate work so verified authored fields do not
+launder delivery or local policy into source truth.
