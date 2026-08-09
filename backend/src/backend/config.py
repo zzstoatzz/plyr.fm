@@ -210,8 +210,6 @@ class FrontendSettings(AppSettingsSection):
     @property
     def domain(self) -> str:
         """extract domain from frontend URL (e.g., 'plyr.fm', 'stg.plyr.fm')."""
-        from urllib.parse import urlparse
-
         parsed = urlparse(self.url)
         return parsed.netloc or "plyr.fm"
 
@@ -225,8 +223,6 @@ class FrontendSettings(AppSettingsSection):
         # the API is public — allow any HTTPS origin (plus localhost for dev).
         # auth uses HttpOnly cookies scoped to plyr.fm, so credentialed
         # cross-origin requests from third-party sites won't carry session cookies.
-
-        from urllib.parse import urlparse
 
         parsed = urlparse(self.url)
         hostname = parsed.hostname or "localhost"
@@ -374,41 +370,6 @@ class StorageSettings(AppSettingsSection):
         validation_alias="ATLAS_JSON_URL",
         description="URL for the /atlas semantic map JSON",
     )
-
-    @computed_field
-    @property
-    def allowed_image_origins(self) -> set[str]:
-        """Origins allowed for imageUrl validation."""
-        origins = set()
-        if self.r2_public_image_bucket_url:
-            parsed = urlparse(self.r2_public_image_bucket_url)
-            origins.add(f"{parsed.scheme}://{parsed.netloc}")
-        return origins
-
-    def validate_image_url(self, url: str | None) -> bool:
-        """Validate that imageUrl comes from allowed origin.
-
-        args:
-            url: image URL to validate
-
-        returns:
-            True if valid or None, raises ValueError if invalid
-
-        raises:
-            ValueError: if URL is from untrusted origin
-        """
-        if not url:
-            return True
-
-        parsed = urlparse(url)
-        origin = f"{parsed.scheme}://{parsed.netloc}"
-
-        if origin not in self.allowed_image_origins:
-            raise ValueError(
-                f"image must be hosted on allowed origins: {self.allowed_image_origins}"
-            )
-
-        return True
 
 
 class AtprotoSettings(AppSettingsSection):
