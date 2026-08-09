@@ -35,6 +35,36 @@ from backend.utilities.redis import clear_client_cache
 settings.atproto.app_namespace = "fm.plyr"
 
 
+"""hosts the suite is allowed to create schemas in, truncate, and clone."""
+_LOCAL_TEST_HOSTS = frozenset({"localhost", "127.0.0.1", "::1", ""})
+_ALLOW_REMOTE = "ALLOW_REMOTE_TEST_DATABASE"
+
+
+def _require_local_test_database(database_url: str) -> None:
+    """refuse to run the suite against a database that isn't local.
+
+    conftest takes its base URL from `settings.database.url`, which loads
+    `backend/.env` — so a developer whose `.env` points at neon (the normal
+    setup for local work against dev) would have the suite run `create_all`,
+    `_truncate_tables`, and `CREATE DATABASE` against a real cloud database.
+    the compose stack would be started, waited on, and ignored.
+
+    `just test` now pins DATABASE_URL at the compose postgres, but that only
+    fixes the invocation we control; this fixes the invariant.
+    """
+    if os.environ.get(_ALLOW_REMOTE) == "1":
+        return
+    if (host := urlsplit(database_url).hostname or "") in _LOCAL_TEST_HOSTS:
+        return
+    raise pytest.UsageError(
+        f"refusing to run tests against non-local database host {host!r}.\n"
+        f"the suite creates schemas, truncates tables, and clones databases.\n"
+        f"run `just test` (which points DATABASE_URL at the compose postgres), "
+        f"or set DATABASE_URL yourself.\n"
+        f"if you really mean it, set {_ALLOW_REMOTE}=1."
+    )
+
+
 def _bootstrap_template_database_from_controller(config: pytest.Config) -> None:
     """bootstrap the template database in the xdist controller.
 
@@ -103,6 +133,8 @@ class MockStorage(R2Storage):
 def pytest_configure(config: pytest.Config) -> None:
     """Set mock storage before any test modules are imported."""
     import backend.storage
+
+    _require_local_test_database(settings.database.url)
 
     # set _storage directly to prevent R2Storage initialization
     backend.storage._storage = MockStorage()
@@ -378,9 +410,18 @@ async def _setup_database_direct(database_url: str) -> None:
         await engine.dispose()
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture(scope="session", autouse=True)
 def _database_setup(test_database_url: str) -> None:
-    """marker fixture - database is set up by test_database_url fixture."""
+    """marker fixture - database is set up by test_database_url fixture.
+
+    autouse because `test_database_url` is what repoints
+    `settings.database.url` at this worker's database. a test that touches the
+    DB *without* requesting a db fixture (code under test opening its own
+    session) would otherwise run against the unpatched base URL — which has a
+    schema serially, but never under xdist, where the base database is only
+    the source the template was built from. that asymmetry is invisible
+    locally and shows up as `relation "artists" does not exist` in CI.
+    """
     _ = test_database_url  # ensure dependency chain
 
 

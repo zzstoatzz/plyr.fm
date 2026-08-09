@@ -2,17 +2,39 @@
 set shell := ["bash", "-eu", "-o", "pipefail", "-c"]
 default := "run"
 
+# docker compose derives its project name from the compose file's directory,
+# which is `tests` for every checkout of this repo — so a worktree and the main
+# checkout share one `tests-test-db-1` and silently recreate each other's
+# schemas. Key the project on this checkout's path instead.
+compose := "docker compose -p plyr-tests-" + replace_regex(sha256(justfile_directory()), '^(.{8}).*$', '$1') + " -f tests/docker-compose.yml"
+
+# tests run against the compose services, never whatever DATABASE_URL a
+# developer's backend/.env happens to point at — a contributor should need
+# docker and nothing else. Mirrors .github/workflows/test-backend.yml.
+db_port := env('TEST_DB_PORT', '5433')
+redis_port := env('TEST_REDIS_PORT', '6380')
+test_env := 'DATABASE_URL=postgresql+asyncpg://relay_test:relay_test@localhost:' + db_port + '/relay_test DOCKET_URL=redis://localhost:' + redis_port + '/0'
+
 alias r := run
 
 # run backend server (hot reloads)
 run:
     uv run uvicorn backend.main:app --reload --host 0.0.0.0 --port ${PORT:-8001}
 
-# run tests with docker-compose
+# run tests with docker-compose (parallel, the way CI runs them)
 test *ARGS='tests/':
-    docker compose -f tests/docker-compose.yml up -d
-    uv run pytest {{ ARGS }}
-    docker compose -f tests/docker-compose.yml down
+    {{ compose }} up -d --wait
+    {{ test_env }} uv run pytest -n auto {{ ARGS }}
+    {{ compose }} down
+
+# run tests in one process — for pdb, -s, or iterating on a single test.
+# NOT what CI runs: the serial path skips the template database, the advisory
+# lock, and the per-worker redis db entirely. Verify with `just test` before
+# pushing. (-n0, not -p no:xdist: conftest needs xdist's `worker_id` fixture.)
+test-serial *ARGS='tests/':
+    {{ compose }} up -d --wait
+    {{ test_env }} uv run pytest -n0 {{ ARGS }}
+    {{ compose }} down
 
 # run integration tests (requires running backend and PLYRFM_API_TOKEN in .env)
 integration:

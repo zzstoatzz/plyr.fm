@@ -259,7 +259,7 @@ max_lines = 840
 
 [[rules]]
 path = "backend/tests/conftest.py"
-max_lines = 560
+max_lines = 601
 
 [[rules]]
 path = "backend/tests/api/track_audio_replace/test_pipeline.py"
