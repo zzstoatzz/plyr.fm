@@ -36,7 +36,7 @@ zig build \
 The two options are a pair; supplying only one is a configuration error.
 
 `check` includes a black-box HTTP contract smoke test on an ephemeral port.
-`test-postgres` starts the repository's disposable Postgres 14 test container,
+`test-postgres` starts a Zig-only disposable Postgres 14 container,
 waits for it to accept connections, creates minimal projection schemas, and
 exercises the real `pg.zig` adapters. It covers atomic ordered-list replacement,
 source-authoritative track replacement, replay and durable tombstone semantics,
@@ -44,8 +44,10 @@ whole-commit chain gap/conflict handling, and rollback across projection types.
 It also covers authenticated complete-repo bootstrap, list and track absence
 reconciliation, durable malformed-record quarantine and repair, and repair
 replay before applying and reversing the real Alembic projection migrations.
-It only destroys objects in the dedicated `relay_test` database on port 5433;
-both test paths refuse any other database name.
+It only destroys objects in the dedicated `zig_test` database on port 5435;
+both test paths refuse any other database name. The HTTP benchmarks use a
+third `zig_bench` database on port 5434, so neither path can overwrite the
+Python suite's `relay_test` schema.
 
 ## API configuration
 
@@ -80,9 +82,10 @@ accepts an optional canonical `artist_did`, applies discovery or artist-view
 policy before keyset pagination, and returns the same track representation as
 detail. Track reads require an authenticated record and authoritative account
 availability, then compose separately attributed authored profile, local
-publication/moderation/metric, and R2 delivery fields. A legacy track row is
-optional enrichment: a verified PDS record without one remains readable and
-uses explicit derived policy defaults rather than disappearing. Artist lookup
+publication/moderation/metric, and unverified R2 delivery fields. Verified PDS
+blob mirrors live in a separate, record-CID-bound delivery projection. A legacy
+track row is optional enrichment: a verified PDS record without one remains
+readable and uses explicit derived policy defaults rather than disappearing. Artist lookup
 accepts a canonical DID or a case-insensitive handle alias and exposes the
 transitional source of each profile field. The album
 collection exposes only canonical list-record albums and keeps local

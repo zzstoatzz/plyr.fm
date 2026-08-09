@@ -1,10 +1,10 @@
 -- Deterministic fixture for `just zig bench-album-detail`.
--- This script is intentionally destructive and refuses every database except relay_test.
+-- This script is intentionally destructive and refuses every database except zig_bench.
 
 DO $$
 BEGIN
-    IF current_database() <> 'relay_test' THEN
-        RAISE EXCEPTION 'album detail benchmark only permits relay_test';
+    IF current_database() <> 'zig_bench' THEN
+        RAISE EXCEPTION 'album detail benchmark only permits zig_bench';
     END IF;
 END
 $$;

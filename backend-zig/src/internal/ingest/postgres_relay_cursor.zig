@@ -103,5 +103,5 @@ fn requireDisposableDatabase(pool: *pg.Pool) !void {
     var row = try pool.row("SELECT current_database()", .{}) orelse return error.MissingDatabase;
     defer row.deinit() catch {};
     const name = try row.get([]const u8, 0);
-    if (!std.mem.eql(u8, name, "relay_test")) return error.UnsafeTestDatabase;
+    if (!std.mem.eql(u8, name, "zig_test")) return error.UnsafeTestDatabase;
 }

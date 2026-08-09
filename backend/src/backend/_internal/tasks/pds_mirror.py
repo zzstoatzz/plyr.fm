@@ -31,6 +31,7 @@ from sqlalchemy import select
 
 from backend._internal.atproto.client import pds_blob_url
 from backend._internal.background import get_docket
+from backend._internal.delivery_origins import upsert_verified_r2_origin
 from backend.config import settings
 from backend.models import Artist, Track
 from backend.storage import storage
@@ -65,6 +66,8 @@ async def mirror_pds_blob(track_id: int) -> None:
             await db.execute(
                 select(
                     Track.r2_url,
+                    Track.atproto_record_uri,
+                    Track.atproto_record_cid,
                     Track.pds_blob_cid,
                     Track.file_type,
                     Track.artist_did,
@@ -80,7 +83,9 @@ async def mirror_pds_blob(track_id: int) -> None:
         logger.debug("mirror_pds_blob: unknown track %s", track_id)
         return
 
-    r2_url, blob_cid, file_type, artist_did, artist_pds_url = row
+    r2_url, record_uri, record_cid, blob_cid, file_type, artist_did, artist_pds_url = (
+        row
+    )
 
     if r2_url:
         return
@@ -95,7 +100,7 @@ async def mirror_pds_blob(track_id: int) -> None:
     try:
         # the extension is validated before the fetch so an unstorable file
         # type fails without spending the bandwidth
-        AudioKey.for_file("verify", file_type)
+        audio_format = AudioKey.for_file("verify", file_type).format
     except InvalidMediaExtension:
         logfire.warn(
             "mirror_pds_blob: unsupported file type",
@@ -129,11 +134,39 @@ async def mirror_pds_blob(track_id: int) -> None:
         return
 
     async with db_session() as db:
-        if track := await db.get(Track, track_id):
-            track.r2_url = stored_url
-            track.file_id = file_id
-            track.audio_storage = "both"
-            await db.commit()
+        track = await db.get(Track, track_id)
+        if not track:
+            return
+        if (
+            track.atproto_record_uri != record_uri
+            or track.atproto_record_cid != record_cid
+            or track.pds_blob_cid != blob_cid
+            or track.file_type != file_type
+        ):
+            # The record changed while its old blob was in flight. The R2
+            # object is content-addressed and harmless, but it is not current
+            # delivery evidence and must never be attached to the new row.
+            logfire.info(
+                "mirror_pds_blob: record changed during mirror",
+                track_id=track_id,
+                mirrored_record_cid=record_cid,
+                current_record_cid=track.atproto_record_cid,
+            )
+            return
+
+        track.r2_url = stored_url
+        track.file_id = file_id
+        track.audio_storage = "both"
+        if record_uri and record_cid:
+            await upsert_verified_r2_origin(
+                db,
+                record_uri=record_uri,
+                record_cid=record_cid,
+                origin_url=stored_url,
+                media_type=audio_format.media_type,
+                artifact_cid=blob_cid,
+            )
+        await db.commit()
 
     logfire.info(
         "mirror_pds_blob: verified and stored",

@@ -1,10 +1,10 @@
 -- Deterministic fixture for `just zig bench-composed-tracks`.
--- This script is intentionally destructive and refuses every database except relay_test.
+-- This script is intentionally destructive and refuses every database except zig_bench.
 
 DO $$
 BEGIN
-    IF current_database() <> 'relay_test' THEN
-        RAISE EXCEPTION 'composed track benchmark only permits relay_test';
+    IF current_database() <> 'zig_bench' THEN
+        RAISE EXCEPTION 'composed track benchmark only permits zig_bench';
     END IF;
 END
 $$;
@@ -65,6 +65,17 @@ CREATE TABLE plyr_index.account_availability (
     pds_origin text,
     observed_at_us bigint NOT NULL
 );
+CREATE TABLE plyr_index.track_delivery_origins (
+    record_uri text NOT NULL,
+    service text NOT NULL,
+    record_cid text NOT NULL,
+    origin_url text NOT NULL,
+    media_type text NOT NULL,
+    artifact_cid text NOT NULL,
+    verification text NOT NULL,
+    observed_at_us bigint NOT NULL,
+    PRIMARY KEY (record_uri, service)
+);
 CREATE TABLE artists (
     did text PRIMARY KEY,
     handle text NOT NULL,
@@ -118,6 +129,18 @@ SELECT
     format('Benchmark description %s', n), '{}', false,
     'bafyreihdwdcefgh4dqkjv67uzcmw7ojee6xedzdetojuzjevtenxquvyku',
     '3jqfcqzm3fo2j', 1786208400000000 + n
+FROM generate_series(1, 100) AS n;
+
+INSERT INTO plyr_index.track_delivery_origins
+SELECT
+    format('at://did:plc:bench/fm.plyr.dev.track/track-%s', n),
+    'r2',
+    'bafyreihdwdcefgh4dqkjv67uzcmw7ojee6xedzdetojuzjevtenxquvyku',
+    format('https://r2.example/audio-%s.flac', n),
+    'audio/flac',
+    'bafkreihdwdcefgh4dqkjv67uzcmw7ojee6xedzdetojuzjevtenxquvyku',
+    'verified_blob_cid',
+    1786208400000000 + n
 FROM generate_series(1, 100) AS n;
 
 INSERT INTO tracks

@@ -402,7 +402,7 @@ fn requireDisposableDatabase(pool: *pg.Pool, allocator: std.mem.Allocator) !void
     const name = try allocator.dupe(u8, try row.get([]const u8, 0));
     defer allocator.free(name);
     try row.deinit();
-    if (!std.mem.eql(u8, name, "relay_test")) return error.UnsafeTestDatabase;
+    if (!std.mem.eql(u8, name, "zig_test")) return error.UnsafeTestDatabase;
 }
 
 fn cidString(allocator: std.mem.Allocator, seed: []const u8) ![]const u8 {

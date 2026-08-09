@@ -236,5 +236,5 @@ fn requireDisposableDatabase(pool: *pg.Pool, allocator: std.mem.Allocator) !void
     defer row.deinit() catch {};
     const database = try allocator.dupe(u8, try row.get([]const u8, 0));
     defer allocator.free(database);
-    if (!std.mem.eql(u8, database, "relay_test")) return error.UnsafeTestDatabase;
+    if (!std.mem.eql(u8, database, "zig_test")) return error.UnsafeTestDatabase;
 }

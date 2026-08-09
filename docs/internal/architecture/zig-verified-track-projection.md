@@ -89,17 +89,21 @@ cannot resurrect a track after the cache TTL expires.
 ## REST transition
 
 The current `/v1/tracks` reads compose the authenticated record and profile
-projections with canonical account-availability evidence. They retain matching
-legacy rows only for publication/visibility policy, current handle/display
-presentation, operator moderation, counters, and R2 delivery. The public domain
-object attributes each field family through `sources`; its
+projections with canonical account-availability evidence. Matching legacy rows
+are optional enrichments for publication/visibility policy, current
+handle/display presentation, operator moderation, counters, and unverified R2
+delivery. The public domain object attributes each field family through `sources`; its
 `projection.verification: verified_repo` describes only the record path and
 cannot launder transitional fields into authored truth.
 
-This deliberately means a new PDS-only record is not yet public without a
-matching local publication row. Replacing that constraint requires explicit
-policy and verified-blob availability projections, not weakening the composed
-read or pretending an R2 URL proves its bytes.
+A new PDS-only record is readable after repository and account verification,
+using explicit derived defaults when no local policy exists. For PDS blob
+mirrors, Python verifies the fetched bytes against the declared raw CID and
+persists the URL/CID relationship in `plyr_index.track_delivery_origins`, bound
+to the exact authored record CID. Zig may therefore mark that artifact verified
+and attribute its R2 origin to `verified_delivery`. It does not invent a signed
+availability attestation. URLs retained only in the legacy row remain visibly
+unverified fallbacks.
 
 ## measured verifier cost
 
@@ -113,7 +117,7 @@ median across five 50-pass `ReleaseFast` samples was 546,768 ns per repository:
 1,828.93 repositories/s or 367,614.78 records/s. This is a local CPU regression baseline,
 not a Postgres, network, large-CAR, or Fly capacity claim.
 
-The production-shaped linux/amd64 ReleaseSafe image is now 35,211,364 bytes and
-contains a 12,789,880-byte executable. Current profile and Unicode costs are
+The production-shaped linux/amd64 ReleaseSafe image is now 35,318,207 bytes and
+contains a 13,191,464-byte executable. Current profile and Unicode costs are
 recorded with the [`verified authored-profile projection`](zig-verified-profile-projection.md).
 The image comparison is an artifact-size guardrail, not a runtime RSS measurement.

@@ -69,21 +69,21 @@ The adapter's authority map is explicit:
 | authored avatar and bio | independently authenticated profile record |
 | handle and display name | transitional legacy artist projection |
 | publication, visibility, operator moderation, plays | transitional local app-view policy |
-| R2 URL | transitional delivery origin, without an invented verification claim |
+| R2 URL verified against a record blob | dedicated delivery-origin projection |
+| other R2 URL | transitional legacy projection, without a verification claim |
 
 Legacy implementation fields do not appear: local integer ID, `file_id`,
 `original_file_id`, `audio_storage`, and bare `r2_url`. A verified record's PDS
-blob reference becomes an artifact with `verification: declared`. The R2 URL
-becomes a separately sourced origin, but both its `artifact_cid` and
-`attestation` remain null because the legacy row did not persist either proof.
+blob reference normally becomes an artifact with `verification: declared`.
 
-The Python mirror now verifies PDS bytes against their blob CID before writing
-R2, but the legacy track row does not persist that verification as an explicit
-fact. V1 therefore does not claim a delivery is verified merely because
-`r2_url` and `pds_blob_cid` coexist. A future projection should store the
-verified CID/digest relationship. Once a new projection persists the proof, it
-can mark the artifact verified and bind an origin to that artifact without
-changing the ownership model.
+The Python PDS mirror verifies fetched bytes against that raw-blob CID before
+writing R2 and now persists the relationship in
+`plyr_index.track_delivery_origins`. Evidence is bound to both record URI and
+record CID, so a later record revision cannot inherit a stale delivery claim.
+Zig then marks the artifact `verified`, exposes an origin whose `artifact_cid`
+points to it, and attributes that origin to `verified_delivery`. This is direct
+content evidence, not a signed service attestation, so `attestation` remains
+null. Any other legacy R2 URL stays an unverified `legacy_projection` fallback.
 
 `projection.indexed_at` and `projection.verification: verified_repo` now come
 from the authenticated record projection. This label covers only the canonical
@@ -111,9 +111,9 @@ isolation, JSON shape, routing, error envelopes, and exact-origin CORS.
 
 ## known next boundary
 
-The REST read now requires an authenticated record, authoritative account
-availability, and a matching local publication-policy row. Consequently a new
-PDS-only track cannot enter the public API until local publication and delivery
-are projected independently. The next boundary is to replace that transitional
-join with explicit policy and verified-blob availability projections while
-preserving the response contract.
+The REST read now requires an authenticated record and authoritative account
+availability. A matching legacy row can enrich the response but is not required,
+so a valid PDS-only track is readable with derived public defaults. Verified R2
+mirrors no longer depend on the legacy row for their evidence. The next boundary
+is to replace the remaining transitional publication, moderation, and metrics
+join with explicit projections while preserving the response contract.

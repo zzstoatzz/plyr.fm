@@ -178,6 +178,22 @@ fn decodeRow(allocator: std.mem.Allocator, row: anytype) !track.Track {
     const id = try allocator.alloc(u8, track_id.encodedLength(uri));
     _ = try track_id.encode(id, uri);
     const blob_cid = try duplicateOptional(allocator, try row.get(?[]const u8, 11));
+    const delivery_url = try duplicateOptional(allocator, try row.get(?[]const u8, 37));
+    if (delivery_url) |url| {
+        if (!lexicon_value.validUri(url)) return error.CorruptOrigin;
+    }
+    const delivery_artifact_cid = try duplicateOptional(
+        allocator,
+        try row.get(?[]const u8, 39),
+    );
+    if (delivery_artifact_cid) |cid| {
+        const parsed = zat.Cid.fromString(allocator, cid) catch
+            return error.CorruptArtifactCid;
+        defer allocator.free(parsed.raw);
+        if (parsed.codec() != zat.cbor.Codec.raw) return error.CorruptArtifactCid;
+        if (blob_cid == null or !std.mem.eql(u8, blob_cid.?, cid))
+            return error.CorruptOrigin;
+    }
     const artifacts = if (blob_cid) |cid| blk: {
         const parsed = zat.Cid.fromString(allocator, cid) catch
             return error.CorruptArtifactCid;
@@ -190,7 +206,7 @@ fn decodeRow(allocator: std.mem.Allocator, row: anytype) !track.Track {
             .media_type = try duplicate(allocator, (try row.get(?[]const u8, 12)) orelse
                 return error.CorruptArtifact),
             .declared_by = uri,
-            .verification = .declared,
+            .verification = if (delivery_artifact_cid != null) .verified else .declared,
         };
         break :blk values;
     } else &.{};
@@ -203,21 +219,44 @@ fn decodeRow(allocator: std.mem.Allocator, row: anytype) !track.Track {
     if (legacy_url) |url| {
         if (!lexicon_value.validUri(url)) return error.CorruptOrigin;
     }
+    const delivery_is_authored = delivery_url != null and authored_url != null and
+        std.mem.eql(u8, delivery_url.?, authored_url.?);
+    const include_delivery = delivery_url != null and !delivery_is_authored;
+    const legacy_is_authored = legacy_url != null and authored_url != null and
+        std.mem.eql(u8, legacy_url.?, authored_url.?);
+    const legacy_is_delivery = legacy_url != null and delivery_url != null and
+        std.mem.eql(u8, legacy_url.?, delivery_url.?);
+    const has_legacy_fallback = legacy_url != null and
+        !legacy_is_authored and !legacy_is_delivery;
     const origin_count = @as(usize, @intFromBool(authored_url != null)) +
-        @as(usize, @intFromBool(legacy_url != null));
+        @as(usize, @intFromBool(include_delivery)) +
+        @as(usize, @intFromBool(has_legacy_fallback));
     const origins = try allocator.alloc(track.Origin, origin_count);
     var origin_index: usize = 0;
     if (authored_url) |url| {
         origins[origin_index] = .{
             .url = url,
             .media_type = try duplicate(allocator, try row.get([]const u8, 15)),
-            .artifact_cid = null,
+            .artifact_cid = if (delivery_is_authored) delivery_artifact_cid else null,
             .attestation = null,
-            .source = .verified_repo,
+            .source = if (delivery_is_authored) .mixed else .verified_repo,
         };
         origin_index += 1;
     }
-    if (legacy_url) |url| {
+    if (include_delivery) {
+        const url = delivery_url.?;
+        origins[origin_index] = .{
+            .url = url,
+            .media_type = try duplicate(allocator, (try row.get(?[]const u8, 38)) orelse
+                return error.CorruptOrigin),
+            .artifact_cid = delivery_artifact_cid,
+            .attestation = null,
+            .source = .verified_delivery,
+        };
+        origin_index += 1;
+    }
+    if (has_legacy_fallback) {
+        const url = legacy_url.?;
         origins[origin_index] = .{
             .url = url,
             .media_type = try duplicate(allocator, try row.get([]const u8, 26)),
@@ -283,11 +322,15 @@ fn decodeRow(allocator: std.mem.Allocator, row: anytype) !track.Track {
             .artist_display_name = .legacy_projection,
             .artist_avatar = if (authored_avatar) .authored_profile else .legacy_projection,
             .artist_bio = if (authored_bio) .authored_profile else .legacy_projection,
-            .media_artifacts = .verified_repo,
-            .media_origins = if (authored_url != null and legacy_url != null)
-                .mixed
-            else if (authored_url != null)
+            .media_artifacts = if (delivery_artifact_cid != null) .mixed else .verified_repo,
+            .media_origins = if (delivery_url != null and authored_url == null and legacy_url == null)
+                .verified_delivery
+            else if (authored_url != null and delivery_url == null and legacy_url == null)
                 .verified_repo
+            else if (legacy_url != null and authored_url == null and delivery_url == null)
+                .legacy_projection
+            else if (authored_url != null or delivery_url != null or legacy_url != null)
+                .mixed
             else if (!has_legacy_track)
                 .verified_repo
             else
@@ -345,7 +388,11 @@ const projected_columns =
     \\  ),
     \\  aa.evidence_source,
     \\  t.atproto_record_uri IS NOT NULL,
-    \\  (extract(epoch FROM COALESCE(t.created_at, v.record_created_at::timestamptz)) * 1000000)::bigint
+    \\  (extract(epoch FROM COALESCE(t.created_at, v.record_created_at::timestamptz)) * 1000000)::bigint,
+    \\  d.origin_url,
+    \\  d.media_type,
+    \\  d.artifact_cid,
+    \\  d.verification
 ;
 
 const joined_projection = "SELECT\n" ++ projected_columns ++ "\n" ++
@@ -353,6 +400,9 @@ const joined_projection = "SELECT\n" ++ projected_columns ++ "\n" ++
     \\JOIN plyr_index.account_availability AS aa
     \\  ON aa.repo_did = v.owner_did AND aa.available
     \\LEFT JOIN tracks AS t ON t.atproto_record_uri = v.record_uri
+    \\LEFT JOIN plyr_index.track_delivery_origins AS d
+    \\  ON d.record_uri = v.record_uri AND d.record_cid = v.record_cid
+    \\  AND d.service = 'r2' AND d.verification = 'verified_blob_cid'
     \\JOIN artists AS a ON a.did = v.owner_did
     \\LEFT JOIN plyr_index.profile_records AS p
     \\  ON p.owner_did = v.owner_did AND p.collection = $2
@@ -429,6 +479,7 @@ const readiness_sql =
     \\WHERE to_regclass('plyr_index.track_records') IS NOT NULL
     \\  AND to_regclass('plyr_index.account_availability') IS NOT NULL
     \\  AND to_regclass('plyr_index.profile_records') IS NOT NULL
+    \\  AND to_regclass('plyr_index.track_delivery_origins') IS NOT NULL
     \\  AND to_regclass('tracks') IS NOT NULL
     \\  AND to_regclass('artists') IS NOT NULL
 ;
@@ -492,6 +543,14 @@ test "composed PostgreSQL reads use verified records and authoritative account s
     try projected_tracks.createTestTable(pool);
     try projected_profiles.createTestTable(pool);
     try projected_availability.createTestTable(pool);
+    _ = try pool.exec(
+        \\CREATE TABLE plyr_index.track_delivery_origins (
+        \\  record_uri text NOT NULL, service text NOT NULL, record_cid text NOT NULL,
+        \\  origin_url text NOT NULL, media_type text NOT NULL, artifact_cid text NOT NULL,
+        \\  verification text NOT NULL, observed_at_us bigint NOT NULL,
+        \\  PRIMARY KEY (record_uri, service)
+        \\)
+    , .{});
     _ = try pool.exec(
         \\CREATE TABLE artists (
         \\  did text PRIMARY KEY, handle text NOT NULL, display_name text NOT NULL,
@@ -610,6 +669,47 @@ test "composed PostgreSQL reads use verified records and authoritative account s
     try std.testing.expectEqualStrings("operator-note", value.moderation.operator_labels[0]);
     try std.testing.expectEqual(@as(i64, 7), value.metrics.play_count);
 
+    _ = try pool.exec(
+        \\INSERT INTO plyr_index.track_delivery_origins VALUES (
+        \\  $1, 'r2', $2, 'https://r2.example/verified.flac', 'audio/flac',
+        \\  $3, 'verified_blob_cid', 1100
+        \\)
+    , .{ record_uri, try record.toString(a), try blob.toString(a) });
+    const delivered = (try implementation.store().getByUri(a, record_uri)).?;
+    try std.testing.expectEqual(@as(usize, 3), delivered.media.origins.len);
+    try std.testing.expectEqualStrings(
+        "https://r2.example/verified.flac",
+        delivered.media.origins[1].url,
+    );
+    try std.testing.expectEqualStrings(
+        try blob.toString(a),
+        delivered.media.origins[1].artifact_cid.?,
+    );
+    try std.testing.expectEqual(track.ArtifactVerification.verified, delivered.media.artifacts[0].verification);
+    try std.testing.expectEqual(track.Source.mixed, delivered.sources.media_artifacts);
+    try std.testing.expectEqual(track.Source.verified_delivery, delivered.media.origins[1].source);
+    try std.testing.expectEqual(track.Source.mixed, delivered.sources.media_origins);
+
+    _ = try pool.exec(
+        "UPDATE plyr_index.track_delivery_origins SET origin_url = 'https://pds.example/audio.flac'",
+        .{},
+    );
+    const shared_origin = (try implementation.store().getByUri(a, record_uri)).?;
+    try std.testing.expectEqual(@as(usize, 2), shared_origin.media.origins.len);
+    try std.testing.expectEqual(track.Source.mixed, shared_origin.media.origins[0].source);
+    try std.testing.expectEqualStrings(
+        try blob.toString(a),
+        shared_origin.media.origins[0].artifact_cid.?,
+    );
+
+    _ = try pool.exec(
+        "UPDATE plyr_index.track_delivery_origins SET record_cid = $1",
+        .{try commit.toString(a)},
+    );
+    const stale_delivery = (try implementation.store().getByUri(a, record_uri)).?;
+    try std.testing.expectEqual(@as(usize, 2), stale_delivery.media.origins.len);
+    try std.testing.expectEqual(track.ArtifactVerification.declared, stale_delivery.media.artifacts[0].verification);
+
     const pds_only_uri = "at://did:plc:artist/fm.plyr.dev.track/pds-only";
     var pds_only = change;
     pds_only.upsert.record_uri = pds_only_uri;
@@ -673,5 +773,5 @@ fn requireDisposableDatabase(pool: *pg.Pool, allocator: std.mem.Allocator) !void
     defer row.deinit() catch {};
     const database = try allocator.dupe(u8, try row.get([]const u8, 0));
     defer allocator.free(database);
-    if (!std.mem.eql(u8, database, "relay_test")) return error.UnsafeTestDatabase;
+    if (!std.mem.eql(u8, database, "zig_test")) return error.UnsafeTestDatabase;
 }

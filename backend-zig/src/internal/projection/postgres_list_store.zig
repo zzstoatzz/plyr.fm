@@ -290,7 +290,7 @@ test "PostgreSQL list projection is atomic and replay safe" {
     const database_name = try allocator.dupe(u8, try database_row.get([]const u8, 0));
     defer allocator.free(database_name);
     try database_row.deinit();
-    if (!std.mem.eql(u8, database_name, "relay_test")) return error.UnsafeTestDatabase;
+    if (!std.mem.eql(u8, database_name, "zig_test")) return error.UnsafeTestDatabase;
 
     _ = try pool.exec("DROP SCHEMA IF EXISTS plyr_index CASCADE", .{});
     defer _ = pool.exec("DROP SCHEMA IF EXISTS plyr_index CASCADE", .{}) catch null;

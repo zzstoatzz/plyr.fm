@@ -1,6 +1,6 @@
 """tests for the verified PDS blob mirror (#1778)."""
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import ANY, AsyncMock, patch
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -15,6 +15,7 @@ from backend.models import Artist, Track
 MOCK_FETCH_PATH = "backend._internal.tasks.pds_mirror._fetch_blob"
 MOCK_STORAGE_PATH = "backend._internal.tasks.pds_mirror.storage"
 MOCK_REENTRY_PATH = "backend._internal.tasks.hooks.run_post_track_create_hooks"
+MOCK_ORIGIN_PATH = "backend._internal.tasks.pds_mirror.upsert_verified_r2_origin"
 
 # pinned CIDv1 / raw / sha256 vectors, reproducible by any implementation.
 # the encoding was additionally checked end-to-end against a live PDS: the
@@ -71,6 +72,9 @@ class TestMirrorPdsBlob:
     ) -> None:
         audio = b"real audio bytes"
         track = await _track_on_pds(db_session, cid=cid_for_blob(audio))
+        track.atproto_record_uri = "at://did:plc:mirror_test/fm.plyr.track/mirror"
+        track.atproto_record_cid = "bafyreirecord"
+        await db_session.commit()
 
         storage_mock = AsyncMock()
         storage_mock.save.return_value = "deadbeefdeadbeef"
@@ -80,6 +84,7 @@ class TestMirrorPdsBlob:
             patch(MOCK_FETCH_PATH, AsyncMock(return_value=audio)),
             patch(MOCK_STORAGE_PATH, storage_mock),
             patch(MOCK_REENTRY_PATH, AsyncMock()) as reentry,
+            patch(MOCK_ORIGIN_PATH, AsyncMock()) as persist_origin,
         ):
             await mirror_pds_blob(track.id)
 
@@ -87,6 +92,14 @@ class TestMirrorPdsBlob:
         assert track.r2_url == "https://r2.example.com/audio/x.mp3"
         assert track.file_id == "deadbeefdeadbeef"
         assert track.audio_storage == "both"
+        persist_origin.assert_awaited_once_with(
+            ANY,
+            record_uri=track.atproto_record_uri,
+            record_cid=track.atproto_record_cid,
+            origin_url="https://r2.example.com/audio/x.mp3",
+            media_type="audio/mpeg",
+            artifact_cid=track.pds_blob_cid,
+        )
         # the scans re-run against our copy, without re-notifying followers
         reentry.assert_awaited_once()
         assert reentry.await_args.kwargs["skip_notification"] is True
@@ -160,6 +173,39 @@ class TestMirrorPdsBlob:
         await db_session.refresh(track)
         assert track.r2_url is None
         assert track.audio_storage == "pds"
+
+    async def test_does_not_attach_a_mirror_after_the_record_changes(
+        self, db_session: AsyncSession
+    ) -> None:
+        old_audio = b"old audio"
+        track = await _track_on_pds(db_session, cid=cid_for_blob(old_audio))
+        track.atproto_record_uri = "at://did:plc:mirror_test/fm.plyr.track/mirror"
+        track.atproto_record_cid = "bafyreirecordold"
+        await db_session.commit()
+
+        async def save_after_record_update(_file: object, _filename: str) -> str:
+            track.atproto_record_cid = "bafyreirecordnew"
+            track.pds_blob_cid = cid_for_blob(b"new audio")
+            await db_session.commit()
+            return "old-content-addressed-object"
+
+        storage_mock = AsyncMock()
+        storage_mock.save.side_effect = save_after_record_update
+        storage_mock.get_url.return_value = "https://r2.example.com/audio/old.mp3"
+
+        with (
+            patch(MOCK_FETCH_PATH, AsyncMock(return_value=old_audio)),
+            patch(MOCK_STORAGE_PATH, storage_mock),
+            patch(MOCK_REENTRY_PATH, AsyncMock()) as reentry,
+            patch(MOCK_ORIGIN_PATH, AsyncMock()) as persist_origin,
+        ):
+            await mirror_pds_blob(track.id)
+
+        await db_session.refresh(track)
+        assert track.r2_url is None
+        assert track.audio_storage == "pds"
+        persist_origin.assert_not_awaited()
+        reentry.assert_not_awaited()
 
     async def test_refuses_unsafe_pds_url(self, db_session: AsyncSession) -> None:
         track = await _track_on_pds(

@@ -1,4 +1,4 @@
-"""Exercise the Zig-owned projection migrations against relay_test only."""
+"""Exercise the Zig-owned projection migrations against zig_test only."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from sqlalchemy.engine import make_url
 from alembic import command
 
 PRIOR_REVISION = "4aaed6c819f1"
-HEAD_REVISION = "a8d20f4bc731"
+HEAD_REVISION = "c31e7b4a902d"
 EXPECTED_TABLES = {
     "account_availability",
     "account_status_checks",
@@ -23,6 +23,7 @@ EXPECTED_TABLES = {
     "relay_cursors",
     "repo_heads",
     "track_records",
+    "track_delivery_origins",
 }
 EXPECTED_AVAILABILITY_COLUMNS = {
     "available",
@@ -58,6 +59,16 @@ EXPECTED_REJECTION_COLUMNS = {
     "record_cid",
     "record_uri",
     "rkey",
+}
+EXPECTED_DELIVERY_COLUMNS = {
+    "artifact_cid",
+    "media_type",
+    "observed_at_us",
+    "origin_url",
+    "record_cid",
+    "record_uri",
+    "service",
+    "verification",
 }
 EXPECTED_HEAD_COLUMNS = {
     "repo_did",
@@ -121,12 +132,12 @@ def sync_database_url() -> str:
 
 
 def assert_test_database_and_drop_schema(database_url: str) -> None:
-    """Refuse destructive work anywhere except the disposable relay_test DB."""
+    """Refuse destructive work anywhere except the disposable zig_test DB."""
     engine = create_engine(database_url)
     try:
         with engine.begin() as connection:
             database_name = connection.scalar(text("SELECT current_database()"))
-            if database_name != "relay_test":
+            if database_name != "zig_test":
                 raise RuntimeError(f"unsafe migration test database: {database_name!r}")
             connection.execute(text("DROP SCHEMA IF EXISTS plyr_index CASCADE"))
     finally:
@@ -237,6 +248,12 @@ def main() -> None:
         if rejection_columns != EXPECTED_REJECTION_COLUMNS:
             raise AssertionError(
                 f"unexpected record_rejections columns: {sorted(rejection_columns)!r}"
+            )
+        delivery_columns = table_columns(database_url, "track_delivery_origins")
+        if delivery_columns != EXPECTED_DELIVERY_COLUMNS:
+            raise AssertionError(
+                "unexpected track_delivery_origins columns: "
+                f"{sorted(delivery_columns)!r}"
             )
     finally:
         if upgraded:
