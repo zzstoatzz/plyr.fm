@@ -73,9 +73,36 @@ def test_benchmark_target_measures_a_real_http_connection() -> None:
 
     assert result["requests"] > 0
     assert result["errors"] == 0
+    assert result["error_counts"] == {}
+    assert result["status_counts"] == {"200": result["requests"]}
     assert result["workers_completed"] == 2
     assert result["requests_per_second"] > 0
+    assert result["response_bytes"] == result["requests"] * len(b'{"ok":true}')
+    assert result["mean_response_bytes"] == len(b'{"ok":true}')
     assert result["latency_ms"]["p99"] > 0
+
+
+def test_benchmark_target_explains_unexpected_statuses() -> None:
+    server = ThreadingHTTPServer(("127.0.0.1", 0), _Handler)
+    thread = threading.Thread(target=server.serve_forever)
+    thread.start()
+    try:
+        result = benchmark_target(
+            HttpTarget("http", "127.0.0.1", server.server_port),
+            duration=0.1,
+            concurrency=1,
+            path="/v1/tracks?limit=1",
+            expected_status=201,
+        )
+    finally:
+        server.shutdown()
+        thread.join()
+        server.server_close()
+
+    assert result["requests"] == 0
+    assert result["errors"] > 0
+    assert result["error_counts"] == {"http_status_200": result["errors"]}
+    assert result["status_counts"] == {"200": result["errors"]}
 
 
 @pytest.mark.parametrize("cgroup_version", [1, 2])

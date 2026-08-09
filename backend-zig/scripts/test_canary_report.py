@@ -25,13 +25,21 @@ def _snapshot(
     }
 
 
-def _benchmark(*, errors: int = 0) -> dict[str, Any]:
+def _benchmark(
+    *,
+    errors: int = 0,
+    requests_per_second: float = 100.0,
+    mean_response_bytes: float = 1_000.0,
+) -> dict[str, Any]:
     return {
         "path": "/v1/tracks?limit=1",
         "concurrency": 16,
         "requests": 1000,
         "errors": errors,
-        "requests_per_second": 100.0,
+        "error_counts": {"TimeoutError": errors} if errors else {},
+        "status_counts": {"200": 1000},
+        "requests_per_second": requests_per_second,
+        "mean_response_bytes": mean_response_bytes,
         "latency_ms": {"p50": 1.0, "p95": 2.0, "p99": 3.0},
     }
 
@@ -84,3 +92,43 @@ def test_report_rejects_restarts_and_request_errors() -> None:
     loaded["pid"] = 42
     with pytest.raises(ValueError, match="without errors"):
         build_report(idle, loaded, [_benchmark(errors=1)])
+
+
+def test_report_compares_resources_payloads_and_http_performance() -> None:
+    report = build_report(
+        _snapshot(rss_kib=8_000, peak_rss_kib=9_000, cpu_ticks=100, uptime=10),
+        _snapshot(rss_kib=9_000, peak_rss_kib=10_000, cpu_ticks=200, uptime=20),
+        [_benchmark(requests_per_second=200.0, mean_response_bytes=2_000)],
+        {
+            "name": "Python staging API",
+            "idle": _snapshot(
+                rss_kib=512_000,
+                peak_rss_kib=600_000,
+                cpu_ticks=1_000,
+                uptime=30,
+            ),
+            "loaded": _snapshot(
+                rss_kib=520_000,
+                peak_rss_kib=640_000,
+                cpu_ticks=1_500,
+                uptime=40,
+            ),
+            "benchmarks": [
+                _benchmark(
+                    errors=1,
+                    requests_per_second=10.0,
+                    mean_response_bytes=4_000,
+                )
+            ],
+        },
+    )
+
+    relative = report["comparison"]["relative_to_canary"]
+    assert relative["idle_application_rss_multiple"] == 64.0
+    assert relative["peak_application_rss_multiple"] == 64.0
+    assert relative["benchmarks"][0]["throughput_multiple"] == 20.0
+    assert relative["benchmarks"][0]["response_size_multiple"] == 2.0
+    markdown = render_markdown(report)
+    assert "Comparison: Python staging API" in markdown
+    assert "Comparison errors" in markdown
+    assert "TimeoutError" in markdown

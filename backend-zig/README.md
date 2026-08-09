@@ -151,11 +151,17 @@ and records its current/peak RSS and CPU ticks alongside cgroup current/peak
 memory. The runner benchmarks the real 50-track product read for ten seconds at
 concurrency 1 and 16, retaining request rate and p50/p95/p99 latency. A combined,
 commit-addressed artifact and workflow summary are produced even when a gate
-fails. Deployment fails above 16 MiB idle application RSS, above 64 MiB peak
-application RSS, after a process restart, or on any load-test HTTP error. This
-instrumentation exists only in the explicitly dispatched canary job; ordinary PR
-checks do not run remote load or deployment measurements. Run the same HTTP load
-driver against an already deployed target with `just zig bench-canary -- ...`.
+fails. The job then streams the same snapshot helper into the live Python staging
+API Machine and drives its current 50-track route from the same runner at the
+same concurrency levels. Both benchmark records include mean response bytes, so
+throughput and latency ratios cannot quietly conceal materially different
+payload sizes. Deployment fails above 16 MiB idle application RSS, above 64 MiB
+peak application RSS, after a Zig process restart, or on any Zig load-test HTTP
+error; baseline errors are retained rather than making the successor inherit a
+legacy failure. This instrumentation exists only in the explicitly dispatched
+canary job; ordinary PR checks do not run remote load or deployment measurements.
+Run the same HTTP load driver against an already deployed target with
+`just zig bench-canary -- ...`.
 
 The iteration loop is native by default. `just zig check` uses the host Zig
 toolchain and `just zig image-check` builds and starts a host-architecture Linux

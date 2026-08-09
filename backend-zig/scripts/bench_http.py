@@ -10,6 +10,7 @@ import socket
 import subprocess
 import threading
 import time
+from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import SplitResult, urlsplit
@@ -20,7 +21,9 @@ ROOT = Path(__file__).resolve().parents[1]
 @dataclass(frozen=True)
 class WorkerResult:
     latencies_ns: list[int]
-    errors: int
+    error_counts: Counter[str]
+    status_counts: Counter[int]
+    response_bytes: int
 
 
 @dataclass(frozen=True)
@@ -89,28 +92,36 @@ def _worker(
     start: threading.Event,
 ) -> WorkerResult:
     latencies: list[int] = []
-    errors = 0
-    connection = target.connect()
+    error_counts: Counter[str] = Counter()
+    status_counts: Counter[int] = Counter()
+    response_bytes = 0
+    connection: http.client.HTTPConnection | None = None
     start.wait()
     deadline = time.perf_counter() + duration
     try:
         while time.perf_counter() < deadline:
             began = time.perf_counter_ns()
             try:
+                if connection is None:
+                    connection = target.connect()
                 connection.request("GET", path)
                 response = connection.getresponse()
-                response.read()
+                body = response.read()
+                status_counts[response.status] += 1
                 if response.status != expected_status:
-                    errors += 1
+                    error_counts[f"http_status_{response.status}"] += 1
                 else:
                     latencies.append(time.perf_counter_ns() - began)
-            except (OSError, http.client.HTTPException):
-                errors += 1
-                connection.close()
-                connection = target.connect()
+                    response_bytes += len(body)
+            except (OSError, http.client.HTTPException) as error:
+                error_counts[type(error).__name__] += 1
+                if connection is not None:
+                    connection.close()
+                    connection = None
     finally:
-        connection.close()
-    return WorkerResult(latencies, errors)
+        if connection is not None:
+            connection.close()
+    return WorkerResult(latencies, error_counts, status_counts, response_bytes)
 
 
 def _percentile(sorted_values: list[int], percentile: float) -> float:
@@ -161,9 +172,15 @@ def benchmark_target(
         latency for result in completed for latency in result.latencies_ns
     )
     workers_completed = len(completed)
-    errors = (
-        sum(result.errors for result in completed) + concurrency - workers_completed
-    )
+    error_counts: Counter[str] = Counter()
+    status_counts: Counter[int] = Counter()
+    for result in completed:
+        error_counts.update(result.error_counts)
+        status_counts.update(result.status_counts)
+    if workers_completed != concurrency:
+        error_counts["worker_crash"] += concurrency - workers_completed
+    errors = sum(error_counts.values())
+    response_bytes = sum(result.response_bytes for result in completed)
     return {
         "target": f"{target.scheme}://{target.host}:{target.port}",
         "path": path,
@@ -173,6 +190,14 @@ def benchmark_target(
         "workers_completed": workers_completed,
         "requests": len(latencies),
         "errors": errors,
+        "error_counts": dict(sorted(error_counts.items())),
+        "status_counts": {
+            str(status): count for status, count in sorted(status_counts.items())
+        },
+        "response_bytes": response_bytes,
+        "mean_response_bytes": round(response_bytes / len(latencies), 1)
+        if latencies
+        else 0,
         "requests_per_second": round(len(latencies) / elapsed, 1),
         "latency_ms": {
             "p50": round(_percentile(latencies, 0.50), 3),

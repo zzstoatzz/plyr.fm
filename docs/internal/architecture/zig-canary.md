@@ -61,11 +61,16 @@ drives `/v1/tracks?limit=50` over the public Fly hostname for ten seconds each a
 concurrency 1 and 16, and captures it again. The retained commit-addressed JSON
 artifact includes application current/peak RSS, cgroup current/peak memory,
 application CPU time during the observation window, requests per second, and
-p50/p95/p99 latency. The workflow summary renders the same evidence. The job
-fails on any request error, process restart, idle RSS above 16 MiB, or application
-peak RSS above 64 MiB. This is deliberately part of the manually dispatched
-deployment path, not the PR workflows, so ordinary checkpoints never generate
-remote load or repeated infrastructure runs.
+p50/p95/p99 latency. It streams the same snapshot helper into the current Python
+staging API Machine and drives Python's 50-track route from the same runner at
+the same concurrency levels. Mean response bytes are retained for both APIs, and
+the summary reports resource, throughput, and latency ratios without pretending
+different payload sizes are equivalent work. The job fails on any Zig request
+error, process restart, idle RSS above 16 MiB, or application peak RSS above
+64 MiB. A Python baseline error remains evidence but does not lower the Zig gate.
+This is deliberately part of the manually dispatched deployment path, not the
+PR workflows, so ordinary checkpoints never generate remote load or repeated
+infrastructure runs.
 
 ## next-environment gates
 
