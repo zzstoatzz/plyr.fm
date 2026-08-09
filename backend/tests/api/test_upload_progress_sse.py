@@ -25,6 +25,7 @@ def _make_completed_job(
     atproto_uri: str | None = "at://did:plc:test/fm.plyr.track/abc",
     atproto_cid: str | None = "bafyTestCid",
     warnings: list[str] | None = None,
+    pds_blob_failed: bool = False,
 ) -> Job:
     """build a Job row with a completed upload and an arbitrary result dict."""
     now = datetime.now(UTC)
@@ -35,6 +36,8 @@ def _make_completed_job(
         result["atproto_cid"] = atproto_cid
     if warnings:
         result["warnings"] = warnings
+    if pds_blob_failed:
+        result["pds_blob_failed"] = True
 
     job = Job(
         id=job_id,
@@ -133,3 +136,26 @@ async def test_sse_payload_preserves_warnings_alongside_strongref(
     assert payload["atproto_uri"] == "at://did:plc:test/fm.plyr.track/abc"
     assert payload["atproto_cid"] == "bafyTestCid"
     assert payload["warnings"] == ["pds blob upload timed out, used r2"]
+
+
+async def test_sse_payload_surfaces_pds_blob_failed_flag(progress_app: FastAPI):
+    """the structured pds_blob_failed flag must reach the SSE payload so the
+    frontend can attach a portal deep-link to the failure toast, and must
+    stay absent when the blob uploaded fine."""
+    failed = _make_completed_job(
+        warnings=["couldn't upload to your PDS"], pds_blob_failed=True
+    )
+    with patch(
+        "backend.api.tracks.uploads.job_service.get_job",
+        new=AsyncMock(return_value=failed),
+    ):
+        payload = await _read_first_completed_event(progress_app, failed.id)
+    assert payload["pds_blob_failed"] is True
+
+    ok = _make_completed_job()
+    with patch(
+        "backend.api.tracks.uploads.job_service.get_job",
+        new=AsyncMock(return_value=ok),
+    ):
+        payload = await _read_first_completed_event(progress_app, ok.id)
+    assert "pds_blob_failed" not in payload

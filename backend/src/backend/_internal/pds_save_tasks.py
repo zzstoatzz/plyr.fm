@@ -83,6 +83,7 @@ async def save_tracks_to_pds(
     skipped_count = 0
     failed_count = 0
     processed_count = 0
+    errors: list[str] = []
     last_processed_track_id: int | None = None
     last_status: str | None = None
     progress_lock = asyncio.Lock()
@@ -263,6 +264,8 @@ async def save_tracks_to_pds(
                 )
                 failed_count += 1
                 one_status = "failed"
+                title = track_data["title"] if track_data else f"track {track_id}"
+                errors.append(f"{title}: {str(e)[:200]}")
             finally:
                 async with progress_lock:
                     processed_count += 1
@@ -283,6 +286,7 @@ async def save_tracks_to_pds(
                 "saved_count": saved_count,
                 "skipped_count": skipped_count,
                 "failed_count": failed_count,
+                "errors": errors[:5],
             },
         )
         return
@@ -302,6 +306,7 @@ async def save_tracks_to_pds(
             "saved_count": saved_count,
             "skipped_count": skipped_count,
             "failed_count": failed_count,
+            "errors": errors[:5],
         },
     )
 

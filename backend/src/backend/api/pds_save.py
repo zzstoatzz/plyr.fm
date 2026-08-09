@@ -123,6 +123,7 @@ async def save_progress(save_id: str) -> StreamingResponse:
                     "last_status": job.result.get("last_status")
                     if job.result
                     else None,
+                    "errors": job.result.get("errors") if job.result else None,
                 }
 
                 yield f"data: {json.dumps(payload)}\n\n"
