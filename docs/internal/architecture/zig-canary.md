@@ -68,11 +68,21 @@ signature, blocks, MST, record CIDs, and selected lexicons, then atomically
 projects the authenticated snapshot. It shares one bounded resolver, transport,
 signing-key cache, and PostgreSQL pool across the batch.
 
-The first run against the temporary staging migration branch found four candidate
-repositories. One verified and projected successfully. Three valid repositories
-contained historical list items whose strongRef CID was encoded as DAG-CBOR text
-instead of a CID link, so strict list decoding rejected them and the process
-exited nonzero. This is now an explicit migration gate: malformed application
-records must be quarantined at record granularity so valid tracks and profiles in
-the same authenticated repository remain usable. The verifier must not reinterpret
-the text as a verified CID, and it must not silently report a complete catalog.
+The first strict run against the temporary staging migration branch found four
+candidate repositories. One projected successfully; three valid repositories
+contained malformed historical list records. Record-level quarantine now keeps
+repository signature, MST, block, and CID verification strict while atomically
+excluding only selected records that fail DAG-CBOR or lexicon decoding. Each
+exclusion persists the record URI/CID, exact reason, and authenticated commit
+proof; a later valid record or verified deletion clears it.
+
+The repeated historical defect is a list-item strongRef CID encoded as DAG-CBOR
+text instead of a CID link. It remains invalid: the verifier does not reinterpret
+the text as a verified CID. On the isolated branch, the corrected reconciler
+verified all four repositories, projected 19 live tracks and four profiles, and
+quarantined seven list records (five invalid strongRefs and two unknown list
+types). Product reads then returned all 19 tracks even though none had an exact
+legacy `tracks.atproto_record_uri` match. That last result is intentional: the
+verified PDS record is authoritative, while a matching legacy row can enrich
+delivery, moderation, visibility, and metrics but cannot determine whether the
+record exists.

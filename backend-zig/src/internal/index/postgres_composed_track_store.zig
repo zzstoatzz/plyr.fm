@@ -147,7 +147,7 @@ pub const PostgresComposedTrackStore = struct {
             };
             items.append(allocator, .{
                 .value = value,
-                .created_at_us = row.get(i64, 35) catch
+                .created_at_us = row.get(i64, 36) catch
                     return error.CorruptProjection,
             }) catch return error.OutOfMemory;
         }
@@ -230,6 +230,7 @@ fn decodeRow(allocator: std.mem.Allocator, row: anytype) !track.Track {
     const authored_avatar = try row.get(bool, 22);
     const authored_bio = try row.get(bool, 24);
     const availability_source = try parseSource(try row.get([]const u8, 34));
+    const has_legacy_track = try row.get(bool, 35);
     return .{
         .id = id,
         .record = .{
@@ -287,11 +288,13 @@ fn decodeRow(allocator: std.mem.Allocator, row: anytype) !track.Track {
                 .mixed
             else if (authored_url != null)
                 .verified_repo
+            else if (!has_legacy_track)
+                .verified_repo
             else
                 .legacy_projection,
-            .access = .mixed,
+            .access = if (has_legacy_track) .mixed else .derived,
             .self_labels = .verified_repo,
-            .operator_labels = .legacy_local,
+            .operator_labels = if (has_legacy_track) .legacy_local else .derived,
             .metrics = .derived,
             .account_availability = availability_source,
         },
@@ -330,25 +333,26 @@ const projected_columns =
     \\  p.bio IS NOT NULL,
     \\  t.r2_url,
     \\  t.file_type,
-    \\  t.visibility,
-    \\  t.visibility IN ('public', 'supporters'),
+    \\  COALESCE(t.visibility, 'public'),
+    \\  COALESCE(t.visibility, 'public') IN ('public', 'supporters'),
     \\  t.space_uri,
-    \\  t.operator_labels::text,
+    \\  COALESCE(t.operator_labels, '[]'::jsonb)::text,
     \\  t.moderation_override,
-    \\  t.play_count::bigint,
+    \\  COALESCE(t.play_count, 0)::bigint,
     \\  to_char(
     \\    TIMESTAMPTZ 'epoch' + (v.indexed_at_us * INTERVAL '1 microsecond'),
     \\    'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'
     \\  ),
     \\  aa.evidence_source,
-    \\  (extract(epoch FROM t.created_at) * 1000000)::bigint
+    \\  t.atproto_record_uri IS NOT NULL,
+    \\  (extract(epoch FROM COALESCE(t.created_at, v.record_created_at::timestamptz)) * 1000000)::bigint
 ;
 
 const joined_projection = "SELECT\n" ++ projected_columns ++ "\n" ++
     \\FROM plyr_index.track_records AS v
     \\JOIN plyr_index.account_availability AS aa
     \\  ON aa.repo_did = v.owner_did AND aa.available
-    \\JOIN tracks AS t ON t.atproto_record_uri = v.record_uri
+    \\LEFT JOIN tracks AS t ON t.atproto_record_uri = v.record_uri
     \\JOIN artists AS a ON a.did = v.owner_did
     \\LEFT JOIN plyr_index.profile_records AS p
     \\  ON p.owner_did = v.owner_did AND p.collection = $2
@@ -363,60 +367,60 @@ const common_policy =
     \\    t.moderation_override IS NOT DISTINCT FROM 'allow'
     \\    OR NOT (
     \\      v.self_labels && ARRAY['copyright-violation']::text[]
-    \\      OR t.operator_labels ?| ARRAY['copyright-violation']
+    \\      OR COALESCE(t.operator_labels, '[]'::jsonb) ?| ARRAY['copyright-violation']
     \\    )
     \\  )
 ;
 
 const detail_query = joined_projection ++ "\n" ++
     \\WHERE v.record_uri = $1
-    \\  AND t.visibility <> 'private'
+    \\  AND COALESCE(t.visibility, 'public') <> 'private'
 ++ common_policy ++ "\n" ++
     \\LIMIT 1
 ;
 
 const discovery_policy = common_policy ++
     \\  AND v.collection = $1
-    \\  AND t.visibility IN ('public', 'supporters')
+    \\  AND COALESCE(t.visibility, 'public') IN ('public', 'supporters')
     \\  AND NOT (
     \\    v.self_labels && ARRAY['sexual', 'porn']::text[]
-    \\    OR t.operator_labels ?| ARRAY['sexual', 'porn']
+    \\    OR COALESCE(t.operator_labels, '[]'::jsonb) ?| ARRAY['sexual', 'porn']
     \\  )
 ;
 
 const artist_policy = common_policy ++
     \\  AND v.collection = $1
     \\  AND v.owner_did = $3
-    \\  AND t.visibility <> 'private'
+    \\  AND COALESCE(t.visibility, 'public') <> 'private'
 ;
 
 const discovery_query = joined_projection ++ "\nWHERE true\n" ++ discovery_policy ++ "\n" ++
-    \\ORDER BY t.created_at DESC, v.record_uri DESC
+    \\ORDER BY COALESCE(t.created_at, v.record_created_at::timestamptz) DESC, v.record_uri DESC
     \\LIMIT $3::bigint
 ;
 
 const discovery_after_query = joined_projection ++ "\nWHERE true\n" ++ discovery_policy ++ "\n" ++
     \\  AND (
-    \\    t.created_at < TIMESTAMPTZ 'epoch' + ($3::bigint * INTERVAL '1 microsecond')
-    \\    OR (t.created_at = TIMESTAMPTZ 'epoch' + ($3::bigint * INTERVAL '1 microsecond')
+    \\    COALESCE(t.created_at, v.record_created_at::timestamptz) < TIMESTAMPTZ 'epoch' + ($3::bigint * INTERVAL '1 microsecond')
+    \\    OR (COALESCE(t.created_at, v.record_created_at::timestamptz) = TIMESTAMPTZ 'epoch' + ($3::bigint * INTERVAL '1 microsecond')
     \\      AND v.record_uri < $4)
     \\  )
-    \\ORDER BY t.created_at DESC, v.record_uri DESC
+    \\ORDER BY COALESCE(t.created_at, v.record_created_at::timestamptz) DESC, v.record_uri DESC
     \\LIMIT $5::bigint
 ;
 
 const artist_query = joined_projection ++ "\nWHERE true\n" ++ artist_policy ++ "\n" ++
-    \\ORDER BY t.created_at DESC, v.record_uri DESC
+    \\ORDER BY COALESCE(t.created_at, v.record_created_at::timestamptz) DESC, v.record_uri DESC
     \\LIMIT $4::bigint
 ;
 
 const artist_after_query = joined_projection ++ "\nWHERE true\n" ++ artist_policy ++ "\n" ++
     \\  AND (
-    \\    t.created_at < TIMESTAMPTZ 'epoch' + ($4::bigint * INTERVAL '1 microsecond')
-    \\    OR (t.created_at = TIMESTAMPTZ 'epoch' + ($4::bigint * INTERVAL '1 microsecond')
+    \\    COALESCE(t.created_at, v.record_created_at::timestamptz) < TIMESTAMPTZ 'epoch' + ($4::bigint * INTERVAL '1 microsecond')
+    \\    OR (COALESCE(t.created_at, v.record_created_at::timestamptz) = TIMESTAMPTZ 'epoch' + ($4::bigint * INTERVAL '1 microsecond')
     \\      AND v.record_uri < $5)
     \\  )
-    \\ORDER BY t.created_at DESC, v.record_uri DESC
+    \\ORDER BY COALESCE(t.created_at, v.record_created_at::timestamptz) DESC, v.record_uri DESC
     \\LIMIT $6::bigint
 ;
 
@@ -606,24 +610,44 @@ test "composed PostgreSQL reads use verified records and authoritative account s
     try std.testing.expectEqualStrings("operator-note", value.moderation.operator_labels[0]);
     try std.testing.expectEqual(@as(i64, 7), value.metrics.play_count);
 
+    const pds_only_uri = "at://did:plc:artist/fm.plyr.dev.track/pds-only";
+    var pds_only = change;
+    pds_only.upsert.record_uri = pds_only_uri;
+    pds_only.upsert.rkey = "pds-only";
+    pds_only.upsert.title = "PDS-only Track";
+    pds_only.upsert.audio_url = "https://pds.example/pds-only.flac";
+    try std.testing.expectEqual(
+        @import("../projection/track_store.zig").ApplyResult.applied,
+        try track_writer.store().apply(a, pds_only),
+    );
+    const pds_only_value = (try implementation.store().getByUri(a, pds_only_uri)).?;
+    try std.testing.expectEqual(track.Visibility.public, pds_only_value.access.visibility);
+    try std.testing.expect(pds_only_value.access.in_discovery);
+    try std.testing.expectEqual(@as(usize, 1), pds_only_value.media.origins.len);
+    try std.testing.expectEqual(track.Source.verified_repo, pds_only_value.sources.media_origins);
+    try std.testing.expectEqual(track.Source.derived, pds_only_value.sources.access);
+    try std.testing.expectEqual(track.Source.derived, pds_only_value.sources.operator_labels);
+    try std.testing.expectEqual(@as(usize, 0), pds_only_value.moderation.operator_labels.len);
+    try std.testing.expectEqual(@as(i64, 0), pds_only_value.metrics.play_count);
+
     const page = try implementation.store().listPublic(a, .{
         .collection = "fm.plyr.dev.track",
         .scope = .discovery,
         .limit = 2,
         .after = null,
     });
-    try std.testing.expectEqual(@as(usize, 1), page.len);
+    try std.testing.expectEqual(@as(usize, 2), page.len);
     _ = try pool.exec(
-        "UPDATE plyr_index.track_records SET self_labels = ARRAY['sexual']::text[]",
-        .{},
+        "UPDATE plyr_index.track_records SET self_labels = ARRAY['sexual']::text[] WHERE record_uri = $1",
+        .{record_uri},
     );
-    try std.testing.expectEqual(@as(usize, 0), (try implementation.store().listPublic(a, .{
+    try std.testing.expectEqual(@as(usize, 1), (try implementation.store().listPublic(a, .{
         .collection = "fm.plyr.dev.track",
         .scope = .discovery,
         .limit = 2,
         .after = null,
     })).len);
-    try std.testing.expectEqual(@as(usize, 1), (try implementation.store().listPublic(a, .{
+    try std.testing.expectEqual(@as(usize, 2), (try implementation.store().listPublic(a, .{
         .collection = "fm.plyr.dev.track",
         .scope = .{ .artist = did },
         .limit = 2,
