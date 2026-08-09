@@ -35,6 +35,27 @@ from backend.utilities.redis import clear_client_cache
 settings.atproto.app_namespace = "fm.plyr"
 
 
+def _bootstrap_template_database_from_controller(config: pytest.Config) -> None:
+    """bootstrap the template database in the xdist controller.
+
+    the template build used to happen lazily in each worker's session fixture,
+    which runs inside the first test's pytest-timeout budget (10s). on a cold
+    postgres the creator's schema setup plus the advisory-lock queue routinely
+    blew that budget: waiters timed out (poisoning their whole worker session),
+    and a creator killed mid-bootstrap left a schemaless template that every
+    other worker cloned — the "relation artists does not exist" cascades.
+
+    the controller runs before any worker and outside any test timeout, so the
+    build happens exactly once here; workers then only take the fast
+    already-finalized path and clone.
+    """
+    if os.environ.get("PYTEST_XDIST_WORKER"):
+        return  # worker process — the controller already did this
+    if not getattr(config.option, "numprocesses", None):
+        return  # single-process run uses the base database directly
+    asyncio.run(_ensure_template_database(settings.database.url))
+
+
 class MockStorage(R2Storage):
     """Mock storage for tests - no R2 credentials needed."""
 
@@ -79,12 +100,14 @@ class MockStorage(R2Storage):
         return "mock_gated_file_id_456"
 
 
-def pytest_configure(config):
+def pytest_configure(config: pytest.Config) -> None:
     """Set mock storage before any test modules are imported."""
     import backend.storage
 
     # set _storage directly to prevent R2Storage initialization
     backend.storage._storage = MockStorage()
+
+    _bootstrap_template_database_from_controller(config)
 
 
 def _database_from_url(url: str) -> str:
@@ -204,9 +227,16 @@ async def _setup_template_database(template_url: str) -> None:
 
 
 async def _ensure_template_database(base_url: str) -> str:
-    """ensure template database exists and is migrated.
+    """ensure template database exists, is migrated, and is FINALIZED.
 
-    uses advisory lock to coordinate between xdist workers.
+    uses an advisory lock to coordinate concurrent callers, and postgres's
+    `datistemplate` flag as a bootstrap-complete marker: the flag is set only
+    after the schema and helper procedure are in place, so a bootstrap killed
+    partway (e.g. by a test timeout) leaves the flag unset and the next caller
+    drops the partial database and rebuilds instead of cloning a schemaless
+    template — the failure mode behind whole-worker "relation does not exist"
+    cascades.
+
     returns the template database name.
     """
     base_db_name = _database_from_url(base_url)
@@ -217,25 +247,37 @@ async def _ensure_template_database(base_url: str) -> str:
     try:
         # advisory lock prevents race condition between workers
         await conn.execute("SELECT pg_advisory_lock(hashtext($1))", template_db_name)
-
-        # check if template exists
-        exists = await conn.fetchval(
-            "SELECT 1 FROM pg_database WHERE datname = $1", template_db_name
-        )
-
-        if not exists:
-            # create template database
-            await conn.execute(f'CREATE DATABASE "{template_db_name}"')
-
-            # build URL for template and set it up
-            scheme, netloc, _, query, fragment = urlsplit(base_url)
-            template_url = urlunsplit(
-                (scheme, netloc, f"/{template_db_name}", query, fragment)
+        try:
+            finalized = await conn.fetchval(
+                "SELECT datistemplate FROM pg_database WHERE datname = $1",
+                template_db_name,
             )
-            await _setup_template_database(template_url)
 
-        # release lock (other workers waiting will see template exists)
-        await conn.execute("SELECT pg_advisory_unlock(hashtext($1))", template_db_name)
+            if finalized is False:
+                # exists but never finalized — a previous bootstrap was
+                # interrupted between CREATE DATABASE and schema setup
+                await conn.execute(f'DROP DATABASE IF EXISTS "{template_db_name}"')
+                finalized = None
+
+            if finalized is None:
+                await conn.execute(f'CREATE DATABASE "{template_db_name}"')
+
+                # build URL for template and set it up
+                scheme, netloc, _, query, fragment = urlsplit(base_url)
+                template_url = urlunsplit(
+                    (scheme, netloc, f"/{template_db_name}", query, fragment)
+                )
+                await _setup_template_database(template_url)
+
+                await conn.execute(
+                    f'ALTER DATABASE "{template_db_name}" IS_TEMPLATE true'
+                )
+        finally:
+            # release even on failure so other workers aren't stuck waiting
+            # for this connection to close
+            await conn.execute(
+                "SELECT pg_advisory_unlock(hashtext($1))", template_db_name
+            )
 
         return template_db_name
     finally:
