@@ -331,7 +331,7 @@ max_lines = 1284
 
 [[rules]]
 path = "backend/tests/api/test_radio.py"
-max_lines = 1388
+max_lines = 1424
 
 [[rules]]
 path = "frontend/src/lib/uploader.svelte.ts"
@@ -363,7 +363,7 @@ max_lines = 1444
 
 [[rules]]
 path = "scripts/build_atlas.py"
-max_lines = 584
+max_lines = 586
 
 [[rules]]
 path = "frontend/src/routes/atlas/renderer.ts"

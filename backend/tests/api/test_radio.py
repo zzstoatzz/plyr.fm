@@ -583,6 +583,42 @@ async def test_radio_excludes_deactivated_artists(
     assert gone_track.id not in ids
 
 
+async def test_radio_excludes_moderation_override_exclude(
+    radio_app: FastAPI,
+    db_session: AsyncSession,
+    radio_artist: Artist,
+) -> None:
+    """a standing `exclude` override keeps a track off radio, no label needed.
+
+    regression: load_corpus filtered on labels only, so an operator exclude
+    (user report: prayer recordings airing on radio) removed a track from
+    discovery feeds but radio kept broadcasting it.
+    """
+    now = datetime.now(UTC) + TEST_TIME_OFFSET
+    airing = await _create_track(
+        db_session, radio_artist, title="Airing", file_id="airing", created_at=now
+    )
+    excluded = await _create_track(
+        db_session,
+        radio_artist,
+        title="Excluded",
+        file_id="excluded",
+        created_at=now - timedelta(minutes=1),
+    )
+    excluded.moderation_override = "exclude"
+    await db_session.commit()
+
+    async with AsyncClient(
+        transport=ASGITransport(app=radio_app),
+        base_url="https://radio.plyr.fm",
+    ) as client:
+        response = await client.get("/radio/state.json")
+
+    ids = {t["id"] for t in response.json()["rotation"]}
+    assert airing.id in ids
+    assert excluded.id not in ids
+
+
 async def test_radio_state_includes_tags_and_up_next(
     radio_app: FastAPI,
     db_session: AsyncSession,
