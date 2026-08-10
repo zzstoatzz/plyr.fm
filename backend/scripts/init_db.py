@@ -7,13 +7,30 @@ fresh local database, then use `alembic upgrade head` for later migrations.
 
 import asyncio
 import sys
+from pathlib import Path
 
 import sqlalchemy as sa
 from alembic.config import Config
+from sqlalchemy.engine import Connection
 
 from alembic import command
 from backend.models import Base
 from backend.utilities.database import get_engine
+
+BACKEND_DIR = Path(__file__).resolve().parents[1]
+ALEMBIC_CONFIG = BACKEND_DIR / "alembic.ini"
+BASE_SCHEMA_REVISION = "4aaed6c819f1"
+MIGRATION_OWNED_SCHEMAS = frozenset({"plyr_auth", "plyr_index"})
+
+
+def create_base_schema(connection: Connection) -> None:
+    """Create ORM-owned tables; later migrations own successor schemas."""
+    tables = [
+        table
+        for table in Base.metadata.sorted_tables
+        if table.schema not in MIGRATION_OWNED_SCHEMAS
+    ]
+    Base.metadata.create_all(connection, tables=tables)
 
 
 async def create_schema() -> bool:
@@ -25,8 +42,8 @@ async def create_schema() -> bool:
             )
             if already_migrated:
                 return False
-            await conn.execute(sa.text("CREATE SCHEMA IF NOT EXISTS plyr_index"))
-            await conn.run_sync(Base.metadata.create_all)
+            await conn.execute(sa.text("CREATE EXTENSION IF NOT EXISTS pg_trgm"))
+            await conn.run_sync(create_base_schema)
             return True
     finally:
         await engine.dispose()
@@ -41,7 +58,9 @@ def main() -> None:
         )
         raise SystemExit(1)
 
-    command.stamp(Config("alembic.ini"), "head")
+    config = Config(ALEMBIC_CONFIG)
+    command.stamp(config, BASE_SCHEMA_REVISION)
+    command.upgrade(config, "head")
     print("schema created and stamped at alembic head")
 
 
