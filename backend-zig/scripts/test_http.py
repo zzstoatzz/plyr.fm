@@ -379,6 +379,26 @@ def main() -> None:
         assert status == 405
         assert playback_method["error"]["code"] == "method_not_allowed"
 
+        likes_path = f"/v1/tracks/{_track_id(uri)}/likes"
+        status, _, unavailable_likes = _request(base_url, likes_path)
+        assert status == 503
+        assert unavailable_likes["error"]["code"] == "service_unavailable"
+
+        status, _, likes_method = _request(base_url, likes_path, method="POST")
+        assert status == 405
+        assert likes_method["error"]["code"] == "method_not_allowed"
+
+        for invalid_likes_path in (
+            "/v1/tracks/42/likes",
+            f"{likes_path}?limit=0",
+            f"{likes_path}?limit=101",
+            f"{likes_path}?limit=2&limit=3",
+            f"{likes_path}?unknown=value",
+        ):
+            status, _, invalid_likes = _request(base_url, invalid_likes_path)
+            assert status == 400
+            assert invalid_likes["error"]["code"] == "invalid_request"
+
         play_path = f"/v1/tracks/{_track_id(uri)}/plays"
         status, _, play_method = _request(base_url, play_path)
         assert status == 405

@@ -1,9 +1,11 @@
 const std = @import("std");
 const get_track = @import("../internal/application/get_track.zig");
 const get_playback = @import("../internal/application/get_playback.zig");
+const list_track_likes = @import("../internal/application/list_track_likes.zig");
 const list_tracks = @import("../internal/application/list_tracks.zig");
 const record_play = @import("../internal/application/record_play.zig");
 const PlaybackStore = @import("../internal/index/playback_store.zig").PlaybackStore;
+const LikeQueryStore = @import("../internal/index/like_query_store.zig").LikeQueryStore;
 const TrackStore = @import("../internal/index/track_store.zig").TrackStore;
 const PlayDedupStore = @import("../internal/metrics/play_dedup_store.zig").PlayDedupStore;
 const PlayMetricStore = @import("../internal/metrics/play_metric_store.zig").PlayMetricStore;
@@ -44,6 +46,39 @@ pub fn get(
             try response.json(request, .ok, body, request_id, cors);
         },
         .invalid_id => try response.apiError(request, .invalid_request, request_id, cors),
+        .not_found => try response.apiError(request, .not_found, request_id, cors),
+        .internal_error => try response.apiError(request, .internal_error, request_id, cors),
+        .unavailable => try response.apiError(request, .service_unavailable, request_id, cors),
+    }
+}
+
+pub fn likes(
+    request: *std.http.Server.Request,
+    allocator: std.mem.Allocator,
+    track_store: ?TrackStore,
+    like_store: ?LikeQueryStore,
+    track_collection: []const u8,
+    like_collection: []const u8,
+    profile_collection: []const u8,
+    cors: response.CorsPolicy,
+    id: []const u8,
+    request_id: []const u8,
+) !void {
+    switch (list_track_likes.execute(
+        allocator,
+        track_store,
+        like_store,
+        track_collection,
+        like_collection,
+        profile_collection,
+        id,
+        request.head.target,
+    )) {
+        .found => |value| {
+            const body = try std.json.Stringify.valueAlloc(allocator, value, .{});
+            try response.json(request, .ok, body, request_id, cors);
+        },
+        .invalid_request, .invalid_id => try response.apiError(request, .invalid_request, request_id, cors),
         .not_found => try response.apiError(request, .not_found, request_id, cors),
         .internal_error => try response.apiError(request, .internal_error, request_id, cors),
         .unavailable => try response.apiError(request, .service_unavailable, request_id, cors),

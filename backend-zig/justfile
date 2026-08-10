@@ -130,6 +130,16 @@ bench-track-chart:
     DATABASE_URL=postgresql://zig_bench:zig_bench@127.0.0.1:5434/zig_bench python3 scripts/bench_http.py --with-index --duration 5 --concurrency 1 --path '/v1/charts/tracks?period=all_time&limit=10'
     DATABASE_URL=postgresql://zig_bench:zig_bench@127.0.0.1:5434/zig_bench python3 scripts/bench_http.py --with-index --duration 5 --concurrency 16 --path '/v1/charts/tracks?period=all_time&limit=10'
 
+# Exact-CID like reads against the same disposable strong-reference fixture.
+bench-track-likes:
+    docker compose -f ../backend/tests/docker-compose.yml --profile bench up -d bench-db
+    @for attempt in {1..100}; do docker compose -f ../backend/tests/docker-compose.yml exec -T bench-db pg_isready -U zig_bench -d zig_bench >/dev/null && break; sleep 0.1; done
+    docker compose -f ../backend/tests/docker-compose.yml exec -T bench-db psql -v ON_ERROR_STOP=1 -U zig_bench -d zig_bench < scripts/composed_track_bench.sql
+    zig build -Doptimize=ReleaseFast
+    DATABASE_URL=postgresql://zig_bench:zig_bench@127.0.0.1:5434/zig_bench python3 scripts/check_track_likes.py
+    DATABASE_URL=postgresql://zig_bench:zig_bench@127.0.0.1:5434/zig_bench python3 scripts/bench_http.py --with-index --duration 5 --concurrency 1 --path '/v1/tracks/trk_YXQ6Ly9kaWQ6cGxjOmJlbmNoL2ZtLnBseXIuZGV2LnRyYWNrL3RyYWNrLTEwMA/likes?limit=20'
+    DATABASE_URL=postgresql://zig_bench:zig_bench@127.0.0.1:5434/zig_bench python3 scripts/bench_http.py --with-index --duration 5 --concurrency 16 --path '/v1/tracks/trk_YXQ6Ly9kaWQ6cGxjOmJlbmNoL2ZtLnBseXIuZGV2LnRyYWNrL3RyYWNrLTEwMA/likes?limit=20'
+
 # Destructive only to the dedicated benchmark database on port 5434.
 bench-composed-tracks:
     docker compose -f ../backend/tests/docker-compose.yml --profile bench up -d bench-db

@@ -11,6 +11,7 @@ const tracks = @import("tracks.zig");
 const path_segment = @import("../internal/http/path_segment.zig");
 const ArtistStore = @import("../internal/index/artist_store.zig").ArtistStore;
 const ArtistMetricStore = @import("../internal/metrics/artist_metric_store.zig").ArtistMetricStore;
+const LikeQueryStore = @import("../internal/index/like_query_store.zig").LikeQueryStore;
 const PlaybackStore = @import("../internal/index/playback_store.zig").PlaybackStore;
 const SearchStore = @import("../internal/index/search_store.zig").SearchStore;
 const PlayDedupStore = @import("../internal/metrics/play_dedup_store.zig").PlayDedupStore;
@@ -29,6 +30,7 @@ pub const App = struct {
     io: std.Io,
     track_store: ?TrackStore,
     track_chart_store: ?TrackChartStore = null,
+    like_store: ?LikeQueryStore = null,
     playback_store: ?PlaybackStore,
     artist_store: ?ArtistStore,
     artist_metric_store: ?ArtistMetricStore,
@@ -39,6 +41,7 @@ pub const App = struct {
     track_collection: []const u8,
     list_collection: []const u8,
     profile_collection: []const u8,
+    like_collection: []const u8,
     cors: response.CorsPolicy,
     auth: ?config.AuthConfig = null,
     auth_store: ?PostgresAuthStore = null,
@@ -216,6 +219,23 @@ pub fn handle(
             id,
             request_id,
         );
+    } else if (trackLikesId(path)) |id| {
+        if (request.head.method != .GET) {
+            try response.apiError(request, .method_not_allowed, request_id, app.cors);
+            return;
+        }
+        try tracks.likes(
+            request,
+            allocator,
+            app.track_store,
+            app.like_store,
+            app.track_collection,
+            app.like_collection,
+            app.profile_collection,
+            app.cors,
+            id,
+            request_id,
+        );
     } else if (trackPlaybackId(path)) |id| {
         if (request.head.method != .GET) {
             try response.apiError(request, .method_not_allowed, request_id, app.cors);
@@ -324,6 +344,17 @@ fn trackPlaybackId(path: []const u8) ?[]const u8 {
     return id;
 }
 
+fn trackLikesId(path: []const u8) ?[]const u8 {
+    const tracks_prefix = prefix ++ "/tracks/";
+    const likes_suffix = "/likes";
+    if (!mem.startsWith(u8, path, tracks_prefix) or
+        !mem.endsWith(u8, path, likes_suffix)) return null;
+    if (path.len <= tracks_prefix.len + likes_suffix.len) return null;
+    const id = path[tracks_prefix.len .. path.len - likes_suffix.len];
+    if (id.len == 0 or mem.indexOfScalar(u8, id, '/') != null) return null;
+    return id;
+}
+
 fn trackPlayId(path: []const u8) ?[]const u8 {
     const tracks_prefix = prefix ++ "/tracks/";
     const plays_suffix = "/plays";
@@ -409,6 +440,13 @@ test "track playback routes accept one opaque track segment" {
     try std.testing.expect(trackPlaybackId("/v1/tracks/playback") == null);
     try std.testing.expect(trackPlaybackId("/v1/tracks/trk_abc/playback/more") == null);
     try std.testing.expect(trackPlaybackId("/tracks/trk_abc/playback") == null);
+}
+
+test "track like-read routes accept one opaque track segment" {
+    try std.testing.expectEqualStrings("trk_abc", trackLikesId("/v1/tracks/trk_abc/likes").?);
+    try std.testing.expect(trackLikesId("/v1/tracks/likes") == null);
+    try std.testing.expect(trackLikesId("/v1/tracks/trk_abc/likes/more") == null);
+    try std.testing.expect(trackLikesId("/tracks/trk_abc/likes") == null);
 }
 
 test "track play-write routes accept one opaque track segment" {

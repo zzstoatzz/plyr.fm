@@ -4,6 +4,7 @@ const server = @import("server.zig");
 const postgres = @import("internal/index/postgres_track_store.zig");
 const postgres_composed_tracks = @import("internal/index/postgres_composed_track_store.zig");
 const postgres_track_charts = @import("internal/index/postgres_track_chart_store.zig");
+const postgres_likes = @import("internal/index/postgres_like_query_store.zig");
 const postgres_playback = @import("internal/index/postgres_playback_store.zig");
 const postgres_search = @import("internal/index/postgres_search_store.zig");
 const postgres_artists = @import("internal/index/postgres_artist_store.zig");
@@ -50,6 +51,11 @@ pub fn main() !void {
     else
         null;
     const track_chart_store = if (postgres_track_chart_store) |*store| store.store() else null;
+    var postgres_like_store: ?postgres_likes.PostgresLikeQueryStore = if (postgres_store) |*store|
+        .{ .pool = store.pool }
+    else
+        null;
+    const like_store = if (postgres_like_store) |*store| store.store() else null;
     var postgres_playback_store: ?postgres_playback.PostgresPlaybackStore = if (postgres_store) |*store|
         .{ .pool = store.pool }
     else
@@ -106,6 +112,7 @@ pub fn main() !void {
                 .io = io,
                 .track_store = track_store,
                 .track_chart_store = track_chart_store,
+                .like_store = like_store,
                 .playback_store = playback_store,
                 .artist_store = artist_store,
                 .artist_metric_store = artist_metric_store,
@@ -116,6 +123,7 @@ pub fn main() !void {
                 .track_collection = settings.track_collection,
                 .list_collection = settings.list_collection,
                 .profile_collection = settings.profile_collection,
+                .like_collection = settings.like_collection,
                 .cors = .{ .allowed_origins = settings.cors_allowed_origins },
                 .auth = settings.auth,
                 .auth_store = auth_store,

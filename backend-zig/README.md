@@ -88,6 +88,7 @@ unbounded detached threads.
 
 The current product surface is `GET /v1/tracks`,
 `GET /v1/tracks/{track_id}`, `GET /v1/tracks/{track_id}/playback`,
+`GET /v1/tracks/{track_id}/likes`,
 `GET /v1/artists/{identifier}`, `GET /v1/artists/{identifier}/metrics`,
 `GET /v1/charts/tracks`, and the collection and detail forms of `GET /v1/albums`
 and `GET /v1/playlists`, plus `GET /v1/search`. Search accepts
@@ -130,6 +131,13 @@ cannot manufacture extra votes, unavailable accounts do not rank content, and
 the response keeps the period count separate from the all-time count. The
 ranking hydrates through the same discovery policy and track representation as
 the catalogue; neither a legacy like row nor a numeric track ID is authority.
+
+Track liker reads expose the underlying verified interaction records rather
+than treating the database as social authority. They require the current
+track's exact URI and CID, filter unavailable actor repositories, and paginate
+with a cursor bound to that strong-reference scope. Stale likes against an
+earlier record revision neither appear in the list nor contribute to charts.
+See [`zig-v1-track-likes.md`](../docs/internal/architecture/zig-v1-track-likes.md).
 
 Artist metrics are a separate public capability rather than extra fields on the
 artist identity resource. They resolve a handle alias through the verified

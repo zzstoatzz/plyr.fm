@@ -53,6 +53,7 @@ decision.
 | `GET /v1/tracks` | covered | anonymous discovery or artist-scoped public catalogue with strict keyset pagination | viewer context, tag filters, hidden-tag preferences, and other collection views |
 | `GET /v1/tracks/{track_id}` | covered | public, published track detail from the projection | authenticated viewer state, private/gated tracks, list/search views, publication and mutations |
 | `GET /v1/tracks/{track_id}/playback` | covered | anonymous authorization and delivery resolution with explicit integrity | sessions, supporter/copyright authorization, private-space proxying, PDS blob resolution, play metrics |
+| `GET /v1/tracks/{track_id}/likes` | covered | exact-URI-and-CID verified public like records with actor availability and strict pagination | authenticated viewer state, like/unlike PDS writes, aggregate counts on track representations |
 | `GET /v1/artists/{identifier}` | covered | public artist detail by canonical DID or case-insensitive handle alias | verified repository ingestion, collections, follows, profile writes, account state, viewer context |
 | `GET /v1/artists/{identifier}/metrics` | covered | derived admitted-track and canonical-URI play aggregates | likes, viewer-specific statistics, historical series |
 | `GET /v1/albums?artist_did={did}` | covered | verified list-record albums for one artist with strict scope-bound pagination | global discovery, writes, viewer state, presentation resources |
@@ -68,11 +69,11 @@ decision.
 `OPTIONS` handling, bounded connections, CORS, request IDs, and the common JSON
 error envelope are covered cross-cutting behavior, not product capabilities.
 
-The product coverage count is therefore **eleven read capabilities**: anonymous
+The product coverage count is therefore **twelve read capabilities**: anonymous
 track discovery, track detail, playback resolution, artist detail, artist album
 discovery, verified album detail, public playlist discovery, and verified
 playlist detail, verified catalog keyword search, artist metrics, and the
-derived verified-like track chart. The
+derived verified-like track chart, plus exact-subject public liker discovery. The
 artist resource replaces both Python lookup routes with one DID-or-handle
 contract. Semantic parity remains partial because the Zig routes deliberately
 exclude most viewer-specific behavior. Of the 221 Python operations,
@@ -93,7 +94,7 @@ second column because every Subsonic route accepts both `GET` and `POST`.
 | resource | routes | operations | Zig v1 status |
 |---|---:|---:|---|
 | `/rest` | 37 | 74 | not started; separate compatibility adapter |
-| `/tracks` | 33 | 33 | discovery/artist collection, detail, and anonymous playback partial; all other capabilities open |
+| `/tracks` | 33 | 33 | discovery/artist collection, detail, anonymous playback, and public verified liker reads partial; all other capabilities open |
 | `/lists` | 18 | 18 | verified public playlist collection/detail started; private lists, liked lists, presentation, recommendations, and mutations open |
 | `/auth` | 15 | 15 | not started |
 | `/artists` | 9 | 9 | public DID/handle lookup covered by one v1 resource; all other capabilities open |
@@ -219,7 +220,7 @@ This is a boundary map, not a frozen schema:
 | API metadata | `GET /v1` |
 | current identity | `GET /v1/me`, session/account-management resources |
 | catalog | `/v1/artists`, `/v1/tracks`, `/v1/albums`, `/v1/playlists` |
-| interactions | track likes and comments as addressable PDS-backed resources |
+| interactions | `GET /v1/tracks/{track_id}/likes`; source-authoritative like writes and comments remain open |
 | publishing | `/v1/uploads` and explicit publish operations |
 | playback | `/v1/tracks/{track_id}/playback` |
 | discovery | `/v1/search`, tag resources, recommendations, activity |
