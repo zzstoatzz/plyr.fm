@@ -176,13 +176,13 @@ describe('Zig v1 compatibility boundary', () => {
 			});
 		});
 		const result = await searchZigCatalog(
-			'https://next.plyr.fm/api',
+			'https://api.next.plyr.fm',
 			'Song',
 			{ limit: 7 },
 			fetcher
 		);
 		const requested = new URL(String(requestedInput));
-		expect(requested.pathname).toBe('/api/v1/search');
+		expect(requested.pathname).toBe('/v1/search');
 		expect(requested.searchParams.get('types')).toBe('track,artist,album');
 		expect(requested.searchParams.get('limit')).toBe('7');
 		expect(result.results[0]).toEqual({
@@ -211,7 +211,7 @@ describe('Zig v1 compatibility boundary', () => {
 			})
 		);
 		await expect(
-			searchZigCatalog('https://next.plyr.fm/api', 'Song', {}, unverified)
+			searchZigCatalog('https://api.next.plyr.fm', 'Song', {}, unverified)
 		).rejects.toThrow('invalid Zig search result');
 
 		const playlist = vi.fn(async () =>
@@ -231,7 +231,7 @@ describe('Zig v1 compatibility boundary', () => {
 			})
 		);
 		await expect(
-			searchZigCatalog('https://next.plyr.fm/api', 'Song', {}, playlist)
+			searchZigCatalog('https://api.next.plyr.fm', 'Song', {}, playlist)
 		).rejects.toThrow('escaped requested type scope');
 	});
 
@@ -239,7 +239,7 @@ describe('Zig v1 compatibility boundary', () => {
 		const fetcher = vi.fn(async () =>
 			json({ object: 'list', data: [albumSummary], has_more: false, next_cursor: null })
 		);
-		const page = await listZigAlbums('https://next.plyr.fm/api', 'did:plc:artist', {}, fetcher);
+		const page = await listZigAlbums('https://api.next.plyr.fm', 'did:plc:artist', {}, fetcher);
 		expect(page.albums[0]).toEqual({
 			id: 'alb_opaque',
 			title: 'Verified Album',
@@ -251,7 +251,7 @@ describe('Zig v1 compatibility boundary', () => {
 
 	it('preserves unavailable signed membership when adapting album detail', async () => {
 		const fetcher = vi.fn(async () => json(albumDetail));
-		const album = await getZigAlbum('https://next.plyr.fm/api', 'alb_opaque', fetcher);
+		const album = await getZigAlbum('https://api.next.plyr.fm', 'alb_opaque', fetcher);
 		expect(album?.metadata.list_uri).toBe(albumSummary.record.uri);
 		expect(album?.tracks.map((value) => value.id)).toEqual(['trk_opaque']);
 		expect(album?.unavailable_track_count).toBe(1);
@@ -265,14 +265,14 @@ describe('Zig v1 compatibility boundary', () => {
 				members: albumDetail.members.map((member, index) => ({ ...member, position: index + 1 }))
 			})
 		);
-		await expect(getZigAlbum('https://next.plyr.fm/api', 'alb_opaque', fetcher)).rejects.toThrow(
+		await expect(getZigAlbum('https://api.next.plyr.fm', 'alb_opaque', fetcher)).rejects.toThrow(
 			'invalid Zig album'
 		);
 	});
 
 	it('accepts only verified artist resources and maps authored profile fields', async () => {
 		const fetcher = vi.fn(async () => json(artist));
-		const value = await getZigArtist('https://next.plyr.fm/api', 'artist.test', fetcher);
+		const value = await getZigArtist('https://api.next.plyr.fm', 'artist.test', fetcher);
 		expect(value).toEqual({
 			did: 'did:plc:artist',
 			handle: 'artist.test',
@@ -288,7 +288,7 @@ describe('Zig v1 compatibility boundary', () => {
 		const fetcher = vi.fn(async () =>
 			json({ ...artist, sources: { ...artist.sources, profile: 'legacy_projection' } })
 		);
-		await expect(getZigArtist('https://next.plyr.fm/api', artist.did, fetcher)).rejects.toThrow(
+		await expect(getZigArtist('https://api.next.plyr.fm', artist.did, fetcher)).rejects.toThrow(
 			'invalid Zig artist resource'
 		);
 	});
@@ -319,7 +319,7 @@ describe('Zig v1 compatibility boundary', () => {
 			});
 		});
 		const metrics = await getZigArtistMetrics(
-			'https://next.plyr.fm/api',
+			'https://api.next.plyr.fm',
 			'did:plc:artist',
 			fetcher
 		);
@@ -355,7 +355,7 @@ describe('Zig v1 compatibility boundary', () => {
 			})
 		);
 		await expect(
-			getZigArtistMetrics('https://next.plyr.fm/api', 'did:plc:artist', fetcher)
+			getZigArtistMetrics('https://api.next.plyr.fm', 'did:plc:artist', fetcher)
 		).rejects.toThrow('invalid Zig artist metrics');
 	});
 
@@ -365,9 +365,9 @@ describe('Zig v1 compatibility boundary', () => {
 			requestedInput = input;
 			return json({ object: 'list', data: [track], has_more: false, next_cursor: null });
 		});
-		const page = await listZigTracks('https://next.plyr.fm/api', { limit: 7 }, fetcher);
+		const page = await listZigTracks('https://api.next.plyr.fm', { limit: 7 }, fetcher);
 		const requested = new URL(String(requestedInput));
-		expect(requested.pathname).toBe('/api/v1/tracks');
+		expect(requested.pathname).toBe('/v1/tracks');
 		expect(requested.searchParams.get('limit')).toBe('7');
 		expect(page.tracks[0]?.id).toBe('trk_opaque');
 		expect(page.tracks[0]?.file_id).toBe('trk_opaque');
@@ -385,12 +385,12 @@ describe('Zig v1 compatibility boundary', () => {
 			});
 		});
 		const chart = await listZigTrackChart(
-			'https://next.plyr.fm/api',
+			'https://api.next.plyr.fm',
 			{ limit: 7, period: 'week' },
 			fetcher
 		);
 		const requested = new URL(String(requestedInput));
-		expect(requested.pathname).toBe('/api/v1/charts/tracks');
+		expect(requested.pathname).toBe('/v1/charts/tracks');
 		expect(requested.searchParams.get('limit')).toBe('7');
 		expect(requested.searchParams.get('period')).toBe('week');
 		expect(chart.data[0]?.all_time_like_count).toBe(5);
@@ -398,7 +398,7 @@ describe('Zig v1 compatibility boundary', () => {
 
 	it('requires detail to round-trip the opaque resource identity', async () => {
 		const fetcher = vi.fn(async () => json({ ...track, id: 'trk_other' }));
-		await expect(getZigTrack('https://next.plyr.fm/api', 'trk_expected', fetcher)).rejects.toThrow(
+		await expect(getZigTrack('https://api.next.plyr.fm', 'trk_expected', fetcher)).rejects.toThrow(
 			'changed resource identity'
 		);
 	});
@@ -421,7 +421,7 @@ describe('Zig v1 compatibility boundary', () => {
 				}
 			});
 		});
-		const playback = await getZigPlayback('https://next.plyr.fm/api', 'trk_opaque', fetcher);
+		const playback = await getZigPlayback('https://api.next.plyr.fm', 'trk_opaque', fetcher);
 		expect(playback.availability.delivery?.url).toBe('https://audio.test/song.mp3');
 		expect(String(requestedInput)).toContain('/v1/tracks/trk_opaque/playback');
 	});
@@ -443,13 +443,13 @@ describe('Zig v1 compatibility boundary', () => {
 			});
 		});
 		const receipt = await recordZigPlay(
-			'https://next.plyr.fm/api',
+			'https://api.next.plyr.fm',
 			'trk_opaque',
 			'share123',
 			fetcher
 		);
 		const requested = new URL(String(requestedInput));
-		expect(requested.pathname).toBe('/api/v1/tracks/trk_opaque/plays');
+		expect(requested.pathname).toBe('/v1/tracks/trk_opaque/plays');
 		expect(requested.searchParams.get('ref')).toBe('share123');
 		expect(requestedInit).toMatchObject({ method: 'POST', credentials: 'include' });
 		expect(receipt.play_count).toBe(4);
@@ -457,7 +457,7 @@ describe('Zig v1 compatibility boundary', () => {
 
 	it('rejects malformed share references and contradictory play receipts', async () => {
 		await expect(
-			recordZigPlay('https://next.plyr.fm/api', 'trk_opaque', 'bad/ref', vi.fn())
+			recordZigPlay('https://api.next.plyr.fm', 'trk_opaque', 'bad/ref', vi.fn())
 		).rejects.toThrow('invalid share reference');
 		const fetcher = vi.fn(async () =>
 			json({
@@ -471,13 +471,13 @@ describe('Zig v1 compatibility boundary', () => {
 			})
 		);
 		await expect(
-			recordZigPlay('https://next.plyr.fm/api', 'trk_opaque', null, fetcher)
+			recordZigPlay('https://api.next.plyr.fm', 'trk_opaque', null, fetcher)
 		).rejects.toThrow('invalid Zig play receipt');
 	});
 
 	it('rejects Python-shaped collections instead of silently adapting them', async () => {
 		const fetcher = vi.fn(async () => json({ tracks: [track], has_more: false }));
-		await expect(listZigTracks('https://next.plyr.fm/api', {}, fetcher)).rejects.toThrow(
+		await expect(listZigTracks('https://api.next.plyr.fm', {}, fetcher)).rejects.toThrow(
 			'invalid Zig track collection'
 		);
 	});

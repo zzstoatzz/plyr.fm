@@ -11,7 +11,7 @@ plyr.fm uses three release environments plus an isolated, manually deployed Zig 
 | **development** | local | localhost:8001 | plyr-dev (neon) | localhost:6379 (docker) | localhost:5173 | audio-dev, images-dev (r2) |
 | **staging** | push to main | api-stg.plyr.fm | plyr-stg (neon) | plyr-redis-stg (fly.io) | stg.plyr.fm (main branch) | audio-staging, images-staging (r2) |
 | **production** | GitHub release (backend) or `production-fe` push (frontend) | api.plyr.fm | plyr-prd (neon) | plyr-redis (fly.io) | plyr.fm (production-fe branch) | audio-prod, images-prod (r2) |
-| **next canary** | manual from `codex/zig-backend` | same-origin `/api/v1/*` proxy to `plyr-api-zig-canary.fly.dev` | isolated read-only Neon branch | none yet | next.plyr.fm (existing Svelte app) | source-authoritative media URLs |
+| **next canary** | manual from `codex/zig-backend` | dedicated `api.next.plyr.fm` origin backed by the Zig canary | isolated read-only Neon branch | none yet | next.plyr.fm (existing Svelte app) | source-authoritative media URLs |
 
 The canary does not share a deployment path with staging or production. It runs
 the existing Svelte frontend in `zig-v1` mode; a small client boundary maps the
@@ -152,8 +152,8 @@ It never modifies `stg.plyr.fm`, `plyr.fm`, or either project's configuration.
 - source: manual `just frontend deploy-next` from `codex/zig-backend`
 - build output: `frontend/.svelte-kit/cloudflare`
 - custom domain: `next.plyr.fm`
-- build mode: `PUBLIC_API_URL=https://next.plyr.fm/api`, `VITE_API_GENERATION=zig-v1`
-- backend origin: fixed server-side proxy to `https://plyr-api-zig-canary.fly.dev`
+- build mode: `PUBLIC_API_URL=https://api.next.plyr.fm`, `VITE_API_GENERATION=zig-v1`
+- backend origin: `https://api.next.plyr.fm` (pending DNS/canary hostname cutover)
 
 ### docs
 

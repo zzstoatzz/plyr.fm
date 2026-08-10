@@ -167,12 +167,12 @@ remain separate: clicking play resolves
 `GET /v1/tracks/{track_id}/playback`, checks the returned track identity and
 availability, and only then attaches the returned delivery URL.
 
-The Pages Function is a fixed-target transport from same-origin `/api/v1/*` to
-`plyr-api-zig-canary.fly.dev`. It permits `GET`, `HEAD`, and scoped `POST`,
-refuses paths outside `v1`, forwards only the dedicated anonymous play cookie,
-and does not rewrite JSON. This makes the Pages preview testable
-without adding preview origins to backend CORS and leaves a same-site seam for
-future sessions.
+The deployed `a922f59f` checkpoint used a narrow Pages Function from
+`next.plyr.fm/api/v1/*` to `plyr-api-zig-canary.fly.dev`. The authentication
+slice replaces that temporary transport with `api.next.plyr.fm`, matching the
+production `plyr.fm` / `api.plyr.fm` boundary. The API cookie remains host-only
+to `api.next.plyr.fm`; browser requests from `https://next.plyr.fm` use exact-
+origin credentialed CORS. DNS and a new frontend checkpoint remain pending.
 
 The deployed `https://next.plyr.fm` verification proved:
 
@@ -185,16 +185,15 @@ The deployed `https://next.plyr.fm` verification proved:
 - one anonymous sustained play is counted, returns a host-only HttpOnly listener
   cookie, and a second request with that cookie is rejected by Redis as a
   duplicate without incrementing the canonical Postgres metric again;
-- non-v1 proxy paths return 404, keeping infrastructure health and unrelated Fly
-  routes outside the frontend transport;
+- non-v1 proxy paths returned 404 in that deployed checkpoint;
 - the rendered page is the existing `plyr.fm - audio streaming app`, contains
   the Zig-backed track catalog, and emits no browser console errors;
 - the final DNS set contains one proxied CNAME to `plyr-fm-next.pages.dev`.
 
-Run `just zig smoke-next` to repeat the public product-contract traversal through
-the same-origin `/api` transport. Infrastructure readiness remains a separate
-direct-Fly gate through `just zig smoke-canary`; next does not broaden its proxy
-solely to make the verifier convenient.
+After the API hostname cutover, `just zig smoke-next` repeats the public product
+contract through `api.next.plyr.fm`. Until then, the deployed checkpoint remains
+available through the historical Pages transport. Infrastructure readiness is a
+separate direct-Fly gate through `just zig smoke-canary`.
 
 ## deployed search and play checkpoint
 

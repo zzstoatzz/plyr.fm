@@ -70,7 +70,7 @@ def test_request_identifies_the_smoke_client() -> None:
     with patch.object(
         canary_smoke.urllib.request, "urlopen", return_value=_UrlResponse()
     ) as urlopen:
-        response = canary_smoke._request("https://next.plyr.fm/api", "/v1")
+        response = canary_smoke._request("https://api.next.plyr.fm", "/v1")
 
     assert response.status == 200
     request = urlopen.call_args.args[0]
@@ -302,11 +302,11 @@ def test_product_only_transport_does_not_probe_infrastructure_routes() -> None:
         ) as reads,
     ):
         try:
-            canary_smoke.verify_product("https://next.plyr.fm/api/")
+            canary_smoke.verify_product("https://api.next.plyr.fm/")
         except RuntimeError as error:
             assert str(error) == "stop after transport assertion"
         else:
             raise AssertionError("product verification unexpectedly continued")
 
-    request.assert_called_once_with("https://next.plyr.fm/api", "/v1")
-    reads.assert_called_once_with("https://next.plyr.fm/api")
+    request.assert_called_once_with("https://api.next.plyr.fm", "/v1")
+    reads.assert_called_once_with("https://api.next.plyr.fm")

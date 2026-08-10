@@ -228,8 +228,9 @@ including verified search, a real canonical play-metric increment through the
 isolated Neon role, and Redis duplicate suppression. Its retained 50-track
 evidence reports 9,812 KiB idle RSS, 15,412 KiB peak RSS, 0.51 application
 CPU-seconds across 22.36 seconds, and zero load-test errors. The same product
-contract passes through the existing frontend's narrow Pages transport with
-`just zig smoke-next`; infrastructure health remains direct-Fly only. See
+contract currently passes through the deployed frontend's narrow Pages transport;
+the authentication slice moves the client boundary to `api.next.plyr.fm` before
+`just zig smoke-next` targets that hostname. Infrastructure health remains direct-Fly only. See
 `docs/internal/architecture/zig-canary.md` for the exact throughput, latency,
 and workflow artifact.
 
@@ -248,8 +249,9 @@ not a percentage canary. It always means a frontend backed by the Zig `/v1`
 surface. The initial A/AAAA records exposing the bare Fly service were a
 temporary backend-verification state, not the completed next application. The
 dedicated `plyr-fm-next` Pages project claims the hostname only after the
-existing Svelte frontend's `zig-v1` client boundary and same-origin `/api/v1/*`
-transport pass locally and on the Pages deployment. It evolves beside
+existing Svelte frontend's `zig-v1` client boundary passes locally and on the
+Pages deployment. The successor API lives at `api.next.plyr.fm`, mirroring the
+production frontend/API hostname split while remaining same-site. It evolves beside
 `plyr.fm` without changing the existing production or staging applications.
 `next.plyr.fm` has one proxied CNAME to that project and does not expose the Fly
 API as a website.
