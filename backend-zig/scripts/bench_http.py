@@ -90,6 +90,7 @@ def _worker(
     expected_status: int,
     duration: float,
     start: threading.Event,
+    request_headers: dict[str, str],
 ) -> WorkerResult:
     latencies: list[int] = []
     error_counts: Counter[str] = Counter()
@@ -104,7 +105,7 @@ def _worker(
             try:
                 if connection is None:
                     connection = target.connect()
-                connection.request("GET", path)
+                connection.request("GET", path, headers=request_headers)
                 response = connection.getresponse()
                 body = response.read()
                 status_counts[response.status] += 1
@@ -149,13 +150,22 @@ def benchmark_target(
     concurrency: int,
     path: str,
     expected_status: int,
+    request_headers: dict[str, str] | None = None,
 ) -> dict[str, object]:
     start = threading.Event()
     threads: list[threading.Thread] = []
     results: list[WorkerResult | None] = [None] * concurrency
+    headers = request_headers or {}
 
     def run(index: int) -> None:
-        results[index] = _worker(target, path, expected_status, duration, start)
+        results[index] = _worker(
+            target,
+            path,
+            expected_status,
+            duration,
+            start,
+            headers,
+        )
 
     for index in range(concurrency):
         thread = threading.Thread(target=run, args=(index,))
@@ -213,6 +223,7 @@ def benchmark(
     path: str,
     expected_status: int,
     database_url: str | None,
+    request_headers: dict[str, str] | None = None,
 ) -> dict[str, object]:
     port = _unused_port()
     environment = {
@@ -246,6 +257,7 @@ def benchmark(
             concurrency,
             path,
             expected_status,
+            request_headers,
         )
         result["resident_set_kib"] = _resident_set_kib(process)
         return result
@@ -273,6 +285,11 @@ def main() -> None:
         action="store_true",
         help="use DATABASE_URL from the environment and require index readiness",
     )
+    parser.add_argument(
+        "--cookie-env",
+        metavar="NAME",
+        help="read a Cookie request header from this environment variable",
+    )
     args = parser.parse_args()
     if args.duration <= 0 or args.concurrency <= 0:
         parser.error("duration and concurrency must be positive")
@@ -285,6 +302,12 @@ def main() -> None:
     database_url = os.environ.get("DATABASE_URL") if args.with_index else None
     if args.with_index and not database_url:
         parser.error("--with-index requires DATABASE_URL in the environment")
+    request_headers: dict[str, str] = {}
+    if args.cookie_env:
+        cookie = os.environ.get(args.cookie_env)
+        if not cookie:
+            parser.error(f"--cookie-env requires non-empty {args.cookie_env}")
+        request_headers["Cookie"] = cookie
     result = (
         benchmark_target(
             target,
@@ -292,6 +315,7 @@ def main() -> None:
             args.concurrency,
             args.path,
             args.expect_status,
+            request_headers,
         )
         if target
         else benchmark(
@@ -300,6 +324,7 @@ def main() -> None:
             args.path,
             args.expect_status,
             database_url,
+            request_headers,
         )
     )
     print(json.dumps(result, indent=2))

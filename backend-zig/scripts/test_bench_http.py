@@ -29,6 +29,16 @@ class _Handler(BaseHTTPRequestHandler):
         del format, args
 
 
+class _CookieHandler(_Handler):
+    def do_GET(self) -> None:
+        if self.headers.get("Cookie") != "__Host-plyr_session=test-token":
+            self.send_response(401)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
+        super().do_GET()
+
+
 def test_parse_target_applies_scheme_default_ports() -> None:
     assert parse_target("https://next.plyr.fm") == HttpTarget(
         "https", "next.plyr.fm", 443
@@ -103,6 +113,29 @@ def test_benchmark_target_explains_unexpected_statuses() -> None:
     assert result["errors"] > 0
     assert result["error_counts"] == {"http_status_200": result["errors"]}
     assert result["status_counts"] == {"200": result["errors"]}
+
+
+def test_benchmark_target_sends_confidential_headers_without_reporting_them() -> None:
+    server = ThreadingHTTPServer(("127.0.0.1", 0), _CookieHandler)
+    thread = threading.Thread(target=server.serve_forever)
+    thread.start()
+    try:
+        result = benchmark_target(
+            HttpTarget("http", "127.0.0.1", server.server_port),
+            duration=0.1,
+            concurrency=1,
+            path="/auth/me",
+            expected_status=200,
+            request_headers={"Cookie": "__Host-plyr_session=test-token"},
+        )
+    finally:
+        server.shutdown()
+        thread.join()
+        server.server_close()
+
+    assert result["errors"] == 0
+    assert result["requests"] > 0
+    assert "test-token" not in json.dumps(result)
 
 
 @pytest.mark.parametrize("cgroup_version", [1, 2])

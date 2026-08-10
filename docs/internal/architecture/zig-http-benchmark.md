@@ -53,6 +53,35 @@ is dominated by the localhost/Python load generator rather than application
 routing. Future comparisons must use the same harness and machine, and should
 add a database-backed benchmark before optimizing the PostgreSQL adapter.
 
+## authenticated identity baseline — 2026-08-10
+
+`GET /auth/me` exercises the browser-session boundary through a real HTTP
+connection, hashes the opaque `__Host-plyr_session` cookie, performs the narrow
+Postgres identity projection, and serializes the authenticated principal. The
+fixture uses the disposable Postgres instance created by `just zig
+test-postgres`; it does not contain production credentials or data.
+
+The benchmark reads the complete Cookie header from an environment variable so
+the credential is absent from the command line and result JSON:
+
+```sh
+PLYR_BENCH_COOKIE='__Host-plyr_session=<disposable token>' \
+  just zig bench-http --with-index --path /auth/me --expect-status 200 \
+  --cookie-env PLYR_BENCH_COOKIE --duration 5 --concurrency 1
+```
+
+Native `ReleaseFast` results on the same Apple M5 Pro:
+
+| concurrency | requests/sec | p50 | p95 | p99 | RSS after load | errors |
+|---:|---:|---:|---:|---:|---:|---:|
+| 1 | 5,443.3 | 0.178 ms | 0.221 ms | 0.308 ms | 3.36 MiB | 0 |
+| 16 | 15,755.9 | 0.936 ms | 1.824 ms | 2.354 ms | 4.17 MiB | 0 |
+
+This is a reproducible Zig regression baseline, not yet a Python efficiency
+comparison. The Python backend must be exercised through its corresponding
+authenticated identity route with the same database locality, payload, load
+generator, and session semantics before calculating a relative multiplier.
+
 ## Python comparison and resource budget — 2026-08-08
 
 This comparison uses `oha 1.15.0` against native localhost processes on the
