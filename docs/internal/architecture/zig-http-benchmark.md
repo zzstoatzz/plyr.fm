@@ -126,6 +126,41 @@ required before routing canary traffic. Every added subsystem must keep the
 service within a 256 MiB machine rather than spending the current headroom by
 default.
 
+## equivalent database-backed catalogue comparison — 2026-08-10
+
+`just zig bench-api-parity` replaces the health-only comparison with useful
+application work. It creates a uniquely named, disposable Compose project on
+random host ports; bootstraps the complete Python, Zig projection, and Zig auth
+schemas; and seeds one Postgres database with 100 equivalent public tracks for
+both read models. Before measuring, semantic probes require the Python
+`GET /tracks/?limit=50` and Zig `GET /v1/tracks?limit=50` resources to each
+return 50 tracks, `has_more: true`, and a successful status. The command tears
+down Postgres and Redis even when a build, probe, or benchmark fails.
+
+Both native processes use a 16-connection local Postgres pool, no access log,
+the same persistent-connection Python load generator, and a five-second pass
+at each concurrency. The Python process is the complete FastAPI application;
+the Zig process is `ReleaseFast`. Their representations deliberately are not
+byte-identical: Python returned 56,578 bytes and Zig returned 100,548 bytes per
+page. The Zig result therefore includes 1.78 times as much response-body work,
+rather than gaining throughput by returning less data.
+
+| concurrency | implementation | responses/s | p50 | p95 | p99 | RSS | responses/CPU-s | errors |
+|---:|---|---:|---:|---:|---:|---:|---:|---:|
+| 1 | Python | 99.7 | 9.706 ms | 10.867 ms | 12.312 ms | 475.6 MiB | 113.7 | 0 |
+| 1 | Zig | 317.1 | 3.121 ms | 3.375 ms | 3.629 ms | 3.70 MiB | 3,965.0 | 0 |
+| 16 | Python | 107.6 | 140.514 ms | 229.728 ms | 241.131 ms | 512.2 MiB | 108.5 | 0 |
+| 16 | Zig | 2,579.4 | 5.510 ms | 9.495 ms | 11.567 ms | 5.34 MiB | 3,699.4 | 0 |
+
+At concurrency one, Zig delivered **3.18×** the throughput, used **128.44×**
+less RSS, and completed **34.87×** as many responses per CPU-second. At
+concurrency 16, it delivered **23.97×** the throughput, used **95.84×** less
+RSS, and retained a **34.10×** CPU-efficiency advantage. This is the first
+apples-to-apples database-backed evidence for the rewrite's resource premise.
+It remains a localhost regression baseline, not a Neon latency or deployed
+capacity claim; the canary workflow keeps the independent Fly-native resource
+gate.
+
 ## database-backed artist baseline — 2026-08-08
 
 The first artist slice was measured against the disposable Postgres 14

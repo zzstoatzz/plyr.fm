@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from bench_http import HttpTarget, benchmark_target, parse_target
+from bench_http import HttpTarget, benchmark_target, parse_cpu_time, parse_target
 
 SCRIPTS = Path(__file__).resolve().parent
 
@@ -62,6 +62,20 @@ def test_parse_target_applies_scheme_default_ports() -> None:
 def test_parse_target_rejects_ambiguous_base_urls(value: str) -> None:
     with pytest.raises(ValueError):
         parse_target(value)
+
+
+@pytest.mark.parametrize(
+    ("value", "seconds"),
+    [("00:01.25", 1.25), ("02:03.50", 123.5), ("1:02:03.25", 3723.25)],
+)
+def test_parse_cpu_time(value: str, seconds: float) -> None:
+    assert parse_cpu_time(value) == seconds
+
+
+@pytest.mark.parametrize("value", ["", "one:two", "1:60:00", "1:2:3:4", "-1"])
+def test_parse_cpu_time_rejects_malformed_values(value: str) -> None:
+    with pytest.raises(ValueError):
+        parse_cpu_time(value)
 
 
 def test_benchmark_target_measures_a_real_http_connection() -> None:

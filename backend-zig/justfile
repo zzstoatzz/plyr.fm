@@ -41,7 +41,7 @@ check:
     zig build test
     python3 scripts/test_http.py
     cd ../backend && uv run ruff check ../backend-zig/scripts
-    cd ../backend && uv run pytest -q ../backend-zig/scripts/test_bench_http.py ../backend-zig/scripts/test_canary_placement.py ../backend-zig/scripts/test_canary_report.py ../backend-zig/scripts/test_canary_smoke.py
+    cd ../backend && uv run pytest -q ../backend-zig/scripts/test_bench_http.py ../backend-zig/scripts/test_bench_api_parity.py ../backend-zig/scripts/test_canary_placement.py ../backend-zig/scripts/test_canary_report.py ../backend-zig/scripts/test_canary_smoke.py
 
 # Destructive only to the dedicated Zig test database on port 5435.
 test-postgres:
@@ -76,6 +76,10 @@ smoke-next URL="https://api.next.plyr.fm":
 bench-http *ARGS:
     zig build -Doptimize=ReleaseFast
     python3 scripts/bench_http.py "$@"
+
+# Equivalent 50-track public reads against one disposable Postgres fixture.
+bench-api-parity *ARGS:
+    @scripts/run_api_parity_bench "$@"
 
 bench-canary URL="https://plyr-api-zig-canary.fly.dev" *ARGS:
     python3 scripts/bench_http.py --url "{{ URL }}" "$@"

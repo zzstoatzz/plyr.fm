@@ -11,6 +11,7 @@ import subprocess
 import threading
 import time
 from collections import Counter
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import SplitResult, urlsplit
@@ -67,7 +68,8 @@ def _unused_port() -> int:
 
 
 def _wait_until_ready(port: int, process: subprocess.Popen[bytes]) -> None:
-    for _ in range(200):
+    deadline = time.monotonic() + 15
+    while time.monotonic() < deadline:
         if process.poll() is not None:
             stderr = process.stderr.read().decode() if process.stderr else ""
             raise RuntimeError(f"server exited before benchmark:\n{stderr}")
@@ -80,8 +82,8 @@ def _wait_until_ready(port: int, process: subprocess.Popen[bytes]) -> None:
             if response.status == 200:
                 return
         except OSError:
-            time.sleep(0.01)
-    raise TimeoutError("Zig API did not become ready")
+            time.sleep(0.05)
+    raise TimeoutError("API did not become ready within 15 seconds")
 
 
 def _worker(
@@ -142,6 +144,37 @@ def _resident_set_kib(process: subprocess.Popen[bytes]) -> int | None:
     if measured.returncode != 0 or not measured.stdout.strip().isdigit():
         return None
     return int(measured.stdout.strip())
+
+
+def parse_cpu_time(value: str) -> float:
+    """Parse the portable `ps -o time` elapsed-CPU representation."""
+    fields = value.strip().split(":")
+    if not fields or len(fields) > 3:
+        raise ValueError("invalid process CPU time")
+    try:
+        seconds = float(fields[-1])
+        minutes = int(fields[-2]) if len(fields) >= 2 else 0
+        hours = int(fields[-3]) if len(fields) == 3 else 0
+    except ValueError as error:
+        raise ValueError("invalid process CPU time") from error
+    if seconds < 0 or minutes < 0 or minutes >= 60 or hours < 0:
+        raise ValueError("invalid process CPU time")
+    return hours * 3600 + minutes * 60 + seconds
+
+
+def _process_cpu_seconds(process: subprocess.Popen[bytes]) -> float | None:
+    measured = subprocess.run(
+        ["ps", "-o", "time=", "-p", str(process.pid)],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if measured.returncode != 0 or not measured.stdout.strip():
+        return None
+    try:
+        return parse_cpu_time(measured.stdout)
+    except ValueError:
+        return None
 
 
 def benchmark_target(
@@ -217,6 +250,65 @@ def benchmark_target(
     }
 
 
+def benchmark_process(
+    command: Sequence[str | Path],
+    cwd: Path,
+    environment: dict[str, str],
+    duration: float,
+    concurrency: int,
+    path: str,
+    expected_status: int,
+    request_headers: dict[str, str] | None = None,
+    validate: Callable[[HttpTarget], None] | None = None,
+    port_argument: str | None = None,
+) -> dict[str, object]:
+    port = _unused_port()
+    target = HttpTarget("http", "127.0.0.1", port)
+    process_environment = {**environment, "PORT": str(port)}
+    process_command = [*command]
+    if port_argument:
+        process_command.extend((port_argument, str(port)))
+    process = subprocess.Popen(
+        process_command,
+        cwd=cwd,
+        env=process_environment,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
+    )
+    try:
+        _wait_until_ready(port, process)
+        if validate:
+            validate(target)
+        cpu_before = _process_cpu_seconds(process)
+        result = benchmark_target(
+            target,
+            duration,
+            concurrency,
+            path,
+            expected_status,
+            request_headers,
+        )
+        result["resident_set_kib"] = _resident_set_kib(process)
+        cpu_after = _process_cpu_seconds(process)
+        if cpu_before is not None and cpu_after is not None:
+            cpu_seconds = max(0.0, cpu_after - cpu_before)
+            request_count = result["requests"]
+            if not isinstance(request_count, int):
+                raise RuntimeError("benchmark request count is not an integer")
+            result["cpu_seconds"] = round(cpu_seconds, 3)
+            result["responses_per_cpu_second"] = (
+                round(request_count / cpu_seconds, 1) if cpu_seconds > 0 else None
+            )
+        return result
+    finally:
+        process.terminate()
+        try:
+            process.wait(timeout=2)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait(timeout=2)
+
+
 def benchmark(
     duration: float,
     concurrency: int,
@@ -225,11 +317,9 @@ def benchmark(
     database_url: str | None,
     request_headers: dict[str, str] | None = None,
 ) -> dict[str, object]:
-    port = _unused_port()
     environment = {
         **os.environ,
         "MODE": "api",
-        "PORT": str(port),
         "TRACK_COLLECTION_NSID": "fm.plyr.dev.track",
         "LIST_COLLECTION_NSID": "fm.plyr.dev.list",
         "PROFILE_COLLECTION_NSID": "fm.plyr.dev.actor.profile",
@@ -242,32 +332,16 @@ def benchmark(
         environment["DATABASE_URL"] = database_url
     else:
         environment.pop("DATABASE_URL", None)
-    process = subprocess.Popen(
+    return benchmark_process(
         [ROOT / "zig-out/bin/plyr-backend"],
-        cwd=ROOT,
-        env=environment,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.PIPE,
+        ROOT,
+        environment,
+        duration,
+        concurrency,
+        path,
+        expected_status,
+        request_headers,
     )
-    try:
-        _wait_until_ready(port, process)
-        result = benchmark_target(
-            HttpTarget("http", "127.0.0.1", port),
-            duration,
-            concurrency,
-            path,
-            expected_status,
-            request_headers,
-        )
-        result["resident_set_kib"] = _resident_set_kib(process)
-        return result
-    finally:
-        process.terminate()
-        try:
-            process.wait(timeout=2)
-        except subprocess.TimeoutExpired:
-            process.kill()
-            process.wait(timeout=2)
 
 
 def main() -> None:
@@ -307,6 +381,7 @@ def main() -> None:
         cookie = os.environ.get(args.cookie_env)
         if not cookie:
             parser.error(f"--cookie-env requires non-empty {args.cookie_env}")
+        assert cookie is not None
         request_headers["Cookie"] = cookie
     result = (
         benchmark_target(

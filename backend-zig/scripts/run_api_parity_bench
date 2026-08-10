@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repository=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
+project="plyr-api-parity-$$"
+compose=(docker compose -p "$project" -f "$repository/backend/tests/docker-compose.yml")
+
+cleanup() {
+    TEST_DB_PORT=0 TEST_REDIS_PORT=0 "${compose[@]}" down --volumes >/dev/null 2>&1 || true
+}
+trap cleanup EXIT INT TERM
+
+TEST_DB_PORT=0 TEST_REDIS_PORT=0 "${compose[@]}" up -d --wait test-db test-redis
+db_address=$(TEST_DB_PORT=0 TEST_REDIS_PORT=0 "${compose[@]}" port test-db 5432)
+redis_address=$(TEST_DB_PORT=0 TEST_REDIS_PORT=0 "${compose[@]}" port test-redis 6379)
+db_port=${db_address##*:}
+redis_port=${redis_address##*:}
+database_url="postgresql://relay_test:relay_test@127.0.0.1:${db_port}/plyr_bench"
+docket_url="redis://127.0.0.1:${redis_port}/0"
+
+"${compose[@]}" exec -T test-db \
+    psql -v ON_ERROR_STOP=1 -U relay_test -d postgres \
+    -c 'CREATE DATABASE plyr_bench' >/dev/null
+
+cd "$repository"
+DATABASE_URL="$database_url" \
+DOCKET_URL="$docket_url" \
+OAUTH_ENCRYPTION_KEY='hnSkDmgbbuK0rt7Ab3eJHAktb18gmebsdwKdTmq9mes=' \
+    uv run --project backend backend/scripts/init_db.py >/dev/null
+
+"${compose[@]}" exec -T test-db \
+    psql -v ON_ERROR_STOP=1 -U relay_test -d plyr_bench \
+    < backend-zig/scripts/api_parity_bench.sql >/dev/null
+
+cd backend-zig
+zig build -Doptimize=ReleaseFast
+cd ../backend
+DATABASE_URL="$database_url" DOCKET_URL="$docket_url" \
+    uv run python ../backend-zig/scripts/bench_api_parity.py "$@"
