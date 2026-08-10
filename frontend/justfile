@@ -10,7 +10,7 @@ run:
 
 # check svelte types
 check:
-    bun run check
+    PUBLIC_API_URL="${PUBLIC_API_URL:-http://localhost:8001}" bun run check
 
 # run component tests (jsdom, fast — no browser)
 test:

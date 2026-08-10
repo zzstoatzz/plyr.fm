@@ -36,7 +36,7 @@ repos:
 
       - id: svelte-check
         name: svelte check
-        entry: bash -c 'cd frontend && bun run check'
+        entry: just frontend check
         language: system
         files: ^frontend/
         pass_filenames: false
