@@ -39,7 +39,7 @@ max_lines = 850
 
 [[rules]]
 path = "backend/src/backend/api/tracks/uploads.py"
-max_lines = 1871
+max_lines = 1878
 
 [[rules]]
 path = "backend/src/backend/config.py"
@@ -75,7 +75,7 @@ max_lines = 569
 
 [[rules]]
 path = "backend/tests/test_moderation.py"
-max_lines = 1026
+max_lines = 1042
 
 [[rules]]
 path = "docs/internal/authentication.md"
@@ -211,11 +211,11 @@ max_lines = 544
 
 [[rules]]
 path = "backend/src/backend/_internal/tasks/ingest.py"
-max_lines = 1099
+max_lines = 1106
 
 [[rules]]
 path = "backend/tests/test_jetstream.py"
-max_lines = 2771
+max_lines = 2784
 
 [[rules]]
 path = "frontend/src/lib/components/embed/CollectionEmbed.svelte"
@@ -259,7 +259,7 @@ max_lines = 840
 
 [[rules]]
 path = "backend/tests/conftest.py"
-max_lines = 605
+max_lines = 610
 
 [[rules]]
 path = "backend/tests/api/track_audio_replace/test_pipeline.py"
@@ -371,20 +371,28 @@ max_lines = 1178
 
 [[rules]]
 path = "backend-zig/src/internal/index/postgres_track_store.zig"
-max_lines = 766
+max_lines = 831
 
 [[rules]]
 path = "backend-zig/src/internal/projection/postgres_verified_snapshot_store.zig"
-max_lines = 715
+max_lines = 802
 
 [[rules]]
 path = "backend-zig/src/internal/projection/postgres_verified_commit_store.zig"
-max_lines = 628
+max_lines = 647
 
 [[rules]]
 path = "backend-zig/src/internal/index/postgres_composed_track_store.zig"
-max_lines = 777
+max_lines = 1047
 
 [[rules]]
 path = "backend-zig/src/internal/ingest/projector.zig"
-max_lines = 507
+max_lines = 515
+
+[[rules]]
+path = "backend-zig/scripts/test_list_migration.py"
+max_lines = 725
+
+[[rules]]
+path = "backend-zig/src/internal/index/postgres_verified_list_store.zig"
+max_lines = 518
