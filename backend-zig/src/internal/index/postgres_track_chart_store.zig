@@ -61,7 +61,7 @@ pub const PostgresTrackChartStore = struct {
 
 const chart_query =
     \\WITH ranked_likes AS MATERIALIZED (
-    \\  SELECT likes.subject_uri,
+    \\  SELECT likes.subject_uri, likes.subject_cid,
     \\    COUNT(DISTINCT likes.owner_did) FILTER (
     \\      WHERE $3::bigint IS NULL OR likes.record_created_at::timestamptz >=
     \\        TIMESTAMPTZ 'epoch' + ($3::bigint * INTERVAL '1 microsecond')
@@ -71,7 +71,7 @@ const chart_query =
     \\  JOIN plyr_index.account_availability AS liker_account
     \\    ON liker_account.repo_did = likes.owner_did AND liker_account.available
     \\  WHERE NOT likes.deleted
-    \\  GROUP BY likes.subject_uri
+    \\  GROUP BY likes.subject_uri, likes.subject_cid
     \\)
     \\SELECT
 ++ composed.projected_columns ++
@@ -79,6 +79,7 @@ const chart_query =
     \\  ranked_likes.all_time_like_count
 ++ "\n" ++ composed.projected_from ++ "\n" ++
     \\JOIN ranked_likes ON ranked_likes.subject_uri = v.record_uri
+    \\  AND ranked_likes.subject_cid = v.record_cid
     \\WHERE ranked_likes.period_like_count > 0
 ++ "\n" ++ composed.discovery_policy ++ "\n" ++
     \\ORDER BY ranked_likes.period_like_count DESC,

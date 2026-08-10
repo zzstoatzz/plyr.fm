@@ -251,6 +251,22 @@ SELECT
 FROM generate_series(1, 100) AS track
 CROSS JOIN LATERAL generate_series(1, track) AS liker;
 
+-- A URI identifies the record slot, not one immutable record. Likes name a
+-- strong reference, so votes for an earlier CID must not transfer to the
+-- current track revision. Without the subject-CID join below, these stale
+-- votes would incorrectly make track-1 tie track-100 at the top of the chart.
+INSERT INTO plyr_index.like_records
+SELECT
+    format('at://did:plc:liker%s/fm.plyr.dev.like/stale-track-1', liker),
+    'bafyreihdwdcefgh4dqkjv67uzcmw7ojee6xedzdetojuzjevtenxquvyku',
+    format('did:plc:liker%s', liker), 'fm.plyr.dev.like', 'stale-track-1',
+    'at://did:plc:bench/fm.plyr.dev.track/track-1',
+    'bafyreic3c7wk5dvep4f6q7bceo7xix4nzf34z2akxro3kjm5xckd7xxf2m',
+    '2026-08-09T12:00:00Z', false,
+    'bafyreihdwdcefgh4dqkjv67uzcmw7ojee6xedzdetojuzjevtenxquvyku',
+    '3jqfcqzm3fo2j', 1786320000000000 + liker
+FROM generate_series(1, 100) AS liker;
+
 -- Neither a second record from one actor nor an unavailable actor creates a
 -- second vote for the same subject.
 INSERT INTO plyr_index.like_records (
@@ -327,7 +343,7 @@ CREATE INDEX list_records_owner_type_bench
     ON plyr_index.list_records (owner_did, list_type, record_created_at, record_uri)
     WHERE NOT deleted;
 CREATE INDEX like_records_subject_bench
-    ON plyr_index.like_records (subject_uri)
+    ON plyr_index.like_records (subject_uri, subject_cid)
     WHERE NOT deleted;
 CREATE INDEX ix_plyr_index_track_records_title_trgm
     ON plyr_index.track_records USING gin (title gin_trgm_ops)
