@@ -1,4 +1,5 @@
-import { API_URL } from '$lib/config';
+import { API_URL, IS_ZIG_V1 } from '$lib/config';
+import { listZigTrackLikers } from '$lib/api/zig-v1';
 import { getLikers, setLikers, type LikerData } from '$lib/tooltip-cache.svelte';
 import type { TrackId } from '$lib/types';
 
@@ -34,12 +35,9 @@ class LikersSheetState {
 
 	private async fetchLikers(trackId: TrackId) {
 		try {
-			const response = await fetch(`${API_URL}/tracks/${trackId}/likes`, {
-				credentials: 'include'
-			});
-			if (!response.ok) throw new Error(`failed to fetch likers: ${response.status}`);
-			const data = await response.json();
-			const users: LikerData[] = data.users || [];
+			const users: LikerData[] = IS_ZIG_V1
+				? (await listZigTrackLikers(API_URL, String(trackId))).users
+				: await fetchLegacyLikers(trackId);
 
 			// stale guard — sheet may have been closed/reopened for a different track
 			if (this.trackId !== trackId) return;
@@ -53,6 +51,15 @@ class LikersSheetState {
 			if (this.trackId === trackId) this.loading = false;
 		}
 	}
+}
+
+async function fetchLegacyLikers(trackId: TrackId): Promise<LikerData[]> {
+	const response = await fetch(`${API_URL}/tracks/${trackId}/likes`, {
+		credentials: 'include'
+	});
+	if (!response.ok) throw new Error(`failed to fetch likers: ${response.status}`);
+	const data = await response.json();
+	return data.users || [];
 }
 
 export const likersSheet = new LikersSheetState();

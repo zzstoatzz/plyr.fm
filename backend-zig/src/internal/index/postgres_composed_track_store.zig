@@ -21,6 +21,7 @@ const TrackStore = store_module.TrackStore;
 pub const PostgresComposedTrackStore = struct {
     pool: *pg.Pool,
     profile_collection: []const u8,
+    like_collection: []const u8,
 
     pub fn store(self: *PostgresComposedTrackStore) TrackStore {
         return .{
@@ -58,6 +59,7 @@ pub const PostgresComposedTrackStore = struct {
         var query_row = conn.row(detail_query, .{
             at_uri,
             self.profile_collection,
+            self.like_collection,
         }) catch |err| {
             if (conn.err) |pg_err|
                 std.log.err("composed track lookup failed: {}: {s}", .{ err, pg_err.message })
@@ -100,6 +102,7 @@ pub const PostgresComposedTrackStore = struct {
                 conn.query(discovery_after_query, .{
                     request.collection,
                     self.profile_collection,
+                    self.like_collection,
                     after.created_at_us,
                     after.at_uri,
                     limit,
@@ -111,6 +114,7 @@ pub const PostgresComposedTrackStore = struct {
                 conn.query(discovery_query, .{
                     request.collection,
                     self.profile_collection,
+                    self.like_collection,
                     limit,
                 }) catch |err| {
                     logQueryError(conn, "composed discovery query failed", err);
@@ -120,6 +124,7 @@ pub const PostgresComposedTrackStore = struct {
                 conn.query(artist_after_query, .{
                     request.collection,
                     self.profile_collection,
+                    self.like_collection,
                     artist_did,
                     after.created_at_us,
                     after.at_uri,
@@ -132,6 +137,7 @@ pub const PostgresComposedTrackStore = struct {
                 conn.query(artist_query, .{
                     request.collection,
                     self.profile_collection,
+                    self.like_collection,
                     artist_did,
                     limit,
                 }) catch |err| {
@@ -334,7 +340,10 @@ pub fn decodeRow(allocator: std.mem.Allocator, row: anytype) !track.Track {
             else
                 null,
         },
-        .metrics = .{ .play_count = try row.get(i64, 32) },
+        .metrics = .{
+            .play_count = try row.get(i64, 32),
+            .like_count = try row.get(i64, 44),
+        },
         .sources = .{
             .record = .verified_repo,
             .metadata = .verified_repo,
@@ -360,6 +369,7 @@ pub fn decodeRow(allocator: std.mem.Allocator, row: anytype) !track.Track {
             .self_labels = .verified_repo,
             .operator_labels = if (has_moderation_policy) .moderation_service else .derived,
             .metrics = if (has_metrics) .application_metrics else .derived,
+            .like_count = .derived,
             .account_availability = availability_source,
         },
         .projection = .{
@@ -416,7 +426,8 @@ pub const projected_columns =
     \\  d.verification,
     \\  pol.visibility IS NOT NULL,
     \\  pol.moderation_write_source IS NOT NULL,
-    \\  metrics.record_uri IS NOT NULL
+    \\  metrics.record_uri IS NOT NULL,
+    \\  COALESCE(like_metrics.like_count, 0)::bigint
 ;
 
 pub const projected_from =
@@ -431,6 +442,14 @@ pub const projected_from =
     \\  ON pol.record_uri = v.record_uri
     \\LEFT JOIN plyr_index.track_metrics AS metrics
     \\  ON metrics.record_uri = v.record_uri
+    \\LEFT JOIN LATERAL (
+    \\  SELECT count(DISTINCT likes.owner_did)::bigint AS like_count
+    \\  FROM plyr_index.like_records AS likes
+    \\  JOIN plyr_index.account_availability AS liker_account
+    \\    ON liker_account.repo_did = likes.owner_did AND liker_account.available
+    \\  WHERE likes.subject_uri = v.record_uri AND likes.subject_cid = v.record_cid
+    \\    AND likes.collection = $3 AND NOT likes.deleted
+    \\) AS like_metrics ON true
     \\JOIN artists AS a ON a.did = v.owner_did
     \\LEFT JOIN plyr_index.profile_records AS p
     \\  ON p.owner_did = v.owner_did AND p.collection = $2
@@ -469,31 +488,16 @@ pub const discovery_policy = common_policy ++
 
 const artist_policy = common_policy ++
     \\  AND v.collection = $1
-    \\  AND v.owner_did = $3
+    \\  AND v.owner_did = $4
     \\  AND COALESCE(pol.visibility, 'public') <> 'private'
 ;
 
 const discovery_query = joined_projection ++ "\nWHERE true\n" ++ discovery_policy ++ "\n" ++
     \\ORDER BY v.record_created_at::timestamptz DESC, v.record_uri DESC
-    \\LIMIT $3::bigint
-;
-
-const discovery_after_query = joined_projection ++ "\nWHERE true\n" ++ discovery_policy ++ "\n" ++
-    \\  AND (
-    \\    v.record_created_at::timestamptz < TIMESTAMPTZ 'epoch' + ($3::bigint * INTERVAL '1 microsecond')
-    \\    OR (v.record_created_at::timestamptz = TIMESTAMPTZ 'epoch' + ($3::bigint * INTERVAL '1 microsecond')
-    \\      AND v.record_uri < $4)
-    \\  )
-    \\ORDER BY v.record_created_at::timestamptz DESC, v.record_uri DESC
-    \\LIMIT $5::bigint
-;
-
-const artist_query = joined_projection ++ "\nWHERE true\n" ++ artist_policy ++ "\n" ++
-    \\ORDER BY v.record_created_at::timestamptz DESC, v.record_uri DESC
     \\LIMIT $4::bigint
 ;
 
-const artist_after_query = joined_projection ++ "\nWHERE true\n" ++ artist_policy ++ "\n" ++
+const discovery_after_query = joined_projection ++ "\nWHERE true\n" ++ discovery_policy ++ "\n" ++
     \\  AND (
     \\    v.record_created_at::timestamptz < TIMESTAMPTZ 'epoch' + ($4::bigint * INTERVAL '1 microsecond')
     \\    OR (v.record_created_at::timestamptz = TIMESTAMPTZ 'epoch' + ($4::bigint * INTERVAL '1 microsecond')
@@ -501,6 +505,21 @@ const artist_after_query = joined_projection ++ "\nWHERE true\n" ++ artist_polic
     \\  )
     \\ORDER BY v.record_created_at::timestamptz DESC, v.record_uri DESC
     \\LIMIT $6::bigint
+;
+
+const artist_query = joined_projection ++ "\nWHERE true\n" ++ artist_policy ++ "\n" ++
+    \\ORDER BY v.record_created_at::timestamptz DESC, v.record_uri DESC
+    \\LIMIT $5::bigint
+;
+
+const artist_after_query = joined_projection ++ "\nWHERE true\n" ++ artist_policy ++ "\n" ++
+    \\  AND (
+    \\    v.record_created_at::timestamptz < TIMESTAMPTZ 'epoch' + ($5::bigint * INTERVAL '1 microsecond')
+    \\    OR (v.record_created_at::timestamptz = TIMESTAMPTZ 'epoch' + ($5::bigint * INTERVAL '1 microsecond')
+    \\      AND v.record_uri < $6)
+    \\  )
+    \\ORDER BY v.record_created_at::timestamptz DESC, v.record_uri DESC
+    \\LIMIT $7::bigint
 ;
 
 const readiness_sql =
@@ -511,6 +530,7 @@ const readiness_sql =
     \\  AND to_regclass('plyr_index.track_delivery_origins') IS NOT NULL
     \\  AND to_regclass('plyr_index.track_policies') IS NOT NULL
     \\  AND to_regclass('plyr_index.track_metrics') IS NOT NULL
+    \\  AND to_regclass('plyr_index.like_records') IS NOT NULL
     \\  AND to_regclass('tracks') IS NOT NULL
     \\  AND to_regclass('artists') IS NOT NULL
 ;
@@ -556,6 +576,7 @@ test "composed PostgreSQL reads use verified records and authoritative account s
     const projected_profiles = @import("../projection/postgres_profile_store.zig");
     const projected_availability = @import("../account/postgres_availability_store.zig");
     const projected_lists = @import("../projection/postgres_list_store.zig");
+    const projected_likes = @import("../projection/postgres_like_store.zig");
     const track_change = @import("../projection/track_change.zig");
     const postgres_playback = @import("postgres_playback_store.zig");
     const postgres_search = @import("postgres_search_store.zig");
@@ -580,6 +601,7 @@ test "composed PostgreSQL reads use verified records and authoritative account s
     try projected_profiles.createTestTable(pool);
     try projected_availability.createTestTable(pool);
     try projected_lists.createTestTables(pool);
+    try projected_likes.createTestTable(pool);
     _ = try pool.exec(
         \\CREATE TABLE plyr_index.track_delivery_origins (
         \\  record_uri text NOT NULL, service text NOT NULL, record_cid text NOT NULL,
@@ -710,6 +732,7 @@ test "composed PostgreSQL reads use verified records and authoritative account s
     var implementation: PostgresComposedTrackStore = .{
         .pool = pool,
         .profile_collection = "fm.plyr.dev.actor.profile",
+        .like_collection = "fm.plyr.dev.like",
     };
     try std.testing.expect(implementation.store().ready());
     const value = (try implementation.store().getByUri(a, record_uri)).?;
@@ -730,6 +753,77 @@ test "composed PostgreSQL reads use verified records and authoritative account s
     try std.testing.expectEqualStrings("self-note", value.moderation.self_labels[0]);
     try std.testing.expectEqualStrings("copyright-violation", value.moderation.operator_labels[0]);
     try std.testing.expectEqual(@as(i64, 7), value.metrics.play_count);
+    try std.testing.expectEqual(@as(i64, 0), value.metrics.like_count);
+
+    for ([_][]const u8{ "did:plc:listenerone", "did:plc:listenertwo" }) |listener| {
+        try std.testing.expectEqual(
+            @import("../account/availability.zig").ApplyResult.applied,
+            try availability_writer.store().apply(a, .{
+                .repo_did = listener,
+                .available = true,
+                .source = .verified_repository,
+                .repository_rev = rev.str(),
+                .commit_cid = commit,
+                .observed_at_us = 1_000,
+            }),
+        );
+    }
+    const record_cid = try record.toString(a);
+    const stale_subject_cid = try (try zat.Cid.forDagCbor(a, "stale subject")).toString(a);
+    var like_writer: projected_likes.PostgresLikeStore = .{ .pool = pool };
+    for ([_]@import("../projection/like_change.zig").Change{
+        .{ .upsert = .{
+            .record_uri = "at://did:plc:listenerone/fm.plyr.dev.like/one",
+            .record_cid = record_cid,
+            .owner_did = "did:plc:listenerone",
+            .collection = "fm.plyr.dev.like",
+            .rkey = "one",
+            .subject_uri = record_uri,
+            .subject_cid = record_cid,
+            .created_at = "2026-08-09T01:00:00Z",
+            .proof = .{ .commit_cid = commit, .commit_rev = rev.str(), .indexed_at_us = 1_000 },
+        } },
+        .{ .upsert = .{
+            .record_uri = "at://did:plc:listenerone/fm.plyr.dev.like/duplicate",
+            .record_cid = record_cid,
+            .owner_did = "did:plc:listenerone",
+            .collection = "fm.plyr.dev.like",
+            .rkey = "duplicate",
+            .subject_uri = record_uri,
+            .subject_cid = record_cid,
+            .created_at = "2026-08-09T02:00:00Z",
+            .proof = .{ .commit_cid = commit, .commit_rev = rev.str(), .indexed_at_us = 1_000 },
+        } },
+        .{ .upsert = .{
+            .record_uri = "at://did:plc:listenertwo/fm.plyr.dev.like/stale",
+            .record_cid = record_cid,
+            .owner_did = "did:plc:listenertwo",
+            .collection = "fm.plyr.dev.like",
+            .rkey = "stale",
+            .subject_uri = record_uri,
+            .subject_cid = stale_subject_cid,
+            .created_at = "2026-08-09T03:00:00Z",
+            .proof = .{ .commit_cid = commit, .commit_rev = rev.str(), .indexed_at_us = 1_000 },
+        } },
+        .{ .upsert = .{
+            .record_uri = "at://did:plc:listenertwo/com.example.like/wrong-namespace",
+            .record_cid = record_cid,
+            .owner_did = "did:plc:listenertwo",
+            .collection = "com.example.like",
+            .rkey = "wrong-namespace",
+            .subject_uri = record_uri,
+            .subject_cid = record_cid,
+            .created_at = "2026-08-09T04:00:00Z",
+            .proof = .{ .commit_cid = commit, .commit_rev = rev.str(), .indexed_at_us = 1_000 },
+        } },
+    }) |like_change| {
+        try std.testing.expectEqual(
+            @import("../projection/like_store.zig").ApplyResult.applied,
+            try like_writer.store().apply(a, like_change),
+        );
+    }
+    const counted = (try implementation.store().getByUri(a, record_uri)).?;
+    try std.testing.expectEqual(@as(i64, 1), counted.metrics.like_count);
 
     const list_uri = "at://did:plc:artist/fm.plyr.dev.list/road-mix";
     const album_list_uri = "at://did:plc:artist/fm.plyr.dev.list/album";
@@ -782,7 +876,10 @@ test "composed PostgreSQL reads use verified records and authoritative account s
     var wildcard_query = search_request;
     wildcard_query.query = "%%";
     try std.testing.expectEqual(@as(usize, 0), (try search_store.search(a, wildcard_query)).len);
-    var verified_list_implementation: postgres_verified_lists.PostgresVerifiedListStore = .{ .pool = pool };
+    var verified_list_implementation: postgres_verified_lists.PostgresVerifiedListStore = .{
+        .pool = pool,
+        .like_collection = "fm.plyr.dev.like",
+    };
     const list_store = verified_list_implementation.store();
     const playlist_page = try list_store.listByOwner(a, .{
         .collection = "fm.plyr.dev.list",

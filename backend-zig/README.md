@@ -137,6 +137,9 @@ than treating the database as social authority. They require the current
 track's exact URI and CID, filter unavailable actor repositories, and paginate
 with a cursor bound to that strong-reference scope. Stale likes against an
 earlier record revision neither appear in the list nor contribute to charts.
+Track representations derive a distinct-actor `metrics.like_count` through the
+same boundary and the configured like NSID, so next's existing count and liker
+UI do not consult legacy interaction rows or an adjacent environment's records.
 See [`zig-v1-track-likes.md`](../docs/internal/architecture/zig-v1-track-likes.md).
 
 Artist metrics are a separate public capability rather than extra fields on the

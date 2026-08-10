@@ -1,4 +1,5 @@
 import type { Artist, Track } from '$lib/types';
+import type { LikerData } from '$lib/tooltip-cache.svelte';
 
 export interface ZigArtist {
 	object: 'artist';
@@ -96,7 +97,7 @@ export interface ZigTrack {
 		self_labels: string[];
 		operator_labels: string[];
 	};
-	metrics: { play_count: number };
+	metrics: { play_count: number; like_count: number };
 	projection: { verification: 'verified_repo' };
 }
 
@@ -125,6 +126,29 @@ export interface ZigPlayReceipt {
 		window_seconds: number;
 	};
 	sources: { metrics: 'application_metrics'; dedup: 'redis_ephemeral' };
+}
+
+interface ZigLikePage {
+	object: 'list';
+	data: Array<{
+		object: 'like';
+		record: { uri: string; cid: string };
+		actor: {
+			did: string;
+			profile: { handle: string; display_name: string; avatar_url: string | null } | null;
+		};
+		subject: { uri: string; cid: string };
+		created_at: string;
+		sources: {
+			record: 'verified_repo';
+			subject: 'verified_repo';
+			actor_identity: 'verified_repo';
+			account_availability: 'verified_repo' | 'current_pds';
+		};
+		projection: { verification: 'verified_repo' };
+	}>;
+	has_more: boolean;
+	next_cursor: string | null;
 }
 
 interface ListOptions {
@@ -212,6 +236,39 @@ export async function getZigTrack(
 	return toFrontendTrack(value);
 }
 
+export async function listZigTrackLikers(
+	apiUrl: string,
+	trackId: string,
+	options: { limit?: number; cursor?: string | null } = {},
+	fetcher: Fetcher = fetch
+): Promise<{ users: LikerData[]; has_more: boolean; next_cursor: string | null }> {
+	assertOpaqueId(trackId, 'track');
+	const url = new URL(`${apiUrl}/v1/tracks/${encodeURIComponent(trackId)}/likes`);
+	url.searchParams.set('limit', String(options.limit ?? 100));
+	if (options.cursor) url.searchParams.set('cursor', options.cursor);
+	const response = await fetcher(url, {
+		credentials: 'include',
+		headers: { accept: 'application/json' }
+	});
+	if (!response.ok) throw new Error(`Zig track likes returned ${response.status}`);
+	const value: unknown = await response.json();
+	assertLikePage(value);
+	const seen = new Set<string>();
+	const users: LikerData[] = [];
+	for (const item of value.data) {
+		if (seen.has(item.actor.did)) continue;
+		seen.add(item.actor.did);
+		users.push({
+			did: item.actor.did,
+			handle: item.actor.profile?.handle ?? item.actor.did,
+			display_name: item.actor.profile?.display_name ?? null,
+			avatar_url: item.actor.profile?.avatar_url ?? null,
+			liked_at: item.created_at
+		});
+	}
+	return { users, has_more: value.has_more, next_cursor: value.next_cursor };
+}
+
 export async function getZigPlayback(
 	apiUrl: string,
 	trackId: string,
@@ -277,7 +334,7 @@ export function toFrontendTrack(value: ZigTrack): Track {
 		atproto_record_uri: value.record.uri,
 		atproto_record_cid: value.record.cid ?? undefined,
 		play_count: value.metrics.play_count,
-		like_count: 0,
+		like_count: value.metrics.like_count,
 		comment_count: 0,
 		created_at: value.metadata.created_at,
 		is_liked: false,
@@ -352,8 +409,12 @@ function assertTrackPage(value: unknown): asserts value is ZigTrackPage {
 }
 
 function assertTrackChart(value: unknown): asserts value is ZigTrackChart {
-	if (!isObject(value) || value.object !== 'track_chart') throw new Error('invalid Zig track chart');
-	if (!['all_time', 'month', 'week', 'day'].includes(String(value.period)) || !Array.isArray(value.data)) {
+	if (!isObject(value) || value.object !== 'track_chart')
+		throw new Error('invalid Zig track chart');
+	if (
+		!['all_time', 'month', 'week', 'day'].includes(String(value.period)) ||
+		!Array.isArray(value.data)
+	) {
 		throw new Error('invalid Zig track chart');
 	}
 	for (const rawEntry of value.data) {
@@ -375,6 +436,52 @@ function assertTrackChart(value: unknown): asserts value is ZigTrackChart {
 	}
 }
 
+function assertLikePage(value: unknown): asserts value is ZigLikePage {
+	if (
+		!isObject(value) ||
+		value.object !== 'list' ||
+		!Array.isArray(value.data) ||
+		typeof value.has_more !== 'boolean' ||
+		!(value.next_cursor === null || typeof value.next_cursor === 'string')
+	) {
+		throw new TypeError('invalid Zig track likes');
+	}
+	for (const item of value.data) {
+		if (
+			!isObject(item) ||
+			item.object !== 'like' ||
+			!isObject(item.record) ||
+			typeof item.record.uri !== 'string' ||
+			typeof item.record.cid !== 'string' ||
+			!isObject(item.actor) ||
+			typeof item.actor.did !== 'string' ||
+			!(item.actor.profile === null || isLikerProfile(item.actor.profile)) ||
+			!isObject(item.subject) ||
+			typeof item.subject.uri !== 'string' ||
+			typeof item.subject.cid !== 'string' ||
+			typeof item.created_at !== 'string' ||
+			!isObject(item.sources) ||
+			item.sources.record !== 'verified_repo' ||
+			item.sources.subject !== 'verified_repo' ||
+			item.sources.actor_identity !== 'verified_repo' ||
+			!['verified_repo', 'current_pds'].includes(String(item.sources.account_availability)) ||
+			!isObject(item.projection) ||
+			item.projection.verification !== 'verified_repo'
+		) {
+			throw new TypeError('invalid Zig track like');
+		}
+	}
+}
+
+function isLikerProfile(value: unknown): boolean {
+	return (
+		isObject(value) &&
+		typeof value.handle === 'string' &&
+		typeof value.display_name === 'string' &&
+		(value.avatar_url === null || typeof value.avatar_url === 'string')
+	);
+}
+
 export function assertZigTrack(value: unknown): asserts value is ZigTrack {
 	if (
 		!isObject(value) ||
@@ -392,6 +499,9 @@ export function assertZigTrack(value: unknown): asserts value is ZigTrack {
 		!Array.isArray(value.media.origins) ||
 		!isObject(value.metrics) ||
 		!Number.isInteger(value.metrics.play_count) ||
+		Number(value.metrics.play_count) < 0 ||
+		!Number.isInteger(value.metrics.like_count) ||
+		Number(value.metrics.like_count) < 0 ||
 		!isObject(value.projection) ||
 		value.projection.verification !== 'verified_repo'
 	) {

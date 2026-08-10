@@ -35,7 +35,7 @@ const track = {
 	},
 	access: { visibility: 'public', in_discovery: true, gate: null },
 	moderation: { self_labels: [], operator_labels: [] },
-	metrics: { play_count: 3 },
+	metrics: { play_count: 3, like_count: 2 },
 	projection: { verification: 'verified_repo' }
 };
 

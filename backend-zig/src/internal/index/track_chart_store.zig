@@ -4,6 +4,7 @@ const track_chart = @import("../domain/track_chart.zig");
 pub const Request = struct {
     track_collection: []const u8,
     profile_collection: []const u8,
+    like_collection: []const u8,
     since_us: ?i64,
     limit: usize,
 };

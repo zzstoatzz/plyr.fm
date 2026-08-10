@@ -9,6 +9,7 @@ pub fn tracks(
     store: ?TrackChartStore,
     track_collection: []const u8,
     profile_collection: []const u8,
+    like_collection: []const u8,
     cors: response.CorsPolicy,
     io: std.Io,
     request_id: []const u8,
@@ -23,6 +24,7 @@ pub fn tracks(
         store,
         track_collection,
         profile_collection,
+        like_collection,
         request.head.target,
         now_us,
     )) {

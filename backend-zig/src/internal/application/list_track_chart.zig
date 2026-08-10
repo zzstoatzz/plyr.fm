@@ -24,6 +24,7 @@ pub fn execute(
     store: ?TrackChartStore,
     track_collection: []const u8,
     profile_collection: []const u8,
+    like_collection: []const u8,
     target: []const u8,
     now_us: i64,
 ) Result {
@@ -36,6 +37,7 @@ pub fn execute(
     const entries = configured_store.list(allocator, .{
         .track_collection = track_collection,
         .profile_collection = profile_collection,
+        .like_collection = like_collection,
         .since_us = sinceMicros(options.period, now_us) catch return .unavailable,
         .limit = options.limit,
     }) catch |err| return switch (err) {

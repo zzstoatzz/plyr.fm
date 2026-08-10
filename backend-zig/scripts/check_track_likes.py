@@ -54,6 +54,10 @@ def main() -> None:
             "cid": TRACK_CID,
         }
         assert body["data"][0]["sources"]["record"] == "verified_repo"
+        status, _, track_one = _request(
+            base_url, f"/v1/tracks/{_track_id(track_one_uri)}"
+        )
+        assert status == 200 and track_one["metrics"]["like_count"] == 1
 
         # A busy subject paginates with an opaque cursor scoped to this exact
         # URI + CID. Adjacent pages cannot repeat a record.
@@ -63,6 +67,10 @@ def main() -> None:
         assert status == 200 and len(first["data"]) == 2
         assert first["has_more"] is True and first["next_cursor"]
         assert all(item["subject"]["cid"] == TRACK_CID for item in first["data"])
+        status, _, track_hundred = _request(
+            base_url, f"/v1/tracks/{_track_id(track_hundred_uri)}"
+        )
+        assert status == 200 and track_hundred["metrics"]["like_count"] == 100
         status, _, second = _request(base_url, f"{path}&cursor={first['next_cursor']}")
         assert status == 200 and len(second["data"]) == 2
         first_uris = {item["record"]["uri"] for item in first["data"]}

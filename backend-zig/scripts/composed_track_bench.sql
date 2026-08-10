@@ -296,6 +296,21 @@ VALUES
         '3jqfcqzm3fo2j', 1786320000000000, false
     );
 
+-- A projection may temporarily hold more than one configured namespace while
+-- an environment is reconciled. Even exact-CID records from another NSID are
+-- not plyr likes and must not change either aggregate counts or chart rank.
+INSERT INTO plyr_index.like_records
+SELECT
+    format('at://did:plc:liker%s/com.example.like/wrong-track-1', liker),
+    'bafyreihdwdcefgh4dqkjv67uzcmw7ojee6xedzdetojuzjevtenxquvyku',
+    format('did:plc:liker%s', liker), 'com.example.like', 'wrong-track-1',
+    'at://did:plc:bench/fm.plyr.dev.track/track-1',
+    'bafyreihdwdcefgh4dqkjv67uzcmw7ojee6xedzdetojuzjevtenxquvyku',
+    '2026-08-09T11:00:00Z', false,
+    'bafyreihdwdcefgh4dqkjv67uzcmw7ojee6xedzdetojuzjevtenxquvyku',
+    '3jqfcqzm3fo2j', 1786320000000000 + liker
+FROM generate_series(1, 100) AS liker;
+
 INSERT INTO plyr_index.list_records VALUES (
     'at://did:plc:bench/fm.plyr.dev.list/playlist',
     'bafyreihdwdcefgh4dqkjv67uzcmw7ojee6xedzdetojuzjevtenxquvyku',

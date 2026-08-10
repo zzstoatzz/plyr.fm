@@ -4,6 +4,7 @@ import {
 	getZigPlayback,
 	getZigTrack,
 	listZigTrackChart,
+	listZigTrackLikers,
 	listZigTracks,
 	recordZigPlay
 } from './zig-v1';
@@ -47,7 +48,7 @@ const track = {
 	},
 	access: { visibility: 'public', in_discovery: true, gate: null },
 	moderation: { self_labels: [], operator_labels: [] },
-	metrics: { play_count: 3 },
+	metrics: { play_count: 3, like_count: 2 },
 	projection: { verification: 'verified_repo' }
 };
 
@@ -386,6 +387,91 @@ describe('Zig v1 compatibility boundary', () => {
 		expect(page.tracks[0]?.id).toBe('trk_opaque');
 		expect(page.tracks[0]?.file_id).toBe('trk_opaque');
 		expect(page.tracks[0]?.atproto_record_uri).toBe(record.uri);
+	});
+
+	it('maps verified like records into the existing liker presentation model', async () => {
+		let requestedInput: RequestInfo | URL | null = null;
+		let requestedInit: RequestInit | undefined;
+		const like = {
+			object: 'like',
+			record: { uri: 'at://did:plc:listener/fm.plyr.like/one', cid: 'bafylike' },
+			actor: {
+				did: 'did:plc:listener',
+				profile: {
+					handle: 'listener.test',
+					display_name: 'Listener',
+					avatar_url: null
+				}
+			},
+			subject: { uri: record.uri, cid: record.cid },
+			created_at: '2026-08-09T01:00:00Z',
+			sources: {
+				record: 'verified_repo',
+				subject: 'verified_repo',
+				actor_identity: 'verified_repo',
+				account_availability: 'verified_repo'
+			},
+			projection: { verification: 'verified_repo' }
+		};
+		const fetcher = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+			requestedInput = input;
+			requestedInit = init;
+			return json({
+				object: 'list',
+				data: [like, { ...like, record: { ...like.record, uri: `${like.record.uri}-duplicate` } }],
+				has_more: true,
+				next_cursor: 'likecur_next'
+			});
+		});
+		const page = await listZigTrackLikers(
+			'https://api.next.plyr.fm',
+			'trk_opaque',
+			{ limit: 20 },
+			fetcher
+		);
+		const requested = new URL(String(requestedInput));
+		expect(requested.pathname).toBe('/v1/tracks/trk_opaque/likes');
+		expect(requested.searchParams.get('limit')).toBe('20');
+		expect(requestedInit).toMatchObject({ credentials: 'include' });
+		expect(page.users).toEqual([
+			{
+				did: 'did:plc:listener',
+				handle: 'listener.test',
+				display_name: 'Listener',
+				avatar_url: null,
+				liked_at: '2026-08-09T01:00:00Z'
+			}
+		]);
+		expect(page).toMatchObject({ has_more: true, next_cursor: 'likecur_next' });
+	});
+
+	it('rejects liker rows that lose repository provenance', async () => {
+		const fetcher = vi.fn(async () =>
+			json({
+				object: 'list',
+				data: [
+					{
+						object: 'like',
+						record: { uri: 'at://did:plc:listener/fm.plyr.like/one', cid: 'bafylike' },
+						actor: { did: 'did:plc:listener', profile: null },
+						subject: { uri: record.uri, cid: record.cid },
+						created_at: '2026-08-09T01:00:00Z',
+						sources: {
+							record: 'legacy_projection',
+							subject: 'verified_repo',
+							actor_identity: 'verified_repo',
+							account_availability: 'verified_repo'
+						},
+						projection: { verification: 'verified_repo' }
+					}
+				],
+				has_more: false,
+				next_cursor: null
+			})
+		);
+		await expect(
+			listZigTrackLikers('https://api.next.plyr.fm', 'trk_opaque', {}, fetcher)
+		).rejects.toThrow('invalid Zig track like');
 	});
 
 	it('reads ranked tracks from the namespaced chart resource', async () => {

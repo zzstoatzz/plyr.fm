@@ -339,7 +339,7 @@ max_lines = 509
 
 [[rules]]
 path = "frontend/src/routes/track/[[]id[]]/+page.svelte"
-max_lines = 1800
+max_lines = 1801
 
 [[rules]]
 path = "frontend/src/lib/components/playlist/PlaylistTrackList.svelte"
@@ -383,7 +383,7 @@ max_lines = 647
 
 [[rules]]
 path = "backend-zig/src/internal/index/postgres_composed_track_store.zig"
-max_lines = 1047
+max_lines = 1144
 
 [[rules]]
 path = "backend-zig/src/internal/ingest/projector.zig"
@@ -395,4 +395,12 @@ max_lines = 755
 
 [[rules]]
 path = "backend-zig/src/internal/index/postgres_verified_list_store.zig"
-max_lines = 518
+max_lines = 528
+
+[[rules]]
+path = "frontend/src/lib/api/zig-v1.test.ts"
+max_lines = 584
+
+[[rules]]
+path = "frontend/src/lib/api/zig-v1.ts"
+max_lines = 547

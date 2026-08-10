@@ -168,6 +168,7 @@ pub fn handle(
             app.track_chart_store,
             app.track_collection,
             app.profile_collection,
+            app.like_collection,
             app.cors,
             app.io,
             request_id,

@@ -26,6 +26,7 @@ pub const PostgresTrackChartStore = struct {
         var result = conn.query(chart_query, .{
             request.track_collection,
             request.profile_collection,
+            request.like_collection,
             request.since_us,
             @as(i64, @intCast(request.limit)),
         }) catch |err| {
@@ -44,8 +45,8 @@ pub const PostgresTrackChartStore = struct {
                 error.OutOfMemory => return error.OutOfMemory,
                 else => return error.CorruptProjection,
             };
-            const period_count = row.get(i64, 44) catch return error.CorruptProjection;
-            const all_time_count = row.get(i64, 45) catch return error.CorruptProjection;
+            const period_count = row.get(i64, 45) catch return error.CorruptProjection;
+            const all_time_count = row.get(i64, 46) catch return error.CorruptProjection;
             if (period_count <= 0 or all_time_count < period_count)
                 return error.CorruptProjection;
             entries.append(allocator, .{
@@ -63,14 +64,14 @@ const chart_query =
     \\WITH ranked_likes AS MATERIALIZED (
     \\  SELECT likes.subject_uri, likes.subject_cid,
     \\    COUNT(DISTINCT likes.owner_did) FILTER (
-    \\      WHERE $3::bigint IS NULL OR likes.record_created_at::timestamptz >=
-    \\        TIMESTAMPTZ 'epoch' + ($3::bigint * INTERVAL '1 microsecond')
+    \\      WHERE $4::bigint IS NULL OR likes.record_created_at::timestamptz >=
+    \\        TIMESTAMPTZ 'epoch' + ($4::bigint * INTERVAL '1 microsecond')
     \\    )::bigint AS period_like_count,
     \\    COUNT(DISTINCT likes.owner_did)::bigint AS all_time_like_count
     \\  FROM plyr_index.like_records AS likes
     \\  JOIN plyr_index.account_availability AS liker_account
     \\    ON liker_account.repo_did = likes.owner_did AND liker_account.available
-    \\  WHERE NOT likes.deleted
+    \\  WHERE likes.collection = $3 AND NOT likes.deleted
     \\  GROUP BY likes.subject_uri, likes.subject_cid
     \\)
     \\SELECT
@@ -84,5 +85,5 @@ const chart_query =
 ++ "\n" ++ composed.discovery_policy ++ "\n" ++
     \\ORDER BY ranked_likes.period_like_count DESC,
     \\  ranked_likes.all_time_like_count DESC, v.record_uri ASC
-    \\LIMIT $4::bigint
+    \\LIMIT $5::bigint
 ;

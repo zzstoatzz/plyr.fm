@@ -106,6 +106,9 @@ pub const ModerationOverride = enum { allow, exclude };
 
 pub const Metrics = struct {
     play_count: i64,
+    /// Distinct currently available repositories with a live strong-reference
+    /// like for this exact record CID.
+    like_count: i64 = 0,
 };
 
 /// Per-claim provenance lets one transitional response compose authenticated
@@ -124,6 +127,7 @@ pub const Sources = struct {
     self_labels: Source = .legacy_projection,
     operator_labels: Source = .legacy_local,
     metrics: Source = .derived,
+    like_count: Source = .derived,
     account_availability: Source = .legacy_projection,
 };
 

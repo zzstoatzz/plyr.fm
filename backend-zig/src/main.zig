@@ -42,7 +42,11 @@ pub fn main() !void {
     }
 
     var postgres_composed_track_store: ?postgres_composed_tracks.PostgresComposedTrackStore = if (postgres_store) |*store|
-        .{ .pool = store.pool, .profile_collection = settings.profile_collection }
+        .{
+            .pool = store.pool,
+            .profile_collection = settings.profile_collection,
+            .like_collection = settings.like_collection,
+        }
     else
         null;
     const track_store = if (postgres_composed_track_store) |*store| store.store() else null;
@@ -67,7 +71,7 @@ pub fn main() !void {
         null;
     const artist_store = if (postgres_artist_store) |*store| store.store() else null;
     var postgres_verified_list_store: ?postgres_verified_lists.PostgresVerifiedListStore = if (postgres_store) |*store|
-        .{ .pool = store.pool }
+        .{ .pool = store.pool, .like_collection = settings.like_collection }
     else
         null;
     const verified_list_store = if (postgres_verified_list_store) |*store| store.store() else null;

@@ -22,6 +22,19 @@ separate. Legacy `track_likes` rows cannot admit a result. An unavailable actor
 is absent because its repository is no longer currently readable; missing
 legacy presentation data does not suppress an otherwise authenticated record.
 
+The common track representation exposes `metrics.like_count` from the same
+exact-CID and available-account boundary. It counts distinct actor DIDs, so
+duplicate records from one repository cannot inflate the number. This makes
+the existing next frontend's count, tooltip, and mobile liker sheet agree with
+the record resource. The frontend adapter validates record provenance before
+mapping presentation fields and keeps every like/unlike control disabled; this
+slice is read-only.
+
+Both the record resource and aggregate are additionally scoped to the
+environment's configured like NSID. A projection can temporarily contain
+records from more than one namespace during reconciliation; those rows do not
+become plyr likes merely because they name the same track strong reference.
+
 The application layer depends only on `TrackStore` and `LikeQueryStore` ports.
 The PostgreSQL adapter currently reads `plyr_index.like_records`, verified
 account availability, verified profile records, and optional legacy profile
@@ -31,10 +44,12 @@ changing HTTP or domain semantics.
 Run `just zig test-postgres` for the adapter contract and
 `just zig bench-track-likes` for full HTTP verification plus native
 `ReleaseFast` measurements. On the August 10 fixture (20 records per response),
-the initial native run produced 533.6 requests/s at concurrency 1 and 3,942.9
-requests/s at concurrency 16, with zero errors; RSS was 4.8 MiB and 20.6 MiB,
-respectively. These numbers are a reproducible endpoint baseline, not a
-Python-parity comparison.
+the latest native run produced 617.9 requests/s at concurrency 1 and 4,216.6
+requests/s at concurrency 16, with zero errors; RSS was 4.8 MiB and 23.3 MiB,
+respectively. With exact like counts included, the 50-track collection produced
+165.1 and 1,580.8 requests/s at concurrency 1 and 16; single-track detail
+produced 977.1 and 6,364.1 requests/s. These numbers are reproducible endpoint
+baselines, not a Python-parity comparison.
 
 Mutation is deliberately separate. A future like or unlike operation may
 report success only after the user's PDS accepts the record operation. It must

@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { API_URL } from '$lib/config';
+	import { API_URL, IS_ZIG_V1 } from '$lib/config';
+	import { listZigTrackLikers } from '$lib/api/zig-v1';
 	import { getLikers, setLikers, type LikerData } from '$lib/tooltip-cache.svelte';
 	import {
 		getRefreshedAvatar,
@@ -99,15 +100,9 @@
 
 		const fetchLikers = async () => {
 			try {
-				const url = `${API_URL}/tracks/${trackId}/likes`;
-				const response = await fetch(url);
-
-				if (!response.ok) {
-					throw new Error(`failed to fetch likers: ${response.status}`);
-				}
-
-				const data = await response.json();
-				const users = data.users || [];
+				const users = IS_ZIG_V1
+					? (await listZigTrackLikers(API_URL, String(trackId))).users
+					: await fetchLegacyLikers(trackId);
 				likers = users;
 				setLikers(trackId, users);
 			} catch (err) {
@@ -120,6 +115,13 @@
 
 		fetchLikers();
 	});
+
+	async function fetchLegacyLikers(id: TrackId): Promise<LikerData[]> {
+		const response = await fetch(`${API_URL}/tracks/${id}/likes`);
+		if (!response.ok) throw new Error(`failed to fetch likers: ${response.status}`);
+		const data = await response.json();
+		return data.users || [];
+	}
 
 	function formatTime(isoString: string): string {
 		const date = new Date(isoString);
@@ -161,7 +163,7 @@
 					{@const displayUrl = getDisplayUrl(liker)}
 					{@const showFallback = shouldShowFallback(liker)}
 					<a
-						href="/u/{liker.handle}/liked"
+						href={IS_ZIG_V1 ? `/u/${liker.handle}` : `/u/${liker.handle}/liked`}
 						class="liker-circle"
 						title="{liker.display_name} (@{liker.handle}) • {formatTime(liker.liked_at)}"
 					>

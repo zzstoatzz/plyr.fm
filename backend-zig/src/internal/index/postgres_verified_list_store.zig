@@ -17,6 +17,7 @@ const VerifiedListStore = store_module.VerifiedListStore;
 
 pub const PostgresVerifiedListStore = struct {
     pool: *pg.Pool,
+    like_collection: []const u8,
 
     pub fn store(self: *PostgresVerifiedListStore) VerifiedListStore {
         return .{
@@ -119,6 +120,7 @@ pub const PostgresVerifiedListStore = struct {
             request.track_collection,
             request.profile_collection,
             @tagName(request.kind),
+            self.like_collection,
         }) catch |err| {
             logQueryError(conn, "verified list detail query failed", err);
             return error.IndexUnavailable;
@@ -508,6 +510,14 @@ const detail_query = "SELECT\n" ++ header_columns ++ "\n" ++
     \\  AND d.service = 'r2' AND d.verification = 'verified_blob_cid'
     \\LEFT JOIN plyr_index.track_metrics AS metrics
     \\  ON metrics.record_uri = v.record_uri
+    \\LEFT JOIN LATERAL (
+    \\  SELECT count(DISTINCT likes.owner_did)::bigint AS like_count
+    \\  FROM plyr_index.like_records AS likes
+    \\  JOIN plyr_index.account_availability AS liker_account
+    \\    ON liker_account.repo_did = likes.owner_did AND liker_account.available
+    \\  WHERE likes.subject_uri = v.record_uri AND likes.subject_cid = v.record_cid
+    \\    AND likes.collection = $6 AND NOT likes.deleted
+    \\) AS like_metrics ON true
     \\LEFT JOIN artists AS a ON a.did = v.owner_did AND NOT a.deactivated
     \\LEFT JOIN plyr_index.profile_records AS p
     \\  ON p.owner_did = v.owner_did AND p.collection = $4

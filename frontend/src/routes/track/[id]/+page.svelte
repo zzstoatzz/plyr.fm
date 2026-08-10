@@ -150,6 +150,7 @@
 
 	async function loadLikedState() {
 		if (!track) return;
+		if (IS_ZIG_V1) return;
 		try {
 			const response = await fetch(`${API_URL}/tracks/${track.id}`, {
 				credentials: 'include'
