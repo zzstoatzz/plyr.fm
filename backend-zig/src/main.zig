@@ -17,6 +17,7 @@ const continuous_runner = @import("internal/ingest/continuous_runner.zig");
 const catalog_reconcile_runner = @import("internal/ingest/catalog_reconcile_runner.zig");
 const account_reconciler = @import("internal/account/reconciler.zig");
 const postgres_auth = @import("internal/auth/postgres_store.zig");
+const oauth_gateway = @import("internal/auth/oauth_gateway.zig");
 
 var threaded_io: std.Io.Threaded = undefined;
 pub const std_options_debug_threaded_io: ?*std.Io.Threaded = &threaded_io;
@@ -30,6 +31,7 @@ pub fn main() !void {
         std.log.err("invalid configuration: {}", .{err});
         return err;
     };
+    std.log.info("browser authentication configured: {}", .{settings.auth != null});
 
     var postgres_store: ?postgres.PostgresTrackStore = if (settings.database_url) |url|
         try postgres.PostgresTrackStore.init(allocator, io, url, settings.database_pool_size)
@@ -108,8 +110,13 @@ pub fn main() !void {
                 null;
             defer if (redis_play_dedup_store) |*store| store.deinit();
             const play_dedup_store = if (redis_play_dedup_store) |*store| store.store() else null;
-            const auth_store: ?postgres_auth.PostgresAuthStore = if (settings.auth != null)
+            var postgres_auth_store: ?postgres_auth.PostgresAuthStore = if (settings.auth != null)
                 if (postgres_store) |*store| .{ .pool = store.pool } else null
+            else
+                null;
+            const auth_store = if (postgres_auth_store) |*store| store.store() else null;
+            var oauth: ?oauth_gateway.OAuthGateway = if (settings.auth != null)
+                .{ .io = io }
             else
                 null;
             try server.run(io, settings.port, settings.max_connections, .{
@@ -131,6 +138,7 @@ pub fn main() !void {
                 .cors = .{ .allowed_origins = settings.cors_allowed_origins },
                 .auth = settings.auth,
                 .auth_store = auth_store,
+                .oauth_client = if (oauth) |*client| client.client() else null,
             });
         },
         .catalog_reconciler => {
@@ -187,6 +195,10 @@ test {
     _ = @import("internal/auth/bearer_token.zig");
     _ = @import("internal/auth/sealed_secret.zig");
     _ = @import("internal/auth/postgres_store.zig");
+    _ = @import("internal/auth/store.zig");
+    _ = @import("internal/auth/oauth_state.zig");
+    _ = @import("internal/auth/oauth_gateway.zig");
+    _ = @import("internal/application/browser_login.zig");
     _ = @import("internal/account/availability.zig");
     _ = @import("internal/account/current_pds_status_source.zig");
     _ = @import("internal/account/check_schedule.zig");

@@ -16,6 +16,15 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 COLLECTION = "fm.plyr.dev.track"
 ALLOWED_ORIGIN = "https://client.example"
+FRONTEND_ORIGIN = "https://next.plyr.fm"
+AUTH_ENVIRONMENT_KEYS = (
+    "ZIG_OAUTH_CLIENT_ID",
+    "ZIG_OAUTH_REDIRECT_URI",
+    "ZIG_OAUTH_FRONTEND_ORIGIN",
+    "ZIG_OAUTH_SCOPE",
+    "ZIG_OAUTH_CLIENT_PRIVATE_KEY",
+    "ZIG_AUTH_ENCRYPTION_KEY",
+)
 
 
 def _unused_port() -> int:
@@ -102,6 +111,69 @@ def _assert_connection_backpressure(port: int) -> None:
             blocker.close()
 
 
+def _assert_configured_auth_process(base_environment: dict[str, str]) -> None:
+    port = _unused_port()
+    base_url = f"http://127.0.0.1:{port}"
+    environment = {
+        **base_environment,
+        "PORT": str(port),
+        "CORS_ALLOWED_ORIGINS": f"{FRONTEND_ORIGIN},{ALLOWED_ORIGIN}",
+        "ZIG_OAUTH_CLIENT_ID": ("https://api.next.plyr.fm/oauth-client-metadata.json"),
+        "ZIG_OAUTH_REDIRECT_URI": "https://api.next.plyr.fm/auth/callback",
+        "ZIG_OAUTH_FRONTEND_ORIGIN": FRONTEND_ORIGIN,
+        "ZIG_OAUTH_SCOPE": "atproto transition:generic",
+        "ZIG_OAUTH_CLIENT_PRIVATE_KEY": base64.b64encode(b"B" * 32).decode(),
+        "ZIG_AUTH_ENCRYPTION_KEY": base64.b64encode(b"3" * 32).decode(),
+    }
+    process = subprocess.Popen(
+        [ROOT / "zig-out/bin/plyr-backend"],
+        cwd=ROOT,
+        env=environment,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
+    )
+    try:
+        _wait_until_ready(base_url, process)
+        status, _, metadata = _request(base_url, "/oauth-client-metadata.json")
+        assert status == 200
+        assert metadata["client_id"] == environment["ZIG_OAUTH_CLIENT_ID"]
+        assert metadata["token_endpoint_auth_method"] == "private_key_jwt"
+        assert metadata["dpop_bound_access_tokens"] is True
+
+        status, _, missing_origin = _request(base_url, "/auth/logout", method="POST")
+        assert status == 403 and missing_origin["error"]["code"] == "forbidden"
+        status, _, foreign_origin = _request(
+            base_url,
+            "/auth/logout",
+            method="POST",
+            origin="https://attacker.example",
+        )
+        assert status == 403 and foreign_origin["error"]["code"] == "forbidden"
+        status, headers, broader_cors_origin = _request(
+            base_url, "/auth/logout", method="POST", origin=ALLOWED_ORIGIN
+        )
+        assert headers["access-control-allow-origin"] == ALLOWED_ORIGIN
+        assert status == 403
+        assert broader_cors_origin["error"]["code"] == "forbidden"
+        status, headers, logout = _request(
+            base_url, "/auth/logout", method="POST", origin=FRONTEND_ORIGIN
+        )
+        assert status == 200 and logout == {"message": "logged out"}
+        assert "HttpOnly" in headers["set-cookie"]
+        assert headers["cache-control"] == "no-store"
+        assert headers["pragma"] == "no-cache"
+
+        status, _, exchange = _request(base_url, "/auth/exchange", method="POST")
+        assert status == 403 and exchange["error"]["code"] == "forbidden"
+    finally:
+        process.terminate()
+        try:
+            process.wait(timeout=2)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait(timeout=2)
+
+
 def main() -> None:
     port = _unused_port()
     base_url = f"http://127.0.0.1:{port}"
@@ -120,6 +192,8 @@ def main() -> None:
     # This smoke test intentionally exercises the unavailable-index contract.
     # Never inherit a developer's staging or production database connection.
     environment.pop("DATABASE_URL", None)
+    for name in AUTH_ENVIRONMENT_KEYS:
+        environment.pop(name, None)
     process = subprocess.Popen(
         [ROOT / "zig-out/bin/plyr-backend"],
         cwd=ROOT,
@@ -136,6 +210,23 @@ def main() -> None:
 
         status, _, readiness = _request(base_url, "/ready")
         assert status == 503 and readiness["error"]["code"] == "service_unavailable"
+
+        status, _, metadata = _request(base_url, "/oauth-client-metadata.json")
+        assert status == 404 and metadata["error"]["code"] == "not_found"
+        status, _, pds_options = _request(base_url, "/auth/pds-options")
+        assert status == 200 and pds_options == {"enabled": False, "options": []}
+        status, _, auth_start = _request(base_url, "/auth/start?handle=artist.example")
+        assert status == 503 and auth_start["error"]["code"] == "service_unavailable"
+        status, _, auth_callback = _request(
+            base_url,
+            "/auth/callback?code=x&state=QkJCQkJCQkJCQkJCQkJCQg&iss=https%3A%2F%2Fauth.example",
+        )
+        assert status == 503
+        assert auth_callback["error"]["code"] == "service_unavailable"
+        status, _, auth_method = _request(
+            base_url, "/auth/start?handle=artist.example", method="POST"
+        )
+        assert status == 405 and auth_method["error"]["code"] == "method_not_allowed"
 
         status, _, unavailable_list = _request(base_url, "/v1/tracks?limit=2")
         assert status == 503
@@ -440,6 +531,8 @@ def main() -> None:
         except subprocess.TimeoutExpired:
             process.kill()
             process.wait(timeout=2)
+
+    _assert_configured_auth_process(environment)
 
 
 if __name__ == "__main__":

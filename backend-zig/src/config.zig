@@ -33,6 +33,9 @@ pub const AuthConfig = struct {
             return error.OauthRedirectMismatch;
         if (!scopeContains(values.scope, "atproto")) return error.InvalidOauthScope;
         const client_secret = try sealed_secret.parseKey(values.client_private_key);
+        const encryption_key = try sealed_secret.parseKey(values.encryption_key);
+        if (std.mem.eql(u8, &client_secret, &encryption_key))
+            return error.ReusedAuthKey;
         return .{
             .client_id = values.client_id,
             .client_uri = client_uri,
@@ -40,7 +43,7 @@ pub const AuthConfig = struct {
             .frontend_origin = values.frontend_origin,
             .scope = values.scope,
             .client_keypair = try zat.Keypair.fromSecretKey(.p256, client_secret),
-            .encryption_key = try sealed_secret.parseKey(values.encryption_key),
+            .encryption_key = encryption_key,
         };
     }
 };
@@ -311,7 +314,7 @@ test "record collections are distinct routing keys" {
     );
 }
 
-test "auth configuration is exact, confidential, and purpose-keyed" {
+test "auth configuration is exact, confidential, and uses separate keys" {
     try std.testing.expectEqual(@as(u8, 0), presentCount(.{false} ** 6));
     try std.testing.expectEqual(
         @as(u8, 1),
@@ -319,14 +322,15 @@ test "auth configuration is exact, confidential, and purpose-keyed" {
     );
     try std.testing.expectEqual(@as(u8, 6), presentCount(.{true} ** 6));
 
-    const encoded_key = "QkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkI=";
+    const client_key = "QkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkI=";
+    const encryption_key = "Q0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0M=";
     const auth = try AuthConfig.fromValues(.{
         .client_id = "https://api.next.plyr.fm/oauth-client-metadata.json",
         .redirect_uri = "https://api.next.plyr.fm/auth/callback",
         .frontend_origin = "https://next.plyr.fm",
         .scope = "atproto transition:generic",
-        .client_private_key = encoded_key,
-        .encryption_key = encoded_key,
+        .client_private_key = client_key,
+        .encryption_key = encryption_key,
     });
     try std.testing.expectEqualStrings("https://api.next.plyr.fm", auth.client_uri);
     try std.testing.expectEqualStrings("ES256", @tagName(auth.client_keypair.algorithm()));
@@ -335,7 +339,15 @@ test "auth configuration is exact, confidential, and purpose-keyed" {
         .redirect_uri = auth.redirect_uri,
         .frontend_origin = auth.frontend_origin,
         .scope = "transition:generic",
-        .client_private_key = encoded_key,
-        .encryption_key = encoded_key,
+        .client_private_key = client_key,
+        .encryption_key = encryption_key,
+    }));
+    try std.testing.expectError(error.ReusedAuthKey, AuthConfig.fromValues(.{
+        .client_id = auth.client_id,
+        .redirect_uri = auth.redirect_uri,
+        .frontend_origin = auth.frontend_origin,
+        .scope = auth.scope,
+        .client_private_key = client_key,
+        .encryption_key = client_key,
     }));
 }

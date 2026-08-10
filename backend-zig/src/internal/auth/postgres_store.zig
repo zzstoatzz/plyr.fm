@@ -7,24 +7,53 @@
 const std = @import("std");
 const pg = @import("pg");
 const bearer = @import("bearer_token.zig");
-
-pub const Session = struct {
-    did: []const u8,
-    handle: []const u8,
-    scope: []const u8,
-    sealed_credentials: []const u8,
-
-    pub fn deinit(self: *Session, allocator: std.mem.Allocator) void {
-        allocator.free(self.did);
-        allocator.free(self.handle);
-        allocator.free(self.scope);
-        allocator.free(self.sealed_credentials);
-        self.* = undefined;
-    }
-};
+const auth_store = @import("store.zig");
+const Session = auth_store.Session;
 
 pub const PostgresAuthStore = struct {
     pool: *pg.Pool,
+
+    pub fn store(self: *PostgresAuthStore) auth_store.Store {
+        return .{
+            .context = self,
+            .put_request_fn = putRequestOpaque,
+            .take_request_fn = takeRequestOpaque,
+            .create_session_exchange_fn = createSessionExchangeOpaque,
+            .consume_exchange_fn = consumeExchangeOpaque,
+            .get_session_fn = getSessionOpaque,
+            .revoke_session_fn = revokeSessionOpaque,
+        };
+    }
+
+    fn putRequestOpaque(context: *anyopaque, digest: bearer.Digest, payload: []const u8, ttl: i64) !void {
+        const self: *PostgresAuthStore = @ptrCast(@alignCast(context));
+        return self.putRequest(digest, payload, ttl);
+    }
+
+    fn takeRequestOpaque(context: *anyopaque, allocator: std.mem.Allocator, digest: bearer.Digest) !?[]const u8 {
+        const self: *PostgresAuthStore = @ptrCast(@alignCast(context));
+        return self.takeRequest(allocator, digest);
+    }
+
+    fn createSessionExchangeOpaque(context: *anyopaque, value: auth_store.SessionExchange) !void {
+        const self: *PostgresAuthStore = @ptrCast(@alignCast(context));
+        return self.createSessionExchange(value);
+    }
+
+    fn consumeExchangeOpaque(context: *anyopaque, allocator: std.mem.Allocator, digest: bearer.Digest) !?[]const u8 {
+        const self: *PostgresAuthStore = @ptrCast(@alignCast(context));
+        return self.consumeExchange(allocator, digest);
+    }
+
+    fn getSessionOpaque(context: *anyopaque, allocator: std.mem.Allocator, digest: bearer.Digest) !?Session {
+        const self: *PostgresAuthStore = @ptrCast(@alignCast(context));
+        return self.getSession(allocator, digest);
+    }
+
+    fn revokeSessionOpaque(context: *anyopaque, digest: bearer.Digest) !bool {
+        const self: *PostgresAuthStore = @ptrCast(@alignCast(context));
+        return self.revokeSession(digest);
+    }
 
     pub fn putRequest(
         self: PostgresAuthStore,
@@ -54,42 +83,42 @@ pub const PostgresAuthStore = struct {
         return try allocator.dupe(u8, try query_row.row.get([]const u8, 0));
     }
 
-    pub fn putSession(
+    /// A callback either publishes both bearer capabilities or neither. This
+    /// avoids stranding a valid session when exchange-token insertion fails.
+    pub fn createSessionExchange(
         self: PostgresAuthStore,
-        session_digest: bearer.Digest,
-        group_id: []const u8,
-        did: []const u8,
-        handle: []const u8,
-        scope: []const u8,
-        sealed_credentials: []const u8,
-        ttl_seconds: i64,
+        value: auth_store.SessionExchange,
     ) !void {
-        const affected = try self.pool.exec(
+        var conn = try self.pool.acquire();
+        defer self.pool.release(conn);
+        try conn.begin();
+        var transaction_open = true;
+        defer if (transaction_open) conn.rollback() catch |err| {
+            std.log.err("auth issuance rollback failed: {}", .{err});
+        };
+        const session_rows = try conn.exec(
             \\INSERT INTO plyr_auth.sessions
             \\  (session_digest, group_id, did, handle, scope, sealed_credentials, expires_at)
             \\VALUES ($1::bytea, $2::uuid, $3, $4, $5, $6::bytea,
             \\        clock_timestamp() + $7::bigint * INTERVAL '1 second')
         , .{
-            session_digest[0..], group_id,    did, handle, scope,
-            sealed_credentials,  ttl_seconds,
+            value.session_digest[0..], value.group_id, value.did,
+            value.handle,              value.scope,    value.sealed_credentials,
+            value.session_ttl_seconds,
         });
-        if (affected != 1) return error.UnexpectedRowCount;
-    }
-
-    pub fn putExchange(
-        self: PostgresAuthStore,
-        token_digest: bearer.Digest,
-        session_digest: bearer.Digest,
-        sealed_session_token: []const u8,
-        ttl_seconds: i64,
-    ) !void {
-        const affected = try self.pool.exec(
+        if (session_rows != 1) return error.UnexpectedRowCount;
+        const exchange_rows = try conn.exec(
             \\INSERT INTO plyr_auth.exchange_tokens
             \\  (token_digest, session_digest, sealed_session_token, expires_at)
             \\VALUES ($1::bytea, $2::bytea, $3::bytea,
             \\        clock_timestamp() + $4::bigint * INTERVAL '1 second')
-        , .{ token_digest[0..], session_digest[0..], sealed_session_token, ttl_seconds });
-        if (affected != 1) return error.UnexpectedRowCount;
+        , .{
+            value.exchange_digest[0..], value.session_digest[0..],
+            value.sealed_session_token, value.exchange_ttl_seconds,
+        });
+        if (exchange_rows != 1) return error.UnexpectedRowCount;
+        try conn.commit();
+        transaction_open = false;
     }
 
     pub fn consumeExchange(
@@ -117,7 +146,7 @@ pub const PostgresAuthStore = struct {
         session_digest: bearer.Digest,
     ) !?Session {
         var query_row = try self.pool.row(
-            \\SELECT did, handle, scope, sealed_credentials
+            \\SELECT did, handle, scope
             \\FROM plyr_auth.sessions
             \\WHERE session_digest = $1::bytea
             \\  AND expires_at > clock_timestamp()
@@ -128,7 +157,6 @@ pub const PostgresAuthStore = struct {
             .did = try allocator.dupe(u8, try query_row.row.get([]const u8, 0)),
             .handle = try allocator.dupe(u8, try query_row.row.get([]const u8, 1)),
             .scope = try allocator.dupe(u8, try query_row.row.get([]const u8, 2)),
-            .sealed_credentials = try allocator.dupe(u8, try query_row.row.get([]const u8, 3)),
         };
     }
 
@@ -187,7 +215,8 @@ test "Postgres auth store consumes exchange tokens once and revokes sessions" {
         \\)
     , .{});
 
-    const store: PostgresAuthStore = .{ .pool = database.pool };
+    var postgres: PostgresAuthStore = .{ .pool = database.pool };
+    const store = postgres.store();
     const state = bearer.digest("state");
     try store.putRequest(state, "sealed request", 60);
     const request_payload = (try store.takeRequest(std.testing.allocator, state)).?;
@@ -196,17 +225,37 @@ test "Postgres auth store consumes exchange tokens once and revokes sessions" {
     try std.testing.expect((try store.takeRequest(std.testing.allocator, state)) == null);
 
     const session = bearer.digest("session");
-    try store.putSession(
-        session,
-        "00000000-0000-4000-8000-000000000001",
-        "did:plc:test",
-        "test.example",
-        "atproto",
-        "sealed credentials",
-        60,
-    );
     const exchange = bearer.digest("exchange");
-    try store.putExchange(exchange, session, "sealed session token", 60);
+    try store.createSessionExchange(.{
+        .session_digest = session,
+        .group_id = "00000000-0000-4000-8000-000000000001",
+        .did = "did:plc:test",
+        .handle = "test.example",
+        .scope = "atproto",
+        .sealed_credentials = "sealed credentials",
+        .session_ttl_seconds = 60,
+        .exchange_digest = exchange,
+        .sealed_session_token = "sealed session token",
+        .exchange_ttl_seconds = 60,
+    });
+    const rolled_back_session = bearer.digest("rolled-back-session");
+    if (store.createSessionExchange(.{
+        .session_digest = rolled_back_session,
+        .group_id = "00000000-0000-4000-8000-000000000002",
+        .did = "did:plc:other",
+        .handle = "other.example",
+        .scope = "atproto",
+        .sealed_credentials = "must roll back",
+        .session_ttl_seconds = 60,
+        .exchange_digest = exchange,
+        .sealed_session_token = "duplicate exchange",
+        .exchange_ttl_seconds = 60,
+    })) |_| {
+        return error.ExpectedUniqueViolation;
+    } else |_| {}
+    try std.testing.expect(
+        (try store.getSession(std.testing.allocator, rolled_back_session)) == null,
+    );
     const session_token = (try store.consumeExchange(std.testing.allocator, exchange)).?;
     defer std.testing.allocator.free(session_token);
     try std.testing.expectEqualStrings("sealed session token", session_token);

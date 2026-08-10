@@ -18,6 +18,7 @@ just zig smoke-canary
 DATABASE_URL=... TRACK_COLLECTION_NSID=... LIST_COLLECTION_NSID=... PROFILE_COLLECTION_NSID=... LIKE_COLLECTION_NSID=... just zig reconcile-catalog
 INDEX_MODE=disabled TRACK_COLLECTION_NSID=fm.plyr.dev.track LIST_COLLECTION_NSID=fm.plyr.dev.list PROFILE_COLLECTION_NSID=fm.plyr.dev.actor.profile LIKE_COLLECTION_NSID=fm.plyr.dev.like just zig run
 just zig bench-http --duration 5 --concurrency 16
+just zig bench-api-parity
 DATABASE_URL=postgresql://... just zig bench-http --with-index --path '/v1/tracks?limit=50'
 DATABASE_URL=postgresql://... TRACK_COLLECTION_NSID=fm.plyr.dev.track LIST_COLLECTION_NSID=fm.plyr.dev.list PROFILE_COLLECTION_NSID=fm.plyr.dev.actor.profile LIKE_COLLECTION_NSID=fm.plyr.dev.like just zig repair-repo did:plc:example
 DATABASE_URL=postgresql://... TRACK_COLLECTION_NSID=fm.plyr.dev.track LIST_COLLECTION_NSID=fm.plyr.dev.list PROFILE_COLLECTION_NSID=fm.plyr.dev.actor.profile LIKE_COLLECTION_NSID=fm.plyr.dev.like just zig reconcile-accounts
@@ -51,6 +52,12 @@ both test paths refuse any other database name. The HTTP benchmarks use a
 third `zig_bench` database on port 5434, so neither path can overwrite the
 Python suite's `relay_test` schema.
 
+`bench-api-parity` is the representative cross-runtime gate. It allocates a
+unique Compose project and random host ports, bootstraps a database named only
+`plyr_bench`, seeds equivalent Python and Zig projections, verifies both
+50-track pagination contracts, measures native RSS and CPU efficiency, and
+removes the entire stack on exit. It never reads a developer database URL.
+
 Local product data follows the same authority boundary as deployment. A PDS
 record written through the API, or discovered by repository ingestion/repair,
 is the fixture; Postgres is the disposable result. A local bootstrap command
@@ -74,6 +81,12 @@ Direct SQL is reserved for projection adapter tests and benchmark fixtures.
 | `MAX_CONNECTIONS` | no | hard cap on accepted connection handlers, default `128` |
 | `PORT` | no | listener port, default `8001` |
 | `CORS_ALLOWED_ORIGINS` | no | comma-separated exact browser origins; empty disables CORS |
+| `ZIG_OAUTH_CLIENT_ID` | as an all-or-nothing auth set | HTTPS metadata-document URL; canary value is `https://api.next.plyr.fm/oauth-client-metadata.json` |
+| `ZIG_OAUTH_REDIRECT_URI` | as an all-or-nothing auth set | exact callback URL on the same API origin |
+| `ZIG_OAUTH_FRONTEND_ORIGIN` | as an all-or-nothing auth set | exact frontend origin used for post-callback redirects and authorization of browser credential mutations |
+| `ZIG_OAUTH_SCOPE` | as an all-or-nothing auth set | ATProto OAuth scope containing `atproto` |
+| `ZIG_OAUTH_CLIENT_PRIVATE_KEY` | as an all-or-nothing auth set | standard-base64 raw 32-byte P-256 confidential-client key |
+| `ZIG_AUTH_ENCRYPTION_KEY` | as an all-or-nothing auth set | standard-base64 raw 32-byte XChaCha20-Poly1305 key; must differ from the OAuth client key |
 | `INGEST_REPAIR_DID` | in repair mode | canonical DID whose complete repository is fetched, verified, and atomically reconciled |
 | `ACCOUNT_CHECK_INTERVAL_SECONDS` | no | authoritative current-PDS recheck interval, default 21600 (six hours) |
 | `ACCOUNT_CHECK_RETRY_SECONDS` | no | retry interval after transport or non-authoritative status, default 300 |
@@ -85,6 +98,21 @@ Direct SQL is reserved for projection adapter tests and benchmark fixtures.
 configured track index. The listener acquires a connection permit before
 `accept`, so saturation applies kernel-backlog backpressure instead of creating
 unbounded detached threads.
+
+The browser-authentication compatibility surface is `GET /auth/start`,
+`GET /auth/callback`, `POST /auth/exchange`, `GET /auth/me`,
+`POST /auth/logout`, `GET /auth/pds-options`, and
+`GET /oauth-client-metadata.json`. OAuth ceremony terminates on
+`api.next.plyr.fm`; the existing frontend receives only a one-minute,
+single-use exchange capability in a URL fragment that is never sent to the
+frontend server, then uses the `__Host-plyr_session` API cookie. Its browser-
+enforced prefix forbids a `Domain` attribute and requires root path plus TLS.
+Cookie-setting and cookie-mutating endpoints reject requests without the exact
+configured frontend `Origin`; CORS response headers alone are not treated as
+CSRF protection, and successful credential responses are explicitly `no-store`.
+Identity/session reads project only DID, handle, and scope;
+they never retrieve the sealed OAuth credentials. A future PDS-write slice must
+request that separate capability explicitly.
 
 The current product surface is `GET /v1/tracks`,
 `GET /v1/tracks/{track_id}`, `GET /v1/tracks/{track_id}/playback`,
@@ -180,23 +208,35 @@ secret values while checking configuration.
 ## canary deployment
 
 Browser authentication is non-rebuildable application state, not an index.
-The successor therefore owns a separate `plyr_auth` schema. Browser session,
-OAuth state, and one-time exchange values are random 256-bit bearer tokens;
-Postgres receives only their SHA-256 lookup digests. PKCE verifiers, OAuth
+The successor therefore owns a separate `plyr_auth` schema. Browser sessions
+and one-time exchange values are random 256-bit bearer tokens; OAuth state is
+a standards-conventional random 128-bit value. Postgres receives only SHA-256
+lookup digests for all three. PKCE verifiers, OAuth
 access/refresh tokens, DPoP private keys, and the temporarily recoverable
 session value are stored only in versioned XChaCha20-Poly1305 envelopes whose
 associated data binds each ciphertext to its purpose. Redis is not in the
 credential path. Exchange uses atomic `DELETE ... RETURNING`, sessions are
-revocable and expire locally, and the cookie is host-only to
-`api.next.plyr.fm` with `HttpOnly; Secure; SameSite=Lax`.
+revocable and expire locally, and the `__Host-plyr_session` cookie is host-only
+to `api.next.plyr.fm` with `HttpOnly; Secure; SameSite=Lax`.
+
+OAuth state is also bound to the browser that initiated the login with a
+separate, host-only `__Host-plyr_oauth` HttpOnly cookie. The callback checks the
+cookie before consuming server-side state and clears it on completion, which
+prevents forwarding a completed callback into another browser to swap that
+browser into the attacker's session.
 
 Zat owns OAuth metadata, PKCE, PAR, client assertions, token exchange, refresh,
-and DPoP ceremony. The application owns destination safety as well as storage:
-every PDS and authorization-server origin must resolve entirely to global
-addresses and the checked address must remain pinned for TLS. The required
-backward-compatible Zat transport extension is prepared locally on
-`codex/oauth-pinned-destinations`; it is intentionally not published or pinned
-here until its shared-library release is explicitly approved.
+and DPoP ceremony. The application binds handle resolution in both directions,
+requires the DID document id and PDS service type, validates callback issuer
+and token subject exactly, consumes state before exchange, and publishes the
+session and one-time exchange token in one transaction. It owns destination
+safety as well as storage: every PDS, authorization-server metadata origin,
+and independently declared authorization, PAR, and token endpoint must resolve
+entirely to global addresses. Each server-side request pins its endpoint's
+checked address while preserving its own TLS identity; valid cross-origin OAuth
+endpoints do not require a global Zat behavior change. Zat v0.3.28 provides the
+pinned-destination transport, optional DPoP nonce handling, and expanded
+special-purpose address rejection used by this boundary.
 
 `fly.canary.toml` defines an API-only Fly service named
 `plyr-api-zig-canary`. It uses one 256 MiB shared-CPU machine, scales to zero,
@@ -219,7 +259,11 @@ The already-registered `deploy staging` GitHub workflow exposes an explicit manu
 goes through that target. Keeping it in a workflow already present on the default
 branch lets this long-lived PR deploy its own ref before merge; a newly added
 standalone workflow cannot be dispatched until it reaches the default branch.
-The job builds and publishes one commit-addressed image before deployment. On the
+The job first verifies the dedicated Fly app has its database, Redis, OAuth
+client-key, and auth-encryption secret names configured, without reading secret
+values. It builds and publishes one commit-addressed image, then applies Alembic
+`head` to only the isolated next Neon branch with the writer credential before
+deployment. The runtime credential never receives migration authority. On the
 first run, its explicit `reconcile_catalog` input launches that image as an
 unmanaged `--rm` Machine in the canary app with a dedicated next-branch writer
 credential: it authenticates current production-namespace repositories, writes

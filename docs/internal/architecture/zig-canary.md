@@ -97,6 +97,16 @@ scoped to the tested REST capability set.
 Routine canary deployments leave reconciliation disabled, avoiding repeated PDS
 fetches and projection writes.
 
+Before building, the canary job verifies that its dedicated Fly app has
+`DATABASE_URL`, `DOCKET_URL`, `ZIG_OAUTH_CLIENT_PRIVATE_KEY`, and
+`ZIG_AUTH_ENCRYPTION_KEY` configured. `flyctl secrets list` exposes names and
+digests, never values; the workflow retains neither. The public client id,
+callback, frontend origin, and scope live in `fly.canary.toml`. After publishing
+the immutable image but before changing a Machine, the workflow applies Alembic
+`head` through the isolated next-branch writer credential. This creates or
+upgrades `plyr_auth` without granting migration authority to the runtime API
+credential and without connecting to staging or production.
+
 After semantic smoke, the same job captures the application process at idle,
 drives `/v1/tracks?limit=50` over the public Fly hostname for ten seconds each at
 concurrency 1 and 16, and captures it again. The retained commit-addressed JSON
@@ -134,6 +144,16 @@ Before exposing `next.plyr.fm`:
 6. No route receives user traffic until its authentication, visibility,
    moderation, and content-authority semantics are explicit. A fast wrong
    response is a regression.
+7. The authentication smoke must serve confidential-client metadata for
+   `api.next.plyr.fm`, reject an anonymous `/auth/me`, reject malformed login
+   identifiers without making an upstream request, and clear a host-only secure
+   session cookie on logout. Exchange and logout must reject missing or foreign
+   browser origins, even when the request would otherwise be same-site. A human
+   authorization round-trip remains a DNS cutover gate because an Authorization
+   Server must fetch the public client metadata URL during PAR.
+
+   Successful credential responses must be `no-store`, and OAuth signing and
+   credential-encryption keys must be distinct.
 
 `next.plyr.fm` is reserved for the complete successor application: a frontend
 whose data and playback capabilities come from Zig `/v1`. Directly exposing the
@@ -170,9 +190,27 @@ availability, and only then attaches the returned delivery URL.
 The deployed `a922f59f` checkpoint used a narrow Pages Function from
 `next.plyr.fm/api/v1/*` to `plyr-api-zig-canary.fly.dev`. The authentication
 slice replaces that temporary transport with `api.next.plyr.fm`, matching the
-production `plyr.fm` / `api.plyr.fm` boundary. The API cookie remains host-only
-to `api.next.plyr.fm`; browser requests from `https://next.plyr.fm` use exact-
-origin credentialed CORS. DNS and a new frontend checkpoint remain pending.
+production `plyr.fm` / `api.plyr.fm` boundary. The API cookie uses the `__Host-`
+prefix and remains host-only to `api.next.plyr.fm`; browser requests from
+`https://next.plyr.fm` use exact-origin credentialed CORS. DNS and deployment
+remain pending.
+
+Authentication mutations authorize only the configured frontend origin, even
+if a development CORS allowlist is broader. OAuth signing and credential-
+encryption keys are separate purposes and configuration fails closed if their
+decoded key material is equal. The pinned outbound OAuth transport is supplied
+by the published Zat v0.3.28 archive.
+
+OAuth state has a second browser binding: `/auth/start` writes a ten-minute,
+host-only `__Host-plyr_oauth` HttpOnly cookie, and the callback must present the
+same canonical state before the one-time database row is consumed. This closes
+login session swapping without exposing session credentials to the frontend.
+The callback passes its one-time exchange capability in the frontend URL
+fragment, not the query string, so the bearer never enters Pages access logs or
+same-origin referrer headers before the client consumes it.
+The isolated Fly app has a certificate request reserved for
+`api.next.plyr.fm`; no DNS record points at it yet, so the suspended historical
+image cannot receive traffic through the new API hostname.
 
 The deployed `https://next.plyr.fm` verification proved:
 

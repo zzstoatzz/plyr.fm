@@ -5,8 +5,10 @@ const http = std.http;
 pub const ApiError = enum {
     invalid_request,
     authentication_required,
+    forbidden,
     not_found,
     method_not_allowed,
+    upstream_failure,
     internal_error,
     service_unavailable,
 
@@ -14,8 +16,10 @@ pub const ApiError = enum {
         return switch (self) {
             .invalid_request => "The request is invalid.",
             .authentication_required => "Authentication is required for this resource.",
+            .forbidden => "The request origin is not allowed.",
             .not_found => "The requested resource was not found.",
             .method_not_allowed => "The resource does not support this method.",
+            .upstream_failure => "An upstream service could not complete the request.",
             .internal_error => "The request could not be completed.",
             .service_unavailable => "The service is temporarily unavailable.",
         };
@@ -25,8 +29,10 @@ pub const ApiError = enum {
         return switch (self) {
             .invalid_request => .bad_request,
             .authentication_required => .unauthorized,
+            .forbidden => .forbidden,
             .not_found => .not_found,
             .method_not_allowed => .method_not_allowed,
+            .upstream_failure => .bad_gateway,
             .internal_error => .internal_server_error,
             .service_unavailable => .service_unavailable,
         };
@@ -109,6 +115,42 @@ pub fn empty(
     try json(request, status, "", request_id, cors);
 }
 
+pub fn redirect(
+    request: *http.Server.Request,
+    location: []const u8,
+    request_id: []const u8,
+) !void {
+    return redirectWithHeaders(request, location, request_id, &.{});
+}
+
+pub fn redirectWithHeaders(
+    request: *http.Server.Request,
+    location: []const u8,
+    request_id: []const u8,
+    additional_headers: []const http.Header,
+) !void {
+    var headers: [12]http.Header = undefined;
+    const standard = [_]http.Header{
+        .{ .name = "location", .value = location },
+        .{ .name = "cache-control", .value = "no-store" },
+        .{ .name = "pragma", .value = "no-cache" },
+        .{ .name = "x-request-id", .value = request_id },
+        .{ .name = "x-content-type-options", .value = "nosniff" },
+        .{ .name = "referrer-policy", .value = "no-referrer" },
+    };
+    if (standard.len + additional_headers.len > headers.len)
+        return error.TooManyResponseHeaders;
+    @memcpy(headers[0..standard.len], &standard);
+    @memcpy(
+        headers[standard.len .. standard.len + additional_headers.len],
+        additional_headers,
+    );
+    try request.respond("", .{
+        .status = .see_other,
+        .extra_headers = headers[0 .. standard.len + additional_headers.len],
+    });
+}
+
 pub fn apiError(
     request: *http.Server.Request,
     kind: ApiError,
@@ -129,13 +171,35 @@ fn formatError(buffer: []u8, kind: ApiError, request_id: []const u8) ![]const u8
 }
 
 fn requestOrigin(request: *const http.Server.Request, cors: CorsPolicy) ?[]const u8 {
+    var candidate: ?[]const u8 = null;
     var headers = request.iterateHeaders();
     while (headers.next()) |header| {
-        if (std.ascii.eqlIgnoreCase(header.name, "origin") and cors.allows(header.value)) {
-            return header.value;
-        }
+        if (!std.ascii.eqlIgnoreCase(header.name, "origin")) continue;
+        if (candidate != null) return null;
+        candidate = header.value;
     }
-    return null;
+    const origin = candidate orelse return null;
+    return if (cors.allows(origin)) origin else null;
+}
+
+pub fn allowsRequestOrigin(request: *const http.Server.Request, cors: CorsPolicy) bool {
+    return requestOrigin(request, cors) != null;
+}
+
+/// Authentication mutations have exactly one browser principal. A broader
+/// development CORS allowlist must not silently expand that authority.
+pub fn hasExactRequestOrigin(
+    request: *const http.Server.Request,
+    expected: []const u8,
+) bool {
+    var candidate: ?[]const u8 = null;
+    var headers = request.iterateHeaders();
+    while (headers.next()) |header| {
+        if (!std.ascii.eqlIgnoreCase(header.name, "origin")) continue;
+        if (candidate != null) return false;
+        candidate = header.value;
+    }
+    return if (candidate) |origin| std.mem.eql(u8, origin, expected) else false;
 }
 
 test "error envelopes are stable and include the request id" {

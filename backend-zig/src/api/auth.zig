@@ -8,10 +8,20 @@ const zat = @import("zat");
 const config = @import("../config.zig");
 const response = @import("response.zig");
 const bearer = @import("../internal/auth/bearer_token.zig");
+const oauth_gateway = @import("../internal/auth/oauth_gateway.zig");
 const sealed_secret = @import("../internal/auth/sealed_secret.zig");
-const PostgresAuthStore = @import("../internal/auth/postgres_store.zig").PostgresAuthStore;
+const AuthStore = @import("../internal/auth/store.zig").Store;
+const browser_login = @import("../internal/application/browser_login.zig");
+const query = @import("../internal/http/query.zig");
 
 const http = std.http;
+const session_cookie_name = "__Host-plyr_session";
+const oauth_cookie_name = "__Host-plyr_oauth";
+const clear_oauth_cookie = oauth_cookie_name ++ "=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Lax";
+const no_store_headers = [_]http.Header{
+    .{ .name = "cache-control", .value = "no-store" },
+    .{ .name = "pragma", .value = "no-cache" },
+};
 
 pub fn clientMetadata(
     request: *http.Server.Request,
@@ -53,15 +63,119 @@ pub fn pdsOptions(
     try response.json(request, .ok, "{\"enabled\":false,\"options\":[]}", request_id, cors);
 }
 
-pub fn exchange(
+pub fn start(
     request: *http.Server.Request,
     allocator: std.mem.Allocator,
+    io: std.Io,
     auth: ?config.AuthConfig,
-    store: ?PostgresAuthStore,
+    store: ?AuthStore,
+    oauth: ?oauth_gateway.Client,
     cors: response.CorsPolicy,
     request_id: []const u8,
 ) !void {
     const settings = auth orelse return unavailable(request, request_id, cors);
+    const auth_store = store orelse return unavailable(request, request_id, cors);
+    const client = oauth orelse return unavailable(request, request_id, cors);
+    const handle = parseStartHandle(allocator, request.head.target) catch {
+        try response.apiError(request, .invalid_request, request_id, cors);
+        return;
+    };
+    const service: browser_login.Service = .{
+        .io = io,
+        .settings = settings,
+        .store = auth_store,
+        .oauth = client,
+    };
+    const begun = service.start(allocator, handle) catch |err| {
+        std.log.warn("OAuth start failed: {}", .{err});
+        const kind: response.ApiError = switch (err) {
+            error.AuthStoreUnavailable => .service_unavailable,
+            error.OauthStartFailed => .upstream_failure,
+            else => .internal_error,
+        };
+        try response.apiError(request, kind, request_id, cors);
+        return;
+    };
+    const cookie = try std.fmt.allocPrint(
+        allocator,
+        "{s}={s}; Path=/; Max-Age=600; HttpOnly; Secure; SameSite=Lax",
+        .{ oauth_cookie_name, begun.state },
+    );
+    try response.redirectWithHeaders(request, begun.redirect_url, request_id, &.{.{
+        .name = "set-cookie",
+        .value = cookie,
+    }});
+}
+
+pub fn callback(
+    request: *http.Server.Request,
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    auth: ?config.AuthConfig,
+    store: ?AuthStore,
+    oauth: ?oauth_gateway.Client,
+    request_id: []const u8,
+) !void {
+    const settings = auth orelse {
+        try response.apiError(request, .service_unavailable, request_id, .{ .allowed_origins = "" });
+        return;
+    };
+    const auth_store = store orelse return callbackError(request, allocator, settings, "failed", request_id);
+    const client = oauth orelse return callbackError(request, allocator, settings, "failed", request_id);
+    const callback_query = parseCallback(allocator, request.head.target) catch {
+        return callbackError(request, allocator, settings, "expired", request_id);
+    };
+    const callback_state = switch (callback_query) {
+        .success => |value| value.state,
+        .failure => |value| value.state,
+    };
+    if (!oauthStateMatchesBrowser(request, callback_state))
+        return callbackError(request, allocator, settings, "expired", request_id);
+
+    const service: browser_login.Service = .{
+        .io = io,
+        .settings = settings,
+        .store = auth_store,
+        .oauth = client,
+    };
+    const params = switch (callback_query) {
+        .success => |value| value,
+        .failure => |failure| {
+            service.cancel(allocator, failure.state, failure.issuer) catch |err| {
+                std.log.warn("OAuth cancellation state failed: {}", .{err});
+            };
+            return callbackError(request, allocator, settings, "failed", request_id);
+        },
+    };
+    const exchange_token = service.callback(allocator, .{
+        .code = params.code,
+        .state = params.state,
+        .issuer = params.issuer,
+    }) catch |err| {
+        std.log.warn("OAuth callback failed: {}", .{err});
+        return callbackError(request, allocator, settings, "failed", request_id);
+    };
+    const location = try callbackLocation(
+        allocator,
+        settings.frontend_origin,
+        exchange_token,
+    );
+    try response.redirectWithHeaders(request, location, request_id, &.{.{
+        .name = "set-cookie",
+        .value = clear_oauth_cookie,
+    }});
+}
+
+pub fn exchange(
+    request: *http.Server.Request,
+    allocator: std.mem.Allocator,
+    auth: ?config.AuthConfig,
+    store: ?AuthStore,
+    cors: response.CorsPolicy,
+    request_id: []const u8,
+) !void {
+    const settings = auth orelse return unavailable(request, request_id, cors);
+    if (!try requireBrowserOrigin(request, settings.frontend_origin, cors, request_id)) return;
     const auth_store = store orelse return unavailable(request, request_id, cors);
     const body_reader = request.readerExpectContinue(&.{}) catch {
         try response.apiError(request, .invalid_request, request_id, cors);
@@ -111,19 +225,20 @@ pub fn exchange(
     }
     const cookie = try std.fmt.allocPrint(
         allocator,
-        "session_id={s}; Path=/; Max-Age=1209600; HttpOnly; Secure; SameSite=Lax",
-        .{session_token},
+        "{s}={s}; Path=/; Max-Age=1209600; HttpOnly; Secure; SameSite=Lax",
+        .{ session_cookie_name, session_token },
     );
-    try response.jsonWithHeaders(request, .ok, "{}", request_id, cors, &.{.{
-        .name = "set-cookie",
-        .value = cookie,
-    }});
+    try response.jsonWithHeaders(request, .ok, "{}", request_id, cors, &.{
+        .{ .name = "set-cookie", .value = cookie },
+        no_store_headers[0],
+        no_store_headers[1],
+    });
 }
 
 pub fn me(
     request: *http.Server.Request,
     allocator: std.mem.Allocator,
-    store: ?PostgresAuthStore,
+    store: ?AuthStore,
     cors: response.CorsPolicy,
     request_id: []const u8,
 ) !void {
@@ -146,15 +261,25 @@ pub fn me(
         "{{\"did\":{f},\"handle\":{f},\"linked_accounts\":[],\"enabled_flags\":[],\"permissioned_spaces\":{{\"supported\":false}}}}",
         .{ std.json.fmt(session.did, .{}), std.json.fmt(session.handle, .{}) },
     );
-    try response.json(request, .ok, body.written(), request_id, cors);
+    try response.jsonWithHeaders(
+        request,
+        .ok,
+        body.written(),
+        request_id,
+        cors,
+        &no_store_headers,
+    );
 }
 
 pub fn logout(
     request: *http.Server.Request,
-    store: ?PostgresAuthStore,
+    auth: ?config.AuthConfig,
+    store: ?AuthStore,
     cors: response.CorsPolicy,
     request_id: []const u8,
 ) !void {
+    const settings = auth orelse return unavailable(request, request_id, cors);
+    if (!try requireBrowserOrigin(request, settings.frontend_origin, cors, request_id)) return;
     if (sessionCookie(request)) |token| {
         if (store) |auth_store| {
             _ = auth_store.revokeSession(bearer.digest(token)) catch {
@@ -163,10 +288,14 @@ pub fn logout(
             };
         }
     }
-    try response.jsonWithHeaders(request, .ok, "{\"message\":\"logged out\"}", request_id, cors, &.{.{
-        .name = "set-cookie",
-        .value = "session_id=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Lax",
-    }});
+    try response.jsonWithHeaders(request, .ok, "{\"message\":\"logged out\"}", request_id, cors, &.{
+        .{
+            .name = "set-cookie",
+            .value = session_cookie_name ++ "=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Lax",
+        },
+        no_store_headers[0],
+        no_store_headers[1],
+    });
 }
 
 fn unavailable(
@@ -177,20 +306,183 @@ fn unavailable(
     try response.apiError(request, .service_unavailable, request_id, cors);
 }
 
+fn requireBrowserOrigin(
+    request: *http.Server.Request,
+    expected: []const u8,
+    cors: response.CorsPolicy,
+    request_id: []const u8,
+) !bool {
+    if (response.hasExactRequestOrigin(request, expected)) return true;
+    try response.apiError(request, .forbidden, request_id, cors);
+    return false;
+}
+
+const CallbackParams = struct {
+    code: []const u8,
+    state: []const u8,
+    issuer: []const u8,
+};
+
+const CallbackFailure = struct {
+    state: []const u8,
+    issuer: []const u8,
+};
+
+const CallbackQuery = union(enum) {
+    success: CallbackParams,
+    failure: CallbackFailure,
+};
+
+fn parseStartHandle(allocator: std.mem.Allocator, target: []const u8) ![]const u8 {
+    var iterator = query.Iterator.init(allocator, target);
+    var handle: ?[]const u8 = null;
+    while (try iterator.next()) |pair| {
+        if (!std.mem.eql(u8, pair.name, "handle") or handle != null)
+            return error.InvalidQuery;
+        handle = pair.value;
+    }
+    const value = handle orelse return error.InvalidQuery;
+    if (value.len == 0 or value.len > zat.Handle.max_length or zat.Handle.parse(value) == null)
+        return error.InvalidQuery;
+    return value;
+}
+
+fn parseCallback(allocator: std.mem.Allocator, target: []const u8) !CallbackQuery {
+    var iterator = query.Iterator.init(allocator, target);
+    var code: ?[]const u8 = null;
+    var state: ?[]const u8 = null;
+    var issuer: ?[]const u8 = null;
+    var oauth_error: ?[]const u8 = null;
+    var error_description: ?[]const u8 = null;
+    var error_uri: ?[]const u8 = null;
+    while (try iterator.next()) |pair| {
+        if (std.mem.eql(u8, pair.name, "code") and code == null) {
+            code = pair.value;
+        } else if (std.mem.eql(u8, pair.name, "state") and state == null) {
+            state = pair.value;
+        } else if (std.mem.eql(u8, pair.name, "iss") and issuer == null) {
+            issuer = pair.value;
+        } else if (std.mem.eql(u8, pair.name, "error") and oauth_error == null) {
+            oauth_error = pair.value;
+        } else if (std.mem.eql(u8, pair.name, "error_description") and error_description == null) {
+            error_description = pair.value;
+        } else if (std.mem.eql(u8, pair.name, "error_uri") and error_uri == null) {
+            error_uri = pair.value;
+        } else {
+            return error.InvalidQuery;
+        }
+    }
+    const state_value = state orelse return error.InvalidQuery;
+    const issuer_value = issuer orelse return error.InvalidQuery;
+    if (!browser_login.isCanonicalState(state_value) or
+        issuer_value.len == 0 or issuer_value.len > 2048)
+        return error.InvalidQuery;
+    if (oauth_error) |error_value| {
+        if (code != null or error_value.len == 0 or error_value.len > 256 or
+            optionalTooLong(error_description, 2048) or
+            optionalTooLong(error_uri, 2048))
+            return error.InvalidQuery;
+        return .{ .failure = .{ .state = state_value, .issuer = issuer_value } };
+    }
+    if (error_description != null or error_uri != null) return error.InvalidQuery;
+    const code_value = code orelse return error.InvalidQuery;
+    if (code_value.len == 0 or code_value.len > 2048) return error.InvalidQuery;
+    return .{ .success = .{
+        .code = code_value,
+        .state = state_value,
+        .issuer = issuer_value,
+    } };
+}
+
+fn optionalTooLong(value: ?[]const u8, maximum: usize) bool {
+    return if (value) |bytes| bytes.len > maximum else false;
+}
+
+fn callbackError(
+    request: *http.Server.Request,
+    allocator: std.mem.Allocator,
+    settings: config.AuthConfig,
+    code: []const u8,
+    request_id: []const u8,
+) !void {
+    const location = try std.fmt.allocPrint(
+        allocator,
+        "{s}/?auth_error={s}",
+        .{ settings.frontend_origin, code },
+    );
+    try response.redirectWithHeaders(request, location, request_id, &.{.{
+        .name = "set-cookie",
+        .value = clear_oauth_cookie,
+    }});
+}
+
+fn callbackLocation(
+    allocator: std.mem.Allocator,
+    frontend_origin: []const u8,
+    exchange_token: []const u8,
+) ![]u8 {
+    return std.fmt.allocPrint(
+        allocator,
+        "{s}/portal#exchange_token={s}",
+        .{ frontend_origin, exchange_token },
+    );
+}
+
 fn sessionCookie(request: *const http.Server.Request) ?[]const u8 {
+    return canonicalCookie(request, session_cookie_name, .bearer);
+}
+
+fn oauthStateMatchesBrowser(
+    request: *const http.Server.Request,
+    callback_state: []const u8,
+) bool {
+    const browser_state = canonicalCookie(request, oauth_cookie_name, .oauth_state) orelse
+        return false;
+    return std.mem.eql(u8, browser_state, callback_state);
+}
+
+const CookieValueKind = enum {
+    bearer,
+    oauth_state,
+
+    fn isCanonical(self: CookieValueKind, value: []const u8) bool {
+        return switch (self) {
+            .bearer => bearer.isCanonical(value),
+            .oauth_state => browser_login.isCanonicalState(value),
+        };
+    }
+};
+
+fn canonicalCookie(
+    request: *const http.Server.Request,
+    name: []const u8,
+    kind: CookieValueKind,
+) ?[]const u8 {
+    var candidate: ?[]const u8 = null;
     var headers = request.iterateHeaders();
     while (headers.next()) |header| {
         if (!std.ascii.eqlIgnoreCase(header.name, "cookie")) continue;
-        var cookies = std.mem.splitScalar(u8, header.value, ';');
-        while (cookies.next()) |raw| {
-            const cookie = std.mem.trim(u8, raw, " \t");
-            const equals = std.mem.indexOfScalar(u8, cookie, '=') orelse continue;
-            if (!std.mem.eql(u8, cookie[0..equals], "session_id")) continue;
-            const value = cookie[equals + 1 ..];
-            return if (bearer.isCanonical(value)) value else null;
-        }
+        if (!consumeCookieHeader(&candidate, header.value, name, kind)) return null;
     }
-    return null;
+    return candidate;
+}
+
+fn consumeCookieHeader(
+    candidate: *?[]const u8,
+    header_value: []const u8,
+    name: []const u8,
+    kind: CookieValueKind,
+) bool {
+    var cookies = std.mem.splitScalar(u8, header_value, ';');
+    while (cookies.next()) |raw| {
+        const cookie = std.mem.trim(u8, raw, " \t");
+        const equals = std.mem.indexOfScalar(u8, cookie, '=') orelse continue;
+        if (!std.mem.eql(u8, cookie[0..equals], name)) continue;
+        const value = cookie[equals + 1 ..];
+        if (candidate.* != null or !kind.isCanonical(value)) return false;
+        candidate.* = value;
+    }
+    return true;
 }
 
 test "Zat emits confidential ATProto OAuth metadata for the browser client" {
@@ -212,4 +504,77 @@ test "Zat emits confidential ATProto OAuth metadata for the browser client" {
     );
     try std.testing.expect(parsed.value.object.get("jwks") != null);
     try std.testing.expectEqual(true, parsed.value.object.get("dpop_bound_access_tokens").?.bool);
+}
+
+test "OAuth HTTP queries are strict and state is canonical" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    try std.testing.expectEqualStrings(
+        "artist.example",
+        try parseStartHandle(allocator, "/auth/start?handle=artist.example"),
+    );
+    try std.testing.expectError(
+        error.InvalidQuery,
+        parseStartHandle(allocator, "/auth/start?handle=a.test&handle=b.test"),
+    );
+    const state = "QkJCQkJCQkJCQkJCQkJCQg";
+    try std.testing.expect(browser_login.isCanonicalState(state));
+    const parsed = (try parseCallback(
+        allocator,
+        "/auth/callback?code=abc&state=QkJCQkJCQkJCQkJCQkJCQg&iss=https%3A%2F%2Fauth.example",
+    )).success;
+    try std.testing.expectEqualStrings("https://auth.example", parsed.issuer);
+    const denied = (try parseCallback(
+        allocator,
+        "/auth/callback?error=access_denied&error_description=nope&state=QkJCQkJCQkJCQkJCQkJCQg&iss=https%3A%2F%2Fauth.example",
+    )).failure;
+    try std.testing.expectEqualStrings("https://auth.example", denied.issuer);
+    try std.testing.expectError(
+        error.InvalidQuery,
+        parseCallback(
+            allocator,
+            "/auth/callback?code=abc&state=bad&iss=https%3A%2F%2Fauth.example",
+        ),
+    );
+}
+
+test "browser exchange capability stays out of HTTP request targets" {
+    const location = try callbackLocation(
+        std.testing.allocator,
+        "https://next.plyr.fm",
+        "secret-capability",
+    );
+    defer std.testing.allocator.free(location);
+    try std.testing.expectEqualStrings(
+        "https://next.plyr.fm/portal#exchange_token=secret-capability",
+        location,
+    );
+    try std.testing.expect(std.mem.indexOfScalar(u8, location, '?') == null);
+}
+
+test "browser OAuth binding accepts exactly one canonical host cookie" {
+    const state = "QkJCQkJCQkJCQkJCQkJCQg";
+    var candidate: ?[]const u8 = null;
+    try std.testing.expect(consumeCookieHeader(
+        &candidate,
+        "unrelated=value; __Host-plyr_oauth=" ++ state,
+        oauth_cookie_name,
+        .oauth_state,
+    ));
+    try std.testing.expectEqualStrings(state, candidate.?);
+    try std.testing.expect(!consumeCookieHeader(
+        &candidate,
+        "__Host-plyr_oauth=" ++ state,
+        oauth_cookie_name,
+        .oauth_state,
+    ));
+
+    candidate = null;
+    try std.testing.expect(!consumeCookieHeader(
+        &candidate,
+        "__Host-plyr_oauth=not-canonical",
+        oauth_cookie_name,
+        .oauth_state,
+    ));
 }
