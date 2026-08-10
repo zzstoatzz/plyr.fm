@@ -68,6 +68,33 @@ jobs:
 
       - uses: superfly/flyctl-actions/setup-flyctl@master
 
+      - name: preflight isolated canary credentials
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_ZIG_NEXT }}
+          ZIG_NEXT_WRITER_DATABASE_URL: ${{ secrets.ZIG_NEXT_WRITER_DATABASE_URL }}
+        run: |
+          test -n "$FLY_API_TOKEN"
+          test -n "$ZIG_NEXT_WRITER_DATABASE_URL"
+          flyctl secrets list --app plyr-api-zig-canary --json > "$RUNNER_TEMP/zig-canary-secrets.json"
+          python3 - "$RUNNER_TEMP/zig-canary-secrets.json" <<'PY'
+          import json
+          import sys
+
+          with open(sys.argv[1], encoding="utf-8") as source:
+              configured = {
+                  item.get("Name") or item.get("name") for item in json.load(source)
+              }
+          required = {
+              "DATABASE_URL",
+              "DOCKET_URL",
+              "ZIG_AUTH_ENCRYPTION_KEY",
+              "ZIG_OAUTH_CLIENT_PRIVATE_KEY",
+          }
+          missing = sorted(required - configured)
+          if missing:
+              raise SystemExit(f"missing isolated canary secrets: {', '.join(missing)}")
+          PY
+
       - name: build and publish immutable Zig image
         working-directory: backend-zig
         run: >-
@@ -95,6 +122,15 @@ jobs:
           exit 1
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_ZIG_NEXT }}
+
+      - uses: astral-sh/setup-uv@v7
+
+      - name: apply migrations to the isolated next branch
+        working-directory: backend
+        env:
+          DATABASE_URL: ${{ secrets.ZIG_NEXT_WRITER_DATABASE_URL }}
+          OAUTH_ENCRYPTION_KEY: QkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkI=
+        run: uv run alembic upgrade head
 
       - name: reconcile authenticated next catalog
         if: inputs.reconcile_catalog

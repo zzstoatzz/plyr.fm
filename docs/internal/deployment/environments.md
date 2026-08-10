@@ -153,7 +153,16 @@ It never modifies `stg.plyr.fm`, `plyr.fm`, or either project's configuration.
 - build output: `frontend/.svelte-kit/cloudflare`
 - custom domain: `next.plyr.fm`
 - build mode: `PUBLIC_API_URL=https://api.next.plyr.fm`, `VITE_API_GENERATION=zig-v1`
-- backend origin: `https://api.next.plyr.fm` (pending DNS/canary hostname cutover)
+- backend origin: `https://api.next.plyr.fm` (Fly certificate reserved; DNS and
+  canary image cutover pending)
+- public OAuth configuration: client metadata at
+  `https://api.next.plyr.fm/oauth-client-metadata.json`, callback at
+  `https://api.next.plyr.fm/auth/callback`, frontend origin
+  `https://next.plyr.fm`
+- private Fly secrets: `ZIG_OAUTH_CLIENT_PRIVATE_KEY` and
+  `ZIG_AUTH_ENCRYPTION_KEY`; values are unique to next and never shared with
+  Python staging or production, and the two decoded keys must differ from one
+  another
 
 ### docs
 

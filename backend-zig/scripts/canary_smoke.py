@@ -20,6 +20,11 @@ class Response:
     body: dict[str, Any]
 
 
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, *_: Any, **__: Any) -> None:
+        return None
+
+
 def _opaque_id(prefix: str, uri: str) -> str:
     payload = base64.urlsafe_b64encode(uri.encode()).decode().rstrip("=")
     return f"{prefix}{payload}"
@@ -31,6 +36,8 @@ def _request(
     *,
     method: str = "GET",
     cookie: str | None = None,
+    origin: str | None = None,
+    follow_redirects: bool = True,
 ) -> Response:
     headers = {
         "Accept": "application/json",
@@ -38,11 +45,17 @@ def _request(
     }
     if cookie:
         headers["Cookie"] = cookie
+    if origin:
+        headers["Origin"] = origin
     request = urllib.request.Request(
         f"{base_url}{path}", headers=headers, method=method
     )
     try:
-        response = urllib.request.urlopen(request, timeout=15)
+        response = (
+            urllib.request.urlopen(request, timeout=15)
+            if follow_redirects
+            else urllib.request.build_opener(_NoRedirect()).open(request, timeout=15)
+        )
     except urllib.error.HTTPError as error:
         response = error
     with response:
@@ -66,6 +79,86 @@ def _expect(response: Response, status: int, body: dict[str, Any]) -> None:
 
 def _expect_request_id(response: Response) -> None:
     assert response.headers.get("x-request-id"), response.headers
+
+
+def _verify_auth_boundary(base_url: str) -> None:
+    metadata = _request(base_url, "/oauth-client-metadata.json")
+    assert metadata.status == 200, (metadata.status, metadata.body)
+    _expect_request_id(metadata)
+    assert metadata.body["client_id"] == (
+        "https://api.next.plyr.fm/oauth-client-metadata.json"
+    ), metadata.body
+    assert metadata.body["redirect_uris"] == [
+        "https://api.next.plyr.fm/auth/callback"
+    ], metadata.body
+    assert metadata.body["token_endpoint_auth_method"] == "private_key_jwt", (
+        metadata.body
+    )
+    assert metadata.body["dpop_bound_access_tokens"] is True, metadata.body
+    keys = metadata.body["jwks"]["keys"]
+    assert isinstance(keys, list) and len(keys) == 1, metadata.body
+    assert keys[0]["kty"] == "EC" and keys[0]["crv"] == "P-256", metadata.body
+
+    _expect(
+        _request(base_url, "/auth/pds-options"),
+        200,
+        {"enabled": False, "options": []},
+    )
+    me = _request(base_url, "/auth/me")
+    assert me.status == 401 and me.body["error"]["code"] == (
+        "authentication_required"
+    ), me.body
+    _expect_request_id(me)
+
+    malformed_start = _request(base_url, "/auth/start?handle=not-a-handle")
+    assert malformed_start.status == 400, (
+        malformed_start.status,
+        malformed_start.body,
+    )
+    assert malformed_start.body["error"]["code"] == "invalid_request", (
+        malformed_start.body
+    )
+    _expect_request_id(malformed_start)
+
+    unbound_callback = _request(
+        base_url,
+        "/auth/callback?code=unused&state=QkJCQkJCQkJCQkJCQkJCQg&iss=https%3A%2F%2Fauth.example",
+        follow_redirects=False,
+    )
+    assert unbound_callback.status == 303, (
+        unbound_callback.status,
+        unbound_callback.body,
+    )
+    assert unbound_callback.headers.get("location") == (
+        "https://next.plyr.fm/?auth_error=expired"
+    ), unbound_callback.headers
+    oauth_cookie = unbound_callback.headers.get("set-cookie", "")
+    assert "__Host-plyr_oauth=" in oauth_cookie and "Max-Age=0" in oauth_cookie, (
+        unbound_callback.headers
+    )
+    assert "HttpOnly" in oauth_cookie and "Secure" in oauth_cookie, (
+        unbound_callback.headers
+    )
+
+    rejected_logout = _request(base_url, "/auth/logout", method="POST")
+    assert rejected_logout.status == 403, (
+        rejected_logout.status,
+        rejected_logout.body,
+    )
+    assert rejected_logout.body["error"]["code"] == "forbidden", rejected_logout.body
+
+    logout = _request(
+        base_url,
+        "/auth/logout",
+        method="POST",
+        origin="https://next.plyr.fm",
+    )
+    _expect(logout, 200, {"message": "logged out"})
+    cookie = logout.headers.get("set-cookie", "")
+    assert "__Host-plyr_session=" in cookie and "Max-Age=0" in cookie, logout.headers
+    assert "HttpOnly" in cookie and "Secure" in cookie, logout.headers
+    assert logout.headers.get("cache-control") == "no-store", logout.headers
+    assert logout.headers.get("pragma") == "no-cache", logout.headers
 
 
 def _verify_real_product_reads(base_url: str) -> dict[str, Any]:
@@ -297,6 +390,7 @@ def verify_product(api_base_url: str) -> None:
         200,
         {"object": "api", "version": "v1"},
     )
+    _verify_auth_boundary(api_base_url)
     track = _verify_real_product_reads(api_base_url)
     _verify_sustained_play(api_base_url, track)
 

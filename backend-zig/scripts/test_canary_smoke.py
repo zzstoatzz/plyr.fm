@@ -1,11 +1,15 @@
 """Contract tests for the post-deploy canary traversal."""
 
 import json
+import tomllib
 from io import BytesIO
+from pathlib import Path
 from typing import ClassVar
 from unittest.mock import patch
 
 import canary_smoke
+
+ROOT = Path(__file__).resolve().parents[1]
 
 
 class _UrlResponse:
@@ -75,6 +79,115 @@ def test_request_identifies_the_smoke_client() -> None:
     assert response.status == 200
     request = urlopen.call_args.args[0]
     assert request.get_header("User-agent") == "plyr-zig-canary-smoke/1"
+
+
+def test_canary_declares_public_auth_config_but_never_secret_values() -> None:
+    config = tomllib.loads((ROOT / "fly.canary.toml").read_text())
+    environment = config["env"]
+    assert environment["ZIG_OAUTH_CLIENT_ID"] == (
+        "https://api.next.plyr.fm/oauth-client-metadata.json"
+    )
+    assert environment["ZIG_OAUTH_REDIRECT_URI"] == (
+        "https://api.next.plyr.fm/auth/callback"
+    )
+    assert environment["ZIG_OAUTH_FRONTEND_ORIGIN"] == "https://next.plyr.fm"
+    assert environment["ZIG_OAUTH_SCOPE"] == "atproto transition:generic"
+    assert "ZIG_OAUTH_CLIENT_PRIVATE_KEY" not in environment
+    assert "ZIG_AUTH_ENCRYPTION_KEY" not in environment
+
+    workflow = (ROOT.parent / ".github/workflows/deploy-staging.yml").read_text()
+    assert "preflight isolated canary credentials" in workflow
+    assert "apply migrations to the isolated next branch" in workflow
+    assert '"ZIG_AUTH_ENCRYPTION_KEY"' in workflow
+    assert '"ZIG_OAUTH_CLIENT_PRIVATE_KEY"' in workflow
+
+
+def test_auth_boundary_requires_confidential_metadata_and_cookie_security() -> None:
+    responses = {
+        ("/oauth-client-metadata.json", "GET"): _response(
+            {
+                "client_id": "https://api.next.plyr.fm/oauth-client-metadata.json",
+                "redirect_uris": ["https://api.next.plyr.fm/auth/callback"],
+                "token_endpoint_auth_method": "private_key_jwt",
+                "dpop_bound_access_tokens": True,
+                "jwks": {"keys": [{"kty": "EC", "crv": "P-256"}]},
+            }
+        ),
+        ("/auth/pds-options", "GET"): _response({"enabled": False, "options": []}),
+        ("/auth/me", "GET"): _response(
+            {
+                "error": {
+                    "code": "authentication_required",
+                    "message": "Authentication is required for this resource.",
+                    "request_id": "req-test",
+                }
+            },
+            status=401,
+        ),
+        ("/auth/start?handle=not-a-handle", "GET"): _response(
+            {
+                "error": {
+                    "code": "invalid_request",
+                    "message": "The request is invalid.",
+                    "request_id": "req-test",
+                }
+            },
+            status=400,
+        ),
+        (
+            "/auth/callback?code=unused&state=QkJCQkJCQkJCQkJCQkJCQg&iss=https%3A%2F%2Fauth.example",
+            "GET",
+        ): canary_smoke.Response(
+            status=303,
+            headers={
+                "x-request-id": "req-test",
+                "location": "https://next.plyr.fm/?auth_error=expired",
+                "set-cookie": (
+                    "__Host-plyr_oauth=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Lax"
+                ),
+            },
+            body={},
+        ),
+        ("/auth/logout", "POST"): canary_smoke.Response(
+            status=200,
+            headers={
+                "x-request-id": "req-test",
+                "set-cookie": (
+                    "__Host-plyr_session=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Lax"
+                ),
+                "cache-control": "no-store",
+                "pragma": "no-cache",
+            },
+            body={"message": "logged out"},
+        ),
+    }
+
+    def request(
+        _: str,
+        path: str,
+        *,
+        method: str = "GET",
+        origin: str | None = None,
+        follow_redirects: bool = True,
+    ) -> canary_smoke.Response:
+        if path == "/auth/logout" and method == "POST" and origin is None:
+            return _response(
+                {
+                    "error": {
+                        "code": "forbidden",
+                        "message": "The request origin is not allowed.",
+                        "request_id": "req-test",
+                    }
+                },
+                status=403,
+            )
+        assert origin in (None, "https://next.plyr.fm")
+        if path.startswith("/auth/callback"):
+            assert follow_redirects is False
+        return responses[(path, method)]
+
+    with patch.object(canary_smoke, "_request", side_effect=request):
+        canary_smoke._verify_auth_boundary("https://canary.example")
 
 
 def test_real_product_reads_traverse_projected_track_and_artist() -> None:
@@ -300,6 +413,7 @@ def test_product_only_transport_does_not_probe_infrastructure_routes() -> None:
             "_verify_real_product_reads",
             side_effect=RuntimeError("stop after transport assertion"),
         ) as reads,
+        patch.object(canary_smoke, "_verify_auth_boundary") as auth,
     ):
         try:
             canary_smoke.verify_product("https://api.next.plyr.fm/")
@@ -309,4 +423,5 @@ def test_product_only_transport_does_not_probe_infrastructure_routes() -> None:
             raise AssertionError("product verification unexpectedly continued")
 
     request.assert_called_once_with("https://api.next.plyr.fm", "/v1")
+    auth.assert_called_once_with("https://api.next.plyr.fm")
     reads.assert_called_once_with("https://api.next.plyr.fm")

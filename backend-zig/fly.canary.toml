@@ -16,6 +16,10 @@ primary_region = "iad"
   MODE = "api"
   PORT = "8000"
   TRACK_COLLECTION_NSID = "fm.plyr.track"
+  ZIG_OAUTH_CLIENT_ID = "https://api.next.plyr.fm/oauth-client-metadata.json"
+  ZIG_OAUTH_FRONTEND_ORIGIN = "https://next.plyr.fm"
+  ZIG_OAUTH_REDIRECT_URI = "https://api.next.plyr.fm/auth/callback"
+  ZIG_OAUTH_SCOPE = "atproto transition:generic"
 
 [http_service]
   internal_port = 8000
