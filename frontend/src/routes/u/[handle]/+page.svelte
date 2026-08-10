@@ -2,6 +2,7 @@
 	import { fade } from 'svelte/transition';
 	import { API_URL, IS_ZIG_V1, getAtprotofansSupportUrl } from '$lib/config';
 	import { listZigTracks } from '$lib/api/zig-v1';
+	import { listZigPlaylists } from '$lib/api/zig-v1-playlists';
 	import { getZigArtistMetrics } from '$lib/api/zig-v1-artist-metrics';
 	import { browser } from '$app/environment';
 	import type { Analytics, Track, TrackId, Playlist } from '$lib/types';
@@ -40,6 +41,9 @@ const albums = $derived(data.albums ?? []);
 let hasMoreTracks = $state(data.hasMoreTracks ?? false);
 let nextCursor = $state<string | null>(data.nextCursor ?? null);
 let loadingMoreTracks = $state(false);
+let hasMorePlaylists = $state(data.hasMorePlaylists ?? false);
+let nextPlaylistCursor = $state<string | null>(data.nextPlaylistCursor ?? null);
+let loadingMorePlaylists = $state(false);
 let shareUrl = $state('');
 
 // compute support URL - handle 'atprotofans' magic value
@@ -73,7 +77,8 @@ $effect(() => {
 	let likedTracksCount = $state<number | null>(null);
 
 	// public playlists for collections section
-	let publicPlaylists = $state<Playlist[]>([]);
+	let publicPlaylists = $state<Playlist[]>(data.playlists ?? []);
+	const showLikedCollection = $derived(!IS_ZIG_V1 && artist.show_liked_on_profile);
 
 	// supporter status - true if logged-in viewer supports this artist via atprotofans
 	let isSupporter = $state(false);
@@ -173,6 +178,24 @@ $effect(() => {
 		}
 	}
 
+	async function loadMorePlaylists() {
+		if (!IS_ZIG_V1 || !artist?.did || !nextPlaylistCursor || loadingMorePlaylists) return;
+		loadingMorePlaylists = true;
+		try {
+			const page = await listZigPlaylists(API_URL, artist.did, {
+				limit: 100,
+				cursor: nextPlaylistCursor
+			});
+			publicPlaylists = [...publicPlaylists, ...page.playlists];
+			hasMorePlaylists = page.has_more;
+			nextPlaylistCursor = page.next_cursor;
+		} catch (_e) {
+			console.error('failed to load more playlists:', _e);
+		} finally {
+			loadingMorePlaylists = false;
+		}
+	}
+
 	/**
 	 * load atprotofans profile and supporters for this artist.
 	 * only called when artist has atprotofans support enabled.
@@ -249,7 +272,9 @@ $effect(() => {
 			analytics = null;
 			tracksHydrated = false;
 			likedTracksCount = null;
-			publicPlaylists = [];
+			publicPlaylists = data.playlists ?? [];
+			hasMorePlaylists = data.hasMorePlaylists ?? false;
+			nextPlaylistCursor = data.nextPlaylistCursor ?? null;
 			isSupporter = false;
 			supporterCount = null;
 			supporters = [];
@@ -666,13 +691,13 @@ $effect(() => {
 			</section>
 		{/if}
 
-		{#if artist.show_liked_on_profile || publicPlaylists.length > 0}
+		{#if showLikedCollection || publicPlaylists.length > 0}
 			<section class="collections-section">
 				<div class="section-header">
 					<h2>collections</h2>
 				</div>
 				<div class="collections-list">
-					{#if artist.show_liked_on_profile}
+					{#if showLikedCollection}
 						<a href="/u/{artist.handle}/liked" class="collection-link">
 							<div class="collection-icon liked">
 								<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
@@ -722,6 +747,16 @@ $effect(() => {
 							</div>
 						</a>
 					{/each}
+					{#if hasMorePlaylists}
+						<button
+							class="collection-link collection-load-more"
+							type="button"
+							disabled={loadingMorePlaylists}
+							onclick={loadMorePlaylists}
+						>
+							{loadingMorePlaylists ? 'loading…' : 'load more playlists'}
+						</button>
+					{/if}
 				</div>
 			</section>
 		{/if}
@@ -1402,6 +1437,17 @@ $effect(() => {
 	.collection-link:hover {
 		transform: translateY(-2px);
 		border-color: var(--accent);
+	}
+
+	.collection-load-more {
+		justify-content: center;
+		font: inherit;
+		cursor: pointer;
+	}
+
+	.collection-load-more:disabled {
+		cursor: wait;
+		opacity: 0.65;
 	}
 
 	.collection-icon {

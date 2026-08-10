@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { getZigPlaylist } from './zig-v1-playlists';
+import { getZigPlaylist, listZigPlaylists } from './zig-v1-playlists';
 
 const track = {
 	object: 'track',
@@ -90,6 +90,7 @@ const playlist = {
 		indexed_at_us: 42
 	}
 };
+const { members: _members, ...playlistSummary } = playlist;
 
 function json(value: unknown, status = 200): Response {
 	return new Response(JSON.stringify(value), {
@@ -99,6 +100,61 @@ function json(value: unknown, status = 200): Response {
 }
 
 describe('Zig v1 playlist compatibility boundary', () => {
+	it('maps an owner-scoped cursor page without inventing presentation', async () => {
+		let requestedInput: RequestInfo | URL | null = null;
+		const fetcher = vi.fn(async (input: RequestInfo | URL) => {
+			requestedInput = input;
+			return json({
+				object: 'list',
+				data: [playlistSummary],
+				has_more: true,
+				next_cursor: 'plscur_next'
+			});
+		});
+		const page = await listZigPlaylists(
+			'https://api.next.plyr.fm',
+			'did:plc:owner',
+			{ limit: 7, cursor: 'plscur_previous' },
+			fetcher
+		);
+		const requested = new URL(String(requestedInput));
+		expect(requested.pathname).toBe('/v1/playlists');
+		expect(requested.searchParams.get('owner_did')).toBe('did:plc:owner');
+		expect(requested.searchParams.get('limit')).toBe('7');
+		expect(requested.searchParams.get('cursor')).toBe('plscur_previous');
+		expect(page).toMatchObject({ has_more: true, next_cursor: 'plscur_next' });
+		expect(page.playlists[0]).toMatchObject({
+			id: 'pls_opaque',
+			name: 'Road mix',
+			owner_did: 'did:plc:owner',
+			track_count: 2
+		});
+		expect(page.playlists[0]).not.toHaveProperty('tracks');
+	});
+
+	it('rejects a playlist page that escapes its requested owner', async () => {
+		const fetcher = vi.fn(async () =>
+			json({
+				object: 'list',
+				data: [
+					{
+						...playlistSummary,
+						record: {
+							...playlistSummary.record,
+							uri: 'at://did:plc:other/fm.plyr.list/road-mix'
+						},
+						owner: { ...playlistSummary.owner, did: 'did:plc:other' }
+					}
+				],
+				has_more: false,
+				next_cursor: null
+			})
+		);
+		await expect(
+			listZigPlaylists('https://api.next.plyr.fm', 'did:plc:owner', {}, fetcher)
+		).rejects.toThrow('escaped owner scope');
+	});
+
 	it('maps the verified detail while retaining signed member cardinality', async () => {
 		let requested = '';
 		const fetcher = vi.fn(async (input: RequestInfo | URL) => {

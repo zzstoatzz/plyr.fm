@@ -1,7 +1,7 @@
-import type { PlaylistWithTracks } from '$lib/types';
+import type { Playlist, PlaylistWithTracks } from '$lib/types';
 import { assertZigTrack, toFrontendTrack, type ZigTrack } from './zig-v1';
 
-export interface ZigPlaylistDetail {
+export interface ZigPlaylistSummary {
 	object: 'playlist';
 	id: string;
 	record: { uri: string; cid: string; collection: string; rkey: string };
@@ -10,12 +10,6 @@ export interface ZigPlaylistDetail {
 		did: string;
 		profile: { handle: string; display_name: string; avatar_url: string | null } | null;
 	};
-	members: Array<{
-		position: number;
-		subject: { uri: string; cid: string };
-		availability: 'available' | 'unavailable';
-		track: ZigTrack | null;
-	}>;
 	metrics: { member_count: number; available_count: number; total_plays: number };
 	sources: {
 		record: 'verified_repo';
@@ -33,7 +27,44 @@ export interface ZigPlaylistDetail {
 	};
 }
 
+export interface ZigPlaylistDetail extends ZigPlaylistSummary {
+	members: Array<{
+		position: number;
+		subject: { uri: string; cid: string };
+		availability: 'available' | 'unavailable';
+		track: ZigTrack | null;
+	}>;
+}
+
+export interface ZigPlaylistPage {
+	object: 'list';
+	data: ZigPlaylistSummary[];
+	has_more: boolean;
+	next_cursor: string | null;
+}
+
 type Fetcher = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
+
+export async function listZigPlaylists(
+	apiUrl: string,
+	ownerDid: string,
+	options: { limit?: number; cursor?: string | null } = {},
+	fetcher: Fetcher = fetch
+): Promise<{ playlists: Playlist[]; next_cursor: string | null; has_more: boolean }> {
+	const url = new URL(`${apiUrl}/v1/playlists`);
+	url.searchParams.set('owner_did', ownerDid);
+	url.searchParams.set('limit', String(options.limit ?? 20));
+	if (options.cursor) url.searchParams.set('cursor', options.cursor);
+	const response = await fetcher(url, { headers: { accept: 'application/json' } });
+	if (!response.ok) throw new Error(`Zig playlist collection returned ${response.status}`);
+	const value: unknown = await response.json();
+	assertPlaylistPage(value, ownerDid);
+	return {
+		playlists: value.data.map((playlist) => toFrontendPlaylistSummary(playlist)),
+		next_cursor: value.next_cursor,
+		has_more: value.has_more
+	};
+}
 
 export async function getZigPlaylist(
 	apiUrl: string,
@@ -56,6 +87,15 @@ export async function getZigPlaylist(
 
 export function toFrontendPlaylist(value: ZigPlaylistDetail): PlaylistWithTracks {
 	return {
+		...toFrontendPlaylistSummary(value),
+		tracks: value.members.flatMap((member) =>
+			member.availability === 'available' && member.track ? [toFrontendTrack(member.track)] : []
+		)
+	};
+}
+
+export function toFrontendPlaylistSummary(value: ZigPlaylistSummary): Playlist {
+	return {
 		id: value.id,
 		name: value.metadata.name ?? 'playlist',
 		owner_did: value.owner.did,
@@ -65,46 +105,38 @@ export function toFrontendPlaylist(value: ZigPlaylistDetail): PlaylistWithTracks
 		atproto_record_uri: value.record.uri,
 		is_private: false,
 		created_at: value.metadata.created_at,
-		preview_thumbnails: [],
-		tracks: value.members.flatMap((member) =>
-			member.availability === 'available' && member.track ? [toFrontendTrack(member.track)] : []
-		)
+		preview_thumbnails: []
 	};
 }
 
-function assertPlaylistDetail(value: unknown): asserts value is ZigPlaylistDetail {
+function assertPlaylistPage(value: unknown, ownerDid: string): asserts value is ZigPlaylistPage {
 	if (
 		!isObject(value) ||
-		value.object !== 'playlist' ||
-		typeof value.id !== 'string' ||
-		!value.id.startsWith('pls_') ||
-		!isObject(value.record) ||
-		typeof value.record.uri !== 'string' ||
-		typeof value.record.cid !== 'string' ||
-		typeof value.record.collection !== 'string' ||
-		typeof value.record.rkey !== 'string' ||
-		!isObject(value.metadata) ||
-		!(value.metadata.name === null || typeof value.metadata.name === 'string') ||
-		typeof value.metadata.created_at !== 'string' ||
-		!(value.metadata.updated_at === null || typeof value.metadata.updated_at === 'string') ||
-		!isObject(value.owner) ||
-		typeof value.owner.did !== 'string' ||
-		!(value.owner.profile === null || isOwnerProfile(value.owner.profile)) ||
-		value.record.uri !==
-			`at://${value.owner.did}/${value.record.collection}/${value.record.rkey}` ||
-		!Array.isArray(value.members) ||
-		!isMetrics(value.metrics) ||
-		value.members.length !== value.metrics.member_count ||
-		!isSources(value.sources) ||
-		!isProjection(value.projection) ||
-		'presentation' in value ||
-		'is_private' in value
+		value.object !== 'list' ||
+		!Array.isArray(value.data) ||
+		typeof value.has_more !== 'boolean' ||
+		!(value.next_cursor === null || typeof value.next_cursor === 'string') ||
+		value.has_more !== (value.next_cursor !== null)
 	) {
+		throw new TypeError('invalid Zig playlist collection');
+	}
+	for (const playlist of value.data) {
+		assertPlaylistSummary(playlist);
+		if (playlist.owner.did !== ownerDid) {
+			throw new TypeError('Zig playlist collection escaped owner scope');
+		}
+	}
+}
+
+function assertPlaylistDetail(value: unknown): asserts value is ZigPlaylistDetail {
+	assertPlaylistSummary(value);
+	const members = (value as unknown as Record<string, unknown>).members;
+	if (!Array.isArray(members) || members.length !== value.metrics.member_count) {
 		throw new TypeError('invalid Zig playlist resource');
 	}
 
 	let available = 0;
-	for (const [position, member] of value.members.entries()) {
+	for (const [position, member] of members.entries()) {
 		if (
 			!isObject(member) ||
 			member.position !== position ||
@@ -130,6 +162,36 @@ function assertPlaylistDetail(value: unknown): asserts value is ZigPlaylistDetai
 	}
 	if (available !== value.metrics.available_count) {
 		throw new TypeError('invalid Zig playlist metrics');
+	}
+}
+
+function assertPlaylistSummary(value: unknown): asserts value is ZigPlaylistSummary {
+	if (
+		!isObject(value) ||
+		value.object !== 'playlist' ||
+		typeof value.id !== 'string' ||
+		!value.id.startsWith('pls_') ||
+		!isObject(value.record) ||
+		typeof value.record.uri !== 'string' ||
+		typeof value.record.cid !== 'string' ||
+		typeof value.record.collection !== 'string' ||
+		typeof value.record.rkey !== 'string' ||
+		!isObject(value.metadata) ||
+		!(value.metadata.name === null || typeof value.metadata.name === 'string') ||
+		typeof value.metadata.created_at !== 'string' ||
+		!(value.metadata.updated_at === null || typeof value.metadata.updated_at === 'string') ||
+		!isObject(value.owner) ||
+		typeof value.owner.did !== 'string' ||
+		!(value.owner.profile === null || isOwnerProfile(value.owner.profile)) ||
+		value.record.uri !==
+			`at://${value.owner.did}/${value.record.collection}/${value.record.rkey}` ||
+		!isMetrics(value.metrics) ||
+		!isSources(value.sources) ||
+		!isProjection(value.projection) ||
+		'presentation' in value ||
+		'is_private' in value
+	) {
+		throw new TypeError('invalid Zig playlist resource');
 	}
 }
 
