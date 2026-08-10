@@ -183,7 +183,7 @@ describe('Zig v1 compatibility boundary', () => {
 		);
 		const requested = new URL(String(requestedInput));
 		expect(requested.pathname).toBe('/v1/search');
-		expect(requested.searchParams.get('types')).toBe('track,artist,album');
+		expect(requested.searchParams.get('types')).toBe('track,artist,album,playlist');
 		expect(requested.searchParams.get('limit')).toBe('7');
 		expect(result.results[0]).toEqual({
 			type: 'track',
@@ -196,7 +196,7 @@ describe('Zig v1 compatibility boundary', () => {
 		expect(result.counts).toEqual({ tracks: 1, artists: 0, albums: 0, tags: 0, playlists: 0 });
 	});
 
-	it('rejects search results that lose provenance or escape the requested scope', async () => {
+	it('rejects search results that lose provenance', async () => {
 		const unverified = vi.fn(async () =>
 			json({
 				object: 'list',
@@ -213,8 +213,10 @@ describe('Zig v1 compatibility boundary', () => {
 		await expect(
 			searchZigCatalog('https://api.next.plyr.fm', 'Song', {}, unverified)
 		).rejects.toThrow('invalid Zig search result');
+	});
 
-		const playlist = vi.fn(async () =>
+	it('maps verified playlist search hits into navigable collection results', async () => {
+		const fetcher = vi.fn(async () =>
 			json({
 				object: 'list',
 				data: [
@@ -222,17 +224,29 @@ describe('Zig v1 compatibility boundary', () => {
 						...searchTrack,
 						type: 'playlist',
 						id: 'pls_opaque',
+						record: {
+							uri: 'at://did:plc:artist/fm.plyr.list/road-mix',
+							cid: 'bafyplaylist'
+						},
+						title: 'Road mix',
 						metrics: { play_count: null, member_count: 3 },
 						match: { kind: 'prefix', field: 'name' }
 					}
 				],
-				query: 'Song',
+				query: 'Road',
 				counts: { tracks: 0, artists: 0, albums: 0, playlists: 1 }
 			})
 		);
-		await expect(
-			searchZigCatalog('https://api.next.plyr.fm', 'Song', {}, playlist)
-		).rejects.toThrow('escaped requested type scope');
+		const result = await searchZigCatalog('https://api.next.plyr.fm', 'Road', {}, fetcher);
+		expect(result.results[0]).toEqual({
+			type: 'playlist',
+			id: 'pls_opaque',
+			name: 'Road mix',
+			owner_handle: 'artist.test',
+			owner_display_name: 'Artist',
+			image_url: null,
+			track_count: 3
+		});
 	});
 
 	it('maps verified album summaries without inventing local presentation', async () => {

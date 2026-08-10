@@ -42,7 +42,7 @@ interface ZigSearchHit {
 
 type Fetcher = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 
-const FRONTEND_KINDS: ZigSearchKind[] = ['track', 'artist', 'album'];
+const FRONTEND_KINDS: ZigSearchKind[] = ['track', 'artist', 'album', 'playlist'];
 
 export async function searchZigCatalog(
 	apiUrl: string,
