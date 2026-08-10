@@ -1,6 +1,6 @@
 // auth state management using Svelte 5 runes
 import { browser } from '$app/environment';
-import { API_URL, IS_ZIG_V1 } from '$lib/config';
+import { API_URL } from '$lib/config';
 import { toast } from '$lib/toast.svelte';
 import type { User } from '$lib/types';
 
@@ -31,11 +31,6 @@ class AuthManager {
 	}
 
 	private async doInitialize(): Promise<void> {
-		if (IS_ZIG_V1) {
-			this.clearSession();
-			this.loading = false;
-			return;
-		}
 		try {
 			const response = await fetch(`${API_URL}/auth/me`, {
 				credentials: 'include'
