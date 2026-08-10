@@ -1,5 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
-import { getZigArtist, getZigPlayback, getZigTrack, listZigTracks, recordZigPlay } from './zig-v1';
+import {
+	getZigArtist,
+	getZigPlayback,
+	getZigTrack,
+	listZigTrackChart,
+	listZigTracks,
+	recordZigPlay
+} from './zig-v1';
 import { getZigAlbum, listZigAlbums } from './zig-v1-albums';
 import { searchZigCatalog } from './zig-v1-search';
 import { getZigArtistMetrics } from './zig-v1-artist-metrics';
@@ -365,6 +372,28 @@ describe('Zig v1 compatibility boundary', () => {
 		expect(page.tracks[0]?.id).toBe('trk_opaque');
 		expect(page.tracks[0]?.file_id).toBe('trk_opaque');
 		expect(page.tracks[0]?.atproto_record_uri).toBe(record.uri);
+	});
+
+	it('reads ranked tracks from the namespaced chart resource', async () => {
+		let requestedInput: RequestInfo | URL | null = null;
+		const fetcher = vi.fn(async (input: RequestInfo | URL) => {
+			requestedInput = input;
+			return json({
+				object: 'track_chart',
+				period: 'week',
+				data: [{ rank: 1, period_like_count: 2, all_time_like_count: 5, track }]
+			});
+		});
+		const chart = await listZigTrackChart(
+			'https://next.plyr.fm/api',
+			{ limit: 7, period: 'week' },
+			fetcher
+		);
+		const requested = new URL(String(requestedInput));
+		expect(requested.pathname).toBe('/api/v1/charts/tracks');
+		expect(requested.searchParams.get('limit')).toBe('7');
+		expect(requested.searchParams.get('period')).toBe('week');
+		expect(chart.data[0]?.all_time_like_count).toBe(5);
 	});
 
 	it('requires detail to round-trip the opaque resource identity', async () => {

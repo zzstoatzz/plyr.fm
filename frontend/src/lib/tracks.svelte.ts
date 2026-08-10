@@ -1,6 +1,11 @@
 import { safeLocalStorage } from './utils/safe-storage';
 import { API_URL, IS_ZIG_V1 } from './config';
-import { listZigTracks } from './api/zig-v1';
+import {
+	listZigTrackChart,
+	listZigTracks,
+	toFrontendTrack,
+	type ZigTrackChartPeriod
+} from './api/zig-v1';
 import type { Track, TrackId } from './types';
 import { preferences } from './preferences.svelte';
 import { downloadAudio, isDownloaded } from './storage';
@@ -248,7 +253,23 @@ export async function unlikeTrack(trackId: TrackId): Promise<boolean> {
 }
 
 export async function fetchTopTracks(limit = 10, period = 'all_time'): Promise<Track[]> {
-	if (IS_ZIG_V1) return [];
+	if (IS_ZIG_V1) {
+		try {
+			const chartPeriod: ZigTrackChartPeriod =
+				period === 'month' || period === 'week' || period === 'day' ? period : 'all_time';
+			const chart = await listZigTrackChart(API_URL, {
+				limit,
+				period: chartPeriod
+			});
+			return chart.data.map((entry) => ({
+				...toFrontendTrack(entry.track),
+				like_count: entry.all_time_like_count
+			}));
+		} catch (e) {
+			console.error('failed to fetch Zig top tracks:', e);
+			return [];
+		}
+	}
 	try {
 		const url = new URL(`${API_URL}/tracks/top`);
 		url.searchParams.set('limit', String(limit));

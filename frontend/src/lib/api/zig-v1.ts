@@ -39,6 +39,19 @@ export interface ZigTrackPage {
 	next_cursor: string | null;
 }
 
+export type ZigTrackChartPeriod = 'all_time' | 'month' | 'week' | 'day';
+
+export interface ZigTrackChart {
+	object: 'track_chart';
+	period: ZigTrackChartPeriod;
+	data: Array<{
+		rank: number;
+		period_like_count: number;
+		all_time_like_count: number;
+		track: ZigTrack;
+	}>;
+}
+
 export interface ZigTrack {
 	object: 'track';
 	id: string;
@@ -162,6 +175,24 @@ export async function listZigTracks(
 		next_cursor: page.next_cursor,
 		has_more: page.has_more
 	};
+}
+
+export async function listZigTrackChart(
+	apiUrl: string,
+	options: { limit?: number; period?: ZigTrackChartPeriod } = {},
+	fetcher: Fetcher = fetch
+): Promise<ZigTrackChart> {
+	const url = new URL(`${apiUrl}/v1/charts/tracks`);
+	if (options.limit !== undefined) url.searchParams.set('limit', String(options.limit));
+	if (options.period !== undefined) url.searchParams.set('period', options.period);
+	const response = await fetcher(url.toString(), {
+		credentials: 'include',
+		headers: { accept: 'application/json' }
+	});
+	if (!response.ok) throw new Error(`Zig track chart returned ${response.status}`);
+	const value: unknown = await response.json();
+	assertTrackChart(value);
+	return value;
 }
 
 export async function getZigTrack(
@@ -318,6 +349,30 @@ function assertTrackPage(value: unknown): asserts value is ZigTrackPage {
 		throw new TypeError('invalid Zig track collection');
 	}
 	for (const track of value.data) assertZigTrack(track);
+}
+
+function assertTrackChart(value: unknown): asserts value is ZigTrackChart {
+	if (!isObject(value) || value.object !== 'track_chart') throw new Error('invalid Zig track chart');
+	if (!['all_time', 'month', 'week', 'day'].includes(String(value.period)) || !Array.isArray(value.data)) {
+		throw new Error('invalid Zig track chart');
+	}
+	for (const rawEntry of value.data) {
+		if (!isObject(rawEntry)) throw new Error('invalid Zig track chart entry');
+		const rank = rawEntry.rank;
+		const periodCount = rawEntry.period_like_count;
+		const allTimeCount = rawEntry.all_time_like_count;
+		if (
+			!Number.isInteger(rank) ||
+			Number(rank) < 1 ||
+			!Number.isInteger(periodCount) ||
+			Number(periodCount) < 1 ||
+			!Number.isInteger(allTimeCount) ||
+			Number(allTimeCount) < Number(periodCount)
+		) {
+			throw new Error('invalid Zig track chart counts');
+		}
+		assertZigTrack(rawEntry.track);
+	}
 }
 
 export function assertZigTrack(value: unknown): asserts value is ZigTrack {
