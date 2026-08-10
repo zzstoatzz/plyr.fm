@@ -12,7 +12,7 @@ from sqlalchemy.engine import make_url
 from alembic import command
 
 PRIOR_REVISION = "4aaed6c819f1"
-HEAD_REVISION = "e82b3d0f5a94"
+HEAD_REVISION = "f93c4e1a6b05"
 CANARY_ROLE = "plyr_zig_canary"
 COMPATIBILITY_TABLES = {"tracks", "artists", "albums", "user_preferences"}
 EXPECTED_TABLES = {
@@ -356,6 +356,25 @@ def projection_indexes(database_url: str) -> set[str]:
         engine.dispose()
 
 
+def projection_index_definition(database_url: str, name: str) -> str:
+    """Return PostgreSQL's canonical definition for one projection index."""
+    engine = create_engine(database_url)
+    try:
+        with engine.connect() as connection:
+            value = connection.scalar(
+                text(
+                    "SELECT indexdef FROM pg_indexes "
+                    "WHERE schemaname = 'plyr_index' AND indexname = :name"
+                ),
+                {"name": name},
+            )
+        if not isinstance(value, str):
+            raise AssertionError(f"missing projection index {name!r}")
+        return value
+    finally:
+        engine.dispose()
+
+
 def role_has_privilege(database_url: str, object_name: str, privilege: str) -> bool:
     """Return one effective privilege for the disposable canary role."""
     engine = create_engine(database_url)
@@ -562,6 +581,17 @@ def main() -> None:
         if not indexes >= EXPECTED_SEARCH_INDEXES:
             raise AssertionError(
                 f"missing projection search indexes: {sorted(indexes)!r}"
+            )
+        like_subject_index = projection_index_definition(
+            database_url, "ix_like_records_subject_live"
+        )
+        if (
+            "(subject_uri, subject_cid, record_created_at DESC, record_uri DESC)"
+            not in (like_subject_index)
+        ):
+            raise AssertionError(
+                f"like subject index does not cover exact-CID pagination: "
+                f"{like_subject_index}"
             )
         assert_canary_least_privilege(database_url)
         columns = table_columns(database_url, "repo_heads")

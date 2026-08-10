@@ -201,12 +201,14 @@ test {
     _ = @import("internal/application/get_playback.zig");
     _ = @import("internal/application/list_tracks.zig");
     _ = @import("internal/application/list_track_chart.zig");
+    _ = @import("internal/application/list_track_likes.zig");
     _ = @import("internal/application/get_playlist.zig");
     _ = @import("internal/application/list_playlists.zig");
     _ = @import("internal/application/search_catalog.zig");
     _ = @import("internal/application/record_play.zig");
     _ = @import("internal/domain/artist.zig");
     _ = @import("internal/domain/track_chart.zig");
+    _ = @import("internal/domain/like.zig");
     _ = @import("internal/domain/artist_metrics.zig");
     _ = @import("internal/domain/playback.zig");
     _ = @import("internal/domain/verified_list.zig");
@@ -218,6 +220,8 @@ test {
     _ = @import("internal/atproto/track_record.zig");
     _ = @import("internal/index/artist_store.zig");
     _ = @import("internal/index/postgres_artist_store.zig");
+    _ = @import("internal/index/like_query_store.zig");
+    _ = @import("internal/index/postgres_like_query_store.zig");
     _ = @import("internal/identity/track_id.zig");
     _ = @import("internal/identity/track_cursor.zig");
     _ = @import("internal/identity/record_id.zig");
