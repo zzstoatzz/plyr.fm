@@ -1,4 +1,6 @@
 const std = @import("std");
+const auth = @import("auth.zig");
+const config = @import("../config.zig");
 const albums = @import("albums.zig");
 const artists = @import("artists.zig");
 const charts = @import("charts.zig");
@@ -16,6 +18,7 @@ const PlayMetricStore = @import("../internal/metrics/play_metric_store.zig").Pla
 const TrackStore = @import("../internal/index/track_store.zig").TrackStore;
 const TrackChartStore = @import("../internal/index/track_chart_store.zig").TrackChartStore;
 const VerifiedListStore = @import("../internal/index/verified_list_store.zig").VerifiedListStore;
+const PostgresAuthStore = @import("../internal/auth/postgres_store.zig").PostgresAuthStore;
 
 const http = std.http;
 const mem = std.mem;
@@ -37,6 +40,8 @@ pub const App = struct {
     list_collection: []const u8,
     profile_collection: []const u8,
     cors: response.CorsPolicy,
+    auth: ?config.AuthConfig = null,
+    auth_store: ?PostgresAuthStore = null,
 };
 
 pub fn handle(
@@ -58,6 +63,36 @@ pub fn handle(
 
     if (request.head.method == .OPTIONS) {
         try response.empty(request, .no_content, request_id, app.cors);
+    } else if (mem.eql(u8, path, "/oauth-client-metadata.json")) {
+        if (request.head.method != .GET) {
+            try response.apiError(request, .method_not_allowed, request_id, app.cors);
+            return;
+        }
+        try auth.clientMetadata(request, allocator, app.auth, app.cors, request_id);
+    } else if (mem.eql(u8, path, "/auth/pds-options")) {
+        if (request.head.method != .GET) {
+            try response.apiError(request, .method_not_allowed, request_id, app.cors);
+            return;
+        }
+        try auth.pdsOptions(request, app.cors, request_id);
+    } else if (mem.eql(u8, path, "/auth/exchange")) {
+        if (request.head.method != .POST) {
+            try response.apiError(request, .method_not_allowed, request_id, app.cors);
+            return;
+        }
+        try auth.exchange(request, allocator, app.auth, app.auth_store, app.cors, request_id);
+    } else if (mem.eql(u8, path, "/auth/me")) {
+        if (request.head.method != .GET) {
+            try response.apiError(request, .method_not_allowed, request_id, app.cors);
+            return;
+        }
+        try auth.me(request, allocator, app.auth_store, app.cors, request_id);
+    } else if (mem.eql(u8, path, "/auth/logout")) {
+        if (request.head.method != .POST) {
+            try response.apiError(request, .method_not_allowed, request_id, app.cors);
+            return;
+        }
+        try auth.logout(request, app.auth_store, app.cors, request_id);
     } else if (mem.eql(u8, path, "/health")) {
         if (request.head.method != .GET) {
             try response.apiError(request, .method_not_allowed, request_id, app.cors);

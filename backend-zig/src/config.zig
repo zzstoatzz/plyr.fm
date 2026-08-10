@@ -1,5 +1,49 @@
 const std = @import("std");
 const zat = @import("zat");
+const sealed_secret = @import("internal/auth/sealed_secret.zig");
+
+pub const AuthConfig = struct {
+    client_id: []const u8,
+    client_uri: []const u8,
+    redirect_uri: []const u8,
+    frontend_origin: []const u8,
+    scope: []const u8,
+    client_keypair: zat.Keypair,
+    encryption_key: sealed_secret.Key,
+
+    fn fromValues(values: struct {
+        client_id: []const u8,
+        redirect_uri: []const u8,
+        frontend_origin: []const u8,
+        scope: []const u8,
+        client_private_key: []const u8,
+        encryption_key: []const u8,
+    }) !AuthConfig {
+        const metadata_suffix = "/oauth-client-metadata.json";
+        if (!std.mem.endsWith(u8, values.client_id, metadata_suffix))
+            return error.InvalidOauthClientId;
+        try validateHttpsUrl(values.client_id, false);
+        try validateHttpsUrl(values.redirect_uri, false);
+        try validateHttpsUrl(values.frontend_origin, true);
+        const client_uri = values.client_id[0 .. values.client_id.len - metadata_suffix.len];
+        const callback_suffix = "/auth/callback";
+        if (values.redirect_uri.len != client_uri.len + callback_suffix.len or
+            !std.mem.startsWith(u8, values.redirect_uri, client_uri) or
+            !std.mem.endsWith(u8, values.redirect_uri, callback_suffix))
+            return error.OauthRedirectMismatch;
+        if (!scopeContains(values.scope, "atproto")) return error.InvalidOauthScope;
+        const client_secret = try sealed_secret.parseKey(values.client_private_key);
+        return .{
+            .client_id = values.client_id,
+            .client_uri = client_uri,
+            .redirect_uri = values.redirect_uri,
+            .frontend_origin = values.frontend_origin,
+            .scope = values.scope,
+            .client_keypair = try zat.Keypair.fromSecretKey(.p256, client_secret),
+            .encryption_key = try sealed_secret.parseKey(values.encryption_key),
+        };
+    }
+};
 
 pub const Role = enum {
     account_reconciler,
@@ -44,6 +88,7 @@ pub const Config = struct {
     account_check_lease_us: i64,
     account_check_seed_us: i64,
     account_check_idle_ms: i64,
+    auth: ?AuthConfig,
 
     pub fn fromEnvironment() !Config {
         const role_value = getenv("MODE") orelse return error.RoleRequired;
@@ -121,9 +166,53 @@ pub const Config = struct {
             .account_check_idle_ms = try parsePositiveI64(
                 getenv("ACCOUNT_CHECK_IDLE_MILLISECONDS") orelse "1000",
             ),
+            .auth = try authFromEnvironment(),
         };
     }
 };
+
+fn authFromEnvironment() !?AuthConfig {
+    const client_id = getenv("ZIG_OAUTH_CLIENT_ID");
+    const redirect_uri = getenv("ZIG_OAUTH_REDIRECT_URI");
+    const frontend_origin = getenv("ZIG_OAUTH_FRONTEND_ORIGIN");
+    const scope = getenv("ZIG_OAUTH_SCOPE");
+    const client_private_key = getenv("ZIG_OAUTH_CLIENT_PRIVATE_KEY");
+    const encryption_key = getenv("ZIG_AUTH_ENCRYPTION_KEY");
+    const configured = @intFromBool(client_id != null) +
+        @intFromBool(redirect_uri != null) +
+        @intFromBool(frontend_origin != null) +
+        @intFromBool(scope != null) +
+        @intFromBool(client_private_key != null) +
+        @intFromBool(encryption_key != null);
+    if (configured == 0) return null;
+    if (configured != 6)
+        return error.PartialAuthConfiguration;
+    return try AuthConfig.fromValues(.{
+        .client_id = client_id.?,
+        .redirect_uri = redirect_uri.?,
+        .frontend_origin = frontend_origin.?,
+        .scope = scope.?,
+        .client_private_key = client_private_key.?,
+        .encryption_key = encryption_key.?,
+    });
+}
+
+fn validateHttpsUrl(value: []const u8, origin_only: bool) !void {
+    const uri = std.Uri.parse(value) catch return error.InvalidHttpsUrl;
+    if (!std.ascii.eqlIgnoreCase(uri.scheme, "https") or uri.host == null or
+        uri.user != null or uri.password != null or uri.query != null or uri.fragment != null)
+        return error.InvalidHttpsUrl;
+    if (origin_only and !std.mem.eql(u8, uri.path.percent_encoded, ""))
+        return error.InvalidHttpsOrigin;
+}
+
+fn scopeContains(scope: []const u8, expected: []const u8) bool {
+    var parts = std.mem.tokenizeScalar(u8, scope, ' ');
+    while (parts.next()) |part| {
+        if (std.mem.eql(u8, part, expected)) return true;
+    }
+    return false;
+}
 
 fn getenv(name: [*:0]const u8) ?[]const u8 {
     const value = std.c.getenv(name) orelse return null;
@@ -212,4 +301,26 @@ test "record collections are distinct routing keys" {
         error.DuplicateCollection,
         validateDistinctCollections(.{ "a.b.track", "a.b.list", "a.b.profile", "a.b.track" }),
     );
+}
+
+test "auth configuration is exact, confidential, and purpose-keyed" {
+    const encoded_key = "QkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkI=";
+    const auth = try AuthConfig.fromValues(.{
+        .client_id = "https://api.next.plyr.fm/oauth-client-metadata.json",
+        .redirect_uri = "https://api.next.plyr.fm/auth/callback",
+        .frontend_origin = "https://next.plyr.fm",
+        .scope = "atproto transition:generic",
+        .client_private_key = encoded_key,
+        .encryption_key = encoded_key,
+    });
+    try std.testing.expectEqualStrings("https://api.next.plyr.fm", auth.client_uri);
+    try std.testing.expectEqualStrings("ES256", @tagName(auth.client_keypair.algorithm()));
+    try std.testing.expectError(error.InvalidOauthScope, AuthConfig.fromValues(.{
+        .client_id = auth.client_id,
+        .redirect_uri = auth.redirect_uri,
+        .frontend_origin = auth.frontend_origin,
+        .scope = "transition:generic",
+        .client_private_key = encoded_key,
+        .encryption_key = encoded_key,
+    }));
 }

@@ -12,7 +12,7 @@ from sqlalchemy.engine import make_url
 from alembic import command
 
 PRIOR_REVISION = "4aaed6c819f1"
-HEAD_REVISION = "d71a2c9e4f83"
+HEAD_REVISION = "e82b3d0f5a94"
 CANARY_ROLE = "plyr_zig_canary"
 COMPATIBILITY_TABLES = {"tracks", "artists", "albums", "user_preferences"}
 EXPECTED_TABLES = {
@@ -29,6 +29,28 @@ EXPECTED_TABLES = {
     "track_delivery_origins",
     "track_metrics",
     "track_policies",
+}
+EXPECTED_AUTH_TABLES = {"exchange_tokens", "oauth_requests", "sessions"}
+EXPECTED_AUTH_COLUMNS = {
+    "oauth_requests": {"state_digest", "sealed_payload", "created_at", "expires_at"},
+    "sessions": {
+        "session_digest",
+        "group_id",
+        "did",
+        "handle",
+        "scope",
+        "sealed_credentials",
+        "created_at",
+        "expires_at",
+        "revoked_at",
+    },
+    "exchange_tokens": {
+        "token_digest",
+        "session_digest",
+        "sealed_session_token",
+        "created_at",
+        "expires_at",
+    },
 }
 EXPECTED_AVAILABILITY_COLUMNS = {
     "available",
@@ -182,6 +204,7 @@ def assert_test_database_and_drop_schema(database_url: str) -> None:
             if database_name != "zig_test":
                 raise RuntimeError(f"unsafe migration test database: {database_name!r}")
             connection.execute(text("DROP SCHEMA IF EXISTS plyr_index CASCADE"))
+            connection.execute(text("DROP SCHEMA IF EXISTS plyr_auth CASCADE"))
             role_exists = connection.scalar(
                 text("SELECT EXISTS (SELECT FROM pg_roles WHERE rolname = :role)"),
                 {"role": CANARY_ROLE},
@@ -261,6 +284,23 @@ def projected_tables(database_url: str) -> set[str]:
         engine.dispose()
 
 
+def schema_tables(database_url: str, schema: str) -> set[str]:
+    """Return the tables in one application-owned schema."""
+    engine = create_engine(database_url)
+    try:
+        with engine.connect() as connection:
+            rows = connection.execute(
+                text(
+                    "SELECT table_name FROM information_schema.tables "
+                    "WHERE table_schema = :schema"
+                ),
+                {"schema": schema},
+            )
+            return {str(row[0]) for row in rows}
+    finally:
+        engine.dispose()
+
+
 def projection_schema_exists(database_url: str) -> bool:
     """Return whether the dedicated projection schema currently exists."""
     engine = create_engine(database_url)
@@ -278,18 +318,20 @@ def projection_schema_exists(database_url: str) -> bool:
         engine.dispose()
 
 
-def table_columns(database_url: str, table_name: str) -> set[str]:
-    """Return the exact columns created for one projection table."""
+def table_columns(
+    database_url: str, table_name: str, schema: str = "plyr_index"
+) -> set[str]:
+    """Return the exact columns created for one application table."""
     engine = create_engine(database_url)
     try:
         with engine.connect() as connection:
             rows = connection.execute(
                 text(
                     "SELECT column_name FROM information_schema.columns "
-                    "WHERE table_schema = 'plyr_index' "
+                    "WHERE table_schema = :schema "
                     "AND table_name = :table_name"
                 ),
-                {"table_name": table_name},
+                {"schema": schema, "table_name": table_name},
             )
             return {str(row[0]) for row in rows}
     finally:
@@ -316,7 +358,7 @@ def role_has_privilege(database_url: str, object_name: str, privilege: str) -> b
         with engine.connect() as connection:
             function = (
                 "has_schema_privilege"
-                if object_name == "plyr_index"
+                if object_name in {"plyr_index", "plyr_auth"}
                 else "has_table_privilege"
             )
             return bool(
@@ -380,7 +422,7 @@ def role_has_sequence_privilege(
 
 
 def assert_canary_least_privilege(database_url: str) -> None:
-    """Prove the API role can write only the sustained-play state."""
+    """Prove the API role writes only play metrics and isolated auth state."""
     if not role_has_privilege(database_url, "plyr_index", "USAGE"):
         raise AssertionError("canary role cannot use the projection schema")
     for table_name in EXPECTED_TABLES:
@@ -399,6 +441,13 @@ def assert_canary_least_privilege(database_url: str) -> None:
                 continue
             if role_has_privilege(database_url, object_name, privilege):
                 raise AssertionError(f"canary role can {privilege} {object_name}")
+    if not role_has_privilege(database_url, "plyr_auth", "USAGE"):
+        raise AssertionError("canary role cannot use the auth schema")
+    for table_name in EXPECTED_AUTH_TABLES:
+        object_name = f"plyr_auth.{table_name}"
+        for privilege in ("SELECT", "INSERT", "UPDATE", "DELETE"):
+            if not role_has_privilege(database_url, object_name, privilege):
+                raise AssertionError(f"canary cannot {privilege} {object_name}")
     for table_name in COMPATIBILITY_TABLES:
         object_name = f"public.{table_name}"
         if not role_has_privilege(database_url, object_name, "SELECT"):
@@ -476,6 +525,17 @@ def main() -> None:
         tables = projected_tables(database_url)
         if tables != EXPECTED_TABLES:
             raise AssertionError(f"unexpected plyr_index tables: {sorted(tables)!r}")
+        auth_tables = schema_tables(database_url, "plyr_auth")
+        if auth_tables != EXPECTED_AUTH_TABLES:
+            raise AssertionError(
+                f"unexpected plyr_auth tables: {sorted(auth_tables)!r}"
+            )
+        for table_name, expected_columns in EXPECTED_AUTH_COLUMNS.items():
+            columns = table_columns(database_url, table_name, "plyr_auth")
+            if columns != expected_columns:
+                raise AssertionError(
+                    f"unexpected plyr_auth.{table_name} columns: {sorted(columns)!r}"
+                )
         indexes = projection_indexes(database_url)
         if not indexes >= EXPECTED_SEARCH_INDEXES:
             raise AssertionError(
@@ -588,6 +648,10 @@ def main() -> None:
         raise AssertionError("migration downgrade left plyr_index schema")
     if remaining := projected_tables(database_url):
         raise AssertionError(f"migration downgrade left tables: {sorted(remaining)!r}")
+    if remaining := schema_tables(database_url, "plyr_auth"):
+        raise AssertionError(
+            f"migration downgrade left auth tables: {sorted(remaining)!r}"
+        )
     for table_name in COMPATIBILITY_TABLES:
         if role_has_privilege(database_url, f"public.{table_name}", "SELECT"):
             raise AssertionError(f"downgrade left compatibility read: {table_name}")

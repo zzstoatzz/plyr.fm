@@ -168,6 +168,25 @@ secret values while checking configuration.
 
 ## canary deployment
 
+Browser authentication is non-rebuildable application state, not an index.
+The successor therefore owns a separate `plyr_auth` schema. Browser session,
+OAuth state, and one-time exchange values are random 256-bit bearer tokens;
+Postgres receives only their SHA-256 lookup digests. PKCE verifiers, OAuth
+access/refresh tokens, DPoP private keys, and the temporarily recoverable
+session value are stored only in versioned XChaCha20-Poly1305 envelopes whose
+associated data binds each ciphertext to its purpose. Redis is not in the
+credential path. Exchange uses atomic `DELETE ... RETURNING`, sessions are
+revocable and expire locally, and the cookie is host-only to
+`api.next.plyr.fm` with `HttpOnly; Secure; SameSite=Lax`.
+
+Zat owns OAuth metadata, PKCE, PAR, client assertions, token exchange, refresh,
+and DPoP ceremony. The application owns destination safety as well as storage:
+every PDS and authorization-server origin must resolve entirely to global
+addresses and the checked address must remain pinned for TLS. The required
+backward-compatible Zat transport extension is prepared locally on
+`codex/oauth-pinned-destinations`; it is intentionally not published or pinned
+here until its shared-library release is explicitly approved.
+
 `fly.canary.toml` defines an API-only Fly service named
 `plyr-api-zig-canary`. It uses one 256 MiB shared-CPU machine, scales to zero,
 and has no worker, jetstream, runtime-migration, Docket queue, R2, PDS-write, or

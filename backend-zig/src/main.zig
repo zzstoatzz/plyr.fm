@@ -15,6 +15,7 @@ const repair_runner = @import("internal/ingest/repair_runner.zig");
 const continuous_runner = @import("internal/ingest/continuous_runner.zig");
 const catalog_reconcile_runner = @import("internal/ingest/catalog_reconcile_runner.zig");
 const account_reconciler = @import("internal/account/reconciler.zig");
+const postgres_auth = @import("internal/auth/postgres_store.zig");
 
 var threaded_io: std.Io.Threaded = undefined;
 pub const std_options_debug_threaded_io: ?*std.Io.Threaded = &threaded_io;
@@ -97,6 +98,10 @@ pub fn main() !void {
                 null;
             defer if (redis_play_dedup_store) |*store| store.deinit();
             const play_dedup_store = if (redis_play_dedup_store) |*store| store.store() else null;
+            const auth_store: ?postgres_auth.PostgresAuthStore = if (settings.auth != null)
+                if (postgres_store) |*store| .{ .pool = store.pool } else null
+            else
+                null;
             try server.run(io, settings.port, settings.max_connections, .{
                 .io = io,
                 .track_store = track_store,
@@ -112,6 +117,8 @@ pub fn main() !void {
                 .list_collection = settings.list_collection,
                 .profile_collection = settings.profile_collection,
                 .cors = .{ .allowed_origins = settings.cors_allowed_origins },
+                .auth = settings.auth,
+                .auth_store = auth_store,
             });
         },
         .catalog_reconciler => {
@@ -165,6 +172,9 @@ pub fn main() !void {
 }
 
 test {
+    _ = @import("internal/auth/bearer_token.zig");
+    _ = @import("internal/auth/sealed_secret.zig");
+    _ = @import("internal/auth/postgres_store.zig");
     _ = @import("internal/account/availability.zig");
     _ = @import("internal/account/current_pds_status_source.zig");
     _ = @import("internal/account/check_schedule.zig");
@@ -173,6 +183,7 @@ test {
     _ = @import("internal/account/reconciler.zig");
     _ = @import("internal/account/repo_status.zig");
     _ = @import("api/response.zig");
+    _ = @import("api/auth.zig");
     _ = @import("api/router.zig");
     _ = @import("api/artists.zig");
     _ = @import("api/charts.zig");
