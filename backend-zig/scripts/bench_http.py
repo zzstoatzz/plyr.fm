@@ -285,26 +285,26 @@ def main() -> None:
     database_url = os.environ.get("DATABASE_URL") if args.with_index else None
     if args.with_index and not database_url:
         parser.error("--with-index requires DATABASE_URL in the environment")
-    print(
-        json.dumps(
-            benchmark_target(
-                target,
-                args.duration,
-                args.concurrency,
-                args.path,
-                args.expect_status,
-            )
-            if target
-            else benchmark(
-                args.duration,
-                args.concurrency,
-                args.path,
-                args.expect_status,
-                database_url,
-            ),
-            indent=2,
+    result = (
+        benchmark_target(
+            target,
+            args.duration,
+            args.concurrency,
+            args.path,
+            args.expect_status,
+        )
+        if target
+        else benchmark(
+            args.duration,
+            args.concurrency,
+            args.path,
+            args.expect_status,
+            database_url,
         )
     )
+    print(json.dumps(result, indent=2))
+    if result["errors"] or not result["requests"]:
+        raise SystemExit("benchmark failed: requests must complete without errors")
 
 
 if __name__ == "__main__":

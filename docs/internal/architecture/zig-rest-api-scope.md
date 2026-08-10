@@ -54,11 +54,13 @@ decision.
 | `GET /v1/tracks/{track_id}` | covered | public, published track detail from the projection | authenticated viewer state, private/gated tracks, list/search views, publication and mutations |
 | `GET /v1/tracks/{track_id}/playback` | covered | anonymous authorization and delivery resolution with explicit integrity | sessions, supporter/copyright authorization, private-space proxying, PDS blob resolution, play metrics |
 | `GET /v1/artists/{identifier}` | covered | public artist detail by canonical DID or case-insensitive handle alias | verified repository ingestion, collections, follows, profile writes, account state, viewer context |
+| `GET /v1/artists/{identifier}/metrics` | covered | derived admitted-track and canonical-URI play aggregates | likes, viewer-specific statistics, historical series |
 | `GET /v1/albums?artist_did={did}` | covered | verified list-record albums for one artist with strict scope-bound pagination | global discovery, writes, viewer state, presentation resources |
 | `GET /v1/albums/{album_id}` | covered | verified album record and position-complete strong-reference membership with policy-safe hydration | continuous verified ingestion, writes, artwork, private/gated authorization, viewer state |
 | `GET /v1/playlists` | covered | global or owner-scoped verified public playlists with scope-bound keyset pagination | session-owned private lists, liked lists, presentation, writes |
 | `GET /v1/playlists/{playlist_id}` | covered | verified playlist record and position-complete exact-CID member hydration | private authorization, cover presentation, recommendations, writes |
 | `GET /v1/search` | covered | globally ranked keyword references across verified tracks, artists, albums, and playlists | tags, semantic/vector search, viewer-specific moderation, playlist-page client wiring |
+| `GET /v1/charts/tracks` | covered | period-ranked verified tracks from distinct available liker DIDs | pagination, historical snapshots, viewer-specific policy |
 | `GET /health` | covered | process liveness | none for liveness |
 | `GET /ready` | covered | index configuration and a live database probe | readiness for dependencies required by future routes |
 | `GET /` | covered | points clients at `/v1` | protocol metadata remains separate |
@@ -66,10 +68,11 @@ decision.
 `OPTIONS` handling, bounded connections, CORS, request IDs, and the common JSON
 error envelope are covered cross-cutting behavior, not product capabilities.
 
-The product coverage count is therefore **nine read capabilities**: anonymous
+The product coverage count is therefore **eleven read capabilities**: anonymous
 track discovery, track detail, playback resolution, artist detail, artist album
 discovery, verified album detail, public playlist discovery, and verified
-playlist detail, and verified catalog keyword search. The
+playlist detail, verified catalog keyword search, artist metrics, and the
+derived verified-like track chart. The
 artist resource replaces both Python lookup routes with one DID-or-handle
 contract. Semantic parity remains partial because the Zig routes deliberately
 exclude most viewer-specific behavior. Of the 221 Python operations,
@@ -78,7 +81,7 @@ have covered successor behavior, two track reads have partial coverage, two
 artist lookups have one covered successor, one album listing and one album
 detail have partial coverage, five public playlist lookup/listing operations
 have two covered successors, keyword search has one covered successor while its
-semantic sibling remains open, and the remaining 206 have no implemented Zig
+semantic sibling remains open, and the remaining operations have no implemented Zig
 mapping yet.
 
 ### legacy surface by resource

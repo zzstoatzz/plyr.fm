@@ -96,6 +96,20 @@ CREATE TABLE plyr_index.track_metrics (
     write_source text NOT NULL,
     observed_at_us bigint NOT NULL
 );
+CREATE TABLE plyr_index.like_records (
+    record_uri text PRIMARY KEY,
+    record_cid text,
+    owner_did text NOT NULL,
+    collection text NOT NULL,
+    rkey text NOT NULL,
+    subject_uri text,
+    subject_cid text,
+    record_created_at text,
+    deleted boolean NOT NULL,
+    commit_cid text NOT NULL,
+    commit_rev text NOT NULL,
+    indexed_at_us bigint NOT NULL
+);
 CREATE TABLE plyr_index.list_records (
     record_uri text PRIMARY KEY,
     record_cid text NOT NULL,
@@ -163,6 +177,21 @@ INSERT INTO plyr_index.account_availability VALUES (
     'bafyreihdwdcefgh4dqkjv67uzcmw7ojee6xedzdetojuzjevtenxquvyku',
     NULL, 1786208400000000
 );
+INSERT INTO plyr_index.account_availability
+SELECT
+    format('did:plc:liker%s', n), true, NULL, 'verified_repository', '3jqfcqzm3fo2j',
+    'bafyreihdwdcefgh4dqkjv67uzcmw7ojee6xedzdetojuzjevtenxquvyku',
+    NULL, 1786208400000000 + n
+FROM generate_series(1, 100) AS n;
+
+INSERT INTO plyr_index.account_availability (
+    repo_did, available, unavailable_reason, evidence_source, pds_origin,
+    observed_at_us
+)
+VALUES (
+    'did:plc:unavailable-liker', false, 'account_event',
+    'account_event', 'https://pds.example', 1786320000000000
+);
 
 INSERT INTO plyr_index.track_records
 SELECT
@@ -206,6 +235,50 @@ SELECT
     format('at://did:plc:bench/fm.plyr.dev.track/track-%s', n),
     n, 'legacy_import', 1786208400000000 + n
 FROM generate_series(1, 100) AS n;
+
+INSERT INTO plyr_index.like_records
+SELECT
+    format('at://did:plc:liker%s/fm.plyr.dev.like/track-%s', liker, track),
+    'bafyreihdwdcefgh4dqkjv67uzcmw7ojee6xedzdetojuzjevtenxquvyku',
+    format('did:plc:liker%s', liker), 'fm.plyr.dev.like', format('track-%s', track),
+    format('at://did:plc:bench/fm.plyr.dev.track/track-%s', track),
+    'bafyreihdwdcefgh4dqkjv67uzcmw7ojee6xedzdetojuzjevtenxquvyku',
+    to_char(TIMESTAMPTZ '2026-08-09 12:00:00+00' - liker * INTERVAL '1 hour',
+        'YYYY-MM-DD"T"HH24:MI:SS"Z"'),
+    false,
+    'bafyreihdwdcefgh4dqkjv67uzcmw7ojee6xedzdetojuzjevtenxquvyku',
+    '3jqfcqzm3fo2j', 1786294800000000 + liker
+FROM generate_series(1, 100) AS track
+CROSS JOIN LATERAL generate_series(1, track) AS liker;
+
+-- Neither a second record from one actor nor an unavailable actor creates a
+-- second vote for the same subject.
+INSERT INTO plyr_index.like_records (
+    record_uri, record_cid, owner_did, collection, rkey, subject_uri,
+    subject_cid, record_created_at, commit_cid, commit_rev, indexed_at_us,
+    deleted
+)
+VALUES
+    (
+        'at://did:plc:liker100/fm.plyr.dev.like/duplicate-track-100',
+        'bafyreihdwdcefgh4dqkjv67uzcmw7ojee6xedzdetojuzjevtenxquvyku',
+        'did:plc:liker100', 'fm.plyr.dev.like', 'duplicate-track-100',
+        'at://did:plc:bench/fm.plyr.dev.track/track-100',
+        'bafyreihdwdcefgh4dqkjv67uzcmw7ojee6xedzdetojuzjevtenxquvyku',
+        '2026-08-09T11:00:00Z',
+        'bafyreihdwdcefgh4dqkjv67uzcmw7ojee6xedzdetojuzjevtenxquvyku',
+        '3jqfcqzm3fo2j', 1786320000000000, false
+    ),
+    (
+        'at://did:plc:unavailable-liker/fm.plyr.dev.like/track-100',
+        'bafyreihdwdcefgh4dqkjv67uzcmw7ojee6xedzdetojuzjevtenxquvyku',
+        'did:plc:unavailable-liker', 'fm.plyr.dev.like', 'track-100',
+        'at://did:plc:bench/fm.plyr.dev.track/track-100',
+        'bafyreihdwdcefgh4dqkjv67uzcmw7ojee6xedzdetojuzjevtenxquvyku',
+        '2026-08-09T11:00:00Z',
+        'bafyreihdwdcefgh4dqkjv67uzcmw7ojee6xedzdetojuzjevtenxquvyku',
+        '3jqfcqzm3fo2j', 1786320000000000, false
+    );
 
 INSERT INTO plyr_index.list_records VALUES (
     'at://did:plc:bench/fm.plyr.dev.list/playlist',
@@ -253,9 +326,14 @@ CREATE INDEX tracks_created_uri_bench
 CREATE INDEX list_records_owner_type_bench
     ON plyr_index.list_records (owner_did, list_type, record_created_at, record_uri)
     WHERE NOT deleted;
+CREATE INDEX like_records_subject_bench
+    ON plyr_index.like_records (subject_uri)
+    WHERE NOT deleted;
 CREATE INDEX ix_plyr_index_track_records_title_trgm
     ON plyr_index.track_records USING gin (title gin_trgm_ops)
     WHERE NOT deleted;
 CREATE INDEX ix_plyr_index_list_records_name_trgm
     ON plyr_index.list_records USING gin (name gin_trgm_ops)
     WHERE NOT deleted AND name IS NOT NULL;
+
+ANALYZE;

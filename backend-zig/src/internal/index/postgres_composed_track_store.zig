@@ -419,7 +419,7 @@ pub const projected_columns =
     \\  metrics.record_uri IS NOT NULL
 ;
 
-const joined_projection = "SELECT\n" ++ projected_columns ++ "\n" ++
+pub const projected_from =
     \\FROM plyr_index.track_records AS v
     \\JOIN plyr_index.account_availability AS aa
     \\  ON aa.repo_did = v.owner_did AND aa.available
@@ -436,6 +436,8 @@ const joined_projection = "SELECT\n" ++ projected_columns ++ "\n" ++
     \\  ON p.owner_did = v.owner_did AND p.collection = $2
     \\  AND p.rkey = 'self' AND NOT p.deleted
 ;
+
+const joined_projection = "SELECT\n" ++ projected_columns ++ "\n" ++ projected_from;
 
 const common_policy =
     \\  AND NOT v.deleted
@@ -456,7 +458,7 @@ const detail_query = joined_projection ++ "\n" ++
     \\LIMIT 1
 ;
 
-const discovery_policy = common_policy ++
+pub const discovery_policy = common_policy ++
     \\  AND v.collection = $1
     \\  AND COALESCE(pol.visibility, 'public') IN ('public', 'supporters')
     \\  AND NOT (

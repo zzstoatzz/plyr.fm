@@ -51,6 +51,13 @@ both test paths refuse any other database name. The HTTP benchmarks use a
 third `zig_bench` database on port 5434, so neither path can overwrite the
 Python suite's `relay_test` schema.
 
+Local product data follows the same authority boundary as deployment. A PDS
+record written through the API, or discovered by repository ingestion/repair,
+is the fixture; Postgres is the disposable result. A local bootstrap command
+must start the ingester and create authentic environment-namespaced records (or
+repair known repositories), never insert rows that pretend to be source state.
+Direct SQL is reserved for projection adapter tests and benchmark fixtures.
+
 ## API configuration
 
 | variable | required | purpose |
@@ -81,8 +88,9 @@ unbounded detached threads.
 
 The current product surface is `GET /v1/tracks`,
 `GET /v1/tracks/{track_id}`, `GET /v1/tracks/{track_id}/playback`,
-`GET /v1/artists/{identifier}`, `GET /v1/artists/{identifier}/metrics`, and the collection and detail forms of
-`GET /v1/albums` and `GET /v1/playlists`, plus `GET /v1/search`. Search accepts
+`GET /v1/artists/{identifier}`, `GET /v1/artists/{identifier}/metrics`,
+`GET /v1/charts/tracks`, and the collection and detail forms of `GET /v1/albums`
+and `GET /v1/playlists`, plus `GET /v1/search`. Search accepts
 one strict query, a bounded global limit, and an optional type set; it returns
 verified record references with match class and provenance but no unstable
 numeric score. The track collection accepts a strict
@@ -115,12 +123,20 @@ verified record metadata, verified ordered-membership counts, attributed owner
 profiles, and derived metrics; detail preserves every strong-reference position
 and hydrates only an exact public URI/CID match.
 
+The track chart is likewise an explicitly derived resource. It ranks admitted
+verified tracks by distinct, currently available liker DIDs for all time or an
+exact 30-, 7-, or 1-day authored-record window. Duplicate records from one DID
+cannot manufacture extra votes, unavailable accounts do not rank content, and
+the response keeps the period count separate from the all-time count. The
+ranking hydrates through the same discovery policy and track representation as
+the catalogue; neither a legacy like row nor a numeric track ID is authority.
+
 Artist metrics are a separate public capability rather than extra fields on the
 artist identity resource. They resolve a handle alias through the verified
 artist boundary, then aggregate admitted verified track records and canonical-
 URI application play metrics. They never read legacy numeric track IDs or the
-legacy play-count column; likes and global rank remain absent until their
-authority is designed.
+legacy play-count column. Track rank is exposed only through the independently
+derived chart resource.
 
 Playlist collection and detail read only authenticated `playlist` list records;
 they do not join the Python playlist table or fetch a mutable PDS record during

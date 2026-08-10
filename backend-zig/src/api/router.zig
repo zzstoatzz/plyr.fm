@@ -1,6 +1,7 @@
 const std = @import("std");
 const albums = @import("albums.zig");
 const artists = @import("artists.zig");
+const charts = @import("charts.zig");
 const playlists = @import("playlists.zig");
 const response = @import("response.zig");
 const search = @import("search.zig");
@@ -13,6 +14,7 @@ const SearchStore = @import("../internal/index/search_store.zig").SearchStore;
 const PlayDedupStore = @import("../internal/metrics/play_dedup_store.zig").PlayDedupStore;
 const PlayMetricStore = @import("../internal/metrics/play_metric_store.zig").PlayMetricStore;
 const TrackStore = @import("../internal/index/track_store.zig").TrackStore;
+const TrackChartStore = @import("../internal/index/track_chart_store.zig").TrackChartStore;
 const VerifiedListStore = @import("../internal/index/verified_list_store.zig").VerifiedListStore;
 
 const http = std.http;
@@ -23,6 +25,7 @@ pub const prefix = "/v1";
 pub const App = struct {
     io: std.Io,
     track_store: ?TrackStore,
+    track_chart_store: ?TrackChartStore = null,
     playback_store: ?PlaybackStore,
     artist_store: ?ArtistStore,
     artist_metric_store: ?ArtistMetricStore,
@@ -114,6 +117,21 @@ pub fn handle(
             app.track_store,
             app.track_collection,
             app.cors,
+            request_id,
+        );
+    } else if (mem.eql(u8, path, prefix ++ "/charts/tracks")) {
+        if (request.head.method != .GET) {
+            try response.apiError(request, .method_not_allowed, request_id, app.cors);
+            return;
+        }
+        try charts.tracks(
+            request,
+            allocator,
+            app.track_chart_store,
+            app.track_collection,
+            app.profile_collection,
+            app.cors,
+            app.io,
             request_id,
         );
     } else if (mem.eql(u8, path, prefix ++ "/search")) {

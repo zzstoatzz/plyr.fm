@@ -3,6 +3,7 @@ const config = @import("config.zig");
 const server = @import("server.zig");
 const postgres = @import("internal/index/postgres_track_store.zig");
 const postgres_composed_tracks = @import("internal/index/postgres_composed_track_store.zig");
+const postgres_track_charts = @import("internal/index/postgres_track_chart_store.zig");
 const postgres_playback = @import("internal/index/postgres_playback_store.zig");
 const postgres_search = @import("internal/index/postgres_search_store.zig");
 const postgres_artists = @import("internal/index/postgres_artist_store.zig");
@@ -43,6 +44,11 @@ pub fn main() !void {
     else
         null;
     const track_store = if (postgres_composed_track_store) |*store| store.store() else null;
+    var postgres_track_chart_store: ?postgres_track_charts.PostgresTrackChartStore = if (postgres_store) |*store|
+        .{ .pool = store.pool }
+    else
+        null;
+    const track_chart_store = if (postgres_track_chart_store) |*store| store.store() else null;
     var postgres_playback_store: ?postgres_playback.PostgresPlaybackStore = if (postgres_store) |*store|
         .{ .pool = store.pool }
     else
@@ -94,6 +100,7 @@ pub fn main() !void {
             try server.run(io, settings.port, settings.max_connections, .{
                 .io = io,
                 .track_store = track_store,
+                .track_chart_store = track_chart_store,
                 .playback_store = playback_store,
                 .artist_store = artist_store,
                 .artist_metric_store = artist_metric_store,
@@ -168,6 +175,7 @@ test {
     _ = @import("api/response.zig");
     _ = @import("api/router.zig");
     _ = @import("api/artists.zig");
+    _ = @import("api/charts.zig");
     _ = @import("api/albums.zig");
     _ = @import("api/tracks.zig");
     _ = @import("api/playlists.zig");
@@ -181,11 +189,13 @@ test {
     _ = @import("internal/application/get_track.zig");
     _ = @import("internal/application/get_playback.zig");
     _ = @import("internal/application/list_tracks.zig");
+    _ = @import("internal/application/list_track_chart.zig");
     _ = @import("internal/application/get_playlist.zig");
     _ = @import("internal/application/list_playlists.zig");
     _ = @import("internal/application/search_catalog.zig");
     _ = @import("internal/application/record_play.zig");
     _ = @import("internal/domain/artist.zig");
+    _ = @import("internal/domain/track_chart.zig");
     _ = @import("internal/domain/artist_metrics.zig");
     _ = @import("internal/domain/playback.zig");
     _ = @import("internal/domain/verified_list.zig");

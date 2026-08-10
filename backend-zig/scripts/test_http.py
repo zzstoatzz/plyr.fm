@@ -317,6 +317,27 @@ def main() -> None:
         assert status == 405
         assert search_method["error"]["code"] == "method_not_allowed"
 
+        for invalid_target in (
+            "/v1/charts/tracks?period=year",
+            "/v1/charts/tracks?period=week&period=day",
+            "/v1/charts/tracks?limit=0",
+            "/v1/charts/tracks?limit=51",
+            "/v1/charts/tracks?offset=1",
+        ):
+            status, _, invalid_chart = _request(base_url, invalid_target)
+            assert status == 400
+            assert invalid_chart["error"]["code"] == "invalid_request"
+
+        status, _, unavailable_chart = _request(
+            base_url, "/v1/charts/tracks?period=all_time&limit=10"
+        )
+        assert status == 503
+        assert unavailable_chart["error"]["code"] == "service_unavailable"
+
+        status, _, chart_method = _request(base_url, "/v1/charts/tracks", method="POST")
+        assert status == 405
+        assert chart_method["error"]["code"] == "method_not_allowed"
+
         uri = f"at://did:plc:artist/{COLLECTION}/3m123abc"
         status, headers, unavailable = _request(
             base_url,
