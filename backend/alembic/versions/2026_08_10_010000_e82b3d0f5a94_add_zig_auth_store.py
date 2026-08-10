@@ -126,21 +126,32 @@ def upgrade() -> None:
 
     if _role_exists():
         op.execute(f"GRANT USAGE ON SCHEMA plyr_auth TO {CANARY_ROLE}")
-        for table in ("oauth_requests", "sessions", "exchange_tokens"):
-            op.execute(
-                f"GRANT SELECT, INSERT, UPDATE, DELETE ON plyr_auth.{table} "
-                f"TO {CANARY_ROLE}"
-            )
+        op.execute(
+            f"GRANT SELECT, INSERT, DELETE ON plyr_auth.oauth_requests TO {CANARY_ROLE}"
+        )
+        op.execute(f"GRANT SELECT, INSERT ON plyr_auth.sessions TO {CANARY_ROLE}")
+        op.execute(f"GRANT UPDATE (revoked_at) ON plyr_auth.sessions TO {CANARY_ROLE}")
+        op.execute(
+            "GRANT SELECT, INSERT, DELETE ON plyr_auth.exchange_tokens "
+            f"TO {CANARY_ROLE}"
+        )
 
 
 def downgrade() -> None:
     """Remove only the isolated successor auth store."""
     if _role_exists():
-        for table in ("exchange_tokens", "sessions", "oauth_requests"):
-            op.execute(
-                f"REVOKE SELECT, INSERT, UPDATE, DELETE ON plyr_auth.{table} "
-                f"FROM {CANARY_ROLE}"
-            )
+        op.execute(
+            "REVOKE SELECT, INSERT, DELETE ON plyr_auth.exchange_tokens "
+            f"FROM {CANARY_ROLE}"
+        )
+        op.execute(
+            f"REVOKE UPDATE (revoked_at) ON plyr_auth.sessions FROM {CANARY_ROLE}"
+        )
+        op.execute(f"REVOKE SELECT, INSERT ON plyr_auth.sessions FROM {CANARY_ROLE}")
+        op.execute(
+            "REVOKE SELECT, INSERT, DELETE ON plyr_auth.oauth_requests "
+            f"FROM {CANARY_ROLE}"
+        )
         op.execute(f"REVOKE USAGE ON SCHEMA plyr_auth FROM {CANARY_ROLE}")
     op.drop_table("exchange_tokens", schema="plyr_auth")
     op.drop_table("sessions", schema="plyr_auth")

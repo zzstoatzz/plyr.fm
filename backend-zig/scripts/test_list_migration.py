@@ -31,6 +31,11 @@ EXPECTED_TABLES = {
     "track_policies",
 }
 EXPECTED_AUTH_TABLES = {"exchange_tokens", "oauth_requests", "sessions"}
+EXPECTED_AUTH_TABLE_PRIVILEGES = {
+    "oauth_requests": {"SELECT", "INSERT", "DELETE"},
+    "sessions": {"SELECT", "INSERT"},
+    "exchange_tokens": {"SELECT", "INSERT", "DELETE"},
+}
 EXPECTED_AUTH_COLUMNS = {
     "oauth_requests": {"state_digest", "sealed_payload", "created_at", "expires_at"},
     "sessions": {
@@ -446,8 +451,25 @@ def assert_canary_least_privilege(database_url: str) -> None:
     for table_name in EXPECTED_AUTH_TABLES:
         object_name = f"plyr_auth.{table_name}"
         for privilege in ("SELECT", "INSERT", "UPDATE", "DELETE"):
-            if not role_has_privilege(database_url, object_name, privilege):
-                raise AssertionError(f"canary cannot {privilege} {object_name}")
+            actual = role_has_privilege(database_url, object_name, privilege)
+            expected = privilege in EXPECTED_AUTH_TABLE_PRIVILEGES[table_name]
+            if actual != expected:
+                outcome = "cannot" if expected else "can"
+                raise AssertionError(f"canary {outcome} {privilege} {object_name}")
+    session_columns = EXPECTED_AUTH_COLUMNS["sessions"]
+    for column_name in session_columns:
+        actual = role_has_column_privilege(
+            database_url,
+            "plyr_auth.sessions",
+            column_name,
+            "UPDATE",
+        )
+        expected = column_name == "revoked_at"
+        if actual != expected:
+            outcome = "cannot" if expected else "can"
+            raise AssertionError(
+                f"canary {outcome} UPDATE plyr_auth.sessions.{column_name}"
+            )
     for table_name in COMPATIBILITY_TABLES:
         object_name = f"public.{table_name}"
         if not role_has_privilege(database_url, object_name, "SELECT"):
