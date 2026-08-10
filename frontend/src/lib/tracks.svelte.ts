@@ -293,6 +293,7 @@ export async function fetchTopTracks(limit = 10, period = 'all_time'): Promise<T
 }
 
 export async function fetchLikedTracks(): Promise<Track[]> {
+	if (IS_ZIG_V1) return [];
 	try {
 		const response = await fetch(`${API_URL}/tracks/liked`, {
 			credentials: 'include'

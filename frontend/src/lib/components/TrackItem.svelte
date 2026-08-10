@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { browser } from '$app/environment';
+	import { IS_ZIG_V1 } from '$lib/config';
 	import ShareButton from './ShareButton.svelte';
 	import AddToMenu from './AddToMenu.svelte';
 	import TrackActionsMenu from './TrackActionsMenu.svelte';
@@ -398,7 +399,7 @@
 	<div class="track-actions" role="presentation" onclick={(e) => e.stopPropagation()}>
 		<!-- desktop: show individual buttons -->
 		<div class="desktop-actions">
-			{#if isAuthenticated}
+			{#if isAuthenticated && !IS_ZIG_V1}
 				<AddToMenu
 					trackId={track.id}
 					trackTitle={track.title}
@@ -443,7 +444,7 @@
 				initialLiked={track.is_liked || false}
 				shareUrl={shareUrl}
 				onQueue={handleQueue}
-				isAuthenticated={isAuthenticated}
+				isAuthenticated={isAuthenticated && !IS_ZIG_V1}
 				likeDisabled={!track.atproto_record_uri}
 				{excludePlaylistId}
 			/>

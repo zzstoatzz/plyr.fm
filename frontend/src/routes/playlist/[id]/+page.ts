@@ -1,6 +1,7 @@
 import { browser } from '$app/environment';
 import { error } from '@sveltejs/kit';
-import { API_URL } from '$lib/config';
+import { getZigPlaylist } from '$lib/api/zig-v1-playlists';
+import { API_URL, IS_ZIG_V1 } from '$lib/config';
 import type { LoadEvent } from '@sveltejs/kit';
 import type { PlaylistWithTracks, Playlist } from '$lib/types';
 
@@ -9,9 +10,15 @@ export interface PageData {
 	playlistMeta: Playlist | null;
 }
 
-export async function load({ params, data }: LoadEvent): Promise<PageData> {
+export async function load({ params, data, fetch: fetcher }: LoadEvent): Promise<PageData> {
 	// server data for OG tags
 	const serverData = data as { playlistMeta: Playlist | null } | undefined;
+	if (IS_ZIG_V1) {
+		if (!params.id) throw error(404, 'playlist not found');
+		const playlist = await getZigPlaylist(API_URL, params.id, fetcher);
+		if (!playlist) throw error(404, 'playlist not found');
+		return { playlist, playlistMeta: playlist };
+	}
 
 	if (!browser) {
 		// during SSR, we don't have auth - just return meta for OG tags
