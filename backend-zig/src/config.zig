@@ -178,12 +178,14 @@ fn authFromEnvironment() !?AuthConfig {
     const scope = getenv("ZIG_OAUTH_SCOPE");
     const client_private_key = getenv("ZIG_OAUTH_CLIENT_PRIVATE_KEY");
     const encryption_key = getenv("ZIG_AUTH_ENCRYPTION_KEY");
-    const configured = @intFromBool(client_id != null) +
-        @intFromBool(redirect_uri != null) +
-        @intFromBool(frontend_origin != null) +
-        @intFromBool(scope != null) +
-        @intFromBool(client_private_key != null) +
-        @intFromBool(encryption_key != null);
+    const configured = presentCount(.{
+        client_id != null,
+        redirect_uri != null,
+        frontend_origin != null,
+        scope != null,
+        client_private_key != null,
+        encryption_key != null,
+    });
     if (configured == 0) return null;
     if (configured != 6)
         return error.PartialAuthConfiguration;
@@ -195,6 +197,12 @@ fn authFromEnvironment() !?AuthConfig {
         .client_private_key = client_private_key.?,
         .encryption_key = encryption_key.?,
     });
+}
+
+fn presentCount(values: [6]bool) u8 {
+    var count: u8 = 0;
+    for (values) |present| count += @intFromBool(present);
+    return count;
 }
 
 fn validateHttpsUrl(value: []const u8, origin_only: bool) !void {
@@ -304,6 +312,13 @@ test "record collections are distinct routing keys" {
 }
 
 test "auth configuration is exact, confidential, and purpose-keyed" {
+    try std.testing.expectEqual(@as(u8, 0), presentCount(.{false} ** 6));
+    try std.testing.expectEqual(
+        @as(u8, 1),
+        presentCount(.{ true, false, false, false, false, false }),
+    );
+    try std.testing.expectEqual(@as(u8, 6), presentCount(.{true} ** 6));
+
     const encoded_key = "QkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkI=";
     const auth = try AuthConfig.fromValues(.{
         .client_id = "https://api.next.plyr.fm/oauth-client-metadata.json",
