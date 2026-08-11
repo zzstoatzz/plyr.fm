@@ -18,6 +18,7 @@ const catalog_reconcile_runner = @import("internal/ingest/catalog_reconcile_runn
 const account_reconciler = @import("internal/account/reconciler.zig");
 const postgres_auth = @import("internal/auth/postgres_store.zig");
 const oauth_gateway = @import("internal/auth/oauth_gateway.zig");
+const redis_start_admission = @import("internal/auth/redis_start_admission.zig");
 
 var threaded_io: std.Io.Threaded = undefined;
 pub const std_options_debug_threaded_io: ?*std.Io.Threaded = &threaded_io;
@@ -119,6 +120,11 @@ pub fn main() !void {
                 .{ .io = io }
             else
                 null;
+            var auth_start_admission: ?redis_start_admission.RedisStartAdmission = if (settings.auth) |_| blk: {
+                const url = settings.redis_url orelse break :blk null;
+                break :blk try redis_start_admission.RedisStartAdmission.init(allocator, io, url);
+            } else null;
+            defer if (auth_start_admission) |*limiter| limiter.deinit();
             try server.run(io, settings.port, settings.max_connections, .{
                 .io = io,
                 .track_store = track_store,
@@ -139,6 +145,12 @@ pub fn main() !void {
                 .auth = settings.auth,
                 .auth_store = auth_store,
                 .oauth_client = if (oauth) |*client| client.client() else null,
+                .auth_start_admission = if (auth_start_admission) |*limiter| limiter.store() else null,
+                .auth_start_client_limit = settings.auth_start_client_limit,
+                .auth_start_subject_limit = settings.auth_start_subject_limit,
+                .auth_start_global_limit = settings.auth_start_global_limit,
+                .auth_start_window_seconds = settings.auth_start_window_seconds,
+                .auth_trusted_proxy_cidrs = settings.auth_trusted_proxy_cidrs,
             });
         },
         .catalog_reconciler => {
@@ -198,6 +210,10 @@ test {
     _ = @import("internal/auth/store.zig");
     _ = @import("internal/auth/oauth_state.zig");
     _ = @import("internal/auth/oauth_gateway.zig");
+    _ = @import("internal/auth/start_admission.zig");
+    _ = @import("internal/auth/redis_start_admission.zig");
+    _ = @import("internal/redis/connection_config.zig");
+    _ = @import("internal/http/client_identity.zig");
     _ = @import("internal/application/browser_login.zig");
     _ = @import("internal/account/availability.zig");
     _ = @import("internal/account/current_pds_status_source.zig");

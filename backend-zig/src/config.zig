@@ -1,6 +1,7 @@
 const std = @import("std");
 const zat = @import("zat");
 const sealed_secret = @import("internal/auth/sealed_secret.zig");
+const client_identity = @import("internal/http/client_identity.zig");
 
 pub const AuthConfig = struct {
     client_id: []const u8,
@@ -91,6 +92,11 @@ pub const Config = struct {
     account_check_lease_us: i64,
     account_check_seed_us: i64,
     account_check_idle_ms: i64,
+    auth_start_client_limit: u32,
+    auth_start_subject_limit: u32,
+    auth_start_global_limit: u32,
+    auth_start_window_seconds: u32,
+    auth_trusted_proxy_cidrs: []const u8,
     auth: ?AuthConfig,
 
     pub fn fromEnvironment() !Config {
@@ -137,6 +143,9 @@ pub const Config = struct {
         if (role == .catalog_reconciler and (database_url == null or index_mode != .required))
             return error.CatalogReconcilerDatabaseRequired;
 
+        const auth_trusted_proxy_cidrs = getenv("AUTH_TRUSTED_PROXY_CIDRS") orelse "";
+        try client_identity.validateTrustedProxyCidrs(auth_trusted_proxy_cidrs);
+
         return .{
             .role = role,
             .port = std.fmt.parseInt(u16, port_value, 10) catch return error.InvalidPort,
@@ -169,6 +178,19 @@ pub const Config = struct {
             .account_check_idle_ms = try parsePositiveI64(
                 getenv("ACCOUNT_CHECK_IDLE_MILLISECONDS") orelse "1000",
             ),
+            .auth_start_client_limit = try parsePositiveU32(
+                getenv("AUTH_START_CLIENT_LIMIT") orelse "10",
+            ),
+            .auth_start_subject_limit = try parsePositiveU32(
+                getenv("AUTH_START_SUBJECT_LIMIT") orelse "10",
+            ),
+            .auth_start_global_limit = try parsePositiveU32(
+                getenv("AUTH_START_GLOBAL_LIMIT") orelse "120",
+            ),
+            .auth_start_window_seconds = try parsePositiveU32(
+                getenv("AUTH_START_WINDOW_SECONDS") orelse "60",
+            ),
+            .auth_trusted_proxy_cidrs = auth_trusted_proxy_cidrs,
             .auth = try authFromEnvironment(),
         };
     }
@@ -242,6 +264,12 @@ fn parsePositiveU16(value: []const u8) !u16 {
     return parsed;
 }
 
+fn parsePositiveU32(value: []const u8) !u32 {
+    const parsed = std.fmt.parseInt(u32, value, 10) catch return error.InvalidPositiveInteger;
+    if (parsed == 0) return error.InvalidPositiveInteger;
+    return parsed;
+}
+
 fn parsePositiveI64(value: []const u8) !i64 {
     const parsed = std.fmt.parseInt(i64, value, 10) catch return error.InvalidPositiveInteger;
     if (parsed <= 0) return error.InvalidPositiveInteger;
@@ -289,9 +317,11 @@ test "index mode and connection bounds are explicit" {
     try std.testing.expectError(error.InvalidIndexMode, IndexMode.parse("optional"));
     try std.testing.expectEqual(@as(usize, 128), try parsePositiveUsize("128"));
     try std.testing.expectEqual(@as(u16, 16), try parsePositiveU16("16"));
+    try std.testing.expectEqual(@as(u32, 60), try parsePositiveU32("60"));
     try std.testing.expectEqual(@as(i64, 6_000_000), try parseSecondsMicros("6"));
     try std.testing.expectError(error.InvalidPositiveInteger, parsePositiveUsize("0"));
     try std.testing.expectError(error.InvalidPositiveInteger, parsePositiveU16("65536"));
+    try std.testing.expectError(error.InvalidPositiveInteger, parsePositiveU32("0"));
 }
 
 test "database role expectations use unquoted PostgreSQL identifiers" {

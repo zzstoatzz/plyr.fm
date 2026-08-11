@@ -21,6 +21,7 @@ const TrackChartStore = @import("../internal/index/track_chart_store.zig").Track
 const VerifiedListStore = @import("../internal/index/verified_list_store.zig").VerifiedListStore;
 const AuthStore = @import("../internal/auth/store.zig").Store;
 const OAuthClient = @import("../internal/auth/oauth_gateway.zig").Client;
+const StartAdmission = @import("../internal/auth/start_admission.zig").Store;
 
 const http = std.http;
 const mem = std.mem;
@@ -47,6 +48,12 @@ pub const App = struct {
     auth: ?config.AuthConfig = null,
     auth_store: ?AuthStore = null,
     oauth_client: ?OAuthClient = null,
+    auth_start_admission: ?StartAdmission = null,
+    auth_start_client_limit: u32 = 10,
+    auth_start_subject_limit: u32 = 10,
+    auth_start_global_limit: u32 = 120,
+    auth_start_window_seconds: u32 = 60,
+    auth_trusted_proxy_cidrs: []const u8 = "",
 };
 
 pub fn handle(
@@ -92,6 +99,12 @@ pub fn handle(
             app.auth,
             app.auth_store,
             app.oauth_client,
+            app.auth_start_admission,
+            app.auth_start_client_limit,
+            app.auth_start_subject_limit,
+            app.auth_start_global_limit,
+            app.auth_start_window_seconds,
+            app.auth_trusted_proxy_cidrs,
             app.cors,
             request_id,
         );

@@ -1,5 +1,6 @@
 """Contract tests for the post-deploy canary traversal."""
 
+import ipaddress
 import json
 import tomllib
 from io import BytesIO
@@ -92,6 +93,17 @@ def test_canary_declares_public_auth_config_but_never_secret_values() -> None:
     )
     assert environment["ZIG_OAUTH_FRONTEND_ORIGIN"] == "https://next.plyr.fm"
     assert environment["ZIG_OAUTH_SCOPE"] == "atproto transition:generic"
+    assert environment["AUTH_START_CLIENT_LIMIT"] == "10"
+    assert environment["AUTH_START_SUBJECT_LIMIT"] == "10"
+    assert environment["AUTH_START_GLOBAL_LIMIT"] == "120"
+    assert environment["AUTH_START_WINDOW_SECONDS"] == "60"
+    trusted_proxies = {
+        ipaddress.ip_network(value)
+        for value in environment["AUTH_TRUSTED_PROXY_CIDRS"].split(",")
+    }
+    assert len(trusted_proxies) == 22
+    assert ipaddress.ip_network("173.245.48.0/20") in trusted_proxies
+    assert ipaddress.ip_network("2a06:98c0::/29") in trusted_proxies
     assert "ZIG_OAUTH_CLIENT_PRIVATE_KEY" not in environment
     assert "ZIG_AUTH_ENCRYPTION_KEY" not in environment
 

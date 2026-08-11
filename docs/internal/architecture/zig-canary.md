@@ -154,6 +154,9 @@ Before exposing `next.plyr.fm`:
 
    Successful credential responses must be `no-store`, and OAuth signing and
    credential-encryption keys must be distinct.
+   OAuth start must enforce a shared per-client limit before identity discovery
+   or PAR; limiter loss fails that expensive path closed without taking down
+   reads or established sessions.
 
 `next.plyr.fm` is reserved for the complete successor application: a frontend
 whose data and playback capabilities come from Zig `/v1`. Directly exposing the
@@ -200,6 +203,19 @@ if a development CORS allowlist is broader. OAuth signing and credential-
 encryption keys are separate purposes and configuration fails closed if their
 decoded key material is equal. The pinned outbound OAuth transport is supplied
 by the published Zat v0.3.28 archive.
+
+OAuth-start admission is a separate application port backed by the existing
+Docket Redis. The adapter stores only a SHA-256-derived bucket key and uses one
+atomic increment/expiry script across instances. Fly reports the address that
+connected to its proxy—which is a Cloudflare edge for the proxied canary—so the
+application accepts `CF-Connecting-IP` only when that Fly-observed peer matches
+the explicitly configured Cloudflare CIDRs. Direct callers stay keyed by their
+Fly-observed address. Independent normalized-handle and fleet-global buckets
+bound work even if a reverse-proxy client identity is varied; defaults are 10
+per client, 10 per handle, and 120 globally per 60 seconds. Redis is startup-
+probed when configured; later connection failures return `503` for
+`/auth/start` and reconnect on the next attempt. A Cloudflare edge rule remains
+the outer per-client control before public cutover.
 
 OAuth state has a second browser binding: `/auth/start` writes a ten-minute,
 host-only `__Host-plyr_oauth` HttpOnly cookie, and the callback must present the

@@ -8,6 +8,7 @@ pub const ApiError = enum {
     forbidden,
     not_found,
     method_not_allowed,
+    rate_limited,
     upstream_failure,
     internal_error,
     service_unavailable,
@@ -19,6 +20,7 @@ pub const ApiError = enum {
             .forbidden => "The request origin is not allowed.",
             .not_found => "The requested resource was not found.",
             .method_not_allowed => "The resource does not support this method.",
+            .rate_limited => "Too many requests were made for this resource.",
             .upstream_failure => "An upstream service could not complete the request.",
             .internal_error => "The request could not be completed.",
             .service_unavailable => "The service is temporarily unavailable.",
@@ -32,6 +34,7 @@ pub const ApiError = enum {
             .forbidden => .forbidden,
             .not_found => .not_found,
             .method_not_allowed => .method_not_allowed,
+            .rate_limited => .too_many_requests,
             .upstream_failure => .bad_gateway,
             .internal_error => .internal_server_error,
             .service_unavailable => .service_unavailable,
@@ -157,9 +160,26 @@ pub fn apiError(
     request_id: []const u8,
     cors: CorsPolicy,
 ) !void {
+    return apiErrorWithHeaders(request, kind, request_id, cors, &.{});
+}
+
+pub fn apiErrorWithHeaders(
+    request: *http.Server.Request,
+    kind: ApiError,
+    request_id: []const u8,
+    cors: CorsPolicy,
+    additional_headers: []const http.Header,
+) !void {
     var buffer: [384]u8 = undefined;
     const body = try formatError(&buffer, kind, request_id);
-    try json(request, kind.status(), body, request_id, cors);
+    try jsonWithHeaders(
+        request,
+        kind.status(),
+        body,
+        request_id,
+        cors,
+        additional_headers,
+    );
 }
 
 fn formatError(buffer: []u8, kind: ApiError, request_id: []const u8) ![]const u8 {

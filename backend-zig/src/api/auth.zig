@@ -11,7 +11,9 @@ const bearer = @import("../internal/auth/bearer_token.zig");
 const oauth_gateway = @import("../internal/auth/oauth_gateway.zig");
 const sealed_secret = @import("../internal/auth/sealed_secret.zig");
 const AuthStore = @import("../internal/auth/store.zig").Store;
+const StartAdmission = @import("../internal/auth/start_admission.zig").Store;
 const browser_login = @import("../internal/application/browser_login.zig");
+const client_identity = @import("../internal/http/client_identity.zig");
 const query = @import("../internal/http/query.zig");
 
 const http = std.http;
@@ -70,6 +72,12 @@ pub fn start(
     auth: ?config.AuthConfig,
     store: ?AuthStore,
     oauth: ?oauth_gateway.Client,
+    start_admission: ?StartAdmission,
+    start_client_limit: u32,
+    start_subject_limit: u32,
+    start_global_limit: u32,
+    start_window_seconds: u32,
+    trusted_proxy_cidrs: []const u8,
     cors: response.CorsPolicy,
     request_id: []const u8,
 ) !void {
@@ -80,6 +88,35 @@ pub fn start(
         try response.apiError(request, .invalid_request, request_id, cors);
         return;
     };
+    const limiter = start_admission orelse return unavailable(request, request_id, cors);
+    const client_key = client_identity.rateLimitKey(request, trusted_proxy_cidrs) catch {
+        try response.apiError(request, .invalid_request, request_id, cors);
+        return;
+    };
+    const decision = limiter.admit(client_key, handle, .{
+        .client_limit = start_client_limit,
+        .subject_limit = start_subject_limit,
+        .global_limit = start_global_limit,
+        .window_seconds = start_window_seconds,
+    }) catch {
+        try response.apiError(request, .service_unavailable, request_id, cors);
+        return;
+    };
+    switch (decision) {
+        .allowed => {},
+        .denied => |retry_after| {
+            var retry_buffer: [10]u8 = undefined;
+            const retry = try std.fmt.bufPrint(&retry_buffer, "{d}", .{retry_after});
+            try response.apiErrorWithHeaders(
+                request,
+                .rate_limited,
+                request_id,
+                cors,
+                &.{.{ .name = "retry-after", .value = retry }},
+            );
+            return;
+        },
+    }
     const service: browser_login.Service = .{
         .io = io,
         .settings = settings,
