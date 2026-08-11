@@ -34,12 +34,21 @@ Report the change summary and which release command you've determined, then **as
 
 ## execute deployment
 
-1. run the appropriate release command
-2. push to tangled remote: `git push tangled main --tags`
-3. report the release tag and deployment status
+1. run the appropriate release command — `scripts/release` already mirrors to the `tangled` remote, no separate push step needed
+2. report the release tag and deployment status
 
 ## post-deployment
 
-remind the user to:
-- monitor fly.io dashboard for backend deployment status (if full release)
-- check https://plyr.fm once deployment completes
+watch the deploy yourself — don't offload this to the user. use `gh run watch` on the relevant workflow run so you get a live status stream and can react to failures immediately:
+
+```bash
+# after `just release` prints the release tag, find the deploy runs it triggered
+gh run list --limit 5 --event release              # backend deploy runs
+gh run list --limit 5 --branch production-fe       # frontend deploy runs
+# then watch them
+gh run watch <run-id> --exit-status
+```
+
+once both deploys complete:
+- spot-check https://plyr.fm (prod frontend) and `curl -sf https://api.plyr.fm/health` (prod backend)
+- report the outcome to the user with the run URLs
