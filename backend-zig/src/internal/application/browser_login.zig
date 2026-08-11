@@ -7,6 +7,7 @@
 const std = @import("std");
 const config = @import("../../config.zig");
 const bearer = @import("../auth/bearer_token.zig");
+const login_identifier = @import("../auth/login_identifier.zig");
 const oauth_gateway = @import("../auth/oauth_gateway.zig");
 const oauth_state = @import("../auth/oauth_state.zig");
 const sealed_secret = @import("../auth/sealed_secret.zig");
@@ -32,9 +33,9 @@ pub const Service = struct {
     pub fn start(
         self: Service,
         allocator: std.mem.Allocator,
-        handle: []const u8,
+        identifier: login_identifier.Identifier,
     ) !Start {
-        const begun = self.oauth.begin(allocator, self.settings, handle) catch |err| {
+        const begun = self.oauth.begin(allocator, self.settings, identifier) catch |err| {
             std.log.warn("OAuth gateway start failed: {}", .{err});
             return error.OauthStartFailed;
         };
@@ -253,9 +254,10 @@ const FakeOAuth = struct {
         _: *anyopaque,
         _: std.mem.Allocator,
         _: config.AuthConfig,
-        handle: []const u8,
+        identifier: login_identifier.Identifier,
     ) !oauth_gateway.BeginResult {
-        if (!std.mem.eql(u8, handle, "artist.example")) return error.UnexpectedHandle;
+        if (!std.mem.eql(u8, identifier.text(), "artist.example"))
+            return error.UnexpectedIdentifier;
         return .{
             .state = "QkJCQkJCQkJCQkJCQkJCQg",
             .redirect_url = "https://auth.example/authorize?request_uri=urn%3Atest",
@@ -326,7 +328,8 @@ test "browser login consumes state once and atomically issues encrypted capabili
         .oauth = fake_oauth.client(),
     };
 
-    const begun = try service.start(allocator, "artist.example");
+    const identifier = try login_identifier.parse(allocator, "artist.example");
+    const begun = try service.start(allocator, identifier);
     try std.testing.expectEqualStrings(
         "https://auth.example/authorize?request_uri=urn%3Atest",
         begun.redirect_url,
@@ -350,7 +353,7 @@ test "browser login consumes state once and atomically issues encrypted capabili
         .issuer = "https://auth.example",
     }));
 
-    _ = try service.start(allocator, "artist.example");
+    _ = try service.start(allocator, identifier);
     try service.cancel(
         allocator,
         "QkJCQkJCQkJCQkJCQkJCQg",
@@ -365,7 +368,7 @@ test "browser login consumes state once and atomically issues encrypted capabili
         ),
     );
 
-    _ = try service.start(allocator, "artist.example");
+    _ = try service.start(allocator, identifier);
     const exchange_token = try service.callback(allocator, .{
         .code = "authorization-code",
         .state = "QkJCQkJCQkJCQkJCQkJCQg",

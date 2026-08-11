@@ -407,7 +407,7 @@ max_lines = 539
 
 [[rules]]
 path = "backend-zig/src/api/auth.zig"
-max_lines = 617
+max_lines = 623
 
 [[rules]]
 path = "frontend/src/lib/api/zig-v1.test.ts"

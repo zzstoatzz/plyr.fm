@@ -8,6 +8,7 @@ const zat = @import("zat");
 const config = @import("../config.zig");
 const response = @import("response.zig");
 const bearer = @import("../internal/auth/bearer_token.zig");
+const login_identifier = @import("../internal/auth/login_identifier.zig");
 const oauth_gateway = @import("../internal/auth/oauth_gateway.zig");
 const sealed_secret = @import("../internal/auth/sealed_secret.zig");
 const AuthStore = @import("../internal/auth/store.zig").Store;
@@ -84,7 +85,7 @@ pub fn start(
     const settings = auth orelse return unavailable(request, request_id, cors);
     const auth_store = store orelse return unavailable(request, request_id, cors);
     const client = oauth orelse return unavailable(request, request_id, cors);
-    const handle = parseStartHandle(allocator, request.head.target) catch {
+    const identifier = parseStartIdentifier(allocator, request.head.target) catch {
         try response.apiError(request, .invalid_request, request_id, cors);
         return;
     };
@@ -93,7 +94,7 @@ pub fn start(
         try response.apiError(request, .invalid_request, request_id, cors);
         return;
     };
-    const decision = limiter.admit(client_key, handle, .{
+    const decision = limiter.admit(client_key, identifier.text(), .{
         .client_limit = start_client_limit,
         .subject_limit = start_subject_limit,
         .global_limit = start_global_limit,
@@ -123,7 +124,7 @@ pub fn start(
         .store = auth_store,
         .oauth = client,
     };
-    const begun = service.start(allocator, handle) catch |err| {
+    const begun = service.start(allocator, identifier) catch |err| {
         std.log.warn("OAuth start failed: {}", .{err});
         const kind: response.ApiError = switch (err) {
             error.AuthStoreUnavailable => .service_unavailable,
@@ -370,7 +371,10 @@ const CallbackQuery = union(enum) {
     failure: CallbackFailure,
 };
 
-fn parseStartHandle(allocator: std.mem.Allocator, target: []const u8) ![]const u8 {
+fn parseStartIdentifier(
+    allocator: std.mem.Allocator,
+    target: []const u8,
+) !login_identifier.Identifier {
     var iterator = query.Iterator.init(allocator, target);
     var handle: ?[]const u8 = null;
     while (try iterator.next()) |pair| {
@@ -379,9 +383,7 @@ fn parseStartHandle(allocator: std.mem.Allocator, target: []const u8) ![]const u
         handle = pair.value;
     }
     const value = handle orelse return error.InvalidQuery;
-    if (value.len == 0 or value.len > zat.Handle.max_length or zat.Handle.parse(value) == null)
-        return error.InvalidQuery;
-    return value;
+    return login_identifier.parse(allocator, value) catch return error.InvalidQuery;
 }
 
 fn parseCallback(allocator: std.mem.Allocator, target: []const u8) !CallbackQuery {
@@ -543,17 +545,21 @@ test "Zat emits confidential ATProto OAuth metadata for the browser client" {
     try std.testing.expectEqual(true, parsed.value.object.get("dpop_bound_access_tokens").?.bool);
 }
 
-test "OAuth HTTP queries are strict and state is canonical" {
+test "OAuth HTTP queries accept handles and DIDs strictly and state is canonical" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     try std.testing.expectEqualStrings(
         "artist.example",
-        try parseStartHandle(allocator, "/auth/start?handle=artist.example"),
+        (try parseStartIdentifier(allocator, "/auth/start?handle=Artist.Example")).handle,
+    );
+    try std.testing.expectEqualStrings(
+        "did:plc:AbC123",
+        (try parseStartIdentifier(allocator, "/auth/start?handle=did%3Aplc%3AAbC123")).did,
     );
     try std.testing.expectError(
         error.InvalidQuery,
-        parseStartHandle(allocator, "/auth/start?handle=a.test&handle=b.test"),
+        parseStartIdentifier(allocator, "/auth/start?handle=a.test&handle=b.test"),
     );
     const state = "QkJCQkJCQkJCQkJCQkJCQg";
     try std.testing.expect(browser_login.isCanonicalState(state));

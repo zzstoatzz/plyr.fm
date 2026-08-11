@@ -8,6 +8,7 @@
 const std = @import("std");
 const zat = @import("zat");
 const config = @import("../../config.zig");
+const login_identifier = @import("login_identifier.zig");
 const oauth_state = @import("oauth_state.zig");
 const pinned_tls = @import("../ingest/pinned_tls.zig");
 const safe_endpoint = @import("../ingest/safe_endpoint.zig");
@@ -31,7 +32,7 @@ pub const Client = struct {
         *anyopaque,
         std.mem.Allocator,
         config.AuthConfig,
-        []const u8,
+        login_identifier.Identifier,
     ) anyerror!BeginResult,
     exchange_fn: *const fn (
         *anyopaque,
@@ -45,9 +46,9 @@ pub const Client = struct {
         self: Client,
         allocator: std.mem.Allocator,
         settings: config.AuthConfig,
-        handle: []const u8,
+        identifier: login_identifier.Identifier,
     ) !BeginResult {
-        return self.begin_fn(self.context, allocator, settings, handle);
+        return self.begin_fn(self.context, allocator, settings, identifier);
     }
 
     pub fn exchangeCode(
@@ -76,10 +77,10 @@ pub const OAuthGateway = struct {
         context: *anyopaque,
         allocator: std.mem.Allocator,
         settings: config.AuthConfig,
-        handle: []const u8,
+        identifier: login_identifier.Identifier,
     ) !BeginResult {
         const self: *OAuthGateway = @ptrCast(@alignCast(context));
-        return self.begin(allocator, settings, handle);
+        return self.begin(allocator, settings, identifier);
     }
 
     fn exchangeOpaque(
@@ -97,14 +98,18 @@ pub const OAuthGateway = struct {
         self: OAuthGateway,
         allocator: std.mem.Allocator,
         settings: config.AuthConfig,
-        raw_handle: []const u8,
+        identifier: login_identifier.Identifier,
     ) !BeginResult {
-        const handle_text = try asciiLower(allocator, raw_handle);
-        const handle = zat.Handle.parse(handle_text) orelse return error.InvalidHandle;
-
-        var handle_resolver = zat.HandleResolver.init(self.io, allocator);
-        defer handle_resolver.deinit();
-        const did_text = try handle_resolver.resolve(handle);
+        const did_text = switch (identifier) {
+            .did => |value| value,
+            .handle => |handle_text| resolved: {
+                const handle = zat.Handle.parse(handle_text) orelse
+                    return error.InvalidHandle;
+                var handle_resolver = zat.HandleResolver.init(self.io, allocator);
+                defer handle_resolver.deinit();
+                break :resolved try handle_resolver.resolve(handle);
+            },
+        };
         const did = zat.Did.parse(did_text) orelse return error.InvalidResolvedDid;
 
         var did_resolver = zat.DidResolver.init(self.io, allocator);
@@ -112,7 +117,19 @@ pub const OAuthGateway = struct {
         var document = try did_resolver.resolve(did);
         defer document.deinit();
         if (!std.mem.eql(u8, document.id, did_text)) return error.DidDocumentMismatch;
-        if (!documentClaimsHandle(document, handle_text)) return error.HandleDidMismatch;
+        const handle_text = switch (identifier) {
+            .handle => |value| claimed: {
+                if (!documentClaimsHandle(document, value))
+                    return error.HandleDidMismatch;
+                break :claimed value;
+            },
+            .did => try verifiedDocumentHandle(
+                self,
+                allocator,
+                document,
+                did_text,
+            ),
+        };
         const pds_url = pdsService(document) orelse return error.MissingPdsService;
 
         var pds = try safe_endpoint.resolve(self.io, allocator, pds_url);
@@ -174,7 +191,7 @@ pub const OAuthGateway = struct {
             .scope = settings.scope,
             .state = secrets.state,
             .pkce_challenge = secrets.pkce_challenge,
-            .login_hint = handle_text,
+            .login_hint = identifier.text(),
             .client_keypair = &settings.client_keypair,
             .dpop_keypair = &secrets.dpop_keypair,
             .resolved_connection = par_destination.connection(),
@@ -261,6 +278,28 @@ fn documentClaimsHandle(document: zat.DidDocument, expected: []const u8) bool {
     return false;
 }
 
+fn verifiedDocumentHandle(
+    self: OAuthGateway,
+    allocator: std.mem.Allocator,
+    document: zat.DidDocument,
+    expected_did: []const u8,
+) ![]const u8 {
+    const candidate = firstDocumentHandle(document) orelse return "handle.invalid";
+    const normalized = try asciiLower(allocator, candidate);
+    const handle = zat.Handle.parse(normalized) orelse unreachable;
+    var resolver = zat.HandleResolver.init(self.io, allocator);
+    defer resolver.deinit();
+    const resolved_did = resolver.resolve(handle) catch return "handle.invalid";
+    if (!std.mem.eql(u8, resolved_did, expected_did)) return "handle.invalid";
+    return normalized;
+}
+
+fn firstDocumentHandle(document: zat.DidDocument) ?[]const u8 {
+    for (document.handles) |candidate|
+        if (zat.Handle.parse(candidate) != null) return candidate;
+    return null;
+}
+
 fn pdsService(document: zat.DidDocument) ?[]const u8 {
     for (document.services) |service| {
         if (isAtprotoPdsServiceId(document.id, service.id) and
@@ -311,6 +350,22 @@ test "identity binding requires the resolved DID document to claim the handle" {
     try std.testing.expect(documentClaimsHandle(document, "artist.example"));
     try std.testing.expect(!documentClaimsHandle(document, "attacker.example"));
     try std.testing.expectEqualStrings("https://pds.example", pdsService(document).?);
+}
+
+test "DID login selects only a syntactically valid presentation handle" {
+    const json =
+        \\{"id":"did:plc:test","alsoKnownAs":["at://Artist.Example"],"service":[]}
+    ;
+    var document = try zat.DidDocument.parse(std.testing.allocator, json);
+    defer document.deinit();
+    try std.testing.expectEqualStrings("Artist.Example", firstDocumentHandle(document).?);
+
+    const no_handle_json =
+        \\{"id":"did:plc:test","alsoKnownAs":[],"service":[]}
+    ;
+    var no_handle = try zat.DidDocument.parse(std.testing.allocator, no_handle_json);
+    defer no_handle.deinit();
+    try std.testing.expect(firstDocumentHandle(no_handle) == null);
 }
 
 test "PDS selection rejects a service with only a lookalike id" {
