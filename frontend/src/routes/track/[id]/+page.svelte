@@ -1224,15 +1224,40 @@ $effect(() => {
 
 	.side-buttons {
 		display: flex;
-		gap: 0.75rem;
+		gap: clamp(0.75rem, 4vw, 1.5rem);
 		justify-content: center;
 		align-items: center;
 		margin-top: 0.75rem;
 	}
 
+	.side-buttons :global(.share-btn),
+	.side-buttons :global(.download-btn) {
+		width: auto;
+		height: auto;
+		padding: 0.5rem;
+		border: none;
+		background: transparent;
+		border-radius: var(--radius-full);
+	}
+
+	.side-buttons :global(.share-btn:hover),
+	.side-buttons :global(.download-btn:hover) {
+		background: color-mix(in srgb, var(--accent) 10%, transparent);
+	}
+
+	.side-buttons :global(.share-btn svg) {
+		width: 18px;
+		height: 18px;
+	}
+
+	.side-buttons :global(.download-btn svg) {
+		width: 17px;
+		height: 17px;
+	}
+
 	.track-actions {
 		display: flex;
-		gap: 1rem;
+		gap: clamp(1.25rem, 6vw, 2.5rem);
 		justify-content: center;
 		align-items: center;
 		margin-top: 0.75rem;
@@ -1242,8 +1267,8 @@ $effect(() => {
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		width: 48px;
-		height: 48px;
+		width: 3rem;
+		height: 3rem;
 		padding: 0;
 		background: var(--accent);
 		color: var(--bg-primary);
@@ -1342,13 +1367,12 @@ $effect(() => {
 		}
 
 		.track-actions {
-			gap: 1rem;
 			margin-top: 0.25rem;
 		}
 
 		.btn-play {
-			width: 44px;
-			height: 44px;
+			width: 2.75rem;
+			height: 2.75rem;
 		}
 
 		.btn-play svg {
