@@ -279,8 +279,8 @@ when you sign in to plyr.fm, the app requests OAuth scopes for the collections i
 | `repo:fm.plyr.feed.comment` | timed comments |
 | `repo:fm.plyr.graph.list` | playlists, albums, liked lists |
 | `repo:fm.plyr.actor.profile` | artist profile |
-| `repo:fm.teal.alpha.feed.play` | scrobbles to [teal.fm](https://teal.fm) |
-| `repo:fm.teal.alpha.actor.status` | now-playing status |
+| `repo:fm.teal.feed.play` | scrobbles to [teal.fm](https://teal.fm) |
+| `repo:fm.teal.actor.status` | now-playing status |
 | `blob:*/*` | upload audio and images |
 
 scopes are requested at authorization time so your PDS knows exactly what plyr.fm is allowed to do.

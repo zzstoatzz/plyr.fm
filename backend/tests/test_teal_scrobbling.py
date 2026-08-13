@@ -27,7 +27,7 @@ class TestBuildTealPlayRecord:
         assert record["$type"] == settings.teal.play_collection
         assert record["trackName"] == "Test Track"
         assert record["artists"] == [{"artistName": "Test Artist"}]
-        assert record["musicServiceBaseDomain"] == "plyr.fm"
+        assert record["musicServiceUri"] == "https://plyr.fm"
         assert record["submissionClientAgent"] == "plyr.fm/1.0"
         assert "playedTime" in record
 
@@ -43,7 +43,7 @@ class TestBuildTealPlayRecord:
 
         assert record["duration"] == 180
         assert record["releaseName"] == "Test Album"
-        assert record["originUrl"] == "https://plyr.fm/track/123"
+        assert record["originUri"] == "https://plyr.fm/track/123"
 
     def test_uses_provided_played_time(self) -> None:
         """should use provided played_time instead of now."""
@@ -112,11 +112,11 @@ class TestTealSettings:
 
     def test_default_play_collection(self):
         """should have correct default teal play collection."""
-        assert settings.teal.play_collection == "fm.teal.alpha.feed.play"
+        assert settings.teal.play_collection == "fm.teal.feed.play"
 
     def test_default_status_collection(self):
         """should have correct default teal status collection."""
-        assert settings.teal.status_collection == "fm.teal.alpha.actor.status"
+        assert settings.teal.status_collection == "fm.teal.actor.status"
 
     def test_default_enabled(self):
         """should be enabled by default."""
@@ -128,8 +128,8 @@ class TestTealSettings:
             settings.teal.play_collection, settings.teal.status_collection
         )
 
-        assert "fm.teal.alpha.feed.play" in scope
-        assert "fm.teal.alpha.actor.status" in scope
+        assert "fm.teal.feed.play" in scope
+        assert "fm.teal.actor.status" in scope
         # should also include base scopes
         assert settings.atproto.track_collection in scope
 

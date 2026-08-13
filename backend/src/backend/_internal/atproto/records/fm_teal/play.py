@@ -44,7 +44,7 @@ def build_teal_play_record(
         "$type": settings.teal.play_collection,
         "trackName": track_name,
         "artists": [{"artistName": artist_name}],
-        "musicServiceBaseDomain": "plyr.fm",
+        "musicServiceUri": "https://plyr.fm",
         "submissionClientAgent": "plyr.fm/1.0",
         "playedTime": played_time.isoformat().replace("+00:00", "Z"),
     }
@@ -54,7 +54,7 @@ def build_teal_play_record(
     if album_name:
         record["releaseName"] = album_name
     if origin_url:
-        record["originUrl"] = origin_url
+        record["originUri"] = origin_url
 
     return record
 
