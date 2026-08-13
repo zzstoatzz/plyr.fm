@@ -108,7 +108,7 @@
 	function nudgeSignIn() {
 		heartShake = true;
 		setTimeout(() => (heartShake = false), 500);
-		toast.info('sign in to like tracks', 3000, { label: 'sign in', href: loginHref() });
+		toast.info('', 3000, { label: 'sign in to like tracks', href: loginHref() });
 	}
 
 	// likers tooltip state
