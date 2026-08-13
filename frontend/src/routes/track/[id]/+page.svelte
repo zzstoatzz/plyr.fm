@@ -1227,7 +1227,6 @@ $effect(() => {
 		gap: clamp(0.75rem, 4vw, 1.5rem);
 		justify-content: center;
 		align-items: center;
-		margin-top: 0.75rem;
 	}
 
 	.side-buttons :global(.share-btn),
