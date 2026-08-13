@@ -1140,6 +1140,23 @@ $effect(() => {
 		align-items: center;
 	}
 
+	/* the AddToMenu trigger is a bordered box on dense surfaces; on this
+	   page's controls line it goes quiet like the queue and utility icons */
+	.like-chip :global(.trigger-button) {
+		width: auto;
+		height: auto;
+		padding: 0.5rem;
+		border: none;
+		background: transparent;
+		border-radius: var(--radius-full);
+	}
+
+	.like-chip :global(.trigger-button:hover),
+	.like-chip :global(.trigger-button.menu-open) {
+		border: none;
+		background: color-mix(in srgb, var(--accent) 10%, transparent);
+	}
+
 	.like-chip .likes {
 		position: relative;
 		cursor: pointer;
