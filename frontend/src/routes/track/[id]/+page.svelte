@@ -1231,7 +1231,7 @@ $effect(() => {
 
 	.track-actions {
 		display: flex;
-		gap: 1.25rem;
+		gap: 1rem;
 		justify-content: center;
 		align-items: center;
 		margin-top: 0.5rem;
@@ -1241,8 +1241,8 @@ $effect(() => {
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		width: 64px;
-		height: 64px;
+		width: 48px;
+		height: 48px;
 		padding: 0;
 		background: var(--accent);
 		color: var(--bg-primary);
@@ -1250,6 +1250,11 @@ $effect(() => {
 		border-radius: var(--radius-full, 50%);
 		cursor: pointer;
 		transition: all 0.2s;
+	}
+
+	.btn-play svg {
+		width: 22px;
+		height: 22px;
 	}
 
 	.btn-play svg {
@@ -1273,15 +1278,20 @@ $effect(() => {
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		width: 44px;
-		height: 44px;
+		width: 36px;
+		height: 36px;
 		padding: 0;
 		background: transparent;
-		color: var(--text-primary);
-		border: 1px solid var(--border-emphasis);
+		color: var(--text-tertiary);
+		border: 1px solid var(--border-default);
 		border-radius: var(--radius-full, 50%);
 		cursor: pointer;
 		transition: all 0.2s;
+	}
+
+	.btn-queue svg {
+		width: 18px;
+		height: 18px;
 	}
 
 	.btn-queue:hover {
@@ -1339,23 +1349,23 @@ $effect(() => {
 		}
 
 		.btn-play {
-			width: 56px;
-			height: 56px;
+			width: 44px;
+			height: 44px;
 		}
 
 		.btn-play svg {
-			width: 22px;
-			height: 22px;
+			width: 20px;
+			height: 20px;
 		}
 
 		.btn-queue {
-			width: 40px;
-			height: 40px;
+			width: 34px;
+			height: 34px;
 		}
 
 		.btn-queue svg {
-			width: 18px;
-			height: 18px;
+			width: 16px;
+			height: 16px;
 		}
 	}
 
