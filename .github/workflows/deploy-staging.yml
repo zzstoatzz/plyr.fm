@@ -72,9 +72,11 @@ jobs:
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_ZIG_NEXT }}
           ZIG_NEXT_WRITER_DATABASE_URL: ${{ secrets.ZIG_NEXT_WRITER_DATABASE_URL }}
+          ZIG_NEXT_MIGRATOR_DATABASE_URL: ${{ secrets.ZIG_NEXT_MIGRATOR_DATABASE_URL }}
         run: |
           test -n "$FLY_API_TOKEN"
           test -n "$ZIG_NEXT_WRITER_DATABASE_URL"
+          test -n "$ZIG_NEXT_MIGRATOR_DATABASE_URL"
           flyctl secrets list --app plyr-api-zig-canary --json > "$RUNNER_TEMP/zig-canary-secrets.json"
           python3 - "$RUNNER_TEMP/zig-canary-secrets.json" <<'PY'
           import json
@@ -128,7 +130,7 @@ jobs:
       - name: apply migrations to the isolated next branch
         working-directory: backend
         env:
-          DATABASE_URL: ${{ secrets.ZIG_NEXT_WRITER_DATABASE_URL }}
+          DATABASE_URL: ${{ secrets.ZIG_NEXT_MIGRATOR_DATABASE_URL }}
           OAUTH_ENCRYPTION_KEY: QkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkI=
         run: uv run alembic upgrade head
 
