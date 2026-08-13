@@ -121,7 +121,7 @@ def _assert_configured_auth_process(base_environment: dict[str, str]) -> None:
         "ZIG_OAUTH_CLIENT_ID": ("https://api.next.plyr.fm/oauth-client-metadata.json"),
         "ZIG_OAUTH_REDIRECT_URI": "https://api.next.plyr.fm/auth/callback",
         "ZIG_OAUTH_FRONTEND_ORIGIN": FRONTEND_ORIGIN,
-        "ZIG_OAUTH_SCOPE": "atproto transition:generic",
+        "ZIG_OAUTH_SCOPE": "atproto repo:fm.plyr.dev.like?action=create&action=update",
         "ZIG_OAUTH_CLIENT_PRIVATE_KEY": base64.b64encode(b"B" * 32).decode(),
         "ZIG_AUTH_ENCRYPTION_KEY": base64.b64encode(b"3" * 32).decode(),
     }
@@ -165,6 +165,31 @@ def _assert_configured_auth_process(base_environment: dict[str, str]) -> None:
 
         status, _, exchange = _request(base_url, "/auth/exchange", method="POST")
         assert status == 403 and exchange["error"]["code"] == "forbidden"
+
+        like_path = (
+            f"/v1/tracks/{_track_id(f'at://did:plc:artist/{COLLECTION}/song')}/like"
+        )
+        status, _, like_method = _request(base_url, like_path)
+        assert status == 405 and like_method["error"]["code"] == "method_not_allowed"
+        status, _, missing_like_origin = _request(base_url, like_path, method="PUT")
+        assert status == 403
+        assert missing_like_origin["error"]["code"] == "forbidden"
+        status, _, foreign_like_origin = _request(
+            base_url,
+            like_path,
+            method="PUT",
+            origin="https://attacker.example",
+        )
+        assert status == 403
+        assert foreign_like_origin["error"]["code"] == "forbidden"
+        status, _, anonymous_like = _request(
+            base_url,
+            like_path,
+            method="PUT",
+            origin=FRONTEND_ORIGIN,
+        )
+        assert status == 401
+        assert anonymous_like["error"]["code"] == "authentication_required"
     finally:
         process.terminate()
         try:

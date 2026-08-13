@@ -223,6 +223,29 @@ export async function listZigTrackChart(
 	return value;
 }
 
+export async function likeZigTrack(
+	apiUrl: string,
+	trackId: string,
+	fetcher: Fetcher = fetch
+): Promise<void> {
+	assertOpaqueId(trackId, 'track');
+	const response = await fetcher(`${apiUrl}/v1/tracks/${encodeURIComponent(trackId)}/like`, {
+		method: 'PUT',
+		credentials: 'include',
+		headers: { accept: 'application/json' }
+	});
+	if (!response.ok) throw new Error(`Zig track like returned ${response.status}`);
+	const value: unknown = await response.json();
+	if (
+		!isObject(value) ||
+		value.object !== 'like_command' ||
+		value.liked !== true ||
+		typeof value.indexed !== 'boolean'
+	) {
+		throw new TypeError('Zig track like returned an invalid command receipt');
+	}
+}
+
 export async function getZigTrack(
 	apiUrl: string,
 	trackId: string,

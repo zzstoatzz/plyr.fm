@@ -92,7 +92,9 @@ def test_canary_declares_public_auth_config_but_never_secret_values() -> None:
         "https://api.next.plyr.fm/auth/callback"
     )
     assert environment["ZIG_OAUTH_FRONTEND_ORIGIN"] == "https://next.plyr.fm"
-    assert environment["ZIG_OAUTH_SCOPE"] == "atproto transition:generic"
+    assert environment["ZIG_OAUTH_SCOPE"] == (
+        "atproto repo:fm.plyr.like?action=create&action=update"
+    )
     assert environment["AUTH_START_CLIENT_LIMIT"] == "10"
     assert environment["AUTH_START_SUBJECT_LIMIT"] == "10"
     assert environment["AUTH_START_GLOBAL_LIMIT"] == "120"

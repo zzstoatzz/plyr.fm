@@ -25,7 +25,7 @@ primary_region = "iad"
   ZIG_OAUTH_CLIENT_ID = "https://api.next.plyr.fm/oauth-client-metadata.json"
   ZIG_OAUTH_FRONTEND_ORIGIN = "https://next.plyr.fm"
   ZIG_OAUTH_REDIRECT_URI = "https://api.next.plyr.fm/auth/callback"
-  ZIG_OAUTH_SCOPE = "atproto transition:generic"
+  ZIG_OAUTH_SCOPE = "atproto repo:fm.plyr.like?action=create&action=update"
 
 [http_service]
   internal_port = 8000

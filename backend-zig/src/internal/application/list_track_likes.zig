@@ -165,7 +165,11 @@ const FakeLikes = struct {
     expected_cid: []const u8,
 
     fn store(self: *FakeLikes) LikeQueryStore {
-        return .{ .context = self, .list_by_subject_fn = list };
+        return .{
+            .context = self,
+            .list_by_subject_fn = list,
+            .find_record_key_fn = findRecordKey,
+        };
     }
 
     fn list(
@@ -177,6 +181,14 @@ const FakeLikes = struct {
         if (!std.mem.eql(u8, request.subject_cid, self.expected_cid))
             return error.CorruptProjection;
         return self.items[0..@min(self.items.len, request.limit)];
+    }
+
+    fn findRecordKey(
+        _: *anyopaque,
+        _: std.mem.Allocator,
+        _: like_store_module.ActorSubjectRequest,
+    ) LikeQueryStore.Error!?[]const u8 {
+        return null;
     }
 };
 

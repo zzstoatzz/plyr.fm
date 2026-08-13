@@ -309,6 +309,51 @@ pub fn me(
     );
 }
 
+pub const MutationIdentity = struct {
+    session_digest: bearer.Digest,
+    session: @import("../internal/auth/store.zig").Session,
+
+    pub fn deinit(self: *MutationIdentity, allocator: std.mem.Allocator) void {
+        self.session.deinit(allocator);
+        self.* = undefined;
+    }
+};
+
+/// Authenticate a browser mutation only after binding it to the one configured
+/// frontend origin. The caller never receives or persists the bearer cookie.
+pub fn requireMutationIdentity(
+    request: *http.Server.Request,
+    allocator: std.mem.Allocator,
+    auth: ?config.AuthConfig,
+    store: ?AuthStore,
+    cors: response.CorsPolicy,
+    request_id: []const u8,
+) !?MutationIdentity {
+    const settings = auth orelse {
+        try unavailable(request, request_id, cors);
+        return null;
+    };
+    if (!try requireBrowserOrigin(request, settings.frontend_origin, cors, request_id))
+        return null;
+    const token = sessionCookie(request) orelse {
+        try response.apiError(request, .authentication_required, request_id, cors);
+        return null;
+    };
+    const auth_store = store orelse {
+        try unavailable(request, request_id, cors);
+        return null;
+    };
+    const digest = bearer.digest(token);
+    const session = auth_store.getSession(allocator, digest) catch {
+        try unavailable(request, request_id, cors);
+        return null;
+    } orelse {
+        try response.apiError(request, .authentication_required, request_id, cors);
+        return null;
+    };
+    return .{ .session_digest = digest, .session = session };
+}
+
 pub fn logout(
     request: *http.Server.Request,
     auth: ?config.AuthConfig,
@@ -531,7 +576,7 @@ test "Zat emits confidential ATProto OAuth metadata for the browser client" {
         .client_name = "plyr.fm",
         .client_uri = "https://api.next.plyr.fm",
         .redirect_uris = &.{"https://api.next.plyr.fm/auth/callback"},
-        .scope = "atproto transition:generic",
+        .scope = "atproto repo:fm.plyr.like?action=create&action=update",
         .keypair = &key,
     });
     defer std.testing.allocator.free(body);

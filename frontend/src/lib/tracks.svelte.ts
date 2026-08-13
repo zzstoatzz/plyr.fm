@@ -3,6 +3,7 @@ import { API_URL, IS_ZIG_V1 } from './config';
 import {
 	listZigTrackChart,
 	listZigTracks,
+	likeZigTrack,
 	toFrontendTrack,
 	type ZigTrackChartPeriod
 } from './api/zig-v1';
@@ -194,13 +195,17 @@ export const tracksCache = new TracksCache();
 // gated: true means viewer lacks access (non-supporter), false means accessible
 export async function likeTrack(trackId: TrackId, fileId?: string, gated?: boolean): Promise<boolean> {
 	try {
-		const response = await fetch(`${API_URL}/tracks/${trackId}/like`, {
-			method: 'POST',
-			credentials: 'include'
-		});
+		if (IS_ZIG_V1) {
+			await likeZigTrack(API_URL, String(trackId));
+		} else {
+			const response = await fetch(`${API_URL}/tracks/${trackId}/like`, {
+				method: 'POST',
+				credentials: 'include'
+			});
 
-		if (!response.ok) {
-			throw new Error(`failed to like track: ${response.statusText}`);
+			if (!response.ok) {
+				throw new Error(`failed to like track: ${response.statusText}`);
+			}
 		}
 
 		// invalidate caches so next fetch gets updated like status

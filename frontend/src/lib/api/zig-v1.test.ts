@@ -4,6 +4,7 @@ import {
 	getZigPlayback,
 	getZigTrack,
 	listZigTrackChart,
+	likeZigTrack,
 	listZigTrackLikers,
 	listZigTracks,
 	recordZigPlay
@@ -499,6 +500,19 @@ describe('Zig v1 compatibility boundary', () => {
 		expect(requested.searchParams.get('limit')).toBe('7');
 		expect(requested.searchParams.get('period')).toBe('week');
 		expect(chart.data[0]?.all_time_like_count).toBe(5);
+	});
+
+	it('likes through the idempotent authenticated v1 command', async () => {
+		let requestedInput: RequestInfo | URL | null = null;
+		let requestedInit: RequestInit | undefined;
+		const fetcher = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+			requestedInput = input;
+			requestedInit = init;
+			return json({ object: 'like_command', liked: true, indexed: false });
+		});
+		await likeZigTrack('https://api.next.plyr.fm', 'trk_opaque', fetcher);
+		expect(String(requestedInput)).toBe('https://api.next.plyr.fm/v1/tracks/trk_opaque/like');
+		expect(requestedInit).toMatchObject({ method: 'PUT', credentials: 'include' });
 	});
 
 	it('requires detail to round-trip the opaque resource identity', async () => {

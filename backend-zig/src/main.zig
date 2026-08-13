@@ -18,7 +18,10 @@ const catalog_reconcile_runner = @import("internal/ingest/catalog_reconcile_runn
 const account_reconciler = @import("internal/account/reconciler.zig");
 const postgres_auth = @import("internal/auth/postgres_store.zig");
 const oauth_gateway = @import("internal/auth/oauth_gateway.zig");
+const pds_gateway = @import("internal/auth/pds_gateway.zig");
 const redis_start_admission = @import("internal/auth/redis_start_admission.zig");
+const authenticated_pds = @import("internal/application/authenticated_pds.zig");
+const postgres_record_keys = @import("internal/command/postgres_record_key_store.zig");
 
 var threaded_io: std.Io.Threaded = undefined;
 pub const std_options_debug_threaded_io: ?*std.Io.Threaded = &threaded_io;
@@ -120,6 +123,25 @@ pub fn main() !void {
                 .{ .io = io }
             else
                 null;
+            var pds_transport: ?pds_gateway.Gateway = if (settings.auth != null)
+                .{ .io = io }
+            else
+                null;
+            var pds_service: ?authenticated_pds.Service = if (settings.auth) |auth_config|
+                if (auth_store) |store| if (oauth) |*oauth_client| if (pds_transport) |*transport| .{
+                    .io = io,
+                    .settings = auth_config,
+                    .store = store,
+                    .oauth = oauth_client.client(),
+                    .pds = transport.client(),
+                } else null else null else null
+            else
+                null;
+            var postgres_record_key_store: ?postgres_record_keys.PostgresRecordKeyStore =
+                if (settings.auth != null) if (postgres_store) |*store|
+                    .{ .pool = store.pool }
+                else
+                    null else null;
             var auth_start_admission: ?redis_start_admission.RedisStartAdmission = if (settings.auth) |_| blk: {
                 const url = settings.redis_url orelse break :blk null;
                 break :blk try redis_start_admission.RedisStartAdmission.init(allocator, io, url);
@@ -145,6 +167,8 @@ pub fn main() !void {
                 .auth = settings.auth,
                 .auth_store = auth_store,
                 .oauth_client = if (oauth) |*client| client.client() else null,
+                .record_key_store = if (postgres_record_key_store) |*store| store.store() else null,
+                .authenticated_pds = if (pds_service) |*service| service.client() else null,
                 .auth_start_admission = if (auth_start_admission) |*limiter| limiter.store() else null,
                 .auth_start_client_limit = settings.auth_start_client_limit,
                 .auth_start_subject_limit = settings.auth_start_subject_limit,
@@ -218,6 +242,7 @@ test {
     _ = @import("internal/application/browser_login.zig");
     _ = @import("internal/application/credential_refresh.zig");
     _ = @import("internal/application/authenticated_pds.zig");
+    _ = @import("internal/application/like_track.zig");
     _ = @import("internal/command/record_key_store.zig");
     _ = @import("internal/command/postgres_record_key_store.zig");
     _ = @import("internal/account/availability.zig");

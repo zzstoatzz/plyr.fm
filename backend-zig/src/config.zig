@@ -33,6 +33,8 @@ pub const AuthConfig = struct {
             !std.mem.endsWith(u8, values.redirect_uri, callback_suffix))
             return error.OauthRedirectMismatch;
         if (!scopeContains(values.scope, "atproto")) return error.InvalidOauthScope;
+        if (scopeContains(values.scope, "transition:generic"))
+            return error.OverbroadOauthScope;
         const client_secret = try sealed_secret.parseKey(values.client_private_key);
         const encryption_key = try sealed_secret.parseKey(values.encryption_key);
         if (std.mem.eql(u8, &client_secret, &encryption_key))
@@ -358,12 +360,20 @@ test "auth configuration is exact, confidential, and uses separate keys" {
         .client_id = "https://api.next.plyr.fm/oauth-client-metadata.json",
         .redirect_uri = "https://api.next.plyr.fm/auth/callback",
         .frontend_origin = "https://next.plyr.fm",
-        .scope = "atproto transition:generic",
+        .scope = "atproto repo:fm.plyr.like?action=create&action=update",
         .client_private_key = client_key,
         .encryption_key = encryption_key,
     });
     try std.testing.expectEqualStrings("https://api.next.plyr.fm", auth.client_uri);
     try std.testing.expectEqualStrings("ES256", @tagName(auth.client_keypair.algorithm()));
+    try std.testing.expectError(error.OverbroadOauthScope, AuthConfig.fromValues(.{
+        .client_id = auth.client_id,
+        .redirect_uri = auth.redirect_uri,
+        .frontend_origin = auth.frontend_origin,
+        .scope = "atproto transition:generic",
+        .client_private_key = client_key,
+        .encryption_key = encryption_key,
+    }));
     try std.testing.expectError(error.InvalidOauthScope, AuthConfig.fromValues(.{
         .client_id = auth.client_id,
         .redirect_uri = auth.redirect_uri,

@@ -20,12 +20,58 @@ const credential_refresh = @import("credential_refresh.zig");
 const refresh_poll_attempts = 75;
 const refresh_poll_ms = 200;
 
+pub const Client = struct {
+    context: *anyopaque,
+    execute_fn: *const fn (
+        *anyopaque,
+        std.mem.Allocator,
+        bearer.Digest,
+        std.http.Method,
+        []const u8,
+        ?[]const u8,
+    ) anyerror!pds_gateway.Response,
+
+    pub fn execute(
+        self: Client,
+        allocator: std.mem.Allocator,
+        session_digest: bearer.Digest,
+        method: std.http.Method,
+        procedure: []const u8,
+        payload: ?[]const u8,
+    ) !pds_gateway.Response {
+        return self.execute_fn(
+            self.context,
+            allocator,
+            session_digest,
+            method,
+            procedure,
+            payload,
+        );
+    }
+};
+
 pub const Service = struct {
     io: std.Io,
     settings: config.AuthConfig,
     store: auth_store.Store,
     oauth: oauth_gateway.Client,
     pds: pds_gateway.Client,
+
+    pub fn client(self: *Service) Client {
+        return .{ .context = self, .execute_fn = executeOpaque };
+    }
+
+    fn executeOpaque(
+        context: *anyopaque,
+        allocator: std.mem.Allocator,
+        session_digest: bearer.Digest,
+        method: std.http.Method,
+        procedure: []const u8,
+        payload: ?[]const u8,
+    ) !pds_gateway.Response {
+        const self: *Service = @ptrCast(@alignCast(context));
+        return self.execute(allocator, session_digest, method, procedure, payload);
+    }
 
     pub fn execute(
         self: Service,

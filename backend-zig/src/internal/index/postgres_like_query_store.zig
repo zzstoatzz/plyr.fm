@@ -13,7 +13,11 @@ pub const PostgresLikeQueryStore = struct {
     pool: *pg.Pool,
 
     pub fn store(self: *PostgresLikeQueryStore) LikeQueryStore {
-        return .{ .context = self, .list_by_subject_fn = listBySubjectOpaque };
+        return .{
+            .context = self,
+            .list_by_subject_fn = listBySubjectOpaque,
+            .find_record_key_fn = findRecordKeyOpaque,
+        };
     }
 
     fn listBySubjectOpaque(
@@ -64,6 +68,44 @@ pub const PostgresLikeQueryStore = struct {
             }) catch return error.OutOfMemory;
         }
         return items.toOwnedSlice(allocator) catch return error.OutOfMemory;
+    }
+
+    fn findRecordKeyOpaque(
+        context: *anyopaque,
+        allocator: std.mem.Allocator,
+        request: store_module.ActorSubjectRequest,
+    ) LikeQueryStore.Error!?[]const u8 {
+        const self: *PostgresLikeQueryStore = @ptrCast(@alignCast(context));
+        return self.findRecordKey(allocator, request);
+    }
+
+    fn findRecordKey(
+        self: PostgresLikeQueryStore,
+        allocator: std.mem.Allocator,
+        request: store_module.ActorSubjectRequest,
+    ) LikeQueryStore.Error!?[]const u8 {
+        var row = (self.pool.row(
+            \\SELECT record_uri, rkey
+            \\FROM plyr_index.like_records
+            \\WHERE owner_did = $1 AND subject_uri = $2 AND subject_cid = $3
+            \\  AND collection = $4 AND NOT deleted
+            \\ORDER BY record_created_at::timestamptz DESC, record_uri DESC
+            \\LIMIT 1
+        , .{
+            request.actor_did,
+            request.subject_uri,
+            request.subject_cid,
+            request.like_collection,
+        }) catch return error.IndexUnavailable) orelse return null;
+        defer row.deinit() catch row.result.deinit();
+        const record_uri = row.row.get([]const u8, 0) catch return error.CorruptProjection;
+        const rkey = row.row.get([]const u8, 1) catch return error.CorruptProjection;
+        const parsed = zat.AtUri.parse(record_uri) orelse return error.CorruptProjection;
+        if (!std.mem.eql(u8, parsed.authority(), request.actor_did) or
+            !std.mem.eql(u8, parsed.collection() orelse return error.CorruptProjection, request.like_collection) or
+            !std.mem.eql(u8, parsed.rkey() orelse return error.CorruptProjection, rkey))
+            return error.CorruptProjection;
+        return allocator.dupe(u8, rkey) catch return error.OutOfMemory;
     }
 };
 
@@ -308,6 +350,19 @@ test "PostgreSQL likes require exact subject CIDs and available actors" {
         @import("../domain/track.zig").Source.mixed,
         first[0].value.sources.actor_profile,
     );
+    const existing_rkey = (try implementation.store().findRecordKey(a, .{
+        .actor_did = "did:plc:listenerone",
+        .subject_uri = subject_uri,
+        .subject_cid = subject_cid,
+        .like_collection = like_collection,
+    })).?;
+    try std.testing.expectEqualStrings("one", existing_rkey);
+    try std.testing.expect((try implementation.store().findRecordKey(a, .{
+        .actor_did = "did:plc:nobody",
+        .subject_uri = subject_uri,
+        .subject_cid = subject_cid,
+        .like_collection = like_collection,
+    })) == null);
     const second = try implementation.store().listBySubject(a, .{
         .subject_uri = subject_uri,
         .subject_cid = subject_cid,

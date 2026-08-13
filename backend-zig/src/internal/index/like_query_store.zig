@@ -13,6 +13,13 @@ pub const SubjectRequest = struct {
     after: ?scoped_record_cursor.Cursor,
 };
 
+pub const ActorSubjectRequest = struct {
+    actor_did: []const u8,
+    subject_uri: []const u8,
+    subject_cid: []const u8,
+    like_collection: []const u8,
+};
+
 pub const Item = struct {
     value: like.Like,
     created_at_us: i64,
@@ -21,6 +28,7 @@ pub const Item = struct {
 pub const LikeQueryStore = struct {
     context: *anyopaque,
     list_by_subject_fn: *const fn (*anyopaque, std.mem.Allocator, SubjectRequest) Error![]Item,
+    find_record_key_fn: *const fn (*anyopaque, std.mem.Allocator, ActorSubjectRequest) Error!?[]const u8,
 
     pub const Error = error{
         IndexUnavailable,
@@ -34,5 +42,13 @@ pub const LikeQueryStore = struct {
         request: SubjectRequest,
     ) Error![]Item {
         return self.list_by_subject_fn(self.context, allocator, request);
+    }
+
+    pub fn findRecordKey(
+        self: LikeQueryStore,
+        allocator: std.mem.Allocator,
+        request: ActorSubjectRequest,
+    ) Error!?[]const u8 {
+        return self.find_record_key_fn(self.context, allocator, request);
     }
 };
