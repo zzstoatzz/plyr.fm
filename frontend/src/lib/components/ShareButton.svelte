@@ -1,11 +1,12 @@
 <script lang="ts">
 	import { auth } from '$lib/auth.svelte';
 	import { API_URL } from '$lib/config';
+	import type { TrackId } from '$lib/types';
 
 	interface Props {
 		url: string;
 		title?: string;
-		trackId?: number; // if provided, creates a tracked share link
+		trackId?: TrackId; // if provided, creates a tracked share link
 	}
 
 	let { url, title = 'share', trackId }: Props = $props();

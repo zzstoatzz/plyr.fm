@@ -1,0 +1,6 @@
+.git
+.zig-cache
+zig-out
+zig-pkg
+scripts/*
+!scripts/canary-resource-snapshot

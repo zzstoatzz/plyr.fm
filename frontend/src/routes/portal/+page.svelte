@@ -11,11 +11,12 @@
 	import TracksSection from '$lib/components/portal/TracksSection.svelte';
 	import AlbumsSection from '$lib/components/portal/AlbumsSection.svelte';
 	import type { Track, AlbumSummary } from '$lib/types';
-	import { API_URL } from '$lib/config';
+	import { API_URL, IS_ZIG_V1 } from '$lib/config';
 	import { toast } from '$lib/toast.svelte';
 	import { auth } from '$lib/auth.svelte';
 	import { checkAtprotofansEligibility } from '$lib/utils/atprotofans';
 	import { preferences } from '$lib/preferences.svelte';
+	import { parseAuthCallback } from '$lib/utils/auth-callback';
 	import { redirectToLogin, resolvePostLogin } from '$lib/utils/auth-redirect';
 
 	let loading = $state(true);
@@ -43,10 +44,17 @@
 
 	onMount(async () => {
 		// check if exchange_token is in URL (from OAuth callback for regular login)
-		const params = new URLSearchParams(window.location.search);
-		const exchangeToken = params.get('exchange_token');
-		const isDevToken = params.get('dev_token') === 'true';
-		const isScopeUpgrade = params.get('scope_upgraded') === 'true';
+		const { exchangeToken, isDevToken, isScopeUpgrade } = parseAuthCallback(
+			window.location.search,
+			window.location.hash
+		);
+
+		// Zig uses this page only for its one-time frontend token exchange. The
+		// artist portal remains hidden until the corresponding API slice exists.
+		if (IS_ZIG_V1 && !exchangeToken) {
+			await goto('/', { replaceState: true });
+			return;
+		}
 
 		// redirect dev token callbacks to settings page
 		if (exchangeToken && isDevToken) {
@@ -68,10 +76,13 @@
 					// invalidate all load functions so they rerun with the new session cookie
 					await invalidateAll();
 					await auth.refresh();
-					await preferences.fetch();
+					if (!IS_ZIG_V1) await preferences.fetch();
 					if (isScopeUpgrade) {
 						toast.success('copyright paradigm configured');
 					} else if (resolvePostLogin()) {
+						return;
+					} else if (IS_ZIG_V1) {
+						await goto('/', { replaceState: true });
 						return;
 					} else {
 						// no captured intent: creators (with published tracks) land on

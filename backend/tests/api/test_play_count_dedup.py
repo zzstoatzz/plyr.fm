@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend._internal import Session, get_optional_session
 from backend.main import app
-from backend.models import Artist, Track
+from backend.models import Artist, Track, TrackMetric
 
 _ARTIST_DID = "did:plc:playcount_artist"
 
@@ -132,6 +132,10 @@ async def test_refresh_does_not_double_count(
 
     assert first.json()["play_count"] == 1
     assert second.json()["play_count"] == 1
+    metric = await db_session.get(TrackMetric, track.atproto_record_uri)
+    assert metric is not None
+    assert metric.play_count == 1
+    assert metric.write_source == "http_play"
     # dedup window keyed off the track's duration
     assert fake_redis.ex_values[0] == 200
 

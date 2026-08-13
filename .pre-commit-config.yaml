@@ -36,7 +36,7 @@ repos:
 
       - id: svelte-check
         name: svelte check
-        entry: bash -c 'cd frontend && bun run check'
+        entry: bash -c 'cd frontend && PUBLIC_API_URL="${PUBLIC_API_URL:-http://localhost:8001}" bun run check'
         language: system
         files: ^frontend/
         pass_filenames: false

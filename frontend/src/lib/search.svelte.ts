@@ -1,17 +1,18 @@
 // global search state using Svelte 5 runes
-import { API_URL } from '$lib/config';
+import { searchZigCatalog } from '$lib/api/zig-v1-search';
+import { API_URL, IS_ZIG_V1 } from '$lib/config';
+import type { TrackId } from '$lib/types';
 
 export type SearchResultType = 'track' | 'artist' | 'album' | 'tag' | 'playlist';
 export type SearchMode = 'keyword' | 'semantic';
 
 export interface TrackSearchResult {
 	type: 'track';
-	id: number;
+	id: TrackId;
 	title: string;
 	artist_handle: string;
 	artist_display_name: string;
 	image_url: string | null;
-	relevance: number;
 }
 
 export interface ArtistSearchResult {
@@ -20,7 +21,6 @@ export interface ArtistSearchResult {
 	handle: string;
 	display_name: string;
 	avatar_url: string | null;
-	relevance: number;
 }
 
 export interface AlbumSearchResult {
@@ -31,7 +31,6 @@ export interface AlbumSearchResult {
 	artist_handle: string;
 	artist_display_name: string;
 	image_url: string | null;
-	relevance: number;
 }
 
 export interface TagSearchResult {
@@ -39,7 +38,6 @@ export interface TagSearchResult {
 	id: number;
 	name: string;
 	track_count: number;
-	relevance: number;
 }
 
 export interface PlaylistSearchResult {
@@ -50,7 +48,6 @@ export interface PlaylistSearchResult {
 	owner_display_name: string;
 	image_url: string | null;
 	track_count: number;
-	relevance: number;
 }
 
 export type SearchResult =
@@ -62,7 +59,7 @@ export type SearchResult =
 
 export interface SemanticSearchResult {
 	type: 'track';
-	id: number;
+	id: TrackId;
 	title: string;
 	artist_handle: string;
 	artist_display_name: string;
@@ -241,10 +238,17 @@ class SearchState {
 		this.error = null;
 
 		try {
-			const response = await fetch(
-				`${API_URL}/search/?q=${encodeURIComponent(query)}&limit=10`,
-				{ credentials: 'include' }
-			);
+			if (IS_ZIG_V1) {
+				const data = await searchZigCatalog(API_URL, query, { limit: 10 });
+				if (this.query !== query || this.mode !== modeAtStart) return;
+				this.results = data.results;
+				this.counts = data.counts;
+				this.selectedIndex = 0;
+				return;
+			}
+			const response = await fetch(`${API_URL}/search/?q=${encodeURIComponent(query)}&limit=10`, {
+				credentials: 'include'
+			});
 
 			if (!response.ok) {
 				throw new Error(`search failed: ${response.statusText}`);
@@ -322,7 +326,8 @@ class SearchState {
 
 	selectPrevious() {
 		if (this.activeResults.length > 0) {
-			this.selectedIndex = (this.selectedIndex - 1 + this.activeResults.length) % this.activeResults.length;
+			this.selectedIndex =
+				(this.selectedIndex - 1 + this.activeResults.length) % this.activeResults.length;
 		}
 	}
 

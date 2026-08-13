@@ -22,7 +22,7 @@
 	import { loginHref } from '$lib/utils/auth-redirect';
 	import TrackInfo from './TrackInfo.svelte';
 	import PlaybackControls from './PlaybackControls.svelte';
-	import type { Track } from '$lib/types';
+	import type { Track, TrackId } from '$lib/types';
 
 	// atprotofans base URL for supporter CTAs
 	const ATPROTOFANS_URL = 'https://atprotofans.com';
@@ -291,7 +291,7 @@
 	}
 
 	// handle track changes - load new audio when track changes
-	let previousTrackId = $state<number | null>(null);
+	let previousTrackId = $state<TrackId | null>(null);
 	// also tracked so an in-place audio replace (same track id, new file_id)
 	// triggers a fresh load — see PUT /tracks/{id}/audio in the portal edit form.
 	let previousFileId = $state<string | null>(null);
@@ -302,7 +302,7 @@
 	// trackChanged/fileChanged check) because the synchronous fast path
 	// needs the loader to recognize "audio is already attached, don't
 	// reload" without going through the full reactivity dance first.
-	let attachedTrackId: number | null = null;
+	let attachedTrackId: TrackId | null = null;
 	let attachedFileId: string | null = null;
 
 	// Pre-resolved source for the next track that natural end-of-track

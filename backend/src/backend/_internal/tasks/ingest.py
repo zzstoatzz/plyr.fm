@@ -31,6 +31,7 @@ from backend._internal.tasks.origin_trust import (
     is_trusted_image_origin,
 )
 from backend._internal.tasks.pds import is_like_uri_cancelled
+from backend._internal.track_policy import upsert_track_access_policy
 from backend.config import settings
 from backend.models import Artist, Playlist, Track, TrackComment, TrackLike
 from backend.models.session import UserSession
@@ -212,6 +213,12 @@ async def ingest_track_create(
                 existing_track.atproto_record_cid = cid
                 existing_track.atproto_record_rev = rev
                 existing_track.publish_state = "published"
+                await upsert_track_access_policy(
+                    db,
+                    record_uri=uri,
+                    visibility=existing_track.visibility,
+                    space_uri=existing_track.space_uri,
+                )
                 await db.commit()
                 await db.refresh(existing_track)
 

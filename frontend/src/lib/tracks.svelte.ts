@@ -1,6 +1,16 @@
 import { safeLocalStorage } from './utils/safe-storage';
-import { API_URL } from './config';
-import type { Track } from './types';
+import { API_URL, IS_ZIG_V1 } from './config';
+import {
+	listZigTrackChart,
+	listZigLikedTracks,
+	listZigTracks,
+	likeZigTrack,
+	resolveZigViewerLikes,
+	unlikeZigTrack,
+	toFrontendTrack,
+	type ZigTrackChartPeriod
+} from './api/zig-v1';
+import type { Track, TrackId } from './types';
 import { preferences } from './preferences.svelte';
 import { downloadAudio, isDownloaded } from './storage';
 import { invalidateLikers } from './tooltip-cache.svelte';
@@ -44,6 +54,7 @@ function loadCachedTracks(): CachedTracksData {
 }
 
 function loadSavedTags(): string[] {
+	if (IS_ZIG_V1) return [];
 	if (typeof window === 'undefined') return [];
 	try {
 		const saved = safeLocalStorage.getItem('active_tags');
@@ -88,6 +99,14 @@ class TracksCache {
 
 		this.loading = true;
 		try {
+			if (IS_ZIG_V1) {
+				const data = await listZigTracks(API_URL);
+				this.tracks = await resolveZigViewerLikes(API_URL, data.tracks);
+				this.nextCursor = data.next_cursor;
+				this.hasMore = data.has_more;
+				this.persistToStorage();
+				return;
+			}
 			const url = new URL(`${API_URL}/tracks/`);
 			for (const tag of this.activeTags) {
 				url.searchParams.append('tags', tag);
@@ -117,6 +136,15 @@ class TracksCache {
 
 		this.loadingMore = true;
 		try {
+			if (IS_ZIG_V1) {
+				const data = await listZigTracks(API_URL, { cursor: this.nextCursor });
+				const personalized = await resolveZigViewerLikes(API_URL, data.tracks);
+				this.tracks = [...this.tracks, ...personalized];
+				this.nextCursor = data.next_cursor;
+				this.hasMore = data.has_more;
+				this.persistToStorage();
+				return;
+			}
 			const url = new URL(`${API_URL}/tracks/`);
 			url.searchParams.set('cursor', this.nextCursor);
 			for (const tag of this.activeTags) {
@@ -169,15 +197,23 @@ export const tracksCache = new TracksCache();
 
 // like/unlike track functions
 // gated: true means viewer lacks access (non-supporter), false means accessible
-export async function likeTrack(trackId: number, fileId?: string, gated?: boolean): Promise<boolean> {
+export async function likeTrack(
+	trackId: TrackId,
+	fileId?: string,
+	gated?: boolean
+): Promise<boolean> {
 	try {
-		const response = await fetch(`${API_URL}/tracks/${trackId}/like`, {
-			method: 'POST',
-			credentials: 'include'
-		});
+		if (IS_ZIG_V1) {
+			await likeZigTrack(API_URL, String(trackId));
+		} else {
+			const response = await fetch(`${API_URL}/tracks/${trackId}/like`, {
+				method: 'POST',
+				credentials: 'include'
+			});
 
-		if (!response.ok) {
-			throw new Error(`failed to like track: ${response.statusText}`);
+			if (!response.ok) {
+				throw new Error(`failed to like track: ${response.statusText}`);
+			}
 		}
 
 		// invalidate caches so next fetch gets updated like status
@@ -207,15 +243,19 @@ export async function likeTrack(trackId: number, fileId?: string, gated?: boolea
 	}
 }
 
-export async function unlikeTrack(trackId: number): Promise<boolean> {
+export async function unlikeTrack(trackId: TrackId): Promise<boolean> {
 	try {
-		const response = await fetch(`${API_URL}/tracks/${trackId}/like`, {
-			method: 'DELETE',
-			credentials: 'include'
-		});
+		if (IS_ZIG_V1) {
+			await unlikeZigTrack(API_URL, String(trackId));
+		} else {
+			const response = await fetch(`${API_URL}/tracks/${trackId}/like`, {
+				method: 'DELETE',
+				credentials: 'include'
+			});
 
-		if (!response.ok) {
-			throw new Error(`failed to unlike track: ${response.statusText}`);
+			if (!response.ok) {
+				throw new Error(`failed to unlike track: ${response.statusText}`);
+			}
 		}
 
 		// invalidate caches so next fetch gets updated like status
@@ -230,6 +270,23 @@ export async function unlikeTrack(trackId: number): Promise<boolean> {
 }
 
 export async function fetchTopTracks(limit = 10, period = 'all_time'): Promise<Track[]> {
+	if (IS_ZIG_V1) {
+		try {
+			const chartPeriod: ZigTrackChartPeriod =
+				period === 'month' || period === 'week' || period === 'day' ? period : 'all_time';
+			const chart = await listZigTrackChart(API_URL, {
+				limit,
+				period: chartPeriod
+			});
+			return chart.data.map((entry) => ({
+				...toFrontendTrack(entry.track),
+				like_count: entry.all_time_like_count
+			}));
+		} catch (e) {
+			console.error('failed to fetch Zig top tracks:', e);
+			return [];
+		}
+	}
 	try {
 		const url = new URL(`${API_URL}/tracks/top`);
 		url.searchParams.set('limit', String(limit));
@@ -253,6 +310,27 @@ export async function fetchTopTracks(limit = 10, period = 'all_time'): Promise<T
 }
 
 export async function fetchLikedTracks(): Promise<Track[]> {
+	if (IS_ZIG_V1) {
+		try {
+			const tracks: Track[] = [];
+			const seenCursors = new Set<string>();
+			let cursor: string | null = null;
+			do {
+				const page = await listZigLikedTracks(API_URL, { cursor });
+				tracks.push(...page.tracks);
+				if (!page.has_more) return tracks;
+				if (!page.next_cursor || seenCursors.has(page.next_cursor)) {
+					throw new TypeError('Zig liked tracks returned an invalid cursor chain');
+				}
+				seenCursors.add(page.next_cursor);
+				cursor = page.next_cursor;
+			} while (seenCursors.size <= 100);
+			throw new TypeError('Zig liked tracks exceeded the client page bound');
+		} catch (e) {
+			console.error('failed to fetch Zig liked tracks:', e);
+			return [];
+		}
+	}
 	try {
 		const response = await fetch(`${API_URL}/tracks/liked`, {
 			credentials: 'include'

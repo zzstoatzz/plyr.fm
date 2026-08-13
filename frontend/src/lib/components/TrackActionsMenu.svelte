@@ -2,10 +2,10 @@
 	import { likeTrack, unlikeTrack } from '$lib/tracks.svelte';
 	import { toast } from '$lib/toast.svelte';
 	import { API_URL } from '$lib/config';
-	import type { Playlist } from '$lib/types';
+	import type { Playlist, TrackId } from '$lib/types';
 
 	interface Props {
-		trackId: number;
+		trackId: TrackId;
 		trackTitle: string;
 		trackUri?: string;
 		trackCid?: string;

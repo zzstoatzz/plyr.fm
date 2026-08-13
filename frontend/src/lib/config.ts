@@ -1,6 +1,8 @@
 import { PUBLIC_API_URL } from '$env/static/public';
 
 export const API_URL = PUBLIC_API_URL || 'http://localhost:8001';
+export const API_GENERATION = import.meta.env.VITE_API_GENERATION ?? 'python';
+export const IS_ZIG_V1 = API_GENERATION === 'zig-v1';
 export const TYPEAHEAD_URL = 'https://typeahead.waow.tech';
 
 export const VIBE_SEARCH_FLAG = 'vibe-search';

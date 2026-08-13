@@ -13,7 +13,7 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import { browser } from '$app/environment';
-	import { API_URL } from '$lib/config';
+	import { API_URL, IS_ZIG_V1 } from '$lib/config';
 	import { APP_NAME, APP_CANONICAL_URL } from '$lib/branding';
 	import { toast } from '$lib/toast.svelte';
 	import { player } from '$lib/player.svelte';
@@ -24,7 +24,7 @@
 	import * as playlistActions from '$lib/playlist-actions';
 	import type { PlaylistTrackCandidate } from '$lib/playlist-actions';
 	import type { PageData } from './$types';
-	import type { PlaylistWithTracks, Track } from '$lib/types';
+	import type { PlaylistWithTracks, Track, TrackId } from '$lib/types';
 
 	let { data }: { data: PageData } = $props();
 	let playlist = $state<PlaylistWithTracks>(data.playlist);
@@ -54,6 +54,10 @@
 
 	async function hydrateTracksWithLikes() {
 		if (!browser || tracksHydrated) return;
+		if (IS_ZIG_V1) {
+			tracksHydrated = true;
+			return;
+		}
 
 		// skip if not authenticated - no need to fetch liked tracks
 		if (!auth.isAuthenticated) {
@@ -72,7 +76,7 @@
 		}
 	}
 
-	function applyLikedFlags(likedIds: Set<number>) {
+	function applyLikedFlags(likedIds: Set<TrackId>) {
 		let changed = false;
 
 		const nextTracks = tracks.map((track) => {
@@ -91,7 +95,7 @@
 	}
 
 	function primeLikesFromCache() {
-		if (!browser) return;
+		if (!browser || IS_ZIG_V1) return;
 		try {
 			const cachedRaw = localStorage.getItem('tracks_cache');
 			if (!cachedRaw) return;
@@ -116,9 +120,9 @@
 
 	// UI state
 	let deleting = $state(false);
-	let addingTrack = $state<number | null>(null);
+	let addingTrack = $state<TrackId | null>(null);
 	let showDeleteConfirm = $state(false);
-	let removingTrackId = $state<number | null>(null);
+	let removingTrackId = $state<TrackId | null>(null);
 
 	// unified edit mode state
 	let isEditMode = $state(false);
@@ -396,6 +400,7 @@
 
 	// check if user owns this playlist
 	const isOwner = $derived(auth.user?.did === playlist.owner_did);
+	const canEdit = $derived(isOwner && !IS_ZIG_V1);
 
 	// check if current track is from this playlist (active, regardless of paused state)
 	const isPlaylistActive = $derived(
@@ -432,7 +437,7 @@
 	<meta property="og:site_name" content={APP_NAME} />
 	{#if playlist.image_url}
 		<meta property="og:image" content={playlist.image_url} />
-	{:else if playlist.preview_thumbnails?.length}
+	{:else if playlist.preview_thumbnails?.length && !IS_ZIG_V1}
 		<meta property="og:image" content="{API_URL}/lists/playlists/{playlist.id}/og-cover" />
 	{/if}
 
@@ -448,15 +453,17 @@
 	/>
 	{#if playlist.image_url}
 		<meta name="twitter:image" content={playlist.image_url} />
-	{:else if playlist.preview_thumbnails?.length}
+	{:else if playlist.preview_thumbnails?.length && !IS_ZIG_V1}
 		<meta name="twitter:image" content="{API_URL}/lists/playlists/{playlist.id}/og-cover" />
 	{/if}
-	<link
-		rel="alternate"
-		type="application/json+oembed"
-		title={playlist.name}
-		href="{API_URL}/oembed?url={encodeURIComponent(`${APP_CANONICAL_URL}/playlist/${playlist.id}`)}"
-	/>
+	{#if !IS_ZIG_V1}
+		<link
+			rel="alternate"
+			type="application/json+oembed"
+			title={playlist.name}
+			href="{API_URL}/oembed?url={encodeURIComponent(`${APP_CANONICAL_URL}/playlist/${playlist.id}`)}"
+		/>
+	{/if}
 
 	<!-- at-tags: map this page to its atproto records (https://tangled.org/chrisshank.com/at-tags/) -->
 	{#if playlist.atproto_record_uri}
@@ -471,7 +478,7 @@
 
 <div class="container">
 	<main>
-		<div class="playlist-hero" class:edit-mode={isEditMode && isOwner}>
+		<div class="playlist-hero" class:edit-mode={isEditMode && canEdit}>
 			<!-- hidden file input for cover upload -->
 			<input
 				type="file"
@@ -480,7 +487,7 @@
 				onchange={handleCoverSelect}
 				hidden
 			/>
-			{#if isEditMode && isOwner}
+			{#if isEditMode && canEdit}
 				<div class="playlist-art-col">
 				<button
 					class="playlist-art-wrapper clickable"
@@ -604,7 +611,7 @@
 			<div class="playlist-info-wrapper">
 				<div class="playlist-info">
 					<p class="playlist-type">{playlist.is_private ? 'private playlist' : 'playlist'}</p>
-					{#if isEditMode && isOwner}
+					{#if isEditMode && canEdit}
 						<input
 							type="text"
 							class="playlist-title-input"
@@ -624,13 +631,13 @@
 							{playlist.track_count === 1 ? 'track' : 'tracks'}</span
 						>
 					</div>
-					{#if isEditMode && isOwner && !playlist.is_private}
+					{#if isEditMode && canEdit && !playlist.is_private}
 						<label class="show-on-profile-toggle">
 							<input type="checkbox" bind:checked={editShowOnProfile} />
 							<span class="toggle-label">show on profile</span>
 						</label>
 					{/if}
-					{#if isEditMode && isOwner}
+					{#if isEditMode && canEdit}
 						<button
 							type="button"
 							class="visibility-toggle-btn"
@@ -646,7 +653,7 @@
 					{#if !playlist.is_private}
 						<ShareButton url={$page.url.href} title="share playlist" />
 					{/if}
-					{#if isOwner}
+					{#if canEdit}
 						<OwnerActionButtons
 							{isEditMode}
 							{isSavingOrder}
@@ -698,7 +705,7 @@
 				{#if !playlist.is_private}
 					<ShareButton url={$page.url.href} title="share playlist" />
 				{/if}
-				{#if isOwner}
+				{#if canEdit}
 					<OwnerActionButtons
 						{isEditMode}
 						{isSavingOrder}
@@ -712,7 +719,7 @@
 		<PlaylistTrackList
 			{tracks}
 			playlistId={playlist.id}
-			{isOwner}
+			isOwner={canEdit}
 			{isEditMode}
 			{reorder}
 			{removingTrackId}
@@ -728,12 +735,14 @@
 	</main>
 </div>
 
-<AddTracksModal
-	bind:open={showSearch}
-	excludeTrackIds={tracks.map((t) => t.id)}
-	addingTrackId={addingTrack}
-	onAdd={addTrack}
-/>
+{#if canEdit}
+	<AddTracksModal
+		bind:open={showSearch}
+		excludeTrackIds={tracks.map((t) => t.id)}
+		addingTrackId={addingTrack}
+		onAdd={addTrack}
+	/>
+{/if}
 
 <ConfirmDialog
 	bind:open={showVisibilityConfirm}

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { browser } from '$app/environment';
+	import { IS_ZIG_V1 } from '$lib/config';
 	import ShareButton from './ShareButton.svelte';
 	import AddToMenu from './AddToMenu.svelte';
 	import TrackActionsMenu from './TrackActionsMenu.svelte';
@@ -9,7 +10,7 @@
 	import { hasPlayableLossless, isLosslessFormat } from '$lib/audio-support';
 	import { likersSheet } from '$lib/likers-sheet.svelte';
 	import { trackCoverUrl, trackThumbnailUrl } from '$lib/track-cover';
-	import type { Track } from '$lib/types';
+	import type { Track, TrackId } from '$lib/types';
 	import { queue } from '$lib/queue.svelte';
 	import { toast } from '$lib/toast.svelte';
 	import { playTrack, guardGatedTrack } from '$lib/playback.svelte';
@@ -68,7 +69,7 @@
 	let trackImageError = $state(false);
 	let avatarError = $state(false);
 	let tagsExpanded = $state(false);
-	let prevTrackId: number | undefined;
+	let prevTrackId: TrackId | undefined;
 
 	// get refreshed avatar URL if available
 	let refreshedAvatarUrl = $derived(getRefreshedAvatar(track.artist_did));
@@ -398,7 +399,7 @@
 	<div class="track-actions" role="presentation" onclick={(e) => e.stopPropagation()}>
 		<!-- desktop: show individual buttons -->
 		<div class="desktop-actions">
-			{#if isAuthenticated}
+			{#if isAuthenticated && !IS_ZIG_V1}
 				<AddToMenu
 					trackId={track.id}
 					trackTitle={track.title}
@@ -443,7 +444,7 @@
 				initialLiked={track.is_liked || false}
 				shareUrl={shareUrl}
 				onQueue={handleQueue}
-				isAuthenticated={isAuthenticated}
+				isAuthenticated={isAuthenticated && !IS_ZIG_V1}
 				likeDisabled={!track.atproto_record_uri}
 				{excludePlaylistId}
 			/>

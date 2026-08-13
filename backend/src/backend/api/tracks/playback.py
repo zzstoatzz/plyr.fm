@@ -16,6 +16,7 @@ from sqlalchemy.orm import selectinload
 from backend._internal import Session, get_optional_session
 from backend._internal.content_labels import get_track_label_values
 from backend._internal.tasks import schedule_teal_scrobble
+from backend._internal.track_metrics import increment_track_play_count
 from backend._internal.track_visibility import ensure_track_visible, viewer_did
 from backend.config import settings
 from backend.models import (
@@ -203,7 +204,7 @@ async def increment_play_count(
         logfire.info("play count deduped", track_id=track_id)
         return PlayCountResponse(play_count=track.play_count)
 
-    track.play_count += 1
+    await increment_track_play_count(db, track, source="http_play")
 
     # record share link play event if ref provided
     ref = body.ref if body else None

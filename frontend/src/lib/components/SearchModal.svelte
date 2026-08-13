@@ -3,7 +3,7 @@
 	import { browser } from '$app/environment';
 	import { search, type SearchResult, type SemanticSearchResult } from '$lib/search.svelte';
 	import { auth } from '$lib/auth.svelte';
-	import { VIBE_SEARCH_FLAG } from '$lib/config';
+	import { IS_ZIG_V1, VIBE_SEARCH_FLAG } from '$lib/config';
 	import { onMount, onDestroy } from 'svelte';
 	import SensitiveImage from './SensitiveImage.svelte';
 
@@ -12,7 +12,7 @@
 
 	// sync semantic search availability from user flags
 	$effect(() => {
-		const enabled = auth.user?.enabled_flags?.includes(VIBE_SEARCH_FLAG) ?? false;
+		const enabled = !IS_ZIG_V1 && (auth.user?.enabled_flags?.includes(VIBE_SEARCH_FLAG) ?? false);
 		search.semanticEnabled = enabled;
 		// clamp mode back to keyword when the flag flips off
 		if (!enabled && search.mode === 'semantic') {

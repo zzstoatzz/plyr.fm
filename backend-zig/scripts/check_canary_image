@@ -1,0 +1,48 @@
+#!/bin/sh
+set -eu
+
+image=${1:-plyr-backend-zig:canary}
+container_name=plyr-zig-image-check-$$
+
+cleanup() {
+    docker rm --force "$container_name" >/dev/null 2>&1 || true
+}
+trap cleanup EXIT INT TERM
+
+docker run \
+    --detach \
+    --name "$container_name" \
+    --publish 127.0.0.1::8000 \
+    --env INDEX_MODE=disabled \
+    --env LIST_COLLECTION_NSID=fm.plyr.dev.list \
+    --env PROFILE_COLLECTION_NSID=fm.plyr.dev.actor.profile \
+    --env LIKE_COLLECTION_NSID=fm.plyr.dev.like \
+    --env TRACK_COLLECTION_NSID=fm.plyr.dev.track \
+    --env MODE=api \
+    --env PORT=8000 \
+    "$image" >/dev/null
+
+attempt=0
+while true; do
+    if [ "$(docker inspect --format '{{.State.Running}}' "$container_name")" != "true" ]; then
+        docker logs "$container_name" >&2
+        echo "canary image exited before becoming healthy" >&2
+        exit 1
+    fi
+    mapping=$(docker port "$container_name" 8000/tcp | head -n 1)
+    if [ -n "$mapping" ]; then
+        port=${mapping##*:}
+        if curl --fail --silent "http://127.0.0.1:$port/health" >/dev/null 2>&1; then
+            break
+        fi
+    fi
+    attempt=$((attempt + 1))
+    if [ "$attempt" -ge 100 ]; then
+        docker logs "$container_name" >&2
+        echo "canary image did not become healthy" >&2
+        exit 1
+    fi
+    sleep 0.05
+done
+
+docker exec "$container_name" /usr/local/bin/canary-resource-snapshot

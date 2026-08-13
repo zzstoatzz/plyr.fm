@@ -1,5 +1,6 @@
-import type { Track } from './types';
-import { API_URL } from './config';
+import type { Track, TrackId } from './types';
+import { API_URL, IS_ZIG_V1 } from './config';
+import { recordZigPlay } from './api/zig-v1';
 
 // radio is a distinct *source* on the same player: when set, the one <audio>
 // element plays this stream instead of a queue track, and the normal player
@@ -59,15 +60,15 @@ class PlayerState {
 	currentTime = $state(0);
 	duration = $state(0);
 	volume = $state(0.7);
-	playCountedForTrack = $state<number | null>(null);
+	playCountedForTrack = $state<TrackId | null>(null);
 
 	// share link tracking: ref code from ?ref= URL param
 	ref = $state<string | null>(null);
-	private _refTrackId: number | null = null; // track the ref is associated with
+	private _refTrackId: TrackId | null = null; // track the ref is associated with
 
 	// synchronous guard to prevent duplicate play count requests
 	// (reactive state updates are batched, so we need this to block rapid-fire calls)
-	private _playCountPending: number | null = null;
+	private _playCountPending: TrackId | null = null;
 
 	// accumulated *listened* time for the current track (seconds). only advances
 	// while playing and stepping forward naturally, so seeks and restored
@@ -79,7 +80,7 @@ class PlayerState {
 	// from stale currentTime/duration values before new audio loads
 	private _playCountLocked = $state(false);
 
-	setRef(code: string | null, trackId: number | null = null) {
+	setRef(code: string | null, trackId: TrackId | null = null) {
 		this.ref = code;
 		this._refTrackId = trackId;
 	}
@@ -323,13 +324,15 @@ class PlayerState {
 
 			// include ref if it's for this track (for share link tracking)
 			const refForTrack = this._refTrackId === track.id ? this.ref : null;
-
-			fetch(`${API_URL}/tracks/${track.id}/play`, {
-				method: 'POST',
-				credentials: 'include',
-				headers: refForTrack ? { 'Content-Type': 'application/json' } : undefined,
-				body: refForTrack ? JSON.stringify({ ref: refForTrack }) : undefined
-			}).catch(err => {
+			const playRequest = IS_ZIG_V1
+				? recordZigPlay(API_URL, String(track.id), refForTrack)
+				: fetch(`${API_URL}/tracks/${track.id}/play`, {
+						method: 'POST',
+						credentials: 'include',
+						headers: refForTrack ? { 'Content-Type': 'application/json' } : undefined,
+						body: refForTrack ? JSON.stringify({ ref: refForTrack }) : undefined
+					});
+			playRequest.catch((err) => {
 				console.error('failed to increment play count:', err);
 			});
 		}

@@ -11,11 +11,11 @@
 	import { playCollection, playCollectionFrom, queueCollection } from '$lib/collection-playback';
 	import { toast } from '$lib/toast.svelte';
 	import { auth } from '$lib/auth.svelte';
-	import { API_URL } from '$lib/config';
+	import { API_URL, IS_ZIG_V1 } from '$lib/config';
 	import { APP_NAME, APP_CANONICAL_URL } from '$lib/branding';
 	import { createListReorder, moveItem } from '$lib/list-reorder.svelte';
 	import * as albumActions from '$lib/album-actions';
-	import type { Track } from '$lib/types';
+	import type { Track, TrackId } from '$lib/types';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -34,7 +34,7 @@
 	let tracks = $state<Track[]>([...data.album.tracks]);
 
 	// check if current user owns this album
-	const isOwner = $derived(auth.user?.did === albumMetadata.artist_did);
+	const isOwner = $derived(!IS_ZIG_V1 && auth.user?.did === albumMetadata.artist_did);
 	// can only reorder if owner and album has an ATProto list
 	const canReorder = $derived(isOwner && !!albumMetadata.list_uri);
 
@@ -61,7 +61,7 @@
 	let uploadingCover = $state(false);
 
 	// track removal
-	let removingTrackId = $state<number | null>(null);
+	let removingTrackId = $state<TrackId | null>(null);
 
 	// drag-to-reorder (desktop + touch)
 	const reorder = createListReorder((from, to) => {
@@ -255,12 +255,14 @@
 	{#if albumMetadata.image_url && !moderation.isSensitive(albumMetadata.image_url)}
 		<meta name="twitter:image" content="{albumMetadata.image_url}" />
 	{/if}
-	<link
-		rel="alternate"
-		type="application/json+oembed"
-		href="{API_URL}/oembed?url={encodeURIComponent(`${APP_CANONICAL_URL}/u/${albumMetadata.artist_handle}/album/${albumMetadata.slug}`)}"
-		title="{albumMetadata.title} by {albumMetadata.artist}"
-	/>
+	{#if !IS_ZIG_V1}
+		<link
+			rel="alternate"
+			type="application/json+oembed"
+			href="{API_URL}/oembed?url={encodeURIComponent(`${APP_CANONICAL_URL}/u/${albumMetadata.artist_handle}/album/${albumMetadata.slug}`)}"
+			title="{albumMetadata.title} by {albumMetadata.artist}"
+		/>
+	{/if}
 
 	<!-- at-tags: map this page to its atproto records (https://tangled.org/chrisshank.com/at-tags/) -->
 	{#if albumMetadata.list_uri}
@@ -475,6 +477,12 @@
 
 		<div class="tracks-section">
 			<h2 class="section-heading">tracks</h2>
+			{#if data.album.unavailable_track_count}
+				<p class="availability-note">
+					{data.album.unavailable_track_count}
+					{data.album.unavailable_track_count === 1 ? 'signed track is' : 'signed tracks are'} currently unavailable.
+				</p>
+			{/if}
 			<div
 				class="tracks-list"
 				class:edit-mode={isEditMode}
@@ -843,6 +851,12 @@
 		color: var(--text-primary);
 		margin-bottom: 1rem;
 		text-transform: lowercase;
+	}
+
+	.availability-note {
+		margin: -0.5rem 0 1rem;
+		color: var(--text-tertiary);
+		font-size: var(--text-sm);
 	}
 
 	.tracks-list {

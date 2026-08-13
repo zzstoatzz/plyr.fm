@@ -1,0 +1,30 @@
+#!/bin/sh
+set -eu
+
+expected_branch='codex/zig-backend'
+actual_branch=$(git branch --show-current)
+if [ "$actual_branch" != "$expected_branch" ]; then
+    echo "refusing next deployment from $actual_branch" >&2
+    exit 1
+fi
+
+if [ -n "$(git status --porcelain)" ]; then
+    echo 'refusing next deployment from a dirty worktree' >&2
+    exit 1
+fi
+
+PUBLIC_API_URL=https://api.next.plyr.fm \
+VITE_API_GENERATION=zig-v1 \
+VITE_APP_CANONICAL_HOST=next.plyr.fm \
+VITE_APP_CANONICAL_URL=https://next.plyr.fm \
+bun run build
+
+commit_hash=$(git rev-parse HEAD)
+commit_message=$(git log -1 --pretty=%s)
+CLOUDFLARE_ACCOUNT_ID=3e9ba01cd687b3c4d29033908177072e \
+exec bunx wrangler pages deploy .svelte-kit/cloudflare \
+    --project-name plyr-fm-next \
+    --branch "$expected_branch" \
+    --commit-hash "$commit_hash" \
+    --commit-message "$commit_message" \
+    --commit-dirty=false

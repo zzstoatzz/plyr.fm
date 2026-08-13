@@ -1,0 +1,185 @@
+# Zig backend development commands.
+set shell := ["bash", "-eu", "-o", "pipefail", "-c"]
+set positional-arguments := true
+
+default: check
+
+build:
+    zig build
+
+image:
+    docker build --tag plyr-backend-zig:canary .
+
+image-check: image
+    scripts/check_canary_image plyr-backend-zig:canary
+
+run:
+    MODE=api TRACK_COLLECTION_NSID=${TRACK_COLLECTION_NSID:?set TRACK_COLLECTION_NSID} LIST_COLLECTION_NSID=${LIST_COLLECTION_NSID:?set LIST_COLLECTION_NSID} PROFILE_COLLECTION_NSID=${PROFILE_COLLECTION_NSID:?set PROFILE_COLLECTION_NSID} LIKE_COLLECTION_NSID=${LIKE_COLLECTION_NSID:?set LIKE_COLLECTION_NSID} zig build run
+
+# Authenticates and atomically reconciles one repository into the configured DB.
+repair-repo DID:
+    MODE=repair INDEX_MODE=required INGEST_REPAIR_DID={{ DID }} TRACK_COLLECTION_NSID=${TRACK_COLLECTION_NSID:?set TRACK_COLLECTION_NSID} LIST_COLLECTION_NSID=${LIST_COLLECTION_NSID:?set LIST_COLLECTION_NSID} PROFILE_COLLECTION_NSID=${PROFILE_COLLECTION_NSID:?set PROFILE_COLLECTION_NSID} LIKE_COLLECTION_NSID=${LIKE_COLLECTION_NSID:?set LIKE_COLLECTION_NSID} DATABASE_URL=${DATABASE_URL:?set DATABASE_URL} zig build run
+
+# Runs the separately supervised continuous signed-relay consumer.
+ingest:
+    MODE=ingester INDEX_MODE=required TRACK_COLLECTION_NSID=${TRACK_COLLECTION_NSID:?set TRACK_COLLECTION_NSID} LIST_COLLECTION_NSID=${LIST_COLLECTION_NSID:?set LIST_COLLECTION_NSID} PROFILE_COLLECTION_NSID=${PROFILE_COLLECTION_NSID:?set PROFILE_COLLECTION_NSID} LIKE_COLLECTION_NSID=${LIKE_COLLECTION_NSID:?set LIKE_COLLECTION_NSID} DATABASE_URL=${DATABASE_URL:?set DATABASE_URL} zig build run
+
+# Reconciles canonical account availability without blocking relay ingestion.
+reconcile-accounts:
+    MODE=account_reconciler INDEX_MODE=required TRACK_COLLECTION_NSID=${TRACK_COLLECTION_NSID:?set TRACK_COLLECTION_NSID} LIST_COLLECTION_NSID=${LIST_COLLECTION_NSID:?set LIST_COLLECTION_NSID} PROFILE_COLLECTION_NSID=${PROFILE_COLLECTION_NSID:?set PROFILE_COLLECTION_NSID} LIKE_COLLECTION_NSID=${LIKE_COLLECTION_NSID:?set LIKE_COLLECTION_NSID} DATABASE_URL=${DATABASE_URL:?set DATABASE_URL} zig build run
+
+# Reconcile current repositories discovered from canonical-looking legacy rows.
+reconcile-catalog:
+    MODE=catalog_reconciler INDEX_MODE=required TRACK_COLLECTION_NSID=${TRACK_COLLECTION_NSID:?set TRACK_COLLECTION_NSID} LIST_COLLECTION_NSID=${LIST_COLLECTION_NSID:?set LIST_COLLECTION_NSID} PROFILE_COLLECTION_NSID=${PROFILE_COLLECTION_NSID:?set PROFILE_COLLECTION_NSID} LIKE_COLLECTION_NSID=${LIKE_COLLECTION_NSID:?set LIKE_COLLECTION_NSID} DATABASE_URL=${DATABASE_URL:?set DATABASE_URL} zig build run
+
+test:
+    zig build test
+
+check:
+    zig fmt --check build.zig src
+    zig build
+    zig build test
+    python3 scripts/test_http.py
+    cd ../backend && uv run ruff check ../backend-zig/scripts
+    cd ../backend && uv run pytest -q ../backend-zig/scripts/test_bench_http.py ../backend-zig/scripts/test_bench_api_parity.py ../backend-zig/scripts/test_canary_placement.py ../backend-zig/scripts/test_canary_report.py ../backend-zig/scripts/test_canary_smoke.py
+
+# Destructive only to the dedicated Zig test database on port 5435.
+test-postgres:
+    docker compose -f ../backend/tests/docker-compose.yml --profile zig up -d zig-db
+    @for attempt in {1..100}; do docker compose -f ../backend/tests/docker-compose.yml exec -T zig-db pg_isready -U zig_test -d zig_test >/dev/null && exit 0; sleep 0.1; done; echo 'test Postgres did not become ready' >&2; exit 1
+    PLYR_ZIG_TEST_DATABASE_URL=postgresql://zig_test:zig_test@127.0.0.1:5435/zig_test zig build test
+    cd ../backend && DATABASE_URL=postgresql://zig_test:zig_test@127.0.0.1:5435/zig_test RELAY_TEST_MODE=1 OAUTH_ENCRYPTION_KEY=hnSkDmgbbuK0rt7Ab3eJHAktb18gmebsdwKdTmq9mes= uv run python ../backend-zig/scripts/test_list_migration.py
+
+# Uses only random, namespaced keys in the dedicated local test Redis.
+test-redis:
+    docker compose -f ../backend/tests/docker-compose.yml up -d test-redis
+    @for attempt in {1..100}; do docker compose -f ../backend/tests/docker-compose.yml exec -T test-redis redis-cli ping >/dev/null && exit 0; sleep 0.1; done; echo 'test Redis did not become ready' >&2; exit 1
+    PLYR_ZIG_TEST_REDIS_URL=redis://127.0.0.1:6380/0 zig build test
+
+# Full HTTP -> application -> Redis/Postgres contract on disposable services.
+test-play-http: build
+    docker compose -f ../backend/tests/docker-compose.yml --profile zig up -d zig-db test-redis
+    @for attempt in {1..100}; do docker compose -f ../backend/tests/docker-compose.yml exec -T zig-db pg_isready -U zig_test -d zig_test >/dev/null && break; sleep 0.1; done
+    @for attempt in {1..100}; do docker compose -f ../backend/tests/docker-compose.yml exec -T test-redis redis-cli ping >/dev/null && exit 0; sleep 0.1; done; echo 'integration services did not become ready' >&2; exit 1
+    cd ../backend && uv run python ../backend-zig/scripts/test_play_http.py
+
+test-http: build
+    python3 scripts/test_http.py
+
+smoke-canary URL="https://plyr-api-zig-canary.fly.dev":
+    python3 scripts/canary_smoke.py "{{ URL }}"
+
+# Verify v1 through next's dedicated API hostname.
+smoke-next URL="https://api.next.plyr.fm":
+    python3 scripts/canary_smoke.py --product-only "{{ URL }}"
+
+bench-http *ARGS:
+    zig build -Doptimize=ReleaseFast
+    python3 scripts/bench_http.py "$@"
+
+# Equivalent 50-track public reads against one disposable Postgres fixture.
+bench-api-parity *ARGS:
+    @scripts/run_api_parity_bench "$@"
+
+bench-canary URL="https://plyr-api-zig-canary.fly.dev" *ARGS:
+    python3 scripts/bench_http.py --url "{{ URL }}" "$@"
+
+# Destructive only to the dedicated benchmark database on port 5434.
+bench-album-detail:
+    docker compose -f ../backend/tests/docker-compose.yml --profile bench up -d bench-db
+    @for attempt in {1..100}; do docker compose -f ../backend/tests/docker-compose.yml exec -T bench-db pg_isready -U zig_bench -d zig_bench >/dev/null && break; sleep 0.1; done
+    docker compose -f ../backend/tests/docker-compose.yml exec -T bench-db psql -v ON_ERROR_STOP=1 -U zig_bench -d zig_bench < scripts/composed_track_bench.sql
+    zig build -Doptimize=ReleaseFast
+    DATABASE_URL=postgresql://zig_bench:zig_bench@127.0.0.1:5434/zig_bench python3 scripts/bench_http.py --with-index --duration 5 --concurrency 1 --path '/v1/albums/alb_YXQ6Ly9kaWQ6cGxjOmJlbmNoL2ZtLnBseXIuZGV2Lmxpc3QvYWxidW0'
+    DATABASE_URL=postgresql://zig_bench:zig_bench@127.0.0.1:5434/zig_bench python3 scripts/bench_http.py --with-index --duration 5 --concurrency 16 --path '/v1/albums/alb_YXQ6Ly9kaWQ6cGxjOmJlbmNoL2ZtLnBseXIuZGV2Lmxpc3QvYWxidW0'
+
+# Destructive only to the dedicated benchmark database on port 5434.
+bench-album-collection:
+    docker compose -f ../backend/tests/docker-compose.yml --profile bench up -d bench-db
+    @for attempt in {1..100}; do docker compose -f ../backend/tests/docker-compose.yml exec -T bench-db pg_isready -U zig_bench -d zig_bench >/dev/null && break; sleep 0.1; done
+    docker compose -f ../backend/tests/docker-compose.yml exec -T bench-db psql -v ON_ERROR_STOP=1 -U zig_bench -d zig_bench < scripts/composed_track_bench.sql
+    zig build -Doptimize=ReleaseFast
+    DATABASE_URL=postgresql://zig_bench:zig_bench@127.0.0.1:5434/zig_bench python3 scripts/bench_http.py --with-index --duration 5 --concurrency 1 --path '/v1/albums?artist_did=did%3Aplc%3Abench&limit=20'
+    DATABASE_URL=postgresql://zig_bench:zig_bench@127.0.0.1:5434/zig_bench python3 scripts/bench_http.py --with-index --duration 5 --concurrency 16 --path '/v1/albums?artist_did=did%3Aplc%3Abench&limit=20'
+
+# Destructive only to the dedicated benchmark database on port 5434.
+bench-artist-detail:
+    docker compose -f ../backend/tests/docker-compose.yml --profile bench up -d bench-db
+    @for attempt in {1..100}; do docker compose -f ../backend/tests/docker-compose.yml exec -T bench-db pg_isready -U zig_bench -d zig_bench >/dev/null && break; sleep 0.1; done
+    docker compose -f ../backend/tests/docker-compose.yml exec -T bench-db psql -v ON_ERROR_STOP=1 -U zig_bench -d zig_bench < scripts/composed_track_bench.sql
+    zig build -Doptimize=ReleaseFast
+    DATABASE_URL=postgresql://zig_bench:zig_bench@127.0.0.1:5434/zig_bench python3 scripts/bench_http.py --with-index --duration 5 --concurrency 1 --path '/v1/artists/benchmark.test'
+    DATABASE_URL=postgresql://zig_bench:zig_bench@127.0.0.1:5434/zig_bench python3 scripts/bench_http.py --with-index --duration 5 --concurrency 16 --path '/v1/artists/benchmark.test'
+
+# Destructive only to the dedicated benchmark database on port 5434.
+bench-artist-metrics:
+    docker compose -f ../backend/tests/docker-compose.yml --profile bench up -d bench-db
+    @for attempt in {1..100}; do docker compose -f ../backend/tests/docker-compose.yml exec -T bench-db pg_isready -U zig_bench -d zig_bench >/dev/null && break; sleep 0.1; done
+    docker compose -f ../backend/tests/docker-compose.yml exec -T bench-db psql -v ON_ERROR_STOP=1 -U zig_bench -d zig_bench < scripts/composed_track_bench.sql
+    zig build -Doptimize=ReleaseFast
+    DATABASE_URL=postgresql://zig_bench:zig_bench@127.0.0.1:5434/zig_bench python3 scripts/bench_http.py --with-index --duration 5 --concurrency 1 --path '/v1/artists/did%3Aplc%3Abench/metrics'
+    DATABASE_URL=postgresql://zig_bench:zig_bench@127.0.0.1:5434/zig_bench python3 scripts/bench_http.py --with-index --duration 5 --concurrency 16 --path '/v1/artists/did%3Aplc%3Abench/metrics'
+
+# Destructive only to the dedicated benchmark database on port 5434.
+bench-track-chart:
+    docker compose -f ../backend/tests/docker-compose.yml --profile bench up -d bench-db
+    @for attempt in {1..100}; do docker compose -f ../backend/tests/docker-compose.yml exec -T bench-db pg_isready -U zig_bench -d zig_bench >/dev/null && break; sleep 0.1; done
+    docker compose -f ../backend/tests/docker-compose.yml exec -T bench-db psql -v ON_ERROR_STOP=1 -U zig_bench -d zig_bench < scripts/composed_track_bench.sql
+    zig build -Doptimize=ReleaseFast
+    DATABASE_URL=postgresql://zig_bench:zig_bench@127.0.0.1:5434/zig_bench python3 scripts/check_track_chart.py
+    DATABASE_URL=postgresql://zig_bench:zig_bench@127.0.0.1:5434/zig_bench python3 scripts/bench_http.py --with-index --duration 5 --concurrency 1 --path '/v1/charts/tracks?period=all_time&limit=10'
+    DATABASE_URL=postgresql://zig_bench:zig_bench@127.0.0.1:5434/zig_bench python3 scripts/bench_http.py --with-index --duration 5 --concurrency 16 --path '/v1/charts/tracks?period=all_time&limit=10'
+
+# Exact-CID like reads against the same disposable strong-reference fixture.
+bench-track-likes:
+    docker compose -f ../backend/tests/docker-compose.yml --profile bench up -d bench-db
+    @for attempt in {1..100}; do docker compose -f ../backend/tests/docker-compose.yml exec -T bench-db pg_isready -U zig_bench -d zig_bench >/dev/null && break; sleep 0.1; done
+    docker compose -f ../backend/tests/docker-compose.yml exec -T bench-db psql -v ON_ERROR_STOP=1 -U zig_bench -d zig_bench < scripts/composed_track_bench.sql
+    zig build -Doptimize=ReleaseFast
+    DATABASE_URL=postgresql://zig_bench:zig_bench@127.0.0.1:5434/zig_bench python3 scripts/check_track_likes.py
+    DATABASE_URL=postgresql://zig_bench:zig_bench@127.0.0.1:5434/zig_bench python3 scripts/bench_http.py --with-index --duration 5 --concurrency 1 --path '/v1/tracks/trk_YXQ6Ly9kaWQ6cGxjOmJlbmNoL2ZtLnBseXIuZGV2LnRyYWNrL3RyYWNrLTEwMA/likes?limit=20'
+    DATABASE_URL=postgresql://zig_bench:zig_bench@127.0.0.1:5434/zig_bench python3 scripts/bench_http.py --with-index --duration 5 --concurrency 16 --path '/v1/tracks/trk_YXQ6Ly9kaWQ6cGxjOmJlbmNoL2ZtLnBseXIuZGV2LnRyYWNrL3RyYWNrLTEwMA/likes?limit=20'
+
+# Destructive only to the dedicated benchmark database on port 5434.
+bench-composed-tracks:
+    docker compose -f ../backend/tests/docker-compose.yml --profile bench up -d bench-db
+    @for attempt in {1..100}; do docker compose -f ../backend/tests/docker-compose.yml exec -T bench-db pg_isready -U zig_bench -d zig_bench >/dev/null && break; sleep 0.1; done
+    docker compose -f ../backend/tests/docker-compose.yml exec -T bench-db psql -v ON_ERROR_STOP=1 -U zig_bench -d zig_bench < scripts/composed_track_bench.sql
+    zig build -Doptimize=ReleaseFast
+    DATABASE_URL=postgresql://zig_bench:zig_bench@127.0.0.1:5434/zig_bench python3 scripts/bench_http.py --with-index --duration 5 --concurrency 1 --path '/v1/tracks?limit=50'
+    DATABASE_URL=postgresql://zig_bench:zig_bench@127.0.0.1:5434/zig_bench python3 scripts/bench_http.py --with-index --duration 5 --concurrency 16 --path '/v1/tracks?limit=50'
+    DATABASE_URL=postgresql://zig_bench:zig_bench@127.0.0.1:5434/zig_bench python3 scripts/bench_http.py --with-index --duration 5 --concurrency 1 --path '/v1/tracks/trk_YXQ6Ly9kaWQ6cGxjOmJlbmNoL2ZtLnBseXIuZGV2LnRyYWNrL3RyYWNrLTEwMA'
+    DATABASE_URL=postgresql://zig_bench:zig_bench@127.0.0.1:5434/zig_bench python3 scripts/bench_http.py --with-index --duration 5 --concurrency 16 --path '/v1/tracks/trk_YXQ6Ly9kaWQ6cGxjOmJlbmNoL2ZtLnBseXIuZGV2LnRyYWNrL3RyYWNrLTEwMA'
+    DATABASE_URL=postgresql://zig_bench:zig_bench@127.0.0.1:5434/zig_bench python3 scripts/bench_http.py --with-index --duration 5 --concurrency 1 --path '/v1/tracks/trk_YXQ6Ly9kaWQ6cGxjOmJlbmNoL2ZtLnBseXIuZGV2LnRyYWNrL3RyYWNrLTEwMA/playback'
+    DATABASE_URL=postgresql://zig_bench:zig_bench@127.0.0.1:5434/zig_bench python3 scripts/bench_http.py --with-index --duration 5 --concurrency 16 --path '/v1/tracks/trk_YXQ6Ly9kaWQ6cGxjOmJlbmNoL2ZtLnBseXIuZGV2LnRyYWNrL3RyYWNrLTEwMA/playback'
+
+# Destructive only to the dedicated benchmark database on port 5434.
+bench-playlists:
+    docker compose -f ../backend/tests/docker-compose.yml --profile bench up -d bench-db
+    @for attempt in {1..100}; do docker compose -f ../backend/tests/docker-compose.yml exec -T bench-db pg_isready -U zig_bench -d zig_bench >/dev/null && break; sleep 0.1; done
+    docker compose -f ../backend/tests/docker-compose.yml exec -T bench-db psql -v ON_ERROR_STOP=1 -U zig_bench -d zig_bench < scripts/composed_track_bench.sql
+    zig build -Doptimize=ReleaseFast
+    DATABASE_URL=postgresql://zig_bench:zig_bench@127.0.0.1:5434/zig_bench python3 scripts/bench_http.py --with-index --duration 5 --concurrency 1 --path '/v1/playlists?limit=20'
+    DATABASE_URL=postgresql://zig_bench:zig_bench@127.0.0.1:5434/zig_bench python3 scripts/bench_http.py --with-index --duration 5 --concurrency 16 --path '/v1/playlists?limit=20'
+    DATABASE_URL=postgresql://zig_bench:zig_bench@127.0.0.1:5434/zig_bench python3 scripts/bench_http.py --with-index --duration 5 --concurrency 1 --path '/v1/playlists/pls_YXQ6Ly9kaWQ6cGxjOmJlbmNoL2ZtLnBseXIuZGV2Lmxpc3QvcGxheWxpc3Q'
+    DATABASE_URL=postgresql://zig_bench:zig_bench@127.0.0.1:5434/zig_bench python3 scripts/bench_http.py --with-index --duration 5 --concurrency 16 --path '/v1/playlists/pls_YXQ6Ly9kaWQ6cGxjOmJlbmNoL2ZtLnBseXIuZGV2Lmxpc3QvcGxheWxpc3Q'
+
+# Destructive only to the dedicated benchmark database on port 5434.
+bench-search:
+    docker compose -f ../backend/tests/docker-compose.yml --profile bench up -d bench-db
+    @for attempt in {1..100}; do docker compose -f ../backend/tests/docker-compose.yml exec -T bench-db pg_isready -U zig_bench -d zig_bench >/dev/null && break; sleep 0.1; done
+    docker compose -f ../backend/tests/docker-compose.yml exec -T bench-db psql -v ON_ERROR_STOP=1 -U zig_bench -d zig_bench < scripts/composed_track_bench.sql
+    docker compose -f ../backend/tests/docker-compose.yml exec -T bench-db psql -v ON_ERROR_STOP=1 -U zig_bench -d zig_bench < scripts/search_bench.sql
+    zig build -Doptimize=ReleaseFast
+    DATABASE_URL=postgresql://zig_bench:zig_bench@127.0.0.1:5434/zig_bench python3 scripts/bench_http.py --with-index --duration 5 --concurrency 1 --path '/v1/search?q=Distinctive%20Search%20Needle&types=track&limit=10'
+    DATABASE_URL=postgresql://zig_bench:zig_bench@127.0.0.1:5434/zig_bench python3 scripts/bench_http.py --with-index --duration 5 --concurrency 16 --path '/v1/search?q=Distinctive%20Search%20Needle&types=track&limit=10'
+
+bench-snapshot:
+    zig build bench-snapshot -Doptimize=ReleaseFast
+
+bench-ingest-dispatch:
+    zig build bench-ingest-dispatch -Doptimize=ReleaseFast
+
+# Snapshot the Python surface that informs parity decisions.
+inventory *ARGS:
+    cd ../backend && RELAY_TEST_MODE=1 OAUTH_ENCRYPTION_KEY=hnSkDmgbbuK0rt7Ab3eJHAktb18gmebsdwKdTmq9mes= LOGFIRE_IGNORE_NO_CONFIG=1 uv run python ../backend-zig/scripts/inventory_python_api.py "$@"

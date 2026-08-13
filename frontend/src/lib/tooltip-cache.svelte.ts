@@ -5,6 +5,8 @@
  * - Invalidatable: cache entries can be cleared when data changes
  */
 
+import type { TrackId } from './types';
+
 interface CacheEntry<T> {
 	data: T;
 	timestamp: number;
@@ -13,8 +15,8 @@ interface CacheEntry<T> {
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
 // separate caches for different data types
-const likersCache = new Map<number, CacheEntry<LikerData[]>>();
-const commentersCache = new Map<number, CacheEntry<CommenterData[]>>();
+const likersCache = new Map<TrackId, CacheEntry<LikerData[]>>();
+const commentersCache = new Map<TrackId, CacheEntry<CommenterData[]>>();
 
 export interface LikerData {
 	did: string;
@@ -36,7 +38,7 @@ function isExpired(entry: CacheEntry<unknown>): boolean {
 }
 
 // likers cache
-export function getLikers(trackId: number): LikerData[] | null {
+export function getLikers(trackId: TrackId): LikerData[] | null {
 	const entry = likersCache.get(trackId);
 	if (!entry || isExpired(entry)) {
 		return null;
@@ -44,16 +46,16 @@ export function getLikers(trackId: number): LikerData[] | null {
 	return entry.data;
 }
 
-export function setLikers(trackId: number, data: LikerData[]): void {
+export function setLikers(trackId: TrackId, data: LikerData[]): void {
 	likersCache.set(trackId, { data, timestamp: Date.now() });
 }
 
-export function invalidateLikers(trackId: number): void {
+export function invalidateLikers(trackId: TrackId): void {
 	likersCache.delete(trackId);
 }
 
 // commenters cache
-export function getCommenters(trackId: number): CommenterData[] | null {
+export function getCommenters(trackId: TrackId): CommenterData[] | null {
 	const entry = commentersCache.get(trackId);
 	if (!entry || isExpired(entry)) {
 		return null;
@@ -61,10 +63,10 @@ export function getCommenters(trackId: number): CommenterData[] | null {
 	return entry.data;
 }
 
-export function setCommenters(trackId: number, data: CommenterData[]): void {
+export function setCommenters(trackId: TrackId, data: CommenterData[]): void {
 	commentersCache.set(trackId, { data, timestamp: Date.now() });
 }
 
-export function invalidateCommenters(trackId: number): void {
+export function invalidateCommenters(trackId: TrackId): void {
 	commentersCache.delete(trackId);
 }

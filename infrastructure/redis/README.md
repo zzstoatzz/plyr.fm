@@ -3,8 +3,13 @@
 self-hosted Redis on Fly.io. backs docket background tasks, the session cache,
 rate-limit counters, and the discovery cache.
 
-two apps, one per environment — `plyr-redis` (prod, used by `relay-api`) and
-`plyr-redis-stg` (staging, used by `relay-api-staging`). they are not shared.
+three apps, one per environment — `plyr-redis` (prod, used by `relay-api`),
+`plyr-redis-stg` (staging, used by `relay-api-staging`), and
+`plyr-redis-next` (the Zig successor canary). they are not shared.
+
+`plyr-redis-next` is intentionally narrower: it holds only expiring,
+domain-separated anonymous play-deduplication keys. It has no volume or AOF
+because losing that cache fails open and must not affect playback availability.
 
 ## deployment
 
@@ -13,7 +18,7 @@ two apps, one per environment — `plyr-redis` (prod, used by `relay-api`) and
 fly apps create plyr-redis
 fly volumes create redis_data --region iad --size 1 -a plyr-redis
 
-# deploy (staging: -c fly.staging.toml -a plyr-redis-stg)
+# deploy (staging: -c fly.staging.toml; next: -c fly.next.toml)
 fly deploy -a plyr-redis
 ```
 
@@ -38,6 +43,7 @@ redis://:<REDIS_PASSWORD>@plyr-redis.internal:6379
 ```bash
 fly secrets set DOCKET_URL='redis://:<pw>@plyr-redis.internal:6379' -a relay-api
 fly secrets set DOCKET_URL='redis://:<pw>@plyr-redis-stg.internal:6379' -a relay-api-staging
+fly secrets set DOCKET_URL='redis://:<pw>@plyr-redis-next.internal:6379' -a plyr-api-zig-canary
 ```
 
 **the password and the connection string must change together.** Redis rejects

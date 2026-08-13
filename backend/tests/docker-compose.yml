@@ -24,6 +24,38 @@ services:
       timeout: 5s
       retries: 30
 
+  bench-db:
+    image: postgres:14-alpine
+    profiles: [bench]
+    ports:
+      - "5434:5432"
+    environment:
+      POSTGRES_USER: zig_bench
+      POSTGRES_PASSWORD: zig_bench
+      POSTGRES_DB: zig_bench
+    tmpfs:
+      - /var/lib/postgresql/data
+    command:
+      - postgres
+      - -c
+      - max_connections=100
+
+  zig-db:
+    image: postgres:14-alpine
+    profiles: [zig]
+    ports:
+      - "5435:5432"
+    environment:
+      POSTGRES_USER: zig_test
+      POSTGRES_PASSWORD: zig_test
+      POSTGRES_DB: zig_test
+    tmpfs:
+      - /var/lib/postgresql/data
+    command:
+      - postgres
+      - -c
+      - max_connections=100
+
   test-redis:
     image: redis:7-alpine
     ports:

@@ -7,6 +7,7 @@
 	import { search } from '$lib/search.svelte';
 	import { feedback } from '$lib/feedback.svelte';
 	import { APP_NAME, APP_TAGLINE, APP_STAGE } from '$lib/branding';
+	import { IS_ZIG_V1 } from '$lib/config';
 	import { redirectToLogin } from '$lib/utils/auth-redirect';
 
 	interface Props {
@@ -70,7 +71,7 @@
 
 		{#if isAuthenticated}
 			{#if !$page.url.pathname.startsWith('/library')}
-				<a href="/library" class="nav-link" title="library">
+				<a href="/library" class="nav-link" title="library" hidden={IS_ZIG_V1}>
 					<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
 						<path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
 					</svg>
@@ -79,7 +80,7 @@
 			{/if}
 
 			{#if $page.url.pathname !== '/upload'}
-				<a href="/upload" class="nav-link upload-link" title="upload a track">
+				<a href="/upload" class="nav-link upload-link" title="upload a track" hidden={IS_ZIG_V1}>
 					<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
 						<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
 						<polyline points="17 8 12 3 7 8"></polyline>
@@ -112,7 +113,7 @@
 					<line x1="21" y1="21" x2="16.65" y2="16.65"></line>
 				</svg>
 			</button>
-			{#if isAuthenticated}
+			{#if isAuthenticated && !IS_ZIG_V1}
 				{#if !$page.url.pathname.startsWith('/library')}
 					<a href="/library" class="nav-icon" title="library">
 						<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">

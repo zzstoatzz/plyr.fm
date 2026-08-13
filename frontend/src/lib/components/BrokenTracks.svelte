@@ -3,11 +3,11 @@
 	import WaveLoading from './WaveLoading.svelte';
 	import { toast } from '$lib/toast.svelte';
 	import { API_URL } from '$lib/config';
-	import type { Track } from '$lib/types';
+	import type { Track, TrackId } from '$lib/types';
 
 	let brokenTracks = $state<Track[]>([]);
 	let loading = $state(true);
-	let restoringTrackId = $state<number | null>(null);
+	let restoringTrackId = $state<TrackId | null>(null);
 	let restoringAll = $state(false);
 
 	onMount(async () => {
@@ -33,7 +33,7 @@
 		}
 	}
 
-	async function restoreRecord(trackId: number, trackTitle: string) {
+	async function restoreRecord(trackId: TrackId, trackTitle: string) {
 		if (!confirm(`restore ATProto record for "${trackTitle}"?\n\nthis will create a new record on your PDS with the original timestamp.`)) {
 			return;
 		}

@@ -26,14 +26,18 @@ export interface AlbumMetadata extends AlbumSummary {
 export interface AlbumResponse {
 	metadata: AlbumMetadata;
 	tracks: Track[];
+	/** Signed members that are intentionally not hydrated into playable tracks. */
+	unavailable_track_count?: number;
 }
 
 export interface SupportGate {
 	type: 'any' | string;
 }
 
+export type TrackId = string | number;
+
 export interface Track {
-	id: number;
+	id: TrackId;
 	title: string;
 	artist: string;
 	album?: AlbumSummary | null;
@@ -122,7 +126,7 @@ export interface QueueResponse {
 }
 
 export interface TopItem {
-	id: number;
+	id: TrackId;
 	title: string;
 	play_count: number;
 }
@@ -215,7 +219,14 @@ export interface ActivityCollection {
 }
 
 export interface ActivityEvent {
-	type: 'like' | 'track' | 'comment' | 'join' | 'playlist_create' | 'album_release' | 'track_added_to_playlist';
+	type:
+		| 'like'
+		| 'track'
+		| 'comment'
+		| 'join'
+		| 'playlist_create'
+		| 'album_release'
+		| 'track_added_to_playlist';
 	actor: ActivityActor;
 	track: ActivityTrack | null;
 	comment_text: string | null;

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { IS_ZIG_V1 } from '$lib/config';
 	import { likersSheet } from '$lib/likers-sheet.svelte';
 	import { getRefreshedAvatar, triggerAvatarRefresh, hasAttemptedRefresh } from '$lib/avatar-refresh.svelte';
 	import BottomSheet from './BottomSheet.svelte';
@@ -64,7 +65,7 @@
 				{#each likersSheet.likers as liker (liker.did)}
 					{@const displayUrl = getDisplayUrl(liker)}
 					{@const showFallback = shouldShowFallback(liker)}
-					<a href="/u/{liker.handle}/liked" class="liker-row" onclick={() => likersSheet.close()}>
+					<a href={IS_ZIG_V1 ? `/u/${liker.handle}` : `/u/${liker.handle}/liked`} class="liker-row" onclick={() => likersSheet.close()}>
 						<div class="liker-avatar">
 							{#if displayUrl && !showFallback}
 								<SensitiveImage src={displayUrl} compact>

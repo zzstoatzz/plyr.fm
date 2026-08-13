@@ -39,7 +39,7 @@ max_lines = 850
 
 [[rules]]
 path = "backend/src/backend/api/tracks/uploads.py"
-max_lines = 1871
+max_lines = 1878
 
 [[rules]]
 path = "backend/src/backend/config.py"
@@ -75,7 +75,7 @@ max_lines = 569
 
 [[rules]]
 path = "backend/tests/test_moderation.py"
-max_lines = 1026
+max_lines = 1042
 
 [[rules]]
 path = "docs/internal/authentication.md"
@@ -131,7 +131,7 @@ max_lines = 955
 
 [[rules]]
 path = "frontend/src/routes/+layout.svelte"
-max_lines = 856
+max_lines = 861
 
 [[rules]]
 path = "frontend/src/routes/costs/+page.svelte"
@@ -211,11 +211,11 @@ max_lines = 544
 
 [[rules]]
 path = "backend/src/backend/_internal/tasks/ingest.py"
-max_lines = 1099
+max_lines = 1106
 
 [[rules]]
 path = "backend/tests/test_jetstream.py"
-max_lines = 2771
+max_lines = 2784
 
 [[rules]]
 path = "frontend/src/lib/components/embed/CollectionEmbed.svelte"
@@ -259,7 +259,7 @@ max_lines = 840
 
 [[rules]]
 path = "backend/tests/conftest.py"
-max_lines = 605
+max_lines = 610
 
 [[rules]]
 path = "backend/tests/api/track_audio_replace/test_pipeline.py"
@@ -339,7 +339,7 @@ max_lines = 509
 
 [[rules]]
 path = "frontend/src/routes/track/[[]id[]]/+page.svelte"
-max_lines = 1793
+max_lines = 1801
 
 [[rules]]
 path = "frontend/src/lib/components/playlist/PlaylistTrackList.svelte"
@@ -347,7 +347,7 @@ max_lines = 668
 
 [[rules]]
 path = "frontend/src/lib/components/player/PlaybackControls.svelte"
-max_lines = 512
+max_lines = 513
 
 [[rules]]
 path = "backend/src/backend/_internal/clients/moderation.py"
@@ -359,7 +359,7 @@ max_lines = 634
 
 [[rules]]
 path = "frontend/src/routes/u/[[]handle[]]/+page.svelte"
-max_lines = 1444
+max_lines = 1522
 
 [[rules]]
 path = "scripts/build_atlas.py"
@@ -368,3 +368,55 @@ max_lines = 586
 [[rules]]
 path = "frontend/src/routes/atlas/renderer.ts"
 max_lines = 1178
+
+[[rules]]
+path = "backend-zig/src/internal/index/postgres_track_store.zig"
+max_lines = 831
+
+[[rules]]
+path = "backend-zig/src/internal/projection/postgres_verified_snapshot_store.zig"
+max_lines = 802
+
+[[rules]]
+path = "backend-zig/src/internal/projection/postgres_verified_commit_store.zig"
+max_lines = 647
+
+[[rules]]
+path = "backend-zig/src/internal/index/postgres_composed_track_store.zig"
+max_lines = 1272
+
+[[rules]]
+path = "backend-zig/src/internal/ingest/projector.zig"
+max_lines = 515
+
+[[rules]]
+path = "backend-zig/scripts/test_list_migration.py"
+max_lines = 807
+
+[[rules]]
+path = "backend-zig/src/internal/index/postgres_verified_list_store.zig"
+max_lines = 528
+
+[[rules]]
+path = "backend-zig/src/api/router.zig"
+max_lines = 631
+
+[[rules]]
+path = "backend-zig/scripts/test_http.py"
+max_lines = 599
+
+[[rules]]
+path = "backend-zig/src/api/auth.zig"
+max_lines = 680
+
+[[rules]]
+path = "frontend/src/lib/api/zig-v1.test.ts"
+max_lines = 671
+
+[[rules]]
+path = "frontend/src/lib/api/zig-v1.ts"
+max_lines = 687
+
+[[rules]]
+path = "backend-zig/src/api/tracks.zig"
+max_lines = 515

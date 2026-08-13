@@ -235,7 +235,10 @@ async def _create_clear_database_procedure(
 async def _truncate_tables(connection: AsyncConnection) -> None:
     """truncate all tables to ensure a clean slate at start of session."""
     # get all table names from metadata
-    tables = [table.name for table in Base.metadata.sorted_tables]
+    tables = [
+        f"{table.schema or 'public'}.{table.name}"
+        for table in Base.metadata.sorted_tables
+    ]
     if not tables:
         return
 
@@ -251,6 +254,7 @@ async def _setup_template_database(template_url: str) -> None:
     try:
         async with engine.begin() as conn:
             await conn.execute(sa.text("CREATE EXTENSION IF NOT EXISTS pg_trgm"))
+            await conn.execute(sa.text("CREATE SCHEMA IF NOT EXISTS plyr_index"))
             await conn.run_sync(Base.metadata.create_all)
             await _truncate_tables(conn)
             await _create_clear_database_procedure(conn)
@@ -403,6 +407,7 @@ async def _setup_database_direct(database_url: str) -> None:
     try:
         async with engine.begin() as conn:
             await conn.execute(sa.text("CREATE EXTENSION IF NOT EXISTS pg_trgm"))
+            await conn.execute(sa.text("CREATE SCHEMA IF NOT EXISTS plyr_index"))
             await conn.run_sync(Base.metadata.create_all)
             await _truncate_tables(conn)
             await _create_clear_database_procedure(conn)

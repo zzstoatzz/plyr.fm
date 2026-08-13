@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { User, LinkedAccount } from '$lib/types';
-	import { API_URL } from '$lib/config';
+	import { API_URL, IS_ZIG_V1 } from '$lib/config';
 	import HandleAutocomplete from './HandleAutocomplete.svelte';
 	import { logout } from '$lib/logout.svelte';
 
@@ -211,7 +211,7 @@
 
 	{#if showMenu}
 		<div class="dropdown">
-			<a href="/portal" class="dropdown-item" onclick={closeMenu}>
+			<a href="/portal" class="dropdown-item" onclick={closeMenu} hidden={IS_ZIG_V1}>
 					<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
 						<rect x="3" y="3" width="7" height="7"></rect>
 						<rect x="14" y="3" width="7" height="7"></rect>
@@ -220,7 +220,7 @@
 					</svg>
 					<span>portal</span>
 				</a>
-				<a href="/settings" class="dropdown-item" onclick={closeMenu}>
+			<a href="/settings" class="dropdown-item" onclick={closeMenu} hidden={IS_ZIG_V1}>
 					<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 						<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path>
 						<circle cx="12" cy="12" r="3"></circle>
@@ -228,10 +228,10 @@
 					<span>settings</span>
 				</a>
 
-				<div class="dropdown-divider"></div>
+			<div class="dropdown-divider" hidden={IS_ZIG_V1}></div>
 
 				<!-- accounts submenu -->
-				<div class="submenu-container">
+			<div class="submenu-container" hidden={IS_ZIG_V1}>
 					<button class="dropdown-item has-submenu" onclick={toggleAccountsSubmenu}>
 						<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
 							<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
@@ -321,7 +321,7 @@
 					{/if}
 				</div>
 
-				<div class="dropdown-divider"></div>
+			<div class="dropdown-divider" hidden={IS_ZIG_V1}></div>
 
 				<button class="dropdown-item logout" onclick={handleLogoutClick}>
 					<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">

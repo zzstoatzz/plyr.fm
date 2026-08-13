@@ -1,0 +1,52 @@
+app = "plyr-api-zig-canary"
+primary_region = "iad"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  CORS_ALLOWED_ORIGINS = "https://next.plyr.fm"
+  AUTH_START_CLIENT_LIMIT = "10"
+  AUTH_START_SUBJECT_LIMIT = "10"
+  AUTH_START_GLOBAL_LIMIT = "120"
+  AUTH_START_WINDOW_SECONDS = "60"
+  # Published at cloudflare.com/ips-v4 and /ips-v6; reviewed 2026-08-11.
+  AUTH_TRUSTED_PROXY_CIDRS = "173.245.48.0/20,103.21.244.0/22,103.22.200.0/22,103.31.4.0/22,141.101.64.0/18,108.162.192.0/18,190.93.240.0/20,188.114.96.0/20,197.234.240.0/22,198.41.128.0/17,162.158.0.0/15,104.16.0.0/13,104.24.0.0/14,172.64.0.0/13,131.0.72.0/22,2400:cb00::/32,2606:4700::/32,2803:f800::/32,2405:b500::/32,2405:8100::/32,2a06:98c0::/29,2c0f:f248::/32"
+  DATABASE_ROLE = "plyr_zig_canary"
+  DATABASE_POOL_SIZE = "16"
+  INDEX_MODE = "required"
+  LIST_COLLECTION_NSID = "fm.plyr.list"
+  LIKE_COLLECTION_NSID = "fm.plyr.like"
+  PROFILE_COLLECTION_NSID = "fm.plyr.actor.profile"
+  MAX_CONNECTIONS = "128"
+  MODE = "api"
+  PORT = "8000"
+  TRACK_COLLECTION_NSID = "fm.plyr.track"
+  ZIG_OAUTH_CLIENT_ID = "https://api.next.plyr.fm/oauth-client-metadata.json"
+  ZIG_OAUTH_FRONTEND_ORIGIN = "https://next.plyr.fm"
+  ZIG_OAUTH_REDIRECT_URI = "https://api.next.plyr.fm/auth/callback"
+  ZIG_OAUTH_SCOPE = "atproto repo:fm.plyr.like?action=create&action=update&action=delete"
+
+[http_service]
+  internal_port = 8000
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+  [http_service.concurrency]
+    type = "connections"
+    soft_limit = 96
+    hard_limit = 128
+
+  [[http_service.checks]]
+    interval = "10s"
+    timeout = "2s"
+    grace_period = "5s"
+    method = "GET"
+    path = "/ready"
+
+[[vm]]
+  cpu_kind = "shared"
+  cpus = 1
+  memory = "256mb"
