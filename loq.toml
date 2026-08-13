@@ -391,7 +391,7 @@ max_lines = 515
 
 [[rules]]
 path = "backend-zig/scripts/test_list_migration.py"
-max_lines = 765
+max_lines = 807
 
 [[rules]]
 path = "backend-zig/src/internal/index/postgres_verified_list_store.zig"

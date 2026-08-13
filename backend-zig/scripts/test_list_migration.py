@@ -12,7 +12,7 @@ from sqlalchemy.engine import make_url
 from alembic import command
 
 PRIOR_REVISION = "4aaed6c819f1"
-HEAD_REVISION = "b6a82c5140de"
+HEAD_REVISION = "c7b913f2a6ed"
 CANARY_ROLE = "plyr_zig_canary"
 COMPATIBILITY_TABLES = {"tracks", "artists", "albums", "user_preferences"}
 EXPECTED_TABLES = {
@@ -31,6 +31,15 @@ EXPECTED_TABLES = {
     "track_policies",
 }
 EXPECTED_AUTH_TABLES = {"exchange_tokens", "oauth_requests", "sessions"}
+EXPECTED_COMMAND_TABLES = {"record_keys"}
+EXPECTED_COMMAND_COLUMNS = {
+    "actor_did",
+    "allocated_at",
+    "collection",
+    "created_at",
+    "operation_digest",
+    "rkey",
+}
 EXPECTED_AUTH_TABLE_PRIVILEGES = {
     "oauth_requests": {"SELECT", "INSERT", "DELETE"},
     "sessions": {"SELECT", "INSERT"},
@@ -213,6 +222,7 @@ def assert_test_database_and_drop_schema(database_url: str) -> None:
                 raise RuntimeError(f"unsafe migration test database: {database_name!r}")
             connection.execute(text("DROP SCHEMA IF EXISTS plyr_index CASCADE"))
             connection.execute(text("DROP SCHEMA IF EXISTS plyr_auth CASCADE"))
+            connection.execute(text("DROP SCHEMA IF EXISTS plyr_command CASCADE"))
             role_exists = connection.scalar(
                 text("SELECT EXISTS (SELECT FROM pg_roles WHERE rolname = :role)"),
                 {"role": CANARY_ROLE},
@@ -311,6 +321,11 @@ def schema_tables(database_url: str, schema: str) -> set[str]:
 
 def projection_schema_exists(database_url: str) -> bool:
     """Return whether the dedicated projection schema currently exists."""
+    return schema_exists(database_url, "plyr_index")
+
+
+def schema_exists(database_url: str, schema: str) -> bool:
+    """Return whether one application-owned schema currently exists."""
     engine = create_engine(database_url)
     try:
         with engine.connect() as connection:
@@ -318,8 +333,9 @@ def projection_schema_exists(database_url: str) -> bool:
                 connection.scalar(
                     text(
                         "SELECT EXISTS (SELECT 1 FROM information_schema.schemata "
-                        "WHERE schema_name = 'plyr_index')"
-                    )
+                        "WHERE schema_name = :schema)"
+                    ),
+                    {"schema": schema},
                 )
             )
     finally:
@@ -385,7 +401,7 @@ def role_has_privilege(database_url: str, object_name: str, privilege: str) -> b
         with engine.connect() as connection:
             function = (
                 "has_schema_privilege"
-                if object_name in {"plyr_index", "plyr_auth"}
+                if object_name in {"plyr_index", "plyr_auth", "plyr_command"}
                 else "has_table_privilege"
             )
             return bool(
@@ -499,6 +515,11 @@ def assert_canary_least_privilege(database_url: str) -> None:
             raise AssertionError(
                 f"canary {outcome} UPDATE plyr_auth.sessions.{column_name}"
             )
+    if not role_has_privilege(database_url, "plyr_command", "USAGE"):
+        raise AssertionError("canary role cannot use the command schema")
+    for privilege in ("SELECT", "INSERT", "UPDATE", "DELETE"):
+        if not role_has_privilege(database_url, "plyr_command.record_keys", privilege):
+            raise AssertionError(f"canary cannot {privilege} plyr_command.record_keys")
     for table_name in COMPATIBILITY_TABLES:
         object_name = f"public.{table_name}"
         if not role_has_privilege(database_url, object_name, "SELECT"):
@@ -587,6 +608,17 @@ def main() -> None:
                 raise AssertionError(
                     f"unexpected plyr_auth.{table_name} columns: {sorted(columns)!r}"
                 )
+        command_tables = schema_tables(database_url, "plyr_command")
+        if command_tables != EXPECTED_COMMAND_TABLES:
+            raise AssertionError(
+                f"unexpected plyr_command tables: {sorted(command_tables)!r}"
+            )
+        command_columns = table_columns(database_url, "record_keys", "plyr_command")
+        if command_columns != EXPECTED_COMMAND_COLUMNS:
+            raise AssertionError(
+                "unexpected plyr_command.record_keys columns: "
+                f"{sorted(command_columns)!r}"
+            )
         indexes = projection_indexes(database_url)
         if not indexes >= EXPECTED_SEARCH_INDEXES:
             raise AssertionError(
@@ -713,6 +745,10 @@ def main() -> None:
     if remaining := schema_tables(database_url, "plyr_auth"):
         raise AssertionError(
             f"migration downgrade left auth tables: {sorted(remaining)!r}"
+        )
+    if remaining := schema_tables(database_url, "plyr_command"):
+        raise AssertionError(
+            f"migration downgrade left command tables: {sorted(remaining)!r}"
         )
     for table_name in COMPATIBILITY_TABLES:
         if role_has_privilege(database_url, f"public.{table_name}", "SELECT"):

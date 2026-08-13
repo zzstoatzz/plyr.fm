@@ -218,6 +218,8 @@ test {
     _ = @import("internal/application/browser_login.zig");
     _ = @import("internal/application/credential_refresh.zig");
     _ = @import("internal/application/authenticated_pds.zig");
+    _ = @import("internal/command/record_key_store.zig");
+    _ = @import("internal/command/postgres_record_key_store.zig");
     _ = @import("internal/account/availability.zig");
     _ = @import("internal/account/current_pds_status_source.zig");
     _ = @import("internal/account/check_schedule.zig");
