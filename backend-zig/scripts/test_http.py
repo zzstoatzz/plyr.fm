@@ -203,6 +203,24 @@ def _assert_configured_auth_process(base_environment: dict[str, str]) -> None:
         )
         assert status == 401
         assert anonymous_unlike["error"]["code"] == "authentication_required"
+
+        viewer_likes_path = "/v1/me/likes/resolve"
+        status, _, viewer_likes_method = _request(base_url, viewer_likes_path)
+        assert status == 405
+        assert viewer_likes_method["error"]["code"] == "method_not_allowed"
+        status, _, missing_viewer_origin = _request(
+            base_url, viewer_likes_path, method="POST"
+        )
+        assert status == 403
+        assert missing_viewer_origin["error"]["code"] == "forbidden"
+        status, _, anonymous_viewer_likes = _request(
+            base_url,
+            viewer_likes_path,
+            method="POST",
+            origin=FRONTEND_ORIGIN,
+        )
+        assert status == 401
+        assert anonymous_viewer_likes["error"]["code"] == "authentication_required"
     finally:
         process.terminate()
         try:

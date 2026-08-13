@@ -5,10 +5,13 @@ import {
 	getZigTrack,
 	listZigTrackChart,
 	likeZigTrack,
-	unlikeZigTrack,
 	listZigTrackLikers,
 	listZigTracks,
-	recordZigPlay
+	recordZigPlay,
+	resolveZigViewerLikes,
+	toFrontendTrack,
+	type ZigTrack,
+	unlikeZigTrack
 } from './zig-v1';
 import { getZigAlbum, listZigAlbums } from './zig-v1-albums';
 import { searchZigCatalog } from './zig-v1-search';
@@ -527,6 +530,40 @@ describe('Zig v1 compatibility boundary', () => {
 		await unlikeZigTrack('https://api.next.plyr.fm', 'trk_opaque', fetcher);
 		expect(String(requestedInput)).toBe('https://api.next.plyr.fm/v1/tracks/trk_opaque/like');
 		expect(requestedInit).toMatchObject({ method: 'DELETE', credentials: 'include' });
+	});
+
+	it('resolves viewer likes in one exact strong-reference batch', async () => {
+		let requestedInit: RequestInit | undefined;
+		const frontendTrack = toFrontendTrack(track as unknown as ZigTrack);
+		const fetcher = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+			requestedInit = init;
+			return json({
+				object: 'viewer_like_states',
+				data: [{ track_id: 'trk_opaque', liked: true }],
+				sources: { likes: 'verified_repo' }
+			});
+		});
+		const personalized = await resolveZigViewerLikes(
+			'https://api.next.plyr.fm',
+			[frontendTrack],
+			fetcher
+		);
+		expect(personalized[0]?.is_liked).toBe(true);
+		expect(requestedInit).toMatchObject({ method: 'POST', credentials: 'include' });
+		expect(JSON.parse(String(requestedInit?.body))).toEqual({
+			tracks: [{ track_id: 'trk_opaque', record_cid: 'bafytrack' }]
+		});
+	});
+
+	it('treats an anonymous viewer like batch as all false', async () => {
+		const fetcher = vi.fn(async () => json({}, 401));
+		const original = toFrontendTrack(track as unknown as ZigTrack);
+		const personalized = await resolveZigViewerLikes(
+			'https://api.next.plyr.fm',
+			[original],
+			fetcher
+		);
+		expect(personalized).toEqual([original]);
 	});
 
 	it('requires detail to round-trip the opaque resource identity', async () => {

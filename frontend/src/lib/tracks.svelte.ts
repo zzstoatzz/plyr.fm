@@ -4,6 +4,7 @@ import {
 	listZigTrackChart,
 	listZigTracks,
 	likeZigTrack,
+	resolveZigViewerLikes,
 	unlikeZigTrack,
 	toFrontendTrack,
 	type ZigTrackChartPeriod
@@ -99,7 +100,7 @@ class TracksCache {
 		try {
 			if (IS_ZIG_V1) {
 				const data = await listZigTracks(API_URL);
-				this.tracks = data.tracks;
+				this.tracks = await resolveZigViewerLikes(API_URL, data.tracks);
 				this.nextCursor = data.next_cursor;
 				this.hasMore = data.has_more;
 				this.persistToStorage();
@@ -136,7 +137,8 @@ class TracksCache {
 		try {
 			if (IS_ZIG_V1) {
 				const data = await listZigTracks(API_URL, { cursor: this.nextCursor });
-				this.tracks = [...this.tracks, ...data.tracks];
+				const personalized = await resolveZigViewerLikes(API_URL, data.tracks);
+				this.tracks = [...this.tracks, ...personalized];
 				this.nextCursor = data.next_cursor;
 				this.hasMore = data.has_more;
 				this.persistToStorage();
@@ -194,7 +196,11 @@ export const tracksCache = new TracksCache();
 
 // like/unlike track functions
 // gated: true means viewer lacks access (non-supporter), false means accessible
-export async function likeTrack(trackId: TrackId, fileId?: string, gated?: boolean): Promise<boolean> {
+export async function likeTrack(
+	trackId: TrackId,
+	fileId?: string,
+	gated?: boolean
+): Promise<boolean> {
 	try {
 		if (IS_ZIG_V1) {
 			await likeZigTrack(API_URL, String(trackId));

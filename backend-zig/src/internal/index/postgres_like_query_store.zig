@@ -6,6 +6,7 @@ const zat = @import("zat");
 const lexicon_value = @import("../atproto/lexicon_value.zig");
 const like = @import("../domain/like.zig");
 const store_module = @import("like_query_store.zig");
+const viewer_store = @import("viewer_like_store.zig");
 
 const LikeQueryStore = store_module.LikeQueryStore;
 
@@ -18,6 +19,47 @@ pub const PostgresLikeQueryStore = struct {
             .list_by_subject_fn = listBySubjectOpaque,
             .list_record_keys_fn = listRecordKeysOpaque,
         };
+    }
+
+    pub fn viewerStore(self: *PostgresLikeQueryStore) viewer_store.Store {
+        return .{ .context = self, .resolve_fn = resolveViewerLikesOpaque };
+    }
+
+    fn resolveViewerLikesOpaque(
+        context: *anyopaque,
+        allocator: std.mem.Allocator,
+        request: viewer_store.Request,
+    ) viewer_store.Store.Error![]const bool {
+        const self: *PostgresLikeQueryStore = @ptrCast(@alignCast(context));
+        const subjects_json = std.json.Stringify.valueAlloc(
+            allocator,
+            request.subjects,
+            .{},
+        ) catch return error.OutOfMemory;
+        defer allocator.free(subjects_json);
+        const conn = self.pool.acquire() catch return error.IndexUnavailable;
+        defer self.pool.release(conn);
+        var result = conn.query(viewer_query, .{
+            subjects_json,
+            request.actor_did,
+            request.like_collection,
+        }) catch |err| {
+            logQueryError(conn, err);
+            return error.IndexUnavailable;
+        };
+        defer result.deinit();
+        const values = allocator.alloc(bool, request.subjects.len) catch return error.OutOfMemory;
+        var count: usize = 0;
+        while (result.next() catch return error.IndexUnavailable) |row| {
+            if (count >= values.len) return error.CorruptProjection;
+            const ordinal = row.get(i64, 0) catch return error.CorruptProjection;
+            if (ordinal < 0 or @as(usize, @intCast(ordinal)) != count)
+                return error.CorruptProjection;
+            values[count] = row.get(bool, 1) catch return error.CorruptProjection;
+            count += 1;
+        }
+        if (count != values.len) return error.CorruptProjection;
+        return values;
     }
 
     fn listBySubjectOpaque(
@@ -275,6 +317,22 @@ const after_query = columns ++ "\n" ++ joins ++ "\n" ++ where ++ "\n" ++
     \\LIMIT $7::bigint
 ;
 
+const viewer_query =
+    \\WITH requested AS (
+    \\  SELECT (ordinality - 1)::bigint AS ordinal,
+    \\    value->>'uri' AS subject_uri, value->>'cid' AS subject_cid
+    \\  FROM jsonb_array_elements($1::jsonb) WITH ORDINALITY
+    \\)
+    \\SELECT requested.ordinal, bool_or(likes.record_uri IS NOT NULL) AS liked
+    \\FROM requested
+    \\LEFT JOIN plyr_index.like_records AS likes
+    \\  ON likes.owner_did = $2 AND likes.collection = $3 AND NOT likes.deleted
+    \\  AND likes.subject_uri = requested.subject_uri
+    \\  AND likes.subject_cid = requested.subject_cid
+    \\GROUP BY requested.ordinal
+    \\ORDER BY requested.ordinal
+;
+
 test "PostgreSQL likes require exact subject CIDs and available actors" {
     const url_z = std.c.getenv("PLYR_ZIG_TEST_DATABASE_URL") orelse return error.SkipZigTest;
     const allocator = std.testing.allocator;
@@ -370,6 +428,16 @@ test "PostgreSQL likes require exact subject CIDs and available actors" {
         .subject_cid = subject_cid,
         .like_collection = like_collection,
     })).len);
+    const viewer = try implementation.viewerStore().resolve(a, .{
+        .actor_did = "did:plc:listenerone",
+        .like_collection = like_collection,
+        .subjects = &.{
+            .{ .uri = subject_uri, .cid = subject_cid },
+            .{ .uri = subject_uri, .cid = stale_cid },
+            .{ .uri = "at://did:plc:artist/fm.plyr.dev.track/missing", .cid = subject_cid },
+        },
+    });
+    try std.testing.expectEqualSlices(bool, &.{ true, false, false }, viewer);
     const second = try implementation.store().listBySubject(a, .{
         .subject_uri = subject_uri,
         .subject_cid = subject_cid,

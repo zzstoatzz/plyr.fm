@@ -66,6 +66,7 @@ pub fn main() !void {
     else
         null;
     const like_store = if (postgres_like_store) |*store| store.store() else null;
+    const viewer_like_store = if (postgres_like_store) |*store| store.viewerStore() else null;
     var postgres_playback_store: ?postgres_playback.PostgresPlaybackStore = if (postgres_store) |*store|
         .{ .pool = store.pool }
     else
@@ -152,6 +153,7 @@ pub fn main() !void {
                 .track_store = track_store,
                 .track_chart_store = track_chart_store,
                 .like_store = like_store,
+                .viewer_like_store = viewer_like_store,
                 .playback_store = playback_store,
                 .artist_store = artist_store,
                 .artist_metric_store = artist_metric_store,
@@ -244,6 +246,7 @@ test {
     _ = @import("internal/application/credential_refresh.zig");
     _ = @import("internal/application/authenticated_pds.zig");
     _ = @import("internal/application/like_track.zig");
+    _ = @import("internal/application/resolve_viewer_likes.zig");
     _ = @import("internal/application/unlike_track.zig");
     _ = @import("internal/application/verified_track_subject.zig");
     _ = @import("internal/command/record_key_store.zig");
@@ -262,6 +265,7 @@ test {
     _ = @import("api/charts.zig");
     _ = @import("api/albums.zig");
     _ = @import("api/tracks.zig");
+    _ = @import("api/viewer.zig");
     _ = @import("api/playlists.zig");
     _ = @import("api/search.zig");
     _ = @import("config.zig");
@@ -294,6 +298,7 @@ test {
     _ = @import("internal/index/artist_store.zig");
     _ = @import("internal/index/postgres_artist_store.zig");
     _ = @import("internal/index/like_query_store.zig");
+    _ = @import("internal/index/viewer_like_store.zig");
     _ = @import("internal/index/postgres_like_query_store.zig");
     _ = @import("internal/identity/track_id.zig");
     _ = @import("internal/identity/track_cursor.zig");

@@ -8,10 +8,12 @@ const playlists = @import("playlists.zig");
 const response = @import("response.zig");
 const search = @import("search.zig");
 const tracks = @import("tracks.zig");
+const viewer = @import("viewer.zig");
 const path_segment = @import("../internal/http/path_segment.zig");
 const ArtistStore = @import("../internal/index/artist_store.zig").ArtistStore;
 const ArtistMetricStore = @import("../internal/metrics/artist_metric_store.zig").ArtistMetricStore;
 const LikeQueryStore = @import("../internal/index/like_query_store.zig").LikeQueryStore;
+const ViewerLikeStore = @import("../internal/index/viewer_like_store.zig").Store;
 const PlaybackStore = @import("../internal/index/playback_store.zig").PlaybackStore;
 const SearchStore = @import("../internal/index/search_store.zig").SearchStore;
 const PlayDedupStore = @import("../internal/metrics/play_dedup_store.zig").PlayDedupStore;
@@ -35,6 +37,7 @@ pub const App = struct {
     track_store: ?TrackStore,
     track_chart_store: ?TrackChartStore = null,
     like_store: ?LikeQueryStore = null,
+    viewer_like_store: ?ViewerLikeStore = null,
     playback_store: ?PlaybackStore,
     artist_store: ?ArtistStore,
     artist_metric_store: ?ArtistMetricStore,
@@ -202,6 +205,22 @@ pub fn handle(
             allocator,
             app.track_store,
             app.track_collection,
+            app.cors,
+            request_id,
+        );
+    } else if (mem.eql(u8, path, prefix ++ "/me/likes/resolve")) {
+        if (request.head.method != .POST) {
+            try response.apiError(request, .method_not_allowed, request_id, app.cors);
+            return;
+        }
+        try viewer.resolveLikes(
+            request,
+            allocator,
+            app.viewer_like_store,
+            app.auth,
+            app.auth_store,
+            app.track_collection,
+            app.like_collection,
             app.cors,
             request_id,
         );

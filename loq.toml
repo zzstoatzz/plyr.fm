@@ -399,11 +399,11 @@ max_lines = 528
 
 [[rules]]
 path = "backend-zig/src/api/router.zig"
-max_lines = 596
+max_lines = 615
 
 [[rules]]
 path = "backend-zig/scripts/test_http.py"
-max_lines = 577
+max_lines = 595
 
 [[rules]]
 path = "backend-zig/src/api/auth.zig"
@@ -411,11 +411,11 @@ max_lines = 668
 
 [[rules]]
 path = "frontend/src/lib/api/zig-v1.test.ts"
-max_lines = 617
+max_lines = 654
 
 [[rules]]
 path = "frontend/src/lib/api/zig-v1.ts"
-max_lines = 605
+max_lines = 665
 
 [[rules]]
 path = "backend-zig/src/api/tracks.zig"

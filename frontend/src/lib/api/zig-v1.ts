@@ -270,6 +270,66 @@ export async function unlikeZigTrack(
 	}
 }
 
+export async function resolveZigViewerLikes(
+	apiUrl: string,
+	tracks: Track[],
+	fetcher: Fetcher = fetch
+): Promise<Track[]> {
+	const resolvable = tracks.filter(
+		(track): track is Track & { atproto_record_cid: string } =>
+			typeof track.atproto_record_cid === 'string'
+	);
+	if (resolvable.length === 0) return tracks;
+	if (resolvable.length > 100) throw new TypeError('too many Zig tracks to personalize');
+	const requested = new Set(resolvable.map((track) => String(track.id)));
+	if (requested.size !== resolvable.length) {
+		throw new TypeError('duplicate Zig tracks cannot be personalized');
+	}
+	const response = await fetcher(`${apiUrl}/v1/me/likes/resolve`, {
+		method: 'POST',
+		credentials: 'include',
+		headers: { accept: 'application/json', 'content-type': 'application/json' },
+		body: JSON.stringify({
+			tracks: resolvable.map((track) => ({
+				track_id: String(track.id),
+				record_cid: track.atproto_record_cid
+			}))
+		})
+	});
+	if (response.status === 401) return tracks;
+	if (!response.ok) throw new Error(`Zig viewer likes returned ${response.status}`);
+	const value: unknown = await response.json();
+	if (
+		!isObject(value) ||
+		value.object !== 'viewer_like_states' ||
+		!Array.isArray(value.data) ||
+		!isObject(value.sources) ||
+		value.sources.likes !== 'verified_repo'
+	) {
+		throw new TypeError('Zig viewer likes returned an invalid state set');
+	}
+	const states = new Map<string, boolean>();
+	for (const candidate of value.data) {
+		if (
+			!isObject(candidate) ||
+			typeof candidate.track_id !== 'string' ||
+			typeof candidate.liked !== 'boolean' ||
+			!requested.has(candidate.track_id) ||
+			states.has(candidate.track_id)
+		) {
+			throw new TypeError('Zig viewer likes returned an invalid state');
+		}
+		states.set(candidate.track_id, candidate.liked);
+	}
+	if (states.size !== requested.size) {
+		throw new TypeError('Zig viewer likes omitted requested state');
+	}
+	return tracks.map((track) => ({
+		...track,
+		is_liked: states.get(String(track.id)) ?? false
+	}));
+}
+
 export async function getZigTrack(
 	apiUrl: string,
 	trackId: string,

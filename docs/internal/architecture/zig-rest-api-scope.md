@@ -50,10 +50,12 @@ decision.
 | Zig surface | state | capability covered | important gaps |
 |---|---|---|---|
 | `GET /v1` | covered | API namespace discovery | generated API description/OpenAPI |
-| `GET /v1/tracks` | covered | anonymous discovery or artist-scoped public catalogue with strict keyset pagination | viewer context, tag filters, hidden-tag preferences, and other collection views |
-| `GET /v1/tracks/{track_id}` | covered | public, published track detail from the projection | authenticated viewer state, private/gated tracks, list/search views, publication and mutations |
+| `GET /v1/tracks` | covered | anonymous discovery or artist-scoped public catalogue with strict keyset pagination | tag filters, hidden-tag preferences, and other collection views |
+| `GET /v1/tracks/{track_id}` | covered | public, published track detail from the projection | private/gated tracks, list/search views, publication and mutations |
 | `GET /v1/tracks/{track_id}/playback` | covered | anonymous authorization and delivery resolution with explicit integrity | sessions, supporter/copyright authorization, private-space proxying, PDS blob resolution, play metrics |
-| `GET /v1/tracks/{track_id}/likes` | covered | exact-URI-and-CID verified public like records with actor availability and strict pagination | authenticated viewer state, like/unlike PDS writes, aggregate counts on track representations |
+| `GET /v1/tracks/{track_id}/likes` | covered | exact-URI-and-CID verified public like records with actor availability and strict pagination | aggregate history and moderation policy |
+| `PUT, DELETE /v1/tracks/{track_id}/like` | covered | replay-safe PDS-first like and idempotent unlike commands with explicit projection-lag receipts | UI treatment of pending projection state |
+| `POST /v1/me/likes/resolve` | covered | bounded exact-strong-reference viewer-state batch without personalizing public track resources | paginated liked-track collection |
 | `GET /v1/artists/{identifier}` | covered | public artist detail by canonical DID or case-insensitive handle alias | verified repository ingestion, collections, follows, profile writes, account state, viewer context |
 | `GET /v1/artists/{identifier}/metrics` | covered | derived admitted-track and canonical-URI play aggregates | likes, viewer-specific statistics, historical series |
 | `GET /v1/albums?artist_did={did}` | covered | verified list-record albums for one artist with strict scope-bound pagination | global discovery, writes, viewer state, presentation resources |
@@ -69,14 +71,16 @@ decision.
 `OPTIONS` handling, bounded connections, CORS, request IDs, and the common JSON
 error envelope are covered cross-cutting behavior, not product capabilities.
 
-The product coverage count is therefore **twelve read capabilities**: anonymous
+The product coverage count is therefore **twelve public read capabilities**: anonymous
 track discovery, track detail, playback resolution, artist detail, artist album
 discovery, verified album detail, public playlist discovery, and verified
 playlist detail, verified catalog keyword search, artist metrics, and the
-derived verified-like track chart, plus exact-subject public liker discovery. The
+derived verified-like track chart, plus exact-subject public liker discovery.
+PDS-first like/unlike commands and authenticated batch viewer-state resolution
+are covered interaction capabilities in addition to those reads. The
 artist resource replaces both Python lookup routes with one DID-or-handle
-contract. Semantic parity remains partial because the Zig routes deliberately
-exclude most viewer-specific behavior. Of the 221 Python operations,
+contract. Semantic parity remains partial because most viewer-specific behavior
+is still open. Of the 221 Python operations,
 root discovery and liveness
 have covered successor behavior, two track reads have partial coverage, two
 artist lookups have one covered successor, one album listing and one album
@@ -218,9 +222,9 @@ This is a boundary map, not a frozen schema:
 | area | initial resources |
 |---|---|
 | API metadata | `GET /v1` |
-| current identity | `GET /v1/me`, session/account-management resources |
+| current identity | `GET /auth/me`, `POST /v1/me/likes/resolve`, session/account-management resources |
 | catalog | `/v1/artists`, `/v1/tracks`, `/v1/albums`, `/v1/playlists` |
-| interactions | `GET /v1/tracks/{track_id}/likes`; source-authoritative like writes and comments remain open |
+| interactions | verified like reads, PDS-first like/unlike commands, and separate viewer-state resolution; comments remain open |
 | publishing | `/v1/uploads` and explicit publish operations |
 | playback | `/v1/tracks/{track_id}/playback` |
 | discovery | `/v1/search`, tag resources, recommendations, activity |

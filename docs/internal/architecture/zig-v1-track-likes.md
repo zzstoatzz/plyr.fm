@@ -51,7 +51,18 @@ respectively. With exact like counts included, the 50-track collection produced
 produced 977.1 and 6,364.1 requests/s. These numbers are reproducible endpoint
 baselines, not a Python-parity comparison.
 
-Mutation is deliberately separate. A future like or unlike operation may
-report success only after the user's PDS accepts the record operation. It must
-not recreate the Python backend's local-first database write followed by a
-best-effort background PDS write.
+Mutation is deliberately separate. `PUT /v1/tracks/{track_id}/like` and
+`DELETE /v1/tracks/{track_id}/like` report success only after the user's PDS accepts
+the record operation; they never recreate the Python backend's local-first
+database write followed by a best-effort background PDS write. Receipts expose
+whether the verified projection has caught up.
+
+Viewer state is separate again. `POST /v1/me/likes/resolve` accepts at most 100
+opaque track IDs paired with their current record CIDs, verifies every decoded
+track URI and DAG-CBOR CID, and resolves all exact strong references for the
+authenticated DID in one PostgreSQL query. Anonymous requests receive `401`,
+credentialed requests require the exact frontend origin, and successful
+responses are `no-store`. This keeps public track resources viewer-independent
+and cacheable while avoiding one query or HTTP request per track. The next
+frontend performs this one batch after each catalogue page and treats `401` as
+the anonymous all-false state.
