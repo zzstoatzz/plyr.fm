@@ -12,7 +12,7 @@ from sqlalchemy.engine import make_url
 from alembic import command
 
 PRIOR_REVISION = "4aaed6c819f1"
-HEAD_REVISION = "f93c4e1a6b05"
+HEAD_REVISION = "b6a82c5140de"
 CANARY_ROLE = "plyr_zig_canary"
 COMPATIBILITY_TABLES = {"tracks", "artists", "albums", "user_preferences"}
 EXPECTED_TABLES = {
@@ -48,6 +48,9 @@ EXPECTED_AUTH_COLUMNS = {
         "created_at",
         "expires_at",
         "revoked_at",
+        "credentials_generation",
+        "refresh_owner",
+        "refresh_lease_until",
     },
     "exchange_tokens": {
         "token_digest",
@@ -483,7 +486,14 @@ def assert_canary_least_privilege(database_url: str) -> None:
             column_name,
             "UPDATE",
         )
-        expected = column_name == "revoked_at"
+        expected = column_name in {
+            "revoked_at",
+            "sealed_credentials",
+            "scope",
+            "credentials_generation",
+            "refresh_owner",
+            "refresh_lease_until",
+        }
         if actual != expected:
             outcome = "cannot" if expected else "can"
             raise AssertionError(

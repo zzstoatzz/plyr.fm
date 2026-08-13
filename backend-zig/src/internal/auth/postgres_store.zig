@@ -22,6 +22,10 @@ pub const PostgresAuthStore = struct {
             .consume_exchange_fn = consumeExchangeOpaque,
             .get_session_fn = getSessionOpaque,
             .revoke_session_fn = revokeSessionOpaque,
+            .get_credentials_fn = getCredentialsOpaque,
+            .claim_refresh_fn = claimRefreshOpaque,
+            .publish_refresh_fn = publishRefreshOpaque,
+            .abandon_refresh_fn = abandonRefreshOpaque,
         };
     }
 
@@ -53,6 +57,26 @@ pub const PostgresAuthStore = struct {
     fn revokeSessionOpaque(context: *anyopaque, digest: bearer.Digest) !bool {
         const self: *PostgresAuthStore = @ptrCast(@alignCast(context));
         return self.revokeSession(digest);
+    }
+
+    fn getCredentialsOpaque(context: *anyopaque, allocator: std.mem.Allocator, digest: bearer.Digest) !?auth_store.CredentialSnapshot {
+        const self: *PostgresAuthStore = @ptrCast(@alignCast(context));
+        return self.getCredentials(allocator, digest);
+    }
+
+    fn claimRefreshOpaque(context: *anyopaque, allocator: std.mem.Allocator, digest: bearer.Digest, generation: i64, owner: []const u8, lease_seconds: i64) !?auth_store.CredentialSnapshot {
+        const self: *PostgresAuthStore = @ptrCast(@alignCast(context));
+        return self.claimRefresh(allocator, digest, generation, owner, lease_seconds);
+    }
+
+    fn publishRefreshOpaque(context: *anyopaque, value: auth_store.RefreshPublication) !bool {
+        const self: *PostgresAuthStore = @ptrCast(@alignCast(context));
+        return self.publishRefresh(value);
+    }
+
+    fn abandonRefreshOpaque(context: *anyopaque, digest: bearer.Digest, owner: []const u8, generation: i64) !void {
+        const self: *PostgresAuthStore = @ptrCast(@alignCast(context));
+        return self.abandonRefresh(digest, owner, generation);
     }
 
     pub fn putRequest(
@@ -168,6 +192,91 @@ pub const PostgresAuthStore = struct {
         , .{session_digest[0..]});
         return affected == 1;
     }
+
+    pub fn getCredentials(
+        self: PostgresAuthStore,
+        allocator: std.mem.Allocator,
+        session_digest: bearer.Digest,
+    ) !?auth_store.CredentialSnapshot {
+        var query_row = try self.pool.row(
+            \\SELECT did, sealed_credentials, credentials_generation
+            \\FROM plyr_auth.sessions
+            \\WHERE session_digest = $1::bytea
+            \\  AND expires_at > clock_timestamp()
+            \\  AND revoked_at IS NULL
+        , .{session_digest[0..]}) orelse return null;
+        defer query_row.deinit() catch query_row.result.deinit();
+        return .{
+            .did = try allocator.dupe(u8, try query_row.row.get([]const u8, 0)),
+            .sealed_credentials = try allocator.dupe(u8, try query_row.row.get([]const u8, 1)),
+            .generation = try query_row.row.get(i64, 2),
+        };
+    }
+
+    /// Claim refresh only for the credential generation the caller observed.
+    /// A crashed owner is recoverable after the bounded lease expires.
+    pub fn claimRefresh(
+        self: PostgresAuthStore,
+        allocator: std.mem.Allocator,
+        session_digest: bearer.Digest,
+        generation: i64,
+        owner: []const u8,
+        lease_seconds: i64,
+    ) !?auth_store.CredentialSnapshot {
+        var query_row = try self.pool.row(
+            \\UPDATE plyr_auth.sessions
+            \\SET refresh_owner = $3::uuid,
+            \\    refresh_lease_until = clock_timestamp() + $4::bigint * INTERVAL '1 second'
+            \\WHERE session_digest = $1::bytea
+            \\  AND credentials_generation = $2::bigint
+            \\  AND expires_at > clock_timestamp()
+            \\  AND revoked_at IS NULL
+            \\  AND (refresh_lease_until IS NULL OR refresh_lease_until <= clock_timestamp())
+            \\RETURNING did, sealed_credentials, credentials_generation
+        , .{ session_digest[0..], generation, owner, lease_seconds }) orelse return null;
+        defer query_row.deinit() catch query_row.result.deinit();
+        return .{
+            .did = try allocator.dupe(u8, try query_row.row.get([]const u8, 0)),
+            .sealed_credentials = try allocator.dupe(u8, try query_row.row.get([]const u8, 1)),
+            .generation = try query_row.row.get(i64, 2),
+        };
+    }
+
+    /// Rotated refresh tokens and their access token are one fenced update.
+    pub fn publishRefresh(self: PostgresAuthStore, value: auth_store.RefreshPublication) !bool {
+        const affected = try self.pool.exec(
+            \\UPDATE plyr_auth.sessions
+            \\SET sealed_credentials = $4::bytea,
+            \\    scope = $5,
+            \\    credentials_generation = credentials_generation + 1,
+            \\    refresh_owner = NULL,
+            \\    refresh_lease_until = NULL
+            \\WHERE session_digest = $1::bytea
+            \\  AND credentials_generation = $3::bigint
+            \\  AND refresh_owner = $2::uuid
+            \\  AND expires_at > clock_timestamp()
+            \\  AND revoked_at IS NULL
+        , .{
+            value.session_digest[0..], value.owner, value.generation,
+            value.sealed_credentials,  value.scope,
+        });
+        return affected == 1;
+    }
+
+    pub fn abandonRefresh(
+        self: PostgresAuthStore,
+        session_digest: bearer.Digest,
+        owner: []const u8,
+        generation: i64,
+    ) !void {
+        _ = try self.pool.exec(
+            \\UPDATE plyr_auth.sessions
+            \\SET refresh_owner = NULL, refresh_lease_until = NULL
+            \\WHERE session_digest = $1::bytea
+            \\  AND refresh_owner = $2::uuid
+            \\  AND credentials_generation = $3::bigint
+        , .{ session_digest[0..], owner, generation });
+    }
 };
 
 test "Postgres auth store consumes exchange tokens once and revokes sessions" {
@@ -204,7 +313,10 @@ test "Postgres auth store consumes exchange tokens once and revokes sessions" {
         \\  session_digest bytea PRIMARY KEY, group_id uuid NOT NULL,
         \\  did text NOT NULL, handle text NOT NULL, scope text NOT NULL,
         \\  sealed_credentials bytea NOT NULL, expires_at timestamptz NOT NULL,
-        \\  revoked_at timestamptz
+        \\  revoked_at timestamptz,
+        \\  credentials_generation bigint NOT NULL DEFAULT 1,
+        \\  refresh_owner uuid, refresh_lease_until timestamptz,
+        \\  CHECK ((refresh_owner IS NULL) = (refresh_lease_until IS NULL))
         \\)
     , .{});
     _ = try database.pool.exec(
@@ -264,6 +376,44 @@ test "Postgres auth store consumes exchange tokens once and revokes sessions" {
     var loaded = (try store.getSession(std.testing.allocator, session)).?;
     defer loaded.deinit(std.testing.allocator);
     try std.testing.expectEqualStrings("did:plc:test", loaded.did);
+
+    var credentials = (try store.getCredentials(std.testing.allocator, session)).?;
+    defer credentials.deinit(std.testing.allocator);
+    try std.testing.expectEqual(@as(i64, 1), credentials.generation);
+    const owner = "00000000-0000-4000-8000-000000000003";
+    var claimed = (try store.claimRefresh(
+        std.testing.allocator,
+        session,
+        credentials.generation,
+        owner,
+        60,
+    )).?;
+    defer claimed.deinit(std.testing.allocator);
+    try std.testing.expect((try store.claimRefresh(
+        std.testing.allocator,
+        session,
+        credentials.generation,
+        "00000000-0000-4000-8000-000000000004",
+        60,
+    )) == null);
+    try std.testing.expect(try store.publishRefresh(.{
+        .session_digest = session,
+        .owner = owner,
+        .generation = claimed.generation,
+        .sealed_credentials = "rotated credentials",
+        .scope = "atproto transition:generic",
+    }));
+    try std.testing.expect(!try store.publishRefresh(.{
+        .session_digest = session,
+        .owner = owner,
+        .generation = claimed.generation,
+        .sealed_credentials = "stale credentials",
+        .scope = "atproto",
+    }));
+    var rotated = (try store.getCredentials(std.testing.allocator, session)).?;
+    defer rotated.deinit(std.testing.allocator);
+    try std.testing.expectEqual(@as(i64, 2), rotated.generation);
+    try std.testing.expectEqualStrings("rotated credentials", rotated.sealed_credentials);
     try std.testing.expect(try store.revokeSession(session));
     try std.testing.expect((try store.getSession(std.testing.allocator, session)) == null);
 }

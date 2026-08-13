@@ -202,6 +202,10 @@ const FakeStore = struct {
             .consume_exchange_fn = consumeExchange,
             .get_session_fn = getSession,
             .revoke_session_fn = revokeSession,
+            .get_credentials_fn = getCredentials,
+            .claim_refresh_fn = claimRefresh,
+            .publish_refresh_fn = publishRefresh,
+            .abandon_refresh_fn = abandonRefresh,
         };
     }
 
@@ -237,6 +241,20 @@ const FakeStore = struct {
     fn revokeSession(_: *anyopaque, _: bearer.Digest) !bool {
         return false;
     }
+
+    fn getCredentials(_: *anyopaque, _: std.mem.Allocator, _: bearer.Digest) !?auth_store.CredentialSnapshot {
+        return null;
+    }
+
+    fn claimRefresh(_: *anyopaque, _: std.mem.Allocator, _: bearer.Digest, _: i64, _: []const u8, _: i64) !?auth_store.CredentialSnapshot {
+        return null;
+    }
+
+    fn publishRefresh(_: *anyopaque, _: auth_store.RefreshPublication) !bool {
+        return false;
+    }
+
+    fn abandonRefresh(_: *anyopaque, _: bearer.Digest, _: []const u8, _: i64) !void {}
 };
 
 const FakeOAuth = struct {
@@ -247,6 +265,7 @@ const FakeOAuth = struct {
             .context = self,
             .begin_fn = begin,
             .exchange_fn = exchange,
+            .refresh_fn = refresh,
         };
     }
 
@@ -296,9 +315,20 @@ const FakeOAuth = struct {
                 .refresh_token = "refresh-secret",
                 .scope = "atproto transition:generic",
                 .dpop_secret = request.dpop_secret,
-                .dpop_nonce = "token-nonce",
+                .authserver_dpop_nonce = "token-nonce",
+                .pds_dpop_nonce = null,
             },
         };
+    }
+
+    fn refresh(
+        _: *anyopaque,
+        _: std.mem.Allocator,
+        _: config.AuthConfig,
+        _: []const u8,
+        _: oauth_state.Credentials,
+    ) !oauth_gateway.RefreshResult {
+        return error.UnexpectedRefresh;
     }
 };
 
@@ -388,7 +418,8 @@ test "browser login consumes state once and atomically issues encrypted capabili
     );
     const credentials = try oauth_state.decodeCredentials(allocator, credentials_json);
     try std.testing.expectEqualStrings("refresh-secret", credentials.refresh_token);
-    try std.testing.expectEqualStrings("token-nonce", credentials.dpop_nonce.?);
+    try std.testing.expectEqualStrings("token-nonce", credentials.authserver_dpop_nonce.?);
+    try std.testing.expect(credentials.pds_dpop_nonce == null);
     const session_token = try sealed_secret.open(
         allocator,
         settings.encryption_key,

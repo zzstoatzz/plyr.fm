@@ -24,6 +24,10 @@ pub const ExchangeResult = struct {
     credentials: oauth_state.Credentials,
 };
 
+pub const RefreshResult = struct {
+    credentials: oauth_state.Credentials,
+};
+
 /// Application-facing port. HTTP tests can exercise state/session semantics
 /// without weakening production SSRF checks or reaching the public network.
 pub const Client = struct {
@@ -41,6 +45,13 @@ pub const Client = struct {
         oauth_state.Request,
         []const u8,
     ) anyerror!ExchangeResult,
+    refresh_fn: *const fn (
+        *anyopaque,
+        std.mem.Allocator,
+        config.AuthConfig,
+        []const u8,
+        oauth_state.Credentials,
+    ) anyerror!RefreshResult,
 
     pub fn begin(
         self: Client,
@@ -60,6 +71,16 @@ pub const Client = struct {
     ) !ExchangeResult {
         return self.exchange_fn(self.context, allocator, settings, request, code);
     }
+
+    pub fn refresh(
+        self: Client,
+        allocator: std.mem.Allocator,
+        settings: config.AuthConfig,
+        did: []const u8,
+        credentials: oauth_state.Credentials,
+    ) !RefreshResult {
+        return self.refresh_fn(self.context, allocator, settings, did, credentials);
+    }
 };
 
 pub const OAuthGateway = struct {
@@ -70,6 +91,7 @@ pub const OAuthGateway = struct {
             .context = self,
             .begin_fn = beginOpaque,
             .exchange_fn = exchangeOpaque,
+            .refresh_fn = refreshOpaque,
         };
     }
 
@@ -92,6 +114,17 @@ pub const OAuthGateway = struct {
     ) !ExchangeResult {
         const self: *OAuthGateway = @ptrCast(@alignCast(context));
         return self.exchangeCode(allocator, settings, request, code);
+    }
+
+    fn refreshOpaque(
+        context: *anyopaque,
+        allocator: std.mem.Allocator,
+        settings: config.AuthConfig,
+        did: []const u8,
+        credentials: oauth_state.Credentials,
+    ) !RefreshResult {
+        const self: *OAuthGateway = @ptrCast(@alignCast(context));
+        return self.refresh(allocator, settings, did, credentials);
     }
 
     pub fn begin(
@@ -259,9 +292,49 @@ pub const OAuthGateway = struct {
                 .refresh_token = try allocator.dupe(u8, tokens.refresh_token),
                 .scope = try allocator.dupe(u8, tokens.scope),
                 .dpop_secret = request.dpop_secret,
-                .dpop_nonce = if (tokens.dpop_nonce) |nonce| try allocator.dupe(u8, nonce) else null,
+                .authserver_dpop_nonce = if (tokens.dpop_nonce) |nonce| try allocator.dupe(u8, nonce) else null,
+                .pds_dpop_nonce = null,
             },
         };
+    }
+
+    pub fn refresh(
+        self: OAuthGateway,
+        allocator: std.mem.Allocator,
+        settings: config.AuthConfig,
+        did: []const u8,
+        credentials: oauth_state.Credentials,
+    ) !RefreshResult {
+        const token_origin = try endpointOrigin(allocator, credentials.token_endpoint);
+        var token_destination = try safe_endpoint.resolve(self.io, allocator, token_origin);
+        defer token_destination.deinit(allocator);
+        var transport = zat.HttpTransport.init(self.io, allocator);
+        defer transport.deinit();
+        try pinned_tls.prepare(self.io, &transport);
+        const dpop_keypair = try zat.Keypair.fromSecretKey(.p256, credentials.dpop_secret);
+        var tokens = try zat.oauth.refreshAccessToken(allocator, self.io, &transport, .{
+            .token_url = credentials.token_endpoint,
+            .authserver_issuer = credentials.issuer,
+            .client_id = settings.client_id,
+            .refresh_token = credentials.refresh_token,
+            .client_keypair = &settings.client_keypair,
+            .dpop_keypair = &dpop_keypair,
+            .dpop_nonce = credentials.authserver_dpop_nonce,
+            .resolved_connection = token_destination.connection(),
+        });
+        defer tokens.deinit(allocator);
+        try requireTokenSubject(did, tokens.sub);
+        return .{ .credentials = .{
+            .issuer = try allocator.dupe(u8, credentials.issuer),
+            .token_endpoint = try allocator.dupe(u8, credentials.token_endpoint),
+            .pds_url = try allocator.dupe(u8, credentials.pds_url),
+            .access_token = try allocator.dupe(u8, tokens.access_token),
+            .refresh_token = try allocator.dupe(u8, tokens.refresh_token),
+            .scope = try allocator.dupe(u8, tokens.scope),
+            .dpop_secret = credentials.dpop_secret,
+            .authserver_dpop_nonce = if (tokens.dpop_nonce) |nonce| try allocator.dupe(u8, nonce) else null,
+            .pds_dpop_nonce = if (credentials.pds_dpop_nonce) |nonce| try allocator.dupe(u8, nonce) else null,
+        } };
     }
 };
 

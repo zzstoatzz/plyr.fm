@@ -25,7 +25,8 @@ pub const Credentials = struct {
     refresh_token: []const u8,
     scope: []const u8,
     dpop_secret: [32]u8,
-    dpop_nonce: ?[]const u8,
+    authserver_dpop_nonce: ?[]const u8,
+    pds_dpop_nonce: ?[]const u8,
 };
 
 const EncodedRequest = struct {
@@ -49,7 +50,11 @@ const EncodedCredentials = struct {
     refresh_token: []const u8,
     scope: []const u8,
     dpop_secret: []const u8,
+    // v1 had one auth-server nonce named dpop_nonce. v2 makes the two
+    // independently rotating destinations explicit.
     dpop_nonce: ?[]const u8 = null,
+    authserver_dpop_nonce: ?[]const u8 = null,
+    pds_dpop_nonce: ?[]const u8 = null,
 };
 
 pub fn encodeRequest(allocator: std.mem.Allocator, value: Request) ![]u8 {
@@ -92,7 +97,7 @@ pub fn encodeCredentials(allocator: std.mem.Allocator, value: Credentials) ![]u8
     const secret = try encodeKey(allocator, value.dpop_secret);
     defer allocator.free(secret);
     return stringify(allocator, EncodedCredentials{
-        .version = 1,
+        .version = 2,
         .issuer = value.issuer,
         .token_endpoint = value.token_endpoint,
         .pds_url = value.pds_url,
@@ -100,7 +105,8 @@ pub fn encodeCredentials(allocator: std.mem.Allocator, value: Credentials) ![]u8
         .refresh_token = value.refresh_token,
         .scope = value.scope,
         .dpop_secret = secret,
-        .dpop_nonce = value.dpop_nonce,
+        .authserver_dpop_nonce = value.authserver_dpop_nonce,
+        .pds_dpop_nonce = value.pds_dpop_nonce,
     });
 }
 
@@ -111,7 +117,7 @@ pub fn decodeCredentials(allocator: std.mem.Allocator, bytes: []const u8) !Crede
         bytes,
         .{ .ignore_unknown_fields = false },
     );
-    if (encoded.version != 1) return error.UnsupportedVersion;
+    if (encoded.version != 1 and encoded.version != 2) return error.UnsupportedVersion;
     return .{
         .issuer = encoded.issuer,
         .token_endpoint = encoded.token_endpoint,
@@ -120,7 +126,11 @@ pub fn decodeCredentials(allocator: std.mem.Allocator, bytes: []const u8) !Crede
         .refresh_token = encoded.refresh_token,
         .scope = encoded.scope,
         .dpop_secret = try decodeKey(encoded.dpop_secret),
-        .dpop_nonce = encoded.dpop_nonce,
+        .authserver_dpop_nonce = if (encoded.version == 1)
+            encoded.dpop_nonce
+        else
+            encoded.authserver_dpop_nonce,
+        .pds_dpop_nonce = if (encoded.version == 1) null else encoded.pds_dpop_nonce,
     };
 }
 
@@ -172,13 +182,21 @@ test "OAuth request and session credentials have strict versioned formats" {
         .refresh_token = "refresh",
         .scope = "atproto transition:generic",
         .dpop_secret = .{0x24} ** 32,
-        .dpop_nonce = null,
+        .authserver_dpop_nonce = null,
+        .pds_dpop_nonce = "pds-nonce",
     });
     defer std.testing.allocator.free(credentials_json);
     const credentials = try decodeCredentials(std.testing.allocator, credentials_json);
     try std.testing.expectEqualStrings("refresh", credentials.refresh_token);
     try std.testing.expectEqual([_]u8{0x24} ** 32, credentials.dpop_secret);
-    try std.testing.expect(credentials.dpop_nonce == null);
+    try std.testing.expect(credentials.authserver_dpop_nonce == null);
+    try std.testing.expectEqualStrings("pds-nonce", credentials.pds_dpop_nonce.?);
+
+    const legacy = try decodeCredentials(std.testing.allocator,
+        \\{"version":1,"issuer":"https://auth.example","token_endpoint":"https://auth.example/oauth/token","pds_url":"https://pds.example","access_token":"access","refresh_token":"refresh","scope":"atproto","dpop_secret":"JCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQ=","dpop_nonce":"legacy-auth-nonce"}
+    );
+    try std.testing.expectEqualStrings("legacy-auth-nonce", legacy.authserver_dpop_nonce.?);
+    try std.testing.expect(legacy.pds_dpop_nonce == null);
 }
 
 test "OAuth state rejects unknown versions and malformed private keys" {
