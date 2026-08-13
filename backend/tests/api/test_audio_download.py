@@ -1,5 +1,7 @@
 """tests for the audio download endpoint."""
 
+import subprocess
+import sys
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -12,7 +14,8 @@ from sqlalchemy.orm import selectinload
 from backend.main import app
 from backend.models import Artist, CopyrightScan, Track, UserPreferences
 from backend.schemas import TrackResponse
-from backend.utilities.downloads import content_disposition, download_filename
+from backend.storage.r2 import content_disposition
+from backend.utilities.downloads import download_filename
 
 
 @pytest.fixture
@@ -254,3 +257,20 @@ async def test_download_refuses_when_no_object_is_ours_to_serve(
 
     assert (await _response_for(db_session, pds_only_id)).downloadable is False
     assert (await _response_for(db_session, ingested_id)).downloadable is False
+
+
+def test_app_imports_in_production_order():
+    """main.py's import order must not hit a circular import.
+
+    the 2026-08-13 staging outage: schemas -> utilities.downloads ->
+    storage.keys triggers storage/__init__ -> r2, which re-entered the
+    partially initialized downloads module. only reproducible in a fresh
+    interpreter that imports backend.main first, the way uvicorn does.
+    """
+    result = subprocess.run(
+        [sys.executable, "-c", "import backend.main"],
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+    assert result.returncode == 0, result.stderr
