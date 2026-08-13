@@ -24,7 +24,7 @@
 	import { preferences } from '$lib/preferences.svelte';
 	import { toast } from '$lib/toast.svelte';
 	import { trackCoverUrl } from '$lib/track-cover';
-	import { redirectToLogin } from '$lib/utils/auth-redirect';
+	import { loginHref, redirectToLogin } from '$lib/utils/auth-redirect';
 	import type { Track } from '$lib/types';
 
 	interface Comment {
@@ -103,6 +103,13 @@
 
 	// metadata disclosure panel
 	let metadataOpen = $state(false);
+	let heartShake = $state(false);
+
+	function nudgeSignIn() {
+		heartShake = true;
+		setTimeout(() => (heartShake = false), 500);
+		toast.info('sign in to like tracks', 3000, { label: 'sign in', href: loginHref() });
+	}
 
 	// likers tooltip state
 	let showLikersTooltip = $state(false);
@@ -705,11 +712,11 @@ $effect(() => {
 									initialLiked={track.is_liked || false}
 								/>
 							{:else}
-								<span class="heart-static" aria-hidden="true">
+								<button class="heart-static" class:shake={heartShake} onclick={nudgeSignIn} aria-label="sign in to like tracks" title="sign in to like tracks">
 									<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
 										<path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
 									</svg>
-								</span>
+								</button>
 							{/if}
 							{#if track.like_count && track.like_count > 0}
 							<span
@@ -1138,6 +1145,29 @@ $effect(() => {
 	.heart-static {
 		display: flex;
 		align-items: center;
+		background: transparent;
+		border: none;
+		padding: 0;
+		color: inherit;
+		cursor: pointer;
+	}
+
+	.heart-static.shake {
+		animation: head-shake 0.5s ease-in-out;
+	}
+
+	@keyframes head-shake {
+		0%, 100% { transform: translateX(0); }
+		20% { transform: translateX(-4px); }
+		40% { transform: translateX(4px); }
+		60% { transform: translateX(-3px); }
+		80% { transform: translateX(3px); }
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.heart-static.shake {
+			animation: none;
+		}
 	}
 
 	/* the AddToMenu trigger is a bordered box on dense surfaces; on this
@@ -1272,11 +1302,19 @@ $effect(() => {
 	}
 
 	.track-actions {
-		display: flex;
-		gap: clamp(1.25rem, 6vw, 2.5rem);
-		justify-content: center;
+		display: grid;
+		grid-template-columns: 1fr auto 1fr;
+		column-gap: clamp(1.25rem, 6vw, 2.5rem);
 		align-items: center;
 		margin-top: 0.75rem;
+	}
+
+	.track-actions .like-chip {
+		justify-self: end;
+	}
+
+	.track-actions .btn-queue {
+		justify-self: start;
 	}
 
 	.btn-play {
