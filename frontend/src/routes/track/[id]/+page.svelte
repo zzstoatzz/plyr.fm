@@ -15,6 +15,7 @@
 	import LosslessBadge from '$lib/components/LosslessBadge.svelte';
 	import RichText from '$lib/components/RichText.svelte';
 	import ShareButton from '$lib/components/ShareButton.svelte';
+	import { downloadTrack } from '$lib/downloads';
 	import { moderation } from '$lib/moderation.svelte';
 	import { player } from '$lib/player.svelte';
 	import { queue } from '$lib/queue.svelte';
@@ -777,6 +778,16 @@ $effect(() => {
 							</svg>
 							add to queue
 						</button>
+						{#if !track.gated && !track.copyright_flagged}
+							<button class="btn-queue" onclick={() => track && downloadTrack(track.file_id)} title="download audio file">
+								<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+									<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+									<polyline points="7 10 12 15 17 10"></polyline>
+									<line x1="12" y1="15" x2="12" y2="3"></line>
+								</svg>
+								download
+							</button>
+						{/if}
 					</div>
 				</div>
 			</div>

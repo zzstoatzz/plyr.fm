@@ -440,6 +440,7 @@
 				trackCid={track.atproto_record_cid}
 				fileId={track.file_id}
 				gated={track.gated}
+				downloadable={!track.gated && !track.copyright_flagged}
 				initialLiked={track.is_liked || false}
 				shareUrl={shareUrl}
 				onQueue={handleQueue}

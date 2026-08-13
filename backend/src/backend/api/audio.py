@@ -9,10 +9,14 @@ from sqlalchemy import or_, select
 from backend._internal import Session, get_optional_session, validate_supporter
 from backend._internal.atproto.client import pds_blob_url
 from backend._internal.atproto.spaces.client import SpaceAccessError, open_space_blob
+from backend._internal.content_labels import has_copyright_label
 from backend.config import settings
-from backend.models import Artist, Track
+from backend.models import Artist, Track, UserPreferences
+from backend.models.copyright_scan import CopyrightScan
 from backend.storage import storage
+from backend.storage.keys import AudioKey
 from backend.utilities.database import db_session
+from backend.utilities.downloads import download_filename
 
 # headers worth relaying from the upstream getBlob response so range/seek works
 _PROXY_HEADERS = ("content-type", "content-length", "content-range", "accept-ranges")
@@ -240,6 +244,87 @@ async def _handle_gated_audio(
 
     # R2-backed gated tracks: presigned URL for private bucket
     url = await storage.generate_presigned_url(file_id=file_id, extension=file_type)
+    return RedirectResponse(url=url)
+
+
+@router.get("/{file_id}/download")
+async def download_audio(file_id: str) -> RedirectResponse:
+    """download a track's audio as an attachment named `artist - title.ext`.
+
+    downloads are offered only where the bytes are already publicly
+    reachable (the artist's PDS serves them to anyone): public and unlisted
+    tracks that are not supporter-gated, not copyright-flagged, and whose
+    artist has not switched downloads off. prefers the preserved lossless
+    original over the streaming rendition.
+    """
+    async with db_session() as db:
+        result = await db.execute(
+            select(
+                Track.id,
+                Track.title,
+                Track.file_id,
+                Track.file_type,
+                Track.original_file_id,
+                Track.original_file_type,
+                Track.r2_url,
+                Track.support_gate,
+                Track.is_private,
+                Track.self_labels,
+                Track.operator_labels,
+                Track.moderation_override,
+                Artist.display_name,
+                UserPreferences.allow_downloads,
+            )
+            .join(Artist, Artist.did == Track.artist_did)
+            .outerjoin(UserPreferences, UserPreferences.did == Track.artist_did)
+            .where(or_(Track.file_id == file_id, Track.original_file_id == file_id))
+            .order_by(Track.r2_url.is_not(None).desc(), Track.created_at.desc())
+            .limit(1)
+        )
+        row = result.first()
+
+        if not row:
+            raise HTTPException(status_code=404, detail="audio file not found")
+
+        if row.is_private:
+            raise HTTPException(status_code=404, detail="audio file not found")
+
+        if row.support_gate is not None:
+            raise HTTPException(
+                status_code=403, detail="gated tracks cannot be downloaded"
+            )
+
+        labels = set(row.self_labels or []) | set(row.operator_labels or [])
+        if has_copyright_label(labels) and row.moderation_override != "allow":
+            raise HTTPException(
+                status_code=403, detail="this track is not available for download"
+            )
+
+        flagged = await db.scalar(
+            select(CopyrightScan.is_flagged).where(CopyrightScan.track_id == row.id)
+        )
+        if flagged and row.moderation_override != "allow":
+            raise HTTPException(
+                status_code=403, detail="this track is not available for download"
+            )
+
+        # no preferences row means the artist never changed the default (on)
+        if row.allow_downloads is False:
+            raise HTTPException(
+                status_code=403, detail="the artist has disabled downloads"
+            )
+
+    # prefer the lossless original; its key never comes from r2_url, which
+    # encodes the streaming rendition
+    if row.original_file_id and row.original_file_type:
+        key = AudioKey.for_file(row.original_file_id, row.original_file_type)
+    else:
+        key = AudioKey.for_track(
+            file_id=row.file_id, file_type=row.file_type, r2_url=row.r2_url
+        )
+
+    filename = download_filename(row.display_name, row.title, key.extension)
+    url = await storage.generate_download_url(key=key.key, filename=filename)
     return RedirectResponse(url=url)
 
 

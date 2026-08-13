@@ -23,6 +23,7 @@ from backend.models.track import Track
 from backend.storage.keys import AudioKey, ImageKey, InvalidMediaExtension
 from backend.utilities.audio_formats import AudioFormat
 from backend.utilities.database import db_session
+from backend.utilities.downloads import content_disposition
 from backend.utilities.hashing import hash_file_chunked
 
 # default chunk size for streaming reads. 1MB matches aiobotocore's default
@@ -856,6 +857,34 @@ class R2Storage:
                     expires_in=expiry,
                 )
                 return url
+
+    async def generate_download_url(
+        self,
+        *,
+        key: str,
+        filename: str,
+        expires_in: int | None = None,
+    ) -> str:
+        """presigned public-bucket URL that downloads as ``filename``.
+
+        the object is publicly readable anyway; presigning exists only to carry
+        a signed ``response-content-disposition`` so the browser saves the file
+        under a human filename instead of the content-hash key.
+        """
+        expiry = expires_in or self.presigned_url_expiry
+        with logfire.span("R2 generate_download_url", key=key, expires_in=expiry):
+            async with self._s3_client(
+                config=Config(signature_version="s3v4"),
+            ) as client:
+                return await client.generate_presigned_url(
+                    "get_object",
+                    Params={
+                        "Bucket": self.audio_bucket_name,
+                        "Key": key,
+                        "ResponseContentDisposition": content_disposition(filename),
+                    },
+                    ExpiresIn=expiry,
+                )
 
     def build_image_url(self, image_id: str, ext: str) -> str:
         """construct public image URL without HEAD checks."""
