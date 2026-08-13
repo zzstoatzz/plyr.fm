@@ -7,6 +7,7 @@ from functools import reduce
 from io import BytesIO
 from pathlib import Path, PurePosixPath
 from typing import BinaryIO
+from urllib.parse import quote
 
 import aioboto3
 import boto3
@@ -23,13 +24,29 @@ from backend.models.track import Track
 from backend.storage.keys import AudioKey, ImageKey, InvalidMediaExtension
 from backend.utilities.audio_formats import AudioFormat
 from backend.utilities.database import db_session
-from backend.utilities.downloads import content_disposition
 from backend.utilities.hashing import hash_file_chunked
 
 # default chunk size for streaming reads. 1MB matches aiobotocore's default
 # part size and keeps per-chunk python overhead negligible against a multi-MB
 # file. callers that want different granularity can override.
 STREAM_CHUNK_SIZE = 1024 * 1024
+
+
+def content_disposition(filename: str) -> str:
+    """RFC 6266 attachment disposition with a unicode-capable filename*.
+
+    lives here rather than utilities/downloads.py because this module is on
+    the import path of `backend.storage` itself — importing policy helpers
+    from there re-enters the package mid-initialization (the circular import
+    that crashed staging on 2026-08-13).
+
+    the plain `filename` parameter is ascii-only for old clients; `filename*`
+    carries the real name percent-encoded as UTF-8 and wins where supported.
+    """
+    ascii_name = filename.encode("ascii", "replace").decode("ascii")
+    utf8_name = quote(filename, safe="")
+    return f"attachment; filename=\"{ascii_name}\"; filename*=UTF-8''{utf8_name}"
+
 
 # content-hashed files never change — cache forever
 IMMUTABLE_CACHE_CONTROL = "public, max-age=31536000, immutable"

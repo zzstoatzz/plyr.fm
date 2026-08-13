@@ -3,7 +3,6 @@
 import re
 from collections.abc import Iterable, Mapping
 from typing import Any, Literal, TypeAlias
-from urllib.parse import quote
 
 from backend._internal.content_labels import has_copyright_label
 from backend.storage.keys import AudioKey, InvalidMediaExtension
@@ -85,14 +84,3 @@ def download_filename(artist: str, title: str, extension: str) -> str:
     cleaned = "".join(c for c in stem if c not in _UNSAFE and c.isprintable())
     cleaned = " ".join(cleaned.split()).strip(". ") or "track"
     return f"{cleaned}.{extension}"
-
-
-def content_disposition(filename: str) -> str:
-    """RFC 6266 attachment disposition with a unicode-capable filename*.
-
-    the plain `filename` parameter is ascii-only for old clients; `filename*`
-    carries the real name percent-encoded as UTF-8 and wins where supported.
-    """
-    ascii_name = filename.encode("ascii", "replace").decode("ascii")
-    utf8_name = quote(filename, safe="")
-    return f"attachment; filename=\"{ascii_name}\"; filename*=UTF-8''{utf8_name}"
