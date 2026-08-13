@@ -104,12 +104,6 @@
 	// metadata disclosure panel
 	let metadataOpen = $state(false);
 
-	// alex's convention: a tag like "ft. woot noot" marks a feature whose
-	// artist has no atproto identity — render it with the artist, not as a tag
-	const FT_TAG = /^(ft|feat)\.?\s+/i;
-	let ftTags = $derived((track?.tags ?? []).filter((t) => FT_TAG.test(t)));
-	let displayTags = $derived((track?.tags ?? []).filter((t) => !FT_TAG.test(t)));
-
 	// likers tooltip state
 	let showLikersTooltip = $state(false);
 	let likersTooltipTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -677,16 +671,6 @@ $effect(() => {
 								{/each}
 							</span>
 						{/if}
-						{#if ftTags.length > 0}
-							<span class="separator">•</span>
-							<span class="features">
-								<span class="features-label">ft.</span>
-								{#each ftTags as tag, i}
-									{#if i > 0}<span class="feature-separator">, </span>{/if}
-									<a href="/tag/{encodeURIComponent(tag)}" class="feature-link">{tag.replace(FT_TAG, '')}</a>
-								{/each}
-							</span>
-						{/if}
 						{#if track.album}
 							<span class="separator">•</span>
 							<a href="/u/{track.artist_handle}/album/{track.album.slug}" class="album album-link">
@@ -699,15 +683,15 @@ $effect(() => {
 						{/if}
 					</div>
 
-					{#if displayTags.length > 0}
+					{#if track.tags && track.tags.length > 0}
 						<div class="track-tags">
-							{#each displayTags as tag}
+							{#each track.tags as tag}
 								<a href="/tag/{encodeURIComponent(tag)}" class="tag-badge">{tag}</a>
 							{/each}
 						</div>
 					{/if}
 
-					<!-- controls: like · play · queue (brooke's sketch, 2026-08) -->
+					<!-- controls: like · play · queue (nate's sketch, 2026-08) -->
 					<div class="track-actions">
 						<div class="like-chip">
 							{#if auth.isAuthenticated}
