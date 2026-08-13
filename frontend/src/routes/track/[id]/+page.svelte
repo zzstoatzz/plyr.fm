@@ -691,11 +691,27 @@ $effect(() => {
 						</div>
 					{/if}
 
-					<div class="track-stats">
-						<span class="plays">{track.play_count} {track.play_count === 1 ? 'play' : 'plays'}</span>
-						<LosslessBadge originalFileType={track.original_file_type} fileType={track.file_type} withSeparator separatorClass="separator" />
-						{#if track.like_count && track.like_count > 0}
-							<span class="separator">•</span>
+					<!-- controls: like · play · queue (nate's sketch, 2026-08) -->
+					<div class="track-actions">
+						<div class="like-chip">
+							{#if auth.isAuthenticated}
+								<AddToMenu
+									trackId={track.id}
+									trackTitle={track.title}
+									trackUri={track.atproto_record_uri}
+									trackCid={track.atproto_record_cid}
+									fileId={track.file_id}
+									gated={track.gated}
+									initialLiked={track.is_liked || false}
+								/>
+							{:else}
+								<span class="heart-static" aria-hidden="true">
+									<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+										<path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+									</svg>
+								</span>
+							{/if}
+							{#if track.like_count && track.like_count > 0}
 							<span
 								class="likes"
 								role="button"
@@ -709,7 +725,7 @@ $effect(() => {
 								onblur={handleLikesMouseLeave}
 								onkeydown={handleLikesKeydown}
 							>
-								{track.like_count} {track.like_count === 1 ? 'like' : 'likes'}
+								{track.like_count}
 								{#if showLikersTooltip && !isMobile}
 									<LikersTooltip
 										trackId={track.id}
@@ -720,6 +736,32 @@ $effect(() => {
 								{/if}
 							</span>
 						{/if}
+						</div>
+						<button class="btn-play" class:playing={isCurrentlyPlaying} onclick={handlePlay} aria-label={isCurrentlyPlaying ? 'pause' : 'play'} title={isCurrentlyPlaying ? 'pause' : 'play'}>
+							{#if isCurrentlyPlaying}
+								<svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor">
+									<path d="M6 4h4v16H6zM14 4h4v16h-4z"/>
+								</svg>
+							{:else}
+								<svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor">
+									<path d="M8 5v14l11-7z"/>
+								</svg>
+							{/if}
+						</button>
+						<button class="btn-queue" onclick={addToQueue} aria-label="add to queue" title="add to queue">
+							<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+								<line x1="5" y1="15" x2="5" y2="21"></line>
+								<line x1="2" y1="18" x2="8" y2="18"></line>
+								<line x1="9" y1="6" x2="21" y2="6"></line>
+								<line x1="9" y1="12" x2="21" y2="12"></line>
+								<line x1="9" y1="18" x2="21" y2="18"></line>
+							</svg>
+						</button>
+					</div>
+
+					<div class="track-stats">
+						<span class="plays">{track.play_count} {track.play_count === 1 ? 'listen' : 'listens'}</span>
+						<LosslessBadge originalFileType={track.original_file_type} fileType={track.file_type} withSeparator separatorClass="separator" />
 						{#if track.description}
 							<span class="separator">•</span>
 							<button
@@ -739,48 +781,10 @@ $effect(() => {
 					{/if}
 
 					<div class="side-buttons">
-						{#if auth.isAuthenticated}
-							<AddToMenu
-								trackId={track.id}
-								trackTitle={track.title}
-								trackUri={track.atproto_record_uri}
-								trackCid={track.atproto_record_cid}
-								fileId={track.file_id}
-								gated={track.gated}
-								initialLiked={track.is_liked || false}
-							/>
-						{/if}
 						<ShareButton url={shareUrl} title="share track" trackId={track.id} />
-							{#if track.downloadable}
-								<DownloadButton fileId={track.file_id} />
-							{/if}
-					</div>
-
-					<!-- actions -->
-					<div class="track-actions">
-						<button class="btn-play" class:playing={isCurrentlyPlaying} onclick={handlePlay}>
-							{#if isCurrentlyPlaying}
-								<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-									<path d="M6 4h4v16H6zM14 4h4v16h-4z"/>
-								</svg>
-								pause
-							{:else}
-								<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-									<path d="M8 5v14l11-7z"/>
-								</svg>
-								play
-							{/if}
-						</button>
-						<button class="btn-queue" onclick={addToQueue}>
-							<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-								<line x1="5" y1="15" x2="5" y2="21"></line>
-								<line x1="2" y1="18" x2="8" y2="18"></line>
-								<line x1="9" y1="6" x2="21" y2="6"></line>
-								<line x1="9" y1="12" x2="21" y2="12"></line>
-								<line x1="9" y1="18" x2="21" y2="18"></line>
-							</svg>
-							add to queue
-						</button>
+						{#if track.downloadable}
+							<DownloadButton fileId={track.file_id} />
+						{/if}
 					</div>
 				</div>
 			</div>
@@ -1112,7 +1116,7 @@ $effect(() => {
 
 	.track-stats {
 		color: var(--text-tertiary);
-		font-size: var(--text-base);
+		font-size: var(--text-sm);
 		display: flex;
 		align-items: center;
 		gap: 0.5rem;
@@ -1123,7 +1127,20 @@ $effect(() => {
 		font-size: var(--text-xs);
 	}
 
-	.track-stats .likes {
+	.like-chip {
+		display: flex;
+		align-items: center;
+		gap: 0.35rem;
+		color: var(--text-tertiary);
+		font-size: var(--text-base);
+	}
+
+	.heart-static {
+		display: flex;
+		align-items: center;
+	}
+
+	.like-chip .likes {
 		position: relative;
 		cursor: pointer;
 		padding: 0.125rem 0.25rem;
@@ -1132,8 +1149,8 @@ $effect(() => {
 		transition: background 0.15s, color 0.15s;
 	}
 
-	.track-stats .likes:hover,
-	.track-stats .likes:focus {
+	.like-chip .likes:hover,
+	.like-chip .likes:focus {
 		background: color-mix(in srgb, var(--accent) 15%, transparent);
 		color: var(--accent);
 		outline: none;
@@ -1207,34 +1224,70 @@ $effect(() => {
 
 	.side-buttons {
 		display: flex;
-		gap: 0.75rem;
+		gap: clamp(0.75rem, 4vw, 1.5rem);
 		justify-content: center;
 		align-items: center;
 	}
 
+	.side-buttons :global(.share-btn),
+	.side-buttons :global(.download-btn) {
+		width: auto;
+		height: auto;
+		padding: 0.5rem;
+		border: none;
+		background: transparent;
+		border-radius: var(--radius-full);
+	}
+
+	.side-buttons :global(.share-btn:hover),
+	.side-buttons :global(.download-btn:hover) {
+		background: color-mix(in srgb, var(--accent) 10%, transparent);
+	}
+
+	.side-buttons :global(.share-btn svg) {
+		width: 18px;
+		height: 18px;
+	}
+
+	.side-buttons :global(.download-btn svg) {
+		width: 17px;
+		height: 17px;
+	}
+
 	.track-actions {
 		display: flex;
-		gap: 0.75rem;
+		gap: clamp(1.25rem, 6vw, 2.5rem);
 		justify-content: center;
 		align-items: center;
-		flex-wrap: wrap;
-		margin-top: 0.5rem;
+		margin-top: 0.75rem;
 	}
 
 	.btn-play {
 		display: flex;
 		align-items: center;
-		gap: 0.5rem;
-		padding: 0.75rem 1.5rem;
+		justify-content: center;
+		width: 3rem;
+		height: 3rem;
+		padding: 0;
 		background: var(--accent);
 		color: var(--bg-primary);
 		border: none;
-		border-radius: var(--radius-2xl);
-		font-size: var(--text-base);
-		font-weight: 600;
-		font-family: inherit;
+		border-radius: var(--radius-full, 50%);
 		cursor: pointer;
 		transition: all 0.2s;
+	}
+
+	.btn-play svg {
+		width: 26px;
+		height: 26px;
+	}
+
+	.btn-play svg {
+		margin-left: 2px; /* optically center the triangle */
+	}
+
+	.btn-play.playing svg {
+		margin-left: 0;
 	}
 
 	.btn-play:hover {
@@ -1249,21 +1302,22 @@ $effect(() => {
 	.btn-queue {
 		display: flex;
 		align-items: center;
-		gap: 0.5rem;
-		padding: 0.75rem 1.5rem;
+		justify-content: center;
+		padding: 0.5rem;
 		background: transparent;
-		color: var(--text-primary);
-		border: 1px solid var(--border-emphasis);
-		border-radius: var(--radius-2xl);
-		font-size: var(--text-base);
-		font-weight: 500;
-		font-family: inherit;
+		color: var(--text-tertiary);
+		border: none;
+		border-radius: var(--radius-full, 50%);
 		cursor: pointer;
 		transition: all 0.2s;
 	}
 
+	.btn-queue svg {
+		width: 20px;
+		height: 20px;
+	}
+
 	.btn-queue:hover {
-		border-color: var(--accent);
 		color: var(--accent);
 		background: color-mix(in srgb, var(--accent) 10%, transparent);
 	}
@@ -1312,33 +1366,17 @@ $effect(() => {
 		}
 
 		.track-actions {
-			flex-direction: row;
-			flex-wrap: wrap;
-			width: 100%;
-			gap: 0.5rem;
 			margin-top: 0.25rem;
-			justify-content: center;
 		}
 
 		.btn-play {
-			flex: 1;
-			min-width: calc(50% - 0.25rem);
-			justify-content: center;
-			padding: 0.6rem 1rem;
-			font-size: var(--text-base);
+			width: 2.75rem;
+			height: 2.75rem;
 		}
 
 		.btn-play svg {
-			width: 20px;
-			height: 20px;
-		}
-
-		.btn-queue {
-			flex: 1;
-			min-width: calc(50% - 0.25rem);
-			justify-content: center;
-			padding: 0.6rem 1rem;
-			font-size: var(--text-base);
+			width: 24px;
+			height: 24px;
 		}
 
 		.btn-queue svg {
