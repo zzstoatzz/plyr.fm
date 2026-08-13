@@ -1,8 +1,13 @@
 services:
   test-db:
-    image: postgres:14-alpine
+    # tracks the postgres major version in .github/workflows/test-backend.yml;
+    # a local suite passing against a different major than CI is the same class
+    # of gap as running serially while CI runs -n auto.
+    image: postgres:16-alpine
     ports:
-      - "5433:5432"
+      # overridable so a second checkout can run its own stack; the project name
+      # isolates the containers but not the host ports.
+      - "${TEST_DB_PORT:-5433}:5432"
     environment:
       POSTGRES_USER: relay_test
       POSTGRES_PASSWORD: relay_test
@@ -13,13 +18,23 @@ services:
       - postgres
       - -c
       - max_connections=100
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U relay_test -d relay_test"]
+      interval: 1s
+      timeout: 5s
+      retries: 30
 
   test-redis:
     image: redis:7-alpine
     ports:
-      - "6380:6379"
+      - "${TEST_REDIS_PORT:-6380}:6379"
     # --databases: each xdist worker claims db (1 + gwN) for isolation; the
     # redis default of 16 breaks past gw14 ("DB index is out of range") on
     # many-core machines. CI's redis service container keeps the default but
     # its 4-core runners stay far below the limit.
     command: redis-server --appendonly no --save "" --databases 128
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 1s
+      timeout: 5s
+      retries: 30

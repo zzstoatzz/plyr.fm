@@ -126,8 +126,15 @@ async def test_hydrate_features_renames_camelcase_via_resolver(
     assert view.avatar_url == "https://example/avatar.jpg"
 
 
-async def test_hydrate_features_handles_unknown_did_via_bsky_fallback() -> None:
-    """when a featured DID isn't a plyr.fm artist, fall back to bsky getProfile."""
+async def test_hydrate_features_handles_unknown_did_via_bsky_fallback(
+    db_session: AsyncSession,
+) -> None:
+    """when a featured DID isn't a plyr.fm artist, fall back to bsky getProfile.
+
+    `db_session` is unused directly, but the resolver checks the artists table
+    before falling back — and requesting a db fixture is what points
+    `settings.database.url` at this xdist worker's database.
+    """
     from backend.schemas import _hydrate_features
 
     # mock the bsky fetch path — we don't want a real network call in tests
@@ -168,12 +175,17 @@ async def test_hydrate_features_empty_list_skips_resolution() -> None:
         assert await _hydrate_features([]) == []
 
 
-async def test_hydrate_features_drops_unresolvable_did() -> None:
+async def test_hydrate_features_drops_unresolvable_did(
+    db_session: AsyncSession,
+) -> None:
     """DIDs that bsky can't resolve are silently dropped — no placeholder.
 
     rationale in `_internal.atproto.profiles` module docstring: a featured
     artist whose profile we can't load is better not shown than shown as
     a raw `did:plc:...` string.
+
+    takes `db_session` for the same reason as the bsky-fallback test above:
+    the resolver hits the artists table first.
     """
     from backend._internal.atproto import profiles as profiles_module
     from backend.schemas import _hydrate_features

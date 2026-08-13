@@ -47,6 +47,186 @@ plyr.fm should become:
 
 ### August 2026
 
+#### the media hosts never had a CORS policy at all (#1821, August 10 — infra, no release)
+
+**why**: [@chris.pardy.family asked for CORS headers to build a web DJ deck on
+plyr](https://bsky.app/profile/chris.pardy.family). The API has allowed any
+HTTPS origin since #1106, so the request read as already-satisfied — but audio
+bytes never come from the API. `r2_url` points at an R2 custom domain, and R2
+CORS is configured per-bucket, entirely separately from the FastAPI middleware.
+All four public buckets returned *"The CORS configuration does not exist"*
+(code 10059): preflight `403`, and a `GET` that returned `206` with real bytes
+and no `Access-Control-Allow-Origin`. Playback through `<audio src>` worked, so
+nothing ever surfaced the gap.
+
+**what shipped**:
+- `infrastructure/r2/cors.json` — `GET`/`HEAD` from any origin, `Range`
+  allowed, range-relevant headers exposed — applied to `audio-{staging,prod}`
+  and `images-{staging,prod}`, with a README recording the apply command, the
+  propagation lag, the purge step, and which buckets must never receive it.
+- **this closes #1753**: the artwork accent wash was inert in production for
+  exactly this reason. Canvas sampling of `images.plyr.fm` no longer taints,
+  so `/radio` should pick up its accent without a frontend change.
+
+**technical notes**:
+- CORS is a browser policy about whether *JS on another origin* may read a
+  response, not authentication — which is what made `*` safe to reason about
+  rather than merely convenient. The public buckets are already reachable two
+  ways with no auth (active custom domain *and* an enabled `pub-*.r2.dev` URL);
+  the pre-change `curl` returned the full audio. `*` grants browsers a read
+  that any server-side script already had.
+- `audio-private-{staging,prod}` are deliberately excluded and the README says
+  why: no custom domain, `r2.dev` public access disabled, presigned-URL only.
+  `*` there *would* be an access-control change.
+- No credential surface: R2 returns literal `*`, so browsers refuse
+  credentialed cross-origin requests; independently, no `set_cookie` in the
+  backend passes `domain=`, so `session_id` is host-only and is never sent to
+  the media hosts. Listing is not exposed either — `/`, `/audio/`, and
+  `?list-type=2` all 404, and keys are content hashes.
+- **The bucket policy alone was not enough.** The media domains carry a 1yr
+  edge TTL, so already-cached objects kept serving their header-less variant
+  and `Vary: Origin` did not rescue them — fresh fetches carried the header
+  while `cf-cache-status: HIT` did not. Purged by *host* rather than
+  `purge_everything`, so only the two media hostnames refill and the frontend's
+  cache was left alone. Propagation also lags: preflight went `403` → `204`
+  before the `GET` header appeared.
+- Verified as the user-facing capability, not as headers: headless Chromium on
+  a genuinely foreign origin read `24343244` bytes via `fetch`, decoded them
+  (`2ch 44100Hz 138.00s`), and pulled `6085800` raw PCM samples — plus
+  `getImageData` on an untainted canvas for cover art. The `curl` proof was
+  taken against a cached `HIT`, since that is the path real listeners hit.
+- The purge token was minted from `THANOS_TOKEN` scoped to one permission group
+  (`Cache Purge`) on one zone with a 2h expiry, then revoked.
+
+**not addressed, flagged so it isn't mistaken for new**: `mirror_pds_blob`
+re-hosts firehose-ingested audio on our CDN because a record was published, not
+because the artist asked. Those blobs are already public and unauthenticated at
+the source PDS, so CORS changes nothing about it — but the consent question is
+real and independent.
+
+#### `just backend test` and CI pointed at different databases (#1815 → #1818, August 9)
+
+**why**: CI runs `pytest tests/ -n auto` against service containers with
+`DATABASE_URL` pinned to localhost. `just backend test` ran serially and never
+set `DATABASE_URL`, so conftest derived its base URL from
+`settings.database.url` → `backend/.env` → **neon dev**. The recipe started the
+compose postgres, waited for it, ignored it, and ran `create_all` +
+`_truncate_tables` (plus `CREATE DATABASE` under xdist) against a real cloud
+database. The two commands did not merely differ in speed.
+
+**what shipped**: `just backend test` is now `-n auto` with `DATABASE_URL` and
+`DOCKET_URL` pinned at the compose services, mirroring `test-backend.yml`.
+`just backend test-serial` keeps a one-process path for pdb — `-n0` rather than
+`-p no:xdist`, which would remove the `worker_id` fixture conftest depends on.
+`DOCKET_URL` was already protected by pyproject's `D:` prefix; `DATABASE_URL`
+had no equivalent.
+
+#### plyr publishes a `community.lexicon.app.profile` record (#1817, August 9)
+
+**why**: app directories and stores read a self-published description of the
+app — name, icon, links, and the lexicons it produces and consumes. Keyed
+`self` in our own repo.
+
+**what shipped**: the icon is uploaded as an atproto blob rather than
+referenced by URL, so the record survives reshuffling
+`frontend/static/icons/`. Every claim was verified against source rather than
+assumed: `produces` lists the collections we actually write (including the two
+teal scrobble records), `consumes` lists `app.bsky.actor.profile`, and all six
+link URLs return 200. The dev and staging namespace variants are deliberately
+omitted — they are not a published surface.
+
+#### a track row's `file_id` is not a storage key (#1805–#1811, August 9 — prod `2026.0809.065939`, `.181741`, `.210022`)
+
+**why**: an artist asked why ten of their tracks weren't on their PDS. Nine were
+the known #1565 token-rotation herd, fixed in June and never repaired
+afterwards. The tenth failed on July 6 for reasons that no longer exist
+anywhere: PDS-blob upload is best-effort, so the failure degraded to R2-only
+with a warning log, and by August the telemetry had aged out. Repairing them
+through the portal then failed on *four* tracks with `image must be hosted on
+allowed origins`, and a later batch of eighteen reported "11 saved, 1 skipped,
+6 failed" with an empty error list and nothing in Logfire at all.
+
+**what shipped**:
+- **the origin allowlist left the record write path** (#1805). It was added in
+  November 2025 as ingest defense — don't let a tampered record point plyr's UI
+  at hostile artwork — but it lived in `build_track_record`, so it also policed
+  what plyr wrote to a creator's *own* repo, and it was computed from the
+  *current* `R2_PUBLIC_IMAGE_BUCKET_URL`, so plyr's own pre-`images.plyr.fm`
+  URLs failed it. Ingest-side trust (`origin_trust.py`) is unchanged: hostile
+  record edits still never render. Deciding where a creator's artwork may live
+  was never ours to enforce at authorship.
+- **failures are now visible to the person they happened to** (#1806, #1810):
+  upload results carry a structured `pds_blob_failed` flag, and the warning
+  toast is sticky with a `save to your PDS` action deep-linking to
+  `/portal/manage?save=pds`, which opens the picker directly rather than
+  dropping the caller at the top of a long page.
+- **the portal states the truth when there's nothing to do** (#1807, #1808):
+  an affirmative "all your audio is on your PDS" card replaces a button whose
+  modal would be empty; a dismissible banner (dismissal stored per-account in
+  `ui_settings`, never localStorage) surfaces the standing case; share links
+  show 5 before "load more" instead of 20.
+- **the actual bug** (#1811): `Track.file_id` addresses storage only for
+  uploads that came through us. On the jetstream ingest path it is
+  `record["fileId"]` falling back to the rkey — author-supplied, as #1778's own
+  commit message says — while the bytes live under the content hash in
+  `r2_url`. Eight sites passed a track row's `file_id` straight into storage:
+  batch and single-track PDS save, **track delete and account deletion (which
+  silently orphaned the real object)**, media export (which silently omitted
+  the track), the file-sizes endpoint, and revision restore + prune. All now
+  resolve through `AudioKey.for_track(file_id, file_type, r2_url)`.
+- an operator alert (`pds blob mirroring failures`, discord, 15m/1h) fires on
+  `pds blob upload failed` / `pds save failed for track` in production.
+
+**technical notes**:
+- The six "missing" staging objects returned **206** at the key in their
+  `r2_url` and 404 at the key derived from `file_id`. Playback never noticed
+  because it redirects straight to `r2_url` and never derives a key — which is
+  exactly why this survived so long. The same asymmetry holds on three real
+  production rows belonging to external users (`natespilman.at`,
+  `pat-ou.bsky.social`, `bifftar.selfhosted.social`), i.e. precisely the people
+  writing plyr records from outside our UI.
+- `storage/keys.py` already existed to make save/read extension drift
+  unrepresentable (#1413). It worked: the key *type* was right everywhere. This
+  was the next mutation of that family — correct type, wrong identifier — so
+  the invariant is now pinned on the source itself: a test scans `src/backend`
+  and fails on any `storage.{head_file,stream_file_data,delete,get_url}` keyed
+  by `track.file_id` / `track_data["file_id"]` / `revision.file_id`. It caught
+  `revisions.py` while the PR description was being written.
+- `AudioKey.from_url` requires the URL's origin to match *this deployment's*
+  bucket. A path lifted off a foreign origin would otherwise name one of our
+  objects while claiming to describe someone else's bytes — the #1778 hazard,
+  one layer down.
+- `save_one` had four early returns doing `failed_count += 1; return` with no
+  log and no recorded reason, which is why querying Logfire for a batch that
+  had just failed six times returned zero rows. Every failure now routes
+  through one helper that records a reason and groups by cause; a bare
+  `failed_count += 1` no longer exists in the module.
+- The blob mirror in the *other* direction already exists and was not the
+  problem: #1778's `mirror_pds_blob` fetches a PDS-hosted blob, verifies it
+  hashes to the record's `pds_blob_cid`, and stores our own copy — so a record
+  authored by any client with an `audioBlob` becomes fully playable here.
+
+#### the parallel test-database bootstrap ran inside a per-test timeout (#1809, August 9)
+
+**why**: CI failed with ~30 setup errors reading `relation "artists" does not
+exist`. Not flakiness — run the way CI runs it (`-n auto`), the suite failed
+**5 out of 5** local attempts with 124–218 errors.
+
+**what shipped**: the xdist template database is now built in `pytest_configure`
+on the controller — before any worker or test timeout exists — and bootstrap
+completion is marked with postgres's `datistemplate` flag, so a build
+interrupted between `CREATE DATABASE` and `create_all` is rebuilt rather than
+cloned schemaless by every worker. The local test redis runs `--databases 128`;
+each worker claims db `1 + gwN` against a default of 16, which a many-core
+machine exceeds at gw15.
+
+**technical notes**: the failure mode was a queue of workers waiting on
+`pg_advisory_lock` inside the first test's 10s `pytest-timeout` budget (1456
+timeout hits across four workers in the failing run). A waiter timing out
+poisons its worker; a *creator* timing out leaves a permanently schemaless
+template. Verified that the finalization marker alone does **not** fix the
+cascade — the controller move is the load-bearing half.
+
 #### search ranks lexical intent above trigram fuzz (#1523 → #1801, August 9 — prod `2026.0809.034121`)
 
 **why**: typing "you don't kn" into add-tracks ranked the exact-prefix title
@@ -298,14 +478,23 @@ See `.status_history/` for detailed history, one file per month: `2026-07.md`,
 **next**: remove the `/admin/*` machine-endpoint aliases now that prod calls `/internal/*` (#1691); re-enable `test_private_media.py` somewhere that has the local postgres/redis fixtures (it is excluded from the staging-facing workflow). which surfaces beyond albums/playlists count as queueable contexts (artist catalogs #1353, feeds/search). publish the five record lexicons (`fm.plyr.track`, `.like`, `.comment`, `.list`, `.actor.profile`) with a docs-quality pass on each (next phase after #1569); a production smoke-test harness for private media (file-types × visibilities, fully inert — no DM/listing/stats — per prod release); enable the `copyright-paradigm` flag for own DID and start dogfooding on prod; co-writer / publisher editing UI for `additionalInterestedParties` (backend plumbed end-to-end, frontend deferred); prefill ISWC/ISRC/masterOwner on the portal edit form (we only have the URIs locally, not field contents); fly worker tcp health check (running-but-stuck symptom detector); upstream `atproto_oauth.OAuthClient` body-factory support (lets us drop `_signed_streaming_post`); deploy-docs sanity check; `config.py` decomposition.
 
 ### known issues
+- **Logfire retention is shorter than time-to-report** ([#1813](https://github.com/zzstoatzz/plyr.fm/issues/1813)): on August 9 the project's earliest record was the same morning. A July 6 PDS-blob failure was therefore undiagnosable a month later — the DB row recorded *that* it failed, never why. Both the new mirroring alert and #1811's failure reasons are only worth as much as the window they survive in. Cheap mitigation for anything we may be asked about later: persist the reason next to the row, which outlives any retention setting.
+- **the PDS picker offers tracks this deployment can't read** ([#1814](https://github.com/zzstoatzz/plyr.fm/issues/1814)): `pds_savable_count` checks ungated + no blob + not optimizing, none of which establishes that the bytes are reachable from here. After #1811 the failure is at least legible instead of a bare count, but the honest behavior is not to offer them. Both candidate fixes have an objection — a per-track HEAD is request-time I/O for a metadata endpoint, and an `r2_url`-origin heuristic reintroduces origin-sniffing right after #1805 removed it from the write path — so it wants a deliberate call. A third framing: if the record carries an `audioBlob`, mirror it in (#1778) rather than hide the track.
+- **unlike may leave the track in the liked list** ([#1812](https://github.com/zzstoatzz/plyr.fm/issues/1812)): `test_cross_user_like` failed once against staging on August 9 and has passed since. Filed rather than dismissed as flaky, because the assertion describes a read-your-own-write guarantee. Ruled out: stale cache (the liked list is a direct DB query) and a failed delete (it commits before returning). Untested hypothesis: `unlike_track` deletes the row and backgrounds the PDS deletion, so a replayed like-create event could resurrect it — the #1736 family. Track deletes write a tombstone for exactly this reason; likes may have no equivalent.
+- **`just backend test` runs serially, CI runs `-n auto`** ([#1815](https://github.com/zzstoatzz/plyr.fm/issues/1815)): the two take different paths through `conftest.py` — serial uses `_setup_database_direct` with no template database, no advisory lock, and no per-worker redis db. The entire parallel bootstrap only ever executed in CI, which is why #1809's bugs were invisible locally despite failing 5/5 once run CI's way. Distinct from the shared-compose-project issue below, which is about *concurrent* sessions rather than parallel workers.
+- **pre-#1811 deletes orphaned R2 objects** ([#1367](https://github.com/zzstoatzz/plyr.fm/issues/1367)): track delete and account deletion keyed off `file_id`, so for firehose-ingested rows the delete was a silent no-op and the real object stayed in the bucket with nothing referencing it. Fixed going forward; anything already orphaned is still there. Production has only 5 ingested rows today so the historical blast radius is small, and the sweep that would confirm it is the audit #1367 already asks for.
 - **a blind jetstream host permanently discards our events** ([#1796](https://github.com/zzstoatzz/plyr.fm/issues/1796)): rotation's fixed 10s cursor rewind cannot cover a blind window in which bsky traffic kept advancing the cursor (verified in production August 8 — see recent work). Silent loss for third-party-client writes, which the write-echo alert cannot see.
 - **parallel agent sessions share one test database** (found August 9): `backend/tests/docker-compose.yml` has no `name:` field, so compose derives the project name from the directory — every checkout/worktree of this repo maps to the same `tests-test-db-1`/`tests-test-redis-1` containers, and two sessions running tests concurrently silently recreate each other's schemas (see the #1801 technical notes for the evening this cost). A `name:` derived from the checkout path, or `COMPOSE_PROJECT_NAME`, would isolate them.
 - **PDS-hosted audio is still scanned from a mutable source** ([#1778](https://github.com/zzstoatzz/plyr.fm/issues/1778), narrowed by #1790): the SSRF half is closed — `is_safe_url` now validates the endpoint where a miniDoc enters the system and at both `pds_blob_url` construction sites, and vendors are no longer pointed at the uploader-controlled URL. What remains is the scan-integrity half: a `did:web` track's bytes are served by the user's own host on every request, so a clean copyright scan does not pin what listeners later hear. Pinning the scan to `pds_blob_cid` means fetching and hashing blobs on the track-creation hook — the path #1519 deliberately made non-blocking — so it is a real change, not a validation tweak.
 - **the transcoder's auth fails open** ([#1780](https://github.com/zzstoatzz/plyr.fm/issues/1780)): with `TRANSCODER_AUTH_TOKEN` unset it logs a warning and accepts every request, and the app has a public IP. Currently latent — the secret is set and the app is suspended — but `services/moderation/src/auth.rs` returns `SERVICE_UNAVAILABLE` in the same situation, so the transcoder is the outlier and this is a consistency fix.
 - **CORS permits every HTTPS origin with credentials** (from #208, closed Feb 2026): `allow_origin_regex` resolves to `^(https://.+|http://localhost:\d+|null)$` with `allow_credentials=True`. Harmless today only because the session cookie is same-site and `SameSite=Lax` is carrying the entire defense — it would become a full CSRF-and-read hole the moment anyone sets `samesite="none"` for an embed, or moves the API off the `plyr.fm` registrable domain. #208's closing summary claimed "CORS validation" and its own item 1 (magic-byte MIME validation) never shipped; uploads still trust the client's `Content-Type`. Worth treating as a lesson about closing security issues against a summary rather than the running system.
 - **staging's error-level `SELECT neondb` spans are a pool/suspend mismatch, now mitigated** (August 8): diagnosed and traced to `pool_recycle` (1800s, the default) being **6x longer than staging Neon's `suspend_timeout_seconds` of 300**. The compute scales to zero after 5 minutes idle and kills pooled connections; the next checkout gets a dead one, SQLAlchemy's `handle_error` fires and the OTel instrumentation stamps the span `ERROR` with `str(exc)` — which is empty for this exception class, hence an error with no message and no exception type. Production never sees it because its compute has `suspend_timeout_seconds: -1` (scale-to-zero disabled). **Functionally benign**: all 95 traces containing the error had a succeeding root span (`POST /tracks/` 200 x76, `optimize_track_audio` OK x11, `PUT /audio` 200 x8) — `pool_pre_ping` recovers transparently, so the cost was error-level noise rather than failed requests. `DATABASE_POOL_RECYCLE=240` was set on `relay-api-staging` and **has since been unset — the mitigation was worse than the problem**. Forcing a reconnect every 240s starved concurrent uploads behind the 3-per-artist gate: jobs stuck past ten minutes, the stuck-upload reaper firing repeatedly, and three album integration tests timing out at 300s. Unsetting it removed the timeouts in a single A/B (the failure signature changed from `Timeout (>300s)` to assertion errors, which is what identified it — not pass/fail). The residual assertion failures were debris: `_create_album` is idempotent on `(artist_did, slug)`, so a run killed by pytest-timeout before cleanup leaves its album behind and the next run reuses it and counts double. With the variable unset and the leftovers cleared, integration is green. The `SELECT neondb` noise is therefore back, and staying: it is benign, and the correct fix if it ever matters is disabling scale-to-zero on the staging compute, not shortening `pool_recycle`. The clusters were never "restart noise"; they track integration-test runs (03:25, 03:33, 05:10 on Aug 8; 04:36 on Aug 7), which is what a burst of uploads after an idle window looks like.
-- **nothing records listening over time** (August 5 accounting): `play_count` is a counter on the track row, so plays-per-day exists only inside Logfire's 14-day retention and the history before that is unrecoverable. Every day without an append-only play-events table (or a daily `/stats` snapshot) is another day of curve we cannot draw later. Deliberately not built yet — it is new surface, and the shape of it is undecided.
-- **the artwork accent wash is inert in production** (#1753): the images hosts send no `Access-Control-Allow-Origin`, so canvas sampling fails closed and `/radio` keeps its neutral look. A one-header infra change, held for sign-off.
+- **nothing records listening over time** (August 5 accounting; retention figure corrected August 9): `play_count` is a counter on the track row, so plays-per-day exists only inside Logfire's retention window — which is **far shorter than the 14 days assumed here**: on August 9 the earliest record in the project was the same day at 06:12 (see [#1813](https://github.com/zzstoatzz/plyr.fm/issues/1813)). The history before that is unrecoverable. Every day without an append-only play-events table (or a daily `/stats` snapshot) is another day of curve we cannot draw later. Deliberately not built yet — it is new surface, and the shape of it is undecided.
+- ~~**the artwork accent wash is inert in production** (#1753)~~ — resolved
+  August 10 by the media-bucket CORS policy (#1821). `images.plyr.fm` now sends
+  `Access-Control-Allow-Origin: *` and canvas sampling no longer taints;
+  verified via `getImageData` from a foreign origin. Wants a look at `/radio`
+  to confirm the accent reads well now that it actually renders.
 - **the `firehose` station has no recorded fallback** (#1741): waow.tech's sonification segments are `unlisted` and the radio corpus is public-only, so when the broadcast stops the station has nothing to play. It now says "off air" and keeps the tuner reachable (#1744) instead of stranding anyone, but publishing some segments publicly is the only thing that gives it real fallback material — a content decision, not a code one.
 - **a failed radio play retries forever** (#1750): while the mobile tune-in was broken, the console logged `playback failed: AbortError` on a loop rather than once — something retries a failed radio `play()` indefinitely. Harmless now that playback works, which is exactly why it is worth writing down: it turned a single failure into continuous noise and would do so again for any future playback fault.
 - **live radio is verified under WebKit emulation, not on a phone** (#1750): Playwright's WebKit with iPhone emulation reports `ManagedMediaSource`, so the iOS code path is genuine, but it is neither Mobile Safari nor Android Chrome. Playwright's bundled Chromium is worse for this — it decodes raw HLS natively, so it cannot reproduce the desktop failure at all. Live playback has no automated coverage on a real mobile browser.
@@ -458,4 +647,4 @@ see the [contributing guide](https://docs.plyr.fm/contributing/) for setup instr
 
 ---
 
-this is a living document. last updated 2026-08-09 (**status maintenance for the August 5–9 window**. Archived the August 3–8 detail block to `.status_history/2026-08.md`, taking STATUS.md from 722 lines to ~460 — including the redis-password cutover and the write-echo alert's design write-up, both now history rather than current state. Backfilled the one thing this window shipped and never recorded here: **#1790**, which stopped handing AudD, Modal, and Replicate a `getBlob` URL built from an uploader-controlled `did:web` endpoint — a regression test on `main` produced the cloud metadata address from a stored `pds_url` — and replaced it with `mirror_pds_blob`, which fetches once through the hardened client, verifies the bytes hash to the `pds_blob_cid` the record commits to, and keys the copy by content hash rather than the record's attacker-supplied `fileId`. Also recorded the smaller August 8 changes that had no entry: environment-tagged operator alerts (#1793), the PDS-mirror backfill's docket client (#1791/#1792), and the `DATABASE_POOL_RECYCLE=240` staging mitigation being unset after it starved concurrent uploads (#1794). Rewrote current focus around the credential chain and folded the exclude-semantics work into the moderation arc. Recorded the podcast recap for August 5–9.) previously 2026-08-09 (**staleness sweep of known issues, verified against reality**. Retired the #1782 production-requirepass entry — the cutover ran August 8 (plyr-redis v2 + `REDIS_PASSWORD`) and an unauthenticated connection from inside the prod network now gets `AuthenticationError`; the issue is closed. Retired the "write-echo alert unexercised" entry — it fired for real on August 8 as a verified true positive (see the #1796 entry). Recounted the review queue: 18 subjects now await triage (was 13; the scanner keeps opening fingerprint flags), track 64 still among them. Updated the rev-guard coverage to 6 of 1005 tracks. Confirmed still true before keeping: the artwork accent wash stays inert (images hosts still send no `Access-Control-Allow-Origin`), and #1778/#1780 remain open.) previously 2026-08-09 (**search ranks lexical intent above trigram fuzz**. Closed #1523 via #1801, prod `2026.0809.034121`: one tiered relevance — exact > prefix > substring > fuzz — across all five search helpers, `word_similarity()` for intra-tier ties, quotes normalized on both sides; verified on prod that "you don't kn", "you don’t kn", and "you dont kn" all rank the reported title first. Also recorded the discovery that every checkout shares one compose project named `tests`, so concurrent agent sessions recreate each other's test databases — the source of the evening's "stale schema" ghosts, now a known issue.) previously 2026-08-09 (**exclude is curation, not removal, and the blackout alert's first firing**. Applied the override_exclude runbook to a user report of prayer recordings on radio, which surfaced two defects in the paradigm itself: radio never honored the projection (#1797), and exclude applied in every context, briefly blanking the artist's public profile before #1799 made it LIST-only — chosen surfaces exclude, destinations never do. Six events recorded with the transparency publisher paused so one curation call didn't become six posts; a batching implementation is parked on `feat/batched-transparency-posts`. Separately, the #1775 write-echo alert fired for real: jetstream2.us-east was externally verified blind to our collections while three sibling hosts served the same commit, and the 10s rotation rewind permanently skipped the event — #1796 filed for rewinding to the blind-window start. Also confirmed the #1523 search-ranking mechanism: bare trigram `similarity` structurally punishes long titles.) previously 2026-08-08 (**the staging db errors were a pool/suspend mismatch**. Diagnosed the error-level `SELECT neondb` spans that had been written off as restart noise: staging Neon suspends after 300s idle while `pool_recycle` defaults to 1800s, so pooled connections outlive the compute. SQLAlchemy recovers transparently via `pool_pre_ping` -- all 95 affected traces had succeeding root spans -- but the instrumentation stamps the failed attempt `ERROR` with an empty message, because the exception stringifies to "". Production is immune: scale-to-zero is disabled there (`suspend_timeout_seconds: -1`). Set `DATABASE_POOL_RECYCLE=240` on staging. The clusters track integration-test runs, not deploys.) previously 2026-08-08 (**redis had no password, and a redis blip took the whole API down**. Closed the remaining half of #1782: `plyr-redis` now requires a password (#1786), wrapped in `sh -c` because Fly exec's `[processes]` args rather than shelling them — unwrapped, `--requirepass $REDIS_PASSWORD` sets the password to that literal string and looks like it worked. Rehearsing the cutover on staging found a second, worse bug: `slowapi` hands storage exceptions to its rate-limit handler, which reads `exc.detail`, so an unreachable Redis returned `AttributeError` on every request including `/health` — a blip took the whole API down and failed the platform health check. Fixed in #1787 with an in-memory fallback that keeps limits enforced and probes for recovery. Verified by restarting staging redis under load: 150/150 requests returned 200, against the same scenario that produced blanket 500s an hour earlier. The production cutover is staged but not run — held for sign-off.) previously 2026-08-08 (**the session cache was handing out PDS credentials**. An external security assessment led with CSRF, which did not survive contact with the source — the API and frontend are same-site, so `SameSite=Lax` already withholds the cookie cross-site. Chasing "what do these compose into" instead of "is each one severe" found the real thing: `get_session()` decrypted the Fernet-encrypted OAuth blob and cached the plaintext in an unauthenticated Redis for 60s, keyed by the bearer token itself — and the payload included `dpop_private_key_pem`, which collapses DPoP's proof-of-possession back to bearer semantics. Fixed in #1783 (cache the ciphertext, key on sha256, drop the redundant id), #1784 (subsonic `/rest` had accepted any session id, not just developer tokens), #1781 (full session ids in debug logs). Verified by connecting to Redis in both environments and asserting on real entries: production failed every check before the release and passed all of them after. The regression test caught a bug in the fix — returning `None` on an undecryptable entry would have made an OAuth key rotation a mass logout. Transferable lessons in `docs/research/2026-08-08-credential-handling-in-atproto-appviews.md`. Four new known issues recorded rather than quietly carried: unauthenticated `plyr-redis` (#1782), the `did:web` SSRF-by-proxy and mutable-source scan (#1778), the transcoder's fail-open auth (#1780), and a CORS regex admitting every HTTPS origin that #208 closed as "CORS validation" in February.) earlier entries are preserved in `.status_history/2026-08.md`.
+this is a living document. last updated 2026-08-10 (**the media hosts never had a CORS policy at all**. An external developer asked for CORS headers to build a web DJ deck; the API has allowed any HTTPS origin since #1106, so the ask read as already-satisfied — but audio bytes come from R2 custom domains, where CORS is configured per-bucket, separately from the FastAPI middleware. All four public buckets returned "The CORS configuration does not exist" (code 10059): preflight 403, and a GET returning 206 with real bytes and no `Access-Control-Allow-Origin`. `<audio src>` playback worked throughout, which is why nothing surfaced it. Shipped `infrastructure/r2/cors.json` (#1821) to `audio-`/`images-{staging,prod}`, deliberately excluding the private buckets — those have no custom domain, `r2.dev` disabled, presigned-only, and `*` there *would* be an access-control change. On the public buckets it is not one: they are already reachable unauthenticated two ways, so `*` grants browsers a read any server-side script already had; no credential surface either, since R2 returns literal `*` and no `set_cookie` passes `domain=`. The bucket policy alone was insufficient — the 1yr edge TTL kept already-cached objects serving their header-less variant and `Vary: Origin` did not rescue them, so the two media hosts were purged by host rather than `purge_everything`. Verified as capability rather than headers: headless Chromium on a foreign origin read 24343244 bytes, decoded them (2ch 44100Hz 138.00s), and pulled 6085800 raw PCM samples. This also closes #1753 — the artwork accent wash was inert for exactly this missing header. Flagged but not addressed: `mirror_pds_blob` re-hosts firehose-ingested audio because a record was published, not because the artist asked — unchanged by CORS, but a real consent question. Also recorded #1818 (`just backend test` ran against **neon dev** rather than the compose postgres it started) and #1817 (plyr publishes a `community.lexicon.app.profile` record).) previously 2026-08-09 (**a track row's `file_id` is not a storage key**. Started from an artist asking why ten tracks weren't on their PDS — nine were the #1565 herd never repaired after June, the tenth failed on July 6 with the telemetry long since aged out. Repairing them surfaced three real defects: the image-origin allowlist was policing what plyr wrote to a creator's *own* repo and rejecting plyr's own pre-`images.plyr.fm` URLs (#1805, removed from the write path — ingest-side trust unchanged); PDS-save failures incremented a counter through four early returns with no log and no reason, so a batch reported "6 failed" with an empty error list and zero rows in Logfire (#1806/#1811); and underneath both, `Track.file_id` addresses storage only for uploads that came through us — on the ingest path it is the record's author-supplied `fileId`/rkey while the bytes live under the content hash in `r2_url`. Eight sites passed it straight into storage, including **track and account deletion, which silently orphaned the real object**, and media export, which silently omitted the track. Fixed via `AudioKey.for_track` and pinned by a source-scanning test that caught a ninth site mid-review. Verified on three production rows belonging to external users — 404 at the old key, 206 at the new one. Also: the portal states "all your audio is on your PDS" when there's nothing to do, a dismissible banner (per-account, not localStorage) surfaces the standing case, its CTA opens the picker directly, and the xdist test bootstrap no longer runs inside a per-test timeout (#1809 — the suite failed 5/5 when run CI's way). Four issues filed rather than carried quietly: #1812–#1815.) previously 2026-08-09 (**status maintenance for the August 5–9 window**. Archived the August 3–8 detail block to `.status_history/2026-08.md`, taking STATUS.md from 722 lines to ~460 — including the redis-password cutover and the write-echo alert's design write-up, both now history rather than current state. Backfilled the one thing this window shipped and never recorded here: **#1790**, which stopped handing AudD, Modal, and Replicate a `getBlob` URL built from an uploader-controlled `did:web` endpoint — a regression test on `main` produced the cloud metadata address from a stored `pds_url` — and replaced it with `mirror_pds_blob`, which fetches once through the hardened client, verifies the bytes hash to the `pds_blob_cid` the record commits to, and keys the copy by content hash rather than the record's attacker-supplied `fileId`. Also recorded the smaller August 8 changes that had no entry: environment-tagged operator alerts (#1793), the PDS-mirror backfill's docket client (#1791/#1792), and the `DATABASE_POOL_RECYCLE=240` staging mitigation being unset after it starved concurrent uploads (#1794). Rewrote current focus around the credential chain and folded the exclude-semantics work into the moderation arc. Recorded the podcast recap for August 5–9.) previously 2026-08-09 (**staleness sweep of known issues, verified against reality**. Retired the #1782 production-requirepass entry — the cutover ran August 8 (plyr-redis v2 + `REDIS_PASSWORD`) and an unauthenticated connection from inside the prod network now gets `AuthenticationError`; the issue is closed. Retired the "write-echo alert unexercised" entry — it fired for real on August 8 as a verified true positive (see the #1796 entry). Recounted the review queue: 18 subjects now await triage (was 13; the scanner keeps opening fingerprint flags), track 64 still among them. Updated the rev-guard coverage to 6 of 1005 tracks. Confirmed still true before keeping: the artwork accent wash stays inert (images hosts still send no `Access-Control-Allow-Origin`), and #1778/#1780 remain open.) previously 2026-08-09 (**search ranks lexical intent above trigram fuzz**. Closed #1523 via #1801, prod `2026.0809.034121`: one tiered relevance — exact > prefix > substring > fuzz — across all five search helpers, `word_similarity()` for intra-tier ties, quotes normalized on both sides; verified on prod that "you don't kn", "you don’t kn", and "you dont kn" all rank the reported title first. Also recorded the discovery that every checkout shares one compose project named `tests`, so concurrent agent sessions recreate each other's test databases — the source of the evening's "stale schema" ghosts, now a known issue.) previously 2026-08-09 (**exclude is curation, not removal, and the blackout alert's first firing**. Applied the override_exclude runbook to a user report of prayer recordings on radio, which surfaced two defects in the paradigm itself: radio never honored the projection (#1797), and exclude applied in every context, briefly blanking the artist's public profile before #1799 made it LIST-only — chosen surfaces exclude, destinations never do. Six events recorded with the transparency publisher paused so one curation call didn't become six posts; a batching implementation is parked on `feat/batched-transparency-posts`. Separately, the #1775 write-echo alert fired for real: jetstream2.us-east was externally verified blind to our collections while three sibling hosts served the same commit, and the 10s rotation rewind permanently skipped the event — #1796 filed for rewinding to the blind-window start. Also confirmed the #1523 search-ranking mechanism: bare trigram `similarity` structurally punishes long titles.) previously 2026-08-08 (**the staging db errors were a pool/suspend mismatch**. Diagnosed the error-level `SELECT neondb` spans that had been written off as restart noise: staging Neon suspends after 300s idle while `pool_recycle` defaults to 1800s, so pooled connections outlive the compute. SQLAlchemy recovers transparently via `pool_pre_ping` -- all 95 affected traces had succeeding root spans -- but the instrumentation stamps the failed attempt `ERROR` with an empty message, because the exception stringifies to "". Production is immune: scale-to-zero is disabled there (`suspend_timeout_seconds: -1`). Set `DATABASE_POOL_RECYCLE=240` on staging. The clusters track integration-test runs, not deploys.) previously 2026-08-08 (**redis had no password, and a redis blip took the whole API down**. Closed the remaining half of #1782: `plyr-redis` now requires a password (#1786), wrapped in `sh -c` because Fly exec's `[processes]` args rather than shelling them — unwrapped, `--requirepass $REDIS_PASSWORD` sets the password to that literal string and looks like it worked. Rehearsing the cutover on staging found a second, worse bug: `slowapi` hands storage exceptions to its rate-limit handler, which reads `exc.detail`, so an unreachable Redis returned `AttributeError` on every request including `/health` — a blip took the whole API down and failed the platform health check. Fixed in #1787 with an in-memory fallback that keeps limits enforced and probes for recovery. Verified by restarting staging redis under load: 150/150 requests returned 200, against the same scenario that produced blanket 500s an hour earlier. The production cutover is staged but not run — held for sign-off.) previously 2026-08-08 (**the session cache was handing out PDS credentials**. An external security assessment led with CSRF, which did not survive contact with the source — the API and frontend are same-site, so `SameSite=Lax` already withholds the cookie cross-site. Chasing "what do these compose into" instead of "is each one severe" found the real thing: `get_session()` decrypted the Fernet-encrypted OAuth blob and cached the plaintext in an unauthenticated Redis for 60s, keyed by the bearer token itself — and the payload included `dpop_private_key_pem`, which collapses DPoP's proof-of-possession back to bearer semantics. Fixed in #1783 (cache the ciphertext, key on sha256, drop the redundant id), #1784 (subsonic `/rest` had accepted any session id, not just developer tokens), #1781 (full session ids in debug logs). Verified by connecting to Redis in both environments and asserting on real entries: production failed every check before the release and passed all of them after. The regression test caught a bug in the fix — returning `None` on an undecryptable entry would have made an OAuth key rotation a mass logout. Transferable lessons in `docs/research/2026-08-08-credential-handling-in-atproto-appviews.md`. Four new known issues recorded rather than quietly carried: unauthenticated `plyr-redis` (#1782), the `did:web` SSRF-by-proxy and mutable-source scan (#1778), the transcoder's fail-open auth (#1780), and a CORS regex admitting every HTTPS origin that #208 closed as "CORS validation" in February.) earlier entries are preserved in `.status_history/2026-08.md`.
