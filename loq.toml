@@ -47,7 +47,7 @@ max_lines = 1266
 
 [[rules]]
 path = "backend/src/backend/storage/r2.py"
-max_lines = 952
+max_lines = 981
 
 [[rules]]
 path = "backend/tests/api/test_audio.py"
@@ -111,7 +111,7 @@ max_lines = 627
 
 [[rules]]
 path = "frontend/src/lib/components/TrackActionsMenu.svelte"
-max_lines = 777
+max_lines = 797
 
 [[rules]]
 path = "frontend/src/lib/components/TrackItem.svelte"
@@ -159,7 +159,7 @@ max_lines = 3961
 
 [[rules]]
 path = "frontend/src/routes/settings/+page.svelte"
-max_lines = 1788
+max_lines = 1814
 
 [[rules]]
 path = "frontend/src/routes/track/\\[id\\]/+page.svelte"
@@ -339,7 +339,7 @@ max_lines = 509
 
 [[rules]]
 path = "frontend/src/routes/track/[[]id[]]/+page.svelte"
-max_lines = 1793
+max_lines = 1804
 
 [[rules]]
 path = "frontend/src/lib/components/playlist/PlaylistTrackList.svelte"
@@ -368,3 +368,7 @@ max_lines = 586
 [[rules]]
 path = "frontend/src/routes/atlas/renderer.ts"
 max_lines = 1178
+
+[[rules]]
+path = "backend/src/backend/api/audio.py"
+max_lines = 510

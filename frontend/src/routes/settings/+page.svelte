@@ -18,6 +18,7 @@ import WaveLoading from '$lib/components/WaveLoading.svelte';
 
 	// derive from preferences store
 	let allowComments = $derived(preferences.allowComments);
+	let allowDownloads = $derived(preferences.allowDownloads);
 	let enableTealScrobbling = $derived(preferences.enableTealScrobbling);
 	let tealNeedsReauth = $derived(preferences.tealNeedsReauth);
 	let showSensitiveArtwork = $derived(preferences.showSensitiveArtwork);
@@ -281,6 +282,16 @@ import WaveLoading from '$lib/components/WaveLoading.svelte';
 		try {
 			await preferences.update({ allow_comments: enabled });
 			toast.success(enabled ? 'comments enabled on your tracks' : 'comments disabled');
+		} catch (_e) {
+			console.error('failed to save preference:', _e);
+			toast.error('failed to update preference');
+		}
+	}
+
+	async function saveAllowDownloads(enabled: boolean) {
+		try {
+			await preferences.update({ allow_downloads: enabled });
+			toast.success(enabled ? 'downloads enabled on your tracks' : 'downloads disabled');
 		} catch (_e) {
 			console.error('failed to save preference:', _e);
 			toast.error('failed to update preference');
@@ -754,6 +765,21 @@ import WaveLoading from '$lib/components/WaveLoading.svelte';
 							type="checkbox"
 							checked={allowComments}
 							onchange={(e) => saveAllowComments((e.target as HTMLInputElement).checked)}
+						/>
+						<span class="toggle-slider"></span>
+					</label>
+				</div>
+
+				<div class="setting-row">
+					<div class="setting-info">
+						<h3>downloads</h3>
+						<p>let listeners download your public, ungated tracks as files</p>
+					</div>
+					<label class="toggle-switch">
+						<input
+							type="checkbox"
+							checked={allowDownloads}
+							onchange={(e) => saveAllowDownloads((e.target as HTMLInputElement).checked)}
 						/>
 						<span class="toggle-slider"></span>
 					</label>

@@ -2,6 +2,7 @@
 	import { likeTrack, unlikeTrack } from '$lib/tracks.svelte';
 	import { toast } from '$lib/toast.svelte';
 	import { API_URL } from '$lib/config';
+	import { downloadTrack } from '$lib/downloads';
 	import type { Playlist } from '$lib/types';
 
 	interface Props {
@@ -11,6 +12,7 @@
 		trackCid?: string;
 		fileId?: string;
 		gated?: boolean;
+		downloadable?: boolean;
 		initialLiked: boolean;
 		shareUrl: string;
 		onQueue: () => void;
@@ -26,6 +28,7 @@
 		trackCid,
 		fileId,
 		gated,
+		downloadable = false,
 		initialLiked,
 		shareUrl,
 		onQueue,
@@ -202,6 +205,13 @@
 		}
 	}
 
+	async function handleDownload(e: Event) {
+		e.stopPropagation();
+		if (!fileId) return;
+		await downloadTrack(fileId);
+		closeMenu();
+	}
+
 	function goBack(e: Event) {
 		e.stopPropagation();
 		if (showCreateForm) {
@@ -321,6 +331,16 @@
 					</svg>
 					<span>share</span>
 				</button>
+				{#if downloadable && fileId}
+					<button class="menu-item" onclick={handleDownload}>
+						<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+							<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+							<polyline points="7 10 12 15 17 10"></polyline>
+							<line x1="12" y1="15" x2="12" y2="3"></line>
+						</svg>
+						<span>download</span>
+					</button>
+				{/if}
 			{:else}
 				<div class="playlist-picker">
 					<button class="back-button" onclick={goBack}>

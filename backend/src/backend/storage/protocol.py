@@ -89,6 +89,21 @@ class StorageProtocol(Protocol):
         expires_in: int | None = None,
     ) -> str: ...
 
+    async def generate_download_url(
+        self,
+        *,
+        key: str,
+        filename: str,
+        expires_in: int | None = None,
+    ) -> str:
+        """presigned public-bucket URL that downloads as ``filename``.
+
+        the attachment disposition is carried by the signed
+        ``response-content-disposition`` param, so the object itself and its
+        streaming (inline) URL are untouched.
+        """
+        ...
+
     async def move_audio(
         self,
         file_id: str,

@@ -52,6 +52,7 @@ export interface Preferences {
 	accent_color: string | null;
 	auto_advance: boolean;
 	allow_comments: boolean;
+	allow_downloads: boolean;
 	hidden_tags: string[];
 	theme: Theme;
 	enable_teal_scrobbling: boolean;
@@ -69,6 +70,7 @@ const DEFAULT_PREFERENCES: Preferences = {
 	accent_color: null,
 	auto_advance: true,
 	allow_comments: true,
+	allow_downloads: true,
 	hidden_tags: ['ai', 'ai-slop', 'suno'],
 	theme: 'dark',
 	enable_teal_scrobbling: false,
@@ -113,6 +115,10 @@ class PreferencesManager {
 
 	get allowComments(): boolean {
 		return this.data?.allow_comments ?? DEFAULT_PREFERENCES.allow_comments;
+	}
+
+	get allowDownloads(): boolean {
+		return this.data?.allow_downloads ?? DEFAULT_PREFERENCES.allow_downloads;
 	}
 
 	get theme(): Theme {
@@ -273,6 +279,7 @@ class PreferencesManager {
 					accent_color: data.accent_color ?? null,
 					auto_advance: data.auto_advance ?? DEFAULT_PREFERENCES.auto_advance,
 					allow_comments: data.allow_comments ?? DEFAULT_PREFERENCES.allow_comments,
+				allow_downloads: data.allow_downloads ?? DEFAULT_PREFERENCES.allow_downloads,
 					hidden_tags: data.hidden_tags ?? DEFAULT_PREFERENCES.hidden_tags,
 					theme: serverTheme,
 					enable_teal_scrobbling: data.enable_teal_scrobbling ?? DEFAULT_PREFERENCES.enable_teal_scrobbling,

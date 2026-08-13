@@ -11,6 +11,7 @@ from backend.models.database import Base
 if TYPE_CHECKING:
     from backend.models.album import Album
     from backend.models.playlist import Playlist
+    from backend.models.preferences import UserPreferences
     from backend.models.track import Track
 
 
@@ -58,6 +59,17 @@ class Artist(Base):
 
     # relationships
     tracks: Mapped[list["Track"]] = relationship("Track", back_populates="artist")
+    # one-to-one with UserPreferences, which shares the DID as its primary key
+    # but declares no FK column — hence the explicit join. selectin-loaded so
+    # any query that loads an Artist (eagerly or not) can read policy flags
+    # like allow_downloads without a per-row query.
+    preferences: Mapped["UserPreferences | None"] = relationship(
+        "UserPreferences",
+        primaryjoin="Artist.did == foreign(UserPreferences.did)",
+        uselist=False,
+        viewonly=True,
+        lazy="selectin",
+    )
     albums: Mapped[list["Album"]] = relationship("Album", back_populates="artist")
     playlists: Mapped[list["Playlist"]] = relationship(
         "Playlist", back_populates="owner"

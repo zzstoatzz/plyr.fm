@@ -56,6 +56,7 @@ export interface Track {
 	thumbnail_url?: string;
 	is_liked?: boolean;
 	copyright_flagged?: boolean | null; // null = not scanned, false = clear, true = flagged
+	downloadable?: boolean; // server-computed: the download endpoint would serve this track
 	copyright_match?: string | null; // "Title by Artist" of primary match
 	labels?: string[]; // active ATProto moderation labels on the track record
 	self_labels?: string[]; // creator-published ATProto content warnings

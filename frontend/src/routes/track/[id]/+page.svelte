@@ -15,6 +15,7 @@
 	import LosslessBadge from '$lib/components/LosslessBadge.svelte';
 	import RichText from '$lib/components/RichText.svelte';
 	import ShareButton from '$lib/components/ShareButton.svelte';
+	import DownloadButton from '$lib/components/DownloadButton.svelte';
 	import { moderation } from '$lib/moderation.svelte';
 	import { player } from '$lib/player.svelte';
 	import { queue } from '$lib/queue.svelte';
@@ -750,6 +751,9 @@ $effect(() => {
 							/>
 						{/if}
 						<ShareButton url={shareUrl} title="share track" trackId={track.id} />
+							{#if track.downloadable}
+								<DownloadButton fileId={track.file_id} />
+							{/if}
 					</div>
 
 					<!-- actions -->

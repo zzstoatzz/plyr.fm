@@ -32,6 +32,13 @@ class UserPreferences(Base):
         Boolean, nullable=False, default=False, server_default=text("false")
     )
 
+    # when enabled (the default), listeners may download this artist's public,
+    # ungated, unflagged tracks. the bytes are already publicly reachable via
+    # the artist's PDS, so this is a courtesy switch, not an access control.
+    allow_downloads: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default=text("true")
+    )
+
     # tag filtering preferences
     # stores a list of tag names that should be hidden from track listings
     # defaults to ["ai"] to hide AI-generated content by default

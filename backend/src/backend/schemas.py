@@ -8,6 +8,7 @@ from backend._internal.atproto.client import parse_at_uri
 from backend.config import settings
 from backend.models import Album, Track
 from backend.utilities.aggregations import CopyrightInfo
+from backend.utilities.downloads import download_key, download_refusal
 
 # --- common simple response types ---
 
@@ -144,6 +145,9 @@ class TrackResponse(BaseModel):
     copyright_match: str | None = None  # "Title by Artist" of primary match
     support_gate: dict[str, Any] | None = None  # supporter gating config
     gated: bool = False  # true if track is gated AND viewer lacks access
+    # true when the download endpoint would hand this track out: public,
+    # ungated, not copyright-blocked, and the artist hasn't disabled downloads
+    downloadable: bool = False
     # indiemusi rights record pointers (set when this track has copyright metadata)
     copyright_song_uri: str | None = None
     copyright_recording_uri: str | None = None
@@ -272,6 +276,30 @@ class TrackResponse(BaseModel):
                 f"{settings.atproto.base_url.rstrip('/')}/audio/{track.file_id}"
             )
 
+        # the download endpoint derives from the same policy function, so the
+        # UI only offers what the endpoint would serve (the artist relationship
+        # selectin-loads prefs)
+        artist_prefs = track.artist.preferences
+        downloadable = (
+            download_refusal(
+                is_private=track.is_private,
+                support_gate=track.support_gate,
+                labels=labels,
+                moderation_override=track.moderation_override,
+                allow_downloads=artist_prefs.allow_downloads if artist_prefs else None,
+            )
+            is None
+            and download_key(
+                file_id=track.file_id,
+                file_type=track.file_type,
+                original_file_id=track.original_file_id,
+                original_file_type=track.original_file_type,
+                r2_url=track.r2_url,
+                audio_storage=track.audio_storage,
+            )
+            is not None
+        )
+
         return cls(
             id=track.id,
             title=track.title,
@@ -299,6 +327,7 @@ class TrackResponse(BaseModel):
             copyright_match=copyright_match,
             support_gate=track.support_gate,
             gated=gated,
+            downloadable=downloadable,
             description=track.description,
             original_file_id=track.original_file_id,
             original_file_type=track.original_file_type,
