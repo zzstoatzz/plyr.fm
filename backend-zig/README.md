@@ -140,7 +140,7 @@ The current product surface is `GET /v1/tracks`,
 `GET /v1/tracks/{track_id}`, `GET /v1/tracks/{track_id}/playback`,
 `GET /v1/tracks/{track_id}/likes`,
 `PUT` and `DELETE /v1/tracks/{track_id}/like`,
-`POST /v1/me/likes/resolve`,
+`GET /v1/me/likes`, `POST /v1/me/likes/resolve`,
 `GET /v1/artists/{identifier}`, `GET /v1/artists/{identifier}/metrics`,
 `GET /v1/charts/tracks`, and the collection and detail forms of `GET /v1/albums`
 and `GET /v1/playlists`, plus `GET /v1/search`. Search accepts

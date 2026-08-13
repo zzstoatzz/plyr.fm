@@ -14,6 +14,7 @@ const lexicon_value = @import("../atproto/lexicon_value.zig");
 const track = @import("../domain/track.zig");
 const verified_list = @import("../domain/verified_list.zig");
 const track_id = @import("../identity/track_id.zig");
+const liked_track_store = @import("liked_track_store.zig");
 const store_module = @import("track_store.zig");
 
 const TrackStore = store_module.TrackStore;
@@ -30,6 +31,65 @@ pub const PostgresComposedTrackStore = struct {
             .list_public_fn = listPublicOpaque,
             .ready_fn = readyOpaque,
         };
+    }
+
+    pub fn likedStore(self: *PostgresComposedTrackStore) liked_track_store.Store {
+        return .{ .context = self, .list_fn = listLikedOpaque };
+    }
+
+    fn listLikedOpaque(
+        context: *anyopaque,
+        allocator: std.mem.Allocator,
+        request: liked_track_store.Request,
+    ) liked_track_store.Store.Error![]liked_track_store.Item {
+        const self: *PostgresComposedTrackStore = @ptrCast(@alignCast(context));
+        const conn = self.pool.acquire() catch return error.IndexUnavailable;
+        defer self.pool.release(conn);
+        const limit: i64 = @intCast(request.limit);
+        var result = if (request.after) |after|
+            conn.query(liked_after_query, .{
+                request.track_collection,
+                self.profile_collection,
+                self.like_collection,
+                request.actor_did,
+                after.created_at_us,
+                after.at_uri,
+                limit,
+            }) catch |err| {
+                logQueryError(conn, "composed liked-track query failed", err);
+                return error.IndexUnavailable;
+            }
+        else
+            conn.query(liked_query, .{
+                request.track_collection,
+                self.profile_collection,
+                self.like_collection,
+                request.actor_did,
+                limit,
+            }) catch |err| {
+                logQueryError(conn, "composed liked-track query failed", err);
+                return error.IndexUnavailable;
+            };
+        defer result.deinit();
+        var items: std.ArrayList(liked_track_store.Item) = .empty;
+        errdefer items.deinit(allocator);
+        while (result.next() catch return error.IndexUnavailable) |row| {
+            const value = decodeRow(allocator, row) catch |err| switch (err) {
+                error.OutOfMemory => return error.OutOfMemory,
+                else => return error.CorruptProjection,
+            };
+            const like_uri = row.get([]const u8, 47) catch return error.CorruptProjection;
+            const parsed_like = zat.AtUri.parse(like_uri) orelse return error.CorruptProjection;
+            if (!std.mem.eql(u8, parsed_like.authority(), request.actor_did) or
+                !std.mem.eql(u8, parsed_like.collection() orelse return error.CorruptProjection, self.like_collection))
+                return error.CorruptProjection;
+            items.append(allocator, .{
+                .value = value,
+                .liked_at_us = row.get(i64, 46) catch return error.CorruptProjection,
+                .like_uri = allocator.dupe(u8, like_uri) catch return error.OutOfMemory,
+            }) catch return error.OutOfMemory;
+        }
+        return items.toOwnedSlice(allocator) catch return error.OutOfMemory;
     }
 
     fn readyOpaque(context: *anyopaque) bool {
@@ -529,6 +589,47 @@ const artist_after_query = joined_projection ++ "\nWHERE true\n" ++ artist_polic
     \\LIMIT $7::bigint
 ;
 
+const liked_joined_projection = "SELECT\n" ++ projected_columns ++
+    \\, viewer_like.liked_at_us, viewer_like.like_uri
+++ "\n" ++ projected_from ++ "\n" ++
+    \\JOIN (
+    \\  SELECT DISTINCT ON (likes.subject_uri, likes.subject_cid)
+    \\    likes.subject_uri, likes.subject_cid, likes.record_uri AS like_uri,
+    \\    (extract(epoch FROM likes.record_created_at::timestamptz) * 1000000)::bigint AS liked_at_us
+    \\  FROM plyr_index.like_records AS likes
+    \\  WHERE likes.owner_did = $4 AND likes.collection = $3 AND NOT likes.deleted
+    \\  ORDER BY likes.subject_uri, likes.subject_cid,
+    \\    likes.record_created_at::timestamptz DESC, likes.record_uri DESC
+    \\) AS viewer_like
+    \\  ON viewer_like.subject_uri = v.record_uri AND viewer_like.subject_cid = v.record_cid
+;
+
+const liked_policy = common_policy ++
+    \\  AND v.collection = $1
+    \\  AND (COALESCE(pol.visibility, 'public') <> 'private' OR v.owner_did = $4)
+    \\  AND (
+    \\    v.owner_did = $4
+    \\    OR NOT (
+    \\      v.self_labels && ARRAY['sexual', 'porn']::text[]
+    \\      OR COALESCE(pol.operator_labels, '[]'::jsonb) ?| ARRAY['sexual', 'porn']
+    \\    )
+    \\  )
+;
+
+const liked_query = liked_joined_projection ++ "\nWHERE true\n" ++ liked_policy ++ "\n" ++
+    \\ORDER BY viewer_like.liked_at_us DESC, viewer_like.like_uri DESC
+    \\LIMIT $5::bigint
+;
+
+const liked_after_query = liked_joined_projection ++ "\nWHERE true\n" ++ liked_policy ++ "\n" ++
+    \\  AND (
+    \\    viewer_like.liked_at_us < $5
+    \\    OR (viewer_like.liked_at_us = $5 AND viewer_like.like_uri < $6)
+    \\  )
+    \\ORDER BY viewer_like.liked_at_us DESC, viewer_like.like_uri DESC
+    \\LIMIT $7::bigint
+;
+
 const readiness_sql =
     \\SELECT 1
     \\WHERE to_regclass('plyr_index.track_records') IS NOT NULL
@@ -833,6 +934,24 @@ test "composed PostgreSQL reads use verified records and authoritative account s
     }
     const counted = (try implementation.store().getByUri(a, record_uri)).?;
     try std.testing.expectEqual(@as(i64, 1), counted.metrics.like_count);
+    const liked = try implementation.likedStore().list(a, .{
+        .actor_did = "did:plc:listenerone",
+        .track_collection = "fm.plyr.dev.track",
+        .limit = 2,
+        .after = null,
+    });
+    try std.testing.expectEqual(@as(usize, 1), liked.len);
+    try std.testing.expectEqualStrings(record_uri, liked[0].value.record.uri);
+    try std.testing.expectEqualStrings(
+        "at://did:plc:listenerone/fm.plyr.dev.like/duplicate",
+        liked[0].like_uri,
+    );
+    try std.testing.expectEqual(@as(usize, 0), (try implementation.likedStore().list(a, .{
+        .actor_did = "did:plc:listenertwo",
+        .track_collection = "fm.plyr.dev.track",
+        .limit = 2,
+        .after = null,
+    })).len);
 
     const list_uri = "at://did:plc:artist/fm.plyr.dev.list/road-mix";
     const album_list_uri = "at://did:plc:artist/fm.plyr.dev.list/album";

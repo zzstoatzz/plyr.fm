@@ -1,12 +1,51 @@
 const std = @import("std");
 const config = @import("../config.zig");
+const list_viewer_liked_tracks = @import("../internal/application/list_viewer_liked_tracks.zig");
 const resolve_viewer_likes = @import("../internal/application/resolve_viewer_likes.zig");
 const AuthStore = @import("../internal/auth/store.zig").Store;
 const ViewerLikeStore = @import("../internal/index/viewer_like_store.zig").Store;
+const LikedTrackStore = @import("../internal/index/liked_track_store.zig").Store;
 const auth = @import("auth.zig");
 const response = @import("response.zig");
 
 const maximum_body_bytes = 32 * 1024;
+
+pub fn listLikes(
+    request: *std.http.Server.Request,
+    allocator: std.mem.Allocator,
+    store: ?LikedTrackStore,
+    sessions: ?AuthStore,
+    track_collection: []const u8,
+    cors: response.CorsPolicy,
+    request_id: []const u8,
+) !void {
+    var identity = (try auth.requireIdentity(
+        request,
+        allocator,
+        sessions,
+        cors,
+        request_id,
+    )) orelse return;
+    defer identity.deinit(allocator);
+    switch (list_viewer_liked_tracks.execute(
+        allocator,
+        store,
+        identity.session.did,
+        track_collection,
+        request.head.target,
+    )) {
+        .found => |value| {
+            const encoded = try std.json.Stringify.valueAlloc(allocator, value, .{});
+            try response.jsonWithHeaders(request, .ok, encoded, request_id, cors, &.{
+                .{ .name = "cache-control", .value = "no-store" },
+                .{ .name = "pragma", .value = "no-cache" },
+            });
+        },
+        .invalid_request => try response.apiError(request, .invalid_request, request_id, cors),
+        .corrupt_projection => try response.apiError(request, .internal_error, request_id, cors),
+        .unavailable => try response.apiError(request, .service_unavailable, request_id, cors),
+    }
+}
 
 pub fn resolveLikes(
     request: *std.http.Server.Request,

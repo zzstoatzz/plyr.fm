@@ -4,6 +4,7 @@ import {
 	getZigPlayback,
 	getZigTrack,
 	listZigTrackChart,
+	listZigLikedTracks,
 	likeZigTrack,
 	listZigTrackLikers,
 	listZigTracks,
@@ -553,6 +554,22 @@ describe('Zig v1 compatibility boundary', () => {
 		expect(JSON.parse(String(requestedInit?.body))).toEqual({
 			tracks: [{ track_id: 'trk_opaque', record_cid: 'bafytrack' }]
 		});
+	});
+
+	it('reads an authenticated liked-track page with liked state attached', async () => {
+		let requestedInput: RequestInfo | URL | null = null;
+		let requestedInit: RequestInit | undefined;
+		const fetcher = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+			requestedInput = input;
+			requestedInit = init;
+			return json({ object: 'list', data: [track], has_more: false, next_cursor: null });
+		});
+		const page = await listZigLikedTracks('https://api.next.plyr.fm', { limit: 25 }, fetcher);
+		const requested = new URL(String(requestedInput));
+		expect(requested.pathname).toBe('/v1/me/likes');
+		expect(requested.searchParams.get('limit')).toBe('25');
+		expect(requestedInit).toMatchObject({ credentials: 'include' });
+		expect(page.tracks[0]?.is_liked).toBe(true);
 	});
 
 	it('treats an anonymous viewer like batch as all false', async () => {

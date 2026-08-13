@@ -221,6 +221,10 @@ def _assert_configured_auth_process(base_environment: dict[str, str]) -> None:
         )
         assert status == 401
         assert anonymous_viewer_likes["error"]["code"] == "authentication_required"
+
+        status, _, anonymous_liked_tracks = _request(base_url, "/v1/me/likes")
+        assert status == 401
+        assert anonymous_liked_tracks["error"]["code"] == "authentication_required"
     finally:
         process.terminate()
         try:

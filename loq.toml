@@ -383,7 +383,7 @@ max_lines = 647
 
 [[rules]]
 path = "backend-zig/src/internal/index/postgres_composed_track_store.zig"
-max_lines = 1153
+max_lines = 1272
 
 [[rules]]
 path = "backend-zig/src/internal/ingest/projector.zig"
@@ -399,23 +399,23 @@ max_lines = 528
 
 [[rules]]
 path = "backend-zig/src/api/router.zig"
-max_lines = 615
+max_lines = 631
 
 [[rules]]
 path = "backend-zig/scripts/test_http.py"
-max_lines = 595
+max_lines = 599
 
 [[rules]]
 path = "backend-zig/src/api/auth.zig"
-max_lines = 668
+max_lines = 680
 
 [[rules]]
 path = "frontend/src/lib/api/zig-v1.test.ts"
-max_lines = 654
+max_lines = 671
 
 [[rules]]
 path = "frontend/src/lib/api/zig-v1.ts"
-max_lines = 665
+max_lines = 687
 
 [[rules]]
 path = "backend-zig/src/api/tracks.zig"

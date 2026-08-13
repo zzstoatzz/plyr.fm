@@ -66,3 +66,14 @@ responses are `no-store`. This keeps public track resources viewer-independent
 and cacheable while avoiding one query or HTTP request per track. The next
 frontend performs this one batch after each catalogue page and treats `401` as
 the anonymous all-false state.
+
+`GET /v1/me/likes` is the corresponding authenticated collection. It joins the
+viewer’s live verified like records to the current track URI **and CID**, picks
+the newest record when one repository contains duplicates, and hydrates the
+same composed track representation in one query. Stale-CID likes cannot make a
+new track revision appear liked. Its keyset cursor is bound to the viewer DID,
+success is `no-store`, private tracks are visible only to their owning viewer,
+and sensitive tracks remain excluded for non-owners until saved viewer
+moderation preferences have their own verified application boundary. The next
+frontend follows the bounded pages for library and download workflows rather
+than preserving the former hardcoded empty result.

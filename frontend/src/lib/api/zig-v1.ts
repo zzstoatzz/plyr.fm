@@ -205,6 +205,28 @@ export async function listZigTracks(
 	};
 }
 
+export async function listZigLikedTracks(
+	apiUrl: string,
+	options: { limit?: number; cursor?: string | null } = {},
+	fetcher: Fetcher = fetch
+): Promise<{ tracks: Track[]; next_cursor: string | null; has_more: boolean }> {
+	const url = new URL(`${apiUrl}/v1/me/likes`);
+	url.searchParams.set('limit', String(options.limit ?? 100));
+	if (options.cursor) url.searchParams.set('cursor', options.cursor);
+	const response = await fetcher(url, {
+		credentials: 'include',
+		headers: { accept: 'application/json' }
+	});
+	if (!response.ok) throw new Error(`Zig liked tracks returned ${response.status}`);
+	const page: unknown = await response.json();
+	assertTrackPage(page);
+	return {
+		tracks: page.data.map((value) => ({ ...toFrontendTrack(value), is_liked: true })),
+		next_cursor: page.next_cursor,
+		has_more: page.has_more
+	};
+}
+
 export async function listZigTrackChart(
 	apiUrl: string,
 	options: { limit?: number; period?: ZigTrackChartPeriod } = {},

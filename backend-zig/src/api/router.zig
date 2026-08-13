@@ -14,6 +14,7 @@ const ArtistStore = @import("../internal/index/artist_store.zig").ArtistStore;
 const ArtistMetricStore = @import("../internal/metrics/artist_metric_store.zig").ArtistMetricStore;
 const LikeQueryStore = @import("../internal/index/like_query_store.zig").LikeQueryStore;
 const ViewerLikeStore = @import("../internal/index/viewer_like_store.zig").Store;
+const LikedTrackStore = @import("../internal/index/liked_track_store.zig").Store;
 const PlaybackStore = @import("../internal/index/playback_store.zig").PlaybackStore;
 const SearchStore = @import("../internal/index/search_store.zig").SearchStore;
 const PlayDedupStore = @import("../internal/metrics/play_dedup_store.zig").PlayDedupStore;
@@ -38,6 +39,7 @@ pub const App = struct {
     track_chart_store: ?TrackChartStore = null,
     like_store: ?LikeQueryStore = null,
     viewer_like_store: ?ViewerLikeStore = null,
+    liked_track_store: ?LikedTrackStore = null,
     playback_store: ?PlaybackStore,
     artist_store: ?ArtistStore,
     artist_metric_store: ?ArtistMetricStore,
@@ -204,6 +206,20 @@ pub fn handle(
             request,
             allocator,
             app.track_store,
+            app.track_collection,
+            app.cors,
+            request_id,
+        );
+    } else if (mem.eql(u8, path, prefix ++ "/me/likes")) {
+        if (request.head.method != .GET) {
+            try response.apiError(request, .method_not_allowed, request_id, app.cors);
+            return;
+        }
+        try viewer.listLikes(
+            request,
+            allocator,
+            app.liked_track_store,
+            app.auth_store,
             app.track_collection,
             app.cors,
             request_id,

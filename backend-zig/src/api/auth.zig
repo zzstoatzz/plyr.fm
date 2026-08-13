@@ -335,6 +335,18 @@ pub fn requireMutationIdentity(
     };
     if (!try requireBrowserOrigin(request, settings.frontend_origin, cors, request_id))
         return null;
+    return requireIdentity(request, allocator, store, cors, request_id);
+}
+
+/// Authenticate a browser read without requiring an Origin header. Viewer
+/// resources remain no-store; unlike mutations, reads do not need CSRF proof.
+pub fn requireIdentity(
+    request: *http.Server.Request,
+    allocator: std.mem.Allocator,
+    store: ?AuthStore,
+    cors: response.CorsPolicy,
+    request_id: []const u8,
+) !?MutationIdentity {
     const token = sessionCookie(request) orelse {
         try response.apiError(request, .authentication_required, request_id, cors);
         return null;

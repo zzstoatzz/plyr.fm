@@ -2,6 +2,7 @@ import { safeLocalStorage } from './utils/safe-storage';
 import { API_URL, IS_ZIG_V1 } from './config';
 import {
 	listZigTrackChart,
+	listZigLikedTracks,
 	listZigTracks,
 	likeZigTrack,
 	resolveZigViewerLikes,
@@ -309,7 +310,27 @@ export async function fetchTopTracks(limit = 10, period = 'all_time'): Promise<T
 }
 
 export async function fetchLikedTracks(): Promise<Track[]> {
-	if (IS_ZIG_V1) return [];
+	if (IS_ZIG_V1) {
+		try {
+			const tracks: Track[] = [];
+			const seenCursors = new Set<string>();
+			let cursor: string | null = null;
+			do {
+				const page = await listZigLikedTracks(API_URL, { cursor });
+				tracks.push(...page.tracks);
+				if (!page.has_more) return tracks;
+				if (!page.next_cursor || seenCursors.has(page.next_cursor)) {
+					throw new TypeError('Zig liked tracks returned an invalid cursor chain');
+				}
+				seenCursors.add(page.next_cursor);
+				cursor = page.next_cursor;
+			} while (seenCursors.size <= 100);
+			throw new TypeError('Zig liked tracks exceeded the client page bound');
+		} catch (e) {
+			console.error('failed to fetch Zig liked tracks:', e);
+			return [];
+		}
+	}
 	try {
 		const response = await fetch(`${API_URL}/tracks/liked`, {
 			credentials: 'include'

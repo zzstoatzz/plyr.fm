@@ -55,7 +55,8 @@ decision.
 | `GET /v1/tracks/{track_id}/playback` | covered | anonymous authorization and delivery resolution with explicit integrity | sessions, supporter/copyright authorization, private-space proxying, PDS blob resolution, play metrics |
 | `GET /v1/tracks/{track_id}/likes` | covered | exact-URI-and-CID verified public like records with actor availability and strict pagination | aggregate history and moderation policy |
 | `PUT, DELETE /v1/tracks/{track_id}/like` | covered | replay-safe PDS-first like and idempotent unlike commands with explicit projection-lag receipts | UI treatment of pending projection state |
-| `POST /v1/me/likes/resolve` | covered | bounded exact-strong-reference viewer-state batch without personalizing public track resources | paginated liked-track collection |
+| `POST /v1/me/likes/resolve` | covered | bounded exact-strong-reference viewer-state batch without personalizing public track resources | other viewer preference families |
+| `GET /v1/me/likes` | covered | authenticated exact-CID liked-track collection ordered by the viewer's verified PDS records | saved moderation preferences |
 | `GET /v1/artists/{identifier}` | covered | public artist detail by canonical DID or case-insensitive handle alias | verified repository ingestion, collections, follows, profile writes, account state, viewer context |
 | `GET /v1/artists/{identifier}/metrics` | covered | derived admitted-track and canonical-URI play aggregates | likes, viewer-specific statistics, historical series |
 | `GET /v1/albums?artist_did={did}` | covered | verified list-record albums for one artist with strict scope-bound pagination | global discovery, writes, viewer state, presentation resources |
@@ -222,7 +223,7 @@ This is a boundary map, not a frozen schema:
 | area | initial resources |
 |---|---|
 | API metadata | `GET /v1` |
-| current identity | `GET /auth/me`, `POST /v1/me/likes/resolve`, session/account-management resources |
+| current identity | `GET /auth/me`, `GET /v1/me/likes`, `POST /v1/me/likes/resolve`, session/account-management resources |
 | catalog | `/v1/artists`, `/v1/tracks`, `/v1/albums`, `/v1/playlists` |
 | interactions | verified like reads, PDS-first like/unlike commands, and separate viewer-state resolution; comments remain open |
 | publishing | `/v1/uploads` and explicit publish operations |
