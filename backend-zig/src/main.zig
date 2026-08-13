@@ -210,12 +210,14 @@ test {
     _ = @import("internal/auth/store.zig");
     _ = @import("internal/auth/oauth_state.zig");
     _ = @import("internal/auth/oauth_gateway.zig");
+    _ = @import("internal/auth/pds_gateway.zig");
     _ = @import("internal/auth/start_admission.zig");
     _ = @import("internal/auth/redis_start_admission.zig");
     _ = @import("internal/redis/connection_config.zig");
     _ = @import("internal/http/client_identity.zig");
     _ = @import("internal/application/browser_login.zig");
     _ = @import("internal/application/credential_refresh.zig");
+    _ = @import("internal/application/authenticated_pds.zig");
     _ = @import("internal/account/availability.zig");
     _ = @import("internal/account/current_pds_status_source.zig");
     _ = @import("internal/account/check_schedule.zig");

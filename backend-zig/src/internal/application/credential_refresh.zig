@@ -148,6 +148,7 @@ const FakeStore = struct {
             .claim_refresh_fn = claimRefresh,
             .publish_refresh_fn = publishRefresh,
             .abandon_refresh_fn = abandonRefresh,
+            .update_credentials_fn = updateCredentials,
         };
     }
 
@@ -186,6 +187,13 @@ const FakeStore = struct {
             self.leased = false;
             self.abandoned += 1;
         }
+    }
+
+    fn updateCredentials(context: *anyopaque, _: bearer.Digest, generation: i64, sealed: []const u8) !bool {
+        const self: *FakeStore = @ptrCast(@alignCast(context));
+        if (self.generation != generation) return false;
+        self.sealed = sealed;
+        return true;
     }
 
     fn putRequest(_: *anyopaque, _: bearer.Digest, _: []const u8, _: i64) !void {}

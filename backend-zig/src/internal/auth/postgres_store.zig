@@ -26,6 +26,7 @@ pub const PostgresAuthStore = struct {
             .claim_refresh_fn = claimRefreshOpaque,
             .publish_refresh_fn = publishRefreshOpaque,
             .abandon_refresh_fn = abandonRefreshOpaque,
+            .update_credentials_fn = updateCredentialsOpaque,
         };
     }
 
@@ -77,6 +78,11 @@ pub const PostgresAuthStore = struct {
     fn abandonRefreshOpaque(context: *anyopaque, digest: bearer.Digest, owner: []const u8, generation: i64) !void {
         const self: *PostgresAuthStore = @ptrCast(@alignCast(context));
         return self.abandonRefresh(digest, owner, generation);
+    }
+
+    fn updateCredentialsOpaque(context: *anyopaque, digest: bearer.Digest, generation: i64, sealed_credentials: []const u8) !bool {
+        const self: *PostgresAuthStore = @ptrCast(@alignCast(context));
+        return self.updateCredentials(digest, generation, sealed_credentials);
     }
 
     pub fn putRequest(
@@ -277,6 +283,23 @@ pub const PostgresAuthStore = struct {
             \\  AND credentials_generation = $3::bigint
         , .{ session_digest[0..], owner, generation });
     }
+
+    pub fn updateCredentials(
+        self: PostgresAuthStore,
+        session_digest: bearer.Digest,
+        generation: i64,
+        sealed_credentials: []const u8,
+    ) !bool {
+        const affected = try self.pool.exec(
+            \\UPDATE plyr_auth.sessions
+            \\SET sealed_credentials = $3::bytea
+            \\WHERE session_digest = $1::bytea
+            \\  AND credentials_generation = $2::bigint
+            \\  AND expires_at > clock_timestamp()
+            \\  AND revoked_at IS NULL
+        , .{ session_digest[0..], generation, sealed_credentials });
+        return affected == 1;
+    }
 };
 
 test "Postgres auth store consumes exchange tokens once and revokes sessions" {
@@ -414,6 +437,16 @@ test "Postgres auth store consumes exchange tokens once and revokes sessions" {
     defer rotated.deinit(std.testing.allocator);
     try std.testing.expectEqual(@as(i64, 2), rotated.generation);
     try std.testing.expectEqualStrings("rotated credentials", rotated.sealed_credentials);
+    try std.testing.expect(try store.updateCredentials(
+        session,
+        rotated.generation,
+        "nonce-updated credentials",
+    ));
+    try std.testing.expect(!try store.updateCredentials(
+        session,
+        1,
+        "stale credentials",
+    ));
     try std.testing.expect(try store.revokeSession(session));
     try std.testing.expect((try store.getSession(std.testing.allocator, session)) == null);
 }

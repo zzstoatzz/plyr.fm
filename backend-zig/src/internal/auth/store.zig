@@ -65,6 +65,7 @@ pub const Store = struct {
     claim_refresh_fn: *const fn (*anyopaque, std.mem.Allocator, bearer.Digest, i64, []const u8, i64) anyerror!?CredentialSnapshot,
     publish_refresh_fn: *const fn (*anyopaque, RefreshPublication) anyerror!bool,
     abandon_refresh_fn: *const fn (*anyopaque, bearer.Digest, []const u8, i64) anyerror!void,
+    update_credentials_fn: *const fn (*anyopaque, bearer.Digest, i64, []const u8) anyerror!bool,
 
     pub fn putRequest(self: Store, digest: bearer.Digest, payload: []const u8, ttl: i64) !void {
         return self.put_request_fn(self.context, digest, payload, ttl);
@@ -123,5 +124,21 @@ pub const Store = struct {
         generation: i64,
     ) !void {
         return self.abandon_refresh_fn(self.context, digest, owner, generation);
+    }
+
+    /// Persist destination nonce evolution without overwriting a token
+    /// generation concurrently rotated by another instance.
+    pub fn updateCredentials(
+        self: Store,
+        digest: bearer.Digest,
+        generation: i64,
+        sealed_credentials: []const u8,
+    ) !bool {
+        return self.update_credentials_fn(
+            self.context,
+            digest,
+            generation,
+            sealed_credentials,
+        );
     }
 };

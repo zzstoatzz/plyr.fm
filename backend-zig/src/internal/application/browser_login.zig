@@ -206,6 +206,7 @@ const FakeStore = struct {
             .claim_refresh_fn = claimRefresh,
             .publish_refresh_fn = publishRefresh,
             .abandon_refresh_fn = abandonRefresh,
+            .update_credentials_fn = updateCredentials,
         };
     }
 
@@ -255,6 +256,10 @@ const FakeStore = struct {
     }
 
     fn abandonRefresh(_: *anyopaque, _: bearer.Digest, _: []const u8, _: i64) !void {}
+
+    fn updateCredentials(_: *anyopaque, _: bearer.Digest, _: i64, _: []const u8) !bool {
+        return false;
+    }
 };
 
 const FakeOAuth = struct {
