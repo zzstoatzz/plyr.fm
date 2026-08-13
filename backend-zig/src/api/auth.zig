@@ -576,7 +576,7 @@ test "Zat emits confidential ATProto OAuth metadata for the browser client" {
         .client_name = "plyr.fm",
         .client_uri = "https://api.next.plyr.fm",
         .redirect_uris = &.{"https://api.next.plyr.fm/auth/callback"},
-        .scope = "atproto repo:fm.plyr.like?action=create&action=update",
+        .scope = "atproto repo:fm.plyr.like?action=create&action=update&action=delete",
         .keypair = &key,
     });
     defer std.testing.allocator.free(body);

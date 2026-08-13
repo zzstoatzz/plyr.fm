@@ -360,7 +360,7 @@ test "auth configuration is exact, confidential, and uses separate keys" {
         .client_id = "https://api.next.plyr.fm/oauth-client-metadata.json",
         .redirect_uri = "https://api.next.plyr.fm/auth/callback",
         .frontend_origin = "https://next.plyr.fm",
-        .scope = "atproto repo:fm.plyr.like?action=create&action=update",
+        .scope = "atproto repo:fm.plyr.like?action=create&action=update&action=delete",
         .client_private_key = client_key,
         .encryption_key = encryption_key,
     });

@@ -168,7 +168,7 @@ const FakeLikes = struct {
         return .{
             .context = self,
             .list_by_subject_fn = list,
-            .find_record_key_fn = findRecordKey,
+            .list_record_keys_fn = listRecordKeys,
         };
     }
 
@@ -183,12 +183,12 @@ const FakeLikes = struct {
         return self.items[0..@min(self.items.len, request.limit)];
     }
 
-    fn findRecordKey(
+    fn listRecordKeys(
         _: *anyopaque,
         _: std.mem.Allocator,
         _: like_store_module.ActorSubjectRequest,
-    ) LikeQueryStore.Error!?[]const u8 {
-        return null;
+    ) LikeQueryStore.Error![]const []const u8 {
+        return &.{};
     }
 };
 

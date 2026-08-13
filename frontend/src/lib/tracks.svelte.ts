@@ -4,6 +4,7 @@ import {
 	listZigTrackChart,
 	listZigTracks,
 	likeZigTrack,
+	unlikeZigTrack,
 	toFrontendTrack,
 	type ZigTrackChartPeriod
 } from './api/zig-v1';
@@ -237,13 +238,17 @@ export async function likeTrack(trackId: TrackId, fileId?: string, gated?: boole
 
 export async function unlikeTrack(trackId: TrackId): Promise<boolean> {
 	try {
-		const response = await fetch(`${API_URL}/tracks/${trackId}/like`, {
-			method: 'DELETE',
-			credentials: 'include'
-		});
+		if (IS_ZIG_V1) {
+			await unlikeZigTrack(API_URL, String(trackId));
+		} else {
+			const response = await fetch(`${API_URL}/tracks/${trackId}/like`, {
+				method: 'DELETE',
+				credentials: 'include'
+			});
 
-		if (!response.ok) {
-			throw new Error(`failed to unlike track: ${response.statusText}`);
+			if (!response.ok) {
+				throw new Error(`failed to unlike track: ${response.statusText}`);
+			}
 		}
 
 		// invalidate caches so next fetch gets updated like status

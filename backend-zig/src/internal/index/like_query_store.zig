@@ -28,7 +28,7 @@ pub const Item = struct {
 pub const LikeQueryStore = struct {
     context: *anyopaque,
     list_by_subject_fn: *const fn (*anyopaque, std.mem.Allocator, SubjectRequest) Error![]Item,
-    find_record_key_fn: *const fn (*anyopaque, std.mem.Allocator, ActorSubjectRequest) Error!?[]const u8,
+    list_record_keys_fn: *const fn (*anyopaque, std.mem.Allocator, ActorSubjectRequest) Error![]const []const u8,
 
     pub const Error = error{
         IndexUnavailable,
@@ -44,11 +44,11 @@ pub const LikeQueryStore = struct {
         return self.list_by_subject_fn(self.context, allocator, request);
     }
 
-    pub fn findRecordKey(
+    pub fn listRecordKeys(
         self: LikeQueryStore,
         allocator: std.mem.Allocator,
         request: ActorSubjectRequest,
-    ) Error!?[]const u8 {
-        return self.find_record_key_fn(self.context, allocator, request);
+    ) Error![]const []const u8 {
+        return self.list_record_keys_fn(self.context, allocator, request);
     }
 };

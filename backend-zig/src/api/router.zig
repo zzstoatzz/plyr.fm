@@ -269,26 +269,44 @@ pub fn handle(
             request_id,
         );
     } else if (trackLikeId(path)) |id| {
-        if (request.head.method != .PUT) {
+        if (request.head.method != .PUT and request.head.method != .DELETE) {
             try response.apiError(request, .method_not_allowed, request_id, app.cors);
             return;
         }
-        try tracks.like(
-            request,
-            allocator,
-            app.io,
-            app.track_store,
-            app.like_store,
-            app.record_key_store,
-            app.authenticated_pds,
-            app.auth,
-            app.auth_store,
-            app.track_collection,
-            app.like_collection,
-            app.cors,
-            id,
-            request_id,
-        );
+        if (request.head.method == .PUT) {
+            try tracks.like(
+                request,
+                allocator,
+                app.io,
+                app.track_store,
+                app.like_store,
+                app.record_key_store,
+                app.authenticated_pds,
+                app.auth,
+                app.auth_store,
+                app.track_collection,
+                app.like_collection,
+                app.cors,
+                id,
+                request_id,
+            );
+        } else {
+            try tracks.unlike(
+                request,
+                allocator,
+                app.track_store,
+                app.like_store,
+                app.record_key_store,
+                app.authenticated_pds,
+                app.auth,
+                app.auth_store,
+                app.track_collection,
+                app.like_collection,
+                app.cors,
+                id,
+                request_id,
+            );
+        }
     } else if (trackLikesId(path)) |id| {
         if (request.head.method != .GET) {
             try response.apiError(request, .method_not_allowed, request_id, app.cors);

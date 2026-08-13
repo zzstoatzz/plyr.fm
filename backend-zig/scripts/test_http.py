@@ -121,7 +121,7 @@ def _assert_configured_auth_process(base_environment: dict[str, str]) -> None:
         "ZIG_OAUTH_CLIENT_ID": ("https://api.next.plyr.fm/oauth-client-metadata.json"),
         "ZIG_OAUTH_REDIRECT_URI": "https://api.next.plyr.fm/auth/callback",
         "ZIG_OAUTH_FRONTEND_ORIGIN": FRONTEND_ORIGIN,
-        "ZIG_OAUTH_SCOPE": "atproto repo:fm.plyr.dev.like?action=create&action=update",
+        "ZIG_OAUTH_SCOPE": "atproto repo:fm.plyr.dev.like?action=create&action=update&action=delete",
         "ZIG_OAUTH_CLIENT_PRIVATE_KEY": base64.b64encode(b"B" * 32).decode(),
         "ZIG_AUTH_ENCRYPTION_KEY": base64.b64encode(b"3" * 32).decode(),
     }
@@ -190,6 +190,19 @@ def _assert_configured_auth_process(base_environment: dict[str, str]) -> None:
         )
         assert status == 401
         assert anonymous_like["error"]["code"] == "authentication_required"
+        status, _, missing_unlike_origin = _request(
+            base_url, like_path, method="DELETE"
+        )
+        assert status == 403
+        assert missing_unlike_origin["error"]["code"] == "forbidden"
+        status, _, anonymous_unlike = _request(
+            base_url,
+            like_path,
+            method="DELETE",
+            origin=FRONTEND_ORIGIN,
+        )
+        assert status == 401
+        assert anonymous_unlike["error"]["code"] == "authentication_required"
     finally:
         process.terminate()
         try:

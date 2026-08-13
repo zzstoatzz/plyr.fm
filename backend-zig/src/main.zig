@@ -231,6 +231,7 @@ test {
     _ = @import("internal/auth/bearer_token.zig");
     _ = @import("internal/auth/sealed_secret.zig");
     _ = @import("internal/auth/postgres_store.zig");
+    _ = @import("internal/auth/repo_scope.zig");
     _ = @import("internal/auth/store.zig");
     _ = @import("internal/auth/oauth_state.zig");
     _ = @import("internal/auth/oauth_gateway.zig");
@@ -243,6 +244,8 @@ test {
     _ = @import("internal/application/credential_refresh.zig");
     _ = @import("internal/application/authenticated_pds.zig");
     _ = @import("internal/application/like_track.zig");
+    _ = @import("internal/application/unlike_track.zig");
+    _ = @import("internal/application/verified_track_subject.zig");
     _ = @import("internal/command/record_key_store.zig");
     _ = @import("internal/command/postgres_record_key_store.zig");
     _ = @import("internal/account/availability.zig");

@@ -4,6 +4,7 @@ const get_playback = @import("../internal/application/get_playback.zig");
 const list_track_likes = @import("../internal/application/list_track_likes.zig");
 const list_tracks = @import("../internal/application/list_tracks.zig");
 const like_track = @import("../internal/application/like_track.zig");
+const unlike_track = @import("../internal/application/unlike_track.zig");
 const record_play = @import("../internal/application/record_play.zig");
 const authenticated_pds = @import("../internal/application/authenticated_pds.zig");
 const config = @import("../config.zig");
@@ -134,8 +135,8 @@ pub fn like(
         id,
         candidate,
     )) {
-        .liked => try writeLikeReceipt(request, request_id, cors, false),
-        .already_liked => try writeLikeReceipt(request, request_id, cors, true),
+        .liked => try writeLikeReceipt(request, allocator, request_id, cors, true, false, 0),
+        .already_liked => try writeLikeReceipt(request, allocator, request_id, cors, true, true, 0),
         .invalid_id => try response.apiError(request, .invalid_request, request_id, cors),
         .not_found => try response.apiError(request, .not_found, request_id, cors),
         .unverified_target => try response.apiError(request, .conflict, request_id, cors),
@@ -147,19 +148,74 @@ pub fn like(
     }
 }
 
+pub fn unlike(
+    request: *std.http.Server.Request,
+    allocator: std.mem.Allocator,
+    track_store: ?TrackStore,
+    like_store: ?LikeQueryStore,
+    record_keys: ?key_store.Store,
+    pds: ?authenticated_pds.Client,
+    auth_config: ?config.AuthConfig,
+    sessions: ?auth_store.Store,
+    track_collection: []const u8,
+    like_collection: []const u8,
+    cors: response.CorsPolicy,
+    id: []const u8,
+    request_id: []const u8,
+) !void {
+    var identity = (try auth.requireMutationIdentity(
+        request,
+        allocator,
+        auth_config,
+        sessions,
+        cors,
+        request_id,
+    )) orelse return;
+    defer identity.deinit(allocator);
+    switch (unlike_track.execute(
+        allocator,
+        track_store,
+        like_store,
+        record_keys,
+        pds,
+        identity.session_digest,
+        identity.session.did,
+        identity.session.scope,
+        track_collection,
+        like_collection,
+        id,
+    )) {
+        .unliked => |count| try writeLikeReceipt(request, allocator, request_id, cors, false, false, count),
+        .already_unliked => try writeLikeReceipt(request, allocator, request_id, cors, false, true, 0),
+        .invalid_id => try response.apiError(request, .invalid_request, request_id, cors),
+        .not_found => try response.apiError(request, .not_found, request_id, cors),
+        .unverified_target, .too_many_records => try response.apiError(request, .conflict, request_id, cors),
+        .invalid_pds_response, .rejected => try response.apiError(request, .upstream_failure, request_id, cors),
+        .session_unavailable => try response.apiError(request, .authentication_required, request_id, cors),
+        .insufficient_scope => try response.apiError(request, .insufficient_scope, request_id, cors),
+        .unavailable => try response.apiError(request, .service_unavailable, request_id, cors),
+    }
+}
+
 fn writeLikeReceipt(
     request: *std.http.Server.Request,
+    allocator: std.mem.Allocator,
     request_id: []const u8,
     cors: response.CorsPolicy,
+    liked: bool,
     indexed: bool,
+    deleted_records: usize,
 ) !void {
+    const body = try std.json.Stringify.valueAlloc(allocator, .{
+        .object = "like_command",
+        .liked = liked,
+        .indexed = indexed,
+        .deleted_records = deleted_records,
+    }, .{});
     try response.jsonWithHeaders(
         request,
         .ok,
-        if (indexed)
-            "{\"object\":\"like_command\",\"liked\":true,\"indexed\":true}"
-        else
-            "{\"object\":\"like_command\",\"liked\":true,\"indexed\":false}",
+        body,
         request_id,
         cors,
         &.{

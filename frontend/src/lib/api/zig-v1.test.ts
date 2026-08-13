@@ -5,6 +5,7 @@ import {
 	getZigTrack,
 	listZigTrackChart,
 	likeZigTrack,
+	unlikeZigTrack,
 	listZigTrackLikers,
 	listZigTracks,
 	recordZigPlay
@@ -513,6 +514,19 @@ describe('Zig v1 compatibility boundary', () => {
 		await likeZigTrack('https://api.next.plyr.fm', 'trk_opaque', fetcher);
 		expect(String(requestedInput)).toBe('https://api.next.plyr.fm/v1/tracks/trk_opaque/like');
 		expect(requestedInit).toMatchObject({ method: 'PUT', credentials: 'include' });
+	});
+
+	it('unlikes through the idempotent authenticated v1 command', async () => {
+		let requestedInput: RequestInfo | URL | null = null;
+		let requestedInit: RequestInit | undefined;
+		const fetcher = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+			requestedInput = input;
+			requestedInit = init;
+			return json({ object: 'like_command', liked: false, indexed: false, deleted_records: 2 });
+		});
+		await unlikeZigTrack('https://api.next.plyr.fm', 'trk_opaque', fetcher);
+		expect(String(requestedInput)).toBe('https://api.next.plyr.fm/v1/tracks/trk_opaque/like');
+		expect(requestedInit).toMatchObject({ method: 'DELETE', credentials: 'include' });
 	});
 
 	it('requires detail to round-trip the opaque resource identity', async () => {

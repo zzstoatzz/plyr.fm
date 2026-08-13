@@ -155,7 +155,7 @@ Before exposing `next.plyr.fm`:
    Successful credential responses must be `no-store`, and OAuth signing and
    credential-encryption keys must be distinct.
    The canary rejects the broad transitional grant and currently requests only
-   `repo:fm.plyr.like?action=create&action=update`; its OAuth authority grows
+   `repo:fm.plyr.like?action=create&action=update&action=delete`; its OAuth authority grows
    explicitly with implemented PDS commands.
    OAuth start must enforce a shared per-client limit before identity discovery
    or PAR; limiter loss fails that expensive path closed without taking down

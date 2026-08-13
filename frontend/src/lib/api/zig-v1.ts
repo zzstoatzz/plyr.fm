@@ -246,6 +246,30 @@ export async function likeZigTrack(
 	}
 }
 
+export async function unlikeZigTrack(
+	apiUrl: string,
+	trackId: string,
+	fetcher: Fetcher = fetch
+): Promise<void> {
+	assertOpaqueId(trackId, 'track');
+	const response = await fetcher(`${apiUrl}/v1/tracks/${encodeURIComponent(trackId)}/like`, {
+		method: 'DELETE',
+		credentials: 'include',
+		headers: { accept: 'application/json' }
+	});
+	if (!response.ok) throw new Error(`Zig track unlike returned ${response.status}`);
+	const value: unknown = await response.json();
+	if (
+		!isObject(value) ||
+		value.object !== 'like_command' ||
+		value.liked !== false ||
+		typeof value.indexed !== 'boolean' ||
+		typeof value.deleted_records !== 'number'
+	) {
+		throw new TypeError('Zig track unlike returned an invalid command receipt');
+	}
+}
+
 export async function getZigTrack(
 	apiUrl: string,
 	trackId: string,
