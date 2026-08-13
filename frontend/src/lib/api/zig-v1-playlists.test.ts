@@ -31,7 +31,8 @@ const track = {
 				artifact_cid: null,
 				source: 'verified_repo'
 			}
-		]
+		],
+		artwork: null
 	},
 	access: { visibility: 'public', in_discovery: true, gate: null },
 	moderation: { self_labels: [], operator_labels: [] },

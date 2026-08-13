@@ -383,7 +383,7 @@ max_lines = 647
 
 [[rules]]
 path = "backend-zig/src/internal/index/postgres_composed_track_store.zig"
-max_lines = 1144
+max_lines = 1153
 
 [[rules]]
 path = "backend-zig/src/internal/ingest/projector.zig"
@@ -411,8 +411,8 @@ max_lines = 623
 
 [[rules]]
 path = "frontend/src/lib/api/zig-v1.test.ts"
-max_lines = 584
+max_lines = 589
 
 [[rules]]
 path = "frontend/src/lib/api/zig-v1.ts"
-max_lines = 547
+max_lines = 558

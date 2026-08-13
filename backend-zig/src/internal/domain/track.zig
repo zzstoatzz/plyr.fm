@@ -50,6 +50,13 @@ pub const ArtistProfile = struct {
 pub const Media = struct {
     artifacts: []const Artifact,
     origins: []const Origin,
+    /// Cover artwork is a presentation claim, not an audio delivery origin.
+    artwork: ?Artwork = null,
+};
+
+pub const Artwork = struct {
+    url: []const u8,
+    source: Source,
 };
 
 /// A content-addressed media object declared by an authored record. The CID is

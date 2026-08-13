@@ -87,6 +87,10 @@ export interface ZigTrack {
 			artifact_cid: string | null;
 			source: string;
 		}>;
+		artwork: {
+			url: string;
+			source: 'verified_repo' | 'legacy_projection';
+		} | null;
 	};
 	access: {
 		visibility: 'public' | 'unlisted' | 'supporters';
@@ -337,6 +341,7 @@ export function toFrontendTrack(value: ZigTrack): Track {
 		like_count: value.metrics.like_count,
 		comment_count: 0,
 		created_at: value.metadata.created_at,
+		image_url: value.media.artwork?.url,
 		is_liked: false,
 		self_labels: value.moderation.self_labels,
 		operator_labels: value.moderation.operator_labels,
@@ -497,6 +502,12 @@ export function assertZigTrack(value: unknown): asserts value is ZigTrack {
 		typeof value.artist.profile.handle !== 'string' ||
 		!isObject(value.media) ||
 		!Array.isArray(value.media.origins) ||
+		!(
+			value.media.artwork === null ||
+			(isObject(value.media.artwork) &&
+				typeof value.media.artwork.url === 'string' &&
+				['verified_repo', 'legacy_projection'].includes(String(value.media.artwork.source)))
+		) ||
 		!isObject(value.metrics) ||
 		!Number.isInteger(value.metrics.play_count) ||
 		Number(value.metrics.play_count) < 0 ||

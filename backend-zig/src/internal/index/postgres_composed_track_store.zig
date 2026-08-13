@@ -297,6 +297,8 @@ pub fn decodeRow(allocator: std.mem.Allocator, row: anytype) !track.Track {
     const has_access_policy = try row.get(bool, 41);
     const has_moderation_policy = try row.get(bool, 42);
     const has_metrics = try row.get(bool, 43);
+    const artwork_url = try duplicateOptional(allocator, try row.get(?[]const u8, 45));
+    if (artwork_url) |url| if (!lexicon_value.validUri(url)) return error.CorruptArtwork;
     return .{
         .id = id,
         .record = .{
@@ -323,7 +325,11 @@ pub fn decodeRow(allocator: std.mem.Allocator, row: anytype) !track.Track {
                 .bio = try duplicateOptional(allocator, try row.get(?[]const u8, 23)),
             },
         },
-        .media = .{ .artifacts = artifacts, .origins = origins },
+        .media = .{
+            .artifacts = artifacts,
+            .origins = origins,
+            .artwork = if (artwork_url) |url| .{ .url = url, .source = .verified_repo } else null,
+        },
         .access = .{
             .visibility = try parseEnum(track.Visibility, try row.get([]const u8, 27)),
             .in_discovery = try row.get(bool, 28),
@@ -427,7 +433,8 @@ pub const projected_columns =
     \\  pol.visibility IS NOT NULL,
     \\  pol.moderation_write_source IS NOT NULL,
     \\  metrics.record_uri IS NOT NULL,
-    \\  COALESCE(like_metrics.like_count, 0)::bigint
+    \\  COALESCE(like_metrics.like_count, 0)::bigint,
+    \\  v.image_url
 ;
 
 pub const projected_from =
@@ -692,7 +699,7 @@ test "composed PostgreSQL reads use verified records and authoritative account s
         .album = "Verified Album",
         .duration_seconds = 180,
         .featured_dids = &.{},
-        .image_url = null,
+        .image_url = "https://images.example/cover.jpg",
         .support_gate_type = "future-gate",
         .description = "verified description",
         .self_labels = &.{"self-note"},
@@ -743,6 +750,8 @@ test "composed PostgreSQL reads use verified records and authoritative account s
     try std.testing.expectEqualStrings("future-gate", value.access.gate.?.type);
     try std.testing.expectEqual(@as(usize, 1), value.media.artifacts.len);
     try std.testing.expectEqual(@as(usize, 2), value.media.origins.len);
+    try std.testing.expectEqualStrings("https://images.example/cover.jpg", value.media.artwork.?.url);
+    try std.testing.expectEqual(track.Source.verified_repo, value.media.artwork.?.source);
     try std.testing.expectEqual(track.Source.verified_repo, value.sources.record);
     try std.testing.expectEqual(track.Source.authored_profile, value.sources.artist_bio);
     try std.testing.expectEqual(track.Source.verified_repo, value.sources.account_availability);

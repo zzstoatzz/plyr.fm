@@ -44,7 +44,11 @@ const track = {
 				artifact_cid: null,
 				source: 'verified_repo'
 			}
-		]
+		],
+		artwork: {
+			url: 'https://images.test/song.jpg',
+			source: 'verified_repo'
+		}
 	},
 	access: { visibility: 'public', in_discovery: true, gate: null },
 	moderation: { self_labels: [], operator_labels: [] },
@@ -387,6 +391,7 @@ describe('Zig v1 compatibility boundary', () => {
 		expect(page.tracks[0]?.id).toBe('trk_opaque');
 		expect(page.tracks[0]?.file_id).toBe('trk_opaque');
 		expect(page.tracks[0]?.atproto_record_uri).toBe(record.uri);
+		expect(page.tracks[0]?.image_url).toBe('https://images.test/song.jpg');
 	});
 
 	it('maps verified like records into the existing liker presentation model', async () => {

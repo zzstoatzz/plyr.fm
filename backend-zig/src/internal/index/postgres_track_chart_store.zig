@@ -45,8 +45,8 @@ pub const PostgresTrackChartStore = struct {
                 error.OutOfMemory => return error.OutOfMemory,
                 else => return error.CorruptProjection,
             };
-            const period_count = row.get(i64, 45) catch return error.CorruptProjection;
-            const all_time_count = row.get(i64, 46) catch return error.CorruptProjection;
+            const period_count = row.get(i64, 46) catch return error.CorruptProjection;
+            const all_time_count = row.get(i64, 47) catch return error.CorruptProjection;
             if (period_count <= 0 or all_time_count < period_count)
                 return error.CorruptProjection;
             entries.append(allocator, .{
