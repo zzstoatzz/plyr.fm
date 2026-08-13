@@ -32,9 +32,8 @@ async def _make_track(db_session: AsyncSession, **overrides) -> Track:
     fields = {
         "title": "My Song",
         "artist_did": artist.did,
-        "file_id": "dl1234",
+        "file_id": "aabbccddeeff0011",
         "file_type": "mp3",
-        "r2_url": "https://cdn.example.com/audio/dl1234.mp3",
     } | overrides
     track = Track(**fields)
     db_session.add(track)
@@ -66,7 +65,7 @@ async def test_download_public_track_redirects_with_filename(
     assert response.status_code == 307
     assert response.headers["location"] == "https://r2.example.com/signed"
     mock_storage.generate_download_url.assert_awaited_once_with(
-        key="audio/dl1234.mp3", filename="Download Artist - My Song.mp3"
+        key="audio/aabbccddeeff0011.mp3", filename="Download Artist - My Song.mp3"
     )
 
 
@@ -75,7 +74,7 @@ async def test_download_prefers_lossless_original(
 ):
     track = await _make_track(
         db_session,
-        original_file_id="orig9999",
+        original_file_id="ccddeeff00112233",
         original_file_type="flac",
     )
 
@@ -87,7 +86,7 @@ async def test_download_prefers_lossless_original(
 
     assert response.status_code == 307
     mock_storage.generate_download_url.assert_awaited_once_with(
-        key="audio/orig9999.flac", filename="Download Artist - My Song.flac"
+        key="audio/ccddeeff00112233.flac", filename="Download Artist - My Song.flac"
     )
 
 
@@ -125,15 +124,23 @@ async def test_download_allows_copyright_label_with_allow_override(
     assert response.status_code == 307
 
 
-async def test_download_refuses_scan_flagged_track(
+async def test_scan_flag_alone_does_not_block_downloads(
     test_app: FastAPI, db_session: AsyncSession
 ):
+    """a fingerprint match is a pending review, not a finding — policy keys on
+    the copyright label, matching discovery/radio/streaming (#1697)."""
     track = await _make_track(db_session)
     db_session.add(CopyrightScan(track_id=track.id, is_flagged=True))
     await db_session.commit()
 
-    response = await _download(test_app, track.file_id)
-    assert response.status_code == 403
+    mock_storage = MagicMock()
+    mock_storage.generate_download_url = AsyncMock(return_value="https://signed")
+
+    with patch("backend.api.audio.storage", mock_storage):
+        response = await _download(test_app, track.file_id)
+
+    assert response.status_code == 307
+    assert (await _response_for(db_session, track.id)).downloadable is True
 
 
 async def test_download_refuses_when_artist_disabled_downloads(
@@ -154,7 +161,6 @@ async def test_download_refuses_private_track(
     track = await _make_track(
         db_session,
         visibility="private",
-        r2_url=None,
         space_uri="at://did:plc:dlartist/space/media/abc",
     )
     response = await _download(test_app, track.file_id)
@@ -215,11 +221,36 @@ async def test_track_response_not_downloadable_when_gated_or_labeled(
     labeled = await _make_track(
         db_session,
         artist_did="did:plc:dlartist2",
-        file_id="dl5678",
-        r2_url="https://cdn.example.com/audio/dl5678.mp3",
+        file_id="aabbccddeeff0022",
         operator_labels=["copyright-violation"],
     )
     gated_id, labeled_id = gated.id, labeled.id
 
     assert (await _response_for(db_session, gated_id)).downloadable is False
     assert (await _response_for(db_session, labeled_id)).downloadable is False
+
+
+async def test_download_refuses_when_no_object_is_ours_to_serve(
+    test_app: FastAPI, db_session: AsyncSession
+):
+    """pds-only rows and unmirrored ingested rows must 404, not 307 to a
+    presigned URL for a key that names nothing (NoSuchKey error body)."""
+    pds_only = await _make_track(
+        db_session,
+        audio_storage="pds",
+        pds_blob_cid="bafyfake",
+    )
+    ingested = await _make_track(
+        db_session,
+        artist_did="did:plc:dlartist3",
+        file_id="3jzfcijpj2z2a",  # a record rkey, not our content hash
+        r2_url="https://someone-elses.example.com/audio/whatever.mp3",
+    )
+    pds_only_id, ingested_id = pds_only.id, ingested.id
+
+    for track in (pds_only, ingested):
+        response = await _download(test_app, track.file_id)
+        assert response.status_code == 404
+
+    assert (await _response_for(db_session, pds_only_id)).downloadable is False
+    assert (await _response_for(db_session, ingested_id)).downloadable is False

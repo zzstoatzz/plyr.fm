@@ -371,4 +371,4 @@ max_lines = 1178
 
 [[rules]]
 path = "backend/src/backend/api/audio.py"
-max_lines = 509
+max_lines = 510

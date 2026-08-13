@@ -9,14 +9,15 @@ from sqlalchemy import or_, select
 from backend._internal import Session, get_optional_session, validate_supporter
 from backend._internal.atproto.client import pds_blob_url
 from backend._internal.atproto.spaces.client import SpaceAccessError, open_space_blob
-from backend._internal.content_labels import has_copyright_label
 from backend.config import settings
 from backend.models import Artist, Track, UserPreferences
-from backend.models.copyright_scan import CopyrightScan
 from backend.storage import storage
-from backend.storage.keys import AudioKey
 from backend.utilities.database import db_session
-from backend.utilities.downloads import download_filename
+from backend.utilities.downloads import (
+    download_filename,
+    download_key,
+    download_refusal,
+)
 
 # headers worth relaying from the upstream getBlob response so range/seek works
 _PROXY_HEADERS = ("content-type", "content-length", "content-range", "accept-ranges")
@@ -269,6 +270,7 @@ async def download_audio(file_id: str) -> RedirectResponse:
                 Track.r2_url,
                 Track.support_gate,
                 Track.is_private,
+                Track.audio_storage,
                 Track.self_labels,
                 Track.operator_labels,
                 Track.moderation_override,
@@ -286,42 +288,41 @@ async def download_audio(file_id: str) -> RedirectResponse:
         if not row:
             raise HTTPException(status_code=404, detail="audio file not found")
 
-        if row.is_private:
+    refusal = download_refusal(
+        is_private=row.is_private,
+        support_gate=row.support_gate,
+        labels=set(row.self_labels or []) | set(row.operator_labels or []),
+        moderation_override=row.moderation_override,
+        allow_downloads=row.allow_downloads,
+    )
+    match refusal:
+        case "private":
+            # same shape as a missing file, so private tracks don't leak
             raise HTTPException(status_code=404, detail="audio file not found")
-
-        if row.support_gate is not None:
+        case "gated":
             raise HTTPException(
                 status_code=403, detail="gated tracks cannot be downloaded"
             )
-
-        labels = set(row.self_labels or []) | set(row.operator_labels or [])
-        if has_copyright_label(labels) and row.moderation_override != "allow":
+        case "copyright":
             raise HTTPException(
                 status_code=403, detail="this track is not available for download"
             )
-
-        flagged = await db.scalar(
-            select(CopyrightScan.is_flagged).where(CopyrightScan.track_id == row.id)
-        )
-        if flagged and row.moderation_override != "allow":
-            raise HTTPException(
-                status_code=403, detail="this track is not available for download"
-            )
-
-        # no preferences row means the artist never changed the default (on)
-        if row.allow_downloads is False:
+        case "artist_opt_out":
             raise HTTPException(
                 status_code=403, detail="the artist has disabled downloads"
             )
 
-    # prefer the lossless original; its key never comes from r2_url, which
-    # encodes the streaming rendition
-    if row.original_file_id and row.original_file_type:
-        key = AudioKey.for_file(row.original_file_id, row.original_file_type)
-    else:
-        key = AudioKey.for_track(
-            file_id=row.file_id, file_type=row.file_type, r2_url=row.r2_url
-        )
+    key = download_key(
+        file_id=row.file_id,
+        file_type=row.file_type,
+        original_file_id=row.original_file_id,
+        original_file_type=row.original_file_type,
+        r2_url=row.r2_url,
+        audio_storage=row.audio_storage,
+    )
+    if key is None:
+        # we hold no object to serve as a file (PDS-only or unmirrored ingest)
+        raise HTTPException(status_code=404, detail="no downloadable file")
 
     filename = download_filename(row.display_name, row.title, key.extension)
     url = await storage.generate_download_url(key=key.key, filename=filename)

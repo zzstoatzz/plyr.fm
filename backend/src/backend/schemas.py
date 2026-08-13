@@ -5,10 +5,10 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from backend._internal.atproto.client import parse_at_uri
-from backend._internal.content_labels import has_copyright_label
 from backend.config import settings
 from backend.models import Album, Track
 from backend.utilities.aggregations import CopyrightInfo
+from backend.utilities.downloads import download_key, download_refusal
 
 # --- common simple response types ---
 
@@ -276,17 +276,28 @@ class TrackResponse(BaseModel):
                 f"{settings.atproto.base_url.rstrip('/')}/audio/{track.file_id}"
             )
 
-        # mirror the download endpoint's policy so the UI only offers what the
-        # endpoint would serve (the artist relationship selectin-loads prefs)
+        # the download endpoint derives from the same policy function, so the
+        # UI only offers what the endpoint would serve (the artist relationship
+        # selectin-loads prefs)
         artist_prefs = track.artist.preferences
-        copyright_blocked = (
-            has_copyright_label(labels) or bool(copyright_flagged)
-        ) and track.moderation_override != "allow"
         downloadable = (
-            not track.is_private
-            and track.support_gate is None
-            and not copyright_blocked
-            and (artist_prefs is None or artist_prefs.allow_downloads)
+            download_refusal(
+                is_private=track.is_private,
+                support_gate=track.support_gate,
+                labels=labels,
+                moderation_override=track.moderation_override,
+                allow_downloads=artist_prefs.allow_downloads if artist_prefs else None,
+            )
+            is None
+            and download_key(
+                file_id=track.file_id,
+                file_type=track.file_type,
+                original_file_id=track.original_file_id,
+                original_file_type=track.original_file_type,
+                r2_url=track.r2_url,
+                audio_storage=track.audio_storage,
+            )
+            is not None
         )
 
         return cls(
