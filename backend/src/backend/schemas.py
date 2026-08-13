@@ -5,6 +5,7 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from backend._internal.atproto.client import parse_at_uri
+from backend._internal.content_labels import has_copyright_label
 from backend.config import settings
 from backend.models import Album, Track
 from backend.utilities.aggregations import CopyrightInfo
@@ -144,6 +145,9 @@ class TrackResponse(BaseModel):
     copyright_match: str | None = None  # "Title by Artist" of primary match
     support_gate: dict[str, Any] | None = None  # supporter gating config
     gated: bool = False  # true if track is gated AND viewer lacks access
+    # true when the download endpoint would hand this track out: public,
+    # ungated, not copyright-blocked, and the artist hasn't disabled downloads
+    downloadable: bool = False
     # indiemusi rights record pointers (set when this track has copyright metadata)
     copyright_song_uri: str | None = None
     copyright_recording_uri: str | None = None
@@ -272,6 +276,19 @@ class TrackResponse(BaseModel):
                 f"{settings.atproto.base_url.rstrip('/')}/audio/{track.file_id}"
             )
 
+        # mirror the download endpoint's policy so the UI only offers what the
+        # endpoint would serve (the artist relationship selectin-loads prefs)
+        artist_prefs = track.artist.preferences
+        copyright_blocked = (
+            has_copyright_label(labels) or bool(copyright_flagged)
+        ) and track.moderation_override != "allow"
+        downloadable = (
+            not track.is_private
+            and track.support_gate is None
+            and not copyright_blocked
+            and (artist_prefs is None or artist_prefs.allow_downloads)
+        )
+
         return cls(
             id=track.id,
             title=track.title,
@@ -299,6 +316,7 @@ class TrackResponse(BaseModel):
             copyright_match=copyright_match,
             support_gate=track.support_gate,
             gated=gated,
+            downloadable=downloadable,
             description=track.description,
             original_file_id=track.original_file_id,
             original_file_type=track.original_file_type,

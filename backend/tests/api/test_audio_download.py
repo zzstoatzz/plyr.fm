@@ -5,10 +5,13 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from backend.main import app
 from backend.models import Artist, CopyrightScan, Track, UserPreferences
+from backend.schemas import TrackResponse
 from backend.utilities.downloads import content_disposition, download_filename
 
 
@@ -173,3 +176,50 @@ def test_content_disposition_carries_unicode():
     value = content_disposition("héllo.mp3")
     assert value.startswith('attachment; filename="h?llo.mp3"')
     assert "filename*=UTF-8''h%C3%A9llo.mp3" in value
+
+
+async def _response_for(db_session: AsyncSession, track_id: int) -> TrackResponse:
+    """rebuild the track through a fresh ORM query, the way endpoints do."""
+    db_session.expire_all()
+    result = await db_session.execute(
+        select(Track)
+        .where(Track.id == track_id)
+        .options(selectinload(Track.artist), selectinload(Track.album_rel))
+    )
+    return await TrackResponse.from_track(result.scalar_one())
+
+
+async def test_track_response_downloadable_by_default(
+    test_app: FastAPI, db_session: AsyncSession
+):
+    track = await _make_track(db_session)
+    response = await _response_for(db_session, track.id)
+    assert response.downloadable is True
+
+
+async def test_track_response_not_downloadable_when_artist_opted_out(
+    test_app: FastAPI, db_session: AsyncSession
+):
+    track = await _make_track(db_session)
+    db_session.add(UserPreferences(did=track.artist_did, allow_downloads=False))
+    await db_session.commit()
+
+    response = await _response_for(db_session, track.id)
+    assert response.downloadable is False
+
+
+async def test_track_response_not_downloadable_when_gated_or_labeled(
+    test_app: FastAPI, db_session: AsyncSession
+):
+    gated = await _make_track(db_session, support_gate={"type": "any"})
+    labeled = await _make_track(
+        db_session,
+        artist_did="did:plc:dlartist2",
+        file_id="dl5678",
+        r2_url="https://cdn.example.com/audio/dl5678.mp3",
+        operator_labels=["copyright-violation"],
+    )
+    gated_id, labeled_id = gated.id, labeled.id
+
+    assert (await _response_for(db_session, gated_id)).downloadable is False
+    assert (await _response_for(db_session, labeled_id)).downloadable is False
