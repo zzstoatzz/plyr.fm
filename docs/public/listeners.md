@@ -72,8 +72,15 @@ links, radio, and playback behave.
 - **like, comment, and build playlists** — public (visible to other atproto apps) or private
 - **timed comments** — leave a reaction at a specific moment in a track
 - **jams** — shared listening rooms, in real time with friends
+- **downloads** — save a track, or a whole album as a zip, when the artist allows it
 
 your records — likes, playlists, comments — are stored on your [PDS](/glossary/#pds), the same place a Bluesky post lives. they belong to your atmosphere account, not to plyr.fm.
+
+## downloads
+
+most public audio can be downloaded — look for the download icon next to share on track and album pages. files come named (`artist - title.ext`) and prefer the lossless original when one exists; albums arrive as a numbered zip in the artist's track order. the first album download takes a minute to prepare — it's safe to leave, it stays ready once built.
+
+if there's no download icon, the artist has switched downloads off, or the audio is supporter-gated or under a copyright notice.
 
 ## keyboard shortcuts
 
