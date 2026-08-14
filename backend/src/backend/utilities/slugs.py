@@ -1,6 +1,7 @@
 """utilities for generating URL-safe slugs."""
 
 import re
+import unicodedata
 
 
 def slugify(text: str, max_length: int = 100) -> str:
@@ -14,13 +15,19 @@ def slugify(text: str, max_length: int = 100) -> str:
         "My Album" -> "my-album"
         "Album (Deluxe Edition)" -> "album-deluxe-edition"
         "Test   Multiple   Spaces" -> "test-multiple-spaces"
-        "Field recordings of life around NY, parables..." -> "field-recordings-of-life-around-ny-parables"
+        "tūnņg" -> "tunng"
+        "Études pour dac" -> "etudes-pour-dac"
     """
     if not text:
         return ""
 
+    # transliterate accented characters to their ASCII base (ū -> u, ñ -> n)
+    # before the ASCII filter below deletes them outright
+    slug = unicodedata.normalize("NFKD", text)
+    slug = slug.encode("ascii", "ignore").decode("ascii")
+
     # lowercase
-    slug = text.lower()
+    slug = slug.lower()
 
     # remove non-alphanumeric characters (keep spaces and hyphens)
     slug = re.sub(r"[^a-z0-9\s-]", "", slug)
