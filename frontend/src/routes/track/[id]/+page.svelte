@@ -1350,6 +1350,19 @@ $effect(() => {
 		box-shadow: 0 4px 16px rgba(138, 179, 255, 0.4);
 	}
 
+	/* press feedback, matching the footer player's play-pause :active */
+	.btn-play:active {
+		transform: scale(0.94);
+		transition-duration: 0.06s;
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.btn-play:hover,
+		.btn-play:active {
+			transform: none;
+		}
+	}
+
 	.btn-play.playing {
 		animation: ethereal-glow 3s ease-in-out infinite;
 	}
