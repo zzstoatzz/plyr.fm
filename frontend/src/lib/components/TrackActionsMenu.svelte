@@ -2,7 +2,6 @@
 	import { likeTrack, unlikeTrack } from '$lib/tracks.svelte';
 	import { toast } from '$lib/toast.svelte';
 	import { API_URL } from '$lib/config';
-	import { downloadTrack } from '$lib/downloads';
 	import type { Playlist } from '$lib/types';
 
 	interface Props {
@@ -13,6 +12,7 @@
 		fileId?: string;
 		gated?: boolean;
 		downloadable?: boolean;
+		onDownload?: () => void;
 		initialLiked: boolean;
 		shareUrl: string;
 		onQueue: () => void;
@@ -29,6 +29,7 @@
 		fileId,
 		gated,
 		downloadable = false,
+		onDownload,
 		initialLiked,
 		shareUrl,
 		onQueue,
@@ -205,10 +206,9 @@
 		}
 	}
 
-	async function handleDownload(e: Event) {
+	function handleDownload(e: Event) {
 		e.stopPropagation();
-		if (!fileId) return;
-		await downloadTrack(fileId);
+		onDownload?.();
 		closeMenu();
 	}
 
@@ -331,7 +331,7 @@
 					</svg>
 					<span>share</span>
 				</button>
-				{#if downloadable && fileId}
+				{#if downloadable && onDownload}
 					<button class="menu-item" onclick={handleDownload}>
 						<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
 							<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>

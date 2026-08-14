@@ -16,6 +16,7 @@
 	import RichText from '$lib/components/RichText.svelte';
 	import ShareButton from '$lib/components/ShareButton.svelte';
 	import DownloadButton from '$lib/components/DownloadButton.svelte';
+	import { requestTrackDownload } from '$lib/downloads';
 	import { moderation } from '$lib/moderation.svelte';
 	import { player } from '$lib/player.svelte';
 	import { queue } from '$lib/queue.svelte';
@@ -790,7 +791,16 @@ $effect(() => {
 					<div class="side-buttons">
 						<ShareButton url={shareUrl} title="share track" trackId={track.id} />
 						{#if track.downloadable}
-							<DownloadButton fileId={track.file_id} />
+							<DownloadButton
+								onDownload={() =>
+									track &&
+									requestTrackDownload(track.file_id, {
+										artistName: track.artist,
+										artistDid: track.artist_did,
+										policy: track.download_policy,
+										supportUrl: track.artist_support_url
+									})}
+							/>
 						{/if}
 					</div>
 				</div>

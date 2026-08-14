@@ -10,6 +10,7 @@
 	import Queue from '$lib/components/Queue.svelte';
 	import SearchModal from '$lib/components/SearchModal.svelte';
 	import LogoutModal from '$lib/components/LogoutModal.svelte';
+	import DownloadAskModal from '$lib/components/DownloadAskModal.svelte';
 	import FeedbackModal from '$lib/components/FeedbackModal.svelte';
 	import TermsOverlay from '$lib/components/TermsOverlay.svelte';
 	import LikersSheet from '$lib/components/LikersSheet.svelte';
@@ -564,6 +565,7 @@
 <Toast />
 <SearchModal />
 <LogoutModal />
+<DownloadAskModal />
 <FeedbackModal />
 <LikersSheet />
 {#if showTermsOverlay}

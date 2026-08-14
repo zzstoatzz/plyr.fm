@@ -122,7 +122,7 @@ async def test_album_download_refuses_if_artist_opted_out(
     test_app: FastAPI, db_session: AsyncSession
 ):
     album, _ = await _make_album(db_session)
-    db_session.add(UserPreferences(did=album.artist_did, allow_downloads=False))
+    db_session.add(UserPreferences(did=album.artist_did, download_policy="off"))
     await db_session.commit()
 
     response = await _download(test_app)

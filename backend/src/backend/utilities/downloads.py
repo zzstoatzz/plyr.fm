@@ -7,7 +7,23 @@ from typing import Any, Literal, TypeAlias
 from backend._internal.content_labels import has_copyright_label
 from backend.storage.keys import AudioKey, InvalidMediaExtension
 
-DownloadRefusal: TypeAlias = Literal["private", "gated", "copyright", "artist_opt_out"]
+DownloadRefusal: TypeAlias = Literal[
+    "private", "gated", "copyright", "artist_opt_out", "supporters_only"
+]
+
+DOWNLOAD_POLICIES = ("open", "ask", "supporters", "off")
+
+
+def effective_download_policy(policy: str | None, support_url: str | None) -> str:
+    """resolve the stored policy; NULL means auto.
+
+    auto = ask when the artist has a support link, open when not — artists
+    who set up a support link presumably want listeners pointed at it.
+    """
+    if policy:
+        return policy
+    return "ask" if support_url else "open"
+
 
 # a file_id minted by our upload path: sha256 truncated to 16 hex chars.
 # anything else (e.g. a record rkey) came from the firehose and names nothing
@@ -52,16 +68,23 @@ def download_refusal(
     support_gate: Mapping[str, Any] | None,
     labels: Iterable[str],
     moderation_override: str | None,
-    allow_downloads: bool | None,
+    download_policy: str | None,
+    viewer_is_artist: bool = False,
+    viewer_is_supporter: bool = False,
 ) -> DownloadRefusal | None:
     """single source of the download policy; None means downloadable.
 
-    both the download endpoint and TrackResponse.downloadable derive from this,
-    so the UI never offers what the endpoint would refuse. keyed on the
+    the download endpoints and TrackResponse.downloadable all derive from
+    this, so the UI never offers what an endpoint would refuse. keyed on the
     copyright *label* — the decided moderation state that discovery, radio,
     and streaming already filter on — never raw scan flags, which mark a
-    pending review, not a finding. `allow_downloads=None` means the artist has
-    no preferences row, i.e. the default (on).
+    pending review, not a finding.
+
+    `download_policy` is the artist's *effective* tier (callers resolve NULL
+    via effective_download_policy first). "ask" never refuses
+    — it is a request the UI makes, not a lock. how a viewer came to count
+    as a supporter is the caller's verifier concern (#1841), never this
+    function's.
     """
     if is_private:
         return "private"
@@ -69,8 +92,11 @@ def download_refusal(
         return "gated"
     if has_copyright_label(labels) and moderation_override != "allow":
         return "copyright"
-    if allow_downloads is False:
+    policy = download_policy or "open"  # tolerate unresolved None as open
+    if policy == "off":
         return "artist_opt_out"
+    if policy == "supporters" and not (viewer_is_artist or viewer_is_supporter):
+        return "supporters_only"
     return None
 
 

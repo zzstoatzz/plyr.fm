@@ -17,6 +17,7 @@ from backend.utilities.downloads import (
     download_filename,
     download_key,
     download_refusal,
+    effective_download_policy,
 )
 
 # headers worth relaying from the upstream getBlob response so range/seek works
@@ -249,7 +250,10 @@ async def _handle_gated_audio(
 
 
 @router.get("/{file_id}/download")
-async def download_audio(file_id: str) -> RedirectResponse:
+async def download_audio(
+    file_id: str,
+    session: Session | None = Depends(get_optional_session),
+) -> RedirectResponse:
     """download a track's audio as an attachment named `artist - title.ext`.
 
     downloads are offered only where the bytes are already publicly
@@ -274,8 +278,10 @@ async def download_audio(file_id: str) -> RedirectResponse:
                 Track.self_labels,
                 Track.operator_labels,
                 Track.moderation_override,
+                Track.artist_did,
                 Artist.display_name,
-                UserPreferences.allow_downloads,
+                UserPreferences.download_policy,
+                UserPreferences.support_url,
             )
             .join(Artist, Artist.did == Track.artist_did)
             .outerjoin(UserPreferences, UserPreferences.did == Track.artist_did)
@@ -288,12 +294,23 @@ async def download_audio(file_id: str) -> RedirectResponse:
         if not row:
             raise HTTPException(status_code=404, detail="audio file not found")
 
+    policy = effective_download_policy(row.download_policy, row.support_url)
+    viewer_is_artist = session is not None and session.did == row.artist_did
+    viewer_is_supporter = False
+    if policy == "supporters" and session is not None and not viewer_is_artist:
+        validation = await validate_supporter(
+            supporter_did=session.did, artist_did=row.artist_did
+        )
+        viewer_is_supporter = validation.valid
+
     refusal = download_refusal(
         is_private=row.is_private,
         support_gate=row.support_gate,
         labels=set(row.self_labels or []) | set(row.operator_labels or []),
         moderation_override=row.moderation_override,
-        allow_downloads=row.allow_downloads,
+        download_policy=policy,
+        viewer_is_artist=viewer_is_artist,
+        viewer_is_supporter=viewer_is_supporter,
     )
     match refusal:
         case "private":
@@ -310,6 +327,17 @@ async def download_audio(file_id: str) -> RedirectResponse:
         case "artist_opt_out":
             raise HTTPException(
                 status_code=403, detail="the artist has disabled downloads"
+            )
+        case "supporters_only":
+            if session is None:
+                raise HTTPException(
+                    status_code=401,
+                    detail="sign in to download this track",
+                )
+            raise HTTPException(
+                status_code=403,
+                detail="downloads are for supporters",
+                headers={"X-Support-Required": "true"},
             )
 
     key = download_key(

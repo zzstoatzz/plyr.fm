@@ -19,6 +19,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from backend._internal import Session as AuthSession
+from backend._internal import get_optional_session, validate_supporter
 from backend._internal.export_tasks import schedule_album_download
 from backend._internal.jobs import job_service
 from backend._internal.track_visibility import track_visible_filter
@@ -29,6 +31,7 @@ from backend.utilities.downloads import (
     download_filename,
     download_key,
     download_refusal,
+    effective_download_policy,
 )
 
 from .listing import order_album_tracks
@@ -49,6 +52,7 @@ async def download_album(
     handle: str,
     slug: str,
     db: Annotated[AsyncSession, Depends(get_db)],
+    session: AuthSession | None = Depends(get_optional_session),
 ) -> RedirectResponse | AlbumDownloadPending:
     """download an album as a zip, if every member track is downloadable.
 
@@ -85,16 +89,41 @@ async def download_album(
 
     ordered = await order_album_tracks(album, artist, tracks)
 
+    # supporter standing: the album's tracks share one artist, so one check
+    viewer_is_artist = session is not None and session.did == album.artist_did
+    viewer_is_supporter = False
+    artist_prefs = ordered[0].artist.preferences
+    album_policy = effective_download_policy(
+        artist_prefs.download_policy if artist_prefs else None,
+        artist_prefs.support_url if artist_prefs else None,
+    )
+    if album_policy == "supporters" and session is not None and not viewer_is_artist:
+        validation = await validate_supporter(
+            supporter_did=session.did, artist_did=album.artist_did
+        )
+        viewer_is_supporter = validation.valid
+
     entries: list[tuple[int, str, str]] = []  # (track_id, key, entry name)
     for position, track in enumerate(ordered, start=1):
-        prefs = track.artist.preferences
         refusal = download_refusal(
             is_private=track.is_private,
             support_gate=track.support_gate,
             labels=set(track.self_labels or []) | set(track.operator_labels or []),
             moderation_override=track.moderation_override,
-            allow_downloads=prefs.allow_downloads if prefs else None,
+            download_policy=album_policy,
+            viewer_is_artist=viewer_is_artist,
+            viewer_is_supporter=viewer_is_supporter,
         )
+        if refusal == "supporters_only":
+            if session is None:
+                raise HTTPException(
+                    status_code=401, detail="sign in to download this album"
+                )
+            raise HTTPException(
+                status_code=403,
+                detail="downloads are for supporters",
+                headers={"X-Support-Required": "true"},
+            )
         if refusal is not None:
             raise HTTPException(
                 status_code=403,

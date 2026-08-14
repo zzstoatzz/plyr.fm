@@ -150,7 +150,7 @@ async def test_download_refuses_when_artist_disabled_downloads(
     test_app: FastAPI, db_session: AsyncSession
 ):
     track = await _make_track(db_session)
-    db_session.add(UserPreferences(did=track.artist_did, allow_downloads=False))
+    db_session.add(UserPreferences(did=track.artist_did, download_policy="off"))
     await db_session.commit()
 
     response = await _download(test_app, track.file_id)
@@ -210,7 +210,7 @@ async def test_track_response_not_downloadable_when_artist_opted_out(
     test_app: FastAPI, db_session: AsyncSession
 ):
     track = await _make_track(db_session)
-    db_session.add(UserPreferences(did=track.artist_did, allow_downloads=False))
+    db_session.add(UserPreferences(did=track.artist_did, download_policy="off"))
     await db_session.commit()
 
     response = await _response_for(db_session, track.id)
@@ -274,3 +274,49 @@ def test_app_imports_in_production_order():
         timeout=120,
     )
     assert result.returncode == 0, result.stderr
+
+
+async def test_supporters_policy_requires_sign_in(
+    test_app: FastAPI, db_session: AsyncSession
+):
+    track = await _make_track(db_session)
+    db_session.add(UserPreferences(did=track.artist_did, download_policy="supporters"))
+    await db_session.commit()
+
+    response = await _download(test_app, track.file_id)
+    assert response.status_code == 401
+
+    resp = await _response_for(db_session, track.id)
+    assert resp.downloadable is False
+    assert resp.download_policy == "supporters"
+
+
+async def test_support_link_defaults_policy_to_ask(
+    test_app: FastAPI, db_session: AsyncSession
+):
+    """NULL policy + support link = auto ask: downloadable, policy exposed."""
+    track = await _make_track(db_session)
+    db_session.add(
+        UserPreferences(did=track.artist_did, support_url="https://ko-fi.example")
+    )
+    await db_session.commit()
+
+    mock_storage = MagicMock()
+    mock_storage.generate_download_url = AsyncMock(return_value="https://signed")
+    with patch("backend.api.audio.storage", mock_storage):
+        response = await _download(test_app, track.file_id)
+    assert response.status_code == 307
+
+    resp = await _response_for(db_session, track.id)
+    assert resp.downloadable is True
+    assert resp.download_policy == "ask"
+    assert resp.artist_support_url == "https://ko-fi.example"
+
+
+async def test_no_support_link_defaults_policy_to_open(
+    test_app: FastAPI, db_session: AsyncSession
+):
+    track = await _make_track(db_session)
+    resp = await _response_for(db_session, track.id)
+    assert resp.downloadable is True
+    assert resp.download_policy == "open"
