@@ -237,6 +237,12 @@ standard ATProto self-label and immediately participates in plyr.fm's
 default-hide policy. It remains separate from any independent moderator label.
 See [sensitive content](/sensitive-content/) for the listener behavior.
 
+## downloads
+
+listeners can download your public audio — single tracks, and whole albums as a zip — with files named after you and your titles, preferring lossless originals. this is **on by default**: the same bytes are already publicly served by your PDS to anyone, so the toggle is a courtesy, not an access control. switch it off any time in [settings](https://plyr.fm/settings) under *downloads*.
+
+supporter-gated tracks, tracks under a copyright notice, and private tracks are never downloadable, and an album containing any of them doesn't offer a zip.
+
 ## your data
 
 ![the artist portal — manage your profile, tracks, and albums](/screenshots/portal-dashboard.png)

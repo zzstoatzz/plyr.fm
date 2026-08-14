@@ -291,7 +291,7 @@ import WaveLoading from '$lib/components/WaveLoading.svelte';
 	async function saveAllowDownloads(enabled: boolean) {
 		try {
 			await preferences.update({ allow_downloads: enabled });
-			toast.success(enabled ? 'downloads enabled on your tracks' : 'downloads disabled');
+			toast.success(enabled ? 'downloads on' : 'downloads off');
 		} catch (_e) {
 			console.error('failed to save preference:', _e);
 			toast.error('failed to update preference');
@@ -773,7 +773,7 @@ import WaveLoading from '$lib/components/WaveLoading.svelte';
 				<div class="setting-row">
 					<div class="setting-info">
 						<h3>downloads</h3>
-						<p>let listeners download your public, ungated tracks as files</p>
+						<p>let listeners download your public, ungated audio — single tracks and whole albums</p>
 					</div>
 					<label class="toggle-switch">
 						<input
