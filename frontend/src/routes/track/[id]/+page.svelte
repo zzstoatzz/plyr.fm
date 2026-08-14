@@ -631,9 +631,12 @@ $effect(() => {
 		display: flex;
 		flex-direction: column;
 		align-items: center;
-		justify-content: flex-start;
+		/* the page is a single composition now (comments live in the panel):
+		   center it in the available height rather than top-anchoring it over
+		   a void — the apple now-playing posture */
+		justify-content: center;
 		padding: 2rem;
-		padding-bottom: 8rem;
+		padding-bottom: calc(var(--player-height, 0px) + 2rem);
 		width: 100%;
 	}
 
@@ -648,7 +651,9 @@ $effect(() => {
 
 	.cover-art-container {
 		width: 100%;
-		max-width: 300px;
+		/* spare vertical room becomes artwork, not void: scale with viewport
+		   height, bounded for short windows and very large screens */
+		max-width: clamp(260px, 38dvh, 480px);
 		aspect-ratio: 1;
 		border-radius: var(--radius-md);
 		overflow: hidden;
