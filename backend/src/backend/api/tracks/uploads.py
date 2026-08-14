@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Annotated, Any, BinaryIO
 
 import aiofiles
+import anyio.to_thread
 import logfire
 from docket import ConcurrencyLimit
 from fastapi import (
@@ -1672,16 +1673,24 @@ async def upload_track(
 
         # extract duration once, while the bytes are still local — saves
         # the worker an extra storage round-trip just to read length metadata.
-        with open(file_path, "rb") as f:
-            duration = extract_duration(f)
+        # off the event loop: these scans read the whole temp file.
+        def _scan_duration() -> int | None:
+            with open(file_path, "rb") as f:
+                return extract_duration(f)
+
+        duration = await anyio.to_thread.run_sync(_scan_duration)
 
         # an .m4a extension is treated as web-playable, but ALAC-in-m4a has no
         # browser decoder; detect it from the bytes here so the worker schedules
         # a streaming-rendition transcode instead of serving the raw file.
         needs_transcode = False
         if audio_format is AudioFormat.M4A:
-            with open(file_path, "rb") as f:
-                needs_transcode = is_alac(f)
+
+            def _scan_alac() -> bool:
+                with open(file_path, "rb") as f:
+                    return is_alac(f)
+
+            needs_transcode = await anyio.to_thread.run_sync(_scan_alac)
 
         if is_private:
             # permissioned media: audio lives ON THE PDS, never R2. upload the

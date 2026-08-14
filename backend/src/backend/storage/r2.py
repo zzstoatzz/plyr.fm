@@ -10,8 +10,10 @@ from typing import BinaryIO
 from urllib.parse import quote
 
 import aioboto3
+import anyio.to_thread
 import boto3
 import logfire
+from boto3.s3.transfer import TransferConfig
 from botocore.config import Config
 from botocore.exceptions import ClientError
 from sqlalchemy import func, or_, select
@@ -50,6 +52,15 @@ def content_disposition(filename: str) -> str:
 
 # content-hashed files never change — cache forever
 IMMUTABLE_CACHE_CONTROL = "public, max-age=31536000, immutable"
+
+# bounds the memory an upload may hold in flight. boto's defaults are 10
+# concurrent 8MB parts — 80MB per upload, which with 3 concurrent uploads
+# starved the 1GB app VM into a wedge on 2026-08-14 (an album batch of WAVs).
+# 2 x 8MB caps each upload at ~16MB of part buffers.
+UPLOAD_TRANSFER_CONFIG = TransferConfig(
+    multipart_chunksize=8 * 1024 * 1024,
+    max_concurrency=2,
+)
 
 # every column that can name a stored object. `_reference_count` walks all of
 # them, because a content hash makes "these bytes" and "this row's media"
@@ -183,8 +194,9 @@ class R2Storage:
         save and read can't disagree about the extension.
         """
         with logfire.span("R2 save", filename=filename):
-            # compute hash in chunks (constant memory)
-            file_id = hash_file_chunked(file)[:16]
+            # chunked (constant memory), and off the event loop — sha256 of a
+            # multi-hundred-MB WAV is real CPU time
+            file_id = (await anyio.to_thread.run_sync(hash_file_chunked, file))[:16]
             logfire.info("computed file hash", file_id=file_id)
 
             # determine file extension and type via the typed key constructors
@@ -227,6 +239,7 @@ class R2Storage:
                         "Fileobj": file,
                         "Bucket": bucket,
                         "Key": key,
+                        "Config": UPLOAD_TRANSFER_CONFIG,
                         "ExtraArgs": {
                             "ContentType": media_type,
                             "CacheControl": IMMUTABLE_CACHE_CONTROL,
@@ -680,8 +693,8 @@ class R2Storage:
             raise ValueError("R2_PRIVATE_BUCKET not configured")
 
         with logfire.span("R2 save_gated", filename=filename):
-            # compute hash in chunks (constant memory)
-            file_id = hash_file_chunked(file)[:16]
+            # chunked (constant memory), and off the event loop
+            file_id = (await anyio.to_thread.run_sync(hash_file_chunked, file))[:16]
             logfire.info("computed file hash for gated content", file_id=file_id)
 
             # only audio is supported for gated content
@@ -715,6 +728,7 @@ class R2Storage:
                         "Fileobj": file,
                         "Bucket": self.private_audio_bucket_name,
                         "Key": key,
+                        "Config": UPLOAD_TRANSFER_CONFIG,
                         "ExtraArgs": {
                             "ContentType": media_type,
                             "CacheControl": IMMUTABLE_CACHE_CONTROL,
