@@ -42,7 +42,7 @@ export async function downloadAlbum(handle: string, slug: string): Promise<void>
 				// it keeps building server-side even if they navigate away — the
 				// next click is a cache hit.
 				const toastId = toast.add(
-					'preparing your album… this takes a minute the first time',
+					'preparing album — takes a minute, safe to leave',
 					'info',
 					0
 				);
@@ -53,7 +53,7 @@ export async function downloadAlbum(handle: string, slug: string): Promise<void>
 						es.close();
 						toast.dismiss(toastId);
 						if (progress.download_url) {
-							toast.success('album ready — downloading');
+							toast.success('album ready');
 							window.location.assign(progress.download_url);
 						} else {
 							toast.error('album download failed');
@@ -63,19 +63,13 @@ export async function downloadAlbum(handle: string, slug: string): Promise<void>
 						toast.dismiss(toastId);
 						toast.error(progress.error || 'album download failed');
 					} else if (progress.message) {
-						toast.update(
-							toastId,
-							`${progress.message} — you can keep browsing, it stays ready once built`
-						);
+						toast.update(toastId, progress.message);
 					}
 				};
 				es.onerror = () => {
 					es.close();
 					toast.dismiss(toastId);
-					toast.info(
-						'connection dropped, but your album is still being prepared — try the download again in a minute',
-						6000
-					);
+					toast.info('still working — try again in a minute', 6000);
 				};
 				return;
 			}
