@@ -1,14 +1,18 @@
 # /// script
 # requires-python = ">=3.12"
-# dependencies = ["httpx", "python-dotenv"]
+# dependencies = [
+#   "httpx",
+#   "python-dotenv",
+#   "atproto @ git+https://github.com/zzstoatzz/atproto@1ad4f176292d688005c6247f1e65f2d2c1057b89",
+# ]
 # ///
 """end-to-end smoke for the permissioned-spaces private-media flow against a live PDS.
 
 exercises the exact com.atproto.space.* request/response shapes the plyr.fm space
 client uses, proving private records + blobs actually store and read back through the
-permissioned-space access path. uses a plain createSession bearer (scope
-com.atproto.access bypasses ZDS granular space-scope checks) so it can run without the
-full OAuth/DPoP plumbing.
+permissioned-space access path. Uses a plain createSession bearer for resident
+operations, then exercises the proposal's separate ephemeral DPoP key for space
+credential issuance and credential-gated reads.
 
 run: uv run scripts/permissioned_smoke.py
 needs ZAT_TEST_HANDLE / ZAT_TEST_PASSWORD / ZAT_TEST_PDS in .env (a test account on a
@@ -19,6 +23,7 @@ import os
 import sys
 
 import httpx
+from atproto_oauth.dpop import DPoPManager
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -170,9 +175,19 @@ def main() -> int:
     delegation_token = delegation_resp.json()["token"]
     print("✓ getDelegationToken")
 
+    credential_url = f"{PDS}/xrpc/com.atproto.space.getSpaceCredential"
+    credential_key = DPoPManager.generate_keypair()
+    issuance_proof = DPoPManager.create_proof(
+        method="POST",
+        url=credential_url,
+        private_key=credential_key,
+    )
     cred_resp = c.post(
-        f"{PDS}/xrpc/com.atproto.space.getSpaceCredential",
-        headers={"authorization": f"Bearer {delegation_token}"},
+        credential_url,
+        headers={
+            "authorization": f"Bearer {delegation_token}",
+            "dpop": issuance_proof,
+        },
         json={"space": space_uri},
     )
     cred_resp.raise_for_status()
@@ -180,9 +195,20 @@ def main() -> int:
     print("✓ getSpaceCredential")
 
     # read the blob THROUGH the permissioned path using the space credential + Range
+    blob_url = f"{PDS}/xrpc/com.atproto.space.getBlob"
+    read_proof = DPoPManager.create_proof(
+        method="GET",
+        url=blob_url,
+        private_key=credential_key,
+        access_token=credential,
+    )
     blob_get = c.get(
-        f"{PDS}/xrpc/com.atproto.space.getBlob",
-        headers={"authorization": f"Bearer {credential}", "range": "bytes=0-3"},
+        blob_url,
+        headers={
+            "authorization": f"DPoP {credential}",
+            "dpop": read_proof,
+            "range": "bytes=0-3",
+        },
         params={"space": space_uri, "repo": did, "cid": blob_cid},
     )
     assert blob_get.status_code == 206, (

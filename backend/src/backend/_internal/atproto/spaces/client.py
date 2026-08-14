@@ -1,27 +1,29 @@
 """Client for the Proposal-0016 permissioned-data surfaces.
 
-owner/author writes go through the DPoP-protected OAuth path
-([make_pds_request][backend._internal.atproto.client.make_pds_request]); the
-credential exchange and credential-gated reads use plain Bearer tokens
-(delegation tokens and space credentials are JWTs, not DPoP-bound), so those go
-through a small raw-bearer helper.
+Owner/author writes go through the DPoP-protected OAuth path
+([make_pds_request][backend._internal.atproto.client.make_pds_request]). Space
+credentials use a separate ephemeral DPoP key generated during credential
+exchange and retained with the credential for subsequent reads.
 
 Read path:
 
     user OAuth -> getDelegationToken (requester PDS, DPoP) -> getSpaceCredential
-    (space authority, delegation token + optional client attestation) -> reads
-    (plain Bearer credential)
+    (space authority, delegation token + DPoP proof + optional client
+    attestation) -> reads (DPoP-bound space credential)
 """
 
 import logging
 import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from dataclasses import dataclass
 from typing import Any
 
 import httpx
 from atproto_identity.did.resolver import AsyncDidResolver
+from atproto_oauth.dpop import DPoPManager
 from atproto_oauth.security import is_safe_url
+from cryptography.hazmat.primitives.asymmetric.ec import EllipticCurvePrivateKey
 
 from backend._internal import Session as AuthSession
 from backend._internal.atproto.client import make_pds_request
@@ -74,27 +76,67 @@ async def _repo_host_url(repo: str) -> str:
     return await _resolve_did_service(repo, "#atproto_pds")
 
 
-async def _raw_bearer_request(
-    pds_url: str,
+def _space_dpop_headers(
+    method: str,
+    url: str,
+    token: str,
+    dpop_key: EllipticCurvePrivateKey,
+    *,
+    issuance: bool = False,
+) -> dict[str, str]:
+    proof = DPoPManager.create_proof(
+        method=method,
+        url=url,
+        private_key=dpop_key,
+        access_token=None if issuance else token,
+    )
+    scheme = "Bearer" if issuance else "DPoP"
+    return {
+        "authorization": f"{scheme} {token}",
+        "dpop": proof,
+    }
+
+
+async def _space_token_request(
+    service_url: str,
     method: str,
     endpoint: str,
-    bearer: str,
+    token: str,
+    dpop_key: EllipticCurvePrivateKey,
     *,
+    issuance: bool = False,
+    legacy_bearer: bool = False,
     json: dict[str, Any] | None = None,
     params: dict[str, Any] | None = None,
 ) -> httpx.Response:
-    """call XRPC with a plain Bearer token (delegation token / space credential)."""
-    url = f"{pds_url}/xrpc/{endpoint}"
+    """Call a permissioned XRPC with its operation-specific DPoP proof."""
+    url = f"{service_url}/xrpc/{endpoint}"
     if not is_safe_url(url):
-        raise ValueError(f"unsafe PDS URL: {url}")
+        raise ValueError(f"unsafe service URL: {url}")
+    headers = (
+        {"authorization": f"Bearer {token}"}
+        if legacy_bearer
+        else _space_dpop_headers(method, url, token, dpop_key, issuance=issuance)
+    )
     async with httpx.AsyncClient(timeout=30) as http:
         return await http.request(
             method,
             url,
-            headers={"authorization": f"Bearer {bearer}"},
+            headers=headers,
             json=json,
             params=params,
         )
+
+
+def _is_pre_dpop_rejection(response: httpx.Response) -> bool:
+    """Identify the old space server that only recognizes Bearer credentials."""
+    if response.status_code != 401:
+        return False
+    try:
+        body = response.json()
+    except ValueError:
+        return False
+    return isinstance(body, dict) and body.get("error") == "AuthenticationRequired"
 
 
 # --- space lifecycle + record writes (owner/author, DPoP OAuth) ---------------
@@ -181,12 +223,21 @@ async def delete_space_record(auth_session: AuthSession, record_uri: str) -> Non
 
 # --- credential exchange ------------------------------------------------------
 
-# per-process cache: space credentials are owner-signed and client-id-bound, so
-# they're reusable across reads of the same space until they expire.
-_credential_cache: dict[str, tuple[str, float]] = {}
+
+@dataclass(frozen=True)
+class SpaceCredential:
+    token: str
+    dpop_key: EllipticCurvePrivateKey
+    expires_at: float
 
 
-async def _mint_credential(auth_session: AuthSession, space: str) -> str:
+# Per-process cache. Keep the proof key and credential together: neither is
+# useful without the other. Include the requesting user so an authorization
+# decision made for one account is never reused for another.
+_credential_cache: dict[tuple[str, str], SpaceCredential] = {}
+
+
+async def _mint_credential(auth_session: AuthSession, space: str) -> SpaceCredential:
     delegation_resp = await make_pds_request(
         auth_session,
         "GET",
@@ -203,11 +254,14 @@ async def _mint_credential(auth_session: AuthSession, space: str) -> str:
 
     # Credential issuance happens on the resolved space host, which may differ
     # from both the user's PDS and each writer's repo host.
-    cred_resp = await _raw_bearer_request(
+    dpop_key = DPoPManager.generate_keypair()
+    cred_resp = await _space_token_request(
         await _space_host_url(space),
         "POST",
         "com.atproto.space.getSpaceCredential",
         delegation_token,
+        dpop_key,
+        issuance=True,
         json=payload,
     )
     if cred_resp.status_code != 200:
@@ -224,20 +278,24 @@ async def _mint_credential(auth_session: AuthSession, space: str) -> str:
         if any(error in body for error in refused_errors):
             raise SpaceAccessError(f"space authority refused credential: {body}")
         raise Exception(f"getSpaceCredential failed: {cred_resp.status_code} {body}")
-    return cred_resp.json()["credential"]
+    return SpaceCredential(
+        token=cred_resp.json()["credential"],
+        dpop_key=dpop_key,
+        expires_at=time.monotonic() + _CREDENTIAL_TTL_SECONDS,
+    )
 
 
 async def get_space_credential(
     auth_session: AuthSession, space: str, *, force_refresh: bool = False
-) -> str:
+) -> SpaceCredential:
     """obtain a space credential for `space`, minting+caching or renewing as needed."""
     now = time.monotonic()
-    if not force_refresh and (cached := _credential_cache.get(space)):
-        credential, expires_at = cached
-        if expires_at > now:
-            return credential
+    cache_key = (auth_session.did, space)
+    if not force_refresh and (cached := _credential_cache.get(cache_key)):
+        if cached.expires_at > now:
+            return cached
     credential = await _mint_credential(auth_session, space)
-    _credential_cache[space] = (credential, now + _CREDENTIAL_TTL_SECONDS)
+    _credential_cache[cache_key] = credential
     return credential
 
 
@@ -266,11 +324,22 @@ async def open_space_blob(
             credential = await get_space_credential(
                 auth_session, space, force_refresh=attempt > 0
             )
-            headers = {"authorization": f"Bearer {credential}"}
+            headers = _space_dpop_headers(
+                "GET", url, credential.token, credential.dpop_key
+            )
             if range_header:
                 headers["range"] = range_header
             req = http.build_request("GET", url, headers=headers, params=params)
             resp = await http.send(req, stream=True)
+            if _is_pre_dpop_rejection(resp):
+                await resp.aclose()
+                fallback_headers = {"authorization": f"Bearer {credential.token}"}
+                if range_header:
+                    fallback_headers["range"] = range_header
+                req = http.build_request(
+                    "GET", url, headers=fallback_headers, params=params
+                )
+                resp = await http.send(req, stream=True)
             if resp.status_code == 401 and attempt == 0:
                 await resp.aclose()
                 continue  # stale credential — renew and retry once
@@ -312,13 +381,24 @@ async def _credential_read(
         credential = await get_space_credential(
             auth_session, space, force_refresh=attempt > 0
         )
-        response = await _raw_bearer_request(
+        response = await _space_token_request(
             host_url,
             "GET",
             endpoint,
-            credential,
+            credential.token,
+            credential.dpop_key,
             params=params,
         )
+        if _is_pre_dpop_rejection(response):
+            response = await _space_token_request(
+                host_url,
+                "GET",
+                endpoint,
+                credential.token,
+                credential.dpop_key,
+                legacy_bearer=True,
+                params=params,
+            )
         if response.status_code == 401 and attempt == 0:
             continue
         if response.status_code != 200:
