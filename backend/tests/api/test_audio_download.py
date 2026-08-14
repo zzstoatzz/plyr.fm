@@ -259,6 +259,7 @@ async def test_download_refuses_when_no_object_is_ours_to_serve(
     assert (await _response_for(db_session, ingested_id)).downloadable is False
 
 
+@pytest.mark.timeout(60)
 def test_app_imports_in_production_order():
     """main.py's import order must not hit a circular import.
 

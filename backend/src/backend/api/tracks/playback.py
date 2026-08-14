@@ -28,7 +28,11 @@ from backend.models import (
     get_db,
 )
 from backend.schemas import PlayCountResponse, TrackResponse
-from backend.utilities.aggregations import get_like_counts, get_track_tags
+from backend.utilities.aggregations import (
+    get_comment_counts,
+    get_like_counts,
+    get_track_tags,
+)
 from backend.utilities.redis import get_async_redis_client
 
 from .router import router
@@ -109,8 +113,9 @@ async def _resolve_track(
     ):
         liked_track_ids = {track.id}
 
-    like_counts, track_tags = await asyncio.gather(
+    like_counts, comment_counts, track_tags = await asyncio.gather(
         get_like_counts(db, [track.id]),
+        get_comment_counts(db, [track.id]),
         get_track_tags(db, [track.id]),
     )
     content_labels = get_track_label_values([track])
@@ -119,6 +124,7 @@ async def _resolve_track(
         track,
         liked_track_ids=liked_track_ids,
         like_counts=like_counts,
+        comment_counts=comment_counts,
         track_tags=track_tags,
         content_labels=content_labels,
     )

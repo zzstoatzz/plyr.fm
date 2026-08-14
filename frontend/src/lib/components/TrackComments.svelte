@@ -75,9 +75,14 @@
 		if (hit) showEmission(hit);
 	});
 
-	// reload + reset whenever the track changes (SPA navigation reuses this)
+	// reload + reset when the track *id* changes. keyed on the value, not the
+	// prop object — the page reassigns `track` after mount (data sync), and an
+	// identity-keyed effect double-fired the whole load (the empty→N flash).
+	let loadedForTrackId: number | null = null;
 	$effect(() => {
-		void track.id;
+		const id = track.id;
+		if (id === loadedForTrackId) return;
+		loadedForTrackId = id;
 		comments = [];
 		commentsEnabled = null;
 		commentsOpen = false;
