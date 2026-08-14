@@ -1,3 +1,4 @@
+import { error } from '@sveltejs/kit';
 import type { PageLoad } from './$types';
 import type { AlbumResponse } from '$lib/types';
 import { API_URL } from '$lib/config';
@@ -17,8 +18,11 @@ export const load: PageLoad = async ({ params, fetch }) => {
 		credentials: 'include'
 	});
 
+	if (response.status === 404) {
+		error(404, 'album not found');
+	}
 	if (!response.ok) {
-		throw new Error(`failed to load album: ${response.statusText}`);
+		error(response.status, `failed to load album: ${response.statusText}`);
 	}
 
 	const album: AlbumResponse = await response.json();
