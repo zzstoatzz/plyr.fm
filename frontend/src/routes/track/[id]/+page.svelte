@@ -1350,6 +1350,19 @@ $effect(() => {
 		box-shadow: 0 4px 16px rgba(138, 179, 255, 0.4);
 	}
 
+	/* press feedback, matching the footer player's play-pause :active */
+	.btn-play:active {
+		transform: scale(0.94);
+		transition-duration: 0.06s;
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.btn-play:hover,
+		.btn-play:active {
+			transform: none;
+		}
+	}
+
 	.btn-play.playing {
 		animation: ethereal-glow 3s ease-in-out infinite;
 	}
@@ -1424,19 +1437,62 @@ $effect(() => {
 			margin-top: 0.25rem;
 		}
 
+		/* touch-first: every control clears the 44px tap-target floor,
+		   and play grows past its desktop size — thumbs, not pointers */
 		.btn-play {
-			width: 2.75rem;
-			height: 2.75rem;
+			width: 3.5rem;
+			height: 3.5rem;
 		}
 
 		.btn-play svg {
-			width: 24px;
-			height: 24px;
+			width: 28px;
+			height: 28px;
+		}
+
+		.btn-queue {
+			padding: 0.75rem;
 		}
 
 		.btn-queue svg {
-			width: 18px;
-			height: 18px;
+			width: 22px;
+			height: 22px;
+		}
+
+		.like-chip :global(.trigger-button) {
+			padding: 0.75rem;
+		}
+
+		.like-chip :global(.trigger-button svg) {
+			width: 20px;
+			height: 20px;
+		}
+
+		.heart-static {
+			padding: 0.75rem;
+		}
+
+		.heart-static svg {
+			width: 20px;
+			height: 20px;
+		}
+
+		.like-chip {
+			font-size: var(--text-lg);
+		}
+
+		.side-buttons :global(.share-btn),
+		.side-buttons :global(.download-btn) {
+			padding: 0.75rem;
+		}
+
+		.side-buttons :global(.share-btn svg) {
+			width: 21px;
+			height: 21px;
+		}
+
+		.side-buttons :global(.download-btn svg) {
+			width: 20px;
+			height: 20px;
 		}
 	}
 
