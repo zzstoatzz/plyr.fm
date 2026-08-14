@@ -26,6 +26,10 @@
 
 	let { track }: { track: Track } = $props();
 
+	const reduceMotionComments =
+		typeof window !== 'undefined' &&
+		window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
 	// comments state - assume enabled until we know otherwise
 	let comments = $state<Comment[]>([]);
 	let commentsEnabled = $state<boolean | null>(null); // null = unknown, true/false = known
@@ -39,6 +43,37 @@
 	const isMobileViewport = () =>
 		typeof window !== 'undefined' && window.matchMedia('(max-width: 768px)').matches;
 
+
+	// a comment bubble emanates from the trigger when playback crosses its
+	// timestamp (the soundcloud move). plain let: previous position must not
+	// retrigger the effect.
+	let emission = $state<Comment | null>(null);
+	let emissionTimer: ReturnType<typeof setTimeout> | null = null;
+	let prevPlaybackMs = -1;
+
+	function showEmission(comment: Comment) {
+		if (emissionTimer) clearTimeout(emissionTimer);
+		emission = comment;
+		emissionTimer = setTimeout(() => (emission = null), 4000);
+	}
+
+	$effect(() => {
+		const playingThis = player.currentTrack?.id === track.id && !player.paused;
+		const nowMs = Math.floor((player.currentTime || 0) * 1000);
+		if (!playingThis) {
+			prevPlaybackMs = -1;
+			return;
+		}
+		const fromMs = prevPlaybackMs;
+		prevPlaybackMs = nowMs;
+		// first tick after play/seek, or a jump: don't spray missed comments
+		if (fromMs < 0 || nowMs <= fromMs || nowMs - fromMs > 3000) return;
+		// untimed comments default to 0:00 — those aren't "at" a moment
+		const hit = comments.find(
+			(c) => c.timestamp_ms > 0 && c.timestamp_ms > fromMs && c.timestamp_ms <= nowMs
+		);
+		if (hit) showEmission(hit);
+	});
 
 	// reload + reset whenever the track changes (SPA navigation reuses this)
 	$effect(() => {
@@ -158,13 +193,6 @@
 		}
 	}
 
-	async function copyCommentLink(timestampMs: number) {
-		const seconds = Math.floor(timestampMs / 1000);
-		const url = `${window.location.origin}/track/${track.id}?t=${seconds}`;
-		await navigator.clipboard.writeText(url);
-		toast.success('link copied');
-	}
-
 	function formatRelativeTime(isoString: string): string {
 		const date = new Date(isoString);
 		const now = new Date();
@@ -246,7 +274,23 @@
 
 <!-- a quiet utility trigger (icon + count) for the page's share/download
      row; the full section opens as a bottom sheet on every viewport -->
-{#if commentsEnabled === true}
+{#if commentsEnabled !== false}
+	<span class="comments-trigger-anchor">
+	{#if emission}
+		<button
+			class="comment-emission"
+			transition:fly={{ y: 10, duration: reduceMotionComments ? 0 : 300 }}
+			onclick={() => {
+				emission = null;
+				commentsOpen = true;
+			}}
+		>
+			{#if emission.user_avatar_url}
+				<img src={emission.user_avatar_url} alt="" class="comment-emission-avatar" />
+			{/if}
+			<span class="comment-emission-text">{emission.text}</span>
+		</button>
+	{/if}
 	<button
 		class="comments-trigger"
 		onclick={() => (commentsOpen = true)}
@@ -260,6 +304,7 @@
 			<span class="comments-trigger-count">{commentCount}</span>
 		{/if}
 	</button>
+	</span>
 			{#if commentsOpen}
 		<aside
 			class="comments-panel"
@@ -382,7 +427,6 @@
 											{:else}
 												<p class="comment-text"><RichText text={comment.text} /></p>
 												<div class="comment-actions">
-													<button class="comment-action-btn" onclick={() => copyCommentLink(comment.timestamp_ms)}>share</button>
 													{#if auth.user?.did === comment.user_did}
 														<button class="comment-action-btn" onclick={() => startEditing(comment)}>edit</button>
 														<button class="comment-action-btn delete" onclick={() => deleteComment(comment.id)}>delete</button>
@@ -402,6 +446,48 @@
 		{/if}
 
 <style>
+	.comments-trigger-anchor {
+		position: relative;
+		display: inline-flex;
+	}
+
+	/* the emission: a passing comment surfaces briefly above the trigger */
+	.comment-emission {
+		position: absolute;
+		bottom: calc(100% + 0.5rem);
+		left: 50%;
+		translate: -50% 0;
+		display: flex;
+		align-items: center;
+		gap: 0.45rem;
+		max-width: 240px;
+		padding: 0.4rem 0.7rem;
+		background: var(--glass-bg, var(--bg-secondary));
+		backdrop-filter: var(--glass-blur, none);
+		-webkit-backdrop-filter: var(--glass-blur, none);
+		border: 1px solid var(--glass-border, var(--border-default));
+		border-radius: var(--radius-2xl);
+		box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+		color: var(--text-secondary);
+		font-size: var(--text-sm);
+		font-family: inherit;
+		cursor: pointer;
+		white-space: nowrap;
+		z-index: 40;
+	}
+
+	.comment-emission-avatar {
+		width: 18px;
+		height: 18px;
+		border-radius: var(--radius-full);
+		flex-shrink: 0;
+	}
+
+	.comment-emission-text {
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
 	/* quiet utility trigger — sits in the page's share/download row */
 	.comments-trigger {
 		display: flex;
