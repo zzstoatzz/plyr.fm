@@ -595,14 +595,13 @@ $effect(() => {
 									})}
 							/>
 						{/if}
+						<TrackComments {track} />
 					</div>
 				</div>
 			</div>
 		</div>
 
-		{#if track}
-			<TrackComments {track} />
-		{/if}
+
 	</main>
 	{/if}
 </div>

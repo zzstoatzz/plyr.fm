@@ -236,25 +236,28 @@
 	}
 </script>
 
-		<!-- comments live in a sheet (mobile) / centered modal (desktop);
-		     the page surfaces only the count -->
-		{#if commentsEnabled === true}
-			<button class="comments-bar" onclick={() => (commentsOpen = true)} aria-haspopup="dialog">
-				<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-					<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
-				</svg>
-				<span>comments</span>
-				{#if commentCount > 0}
-					<span class="comments-bar-count">{commentCount}</span>
-				{/if}
-			</button>
+<!-- a quiet utility trigger (icon + count) for the page's share/download
+     row; the full section opens as a bottom sheet on every viewport -->
+{#if commentsEnabled === true}
+	<button
+		class="comments-trigger"
+		onclick={() => (commentsOpen = true)}
+		aria-haspopup="dialog"
+		title="comments"
+	>
+		<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+			<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+		</svg>
+		{#if commentCount > 0}
+			<span class="comments-trigger-count">{commentCount}</span>
+		{/if}
+	</button>
 			<BottomSheet
 				open={commentsOpen}
 				onClose={() => (commentsOpen = false)}
 				ariaLabel="comments"
-				centerOnDesktop
 				maxWidth="520px"
-				maxHeight="75vh"
+				maxHeight="70vh"
 			>
 			<section class="comments-section">
 				<h2 class="comments-title">
@@ -383,42 +386,45 @@
 		{/if}
 
 <style>
-	.comments-bar {
+	/* quiet utility trigger — sits in the page's share/download row */
+	.comments-trigger {
 		display: flex;
 		align-items: center;
-		gap: 0.5rem;
-		margin: clamp(1rem, 2vh, 1.5rem) auto 0;
-		padding: 0.6rem 1.1rem;
+		gap: 0.35rem;
+		padding: 0.5rem;
 		background: transparent;
-		border: 1px solid var(--border-default);
-		border-radius: var(--radius-2xl);
-		color: var(--text-secondary);
+		border: none;
+		border-radius: var(--radius-full);
+		color: var(--text-tertiary);
 		font-family: inherit;
 		font-size: var(--text-base);
 		cursor: pointer;
 		transition: all 0.15s;
 	}
 
-	.comments-bar:hover {
-		border-color: var(--accent);
+	.comments-trigger:hover {
 		color: var(--accent);
+		background: color-mix(in srgb, var(--accent) 10%, transparent);
 	}
 
-	.comments-bar-count {
-		color: var(--text-tertiary);
+	.comments-trigger-count {
 		font-variant-numeric: tabular-nums;
 	}
 
 	.comments-section {
+		display: flex;
+		flex-direction: column;
+		gap: 1rem;
 		width: 100%;
-		padding: 0.25rem 0.25rem 0.5rem;
+		padding: 0.75rem 1.25rem 1.25rem;
+		text-align: left;
 	}
 
 	.comments-title {
-		font-size: var(--text-lg);
+		font-size: var(--text-base);
 		font-weight: 600;
 		color: var(--text-primary);
-		margin: 0 0 0.75rem 0;
+		margin: 0;
 		display: flex;
 		align-items: center;
 		gap: 0.5rem;
@@ -432,7 +438,6 @@
 	.comment-form {
 		display: flex;
 		gap: 0.5rem;
-		margin-bottom: 0.75rem;
 	}
 
 	.comment-input-wrapper {
@@ -509,7 +514,7 @@
 		color: var(--text-muted);
 		font-size: var(--text-base);
 		text-align: center;
-		padding: 1rem;
+		padding: 0.5rem 1rem 0.75rem;
 	}
 
 	.comments-list {
@@ -736,7 +741,7 @@
 
 	/* comments container prevents layout shift during transition */
 	.comments-container {
-		min-height: 120px;
+		min-height: 0;
 	}
 
 	/* skeleton loading styles for comments */
