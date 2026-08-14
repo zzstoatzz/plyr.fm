@@ -431,11 +431,16 @@
 	   mobile: docked above the footer player. desktop: right-edge drawer. */
 	.comments-panel {
 		position: fixed;
-		z-index: 90;
+		/* below the queue sidebar (50) and its toggle (60)? no — above content,
+		   below nothing it fights: the queue-width offset keeps them siblings */
+		z-index: 45;
 		display: flex;
 		flex-direction: column;
-		background: var(--bg-secondary);
-		border: 1px solid var(--border-default);
+		/* the queue sidebar's material — the two panels are one family */
+		background: var(--glass-bg, var(--bg-secondary));
+		backdrop-filter: var(--glass-blur, none);
+		-webkit-backdrop-filter: var(--glass-blur, none);
+		border: 1px solid var(--glass-border, var(--border-default));
 		box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.35);
 		inset: auto 0 calc(var(--player-height, 0px) + env(safe-area-inset-bottom, 0px)) 0;
 		max-height: 60dvh;
@@ -479,12 +484,17 @@
 
 	@media (min-width: 769px) {
 		.comments-panel {
-			inset: 5rem 1rem calc(var(--player-height, 0px) + 1rem) auto;
+			/* sits beside the queue sidebar when it's open (leaflet's sibling-
+			   column idea): the offset rides the same --queue-width variable
+			   the layout already maintains */
+			inset: 5rem calc(1rem + var(--queue-width, 0px))
+				calc(var(--player-height, 0px) + 1rem) auto;
 			width: 380px;
 			max-height: none;
 			border-radius: var(--radius-lg);
-			border-bottom: 1px solid var(--border-default);
+			border-bottom: 1px solid var(--glass-border, var(--border-default));
 			box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
+			transition: right 0.25s ease;
 		}
 
 		.comments-panel-handle {
@@ -891,11 +901,16 @@
 	   mobile: docked above the footer player. desktop: right-edge drawer. */
 	.comments-panel {
 		position: fixed;
-		z-index: 90;
+		/* below the queue sidebar (50) and its toggle (60)? no — above content,
+		   below nothing it fights: the queue-width offset keeps them siblings */
+		z-index: 45;
 		display: flex;
 		flex-direction: column;
-		background: var(--bg-secondary);
-		border: 1px solid var(--border-default);
+		/* the queue sidebar's material — the two panels are one family */
+		background: var(--glass-bg, var(--bg-secondary));
+		backdrop-filter: var(--glass-blur, none);
+		-webkit-backdrop-filter: var(--glass-blur, none);
+		border: 1px solid var(--glass-border, var(--border-default));
 		box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.35);
 		inset: auto 0 calc(var(--player-height, 0px) + env(safe-area-inset-bottom, 0px)) 0;
 		max-height: 60dvh;
@@ -939,12 +954,17 @@
 
 	@media (min-width: 769px) {
 		.comments-panel {
-			inset: 5rem 1rem calc(var(--player-height, 0px) + 1rem) auto;
+			/* sits beside the queue sidebar when it's open (leaflet's sibling-
+			   column idea): the offset rides the same --queue-width variable
+			   the layout already maintains */
+			inset: 5rem calc(1rem + var(--queue-width, 0px))
+				calc(var(--player-height, 0px) + 1rem) auto;
 			width: 380px;
 			max-height: none;
 			border-radius: var(--radius-lg);
-			border-bottom: 1px solid var(--border-default);
+			border-bottom: 1px solid var(--glass-border, var(--border-default));
 			box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
+			transition: right 0.25s ease;
 		}
 
 		.comments-panel-handle {
