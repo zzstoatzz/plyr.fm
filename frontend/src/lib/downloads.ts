@@ -1,5 +1,49 @@
-import { API_URL } from '$lib/config';
+import { API_URL, getAtprotofansSupportUrl } from '$lib/config';
+import { downloadAsk } from '$lib/download-ask.svelte';
 import { toast } from '$lib/toast.svelte';
+
+export interface DownloadAskInfo {
+	artistName: string;
+	artistDid?: string;
+	policy?: string;
+	supportUrl?: string | null;
+}
+
+function resolveSupportHref(info: DownloadAskInfo): string | null {
+	if (!info.supportUrl) return null;
+	if (info.supportUrl === 'atprotofans') {
+		return info.artistDid ? getAtprotofansSupportUrl(info.artistDid) : null;
+	}
+	return info.supportUrl;
+}
+
+/** run a download, interposing the support-ask modal when the artist's
+ * policy requests it. */
+function withAsk(info: DownloadAskInfo | null, proceed: () => void): void {
+	const href = info && info.policy === 'ask' ? resolveSupportHref(info) : null;
+	if (info && href) {
+		downloadAsk.open(info.artistName, href, proceed);
+	} else {
+		proceed();
+	}
+}
+
+/** entry point for track download buttons/menus. */
+export function requestTrackDownload(
+	fileId: string,
+	ask: DownloadAskInfo | null = null
+): void {
+	withAsk(ask, () => void downloadTrack(fileId));
+}
+
+/** entry point for album download buttons. */
+export function requestAlbumDownload(
+	handle: string,
+	slug: string,
+	ask: DownloadAskInfo | null = null
+): void {
+	withAsk(ask, () => void downloadAlbum(handle, slug));
+}
 
 /**
  * trigger a file download of a track's audio via the backend download

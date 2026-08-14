@@ -5,7 +5,7 @@
 	import TrackItem from '$lib/components/TrackItem.svelte';
 	import ShareButton from '$lib/components/ShareButton.svelte';
 	import DownloadButton from '$lib/components/DownloadButton.svelte';
-	import { downloadAlbum } from '$lib/downloads';
+	import { requestAlbumDownload } from '$lib/downloads';
 	import SensitiveImage from '$lib/components/SensitiveImage.svelte';
 	import { moderation } from '$lib/moderation.svelte';
 	import { player } from '$lib/player.svelte';
@@ -361,7 +361,13 @@
 					<ShareButton url={shareUrl} title="share album" />
 					{#if albumDownloadable}
 						<DownloadButton
-							onDownload={() => downloadAlbum(albumMetadata.artist_handle, albumMetadata.slug)}
+							onDownload={() =>
+								requestAlbumDownload(albumMetadata.artist_handle, albumMetadata.slug, tracks[0] ? {
+									artistName: tracks[0].artist,
+									artistDid: tracks[0].artist_did,
+									policy: tracks[0].download_policy,
+									supportUrl: tracks[0].artist_support_url
+								} : null)}
 							title="download album"
 						/>
 					{/if}
@@ -441,7 +447,13 @@
 				<ShareButton url={shareUrl} title="share album" />
 				{#if albumDownloadable}
 					<DownloadButton
-							onDownload={() => downloadAlbum(albumMetadata.artist_handle, albumMetadata.slug)}
+							onDownload={() =>
+								requestAlbumDownload(albumMetadata.artist_handle, albumMetadata.slug, tracks[0] ? {
+									artistName: tracks[0].artist,
+									artistDid: tracks[0].artist_did,
+									policy: tracks[0].download_policy,
+									supportUrl: tracks[0].artist_support_url
+								} : null)}
 							title="download album"
 						/>
 				{/if}

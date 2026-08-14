@@ -62,7 +62,7 @@ class Artist(Base):
     # one-to-one with UserPreferences, which shares the DID as its primary key
     # but declares no FK column — hence the explicit join. selectin-loaded so
     # any query that loads an Artist (eagerly or not) can read policy flags
-    # like allow_downloads without a per-row query.
+    # like download_policy without a per-row query.
     preferences: Mapped["UserPreferences | None"] = relationship(
         "UserPreferences",
         primaryjoin="Artist.did == foreign(UserPreferences.did)",

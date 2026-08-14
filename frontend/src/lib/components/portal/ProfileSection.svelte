@@ -16,6 +16,11 @@
 	let avatarUrl = $state('');
 	// support link mode: 'none' | 'atprotofans' | 'custom'
 	let supportLinkMode = $state<'none' | 'atprotofans' | 'custom'>('none');
+	// download policy: '' = auto (ask with a support link, open without)
+	let downloadPolicy = $state<'' | 'open' | 'ask' | 'supporters' | 'off'>('');
+	// whether a support relationship can be verified for this artist —
+	// currently backed by atprotofans, verifier-neutral by design (#1841)
+	let supportVerificationAvailable = $derived(atprotofansEligible);
 	let customSupportUrl = $state('');
 	let savingProfile = $state(false);
 
@@ -35,6 +40,7 @@
 
 			if (prefsRes.ok) {
 				const prefs = await prefsRes.json();
+				downloadPolicy = (prefs.download_policy ?? '') as typeof downloadPolicy;
 				// parse support_url into mode + custom URL
 				const url = prefs.support_url || '';
 				if (!url) {
@@ -88,7 +94,9 @@
 					method: 'POST',
 					headers: { 'Content-Type': 'application/json' },
 					credentials: 'include',
-					body: JSON.stringify({ support_url: supportUrlValue })
+					body: JSON.stringify({ support_url: supportUrlValue,
+						download_policy: downloadPolicy || 'auto'
+					})
 				})
 			]);
 
@@ -221,6 +229,39 @@
 					link to Ko-fi, Patreon, or similar - shown on your profile
 				{:else}
 					no support link will be shown on your profile
+				{/if}
+			</p>
+		</div>
+
+		<div class="form-group">
+			<label class="form-label" for="download-policy">downloads</label>
+			<select
+				id="download-policy"
+				bind:value={downloadPolicy}
+				disabled={savingProfile}
+				class="download-policy-select"
+			>
+				<option value="">auto — ask when you have a support link</option>
+				<option value="open">open — anyone can download</option>
+				<option value="ask">ask — downloads work, listeners see your support link first</option>
+				<option value="supporters" disabled={!supportVerificationAvailable}>
+					supporters — only verified supporters can download
+				</option>
+				<option value="off">off — no downloads</option>
+			</select>
+			<p class="hint">
+				{#if downloadPolicy === 'supporters'}
+					listeners need a verified support relationship to download your tracks and albums
+				{:else if downloadPolicy === 'ask' && supportLinkMode === 'none'}
+					set a support link above so the ask has somewhere to point
+				{:else if downloadPolicy === '' && supportLinkMode !== 'none'}
+					with your support link set, listeners are asked to consider supporting before downloading
+				{:else if downloadPolicy === '' || downloadPolicy === 'open'}
+					your public, ungated audio can be downloaded — single tracks and whole albums
+				{:else if downloadPolicy === 'off'}
+					no download buttons anywhere
+				{:else}
+					listeners see your support link before the download starts
 				{/if}
 			</p>
 		</div>
@@ -387,6 +428,17 @@
 	.support-option:has(input:checked) {
 		border-color: var(--accent);
 		background: color-mix(in srgb, var(--accent) 8%, var(--bg-primary));
+	}
+
+	.download-policy-select {
+		width: 100%;
+		padding: 0.6rem 0.75rem;
+		background: var(--bg-tertiary);
+		border: 1px solid var(--border-default);
+		border-radius: var(--radius-md);
+		color: var(--text-primary);
+		font-family: inherit;
+		font-size: var(--text-base);
 	}
 
 	.support-option input[type='radio'] {

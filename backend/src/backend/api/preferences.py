@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend._internal import Session, require_auth
 from backend.config import settings
 from backend.models import UserPreferences, get_db
+from backend.utilities.downloads import DOWNLOAD_POLICIES
 from backend.utilities.tags import DEFAULT_HIDDEN_TAGS
 
 router = APIRouter(prefix="/preferences", tags=["preferences"])
@@ -27,7 +28,8 @@ class PreferencesResponse(BaseModel):
     accent_color: str
     auto_advance: bool
     allow_comments: bool
-    allow_downloads: bool
+    # None = auto: ask when a support link is set, open otherwise
+    download_policy: str | None = None
     hidden_tags: list[str]
     enable_teal_scrobbling: bool
     # indicates if user needs to re-login to activate teal scrobbling
@@ -48,7 +50,8 @@ class PreferencesUpdate(BaseModel):
     accent_color: str | None = None
     auto_advance: bool | None = None
     allow_comments: bool | None = None
-    allow_downloads: bool | None = None
+    # "auto" resets to the automatic default (stored as NULL)
+    download_policy: str | None = None
     hidden_tags: list[str] | None = None
     enable_teal_scrobbling: bool | None = None
     show_sensitive_artwork: bool | None = None
@@ -113,7 +116,7 @@ async def get_preferences(
         accent_color=prefs.accent_color,
         auto_advance=prefs.auto_advance,
         allow_comments=prefs.allow_comments,
-        allow_downloads=prefs.allow_downloads,
+        download_policy=prefs.download_policy,
         hidden_tags=prefs.hidden_tags or [],
         enable_teal_scrobbling=prefs.enable_teal_scrobbling,
         teal_needs_reauth=teal_needs_reauth,
@@ -150,9 +153,9 @@ async def update_preferences(
             allow_comments=update.allow_comments
             if update.allow_comments is not None
             else False,
-            allow_downloads=update.allow_downloads
-            if update.allow_downloads is not None
-            else True,
+            download_policy=update.download_policy
+            if update.download_policy in DOWNLOAD_POLICIES
+            else None,
             hidden_tags=update.hidden_tags
             if update.hidden_tags is not None
             else list(DEFAULT_HIDDEN_TAGS),
@@ -182,8 +185,13 @@ async def update_preferences(
             prefs.auto_advance = update.auto_advance
         if update.allow_comments is not None:
             prefs.allow_comments = update.allow_comments
-        if update.allow_downloads is not None:
-            prefs.allow_downloads = update.allow_downloads
+        if update.download_policy is not None:
+            # "auto" clears the explicit choice back to NULL
+            prefs.download_policy = (
+                update.download_policy
+                if update.download_policy in DOWNLOAD_POLICIES
+                else None
+            )
         if update.hidden_tags is not None:
             prefs.hidden_tags = update.hidden_tags
         if update.enable_teal_scrobbling is not None:
@@ -213,7 +221,7 @@ async def update_preferences(
         accent_color=prefs.accent_color,
         auto_advance=prefs.auto_advance,
         allow_comments=prefs.allow_comments,
-        allow_downloads=prefs.allow_downloads,
+        download_policy=prefs.download_policy,
         hidden_tags=prefs.hidden_tags or [],
         enable_teal_scrobbling=prefs.enable_teal_scrobbling,
         teal_needs_reauth=teal_needs_reauth,

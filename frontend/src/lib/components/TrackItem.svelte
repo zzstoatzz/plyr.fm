@@ -13,6 +13,7 @@
 	import { queue } from '$lib/queue.svelte';
 	import { toast } from '$lib/toast.svelte';
 	import { playTrack, guardGatedTrack } from '$lib/playback.svelte';
+	import { requestTrackDownload } from '$lib/downloads';
 	import {
 		getRefreshedAvatar,
 		triggerAvatarRefresh,
@@ -441,6 +442,13 @@
 				fileId={track.file_id}
 				gated={track.gated}
 				downloadable={track.downloadable ?? false}
+				onDownload={() =>
+					requestTrackDownload(track.file_id, {
+						artistName: track.artist,
+						artistDid: track.artist_did,
+						policy: track.download_policy,
+						supportUrl: track.artist_support_url
+					})}
 				initialLiked={track.is_liked || false}
 				shareUrl={shareUrl}
 				onQueue={handleQueue}

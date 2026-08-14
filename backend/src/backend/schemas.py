@@ -8,7 +8,11 @@ from backend._internal.atproto.client import parse_at_uri
 from backend.config import settings
 from backend.models import Album, Track
 from backend.utilities.aggregations import CopyrightInfo
-from backend.utilities.downloads import download_key, download_refusal
+from backend.utilities.downloads import (
+    download_key,
+    download_refusal,
+    effective_download_policy,
+)
 
 # --- common simple response types ---
 
@@ -145,9 +149,16 @@ class TrackResponse(BaseModel):
     copyright_match: str | None = None  # "Title by Artist" of primary match
     support_gate: dict[str, Any] | None = None  # supporter gating config
     gated: bool = False  # true if track is gated AND viewer lacks access
-    # true when the download endpoint would hand this track out: public,
-    # ungated, not copyright-blocked, and the artist hasn't disabled downloads
+    # true when the download endpoint would hand this track out *to this
+    # viewer*: public, ungated, not copyright-blocked, and permitted by the
+    # artist's download policy (viewer-dependent for the supporters tier)
     downloadable: bool = False
+    # the artist's download policy ("open"|"ask"|"supporters"|"off") — lets
+    # the UI ask (support nudge) or explain (supporters tier)
+    download_policy: str = "open"
+    # the artist's support link, raw ("atprotofans" magic value included; the
+    # frontend resolves it) — present so ask/supporters UIs can link out
+    artist_support_url: str | None = None
     # indiemusi rights record pointers (set when this track has copyright metadata)
     copyright_song_uri: str | None = None
     copyright_recording_uri: str | None = None
@@ -280,13 +291,21 @@ class TrackResponse(BaseModel):
         # UI only offers what the endpoint would serve (the artist relationship
         # selectin-loads prefs)
         artist_prefs = track.artist.preferences
+        download_policy = effective_download_policy(
+            artist_prefs.download_policy if artist_prefs else None,
+            artist_prefs.support_url if artist_prefs else None,
+        )
         downloadable = (
             download_refusal(
                 is_private=track.is_private,
                 support_gate=track.support_gate,
                 labels=labels,
                 moderation_override=track.moderation_override,
-                allow_downloads=artist_prefs.allow_downloads if artist_prefs else None,
+                download_policy=download_policy,
+                viewer_is_artist=viewer_did == track.artist_did,
+                viewer_is_supporter=bool(
+                    supported_artist_dids and track.artist_did in supported_artist_dids
+                ),
             )
             is None
             and download_key(
@@ -328,6 +347,8 @@ class TrackResponse(BaseModel):
             support_gate=track.support_gate,
             gated=gated,
             downloadable=downloadable,
+            download_policy=download_policy,
+            artist_support_url=artist_prefs.support_url if artist_prefs else None,
             description=track.description,
             original_file_id=track.original_file_id,
             original_file_type=track.original_file_type,
