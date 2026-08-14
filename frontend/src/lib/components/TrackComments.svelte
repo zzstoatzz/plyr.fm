@@ -484,13 +484,16 @@
 
 	@media (min-width: 769px) {
 		.comments-panel {
-			/* sits beside the queue sidebar when it's open (leaflet's sibling-
-			   column idea): the offset rides the same --queue-width variable
-			   the layout already maintains */
-			inset: 5rem calc(1rem + var(--queue-width, 0px))
+			/* bottom-anchored on desktop too — a narrower, queue-offset
+			   sibling of the mobile dock. content-driven height, so one
+			   comment makes a small card, never a hollow column; never
+			   pinned under the header. the offset rides the --queue-width
+			   variable the layout already maintains (leaflet's
+			   sibling-column idea). */
+			inset: auto calc(1rem + var(--queue-width, 0px))
 				calc(var(--player-height, 0px) + 1rem) auto;
-			width: 380px;
-			max-height: none;
+			width: min(380px, calc(100vw - 2rem));
+			max-height: min(65dvh, calc(100dvh - 7rem));
 			border-radius: var(--radius-lg);
 			border-bottom: 1px solid var(--glass-border, var(--border-default));
 			box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
@@ -954,13 +957,16 @@
 
 	@media (min-width: 769px) {
 		.comments-panel {
-			/* sits beside the queue sidebar when it's open (leaflet's sibling-
-			   column idea): the offset rides the same --queue-width variable
-			   the layout already maintains */
-			inset: 5rem calc(1rem + var(--queue-width, 0px))
+			/* bottom-anchored on desktop too — a narrower, queue-offset
+			   sibling of the mobile dock. content-driven height, so one
+			   comment makes a small card, never a hollow column; never
+			   pinned under the header. the offset rides the --queue-width
+			   variable the layout already maintains (leaflet's
+			   sibling-column idea). */
+			inset: auto calc(1rem + var(--queue-width, 0px))
 				calc(var(--player-height, 0px) + 1rem) auto;
-			width: 380px;
-			max-height: none;
+			width: min(380px, calc(100vw - 2rem));
+			max-height: min(65dvh, calc(100dvh - 7rem));
 			border-radius: var(--radius-lg);
 			border-bottom: 1px solid var(--glass-border, var(--border-default));
 			box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
