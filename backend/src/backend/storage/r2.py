@@ -53,13 +53,17 @@ def content_disposition(filename: str) -> str:
 # content-hashed files never change — cache forever
 IMMUTABLE_CACHE_CONTROL = "public, max-age=31536000, immutable"
 
-# bounds the memory an upload may hold in flight. boto's defaults are 10
-# concurrent 8MB parts — 80MB per upload, which with 3 concurrent uploads
-# starved the 1GB app VM into a wedge on 2026-08-14 (an album batch of WAVs).
-# 2 x 8MB caps each upload at ~16MB of part buffers.
+# bounds the memory an upload may hold in flight. two independent knobs both
+# default dangerously high in aioboto3's upload_fileobj: uploader concurrency
+# (10 x 8MB parts) and — far worse — the reader-side io_queue, which eagerly
+# buffers up to 100 full 8MB parts (~800MB) ahead of the uploaders. a single
+# large WAV could therefore hold most of the file in memory, which is what
+# wedged the 1GB app VM on 2026-08-14 during an album batch. 2 queued + 2 in
+# flight caps each upload at ~32MB.
 UPLOAD_TRANSFER_CONFIG = TransferConfig(
     multipart_chunksize=8 * 1024 * 1024,
     max_concurrency=2,
+    max_io_queue=2,
 )
 
 # every column that can name a stored object. `_reference_count` walks all of

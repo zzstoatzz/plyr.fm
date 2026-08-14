@@ -1696,8 +1696,11 @@ async def upload_track(
             # permissioned media: audio lives ON THE PDS, never R2. upload the
             # blob straight to the user's PDS blobstore here (we hold the bytes +
             # the auth session); the worker only writes the permissioned record.
-            with open(file_path, "rb") as f:
-                audio_file_id = hash_file_chunked(f)[:16]
+            def _hash_tmp() -> str:
+                with open(file_path, "rb") as f:
+                    return hash_file_chunked(f)
+
+            audio_file_id = (await anyio.to_thread.run_sync(_hash_tmp))[:16]
 
             # stream the temp file (don't buffer audio in memory); the factory is
             # re-invoked per upload attempt, so it must yield a fresh iterator.
