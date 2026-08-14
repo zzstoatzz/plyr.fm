@@ -162,9 +162,7 @@
 						{#if fileSizes[track.id]}
 							<span class="pds-track-size">{formatBytes(fileSizes[track.id])}</span>
 						{/if}
-						{#if status === 'saved'}
-							<span class="pds-badge saved">saved to PDS</span>
-						{:else if status === 'gated'}
+						{#if status === 'gated'}
 							<span class="pds-badge gated">gated</span>
 						{:else if status === 'optimizing'}
 							<span
@@ -369,10 +367,6 @@
 		font-weight: 500;
 	}
 
-	.pds-badge.saved {
-		background: color-mix(in srgb, var(--accent) 15%, transparent);
-		color: var(--accent);
-	}
 
 	.pds-badge.gated {
 		background: color-mix(in srgb, var(--text-tertiary) 15%, transparent);
