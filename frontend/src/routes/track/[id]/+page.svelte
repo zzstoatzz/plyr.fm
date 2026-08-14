@@ -1010,7 +1010,7 @@ $effect(() => {
 		min-width: 0;
 		display: flex;
 		flex-direction: column;
-		gap: 1rem;
+		gap: clamp(1rem, 2vh, 1.5rem);
 		text-align: center;
 	}
 
@@ -1316,7 +1316,9 @@ $effect(() => {
 		grid-template-columns: 1fr auto 1fr;
 		column-gap: clamp(1.25rem, 6vw, 2.5rem);
 		align-items: center;
-		margin-top: 0.75rem;
+		/* the zone break between identity and action — deliberately larger
+		   than the uniform row gap, and scaling with the viewport */
+		margin-top: clamp(0.75rem, 3vh, 2rem);
 	}
 
 	.track-actions .like-chip {
