@@ -8,6 +8,7 @@
 	import { API_URL } from '$lib/config';
 	import Header from '$lib/components/Header.svelte';
 	import AddToMenu from '$lib/components/AddToMenu.svelte';
+	import BottomSheet from '$lib/components/BottomSheet.svelte';
 	import TagEffects from '$lib/components/TagEffects.svelte';
 	import SensitiveImage from '$lib/components/SensitiveImage.svelte';
 	import LikersTooltip from '$lib/components/LikersTooltip.svelte';
@@ -78,7 +79,9 @@
 	// comments state - assume enabled until we know otherwise
 	let comments = $state<Comment[]>([]);
 	let commentsEnabled = $state<boolean | null>(null); // null = unknown, true/false = known
+	let commentsOpen = $state(false);
 	let loadingComments = $state(true);
+	let commentCount = $derived(loadingComments ? (track?.comment_count ?? 0) : comments.length);
 	let newCommentText = $state('');
 	let submittingComment = $state(false);
 	let editingCommentId = $state<number | null>(null);
@@ -711,6 +714,12 @@ $effect(() => {
 									fileId={track.file_id}
 									gated={track.gated}
 									initialLiked={track.is_liked || false}
+									onLikeChange={(liked) => {
+										if (track) {
+											track.like_count = (track.like_count || 0) + (liked ? 1 : -1);
+											track.is_liked = liked;
+										}
+									}}
 								/>
 							{:else}
 								<button class="heart-static" class:shake={heartShake} onclick={nudgeSignIn} aria-label="sign in to like tracks" title="sign in to like tracks">
@@ -807,8 +816,26 @@ $effect(() => {
 			</div>
 		</div>
 
-		<!-- comments section - only render when we know comments are enabled -->
+		<!-- comments live in a sheet (mobile) / centered modal (desktop);
+		     the page surfaces only the count -->
 		{#if commentsEnabled === true}
+			<button class="comments-bar" onclick={() => (commentsOpen = true)} aria-haspopup="dialog">
+				<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+					<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+				</svg>
+				<span>comments</span>
+				{#if commentCount > 0}
+					<span class="comments-bar-count">{commentCount}</span>
+				{/if}
+			</button>
+			<BottomSheet
+				open={commentsOpen}
+				onClose={() => (commentsOpen = false)}
+				ariaLabel="comments"
+				centerOnDesktop
+				maxWidth="520px"
+				maxHeight="75vh"
+			>
 			<section class="comments-section">
 				<h2 class="comments-title">
 					comments
@@ -932,6 +959,7 @@ $effect(() => {
 					{/key}
 				</div>
 			</section>
+			</BottomSheet>
 		{/if}
 	</main>
 	{/if}
@@ -1509,12 +1537,35 @@ $effect(() => {
 	}
 
 	/* comments section */
+	.comments-bar {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		margin: clamp(1rem, 2vh, 1.5rem) auto 0;
+		padding: 0.6rem 1.1rem;
+		background: transparent;
+		border: 1px solid var(--border-default);
+		border-radius: var(--radius-2xl);
+		color: var(--text-secondary);
+		font-family: inherit;
+		font-size: var(--text-base);
+		cursor: pointer;
+		transition: all 0.15s;
+	}
+
+	.comments-bar:hover {
+		border-color: var(--accent);
+		color: var(--accent);
+	}
+
+	.comments-bar-count {
+		color: var(--text-tertiary);
+		font-variant-numeric: tabular-nums;
+	}
+
 	.comments-section {
 		width: 100%;
-		max-width: 500px;
-		margin: 1.5rem auto 0;
-		padding-top: 1.5rem;
-		border-top: 1px solid var(--border-subtle);
+		padding: 0.25rem 0.25rem 0.5rem;
 	}
 
 	.comments-title {
