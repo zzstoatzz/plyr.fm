@@ -14,6 +14,7 @@ import aioboto3
 import aiofiles
 import logfire
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 
 from backend._internal.background import get_docket
 from backend._internal.jobs import job_service
@@ -24,6 +25,8 @@ from backend.storage import storage
 from backend.storage.keys import AudioKey, InvalidMediaExtension
 from backend.storage.r2 import UploadProgressTracker
 from backend.utilities.database import db_session
+from backend.utilities.downloads import download_filename as track_entry_name
+from backend.utilities.downloads import download_key
 from backend.utilities.progress import R2ProgressTracker
 
 logger = logging.getLogger(__name__)
@@ -326,6 +329,192 @@ async def process_export(export_id: str, artist_did: str) -> None:
             "export failed",
             error=f"unexpected error: {e!s}",
         )
+
+
+async def process_album_download(
+    job_id: str, track_ids: list[int], r2_key: str, zip_filename: str
+) -> None:
+    """build a public album zip and cache it in R2 under a content-digest key.
+
+    sibling of `process_export` with two deliberate differences: entries are
+    ZIP_STORED (audio is already compressed — deflate burns worker CPU for
+    nothing), and the destination key encodes a digest of the member tracks,
+    so an edited album naturally builds a fresh object while the old one is
+    swept below. eligibility (no gated/labeled/opted-out tracks) is enforced
+    by the API endpoint before this job is ever enqueued.
+    """
+    try:
+        await job_service.update_progress(
+            job_id, JobStatus.PROCESSING, "fetching album..."
+        )
+
+        async with db_session() as db:
+            stmt = (
+                select(Track)
+                .options(selectinload(Track.artist))
+                .where(Track.id.in_(track_ids))
+            )
+            by_id = {t.id: t for t in (await db.execute(stmt)).scalars().all()}
+            # the endpoint owns ordering (the ATProto list record); preserve it
+            tracks = [by_id[tid] for tid in track_ids if tid in by_id]
+
+        entries = []
+        for position, track in enumerate(tracks, start=1):
+            key = download_key(
+                file_id=track.file_id,
+                file_type=track.file_type,
+                original_file_id=track.original_file_id,
+                original_file_type=track.original_file_type,
+                r2_url=track.r2_url,
+                audio_storage=track.audio_storage,
+            )
+            if key is None:
+                continue
+            entries.append(
+                {
+                    "track": track,
+                    "key": key.key,
+                    "filename": f"{position:02d} "
+                    + track_entry_name(
+                        track.artist.display_name, track.title, key.extension
+                    ),
+                }
+            )
+
+        if not entries:
+            await job_service.update_progress(
+                job_id,
+                JobStatus.FAILED,
+                "album download failed",
+                error="no downloadable tracks",
+            )
+            return
+
+        async_session = aioboto3.Session()
+        total = len(entries)
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            zip_path = temp_path / "album.zip"
+            for info in entries:
+                info["temp_path"] = temp_path / info["filename"]
+
+            downloaded = 0
+            download_lock = asyncio.Lock()
+            semaphore = asyncio.Semaphore(4)
+
+            async def download_one(info: dict, s3_client) -> dict | None:
+                nonlocal downloaded
+                async with semaphore:
+                    try:
+                        response = await s3_client.get_object(
+                            Bucket=storage.audio_bucket_name, Key=info["key"]
+                        )
+                        async with aiofiles.open(info["temp_path"], "wb") as f:
+                            async for chunk in response["Body"].iter_chunks():
+                                await f.write(chunk)
+                        async with download_lock:
+                            downloaded += 1
+                            await job_service.update_progress(
+                                job_id,
+                                JobStatus.PROCESSING,
+                                f"gathering tracks ({downloaded}/{total})...",
+                                progress_pct=(downloaded / total) * 90,
+                            )
+                        return info
+                    except Exception as e:
+                        logfire.error(
+                            "album download: failed to fetch track",
+                            track_id=info["track"].id,
+                            key=info["key"],
+                            error=str(e),
+                        )
+                        return None
+
+            async with async_session.client(
+                "s3",
+                endpoint_url=settings.storage.r2_endpoint_url,
+                aws_access_key_id=settings.storage.aws_access_key_id,
+                aws_secret_access_key=settings.storage.aws_secret_access_key,
+            ) as s3_client:
+                results = await asyncio.gather(
+                    *[download_one(info, s3_client) for info in entries]
+                )
+
+            fetched = [r for r in results if r is not None]
+            if len(fetched) != total:
+                # a partial album zip is a corrupt product — fail loudly
+                await job_service.update_progress(
+                    job_id,
+                    JobStatus.FAILED,
+                    "album download failed",
+                    error=f"only {len(fetched)}/{total} tracks were fetchable",
+                )
+                return
+
+            await job_service.update_progress(
+                job_id, JobStatus.PROCESSING, "packaging...", progress_pct=92.0
+            )
+            with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_STORED) as zf:
+                for info in fetched:
+                    zf.write(info["temp_path"], arcname=info["filename"])
+                    os.unlink(info["temp_path"])
+
+            async with async_session.client(
+                "s3",
+                endpoint_url=settings.storage.r2_endpoint_url,
+                aws_access_key_id=settings.storage.aws_access_key_id,
+                aws_secret_access_key=settings.storage.aws_secret_access_key,
+            ) as upload_client:
+                with open(zip_path, "rb") as zip_file_obj:
+                    await upload_client.upload_fileobj(
+                        zip_file_obj,
+                        storage.audio_bucket_name,
+                        r2_key,
+                        ExtraArgs={
+                            "ContentType": "application/zip",
+                            "ContentDisposition": (
+                                f'attachment; filename="{zip_filename}"'
+                            ),
+                        },
+                    )
+
+                # sweep stale digests for this album so edits don't accrete zips
+                prefix = r2_key.rsplit("-", 1)[0] + "-"
+                listing = await upload_client.list_objects_v2(
+                    Bucket=storage.audio_bucket_name, Prefix=prefix
+                )
+                for obj in listing.get("Contents", []):
+                    if obj["Key"] != r2_key:
+                        await upload_client.delete_object(
+                            Bucket=storage.audio_bucket_name, Key=obj["Key"]
+                        )
+                        logfire.info("swept stale album zip", key=obj["Key"])
+
+        download_url = f"{storage.public_audio_bucket_url}/{r2_key}"
+        await job_service.update_progress(
+            job_id,
+            JobStatus.COMPLETED,
+            "album ready",
+            result={"download_url": download_url, "total_count": total},
+        )
+
+    except Exception as e:
+        logfire.exception("album download failed", job_id=job_id)
+        await job_service.update_progress(
+            job_id,
+            JobStatus.FAILED,
+            "album download failed",
+            error=f"unexpected error: {e!s}",
+        )
+
+
+async def schedule_album_download(
+    job_id: str, track_ids: list[int], r2_key: str, zip_filename: str
+) -> None:
+    """schedule an album zip build via docket."""
+    docket = get_docket()
+    await docket.add(process_album_download)(job_id, track_ids, r2_key, zip_filename)
+    logfire.info("scheduled album download", job_id=job_id, r2_key=r2_key)
 
 
 async def schedule_export(export_id: str, artist_did: str) -> None:

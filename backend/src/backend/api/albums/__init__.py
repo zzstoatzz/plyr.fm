@@ -21,6 +21,7 @@ from . import listing as _listing  # /, /{handle}, /{handle}/{slug}
 from . import (
     mutations as _mutations,
 )  # POST /, /{id}/cover, /{id}/finalize, PATCH, DELETE
+from . import downloads as _downloads  # /{handle}/{slug}/download
 
 __all__ = [
     "ALBUM_CACHE_PREFIX",

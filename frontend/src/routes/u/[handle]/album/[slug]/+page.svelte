@@ -4,6 +4,8 @@
 	import Header from '$lib/components/Header.svelte';
 	import TrackItem from '$lib/components/TrackItem.svelte';
 	import ShareButton from '$lib/components/ShareButton.svelte';
+	import DownloadButton from '$lib/components/DownloadButton.svelte';
+	import { downloadAlbum } from '$lib/downloads';
 	import SensitiveImage from '$lib/components/SensitiveImage.svelte';
 	import { moderation } from '$lib/moderation.svelte';
 	import { player } from '$lib/player.svelte';
@@ -32,6 +34,7 @@
 
 	// local mutable copy of tracks for reordering
 	let tracks = $state<Track[]>([...data.album.tracks]);
+	let albumDownloadable = $derived(tracks.length > 0 && tracks.every((t) => t.downloadable));
 
 	// check if current user owns this album
 	const isOwner = $derived(auth.user?.did === albumMetadata.artist_did);
@@ -356,6 +359,12 @@
 
 				<div class="side-buttons">
 					<ShareButton url={shareUrl} title="share album" />
+					{#if albumDownloadable}
+						<DownloadButton
+							onDownload={() => downloadAlbum(albumMetadata.artist_handle, albumMetadata.slug)}
+							title="download album"
+						/>
+					{/if}
 					{#if isOwner}
 						<button
 							class="icon-btn"
@@ -430,6 +439,12 @@
 			</button>
 			<div class="mobile-buttons">
 				<ShareButton url={shareUrl} title="share album" />
+				{#if albumDownloadable}
+					<DownloadButton
+							onDownload={() => downloadAlbum(albumMetadata.artist_handle, albumMetadata.slug)}
+							title="download album"
+						/>
+				{/if}
 				{#if isOwner}
 					<button
 						class="icon-btn"

@@ -2,14 +2,23 @@
 	import { downloadTrack } from '$lib/downloads';
 
 	interface Props {
-		fileId: string;
+		fileId?: string;
+		onDownload?: () => void;
 		title?: string;
 	}
 
-	let { fileId, title = 'download audio file' }: Props = $props();
+	let { fileId, onDownload, title = 'download audio file' }: Props = $props();
+
+	function handleClick() {
+		if (onDownload) {
+			onDownload();
+		} else if (fileId) {
+			downloadTrack(fileId);
+		}
+	}
 </script>
 
-<button class="download-btn" onclick={() => downloadTrack(fileId)} {title}>
+<button class="download-btn" onclick={handleClick} {title}>
 	<!-- 15px: the download glyph fills its viewBox denser than share's corner
 	     circles do, so equal nominal sizes read unequal. -->
 	<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
