@@ -284,7 +284,7 @@
 	{#if emission}
 		<button
 			class="comment-emission"
-			transition:fly={{ y: 10, duration: reduceMotionComments ? 0 : 300 }}
+			transition:fly={{ y: -8, duration: reduceMotionComments ? 0 : 300 }}
 			onclick={() => {
 				emission = null;
 				commentsOpen = true;
@@ -456,10 +456,11 @@
 		display: inline-flex;
 	}
 
-	/* the emission: a passing comment surfaces briefly above the trigger */
+	/* the emission: a passing comment surfaces briefly in the open space
+	   below the utilities row — never over the stats line above */
 	.comment-emission {
 		position: absolute;
-		bottom: calc(100% + 0.5rem);
+		top: calc(100% + 0.5rem);
 		left: 50%;
 		translate: -50% 0;
 		display: flex;
