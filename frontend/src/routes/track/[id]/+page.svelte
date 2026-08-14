@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { slide } from 'svelte/transition';
+	import { fly, scale, slide } from 'svelte/transition';
+	import { backOut } from 'svelte/easing';
 	import { onMount } from 'svelte';
 	import { browser } from '$app/environment';
 	import { page } from '$app/stores';
@@ -85,6 +86,8 @@
 
 	// metadata disclosure panel
 	let metadataOpen = $state(false);
+	const reduceMotion =
+		browser && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 	let heartShake = $state(false);
 
 	function nudgeSignIn() {
@@ -514,6 +517,7 @@ $effect(() => {
 							{/if}
 							{#if track.like_count && track.like_count > 0}
 							<span
+								in:scale={{ start: 0.5, duration: reduceMotion ? 0 : 260, easing: backOut }}
 								class="likes"
 								role="button"
 								tabindex="0"
@@ -526,7 +530,9 @@ $effect(() => {
 								onblur={handleLikesMouseLeave}
 								onkeydown={handleLikesKeydown}
 							>
-								{track.like_count}
+								{#key track.like_count}
+									<span class="likes-num" in:fly={{ y: 9, duration: reduceMotion ? 0 : 220 }}>{track.like_count}</span>
+								{/key}
 								{#if showLikersTooltip && !isMobile}
 									<LikersTooltip
 										trackId={track.id}
@@ -858,6 +864,29 @@ $effect(() => {
 		border: none;
 		background: transparent;
 		border-radius: var(--radius-full);
+	}
+
+	/* one heartbeat when the heart turns liked — a tad, no more */
+	.like-chip :global(.trigger-button.liked svg) {
+		animation: heart-beat 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+	}
+
+	@keyframes heart-beat {
+		0% { transform: scale(1); }
+		35% { transform: scale(1.35); }
+		65% { transform: scale(0.92); }
+		100% { transform: scale(1); }
+	}
+
+	.likes-num {
+		display: inline-block;
+		font-variant-numeric: tabular-nums;
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.like-chip :global(.trigger-button.liked svg) {
+			animation: none;
+		}
 	}
 
 	.like-chip :global(.trigger-button:hover),

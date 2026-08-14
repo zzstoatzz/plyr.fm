@@ -1,13 +1,13 @@
 <script lang="ts">
 	import { auth } from '$lib/auth.svelte';
-	import BottomSheet from '$lib/components/BottomSheet.svelte';
+	import { swipeToDismiss } from '$lib/swipe-to-dismiss';
 	import { API_URL } from '$lib/config';
 	import { playTrack } from '$lib/playback.svelte';
 	import { player } from '$lib/player.svelte';
 	import { queue } from '$lib/queue.svelte';
 	import { toast } from '$lib/toast.svelte';
 	import type { Track } from '$lib/types';
-	import { fade } from 'svelte/transition';
+	import { fade, fly } from 'svelte/transition';
 	import RichText from '$lib/components/RichText.svelte';
 	import SensitiveImage from '$lib/components/SensitiveImage.svelte';
 	import { redirectToLogin } from '$lib/utils/auth-redirect';
@@ -36,6 +36,8 @@
 	let submittingComment = $state(false);
 	let editingCommentId = $state<number | null>(null);
 	let editingCommentText = $state('');
+	const isMobileViewport = () =>
+		typeof window !== 'undefined' && window.matchMedia('(max-width: 768px)').matches;
 
 
 	// reload + reset whenever the track changes (SPA navigation reuses this)
@@ -234,7 +236,13 @@
 			toast.error('failed to delete comment');
 		}
 	}
+
+	function handleWindowKeydown(e: KeyboardEvent) {
+		if (e.key === 'Escape' && commentsOpen) commentsOpen = false;
+	}
 </script>
+
+<svelte:window onkeydown={handleWindowKeydown} />
 
 <!-- a quiet utility trigger (icon + count) for the page's share/download
      row; the full section opens as a bottom sheet on every viewport -->
@@ -252,13 +260,20 @@
 			<span class="comments-trigger-count">{commentCount}</span>
 		{/if}
 	</button>
-			<BottomSheet
-				open={commentsOpen}
-				onClose={() => (commentsOpen = false)}
-				ariaLabel="comments"
-				maxWidth="520px"
-				maxHeight="70vh"
-			>
+			{#if commentsOpen}
+		<aside
+			class="comments-panel"
+			aria-label="comments"
+			transition:fly={{ x: isMobileViewport() ? 0 : 40, y: isMobileViewport() ? 120 : 0, duration: 220 }}
+			{@attach swipeToDismiss(() => (commentsOpen = false), { scrollSelector: '.comments-container' })}
+		>
+			<div class="comments-panel-handle" aria-hidden="true"></div>
+			<button class="comments-panel-close" onclick={() => (commentsOpen = false)} aria-label="close comments">
+				<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+					<line x1="18" y1="6" x2="6" y2="18"></line>
+					<line x1="6" y1="6" x2="18" y2="18"></line>
+				</svg>
+			</button>
 			<section class="comments-section">
 				<h2 class="comments-title">
 					comments
@@ -382,7 +397,8 @@
 					{/key}
 				</div>
 			</section>
-			</BottomSheet>
+				</aside>
+	{/if}
 		{/if}
 
 <style>
@@ -409,6 +425,71 @@
 
 	.comments-trigger-count {
 		font-variant-numeric: tabular-nums;
+	}
+
+	/* non-modal panel (leaflet-inspired): no backdrop, the page stays live.
+	   mobile: docked above the footer player. desktop: right-edge drawer. */
+	.comments-panel {
+		position: fixed;
+		z-index: 90;
+		display: flex;
+		flex-direction: column;
+		background: var(--bg-secondary);
+		border: 1px solid var(--border-default);
+		box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.35);
+		inset: auto 0 calc(var(--player-height, 0px) + env(safe-area-inset-bottom, 0px)) 0;
+		max-height: 60dvh;
+		border-radius: 16px 16px 0 0;
+		border-bottom: none;
+	}
+
+	.comments-panel-handle {
+		width: 36px;
+		height: 4px;
+		border-radius: var(--radius-full);
+		background: var(--border-emphasis);
+		margin: 0.5rem auto 0;
+		flex-shrink: 0;
+	}
+
+	.comments-panel-close {
+		position: absolute;
+		top: 0.75rem;
+		right: 0.75rem;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		padding: 0.4rem;
+		background: transparent;
+		border: none;
+		border-radius: var(--radius-full);
+		color: var(--text-tertiary);
+		cursor: pointer;
+	}
+
+	.comments-panel-close:hover {
+		color: var(--accent);
+		background: color-mix(in srgb, var(--accent) 10%, transparent);
+	}
+
+	.comments-container {
+		overflow-y: auto;
+		min-height: 0;
+	}
+
+	@media (min-width: 769px) {
+		.comments-panel {
+			inset: 5rem 1rem calc(var(--player-height, 0px) + 1rem) auto;
+			width: 380px;
+			max-height: none;
+			border-radius: var(--radius-lg);
+			border-bottom: 1px solid var(--border-default);
+			box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
+		}
+
+		.comments-panel-handle {
+			display: none;
+		}
 	}
 
 	.comments-section {
@@ -740,10 +821,6 @@
 	}
 
 	/* comments container prevents layout shift during transition */
-	.comments-container {
-		min-height: 0;
-	}
-
 	/* skeleton loading styles for comments */
 	.comment.skeleton {
 		pointer-events: none;
@@ -810,7 +887,72 @@
 	}
 
 	@media (max-width: 768px) {
-		.comments-section {
+		/* non-modal panel (leaflet-inspired): no backdrop, the page stays live.
+	   mobile: docked above the footer player. desktop: right-edge drawer. */
+	.comments-panel {
+		position: fixed;
+		z-index: 90;
+		display: flex;
+		flex-direction: column;
+		background: var(--bg-secondary);
+		border: 1px solid var(--border-default);
+		box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.35);
+		inset: auto 0 calc(var(--player-height, 0px) + env(safe-area-inset-bottom, 0px)) 0;
+		max-height: 60dvh;
+		border-radius: 16px 16px 0 0;
+		border-bottom: none;
+	}
+
+	.comments-panel-handle {
+		width: 36px;
+		height: 4px;
+		border-radius: var(--radius-full);
+		background: var(--border-emphasis);
+		margin: 0.5rem auto 0;
+		flex-shrink: 0;
+	}
+
+	.comments-panel-close {
+		position: absolute;
+		top: 0.75rem;
+		right: 0.75rem;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		padding: 0.4rem;
+		background: transparent;
+		border: none;
+		border-radius: var(--radius-full);
+		color: var(--text-tertiary);
+		cursor: pointer;
+	}
+
+	.comments-panel-close:hover {
+		color: var(--accent);
+		background: color-mix(in srgb, var(--accent) 10%, transparent);
+	}
+
+	.comments-container {
+		overflow-y: auto;
+		min-height: 0;
+	}
+
+	@media (min-width: 769px) {
+		.comments-panel {
+			inset: 5rem 1rem calc(var(--player-height, 0px) + 1rem) auto;
+			width: 380px;
+			max-height: none;
+			border-radius: var(--radius-lg);
+			border-bottom: 1px solid var(--border-default);
+			box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
+		}
+
+		.comments-panel-handle {
+			display: none;
+		}
+	}
+
+	.comments-section {
 			margin-top: 1rem;
 			padding-top: 1rem;
 		}
