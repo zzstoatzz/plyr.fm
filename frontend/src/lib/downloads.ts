@@ -38,25 +38,44 @@ export async function downloadAlbum(handle: string, slug: string): Promise<void>
 		if (res.ok) {
 			const data = await res.json();
 			if (data.job_id) {
-				toast.info('preparing album download...');
+				// persistent, live-updating toast: a cold build takes a while, and
+				// it keeps building server-side even if they navigate away — the
+				// next click is a cache hit.
+				const toastId = toast.add(
+					'preparing your album… this takes a minute the first time',
+					'info',
+					0
+				);
 				const es = new EventSource(`${API_URL}/exports/${data.job_id}/progress`);
 				es.onmessage = (event) => {
 					const progress = JSON.parse(event.data);
 					if (progress.status === 'completed') {
 						es.close();
+						toast.dismiss(toastId);
 						if (progress.download_url) {
+							toast.success('album ready — downloading');
 							window.location.assign(progress.download_url);
 						} else {
 							toast.error('album download failed');
 						}
 					} else if (progress.status === 'failed') {
 						es.close();
+						toast.dismiss(toastId);
 						toast.error(progress.error || 'album download failed');
+					} else if (progress.message) {
+						toast.update(
+							toastId,
+							`${progress.message} — you can keep browsing, it stays ready once built`
+						);
 					}
 				};
 				es.onerror = () => {
 					es.close();
-					toast.error('album download failed');
+					toast.dismiss(toastId);
+					toast.info(
+						'connection dropped, but your album is still being prepared — try the download again in a minute',
+						6000
+					);
 				};
 				return;
 			}
