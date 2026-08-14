@@ -893,6 +893,15 @@ class R2Storage:
                 )
                 return url
 
+    async def object_exists(self, key: str) -> bool:
+        """HEAD an audio-bucket object by raw key (cache checks, not media reads)."""
+        async with self._s3_client() as client:
+            try:
+                await client.head_object(Bucket=self.audio_bucket_name, Key=key)
+                return True
+            except ClientError:
+                return False
+
     async def generate_download_url(
         self,
         *,

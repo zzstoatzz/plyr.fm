@@ -6,7 +6,7 @@ they should be self-contained and handle their own database sessions.
 requires DOCKET_URL to be set (Redis is always available).
 """
 
-from backend._internal.export_tasks import process_export
+from backend._internal.export_tasks import process_album_download, process_export
 from backend._internal.pds_save_tasks import save_tracks_to_pds
 from backend._internal.tasks.copyright import (
     scan_copyright,
@@ -108,6 +108,7 @@ def _build_background_tasks() -> list:
         sync_operator_labels,
         publish_moderation_decisions,
         process_export,
+        process_album_download,
         sync_atproto,
         scrobble_to_teal,
         sync_album_list,

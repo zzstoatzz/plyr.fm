@@ -137,6 +137,37 @@ async def list_artist_albums(
     return {"albums": album_items}
 
 
+async def order_album_tracks(
+    album: Album, artist: Artist, all_tracks: list[Track]
+) -> list[Track]:
+    """order an album's tracks by its ATProto list record, created_at fallback.
+
+    the list record is the source of truth for curated order; tracks missing
+    from it (or the whole fetch failing) fall back to upload order.
+    """
+    if not album.atproto_record_uri:
+        return sorted(all_tracks, key=lambda t: t.created_at)
+    try:
+        track_uris = await fetch_list_item_uris(
+            album.atproto_record_uri, artist.pds_url
+        )
+        track_by_uri = {t.atproto_record_uri: t for t in all_tracks}
+        ordered: list[Track] = []
+        seen_ids = set()
+        for uri in track_uris:
+            if uri in track_by_uri:
+                track = track_by_uri[uri]
+                ordered.append(track)
+                seen_ids.add(track.id)
+        for track in sorted(all_tracks, key=lambda t: t.created_at):
+            if track.id not in seen_ids:
+                ordered.append(track)
+        return ordered
+    except Exception as e:
+        logger.warning(f"failed to fetch ATProto list for album ordering: {e}")
+        return sorted(all_tracks, key=lambda t: t.created_at)
+
+
 @router.get("/{handle}/{slug}")
 async def get_album(
     handle: str,
@@ -180,36 +211,7 @@ async def get_album(
     all_tracks = list(track_result.scalars().all())
 
     # determine track order: use ATProto list record if available
-    ordered_tracks: list[Track] = []
-    if album.atproto_record_uri:
-        try:
-            track_uris = await fetch_list_item_uris(
-                album.atproto_record_uri, artist.pds_url
-            )
-
-            # build uri -> track map
-            track_by_uri = {t.atproto_record_uri: t for t in all_tracks}
-
-            # order tracks by ATProto list, append any not in list at end
-            seen_ids = set()
-            for uri in track_uris:
-                if uri in track_by_uri:
-                    track = track_by_uri[uri]
-                    ordered_tracks.append(track)
-                    seen_ids.add(track.id)
-
-            # append any tracks not in the ATProto list (fallback)
-            for track in sorted(all_tracks, key=lambda t: t.created_at):
-                if track.id not in seen_ids:
-                    ordered_tracks.append(track)
-
-        except Exception as e:
-            logger.warning(f"failed to fetch ATProto list for album ordering: {e}")
-            # fallback to created_at order
-            ordered_tracks = sorted(all_tracks, key=lambda t: t.created_at)
-    else:
-        # no ATProto record - order by created_at
-        ordered_tracks = sorted(all_tracks, key=lambda t: t.created_at)
+    ordered_tracks = await order_album_tracks(album, artist, all_tracks)
 
     # an album someone opened is a destination, not a surface we chose
     tracks, labels_by_id = await filter_sensitive_audio_tracks(

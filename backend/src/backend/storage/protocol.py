@@ -89,6 +89,10 @@ class StorageProtocol(Protocol):
         expires_in: int | None = None,
     ) -> str: ...
 
+    async def object_exists(self, key: str) -> bool:
+        """whether an audio-bucket object exists at this raw key."""
+        ...
+
     async def generate_download_url(
         self,
         *,
