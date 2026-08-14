@@ -199,8 +199,9 @@ reads, and ranged blob playback. Unit tests cover URI parsing, current config sh
 scope composition, attestation inclusion, host routing, credential renewal, and the public
 record URL boundary.
 
-The smoke script currently authenticates with an app password. It proves the aligned ZDS
-data path, but not the browser OAuth scope-upgrade or confidential-client attestation path.
+The smoke script authenticates resident operations with an app password, then proves the
+DPoP-bound credential exchange and ranged read path using a separate ephemeral key. It
+does not prove the browser OAuth scope-upgrade or confidential-client attestation path.
 That browser-level interoperability proof remains in #1684.
 
 ## remaining product work

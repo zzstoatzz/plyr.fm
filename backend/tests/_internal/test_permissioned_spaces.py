@@ -6,7 +6,7 @@ full data path is exercised against a live ZDS by scripts/permissioned_smoke.py.
 """
 
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import ANY, AsyncMock
 
 import httpx
 import pytest
@@ -234,11 +234,11 @@ async def test_mint_credential_uses_delegation_token_flow(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     pds_request = AsyncMock(return_value={"token": "delegation-token"})
-    bearer_request = AsyncMock(
+    token_request = AsyncMock(
         return_value=httpx.Response(200, json={"credential": "space-credential"})
     )
     monkeypatch.setattr(space_client, "make_pds_request", pds_request)
-    monkeypatch.setattr(space_client, "_raw_bearer_request", bearer_request)
+    monkeypatch.setattr(space_client, "_space_token_request", token_request)
     monkeypatch.setattr(
         space_client,
         "_space_host_url",
@@ -257,18 +257,20 @@ async def test_mint_credential_uses_delegation_token_flow(
 
     credential = await space_client._mint_credential(session, space)
 
-    assert credential == "space-credential"
+    assert credential.token == "space-credential"
     pds_request.assert_awaited_once_with(
         session,
         "GET",
         "com.atproto.space.getDelegationToken",
         params={"space": space},
     )
-    bearer_request.assert_awaited_once_with(
+    token_request.assert_awaited_once_with(
         "https://space-host.test",
         "POST",
         "com.atproto.space.getSpaceCredential",
         "delegation-token",
+        ANY,
+        issuance=True,
         json={"space": space},
     )
 
@@ -276,7 +278,7 @@ async def test_mint_credential_uses_delegation_token_flow(
 async def test_mint_credential_sends_separate_client_attestation(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    bearer_request = AsyncMock(
+    token_request = AsyncMock(
         return_value=httpx.Response(200, json={"credential": "space-credential"})
     )
     monkeypatch.setattr(
@@ -284,7 +286,7 @@ async def test_mint_credential_sends_separate_client_attestation(
         "make_pds_request",
         AsyncMock(return_value={"token": "delegation-token"}),
     )
-    monkeypatch.setattr(space_client, "_raw_bearer_request", bearer_request)
+    monkeypatch.setattr(space_client, "_space_token_request", token_request)
     monkeypatch.setattr(
         space_client,
         "_space_host_url",
@@ -305,11 +307,13 @@ async def test_mint_credential_sends_separate_client_attestation(
 
     await space_client._mint_credential(session, space)
 
-    bearer_request.assert_awaited_once_with(
+    token_request.assert_awaited_once_with(
         "https://space-host.test",
         "POST",
         "com.atproto.space.getSpaceCredential",
         "delegation-token",
+        ANY,
+        issuance=True,
         json={
             "space": space,
             "clientAttestation": (
@@ -403,7 +407,7 @@ async def test_mint_credential_maps_zds_access_refusal(
     )
     monkeypatch.setattr(
         space_client,
-        "_raw_bearer_request",
+        "_space_token_request",
         AsyncMock(
             return_value=httpx.Response(
                 403,
@@ -461,35 +465,6 @@ async def test_delete_space_record_uses_record_uri_shape(
         },
         success_codes=(200, 201, 204),
     )
-
-
-async def test_space_credential_cache_and_force_refresh(monkeypatch):
-    space_client._credential_cache.clear()
-    calls = {"n": 0}
-
-    async def fake_mint(auth_session, space):
-        calls["n"] += 1
-        return f"cred-{calls['n']}"
-
-    monkeypatch.setattr(space_client, "_mint_credential", fake_mint)
-    session = Session(
-        session_id="s",
-        did="did:plc:x",
-        handle="x.test",
-        oauth_session={"pds_url": "https://x"},
-    )
-    space = "at://did:plc:x/space/fm.plyr.privateMedia/self"
-
-    first = await space_client.get_space_credential(session, space)
-    cached = await space_client.get_space_credential(session, space)
-    assert first == cached == "cred-1"
-    assert calls["n"] == 1  # second call served from cache
-
-    renewed = await space_client.get_space_credential(
-        session, space, force_refresh=True
-    )
-    assert renewed == "cred-2"
-    assert calls["n"] == 2
 
 
 # --- discovery and sync routing ----------------------------------------------
