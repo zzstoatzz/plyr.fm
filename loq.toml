@@ -376,3 +376,7 @@ max_lines = 538
 [[rules]]
 path = "backend/src/backend/_internal/export_tasks.py"
 max_lines = 524
+
+[[rules]]
+path = "frontend/src/lib/components/TrackComments.svelte"
+max_lines = 826
