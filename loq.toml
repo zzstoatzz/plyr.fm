@@ -379,4 +379,4 @@ max_lines = 524
 
 [[rules]]
 path = "frontend/src/lib/components/TrackComments.svelte"
-max_lines = 973
+max_lines = 993

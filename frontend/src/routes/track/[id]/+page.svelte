@@ -1143,8 +1143,28 @@ $effect(() => {
 			font-size: var(--text-sm);
 		}
 
+		/* use the width: controls and utilities share one measure and spread
+		   across it, columns loosely aligned — the rows read as one grouped
+		   control surface instead of a pinched center cluster */
 		.track-actions {
 			margin-top: 0.25rem;
+			width: min(100%, 20rem);
+			margin-inline: auto;
+		}
+
+		.track-actions .like-chip {
+			justify-self: center;
+		}
+
+		.track-actions .btn-queue {
+			justify-self: center;
+		}
+
+		.side-buttons {
+			width: min(100%, 20rem);
+			margin-inline: auto;
+			justify-content: space-evenly;
+			gap: 0;
 		}
 
 		/* touch-first: every control clears the 44px tap-target floor,
