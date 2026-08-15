@@ -83,6 +83,12 @@
     });
   }
 
+  // any click/tap on the page starts playback — lets automation (and thumbs)
+  // avoid hunting for the native control
+  document.addEventListener('pointerdown', (e) => {
+    if (audio.paused && !e.target.closest('a')) audio.play();
+  });
+
   const state = document.getElementById('state');
   setInterval(() => {
     const r = audio.seekable;
