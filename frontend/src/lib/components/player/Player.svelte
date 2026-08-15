@@ -70,39 +70,15 @@
 			queue.pause();
 		});
 
-		navigator.mediaSession.setActionHandler('previoustrack', () => {
-			if (queue.hasPrevious) {
-				queue.previous();
-			}
-		});
-
-		navigator.mediaSession.setActionHandler('nexttrack', () => {
-			if (queue.hasNext) {
-				queue.next();
-			}
-		});
-
 		navigator.mediaSession.setActionHandler('seekto', (details) => {
 			if (details.seekTime !== undefined) {
 				queue.seek(details.seekTime * 1000);
 			}
 		});
 
-		navigator.mediaSession.setActionHandler('seekbackward', (details) => {
-			if (player.audioElement) {
-				const skipTime = details.seekOffset ?? 10;
-				const newTime = Math.max(0, player.audioElement.currentTime - skipTime);
-				queue.seek(newTime * 1000);
-			}
-		});
-
-		navigator.mediaSession.setActionHandler('seekforward', (details) => {
-			if (player.audioElement) {
-				const skipTime = details.seekOffset ?? 10;
-				const newTime = Math.min(player.duration, player.audioElement.currentTime + skipTime);
-				queue.seek(newTime * 1000);
-			}
-		});
+		// deliberately NO seekbackward/seekforward: iOS replaces the ⏮/⏭ track
+		// buttons with 10s-skip buttons when those handlers exist, and seekto +
+		// the lock-screen scrubber already cover in-track seeking
 	}
 
 	// check if we're on the current track's detail page
@@ -238,11 +214,26 @@
 		localStorage.setItem('player_volume', player.volume.toString());
 	});
 
-	// update media session metadata when track changes
+	// update media session metadata when track changes (queue OR radio)
 	$effect(() => {
-		if (player.currentTrack) {
-			updateMediaSessionMetadata(player.currentTrack);
+		if (nowPlayingTrack) {
+			updateMediaSessionMetadata(nowPlayingTrack);
 		}
+	});
+
+	// (de)register prev/next reactively: the OS only shows ⏮/⏭ for commands it
+	// believes are live, so availability must be signaled by registration, not
+	// by a no-op inside the callback. radio has no queue navigation.
+	$effect(() => {
+		if (!('mediaSession' in navigator)) return;
+		navigator.mediaSession.setActionHandler(
+			'previoustrack',
+			!player.radio && queue.hasPrevious ? () => queue.previous() : null
+		);
+		navigator.mediaSession.setActionHandler(
+			'nexttrack',
+			!player.radio && queue.hasNext ? () => queue.next() : null
+		);
 	});
 
 	// update media session playback state when paused changes
@@ -253,11 +244,14 @@
 
 	// update media session position state when time/duration changes
 	$effect(() => {
-		if (!('mediaSession' in navigator) || !player.duration || player.duration <= 0) return;
+		// Infinity/NaN durations (streams, sources mid-swap) make
+		// setPositionState throw, which leaves iOS with no scrubber
+		if (!('mediaSession' in navigator) || !Number.isFinite(player.duration) || player.duration <= 0)
+			return;
 		try {
 			navigator.mediaSession.setPositionState({
 				duration: player.duration,
-				playbackRate: 1,
+				playbackRate: player.audioElement?.playbackRate || 1,
 				position: Math.min(player.currentTime, player.duration)
 			});
 		} catch {

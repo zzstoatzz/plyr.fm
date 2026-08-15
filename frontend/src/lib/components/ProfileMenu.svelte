@@ -1080,9 +1080,12 @@
 
 	.all-settings-link {
 		display: block;
+		position: sticky;
+		bottom: 0;
+		background: var(--bg-secondary);
 		text-align: center;
 		padding: 1rem;
-		margin-top: 0.5rem;
+		margin: 0.5rem -1.25rem -1.25rem;
 		border-top: 1px solid var(--border-subtle);
 		color: var(--text-secondary);
 		text-decoration: none;
