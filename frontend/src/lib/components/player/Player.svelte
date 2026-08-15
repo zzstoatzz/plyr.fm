@@ -70,12 +70,6 @@
 			queue.pause();
 		});
 
-		// seekto is REQUIRED for lock-screen scrubbing: once any action handler
-		// is registered, WebKit stops advertising the element's native
-		// seekability and only declares the commands the page registered —
-		// without seekto the scrubber renders but ignores drags (bisected on
-		// the iOS 26.5 simulator: bare element scrubs, +play/pause kills it,
-		// +seekto restores it)
 		navigator.mediaSession.setActionHandler('seekto', (details) => {
 			if (details.seekTime !== undefined) {
 				queue.seek(details.seekTime * 1000);
@@ -83,7 +77,8 @@
 		});
 
 		// deliberately NO seekbackward/seekforward: iOS replaces the ⏮/⏭ track
-		// buttons with 10s-skip buttons when those handlers exist
+		// buttons with 10s-skip buttons when those handlers exist, and seekto +
+		// the lock-screen scrubber already cover in-track seeking
 	}
 
 	// check if we're on the current track's detail page
@@ -247,39 +242,20 @@
 		navigator.mediaSession.playbackState = player.paused ? 'paused' : 'playing';
 	});
 
-	// push position state only when the timeline actually changes — new track
-	// (duration), a seek (position deviating from extrapolation), or a
-	// pause/resume boundary. The OS extrapolates position from playbackRate
-	// between pushes; re-pushing every frame (currentTime is bound per-frame)
-	// resets the Now Playing timeline ~60×/s, which makes the iOS lock-screen
-	// scrubber render but ignore drags. Finite-duration guard keeps
-	// Infinity/NaN (streams, sources mid-swap) from making the call throw.
-	let pushedPosition = -1;
-	let pushedDuration = -1;
-	let pushedPaused = false;
-	let pushedAt = 0;
+	// update media session position state when time/duration changes
 	$effect(() => {
+		// Infinity/NaN durations (streams, sources mid-swap) make
+		// setPositionState throw, which leaves iOS with no scrubber
 		if (!('mediaSession' in navigator) || !Number.isFinite(player.duration) || player.duration <= 0)
 			return;
-		const duration = player.duration;
-		const position = Math.min(player.currentTime, duration);
-		const rate = player.audioElement?.playbackRate || 1;
-		const extrapolated =
-			pushedPosition + ((Date.now() - pushedAt) / 1000) * (pushedPaused ? 0 : rate);
-		if (
-			duration === pushedDuration &&
-			player.paused === pushedPaused &&
-			Math.abs(position - extrapolated) < 2
-		)
-			return;
 		try {
-			navigator.mediaSession.setPositionState({ duration, playbackRate: rate, position });
-			pushedPosition = position;
-			pushedDuration = duration;
-			pushedPaused = player.paused;
-			pushedAt = Date.now();
+			navigator.mediaSession.setPositionState({
+				duration: player.duration,
+				playbackRate: player.audioElement?.playbackRate || 1,
+				position: Math.min(player.currentTime, player.duration)
+			});
 		} catch {
-			// invalid transient position state
+			// ignore errors from invalid position state
 		}
 	});
 
