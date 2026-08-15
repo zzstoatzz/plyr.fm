@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>lock-screen scrub bisect</title>
+<style>
+  body { background: #111; color: #eee; font-family: -apple-system, sans-serif; padding: 1.5rem; }
+  h1 { font-size: 1.1rem; }
+  a { color: #7a9fff; }
+  .active { font-weight: 700; color: #fff; }
+  nav { display: flex; flex-direction: column; gap: 0.4rem; margin: 1rem 0; }
+  audio { width: 100%; margin: 1rem 0; }
+  code { background: #222; padding: 0.1rem 0.3rem; border-radius: 4px; }
+  #state { font-size: 0.85rem; color: #aaa; white-space: pre-line; }
+</style>
+</head>
+<body>
+<h1>lock-screen scrub bisect</h1>
+<p>pick a mode, press play, lock the phone, try to scrub.</p>
+<nav id="modes"></nav>
+<audio id="a" controls preload="metadata"></audio>
+<div id="state"></div>
+<script>
+  const params = new URLSearchParams(location.search);
+  const mode = params.get('mode') || 'a';
+  const fmt = params.get('fmt') || 'flac';
+  const SRC = {
+    flac: 'https://audio.plyr.fm/audio/36f2ff4db5500b30.flac',
+    mp3: 'https://audio.plyr.fm/audio/b5433224532c34e9.mp3'
+  };
+  const MODES = {
+    a: 'A — bare <audio>, no media session calls at all',
+    b: 'B — A + MediaMetadata',
+    c: 'C — B + play/pause/prev/next handlers',
+    d: 'D — C + seekto + setPositionState (the old full recipe)'
+  };
+  const nav = document.getElementById('modes');
+  for (const [m, label] of Object.entries(MODES)) {
+    for (const f of Object.keys(SRC)) {
+      const link = document.createElement('a');
+      link.href = `?mode=${m}&fmt=${f}`;
+      link.textContent = `${label} [${f}]`;
+      if (m === mode && f === fmt) link.className = 'active';
+      nav.appendChild(link);
+    }
+  }
+
+  const audio = document.getElementById('a');
+  audio.src = SRC[fmt] || SRC.flac;
+  const ms = navigator.mediaSession;
+
+  if (mode >= 'b' && ms) {
+    audio.addEventListener('play', () => {
+      ms.metadata = new MediaMetadata({
+        title: `scrub test ${mode.toUpperCase()} (${fmt})`,
+        artist: 'plyr.fm debug',
+        album: 'bisect'
+      });
+    });
+  }
+  if (mode >= 'c' && ms) {
+    ms.setActionHandler('play', () => audio.play());
+    ms.setActionHandler('pause', () => audio.pause());
+    ms.setActionHandler('previoustrack', () => { audio.currentTime = 0; });
+    ms.setActionHandler('nexttrack', () => { audio.currentTime = 0; });
+    audio.addEventListener('play', () => { ms.playbackState = 'playing'; });
+    audio.addEventListener('pause', () => { ms.playbackState = 'paused'; });
+  }
+  if (mode >= 'd' && ms) {
+    ms.setActionHandler('seekto', (d) => {
+      if (d.seekTime !== undefined) audio.currentTime = d.seekTime;
+    });
+    audio.addEventListener('timeupdate', () => {
+      if (!Number.isFinite(audio.duration) || audio.duration <= 0) return;
+      try {
+        ms.setPositionState({
+          duration: audio.duration,
+          playbackRate: audio.playbackRate || 1,
+          position: Math.min(audio.currentTime, audio.duration)
+        });
+      } catch {}
+    });
+  }
+
+  const state = document.getElementById('state');
+  setInterval(() => {
+    const r = audio.seekable;
+    const ranges = [];
+    for (let i = 0; i < r.length; i++) ranges.push(`${r.start(i).toFixed(1)}–${r.end(i).toFixed(1)}`);
+    state.textContent =
+      `mode=${mode} fmt=${fmt}\n` +
+      `duration=${audio.duration} readyState=${audio.readyState}\n` +
+      `seekable=[${ranges.join(', ')}]\n` +
+      `currentSrc=${audio.currentSrc}`;
+  }, 1000);
+</script>
+</body>
+</html>
