@@ -247,18 +247,37 @@
 		navigator.mediaSession.playbackState = player.paused ? 'paused' : 'playing';
 	});
 
-	// keep position state current so the lock-screen timeline tracks the
-	// element; guards keep Infinity/NaN durations (streams, sources mid-swap)
-	// from making setPositionState throw
+	// push position state only when the timeline actually changes — new track
+	// (duration), a seek (position deviating from extrapolation), or a
+	// pause/resume boundary. The OS extrapolates position from playbackRate
+	// between pushes; re-pushing every frame (currentTime is bound per-frame)
+	// resets the Now Playing timeline ~60×/s, which makes the iOS lock-screen
+	// scrubber render but ignore drags. Finite-duration guard keeps
+	// Infinity/NaN (streams, sources mid-swap) from making the call throw.
+	let pushedPosition = -1;
+	let pushedDuration = -1;
+	let pushedPaused = false;
+	let pushedAt = 0;
 	$effect(() => {
 		if (!('mediaSession' in navigator) || !Number.isFinite(player.duration) || player.duration <= 0)
 			return;
+		const duration = player.duration;
+		const position = Math.min(player.currentTime, duration);
+		const rate = player.audioElement?.playbackRate || 1;
+		const extrapolated =
+			pushedPosition + ((Date.now() - pushedAt) / 1000) * (pushedPaused ? 0 : rate);
+		if (
+			duration === pushedDuration &&
+			player.paused === pushedPaused &&
+			Math.abs(position - extrapolated) < 2
+		)
+			return;
 		try {
-			navigator.mediaSession.setPositionState({
-				duration: player.duration,
-				playbackRate: player.audioElement?.playbackRate || 1,
-				position: Math.min(player.currentTime, player.duration)
-			});
+			navigator.mediaSession.setPositionState({ duration, playbackRate: rate, position });
+			pushedPosition = position;
+			pushedDuration = duration;
+			pushedPaused = player.paused;
+			pushedAt = Date.now();
 		} catch {
 			// invalid transient position state
 		}
