@@ -49,4 +49,16 @@
 		border-color: var(--accent);
 		color: var(--accent);
 	}
+
+	@media (max-width: 768px) {
+		.download-btn {
+			width: 28px;
+			height: 28px;
+		}
+
+		.download-btn svg {
+			width: 13px;
+			height: 13px;
+		}
+	}
 </style>

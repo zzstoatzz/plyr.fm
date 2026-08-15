@@ -1119,8 +1119,10 @@ $effect(() => {
 			max-width: 100%;
 		}
 
+		/* height-aware like desktop: the artwork gives way before the
+		   share/download row falls past the fold */
 		.cover-art-container {
-			max-width: 60%;
+			max-width: min(60%, 22dvh);
 			margin: 0 auto;
 		}
 
