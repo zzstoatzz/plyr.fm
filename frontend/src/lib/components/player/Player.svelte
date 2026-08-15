@@ -70,12 +70,20 @@
 			queue.pause();
 		});
 
-		// deliberately NO seekbackward/seekforward (iOS replaces the ⏮/⏭ track
-		// buttons with 10s-skip buttons when those handlers exist) and NO
-		// seekto/setPositionState: iOS drives the lock-screen scrubber natively
-		// from the audio element's seekable state, and supplying an explicit
-		// position state replaces that with an emulated one the lock screen
-		// won't let you drag. SoundCloud's working web player registers neither.
+		// seekto is REQUIRED for lock-screen scrubbing: once any action handler
+		// is registered, WebKit stops advertising the element's native
+		// seekability and only declares the commands the page registered —
+		// without seekto the scrubber renders but ignores drags (bisected on
+		// the iOS 26.5 simulator: bare element scrubs, +play/pause kills it,
+		// +seekto restores it)
+		navigator.mediaSession.setActionHandler('seekto', (details) => {
+			if (details.seekTime !== undefined) {
+				queue.seek(details.seekTime * 1000);
+			}
+		});
+
+		// deliberately NO seekbackward/seekforward: iOS replaces the ⏮/⏭ track
+		// buttons with 10s-skip buttons when those handlers exist
 	}
 
 	// check if we're on the current track's detail page
@@ -237,6 +245,23 @@
 	$effect(() => {
 		if (!('mediaSession' in navigator)) return;
 		navigator.mediaSession.playbackState = player.paused ? 'paused' : 'playing';
+	});
+
+	// keep position state current so the lock-screen timeline tracks the
+	// element; guards keep Infinity/NaN durations (streams, sources mid-swap)
+	// from making setPositionState throw
+	$effect(() => {
+		if (!('mediaSession' in navigator) || !Number.isFinite(player.duration) || player.duration <= 0)
+			return;
+		try {
+			navigator.mediaSession.setPositionState({
+				duration: player.duration,
+				playbackRate: player.audioElement?.playbackRate || 1,
+				position: Math.min(player.currentTime, player.duration)
+			});
+		} catch {
+			// invalid transient position state
+		}
 	});
 
 	// report now-playing state for external integrations (teal.fm/Piper)
