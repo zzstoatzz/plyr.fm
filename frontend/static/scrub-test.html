@@ -50,12 +50,24 @@
   audio.src = SRC[fmt] || SRC.flac;
   const ms = navigator.mediaSession;
 
+  // art=jpeg reproduces the app's exact artwork entry: a webp avatar declared
+  // as image/jpeg. art=honest declares no type. art omitted = no artwork.
+  const AVATAR =
+    'https://cdn.bsky.app/img/avatar/plain/did:plc:xbtmt2zjwlrfegqvch7fboei/bafkreiegehiwbazkkpp5nucenajtdjwinxrrnz7ukawpqnudbr47f44zhq';
+  const art = params.get('art');
+  const artwork =
+    art === 'jpeg'
+      ? [{ src: AVATAR, sizes: '256x256', type: 'image/jpeg' }]
+      : art === 'honest'
+        ? [{ src: AVATAR, sizes: '256x256' }]
+        : [];
   if (mode >= 'b' && ms) {
     audio.addEventListener('play', () => {
       ms.metadata = new MediaMetadata({
-        title: `scrub test ${mode.toUpperCase()} (${fmt})`,
+        title: `scrub test ${mode.toUpperCase()} (${fmt}) art=${art ?? 'none'}`,
         artist: 'plyr.fm debug',
-        album: 'bisect'
+        album: 'bisect',
+        artwork
       });
     });
   }
