@@ -784,7 +784,7 @@ import WaveLoading from '$lib/components/WaveLoading.svelte';
 					<div class="setting-info">
 						<h3>teal.fm scrobbling</h3>
 						<p>
-							track your listens as <a href="https://pdsls.dev/at://{auth.user?.did}/fm.teal.alpha.feed.play" target="_blank" rel="noopener">fm.teal.alpha.feed.play</a> records
+							track your listens as <a href="https://pdsls.dev/at://{auth.user?.did}/fm.teal.feed.play" target="_blank" rel="noopener">fm.teal.feed.play</a> records
 						</p>
 					</div>
 					<label class="toggle-switch">

@@ -35,7 +35,7 @@ def build_teal_status_record(
     item: dict[str, Any] = {
         "trackName": track_name,
         "artists": [{"artistName": artist_name}],
-        "musicServiceBaseDomain": "plyr.fm",
+        "musicServiceUri": "https://plyr.fm",
         "submissionClientAgent": "plyr.fm/1.0",
         "playedTime": now.isoformat().replace("+00:00", "Z"),
     }
@@ -45,7 +45,7 @@ def build_teal_status_record(
     if album_name:
         item["releaseName"] = album_name
     if origin_url:
-        item["originUrl"] = origin_url
+        item["originUri"] = origin_url
 
     record: dict[str, Any] = {
         "$type": settings.teal.status_collection,

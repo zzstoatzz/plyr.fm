@@ -91,7 +91,7 @@ plyr.fm requests the following OAuth scopes:
 | `repo:fm.plyr.comment` | timed comments |
 | `repo:fm.plyr.list` | playlists, albums, liked lists |
 | `repo:fm.plyr.actor.profile` | artist profile |
-| `repo:fm.teal.alpha.feed.play` | scrobbles to [teal.fm](https://teal.fm) |
+| `repo:fm.teal.feed.play` | scrobbles to [teal.fm](https://teal.fm) |
 | `blob:*/*` | upload audio and images |
 
 if your session is missing a required scope (e.g. new features were added since you authenticated), the API returns `403` with `"detail": "scope_upgrade_required"`. re-authenticate via `/auth/scope-upgrade/start` to grant the new scopes.

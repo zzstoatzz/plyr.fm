@@ -57,7 +57,7 @@ class UserPreferences(Base):
     )
 
     # teal.fm scrobbling integration
-    # when enabled, plays are written to user's PDS as fm.teal.alpha.feed.play records
+    # when enabled, plays are written to user's PDS as fm.teal.feed.play records
     # requires re-login to grant teal scopes after enabling
     enable_teal_scrobbling: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default=text("false")

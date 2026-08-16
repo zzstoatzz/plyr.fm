@@ -149,7 +149,7 @@ the user will be redirected to authorize, and on callback the old session
 will be replaced with a new session that has the requested scopes.
 
 use this when a user enables a feature that requires additional OAuth scopes
-(e.g., enabling teal.fm scrobbling which needs fm.teal.alpha.* scopes).
+(e.g., enabling teal.fm scrobbling which needs fm.teal.* scopes).
 
 returns the authorization URL that the frontend should redirect to.
 
@@ -305,4 +305,3 @@ request model for switching to a different account.
 
 
 response model after switching accounts.
-

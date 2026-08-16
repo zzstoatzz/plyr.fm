@@ -533,8 +533,8 @@ class AtprotoSettings(AppSettingsSection):
         """OAuth scope including teal.fm scrobbling permissions.
 
         args:
-            teal_play: teal.fm play collection NSID (e.g., fm.teal.alpha.feed.play)
-            teal_status: teal.fm status collection NSID (e.g., fm.teal.alpha.actor.status)
+            teal_play: teal.fm play collection NSID (e.g., fm.teal.feed.play)
+            teal_status: teal.fm status collection NSID (e.g., fm.teal.actor.status)
         """
         base = self.resolved_scope
         teal_scopes = [f"repo:{teal_play}", f"repo:{teal_status}"]
@@ -592,11 +592,11 @@ class TealSettings(AppSettingsSection):
         description="Enable teal.fm scrobbling feature. When False, the toggle is hidden and no scrobbles are sent.",
     )
     play_collection: str = Field(
-        default="fm.teal.alpha.feed.play",
+        default="fm.teal.feed.play",
         description="Lexicon NSID for teal.fm play records (scrobbles)",
     )
     status_collection: str = Field(
-        default="fm.teal.alpha.actor.status",
+        default="fm.teal.actor.status",
         description="Lexicon NSID for teal.fm actor status (now playing)",
     )
 
