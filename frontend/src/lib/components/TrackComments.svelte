@@ -164,17 +164,16 @@
 	}
 
 	async function seekToTimestamp(ms: number) {
-		const doSeek = () => {
-			queue.seek(ms);
-		};
-
 		// if this track is already loaded, seek immediately
 		if (player.currentTrack?.id === track.id) {
-			doSeek();
+			queue.seek(ms);
 			return;
 		}
 
-		// otherwise start playing and wait for audio to be ready
+		// the element still holds the previous source; the loader applies this
+		// once the new track's audio attaches
+		player.pendingSeek = { trackId: track.id, ms };
+
 		// use playTrack for gated content checks
 		let played = false;
 		if (track.gated) {
@@ -184,18 +183,7 @@
 			played = true;
 		}
 
-		if (!played) return; // gated - can't seek
-
-		if (player.audioElement && player.audioElement.readyState >= 1) {
-			doSeek();
-		} else {
-			// wait for metadata to load before seeking
-			const onReady = () => {
-				doSeek();
-				player.audioElement?.removeEventListener('loadedmetadata', onReady);
-			};
-			player.audioElement?.addEventListener('loadedmetadata', onReady);
-		}
+		if (!played) player.pendingSeek = null; // gated - can't seek
 	}
 
 	function formatRelativeTime(isoString: string): string {

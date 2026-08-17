@@ -56,6 +56,9 @@ class PlayerState {
 	private hlsLoad: Promise<HlsModule | null> | null = null;
 	paused = $state(true);
 
+	/** seek to apply once the named track's audio attaches (comment timestamps) */
+	pendingSeek = $state<{ trackId: number; ms: number } | null>(null);
+
 	currentTime = $state(0);
 	duration = $state(0);
 	volume = $state(0.7);

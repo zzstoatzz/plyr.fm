@@ -390,12 +390,23 @@
 				// after radio releases the player). always mark the attempt done —
 				// with nothing to restore there is still nothing pending, and
 				// progress persistence stays paused until this flips true.
-				if (!positionRestored && queue.progressMs > 0 && player.audioElement) {
+				const pendingSeek =
+					player.pendingSeek?.trackId === resolved.trackId ? player.pendingSeek : null;
+				if (
+					!pendingSeek &&
+					!positionRestored &&
+					queue.progressMs > 0 &&
+					player.audioElement
+				) {
 					const positionSec = queue.progressMs / 1000;
 					// don't restore if near the end (within 5s of duration)
 					if (player.duration === 0 || positionSec < player.duration - 5) {
 						player.audioElement.currentTime = positionSec;
 					}
+				}
+				if (pendingSeek && player.audioElement) {
+					player.audioElement.currentTime = pendingSeek.ms / 1000;
+					player.pendingSeek = null;
 				}
 				positionRestored = true;
 				isLoadingTrack = false;
@@ -496,6 +507,11 @@
 			previousTrackId = trackToLoad.id;
 			previousFileId = trackToLoad.file_id;
 			return;
+		}
+
+		// a seek requested for some other track must not fire on this one
+		if (player.pendingSeek && player.pendingSeek.trackId !== trackToLoad.id) {
+			player.pendingSeek = null;
 		}
 
 		// update tracking state

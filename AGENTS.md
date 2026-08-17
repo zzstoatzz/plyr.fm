@@ -17,6 +17,7 @@
 *   **Async Everywhere:** Never block the event loop. Use `anyio`/`aiofiles`.
 *   **Type Hints:** Required everywhere (Python & TypeScript).
 *   **Communication:** Use emojis sparingly and strictly for emphasis.
+*   **No paragraph comments in code.** Rationale and mechanism explanations live in STATUS.md, docs, commit messages, and PR bodies — never as multi-line comment blocks in the middle of code. A comment, when warranted at all, is one short line.
 *   **DO NOT UNNECESSARILY DEFER IMPORTS.** Put imports at the top of the file where they belong. Deferred imports inside functions are only acceptable for avoiding circular imports - not for "lazy loading" or other reasons.
 
 ## 🛠️ Stack & Tooling
