@@ -47,6 +47,133 @@ plyr.fm should become:
 
 ### August 2026
 
+#### comment timestamps seek on the first click (#1873, August 17 — prod frontend)
+
+**why**: a long-standing unreported irritation of nate's: clicking a comment's
+timestamp on a not-yet-playing track started the track at 0; only a second
+click landed on the timestamp.
+
+**what shipped**: `seekToTimestamp` used to start the track and then check
+`audioElement.readyState` — but the player attaches the new source
+*asynchronously* (`resolveAudioSource`), so `readyState` still described the
+previous source: the seek fired against the old audio and the new load reset
+to 0. the click now sets `player.pendingSeek = { trackId, ms }`, applied by
+the loader's `loadeddata` handler once the *matching* track's audio is
+attached — taking precedence over the saved-progress restore, which was a
+second, latent overwrite on the old fallback path. a pending seek for a
+different track is cleared before load; a denied gated track clears it too.
+regression tests mount the real `Player.svelte` and were proven failing with
+the loader half reverted. verified on staging and prod by clicking real
+comment timestamps cold (landed at 24.7s and 38.9s, not 0).
+
+**also**: a new root-CLAUDE.md rule from the same session — no paragraph
+comments in code; rationale lives here, in docs, commits, and PR bodies.
+
+#### the iOS lock-screen scrub investigation, unwound to its last verified point (#1860–#1869, August 15–16; open as #1870)
+
+**why**: on physical iPhones the Now Playing card shows correct metadata but
+the scrubber cannot be grabbed at all — while SoundCloud's web player scrubs
+fine in the same Safari, so it's achievable and it's our bug.
+
+**what shipped**: #1860 is the keeper — ⏮/⏭ arrows restored (registering
+`seekbackward`/`seekforward` makes iOS replace track-skip with 10s-skip
+buttons; removed), prev/next (de)registered reactively so the OS knows when
+they're live, `setPositionState` guarded against `Infinity`/`NaN` durations,
+radio mode finally feeding the media session, plus settings-popover and
+track-page fold fixes. everything after it — the "let iOS drive it natively"
+theory (#1861), a bisect diagnostic page (#1862–#1867), guarded and then
+throttled position state (#1865, #1868) — produced no observable improvement
+on a physical phone and was reverted byte-for-byte to the #1860 state
+(#1869). five recipe variants failed identically on-device; codec/range
+support, artwork MIME, and call churn are all ruled out. the simulator bisect
+shows a minimal page scrubbing fine until action handlers are added. #1870
+holds the full matrix; the deciding experiment — a minimal page on a
+*physical* phone, or Web Inspector attached to the device — hasn't run yet.
+
+#### teal scrobbles write the production lexicons (#1823, August 16 — prod `2026.0816.012308`)
+
+new writes use `fm.teal.feed.play` / `fm.teal.actor.status` (canonical after
+teal-fm/teal#110) with the canonical URI field names; existing alpha records
+are not rewritten, and collection names stay configurable via `TEAL_*` env
+vars. authored by Codex, reviewed and landed here.
+
+#### slugs transliterate instead of deleting (#1858, August 14 — prod `2026.0814.213524`)
+
+`slugify()` dropped non-ASCII letters outright, so **tūnņg** slugged to `tng`
+and the obvious `/album/tunng` URL 404'd (and 500'd through the frontend,
+which rendered a thrown bare `Error`). NFKD-normalize + ASCII-fold now runs
+before the character filter (`tūnņg` → `tunng`); a backend 404 surfaces as a
+proper 404 page; and a conflict-guarded backfill re-derived the 9 affected
+prod albums — only where the stored slug equals what the old pipeline
+produced, so artist-chosen custom slugs were untouched. no redirects from the
+old mangled forms: they were never shared as canonical links.
+
+#### space credentials are DPoP-bound (#1856, August 14 — prod `2026.0814.200348`)
+
+permissioned-space credentials now bind to an independent ephemeral DPoP key,
+with operation-specific proofs on credential reads including ranged blob
+playback, and the credential cache keyed by resident DID and space. a narrow
+rollout bridge retries only exact `401 AuthenticationRequired` responses from
+the current pre-DPoP ZDS — it never downgrades proof or policy errors.
+verified against live ZDS via the private-media integration suite.
+
+#### comments became a non-modal panel, and the track page finished its redesign (#1843–#1855, August 14 — prod `2026.0814.183107` + frontend releases)
+
+**why**: comments lived inline at the bottom of the track page — invisible,
+and any overlay treatment would have interrupted playback. nate wanted them
+present but never modal, plus a round of review notes on the redesigned page.
+
+**what shipped**:
+- **comments are a docked panel, not a modal** (#1845–#1850): extracted into
+  `TrackComments.svelte`, triggered from a count chip in the utilities row.
+  the desktop treatment came from reading leaflet.pub's drawer source: a
+  sibling column — no backdrop, no dim, no focus trap, page fully
+  interactive. plyr's version docks 380px at the right edge; mobile docks
+  above the footer player with the grab handle and swipe-to-dismiss. comments
+  and the queue are sibling panels (#1849).
+- **timestamp emissions** (#1851, #1855) — the soundcloud move: when playback
+  crosses a comment's timestamp, the comment emanates from the 💬 trigger as
+  a small glass bubble that lingers 4s and opens the panel on tap. seeks past
+  a 3s window don't spray missed comments; untimed 0:00 comments never fire.
+  per-comment "share" was removed (it copied a page-level link the page
+  already owns).
+- **the count flash was two bugs, not a style problem** (#1853): the
+  single-track endpoints never gathered comment counts, so every detail
+  response carried `comment_count: 0` — the optimistic trigger was an honest
+  render of wrong data; and the component reset on the `track` prop's object
+  identity, which the page reassigns after mount, so the whole thread
+  refetched. count joins the gather; the effect keys on the id value.
+- **like whimsy** (#1848): count pops on 0→1, digits roll on increment, the
+  heart plays one heartbeat on like — all explicitly zeroed under
+  `prefers-reduced-motion`, which svelte transitions don't respect natively.
+- layout rounds: viewport-scaled vertical rhythm (#1844), centered
+  composition with artwork absorbing spare height (#1854).
+
+#### artists choose a download policy: open / ask / supporters / off (#1841 → #1842, August 14 — prod `2026.0814.051956`)
+
+**why**: #1824's boolean opt-out was the v1 of a relationship dial nate
+wanted now: downloads as a moment to route listeners toward supporting the
+artist, without ever locking public bytes.
+
+**what shipped**: `download_policy` replaces `allow_downloads` (`false→'off'`,
+`true→NULL`). the default **auto** resolves to `ask` when the artist has a
+support link and `open` otherwise. `ask` always downloads but shows one
+interstitial first — "*artist* asks listeners to consider supporting their
+work" with an accent link to their support page and a quiet continue: a
+request, never a lock. `supporters` requires a verified support relationship
+(signed-out 401, non-supporter 403 with `X-Support-Required`); non-supporters
+simply never see the button. the control lives in the portal's profile
+section beside the support-link selector, replacing the `/settings` row.
+
+**technical notes**: verifier-neutral by construction — the schema stores
+only the policy, and `download_refusal()` receives `viewer_is_supporter` as a
+fact without learning how it was established, so the attested.network
+entitlement path (#1871) swaps the resolution without touching schema or
+endpoints. one policy function still feeds the track endpoint, the album-zip
+endpoint, and `TrackResponse.downloadable`. supporters-tier bytes stay in the
+public bucket deliberately: those tracks still stream publicly, so the gate
+is an offer, the same exposure class as `r2_url` itself.
+
 #### albums download as cached zips, and the track page learned to be touched (#1834–#1839, August 14 — prod `2026.0814.034855`)
 
 **why**: with track downloads a day old, the natural next ask (nate, after
@@ -644,6 +771,7 @@ See `.status_history/` for detailed history, one file per month: `2026-07.md`,
 - **no per-actor authentication**: the moderation service trusts one shared `MODERATION_AUTH_TOKEN`, so the event log's `actor` is a claim rather than a verified identity. This is the gate on letting an agent *act* rather than propose, and on review genuinely not always being one person.
 - **the DMCA surface is incomplete** ([#1715](https://github.com/zzstoatzz/plyr.fm/issues/1715)): the agent is registered and reachable at `dmca@plyr.fm`, but the site does not publish the notice requirements or a counter-notice procedure, and there is no repeat-infringer counter — takedowns are recorded per track in `moderation_events`, never aggregated per uploader. The published-agent half is additionally blocked on a non-residential address.
 - `/costs` shows Cloudflare at $0 — upstream gap: CF line items aren't yet tagged `project=="plyr.fm"` in my-prefect-server, so the live feed can't attribute them (#1599).
+- **the iOS lock-screen scrubber cannot be dragged in the real app** ([#1870](https://github.com/zzstoatzz/plyr.fm/issues/1870)): metadata, times, and ⏮/⏭ all work; the scrubber never grabs on a physical iPhone under any of five media-session recipes, while SoundCloud's web player scrubs in the same Safari. the deciding experiment — a minimal page on a physical phone, or Web Inspector attached to the device — has not run yet; the code is deliberately parked at the #1860 state.
 - iOS PWA audio may hang on first play after backgrounding
 - audio may persist after closing bluesky in-app browser on iOS ([#779](https://github.com/zzstoatzz/plyr.fm/issues/779)) - user reported audio and lock screen controls continue after dismissing SFSafariViewController. expo-web-browser has a [known fix](https://github.com/expo/expo/issues/22406) that calls `dismissBrowser()` on close, and bluesky uses a version with the fix, but it didn't help in this case. we [opened an upstream issue](https://github.com/expo/expo/issues/42454) then closed it as duplicate after finding prior art. root cause unclear - may be iOS version specific or edge case timing issue.
 
