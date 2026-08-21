@@ -47,6 +47,42 @@ plyr.fm should become:
 
 ### August 2026
 
+#### private memos from /record never reached consent; browser e2e for private media (#1887–#1889, August 21 — prod frontend)
+
+**why**: #1882's private option on `/record` was dead for every first-time
+user: `stashRecording()` handed IndexedDB the `$state` proxy behind `tags`,
+structured clone refused it (`DataCloneError`), and the page fell back to
+the preview with "couldn't save your recording". Nothing caught it because
+the live integration test signs in with an app password, and
+`session_has_private_media_access()` short-circuits for those sessions —
+capability detection, consent, and the granted token were structurally
+untested.
+
+**what shipped**:
+- `frontend/e2e/private-media.mjs` and `frontend/e2e/record-private.mjs`:
+  Playwright drives stg.plyr.fm with the zat test account through real OAuth
+  (PAR → zds consent → callback), a private upload, the consent round trip,
+  and playback from a fresh session; the record flow uses Chromium's fake
+  microphone and asserts title + private visibility survive the stash.
+  shared plumbing in `e2e/lib.mjs`. runs on every merge to main, on PRs that
+  touch `frontend/e2e/**`, and via `workflow_dispatch`; on failure it prints
+  the browser's API requests and console errors and uploads screenshots.
+- `/record` stashes `$state.snapshot(tags)` and restores the chosen private
+  visibility on the way back (it fell back to public before).
+- eslint has a node-globals block for `e2e/**/*.mjs` (#1887 merged with
+  pre-commit red on this).
+
+**verification**: the record flow failed at `[consent]` against the
+pre-fix staging build with the exact `DataCloneError`, then passed on main
+after the Pages deploy: `[restored]` → private track → `206` from the space
+proxy → cleanup. prod verified by the served `/record` chunk matching the
+fixed build.
+
+**open**: the first main run of the upload flow timed out at its second
+sign-in with zero requests reaching staging from the fresh context; three
+later runs passed and the cause is unknown. the diagnostics exist for the
+next occurrence — don't call it flaky.
+
 #### the createSpace body drifted from the spaces-alpha lexicons (#1876–#1878, August 21 — prod `2026.0821.071650`, `.073416`)
 
 **why**: zds aligned with the published spaces-alpha lexicons on August 20
