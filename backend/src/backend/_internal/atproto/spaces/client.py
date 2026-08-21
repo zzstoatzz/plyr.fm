@@ -149,8 +149,10 @@ async def ensure_personal_space(
 ) -> str:
     """create (or find) the caller's artist-owned personal space; return its URI.
 
-    The required ``simplespace`` management layer uses a member-list policy for
-    this owner-only MVP. App access stays open so local/public OAuth clients can
+    The space is anchored on the authenticated DID. The ``simplespace``
+    management layer uses ``memberListPolicy`` for this owner-only MVP; the
+    authority is authorized on its own member-list space without an explicit
+    ``addMember``. App access stays open so local/public OAuth clients can
     exercise the experimental feature without a confidential-client key.
     """
     space_type = settings.atproto.private_media_space_type
@@ -161,13 +163,10 @@ async def ensure_personal_space(
             "POST",
             "com.atproto.simplespace.createSpace",
             payload={
-                "did": auth_session.did,
                 "type": space_type,
                 "skey": skey,
-                "config": {
-                    "policy": "member-list",
-                    "appAccess": {"$type": "com.atproto.simplespace.defs#open"},
-                },
+                "policy": {"$type": "com.atproto.simplespace.defs#memberListPolicy"},
+                "appAccess": {"$type": "com.atproto.simplespace.defs#open"},
             },
         )
     except Exception as exc:
@@ -414,14 +413,21 @@ async def list_space_repos(
     space: str,
     *,
     limit: int = 50,
+    cursor: str | None = None,
 ) -> dict[str, Any]:
-    """Discover the writer set for a space from its authority host."""
+    """Discover the writer set for a space from its authority host.
+
+    A full page carries ``cursor``; the final page omits it.
+    """
+    params: dict[str, Any] = {"space": space, "limit": limit}
+    if cursor:
+        params["cursor"] = cursor
     return await _credential_read(
         auth_session,
         host_url=await _space_host_url(space),
         endpoint="com.atproto.space.listRepos",
         space=space,
-        params={"space": space, "limit": limit},
+        params=params,
     )
 
 
@@ -457,19 +463,25 @@ async def list_space_repo_ops(
     *,
     space: str,
     repo: str,
-    since: str,
+    since: str | None = None,
     limit: int = 500,
+    cursor: str | None = None,
 ) -> dict[str, Any]:
-    """Pull incremental operations directly from a writer's repo host."""
+    """Pull incremental operations directly from a writer's repo host.
+
+    A full page carries ``cursor`` and no ``commit``; the page that reaches the
+    head of the oplog carries the signed ``commit`` and no ``cursor``. ``cursor``
+    takes precedence over ``since`` when both are sent.
+    """
+    params: dict[str, Any] = {"space": space, "repo": repo, "limit": limit}
+    if since:
+        params["since"] = since
+    if cursor:
+        params["cursor"] = cursor
     return await _credential_read(
         auth_session,
         host_url=await _repo_host_url(repo),
         endpoint="com.atproto.space.listRepoOps",
         space=space,
-        params={
-            "space": space,
-            "repo": repo,
-            "since": since,
-            "limit": limit,
-        },
+        params=params,
     )

@@ -40,7 +40,7 @@ never R2. the browser has no space credential, so we cannot redirect — we
 **proxy** the bytes through the owner's credential (`open_space_blob` →
 `getDelegationToken` → `getSpaceCredential` → ranged `getBlob`). access is
 owner-only at two layers: plyr rejects non-owners, and the required
-`com.atproto.simplespace` management layer uses an explicit `member-list`
+`com.atproto.simplespace` management layer uses an explicit `memberListPolicy`
 policy for this MVP. The core permissioned-data protocol does not enumerate
 readers; `simplespace` sits above that core and may maintain members. A
 non-owner or anonymous request gets a `404`, identical to a missing file, so

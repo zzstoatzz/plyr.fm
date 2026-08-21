@@ -94,13 +94,10 @@ def main() -> int:
         "com.atproto.simplespace.createSpace",
         token=token,
         json={
-            "did": did,
             "type": SPACE_TYPE,
             "skey": SKEY,
-            "config": {
-                "policy": "member-list",
-                "appAccess": {"$type": "com.atproto.simplespace.defs#open"},
-            },
+            "policy": {"$type": "com.atproto.simplespace.defs#memberListPolicy"},
+            "appAccess": {"$type": "com.atproto.simplespace.defs#open"},
         },
     )
     if created.status_code == 400 and "SpaceAlreadyExists" in created.text:
