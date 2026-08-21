@@ -44,38 +44,23 @@ def test_space_dpop_headers_bind_the_correct_operation(
         assert claims["ath"] == expected_ath
 
 
-@pytest.mark.parametrize(
-    ("status", "body", "expected"),
-    [
-        (401, {"error": "AuthenticationRequired"}, True),
-        (401, {"error": "InvalidDpopProof"}, False),
-        (403, {"error": "AuthenticationRequired"}, False),
-    ],
-)
-def test_pre_dpop_rejection_is_narrow(
-    status: int, body: dict[str, str], expected: bool
-) -> None:
-    response = httpx.Response(status, json=body)
-    assert space_client._is_pre_dpop_rejection(response) is expected
-
-
-async def test_credential_read_bridges_only_a_pre_dpop_server(
+async def test_credential_read_renews_on_401_and_never_downgrades_to_bearer(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    credential = space_client.SpaceCredential(
-        token="space-credential",
-        dpop_key=space_client.DPoPManager.generate_keypair(),
-        expires_at=time.monotonic() + 300,
-    )
     token_request = AsyncMock(
         side_effect=[
             httpx.Response(401, json={"error": "AuthenticationRequired"}),
             httpx.Response(200, json={"records": []}),
         ]
     )
-    monkeypatch.setattr(
-        space_client, "get_space_credential", AsyncMock(return_value=credential)
+    mint = AsyncMock(
+        side_effect=lambda *_, **__: space_client.SpaceCredential(
+            token="space-credential",
+            dpop_key=space_client.DPoPManager.generate_keypair(),
+            expires_at=time.monotonic() + 300,
+        )
     )
+    monkeypatch.setattr(space_client, "get_space_credential", mint)
     monkeypatch.setattr(space_client, "_space_token_request", token_request)
     session = Session(
         session_id="s",
@@ -93,8 +78,8 @@ async def test_credential_read_bridges_only_a_pre_dpop_server(
     )
 
     assert result == {"records": []}
-    assert token_request.await_args_list[0].kwargs.get("legacy_bearer") is None
-    assert token_request.await_args_list[1].kwargs["legacy_bearer"] is True
+    assert [c.kwargs["force_refresh"] for c in mint.await_args_list] == [False, True]
+    assert all("legacy_bearer" not in c.kwargs for c in token_request.await_args_list)
 
 
 async def test_space_credential_cache_and_force_refresh(

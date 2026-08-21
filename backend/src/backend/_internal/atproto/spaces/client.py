@@ -105,7 +105,6 @@ async def _space_token_request(
     dpop_key: EllipticCurvePrivateKey,
     *,
     issuance: bool = False,
-    legacy_bearer: bool = False,
     json: dict[str, Any] | None = None,
     params: dict[str, Any] | None = None,
 ) -> httpx.Response:
@@ -113,11 +112,7 @@ async def _space_token_request(
     url = f"{service_url}/xrpc/{endpoint}"
     if not is_safe_url(url):
         raise ValueError(f"unsafe service URL: {url}")
-    headers = (
-        {"authorization": f"Bearer {token}"}
-        if legacy_bearer
-        else _space_dpop_headers(method, url, token, dpop_key, issuance=issuance)
-    )
+    headers = _space_dpop_headers(method, url, token, dpop_key, issuance=issuance)
     async with httpx.AsyncClient(timeout=30) as http:
         return await http.request(
             method,
@@ -126,17 +121,6 @@ async def _space_token_request(
             json=json,
             params=params,
         )
-
-
-def _is_pre_dpop_rejection(response: httpx.Response) -> bool:
-    """Identify the old space server that only recognizes Bearer credentials."""
-    if response.status_code != 401:
-        return False
-    try:
-        body = response.json()
-    except ValueError:
-        return False
-    return isinstance(body, dict) and body.get("error") == "AuthenticationRequired"
 
 
 # --- space lifecycle + record writes (owner/author, DPoP OAuth) ---------------
@@ -330,15 +314,6 @@ async def open_space_blob(
                 headers["range"] = range_header
             req = http.build_request("GET", url, headers=headers, params=params)
             resp = await http.send(req, stream=True)
-            if _is_pre_dpop_rejection(resp):
-                await resp.aclose()
-                fallback_headers = {"authorization": f"Bearer {credential.token}"}
-                if range_header:
-                    fallback_headers["range"] = range_header
-                req = http.build_request(
-                    "GET", url, headers=fallback_headers, params=params
-                )
-                resp = await http.send(req, stream=True)
             if resp.status_code == 401 and attempt == 0:
                 await resp.aclose()
                 continue  # stale credential — renew and retry once
@@ -388,16 +363,6 @@ async def _credential_read(
             credential.dpop_key,
             params=params,
         )
-        if _is_pre_dpop_rejection(response):
-            response = await _space_token_request(
-                host_url,
-                "GET",
-                endpoint,
-                credential.token,
-                credential.dpop_key,
-                legacy_bearer=True,
-                params=params,
-            )
         if response.status_code == 401 and attempt == 0:
             continue
         if response.status_code != 200:
