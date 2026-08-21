@@ -184,7 +184,7 @@
 			return await toWav(blob);
 		} catch (e) {
 			console.error('could not convert the recording:', e);
-			toast.error("couldn't prepare your recording — try unlisted");
+			toast.error("couldn't prepare your recording");
 			return null;
 		}
 	}
@@ -205,7 +205,7 @@
 			capturedDuration
 		});
 		if (!stashed) {
-			toast.error("couldn't save your recording — try unlisted");
+			toast.error("couldn't save your recording");
 			return false;
 		}
 		try {
@@ -222,7 +222,7 @@
 					toast.error("your PDS refused private media", 8000);
 					await auth.refresh();
 				} else {
-					toast.error("couldn't start approval — try again");
+					toast.error("couldn't start approval");
 				}
 				return false;
 			}
@@ -234,7 +234,7 @@
 		} catch (e) {
 			console.error('scope upgrade failed:', e);
 			await clearStashedRecording();
-			toast.error("couldn't start approval — try again");
+			toast.error("couldn't start approval");
 			return false;
 		}
 	}
@@ -292,12 +292,11 @@
 		title = stashed.title;
 		tags = stashed.tags;
 		capturedDuration = stashed.capturedDuration;
-		visibility = permissionedGranted ? 'private' : 'unlisted';
 		uiState = 'preview';
 		if (permissionedGranted) {
 			toast.success('approved — upload when ready', 6000);
 		} else {
-			toast.error('not approved — your recording is still here', 6000);
+			toast.error("private media wasn't approved", 6000);
 		}
 	}
 
