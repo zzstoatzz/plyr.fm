@@ -40,12 +40,20 @@ from backend._internal import (
     start_oauth_flow_with_scopes,
     switch_active_account,
 )
-from backend._internal.atproto.spaces import detect_permissioned_capability
+from backend._internal.atproto.spaces import (
+    session_has_private_media_access,
+    set_spaces_unsupported,
+    spaces_unsupported_here,
+)
 from backend._internal.auth import get_refresh_token_lifetime_days
 from backend._internal.auth.app_password import (
     AppPasswordAuthError,
     create_app_password_session,
     resolve_pds,
+)
+from backend._internal.auth.space_scope import (
+    permissioned_scope_requested,
+    private_media_grant_present,
 )
 from backend._internal.copyright import complete_indiemusi_setup
 from backend._internal.tasks import schedule_atproto_sync
@@ -67,9 +75,14 @@ class LinkedAccountResponse(BaseModel):
 
 
 class PermissionedSpacesStatus(BaseModel):
-    """whether the user's PDS implements the experimental permissioned-space surface."""
+    """private-media availability for this session.
+
+    ``granted``: the token carries the expanded space grant. ``supported``:
+    offer the option — true unless an upgrade on this PDS came back without it.
+    """
 
     supported: bool = False
+    granted: bool = False
 
 
 class CurrentUserResponse(BaseModel):
@@ -186,9 +199,11 @@ async def start_login(
 
 @router.get("/callback")
 async def oauth_callback(
-    code: Annotated[str, Query()],
     state: Annotated[str, Query()],
-    iss: Annotated[str, Query()],
+    code: Annotated[str | None, Query()] = None,
+    iss: Annotated[str | None, Query()] = None,
+    error: Annotated[str | None, Query()] = None,
+    error_description: Annotated[str | None, Query()] = None,
 ) -> RedirectResponse:
     """handle OAuth callback and create session.
 
@@ -200,7 +215,32 @@ async def oauth_callback(
     2. scope upgrade flow - replaces old session with new one, redirects to settings
     3. add account flow - creates session in existing group, redirects to portal
     4. regular login flow - creates session, redirects to portal or profile setup
+
+    an authorization-server refusal arrives as ``error=`` with no ``code``. an
+    ``invalid_scope`` refusal of a private-media upgrade means the PDS does not
+    do permissioned spaces: remember that for the account and keep the old
+    session, which the upgrade never replaced.
     """
+    if error or not code or not iss:
+        pending = await get_pending_scope_upgrade(state)
+        if pending and pending.requested_scopes == "permissioned":
+            await delete_pending_scope_upgrade(state)
+            if error == "invalid_scope":
+                old = await get_session(pending.old_session_id)
+                pds_url = (old.oauth_session or {}).get("pds_url") if old else None
+                await set_spaces_unsupported(pending.did, pds_url)
+                return RedirectResponse(
+                    url=f"{settings.frontend.url}/settings?scope_upgrade_error=incompatible_pds",
+                    status_code=303,
+                )
+        logger.warning(
+            "OAuth callback refused (error=%s): %s", error, error_description
+        )
+        return RedirectResponse(
+            url=f"{settings.frontend.url}/?auth_error={error or 'failed'}",
+            status_code=303,
+        )
+
     try:
         did, handle, oauth_session = await handle_oauth_callback(code, state, iss)
     except HTTPException as e:
@@ -291,8 +331,16 @@ async def oauth_callback(
         await schedule_atproto_sync(session_id, did)
 
         redirect_path = pending_scope_upgrade.redirect_to or "/settings"
+        outcome = "scope_upgraded=true"
+        if pending_scope_upgrade.requested_scopes == "permissioned":
+            granted = private_media_grant_present(oauth_session.get("scope", ""), did)
+            await set_spaces_unsupported(
+                did, None if granted else oauth_session.get("pds_url")
+            )
+            if not granted:
+                outcome = "scope_upgrade_error=incompatible_pds"
         return RedirectResponse(
-            url=f"{settings.frontend.url}{redirect_path}?exchange_token={exchange_token}&scope_upgraded=true",
+            url=f"{settings.frontend.url}{redirect_path}?exchange_token={exchange_token}&{outcome}",
             status_code=303,
         )
 
@@ -488,22 +536,19 @@ async def get_current_user(
     # look up artist profiles to get fresh avatars
     dids = [account.did for account in linked]
     avatar_map: dict[str, str | None] = {}
+    current_artist: Artist | None = None
     if dids:
         result = await db.execute(select(Artist).where(Artist.did.in_(dids)))
         for artist in result.scalars().all():
             avatar_map[artist.did] = artist.avatar_url
+            if artist.did == session.did:
+                current_artist = artist
 
     # get feature flags for current user from dedicated table
     current_user_flags = await get_user_flags(db, session.did)
 
-    # permissioned-spaces capability is the gate for the private-media feature;
-    # cached per-PDS in redis so this probe is cheap after the first call. never
-    # let it break /auth/me.
-    try:
-        spaces_supported = await detect_permissioned_capability(session)
-    except Exception as exc:
-        logger.debug(f"permissioned capability probe failed: {exc}")
-        spaces_supported = False
+    granted = session_has_private_media_access(session)
+    spaces_supported = granted or not spaces_unsupported_here(current_artist, session)
 
     return CurrentUserResponse(
         did=session.did,
@@ -517,7 +562,9 @@ async def get_current_user(
             for account in linked
         ],
         enabled_flags=current_user_flags,
-        permissioned_spaces=PermissionedSpacesStatus(supported=spaces_supported),
+        permissioned_spaces=PermissionedSpacesStatus(
+            supported=spaces_supported, granted=granted
+        ),
     )
 
 
@@ -722,16 +769,27 @@ async def start_scope_upgrade_flow(
         f"repo:{settings.teal.play_collection}" in current_scope
     )
     include_indiemusi = settings.indiemusi.song_collection in current_scope
-    include_permissioned = body.include_permissioned or (
-        settings.atproto.private_media_space_type in current_scope
+    include_permissioned = body.include_permissioned or permissioned_scope_requested(
+        current_scope
     )
+    if body.include_permissioned:
+        await set_spaces_unsupported(session.did, None)
 
-    auth_url, state = await start_oauth_flow_with_scopes(
-        session.handle,
-        include_teal=include_teal,
-        include_indiemusi=include_indiemusi,
-        include_permissioned=include_permissioned,
-    )
+    try:
+        auth_url, state = await start_oauth_flow_with_scopes(
+            session.handle,
+            include_teal=include_teal,
+            include_indiemusi=include_indiemusi,
+            include_permissioned=include_permissioned,
+        )
+    except HTTPException as exc:
+        # a PDS without spaces refuses at PAR, before any consent screen
+        if not (body.include_permissioned and "invalid_scope" in str(exc.detail)):
+            raise
+        pds_url = (session.oauth_session or {}).get("pds_url")
+        await set_spaces_unsupported(session.did, pds_url)
+        logger.info("PDS %s refused the private-media permission set", pds_url)
+        raise HTTPException(status_code=400, detail="incompatible_pds") from exc
 
     # build the requested scopes string for logging/tracking
     requested_scopes = (

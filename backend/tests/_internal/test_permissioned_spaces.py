@@ -1,6 +1,6 @@
 """unit tests for the permissioned-data spaces foundation (#1528).
 
-pure-logic + mocked-PDS-boundary tests for capability detection, canonical URI
+pure-logic + mocked-PDS-boundary tests for scope-derived capability, canonical URI
 helpers, the OAuth scope composition, and space-credential caching/renewal. the
 full data path is exercised against a live ZDS by scripts/permissioned_smoke.py.
 """
@@ -23,7 +23,9 @@ from backend._internal.atproto.spaces.uris import (
     parse_space_uri,
 )
 from backend._internal.auth import oauth as oauth_module
+from backend._internal.auth import space_scope
 from backend.config import settings
+from backend.models import Artist
 
 # --- canonical permissioned at:// URI helpers --------------------------------
 
@@ -74,104 +76,75 @@ def test_parse_space_record_uri_rejects_malformed(bad: str) -> None:
         parse_space_record_uri(bad)
 
 
-# --- capability probe interpretation -----------------------------------------
+# --- capability from the expanded scope ----------------------------------------
 
 
-@pytest.mark.parametrize(
-    "message,expected",
-    [
-        # the ONLY supported signal from a failure: ZDS's space-scope check ran
-        ("PDS request failed: 403 InsufficientScope", True),
-        # not-a-supporting-PDS responses — all unsupported (fail closed)
-        ("PDS request failed: 401 AuthMissing", False),  # regression: bsky 401 leak
-        ("PDS request failed: 400 InvalidRequest: bad", False),
-        ("PDS request failed: 404 UnknownMethod", False),
-        ("PDS request failed: 405 MethodNotAllowed", False),
-        ("PDS request failed: 501 MethodNotImplemented", False),
-        # genuinely transient → don't cache, fail closed for this call
-        ("PDS request failed: 503 upstream", None),
-        ("PDS request failed: 502 bad gateway", None),
-        ("totally opaque error", None),
-    ],
+_GRANT = (
+    "space:fm.plyr.privateMedia?authority=did:plc:x&skey=self"
+    "&collection=fm.plyr.track&action=read&action=create&action=update"
+    "&action=delete&manage=create&manage=update&manage=delete"
 )
-def test_classify_failure(message, expected):
-    assert cap._classify_failure(message) is expected
 
 
-async def test_detect_capability_insufficient_scope_is_supported(monkeypatch):
-    # a capable PDS that hasn't been granted the space scope yet returns 403
-    # InsufficientScope from the space route — that proves the route exists.
-    async def fake_request(*args, **kwargs):
-        raise Exception("PDS request failed: 403 InsufficientScope")
+@pytest.fixture
+def prod_namespace(monkeypatch):
+    monkeypatch.setattr(settings.atproto, "app_namespace", "fm.plyr")
 
-    monkeypatch.setattr(cap, "make_pds_request", fake_request)
+
+def test_grant_present_requires_manage_and_collection_write(prod_namespace):
+    assert space_scope.private_media_grant_present(
+        f"atproto blob:*/* {_GRANT}", "did:plc:x"
+    )
+    # the include: came back unexpanded — a PDS without spaces
+    assert not space_scope.private_media_grant_present(
+        "atproto blob:*/* include:fm.plyr.privateMediaAccess", "did:plc:x"
+    )
+    # granted to someone else's authority
+    assert not space_scope.private_media_grant_present(_GRANT, "did:plc:other")
+    # record writes without manage=create cannot create the space
+    no_manage = _GRANT.split("&manage=")[0]
+    assert not space_scope.private_media_grant_present(no_manage, "did:plc:x")
+    # the pre-alpha `did=*` shape is not a grant
+    assert not space_scope.private_media_grant_present(
+        "space:fm.plyr.privateMedia?action=create&did=*&skey=self", "did:plc:x"
+    )
+
+
+def test_permissioned_scope_requested_matches_include_or_grant(prod_namespace):
+    assert space_scope.permissioned_scope_requested(
+        "atproto include:fm.plyr.privateMediaAccess"
+    )
+    assert space_scope.permissioned_scope_requested(_GRANT)
+    assert not space_scope.permissioned_scope_requested("atproto repo:fm.plyr.track")
+    assert not space_scope.permissioned_scope_requested("atproto space:fm.other.space")
+
+
+def test_session_access_and_unsupported_marker(prod_namespace):
     session = Session(
+        session_id="s", did="did:plc:x", handle="x", oauth_session={"scope": _GRANT}
+    )
+    assert cap.session_has_private_media_access(session)
+    app_pw = Session(
         session_id="s",
         did="did:plc:x",
-        handle="x.test",
-        oauth_session={"pds_url": "https://probe-insufficient.test"},
+        handle="x",
+        oauth_session={"auth_type": "app_password", "scope": ""},
     )
-    assert await cap.detect_permissioned_capability(session) is True
+    assert cap.session_has_private_media_access(app_pw)
 
-
-async def test_detect_capability_401_is_unsupported(monkeypatch):
-    # regression: a non-supporting PDS (e.g. bsky) must NOT be read as supported
-    async def fake_request(*args, **kwargs):
-        raise Exception("PDS request failed: 401 AuthMissing")
-
-    monkeypatch.setattr(cap, "make_pds_request", fake_request)
-    session = Session(
+    here = Session(
         session_id="s",
         did="did:plc:x",
-        handle="x.test",
-        oauth_session={"pds_url": "https://probe-bsky.test"},
+        handle="x",
+        oauth_session={"pds_url": "https://pds.example", "scope": ""},
     )
-    assert await cap.detect_permissioned_capability(session) is False
-
-
-async def test_detect_capability_supported(monkeypatch):
-    async def fake_request(*args, **kwargs):
-        return {"spaces": []}
-
-    monkeypatch.setattr(cap, "make_pds_request", fake_request)
-
-    session = Session(
-        session_id="s",
-        did="did:plc:x",
-        handle="x.test",
-        oauth_session={"pds_url": "https://probe-supported.test"},
-    )
-    assert await cap.detect_permissioned_capability(session) is True
-
-
-async def test_detect_capability_unsupported(monkeypatch):
-    async def fake_request(*args, **kwargs):
-        raise Exception("PDS request failed: 501 MethodNotImplemented")
-
-    monkeypatch.setattr(cap, "make_pds_request", fake_request)
-
-    session = Session(
-        session_id="s",
-        did="did:plc:x",
-        handle="x.test",
-        oauth_session={"pds_url": "https://probe-unsupported.test"},
-    )
-    assert await cap.detect_permissioned_capability(session) is False
-
-
-async def test_detect_capability_transient_fails_closed(monkeypatch):
-    async def fake_request(*args, **kwargs):
-        raise Exception("PDS request failed: 503 upstream")
-
-    monkeypatch.setattr(cap, "make_pds_request", fake_request)
-
-    session = Session(
-        session_id="s",
-        did="did:plc:x",
-        handle="x.test",
-        oauth_session={"pds_url": "https://probe-transient.test"},
-    )
-    assert await cap.detect_permissioned_capability(session) is False
+    marked = Artist(did="did:plc:x", handle="x", display_name="x")
+    marked.spaces_unsupported_pds = "https://pds.example"
+    moved = Artist(did="did:plc:x", handle="x", display_name="x")
+    moved.spaces_unsupported_pds = "https://old.example"
+    assert cap.spaces_unsupported_here(marked, here)
+    assert not cap.spaces_unsupported_here(moved, here)
+    assert not cap.spaces_unsupported_here(None, here)
 
 
 # --- OAuth scope composition --------------------------------------------------

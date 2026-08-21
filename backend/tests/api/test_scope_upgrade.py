@@ -4,12 +4,14 @@ from collections.abc import Generator
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend._internal import Session, require_auth
+from backend.config import settings
 from backend.main import app
+from backend.models import Artist
 
 
 class MockSession(Session):
@@ -149,3 +151,238 @@ async def test_scope_upgrade_saves_pending_record(
         assert pending.did == "did:test:user123"
         assert pending.old_session_id == "test_session_id_for_upgrade"
         assert pending.requested_scopes == "teal"
+
+
+# --- private-media upgrade callback: the PDS answers through the grant ---------
+
+_GRANTED_SCOPE = (
+    "atproto blob:*/* space:fm.plyr.dev.privateMedia?authority=did:test:user123"
+    "&skey=self&collection=fm.plyr.dev.track&action=read&action=create"
+    "&action=update&action=delete&manage=create&manage=update&manage=delete"
+)
+_UNEXPANDED_SCOPE = "atproto blob:*/* include:fm.plyr.dev.privateMediaAccess"
+
+
+def _oauth_session(scope: str) -> dict:
+    return {
+        "did": "did:test:user123",
+        "handle": "testuser.bsky.social",
+        "pds_url": "https://test.pds",
+        "authserver_iss": "https://auth.test",
+        "scope": scope,
+        "access_token": "t",
+        "refresh_token": "r",
+        "dpop_private_key_pem": "fake_key",
+        "dpop_authserver_nonce": "",
+        "dpop_pds_nonce": "",
+    }
+
+
+@pytest.fixture
+async def upgrade_artist(db_session: AsyncSession) -> Artist:
+    artist = Artist(
+        did="did:test:user123", handle="testuser.bsky.social", display_name="t"
+    )
+    db_session.add(artist)
+    await db_session.commit()
+    return artist
+
+
+async def _run_permissioned_callback(
+    test_app: FastAPI, scope: str, monkeypatch: pytest.MonkeyPatch
+) -> str:
+    from backend._internal import save_pending_scope_upgrade
+
+    monkeypatch.setattr(settings.atproto, "app_namespace", "fm.plyr.dev")
+    await save_pending_scope_upgrade(
+        state="perm_state",
+        did="did:test:user123",
+        old_session_id="old_session",
+        requested_scopes="permissioned",
+    )
+    with (
+        patch(
+            "backend.api.auth.handle_oauth_callback",
+            new_callable=AsyncMock,
+            return_value=(
+                "did:test:user123",
+                "testuser.bsky.social",
+                _oauth_session(scope),
+            ),
+        ),
+        patch(
+            "backend.api.auth.get_pending_dev_token",
+            new_callable=AsyncMock,
+            return_value=None,
+        ),
+        patch(
+            "backend.api.auth.ensure_artist_exists",
+            new_callable=AsyncMock,
+            return_value=False,
+        ),
+        patch("backend.api.auth.delete_session", new_callable=AsyncMock),
+        patch(
+            "backend.api.auth.create_session",
+            new_callable=AsyncMock,
+            return_value="new_session",
+        ),
+        patch(
+            "backend.api.auth.create_exchange_token",
+            new_callable=AsyncMock,
+            return_value="xt",
+        ),
+        patch("backend.api.auth.schedule_atproto_sync", new_callable=AsyncMock),
+    ):
+        async with AsyncClient(
+            transport=ASGITransport(app=test_app), base_url="http://test"
+        ) as client:
+            response = await client.get(
+                "/auth/callback",
+                params={"code": "c", "state": "perm_state", "iss": "https://auth.test"},
+            )
+    assert response.status_code == 303
+    return response.headers["location"]
+
+
+async def _marker(db_session: AsyncSession) -> str | None:
+    db_session.expire_all()
+    artist = await db_session.get(Artist, "did:test:user123")
+    assert artist is not None
+    return artist.spaces_unsupported_pds
+
+
+async def test_permissioned_callback_with_expanded_grant_succeeds(
+    test_app: FastAPI,
+    db_session: AsyncSession,
+    upgrade_artist: Artist,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    location = await _run_permissioned_callback(test_app, _GRANTED_SCOPE, monkeypatch)
+    assert location.endswith("/settings?exchange_token=xt&scope_upgraded=true")
+    assert await _marker(db_session) is None
+
+
+async def test_permissioned_callback_with_unexpanded_scope_marks_pds(
+    test_app: FastAPI,
+    db_session: AsyncSession,
+    upgrade_artist: Artist,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    location = await _run_permissioned_callback(
+        test_app, _UNEXPANDED_SCOPE, monkeypatch
+    )
+    assert location.endswith(
+        "/settings?exchange_token=xt&scope_upgrade_error=incompatible_pds"
+    )
+    assert await _marker(db_session) == "https://test.pds"
+
+
+async def test_permissioned_callback_invalid_scope_keeps_old_session(
+    test_app: FastAPI,
+    db_session: AsyncSession,
+    upgrade_artist: Artist,
+):
+    from backend._internal import get_pending_scope_upgrade, save_pending_scope_upgrade
+
+    await save_pending_scope_upgrade(
+        state="perm_state",
+        did="did:test:user123",
+        old_session_id="old_session",
+        requested_scopes="permissioned",
+    )
+    with (
+        patch(
+            "backend.api.auth.get_session",
+            new_callable=AsyncMock,
+            return_value=MockSession(),
+        ),
+        patch("backend.api.auth.delete_session", new_callable=AsyncMock) as delete,
+        patch("backend.api.auth.handle_oauth_callback", new_callable=AsyncMock) as cb,
+    ):
+        async with AsyncClient(
+            transport=ASGITransport(app=test_app), base_url="http://test"
+        ) as client:
+            response = await client.get(
+                "/auth/callback",
+                params={
+                    "state": "perm_state",
+                    "error": "invalid_scope",
+                    "error_description": "unknown scope",
+                },
+            )
+    assert response.status_code == 303
+    assert response.headers["location"].endswith(
+        "/settings?scope_upgrade_error=incompatible_pds"
+    )
+    assert await _marker(db_session) == "https://test.pds"
+    delete.assert_not_awaited()
+    cb.assert_not_awaited()
+    assert await get_pending_scope_upgrade("perm_state") is None
+
+
+async def test_permissioned_upgrade_start_clears_marker(
+    test_app: FastAPI, db_session: AsyncSession, upgrade_artist: Artist
+):
+    upgrade_artist.spaces_unsupported_pds = "https://test.pds"
+    await db_session.commit()
+    with patch(
+        "backend.api.auth.start_oauth_flow_with_scopes", new_callable=AsyncMock
+    ) as mock_oauth:
+        mock_oauth.return_value = ("https://auth.example.com/authorize", "retry_state")
+        async with AsyncClient(
+            transport=ASGITransport(app=test_app), base_url="http://test"
+        ) as client:
+            response = await client.post(
+                "/auth/scope-upgrade/start",
+                json={"include_teal": False, "include_permissioned": True},
+            )
+    assert response.status_code == 200
+    assert await _marker(db_session) is None
+
+
+async def test_permissioned_start_marks_pds_when_par_refuses_the_scope(
+    test_app: FastAPI, db_session: AsyncSession, upgrade_artist: Artist
+):
+    """a PDS without spaces refuses at PAR, before any consent screen."""
+    with patch(
+        "backend.api.auth.start_oauth_flow_with_scopes",
+        new_callable=AsyncMock,
+        side_effect=HTTPException(
+            status_code=400,
+            detail=(
+                "failed to start OAuth flow: invalid_scope: Permissioned data "
+                "(spaces) is not enabled on this server"
+            ),
+        ),
+    ):
+        async with AsyncClient(
+            transport=ASGITransport(app=test_app), base_url="http://test"
+        ) as client:
+            response = await client.post(
+                "/auth/scope-upgrade/start",
+                json={"include_teal": False, "include_permissioned": True},
+            )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "incompatible_pds"
+    assert await _marker(db_session) == "https://test.pds"
+
+
+async def test_non_permissioned_start_failure_is_not_swallowed(
+    test_app: FastAPI, db_session: AsyncSession, upgrade_artist: Artist
+):
+    with patch(
+        "backend.api.auth.start_oauth_flow_with_scopes",
+        new_callable=AsyncMock,
+        side_effect=HTTPException(status_code=400, detail="invalid_scope: teal"),
+    ):
+        async with AsyncClient(
+            transport=ASGITransport(app=test_app), base_url="http://test"
+        ) as client:
+            response = await client.post(
+                "/auth/scope-upgrade/start", json={"include_teal": True}
+            )
+
+    assert response.status_code == 400
+    assert "invalid_scope" in response.json()["detail"]
+    assert await _marker(db_session) is None

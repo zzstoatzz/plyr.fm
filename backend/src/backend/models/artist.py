@@ -44,6 +44,10 @@ class Artist(Base):
     # kept so the flag above can be explained rather than just believed.
     account_status: Mapped[str | None] = mapped_column(String, nullable=True)
 
+    # the PDS whose private-media scope upgrade came back without a space grant;
+    # NULL until that happens, and cleared on an explicit retry or a host change.
+    spaces_unsupported_pds: Mapped[str | None] = mapped_column(String, nullable=True)
+
     # metadata
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

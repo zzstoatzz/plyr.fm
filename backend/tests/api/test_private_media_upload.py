@@ -19,10 +19,14 @@ from backend.config import settings
 from backend.main import app
 from backend.utilities.audio_formats import AudioFormat
 
-# the granted token carries the expanded space scope (what the preflight checks for),
-# not the requested `include:` form
+# the granted token carries the expanded space grant (what the preflight checks
+# for), not the requested `include:` form
 _TYPE = settings.atproto.private_media_space_type
-PERM_SCOPE = f"space:{_TYPE}?action=create&did=*&skey=self&collection={_TYPE}"
+PERM_SCOPE = (
+    f"space:{_TYPE}?authority=did:test:artist&skey=self"
+    f"&collection={settings.atproto.track_collection}"
+    "&action=read&action=create&action=update&action=delete&manage=create"
+)
 
 
 class _MockSession(Session):
@@ -81,27 +85,8 @@ def _post(client: TestClient, *, filename: str = "t.wav", data: dict) -> httpx.R
     )
 
 
-def test_private_requires_pds_capability(app_no_scope: FastAPI):
-    with (
-        patch(
-            "backend.api.tracks.uploads.detect_permissioned_capability",
-            return_value=False,
-        ),
-        TestClient(app_no_scope) as client,
-    ):
-        resp = _post(client, data={"visibility": "private"})
-    assert resp.status_code == 400
-    assert "permissioned spaces" in resp.json()["detail"]
-
-
-def test_private_capable_but_scope_missing_requests_upgrade(app_no_scope: FastAPI):
-    with (
-        patch(
-            "backend.api.tracks.uploads.detect_permissioned_capability",
-            return_value=True,
-        ),
-        TestClient(app_no_scope) as client,
-    ):
+def test_private_without_grant_requests_upgrade(app_no_scope: FastAPI):
+    with TestClient(app_no_scope) as client:
         resp = _post(client, data={"visibility": "private"})
     assert resp.status_code == 403
     assert resp.json()["detail"] == "permissioned_scope_required"
@@ -122,10 +107,6 @@ def test_private_app_password_session_bypasses_oauth_scope_gate(
     }
 
     with (
-        patch(
-            "backend.api.tracks.uploads.detect_permissioned_capability",
-            return_value=True,
-        ),
         patch("backend.api.tracks.uploads.upload_blob", return_value=fake_blob),
         patch("backend.api.tracks.uploads.schedule_track_upload"),
         TestClient(app_no_scope) as client,
@@ -137,10 +118,6 @@ def test_private_app_password_session_bypasses_oauth_scope_gate(
 
 def test_private_rejects_non_web_playable(app_with_scope: FastAPI):
     with (
-        patch(
-            "backend.api.tracks.uploads.detect_permissioned_capability",
-            return_value=True,
-        ),
         TestClient(app_with_scope) as client,
     ):
         resp = client.post(
@@ -187,10 +164,6 @@ def test_private_upload_goes_to_pds_not_r2(app_with_scope: FastAPI):
         raise AssertionError("private upload must not stage audio to R2")
 
     with (
-        patch(
-            "backend.api.tracks.uploads.detect_permissioned_capability",
-            return_value=True,
-        ),
         patch("backend.api.tracks.uploads.upload_blob", _fake_upload_blob),
         patch("backend.api.tracks.uploads.stage_audio_to_storage", _no_stage),
         patch("backend.api.tracks.uploads.schedule_track_upload", _fake_schedule),
@@ -303,10 +276,6 @@ def test_private_upload_dead_session_returns_401_not_500(app_with_scope: FastAPI
         )
 
     with (
-        patch(
-            "backend.api.tracks.uploads.detect_permissioned_capability",
-            return_value=True,
-        ),
         patch("backend.api.tracks.uploads.upload_blob", _dead_session),
         TestClient(app_with_scope) as client,
     ):

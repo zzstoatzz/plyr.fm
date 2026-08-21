@@ -72,12 +72,26 @@ check is no longer sufficient.
 
 ## capability and OAuth upgrade
 
-No stable declarative PDS capability exists yet. An authenticated
-`com.atproto.space.listSpaces` probe remains the isolation point:
+No stable declarative PDS capability exists, and probing a `com.atproto.space.*`
+route only ever guessed at the host. The signal is the **token**: a
+spaces-capable PDS expands `include:fm.plyr.privateMediaAccess` into concrete
+`space:` grants, and one without spaces either rejects the scope
+(`invalid_scope`) or returns a token with the include silently unexpanded — the
+reference PDS's `IncludeScope.buildPermissions` skips resource types it does not
+know. Capability is therefore *presence of the parsed grant*, per session:
 
-- a real response or route-level `InsufficientScope` proves support;
-- `UnknownMethod`, `MethodNotImplemented`, `404`, or `501` means unsupported;
-- ambiguous/transient failures fail closed and are not treated as support.
+- `private_media_grant_present()` requires `manage=create` on
+  `space:<type>?authority=<user did>&skey=self` **and** `action=create` on the
+  track collection — the two operations a first private upload performs;
+- absent after an upgrade → record the PDS in `artists.spaces_unsupported_pds`
+  and stop offering the option, cleared on an explicit retry or a host change;
+- `invalid_scope` at the callback is the same answer arriving faster, and never
+  replaces the old session.
+
+`space:` scopes are parsed by `_internal/auth/space_scope.py`, a port of
+`SpacePermission` from `@atproto/oauth-scopes` (`permissioned-data` branch),
+which `atproto_oauth.scopes` does not yet implement. Bulletin and its fork
+secretsky read capability the same way.
 
 The result is cached per PDS and surfaced by `/auth/me`. Private-media OAuth permission is
 requested only through the explicit scope-upgrade flow for a capable PDS, never during the
