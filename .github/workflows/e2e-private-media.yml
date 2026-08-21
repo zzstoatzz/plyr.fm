@@ -18,6 +18,10 @@ on:
       - "frontend/src/**"
       - ".github/workflows/e2e-private-media.yml"
       - "frontend/e2e/**"
+  pull_request:
+    paths:
+      - ".github/workflows/e2e-private-media.yml"
+      - "frontend/e2e/**"
   workflow_dispatch:
 
 concurrency:
@@ -52,12 +56,20 @@ jobs:
           echo "staging never became healthy" >&2
           exit 1
 
-      - name: run the flow
+      - name: private upload
         working-directory: frontend
         env:
           ZAT_TEST_HANDLE: ${{ secrets.ZAT_TEST_HANDLE }}
           ZAT_TEST_PASSWORD: ${{ secrets.ZAT_TEST_PASSWORD }}
         run: node e2e/private-media.mjs
+
+      - name: private voice memo from /record
+        if: success() || failure()
+        working-directory: frontend
+        env:
+          ZAT_TEST_HANDLE: ${{ secrets.ZAT_TEST_HANDLE }}
+          ZAT_TEST_PASSWORD: ${{ secrets.ZAT_TEST_PASSWORD }}
+        run: node e2e/record-private.mjs
 
       - name: keep screenshots from a failed run
         if: failure()

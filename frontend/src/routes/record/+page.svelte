@@ -200,7 +200,7 @@
 		const stashed = await stashRecording({
 			blob,
 			title,
-			tags,
+			tags: $state.snapshot(tags),
 			visibility: 'private',
 			capturedDuration
 		});
@@ -291,6 +291,7 @@
 		previewUrl = URL.createObjectURL(stashed.blob);
 		title = stashed.title;
 		tags = stashed.tags;
+		if (stashed.visibility === 'private') visibility = 'private';
 		capturedDuration = stashed.capturedDuration;
 		uiState = 'preview';
 		if (permissionedGranted) {

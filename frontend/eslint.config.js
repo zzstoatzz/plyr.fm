@@ -29,6 +29,7 @@ export default [
 				fetch: 'readonly',
 				Buffer: 'readonly',
 				URL: 'readonly',
+				document: 'readonly',
 				setTimeout: 'readonly',
 				clearTimeout: 'readonly'
 			}
