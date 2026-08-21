@@ -19,9 +19,10 @@
 	} from '$lib/record-stash';
 	import { Recorder, RecorderError, extensionForMime } from '$lib/recorder.svelte';
 	import { isWebPlayableExtension } from '$lib/utils/web-playable';
+	import { toWav } from '$lib/audio/wav';
 	import logo from '$lib/assets/logo.png';
 
-	type RecordState = 'idle' | 'recording' | 'preview' | 'uploading';
+	type RecordState = 'idle' | 'recording' | 'preview' | 'converting' | 'uploading';
 
 	const MAX_SECONDS = 600;
 	const WARN_SECONDS = 540;
@@ -53,19 +54,6 @@
 		auth.user?.permissioned_spaces?.granted ?? false
 	);
 
-	const recordedExtension = $derived(
-		previewBlob ? extensionForMime(previewBlob.type) : null
-	);
-	// private media stores the blob in the artist's space as-is, so the
-	// recording has to be a container browsers play natively.
-	const privateAvailable = $derived(
-		permissionedSupported && (!recordedExtension || isWebPlayableExtension(recordedExtension))
-	);
-	const privateNote = $derived(
-		privateAvailable
-			? null
-			: `your browser records ${recordedExtension}, which has to be transcoded — private media stores the file as-is. record in a browser that captures m4a to keep this one to yourself.`
-	);
 
 	const effectiveDuration = $derived(
 		Number.isFinite(duration) && duration > 0 ? duration : capturedDuration
@@ -87,11 +75,6 @@
 	const remainingDisplay = $derived(
 		formatTime(Math.max(0, MAX_SECONDS - recorder.elapsedSeconds))
 	);
-
-	// a private choice that silently became impossible would publish publicly
-	$effect(() => {
-		if (visibility === 'private' && !privateAvailable) visibility = 'unlisted';
-	});
 
 	function handleSeek(ratio: number) {
 		if (audioEl && effectiveDuration > 0) {
@@ -191,6 +174,22 @@
 	}
 
 	/**
+	 * Private media is stored in the space exactly as uploaded, so a container
+	 * the browser can't play natively (Firefox's webm/opus) is re-encoded to WAV
+	 * here rather than refused.
+	 */
+	async function preparedForPrivate(blob: Blob): Promise<Blob | null> {
+		if (isWebPlayableExtension(extensionForMime(blob.type))) return blob;
+		try {
+			return await toWav(blob);
+		} catch (e) {
+			console.error('could not convert the recording:', e);
+			toast.error('could not prepare this recording for private storage');
+			return null;
+		}
+	}
+
+	/**
 	 * Trade the recording for the one-time private-media consent.
 	 *
 	 * The consent round trip leaves the page, so the blob goes to IndexedDB
@@ -242,7 +241,17 @@
 
 	async function handleUpload() {
 		if (!previewBlob) return;
-		const blob = previewBlob;
+		let blob = previewBlob;
+
+		if (visibility === 'private') {
+			uiState = 'converting';
+			const prepared = await preparedForPrivate(blob);
+			if (!prepared) {
+				uiState = 'preview';
+				return;
+			}
+			blob = prepared;
+		}
 
 		if (visibility === 'private' && !permissionedGranted) {
 			uiState = 'uploading';
@@ -444,8 +453,6 @@
 			<VisibilityPicker
 				bind:visibility
 				showPrivate={permissionedSupported}
-				privateDisabled={!privateAvailable}
-				{privateNote}
 				privateGranted={permissionedGranted}
 			/>
 
@@ -466,6 +473,10 @@
 					{visibility === 'private' ? 'save privately' : 'publish'}
 				</button>
 			</div>
+		</div>
+	{:else if uiState === 'converting'}
+		<div class="stage">
+			<p class="hint">preparing your recording...</p>
 		</div>
 	{:else if uiState === 'uploading'}
 		<div class="stage">

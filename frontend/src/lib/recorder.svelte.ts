@@ -20,8 +20,10 @@ export interface RecorderOptions {
 // permissioned space, and a public one skips transcoding. webm/ogg remain the
 // fallback for browsers that record nothing else.
 const MIME_CANDIDATES = [
-	'audio/mp4',
+	// AAC explicitly: a bare `audio/mp4` lets the browser choose the codec, and
+	// some negotiate opus-in-mp4, which Safari cannot play.
 	'audio/mp4;codecs=mp4a.40.2',
+	'audio/mp4',
 	'audio/webm;codecs=opus',
 	'audio/webm',
 	'audio/ogg;codecs=opus',
@@ -36,6 +38,9 @@ export function pickSupportedMime(): string | null {
 export function extensionForMime(mime: string): string {
 	if (mime.includes('mp4')) return 'm4a';
 	if (mime.includes('ogg')) return 'ogg';
+	// wav is never recorded, but a recording converted for private storage is
+	// carried back through here on its way to the uploader
+	if (mime.includes('wav')) return 'wav';
 	return 'webm';
 }
 
