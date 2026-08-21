@@ -175,7 +175,7 @@ max_lines = 1299
 
 [[rules]]
 path = "frontend/src/routes/upload/+page.svelte"
-max_lines = 983
+max_lines = 893
 
 [[rules]]
 path = "services/moderation/src/admin.rs"
@@ -243,7 +243,7 @@ max_lines = 600
 
 [[rules]]
 path = "frontend/src/routes/record/+page.svelte"
-max_lines = 701
+max_lines = 795
 
 [[rules]]
 path = "backend/src/backend/api/albums/mutations.py"

@@ -9,6 +9,8 @@
 	import WaveLoading from "$lib/components/WaveLoading.svelte";
 	import TagInput from "$lib/components/TagInput.svelte";
 	import CopyrightRightsPanel from "$lib/components/CopyrightRightsPanel.svelte";
+	import VisibilityPicker from "$lib/components/VisibilityPicker.svelte";
+	import { isWebPlayableAudioFile } from "$lib/utils/web-playable";
 	import type { TrackRights } from "$lib/components/CopyrightRightsPanel.svelte";
 	import type { FeaturedArtist, AlbumSummary, Artist } from "$lib/types";
 	import { API_URL, getServerConfig } from "$lib/config";
@@ -36,17 +38,6 @@
 		if (dotIndex === -1) return false;
 		const ext = name.slice(dotIndex).toLowerCase();
 		return AUDIO_EXTENSIONS.includes(ext);
-	}
-
-	// formats browsers play natively (no transcode). private media is stored as a
-	// PDS blob with no transcode step, so it only accepts these — mirrors the
-	// backend's AudioFormat.is_web_playable (aiff/aif need conversion).
-	const WEB_PLAYABLE_EXTENSIONS = [".mp3", ".wav", ".m4a", ".flac"];
-
-	function isWebPlayableAudioFile(name: string): boolean {
-		const dotIndex = name.lastIndexOf(".");
-		if (dotIndex === -1) return false;
-		return WEB_PLAYABLE_EXTENSIONS.includes(name.slice(dotIndex).toLowerCase());
 	}
 
 	let loading = $state(true);
@@ -524,50 +515,13 @@
 				</label>
 			</fieldset>
 
-			<fieldset class="form-group access-card">
-				<legend>visibility &amp; access</legend>
-
-				<label class="access-row checkbox-label">
-					<input type="radio" bind:group={visibility} value="public" />
-					<span class="access-body">
-						<span class="checkbox-text">public</span>
-						<span class="access-note">appears in feeds; anyone can play it.</span>
-					</span>
-				</label>
-
-				<label class="access-row checkbox-label">
-					<input type="radio" bind:group={visibility} value="unlisted" />
-					<span class="access-body">
-						<span class="checkbox-text">unlisted</span>
-						<span class="access-note">hidden from feeds, but anyone with the link, your profile, albums, playlists, or search can play it.</span>
-					</span>
-				</label>
-
-				{#if artistProfile?.support_url}
-					<label class="access-row checkbox-label supporter-gating">
-						<input type="radio" bind:group={visibility} value="supporters" disabled={copyrightEnabled} />
-						<span class="access-body">
-							<span class="checkbox-text">
-								<svg class="heart-icon" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-									<path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
-								</svg>
-								supporters only
-							</span>
-							<span class="access-note">only users who support you via <a href={artistProfile.support_url} target="_blank" rel="noopener">atprotofans</a> can play it.</span>
-						</span>
-					</label>
-				{/if}
-
-				{#if permissionedSupported}
-					<label class="access-row checkbox-label">
-						<input type="radio" bind:group={visibility} value="private" disabled={copyrightEnabled} />
-						<span class="access-body">
-							<span class="checkbox-text">private</span>
-							<span class="access-note">stored in a permissioned space on your PDS — no public copy, hidden from feeds, playable only by you. you'll be asked once to approve private-media access.</span>
-						</span>
-					</label>
-				{/if}
-			</fieldset>
+			<VisibilityPicker
+				bind:visibility
+				supportUrl={artistProfile?.support_url}
+				showPrivate={permissionedSupported}
+				restrictedToPublic={copyrightEnabled}
+				privateGranted={auth.user?.permissioned_spaces?.granted ?? false}
+			/>
 
 			<div class="form-group attestation">
 				<label class="checkbox-label">
@@ -879,12 +833,6 @@
 
 	/* grouped "visibility & access" card: one bordered container, the toggles
 	   stacked as rows with subtle dividers and a persistent note under each */
-	.access-card {
-		padding: 0;
-		border: 1px solid var(--border-default);
-		border-radius: var(--radius-sm);
-		min-width: 0;
-	}
 
 	.content-notice-card {
 		padding: 0;
@@ -905,32 +853,9 @@
 		margin: 0;
 	}
 
-	.access-card legend {
-		margin-left: 0.75rem;
-		padding: 0 0.4rem;
-		font-size: var(--text-sm);
-		color: var(--text-tertiary);
-	}
 
-	.access-row {
-		display: flex;
-		align-items: flex-start;
-		gap: 0.6rem;
-		padding: 0.875rem 1rem;
-		margin: 0;
-		cursor: pointer;
-	}
 
-	.access-row + .access-row {
-		border-top: 1px solid var(--border-default);
-	}
 
-	.access-row input[type='radio'] {
-		margin-top: 0.2rem;
-		flex-shrink: 0;
-		accent-color: var(--accent);
-		cursor: pointer;
-	}
 
 	.access-body {
 		display: flex;
@@ -938,15 +863,7 @@
 		gap: 0.25rem;
 	}
 
-	.supporter-gating .checkbox-text {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.4rem;
-	}
 
-	.supporter-gating .heart-icon {
-		color: var(--accent);
-	}
 
 	.access-note {
 		font-size: var(--text-sm);
@@ -954,14 +871,7 @@
 		line-height: 1.4;
 	}
 
-	.access-note a {
-		color: var(--accent);
-		text-decoration: none;
-	}
 
-	.access-note a:hover {
-		text-decoration: underline;
-	}
 
 	@media (max-width: 768px) {
 		main {
