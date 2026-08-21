@@ -4,7 +4,7 @@ Capability is read from the authorization server's advertised scopes, so there
 is no failed-upgrade result to remember.
 
 Revision ID: e7a4d1b93fc5
-Revises: c4e2b8f51da1
+Revises: d5f3c9a62eb2
 Create Date: 2026-08-21 12:00:00.000000
 
 """
@@ -17,7 +17,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "e7a4d1b93fc5"
-down_revision: str | Sequence[str] | None = "c4e2b8f51da1"
+down_revision: str | Sequence[str] | None = "d5f3c9a62eb2"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
