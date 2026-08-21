@@ -5,6 +5,7 @@
 	import Header from '$lib/components/Header.svelte';
 	import TagInput from '$lib/components/TagInput.svelte';
 	import Waveform from '$lib/components/Waveform.svelte';
+	import VisibilityPicker, { type Visibility } from '$lib/components/VisibilityPicker.svelte';
 	import { auth } from '$lib/auth.svelte';
 	import { toast } from '$lib/toast.svelte';
 	import { uploader } from '$lib/uploader.svelte';
@@ -16,20 +17,16 @@
 		stashRecording,
 		takeStashedRecording
 	} from '$lib/record-stash';
+	import { Recorder, RecorderError, extensionForMime } from '$lib/recorder.svelte';
+	import { isWebPlayableExtension } from '$lib/utils/web-playable';
 	import logo from '$lib/assets/logo.png';
 
 	type RecordState = 'idle' | 'recording' | 'preview' | 'uploading';
-	type Visibility = 'public' | 'unlisted' | 'private';
 
 	const MAX_SECONDS = 600;
 	const WARN_SECONDS = 540;
 
-	// containers a browser can play as-is. anything else is routed through the
-	// transcoder on publish, which the private path deliberately never does.
-	const WEB_PLAYABLE_EXTENSIONS = new Set(['mp3', 'wav', 'm4a', 'flac']);
-
 	let uiState = $state<RecordState>('idle');
-	let elapsedSeconds = $state(0);
 	let title = $state('');
 	let tags = $state<string[]>([]);
 	let visibility = $state<Visibility>('public');
@@ -39,7 +36,6 @@
 	let currentTime = $state(0);
 	let duration = $state(0);
 	let isPlaying = $state(false);
-	let inputLevel = $state(0);
 	// captured at recording stop-time from the live-tick counter. gives us a
 	// correct (1s-resolution) display duration immediately, before the browser
 	// has finished scanning the blob for its real length. we prefer the audio
@@ -58,13 +54,17 @@
 	);
 
 	const recordedExtension = $derived(
-		previewBlob ? extensionFor(previewBlob.type) : null
+		previewBlob ? extensionForMime(previewBlob.type) : null
 	);
 	// private media stores the blob in the artist's space as-is, so the
 	// recording has to be a container browsers play natively.
 	const privateAvailable = $derived(
-		permissionedSupported &&
-			(!recordedExtension || WEB_PLAYABLE_EXTENSIONS.has(recordedExtension))
+		permissionedSupported && (!recordedExtension || isWebPlayableExtension(recordedExtension))
+	);
+	const privateNote = $derived(
+		privateAvailable
+			? null
+			: `your browser records ${recordedExtension}, which has to be transcoded — private media stores the file as-is. record in a browser that captures m4a to keep this one to yourself.`
 	);
 
 	const effectiveDuration = $derived(
@@ -76,7 +76,17 @@
 	const timeDisplay = $derived(
 		`${formatTime(currentTime)} / ${formatTime(effectiveDuration)}`
 	);
-	const remainingDisplay = $derived(formatTime(Math.max(0, MAX_SECONDS - elapsedSeconds)));
+	const recorder = new Recorder({
+		maxSeconds: MAX_SECONDS,
+		warnAtSeconds: WARN_SECONDS,
+		measureLevel: !reducedMotion,
+		onWarn: () => toast.info('1 minute until auto-stop'),
+		onStop: finalizeRecording
+	});
+
+	const remainingDisplay = $derived(
+		formatTime(Math.max(0, MAX_SECONDS - recorder.elapsedSeconds))
+	);
 
 	// a private choice that silently became impossible would publish publicly
 	$effect(() => {
@@ -122,16 +132,7 @@
 		el.currentTime = 1e101;
 	}
 
-	let mediaRecorder: MediaRecorder | null = null;
-	let stream: MediaStream | null = null;
-	let chunks: Blob[] = [];
-	let timerHandle: number | null = null;
-	let warnedNearLimit = false;
-	let audioContext: AudioContext | null = null;
-	let analyser: AnalyserNode | null = null;
-	let levelFrame: number | null = null;
-
-	const elapsedDisplay = $derived(formatTime(elapsedSeconds));
+	const elapsedDisplay = $derived(formatTime(recorder.elapsedSeconds));
 
 	function formatTime(seconds: number): string {
 		if (!Number.isFinite(seconds) || seconds < 0) seconds = 0;
@@ -144,135 +145,16 @@
 		return `${mm}:${ss}`;
 	}
 
-	// mp4/m4a first: it is web-playable, so the recording can go straight into a
-	// permissioned space and a public one skips transcoding entirely. webm/ogg
-	// remain the fallback for browsers that record nothing else.
-	function pickSupportedMime(): string | null {
-		const candidates = [
-			'audio/mp4',
-			'audio/mp4;codecs=mp4a.40.2',
-			'audio/webm;codecs=opus',
-			'audio/webm',
-			'audio/ogg;codecs=opus',
-			'audio/ogg'
-		];
-		for (const c of candidates) {
-			if (typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported(c)) {
-				return c;
-			}
-		}
-		return null;
-	}
-
-	function extensionFor(mime: string): string {
-		if (mime.includes('mp4')) return 'm4a';
-		if (mime.includes('webm')) return 'webm';
-		if (mime.includes('ogg')) return 'ogg';
-		return 'webm';
-	}
-
-	function startTimer() {
-		stopTimer();
-		elapsedSeconds = 0;
-		warnedNearLimit = false;
-		timerHandle = window.setInterval(() => {
-			elapsedSeconds += 1;
-			if (elapsedSeconds === WARN_SECONDS && !warnedNearLimit) {
-				warnedNearLimit = true;
-				toast.info('1 minute until auto-stop');
-			}
-			if (elapsedSeconds >= MAX_SECONDS) {
-				stopRecording();
-			}
-		}, 1000);
-	}
-
-	function stopTimer() {
-		if (timerHandle !== null) {
-			window.clearInterval(timerHandle);
-			timerHandle = null;
-		}
-	}
-
-	/** drive the aura from live mic amplitude so the page reacts to the room. */
-	function startLevelMeter(source: MediaStream) {
-		if (reducedMotion) return;
-		try {
-			audioContext = new AudioContext();
-			analyser = audioContext.createAnalyser();
-			analyser.fftSize = 256;
-			audioContext.createMediaStreamSource(source).connect(analyser);
-			const samples = new Uint8Array(analyser.frequencyBinCount);
-			const tick = () => {
-				if (!analyser) return;
-				analyser.getByteTimeDomainData(samples);
-				let peak = 0;
-				for (const sample of samples) {
-					peak = Math.max(peak, Math.abs(sample - 128) / 128);
-				}
-				// ease downward so the ring settles instead of strobing
-				inputLevel = Math.max(peak, inputLevel * 0.82);
-				levelFrame = requestAnimationFrame(tick);
-			};
-			tick();
-		} catch (e) {
-			console.error('could not read input level:', e);
-		}
-	}
-
-	function stopLevelMeter() {
-		if (levelFrame !== null) {
-			cancelAnimationFrame(levelFrame);
-			levelFrame = null;
-		}
-		analyser = null;
-		void audioContext?.close().catch(() => undefined);
-		audioContext = null;
-		inputLevel = 0;
-	}
-
 	async function startRecording() {
 		try {
-			stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+			await recorder.start();
+			uiState = 'recording';
 		} catch (e) {
-			console.error('mic permission error:', e);
-			toast.error('microphone permission denied');
-			return;
+			toast.error(e instanceof RecorderError ? e.message : 'could not start recording');
 		}
-		chunks = [];
-		const mime = pickSupportedMime();
-		try {
-			mediaRecorder = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
-		} catch (e) {
-			console.error('mediarecorder init error:', e);
-			toast.error('your browser does not support audio recording');
-			stream?.getTracks().forEach((t) => t.stop());
-			stream = null;
-			return;
-		}
-		mediaRecorder.ondataavailable = (e) => {
-			if (e.data.size > 0) chunks.push(e.data);
-		};
-		mediaRecorder.onstop = finalizeRecording;
-		mediaRecorder.start();
-		startLevelMeter(stream);
-		uiState = 'recording';
-		startTimer();
 	}
 
-	function stopRecording() {
-		if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-			mediaRecorder.stop();
-		}
-		stream?.getTracks().forEach((t) => t.stop());
-		stream = null;
-		stopTimer();
-		stopLevelMeter();
-	}
-
-	function finalizeRecording() {
-		const mime = mediaRecorder?.mimeType ?? 'audio/webm';
-		const blob = new Blob(chunks, { type: mime });
+	function finalizeRecording(blob: Blob, elapsedSeconds: number) {
 		previewBlob = blob;
 		if (previewUrl) URL.revokeObjectURL(previewUrl);
 		previewUrl = URL.createObjectURL(blob);
@@ -292,10 +174,8 @@
 			previewUrl = null;
 		}
 		previewBlob = null;
-		chunks = [];
 		title = '';
 		tags = [];
-		elapsedSeconds = 0;
 		currentTime = 0;
 		duration = 0;
 		capturedDuration = 0;
@@ -305,7 +185,7 @@
 	}
 
 	function recordingFile(blob: Blob): File {
-		const ext = extensionFor(blob.type);
+		const ext = extensionForMime(blob.type);
 		const safeTitle = title.replace(/[^\w\s.-]/g, '_').trim() || `recording-${Date.now()}`;
 		return new File([blob], `${safeTitle}.${ext}`, { type: blob.type });
 	}
@@ -419,16 +299,7 @@
 	});
 
 	onDestroy(() => {
-		stopTimer();
-		stopLevelMeter();
-		if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-			try {
-				mediaRecorder.stop();
-			} catch (e) {
-				console.error('error stopping recorder on destroy:', e);
-			}
-		}
-		stream?.getTracks().forEach((t) => t.stop());
+		recorder.dispose();
 		if (previewUrl) URL.revokeObjectURL(previewUrl);
 	});
 </script>
@@ -494,9 +365,9 @@
 			<div class="timer" aria-live="polite">{elapsedDisplay}</div>
 			<div
 				class="mic-aura recording"
-				style="--input-level: {inputLevel.toFixed(3)}"
+				style="--input-level: {recorder.inputLevel.toFixed(3)}"
 			>
-				<button type="button" class="record-btn recording" onclick={stopRecording} aria-label="stop recording">
+				<button type="button" class="record-btn recording" onclick={() => recorder.stop()} aria-label="stop recording">
 					<svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
 						<rect x="6" y="6" width="12" height="12" rx="2" />
 					</svg>
@@ -575,51 +446,13 @@
 				/>
 			</div>
 
-			<fieldset class="form-group access-card">
-				<legend>visibility &amp; access</legend>
-
-				<label class="access-row">
-					<input type="radio" bind:group={visibility} value="public" />
-					<span class="access-body">
-						<span class="access-title">public</span>
-						<span class="access-note">appears in feeds; anyone can play it.</span>
-					</span>
-				</label>
-
-				<label class="access-row">
-					<input type="radio" bind:group={visibility} value="unlisted" />
-					<span class="access-body">
-						<span class="access-title">unlisted</span>
-						<span class="access-note">hidden from feeds; anyone with the link can play it.</span>
-					</span>
-				</label>
-
-				{#if permissionedSupported}
-					<label class="access-row" class:unavailable={!privateAvailable}>
-						<input type="radio" bind:group={visibility} value="private" disabled={!privateAvailable} />
-						<span class="access-body">
-							<span class="access-title">
-								<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-									<rect x="3" y="11" width="18" height="11" rx="2" />
-									<path d="M7 11V7a5 5 0 0 1 10 0v4" />
-								</svg>
-								private
-							</span>
-							<span class="access-note">
-								{#if privateAvailable}
-									{permissionedGranted
-										? 'stored in a permissioned space on your PDS — no public copy, hidden from feeds, playable only by you.'
-										: "stored in a permissioned space on your PDS — no public copy, hidden from feeds, playable only by you. you'll be asked once to approve access; your recording is kept."}
-								{:else}
-									your browser records {recordedExtension}, which has to be transcoded —
-									private media stores the file as-is. record in a browser that captures
-									m4a to keep this one to yourself.
-								{/if}
-							</span>
-						</span>
-					</label>
-				{/if}
-			</fieldset>
+			<VisibilityPicker
+				bind:visibility
+				showPrivate={permissionedSupported}
+				privateDisabled={!privateAvailable}
+				{privateNote}
+				privateGranted={permissionedGranted}
+			/>
 
 			<div class="actions">
 				<button type="button" class="secondary-btn" onclick={reRecord}>
@@ -871,75 +704,6 @@
 	.form-group input[type='text']:focus {
 		outline: none;
 		border-color: var(--accent);
-	}
-
-	.access-card {
-		padding: 0;
-		gap: 0;
-		border: 1px solid var(--border-default);
-		border-radius: var(--radius-md);
-		min-width: 0;
-	}
-
-	.access-card legend {
-		margin-left: 0.75rem;
-		padding: 0 0.4rem;
-		font-size: var(--text-sm);
-		color: var(--text-tertiary);
-	}
-
-	.access-row {
-		display: flex;
-		align-items: flex-start;
-		gap: 0.6rem;
-		padding: 0.875rem 1rem;
-		margin: 0;
-		cursor: pointer;
-		transition: background 0.15s ease;
-	}
-
-	.access-row:hover {
-		background: color-mix(in srgb, var(--accent) 5%, transparent);
-	}
-
-	.access-row + .access-row {
-		border-top: 1px solid var(--border-default);
-	}
-
-	.access-row.unavailable {
-		cursor: not-allowed;
-	}
-
-	.access-row.unavailable .access-title {
-		color: var(--text-muted);
-	}
-
-	.access-row input[type='radio'] {
-		margin-top: 0.2rem;
-		flex-shrink: 0;
-		accent-color: var(--accent);
-		cursor: inherit;
-	}
-
-	.access-body {
-		display: flex;
-		flex-direction: column;
-		gap: 0.25rem;
-		min-width: 0;
-	}
-
-	.access-title {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.4rem;
-		font-size: var(--text-sm);
-		color: var(--text-primary);
-	}
-
-	.access-note {
-		font-size: var(--text-xs);
-		color: var(--text-tertiary);
-		line-height: 1.45;
 	}
 
 	.actions {
