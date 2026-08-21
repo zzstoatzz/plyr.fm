@@ -34,8 +34,8 @@
 
 	const defaultPrivateNote = $derived(
 		privateGranted
-			? 'stored in a permissioned space on your PDS — no public copy, hidden from feeds, playable only by you.'
-			: "stored in a permissioned space on your PDS — no public copy, hidden from feeds, playable only by you. you'll be asked once to approve access."
+			? 'only you can play it. nothing public, nothing in feeds.'
+			: "only you can play it. nothing public, nothing in feeds. you'll be asked once to allow it."
 	);
 </script>
 
