@@ -21,6 +21,20 @@ export default [
 	},
 	js.configs.recommended,
 	{
+		files: ['e2e/**/*.mjs'],
+		languageOptions: {
+			globals: {
+				process: 'readonly',
+				console: 'readonly',
+				fetch: 'readonly',
+				Buffer: 'readonly',
+				URL: 'readonly',
+				setTimeout: 'readonly',
+				clearTimeout: 'readonly'
+			}
+		}
+	},
+	{
 		files: ['**/*.ts', '**/*.svelte'],
 		languageOptions: {
 			parser: tsParser,

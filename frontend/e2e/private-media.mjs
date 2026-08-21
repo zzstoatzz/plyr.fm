@@ -11,6 +11,7 @@
  *   ZAT_TEST_HANDLE=... ZAT_TEST_PASSWORD=... node e2e/private-media.mjs
  */
 
+import { mkdirSync } from 'node:fs';
 import { chromium } from 'playwright';
 
 const APP = process.env.PLYR_APP_URL ?? 'https://stg.plyr.fm';
@@ -37,6 +38,36 @@ const fail = (detail) => {
 	process.exitCode = 1;
 	throw new Error(detail);
 };
+
+const ARTIFACTS = process.env.E2E_ARTIFACT_DIR ?? 'e2e-artifacts';
+mkdirSync(ARTIFACTS, { recursive: true });
+
+/** every API request and console error a page makes, so a failure can say
+ * what the browser actually did instead of just where it stopped. */
+function observe(page, label) {
+	const seen = [];
+	page.on('request', (r) => {
+		if (r.url().startsWith(API)) seen.push(`${r.method()} ${new URL(r.url()).pathname}`);
+	});
+	page.on('response', (r) => {
+		if (r.url().startsWith(API) && r.status() >= 400) seen.push(`  -> ${r.status()} ${new URL(r.url()).pathname}`);
+	});
+	page.on('console', (m) => {
+		if (m.type() === 'error') seen.push(`console.error: ${m.text().slice(0, 200)}`);
+	});
+	page.on('pageerror', (e) => seen.push(`pageerror: ${String(e).slice(0, 200)}`));
+	return async () => {
+		console.error(`--- ${label}: url=${page.url()}`);
+		console.error(`--- ${label}: requests\n${seen.map((l) => '    ' + l).join('\n')}`);
+		const text = await page
+			.locator('body')
+			.innerText()
+			.then((t) => t.replace(/\s+/g, ' ').slice(0, 600))
+			.catch(() => '(no body)');
+		console.error(`--- ${label}: text: ${text}`);
+		await page.screenshot({ path: `${ARTIFACTS}/${label}.png`, fullPage: true }).catch(() => undefined);
+	};
+}
 
 /** 0.2s of 8kHz mono sine — small but decodable, and unique per run so the
  * content-hash dedupe never mistakes two test runs for the same track. */
@@ -77,8 +108,10 @@ async function authorizeOnPds(page) {
 
 async function signIn(page) {
 	await page.goto(`${APP}/login`, { waitUntil: 'networkidle' });
-	await page.locator('input').first().fill(HANDLE);
-	await page.keyboard.press('Enter');
+	const handle = page.getByPlaceholder('you.example.com');
+	await handle.waitFor({ timeout: 15000 });
+	await handle.fill(HANDLE);
+	await handle.press('Enter');
 	await page.waitForURL(/oauth\/authorize/, { timeout: 30000 });
 	await authorizeOnPds(page);
 	await page.waitForTimeout(2500);
@@ -96,11 +129,14 @@ const browser = await chromium.launch();
 const title = `e2e private ${Date.now()}`;
 let createdTrackId = null;
 let ownerContext = null;
+let dumpOwner = null;
+let dumpFresh = null;
 
 try {
 	// --- session 1: sign in, upload privately through the consent round trip
 	ownerContext = await browser.newContext({ viewport: { width: 1000, height: 2600 } });
 	const page = await ownerContext.newPage();
+	dumpOwner = observe(page, 'owner');
 
 	step('sign-in', HANDLE);
 	await signIn(page);
@@ -169,6 +205,7 @@ try {
 	// --- session 2: a fresh sign-in (base scope, no grant) must still play it
 	const freshContext = await browser.newContext({ viewport: { width: 1000, height: 2000 } });
 	const fresh = await freshContext.newPage();
+	dumpFresh = observe(fresh, 'fresh');
 	step('fresh-session', 'signing in again without the grant');
 	await signIn(fresh);
 	const freshMe = await me(fresh);
@@ -200,6 +237,8 @@ try {
 		console.error(`FAILED at [${stage}]: ${String(e).slice(0, 400)}`);
 		process.exitCode = 1;
 	}
+	if (dumpFresh) await dumpFresh();
+	if (dumpOwner) await dumpOwner();
 } finally {
 	// leave the fixture account the way we found it
 	if (createdTrackId && ownerContext) {
