@@ -6,6 +6,13 @@ and [Permissioned Data Diary 7](https://dholms.leaflet.pub/3mqtqvjidqs2p).
 The proposal is not a final specification, so this integration remains capability-gated
 and intentionally isolated under `backend/_internal/atproto/spaces/`.
 
+The wire contract is the **spaces-alpha lexicons** at the tip of the `permissioned-data`
+branch of [bluesky-social/atproto](https://github.com/bluesky-social/atproto/tree/permissioned-data/lexicons/com/atproto)
+(`lexicons/com/atproto/{space,simplespace}`) — not the proposal prose, which lags them.
+[Bulletin](https://github.com/bluesky-social/bulletin) is the alpha's reference client;
+when a request shape is in doubt, match what its `lib/atproto/` does. ZDS tracks the same
+branch, and has rejected stale bodies twice (#1656, #1876).
+
 ## what exists today
 
 The shipped product is the smallest personal-space case:
@@ -78,23 +85,23 @@ base login.
 
 ## space creation and policy
 
-`com.atproto.simplespace.createSpace` receives the current proposal shape:
+`com.atproto.simplespace.createSpace` receives the alpha body. The space is anchored on
+the authenticated DID (no `did` field), and `policy` / `appAccess` are `$type` unions:
 
 ```json
 {
-  "did": "did:plc:artist",
   "type": "fm.plyr.privateMedia",
   "skey": "self",
-  "config": {
-    "policy": "member-list",
-    "appAccess": {"$type": "com.atproto.simplespace.defs#open"}
-  }
+  "policy": {"$type": "com.atproto.simplespace.defs#memberListPolicy"},
+  "appAccess": {"$type": "com.atproto.simplespace.defs#open"}
 }
 ```
 
-The required `simplespace` management layer has a member list even though the core sync
-protocol does not enumerate readers. The authority is added by default and plyr.fm adds
-nobody else, yielding owner-only access.
+The `simplespace` management layer has a member list even though the core sync protocol
+does not enumerate readers. The authority is authorized on its own member-list space
+without an explicit `addMember`, and plyr.fm adds nobody else, yielding owner-only access.
+`getSpace` returns `{uri, policy, appAccess}` with the same unions; `updateSpace` takes
+`{space, policy?, appAccess?}`.
 
 App access is open for this personal experiment so local/public OAuth clients can use it
 without a confidential-client signing key. This is separate from user eligibility. A
@@ -125,6 +132,11 @@ The generic client exposes:
 - `list_space_repos` on the authority host;
 - `list_space_records` and `list_space_repo_ops` on each writer's repo host;
 - ranged `open_space_blob` reads on the writer's repo host.
+
+`listRepos` and `listRepoOps` page by `cursor` (default 100, max 1000): a full page
+carries `cursor`, the final page omits it. `listRepoOps` additionally returns the signed
+`commit` only on the page that reaches the head of the oplog, so a consumer must not
+expect `commit` on every page. Both client functions accept `cursor`.
 
 Proposal 0016 also defines full CAR recovery (`getRepo`), deniable LtHash commits, and
 best-effort notifications (`registerNotify`/`notifyWrite`). plyr.fm does not yet keep a

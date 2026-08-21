@@ -355,7 +355,7 @@ max_lines = 689
 
 [[rules]]
 path = "backend/tests/_internal/test_permissioned_spaces.py"
-max_lines = 634
+max_lines = 664
 
 [[rules]]
 path = "frontend/src/routes/u/[[]handle[]]/+page.svelte"

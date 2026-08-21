@@ -219,15 +219,16 @@ async def test_ensure_personal_space_uses_simplespace_shape(
         "POST",
         "com.atproto.simplespace.createSpace",
         payload={
-            "did": "did:plc:x",
             "type": "fm.plyr.privateMedia",
             "skey": "self",
-            "config": {
-                "policy": "member-list",
-                "appAccess": {"$type": "com.atproto.simplespace.defs#open"},
-            },
+            "policy": {"$type": "com.atproto.simplespace.defs#memberListPolicy"},
+            "appAccess": {"$type": "com.atproto.simplespace.defs#open"},
         },
     )
+    assert request.await_args is not None
+    payload = request.await_args.kwargs["payload"]
+    assert "did" not in payload
+    assert "config" not in payload
 
 
 async def test_mint_credential_uses_delegation_token_flow(
@@ -529,6 +530,27 @@ async def test_list_space_repos_routes_to_authority_host(
     )
 
 
+async def test_list_space_repos_forwards_cursor(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    read = AsyncMock(return_value={"repos": []})
+    monkeypatch.setattr(space_client, "_credential_read", read)
+    monkeypatch.setattr(
+        space_client, "_space_host_url", AsyncMock(return_value="https://a.example")
+    )
+    session = Session(session_id="s", did="did:plc:user", handle="u", oauth_session={})
+    space = "at://did:plc:authority/space/fm.example.catalog/main"
+
+    await space_client.list_space_repos(session, space, limit=20, cursor="page-2")
+
+    assert read.await_args is not None
+    assert read.await_args.kwargs["params"] == {
+        "space": space,
+        "limit": 20,
+        "cursor": "page-2",
+    }
+
+
 async def test_list_space_records_routes_to_writer_repo_host(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -607,3 +629,36 @@ async def test_list_space_repo_ops_routes_to_writer_repo_host(
             "limit": 250,
         },
     )
+
+
+async def test_list_space_repo_ops_pages_by_cursor_and_tolerates_missing_commit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    full_page = {"ops": [{"rev": "3mabd"}], "cursor": "page-2"}
+    head_page = {"ops": [], "commit": {"rev": "3mabd"}}
+    read = AsyncMock(side_effect=[full_page, head_page])
+    monkeypatch.setattr(space_client, "_credential_read", read)
+    monkeypatch.setattr(
+        space_client, "_repo_host_url", AsyncMock(return_value="https://w.example")
+    )
+    session = Session(session_id="s", did="did:plc:user", handle="u", oauth_session={})
+    space = "at://did:plc:authority/space/fm.example.catalog/main"
+
+    first = await space_client.list_space_repo_ops(
+        session, space=space, repo="did:plc:writer", since="3mabc"
+    )
+    assert first == full_page
+    assert "commit" not in first
+
+    second = await space_client.list_space_repo_ops(
+        session, space=space, repo="did:plc:writer", cursor=first["cursor"]
+    )
+    assert second == head_page
+    assert "cursor" not in second
+    assert read.await_args is not None
+    assert read.await_args.kwargs["params"] == {
+        "space": space,
+        "repo": "did:plc:writer",
+        "limit": 500,
+        "cursor": "page-2",
+    }

@@ -496,7 +496,7 @@ async def _handle_private_audio(
     """proxy a private track's audio through the permissioned-space credential path.
 
     access is owner-only at two layers: plyr.fm rejects non-owners here, while the
-    ``simplespace`` created for this MVP uses its explicit ``member-list`` policy.
+    ``simplespace`` created for this MVP uses its explicit ``memberListPolicy``.
     Core permissioned spaces do not enumerate readers, but ``simplespace`` is the
     required PDS management layer above that core protocol and may maintain members.
     A non-owner (or anonymous) request gets a 404 — the same as a missing file — so
