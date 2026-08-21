@@ -41,9 +41,8 @@ from backend._internal import (
     switch_active_account,
 )
 from backend._internal.atproto.spaces import (
+    pds_supports_spaces,
     session_has_private_media_access,
-    set_spaces_unsupported,
-    spaces_unsupported_here,
 )
 from backend._internal.auth import get_refresh_token_lifetime_days
 from backend._internal.auth.app_password import (
@@ -223,16 +222,12 @@ async def oauth_callback(
     """
     if error or not code or not iss:
         pending = await get_pending_scope_upgrade(state)
-        if pending and pending.requested_scopes == "permissioned":
+        if pending and error == "invalid_scope":
             await delete_pending_scope_upgrade(state)
-            if error == "invalid_scope":
-                old = await get_session(pending.old_session_id)
-                pds_url = (old.oauth_session or {}).get("pds_url") if old else None
-                await set_spaces_unsupported(pending.did, pds_url)
-                return RedirectResponse(
-                    url=f"{settings.frontend.url}/settings?scope_upgrade_error=incompatible_pds",
-                    status_code=303,
-                )
+            return RedirectResponse(
+                url=f"{settings.frontend.url}/settings?scope_upgrade_error=refused",
+                status_code=303,
+            )
         logger.warning(
             "OAuth callback refused (error=%s): %s", error, error_description
         )
@@ -332,13 +327,10 @@ async def oauth_callback(
 
         redirect_path = pending_scope_upgrade.redirect_to or "/settings"
         outcome = "scope_upgraded=true"
-        if pending_scope_upgrade.requested_scopes == "permissioned":
-            granted = private_media_grant_present(oauth_session.get("scope", ""), did)
-            await set_spaces_unsupported(
-                did, None if granted else oauth_session.get("pds_url")
-            )
-            if not granted:
-                outcome = "scope_upgrade_error=incompatible_pds"
+        if pending_scope_upgrade.requested_scopes == "permissioned" and not (
+            private_media_grant_present(oauth_session.get("scope", ""), did)
+        ):
+            outcome = "scope_upgrade_error=refused"
         return RedirectResponse(
             url=f"{settings.frontend.url}{redirect_path}?exchange_token={exchange_token}&{outcome}",
             status_code=303,
@@ -536,19 +528,16 @@ async def get_current_user(
     # look up artist profiles to get fresh avatars
     dids = [account.did for account in linked]
     avatar_map: dict[str, str | None] = {}
-    current_artist: Artist | None = None
     if dids:
         result = await db.execute(select(Artist).where(Artist.did.in_(dids)))
         for artist in result.scalars().all():
             avatar_map[artist.did] = artist.avatar_url
-            if artist.did == session.did:
-                current_artist = artist
 
     # get feature flags for current user from dedicated table
     current_user_flags = await get_user_flags(db, session.did)
 
     granted = session_has_private_media_access(session)
-    spaces_supported = granted or not spaces_unsupported_here(current_artist, session)
+    spaces_supported = granted or await pds_supports_spaces(session)
 
     return CurrentUserResponse(
         did=session.did,
@@ -772,9 +761,6 @@ async def start_scope_upgrade_flow(
     include_permissioned = body.include_permissioned or permissioned_scope_requested(
         current_scope
     )
-    if body.include_permissioned:
-        await set_spaces_unsupported(session.did, None)
-
     try:
         auth_url, state = await start_oauth_flow_with_scopes(
             session.handle,
@@ -786,10 +772,8 @@ async def start_scope_upgrade_flow(
         # a PDS without spaces refuses at PAR, before any consent screen
         if not (body.include_permissioned and "invalid_scope" in str(exc.detail)):
             raise
-        pds_url = (session.oauth_session or {}).get("pds_url")
-        await set_spaces_unsupported(session.did, pds_url)
-        logger.info("PDS %s refused the private-media permission set", pds_url)
-        raise HTTPException(status_code=400, detail="incompatible_pds") from exc
+        logger.info("authserver refused the private-media permission set")
+        raise HTTPException(status_code=400, detail="spaces_refused") from exc
 
     # build the requested scopes string for logging/tracking
     requested_scopes = (

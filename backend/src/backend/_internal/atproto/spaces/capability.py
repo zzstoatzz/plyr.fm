@@ -1,20 +1,34 @@
 """whether a session can use permissioned spaces (private media).
 
-No PDS advertises the space surface declaratively, and probing a
-``com.atproto.space.*`` route is a guess about the host. The honest signal is
-the token: a spaces-capable PDS expands ``include:<permission set>`` into
-concrete ``space:`` grants, and one that is not either rejects the scope or
-returns a token without them. Capability is therefore read from the granted
-scope, and a grant that came back empty is remembered per (account, PDS) so
-the option is not offered again until the user retries explicitly.
+Two questions, each answered by the thing that actually knows:
+
+- **can this PDS do spaces at all?** its OAuth authorization server lists a
+  ``space:`` scope in ``scopes_supported``. Declarative, available before we
+  ask the user for anything, and stable enough to cache per issuer. This
+  decides whether private media is offered.
+- **may this session write to the space?** the granted token carries the
+  expanded ``space:`` grant (see
+  [space_scope][backend._internal.auth.space_scope]). This decides whether a
+  write is allowed.
+
+Never offer what the first question says is impossible, and never authorize on
+anything but the second.
 """
 
-from sqlalchemy import select
+import logging
+
+import httpx
+from atproto_oauth.security import is_safe_url
+from redis.exceptions import RedisError
 
 from backend._internal.auth.session import Session as AuthSession
 from backend._internal.auth.space_scope import private_media_grant_present
-from backend.models import Artist
-from backend.utilities.database import db_session
+from backend.utilities.redis import get_async_redis_client
+
+logger = logging.getLogger(__name__)
+
+_CACHE_PREFIX = "spaces_supported:v1:"
+_CACHE_TTL_SECONDS = 6 * 60 * 60
 
 
 def session_has_private_media_access(auth_session: AuthSession) -> bool:
@@ -25,16 +39,54 @@ def session_has_private_media_access(auth_session: AuthSession) -> bool:
     return private_media_grant_present(data.get("scope", ""), auth_session.did)
 
 
-def spaces_unsupported_here(artist: Artist | None, auth_session: AuthSession) -> bool:
-    """whether a previous upgrade on this session's PDS came back without the grant."""
-    pds_url = (auth_session.oauth_session or {}).get("pds_url")
-    return bool(artist and pds_url and artist.spaces_unsupported_pds == pds_url)
+def advertises_spaces(metadata: dict) -> bool:
+    """whether authorization-server metadata offers any ``space:`` scope."""
+    scopes = metadata.get("scopes_supported")
+    if not isinstance(scopes, list):
+        return False
+    return any(
+        isinstance(scope, str) and (scope == "space" or scope.startswith("space:"))
+        for scope in scopes
+    )
 
 
-async def set_spaces_unsupported(did: str, pds_url: str | None) -> None:
-    """record (or, with ``None``, clear) the PDS that returned no private-media grant."""
-    async with db_session() as db:
-        result = await db.execute(select(Artist).where(Artist.did == did))
-        if artist := result.scalar_one_or_none():
-            artist.spaces_unsupported_pds = pds_url
-            await db.commit()
+async def pds_supports_spaces(auth_session: AuthSession) -> bool:
+    """whether the session's authorization server advertises a ``space:`` scope.
+
+    A transient failure answers "no": offering private media we cannot deliver
+    is worse than hiding it for one page load.
+    """
+    issuer = (auth_session.oauth_session or {}).get("authserver_iss")
+    if not issuer:
+        return False
+    issuer = issuer.rstrip("/")
+
+    redis = None
+    cache_key = f"{_CACHE_PREFIX}{issuer}"
+    try:
+        redis = get_async_redis_client()
+        if (cached := await redis.get(cache_key)) is not None:
+            return cached == "1"
+    except RedisError as exc:
+        logger.debug("spaces capability cache read failed: %s", exc)
+        redis = None
+
+    url = f"{issuer}/.well-known/oauth-authorization-server"
+    if not is_safe_url(url):
+        return False
+    try:
+        async with httpx.AsyncClient(timeout=10) as http:
+            response = await http.get(url)
+        if response.status_code != 200:
+            return False
+        supported = advertises_spaces(response.json())
+    except (httpx.HTTPError, ValueError) as exc:
+        logger.debug("could not read authserver metadata for %s: %s", issuer, exc)
+        return False
+
+    if redis is not None:
+        try:
+            await redis.set(cache_key, "1" if supported else "0", ex=_CACHE_TTL_SECONDS)
+        except RedisError as exc:
+            logger.debug("spaces capability cache write failed: %s", exc)
+    return supported

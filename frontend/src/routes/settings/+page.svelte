@@ -98,12 +98,9 @@ import WaveLoading from '$lib/components/WaveLoading.svelte';
 		const exchangeToken = params.get('exchange_token');
 		const isDevToken = params.get('dev_token') === 'true';
 		const isScopeUpgrade = params.get('scope_upgraded') === 'true';
-		if (params.get('scope_upgrade_error') === 'incompatible_pds') {
+		if (params.get('scope_upgrade_error') === 'refused') {
 			clearReturnUrl();
-			toast.error(
-				"your PDS doesn't support private media yet — it didn't grant permissioned-space access",
-				8000
-			);
+			toast.error('your PDS refused private media', 8000);
 			await auth.refresh();
 			window.history.replaceState({}, '', '/settings');
 		}

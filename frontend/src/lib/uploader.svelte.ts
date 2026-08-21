@@ -59,8 +59,8 @@ async function startPermissionedScopeUpgrade(): Promise<void> {
 			// the PDS refused the permission set at PAR — it doesn't do spaces.
 			// the backend has recorded that, so refreshing auth stops offering it.
 			const detail = await res.json().catch(() => null);
-			if (detail?.detail === 'incompatible_pds') {
-				toast.error("your PDS doesn't support private media yet", 8000);
+			if (detail?.detail === 'spaces_refused') {
+				toast.error("your PDS refused private media", 8000);
 				await auth.refresh();
 				return;
 			}
