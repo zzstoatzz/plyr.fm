@@ -10,6 +10,13 @@
 const DB_NAME = 'plyr-record';
 const STORE = 'pending';
 const KEY = 'recording';
+const UPLOAD_KEY = 'upload-files';
+
+/** the audio + cover files of an /upload draft, kept across the consent redirect. */
+export interface StashedUploadFiles {
+	file: File;
+	imageFile: File | null;
+}
 
 export interface StashedRecording {
 	blob: Blob;
@@ -70,5 +77,34 @@ export async function clearStashedRecording(): Promise<void> {
 		await tx('readwrite', (store) => store.delete(KEY));
 	} catch (e) {
 		console.error('could not clear the stashed recording:', e);
+	}
+}
+
+export async function stashUploadFiles(files: StashedUploadFiles): Promise<boolean> {
+	try {
+		await tx('readwrite', (store) => store.put(files, UPLOAD_KEY));
+		return true;
+	} catch (e) {
+		console.error('could not stash the upload files:', e);
+		return false;
+	}
+}
+
+export async function takeUploadFiles(): Promise<StashedUploadFiles | null> {
+	try {
+		const stashed = await tx<StashedUploadFiles | undefined>('readonly', (store) => store.get(UPLOAD_KEY));
+		await clearUploadFiles();
+		return stashed?.file ? stashed : null;
+	} catch (e) {
+		console.error('could not read the stashed upload files:', e);
+		return null;
+	}
+}
+
+export async function clearUploadFiles(): Promise<void> {
+	try {
+		await tx('readwrite', (store) => store.delete(UPLOAD_KEY));
+	} catch (e) {
+		console.error('could not clear the stashed upload files:', e);
 	}
 }

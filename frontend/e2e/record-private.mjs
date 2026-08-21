@@ -35,11 +35,12 @@ let dump = null;
 
 const privateRadio = (page) => page.locator('input[type="radio"][value="private"]');
 
-async function choosePrivateAndSave(page) {
+async function choosePrivateAndSave(page, granted) {
 	await page.locator('#record-title').fill(title);
 	await page.locator('label:has(input[type="radio"][value="private"])').click();
-	const save = page.getByRole('button', { name: 'save privately' });
-	if (!(await save.count())) fail('choosing private did not relabel the button "save privately"');
+	const expected = granted ? 'save privately' : 'approve private media';
+	const save = page.getByRole('button', { name: expected });
+	if (!(await save.count())) fail(`choosing private did not relabel the button "${expected}"`);
 	await save.click();
 }
 
@@ -57,7 +58,10 @@ try {
 	if (before?.permissioned_spaces?.supported !== true) {
 		fail(`spaces PDS not detected as supported: ${JSON.stringify(before?.permissioned_spaces)}`);
 	}
-	step('capability', `supported=true granted=${before.permissioned_spaces.granted}`);
+	if (before.permissioned_spaces.granted !== true) {
+		fail('sign-in on a spaces PDS did not carry the private-media grant');
+	}
+	step('capability', 'supported=true granted=true straight from sign-in');
 
 	await page.goto(`${APP}/record`, { waitUntil: 'networkidle' });
 	step('record', 'three seconds from the fake microphone');
@@ -73,7 +77,7 @@ try {
 	step('preview', mime);
 	if ((await privateRadio(page).count()) !== 1) fail('private option not offered on /record');
 
-	await choosePrivateAndSave(page);
+	await choosePrivateAndSave(page, before.permissioned_spaces.granted);
 
 	if (!before.permissioned_spaces.granted) {
 		step('consent', 'expecting the one-time private-media approval');
@@ -89,9 +93,7 @@ try {
 		await page.locator('#record-title').waitFor({ timeout: 15000 });
 		const restored = await page.locator('#record-title').inputValue();
 		if (restored !== title) fail(`restored title is "${restored}", expected "${title}"`);
-		if (!(await privateRadio(page).isChecked())) fail('visibility fell back from private after consent');
-		step('restored', 'recording, title and private visibility survived the round trip');
-		await page.getByRole('button', { name: 'save privately' }).click();
+		step('restored', 'recording and title survived the round trip; the save resumes by itself');
 	}
 
 	step('uploading', 'waiting for the track to exist');

@@ -215,10 +215,18 @@ Rollout order matters:
    canonical URI;
 5. verify a non-supporting PDS continues to hide the private option.
 
-Publishing must precede deployment because a newly upgraded browser session requests
+Publishing must precede deployment because every browser sign-in requests
 `include:<namespace>.privateMediaAccess`; the PDS must be able to resolve that permission
-set during authorization. Existing sessions without the include will be sent through the
-normal one-time OAuth scope upgrade when they first choose private media.
+set during authorization. The grant is the capability signal, as in Bulletin: a spaces
+PDS expands the include into `space:` grants at consent (`granted: true`), any other PDS
+leaves it unexpanded and private media stays hidden, and an authserver that rejects the
+include at PAR with `invalid_scope` gets the sign-in again without it. `scopes_supported`
+cannot carry this — the reference oauth-provider only ever lists `atproto` and the
+`transition:*` hints ("other atproto scopes can't be enumerated as they are dynamic"), so
+the Bluesky-hosted alpha PDS (`spaces-alpha.host.bsky.network`) advertises nothing; zds is
+the one implementation that adds `space:*`. Sessions signed in before this (no include)
+take the one-time OAuth scope upgrade the first time they choose private; the upload or
+recording is held across that redirect and completes on return without another click.
 
 The smoke script covers space creation, record/blob writes, credential exchange, record
 reads, and ranged blob playback. Unit tests cover URI parsing, current config shape,
