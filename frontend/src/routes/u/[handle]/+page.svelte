@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import { fade } from 'svelte/transition';
 	import { API_URL, getAtprotofansSupportUrl } from '$lib/config';
 	import { browser } from '$app/environment';
@@ -298,6 +299,39 @@ $effect(() => {
 			console.error('failed to load more tracks:', _e);
 		} finally {
 			loadingMoreTracks = false;
+		}
+	}
+
+	/**
+	 * The server render is anonymous, so an owner's private tracks are missing
+	 * from it; once auth settles on the owner, reload the first page with their
+	 * session. Keyed on auth readiness because the layout's initialize() races
+	 * this page's first hydration pass.
+	 */
+	let ownerReloadedFor = $state<string | null>(null);
+	$effect(() => {
+		const did = data.artist?.did;
+		const viewer = auth.user?.did;
+		if (!browser || auth.loading || !did || viewer !== did) return;
+		if (untrack(() => ownerReloadedFor) === did) return;
+		ownerReloadedFor = did;
+		void untrack(() => reloadTracksAsOwner(did));
+	});
+
+	async function reloadTracksAsOwner(did: string) {
+		try {
+			const response = await fetch(`${API_URL}/tracks/?artist_did=${did}&limit=5`, {
+				credentials: 'include'
+			});
+			if (!response.ok) return;
+			const data = await response.json();
+			tracks = data.tracks ?? [];
+			hasMoreTracks = data.has_more ?? false;
+			nextCursor = data.next_cursor ?? null;
+			const likedTracks = await fetchLikedTracks();
+			applyLikedFlags(new Set(likedTracks.map((track) => track.id)));
+		} catch (_e) {
+			console.error('failed to reload tracks as owner:', _e);
 		}
 	}
 

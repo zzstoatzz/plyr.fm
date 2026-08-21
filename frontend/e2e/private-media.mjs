@@ -88,6 +88,29 @@ try {
 	if (!createdTrackId) fail('uploaded track never appeared');
 	step('created', `track ${createdTrackId}`);
 
+	// --- the artist page: listed for the owner, absent for everyone else
+	await page.goto(`${APP}/u/${before.handle}`, { waitUntil: 'networkidle' });
+	await page.getByText(title, { exact: true }).first().waitFor({ timeout: 15000 });
+	const ownerCount = await page.evaluate(
+		async ([api, did]) => (await (await fetch(`${api}/artists/${did}/analytics`, { credentials: 'include' })).json()).total_items,
+		[API, before.did]
+	);
+	step('artist-page', `owner sees "${title}" listed; analytics total_items=${ownerCount}`);
+	const stranger = await (await browser.newContext()).newPage();
+	await stranger.goto(`${APP}/u/${before.handle}`, { waitUntil: 'networkidle' });
+	await stranger.waitForTimeout(2000);
+	const strangerSees = await stranger.getByText(title, { exact: true }).count();
+	const strangerCount = await stranger.evaluate(
+		async ([api, did]) => (await (await fetch(`${api}/artists/${did}/analytics`)).json()).total_items,
+		[API, before.did]
+	);
+	await stranger.context().close();
+	if (strangerSees) fail('a signed-out visitor can see the private track on the artist page');
+	if (strangerCount !== ownerCount - 1) {
+		fail(`analytics leak: stranger total_items=${strangerCount}, owner=${ownerCount}`);
+	}
+	step('artist-page-anon', `hidden from a signed-out visitor; total_items=${strangerCount}`);
+
 	// --- session 2: a fresh sign-in (base scope, no grant) must still play it
 	const freshContext = await browser.newContext({ viewport: { width: 1000, height: 2000 } });
 	const fresh = await freshContext.newPage();
