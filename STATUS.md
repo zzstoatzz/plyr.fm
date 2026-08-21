@@ -47,6 +47,40 @@ plyr.fm should become:
 
 ### August 2026
 
+#### private media is requested at sign-in; the grant is the capability (#1891, August 21 — staging, awaiting prod)
+
+**why**: nate's question — "shouldn't it request that ability on login?" —
+and a fact check against the official alpha. #1885 decided "can this PDS
+do spaces" from `scopes_supported` in the authserver metadata. The
+reference `oauth-provider` never lists dynamic scopes there ("other atproto
+scopes can't be enumerated as they are dynamic"), so the Bluesky-hosted
+alpha PDS (`spaces-alpha.host.bsky.network`, health
+`{"version":"permissioned-data"}`) advertises only `atproto` + `transition:*`
+— and #1885 hid private media from every account on it. zds
+(`pds.zat.dev`, `pi.chadtmiller.com`) is the one implementation that adds
+`space:*`; `pds.cauda.cloud` and `bsky.social` don't.
+
+**what shipped**: Bulletin's pattern. every sign-in requests
+`include:<ns>.privateMediaAccess`; a spaces PDS expands it into `space:`
+grants at consent (`granted: true`), any other PDS leaves it unexpanded, and
+an authserver that rejects it at PAR with `invalid_scope` gets the sign-in
+again without it. this is #1559's design; #1560's objection ("scope granted
+≠ PDS implements spaces") is answered by expansion (#1881). sessions from
+before this still take the one-time upgrade, which now says what it does —
+the button reads "approve private media" — and holds the upload (files in
+IndexedDB) or recording across the redirect and completes on return without
+a second click.
+
+**verification**: loopback-client PAR with the prod include → `201` on the
+alpha PDS, bsky.social and pds.cauda.cloud, each `/authorize` rendering a
+normal sign-in; zds rejects loopback clients, so its evidence is plyr's real
+client doing the same PAR in the e2e. on staging after merge both browser
+flows pass with `granted: true` straight from sign-in and no consent step.
+**not yet verified**: token exchange on a non-spaces official PDS with the
+include present (#1560 saw it complete on a standard PDS), and a real
+sign-in with `nate.spaces-alpha.bsky.network` — both are the staging checks
+before `just release`.
+
 #### private memos from /record never reached consent; browser e2e for private media (#1887–#1889, August 21 — prod frontend)
 
 **why**: #1882's private option on `/record` was dead for every first-time
