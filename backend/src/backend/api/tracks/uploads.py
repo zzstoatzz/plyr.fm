@@ -45,7 +45,7 @@ from backend._internal.atproto.records.fm_plyr.track import build_track_record
 from backend._internal.atproto.self_labels import parse_self_label_values_json
 from backend._internal.atproto.spaces import (
     build_record_uri,
-    detect_permissioned_capability,
+    session_has_private_media_access,
 )
 from backend._internal.atproto.spaces.client import (
     create_space_record,
@@ -1603,24 +1603,12 @@ async def upload_track(
         )
 
     # private media: audio + record live in the artist's ATProto permissioned
-    # space. only available on a PDS that supports com.atproto.space.*, and only
-    # for web-playable sources (the blob is written at publish time; the deferred
-    # transcode path still targets the public repo — see the design note).
+    # space. the token must carry the expanded space grant; absent → the
+    # frontend runs the opt-in scope upgrade and the PDS answers whether it
+    # can. web-playable sources only (the blob is written at publish time; the
+    # deferred transcode path still targets the public repo).
     if is_private:
-        if not await detect_permissioned_capability(auth_session):
-            raise HTTPException(
-                status_code=400,
-                detail="your PDS does not support permissioned spaces (private media)",
-            )
-        # writing to a space needs the granted space scope (the capability probe
-        # passes without it). the granted token carries the expanded
-        # `space:<nsid>?...` scopes, so match on the NSID. absent → tell the
-        # frontend to run the opt-in scope upgrade (which requests include:<nsid>).
-        auth_data = auth_session.oauth_session or {}
-        has_space_access = auth_data.get("auth_type") == "app_password" or (
-            settings.atproto.private_media_space_type in auth_data.get("scope", "")
-        )
-        if not has_space_access:
+        if not session_has_private_media_access(auth_session):
             raise HTTPException(status_code=403, detail="permissioned_scope_required")
         if not audio_format.is_web_playable:
             raise HTTPException(

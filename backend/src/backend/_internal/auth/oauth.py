@@ -31,6 +31,7 @@ from backend._internal.auth.session import (
     get_client_auth_method,
     get_refresh_token_lifetime_days,
 )
+from backend._internal.auth.space_scope import permissioned_scope_requested
 from backend._internal.oauth_stores import PostgresStateStore
 from backend.config import settings
 from backend.models import Artist
@@ -173,9 +174,7 @@ def get_oauth_client_for_scope(scope: str) -> OAuthClient:
     include_indiemusi = scopes.matches(
         "repo", collection=settings.indiemusi.song_collection, action="create"
     )
-    # match on the private-media NSID — present whether the scope is the requested
-    # `include:<nsid>` form or the granted, expanded `space:<nsid>?...` form
-    include_permissioned = settings.atproto.private_media_space_type in scope
+    include_permissioned = permissioned_scope_requested(scope)
     return get_oauth_client(
         include_teal=include_teal,
         include_indiemusi=include_indiemusi,

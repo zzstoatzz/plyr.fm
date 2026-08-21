@@ -87,8 +87,10 @@ export interface User {
 	handle: string;
 	linked_accounts: LinkedAccount[];
 	enabled_flags: string[];
-	// whether the user's PDS supports ATProto permissioned spaces (private media)
-	permissioned_spaces?: { supported: boolean };
+	// private media on ATProto permissioned spaces. `granted` = this session's
+	// token carries the expanded space grant; `supported` = still worth offering
+	// (false once an upgrade on this PDS came back without one).
+	permissioned_spaces?: { supported: boolean; granted?: boolean };
 }
 
 export interface Artist {
