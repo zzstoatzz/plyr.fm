@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend._internal import Session, require_auth
+from backend._internal import Session, get_optional_session, require_auth
 from backend.main import app
 from backend.models import Artist, Track, TrackLike
 
@@ -276,3 +276,76 @@ async def test_get_artist_analytics_with_duration(
     assert data["total_items"] == 3
     # duration should sum only tracks that have it: 180 + 3600 = 3780
     assert data["total_duration_seconds"] == 3780
+
+
+@pytest.fixture
+async def artist_with_private_track(db_session: AsyncSession) -> Artist:
+    """one public track (10 plays) and one private track (99 plays)."""
+    artist = Artist(
+        did="did:plc:spaces", handle="spaces.example", display_name="Spaces"
+    )
+    db_session.add(artist)
+    await db_session.flush()
+    db_session.add(
+        Track(
+            title="public one",
+            artist_did=artist.did,
+            file_id="pub",
+            file_type="mp3",
+            play_count=10,
+            atproto_record_uri="at://did:plc:spaces/fm.plyr.track/pub",
+            atproto_record_cid="cid_pub",
+        )
+    )
+    db_session.add(
+        Track(
+            title="private memo",
+            artist_did=artist.did,
+            file_id="priv",
+            file_type="wav",
+            play_count=99,
+            visibility="private",
+            atproto_record_uri="at://did:plc:spaces/fm.plyr.track/priv",
+            atproto_record_cid="cid_priv",
+        )
+    )
+    await db_session.commit()
+    return artist
+
+
+async def test_analytics_hide_private_tracks_from_everyone_else(
+    artist_with_private_track: Artist,
+):
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await client.get(
+            f"/artists/{artist_with_private_track.did}/analytics"
+        )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["total_items"] == 1
+    assert data["total_plays"] == 10
+    assert data["top_item"]["title"] == "public one"
+
+
+async def test_analytics_count_private_tracks_for_their_owner(
+    artist_with_private_track: Artist,
+):
+    async def owner() -> Session:
+        return MockSession(did=artist_with_private_track.did)
+
+    app.dependency_overrides[get_optional_session] = owner
+    try:
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            response = await client.get(
+                f"/artists/{artist_with_private_track.did}/analytics"
+            )
+    finally:
+        app.dependency_overrides.clear()
+    data = response.json()
+    assert data["total_items"] == 2
+    assert data["total_plays"] == 109
+    assert data["top_item"]["title"] == "private memo"

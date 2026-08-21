@@ -11,12 +11,13 @@ from redis.exceptions import RedisError
 from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend._internal import Session, require_auth
+from backend._internal import Session, get_optional_session, require_auth
 from backend._internal.atproto import (
     fetch_user_avatar,
     normalize_avatar_url,
     upsert_profile_record,
 )
+from backend._internal.track_visibility import track_visible_filter, viewer_did
 from backend.models import Artist, Track, TrackLike, UserPreferences, get_db
 from backend.utilities.aggregations import get_top_artists_by_plays
 from backend.utilities.redis import get_async_redis_client
@@ -326,18 +327,23 @@ async def _get_artist_rank(db: AsyncSession, artist_did: str) -> int | None:
 async def get_artist_analytics(
     artist_did: str,
     db: Annotated[AsyncSession, Depends(get_db)],
+    session: Annotated[Session | None, Depends(get_optional_session)] = None,
 ) -> AnalyticsResponse:
     """get public analytics for any artist by DID.
 
-    returns zeros if artist has no tracks.
+    returns zeros if artist has no tracks. private tracks count only for
+    their owner.
     """
+    visible = track_visible_filter(viewer_did(session))
     # get total plays, item count, and duration in one query
     result = await db.execute(
         select(
             func.sum(Track.play_count),
             func.count(Track.id),
             func.coalesce(func.sum(text("(extra->>'duration')::int")), 0),
-        ).where(Track.artist_did == artist_did)
+        )
+        .where(Track.artist_did == artist_did)
+        .where(visible)
     )
     total_plays, total_items, total_duration = result.one()
     total_plays = total_plays or 0  # handle None when no tracks
@@ -350,6 +356,7 @@ async def get_artist_analytics(
         result = await db.execute(
             select(Track.id, Track.title, Track.play_count)
             .where(Track.artist_did == artist_did)
+            .where(visible)
             .order_by(Track.play_count.desc())
             .limit(1)
         )
@@ -368,6 +375,7 @@ async def get_artist_analytics(
             select(Track.id, Track.title, func.count(TrackLike.id).label("like_count"))
             .join(TrackLike, TrackLike.track_id == Track.id)
             .where(Track.artist_did == artist_did)
+            .where(visible)
             .group_by(Track.id, Track.title)
             .order_by(func.count(TrackLike.id).desc())
             .limit(1)
