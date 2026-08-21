@@ -47,6 +47,8 @@ export default [
 				Image: 'readonly',
 				MutationObserver: 'readonly',
 				requestAnimationFrame: 'readonly',
+				cancelAnimationFrame: 'readonly',
+				indexedDB: 'readonly',
 				performance: 'readonly',
 				// svelte 5 runes
 				$state: 'readonly',
