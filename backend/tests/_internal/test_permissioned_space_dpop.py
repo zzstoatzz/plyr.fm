@@ -53,13 +53,12 @@ async def test_credential_read_renews_on_401_and_never_downgrades_to_bearer(
             httpx.Response(200, json={"records": []}),
         ]
     )
-    mint = AsyncMock(
-        side_effect=lambda *_, **__: space_client.SpaceCredential(
-            token="space-credential",
-            dpop_key=space_client.DPoPManager.generate_keypair(),
-            expires_at=time.monotonic() + 300,
-        )
+    credential = space_client.SpaceCredential(
+        token="space-credential",
+        dpop_key=space_client.DPoPManager.generate_keypair(),
+        expires_at=time.monotonic() + 300,
     )
+    mint = AsyncMock(return_value=credential)
     monkeypatch.setattr(space_client, "get_space_credential", mint)
     monkeypatch.setattr(space_client, "_space_token_request", token_request)
     session = Session(
