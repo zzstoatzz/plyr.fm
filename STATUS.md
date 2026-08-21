@@ -47,7 +47,7 @@ plyr.fm should become:
 
 ### August 2026
 
-#### private media is requested at sign-in; the grant is the capability (#1891, August 21 — staging, awaiting prod)
+#### private media is requested at sign-in; the grant is the capability (#1891, #1893–#1895, August 21 — prod `2026.0821.231527`)
 
 **why**: nate's question — "shouldn't it request that ability on login?" —
 and a fact check against the official alpha. #1885 decided "can this PDS
@@ -76,10 +76,18 @@ alpha PDS, bsky.social and pds.cauda.cloud, each `/authorize` rendering a
 normal sign-in; zds rejects loopback clients, so its evidence is plyr's real
 client doing the same PAR in the e2e. on staging after merge both browser
 flows pass with `granted: true` straight from sign-in and no consent step.
-**not yet verified**: token exchange on a non-spaces official PDS with the
-include present (#1560 saw it complete on a standard PDS), and a real
-sign-in with `nate.spaces-alpha.bsky.network` — both are the staging checks
-before `just release`.
+nate then signed in on staging with `nate.spaces-alpha.bsky.network` — the
+first real session on the official implementation: PAR 201, token, no
+scope-upgrade, and a private upload that created the space and wrote the
+record on the alpha PDS, then streamed back through the credential proxy.
+released to prod as `2026.0821.231527` with #1893 (the owner's private
+tracks were missing from their own artist page — SSR is anonymous — and
+`/artists/{did}/analytics` counted private tracks for every visitor; both
+fixed, the e2e checks the page as owner and as a stranger) and #1895 (the
+private option's copy: "only you can play it. nothing public, nothing in
+feeds." instead of protocol vocabulary). **still unverified**: token
+exchange on a non-spaces official PDS with the include present (#1560 saw
+it complete on a standard PDS).
 
 #### private memos from /record never reached consent; browser e2e for private media (#1887–#1889, August 21 — prod frontend)
 
