@@ -244,13 +244,6 @@ async def _run_permissioned_callback(
     return response.headers["location"]
 
 
-async def _marker(db_session: AsyncSession) -> str | None:
-    db_session.expire_all()
-    artist = await db_session.get(Artist, "did:test:user123")
-    assert artist is not None
-    return artist.spaces_unsupported_pds
-
-
 async def test_permissioned_callback_with_expanded_grant_succeeds(
     test_app: FastAPI,
     db_session: AsyncSession,
@@ -259,10 +252,9 @@ async def test_permissioned_callback_with_expanded_grant_succeeds(
 ):
     location = await _run_permissioned_callback(test_app, _GRANTED_SCOPE, monkeypatch)
     assert location.endswith("/settings?exchange_token=xt&scope_upgraded=true")
-    assert await _marker(db_session) is None
 
 
-async def test_permissioned_callback_with_unexpanded_scope_marks_pds(
+async def test_permissioned_callback_with_unexpanded_scope_reports_refusal(
     test_app: FastAPI,
     db_session: AsyncSession,
     upgrade_artist: Artist,
@@ -271,10 +263,7 @@ async def test_permissioned_callback_with_unexpanded_scope_marks_pds(
     location = await _run_permissioned_callback(
         test_app, _UNEXPANDED_SCOPE, monkeypatch
     )
-    assert location.endswith(
-        "/settings?exchange_token=xt&scope_upgrade_error=incompatible_pds"
-    )
-    assert await _marker(db_session) == "https://test.pds"
+    assert location.endswith("/settings?exchange_token=xt&scope_upgrade_error=refused")
 
 
 async def test_permissioned_callback_invalid_scope_keeps_old_session(
@@ -312,35 +301,14 @@ async def test_permissioned_callback_invalid_scope_keeps_old_session(
             )
     assert response.status_code == 303
     assert response.headers["location"].endswith(
-        "/settings?scope_upgrade_error=incompatible_pds"
+        "/settings?scope_upgrade_error=refused"
     )
-    assert await _marker(db_session) == "https://test.pds"
     delete.assert_not_awaited()
     cb.assert_not_awaited()
     assert await get_pending_scope_upgrade("perm_state") is None
 
 
-async def test_permissioned_upgrade_start_clears_marker(
-    test_app: FastAPI, db_session: AsyncSession, upgrade_artist: Artist
-):
-    upgrade_artist.spaces_unsupported_pds = "https://test.pds"
-    await db_session.commit()
-    with patch(
-        "backend.api.auth.start_oauth_flow_with_scopes", new_callable=AsyncMock
-    ) as mock_oauth:
-        mock_oauth.return_value = ("https://auth.example.com/authorize", "retry_state")
-        async with AsyncClient(
-            transport=ASGITransport(app=test_app), base_url="http://test"
-        ) as client:
-            response = await client.post(
-                "/auth/scope-upgrade/start",
-                json={"include_teal": False, "include_permissioned": True},
-            )
-    assert response.status_code == 200
-    assert await _marker(db_session) is None
-
-
-async def test_permissioned_start_marks_pds_when_par_refuses_the_scope(
+async def test_permissioned_start_surfaces_a_par_refusal(
     test_app: FastAPI, db_session: AsyncSession, upgrade_artist: Artist
 ):
     """a PDS without spaces refuses at PAR, before any consent screen."""
@@ -364,8 +332,7 @@ async def test_permissioned_start_marks_pds_when_par_refuses_the_scope(
             )
 
     assert response.status_code == 400
-    assert response.json()["detail"] == "incompatible_pds"
-    assert await _marker(db_session) == "https://test.pds"
+    assert response.json()["detail"] == "spaces_refused"
 
 
 async def test_non_permissioned_start_failure_is_not_swallowed(
@@ -385,4 +352,39 @@ async def test_non_permissioned_start_failure_is_not_swallowed(
 
     assert response.status_code == 400
     assert "invalid_scope" in response.json()["detail"]
-    assert await _marker(db_session) is None
+
+
+async def test_auth_me_hides_private_media_when_the_authserver_lacks_space_scopes(
+    test_app: FastAPI, db_session: AsyncSession, upgrade_artist: Artist
+):
+    """a PDS that does not advertise space scopes must not be offered private media."""
+    from backend._internal.atproto.spaces import capability as cap
+
+    bsky = {"scopes_supported": ["atproto", "transition:generic", "transition:email"]}
+    zds = {"scopes_supported": ["atproto", "repo:*", "include:*", "space:*"]}
+    assert cap.advertises_spaces(bsky) is False
+    assert cap.advertises_spaces(zds) is True
+
+    with patch(
+        "backend.api.auth.pds_supports_spaces",
+        new_callable=AsyncMock,
+        return_value=False,
+    ):
+        async with AsyncClient(
+            transport=ASGITransport(app=test_app), base_url="http://test"
+        ) as client:
+            response = await client.get("/auth/me")
+    assert response.status_code == 200
+    spaces = response.json()["permissioned_spaces"]
+    assert spaces == {"supported": False, "granted": False}
+
+    with patch(
+        "backend.api.auth.pds_supports_spaces",
+        new_callable=AsyncMock,
+        return_value=True,
+    ):
+        async with AsyncClient(
+            transport=ASGITransport(app=test_app), base_url="http://test"
+        ) as client:
+            response = await client.get("/auth/me")
+    assert response.json()["permissioned_spaces"]["supported"] is True

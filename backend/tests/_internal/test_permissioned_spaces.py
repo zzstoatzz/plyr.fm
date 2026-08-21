@@ -25,7 +25,6 @@ from backend._internal.atproto.spaces.uris import (
 from backend._internal.auth import oauth as oauth_module
 from backend._internal.auth import space_scope
 from backend.config import settings
-from backend.models import Artist
 
 # --- canonical permissioned at:// URI helpers --------------------------------
 
@@ -119,7 +118,7 @@ def test_permissioned_scope_requested_matches_include_or_grant(prod_namespace):
     assert not space_scope.permissioned_scope_requested("atproto space:fm.other.space")
 
 
-def test_session_access_and_unsupported_marker(prod_namespace):
+def test_session_access(prod_namespace):
     session = Session(
         session_id="s", did="did:plc:x", handle="x", oauth_session={"scope": _GRANT}
     )
@@ -132,19 +131,28 @@ def test_session_access_and_unsupported_marker(prod_namespace):
     )
     assert cap.session_has_private_media_access(app_pw)
 
-    here = Session(
-        session_id="s",
-        did="did:plc:x",
-        handle="x",
-        oauth_session={"pds_url": "https://pds.example", "scope": ""},
-    )
-    marked = Artist(did="did:plc:x", handle="x", display_name="x")
-    marked.spaces_unsupported_pds = "https://pds.example"
-    moved = Artist(did="did:plc:x", handle="x", display_name="x")
-    moved.spaces_unsupported_pds = "https://old.example"
-    assert cap.spaces_unsupported_here(marked, here)
-    assert not cap.spaces_unsupported_here(moved, here)
-    assert not cap.spaces_unsupported_here(None, here)
+
+@pytest.mark.parametrize(
+    ("scopes", "expected"),
+    [
+        (["atproto", "repo:*", "include:*", "space:*"], True),
+        (["atproto", "space"], True),
+        (["atproto", "transition:generic", "transition:email"], False),
+        (["atproto", "repo:*", "blob:*/*"], False),
+        # a scope that merely mentions space is not a space scope
+        (["atproto", "rpc:com.atproto.space.listSpaces"], False),
+        (None, False),
+        ("space:*", False),
+    ],
+)
+def test_advertises_spaces_reads_scopes_supported(scopes, expected):
+    metadata = {} if scopes is None else {"scopes_supported": scopes}
+    assert cap.advertises_spaces(metadata) is expected
+
+
+async def test_pds_supports_spaces_without_issuer_is_false():
+    session = Session(session_id="s", did="did:plc:x", handle="x", oauth_session={})
+    assert await cap.pds_supports_spaces(session) is False
 
 
 # --- OAuth scope composition --------------------------------------------------

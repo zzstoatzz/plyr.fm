@@ -133,7 +133,7 @@
 			await recorder.start();
 			uiState = 'recording';
 		} catch (e) {
-			toast.error(e instanceof RecorderError ? e.message : 'could not start recording');
+			toast.error(e instanceof RecorderError ? e.message : "couldn't start recording");
 		}
 	}
 
@@ -184,7 +184,7 @@
 			return await toWav(blob);
 		} catch (e) {
 			console.error('could not convert the recording:', e);
-			toast.error('could not prepare this recording for private storage');
+			toast.error("couldn't prepare your recording — try unlisted");
 			return null;
 		}
 	}
@@ -205,7 +205,7 @@
 			capturedDuration
 		});
 		if (!stashed) {
-			toast.error('could not hold onto your recording — try uploading it as unlisted');
+			toast.error("couldn't save your recording — try unlisted");
 			return false;
 		}
 		try {
@@ -218,23 +218,23 @@
 			if (!res.ok) {
 				const detail = await res.json().catch(() => null);
 				await clearStashedRecording();
-				if (detail?.detail === 'incompatible_pds') {
-					toast.error("your PDS doesn't support private media yet", 8000);
+				if (detail?.detail === 'spaces_refused') {
+					toast.error("your PDS refused private media", 8000);
 					await auth.refresh();
 				} else {
-					toast.error('could not start the approval needed for private media');
+					toast.error("couldn't start approval — try again");
 				}
 				return false;
 			}
 			const data = await res.json();
-			toast.info('one-time approval needed — your recording is saved', 6000);
+			toast.info('approving private media — your recording is saved', 6000);
 			setReturnUrl('/record');
 			if (browser && data.auth_url) window.location.href = data.auth_url;
 			return true;
 		} catch (e) {
 			console.error('scope upgrade failed:', e);
 			await clearStashedRecording();
-			toast.error('could not start the approval needed for private media');
+			toast.error("couldn't start approval — try again");
 			return false;
 		}
 	}
@@ -294,12 +294,11 @@
 		capturedDuration = stashed.capturedDuration;
 		visibility = permissionedGranted ? 'private' : 'unlisted';
 		uiState = 'preview';
-		toast.success(
-			permissionedGranted
-				? 'approved — your recording is ready to upload privately'
-				: 'your recording is here, but private media was not approved',
-			6000
-		);
+		if (permissionedGranted) {
+			toast.success('approved — upload when ready', 6000);
+		} else {
+			toast.error('not approved — your recording is still here', 6000);
+		}
 	}
 
 	onMount(async () => {
