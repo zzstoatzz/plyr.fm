@@ -227,6 +227,19 @@ def private_media_grant_present(scope: str, did: str) -> bool:
     )
 
 
+def private_media_reader_grant_present(scope: str) -> bool:
+    """whether ``scope`` lets this session read private-media spaces of *other*
+    authorities — the grant a member needs to play what an artist shared."""
+    space_type = settings.atproto.private_media_space_type
+    return any(
+        grant.type in ("*", space_type)
+        and grant.authority == "*"
+        and grant.skey in ("*", "self")
+        and "read" in grant.action
+        for grant in space_grants(scope)
+    )
+
+
 def permissioned_scope_requested(scope: str) -> bool:
     """whether a scope string asks for (``include:``) or carries (``space:``) private media."""
     if ScopesSet.from_string(scope).has(settings.atproto.private_media_include_scope):

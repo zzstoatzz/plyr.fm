@@ -215,6 +215,17 @@ Rollout order matters:
    canonical URI;
 5. verify a non-supporting PDS continues to hide the private option.
 
+The permission set `fm.plyr.privateMediaAccess` carries two permissions on the
+`fm.plyr.privateMedia` space type: the owner permission (`authority: self`, all
+actions, `manage`) and, since the access-list work, a reader permission
+(`authority: "*"`, `action: ["read"]`). The reader permission is what lets a
+member's own PDS issue a delegation token for *another* artist's space; zds
+passes `*` through at token issuance, so the expanded grant reads
+`space:fm.plyr.privateMedia?authority=*&skey=self&collection=fm.plyr.track&action=read`.
+`/auth/me` reports it as `permissioned_spaces.reader`. It never makes anyone an
+owner: `private_media_grant_present` still requires the `self`-resolved
+authority plus `manage=create`.
+
 Publishing must precede deployment because every browser sign-in requests
 `include:<namespace>.privateMediaAccess`; the PDS must be able to resolve that permission
 set during authorization. The grant is the capability signal, as in Bulletin: a spaces

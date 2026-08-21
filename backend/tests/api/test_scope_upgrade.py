@@ -376,7 +376,7 @@ async def test_auth_me_hides_private_media_when_the_authserver_lacks_space_scope
             response = await client.get("/auth/me")
     assert response.status_code == 200
     spaces = response.json()["permissioned_spaces"]
-    assert spaces == {"supported": False, "granted": False}
+    assert spaces == {"supported": False, "granted": False, "reader": False}
 
     with patch(
         "backend.api.auth.pds_supports_spaces",

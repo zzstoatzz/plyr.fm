@@ -22,7 +22,10 @@ from atproto_oauth.security import is_safe_url
 from redis.exceptions import RedisError
 
 from backend._internal.auth.session import Session as AuthSession
-from backend._internal.auth.space_scope import private_media_grant_present
+from backend._internal.auth.space_scope import (
+    private_media_grant_present,
+    private_media_reader_grant_present,
+)
 from backend.utilities.redis import get_async_redis_client
 
 logger = logging.getLogger(__name__)
@@ -37,6 +40,14 @@ def session_has_private_media_access(auth_session: AuthSession) -> bool:
     if data.get("auth_type") == "app_password":
         return True
     return private_media_grant_present(data.get("scope", ""), auth_session.did)
+
+
+def session_can_read_shared_private_media(auth_session: AuthSession) -> bool:
+    """whether this session may read private-media spaces artists shared with it."""
+    data = auth_session.oauth_session or {}
+    if data.get("auth_type") == "app_password":
+        return True
+    return private_media_reader_grant_present(data.get("scope", ""))
 
 
 def advertises_spaces(metadata: dict) -> bool:

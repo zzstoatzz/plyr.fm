@@ -5,7 +5,7 @@
     "main": {
       "type": "permission-set",
       "title": "plyr.fm Private Media",
-      "detail": "Create and manage your private-media space and read or update the track records and audio it contains.",
+      "detail": "Create and manage your private-media space, read or update the track records and audio it contains, and play private tracks other artists have shared with you.",
       "permissions": [
         {
           "type": "permission",
@@ -13,9 +13,33 @@
           "spaceType": "fm.plyr.privateMedia",
           "authority": "self",
           "skey": "self",
-          "collection": ["fm.plyr.track"],
-          "action": ["read", "create", "update", "delete"],
-          "manage": ["create", "update", "delete"]
+          "collection": [
+            "fm.plyr.track"
+          ],
+          "action": [
+            "read",
+            "create",
+            "update",
+            "delete"
+          ],
+          "manage": [
+            "create",
+            "update",
+            "delete"
+          ]
+        },
+        {
+          "type": "permission",
+          "resource": "space",
+          "spaceType": "fm.plyr.privateMedia",
+          "authority": "*",
+          "skey": "self",
+          "collection": [
+            "fm.plyr.track"
+          ],
+          "action": [
+            "read"
+          ]
         }
       ]
     }

@@ -42,6 +42,7 @@ from backend._internal import (
 )
 from backend._internal.atproto.spaces import (
     pds_supports_spaces,
+    session_can_read_shared_private_media,
     session_has_private_media_access,
 )
 from backend._internal.auth import get_refresh_token_lifetime_days
@@ -78,10 +79,13 @@ class PermissionedSpacesStatus(BaseModel):
 
     ``granted``: the token carries the expanded space grant. ``supported``:
     offer the option — true unless an upgrade on this PDS came back without it.
+    ``reader``: the token also carries the any-authority read grant, so this
+    session can play private tracks other artists share with it.
     """
 
     supported: bool = False
     granted: bool = False
+    reader: bool = False
 
 
 class CurrentUserResponse(BaseModel):
@@ -552,7 +556,9 @@ async def get_current_user(
         ],
         enabled_flags=current_user_flags,
         permissioned_spaces=PermissionedSpacesStatus(
-            supported=spaces_supported, granted=granted
+            supported=spaces_supported,
+            granted=granted,
+            reader=session_can_read_shared_private_media(session),
         ),
     )
 

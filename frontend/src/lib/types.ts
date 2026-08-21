@@ -90,7 +90,7 @@ export interface User {
 	// private media on ATProto permissioned spaces. `granted` = this session's
 	// token carries the expanded space grant; `supported` = still worth offering
 	// (false once an upgrade on this PDS came back without one).
-	permissioned_spaces?: { supported: boolean; granted?: boolean };
+	permissioned_spaces?: { supported: boolean; granted?: boolean; reader?: boolean };
 }
 
 export interface Artist {
