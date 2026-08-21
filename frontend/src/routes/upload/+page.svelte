@@ -25,6 +25,8 @@
 		clearTrackFormStash,
 		preflightAuth,
 	} from "$lib/upload-form-stash";
+	import { stashUploadFiles, takeUploadFiles } from "$lib/record-stash";
+	import { startPermissionedScopeUpgrade } from "$lib/uploader.svelte";
 
 	const AUDIO_EXTENSIONS = [".mp3", ".wav", ".m4a", ".aiff", ".aif", ".flac"];
 	const AUDIO_MIME_TYPES = [
@@ -79,6 +81,9 @@
 	const permissionedSupported = $derived(
 		auth.user?.permissioned_spaces?.supported ?? false
 	);
+	const permissionedGranted = $derived(
+		auth.user?.permissioned_spaces?.granted ?? false
+	);
 	// copyright rights metadata — orthogonal, rides on public/unlisted tracks.
 	// when enabled, audio is uploaded to private storage and the backend writes
 	// indiemusi song + recording records after the track is published.
@@ -117,10 +122,22 @@
 			sensitiveAudio = stashed.sensitiveAudio ?? false;
 			visibility = (stashed.visibility ?? 'public') as typeof visibility;
 			clearTrackFormStash();
-			toast.info(
-				"your draft was restored — please reattach your audio file",
-				7000,
-			);
+			const files = await takeUploadFiles();
+			if (files) {
+				file = files.file;
+				imageFile = files.imageFile;
+			}
+			if (visibility === "private" && !permissionedGranted) {
+				toast.error("not approved — your draft is still here", 6000);
+			} else if (files && visibility === "private") {
+				toast.success("approved — uploading your track", 4000);
+				await submitUpload();
+			} else if (!files) {
+				toast.info(
+					"your draft was restored — please reattach your audio file",
+					7000,
+				);
+			}
 		}
 
 		await Promise.all([loadMyAlbums(), loadArtistProfile()]);
@@ -175,6 +192,10 @@
 
 	async function handleUpload(e: SubmitEvent) {
 		e.preventDefault();
+		await submitUpload();
+	}
+
+	async function submitUpload() {
 		if (!file) return;
 
 		// private media has no transcode step (audio is stored as-is as a PDS
@@ -258,6 +279,15 @@
 		// terminal error (the scope-upgrade path returns without firing onError).
 		if (uploadVisibility === "private") {
 			stashTrackForm(currentFormStash());
+			if (!permissionedGranted) {
+				if (!(await stashUploadFiles({ file: uploadFile, imageFile: uploadImage }))) {
+					clearTrackFormStash();
+					toast.error("couldn't save your draft — try again");
+					return;
+				}
+				await startPermissionedScopeUpgrade();
+				return;
+			}
 		}
 
 		uploader.upload(
@@ -520,7 +550,7 @@
 				supportUrl={artistProfile?.support_url}
 				showPrivate={permissionedSupported}
 				restrictedToPublic={copyrightEnabled}
-				privateGranted={auth.user?.permissioned_spaces?.granted ?? false}
+				privateGranted={permissionedGranted}
 			/>
 
 			<div class="form-group attestation">
@@ -562,7 +592,11 @@
 						? "please confirm you have distribution rights"
 						: ""}
 			>
-				<span>upload track</span>
+				<span
+					>{visibility === "private" && !permissionedGranted
+						? "approve private media"
+						: "upload track"}</span
+				>
 			</button>
 
 		</form>

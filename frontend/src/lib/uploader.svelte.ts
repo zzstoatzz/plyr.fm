@@ -44,8 +44,8 @@ const MOBILE_LARGE_FILE_THRESHOLD_MB = 50;
  * (private media) scope, then redirect to the authorization URL. After the user
  * returns, they retry the upload with the scope granted.
  */
-async function startPermissionedScopeUpgrade(): Promise<void> {
-	toast.info('one-time approval needed to store private media on your PDS...', 6000);
+export async function startPermissionedScopeUpgrade(): Promise<void> {
+	toast.info('approving private media — your draft is saved', 6000);
 	try {
 		const res = await fetch(`${API_URL}/auth/scope-upgrade/start`, {
 			method: 'POST',

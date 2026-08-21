@@ -291,14 +291,15 @@
 		previewUrl = URL.createObjectURL(stashed.blob);
 		title = stashed.title;
 		tags = stashed.tags;
-		if (stashed.visibility === 'private') visibility = 'private';
 		capturedDuration = stashed.capturedDuration;
 		uiState = 'preview';
-		if (permissionedGranted) {
-			toast.success('approved — upload when ready', 6000);
-		} else {
-			toast.error("private media wasn't approved", 6000);
+		if (!permissionedGranted) {
+			toast.error("not approved — your recording is still here", 6000);
+			return;
 		}
+		visibility = 'private';
+		toast.success('approved — saving your recording', 4000);
+		await handleUpload();
 	}
 
 	onMount(async () => {
@@ -469,7 +470,11 @@
 						<polyline points="17 8 12 3 7 8" />
 						<line x1="12" y1="3" x2="12" y2="15" />
 					</svg>
-					{visibility === 'private' ? 'save privately' : 'publish'}
+					{visibility !== 'private'
+						? 'publish'
+						: permissionedGranted
+							? 'save privately'
+							: 'approve private media'}
 				</button>
 			</div>
 		</div>

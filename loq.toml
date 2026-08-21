@@ -175,7 +175,7 @@ max_lines = 1299
 
 [[rules]]
 path = "frontend/src/routes/upload/+page.svelte"
-max_lines = 893
+max_lines = 927
 
 [[rules]]
 path = "services/moderation/src/admin.rs"
@@ -243,7 +243,7 @@ max_lines = 600
 
 [[rules]]
 path = "frontend/src/routes/record/+page.svelte"
-max_lines = 794
+max_lines = 798
 
 [[rules]]
 path = "backend/src/backend/api/albums/mutations.py"
@@ -287,7 +287,7 @@ max_lines = 921
 
 [[rules]]
 path = "backend/src/backend/_internal/auth/oauth.py"
-max_lines = 642
+max_lines = 657
 
 [[rules]]
 path = "frontend/src/lib/components/CopyrightSection.svelte"
@@ -355,7 +355,7 @@ max_lines = 689
 
 [[rules]]
 path = "backend/tests/_internal/test_permissioned_spaces.py"
-max_lines = 664
+max_lines = 712
 
 [[rules]]
 path = "frontend/src/routes/u/[[]handle[]]/+page.svelte"

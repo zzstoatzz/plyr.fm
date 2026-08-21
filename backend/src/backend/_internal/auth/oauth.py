@@ -270,10 +270,15 @@ async def start_oauth_flow(
     """start OAuth flow and return (auth_url, state).
 
     uses extended scope if user has enabled teal.fm scrobbling or has opted
-    into a copyright paradigm.
+    into a copyright paradigm. the private-media permission set is always
+    requested: a spaces PDS expands it into ``space:`` grants at consent, any
+    other PDS leaves it unexpanded, and an authserver that rejects it at PAR
+    gets the request again without it.
     """
     from backend._internal.atproto.handles import resolve_handle
 
+    wants_teal = False
+    wants_indiemusi = False
     try:
         # resolve handle to DID to check preferences
         resolved = await resolve_handle(handle)
@@ -281,21 +286,32 @@ async def start_oauth_flow(
             did = resolved["did"]
             wants_teal = await _check_teal_preference(did)
             wants_indiemusi = await _check_copyright_paradigm(did)
-            client = get_oauth_client(
-                include_teal=wants_teal, include_indiemusi=wants_indiemusi
-            )
             logger.info(
                 f"starting OAuth for {handle} (did={did}, "
                 f"teal={wants_teal}, indiemusi={wants_indiemusi})"
             )
         else:
-            # fallback to base client if resolution fails
-            # (OAuth flow will resolve handle again internally)
-            client = get_oauth_client()
+            # OAuth flow will resolve handle again internally
             logger.info(f"starting OAuth for {handle} (resolution failed, using base)")
 
-        auth_url, state = await _start_authorization_with_retry(client, handle, prompt)
-        return auth_url, state
+        client = get_oauth_client(
+            include_teal=wants_teal,
+            include_indiemusi=wants_indiemusi,
+            include_permissioned=True,
+        )
+        try:
+            return await _start_authorization_with_retry(client, handle, prompt)
+        except Exception as exc:
+            if "invalid_scope" not in str(exc):
+                raise
+            logger.info(
+                f"authserver for {handle} rejected the private-media permission "
+                "set; signing in without it"
+            )
+        client = get_oauth_client(
+            include_teal=wants_teal, include_indiemusi=wants_indiemusi
+        )
+        return await _start_authorization_with_retry(client, handle, prompt)
     except HTTPException:
         raise
     except Exception as e:

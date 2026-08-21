@@ -47,7 +47,10 @@ try {
 	if (before?.permissioned_spaces?.supported !== true) {
 		fail(`spaces PDS not detected as supported: ${JSON.stringify(before?.permissioned_spaces)}`);
 	}
-	step('capability', `supported=true granted=${before.permissioned_spaces.granted}`);
+	if (before.permissioned_spaces.granted !== true) {
+		fail('sign-in on a spaces PDS did not carry the private-media grant');
+	}
+	step('capability', 'supported=true granted=true straight from sign-in');
 
 	await page.goto(`${APP}/upload`, { waitUntil: 'networkidle' });
 	await page.waitForTimeout(1500);
@@ -77,12 +80,7 @@ try {
 		if (after?.permissioned_spaces?.granted !== true) {
 			fail(`grant absent after consent: ${JSON.stringify(after?.permissioned_spaces)}`);
 		}
-		step('granted', 'token carries the space grant');
-		if (!page.url().includes('/upload')) await page.goto(`${APP}/upload`, { waitUntil: 'networkidle' });
-		await page.waitForTimeout(2000);
-		// the stash restores text + visibility; the file must be re-attached
-		await fillForm();
-		await page.locator('button[type="submit"]').last().click();
+		step('granted', 'token carries the space grant; the upload resumes by itself');
 	}
 
 	step('uploading', 'waiting for the track to exist');

@@ -155,6 +155,73 @@ async def test_pds_supports_spaces_without_issuer_is_false():
     assert await cap.pds_supports_spaces(session) is False
 
 
+def _login_harness(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, bool]]:
+    from backend._internal.atproto import handles
+
+    monkeypatch.setattr(
+        handles, "resolve_handle", AsyncMock(return_value={"did": "did:plc:x"})
+    )
+    monkeypatch.setattr(
+        oauth_module, "_check_teal_preference", AsyncMock(return_value=False)
+    )
+    monkeypatch.setattr(
+        oauth_module, "_check_copyright_paradigm", AsyncMock(return_value=False)
+    )
+    clients: list[dict[str, bool]] = []
+
+    def fake_client(**kwargs):
+        clients.append(kwargs)
+        return SimpleNamespace(scope=str(kwargs))
+
+    monkeypatch.setattr(oauth_module, "get_oauth_client", fake_client)
+    return clients
+
+
+async def test_login_always_requests_the_private_media_permission_set(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    clients = _login_harness(monkeypatch)
+    start = AsyncMock(return_value=("https://auth.example/authorize", "state"))
+    monkeypatch.setattr(oauth_module, "_start_authorization_with_retry", start)
+
+    assert await oauth_module.start_oauth_flow("someone.example") == (
+        "https://auth.example/authorize",
+        "state",
+    )
+    assert [c["include_permissioned"] for c in clients] == [True]
+    start.assert_awaited_once()
+
+
+async def test_login_retries_without_the_permission_set_when_par_rejects_it(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    clients = _login_harness(monkeypatch)
+    start = AsyncMock(
+        side_effect=[
+            RuntimeError('PAR failed: 400 {"error":"invalid_scope"}'),
+            ("https://auth.example/authorize", "state"),
+        ]
+    )
+    monkeypatch.setattr(oauth_module, "_start_authorization_with_retry", start)
+
+    assert await oauth_module.start_oauth_flow("someone.example") == (
+        "https://auth.example/authorize",
+        "state",
+    )
+    assert [c.get("include_permissioned", False) for c in clients] == [True, False]
+
+
+async def test_login_surfaces_other_par_failures(monkeypatch: pytest.MonkeyPatch):
+    _login_harness(monkeypatch)
+    monkeypatch.setattr(
+        oauth_module,
+        "_start_authorization_with_retry",
+        AsyncMock(side_effect=RuntimeError("PAR failed: 500 boom")),
+    )
+    with pytest.raises(Exception, match="boom"):
+        await oauth_module.start_oauth_flow("someone.example")
+
+
 # --- OAuth scope composition --------------------------------------------------
 
 
