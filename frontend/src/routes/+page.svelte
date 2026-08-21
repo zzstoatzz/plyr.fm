@@ -128,6 +128,7 @@
 				scope_mismatch:
 					'sign-in failed — your PDS did not grant the permissions plyr.fm needs. it may not support permission sets yet.',
 				expired: 'sign-in expired — please try again.',
+				access_denied: 'sign-in cancelled.',
 				failed: 'sign-in failed — please try again.'
 			};
 			toast.error(messages[authError] ?? messages.failed, authError === 'scope_mismatch' ? 8000 : 5000);

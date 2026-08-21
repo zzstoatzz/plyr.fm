@@ -41,8 +41,6 @@ from backend._internal import (
     switch_active_account,
 )
 from backend._internal.atproto.spaces import (
-    permissioned_scope_requested,
-    private_media_grant_present,
     session_has_private_media_access,
     set_spaces_unsupported,
     spaces_unsupported_here,
@@ -52,6 +50,10 @@ from backend._internal.auth.app_password import (
     AppPasswordAuthError,
     create_app_password_session,
     resolve_pds,
+)
+from backend._internal.auth.space_scope import (
+    permissioned_scope_requested,
+    private_media_grant_present,
 )
 from backend._internal.copyright import complete_indiemusi_setup
 from backend._internal.tasks import schedule_atproto_sync
@@ -781,9 +783,7 @@ async def start_scope_upgrade_flow(
             include_permissioned=include_permissioned,
         )
     except HTTPException as exc:
-        # a PDS without spaces refuses the permission set at PAR, before the
-        # user ever sees a consent screen — the same answer the callback path
-        # handles, arriving earlier.
+        # a PDS without spaces refuses at PAR, before any consent screen
         if not (body.include_permissioned and "invalid_scope" in str(exc.detail)):
             raise
         pds_url = (session.oauth_session or {}).get("pds_url")

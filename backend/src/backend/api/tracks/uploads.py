@@ -1602,11 +1602,8 @@ async def upload_track(
             f"supported: {AudioFormat.supported_extensions_str()}",
         )
 
-    # private media: audio + record live in the artist's ATProto permissioned
-    # space. the token must carry the expanded space grant; absent → the
-    # frontend runs the opt-in scope upgrade and the PDS answers whether it
-    # can. web-playable sources only (the blob is written at publish time; the
-    # deferred transcode path still targets the public repo).
+    # web-playable only: the blob is written at publish time, and the deferred
+    # transcode path still targets the public repo.
     if is_private:
         if not session_has_private_media_access(auth_session):
             raise HTTPException(status_code=403, detail="permissioned_scope_required")

@@ -23,6 +23,7 @@ from backend._internal.atproto.spaces.uris import (
     parse_space_uri,
 )
 from backend._internal.auth import oauth as oauth_module
+from backend._internal.auth import space_scope
 from backend.config import settings
 from backend.models import Artist
 
@@ -91,29 +92,31 @@ def prod_namespace(monkeypatch):
 
 
 def test_grant_present_requires_manage_and_collection_write(prod_namespace):
-    assert cap.private_media_grant_present(f"atproto blob:*/* {_GRANT}", "did:plc:x")
+    assert space_scope.private_media_grant_present(
+        f"atproto blob:*/* {_GRANT}", "did:plc:x"
+    )
     # the include: came back unexpanded — a PDS without spaces
-    assert not cap.private_media_grant_present(
+    assert not space_scope.private_media_grant_present(
         "atproto blob:*/* include:fm.plyr.privateMediaAccess", "did:plc:x"
     )
     # granted to someone else's authority
-    assert not cap.private_media_grant_present(_GRANT, "did:plc:other")
+    assert not space_scope.private_media_grant_present(_GRANT, "did:plc:other")
     # record writes without manage=create cannot create the space
     no_manage = _GRANT.split("&manage=")[0]
-    assert not cap.private_media_grant_present(no_manage, "did:plc:x")
+    assert not space_scope.private_media_grant_present(no_manage, "did:plc:x")
     # the pre-alpha `did=*` shape is not a grant
-    assert not cap.private_media_grant_present(
+    assert not space_scope.private_media_grant_present(
         "space:fm.plyr.privateMedia?action=create&did=*&skey=self", "did:plc:x"
     )
 
 
 def test_permissioned_scope_requested_matches_include_or_grant(prod_namespace):
-    assert cap.permissioned_scope_requested(
+    assert space_scope.permissioned_scope_requested(
         "atproto include:fm.plyr.privateMediaAccess"
     )
-    assert cap.permissioned_scope_requested(_GRANT)
-    assert not cap.permissioned_scope_requested("atproto repo:fm.plyr.track")
-    assert not cap.permissioned_scope_requested("atproto space:fm.other.space")
+    assert space_scope.permissioned_scope_requested(_GRANT)
+    assert not space_scope.permissioned_scope_requested("atproto repo:fm.plyr.track")
+    assert not space_scope.permissioned_scope_requested("atproto space:fm.other.space")
 
 
 def test_session_access_and_unsupported_marker(prod_namespace):

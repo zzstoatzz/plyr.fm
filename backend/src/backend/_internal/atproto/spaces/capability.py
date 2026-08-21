@@ -12,20 +12,9 @@ the option is not offered again until the user retries explicitly.
 from sqlalchemy import select
 
 from backend._internal.auth.session import Session as AuthSession
-from backend._internal.auth.space_scope import (
-    permissioned_scope_requested,
-    private_media_grant_present,
-)
+from backend._internal.auth.space_scope import private_media_grant_present
 from backend.models import Artist
 from backend.utilities.database import db_session
-
-__all__ = [
-    "permissioned_scope_requested",
-    "private_media_grant_present",
-    "session_has_private_media_access",
-    "set_spaces_unsupported",
-    "spaces_unsupported_here",
-]
 
 
 def session_has_private_media_access(auth_session: AuthSession) -> bool:
