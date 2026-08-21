@@ -354,11 +354,6 @@
 				</button>
 			</div>
 			<p class="hint">tap the mic to start</p>
-			{#if permissionedSupported}
-				<p class="capability-note">
-					your PDS supports private media — you can keep a recording to yourself
-				</p>
-			{/if}
 		</div>
 	{:else if uiState === 'recording'}
 		<div class="stage">
@@ -612,13 +607,6 @@
 		color: var(--text-muted);
 	}
 
-	.capability-note {
-		margin: 0;
-		font-size: var(--text-xs);
-		color: var(--text-tertiary);
-		text-align: center;
-		max-width: 34ch;
-	}
 
 	.preview-card {
 		background: color-mix(in srgb, var(--track-bg, var(--bg-primary)) 70%, transparent);
