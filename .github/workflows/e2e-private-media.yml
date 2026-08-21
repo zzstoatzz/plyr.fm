@@ -1,0 +1,60 @@
+name: e2e private media
+
+# drives the real private-upload flow in a browser against staging: OAuth
+# sign-in with the zat test account, the one-time private-media consent, a
+# private upload into the permissioned space, and playback from a fresh
+# session. this is the test that would have caught the capability and consent
+# regressions unit suites are structurally blind to (the app-password bypass).
+#
+# runs after a merge lands; staging deploys are racing us, so a run exercises
+# whatever staging serves at that moment — re-runnable via workflow_dispatch.
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "backend/src/**"
+      - "frontend/src/**"
+      - ".github/workflows/e2e-private-media.yml"
+      - "frontend/e2e/**"
+  workflow_dispatch:
+
+concurrency:
+  group: e2e-private-media
+  cancel-in-progress: false
+
+jobs:
+  e2e:
+    name: private upload end to end
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+
+      - name: install frontend deps
+        working-directory: frontend
+        run: bun install --frozen-lockfile
+
+      - name: install chromium
+        working-directory: frontend
+        run: bunx playwright install --with-deps chromium
+
+      - name: wait for staging to serve the merged backend
+        run: |
+          for i in $(seq 1 30); do
+            status=$(curl -s -o /dev/null -w "%{http_code}" -m 10 https://api-stg.plyr.fm/health || true)
+            if [ "$status" = "200" ]; then exit 0; fi
+            sleep 10
+          done
+          echo "staging never became healthy" >&2
+          exit 1
+
+      - name: run the flow
+        working-directory: frontend
+        env:
+          ZAT_TEST_HANDLE: ${{ secrets.ZAT_TEST_HANDLE }}
+          ZAT_TEST_PASSWORD: ${{ secrets.ZAT_TEST_PASSWORD }}
+        run: node e2e/private-media.mjs
