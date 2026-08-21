@@ -58,3 +58,11 @@ jobs:
           ZAT_TEST_HANDLE: ${{ secrets.ZAT_TEST_HANDLE }}
           ZAT_TEST_PASSWORD: ${{ secrets.ZAT_TEST_PASSWORD }}
         run: node e2e/private-media.mjs
+
+      - name: keep screenshots from a failed run
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-private-media
+          path: frontend/e2e-artifacts
+          if-no-files-found: ignore
