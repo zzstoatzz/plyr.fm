@@ -85,10 +85,13 @@ grants `authority: "*"`. plyr needs a reader permission:
 ```
 
 alongside the existing owner permission (`authority: "self"`, full actions +
-`manage`). Publish under the existing NSID (a revised set) or a second set;
-either way every session must re-consent to pick it up, which is the
-scope-upgrade path this week made honest. Confirm with the zds side that a
-`*` authority expands the way Bulletin relies on.
+`manage`), revised **in place** under the existing NSID (PR #1898). Every
+session re-consents to pick it up — the scope-upgrade path this week made
+honest. Verified in zds source: `writeResolvedScope` substitutes the user DID
+for `self` and passes `*` through, so the token carries
+`space:fm.plyr.privateMedia?authority=*&skey=self&collection=fm.plyr.track&action=read`;
+`getDelegationToken` requires a grant covering the *target* authority and signs
+with the requester's own key without checking the authority is local.
 
 ### 2. the reader credential path (already mostly right)
 
@@ -135,8 +138,28 @@ plyr's cache can only ever *over-show metadata*, never *over-serve bytes*.
 - **Surfaces that short-circuit on `support_gate is not None`** (radio corpus,
   PDS-save eligibility, subsonic direct URLs) are untouched: private tracks are
   already excluded by `is_private`, and members do not change that.
-- **Revocation is instant at the PDS and eventual in plyr's cache**; the cache
-  never gates bytes, so that asymmetry is safe.
+- **Revocation is eventual, and the protocol says so.** `removeMember` only
+  stops *future* mints; a space credential lives 2 hours, is verifiable
+  offline against the authority's key, and has no revocation list (proposal
+  §Space credential; zds `permissioned_data.zig` `exp = iat + 7200`). plyr's
+  own credential cache (50 min, keyed `(reader did, space)`) must be dropped
+  on `removeMember` so plyr never outlives the PDS's answer by more than the
+  credential it already holds. Tell the artist plainly: "they can keep
+  listening for up to two hours."
+- **The authority is implicitly a member** and cannot be removed (zds
+  `spacePolicyAllowsRequester` short-circuits on the authority;
+  `removeSimpleSpaceMember` refuses it). The portal list is everyone *else*.
+- **`listMembers` is owner-only on zds** (authority + `manage=update`, stricter
+  than the proposal's `read_self`), paged at most 100 per call. plyr's mirror
+  is reconciled with the artist's session only.
+- **There is no discovery primitive.** Being on a member list does not make the
+  space appear in the member's `listSpaces`, and the protocol never enumerates
+  readers. plyr must tell members what was shared with them at the app layer
+  (a "shared with you" surface), never by publishing a public pointer record —
+  that is the existence leak the doodl notes warn about.
+- **`appAccess` stays `open`.** `allowList` refuses every request without an
+  attested `client_id`, which is every public browser client — members
+  included.
 
 ## how this reconciles with attested.network / ATM (#1871)
 
