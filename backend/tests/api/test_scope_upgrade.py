@@ -4,7 +4,7 @@ from collections.abc import Generator
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -337,4 +337,52 @@ async def test_permissioned_upgrade_start_clears_marker(
                 json={"include_teal": False, "include_permissioned": True},
             )
     assert response.status_code == 200
+    assert await _marker(db_session) is None
+
+
+async def test_permissioned_start_marks_pds_when_par_refuses_the_scope(
+    test_app: FastAPI, db_session: AsyncSession, upgrade_artist: Artist
+):
+    """a PDS without spaces refuses at PAR, before any consent screen."""
+    with patch(
+        "backend.api.auth.start_oauth_flow_with_scopes",
+        new_callable=AsyncMock,
+        side_effect=HTTPException(
+            status_code=400,
+            detail=(
+                "failed to start OAuth flow: invalid_scope: Permissioned data "
+                "(spaces) is not enabled on this server"
+            ),
+        ),
+    ):
+        async with AsyncClient(
+            transport=ASGITransport(app=test_app), base_url="http://test"
+        ) as client:
+            response = await client.post(
+                "/auth/scope-upgrade/start",
+                json={"include_teal": False, "include_permissioned": True},
+            )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "incompatible_pds"
+    assert await _marker(db_session) == "https://test.pds"
+
+
+async def test_non_permissioned_start_failure_is_not_swallowed(
+    test_app: FastAPI, db_session: AsyncSession, upgrade_artist: Artist
+):
+    with patch(
+        "backend.api.auth.start_oauth_flow_with_scopes",
+        new_callable=AsyncMock,
+        side_effect=HTTPException(status_code=400, detail="invalid_scope: teal"),
+    ):
+        async with AsyncClient(
+            transport=ASGITransport(app=test_app), base_url="http://test"
+        ) as client:
+            response = await client.post(
+                "/auth/scope-upgrade/start", json={"include_teal": True}
+            )
+
+    assert response.status_code == 400
+    assert "invalid_scope" in response.json()["detail"]
     assert await _marker(db_session) is None

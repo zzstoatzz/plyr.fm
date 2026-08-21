@@ -773,12 +773,23 @@ async def start_scope_upgrade_flow(
     if body.include_permissioned:
         await set_spaces_unsupported(session.did, None)
 
-    auth_url, state = await start_oauth_flow_with_scopes(
-        session.handle,
-        include_teal=include_teal,
-        include_indiemusi=include_indiemusi,
-        include_permissioned=include_permissioned,
-    )
+    try:
+        auth_url, state = await start_oauth_flow_with_scopes(
+            session.handle,
+            include_teal=include_teal,
+            include_indiemusi=include_indiemusi,
+            include_permissioned=include_permissioned,
+        )
+    except HTTPException as exc:
+        # a PDS without spaces refuses the permission set at PAR, before the
+        # user ever sees a consent screen — the same answer the callback path
+        # handles, arriving earlier.
+        if not (body.include_permissioned and "invalid_scope" in str(exc.detail)):
+            raise
+        pds_url = (session.oauth_session or {}).get("pds_url")
+        await set_spaces_unsupported(session.did, pds_url)
+        logger.info("PDS %s refused the private-media permission set", pds_url)
+        raise HTTPException(status_code=400, detail="incompatible_pds") from exc
 
     # build the requested scopes string for logging/tracking
     requested_scopes = (

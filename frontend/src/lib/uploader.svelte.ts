@@ -1,5 +1,6 @@
 import { browser } from '$app/environment';
 import { goto } from '$app/navigation';
+import { auth } from './auth.svelte';
 import { API_URL } from './config';
 import { toast } from './toast.svelte';
 import { tracksCache } from './tracks.svelte';
@@ -54,7 +55,17 @@ async function startPermissionedScopeUpgrade(): Promise<void> {
 			// current session and only ADDS permissioned (doesn't force teal on).
 			body: JSON.stringify({ include_teal: false, include_permissioned: true })
 		});
-		if (!res.ok) throw new Error(`scope upgrade failed (${res.status})`);
+		if (!res.ok) {
+			// the PDS refused the permission set at PAR — it doesn't do spaces.
+			// the backend has recorded that, so refreshing auth stops offering it.
+			const detail = await res.json().catch(() => null);
+			if (detail?.detail === 'incompatible_pds') {
+				toast.error("your PDS doesn't support private media yet", 8000);
+				await auth.refresh();
+				return;
+			}
+			throw new Error(`scope upgrade failed (${res.status})`);
+		}
 		const data = await res.json();
 		// preserve intent across the consent redirect via the same plyr_return_to
 		// cookie jams/login use — the scope-upgrade lands on /settings, which

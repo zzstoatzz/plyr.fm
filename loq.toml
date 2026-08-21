@@ -27,7 +27,7 @@ max_lines = 904
 
 [[rules]]
 path = "backend/src/backend/api/auth.py"
-max_lines = 970
+max_lines = 981
 
 [[rules]]
 path = "backend/src/backend/api/tracks/listing.py"
@@ -335,7 +335,7 @@ max_lines = 1424
 
 [[rules]]
 path = "frontend/src/lib/uploader.svelte.ts"
-max_lines = 509
+max_lines = 520
 
 [[rules]]
 path = "frontend/src/routes/track/[[]id[]]/+page.svelte"
