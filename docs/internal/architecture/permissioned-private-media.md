@@ -233,9 +233,9 @@ PDS expands the include into `space:` grants at consent (`granted: true`), any o
 leaves it unexpanded and private media stays hidden, and an authserver that rejects the
 include at PAR with `invalid_scope` gets the sign-in again without it. `scopes_supported`
 cannot carry this — the reference oauth-provider only ever lists `atproto` and the
-`transition:*` hints ("other atproto scopes can't be enumerated as they are dynamic"), so
-the Bluesky-hosted alpha PDS (`spaces-alpha.host.bsky.network`) advertises nothing; zds is
-the one implementation that adds `space:*`. Sessions signed in before this (no include)
+`transition:*` hints ("other atproto scopes can't be enumerated as they are dynamic"), and
+every implementation now matches it (zds briefly listed granular scopes and removed them
+to match the reference). `/auth/me.supported` therefore equals `granted`. Sessions signed in before this (no include)
 take the one-time OAuth scope upgrade the first time they choose private; the upload or
 recording is held across that redirect and completes on return without another click.
 

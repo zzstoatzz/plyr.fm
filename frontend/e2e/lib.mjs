@@ -6,6 +6,8 @@ export const APP = process.env.PLYR_APP_URL ?? 'https://stg.plyr.fm';
 export const API = process.env.PLYR_API_URL ?? 'https://api-stg.plyr.fm';
 export const HANDLE = required('ZAT_TEST_HANDLE');
 export const PASSWORD = required('ZAT_TEST_PASSWORD');
+export const MEMBER_HANDLE = process.env.ALPHA_TEST_HANDLE?.trim() || null;
+export const MEMBER_PASSWORD = process.env.ALPHA_TEST_PASSWORD?.trim() || null;
 
 function required(name) {
 	const value = process.env[name]?.trim();
@@ -85,24 +87,24 @@ export function wavBuffer() {
 }
 
 /** the zds consent page: expand the password form and authorize. */
-export async function authorizeOnPds(page) {
+export async function authorizeOnPds(page, who = HANDLE, secret = PASSWORD) {
 	await page.waitForTimeout(800);
 	const usePassword = page.getByText('use password instead');
 	if (await usePassword.count()) await usePassword.click().catch(() => undefined);
-	await page.locator('input[name="username"]').fill(HANDLE);
-	await page.locator('input[name="password"]').fill(PASSWORD);
+	await page.locator('input[name="username"]').fill(who);
+	await page.locator('input[name="password"]').fill(secret);
 	await page.getByRole('button', { name: 'authorize' }).click();
 	await page.waitForURL((u) => u.href.startsWith(APP), { timeout: 30000 });
 }
 
-export async function signIn(page) {
+export async function signIn(page, who = HANDLE, secret = PASSWORD) {
 	await page.goto(`${APP}/login`, { waitUntil: 'networkidle' });
 	const handle = page.getByPlaceholder('you.example.com');
 	await handle.waitFor({ timeout: 15000 });
-	await handle.fill(HANDLE);
+	await handle.fill(who);
 	await handle.press('Enter');
 	await page.waitForURL(/oauth\/authorize/, { timeout: 30000 });
-	await authorizeOnPds(page);
+	await authorizeOnPds(page, who, secret);
 	await page.waitForTimeout(2500);
 	const terms = page.locator('.terms-overlay');
 	if (await terms.count()) {

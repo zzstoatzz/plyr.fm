@@ -205,7 +205,7 @@ async def get_recommended_tags(
     track = result.scalar_one_or_none()
     if not track:
         raise HTTPException(status_code=404, detail="track not found")
-    ensure_track_visible(track, viewer_did(session))
+    await ensure_track_visible(db, track, viewer_did(session))
 
     # check for stored predictions (invalidate if audio file changed)
     extra = track.extra or {}

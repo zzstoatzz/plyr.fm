@@ -87,7 +87,7 @@ async def create_share_link(
     track = await db.scalar(select(Track).where(Track.id == track_id))
     if not track:
         raise HTTPException(status_code=404, detail="track not found")
-    ensure_track_visible(track, auth_session.did)  # non-owner → 404
+    await ensure_track_visible(db, track, auth_session.did)  # non-owner → 404
     if track.is_private:
         raise HTTPException(status_code=409, detail="private tracks can't be shared")
 
