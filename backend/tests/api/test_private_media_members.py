@@ -198,3 +198,13 @@ async def test_members_require_auth():
         transport=ASGITransport(app=app), base_url="http://test"
     ) as c:
         assert (await c.get("/artists/me/private-media/members")).status_code == 401
+
+
+async def test_remove_rejects_self(db_session: AsyncSession, artist: Artist, as_owner):
+    with patch("backend.api.artists.remove_space_member", AsyncMock()) as remove:
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as c:
+            r = await c.delete(f"/artists/me/private-media/members/{_ARTIST}")
+    assert r.status_code == 400
+    remove.assert_not_awaited()

@@ -544,7 +544,7 @@ async def test_mint_credential_maps_zds_access_refusal(
         AsyncMock(
             return_value=httpx.Response(
                 403,
-                json={"error": "NotPermitted", "message": "requester denied"},
+                json={"error": "UserNotAuthorized", "message": "requester denied"},
             )
         ),
     )
@@ -566,6 +566,89 @@ async def test_mint_credential_maps_zds_access_refusal(
     with pytest.raises(space_client.SpaceAccessError, match="authority refused"):
         await space_client._mint_credential(
             session, "at://did:plc:x/space/fm.plyr.privateMedia/self"
+        )
+
+
+@pytest.mark.parametrize(
+    ("status", "error"),
+    [
+        (400, "SpaceNotFound"),
+        (401, "InvalidDelegationToken"),
+        (403, "WhateverThisHostSays"),
+    ],
+)
+async def test_mint_credential_maps_lexicon_refusals_and_any_403(
+    monkeypatch: pytest.MonkeyPatch, status: int, error: str
+) -> None:
+    monkeypatch.setattr(
+        space_client, "make_pds_request", AsyncMock(return_value={"token": "d"})
+    )
+    monkeypatch.setattr(
+        space_client,
+        "_space_token_request",
+        AsyncMock(return_value=httpx.Response(status, json={"error": error})),
+    )
+    monkeypatch.setattr(
+        space_client, "_space_host_url", AsyncMock(return_value="https://host.test")
+    )
+    monkeypatch.setattr(
+        space_client, "create_space_client_attestation", lambda _audience: None
+    )
+    session = Session(
+        session_id="s",
+        did="did:plc:x",
+        handle="x.test",
+        oauth_session={"pds_url": "https://p"},
+    )
+    with pytest.raises(space_client.SpaceAccessError):
+        await space_client._mint_credential(
+            session, "at://did:plc:owner/space/fm.plyr.privateMedia/self"
+        )
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        'PDS request failed: 404 {"error":"MethodNotImplemented"}',
+        'PDS request failed: 403 {"error":"InsufficientScope"}',
+    ],
+)
+async def test_mint_credential_refuses_cleanly_when_the_readers_pds_cannot_delegate(
+    monkeypatch: pytest.MonkeyPatch, message: str
+) -> None:
+    """a member on a non-spaces PDS, or without the reader grant, is a refusal — not a 500."""
+    monkeypatch.setattr(
+        space_client, "make_pds_request", AsyncMock(side_effect=Exception(message))
+    )
+    session = Session(
+        session_id="s",
+        did="did:plc:member",
+        handle="m.test",
+        oauth_session={"pds_url": "https://p"},
+    )
+    with pytest.raises(space_client.SpaceAccessError, match="did not delegate"):
+        await space_client._mint_credential(
+            session, "at://did:plc:owner/space/fm.plyr.privateMedia/self"
+        )
+
+
+async def test_mint_credential_propagates_real_failures(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.setattr(
+        space_client,
+        "make_pds_request",
+        AsyncMock(side_effect=Exception("PDS request failed: 502 <empty body>")),
+    )
+    session = Session(
+        session_id="s",
+        did="did:plc:member",
+        handle="m.test",
+        oauth_session={"pds_url": "https://p"},
+    )
+    with pytest.raises(Exception, match="502"):
+        await space_client._mint_credential(
+            session, "at://did:plc:owner/space/fm.plyr.privateMedia/self"
         )
 
 

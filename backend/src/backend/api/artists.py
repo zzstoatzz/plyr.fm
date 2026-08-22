@@ -582,9 +582,11 @@ async def remove_private_media_member(
 ) -> Response:
     """stop an account from hearing the caller's private tracks.
 
-    the PDS refuses them a new credential at once; one already issued keeps
-    working until it expires, which the protocol leaves at two hours.
+    plyr stops serving them on their next request; the PDS refuses them a new
+    credential at once, and one already issued lasts its host's lifetime.
     """
+    if did == auth_session.did:
+        raise HTTPException(status_code=400, detail="you can't remove yourself")
     space = await ensure_personal_space(auth_session)
     await remove_space_member(auth_session, space=space, did=did)
     await db.execute(
