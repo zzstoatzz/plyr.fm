@@ -172,9 +172,10 @@ async def add_space_member(auth_session: AuthSession, *, space: str, did: str) -
 async def remove_space_member(
     auth_session: AuthSession, *, space: str, did: str
 ) -> None:
-    """take ``did`` off the member list and forget any credential plyr minted
-    for it. The PDS stops issuing new credentials at once; one already issued
-    keeps working until it expires, which the protocol leaves at two hours."""
+    """take ``did`` off the member list and forget the credential this process
+    minted for it. The PDS stops issuing new credentials at once; one already
+    issued lasts until its host's lifetime runs out (the protocol's default is
+    two hours). plyr's own reads re-check membership per request regardless."""
     await make_pds_request(
         auth_session,
         "POST",
@@ -266,13 +267,35 @@ def forget_credential(did: str, space: str) -> None:
     _credential_cache.pop((did, space), None)
 
 
+# the requester's own PDS answering that it cannot or will not delegate for this
+# space: no spaces support, no covering grant, or a refused request. anything
+# else (network, 5xx) is a real failure and propagates.
+_DELEGATION_REFUSALS = (
+    "MethodNotImplemented",
+    "XRPCNotSupported",
+    "InsufficientScope",
+    "InvalidRequest",
+    "AuthMissing",
+    "failed: 401",
+    "failed: 403",
+    "failed: 404",
+)
+
+
 async def _mint_credential(auth_session: AuthSession, space: str) -> SpaceCredential:
-    delegation_resp = await make_pds_request(
-        auth_session,
-        "GET",
-        "com.atproto.space.getDelegationToken",
-        params={"space": space},
-    )
+    try:
+        delegation_resp = await make_pds_request(
+            auth_session,
+            "GET",
+            "com.atproto.space.getDelegationToken",
+            params={"space": space},
+        )
+    except Exception as exc:
+        if any(marker in str(exc) for marker in _DELEGATION_REFUSALS):
+            raise SpaceAccessError(
+                f"requester's PDS did not delegate for {space}: {exc}"
+            ) from exc
+        raise
     delegation_token = delegation_resp["token"]
 
     authority = parse_space_uri(space).owner_did
@@ -295,16 +318,18 @@ async def _mint_credential(auth_session: AuthSession, space: str) -> SpaceCreden
     )
     if cred_resp.status_code != 200:
         body = cred_resp.text
+        # the error names com.atproto.space.getSpaceCredential declares; any 403
+        # is a refusal whatever the host calls it
         refused_errors = (
-            "AppNotPermitted",
-            "AppNotAuthorized",
-            "NotAMember",
-            "NotAuthorized",
-            "NotPermitted",
+            "SpaceNotFound",
             "SpaceDeleted",
             "UserNotAuthorized",
+            "AppNotAuthorized",
+            "NotAuthorized",
+            "InvalidDelegationToken",
+            "InvalidClientAttestation",
         )
-        if any(error in body for error in refused_errors):
+        if cred_resp.status_code == 403 or any(e in body for e in refused_errors):
             raise SpaceAccessError(f"space authority refused credential: {body}")
         raise Exception(f"getSpaceCredential failed: {cred_resp.status_code} {body}")
     return SpaceCredential(

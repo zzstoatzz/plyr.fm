@@ -64,7 +64,7 @@
 				return;
 			}
 			members = members.filter((m) => m.did !== did);
-			if (who) toast.info(`removed @${who.handle} — anything already playing stops within two hours`);
+			if (who) toast.info(`removed @${who.handle} — they can't play your private tracks anymore`);
 		} catch (_e) {
 			console.error('failed to remove private media member:', _e);
 			toast.error("couldn't remove them");
@@ -89,7 +89,8 @@
 		</div>
 		<p class="lede">
 			only you can play your private tracks. add people here and they can too. they need an
-			account on a PDS that supports private media, and the list is kept on yours.
+			account on a PDS that supports private media and to have signed in to plyr.fm, and the
+			list is kept on your PDS.
 		</p>
 
 		{#if loading}

@@ -355,7 +355,7 @@ max_lines = 689
 
 [[rules]]
 path = "backend/tests/_internal/test_permissioned_spaces.py"
-max_lines = 796
+max_lines = 879
 
 [[rules]]
 path = "frontend/src/routes/u/[[]handle[]]/+page.svelte"
@@ -383,4 +383,8 @@ max_lines = 1091
 
 [[rules]]
 path = "backend/src/backend/api/artists.py"
-max_lines = 597
+max_lines = 599
+
+[[rules]]
+path = "backend/src/backend/_internal/atproto/spaces/client.py"
+max_lines = 523
