@@ -16,6 +16,7 @@ from backend.models.pending_dev_token import PendingDevToken
 from backend.models.pending_scope_upgrade import PendingScopeUpgrade
 from backend.models.playlist import Playlist
 from backend.models.preferences import UserPreferences
+from backend.models.private_media_member import PrivateMediaMember
 from backend.models.queue import QueueState
 from backend.models.session import UserSession
 from backend.models.share_link import ShareLink, ShareLinkEvent
@@ -44,6 +45,7 @@ __all__ = [
     "PendingDevToken",
     "PendingScopeUpgrade",
     "Playlist",
+    "PrivateMediaMember",
     "QueueState",
     "SensitiveImage",
     "ShareLink",

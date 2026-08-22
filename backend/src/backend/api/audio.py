@@ -5,10 +5,12 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import RedirectResponse, StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy import or_, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend._internal import Session, get_optional_session, validate_supporter
 from backend._internal.atproto.client import pds_blob_url
 from backend._internal.atproto.spaces.client import SpaceAccessError, open_space_blob
+from backend._internal.track_visibility import is_private_media_member
 from backend.config import settings
 from backend.models import Artist, Track, UserPreferences
 from backend.storage import storage
@@ -107,12 +109,14 @@ async def stream_audio(
             is_private,
             space_uri,
         ) = track_data
+        can_read_private = await _can_read_private(db, session, artist_did)
 
     # private media lives in a permissioned space — proxy the bytes through the
-    # owner's space credential (can't redirect: the browser has no credential).
+    # reader's space credential (can't redirect: the browser has no credential).
     if is_private:
         return await _handle_private_audio(
             session=session,
+            allowed=can_read_private,
             artist_did=artist_did,
             space_uri=space_uri,
             pds_blob_cid=pds_blob_cid,
@@ -406,12 +410,13 @@ async def get_audio_url(
             is_private,
             _space_uri,
         ) = track_data
+        can_read_private = await _can_read_private(db, session, artist_did)
 
     # private media is proxied through the permissioned-space credential path,
     # so the cacheable "url" is this backend's own stream endpoint (which holds
     # the credential), not a presigned/CDN URL the client could fetch directly.
     if is_private:
-        if session is None or session.did != artist_did:
+        if not can_read_private:
             raise HTTPException(status_code=404, detail="audio file not found")
         backend_url = settings.atproto.redirect_uri.rsplit("/", 2)[0]
         return AudioUrlResponse(
@@ -484,9 +489,20 @@ def _relay_headers(resp) -> dict[str, str]:
     return {k: resp.headers[k] for k in _PROXY_HEADERS if k in resp.headers}
 
 
+async def _can_read_private(
+    db: AsyncSession, session: Session | None, artist_did: str
+) -> bool:
+    if session is None:
+        return False
+    return session.did == artist_did or await is_private_media_member(
+        db, artist_did, session.did
+    )
+
+
 async def _handle_private_audio(
     *,
     session: Session | None,
+    allowed: bool,
     artist_did: str,
     space_uri: str | None,
     pds_blob_cid: str | None,
@@ -495,15 +511,13 @@ async def _handle_private_audio(
 ) -> Response:
     """proxy a private track's audio through the permissioned-space credential path.
 
-    access is owner-only at two layers: plyr.fm rejects non-owners here, while the
-    ``simplespace`` created for this MVP uses its explicit ``memberListPolicy``.
-    Core permissioned spaces do not enumerate readers, but ``simplespace`` is the
-    required PDS management layer above that core protocol and may maintain members.
-    A non-owner (or anonymous) request gets a 404 — the same as a missing file — so
-    private tracks do not leak their existence. Range is passed through so the
-    206/seek semantics survive the proxy.
+    the owner and the artist's private-media members pass; anyone else gets a
+    404 — the same as a missing file — so private tracks do not leak their
+    existence. the credential is minted from the requesting session, so a
+    member streams through their own PDS's delegation token. Range is passed
+    through so the 206/seek semantics survive the proxy.
     """
-    if session is None or session.did != artist_did:
+    if session is None or not allowed:
         raise HTTPException(status_code=404, detail="audio file not found")
     if not (space_uri and pds_blob_cid):
         raise HTTPException(status_code=404, detail="audio file not found")
