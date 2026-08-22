@@ -132,29 +132,6 @@ def test_session_access(prod_namespace):
     assert cap.session_has_private_media_access(app_pw)
 
 
-@pytest.mark.parametrize(
-    ("scopes", "expected"),
-    [
-        (["atproto", "repo:*", "include:*", "space:*"], True),
-        (["atproto", "space"], True),
-        (["atproto", "transition:generic", "transition:email"], False),
-        (["atproto", "repo:*", "blob:*/*"], False),
-        # a scope that merely mentions space is not a space scope
-        (["atproto", "rpc:com.atproto.space.listSpaces"], False),
-        (None, False),
-        ("space:*", False),
-    ],
-)
-def test_advertises_spaces_reads_scopes_supported(scopes, expected):
-    metadata = {} if scopes is None else {"scopes_supported": scopes}
-    assert cap.advertises_spaces(metadata) is expected
-
-
-async def test_pds_supports_spaces_without_issuer_is_false():
-    session = Session(session_id="s", did="did:plc:x", handle="x", oauth_session={})
-    assert await cap.pds_supports_spaces(session) is False
-
-
 def _login_harness(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, bool]]:
     from backend._internal.atproto import handles
 

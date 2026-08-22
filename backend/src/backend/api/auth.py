@@ -41,7 +41,6 @@ from backend._internal import (
     switch_active_account,
 )
 from backend._internal.atproto.spaces import (
-    pds_supports_spaces,
     session_has_private_media_access,
 )
 from backend._internal.auth import get_refresh_token_lifetime_days
@@ -76,8 +75,9 @@ class LinkedAccountResponse(BaseModel):
 class PermissionedSpacesStatus(BaseModel):
     """private-media availability for this session.
 
-    ``granted``: the token carries the expanded space grant. ``supported``:
-    offer the option — true unless an upgrade on this PDS came back without it.
+    ``granted``: the token carries the expanded space grant. ``supported``
+    equals it — the grant is the only capability signal — and stays for
+    clients that key on it.
     """
 
     supported: bool = False
@@ -537,7 +537,6 @@ async def get_current_user(
     current_user_flags = await get_user_flags(db, session.did)
 
     granted = session_has_private_media_access(session)
-    spaces_supported = granted or await pds_supports_spaces(session)
 
     return CurrentUserResponse(
         did=session.did,
@@ -552,7 +551,7 @@ async def get_current_user(
         ],
         enabled_flags=current_user_flags,
         permissioned_spaces=PermissionedSpacesStatus(
-            supported=spaces_supported, granted=granted
+            supported=granted, granted=granted
         ),
     )
 
