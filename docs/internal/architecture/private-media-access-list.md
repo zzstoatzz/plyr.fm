@@ -149,9 +149,12 @@ plyr's cache can only ever *over-show metadata*, never *over-serve bytes*.
 - **The authority is implicitly a member** and cannot be removed (zds
   `spacePolicyAllowsRequester` short-circuits on the authority;
   `removeSimpleSpaceMember` refuses it). The portal list is everyone *else*.
-- **`listMembers` is owner-only on zds** (authority + `manage=update`, stricter
-  than the proposal's `read_self`), paged at most 100 per call. plyr's mirror
-  is reconciled with the artist's session only.
+- **`listMembers` is owner-only** on every implementation except
+  atproto-crates (reference: `read_self` scope plus an owner assert; rsky and
+  zds: `manage=update`; atproto-crates: any member with `read_self`). treat it
+  as owner-only; only the scope action varies. zds pages at most 100 per call.
+  plyr's mirror is reconciled with the artist's session only. the full table is
+  in zds `docs/permissioned-data.md` under "client-visible contract".
 - **There is no discovery primitive.** Being on a member list does not make the
   space appear in the member's `listSpaces`, and the protocol never enumerates
   readers. plyr must tell members what was shared with them at the app layer
