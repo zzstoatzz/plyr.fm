@@ -61,6 +61,8 @@ jobs:
         env:
           ZAT_TEST_HANDLE: ${{ secrets.ZAT_TEST_HANDLE }}
           ZAT_TEST_PASSWORD: ${{ secrets.ZAT_TEST_PASSWORD }}
+          ALPHA_TEST_HANDLE: ${{ secrets.ALPHA_TEST_HANDLE }}
+          ALPHA_TEST_PASSWORD: ${{ secrets.ALPHA_TEST_PASSWORD }}
         run: node e2e/private-media.mjs
 
       - name: private voice memo from /record

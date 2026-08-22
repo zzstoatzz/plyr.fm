@@ -34,7 +34,7 @@
 
 	const defaultPrivateNote = $derived(
 		privateGranted
-			? 'only you can play it. nothing public, nothing in feeds.'
+			? 'only you, and anyone you add under private tracks in your portal, can play it. nothing public, nothing in feeds.'
 			: "only you can play it. nothing public, nothing in feeds. you'll be asked once to allow it."
 	);
 </script>
