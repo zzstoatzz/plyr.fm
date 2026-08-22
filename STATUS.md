@@ -47,7 +47,29 @@ plyr.fm should become:
 
 ### August 2026
 
-#### people who can hear your private tracks (#1897–#1901, August 21–22 — staging only)
+#### editing a track deleted its audio from the PDS (#1904, August 22 — prod `2026.0822.185531`)
+
+**why**: nate's 4:32 am upload went to his PDS — `uploadBlob` 200 and the record
+rewritten with `audioBlob` by the deferred optimize task — and his edit nine
+minutes later deleted it. `rebuild_track_pds_record`, which every metadata edit
+runs, rebuilt the record from the row with `audioUrl` only and never passed
+`audio_blob`. The official PDS garbage-collects a blob no record references
+(`sync.getBlob` → "Blob not found"), and jetstream ingest mirrored the blob-less
+record back into the DB: `audio_storage='r2'`, `pds_blob_cid=NULL`, with the
+stale `pds_blob_size` left behind — the fingerprint.
+
+**blast radius**: 66 production tracks across 21 artists since March 18 carry
+the fingerprint (graham.systems 7, whereditgo.diamonds 6, darkhart 6, …). Their
+audio exists only in R2 now. Repairing them means re-uploading from R2 and
+rewriting each record — a PDS write on other people's behalf — **not done**;
+nate's call on consent (heads-up post or opt-in).
+
+**what shipped**: the rebuilt record carries `audioBlob` built from the row
+(cid, mime from the file type, size) next to `audioUrl`, the pairing the
+publish and optimize paths already use. Regression test drives `PATCH` and
+asserts the `putRecord` payload keeps the blob; it failed on the old code.
+
+#### people who can hear your private tracks (#1897–#1905, August 21–22 — prod `2026.0822.185531`)
 
 **why**: nate's direction after the sign-in work: "private" should not have to
 mean "only you" forever; an artist should name the people who can hear their
@@ -97,6 +119,16 @@ event; "supporters can hear my private space" would be `managingAppPolicy`
 with plyr's `checkUserAccess` answering at mint time. downloads of private
 tracks stay refused for everyone (even the owner) until a private download byte
 path exists. design: `docs/internal/architecture/private-media-access-list.md`.
+
+**released**: nate chose to ship the arc with #1904 rather than hotfix. Before
+release, a review against 0016 and Habitat's ReBAC post led to #1905 — refusal
+names match the `getSpaceCredential` lexicon (three invented names were 500s),
+a member whose own PDS cannot delegate gets a 403 not a 500, removing yourself
+is a 400, and the "two hours" copy is gone (a protocol default, not a bound;
+plyr re-checks membership per request). Residuals are in the design doc's
+review section. Prod permission set published before the deploy; migration
+`f3a9c1d27b4e` applied; cross-account e2e leg still needs the
+`ALPHA_TEST_*` secrets.
 
 **lesson from the run**: merging #1900 while #1901's e2e was mid-flight
 redeployed staging under it — a `200` `/auth/me` followed by `401`s. the
