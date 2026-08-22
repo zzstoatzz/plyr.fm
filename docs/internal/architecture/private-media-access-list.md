@@ -138,23 +138,30 @@ plyr's cache can only ever *over-show metadata*, never *over-serve bytes*.
 - **Surfaces that short-circuit on `support_gate is not None`** (radio corpus,
   PDS-save eligibility, subsonic direct URLs) are untouched: private tracks are
   already excluded by `is_private`, and members do not change that.
-- **Revocation is eventual, and the protocol says so.** `removeMember` only
-  stops *future* mints; a space credential lives 2 hours, is verifiable
-  offline against the authority's key, and has no revocation list (proposal
-  §Space credential; zds `permissioned_data.zig` `exp = iat + 7200`). plyr's
-  own credential cache (50 min, keyed `(reader did, space)`) must be dropped
-  on `removeMember` so plyr never outlives the PDS's answer by more than the
-  credential it already holds. Tell the artist plainly: "they can keep
-  listening for up to two hours."
-- **The authority is implicitly a member** and cannot be removed (zds
-  `spacePolicyAllowsRequester` short-circuits on the authority;
-  `removeSimpleSpaceMember` refuses it). The portal list is everyone *else*.
-- **`listMembers` is owner-only** on every implementation except
-  atproto-crates (reference: `read_self` scope plus an owner assert; rsky and
-  zds: `manage=update`; atproto-crates: any member with `read_self`). treat it
-  as owner-only; only the scope action varies. zds pages at most 100 per call.
-  plyr's mirror is reconciled with the artist's session only. the full table is
-  in zds `docs/permissioned-data.md` under "client-visible contract".
+- **Revocation is eventual at the protocol, immediate through plyr.**
+  `removeMember` only stops *future* mints; a space credential is verifiable
+  offline against the authority's key and has no revocation list (proposal
+  §Space credential: "short-lived (default 2 hours)" — a default, not a bound;
+  zds uses `exp = iat + 7200`). plyr re-checks membership in SQL on every
+  private read, so a removed member's next request through plyr is a 404
+  regardless of any credential. plyr's per-process credential cache (50 min,
+  keyed `(reader did, space)`) is dropped on `removeMember` in the process
+  that handled it; other machines keep theirs until expiry, which only
+  matters if the SQL check were bypassed (it isn't). Don't promise a time in
+  copy; "they can't play your private tracks anymore" is what plyr delivers.
+- **The authority is implicitly a member** on zds (`spacePolicyAllowsRequester`
+  short-circuits on the authority; `removeSimpleSpaceMember` refuses it). The
+  proposal's `memberListPolicy` text doesn't say so; plyr neither relies on it
+  (the authority is never stored in the mirror) nor stores it if a host lists
+  it. The portal list is everyone *else*.
+- **`listMembers` is owner-only in practice.** the lexicon only says "OAuth
+  with a covering read grant; a space credential is not sufficient; must be
+  called on the space authority's PDS" — but the reference (`read_self` plus an
+  owner assert), rsky and zds (`manage=update`) all restrict it to the owner;
+  atproto-crates lets any member with `read_self` read it. plyr always calls
+  it with the owner's session, which satisfies every variant. zds pages at
+  most 100 per call. the table is in zds `docs/permissioned-data.md` under
+  "client-visible contract".
 - **There is no discovery primitive.** Being on a member list does not make the
   space appear in the member's `listSpaces`, and the protocol never enumerates
   readers. plyr must tell members what was shared with them at the app layer
@@ -192,3 +199,24 @@ different policy on the same space and a separate decision.
 The second fixture account must be on a spaces-capable PDS. bufo.uk (zds) plus
 `nate.spaces-alpha.bsky.network` (official) is the pair that proves both
 implementations and cross-host membership at once.
+
+## review against 0016 and Habitat, before release (2026-08-22)
+
+Fixed before shipping (#1905): refusal error names now match the
+`getSpaceCredential` lexicon and any 403 counts; a member whose own PDS cannot
+delegate (no spaces support, no reader grant) gets a clean 403 instead of a
+500; removing yourself is a 400; the "two hours" copy is gone.
+
+Left as recorded facts:
+- the reader permission carries `collection`, which `read` ignores — harmless;
+- per-reader minting is stricter than the proposal needs ("an application …
+  may obtain its credential using any one user's session") and is the point:
+  it makes the PDS the per-member backstop;
+- `SpaceDeleted` maps to 403 and does not purge plyr's derived rows (tracks,
+  members, cached credential) — the proposal asks syncers to; plyr is a
+  proxying client, and this is the cleanup item if a space is ever deleted;
+- the mirror has no `space` or `relation` column and the API body is `{actor}`;
+  adopting Habitat-style relations later means re-keying both. The
+  `is_private_media_member` / `_can_read_private` chokepoints are the seam;
+- nothing in the frontend consumes `permissioned_spaces.reader` yet, and there
+  is no "shared with you" surface: a member finds a shared track only by link.
