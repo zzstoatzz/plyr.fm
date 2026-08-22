@@ -159,6 +159,47 @@ async def ensure_personal_space(
     return space_uri
 
 
+async def add_space_member(auth_session: AuthSession, *, space: str, did: str) -> None:
+    """put ``did`` on the space's member list. Authority-only on the space host."""
+    await make_pds_request(
+        auth_session,
+        "POST",
+        "com.atproto.simplespace.addMember",
+        payload={"space": space, "did": did},
+    )
+
+
+async def remove_space_member(
+    auth_session: AuthSession, *, space: str, did: str
+) -> None:
+    """take ``did`` off the member list and forget any credential plyr minted
+    for it. The PDS stops issuing new credentials at once; one already issued
+    keeps working until it expires, which the protocol leaves at two hours."""
+    await make_pds_request(
+        auth_session,
+        "POST",
+        "com.atproto.simplespace.removeMember",
+        payload={"space": space, "did": did},
+    )
+    forget_credential(did, space)
+
+
+async def list_space_members(
+    auth_session: AuthSession, *, space: str, cursor: str | None = None
+) -> tuple[list[str], str | None]:
+    """one page of the member list (zds caps a page at 100). Authority-only."""
+    params: dict[str, Any] = {"space": space, "limit": 100}
+    if cursor:
+        params["cursor"] = cursor
+    result = await make_pds_request(
+        auth_session,
+        "GET",
+        "com.atproto.simplespace.listMembers",
+        params=params,
+    )
+    return [m["did"] for m in result.get("members", [])], result.get("cursor")
+
+
 async def create_space_record(
     auth_session: AuthSession,
     *,
@@ -218,6 +259,11 @@ class SpaceCredential:
 # useful without the other. Include the requesting user so an authorization
 # decision made for one account is never reused for another.
 _credential_cache: dict[tuple[str, str], SpaceCredential] = {}
+
+
+def forget_credential(did: str, space: str) -> None:
+    """drop the cached credential plyr holds for ``did`` on ``space``, if any."""
+    _credential_cache.pop((did, space), None)
 
 
 async def _mint_credential(auth_session: AuthSession, space: str) -> SpaceCredential:
