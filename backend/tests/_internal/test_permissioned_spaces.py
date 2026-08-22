@@ -109,6 +109,47 @@ def test_grant_present_requires_manage_and_collection_write(prod_namespace):
     )
 
 
+_READER_GRANT = (
+    "space:fm.plyr.privateMedia?authority=*&skey=self"
+    "&collection=fm.plyr.track&action=read"
+)
+
+
+def test_reader_grant_is_the_any_authority_read(prod_namespace):
+    assert space_scope.private_media_reader_grant_present(
+        f"atproto {_GRANT} {_READER_GRANT}"
+    )
+    # the owner grant alone names one authority — it cannot read anyone else's space
+    assert not space_scope.private_media_reader_grant_present(_GRANT)
+    # unexpanded include, or a different space type, is not a reader grant
+    assert not space_scope.private_media_reader_grant_present(
+        "atproto include:fm.plyr.privateMediaAccess"
+    )
+    assert not space_scope.private_media_reader_grant_present(
+        "space:fm.other.space?authority=*&skey=self&action=read"
+    )
+    # a wildcard type with read covers it
+    assert space_scope.private_media_reader_grant_present(
+        "space:*?authority=*&skey=*&action=read"
+    )
+    # the reader grant never makes someone an owner
+    assert not space_scope.private_media_grant_present(_READER_GRANT, "did:plc:x")
+
+
+def test_published_permission_set_declares_owner_and_reader():
+    import json
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[3]
+    doc = json.loads((root / "lexicons" / "privateMediaAccess.json").read_text())
+    perms = doc["defs"]["main"]["permissions"]
+    by_authority = {p["authority"]: p for p in perms}
+    assert set(by_authority) == {"self", "*"}
+    assert by_authority["*"]["action"] == ["read"]
+    assert "manage" not in by_authority["*"]
+    assert by_authority["*"]["skey"] == "self"
+
+
 def test_permissioned_scope_requested_matches_include_or_grant(prod_namespace):
     assert space_scope.permissioned_scope_requested(
         "atproto include:fm.plyr.privateMediaAccess"

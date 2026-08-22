@@ -61,7 +61,10 @@ try {
 	if (before.permissioned_spaces.granted !== true) {
 		fail('sign-in on a spaces PDS did not carry the private-media grant');
 	}
-	step('capability', 'supported=true granted=true straight from sign-in');
+	if (before.permissioned_spaces.reader !== true) {
+		fail('sign-in did not carry the any-authority read grant (is the revised permission set published?)');
+	}
+	step('capability', 'supported=true granted=true reader=true straight from sign-in');
 
 	await page.goto(`${APP}/record`, { waitUntil: 'networkidle' });
 	step('record', 'three seconds from the fake microphone');

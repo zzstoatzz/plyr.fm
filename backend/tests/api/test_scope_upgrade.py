@@ -366,6 +366,7 @@ async def test_auth_me_supported_is_the_grant(
     assert response.json()["permissioned_spaces"] == {
         "supported": False,
         "granted": False,
+        "reader": False,
     }
 
     with patch("backend.api.auth.session_has_private_media_access", return_value=True):

@@ -6,6 +6,7 @@ read from the token's expanded ``space:`` grant — see
 """
 
 from backend._internal.atproto.spaces.capability import (
+    session_can_read_shared_private_media,
     session_has_private_media_access,
 )
 from backend._internal.atproto.spaces.uris import (
@@ -20,5 +21,6 @@ __all__ = [
     "build_space_uri",
     "parse_space_record_uri",
     "parse_space_uri",
+    "session_can_read_shared_private_media",
     "session_has_private_media_access",
 ]
