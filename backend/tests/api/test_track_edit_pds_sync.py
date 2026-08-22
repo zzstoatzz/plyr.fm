@@ -139,3 +139,57 @@ async def test_editing_creator_self_label_syncs_to_pds(
 
     await db_session.refresh(published_track)
     assert published_track.self_labels == ["sexual"]
+
+
+@pytest.fixture
+async def track_on_pds(db_session: AsyncSession) -> Track:
+    """a public track whose audio is also a blob on the PDS (audio_storage both)."""
+    artist = Artist(did=_ARTIST_DID, handle="editor.bsky.social", display_name="Editor")
+    db_session.add(artist)
+    await db_session.flush()
+    track = Track(
+        title="on the pds",
+        artist_did=_ARTIST_DID,
+        file_id="edit_sync_pds",
+        file_type="mp3",
+        extra={"duration": 180},
+        r2_url="https://audio.example.com/edit_sync_pds.mp3",
+        audio_storage="both",
+        pds_blob_cid="bafkreiblobonpds",
+        pds_blob_size=2562132,
+        atproto_record_uri=f"at://{_ARTIST_DID}/fm.plyr.track/editsyncpds",
+        atproto_record_cid="bafyoriginal",
+    )
+    db_session.add(track)
+    await db_session.commit()
+    await db_session.refresh(track)
+    return track
+
+
+async def test_editing_keeps_the_audio_blob_in_the_pds_record(
+    test_app: FastAPI, db_session: AsyncSession, track_on_pds: Track
+) -> None:
+    """a rebuilt record must still reference the audio blob — a PDS
+    garbage-collects a blob no record references, which deletes the audio."""
+    pds = AsyncMock(
+        return_value={"uri": track_on_pds.atproto_record_uri, "cid": "bafyupdated"}
+    )
+    with patch("backend._internal.atproto.records.fm_plyr.track.make_pds_request", pds):
+        async with AsyncClient(
+            transport=ASGITransport(app=test_app), base_url="http://test"
+        ) as client:
+            response = await client.patch(
+                f"/tracks/{track_on_pds.id}", data={"title": "renamed, still on pds"}
+            )
+    assert response.status_code == 200, response.text
+
+    pds.assert_awaited_once()
+    assert pds.await_args is not None
+    record = pds.await_args.args[3]["record"]
+    assert record["audioBlob"] == {
+        "$type": "blob",
+        "ref": {"$link": "bafkreiblobonpds"},
+        "mimeType": "audio/mpeg",
+        "size": 2562132,
+    }
+    assert record["audioUrl"] == "https://audio.example.com/edit_sync_pds.mp3"

@@ -13,6 +13,7 @@ from backend._internal.atproto.profiles import resolve_dids
 from backend._internal.atproto.self_labels import build_self_labels
 from backend.config import settings
 from backend.models import Track
+from backend.utilities.audio_formats import AudioFormat
 
 logger = logging.getLogger(__name__)
 
@@ -297,6 +298,23 @@ async def update_record(
     return result["uri"], result["cid"]
 
 
+def audio_blob_ref(track: Track) -> BlobRef | None:
+    """the record's ``audioBlob`` for a track whose audio lives on the PDS.
+
+    a rebuilt record must keep referencing the blob: a PDS garbage-collects a
+    blob the moment no record references it, so dropping the field here is
+    what deletes the audio from the user's account.
+    """
+    if not track.pds_blob_cid:
+        return None
+    return {
+        "$type": "blob",
+        "ref": {"$link": track.pds_blob_cid},
+        "mimeType": AudioFormat(track.file_type).media_type,
+        "size": track.pds_blob_size or 0,
+    }
+
+
 async def rebuild_track_pds_record(
     track: Track,
     auth_session: AuthSession,
@@ -338,6 +356,7 @@ async def rebuild_track_pds_record(
         features=track.features if track.features else None,
         image_url=image_url_override or await track.get_image_url(),
         support_gate=track.support_gate,
+        audio_blob=audio_blob_ref(track),
         description=track.description,
         self_labels=track.self_labels,
     )
