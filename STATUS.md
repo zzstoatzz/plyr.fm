@@ -47,6 +47,61 @@ plyr.fm should become:
 
 ### August 2026
 
+#### people who can hear your private tracks (#1897–#1901, August 21–22 — staging only)
+
+**why**: nate's direction after the sign-in work: "private" should not have to
+mean "only you" forever; an artist should name the people who can hear their
+private tracks, by identity, in the portal. staging-first until we're happy —
+this touches the permission set every session consents to.
+
+**vocabulary, drilled** (Proposal 0016): the **space authority** is the DID
+that decides (the artist); the **space host** is the service that mints
+credentials for it (the PDS today); the **repo host** stores the bytes.
+"space owner" is not a protocol term — it means the authority. a reader never
+holds a working URL: their *app* trades a delegation token from *their own*
+PDS for a credential the authority's host mints, DPoP-bound to the app. so
+access is by DID, links cannot leak, and **a member must be on a PDS that
+implements spaces**.
+
+**the legwork that surfaced**: plyr's permission set granted
+`authority: "self"` only, so a member's session could never obtain a
+credential for another artist's space whatever the member list said — Bulletin
+grants `authority: "*"`. #1898 revises `fm.plyr.privateMediaAccess` in place
+with a read-only `authority: "*"` permission (zds passes `*` through at token
+issuance; verified in `permission_sets.zig`), reported as
+`permissioned_spaces.reader` on `/auth/me`. **open until the revised set is
+published to staging** (`NAMESPACE=fm.plyr.stg … publish_permission_set.py
+privateMediaAccess`, nate's credential) and sessions re-consent.
+
+**what landed on staging**:
+- #1899 — `add/remove/list_space_members` wrappers; `remove` also forgets the
+  credential plyr cached for that DID (credentials live 2h by protocol with no
+  revocation, so removal is eventual). `scripts/permissioned_smoke.py` gains a
+  two-account leg proving a member reads the owner's blob through its own PDS's
+  delegation token.
+- #1900 — `private_media_members` mirrors the PDS list (source of truth;
+  written through on every add/remove, reconciled from `listMembers` when the
+  owner reads it, served as fallback when the PDS can't answer). visibility
+  guards become async and DB-backed; both private audio paths accept members,
+  minting from the requesting session. `GET/POST/DELETE
+  /artists/me/private-media/members`. non-members still 404.
+- #1901 — the `/portal/manage` section ("private tracks": search a handle,
+  add, remove) reusing `HandleSearch`; the e2e gains an optional cross-account
+  leg (`ALPHA_TEST_HANDLE/PASSWORD`, meant for `nate.spaces-alpha.bsky.network`
+  on the official implementation, with bufo.uk on zds as owner).
+
+**reconciled, not merged**: membership is the artist's explicit choice and
+instant; supporter standing is a verifier's answer with a 5-minute cache that
+expires. they stay separate facts — never auto-`addMember` from a payment
+event; "supporters can hear my private space" would be `managingAppPolicy`
+with plyr's `checkUserAccess` answering at mint time. downloads of private
+tracks stay refused for everyone (even the owner) until a private download byte
+path exists. design: `docs/internal/architecture/private-media-access-list.md`.
+
+**lesson from the run**: merging #1900 while #1901's e2e was mid-flight
+redeployed staging under it — a `200` `/auth/me` followed by `401`s. the
+re-run passed. don't merge into a staging deploy a sibling run depends on.
+
 #### private media is requested at sign-in; the grant is the capability (#1891, #1893–#1895, August 21 — prod `2026.0821.231527`)
 
 **why**: nate's question — "shouldn't it request that ability on login?" —
