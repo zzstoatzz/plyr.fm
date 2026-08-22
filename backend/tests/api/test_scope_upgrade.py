@@ -354,37 +354,24 @@ async def test_non_permissioned_start_failure_is_not_swallowed(
     assert "invalid_scope" in response.json()["detail"]
 
 
-async def test_auth_me_hides_private_media_when_the_authserver_lacks_space_scopes(
+async def test_auth_me_supported_is_the_grant(
     test_app: FastAPI, db_session: AsyncSession, upgrade_artist: Artist
 ):
-    """a PDS that does not advertise space scopes must not be offered private media."""
-    from backend._internal.atproto.spaces import capability as cap
-
-    bsky = {"scopes_supported": ["atproto", "transition:generic", "transition:email"]}
-    zds = {"scopes_supported": ["atproto", "repo:*", "include:*", "space:*"]}
-    assert cap.advertises_spaces(bsky) is False
-    assert cap.advertises_spaces(zds) is True
-
-    with patch(
-        "backend.api.auth.pds_supports_spaces",
-        new_callable=AsyncMock,
-        return_value=False,
-    ):
-        async with AsyncClient(
-            transport=ASGITransport(app=test_app), base_url="http://test"
-        ) as client:
-            response = await client.get("/auth/me")
+    """the expanded grant is the only capability signal: supported == granted."""
+    async with AsyncClient(
+        transport=ASGITransport(app=test_app), base_url="http://test"
+    ) as client:
+        response = await client.get("/auth/me")
     assert response.status_code == 200
-    spaces = response.json()["permissioned_spaces"]
-    assert spaces == {"supported": False, "granted": False}
+    assert response.json()["permissioned_spaces"] == {
+        "supported": False,
+        "granted": False,
+    }
 
-    with patch(
-        "backend.api.auth.pds_supports_spaces",
-        new_callable=AsyncMock,
-        return_value=True,
-    ):
+    with patch("backend.api.auth.session_has_private_media_access", return_value=True):
         async with AsyncClient(
             transport=ASGITransport(app=test_app), base_url="http://test"
         ) as client:
             response = await client.get("/auth/me")
-    assert response.json()["permissioned_spaces"]["supported"] is True
+    spaces = response.json()["permissioned_spaces"]
+    assert spaces["supported"] is True and spaces["granted"] is True
