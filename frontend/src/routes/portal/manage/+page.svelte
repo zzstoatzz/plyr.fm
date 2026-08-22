@@ -5,6 +5,7 @@
 	import ProfileSection from '$lib/components/portal/ProfileSection.svelte';
 	import SharesSection from '$lib/components/portal/SharesSection.svelte';
 	import DataSection from '$lib/components/portal/DataSection.svelte';
+	import PrivateMediaSection from '$lib/components/portal/PrivateMediaSection.svelte';
 	import CopyrightSection from '$lib/components/CopyrightSection.svelte';
 	import type { Track } from '$lib/types';
 	import { API_URL } from '$lib/config';
@@ -87,6 +88,8 @@
 		<ProfileSection {atprotofansEligible} {checkingAtprotofans} />
 
 		<CopyrightSection />
+
+		<PrivateMediaSection />
 
 		<SharesSection />
 
