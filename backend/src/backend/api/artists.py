@@ -5,10 +5,10 @@ import logging
 from datetime import UTC, datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel, ConfigDict, field_validator
 from redis.exceptions import RedisError
-from sqlalchemy import func, select, text
+from sqlalchemy import delete, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend._internal import Session, get_optional_session, require_auth
@@ -17,8 +17,23 @@ from backend._internal.atproto import (
     normalize_avatar_url,
     upsert_profile_record,
 )
+from backend._internal.atproto.handles import resolve_handle
+from backend._internal.atproto.profiles import resolve_dids
+from backend._internal.atproto.spaces.client import (
+    add_space_member,
+    ensure_personal_space,
+    list_space_members,
+    remove_space_member,
+)
 from backend._internal.track_visibility import track_visible_filter, viewer_did
-from backend.models import Artist, Track, TrackLike, UserPreferences, get_db
+from backend.models import (
+    Artist,
+    PrivateMediaMember,
+    Track,
+    TrackLike,
+    UserPreferences,
+    get_db,
+)
 from backend.utilities.aggregations import get_top_artists_by_plays
 from backend.utilities.redis import get_async_redis_client
 
@@ -445,3 +460,138 @@ async def refresh_artist_avatar(
         logger.info(f"refreshed avatar for {did}: {fresh_avatar}")
 
     return RefreshAvatarResponse(avatar_url=fresh_avatar)
+
+
+# --- private media members ----------------------------------------------------
+
+
+class PrivateMediaMemberResponse(BaseModel):
+    did: str
+    handle: str
+    display_name: str
+    avatar_url: str | None
+
+
+class AddPrivateMediaMemberRequest(BaseModel):
+    """a handle or DID to add to the caller's private-media member list."""
+
+    actor: str
+
+
+async def _mirror(db: AsyncSession, artist_did: str) -> list[str]:
+    result = await db.execute(
+        select(PrivateMediaMember.member_did)
+        .where(PrivateMediaMember.artist_did == artist_did)
+        .order_by(PrivateMediaMember.created_at)
+    )
+    return list(result.scalars().all())
+
+
+async def _members_response(dids: list[str]) -> list[PrivateMediaMemberResponse]:
+    return [
+        PrivateMediaMemberResponse(
+            did=p.did,
+            handle=p.handle,
+            display_name=p.display_name,
+            avatar_url=p.avatar_url,
+        )
+        for p in await resolve_dids(dids)
+    ]
+
+
+async def _reconcile_from_pds(
+    db: AsyncSession, auth_session: Session, space: str
+) -> list[str] | None:
+    """replace the mirror with the PDS's member list; None when the PDS can't answer."""
+    members: list[str] = []
+    cursor: str | None = None
+    try:
+        while True:
+            page, cursor = await list_space_members(
+                auth_session, space=space, cursor=cursor
+            )
+            members.extend(did for did in page if did != auth_session.did)
+            if not cursor:
+                break
+    except Exception as exc:
+        logger.warning(f"could not read the member list for {auth_session.did}: {exc}")
+        return None
+    await db.execute(
+        delete(PrivateMediaMember).where(
+            PrivateMediaMember.artist_did == auth_session.did,
+            PrivateMediaMember.member_did.not_in(members),
+        )
+    )
+    known = set(await _mirror(db, auth_session.did))
+    for did in members:
+        if did not in known:
+            db.add(PrivateMediaMember(artist_did=auth_session.did, member_did=did))
+    await db.commit()
+    return members
+
+
+@router.get("/me/private-media/members")
+async def list_private_media_members(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    auth_session: Session = Depends(require_auth),
+) -> list[PrivateMediaMemberResponse]:
+    """the DIDs allowed to hear the caller's private tracks.
+
+    the PDS member list is the source of truth; plyr.fm's mirror is refreshed
+    from it here and served as a fallback when the PDS cannot answer.
+    """
+    space = await ensure_personal_space(auth_session)
+    members = await _reconcile_from_pds(db, auth_session, space)
+    if members is None:
+        members = await _mirror(db, auth_session.did)
+    return await _members_response(members)
+
+
+@router.post("/me/private-media/members", status_code=201)
+async def add_private_media_member(
+    body: AddPrivateMediaMemberRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    auth_session: Session = Depends(require_auth),
+) -> PrivateMediaMemberResponse:
+    """let one more account hear the caller's private tracks."""
+    actor = body.actor.strip().lstrip("@")
+    if actor.startswith("did:"):
+        did = actor
+    else:
+        resolved = await resolve_handle(actor)
+        if not resolved:
+            raise HTTPException(status_code=404, detail="account not found")
+        did = resolved["did"]
+    if did == auth_session.did:
+        raise HTTPException(status_code=400, detail="you already hear your own tracks")
+
+    space = await ensure_personal_space(auth_session)
+    await add_space_member(auth_session, space=space, did=did)
+    if did not in await _mirror(db, auth_session.did):
+        db.add(PrivateMediaMember(artist_did=auth_session.did, member_did=did))
+        await db.commit()
+    (member,) = await _members_response([did])
+    return member
+
+
+@router.delete("/me/private-media/members/{did}", status_code=204)
+async def remove_private_media_member(
+    did: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    auth_session: Session = Depends(require_auth),
+) -> Response:
+    """stop an account from hearing the caller's private tracks.
+
+    the PDS refuses them a new credential at once; one already issued keeps
+    working until it expires, which the protocol leaves at two hours.
+    """
+    space = await ensure_personal_space(auth_session)
+    await remove_space_member(auth_session, space=space, did=did)
+    await db.execute(
+        delete(PrivateMediaMember).where(
+            PrivateMediaMember.artist_did == auth_session.did,
+            PrivateMediaMember.member_did == did,
+        )
+    )
+    await db.commit()
+    return Response(status_code=204)

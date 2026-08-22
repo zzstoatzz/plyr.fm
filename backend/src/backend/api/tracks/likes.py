@@ -116,7 +116,7 @@ async def like_track(
 
     if not track:
         raise HTTPException(status_code=404, detail="track not found")
-    ensure_track_visible(track, auth_session.did)
+    await ensure_track_visible(db, track, auth_session.did)
 
     if not track.atproto_record_uri or not track.atproto_record_cid:
         raise HTTPException(

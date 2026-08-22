@@ -371,7 +371,7 @@ max_lines = 1178
 
 [[rules]]
 path = "backend/src/backend/api/audio.py"
-max_lines = 538
+max_lines = 552
 
 [[rules]]
 path = "backend/src/backend/_internal/export_tasks.py"
@@ -380,3 +380,7 @@ max_lines = 524
 [[rules]]
 path = "frontend/src/lib/components/TrackComments.svelte"
 max_lines = 1091
+
+[[rules]]
+path = "backend/src/backend/api/artists.py"
+max_lines = 597

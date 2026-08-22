@@ -1,7 +1,8 @@
 """private (permissioned-space) track visibility — one place, applied everywhere.
 
 a private track (`Track.is_private`) lives in the artist's permissioned space and
-must be invisible and inert to everyone except its owner: no metadata reads, no
+is visible to its owner and to the DIDs on the artist's private-media member
+list, and invisible and inert to everyone else: no metadata reads, no
 listing/counting, no likes/comments/shares/embeds. public, unlisted, and gated
 tracks are unaffected (unlisted is still searchable/listable by design).
 
@@ -15,9 +16,10 @@ two shapes:
 from typing import Protocol, runtime_checkable
 
 from fastapi import HTTPException
-from sqlalchemy import ColumnElement, or_
+from sqlalchemy import ColumnElement, exists, or_, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.models import Track
+from backend.models import PrivateMediaMember, Track
 
 
 @runtime_checkable
@@ -27,26 +29,55 @@ class _HasDid(Protocol):
     did: str
 
 
+def _membership(artist_did, viewer_did: str) -> ColumnElement[bool]:
+    return exists(
+        select(PrivateMediaMember.member_did).where(
+            PrivateMediaMember.artist_did == artist_did,
+            PrivateMediaMember.member_did == viewer_did,
+        )
+    )
+
+
 def track_visible_filter(viewer_did: str | None) -> ColumnElement[bool]:
-    """SQL condition: non-private tracks, plus the viewer's own private tracks."""
+    """SQL condition: non-private tracks, plus private tracks the viewer owns or
+    is a member of."""
     not_private = Track.visibility != "private"
     if viewer_did is None:
         return not_private
-    return or_(not_private, Track.artist_did == viewer_did)
+    return or_(
+        not_private,
+        Track.artist_did == viewer_did,
+        _membership(Track.artist_did, viewer_did),
+    )
 
 
-def can_view_track(viewer_did: str | None, track: Track) -> bool:
-    """whether `viewer_did` may see/interact with `track` (owner-only when private)."""
-    return not track.is_private or viewer_did == track.artist_did
+async def is_private_media_member(
+    db: AsyncSession, artist_did: str, viewer_did: str | None
+) -> bool:
+    """whether ``viewer_did`` is on ``artist_did``'s private-media member list."""
+    if viewer_did is None:
+        return False
+    return bool(await db.scalar(select(_membership(artist_did, viewer_did))))
 
 
-def ensure_track_visible(track: Track, viewer_did: str | None) -> None:
-    """404 when a private track is accessed by anyone but its owner.
+async def can_view_track(
+    db: AsyncSession, viewer_did: str | None, track: Track
+) -> bool:
+    """whether `viewer_did` may see/interact with `track`."""
+    if not track.is_private or viewer_did == track.artist_did:
+        return True
+    return await is_private_media_member(db, track.artist_did, viewer_did)
+
+
+async def ensure_track_visible(
+    db: AsyncSession, track: Track, viewer_did: str | None
+) -> None:
+    """404 when a private track is accessed by anyone but its owner or a member.
 
     404 (not 403) so a private track is indistinguishable from a missing one —
-    sequential ids must not let a non-owner probe for private uploads.
+    sequential ids must not let a non-member probe for private uploads.
     """
-    if not can_view_track(viewer_did, track):
+    if not await can_view_track(db, viewer_did, track):
         raise HTTPException(status_code=404, detail="track not found")
 
 

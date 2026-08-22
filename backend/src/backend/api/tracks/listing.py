@@ -22,6 +22,7 @@ from backend._internal.content_labels import (
     get_track_label_values,
     label_visible_clause,
 )
+from backend._internal.track_visibility import track_visible_filter
 from backend.config import settings
 from backend.models import (
     Artist,
@@ -143,10 +144,7 @@ async def list_tracks(
     # filter by artist if provided
     if artist_did:
         stmt = stmt.where(Track.artist_did == artist_did)
-        # private (permissioned-space) media is visible only to its owner — an
-        # artist page viewed by anyone else (or logged out) must not list it
-        if not (session and session.did == artist_did):
-            stmt = stmt.where(Track.visibility != "private")
+        stmt = stmt.where(track_visible_filter(session.did if session else None))
     else:
         # discovery feed: only listed visibilities (public + supporters); excludes
         # unlisted and private. plus tracks from deactivated accounts drop out.

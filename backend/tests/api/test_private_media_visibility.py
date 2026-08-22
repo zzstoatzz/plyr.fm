@@ -13,7 +13,7 @@ from sqlalchemy.orm import selectinload
 from backend._internal import Session
 from backend.api.search import _search_tracks
 from backend.api.tracks.listing import list_tracks
-from backend.models import Artist, Track
+from backend.models import Artist, PrivateMediaMember, Track
 from backend.schemas import TrackResponse
 
 _DID = "did:test:private-vis"
@@ -130,33 +130,49 @@ async def test_adult_track_serializes_through_policy_endpoint(
 # --- centralized helper (the chokepoint every endpoint routes through) --------
 
 
-def test_visibility_helper_rules():
+async def test_visibility_helper_rules(db_session: AsyncSession, artist: Artist):
     from fastapi import HTTPException
 
     from backend._internal.track_visibility import can_view_track, ensure_track_visible
 
-    public = Track(title="p", artist_did=_DID, file_id="h_pub", file_type="mp3")
-    private = Track(
-        title="x",
-        artist_did=_DID,
-        file_id="h_priv",
-        file_type="mp3",
-        visibility="private",
-    )
+    public = await _make_track(db_session, title="p", fid="h_pub", private=False)
+    private = await _make_track(db_session, title="x", fid="h_priv", private=True)
+    db_session.add(PrivateMediaMember(artist_did=_DID, member_did="did:test:member"))
+    await db_session.commit()
 
     # public: anyone
-    assert can_view_track(None, public)
-    assert can_view_track("did:test:other", public)
-    # private: owner only
-    assert can_view_track(_DID, private)
-    assert not can_view_track(None, private)
-    assert not can_view_track("did:test:other", private)
+    assert await can_view_track(db_session, None, public)
+    assert await can_view_track(db_session, "did:test:other", public)
+    # private: owner and members
+    assert await can_view_track(db_session, _DID, private)
+    assert await can_view_track(db_session, "did:test:member", private)
+    assert not await can_view_track(db_session, None, private)
+    assert not await can_view_track(db_session, "did:test:other", private)
 
-    ensure_track_visible(private, _DID)  # owner: no raise
+    await ensure_track_visible(db_session, private, _DID)
+    await ensure_track_visible(db_session, private, "did:test:member")
     for did in (None, "did:test:other"):
         with pytest.raises(HTTPException) as exc:
-            ensure_track_visible(private, did)
+            await ensure_track_visible(db_session, private, did)
         assert exc.value.status_code == 404
+
+
+async def test_member_sees_private_in_artist_listing(
+    db_session: AsyncSession, artist: Artist
+):
+    await _make_track(db_session, title="for members", fid="m_priv", private=True)
+    db_session.add(PrivateMediaMember(artist_did=_DID, member_did="did:test:member"))
+    await db_session.commit()
+
+    async def titles(session: Session | None) -> list[str]:
+        page = await list_tracks(
+            db=db_session, session=session, artist_did=_DID, limit=50
+        )
+        return [t.title for t in page.tracks]
+
+    assert "for members" in await titles(_session("did:test:member"))
+    assert "for members" not in await titles(_session("did:test:other"))
+    assert "for members" not in await titles(None)
 
 
 # --- endpoint proof: GET /tracks/{id} is the headline leak --------------------
@@ -185,5 +201,54 @@ async def test_track_detail_endpoint_owner_only_for_private(
         app.dependency_overrides[get_optional_session] = _owner
         with TestClient(app) as client:
             assert client.get(f"/tracks/{track.id}").status_code == 200
+
+        db_session.add(
+            PrivateMediaMember(artist_did=_DID, member_did="did:test:member")
+        )
+        await db_session.commit()
+
+        async def _member() -> Session | None:
+            return _session("did:test:member")
+
+        async def _stranger() -> Session | None:
+            return _session("did:test:other")
+
+        app.dependency_overrides[get_optional_session] = _member
+        with TestClient(app) as client:
+            assert client.get(f"/tracks/{track.id}").status_code == 200
+        app.dependency_overrides[get_optional_session] = _stranger
+        with TestClient(app) as client:
+            assert client.get(f"/tracks/{track.id}").status_code == 404
+    finally:
+        app.dependency_overrides.clear()
+
+
+async def test_audio_url_for_private_track_owner_and_members_only(
+    db_session: AsyncSession, artist: Artist
+):
+    """/audio/{id}/url is the cacheable handle the player asks for first; it must
+    answer the owner and members with the proxy URL and everyone else with 404."""
+    from fastapi.testclient import TestClient
+
+    from backend._internal import get_optional_session
+    from backend.main import app
+
+    track = await _make_track(db_session, title="hear", fid="aud_priv", private=True)
+    db_session.add(PrivateMediaMember(artist_did=_DID, member_did="did:test:member"))
+    await db_session.commit()
+
+    async def statuses(session: Session | None) -> int:
+        async def dep() -> Session | None:
+            return session
+
+        app.dependency_overrides[get_optional_session] = dep
+        with TestClient(app) as client:
+            return client.get(f"/audio/{track.file_id}/url").status_code
+
+    try:
+        assert await statuses(_session(_DID)) == 200
+        assert await statuses(_session("did:test:member")) == 200
+        assert await statuses(_session("did:test:other")) == 404
+        assert await statuses(None) == 404
     finally:
         app.dependency_overrides.clear()

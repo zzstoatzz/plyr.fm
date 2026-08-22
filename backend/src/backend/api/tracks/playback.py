@@ -145,7 +145,7 @@ async def get_track_by_uri(
     )
     if not (track := result.scalar_one_or_none()):
         raise HTTPException(status_code=404, detail="track not found")
-    ensure_track_visible(track, viewer_did(session))
+    await ensure_track_visible(db, track, viewer_did(session))
 
     return await _resolve_track(db, track, session)
 
@@ -165,7 +165,7 @@ async def get_track(
     )
     if not (track := result.scalar_one_or_none()):
         raise HTTPException(status_code=404, detail="track not found")
-    ensure_track_visible(track, viewer_did(session))
+    await ensure_track_visible(db, track, viewer_did(session))
 
     return await _resolve_track(db, track, session)
 
@@ -199,7 +199,7 @@ async def increment_play_count(
 
     if not (track := result.scalar_one_or_none()):
         raise HTTPException(status_code=404, detail="track not found")
-    ensure_track_visible(track, viewer_did(session))
+    await ensure_track_visible(db, track, viewer_did(session))
 
     ttl = max(
         _PLAY_DEDUP_MIN_TTL_S,
