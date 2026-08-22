@@ -279,6 +279,72 @@ async def test_ensure_personal_space_uses_simplespace_shape(
     assert "config" not in payload
 
 
+def _owner_session() -> Session:
+    return Session(
+        session_id="s",
+        did="did:plc:x",
+        handle="x.test",
+        oauth_session={"pds_url": "https://x"},
+    )
+
+
+async def test_add_and_remove_member_use_simplespace_shapes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    request = AsyncMock(return_value={})
+    monkeypatch.setattr(space_client, "make_pds_request", request)
+    session = _owner_session()
+    space = "at://did:plc:x/space/fm.plyr.privateMedia/self"
+
+    await space_client.add_space_member(session, space=space, did="did:plc:friend")
+    request.assert_awaited_with(
+        session,
+        "POST",
+        "com.atproto.simplespace.addMember",
+        payload={"space": space, "did": "did:plc:friend"},
+    )
+
+    space_client._credential_cache[("did:plc:friend", space)] = (
+        space_client.SpaceCredential(
+            token="t", dpop_key=ec.generate_private_key(ec.SECP256R1()), expires_at=1e12
+        )
+    )
+    await space_client.remove_space_member(session, space=space, did="did:plc:friend")
+    request.assert_awaited_with(
+        session,
+        "POST",
+        "com.atproto.simplespace.removeMember",
+        payload={"space": space, "did": "did:plc:friend"},
+    )
+    # plyr forgets the credential it minted for the removed member
+    assert ("did:plc:friend", space) not in space_client._credential_cache
+
+
+async def test_list_members_pages_by_cursor(monkeypatch: pytest.MonkeyPatch) -> None:
+    request = AsyncMock(
+        side_effect=[
+            {"members": [{"did": "did:plc:a"}, {"did": "did:plc:b"}], "cursor": "c1"},
+            {"members": [{"did": "did:plc:c"}]},
+        ]
+    )
+    monkeypatch.setattr(space_client, "make_pds_request", request)
+    session = _owner_session()
+    space = "at://did:plc:x/space/fm.plyr.privateMedia/self"
+
+    first, cursor = await space_client.list_space_members(session, space=space)
+    assert (first, cursor) == (["did:plc:a", "did:plc:b"], "c1")
+    second, end = await space_client.list_space_members(
+        session, space=space, cursor="c1"
+    )
+    assert (second, end) == (["did:plc:c"], None)
+    assert request.await_args_list[0].kwargs["params"] == {"space": space, "limit": 100}
+    assert request.await_args_list[1].kwargs["params"] == {
+        "space": space,
+        "limit": 100,
+        "cursor": "c1",
+    }
+
+
 async def test_mint_credential_uses_delegation_token_flow(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
