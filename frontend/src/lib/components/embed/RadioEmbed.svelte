@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { page } from '$app/stores';
 	import { API_URL } from '$lib/config';
 	import TunerDial from '$lib/components/radio/TunerDial.svelte';
 	import SensitiveImage from '$lib/components/SensitiveImage.svelte';
@@ -126,7 +125,8 @@
 	}
 
 	onMount(() => {
-		const params = $page.url.searchParams;
+		// the embed is its own iframe document, so its query string is its own location
+		const params = new URLSearchParams(window.location.search);
 		station = params.get('station');
 		const autoplay = params.get('autoplay') === '1';
 		loadStations();

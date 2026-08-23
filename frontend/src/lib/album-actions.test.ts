@@ -9,7 +9,7 @@ import type { Track } from './types';
 const ALBUM_ID = 'a1b2c3d4';
 const LIST_URI = 'at://did:plc:abc/fm.plyr.dev.list/3m6vlistrkey1';
 
-function jsonResponse(body: unknown, status = 200): Response {
+function jsonResponse<Body extends object>(body: Body, status = 200): Response {
 	return new Response(JSON.stringify(body), {
 		status,
 		headers: { 'content-type': 'application/json' }
@@ -20,13 +20,18 @@ function track(overrides: Partial<Track> = {}): Track {
 	return {
 		id: 63,
 		title: 'maxwell',
+		artist: 'joe',
+		artist_handle: 'joe.test',
+		file_id: 'f63',
+		file_type: 'mp3',
+		play_count: 0,
 		atproto_record_uri: 'at://did:plc:abc/fm.plyr.dev.track/3m6vshv6lxc25',
 		atproto_record_cid: 'bafyreih',
 		...overrides
-	} as Track;
+	};
 }
 
-const fetchMock = vi.fn();
+const fetchMock = vi.fn<typeof fetch>();
 
 beforeEach(() => {
 	vi.stubGlobal('fetch', fetchMock);
@@ -37,9 +42,21 @@ afterEach(() => {
 	fetchMock.mockReset();
 });
 
-function lastRequest(): { url: string; init: RequestInit } {
-	const [url, init] = fetchMock.mock.calls.at(-1)!;
-	return { url, init };
+function lastRequest() {
+	const call = fetchMock.mock.calls.at(-1);
+	if (!call) throw new Error('fetch was never called');
+	const [url, init] = call;
+	if (!init) throw new Error('fetch was called without a request init');
+	return { url: String(url), init };
+}
+
+function formBody(init: RequestInit): FormData {
+	if (!(init.body instanceof FormData)) throw new Error('expected a FormData body');
+	return init.body;
+}
+
+function jsonBody(init: RequestInit) {
+	return JSON.parse(String(init.body));
 }
 
 describe('updateTitle', () => {
@@ -81,7 +98,7 @@ describe('uploadCover', () => {
 		const { url, init } = lastRequest();
 		expect(url).toBe(`${API_URL}/albums/${ALBUM_ID}/cover`);
 		expect(init.method).toBe('POST');
-		expect((init.body as FormData).get('image')).toBe(file);
+		expect(formBody(init).get('image')).toBe(file);
 		expect(result.image_url).toBe('/img.webp');
 	});
 });
@@ -133,7 +150,7 @@ describe('reorderTracks', () => {
 		const { url, init } = lastRequest();
 		expect(url).toBe(`${API_URL}/lists/3m6vlistrkey1/reorder`);
 		expect(init.method).toBe('PUT');
-		expect(JSON.parse(init.body as string)).toEqual({
+		expect(jsonBody(init)).toEqual({
 			items: [
 				{
 					uri: withRecord.atproto_record_uri,

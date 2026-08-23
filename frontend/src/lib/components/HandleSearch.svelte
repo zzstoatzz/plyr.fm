@@ -86,8 +86,7 @@
 
 	// close dropdown when clicking outside
 	function handleClickOutside(e: MouseEvent) {
-		const target = e.target as HTMLElement;
-		if (!target.closest('.handle-search-container')) {
+		if (!(e.target instanceof Element && e.target.closest('.handle-search-container'))) {
 			showResults = false;
 		}
 	}

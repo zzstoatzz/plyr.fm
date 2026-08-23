@@ -26,7 +26,12 @@
 	}: Props = $props();
 
 	let sheetEl: HTMLDivElement | null = $state(null);
-	let previousFocus: HTMLElement | null = null;
+	let previousFocus: HTMLElement | SVGElement | null = null;
+
+	const focusableActiveElement = () => {
+		const active = document.activeElement;
+		return active instanceof HTMLElement || active instanceof SVGElement ? active : null;
+	};
 
 	function handleBackdropClick(event: MouseEvent) {
 		if (event.target === event.currentTarget) onClose();
@@ -53,7 +58,7 @@
 		}
 		const first = focusable[0];
 		const last = focusable[focusable.length - 1];
-		const active = document.activeElement as HTMLElement | null;
+		const active = document.activeElement;
 
 		if (event.shiftKey && active === first) {
 			event.preventDefault();
@@ -66,11 +71,11 @@
 
 	$effect(() => {
 		if (open && sheetEl) {
-			previousFocus = document.activeElement as HTMLElement | null;
+			previousFocus = focusableActiveElement();
 			// defer to next tick so the open transition can begin before focus moves
 			tick().then(() => sheetEl?.focus({ preventScroll: true }));
 		} else if (!open && previousFocus) {
-			previousFocus.focus?.();
+			previousFocus.focus();
 			previousFocus = null;
 		}
 	});

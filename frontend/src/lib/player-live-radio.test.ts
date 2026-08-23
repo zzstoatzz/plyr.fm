@@ -6,8 +6,10 @@ import type { Track } from '$lib/types';
 
 vi.spyOn(HTMLMediaElement.prototype, 'load').mockImplementation(() => {});
 vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {});
-vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue(undefined);
+const playSpy = vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue(undefined);
 
+// hls.js needs MediaSource, which jsdom lacks — stand in for the module behind
+// the player's import seam so the attach path can be driven.
 const hlsInstance = { loadSource: vi.fn(), attachMedia: vi.fn(), destroy: vi.fn() };
 let hlsSupported = true;
 class HlsCtor {
@@ -16,7 +18,6 @@ class HlsCtor {
 	attachMedia = hlsInstance.attachMedia;
 	destroy = hlsInstance.destroy;
 }
-vi.mock('hls.js', () => ({ default: HlsCtor }));
 
 function track(): Track {
 	return {
@@ -52,7 +53,11 @@ describe('live radio', () => {
 		hlsSupported = true;
 		// the player is a module singleton — start every case with a cold module
 		// so the preload-warmed path is only exercised where it's the subject.
-		Object.assign(player, { hlsModule: null, hlsLoad: null });
+		Object.assign(player, {
+			hlsModule: null,
+			hlsLoad: null,
+			importHls: () => Promise.resolve({ default: HlsCtor })
+		});
 		el = document.createElement('audio');
 		player.audioElement = el;
 		player.stopRadio();
@@ -73,7 +78,7 @@ describe('live radio', () => {
 		vi.spyOn(el, 'canPlayType').mockReturnValue('maybe');
 		player.playRadio(live());
 		await vi.waitFor(() => expect(hlsInstance.attachMedia).toHaveBeenCalled());
-		const playOrder = (el.play as ReturnType<typeof vi.fn>).mock.invocationCallOrder;
+		const playOrder = playSpy.mock.invocationCallOrder;
 		const attachOrder = hlsInstance.attachMedia.mock.invocationCallOrder[0];
 		expect(playOrder.some((order) => order > attachOrder)).toBe(true);
 	});
@@ -86,7 +91,7 @@ describe('live radio', () => {
 		vi.clearAllMocks();
 		player.playRadio(live());
 		expect(hlsInstance.attachMedia).toHaveBeenCalled(); // no await
-		expect(el.play).toHaveBeenCalledTimes(1); // the gesture's own play, not a replay
+		expect(playSpy).toHaveBeenCalledTimes(1); // the gesture's own play, not a replay
 	});
 
 	it('disables remote playback so iOS ManagedMediaSource will attach', async () => {

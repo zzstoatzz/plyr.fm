@@ -28,6 +28,9 @@
 	import { getAtprotofansProfile, getAtprotofansSupporters, type Supporter } from '$lib/atprotofans';
 	import type { PageData } from './$types';
 
+	interface TracksCacheSnapshot {
+		tracks?: Track[];
+	}
 
 	// receive server-loaded data
 	let { data }: { data: PageData } = $props();
@@ -56,7 +59,7 @@ $effect(() => {
 		return;
 	}
 
-	if (typeof window !== 'undefined') {
+	if (browser) {
 		shareUrl = `${window.location.origin}/u/${artist.handle}`;
 	} else {
 		shareUrl = `${APP_CANONICAL_URL}/u/${artist.handle}`;
@@ -380,7 +383,7 @@ $effect(() => {
 		try {
 			const cachedRaw = localStorage.getItem('tracks_cache');
 			if (!cachedRaw) return;
-			const cached = JSON.parse(cachedRaw) as { tracks?: Track[] };
+			const cached: TracksCacheSnapshot = JSON.parse(cachedRaw);
 			const cachedTracks = cached.tracks ?? [];
 			if (cachedTracks.length === 0) return;
 

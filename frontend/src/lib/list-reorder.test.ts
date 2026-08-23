@@ -5,12 +5,14 @@ import { describe, it, expect, vi } from 'vitest';
 
 import { createListReorder, moveItem } from './list-reorder.svelte';
 
+/** jsdom has no DragEvent; a MouseEvent carrying `dataTransfer` is the whole interface. */
 function dragEvent(): DragEvent {
-	return new Event('dragstart', { cancelable: true }) as DragEvent;
+	return Object.assign(new MouseEvent('dragstart', { cancelable: true }), { dataTransfer: null });
 }
 
+/** jsdom has no Touch constructor, so the touch list is laid over a real TouchEvent. */
 function touchEvent(clientY: number, target?: HTMLElement): TouchEvent {
-	const event = new Event('touchstart', { cancelable: true }) as TouchEvent;
+	const event = new TouchEvent('touchstart', { cancelable: true });
 	Object.defineProperty(event, 'touches', { value: [{ clientY }] });
 	if (target) {
 		Object.defineProperty(event, 'currentTarget', { value: target });
@@ -19,14 +21,14 @@ function touchEvent(clientY: number, target?: HTMLElement): TouchEvent {
 }
 
 /** a list element whose rows report fixed 50px-tall stacked rects. */
-function listWithRows(count: number): { list: HTMLElement; rows: HTMLElement[] } {
+function listWithRows(count: number) {
 	const list = document.createElement('div');
 	const rows: HTMLElement[] = [];
 	for (let i = 0; i < count; i++) {
 		const row = document.createElement('div');
 		row.className = 'track-row';
 		row.dataset.index = String(i);
-		row.getBoundingClientRect = () => ({ top: i * 50, height: 50, bottom: i * 50 + 50 }) as DOMRect;
+		row.getBoundingClientRect = () => new DOMRect(0, i * 50, 0, 50);
 		list.appendChild(row);
 		rows.push(row);
 	}

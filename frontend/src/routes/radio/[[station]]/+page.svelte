@@ -26,8 +26,10 @@
 	let coverRatio = $state(1);
 
 	function readCoverRatio(event: Event) {
-		const img = event.currentTarget as HTMLImageElement;
-		if (img.naturalHeight > 0) coverRatio = img.naturalWidth / img.naturalHeight;
+		const img = event.currentTarget;
+		if (img instanceof HTMLImageElement && img.naturalHeight > 0) {
+			coverRatio = img.naturalWidth / img.naturalHeight;
+		}
 	}
 
 	// ambient accent from the on-air artwork. loads a thumbnail with CORS and
@@ -105,8 +107,11 @@
 
 	function onKeydown(event: KeyboardEvent) {
 		if (event.metaKey || event.ctrlKey || event.altKey) return;
-		const target = event.target as HTMLElement | null;
-		if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable))
+		const target = event.target;
+		if (
+			target instanceof HTMLElement &&
+			(target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)
+		)
 			return;
 		if (event.key === 'ArrowRight') flip('next');
 		else if (event.key === 'ArrowLeft') flip('prev');

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { browser } from '$app/environment';
 	import { player } from '$lib/player.svelte';
 	import { queue } from '$lib/queue.svelte';
 
@@ -25,7 +26,7 @@
 	});
 
 	function animateSeek() {
-		if (typeof window === 'undefined') return;
+		if (!browser) return;
 		if (!isScrubbing) {
 			const liveTime = player.audioElement?.currentTime;
 			if (liveTime !== undefined && !Number.isNaN(liveTime)) {
@@ -39,11 +40,11 @@
 
 	onMount(() => {
 		seekValue = player.currentTime || 0;
-		if (typeof window !== 'undefined') {
+		if (browser) {
 			rafId = window.requestAnimationFrame(animateSeek);
 		}
 		return () => {
-			if (typeof window !== 'undefined' && rafId !== null) {
+			if (browser && rafId !== null) {
 				window.cancelAnimationFrame(rafId);
 			}
 		};
@@ -73,9 +74,11 @@
 		}
 	}
 
-	function handleSeekInput(event: Event) {
+	type SliderEvent<E extends Event> = E & { currentTarget: HTMLInputElement };
+
+	function handleSeekInput(event: SliderEvent<Event>) {
 		isScrubbing = true;
-		const value = Number((event.currentTarget as HTMLInputElement).value);
+		const value = Number(event.currentTarget.value);
 		seekValue = value;
 	}
 
@@ -84,20 +87,20 @@
 		seekValue = value;
 	}
 
-	function handleSeekChange(event: Event) {
-		const value = Number((event.currentTarget as HTMLInputElement).value);
+	function handleSeekChange(event: SliderEvent<Event>) {
+		const value = Number(event.currentTarget.value);
 		commitSeek(value);
 	}
 
-	function handleSeekPointerUp(event: PointerEvent) {
-		const value = Number((event.currentTarget as HTMLInputElement).value);
+	function handleSeekPointerUp(event: SliderEvent<PointerEvent>) {
+		const value = Number(event.currentTarget.value);
 		commitSeek(value);
 		isScrubbing = false;
 	}
 
-	function handleSeekPointerCancel(event?: PointerEvent) {
+	function handleSeekPointerCancel(event?: SliderEvent<PointerEvent>) {
 		if (event) {
-			const value = Number((event.currentTarget as HTMLInputElement).value);
+			const value = Number(event.currentTarget.value);
 			commitSeek(value);
 		}
 		isScrubbing = false;

@@ -22,9 +22,13 @@
 	import { fetchLikedTracks } from '$lib/tracks.svelte';
 	import { createListReorder, moveItem } from '$lib/list-reorder.svelte';
 	import * as playlistActions from '$lib/playlist-actions';
-	import type { PlaylistTrackCandidate } from '$lib/playlist-actions';
+	import type { PlaylistTrackCandidate, PlaylistUpdate } from '$lib/playlist-actions';
 	import type { PageData } from './$types';
 	import type { PlaylistWithTracks, Track } from '$lib/types';
+
+	interface TracksCacheSnapshot {
+		tracks?: Track[];
+	}
 
 	let { data }: { data: PageData } = $props();
 	let playlist = $state<PlaylistWithTracks>(data.playlist);
@@ -95,7 +99,7 @@
 		try {
 			const cachedRaw = localStorage.getItem('tracks_cache');
 			if (!cachedRaw) return;
-			const cached = JSON.parse(cachedRaw) as { tracks?: Track[] };
+			const cached: TracksCacheSnapshot = JSON.parse(cachedRaw);
 			const cachedTracks = cached.tracks ?? [];
 			if (cachedTracks.length === 0) return;
 
@@ -256,11 +260,11 @@
 	}
 
 	async function savePlaylistMetadata(nameChanged: boolean, showOnProfileChanged: boolean) {
+		const update: PlaylistUpdate = {};
+		if (nameChanged) update.name = editName.trim();
+		if (showOnProfileChanged) update.show_on_profile = editShowOnProfile;
 		try {
-			const updated = await playlistActions.updatePlaylist(playlist.id, {
-				...(nameChanged ? { name: editName.trim() } : {}),
-				...(showOnProfileChanged ? { show_on_profile: editShowOnProfile } : {})
-			});
+			const updated = await playlistActions.updatePlaylist(playlist.id, update);
 			playlist.name = updated.name;
 			playlist.show_on_profile = updated.show_on_profile;
 		} catch (e) {
@@ -302,9 +306,8 @@
 		}
 	}
 
-	function handleCoverSelect(event: Event) {
-		const input = event.target as HTMLInputElement;
-		const file = input.files?.[0];
+	function handleCoverSelect(event: Event & { currentTarget: HTMLInputElement }) {
+		const file = event.currentTarget.files?.[0];
 		if (!file) return;
 
 		if (!file.type.startsWith('image/')) {

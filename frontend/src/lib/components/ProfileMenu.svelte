@@ -110,9 +110,8 @@
 		await preferences.update({ accent_color: color });
 	}
 
-	function handleColorInput(event: Event) {
-		const input = event.target as HTMLInputElement;
-		applyColor(input.value);
+	function handleColorInput(event: Event & { currentTarget: HTMLInputElement }) {
+		applyColor(event.currentTarget.value);
 	}
 
 	function selectPreset(color: string) {
@@ -125,13 +124,13 @@
 		await preferences.updateUiSettings({ font_family: font });
 	}
 
-	async function handleKeepPlayingToggle(event: Event) {
-		const value = (event.target as HTMLInputElement).checked;
+	async function handleKeepPlayingToggle(event: Event & { currentTarget: HTMLInputElement }) {
+		const value = event.currentTarget.checked;
 		await preferences.updateUiSettings({ keep_playing: value });
 	}
 
-	async function handlePlayThroughCollectionsToggle(event: Event) {
-		const value = (event.target as HTMLInputElement).checked;
+	async function handlePlayThroughCollectionsToggle(event: Event & { currentTarget: HTMLInputElement }) {
+		const value = event.currentTarget.checked;
 		await preferences.updateUiSettings({ play_through_collections: value });
 	}
 

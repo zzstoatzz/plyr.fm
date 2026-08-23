@@ -24,7 +24,7 @@ export const load: PageServerLoad = async ({ params, fetch }) => {
 		}
 
 		const data = await response.json();
-		const tag = data.tag as TagDetail;
+		const tag: TagDetail = data.tag;
 
 		return {
 			tag,

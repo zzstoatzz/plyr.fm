@@ -40,8 +40,8 @@ function openDatabase(): Promise<IDBDatabase> {
 		request.onerror = () => reject(request.error);
 		request.onsuccess = () => resolve(request.result);
 
-		request.onupgradeneeded = (event) => {
-			const db = (event.target as IDBOpenDBRequest).result;
+		request.onupgradeneeded = () => {
+			const db = request.result;
 
 			if (!db.objectStoreNames.contains(DOWNLOADS_STORE)) {
 				const store = db.createObjectStore(DOWNLOADS_STORE, { keyPath: 'file_id' });
@@ -305,8 +305,8 @@ export async function downloadAllLikedTracks(): Promise<number> {
 		throw new Error(`failed to fetch liked tracks: ${response.status}`);
 	}
 
-	const data = await response.json();
-	const tracks = data.tracks as { file_id: string }[];
+	const data: { tracks: { file_id: string }[] } = await response.json();
+	const tracks = data.tracks;
 
 	let downloadedCount = 0;
 

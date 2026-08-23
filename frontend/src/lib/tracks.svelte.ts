@@ -1,3 +1,4 @@
+import { browser } from '$app/environment';
 import { safeLocalStorage } from './utils/safe-storage';
 import { API_URL } from './config';
 import type { Track } from './types';
@@ -19,7 +20,7 @@ interface CachedTracksData {
 
 // load cached tracks from localStorage (no time check - trust invalidate() calls)
 function loadCachedTracks(): CachedTracksData {
-	if (typeof window === 'undefined') {
+	if (!browser) {
 		return { tracks: [], nextCursor: null, hasMore: true };
 	}
 	try {
@@ -44,7 +45,7 @@ function loadCachedTracks(): CachedTracksData {
 }
 
 function loadSavedTags(): string[] {
-	if (typeof window === 'undefined') return [];
+	if (!browser) return [];
 	try {
 		const saved = safeLocalStorage.getItem('active_tags');
 		return saved ? JSON.parse(saved) : [];
@@ -63,7 +64,7 @@ class TracksCache {
 	activeTags = $state<string[]>(loadSavedTags());
 
 	private persistToStorage(): void {
-		if (typeof window !== 'undefined' && this.activeTags.length === 0) {
+		if (browser && this.activeTags.length === 0) {
 			try {
 				safeLocalStorage.setItem(
 					'tracks_cache',
@@ -143,7 +144,7 @@ class TracksCache {
 
 	invalidate(): void {
 		// clear cache and reset pagination state - next fetch will get fresh data
-		if (typeof window !== 'undefined') {
+		if (browser) {
 			safeLocalStorage.removeItem('tracks_cache');
 		}
 		this.nextCursor = null;
@@ -154,7 +155,7 @@ class TracksCache {
 		this.activeTags = tags;
 		this.nextCursor = null;
 		this.hasMore = true;
-		if (typeof window !== 'undefined') {
+		if (browser) {
 			if (tags.length > 0) {
 				safeLocalStorage.setItem('active_tags', JSON.stringify(tags));
 			} else {

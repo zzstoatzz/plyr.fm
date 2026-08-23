@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { Track } from '$lib/types';
 	import { onMount } from 'svelte';
+	import { browser } from '$app/environment';
 	import SensitiveImage from '$lib/components/SensitiveImage.svelte';
 	import { IMAGE_WIDTHS, resizedImageUrl } from '$lib/utils/display-image';
 
@@ -21,7 +22,7 @@
 	let imageError = $state(false);
 
 	function checkOverflows() {
-		if (typeof window === 'undefined') return;
+		if (!browser) return;
 
 		window.requestAnimationFrame(() => {
 			if (titleEl) {

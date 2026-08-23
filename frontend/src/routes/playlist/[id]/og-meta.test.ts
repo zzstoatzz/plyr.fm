@@ -2,11 +2,10 @@
 // object field-by-field from /meta; dropping a field there silently strips
 // it from the OG head render (preview_thumbnails went missing → imageless
 // link previews for composite covers).
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
+import { trace } from '@opentelemetry/api';
 import type { LoadEvent } from '@sveltejs/kit';
 import type { Playlist } from '$lib/types';
-
-vi.mock('$app/environment', () => ({ browser: false }));
 
 import { load } from './+page';
 
@@ -23,21 +22,31 @@ const meta: Playlist = {
 	preview_thumbnails: ['a.webp', 'b.webp', 'c.webp', 'd.webp']
 };
 
+function loadEvent(playlistMeta: Playlist | null): LoadEvent {
+	const span = trace.getTracer('test').startSpan('sveltekit.handle.root');
+	return {
+		tracing: { enabled: false, root: span, current: span },
+		params: { id: 'p1' },
+		data: { playlistMeta },
+		url: new URL('http://localhost/playlist/p1'),
+		route: { id: '/playlist/[id]' },
+		fetch,
+		setHeaders: () => {},
+		depends: () => {},
+		parent: () => Promise.resolve({}),
+		untrack: (fn) => fn()
+	};
+}
+
 describe('playlist SSR load', () => {
 	it('carries preview_thumbnails through to the head data', async () => {
-		const result = await load({
-			params: { id: 'p1' },
-			data: { playlistMeta: meta }
-		} as unknown as LoadEvent);
+		const result = await load(loadEvent(meta), true);
 
 		expect(result.playlist.preview_thumbnails).toEqual(['a.webp', 'b.webp', 'c.webp', 'd.webp']);
 	});
 
 	it('defaults to no previews when meta is unavailable', async () => {
-		const result = await load({
-			params: { id: 'p1' },
-			data: { playlistMeta: null }
-		} as unknown as LoadEvent);
+		const result = await load(loadEvent(null), true);
 
 		expect(result.playlist.preview_thumbnails).toEqual([]);
 	});

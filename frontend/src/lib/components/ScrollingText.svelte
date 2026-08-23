@@ -3,6 +3,8 @@
 	// native tooltip, and marquee-scrolls on hover when it overflows — the same
 	// scroll technique the footer player uses (TrackInfo.svelte), factored out so
 	// list rows (the queue) can reuse it without every row animating at once.
+	import { browser } from '$app/environment';
+
 	interface Props {
 		text: string;
 		/** 'hover' scrolls only while hovered (calm lists); 'always' scrolls whenever it overflows. */
@@ -16,7 +18,7 @@
 	let hovered = $state(false);
 
 	function measure() {
-		if (typeof window === 'undefined' || !el) return;
+		if (!browser || !el) return;
 		window.requestAnimationFrame(() => {
 			if (el) overflows = el.scrollWidth > el.clientWidth;
 		});

@@ -5,6 +5,7 @@ import { API_URL } from './config';
 import { toast } from './toast.svelte';
 import { tracksCache } from './tracks.svelte';
 import type { FeaturedArtist } from './types';
+import type { TrackRights } from './components/CopyrightRightsPanel.svelte';
 import { setReturnUrl } from './utils/return-url';
 
 interface UploadTask {
@@ -24,6 +25,19 @@ interface UploadProgressCallback {
 	onProgress?: (_loaded: number, _total: number) => void;
 	onSuccess?: (_uploadId: string) => void;
 	onError?: (_error: string) => void;
+}
+
+/** one SSE frame from `/tracks/uploads/{id}/progress` */
+interface UploadProgressUpdate {
+	status?: 'processing' | 'completed' | 'failed';
+	message?: string;
+	server_progress_pct?: number | null;
+	track_id?: number | null;
+	atproto_uri?: string | null;
+	atproto_cid?: string | null;
+	warnings?: string[];
+	pds_blob_failed?: boolean;
+	error?: string;
 }
 
 export interface UploadResult {
@@ -129,7 +143,7 @@ class UploaderState {
 		callbacks?: UploadProgressCallback,
 		label?: string,
 		albumId?: string,
-		copyright?: object | null,
+		copyright?: TrackRights | null,
 		selfLabels: string[] = []
 	): void {
 		const taskId = crypto.randomUUID();
@@ -233,7 +247,7 @@ class UploaderState {
 					task.eventSource = eventSource;
 
 					eventSource.onmessage = (event) => {
-						const update = JSON.parse(event.data);
+						const update: UploadProgressUpdate = JSON.parse(event.data);
 
 						// show backend processing messages
 						if (update.message && update.status === 'processing') {
@@ -252,7 +266,7 @@ class UploaderState {
 							toast.dismiss(task.toastId);
 							this.activeUploads.delete(taskId);
 
-							const trackId = update.track_id;
+							const trackId = update.track_id ?? null;
 							toast.success(`"${displayName}" uploaded`, 5000, trackId ? {
 								label: 'view track',
 								href: `/track/${trackId}`
@@ -270,7 +284,7 @@ class UploaderState {
 							tracksCache.fetch(true);
 							if (onSuccess) {
 								onSuccess(
-									typeof trackId === 'number'
+									trackId !== null
 										? {
 												trackId,
 												atprotoUri: update.atproto_uri ?? null,
@@ -435,7 +449,7 @@ class UploaderState {
 					task.eventSource = eventSource;
 
 					eventSource.onmessage = (event) => {
-						const update = JSON.parse(event.data);
+						const update: UploadProgressUpdate = JSON.parse(event.data);
 
 						if (update.message && update.status === 'processing') {
 							const serverProgress = update.server_progress_pct;

@@ -9,13 +9,19 @@
  * WAV: uncompressed, universally playable, and entirely on our side.
  */
 
+declare global {
+	interface Window {
+		/** older iOS Safari still ships AudioContext under the webkit prefix */
+		webkitAudioContext?: typeof AudioContext;
+	}
+}
+
 /** 16-bit PCM keeps the file honest without the weight of 24/32-bit. */
 const BYTES_PER_SAMPLE = 2;
 
-function audioContextCtor(): typeof AudioContext {
-	const ctor =
-		window.AudioContext ??
-		(window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+/** the browser's AudioContext constructor, prefixed or not. */
+export function audioContextCtor(): typeof AudioContext {
+	const ctor = window.AudioContext ?? window.webkitAudioContext;
 	if (!ctor) throw new Error('AudioContext is not available in this browser');
 	return ctor;
 }

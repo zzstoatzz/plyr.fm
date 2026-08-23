@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from "svelte";
+	import { browser } from "$app/environment";
 	import Header from "$lib/components/Header.svelte";
 	import HandleSearch from "$lib/components/HandleSearch.svelte";
 	import AlbumSelect from "$lib/components/AlbumSelect.svelte";
@@ -46,7 +47,7 @@
 
 	// upload mode: track (single) or album (multi-track)
 	let mode = $state<'track' | 'album'>(
-		typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('mode') === 'album'
+		browser && new URLSearchParams(window.location.search).get('mode') === 'album'
 			? 'album'
 			: 'track'
 	);
@@ -77,7 +78,13 @@
 	// visibility/access — one mutually-exclusive choice:
 	//   public | unlisted | supporters | private
 	// "private" is only offered when the PDS supports com.atproto.space.* (/auth/me).
-	let visibility = $state<'public' | 'unlisted' | 'supporters' | 'private'>('public');
+	const VISIBILITIES = ['public', 'unlisted', 'supporters', 'private'] as const;
+	type Visibility = (typeof VISIBILITIES)[number];
+	let visibility = $state<Visibility>('public');
+
+	function parseVisibility(raw: string | undefined): Visibility {
+		return VISIBILITIES.find((option) => option === raw) ?? 'public';
+	}
 	const permissionedSupported = $derived(
 		auth.user?.permissioned_spaces?.supported ?? false
 	);
@@ -120,7 +127,7 @@
 			attestedRights = stashed.attestedRights;
 			autoTag = stashed.autoTag;
 			sensitiveAudio = stashed.sensitiveAudio ?? false;
-			visibility = (stashed.visibility ?? 'public') as typeof visibility;
+			visibility = parseVisibility(stashed.visibility);
 			clearTrackFormStash();
 			const files = await takeUploadFiles();
 			if (files) {
@@ -259,14 +266,10 @@
 			copyrightEnabled = false;
 			copyrightRights = {};
 
-			const fileInput = document.getElementById(
-				"file-input",
-			) as HTMLInputElement;
-			if (fileInput) fileInput.value = "";
-			const imageInput = document.getElementById(
-				"image-input",
-			) as HTMLInputElement;
-			if (imageInput) imageInput.value = "";
+			const fileInput = document.getElementById("file-input");
+			if (fileInput instanceof HTMLInputElement) fileInput.value = "";
+			const imageInput = document.getElementById("image-input");
+			if (imageInput instanceof HTMLInputElement) imageInput.value = "";
 		};
 
 		const copyrightToSend: TrackRights | null = copyrightEnabled
@@ -319,8 +322,8 @@
 		);
 	}
 
-	async function handleFileChange(e: Event) {
-		const target = e.target as HTMLInputElement;
+	async function handleFileChange(e: Event & { currentTarget: HTMLInputElement }) {
+		const target = e.currentTarget;
 		if (target.files && target.files[0]) {
 			const selected = target.files[0];
 			if (!isSupportedAudioFile(selected.name)) {
@@ -351,8 +354,8 @@
 		}
 	}
 
-	async function handleImageChange(e: Event) {
-		const target = e.target as HTMLInputElement;
+	async function handleImageChange(e: Event & { currentTarget: HTMLInputElement }) {
+		const target = e.currentTarget;
 		if (target.files && target.files[0]) {
 			const selected = target.files[0];
 

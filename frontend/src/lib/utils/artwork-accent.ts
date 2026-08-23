@@ -20,11 +20,12 @@ export interface ArtworkAccent {
 
 const SAMPLE_SIZE = 28;
 
-function rgbToHsl(
-	red: number,
-	green: number,
-	blue: number
-): { saturation: number; lightness: number } {
+interface HslSample {
+	saturation: number;
+	lightness: number;
+}
+
+function rgbToHsl(red: number, green: number, blue: number): HslSample {
 	const r = red / 255;
 	const g = green / 255;
 	const b = blue / 255;

@@ -9,34 +9,39 @@ export interface PageData {
 	playlistMeta: Playlist | null;
 }
 
-export async function load({ params, data }: LoadEvent): Promise<PageData> {
-	// server data for OG tags
-	const serverData = data as { playlistMeta: Playlist | null } | undefined;
+export async function load({ params, data }: LoadEvent, ssr = !browser): Promise<PageData> {
+	const id = params.id;
+	if (id === undefined) {
+		throw error(404, 'playlist not found');
+	}
 
-	if (!browser) {
+	// server data for OG tags
+	const playlistMeta: Playlist | null = data?.playlistMeta ?? null;
+
+	if (ssr) {
 		// during SSR, we don't have auth - just return meta for OG tags
 		// playlist will be loaded client-side
 		return {
 			playlist: {
-				id: params.id as string,
-				name: serverData?.playlistMeta?.name ?? 'playlist',
-				owner_did: serverData?.playlistMeta?.owner_did ?? '',
-				owner_handle: serverData?.playlistMeta?.owner_handle ?? '',
-				track_count: serverData?.playlistMeta?.track_count ?? 0,
-				image_url: serverData?.playlistMeta?.image_url,
-				show_on_profile: serverData?.playlistMeta?.show_on_profile ?? false,
-				atproto_record_uri: serverData?.playlistMeta?.atproto_record_uri ?? null,
-				is_private: serverData?.playlistMeta?.is_private ?? false,
-				created_at: serverData?.playlistMeta?.created_at ?? '',
-				preview_thumbnails: serverData?.playlistMeta?.preview_thumbnails ?? [],
+				id,
+				name: playlistMeta?.name ?? 'playlist',
+				owner_did: playlistMeta?.owner_did ?? '',
+				owner_handle: playlistMeta?.owner_handle ?? '',
+				track_count: playlistMeta?.track_count ?? 0,
+				image_url: playlistMeta?.image_url,
+				show_on_profile: playlistMeta?.show_on_profile ?? false,
+				atproto_record_uri: playlistMeta?.atproto_record_uri ?? null,
+				is_private: playlistMeta?.is_private ?? false,
+				created_at: playlistMeta?.created_at ?? '',
+				preview_thumbnails: playlistMeta?.preview_thumbnails ?? [],
 				tracks: [],
 			},
-			playlistMeta: serverData?.playlistMeta ?? null,
+			playlistMeta,
 		};
 	}
 
 	// playlist endpoint is public - no auth required
-	const response = await fetch(`${API_URL}/lists/playlists/${params.id}`, {
+	const response = await fetch(`${API_URL}/lists/playlists/${id}`, {
 		credentials: 'include'
 	});
 
@@ -50,6 +55,6 @@ export async function load({ params, data }: LoadEvent): Promise<PageData> {
 	const playlist = await response.json();
 	return {
 		playlist,
-		playlistMeta: serverData?.playlistMeta ?? null,
+		playlistMeta,
 	};
 }

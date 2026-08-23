@@ -3,16 +3,17 @@
 // matched-song text and a link to the docs — the old native `title` attribute
 // gave none of this on touch (see Woody report).
 import { describe, it, expect, afterEach } from 'vitest';
-import { mount, unmount, flushSync } from 'svelte';
+import { mount, unmount, flushSync, type ComponentProps } from 'svelte';
 import CopyrightFlag from '$lib/components/portal/CopyrightFlag.svelte';
 
-let component: Record<string, unknown> | null = null;
+let cleanup: (() => void) | null = null;
 
-function mountFlag(props: Record<string, unknown>): HTMLButtonElement {
-	component = mount(CopyrightFlag, { target: document.body, props });
+function mountFlag(props: ComponentProps<typeof CopyrightFlag>): HTMLButtonElement {
+	const component = mount(CopyrightFlag, { target: document.body, props });
+	cleanup = () => unmount(component);
 	const trigger = document.querySelector<HTMLButtonElement>('.copyright-flag-trigger');
-	expect(trigger).toBeTruthy();
-	return trigger!;
+	if (!trigger) throw new Error('copyright flag trigger did not render');
+	return trigger;
 }
 
 function popover(): HTMLElement | null {
@@ -20,10 +21,8 @@ function popover(): HTMLElement | null {
 }
 
 afterEach(() => {
-	if (component) {
-		unmount(component);
-		component = null;
-	}
+	cleanup?.();
+	cleanup = null;
 	document.body.innerHTML = '';
 });
 

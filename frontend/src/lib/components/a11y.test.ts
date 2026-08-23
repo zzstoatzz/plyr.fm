@@ -3,20 +3,21 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { mount, unmount } from 'svelte';
 
-let comp: Record<string, unknown> | null = null;
+let cleanup: (() => void) | null = null;
 afterEach(() => {
-	if (comp) unmount(comp);
-	comp = null;
+	cleanup?.();
+	cleanup = null;
 	document.body.innerHTML = '';
 });
 
 describe('a11y: TagInput', () => {
 	it('labels the icon-only remove button and the text input', async () => {
 		const TagInput = (await import('./TagInput.svelte')).default;
-		comp = mount(TagInput, {
+		const comp = mount(TagInput, {
 			target: document.body,
 			props: { tags: ['house'], onAdd: () => {}, onRemove: () => {} }
 		});
+		cleanup = () => unmount(comp);
 		const remove = document.querySelector<HTMLButtonElement>('.tag-remove');
 		expect(remove?.getAttribute('aria-label')).toBe('remove house');
 		const input = document.querySelector<HTMLInputElement>('.tag-input');
@@ -27,7 +28,8 @@ describe('a11y: TagInput', () => {
 describe('a11y: WaveLoading', () => {
 	it('exposes a status role with an accessible name and hides the decorative bars', async () => {
 		const WaveLoading = (await import('./WaveLoading.svelte')).default;
-		comp = mount(WaveLoading, { target: document.body, props: { message: 'loading tracks' } });
+		const comp = mount(WaveLoading, { target: document.body, props: { message: 'loading tracks' } });
+		cleanup = () => unmount(comp);
 		const status = document.querySelector<HTMLElement>('.wave-loading');
 		expect(status?.getAttribute('role')).toBe('status');
 		expect(status?.getAttribute('aria-label')).toBe('loading tracks');
@@ -36,7 +38,8 @@ describe('a11y: WaveLoading', () => {
 
 	it('falls back to a generic label when no message is given', async () => {
 		const WaveLoading = (await import('./WaveLoading.svelte')).default;
-		comp = mount(WaveLoading, { target: document.body, props: {} });
+		const comp = mount(WaveLoading, { target: document.body, props: {} });
+		cleanup = () => unmount(comp);
 		expect(document.querySelector('.wave-loading')?.getAttribute('aria-label')).toBe('loading');
 	});
 });

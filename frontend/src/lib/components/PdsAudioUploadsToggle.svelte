@@ -4,9 +4,8 @@
 
 	let enabled = $derived(preferences.uiSettings.pds_audio_uploads_enabled ?? true);
 
-	async function handleToggle(event: Event) {
-		const input = event.target as HTMLInputElement;
-		const nextEnabled = input.checked;
+	async function handleToggle(event: Event & { currentTarget: HTMLInputElement }) {
+		const nextEnabled = event.currentTarget.checked;
 		await preferences.updateUiSettings({ pds_audio_uploads_enabled: nextEnabled });
 		toast.success(
 			nextEnabled

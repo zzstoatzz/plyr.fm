@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { feedback, REPORT_REASONS, type ReportReason } from '$lib/feedback.svelte';
+	import { feedback, REPORT_REASONS } from '$lib/feedback.svelte';
 
 	function handleBackdropClick(event: MouseEvent) {
 		if (event.target === event.currentTarget) {
@@ -14,19 +14,18 @@
 		}
 	}
 
-	function handleSearchInput(event: Event) {
-		const target = event.target as HTMLInputElement;
-		feedback.setSearchQuery(target.value);
+	function handleSearchInput(event: Event & { currentTarget: HTMLInputElement }) {
+		feedback.setSearchQuery(event.currentTarget.value);
 	}
 
-	function handleDescriptionInput(event: Event) {
-		const target = event.target as HTMLTextAreaElement;
-		feedback.setDescription(target.value);
+	function handleDescriptionInput(event: Event & { currentTarget: HTMLTextAreaElement }) {
+		feedback.setDescription(event.currentTarget.value);
 	}
 
-	function handleReasonChange(event: Event) {
-		const target = event.target as HTMLSelectElement;
-		feedback.setReason(target.value as ReportReason);
+	function handleReasonChange(event: Event & { currentTarget: HTMLSelectElement }) {
+		const selected = event.currentTarget.value;
+		const reason = REPORT_REASONS.find((r) => r.value === selected);
+		if (reason) feedback.setReason(reason.value);
 	}
 </script>
 

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { browser } from '$app/environment';
 	import { page } from '$app/stores';
 	import TrackItem from '$lib/components/TrackItem.svelte';
 	import TrackCard from '$lib/components/TrackCard.svelte';
@@ -17,6 +18,7 @@
 	import type { Track } from '$lib/types';
 	import { auth } from '$lib/auth.svelte';
 	import { preferences } from '$lib/preferences.svelte';
+	import { safeLocalStorage } from '$lib/utils/safe-storage';
 	import { toast } from '$lib/toast.svelte';
 	import { fade } from 'svelte/transition';
 	import { APP_NAME, APP_TAGLINE, APP_CANONICAL_URL } from '$lib/branding';
@@ -27,10 +29,16 @@
 	} from '$lib/avatar-refresh.svelte';
 
 	// feed mode state
-	type FeedMode = 'latest' | 'for-you';
-	let feedMode = $state<FeedMode>(
-		(typeof window !== 'undefined' && localStorage.getItem('feedMode') as FeedMode) || 'latest'
-	);
+	const FEED_MODES = ['latest', 'for-you'] as const;
+	type FeedMode = (typeof FEED_MODES)[number];
+
+	function readSavedFeedMode(): FeedMode {
+		if (!browser) return 'latest';
+		const saved = safeLocalStorage.getItem('feedMode');
+		return FEED_MODES.find((mode) => mode === saved) ?? 'latest';
+	}
+
+	let feedMode = $state<FeedMode>(readSavedFeedMode());
 	let forYouAvailable = $state(false);
 
 	// use active feed cache based on mode
@@ -51,19 +59,25 @@
 
 	// top tracks period toggle
 	const PERIODS = ['all_time', 'month', 'week', 'day'] as const;
-	const PERIOD_LABELS: Record<string, string> = {
+	type Period = (typeof PERIODS)[number];
+	const PERIOD_LABELS = {
 		all_time: 'all time',
 		month: 'past month',
 		week: 'past week',
 		day: 'past day'
-	};
-	let topTracksPeriod = $state(
-		(typeof window !== 'undefined' && localStorage.getItem('topTracksPeriod')) || 'all_time'
-	);
-	let periodLabel = $derived(PERIOD_LABELS[topTracksPeriod] ?? 'all time');
+	} satisfies Record<Period, string>;
+
+	function readSavedPeriod(): Period {
+		if (!browser) return 'all_time';
+		const saved = safeLocalStorage.getItem('topTracksPeriod');
+		return PERIODS.find((period) => period === saved) ?? 'all_time';
+	}
+
+	let topTracksPeriod = $state<Period>(readSavedPeriod());
+	let periodLabel = $derived(PERIOD_LABELS[topTracksPeriod]);
 
 	async function cyclePeriod() {
-		const startIdx = PERIODS.indexOf(topTracksPeriod as (typeof PERIODS)[number]);
+		const startIdx = PERIODS.indexOf(topTracksPeriod);
 		loadingTopTracks = true;
 
 		// try each subsequent period, skipping empty ones
@@ -77,9 +91,7 @@
 			}
 		}
 
-		if (typeof window !== 'undefined') {
-			localStorage.setItem('topTracksPeriod', topTracksPeriod);
-		}
+		safeLocalStorage.setItem('topTracksPeriod', topTracksPeriod);
 		loadingTopTracks = false;
 	}
 
@@ -96,21 +108,32 @@
 	// infinite scroll sentinel element
 	let sentinelElement = $state<HTMLDivElement | null>(null);
 
+	const AUTH_ERROR_MESSAGES = {
+		scope_mismatch:
+			'sign-in failed — your PDS did not grant the permissions plyr.fm needs. it may not support permission sets yet.',
+		expired: 'sign-in expired — please try again.',
+		access_denied: 'sign-in cancelled.',
+		failed: 'sign-in failed — please try again.'
+	};
+	type AuthErrorCode = keyof typeof AUTH_ERROR_MESSAGES;
+
+	function isAuthErrorCode(code: string): code is AuthErrorCode {
+		return code in AUTH_ERROR_MESSAGES;
+	}
+
 	onMount(async () => {
 		const [topResult] = await Promise.all([fetchTopTracks(10, topTracksPeriod), tracksCache.fetch()]);
 
 		// if saved period is empty, find the first non-empty one
 		if (topResult.length === 0) {
-			const startIdx = PERIODS.indexOf(topTracksPeriod as (typeof PERIODS)[number]);
+			const startIdx = PERIODS.indexOf(topTracksPeriod);
 			for (let i = 1; i < PERIODS.length; i++) {
 				const candidate = PERIODS[(startIdx + i) % PERIODS.length];
 				const result = await fetchTopTracks(10, candidate);
 				if (result.length > 0) {
 					topTracksPeriod = candidate;
 					topTracks = result;
-					if (typeof window !== 'undefined') {
-						localStorage.setItem('topTracksPeriod', topTracksPeriod);
-					}
+					safeLocalStorage.setItem('topTracksPeriod', topTracksPeriod);
 					break;
 				}
 			}
@@ -124,14 +147,10 @@
 		// show toast for OAuth errors (e.g. PDS scope mismatch)
 		const authError = $page.url.searchParams.get('auth_error');
 		if (authError) {
-			const messages: Record<string, string> = {
-				scope_mismatch:
-					'sign-in failed — your PDS did not grant the permissions plyr.fm needs. it may not support permission sets yet.',
-				expired: 'sign-in expired — please try again.',
-				access_denied: 'sign-in cancelled.',
-				failed: 'sign-in failed — please try again.'
-			};
-			toast.error(messages[authError] ?? messages.failed, authError === 'scope_mismatch' ? 8000 : 5000);
+			const message = isAuthErrorCode(authError)
+				? AUTH_ERROR_MESSAGES[authError]
+				: AUTH_ERROR_MESSAGES.failed;
+			toast.error(message, authError === 'scope_mismatch' ? 8000 : 5000);
 			// clean auth_error from URL without navigation
 			goto('/', { replaceState: true });
 		}

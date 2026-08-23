@@ -14,6 +14,8 @@ import WaveLoading from '$lib/components/WaveLoading.svelte';
 	import { getReturnUrl, clearReturnUrl } from '$lib/utils/return-url';
 	import { redirectToLogin } from '$lib/utils/auth-redirect';
 
+	type InputChangeEvent = Event & { currentTarget: HTMLInputElement };
+
 	let loading = $state(true);
 
 	// derive from preferences store
@@ -196,9 +198,8 @@ import WaveLoading from '$lib/components/WaveLoading.svelte';
 		await preferences.update({ accent_color: color });
 	}
 
-	function handleColorInput(event: Event) {
-		const input = event.target as HTMLInputElement;
-		applyColor(input.value);
+	function handleColorInput(event: InputChangeEvent) {
+		applyColor(event.currentTarget.value);
 	}
 
 	function selectPreset(color: string) {
@@ -249,14 +250,12 @@ import WaveLoading from '$lib/components/WaveLoading.svelte';
 		preferences.setTheme(theme);
 	}
 
-	async function handleKeepPlayingToggle(event: Event) {
-		const value = (event.target as HTMLInputElement).checked;
-		await preferences.updateUiSettings({ keep_playing: value });
+	async function handleKeepPlayingToggle(event: InputChangeEvent) {
+		await preferences.updateUiSettings({ keep_playing: event.currentTarget.checked });
 	}
 
-	async function handlePlayThroughCollectionsToggle(event: Event) {
-		const value = (event.target as HTMLInputElement).checked;
-		await preferences.updateUiSettings({ play_through_collections: value });
+	async function handlePlayThroughCollectionsToggle(event: InputChangeEvent) {
+		await preferences.updateUiSettings({ play_through_collections: event.currentTarget.checked });
 	}
 
 	function handleAutoDownloadToggle(enabled: boolean) {

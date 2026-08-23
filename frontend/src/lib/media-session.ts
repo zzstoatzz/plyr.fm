@@ -29,7 +29,7 @@ export interface MediaMetadataInput {
 }
 
 function hasMediaSession(): boolean {
-	return typeof navigator !== 'undefined' && 'mediaSession' in navigator;
+	return 'navigator' in globalThis && 'mediaSession' in navigator;
 }
 
 function buildArtwork(input: MediaMetadataInput): MediaImage[] {
@@ -99,9 +99,11 @@ export function setMediaSessionActionHandlers(
 	handlers: MediaSessionHandlers
 ): void {
 	if (!hasMediaSession()) return;
-	for (const [action, handler] of Object.entries(handlers) as Array<
+	// SAFETY: MediaSessionHandlers is keyed by MediaSessionAction; Object.entries only widens the key to string
+	const entries = Object.entries(handlers) as Array<
 		[MediaSessionAction, MediaSessionActionHandler | null]
-	>) {
+	>;
+	for (const [action, handler] of entries) {
 		try {
 			navigator.mediaSession.setActionHandler(action, handler);
 		} catch {

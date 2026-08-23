@@ -5,7 +5,14 @@ import { API_URL, getServerConfig } from '$lib/config';
 import { auth } from '$lib/auth.svelte';
 import { ambient } from '$lib/ambient.svelte';
 
-export type Theme = 'dark' | 'light' | 'system' | 'live';
+export const THEMES = ['dark', 'light', 'system', 'live'] as const;
+
+export type Theme = (typeof THEMES)[number];
+
+/** the theme a stored string names, or null when it names none */
+function parseTheme(raw: string | null): Theme | null {
+	return THEMES.find((theme) => theme === raw) ?? null;
+}
 
 export type FontFamily = 'mono' | 'geist' | 'inter' | 'comic-sans' | 'georgia' | 'system-ui';
 
@@ -274,7 +281,7 @@ class PreferencesManager {
 			if (response.ok) {
 				const data = await response.json();
 				// theme comes from server (per-account), localStorage is just a flash-prevention cache
-				const serverTheme = (data.theme as Theme) ?? DEFAULT_PREFERENCES.theme;
+				const serverTheme = parseTheme(data.theme) ?? DEFAULT_PREFERENCES.theme;
 				const storedAutoDownload = safeLocalStorage.getItem('autoDownloadLiked') === '1';
 				this.data = {
 					accent_color: data.accent_color ?? null,
@@ -295,7 +302,7 @@ class PreferencesManager {
 				};
 			} else {
 				// server error — fall back to localStorage cache
-				const storedTheme = safeLocalStorage.getItem('theme') as Theme | null;
+				const storedTheme = parseTheme(safeLocalStorage.getItem('theme'));
 				const storedAutoDownload = safeLocalStorage.getItem('autoDownloadLiked') === '1';
 				this.data = { ...DEFAULT_PREFERENCES, theme: storedTheme ?? DEFAULT_PREFERENCES.theme, auto_download_liked: storedAutoDownload };
 			}
@@ -319,7 +326,7 @@ class PreferencesManager {
 		} catch (error) {
 			console.error('failed to fetch preferences:', error);
 			// network error — fall back to localStorage cache
-			const storedTheme = safeLocalStorage.getItem('theme') as Theme | null;
+			const storedTheme = parseTheme(safeLocalStorage.getItem('theme'));
 			this.data = { ...DEFAULT_PREFERENCES, theme: storedTheme ?? DEFAULT_PREFERENCES.theme };
 		} finally {
 			this.loading = false;

@@ -6,7 +6,7 @@
 	import type { Track } from '$lib/types';
 	import { AtlasRenderer, type AtlasData, type AtlasPoint } from './renderer';
 
-	let canvasEl: HTMLCanvasElement;
+	let canvasEl = $state<HTMLCanvasElement>();
 	let renderer: AtlasRenderer | null = null;
 
 	let loading = $state(true);
@@ -41,7 +41,7 @@
 		}
 	}
 
-	function placeTooltip(sx: number, sy: number): { x: number; y: number } {
+	function placeTooltip(sx: number, sy: number) {
 		const pad = 12;
 		const width = 260;
 		let x = sx + 16;
@@ -50,6 +50,7 @@
 	}
 
 	onMount(() => {
+		if (!canvasEl) return;
 		renderer = new AtlasRenderer(canvasEl, {
 			onHover: (point, sx, sy) => {
 				if (!point) {
@@ -101,7 +102,7 @@
 				stats = `${data.meta.nTracks} tracks · ${data.clusters.coarse.length} regions · ${data.clusters.fine.length} clusters`;
 				loading = false;
 			})
-			.catch((e: unknown) => {
+			.catch((e) => {
 				console.error('atlas: failed to load data', e);
 				loadError = 'failed to load the atlas';
 				loading = false;

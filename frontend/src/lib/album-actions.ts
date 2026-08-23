@@ -6,8 +6,8 @@ import { API_URL } from '$lib/config';
 import type { Track } from '$lib/types';
 
 async function detailFrom(response: Response, fallback: string): Promise<string> {
-	const data = await response.json().catch(() => null);
-	return (data as { detail?: string } | null)?.detail || fallback;
+	const data: { detail?: string } | null = await response.json().catch(() => null);
+	return data?.detail || fallback;
 }
 
 export async function updateTitle(albumId: string, title: string): Promise<void> {

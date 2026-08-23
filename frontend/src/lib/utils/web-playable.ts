@@ -11,7 +11,7 @@ export const WEB_PLAYABLE_EXTENSIONS = ['mp3', 'wav', 'm4a', 'flac'] as const;
 /** whether a bare extension (with or without a dot) is web-playable. */
 export function isWebPlayableExtension(extension: string): boolean {
 	const bare = extension.replace(/^\./, '').toLowerCase();
-	return (WEB_PLAYABLE_EXTENSIONS as readonly string[]).includes(bare);
+	return WEB_PLAYABLE_EXTENSIONS.some((playable) => playable === bare);
 }
 
 /** whether a filename's extension is web-playable. */

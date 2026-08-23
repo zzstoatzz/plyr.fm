@@ -2,21 +2,9 @@
 // unauthenticated contexts), and ?autoplay=1 tunes in once state loads.
 import { describe, it, expect, vi, beforeAll, afterEach } from 'vitest';
 import { mount, unmount } from 'svelte';
-
-const prefs = vi.hoisted(() => ({ showSensitiveArtwork: false }));
-vi.mock('$lib/preferences.svelte', () => ({ preferences: prefs }));
-
-// the shared $app/stores stub pins the url to http://localhost/ — the embed
-// reads ?station= and ?autoplay= from it, so tests need a controllable url
-const pageUrl = vi.hoisted(() => ({ value: 'http://localhost/' }));
-vi.mock('$app/stores', () => ({
-	page: {
-		subscribe(run: (value: { url: URL }) => void) {
-			run({ url: new URL(pageUrl.value) });
-			return () => {};
-		}
-	}
-}));
+import RadioEmbed from '$lib/components/embed/RadioEmbed.svelte';
+import { moderation, type SensitiveImagesData } from '$lib/moderation.svelte';
+import type { RadioState, RadioStation } from '$lib/radio.svelte';
 
 // jsdom doesn't implement media playback
 const playSpy = vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue(undefined);
@@ -28,72 +16,96 @@ const SAFE_ART = 'https://images.test/images/safe456.webp';
 let artworkUrl = SENSITIVE_ART;
 let trackNum = 1;
 
-function jsonResponse(body: unknown): Response {
+type StationsPayload = { stations: RadioStation[] };
+
+function jsonResponse(body: RadioState | StationsPayload | SensitiveImagesData): Response {
 	return new Response(JSON.stringify(body), {
 		status: 200,
 		headers: { 'content-type': 'application/json' }
 	});
 }
 
-function radioState() {
+function radioState(): RadioState {
 	return {
+		station: 'loved',
 		station_slug: 'loved',
 		generated_at: new Date().toISOString(),
+		loop_duration_seconds: 100,
+		current_index: 0,
+		current_started_at: null,
+		current_ends_at: null,
 		progress_seconds: 10,
 		current: {
 			id: trackNum,
 			title: `track ${trackNum}`,
+			artist: 'artist',
 			artist_handle: 'artist.test',
-			artwork_url: artworkUrl,
+			artist_did: 'did:plc:artist',
+			stream_url: `https://audio.test/${trackNum}.mp3`,
+			file_type: 'mp3',
 			duration: 100,
-			stream_url: `https://audio.test/${trackNum}.mp3`
+			artwork_url: artworkUrl,
+			thumbnail_url: null,
+			atproto_record_uri: null,
+			atproto_record_cid: null,
+			created_at: '2026-01-01T00:00:00Z',
+			tags: [],
+			like_count: 0,
+			play_count: 0,
+			liked: false
 		},
+		up_next: [],
 		rotation: []
 	};
 }
 
-let component: Record<string, unknown> | null = null;
+let cleanup: (() => void) | null = null;
+
+// the embed reads ?station= and ?autoplay= from its own location
+function setEmbedUrl(search: string): void {
+	window.history.replaceState(null, '', `/${search}`);
+}
 
 async function mountRadioEmbed(): Promise<HTMLImageElement> {
-	const RadioEmbed = (await import('$lib/components/embed/RadioEmbed.svelte')).default;
-	component = mount(RadioEmbed, { target: document.body });
+	const component = mount(RadioEmbed, { target: document.body });
+	cleanup = () => unmount(component);
 	let img: HTMLImageElement | null = null;
 	await vi.waitFor(() => {
-		img = document.querySelector('img.art');
+		img = document.querySelector<HTMLImageElement>('img.art');
 		expect(img).toBeTruthy();
 	});
-	return img!;
+	if (!img) throw new Error('now-playing artwork did not render');
+	return img;
 }
 
 beforeAll(async () => {
 	vi.stubGlobal(
 		'fetch',
-		vi.fn(async (input: RequestInfo | URL) => {
+		vi.fn<typeof fetch>(async (input) => {
 			const url = String(input);
 			if (url.includes('/moderation/sensitive-images')) {
 				return jsonResponse({ image_ids: ['sens123'], urls: [] });
 			}
 			if (url.includes('/radio/stations')) {
-				return jsonResponse({ stations: [{ slug: 'loved', name: 'loved', description: '' }] });
+				return jsonResponse({
+					stations: [{ slug: 'loved', name: 'loved', description: '', is_default: true }]
+				});
 			}
 			if (url.includes('/radio/state')) {
 				return jsonResponse(radioState());
 			}
-			return jsonResponse({});
+			return new Response('{}', { status: 200, headers: { 'content-type': 'application/json' } });
 		})
 	);
 	// seed the registry the same way the root layout does (moderation.initialize → fetch)
-	const { moderation } = await import('$lib/moderation.svelte');
 	await moderation.fetch();
 });
 
 afterEach(() => {
-	if (component) {
-		unmount(component);
-		component = null;
-	}
+	cleanup?.();
+	cleanup = null;
 	document.body.innerHTML = '';
-	pageUrl.value = 'http://localhost/';
+	setEmbedUrl('');
 	trackNum = 1;
 	playSpy.mockClear();
 });
@@ -115,7 +127,7 @@ describe('RadioEmbed sensitive artwork', () => {
 describe('RadioEmbed autoplay', () => {
 	it('tunes in automatically with ?autoplay=1', async () => {
 		artworkUrl = SAFE_ART;
-		pageUrl.value = 'http://localhost/?autoplay=1';
+		setEmbedUrl('?autoplay=1');
 		await mountRadioEmbed();
 		await vi.waitFor(() => expect(playSpy).toHaveBeenCalled());
 	});
@@ -132,11 +144,13 @@ describe('RadioEmbed autoplay', () => {
 describe('RadioEmbed auto-advance', () => {
 	async function tuneIn(): Promise<HTMLAudioElement> {
 		artworkUrl = SAFE_ART;
-		pageUrl.value = 'http://localhost/?autoplay=1';
+		setEmbedUrl('?autoplay=1');
 		await mountRadioEmbed();
 		await vi.waitFor(() => expect(playSpy).toHaveBeenCalled());
 		playSpy.mockClear();
-		return document.querySelector('audio')!;
+		const audio = document.querySelector('audio');
+		if (!audio) throw new Error('embed audio element did not render');
+		return audio;
 	}
 
 	it('keeps playing the next track when the current one ends', async () => {

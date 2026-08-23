@@ -42,7 +42,10 @@
 		(async () => {
 			try {
 				const r = await fetch(`${API_URL}/copyright/config`, { credentials: 'include' });
-				if (r.ok) config = (await r.json()) as CopyrightConfig | null;
+				if (r.ok) {
+					const data: CopyrightConfig | null = await r.json();
+					config = data;
+				}
 			} catch (e) {
 				console.error('failed to load copyright config:', e);
 			} finally {

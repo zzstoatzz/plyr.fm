@@ -1,14 +1,14 @@
 <script lang="ts">
-	import { toast } from '$lib/toast.svelte';
+	import { toast, type ToastType } from '$lib/toast.svelte';
 	import { fade } from 'svelte/transition';
 
 	// icons for different toast types
-	const icons: Record<string, string> = {
+	const icons = {
 		success: '✓',
 		error: '✕',
 		info: 'ℹ',
 		warning: '⚠'
-	};
+	} satisfies Record<ToastType, string>;
 </script>
 
 {#if toast.toasts.length > 0}

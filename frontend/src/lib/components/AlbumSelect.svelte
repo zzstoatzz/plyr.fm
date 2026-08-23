@@ -38,8 +38,7 @@
 	}
 
 	function handleClickOutside(e: MouseEvent) {
-		const target = e.target as HTMLElement;
-		if (!target.closest('.album-select-container')) {
+		if (!(e.target instanceof Element && e.target.closest('.album-select-container'))) {
 			showResults = false;
 		}
 	}

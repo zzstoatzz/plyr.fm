@@ -339,7 +339,7 @@ class Queue {
 		// without the field => no tail (boundary at end).
 		const restored = state.continuation_from_index;
 		this.continuationFromIndex =
-			typeof restored === 'number'
+			restored !== undefined
 				? Math.max(0, Math.min(restored, this.tracks.length))
 				: this.tracks.length;
 
@@ -940,8 +940,8 @@ class Queue {
 	}
 
 	private createTabId(): string {
-		if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
-			return crypto.randomUUID();
+		if (globalThis.crypto && 'randomUUID' in globalThis.crypto) {
+			return globalThis.crypto.randomUUID();
 		}
 
 		return `${Date.now()}-${Math.random().toString(16).slice(2)}`;

@@ -8,6 +8,7 @@
 
 import { API_URL } from '$lib/config';
 import type { FeaturedArtist } from '$lib/types';
+import { safeSessionStorage } from '$lib/utils/safe-storage';
 
 const STASH_KEY = 'plyr_upload_track_form_stash';
 
@@ -26,37 +27,41 @@ export interface TrackFormStash {
 }
 
 export function stashTrackForm(state: TrackFormStash): void {
-	if (typeof sessionStorage === 'undefined') return;
-	try {
-		sessionStorage.setItem(STASH_KEY, JSON.stringify(state));
-	} catch {
-		// sessionStorage disabled / quota exceeded — fail silently;
-		// worst case we lose the draft, which matches today's behavior.
+	safeSessionStorage.setItem(STASH_KEY, JSON.stringify(state));
+}
+
+/** the parsed stash, or null when it isn't the shape this module writes. */
+function parseTrackFormStash(raw: string): TrackFormStash | null {
+	const parsed: Partial<TrackFormStash> | null = JSON.parse(raw);
+	if (!parsed || !Array.isArray(parsed.featuredArtists) || !Array.isArray(parsed.uploadTags)) {
+		return null;
 	}
+	return {
+		title: parsed.title ?? '',
+		albumTitle: parsed.albumTitle ?? '',
+		description: parsed.description ?? '',
+		featuredArtists: parsed.featuredArtists,
+		uploadTags: parsed.uploadTags,
+		attestedRights: parsed.attestedRights ?? false,
+		autoTag: parsed.autoTag ?? false,
+		sensitiveAudio: parsed.sensitiveAudio,
+		visibility: parsed.visibility ?? 'public'
+	};
 }
 
 export function restoreTrackForm(): TrackFormStash | null {
-	if (typeof sessionStorage === 'undefined') return null;
 	try {
-		const raw = sessionStorage.getItem(STASH_KEY);
+		const raw = safeSessionStorage.getItem(STASH_KEY);
 		if (!raw) return null;
-		const parsed = JSON.parse(raw);
-		// minimal shape check — if a future schema bump renders the stash
-		// unreadable, drop it rather than crash the page.
-		if (typeof parsed !== 'object' || parsed === null) return null;
-		return parsed as TrackFormStash;
+		// if a future schema bump renders the stash unreadable, drop it rather than crash the page
+		return parseTrackFormStash(raw);
 	} catch {
 		return null;
 	}
 }
 
 export function clearTrackFormStash(): void {
-	if (typeof sessionStorage === 'undefined') return;
-	try {
-		sessionStorage.removeItem(STASH_KEY);
-	} catch {
-		// ignore
-	}
+	safeSessionStorage.removeItem(STASH_KEY);
 }
 
 /**

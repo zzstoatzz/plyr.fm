@@ -19,8 +19,7 @@ export async function checkAtprotofansEligibility(did: string | undefined): Prom
 			collection: 'com.atprotofans.profile',
 			rkey: 'self'
 		});
-		const value = response.data.value as { acceptingSupporters?: boolean } | undefined;
-		return value?.acceptingSupporters === true;
+		return response.data.value.acceptingSupporters === true;
 	} catch {
 		// record doesn't exist or other error — not eligible
 		return false;

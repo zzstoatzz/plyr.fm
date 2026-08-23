@@ -19,7 +19,7 @@
 		track.labels?.some((label) => label === 'sexual' || label === 'porn') ?? false
 	);
 
-	let audio: HTMLAudioElement = $state() as HTMLAudioElement;
+	let audio = $state<HTMLAudioElement>();
 	let paused = $state(true);
 	let currentTime = $state(0);
 	let duration = $state(0);
@@ -34,7 +34,7 @@
 	}
 
 	function togglePlay() {
-		if (isAdultLabeled) return;
+		if (isAdultLabeled || !audio) return;
 		if (audio.paused) {
 			audio.play();
 		} else {
@@ -48,9 +48,9 @@
 		return `${m}:${s.toString().padStart(2, '0')}`;
 	}
 
-	function handleSeek(e: MouseEvent) {
-		const bar = e.currentTarget as HTMLElement;
-		const rect = bar.getBoundingClientRect();
+	function handleSeek(e: MouseEvent & { currentTarget: HTMLElement }) {
+		if (!audio) return;
+		const rect = e.currentTarget.getBoundingClientRect();
 		const x = e.clientX - rect.left;
 		const pct = x / rect.width;
 		audio.currentTime = pct * duration;
@@ -59,7 +59,7 @@
 	onMount(() => {
 		const autoplay = $page.url.searchParams.get('autoplay') === '1';
 		if (autoplay && !isAdultLabeled) {
-			audio.play().catch(() => {
+			audio?.play().catch(() => {
 				// Autoplay policy might block this
 				paused = true;
 			});

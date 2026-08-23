@@ -49,10 +49,10 @@
 		onFileChange,
 	}: Props = $props();
 
-	function handleFileInput(e: Event) {
-		const target = e.target as HTMLInputElement;
-		if (target.files && target.files[0]) {
-			onFileChange(target.files[0]);
+	function handleFileInput(e: Event & { currentTarget: HTMLInputElement }) {
+		const file = e.currentTarget.files?.[0];
+		if (file) {
+			onFileChange(file);
 		}
 	}
 

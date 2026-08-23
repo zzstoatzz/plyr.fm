@@ -262,7 +262,7 @@ $effect(() => {
 	})();
 });
 
-let shareUrl = $derived(`${typeof window !== 'undefined' ? window.location.origin : ''}/track/${track?.id ?? $page.params.id}`);
+let shareUrl = $derived(`${browser ? window.location.origin : ''}/track/${track?.id ?? $page.params.id}`);
 
 // handle ?t= timestamp param for deep linking (youtube-style)
 // handle ?ref= param for share link tracking

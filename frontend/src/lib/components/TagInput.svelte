@@ -109,8 +109,7 @@
 	}
 
 	function handleClickOutside(e: MouseEvent) {
-		const target = e.target as HTMLElement;
-		if (!target.closest('.tag-input-wrapper')) {
+		if (!(e.target instanceof Element && e.target.closest('.tag-input-wrapper'))) {
 			showSuggestions = false;
 		}
 	}

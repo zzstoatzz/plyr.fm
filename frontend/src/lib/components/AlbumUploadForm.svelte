@@ -202,8 +202,8 @@
 		}
 	}
 
-	async function handleCoverArtChange(e: Event) {
-		const target = e.target as HTMLInputElement;
+	async function handleCoverArtChange(e: Event & { currentTarget: HTMLInputElement }) {
+		const target = e.currentTarget;
 		if (target.files && target.files[0]) {
 			const selected = target.files[0];
 
@@ -224,8 +224,8 @@
 		}
 	}
 
-	function handleBulkFileInput(e: Event) {
-		const target = e.target as HTMLInputElement;
+	function handleBulkFileInput(e: Event & { currentTarget: HTMLInputElement }) {
+		const target = e.currentTarget;
 		if (target.files && target.files.length > 0) {
 			addTracksFromFiles(target.files);
 			target.value = '';

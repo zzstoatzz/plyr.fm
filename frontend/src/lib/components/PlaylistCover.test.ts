@@ -2,21 +2,22 @@
 // stores full-size artwork URLs, and stretching a 96px thumbnail across a
 // hero-sized mosaic quadrant (the pre-fix behavior) looks terrible.
 import { describe, it, expect, afterEach } from 'vitest';
-import { mount, unmount } from 'svelte';
+import { mount, unmount, type ComponentProps } from 'svelte';
 import PlaylistCover from '$lib/components/PlaylistCover.svelte';
 import { IMAGE_WIDTHS } from '$lib/utils/display-image';
 
 const PREVIEWS = [1, 2, 3, 4].map((i) => `https://images.plyr.fm/images/art${i}.jpg`);
 
-let component: Record<string, unknown> | null = null;
+let cleanup: (() => void) | null = null;
 
-function mountCover(props: Record<string, unknown>): void {
-	component = mount(PlaylistCover, { target: document.body, props });
+function mountCover(props: ComponentProps<typeof PlaylistCover>): void {
+	const component = mount(PlaylistCover, { target: document.body, props });
+	cleanup = () => unmount(component);
 }
 
 afterEach(() => {
-	if (component) unmount(component);
-	component = null;
+	cleanup?.();
+	cleanup = null;
 	document.body.innerHTML = '';
 });
 

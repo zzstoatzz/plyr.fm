@@ -31,7 +31,7 @@ const MIME_CANDIDATES = [
 ];
 
 export function pickSupportedMime(): string | null {
-	if (typeof MediaRecorder === 'undefined') return null;
+	if (!('MediaRecorder' in globalThis)) return null;
 	return MIME_CANDIDATES.find((c) => MediaRecorder.isTypeSupported(c)) ?? null;
 }
 

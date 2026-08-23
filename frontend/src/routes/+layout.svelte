@@ -18,7 +18,8 @@
 	import { page } from '$app/stores';
 	import { afterNavigate, goto } from '$app/navigation';
 	import { auth } from '$lib/auth.svelte';
-	import { preferences, getContrastColor } from '$lib/preferences.svelte';
+	import { preferences, getContrastColor, type Theme } from '$lib/preferences.svelte';
+	import type { Track } from '$lib/types';
 	import { safeLocalStorage } from '$lib/utils/safe-storage';
 	import { ambient } from '$lib/ambient.svelte';
 	import { moderation } from '$lib/moderation.svelte';
@@ -112,12 +113,9 @@
 	// document title: show playing track, or fall back to page title
 	let pageTitle = $state(`${APP_NAME} - ${APP_TAGLINE}`);
 
-	function updateTitle() {
-		const track = player.currentTrack;
-		const playing = track && !player.paused;
-		document.title = playing
-			? `${track.title} - ${track.artist} • ${APP_NAME}`
-			: pageTitle;
+	function updateTitle(track: Track | null, paused: boolean) {
+		document.title =
+			track && !paused ? `${track.title} - ${track.artist} • ${APP_NAME}` : pageTitle;
 	}
 
 	afterNavigate(() => {
@@ -127,16 +125,14 @@
 			if (!currentTitle.includes(` • ${APP_NAME}`)) {
 				pageTitle = currentTitle;
 			}
-			updateTitle();
+			updateTitle(player.currentTrack, player.paused);
 		});
 	});
 
 	// react to play/pause changes
 	$effect(() => {
 		if (!browser) return;
-		player.currentTrack;
-		player.paused;
-		updateTitle();
+		updateTitle(player.currentTrack, player.paused);
 	});
 
 	// "keep playing": when the queue runs low, extend it with a continuation
@@ -246,6 +242,13 @@
 		if (ambient.enabled) ambient.refreshBaseValues();
 	});
 
+	const THEMES = ['dark', 'light', 'system', 'live'] as const satisfies readonly Theme[];
+
+	function readSavedTheme(): Theme | null {
+		const saved = safeLocalStorage.getItem('theme');
+		return THEMES.find((theme) => theme === saved) ?? null;
+	}
+
 	const SEEK_AMOUNT = 10; // seconds
 	let previousVolume = 0.7; // for mute toggle
 
@@ -271,11 +274,10 @@
 		}
 
 		// ignore if inside input/textarea/contenteditable
-		const target = event.target as HTMLElement;
+		const target = event.target;
 		if (
-			target.tagName === 'INPUT' ||
-			target.tagName === 'TEXTAREA' ||
-			target.isContentEditable
+			target instanceof HTMLElement &&
+			(target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)
 		) {
 			return;
 		}
@@ -383,7 +385,7 @@
 		}
 
 		// apply saved theme from localStorage
-		const savedTheme = safeLocalStorage.getItem('theme') as 'dark' | 'light' | 'system' | 'live' | null;
+		const savedTheme = readSavedTheme();
 		if (savedTheme) {
 			preferences.applyTheme(savedTheme);
 		} else {
@@ -481,8 +483,7 @@
 		// prevent flash by applying saved settings immediately.
 		// inline script — can't import the safe-storage helper, so read via a
 		// local shim (localStorage access throws in sandboxed embeds).
-		if (typeof window !== 'undefined') {
-			(function() {
+		(function() {
 				const root = document.documentElement;
 				const getItem = (key) => {
 					try {
@@ -528,8 +529,7 @@
 				}
 				root.classList.add('theme-' + effectiveTheme);
 
-			})();
-		}
+		})();
 	</script>
 </svelte:head>
 

@@ -49,9 +49,8 @@
 		await preferences.update({ accent_color: color });
 	}
 
-	function handleColorInput(e: Event) {
-		const input = e.target as HTMLInputElement;
-		applyColor(input.value);
+	function handleColorInput(e: Event & { currentTarget: HTMLInputElement }) {
+		applyColor(e.currentTarget.value);
 	}
 
 	function selectPreset(color: string) {
