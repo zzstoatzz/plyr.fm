@@ -540,7 +540,7 @@
 
 	{#if showQueue && !isEmbed}
 		<aside class="queue-sidebar">
-			<Queue />
+			<Queue onNavigate={() => showQueue && toggleQueue()} />
 		</aside>
 	{/if}
 </div>
