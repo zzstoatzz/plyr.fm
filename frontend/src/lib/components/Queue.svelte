@@ -7,6 +7,9 @@
 	import SensitiveImage from './SensitiveImage.svelte';
 	import ScrollingText from './ScrollingText.svelte';
 	import { trackCoverUrl, trackThumbnailUrl } from '$lib/track-cover';
+	import { auth } from '$lib/auth.svelte';
+	import { likeTrack, unlikeTrack } from '$lib/tracks.svelte';
+	import { swipeable, type SwipeState } from '$lib/swipe';
 	import type { Track, JamParticipant } from '$lib/types';
 
 	let draggedIndex = $state<number | null>(null);
@@ -102,6 +105,36 @@
 
 	function handleRemoveTrack(index: number) {
 		queue.removeTrack(index);
+	}
+
+	// swipe: right reveals the heart (like / unlike), left reveals the trash
+	// (remove from the queue). progress per row drives the reveal.
+	let swipeStates = $state<Record<number, SwipeState>>({});
+
+	function handleSwipeUpdate(index: number, state: SwipeState) {
+		if (state.side === null) {
+			delete swipeStates[index];
+		} else {
+			swipeStates[index] = state;
+		}
+	}
+
+	async function handleSwipeLike(track: Track) {
+		if (!auth.isAuthenticated) {
+			toast.error('sign in to like tracks');
+			return;
+		}
+		if (track.is_liked) {
+			if (await unlikeTrack(track.id)) {
+				track.is_liked = false;
+				toast.info('removed from your likes');
+			}
+			return;
+		}
+		if (await likeTrack(track.id, track.file_id, track.gated)) {
+			track.is_liked = true;
+			toast.success('liked');
+		}
 	}
 
 	// desktop drag and drop
@@ -251,6 +284,27 @@
 <!-- a reorderable queue row: the whole row is the drag affordance (no handle).
      desktop uses native HTML5 drag; touch uses press-and-hold (handleTouchStart). -->
 {#snippet queueRow(track: Track, index: number)}
+	{@const swipe = swipeStates[index]}
+	<div
+		class="swipe-row"
+		class:swiping={!!swipe}
+		class:armed={swipe?.committed}
+		data-side={swipe?.side ?? ''}
+		style="--swipe-progress: {swipe?.progress ?? 0}"
+	>
+		<div class="swipe-reveal like" aria-hidden="true">
+			<svg width="20" height="20" viewBox="0 0 24 24" fill={track.is_liked ? 'none' : 'currentColor'} stroke="currentColor" stroke-width="2">
+				<path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+			</svg>
+		</div>
+		<div class="swipe-reveal remove" aria-hidden="true">
+			<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+				<polyline points="3 6 5 6 21 6"></polyline>
+				<path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path>
+				<path d="M10 11v6M14 11v6"></path>
+				<path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"></path>
+			</svg>
+		</div>
 	<div
 		class="queue-track"
 		class:drag-over={dragOverIndex === index && touchDragIndex !== index}
@@ -259,6 +313,11 @@
 		draggable="true"
 		role="button"
 		tabindex="0"
+		use:swipeable={{
+			onLeft: () => handleRemoveTrack(index),
+			onRight: () => handleSwipeLike(track),
+			onUpdate: (state) => handleSwipeUpdate(index, state)
+		}}
 		ondragstart={(e) => handleDragStart(e, index)}
 		ondragover={(e) => handleDragOver(e, index)}
 		ondrop={(e) => handleDrop(e, index)}
@@ -299,6 +358,7 @@
 				<circle cx="11" cy="13" r="1.5"></circle>
 			</svg>
 		</button>
+	</div>
 	</div>
 {/snippet}
 
@@ -1030,6 +1090,51 @@
 	.drag-handle:active {
 		cursor: grabbing;
 		color: var(--accent);
+	}
+
+	.swipe-row {
+		position: relative;
+		border-radius: var(--radius-md);
+		overflow: hidden;
+	}
+
+	.swipe-reveal {
+		position: absolute;
+		inset: 0;
+		display: flex;
+		align-items: center;
+		padding: 0 1.1rem;
+		color: #fff;
+		opacity: 0;
+		pointer-events: none;
+	}
+
+	.swipe-reveal svg {
+		transform: scale(calc(0.7 + var(--swipe-progress) * 0.3));
+		transition: transform 0.1s ease-out;
+	}
+
+	.swipe-reveal.like {
+		justify-content: flex-start;
+		background: #1db954;
+	}
+
+	.swipe-reveal.remove {
+		justify-content: flex-end;
+		background: #e5484d;
+	}
+
+	.swipe-row[data-side='right'] .swipe-reveal.like,
+	.swipe-row[data-side='left'] .swipe-reveal.remove {
+		opacity: calc(0.55 + var(--swipe-progress) * 0.45);
+	}
+
+	.swipe-row.armed .swipe-reveal svg {
+		transform: scale(1.15);
+	}
+
+	.swipe-row.swiping .queue-track {
+		transition: none;
 	}
 
 	.queue-track {
