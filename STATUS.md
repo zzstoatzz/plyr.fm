@@ -47,7 +47,7 @@ plyr.fm should become:
 
 ### August 2026
 
-#### queue swipe actions, and the anti-slop sweep (#1907–#1909, August 22–24 — staging, awaiting prod)
+#### queue swipe actions, hints, and the anti-slop sweep (#1907–#1912, August 22–24 — prod, frontend-only promote)
 
 **swipe** (#1907, #1908): a queue row swiped right reveals a heart (like /
 unlike), left a trash (remove from the queue), mouse or finger — Spotify's
@@ -67,6 +67,17 @@ modules (three minimal seams: player.importHls, playlist load's ssr default
 arg, RadioEmbed reading window.location). two SAFETY one-liners remain. an
 independent review pass found three nits, fixed pre-merge (null at the queue's
 JSON boundary, half-converted safe-storage writes, an untested default).
+
+**follow-ups from nate's staging review** (#1911, #1912): the X button is
+gone — swipe-left is the removal; the reveal dropped the red trash for the
+app's own surface (muted panel, list-minus glyph, accent when armed) since
+queue removal isn't destructive and shouldn't look scary. moving the cheese
+introduced one-time **versioned hints** (`id@version` in
+`ui_settings.seen_hints`, server-merged, device-local when signed out; bump
+the version when a mechanism changes) with `queue-swipe@1` as the first. and
+the empty-queue "find something to play" CTA now closes the full-screen
+mobile queue when it navigates, styled as a real 44px button. promoted with
+nate's go-ahead as `production-fe` @ 6979bc1c.
 
 **process**: `change` and `self-review` skills now encode the delivery flow
 (PR → self-review → merge = staging → nate reviews → promote via `deploy`).
