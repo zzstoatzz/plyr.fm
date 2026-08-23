@@ -127,12 +127,11 @@
 		return [...(queueTracksElement?.querySelectorAll<HTMLElement>('.queue-track') ?? [])];
 	}
 
-	// keyboard on a focused row: enter plays, delete removes, l likes,
-	// arrows move between rows. stopPropagation keeps the global shortcuts
-	// (l = next track, arrows = seek) out of the way while a row has focus.
+	// keyboard on a focused row: enter plays, delete removes, arrows move
+	// between rows. keys that carry global shortcuts (like l = next track)
+	// are left alone.
 	async function handleRowKeydown(
 		e: KeyboardEvent & { currentTarget: HTMLElement },
-		track: Track,
 		index: number
 	) {
 		if (e.key === 'Enter') {
@@ -147,12 +146,6 @@
 			await tick();
 			const rows = queueRows();
 			rows[Math.min(Math.max(position, 0), rows.length - 1)]?.focus();
-			return;
-		}
-		if (e.key === 'l' || e.key === 'L') {
-			e.preventDefault();
-			e.stopPropagation();
-			void handleSwipeLike(track);
 			return;
 		}
 		if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
@@ -382,7 +375,7 @@
 		ondrop={(e) => handleDrop(e, index)}
 		ondragend={handleDragEnd}
 		onclick={() => handleTrackClick(index)}
-		onkeydown={(e) => handleRowKeydown(e, track, index)}
+		onkeydown={(e) => handleRowKeydown(e, index)}
 	>
 		{@render media(track)}
 

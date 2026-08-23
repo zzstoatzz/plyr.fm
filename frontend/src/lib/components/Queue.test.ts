@@ -2,7 +2,6 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { mount, unmount, flushSync } from 'svelte';
 import Queue from '$lib/components/Queue.svelte';
 import { queue } from '$lib/queue.svelte';
-import { toast } from '$lib/toast.svelte';
 import type { Track } from '$lib/types';
 
 const TRACK: Track = {
@@ -89,19 +88,4 @@ describe('Queue keyboard', () => {
 		expect(document.activeElement).toBe(rows[0]);
 	});
 
-	it('l on a focused row asks signed-out users to sign in, not next-track', () => {
-		queue.tracks = [makeTrack(1), makeTrack(2)];
-		queue.currentIndex = 0;
-		component = mount(Queue, { target: document.body, props: {} });
-		flushSync();
-
-		toast.toasts.length = 0;
-		const row = focusRow(0);
-		const bubbled = vi.fn();
-		document.addEventListener('keydown', bubbled, { once: true });
-		press(row, 'l');
-		flushSync();
-		expect(toast.toasts.some((t) => t.message.includes('sign in to like'))).toBe(true);
-		expect(bubbled).not.toHaveBeenCalled();
-	});
 });
