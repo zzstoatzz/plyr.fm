@@ -20,6 +20,7 @@ from backend._internal.atproto import (
 from backend._internal.atproto.handles import resolve_handle
 from backend._internal.atproto.profiles import resolve_dids
 from backend._internal.atproto.spaces.client import (
+    MEMBERS_PAGE_LIMIT,
     add_space_member,
     ensure_personal_space,
     list_space_members,
@@ -499,7 +500,8 @@ async def _pds_members(auth_session: Session, space: str) -> list[str]:
             auth_session, space=space, cursor=cursor
         )
         members.extend(did for did in page if did != auth_session.did)
-        if not cursor:
+        # the alpha host can hand back a cursor on an exhausted page
+        if not cursor or len(page) < MEMBERS_PAGE_LIMIT:
             return members
 
 

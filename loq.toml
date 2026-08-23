@@ -355,7 +355,7 @@ max_lines = 689
 
 [[rules]]
 path = "backend/tests/_internal/test_permissioned_spaces.py"
-max_lines = 879
+max_lines = 972
 
 [[rules]]
 path = "frontend/src/routes/u/[[]handle[]]/+page.svelte"
@@ -387,7 +387,7 @@ max_lines = 599
 
 [[rules]]
 path = "backend/src/backend/_internal/atproto/spaces/client.py"
-max_lines = 523
+max_lines = 568
 
 [[rules]]
 path = "frontend/tools/oxlint/anti-slop/shared/dictionary-types.ts"

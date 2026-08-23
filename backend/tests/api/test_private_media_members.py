@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend._internal import Session, require_auth
 from backend._internal.atproto.profiles import ResolvedProfile
+from backend._internal.atproto.spaces.client import MEMBERS_PAGE_LIMIT
 from backend.main import app
 from backend.models import Artist
 
@@ -123,7 +124,8 @@ async def test_remove_writes_pds_and_forgets_what_plyr_held(artist: Artist, as_o
 
 
 async def test_list_reads_the_pds_every_time(artist: Artist, as_owner):
-    pages = [(["did:test:a", _ARTIST], "c1"), (["did:test:b"], None)]
+    full_page = [f"did:test:m{i}" for i in range(MEMBERS_PAGE_LIMIT - 1)] + [_ARTIST]
+    pages = [(full_page, "c1"), (["did:test:b"], None)]
     with (
         _space(),
         patch(
@@ -136,7 +138,7 @@ async def test_list_reads_the_pds_every_time(artist: Artist, as_owner):
         ) as c:
             r = await c.get("/artists/me/private-media/members")
     assert r.status_code == 200
-    assert [m["did"] for m in r.json()] == ["did:test:a", "did:test:b"]
+    assert [m["did"] for m in r.json()] == [*full_page[:-1], "did:test:b"]
     assert listed.await_count == 2
 
 

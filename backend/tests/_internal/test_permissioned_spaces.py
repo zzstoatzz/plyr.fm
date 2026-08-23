@@ -5,6 +5,10 @@ helpers, the OAuth scope composition, and space-credential caching/renewal. the
 full data path is exercised against a live ZDS by scripts/permissioned_smoke.py.
 """
 
+import asyncio
+import base64
+import json
+import time
 from types import SimpleNamespace
 from unittest.mock import ANY, AsyncMock
 
@@ -877,3 +881,92 @@ async def test_list_space_repo_ops_pages_by_cursor_and_tolerates_missing_commit(
         "limit": 500,
         "cursor": "page-2",
     }
+
+
+# --- credential lifetime and concurrency ------------------------------------
+
+
+def _unsigned_jwt(payload: dict) -> str:
+    def enc(d: dict) -> str:
+        return base64.urlsafe_b64encode(json.dumps(d).encode()).rstrip(b"=").decode()
+
+    return f"{enc({'alg': 'none'})}.{enc(payload)}.sig"
+
+
+def test_credential_lifetime_comes_from_exp() -> None:
+    soon = _unsigned_jwt({"exp": int(time.time()) + 120})
+    deadline = space_client._credential_expires_at(soon)
+    assert (
+        0
+        < deadline - time.monotonic()
+        <= 120 - space_client._CREDENTIAL_EXPIRY_MARGIN_SECONDS + 1
+    )
+
+    long_lived = _unsigned_jwt({"exp": int(time.time()) + 86400})
+    assert (
+        space_client._credential_expires_at(long_lived) - time.monotonic()
+        <= space_client._CREDENTIAL_FALLBACK_TTL_SECONDS + 1
+    )
+
+    assert (
+        space_client._credential_expires_at("not-a-jwt") - time.monotonic()
+        <= space_client._CREDENTIAL_FALLBACK_TTL_SECONDS + 1
+    )
+    expired = _unsigned_jwt({"exp": int(time.time()) - 5})
+    assert space_client._credential_expires_at(expired) <= time.monotonic()
+
+
+async def test_concurrent_mints_for_one_pair_spend_one_delegation_token(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    minted = 0
+
+    async def slow_mint(session: Session, space: str) -> space_client.SpaceCredential:
+        nonlocal minted
+        minted += 1
+        await asyncio.sleep(0.05)
+        return space_client.SpaceCredential(
+            token=f"t{minted}",
+            dpop_key=ec.generate_private_key(ec.SECP256R1()),
+            expires_at=time.monotonic() + 600,
+        )
+
+    monkeypatch.setattr(space_client, "_mint_credential", slow_mint)
+    session = Session(
+        session_id="s",
+        did="did:plc:concurrent",
+        handle="x.test",
+        oauth_session={"pds_url": "https://pds.test"},
+    )
+    space = "at://did:plc:artist/space/fm.plyr.privateMedia/self"
+    space_client.forget_credential(session.did, space)
+
+    results = await asyncio.gather(
+        *(
+            space_client.get_space_credential(session, space, force_refresh=True)
+            for _ in range(4)
+        )
+    )
+    assert minted == 1
+    assert {c.token for c in results} == {"t1"}
+    space_client.forget_credential(session.did, space)
+
+
+async def test_list_members_stops_on_a_short_page_even_with_a_cursor(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from backend.api.artists import _pds_members
+
+    pages = AsyncMock(side_effect=[(["did:plc:a", "did:plc:b"], "did:plc:b")])
+    monkeypatch.setattr("backend.api.artists.list_space_members", pages)
+    session = Session(
+        session_id="s",
+        did="did:plc:owner",
+        handle="o.test",
+        oauth_session={"pds_url": "https://pds.test"},
+    )
+    assert await _pds_members(session, "at://did:plc:owner/space/t/self") == [
+        "did:plc:a",
+        "did:plc:b",
+    ]
+    assert pages.await_count == 1
