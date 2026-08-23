@@ -52,20 +52,21 @@
 		pointer-events: none;
 	}
 
+	/* the same glass the queue cards and preview panels wear */
 	.toast {
 		display: inline-flex;
 		align-items: flex-start;
-		gap: 0.5rem;
-		padding: 0.5rem 1rem;
-		background: rgba(10, 10, 10, 0.6);
-		backdrop-filter: blur(12px);
-		-webkit-backdrop-filter: blur(12px);
-		border: 1px solid rgba(255, 255, 255, 0.06);
+		gap: 0.6rem;
+		padding: 0.6rem 1rem;
+		background: color-mix(in srgb, var(--track-bg, var(--bg-primary)) 78%, transparent);
+		backdrop-filter: blur(14px);
+		-webkit-backdrop-filter: blur(14px);
+		border: 1px solid var(--glass-border, var(--border-subtle));
 		border-radius: var(--radius-md);
 		pointer-events: none;
 		font-size: var(--text-sm);
 		max-width: 450px;
-		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+		box-shadow: 0 8px 24px color-mix(in srgb, #000 30%, transparent);
 	}
 
 	.toast-icon {
