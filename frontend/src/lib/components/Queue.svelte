@@ -26,15 +26,12 @@
 	// when the empty-state CTA navigates, so the destination is actually seen
 	let { onNavigate }: { onNavigate?: () => void } = $props();
 
-	let draggedIndex = $state<number | null>(null);
-	let dragOverIndex = $state<number | null>(null);
 
 	// touch drag state — the right-side handle is the drag affordance: a touch
 	// that starts on the handle initiates a reorder, while the rest of the row
 	// stays tap-to-play and the list scrolls normally.
 	let touchDragIndex = $state<number | null>(null);
 	let touchStartY = $state(0);
-	let touchCurrentY = $state(0);
 	let touchDragElement = $state<HTMLElement | null>(null);
 	let queueTracksElement = $state<HTMLElement | null>(null);
 
@@ -194,88 +191,65 @@
 		}
 	}
 
-	// desktop drag and drop
-	function handleDragStart(event: DragEvent, index: number) {
-		draggedIndex = index;
-		if (event.dataTransfer) {
-			event.dataTransfer.effectAllowed = 'move';
-		}
-	}
 
-	function handleDragOver(event: DragEvent, index: number) {
-		event.preventDefault();
-		dragOverIndex = index;
-	}
 
-	function handleDrop(event: DragEvent, index: number) {
-		event.preventDefault();
-		if (draggedIndex !== null && draggedIndex !== index) {
-			queue.moveTrack(draggedIndex, index);
-		}
-		draggedIndex = null;
-		dragOverIndex = null;
-	}
 
-	function handleDragEnd() {
-		draggedIndex = null;
-		dragOverIndex = null;
-	}
 
-	// touch reorder: rows are measured once at pickup; the finger's position
+	// reorder: ONE engine for mouse and touch. rows are measured once at
+	// pickup (in the scroll container's content space); the pointer's position
 	// against those measurements decides the landing slot, neighbours animate
 	// out of the way, and a line marks the gap — the iOS home-screen contract.
+	// touch picks up from the drag handle (vertical elsewhere scrolls); a
+	// mouse picks up anywhere on the row once the drag is clearly vertical
+	// (the swipe owns horizontal).
 	const ROW_GAP = 8;
 	let dragPlan: { rows: PlannedRow[]; wrappers: HTMLElement[]; draggedPos: number } | null = null;
 	let dragSlot = $state<number | null>(null);
 	let dropLineY = $state<number | null>(null);
 
-	function handleTouchStart(event: TouchEvent & { currentTarget: HTMLElement }, index: number) {
+	function beginReorder(rowEl: HTMLElement, index: number, clientY: number) {
 		if (!queueTracksElement) return;
-		const touch = event.touches[0];
 		touchDragIndex = index;
-		touchStartY = touch.clientY;
-		touchCurrentY = touch.clientY;
-		touchDragElement = event.currentTarget.closest('.queue-track');
-		touchDragElement?.classList.add('touch-dragging');
+		touchStartY = clientY;
+		touchDragElement = rowEl;
+		rowEl.classList.add('touch-dragging');
 		// the swipe wrapper clips its row (the reveal design); a lifted row must
 		// escape that clip and sit above its neighbours
-		const draggedWrapper = touchDragElement?.closest<HTMLElement>('.swipe-row');
+		const draggedWrapper = rowEl.closest<HTMLElement>('.swipe-row');
 		if (draggedWrapper) {
 			draggedWrapper.style.overflow = 'visible';
 			draggedWrapper.style.zIndex = '100';
 		}
 
+		const container = queueTracksElement.getBoundingClientRect();
+		const scrollTop = queueTracksElement.scrollTop;
 		const wrappers = [...queueTracksElement.querySelectorAll<HTMLElement>('.swipe-row')];
-		const containerTop = queueTracksElement.getBoundingClientRect().top;
 		const rows: PlannedRow[] = wrappers.map((w) => {
 			const rect = w.getBoundingClientRect();
 			const row = w.querySelector<HTMLElement>('.queue-track');
 			return {
 				queueIndex: parseInt(row?.dataset.index ?? '0'),
-				top: rect.top - containerTop,
+				// content space, so the landing line survives a scrolled list
+				top: rect.top - container.top + scrollTop,
 				height: rect.height
 			};
 		});
-		const draggedPos = wrappers.findIndex((w) => w.contains(touchDragElement));
+		const draggedPos = wrappers.findIndex((w) => w.contains(rowEl));
 		dragPlan = { rows, wrappers, draggedPos };
 		dragSlot = draggedPos;
 		navigator.vibrate?.(8);
 	}
 
-	function handleTouchMove(event: TouchEvent) {
+	function updateReorder(clientY: number) {
 		if (touchDragIndex === null || !touchDragElement || !queueTracksElement || !dragPlan) return;
 
-		event.preventDefault();
-		const touch = event.touches[0];
-		touchCurrentY = touch.clientY;
-
-		const offset = touchCurrentY - touchStartY;
+		const offset = clientY - touchStartY;
 		touchDragElement.style.transform = `translateY(${offset}px) scale(1.03)`;
 
 		// hovering the empty up-next drop zone promotes instead of reordering
 		if (dropZoneElement) {
 			const rect = dropZoneElement.getBoundingClientRect();
-			dropZoneActive = touch.clientY >= rect.top && touch.clientY <= rect.bottom;
+			dropZoneActive = clientY >= rect.top && clientY <= rect.bottom;
 			if (dropZoneActive) {
 				dragSlot = dragPlan.draggedPos;
 				settleNeighbours();
@@ -284,9 +258,10 @@
 			}
 		}
 
-		const containerTop = queueTracksElement.getBoundingClientRect().top;
+		const container = queueTracksElement.getBoundingClientRect();
+		const contentY = clientY - container.top + queueTracksElement.scrollTop;
 		const { rows, draggedPos } = dragPlan;
-		const slot = insertionSlot(rows, draggedPos, touch.clientY - containerTop);
+		const slot = insertionSlot(rows, draggedPos, contentY);
 		if (slot !== dragSlot) {
 			dragSlot = slot;
 			navigator.vibrate?.(4);
@@ -308,7 +283,7 @@
 		});
 	}
 
-	function handleTouchEnd() {
+	function finishReorder() {
 		if (touchDragIndex !== null && dropZoneActive) {
 			queue.promoteToUpNext(touchDragIndex);
 		} else if (touchDragIndex !== null && dragPlan && dragSlot !== null) {
@@ -334,8 +309,67 @@
 		dragSlot = null;
 		dropLineY = null;
 		touchDragIndex = null;
-		dragOverIndex = null;
 		touchDragElement = null;
+	}
+
+	function handleTouchStart(event: TouchEvent & { currentTarget: HTMLElement }, index: number) {
+		const row = event.currentTarget.closest<HTMLElement>('.queue-track');
+		if (row) beginReorder(row, index, event.touches[0].clientY);
+	}
+
+	function handleTouchMove(event: TouchEvent) {
+		if (touchDragIndex === null) return;
+		event.preventDefault();
+		updateReorder(event.touches[0].clientY);
+	}
+
+	const handleTouchEnd = finishReorder;
+
+	// mouse: a clearly vertical drag anywhere on the row reorders (mirror of
+	// the swipe's horizontal claim). window listeners live only for the drag.
+	let mouseCandidate: { x: number; y: number; index: number; row: HTMLElement } | null = null;
+	let mouseReordering = false;
+	let swallowRowClick = false;
+
+	function handleRowPointerDown(e: PointerEvent & { currentTarget: HTMLElement }, index: number) {
+		swallowRowClick = false;
+		if (e.pointerType !== 'mouse' || e.button !== 0) return;
+		mouseCandidate = { x: e.clientX, y: e.clientY, index, row: e.currentTarget };
+		window.addEventListener('pointermove', handleWindowPointerMove);
+		window.addEventListener('pointerup', handleWindowPointerUp);
+	}
+
+	function handleWindowPointerMove(e: PointerEvent) {
+		if (!mouseCandidate) return;
+		const dx = e.clientX - mouseCandidate.x;
+		const dy = e.clientY - mouseCandidate.y;
+		if (!mouseReordering) {
+			if (Math.hypot(dx, dy) < 8) return;
+			// vertical must clearly win — the swipe claims everything else
+			if (Math.abs(dx) >= Math.abs(dy) * 0.75) {
+				stopMouseReorder();
+				return;
+			}
+			mouseReordering = true;
+			beginReorder(mouseCandidate.row, mouseCandidate.index, mouseCandidate.y);
+		}
+		e.preventDefault();
+		updateReorder(e.clientY);
+	}
+
+	function handleWindowPointerUp() {
+		if (mouseReordering) {
+			swallowRowClick = true;
+			finishReorder();
+		}
+		stopMouseReorder();
+	}
+
+	function stopMouseReorder() {
+		mouseCandidate = null;
+		mouseReordering = false;
+		window.removeEventListener('pointermove', handleWindowPointerMove);
+		window.removeEventListener('pointerup', handleWindowPointerUp);
 	}
 </script>
 
@@ -407,10 +441,8 @@
 		</div>
 	<div
 		class="queue-track"
-		class:drag-over={dragOverIndex === index && touchDragIndex !== index}
-		class:is-dragging={touchDragIndex === index || draggedIndex === index}
+		class:is-dragging={touchDragIndex === index}
 		data-index={index}
-		draggable="true"
 		role="button"
 		tabindex="0"
 		use:swipeable={{
@@ -420,11 +452,14 @@
 			dismissLeft: true,
 			ignore: '.drag-handle'
 		}}
-		ondragstart={(e) => handleDragStart(e, index)}
-		ondragover={(e) => handleDragOver(e, index)}
-		ondrop={(e) => handleDrop(e, index)}
-		ondragend={handleDragEnd}
-		onclick={() => handleTrackClick(index)}
+		onpointerdown={(e) => handleRowPointerDown(e, index)}
+		onclick={() => {
+			if (swallowRowClick) {
+				swallowRowClick = false;
+				return;
+			}
+			handleTrackClick(index);
+		}}
 		onkeydown={(e) => handleRowKeydown(e, index)}
 	>
 		{@render media(track)}
@@ -652,18 +687,6 @@
 								class:drag-over={dropZoneActive}
 								role="listitem"
 								bind:this={dropZoneElement}
-								ondragover={(e) => {
-									e.preventDefault();
-									dropZoneActive = true;
-									dragOverIndex = null;
-								}}
-								ondragleave={() => (dropZoneActive = false)}
-								ondrop={(e) => {
-									e.preventDefault();
-									if (draggedIndex !== null) queue.promoteToUpNext(draggedIndex);
-									dropZoneActive = false;
-									draggedIndex = null;
-								}}
 							>
 								<span>drag here to play next</span>
 							</div>
@@ -1306,10 +1329,6 @@
 		border-color: var(--border-default);
 	}
 
-	.queue-track.drag-over {
-		border-color: var(--accent);
-		background: color-mix(in srgb, var(--accent) 12%, transparent);
-	}
 
 	.queue-track.is-dragging {
 		opacity: 0.9;
