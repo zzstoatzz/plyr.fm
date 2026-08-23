@@ -47,7 +47,18 @@ plyr.fm should become:
 
 ### August 2026
 
-#### queue polish round two: keyboard, races, physics everywhere (#1914–#1922, August 24–25 — prod, frontend-only promotes)
+#### the queue header settles on three matching buttons (#1924, August 25 — prod)
+
+**why**: the header carried three square icon buttons and one uppercase text
+pill, plus a repeat control the player bar already owns.
+
+**what shipped**: repeat left the header (the player bar keeps it); clear
+became the same 32px square as jam and shuffle, with a list-x glyph from the
+same icon family as add-to-queue (list+) and the swipe reveal (list-minus).
+Applies to both the queue and jam headers; the pill's words live on as
+title/aria-label.
+
+#### queue polish round two: keyboard, races, physics everywhere (#1914–#1922, August 24–25 — prod, frontend-only promotes; reorder engine promoted with #1924's release)
 
 **why**: nate drove the queue hard on staging and prod and kept filing what he
 felt: no keyboard path after the X went away, toasts that looked crude and
