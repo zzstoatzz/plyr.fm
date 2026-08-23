@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { resolveSwipe, swipeable, type SwipeState } from './swipe';
+import { displacement, resolveSwipe, swipeable, type SwipeState } from './swipe';
 
 describe('resolveSwipe', () => {
 	it('commits past 35% of the width, never under the 72px floor', () => {
@@ -37,6 +37,18 @@ function pointer(node: HTMLElement, type: string, x: number, y: number, extra: P
 	);
 }
 
+describe('displacement', () => {
+	it('follows the finger to the threshold, then resists', () => {
+		expect(displacement(50, 300)).toBe(50);
+		expect(displacement(-105, 300)).toBe(-105);
+		const past = displacement(205, 300);
+		expect(past).toBeGreaterThan(105);
+		expect(past).toBeLessThan(145);
+		// resistance grows with overshoot
+		expect(displacement(405, 300) - displacement(305, 300)).toBeLessThan(displacement(305, 300) - displacement(205, 300));
+	});
+});
+
 describe('swipeable', () => {
 	let node: HTMLElement;
 	let onLeft: ReturnType<typeof vi.fn<() => void>>;
@@ -63,7 +75,7 @@ describe('swipeable', () => {
 		pointer(node, 'pointerdown', 200, 50);
 		pointer(node, 'pointermove', 150, 52);
 		pointer(node, 'pointermove', 60, 55);
-		expect(node.style.transform).toBe('translateX(-140px)');
+		expect(node.style.transform).toBe(`translateX(${displacement(-140, 300)}px)`);
 		pointer(node, 'pointerup', 60, 55);
 		expect(onLeft).toHaveBeenCalledTimes(1);
 		expect(onRight).not.toHaveBeenCalled();
@@ -140,6 +152,37 @@ describe('swipeable', () => {
 		pointer(node, 'pointerup', 60, 50);
 		expect(onLeft).not.toHaveBeenCalled();
 		expect(node.style.transform).toBe('');
+	});
+
+	it('with dismissLeft, a committed left swipe slides out and collapses before removing', () => {
+		vi.useFakeTimers();
+		action.destroy();
+		const wrapper = document.createElement('div');
+		Object.defineProperty(wrapper, 'getBoundingClientRect', { value: () => ({ height: 64 }) });
+		document.body.appendChild(wrapper);
+		wrapper.appendChild(node);
+		action = swipeable(node, { onLeft, onUpdate, dismissLeft: true });
+		pointer(node, 'pointerdown', 200, 50);
+		pointer(node, 'pointermove', 40, 50);
+		pointer(node, 'pointerup', 40, 50);
+		expect(node.style.transform).toBe('translateX(-316px)');
+		expect(onLeft).not.toHaveBeenCalled();
+		vi.advanceTimersByTime(180);
+		expect(wrapper.style.height).toBe('64px');
+		vi.advanceTimersByTime(200);
+		expect(onLeft).toHaveBeenCalledTimes(1);
+		expect(onUpdate).toHaveBeenLastCalledWith({ side: null, progress: 0, committed: false, dx: 0 });
+		vi.useRealTimers();
+		wrapper.remove();
+	});
+
+	it('crossing the threshold arms once and emits committed', () => {
+		pointer(node, 'pointerdown', 200, 50);
+		pointer(node, 'pointermove', 120, 50);
+		expect(onUpdate).toHaveBeenLastCalledWith(expect.objectContaining({ committed: false }));
+		pointer(node, 'pointermove', 80, 50);
+		expect(onUpdate).toHaveBeenLastCalledWith(expect.objectContaining({ committed: true, side: 'left' }));
+		pointer(node, 'pointerup', 80, 50);
 	});
 
 	it('a right mouse button never starts a swipe', () => {

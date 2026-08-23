@@ -317,6 +317,7 @@
 			onLeft: () => handleRemoveTrack(index),
 			onRight: () => handleSwipeLike(track),
 			onUpdate: (state) => handleSwipeUpdate(index, state),
+			dismissLeft: true,
 			ignore: '.drag-handle'
 		}}
 		ondragstart={(e) => handleDragStart(e, index)}
@@ -1095,6 +1096,7 @@
 
 	.swipe-row {
 		position: relative;
+		flex-shrink: 0;
 		border-radius: var(--radius-md);
 		overflow: hidden;
 	}
@@ -1112,7 +1114,8 @@
 
 	.swipe-reveal svg {
 		transform: scale(calc(0.7 + var(--swipe-progress) * 0.3));
-		transition: transform 0.1s ease-out;
+		opacity: calc(0.6 + var(--swipe-progress) * 0.4);
+		transition: transform 0.12s ease-out, opacity 0.12s ease-out;
 	}
 
 	.swipe-reveal.like {
@@ -1130,8 +1133,17 @@
 		opacity: calc(0.55 + var(--swipe-progress) * 0.45);
 	}
 
+	.swipe-row.armed .swipe-reveal {
+		filter: brightness(1.12);
+	}
+
 	.swipe-row.armed .swipe-reveal svg {
-		transform: scale(1.15);
+		transform: scale(1.2);
+		transition: transform 0.16s cubic-bezier(0.2, 0.9, 0.3, 1.3);
+	}
+
+	.swipe-row.swiping .queue-track {
+		box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
 	}
 
 	.swipe-row.swiping .queue-track {
