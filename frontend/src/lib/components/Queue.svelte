@@ -2,6 +2,7 @@
 	import { queue } from '$lib/queue.svelte';
 	import { player } from '$lib/player.svelte';
 	import { goToIndex } from '$lib/playback.svelte';
+	import { goto } from '$app/navigation';
 	import { jam } from '$lib/jam.svelte';
 	import { toast } from '$lib/toast.svelte';
 	import SensitiveImage from './SensitiveImage.svelte';
@@ -12,6 +13,10 @@
 	import { swipeable, type SwipeState } from '$lib/swipe';
 	import { HINTS, hintSeen, markHintSeen } from '$lib/hints.svelte';
 	import type { Track, JamParticipant } from '$lib/types';
+
+	// the queue can cover the viewport (mobile); whoever renders it closes it
+	// when the empty-state CTA navigates, so the destination is actually seen
+	let { onNavigate }: { onNavigate?: () => void } = $props();
 
 	let draggedIndex = $state<number | null>(null);
 	let dragOverIndex = $state<number | null>(null);
@@ -600,7 +605,19 @@
 				{:else}
 					<div class="empty-up-next">
 						<span>nothing else in the queue</span>
-						<a href="/for-you" class="empty-cta">find something to play</a>
+						<a
+							href="/for-you"
+							class="empty-cta"
+							onclick={(e) => {
+								// closing the queue unmounts this anchor mid-click, which can
+								// drop the default navigation — drive it explicitly
+								e.preventDefault();
+								onNavigate?.();
+								void goto('/for-you');
+							}}
+						>
+							find something to play
+						</a>
 					</div>
 				{/if}
 			</section>
@@ -1283,14 +1300,26 @@
 	}
 
 	.empty-cta {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		min-height: 44px;
+		padding: 0.6rem 1.25rem;
+		border-radius: var(--radius-md);
+		background: var(--accent);
+		color: var(--text-primary);
 		font-size: var(--text-sm);
-		color: var(--accent);
+		font-weight: 600;
 		text-decoration: none;
-		transition: color 0.15s ease;
+		transition: transform 0.15s ease;
 	}
 
 	.empty-cta:hover {
-		text-decoration: underline;
+		transform: translateY(-1px);
+	}
+
+	.empty-cta:active {
+		transform: scale(0.98);
 	}
 
 	.queue.empty {
