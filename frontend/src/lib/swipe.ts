@@ -34,7 +34,10 @@ export function displacement(dx: number, width: number, fraction = 0.35, minPx =
 	return Math.sign(dx) * damped;
 }
 
-const ENGAGE_PX = 6;
+const SLOP_PX = 8;
+// a swipe wins any contest it plausibly means to win: horizontal engages up to
+// ~53° off-axis, because thumbs arc and scrolling has the rest of the screen
+const HORIZONTAL_BIAS = 0.75;
 const SNAP_BACK = 'transform 260ms cubic-bezier(0.2, 0.9, 0.3, 1.1)';
 const SLIDE_OUT = 'transform 180ms cubic-bezier(0.4, 0, 1, 1)';
 const IDLE: SwipeState = { side: null, progress: 0, committed: false, dx: 0 };
@@ -143,11 +146,13 @@ export function swipeable(node: HTMLElement, params: SwipeParams = {}) {
 		dx = e.clientX - startX;
 		const dy = e.clientY - startY;
 		if (!engaged) {
-			if (Math.abs(dy) > ENGAGE_PX && Math.abs(dy) >= Math.abs(dx)) {
+			// wait out the thumb's opening wobble, then decide ONCE by angle —
+			// an early vertical blip must not steal a horizontal swipe
+			if (Math.hypot(dx, dy) < SLOP_PX) return;
+			if (Math.abs(dx) < Math.abs(dy) * HORIZONTAL_BIAS) {
 				abandoned = true;
 				return;
 			}
-			if (Math.abs(dx) <= ENGAGE_PX) return;
 			engaged = true;
 			node.setPointerCapture?.(e.pointerId);
 		}
