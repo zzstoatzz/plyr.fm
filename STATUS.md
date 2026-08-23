@@ -47,7 +47,7 @@ plyr.fm should become:
 
 ### August 2026
 
-#### the queue header settles on three matching buttons (#1924, August 25 — prod)
+#### the queue header settles on three matching buttons (#1924, August 23 — prod)
 
 **why**: the header carried three square icon buttons and one uppercase text
 pill, plus a repeat control the player bar already owns.
@@ -58,7 +58,7 @@ same icon family as add-to-queue (list+) and the swipe reveal (list-minus).
 Applies to both the queue and jam headers; the pill's words live on as
 title/aria-label.
 
-#### queue polish round two: keyboard, races, physics everywhere (#1914–#1922, August 24–25 — prod, frontend-only promotes; reorder engine promoted with #1924's release)
+#### queue polish round two: keyboard, races, physics everywhere (#1914–#1922, August 23 — prod, frontend-only promotes; reorder engine promoted with #1924's release)
 
 **why**: nate drove the queue hard on staging and prod and kept filing what he
 felt: no keyboard path after the X went away, toasts that looked crude and
@@ -102,7 +102,8 @@ on mobile, and a desktop that quietly kept an older, worse reorder.
 = swipe, vertical = reorder — partitioned by one bias constant, with scroll
 untouched on touch except from the drag handle. feel constants (scale 1.03,
 180ms spring, line at 55% accent) are each one line if nate wants to tune.
-#### queue swipe actions, hints, and the anti-slop sweep (#1907–#1912, August 22–24 — prod, frontend-only promote)
+
+#### queue swipe actions, hints, and the anti-slop sweep (#1907–#1912, August 23 — prod, frontend-only promote)
 
 **swipe** (#1907, #1908): a queue row swiped right reveals a heart (like /
 unlike), left a trash (remove from the queue), mouse or finger — Spotify's
@@ -163,321 +164,60 @@ nate's call on consent (heads-up post or opt-in).
 publish and optimize paths already use. Regression test drives `PATCH` and
 asserts the `putRecord` payload keeps the blob; it failed on the old code.
 
-#### people who can hear your private tracks (#1897–#1905, August 21–22 — prod `2026.0822.185531`)
+#### private media grows an access list (#1876–#1905, August 21–22 — prod `2026.0821.071650` → `2026.0822.185531`)
 
-**why**: nate's direction after the sign-in work: "private" should not have to
-mean "only you" forever; an artist should name the people who can hear their
-private tracks, by identity, in the portal. staging-first until we're happy —
-this touches the permission set every session consents to.
+Full write-up in `.status_history/2026-08.md`. Four days took private media from
+owner-only to an artist-named list of people who can hear it:
 
-**vocabulary, drilled** (Proposal 0016): the **space authority** is the DID
-that decides (the artist); the **space host** is the service that mints
-credentials for it (the PDS today); the **repo host** stores the bytes.
-"space owner" is not a protocol term — it means the authority. a reader never
-holds a working URL: their *app* trades a delegation token from *their own*
-PDS for a credential the authority's host mints, DPoP-bound to the app. so
-access is by DID, links cannot leak, and **a member must be on a PDS that
-implements spaces**.
+- **the contract caught up** (#1876–#1878): zds moved to the published
+  spaces-alpha lexicons on August 20 and rejected plyr's pre-alpha
+  `createSpace` body with `400 Missing policy`, failing every first private
+  upload; `ensure_personal_space` now sends the alpha body, space reads page by
+  cursor, and the pre-DPoP Bearer bridge is deleted.
+- **the grant is the capability** (#1881, #1885, #1891, #1903): deciding "can
+  this PDS do spaces" from advertised `scopes_supported` was wrong — the
+  reference `oauth-provider` never lists dynamic scopes, so the official
+  alpha PDS looked incapable. Every sign-in now requests
+  `include:<ns>.privateMediaAccess`; a spaces PDS expands it into `space:`
+  grants at consent, others leave it unexpanded, and a PAR `invalid_scope`
+  retries without it. Legacy sessions take a one-time upgrade that holds the
+  in-flight upload or recording across the redirect.
+- **members** (#1897–#1901, #1905): the `simplespace` member list on the
+  artist's PDS is the source of truth, mirrored into `private_media_members` so
+  visibility can be expressed in SQL and reconciled from `listMembers` on every
+  owner read. Both private audio paths mint from the *requesting* session, so a
+  member streams through their own PDS's delegation token; non-members still
+  404. The portal gained a "private tracks" section for adding and removing by
+  handle. Refusals now match the `getSpaceCredential` lexicon names instead of
+  500ing. Membership and supporter standing stay separate facts by design —
+  design doc: `docs/internal/architecture/private-media-access-list.md`.
+- **verification**: a real session on `nate.spaces-alpha.bsky.network` (the
+  official implementation) created a space, wrote the record, and streamed it
+  back through the credential proxy; Playwright drives the private-media and
+  `/record` flows against staging on every merge to main (#1887–#1889).
 
-**the legwork that surfaced**: plyr's permission set granted
-`authority: "self"` only, so a member's session could never obtain a
-credential for another artist's space whatever the member list said — Bulletin
-grants `authority: "*"`. #1898 revises `fm.plyr.privateMediaAccess` in place
-with a read-only `authority: "*"` permission (zds passes `*` through at token
-issuance; verified in `permission_sets.zig`), reported as
-`permissioned_spaces.reader` on `/auth/me`. **open until the revised set is
-published to staging** (`NAMESPACE=fm.plyr.stg … publish_permission_set.py
-privateMediaAccess`, nate's credential) and sessions re-consent.
+#### August 14 – 17 (archived)
 
-**what landed on staging**:
-- #1899 — `add/remove/list_space_members` wrappers; `remove` also forgets the
-  credential plyr cached for that DID (credentials live 2h by protocol with no
-  revocation, so removal is eventual). `scripts/permissioned_smoke.py` gains a
-  two-account leg proving a member reads the owner's blob through its own PDS's
-  delegation token.
-- #1900 — `private_media_members` mirrors the PDS list (source of truth;
-  written through on every add/remove, reconciled from `listMembers` when the
-  owner reads it, served as fallback when the PDS can't answer). visibility
-  guards become async and DB-backed; both private audio paths accept members,
-  minting from the requesting session. `GET/POST/DELETE
-  /artists/me/private-media/members`. non-members still 404.
-- #1901 — the `/portal/manage` section ("private tracks": search a handle,
-  add, remove) reusing `HandleSearch`; the e2e gains an optional cross-account
-  leg (`ALPHA_TEST_HANDLE/PASSWORD`, meant for `nate.spaces-alpha.bsky.network`
-  on the official implementation, with bufo.uk on zds as owner).
+See `.status_history/2026-08.md` for detailed history:
 
-**reconciled, not merged**: membership is the artist's explicit choice and
-instant; supporter standing is a verifier's answer with a 5-minute cache that
-expires. they stay separate facts — never auto-`addMember` from a payment
-event; "supporters can hear my private space" would be `managingAppPolicy`
-with plyr's `checkUserAccess` answering at mint time. downloads of private
-tracks stay refused for everyone (even the owner) until a private download byte
-path exists. design: `docs/internal/architecture/private-media-access-list.md`.
-
-**released**: nate chose to ship the arc with #1904 rather than hotfix. Before
-release, a review against 0016 and Habitat's ReBAC post led to #1905 — refusal
-names match the `getSpaceCredential` lexicon (three invented names were 500s),
-a member whose own PDS cannot delegate gets a 403 not a 500, removing yourself
-is a 400, and the "two hours" copy is gone (a protocol default, not a bound;
-plyr re-checks membership per request). Residuals are in the design doc's
-review section. Prod permission set published before the deploy; migration
-`f3a9c1d27b4e` applied; cross-account e2e leg still needs the
-`ALPHA_TEST_*` secrets.
-
-**lesson from the run**: merging #1900 while #1901's e2e was mid-flight
-redeployed staging under it — a `200` `/auth/me` followed by `401`s. the
-re-run passed. don't merge into a staging deploy a sibling run depends on.
-
-#### private media is requested at sign-in; the grant is the capability (#1891, #1893–#1895, August 21 — prod `2026.0821.231527`)
-
-**why**: nate's question — "shouldn't it request that ability on login?" —
-and a fact check against the official alpha. #1885 decided "can this PDS
-do spaces" from `scopes_supported` in the authserver metadata. The
-reference `oauth-provider` never lists dynamic scopes there ("other atproto
-scopes can't be enumerated as they are dynamic"), so the Bluesky-hosted
-alpha PDS (`spaces-alpha.host.bsky.network`, health
-`{"version":"permissioned-data"}`) advertises only `atproto` + `transition:*`
-— and #1885 hid private media from every account on it. zds
-(`pds.zat.dev`, `pi.chadtmiller.com`) is the one implementation that adds
-`space:*`; `pds.cauda.cloud` and `bsky.social` don't.
-
-**what shipped**: Bulletin's pattern. every sign-in requests
-`include:<ns>.privateMediaAccess`; a spaces PDS expands it into `space:`
-grants at consent (`granted: true`), any other PDS leaves it unexpanded, and
-an authserver that rejects it at PAR with `invalid_scope` gets the sign-in
-again without it. this is #1559's design; #1560's objection ("scope granted
-≠ PDS implements spaces") is answered by expansion (#1881). sessions from
-before this still take the one-time upgrade, which now says what it does —
-the button reads "approve private media" — and holds the upload (files in
-IndexedDB) or recording across the redirect and completes on return without
-a second click.
-
-**verification**: loopback-client PAR with the prod include → `201` on the
-alpha PDS, bsky.social and pds.cauda.cloud, each `/authorize` rendering a
-normal sign-in; zds rejects loopback clients, so its evidence is plyr's real
-client doing the same PAR in the e2e. on staging after merge both browser
-flows pass with `granted: true` straight from sign-in and no consent step.
-nate then signed in on staging with `nate.spaces-alpha.bsky.network` — the
-first real session on the official implementation: PAR 201, token, no
-scope-upgrade, and a private upload that created the space and wrote the
-record on the alpha PDS, then streamed back through the credential proxy.
-released to prod as `2026.0821.231527` with #1893 (the owner's private
-tracks were missing from their own artist page — SSR is anonymous — and
-`/artists/{did}/analytics` counted private tracks for every visitor; both
-fixed, the e2e checks the page as owner and as a stranger) and #1895 (the
-private option's copy: "only you can play it. nothing public, nothing in
-feeds." instead of protocol vocabulary). **still unverified**: token
-exchange on a non-spaces official PDS with the include present (#1560 saw
-it complete on a standard PDS).
-
-#### private memos from /record never reached consent; browser e2e for private media (#1887–#1889, August 21 — prod frontend)
-
-**why**: #1882's private option on `/record` was dead for every first-time
-user: `stashRecording()` handed IndexedDB the `$state` proxy behind `tags`,
-structured clone refused it (`DataCloneError`), and the page fell back to
-the preview with "couldn't save your recording". Nothing caught it because
-the live integration test signs in with an app password, and
-`session_has_private_media_access()` short-circuits for those sessions —
-capability detection, consent, and the granted token were structurally
-untested.
-
-**what shipped**:
-- `frontend/e2e/private-media.mjs` and `frontend/e2e/record-private.mjs`:
-  Playwright drives stg.plyr.fm with the zat test account through real OAuth
-  (PAR → zds consent → callback), a private upload, the consent round trip,
-  and playback from a fresh session; the record flow uses Chromium's fake
-  microphone and asserts title + private visibility survive the stash.
-  shared plumbing in `e2e/lib.mjs`. runs on every merge to main, on PRs that
-  touch `frontend/e2e/**`, and via `workflow_dispatch`; on failure it prints
-  the browser's API requests and console errors and uploads screenshots.
-- `/record` stashes `$state.snapshot(tags)` and restores the chosen private
-  visibility on the way back (it fell back to public before).
-- eslint has a node-globals block for `e2e/**/*.mjs` (#1887 merged with
-  pre-commit red on this).
-
-**verification**: the record flow failed at `[consent]` against the
-pre-fix staging build with the exact `DataCloneError`, then passed on main
-after the Pages deploy: `[restored]` → private track → `206` from the space
-proxy → cleanup. prod verified by the served `/record` chunk matching the
-fixed build.
-
-**open**: the first main run of the upload flow timed out at its second
-sign-in with zero requests reaching staging from the fresh context; three
-later runs passed and the cause is unknown. the diagnostics exist for the
-next occurrence — don't call it flaky.
-
-#### the createSpace body drifted from the spaces-alpha lexicons (#1876–#1878, August 21 — prod `2026.0821.071650`, `.073416`)
-
-**why**: zds aligned with the published spaces-alpha lexicons on August 20
-(zds `d68e94d`, atproto `2f77206`) and rejected the pre-alpha
-`com.atproto.simplespace.createSpace` body plyr still sent — `did` plus a
-`config` wrapper with a string `policy` — with `400 Missing policy`. every
-first private upload from a pds.zat.dev account failed at space creation. same
-drift class as #1656; reported by the zds side.
-
-**what shipped**:
-- `ensure_personal_space` sends the alpha body: `{type, skey: "self", policy:
-  {$type: …#memberListPolicy}, appAccess: {$type: …#open}}`, anchored on the
-  authenticated DID. zds authorizes the authority on its own member-list space
-  without an explicit `addMember`, so owner-only stays zero-config. the unit
-  test pins the exact payload and the absence of `did`/`config`.
-- `list_space_repos` / `list_space_repo_ops` accept `cursor` (`since` is
-  optional): a full page carries `cursor`, the head page carries the signed
-  `commit` and no cursor. neither function assumed `commit` before, but neither
-  could page.
-- the #1856 rollout bridge — retry a `401 AuthenticationRequired` with a Bearer
-  credential for the pre-DPoP zds — is deleted (#1878). a 401 on a space read
-  now only renews the credential.
-- `docs/internal/architecture/permissioned-private-media.md` names the contract:
-  the `permissioned-data` branch-tip lexicons, with
-  [Bulletin](https://github.com/bluesky-social/bulletin) as the reference
-  client.
-
-**verification**: old vs new body sent directly to pds.zat.dev on a fresh skey
-(`400` vs `200`, `getSpace` echoes the unions); `scripts/permissioned_smoke.py`
-green; the PR's CI ran the live private-media integration — real upload →
-proxied playback → delete against zds — with and without the bridge. no user
-impact: production has zero private tracks, staging's two belong to the test
-account.
-
-**technical notes**: reading Bulletin's whole atproto layer for the comparison
-settled where plyr stands. the request/response surface plyr uses — space
-creation, the delegation-token → DPoP-bound credential exchange, record writes,
-`getBlob` — matches the reference client. the gap is architectural: Bulletin
-is a *syncing service* (durable replica, `listRepoOps` to the `commit` then
-`verifyCommit` against the writer's DID key and an LtHash state check, `getRepo`
-CAR for initial sync, `registerNotify`/`notifyWrite`, and a `managingAppPolicy`
-whose `checkUserAccess` callback it serves); plyr is a *proxying client* with no
-replica, using `memberListPolicy` with nobody added. that is a product choice
-for owner-only media, not drift — but `lib/sync/engine.ts` is the template if
-#1684 ever needs a verified replica.
-
-#### comment timestamps seek on the first click (#1873, August 17 — prod frontend)
-
-**why**: a long-standing unreported irritation of nate's: clicking a comment's
-timestamp on a not-yet-playing track started the track at 0; only a second
-click landed on the timestamp.
-
-**what shipped**: `seekToTimestamp` used to start the track and then check
-`audioElement.readyState` — but the player attaches the new source
-*asynchronously* (`resolveAudioSource`), so `readyState` still described the
-previous source: the seek fired against the old audio and the new load reset
-to 0. the click now sets `player.pendingSeek = { trackId, ms }`, applied by
-the loader's `loadeddata` handler once the *matching* track's audio is
-attached — taking precedence over the saved-progress restore, which was a
-second, latent overwrite on the old fallback path. a pending seek for a
-different track is cleared before load; a denied gated track clears it too.
-regression tests mount the real `Player.svelte` and were proven failing with
-the loader half reverted. verified on staging and prod by clicking real
-comment timestamps cold (landed at 24.7s and 38.9s, not 0).
-
-**also**: a new root-CLAUDE.md rule from the same session — no paragraph
-comments in code; rationale lives here, in docs, commits, and PR bodies.
-
-#### the iOS lock-screen scrub investigation, unwound to its last verified point (#1860–#1869, August 15–16; open as #1870)
-
-**why**: on physical iPhones the Now Playing card shows correct metadata but
-the scrubber cannot be grabbed at all — while SoundCloud's web player scrubs
-fine in the same Safari, so it's achievable and it's our bug.
-
-**what shipped**: #1860 is the keeper — ⏮/⏭ arrows restored (registering
-`seekbackward`/`seekforward` makes iOS replace track-skip with 10s-skip
-buttons; removed), prev/next (de)registered reactively so the OS knows when
-they're live, `setPositionState` guarded against `Infinity`/`NaN` durations,
-radio mode finally feeding the media session, plus settings-popover and
-track-page fold fixes. everything after it — the "let iOS drive it natively"
-theory (#1861), a bisect diagnostic page (#1862–#1867), guarded and then
-throttled position state (#1865, #1868) — produced no observable improvement
-on a physical phone and was reverted byte-for-byte to the #1860 state
-(#1869). five recipe variants failed identically on-device; codec/range
-support, artwork MIME, and call churn are all ruled out. the simulator bisect
-shows a minimal page scrubbing fine until action handlers are added. #1870
-holds the full matrix; the deciding experiment — a minimal page on a
-*physical* phone, or Web Inspector attached to the device — hasn't run yet.
-
-#### teal scrobbles write the production lexicons (#1823, August 16 — prod `2026.0816.012308`)
-
-new writes use `fm.teal.feed.play` / `fm.teal.actor.status` (canonical after
-teal-fm/teal#110) with the canonical URI field names; existing alpha records
-are not rewritten, and collection names stay configurable via `TEAL_*` env
-vars. authored by Codex, reviewed and landed here.
-
-#### slugs transliterate instead of deleting (#1858, August 14 — prod `2026.0814.213524`)
-
-`slugify()` dropped non-ASCII letters outright, so **tūnņg** slugged to `tng`
-and the obvious `/album/tunng` URL 404'd (and 500'd through the frontend,
-which rendered a thrown bare `Error`). NFKD-normalize + ASCII-fold now runs
-before the character filter (`tūnņg` → `tunng`); a backend 404 surfaces as a
-proper 404 page; and a conflict-guarded backfill re-derived the 9 affected
-prod albums — only where the stored slug equals what the old pipeline
-produced, so artist-chosen custom slugs were untouched. no redirects from the
-old mangled forms: they were never shared as canonical links.
-
-#### space credentials are DPoP-bound (#1856, August 14 — prod `2026.0814.200348`)
-
-permissioned-space credentials now bind to an independent ephemeral DPoP key,
-with operation-specific proofs on credential reads including ranged blob
-playback, and the credential cache keyed by resident DID and space. a narrow
-rollout bridge retries only exact `401 AuthenticationRequired` responses from
-the current pre-DPoP ZDS — it never downgrades proof or policy errors.
-verified against live ZDS via the private-media integration suite.
-
-#### comments became a non-modal panel, and the track page finished its redesign (#1843–#1855, August 14 — prod `2026.0814.183107` + frontend releases)
-
-**why**: comments lived inline at the bottom of the track page — invisible,
-and any overlay treatment would have interrupted playback. nate wanted them
-present but never modal, plus a round of review notes on the redesigned page.
-
-**what shipped**:
-- **comments are a docked panel, not a modal** (#1845–#1850): extracted into
-  `TrackComments.svelte`, triggered from a count chip in the utilities row.
-  the desktop treatment came from reading leaflet.pub's drawer source: a
-  sibling column — no backdrop, no dim, no focus trap, page fully
-  interactive. plyr's version docks 380px at the right edge; mobile docks
-  above the footer player with the grab handle and swipe-to-dismiss. comments
-  and the queue are sibling panels (#1849).
-- **timestamp emissions** (#1851, #1855) — the soundcloud move: when playback
-  crosses a comment's timestamp, the comment emanates from the 💬 trigger as
-  a small glass bubble that lingers 4s and opens the panel on tap. seeks past
-  a 3s window don't spray missed comments; untimed 0:00 comments never fire.
-  per-comment "share" was removed (it copied a page-level link the page
-  already owns).
-- **the count flash was two bugs, not a style problem** (#1853): the
-  single-track endpoints never gathered comment counts, so every detail
-  response carried `comment_count: 0` — the optimistic trigger was an honest
-  render of wrong data; and the component reset on the `track` prop's object
-  identity, which the page reassigns after mount, so the whole thread
-  refetched. count joins the gather; the effect keys on the id value.
-- **like whimsy** (#1848): count pops on 0→1, digits roll on increment, the
-  heart plays one heartbeat on like — all explicitly zeroed under
-  `prefers-reduced-motion`, which svelte transitions don't respect natively.
-- layout rounds: viewport-scaled vertical rhythm (#1844), centered
-  composition with artwork absorbing spare height (#1854).
-
-#### artists choose a download policy: open / ask / supporters / off (#1841 → #1842, August 14 — prod `2026.0814.051956`)
-
-**why**: #1824's boolean opt-out was the v1 of a relationship dial nate
-wanted now: downloads as a moment to route listeners toward supporting the
-artist, without ever locking public bytes.
-
-**what shipped**: `download_policy` replaces `allow_downloads` (`false→'off'`,
-`true→NULL`). the default **auto** resolves to `ask` when the artist has a
-support link and `open` otherwise. `ask` always downloads but shows one
-interstitial first — "*artist* asks listeners to consider supporting their
-work" with an accent link to their support page and a quiet continue: a
-request, never a lock. `supporters` requires a verified support relationship
-(signed-out 401, non-supporter 403 with `X-Support-Required`); non-supporters
-simply never see the button. the control lives in the portal's profile
-section beside the support-link selector, replacing the `/settings` row.
-
-**technical notes**: verifier-neutral by construction — the schema stores
-only the policy, and `download_refusal()` receives `viewer_is_supporter` as a
-fact without learning how it was established, so the attested.network
-entitlement path (#1871) swaps the resolution without touching schema or
-endpoints. one policy function still feeds the track endpoint, the album-zip
-endpoint, and `TrackResponse.downloadable`. supporters-tier bytes stay in the
-public bucket deliberately: those tracks still stream publicly, so the gate
-is an offer, the same exposure class as `r2_url` itself.
+- **comment timestamps seek on the first click** (#1873) — the seek fired
+  against the previous source because `resolveAudioSource` attaches
+  asynchronously; now a `pendingSeek` applied by the matching track's
+  `loadeddata`.
+- **the iOS lock-screen scrub unwind** (#1860–#1869, open as #1870) — ⏮/⏭,
+  metadata and times work; the scrubber does not grab on a physical iPhone, and
+  everything after #1860 was reverted byte-for-byte because none of it changed
+  on-device behavior.
+- **teal scrobbles write the production lexicons** (#1823); **slugs
+  transliterate instead of deleting** (#1858, `tūnņg` → `tunng`); **space
+  credentials are DPoP-bound** (#1856).
+- **comments became a non-modal docked panel and the track page finished its
+  redesign** (#1843–#1855) — timestamp emissions from the trigger, the count
+  flash traced to two real bugs, like whimsy zeroed under
+  `prefers-reduced-motion`.
+- **artists choose a download policy** (#1841, #1842) — open / ask /
+  supporters / off, defaulting to `ask` when the artist has a support link, one
+  `download_refusal`/`download_key` pair behind three endpoints.
 
 #### August 3 – 14 (archived)
 
@@ -521,7 +261,9 @@ See `.status_history/` for detailed history, one file per month: `2026-07.md`,
 
 ### current focus
 
-**downloads are a relationship dial, and the track page is a composition** (#1824–#1858, August 13–14 — prod `2026.0813.195021` → `2026.0814.213524`): five days took downloads from "does not exist" to a four-value per-artist policy (open / ask / supporters / off, defaulting to `ask` when the artist has a support link), covering single tracks and whole albums as worker-built cached zips, through one `download_refusal`/`download_key` pair that three endpoints and the UI's `downloadable` flag all derive from — so the button can never offer what the endpoint would refuse. The surface it landed on was redrawn in the same arc: one controls line, comments as a non-modal docked panel with timestamp emissions, mobile controls at the 44px floor. **next in this arc**: the attested.network entitlement path (#1871) swapping in behind `viewer_is_supporter`, which the schema was deliberately kept ignorant of; per-track toggles and download counts; elevation tokens done holistically rather than as a one-page snowflake (#1835).
+**the queue became a direct-manipulation surface** (#1907–#1924, August 23 — prod, mostly frontend-only promotes): a queue row now has exactly two pointer grammars, partitioned by one bias constant — horizontal is swipe (right likes, left removes, and swipe is now the *only* remove), vertical is reorder. The reorder engine measures rows once at pickup into a pure, unit-tested plan, lifts the dragged row under a real shadow, displaces neighbours iOS-home-screen style, and marks the landing gap with an accent line; mouse and touch run the same engine after #1922 deleted native HTML5 drag. Keyboard reaches the same actions on a focused row. Two sync races found in staging spans were closed in #1919 — a `409` on `PUT /queue/` used to adopt server state wholesale and discard the mutation whose toast had already fired, and even a `200`'s echo could clobber a mid-flight change. **next in this arc**: nate's pick for a like key (the obvious `l` collided with global next-track); whether the landing line needs more than a subtle underline now that displacement carries the signal; the swipe hint's `queue-swipe@1` is the first user of versioned one-time hints, and other mechanisms that moved recently could use them.
+
+**downloads are a relationship dial** (#1824–#1858, August 13–14 — prod `2026.0813.195021` → `2026.0814.213524`, detail archived): a four-value per-artist policy (open / ask / supporters / off, defaulting to `ask` when the artist has a support link) covering single tracks and whole albums as worker-built cached zips, through one `download_refusal`/`download_key` pair that three endpoints and the UI's `downloadable` flag all derive from. **next in this arc**: the attested.network entitlement path (#1871) swapping in behind `viewer_is_supporter`, which the schema was deliberately kept ignorant of; per-track toggles and download counts; elevation tokens done holistically rather than as a one-page snowflake (#1835).
 
 **the iOS lock-screen scrubber is the standing unknown** (#1860–#1870, August 15–16): ⏮/⏭ arrows, metadata, and times all work on a physical iPhone; the scrubber cannot be grabbed under any of five media-session recipes, while SoundCloud's web player scrubs in the same Safari. Everything after #1860 was reverted byte-for-byte because none of it changed on-device behavior — codec/range support, artwork MIME, and call churn are ruled out, and the simulator disagrees with the phone. **next in this arc**: the deciding experiment, which is a minimal page on a physical device or Web Inspector attached to one — not another recipe (#1870).
 
@@ -537,13 +279,15 @@ See `.status_history/` for detailed history, one file per month: `2026-07.md`,
 
 **moderation: from inert labels to recorded decisions** (#1691–#1718, July 24–27 — prod `2026.0725.035625` → `2026.0728.043224`): `copyright-violation` de-lists instead of doing nothing; adult labels stopped gating permalinks; `LabelContext.LIST` vs `VIEW` keeps labels shaping discovery rather than destinations; and underneath all of it `moderation_events` carries the review queue, per-track overrides, the audit trail, and the source of public transparency posts from @moderation.plyr.fm. Published contact is now `help@plyr.fm` / `dmca@plyr.fm`, and rate limits are keyed per client rather than per site (#1716, #1718). August 8–9 sharpened what those decisions *mean*: `override_exclude` is curation, not removal, so it empties chosen surfaces (feeds, search, radio, atlas) and never a destination anyone navigated to (#1799), and radio and the atlas actually honor it now (#1797). **next in this arc**: triage the 18 queued subjects; merge or discard the transparency-post batching work parked on `feat/batched-transparency-posts` (six curation events currently mean six posts); per-actor authentication, which is what gates agent participation; then a proposed/applied split so an agent can propose a decision a human approves. The DMCA surface itself is still incomplete (see known issues).
 
-**still experimental — private media on permissioned spaces** (#1557→#1574, #1684, #1876, epic #1384): private audio in an artist-owned permissioned space (never R2), owner-only, credential-gated playback — end-to-end on staging, in prod with zero private tracks so far. the wire contract is the spaces-alpha lexicons at the tip of atproto's `permissioned-data` branch, with Bulletin as the reference client; zds tracks that branch and has rejected stale bodies twice (#1656, #1876), so drift there shows up as a failed first private upload. The July Proposal-0016 alignment replaces the obsolete `ats://` draft addresses with canonical `at://{authority}/space/{type}/{skey}` addresses, separates the space-type lexicon from the OAuth permission set, resolves dedicated space hosts with PDS fallback, and sends a confidential-client attestation separately from the user's delegation token. The current owner-only policy remains intentionally narrow; interoperable catalog sharing needs a product policy and UX on top of the protocol primitives. See `docs/internal/architecture/permissioned-private-media.md`.
+**still experimental — private media on permissioned spaces** (#1557→#1574, #1684, #1876–#1905, epic #1384): private audio in an artist-owned permissioned space (never R2), credential-gated playback, and since August 22 an artist-named member list rather than owner-only — the `simplespace` member list on the artist's PDS decides, mirrored into `private_media_members` for SQL-expressible visibility and reconciled from `listMembers` on every owner read. Every sign-in now requests the private-media permission set and a spaces PDS expands it into `space:` grants at consent, so the *grant* is the capability signal (advertised `scopes_supported` never listed the dynamic scopes and hid the feature from the official alpha PDS). **open**: the cross-account e2e leg needs its `ALPHA_TEST_*` secrets; membership and supporter standing stay separate facts by design; downloads of private tracks are still refused for everyone, owner included, until a private download byte path exists. Design: `docs/internal/architecture/private-media-access-list.md`. the wire contract is the spaces-alpha lexicons at the tip of atproto's `permissioned-data` branch, with Bulletin as the reference client; zds tracks that branch and has rejected stale bodies twice (#1656, #1876), so drift there shows up as a failed first private upload. The July Proposal-0016 alignment replaces the obsolete `ats://` draft addresses with canonical `at://{authority}/space/{type}/{skey}` addresses, separates the space-type lexicon from the OAuth permission set, resolves dedicated space hosts with PDS fallback, and sends a confidential-client attestation separately from the user's delegation token. The current owner-only policy remains intentionally narrow; interoperable catalog sharing needs a product policy and UX on top of the protocol primitives. See `docs/internal/architecture/permissioned-private-media.md`.
 
 **identity, discovery and the queue** (#1620–#1730, July): a broken avatar led to five live artists hidden from every discovery surface because we read one host's `#account` event as a statement about the person — fixed at three levels, and the identity task that maintains the PDS cache is now actually registered with the worker (it had never run in production). The radio no longer plays one artist back-to-back (#1730). An experimental subsonic `/rest` shim lets off-the-shelf clients (Symfonium, Amperfy, Shelv) play plyr libraries with a developer token as the password (#1644–#1651); collection continuity queues the rest of an album or playlist as a labeled "next from" context (#1626); repeat-one shipped (#1653/#1654/#1657), reviving @AilaScott's #1518, with repeat-all deferred until the loop-vs-continuation interaction is designed.
 
 **next**: remove the `/admin/*` machine-endpoint aliases now that prod calls `/internal/*` (#1691); re-enable `test_private_media.py` somewhere that has the local postgres/redis fixtures (it is excluded from the staging-facing workflow). which surfaces beyond albums/playlists count as queueable contexts (artist catalogs #1353, feeds/search). publish the five record lexicons (`fm.plyr.track`, `.like`, `.comment`, `.list`, `.actor.profile`) with a docs-quality pass on each (next phase after #1569); a production smoke-test harness for private media (file-types × visibilities, fully inert — no DM/listing/stats — per prod release); enable the `copyright-paradigm` flag for own DID and start dogfooding on prod; co-writer / publisher editing UI for `additionalInterestedParties` (backend plumbed end-to-end, frontend deferred); prefill ISWC/ISRC/masterOwner on the portal edit form (we only have the URIs locally, not field contents); fly worker tcp health check (running-but-stuck symptom detector); upstream `atproto_oauth.OAuthClient` body-factory support (lets us drop `_signed_streaming_post`); deploy-docs sanity check; `config.py` decomposition.
 
 ### known issues
+- **66 production tracks lost their PDS blob to the edit bug** (#1904, fixed August 22): every metadata edit rebuilt the PDS record without `audioBlob`, so the PDS garbage-collected the blob and jetstream mirrored the blob-less record back. 21 artists affected since March 18; the audio still exists in R2. Repairing means re-uploading and rewriting records on other people's behalf, so it is **deliberately not done** — it waits on nate's call about consent (heads-up post or opt-in).
+- **the revised private-media permission set is a re-consent event** (#1898): the `authority: "*"` reader permission only takes effect for sessions that consented after it was published, so a member added before their next sign-in cannot mint a credential yet. Credentials also live two hours by protocol with no revocation, so removal from a member list is eventual.
 - **Logfire retention is shorter than time-to-report** ([#1813](https://github.com/zzstoatzz/plyr.fm/issues/1813)): on August 9 the project's earliest record was the same morning. A July 6 PDS-blob failure was therefore undiagnosable a month later — the DB row recorded *that* it failed, never why. Both the new mirroring alert and #1811's failure reasons are only worth as much as the window they survive in. Cheap mitigation for anything we may be asked about later: persist the reason next to the row, which outlives any retention setting.
 - **the PDS picker offers tracks this deployment can't read** ([#1814](https://github.com/zzstoatzz/plyr.fm/issues/1814)): `pds_savable_count` checks ungated + no blob + not optimizing, none of which establishes that the bytes are reachable from here. After #1811 the failure is at least legible instead of a bare count, but the honest behavior is not to offer them. Both candidate fixes have an objection — a per-track HEAD is request-time I/O for a metadata endpoint, and an `r2_url`-origin heuristic reintroduces origin-sniffing right after #1805 removed it from the write path — so it wants a deliberate call. A third framing: if the record carries an `audioBlob`, mirror it in (#1778) rather than hide the track.
 - **unlike may leave the track in the liked list** ([#1812](https://github.com/zzstoatzz/plyr.fm/issues/1812)): `test_cross_user_like` failed once against staging on August 9 and has passed since. Filed rather than dismissed as flaky, because the assertion describes a read-your-own-write guarantee. Ruled out: stale cache (the liked list is a direct DB query) and a failed delete (it commits before returning). Untested hypothesis: `unlike_track` deletes the row and backgrounds the PDS deletion, so a replayed like-create event could resurrect it — the #1736 family. Track deletes write a tombstone for exactly this reason; likes may have no equivalent.
@@ -715,4 +459,4 @@ see the [contributing guide](https://docs.plyr.fm/contributing/) for setup instr
 
 ---
 
-this is a living document. last updated 2026-08-21 (**the createSpace body drifted from the spaces-alpha lexicons**. zds moved to the alpha lexicons on August 20 and rejected plyr's pre-alpha `createSpace` body, failing every first private upload on pds.zat.dev; #1877 sends the alpha body and lets `listRepos`/`listRepoOps` page by cursor, #1878 deletes the now-dead pre-DPoP Bearer bridge from #1856. verified old-vs-new body directly against zds, the smoke script, and the live private-media integration in CI; no user impact since prod has zero private tracks. the architecture doc now names the branch-tip lexicons and Bulletin as the contract, and the entry records how plyr's proxying client compares to Bulletin's syncing service.) previously last updated 2026-08-17 (**status maintenance for the August 9–17 window**. Archived the August 3–14 detail block to `.status_history/2026-08.md`, taking STATUS.md from 916 lines to ~410 — the credential chain, the `file_id` storage-key family, the media-bucket CORS policy, the upload memory wedge, and the whole track/album download build-out are now history rather than current state, kept as a single dated cross-reference. Rewrote current focus around the two arcs that are actually live: downloads as a per-artist relationship dial with the redrawn track page and non-modal comments panel around it, and the iOS lock-screen scrubber, which remains unexplained after five media-session recipes and a byte-for-byte revert to #1860. Left the known-issues list intact — nothing in it was retired by this window. Recorded the podcast recap for August 9–17.) previously last updated 2026-08-14 (**albums download as cached zips**. #1836 extends yesterday's download policy to albums — same shared `download_refusal`/`download_key`, zip built on the worker via the export machinery, cached in R2 under a digest of the ordered member keys so edits invalidate naturally, CDN-served by redirect; verified cold-build → SSE → zip → cache-hit on both staging and prod. #1834 brought the regrouped track page's mobile controls up to the 44px touch floor with press feedback on the play disc, punting the material treatment to #1835 rather than hardcoding a token-less one-off. #1837/#1838 fixed the brutal cold-download toast and captured the research as a `toast-copy` skill; #1839 caught the settings copy and docs.plyr.fm up to the feature. also: a 10-day orphaned vite on port 5199 had been silently absorbing every local dev-server start.) previously 2026-08-14 (**an album batch wedged the app VM**. the 02:02 UTC incident: aioboto3's upload reader eagerly queues 100 x 8MB parts per upload by default (~800MB), starving the 1GB app VM into page-cache thrash — process alive, logs/health/SSH all silent, zero 5xx in Logfire because failing requests never reached the app. #1831 capped uploader concurrency and was insufficient; re-review found the io_queue by reading the installed source, #1832 capped it to ~32MB per upload and moved the sync whole-file scans off the event loop. verified with the staging longform-WAV integration test, released clean. retro in docs/internal/runbooks/2026-08-14-upload-memory-wedge.md; open items: machine-level health alerting, app-VM sizing, /tmp exposure.) previously 2026-08-13 (**tracks are downloadable, and the detail page got its sketch**. #1824 adds `GET /audio/{file_id}/download` — presigned attachment named `artist - title.ext`, preferring the lossless original — for anything public, ungated, and un-copyright-labeled, with an `allow_downloads` artist opt-out defaulting on since the artist's PDS already serves the bytes to anyone. one policy module feeds both the endpoint and `TrackResponse.downloadable`, so the UI never offers what the endpoint refuses; adversarial review killed a dead-presigned-URL bug for PDS-only/ingested rows and an unordered scan-row read. #1825 fixed the circular import that crash-looped staging's app process — only uvicorn's import order hits it, so a regression test now imports backend.main in a fresh interpreter. #1826 rebuilt the track detail page to nate's notebook sketch: one controls line (like chip · circular play · bare queue icon), listens, unboxed share/download, `clamp()`ed gaps — the album-context/track-list half of the sketch deliberately punted. verified on prod end-to-end: downloaded the actual 16-bit WAV original with the right filename.) previously 2026-08-10 (**the media hosts never had a CORS policy at all**. An external developer asked for CORS headers to build a web DJ deck; the API has allowed any HTTPS origin since #1106, so the ask read as already-satisfied — but audio bytes come from R2 custom domains, where CORS is configured per-bucket, separately from the FastAPI middleware. All four public buckets returned "The CORS configuration does not exist" (code 10059): preflight 403, and a GET returning 206 with real bytes and no `Access-Control-Allow-Origin`. `<audio src>` playback worked throughout, which is why nothing surfaced it. Shipped `infrastructure/r2/cors.json` (#1821) to `audio-`/`images-{staging,prod}`, deliberately excluding the private buckets — those have no custom domain, `r2.dev` disabled, presigned-only, and `*` there *would* be an access-control change. On the public buckets it is not one: they are already reachable unauthenticated two ways, so `*` grants browsers a read any server-side script already had; no credential surface either, since R2 returns literal `*` and no `set_cookie` passes `domain=`. The bucket policy alone was insufficient — the 1yr edge TTL kept already-cached objects serving their header-less variant and `Vary: Origin` did not rescue them, so the two media hosts were purged by host rather than `purge_everything`. Verified as capability rather than headers: headless Chromium on a foreign origin read 24343244 bytes, decoded them (2ch 44100Hz 138.00s), and pulled 6085800 raw PCM samples. This also closes #1753 — the artwork accent wash was inert for exactly this missing header. Flagged but not addressed: `mirror_pds_blob` re-hosts firehose-ingested audio because a record was published, not because the artist asked — unchanged by CORS, but a real consent question. Also recorded #1818 (`just backend test` ran against **neon dev** rather than the compose postgres it started) and #1817 (plyr publishes a `community.lexicon.app.profile` record).) previously 2026-08-09 (**a track row's `file_id` is not a storage key**. Started from an artist asking why ten tracks weren't on their PDS — nine were the #1565 herd never repaired after June, the tenth failed on July 6 with the telemetry long since aged out. Repairing them surfaced three real defects: the image-origin allowlist was policing what plyr wrote to a creator's *own* repo and rejecting plyr's own pre-`images.plyr.fm` URLs (#1805, removed from the write path — ingest-side trust unchanged); PDS-save failures incremented a counter through four early returns with no log and no reason, so a batch reported "6 failed" with an empty error list and zero rows in Logfire (#1806/#1811); and underneath both, `Track.file_id` addresses storage only for uploads that came through us — on the ingest path it is the record's author-supplied `fileId`/rkey while the bytes live under the content hash in `r2_url`. Eight sites passed it straight into storage, including **track and account deletion, which silently orphaned the real object**, and media export, which silently omitted the track. Fixed via `AudioKey.for_track` and pinned by a source-scanning test that caught a ninth site mid-review. Verified on three production rows belonging to external users — 404 at the old key, 206 at the new one. Also: the portal states "all your audio is on your PDS" when there's nothing to do, a dismissible banner (per-account, not localStorage) surfaces the standing case, its CTA opens the picker directly, and the xdist test bootstrap no longer runs inside a per-test timeout (#1809 — the suite failed 5/5 when run CI's way). Four issues filed rather than carried quietly: #1812–#1815.) previously 2026-08-09 (**status maintenance for the August 5–9 window**. Archived the August 3–8 detail block to `.status_history/2026-08.md`, taking STATUS.md from 722 lines to ~460 — including the redis-password cutover and the write-echo alert's design write-up, both now history rather than current state. Backfilled the one thing this window shipped and never recorded here: **#1790**, which stopped handing AudD, Modal, and Replicate a `getBlob` URL built from an uploader-controlled `did:web` endpoint — a regression test on `main` produced the cloud metadata address from a stored `pds_url` — and replaced it with `mirror_pds_blob`, which fetches once through the hardened client, verifies the bytes hash to the `pds_blob_cid` the record commits to, and keys the copy by content hash rather than the record's attacker-supplied `fileId`. Also recorded the smaller August 8 changes that had no entry: environment-tagged operator alerts (#1793), the PDS-mirror backfill's docket client (#1791/#1792), and the `DATABASE_POOL_RECYCLE=240` staging mitigation being unset after it starved concurrent uploads (#1794). Rewrote current focus around the credential chain and folded the exclude-semantics work into the moderation arc. Recorded the podcast recap for August 5–9.) previously 2026-08-09 (**staleness sweep of known issues, verified against reality**. Retired the #1782 production-requirepass entry — the cutover ran August 8 (plyr-redis v2 + `REDIS_PASSWORD`) and an unauthenticated connection from inside the prod network now gets `AuthenticationError`; the issue is closed. Retired the "write-echo alert unexercised" entry — it fired for real on August 8 as a verified true positive (see the #1796 entry). Recounted the review queue: 18 subjects now await triage (was 13; the scanner keeps opening fingerprint flags), track 64 still among them. Updated the rev-guard coverage to 6 of 1005 tracks. Confirmed still true before keeping: the artwork accent wash stays inert (images hosts still send no `Access-Control-Allow-Origin`), and #1778/#1780 remain open.) previously 2026-08-09 (**search ranks lexical intent above trigram fuzz**. Closed #1523 via #1801, prod `2026.0809.034121`: one tiered relevance — exact > prefix > substring > fuzz — across all five search helpers, `word_similarity()` for intra-tier ties, quotes normalized on both sides; verified on prod that "you don't kn", "you don’t kn", and "you dont kn" all rank the reported title first. Also recorded the discovery that every checkout shares one compose project named `tests`, so concurrent agent sessions recreate each other's test databases — the source of the evening's "stale schema" ghosts, now a known issue.) previously 2026-08-09 (**exclude is curation, not removal, and the blackout alert's first firing**. Applied the override_exclude runbook to a user report of prayer recordings on radio, which surfaced two defects in the paradigm itself: radio never honored the projection (#1797), and exclude applied in every context, briefly blanking the artist's public profile before #1799 made it LIST-only — chosen surfaces exclude, destinations never do. Six events recorded with the transparency publisher paused so one curation call didn't become six posts; a batching implementation is parked on `feat/batched-transparency-posts`. Separately, the #1775 write-echo alert fired for real: jetstream2.us-east was externally verified blind to our collections while three sibling hosts served the same commit, and the 10s rotation rewind permanently skipped the event — #1796 filed for rewinding to the blind-window start. Also confirmed the #1523 search-ranking mechanism: bare trigram `similarity` structurally punishes long titles.) previously 2026-08-08 (**the staging db errors were a pool/suspend mismatch**. Diagnosed the error-level `SELECT neondb` spans that had been written off as restart noise: staging Neon suspends after 300s idle while `pool_recycle` defaults to 1800s, so pooled connections outlive the compute. SQLAlchemy recovers transparently via `pool_pre_ping` -- all 95 affected traces had succeeding root spans -- but the instrumentation stamps the failed attempt `ERROR` with an empty message, because the exception stringifies to "". Production is immune: scale-to-zero is disabled there (`suspend_timeout_seconds: -1`). Set `DATABASE_POOL_RECYCLE=240` on staging. The clusters track integration-test runs, not deploys.) previously 2026-08-08 (**redis had no password, and a redis blip took the whole API down**. Closed the remaining half of #1782: `plyr-redis` now requires a password (#1786), wrapped in `sh -c` because Fly exec's `[processes]` args rather than shelling them — unwrapped, `--requirepass $REDIS_PASSWORD` sets the password to that literal string and looks like it worked. Rehearsing the cutover on staging found a second, worse bug: `slowapi` hands storage exceptions to its rate-limit handler, which reads `exc.detail`, so an unreachable Redis returned `AttributeError` on every request including `/health` — a blip took the whole API down and failed the platform health check. Fixed in #1787 with an in-memory fallback that keeps limits enforced and probes for recovery. Verified by restarting staging redis under load: 150/150 requests returned 200, against the same scenario that produced blanket 500s an hour earlier. The production cutover is staged but not run — held for sign-off.) previously 2026-08-08 (**the session cache was handing out PDS credentials**. An external security assessment led with CSRF, which did not survive contact with the source — the API and frontend are same-site, so `SameSite=Lax` already withholds the cookie cross-site. Chasing "what do these compose into" instead of "is each one severe" found the real thing: `get_session()` decrypted the Fernet-encrypted OAuth blob and cached the plaintext in an unauthenticated Redis for 60s, keyed by the bearer token itself — and the payload included `dpop_private_key_pem`, which collapses DPoP's proof-of-possession back to bearer semantics. Fixed in #1783 (cache the ciphertext, key on sha256, drop the redundant id), #1784 (subsonic `/rest` had accepted any session id, not just developer tokens), #1781 (full session ids in debug logs). Verified by connecting to Redis in both environments and asserting on real entries: production failed every check before the release and passed all of them after. The regression test caught a bug in the fix — returning `None` on an undecryptable entry would have made an OAuth key rotation a mass logout. Transferable lessons in `docs/research/2026-08-08-credential-handling-in-atproto-appviews.md`. Four new known issues recorded rather than quietly carried: unauthenticated `plyr-redis` (#1782), the `did:web` SSRF-by-proxy and mutable-source scan (#1778), the transcoder's fail-open auth (#1780), and a CORS regex admitting every HTTPS origin that #208 closed as "CORS validation" in February.) earlier entries are preserved in `.status_history/2026-08.md`.
+this is a living document. last updated 2026-08-23 (**status maintenance for the August 17–23 window**. Archived the August 14–22 detail to `.status_history/2026-08.md` — the private-media access-list arc, the first-click comment-timestamp seek, the iOS scrub unwind, the comments panel, and the download policy — taking STATUS.md from 719 lines to ~460, and trimmed this trailer, whose older entries now live in the same archive file. Rewrote current focus around the two arcs that are actually live: the queue as a direct-manipulation surface, and private media now that it has a member list rather than an owner. Corrected the queue entries' dates, which were a day or two ahead of the merges they describe. Two new known issues recorded rather than left in a PR body: the 66 production tracks whose PDS blobs the edit bug deleted, which nobody has decided how to repair, and the re-consent the revised permission set requires of existing sessions. Recorded the podcast recap for August 17–23.) previously 2026-08-21 (**the createSpace body drifted from the spaces-alpha lexicons**. zds moved to the alpha lexicons on August 20 and rejected plyr's pre-alpha `createSpace` body, failing every first private upload on pds.zat.dev; #1877 sends the alpha body and lets `listRepos`/`listRepoOps` page by cursor, #1878 deletes the now-dead pre-DPoP Bearer bridge from #1856. verified old-vs-new body directly against zds, the smoke script, and the live private-media integration in CI; no user impact since prod has zero private tracks. the architecture doc now names the branch-tip lexicons and Bulletin as the contract, and the entry records how plyr's proxying client compares to Bulletin's syncing service.) previously last updated 2026-08-17 (**status maintenance for the August 9–17 window**. Archived the August 3–14 detail block to `.status_history/2026-08.md`, taking STATUS.md from 916 lines to ~410 — the credential chain, the `file_id` storage-key family, the media-bucket CORS policy, the upload memory wedge, and the whole track/album download build-out are now history rather than current state, kept as a single dated cross-reference. Rewrote current focus around the two arcs that are actually live: downloads as a per-artist relationship dial with the redrawn track page and non-modal comments panel around it, and the iOS lock-screen scrubber, which remains unexplained after five media-session recipes and a byte-for-byte revert to #1860. Left the known-issues list intact — nothing in it was retired by this window. Recorded the podcast recap for August 9–17.) previously last updated 2026-08-14 (**albums download as cached zips**. #1836 extends yesterday's download policy to albums — same shared `download_refusal`/`download_key`, zip built on the worker via the export machinery, cached in R2 under a digest of the ordered member keys so edits invalidate naturally, CDN-served by redirect; verified cold-build → SSE → zip → cache-hit on both staging and prod. #1834 brought the regrouped track page's mobile controls up to the 44px touch floor with press feedback on the play disc, punting the material treatment to #1835 rather than hardcoding a token-less one-off. #1837/#1838 fixed the brutal cold-download toast and captured the research as a `toast-copy` skill; #1839 caught the settings copy and docs.plyr.fm up to the feature. also: a 10-day orphaned vite on port 5199 had been silently absorbing every local dev-server start.)
