@@ -47,6 +47,50 @@ plyr.fm should become:
 
 ### August 2026
 
+#### queue polish round two: keyboard, races, physics everywhere (#1914–#1922, August 24–25 — prod, frontend-only promotes)
+
+**why**: nate drove the queue hard on staging and prod and kept filing what he
+felt: no keyboard path after the X went away, toasts that looked crude and
+spoke in two voices, adds that "weirdly disappear", a reorder that felt cheap
+on mobile, and a desktop that quietly kept an older, worse reorder.
+
+**what shipped**:
+- keyboard on a focused queue row: arrows move, delete/backspace removes
+  (focus stays in the list). the first cut also bound `l` to like — it
+  shadowed the global `l` = next-track and nate called it out: a shortcut
+  collision is a question, not a silent contextual override. reverted
+  (#1915); a like key waits on his pick. both lessons are now `self-review`
+  checklist items (#1918), along with "reuse an existing action's copy"
+  (#1917: the queue toasted bare "liked" while the menu said "liked <title>").
+- toasts wear the app's glass (#1916): the container hardcoded a dark rgba in
+  both themes — wrong in light. now the same color-mix surface, glass border
+  and shadow as the queue cards. aesthetic only, per nate.
+- two real races (#1919), diagnosed from staging spans (11 PUT + 12 GET + a
+  409 in one minute): a 409 on `PUT /queue/` adopted server state wholesale,
+  discarding the mutation whose toast had just fired (refresh showed it once a
+  later push rewrote it); and even a 200's echo snapshot clobbered anything
+  done mid-flight. now: a conflict re-pushes local intent once under the new
+  revision (a second conflict concedes — another writer is real), and a
+  mutation-epoch guard skips stale echoes. plus: the swipe dismiss left a
+  height-0 wrapper that the keyed each handed back to a re-added track — an
+  invisible row with the count disagreeing (nate's screenshot).
+- gesture discrimination (#1920): the swipe used to die at the first pointer
+  event where vertical wobble edged past 6px — exactly how a thumb-arc swipe
+  opens. now 8px of travel, one decision, swipes winning to ~53° off-axis.
+- reorder physics (#1921, #1922): rows are measured once at pickup
+  (`reorder-plan.ts`, pure and unit-tested); the lifted row scales under a
+  real shadow (escaping its swipe wrapper's clip), neighbours animate out of
+  the way iOS-home-screen style, a subtle accent line marks the landing gap,
+  haptics tick on pickup and slot change. #1922 unified it: native HTML5 drag
+  is deleted, mouse and touch share the engine (mouse: vertical drag anywhere
+  on the row; the swipe owns horizontal via the same mirrored 0.75 bias), and
+  the landing line moved from viewport space to the scroll container's content
+  space — the "line in the wrong spot" was a `scrollTop` bug.
+
+**technical notes**: the row now has exactly two pointer grammars — horizontal
+= swipe, vertical = reorder — partitioned by one bias constant, with scroll
+untouched on touch except from the drag handle. feel constants (scale 1.03,
+180ms spring, line at 55% accent) are each one line if nate wants to tune.
 #### queue swipe actions, hints, and the anti-slop sweep (#1907–#1912, August 22–24 — prod, frontend-only promote)
 
 **swipe** (#1907, #1908): a queue row swiped right reveals a heart (like /
