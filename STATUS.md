@@ -47,6 +47,34 @@ plyr.fm should become:
 
 ### August 2026
 
+#### queue swipe actions, and the anti-slop sweep (#1907–#1909, August 22–24 — staging, awaiting prod)
+
+**swipe** (#1907, #1908): a queue row swiped right reveals a heart (like /
+unlike), left a trash (remove from the queue), mouse or finger — Spotify's
+queue gesture. threshold 35% of the row (72px floor); one-to-one tracking to
+the threshold then rubber-band resistance; spring snap-back; a committed
+remove slides the row out and collapses its slot; crossing the threshold pops
+the icon with a haptic where offered. verified in a real browser (desktop +
+390×844 touch) against the staging API. #1908 also fixed a phone regression
+nate caught on staging: the wrapper's overflow:hidden let flex items shrink,
+clipping every row — flex-shrink: 0.
+
+**anti-slop** (#1909): doodl's oxlint plugin (15 rules) now runs in
+`bun run lint` after eslint. all 237 findings across 91 files fixed at the
+root — casts removed by real narrowing, runtime typeof replaced by boundary
+parsing or `browser`, open dictionaries by named contracts, vi.mock by real
+modules (three minimal seams: player.importHls, playlist load's ssr default
+arg, RadioEmbed reading window.location). two SAFETY one-liners remain. an
+independent review pass found three nits, fixed pre-merge (null at the queue's
+JSON boundary, half-converted safe-storage writes, an untested default).
+
+**process**: `change` and `self-review` skills now encode the delivery flow
+(PR → self-review → merge = staging → nate reviews → promote via `deploy`).
+lesson repeated with a new face: the post-merge e2e raced the **Pages**
+deploy this time (HTML/chunk skew, pages stuck unhydrated with zero
+requests); a local production build was healthy and the re-run passed —
+diagnose the deploy window before suspecting the change.
+
 #### editing a track deleted its audio from the PDS (#1904, August 22 — prod `2026.0822.185531`)
 
 **why**: nate's 4:32 am upload went to his PDS — `uploadBlob` 200 and the record
