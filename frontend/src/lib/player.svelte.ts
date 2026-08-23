@@ -54,6 +54,8 @@ class PlayerState {
 	 * can attach synchronously inside the tap that asked for it. */
 	private hlsModule: HlsModule | null = null;
 	private hlsLoad: Promise<HlsModule | null> | null = null;
+	/** the dynamic import behind `preloadHls`; tests swap in a stand-in since hls.js needs MediaSource. */
+	private importHls = () => import('hls.js');
 	paused = $state(true);
 
 	/** seek to apply once the named track's audio attaches (comment timestamps) */
@@ -130,7 +132,7 @@ class PlayerState {
 		void this.attachRadioSource(el, np, assigned, autoplay);
 		if (autoplay) {
 			// play immediately (preserve the gesture), then align to station position
-			el.play().catch((err: unknown) => {
+			el.play().catch((err: DOMException) => {
 				// a rapid station flip supersedes this load before its play() settles;
 				// the rejection belongs to the DEAD load and must not touch state —
 				// unguarded, it flipped `paused` under the successor and left the
@@ -138,13 +140,13 @@ class PlayerState {
 				if (this.radio !== assigned) return;
 				// the element aborting this play() because a new load started means
 				// a successor owns playback now — nothing to record here either
-				if ((err as { name?: string })?.name === 'AbortError') return;
+				if (err.name === 'AbortError') return;
 				this.paused = true;
 				// autoplay policy blocked a fresh tune-in: roll back to the pre-tune
 				// state so the ui reads "tune in" again instead of a silent on-air
 				// state ("stop" + LIVE). mid-session failures (station flips, track
 				// boundaries) keep radio mode — only the entry is rolled back.
-				if (!wasActive && (err as { name?: string })?.name === 'NotAllowedError') {
+				if (!wasActive && err.name === 'NotAllowedError') {
 					this.radio = null;
 					this.currentTrack = previousTrack;
 				}
@@ -188,9 +190,9 @@ class PlayerState {
 	 * this and never download the chunk.
 	 */
 	preloadHls(): Promise<HlsModule | null> {
-		this.hlsLoad ??= import('hls.js')
-			.then(({ default: Hls }) => (this.hlsModule = Hls as unknown as HlsModule))
-			.catch((e: unknown) => {
+		this.hlsLoad ??= this.importHls()
+			.then(({ default: Hls }) => (this.hlsModule = Hls))
+			.catch((e) => {
 				console.error('failed to load hls.js for live radio:', e);
 				this.hlsLoad = null; // let a later tune-in retry
 				return null;

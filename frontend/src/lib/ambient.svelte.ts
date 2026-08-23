@@ -209,7 +209,9 @@ function cacheWeather(w: WeatherData): void {
 function getCachedWeather(): WeatherData | null {
 	try {
 		const raw = safeLocalStorage.getItem('ambient_weather');
-		return raw ? JSON.parse(raw) as WeatherData : null;
+		if (!raw) return null;
+		const cached: WeatherData = JSON.parse(raw);
+		return cached;
 	} catch { return null; }
 }
 

@@ -76,7 +76,7 @@ describe('playRadio under autoplay policy', () => {
 	// the dead load's rejection must not pause the successor: unguarded, it left
 	// the radio on-air ("stop" shown) but silent (firehose → deep-cuts, 2026-08-04)
 	it('ignores a superseded load play() rejection during a station flip', async () => {
-		let rejectFirst: (err: unknown) => void = () => {};
+		let rejectFirst: (err: DOMException) => void = () => {};
 		playSpy.mockImplementationOnce(
 			() => new Promise((_, reject) => (rejectFirst = reject))
 		);

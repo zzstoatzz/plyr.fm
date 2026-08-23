@@ -4,20 +4,30 @@
 // on a 404 / dead R2 url / corrupt media — regression cover for that.
 import { describe, it, expect, vi } from 'vitest';
 
-// control the "still on an undecodable interim rendition" predicate directly.
-const isOptimizingMock = vi.hoisted(() => vi.fn((_t: Track) => false));
-const canPlayFormatMock = vi.hoisted(() => vi.fn((_f?: string) => true));
-vi.mock('$lib/utils/track-audio', () => ({ isOptimizing: isOptimizingMock }));
-vi.mock('$lib/audio-support', () => ({
-	canPlayFormat: canPlayFormatMock,
-	hasPlayableLossless: () => true
-}));
-
 import { findNextPlayableIndex } from './audio-source';
 import type { Track } from './types';
 
+// the "still on an undecodable interim rendition" predicate is the server's
+// `is_optimizing` flag AND this browser declining the interim format. jsdom's
+// <audio> answers '' to every canPlayType, so an aiff interim is unplayable here.
+vi.spyOn(HTMLMediaElement.prototype, 'canPlayType').mockReturnValue('');
+
 function track(id: number, extra: Partial<Track> = {}): Track {
-	return { id, file_id: `f${id}`, file_type: 'mp3', gated: false, ...extra } as Track;
+	return {
+		id,
+		title: `track ${id}`,
+		artist: 'artist',
+		artist_handle: 'artist.test',
+		file_id: `f${id}`,
+		file_type: 'mp3',
+		play_count: 0,
+		gated: false,
+		...extra
+	};
+}
+
+function awaitingRendition(id: number): Track {
+	return track(id, { file_type: 'aiff', original_file_id: `o${id}`, original_file_type: 'aiff', is_optimizing: true });
 }
 
 describe('findNextPlayableIndex', () => {
@@ -42,16 +52,12 @@ describe('findNextPlayableIndex', () => {
 
 	it('skips tracks still awaiting a playable rendition by default', () => {
 		// track 2 is optimizing and this browser cannot play its interim format.
-		isOptimizingMock.mockImplementation((t: Track) => t.id === 2);
-		canPlayFormatMock.mockReturnValue(false);
-		const tracks = [track(1), track(2), track(3)];
+		const tracks = [track(1), awaitingRendition(2), track(3)];
 		expect(findNextPlayableIndex(tracks, 0)).toBe(2);
 	});
 
 	it('does not skip awaiting tracks when skipAwaiting is off (gated-denial scan)', () => {
-		isOptimizingMock.mockImplementation((t: Track) => t.id === 2);
-		canPlayFormatMock.mockReturnValue(false);
-		const tracks = [track(1), track(2), track(3)];
+		const tracks = [track(1), awaitingRendition(2), track(3)];
 		expect(findNextPlayableIndex(tracks, 0, { skipAwaiting: false })).toBe(1);
 	});
 });

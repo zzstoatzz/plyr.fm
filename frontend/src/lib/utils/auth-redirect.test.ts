@@ -49,8 +49,8 @@ describe('resolvePostLogin', () => {
 	it('consumes the stash exactly once', () => {
 		setReturnUrl('/jam/abc123');
 		// jsdom forbids real navigation; observe the href assignment instead
-		const target: { href?: string } = {};
-		vi.spyOn(window, 'location', 'get').mockReturnValue(target as Location);
+		const target: Location = { ...window.location, href: '' };
+		vi.spyOn(window, 'location', 'get').mockReturnValue(target);
 		expect(resolvePostLogin()).toBe(true);
 		expect(target.href).toBe('/jam/abc123');
 		vi.restoreAllMocks();

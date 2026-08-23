@@ -19,8 +19,6 @@
 		lastName?: string;
 		companyName?: string;
 		collectingSociety?: string;
-		// preserved-but-unknown fields may live here in the raw value too
-		[key: string]: unknown;
 	};
 
 	type PublishingOwnerRecord = {
@@ -87,7 +85,7 @@
 				credentials: 'include'
 			});
 			if (!res.ok) throw new Error(`list failed (${res.status})`);
-			const data = (await res.json()) as ListResponse;
+			const data: ListResponse = await res.json();
 			records = data.records;
 			needsScopeUpgrade = data.needs_scope_upgrade;
 		} catch (err) {
@@ -177,7 +175,7 @@
 				}
 				throw new Error(message);
 			}
-			const data = (await res.json()) as OpResponse;
+			const data: OpResponse = await res.json();
 			if (data.auth_url) {
 				window.location.href = data.auth_url;
 				return;

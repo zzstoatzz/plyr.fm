@@ -53,6 +53,11 @@ export interface AtlasData {
 	meta: { generatedAt: string; nTracks: number };
 }
 
+interface HaloSprite {
+	cv: HTMLCanvasElement;
+	bucket: number;
+}
+
 export interface AtlasCallbacks {
 	onHover: (point: AtlasPoint | null, sx: number, sy: number) => void;
 	onHoverArtist: (artist: AtlasArtist | null, sx: number, sy: number) => void;
@@ -192,8 +197,7 @@ export class AtlasRenderer {
 	private pinchMidY = 0;
 	private touches = new Map<number, { x: number; y: number }>();
 	private touchMoved = false;
-	private readonly isTouch =
-		typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0);
+	private readonly isTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
 	private readonly hitRadius = this.isTouch ? 36 : 18;
 
 	// fly-to animation
@@ -456,7 +460,7 @@ export class AtlasRenderer {
 		return cv;
 	}
 
-	private getHaloSprite(clusterId: number, radiusPx: number): { cv: HTMLCanvasElement; bucket: number } {
+	private getHaloSprite(clusterId: number, radiusPx: number): HaloSprite {
 		const buckets = [20, 50, 100, 200, 400];
 		let bucket = buckets[buckets.length - 1];
 		for (const b of buckets) {

@@ -135,7 +135,7 @@
 
 		// update player height css variable for dynamic positioning
 		function updatePlayerHeight() {
-			const playerEl = document.querySelector('.player') as HTMLElement | null;
+			const playerEl = document.querySelector<HTMLElement>('.player');
 			if (playerEl) {
 				const height = playerEl.offsetHeight;
 				document.documentElement.style.setProperty('--player-height', `${height}px`);
@@ -473,7 +473,7 @@
 	// playable one, or pause at the end of the queue. no toast — a broken track
 	// in a collection tail should skip quietly, and the next track starting is
 	// its own feedback.
-	function handleLoadFailure(reason: unknown): void {
+	function handleLoadFailure(reason: Error | string): void {
 		console.error('failed to load audio:', reason);
 
 		const nextPlayable = findNextPlayableIndex(queue.tracks, queue.currentIndex);
@@ -570,7 +570,7 @@
 				handleProcessing();
 				return;
 			}
-			handleLoadFailure(resolved.error);
+			handleLoadFailure(resolved.error instanceof Error ? resolved.error : String(resolved.error));
 		});
 	});
 
@@ -600,9 +600,8 @@
 		if (player.paused) {
 			player.audioElement.pause();
 		} else {
-			player.audioElement.play().catch((err: unknown) => {
-				const e = err as { name?: string; message?: string };
-				console.error('[player] playback failed:', e?.name, e?.message);
+			player.audioElement.play().catch((err: Error) => {
+				console.error('[player] playback failed:', err?.name, err?.message);
 				player.paused = true;
 			});
 		}
@@ -836,14 +835,10 @@
 		// the implicit-playback grace from the `ended` event. Anything
 		// that yields between here and play() costs us the autoplay
 		// permission on locked Android.
-		const playPromise = audio.play();
-		if (playPromise && typeof playPromise.catch === 'function') {
-			playPromise.catch((err: unknown) => {
-				const e = err as { name?: string; message?: string };
-				console.error('[player] fast-path play failed:', e?.name, e?.message);
-				player.paused = true;
-			});
-		}
+		audio.play()?.catch((err: Error) => {
+			console.error('[player] fast-path play failed:', err?.name, err?.message);
+			player.paused = true;
+		});
 
 		// Now let reactivity catch up. Setting player.currentTrack first
 		// (and pre-incrementing previousQueueIndex above) keeps every

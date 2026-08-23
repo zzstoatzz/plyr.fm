@@ -8,6 +8,37 @@ import type { JamInfo, JamParticipant, JamPlaybackState, Track } from './types';
 const RECONNECT_BASE_MS = 1000;
 const RECONNECT_MAX_MS = 30000;
 
+/** a command this client sends over the jam socket */
+type JamCommand =
+	| { type: 'update_queue'; track_ids: string[]; current_index: number }
+	| { type: 'play' }
+	| { type: 'pause' }
+	| { type: 'seek'; position_ms: number }
+	| { type: 'set_output'; client_id: string }
+	| { type: 'set_mode'; mode: 'one_speaker' | 'everyone' };
+
+interface JamStateMessage {
+	type: 'state';
+	state: JamPlaybackState;
+	revision: number;
+	stream_id?: string | null;
+	tracks_changed?: boolean;
+	tracks?: Track[];
+	participants?: JamParticipant[];
+}
+
+interface JamParticipantMessage {
+	type: 'participant';
+	did?: string;
+}
+
+/** a frame the jam socket delivers; anything else is ignored */
+type JamServerMessage =
+	| JamStateMessage
+	| JamParticipantMessage
+	| { type: 'pong' }
+	| { type: 'error'; message?: string };
+
 class JamState {
 	active = $state(false);
 	jam = $state<JamInfo | null>(null);
@@ -202,7 +233,7 @@ class JamState {
 		this.sendCommand({ type: 'set_mode', mode });
 	}
 
-	private sendCommand(payload: Record<string, unknown>): void {
+	private sendCommand(payload: JamCommand): void {
 		if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
 			console.warn('[jam] command dropped — ws not open:', payload, {
 				ws: !!this.ws,
@@ -255,7 +286,7 @@ class JamState {
 
 		this.ws.onmessage = (event) => {
 			try {
-				const data = JSON.parse(event.data);
+				const data: JamServerMessage = JSON.parse(event.data);
 				this.handleMessage(data);
 			} catch (error) {
 				console.error('failed to parse jam ws message:', error);
@@ -327,24 +358,26 @@ class JamState {
 
 	// ── message handling ───────────────────────────────────────────
 
-	private handleMessage(data: Record<string, unknown>): void {
-		const msgType = data.type as string;
-
-		if (msgType === 'state') {
-			this.handleStateMessage(data);
-		} else if (msgType === 'participant') {
-			this.handleParticipantMessage(data);
-		} else if (msgType === 'pong') {
-			// heartbeat response, no-op
-		} else if (msgType === 'error') {
-			console.error('jam error:', data.message);
+	private handleMessage(data: JamServerMessage): void {
+		switch (data.type) {
+			case 'state':
+				this.handleStateMessage(data);
+				break;
+			case 'participant':
+				this.handleParticipantMessage(data);
+				break;
+			case 'pong':
+				break;
+			case 'error':
+				console.error('jam error:', data.message);
+				break;
 		}
 	}
 
-	private handleStateMessage(data: Record<string, unknown>): void {
-		const state = data.state as JamPlaybackState;
-		const rev = data.revision as number;
-		const streamId = data.stream_id as string | null;
+	private handleStateMessage(data: JamStateMessage): void {
+		const state = data.state;
+		const rev = data.revision;
+		const streamId = data.stream_id ?? null;
 
 		if (rev < this.revision) return;
 
@@ -360,11 +393,11 @@ class JamState {
 		this.outputMode = state.output_mode ?? 'one_speaker';
 
 		if (data.tracks_changed && Array.isArray(data.tracks)) {
-			this.tracks = data.tracks as Track[];
+			this.tracks = data.tracks;
 		}
 
 		if (Array.isArray(data.participants)) {
-			this.participants = data.participants as JamParticipant[];
+			this.participants = data.participants;
 		}
 
 		this.syncToQueue();
@@ -379,7 +412,7 @@ class JamState {
 		}
 	}
 
-	private async handleParticipantMessage(_data: Record<string, unknown>): Promise<void> {
+	private async handleParticipantMessage(_data: JamParticipantMessage): Promise<void> {
 		// participant events only carry DID — fetch full list with metadata
 		if (!this.jam) return;
 		const fresh = await this.fetchJam(this.jam.code);

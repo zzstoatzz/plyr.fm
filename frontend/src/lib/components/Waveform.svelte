@@ -63,14 +63,14 @@
 		(async () => {
 			try {
 				let result: number[];
-				if (typeof source === 'string') {
+				if (source instanceof Blob) {
+					result = await extractPeaks(source, barCount);
+				} else {
 					const res = await fetch(source);
 					if (!res.ok) throw new Error(`fetch failed: ${res.status}`);
 					const buf = await res.arrayBuffer();
 					if (aborted) return;
 					result = await extractPeaks(buf, barCount);
-				} else {
-					result = await extractPeaks(source, barCount);
 				}
 				if (aborted) return;
 				decodedPeaks = result;
@@ -94,17 +94,16 @@
 	// while decoding, show a flat ghost row so layout stays stable
 	const showPlaceholder = $derived(loading && activePeaks.length === 0);
 	const renderPeaks = $derived(
-		showPlaceholder ? new Array<number>(barCount).fill(0.15) : activePeaks
+		showPlaceholder ? Array.from({ length: barCount }, () => 0.15) : activePeaks
 	);
 
 	const intrinsicWidth = $derived(Math.max(1, renderPeaks.length * BAR_STEP));
 	const clampedProgress = $derived(Math.max(0, Math.min(1, progress)));
 	const progressWidth = $derived(clampedProgress * intrinsicWidth);
 
-	function handleClick(event: MouseEvent) {
+	function handleClick(event: MouseEvent & { currentTarget: SVGSVGElement }) {
 		if (!onSeek) return;
-		const target = event.currentTarget as SVGSVGElement;
-		const rect = target.getBoundingClientRect();
+		const rect = event.currentTarget.getBoundingClientRect();
 		if (rect.width <= 0) return;
 		const ratio = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
 		onSeek(ratio);

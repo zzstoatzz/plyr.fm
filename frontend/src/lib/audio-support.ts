@@ -1,34 +1,42 @@
 import { browser } from '$app/environment';
 
 /**
- * MIME types for lossless audio formats.
+ * Lossless audio formats and their MIME types.
  * Safari supports AIFF and FLAC natively.
  */
-const LOSSLESS_MIME_TYPES: Record<string, string> = {
+const LOSSLESS_FORMATS = ['aiff', 'aif', 'flac'] as const;
+
+type LosslessFormat = (typeof LOSSLESS_FORMATS)[number];
+
+const LOSSLESS_MIME_TYPES = {
 	aiff: 'audio/aiff',
 	aif: 'audio/aiff',
 	flac: 'audio/flac'
-};
+} as const satisfies Record<LosslessFormat, string>;
+
+function losslessFormat(format: string): LosslessFormat | null {
+	const normalized = format.toLowerCase().replace('.', '');
+	return LOSSLESS_FORMATS.find((candidate) => candidate === normalized) ?? null;
+}
 
 /**
  * Cache for browser audio format support detection.
  * Computed once per session.
  */
-let supportCache: Record<string, boolean> | null = null;
+let supportCache: Map<LosslessFormat, boolean> | null = null;
 
 /**
  * Detect which audio formats the browser can play natively.
  */
-function detectAudioSupport(): Record<string, boolean> {
-	if (!browser) return {};
+function detectAudioSupport(): Map<LosslessFormat, boolean> {
+	const support = new Map<LosslessFormat, boolean>();
+	if (!browser) return support;
 
 	const audio = document.createElement('audio');
-	const support: Record<string, boolean> = {};
-
-	for (const [format, mimeType] of Object.entries(LOSSLESS_MIME_TYPES)) {
+	for (const format of LOSSLESS_FORMATS) {
 		// canPlayType returns '', 'maybe', or 'probably'
-		const result = audio.canPlayType(mimeType);
-		support[format] = result === 'probably' || result === 'maybe';
+		const result = audio.canPlayType(LOSSLESS_MIME_TYPES[format]);
+		support.set(format, result === 'probably' || result === 'maybe');
 	}
 
 	return support;
@@ -44,8 +52,8 @@ export function canPlayFormat(format: string | null | undefined): boolean {
 		supportCache = detectAudioSupport();
 	}
 
-	const normalized = format.toLowerCase().replace('.', '');
-	return supportCache[normalized] ?? false;
+	const lossless = losslessFormat(format);
+	return lossless !== null && (supportCache.get(lossless) ?? false);
 }
 
 /**
@@ -60,6 +68,5 @@ export function hasPlayableLossless(originalFileType: string | null | undefined)
  */
 export function isLosslessFormat(format: string | null | undefined): boolean {
 	if (!format) return false;
-	const normalized = format.toLowerCase().replace('.', '');
-	return normalized in LOSSLESS_MIME_TYPES;
+	return losslessFormat(format) !== null;
 }

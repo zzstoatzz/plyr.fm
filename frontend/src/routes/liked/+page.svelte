@@ -127,11 +127,11 @@
 	}
 
 	// touch drag and drop
-	function handleTouchStart(event: TouchEvent, index: number) {
+	function handleTouchStart(event: TouchEvent & { currentTarget: HTMLElement }, index: number) {
 		const touch = event.touches[0];
 		touchDragIndex = index;
 		touchStartY = touch.clientY;
-		touchDragElement = event.currentTarget as HTMLElement;
+		touchDragElement = event.currentTarget;
 		touchDragElement.classList.add('touch-dragging');
 	}
 
@@ -146,7 +146,8 @@
 		// find which track we're hovering over
 		const trackElements = tracksListElement.querySelectorAll('.track-row');
 		for (let i = 0; i < trackElements.length; i++) {
-			const trackEl = trackElements[i] as HTMLElement;
+			const trackEl = trackElements[i];
+			if (!(trackEl instanceof HTMLElement)) continue;
 			const rect = trackEl.getBoundingClientRect();
 			const midY = rect.top + rect.height / 2;
 

@@ -1,12 +1,13 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { browser } from '$app/environment';
 	import { APP_NAME } from '$lib/branding';
 	import { API_URL } from '$lib/config';
 	import HandleAutocomplete from '$lib/components/HandleAutocomplete.svelte';
 	import { isValidReturnPath, setReturnUrl } from '$lib/utils/return-url';
 
 	const returnTo = (() => {
-		const raw = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '').get('return_to');
+		const raw = new URLSearchParams(browser ? window.location.search : '').get('return_to');
 		return raw && isValidReturnPath(raw) ? raw : null;
 	})();
 

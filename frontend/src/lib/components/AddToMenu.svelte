@@ -63,8 +63,7 @@
 
 	// close menu when clicking outside
 	function handleClickOutside(event: MouseEvent) {
-		const target = event.target as HTMLElement;
-		if (!target.closest('.add-to-menu')) {
+		if (!(event.target instanceof Element && event.target.closest('.add-to-menu'))) {
 			menuOpen = false;
 			showPlaylistPicker = false;
 		}

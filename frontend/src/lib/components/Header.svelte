@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { page } from '$app/stores';
+	import { browser } from '$app/environment';
 	import type { User } from '$lib/types';
 	import LinksMenu from './LinksMenu.svelte';
 	import ProfileMenu from './ProfileMenu.svelte';
@@ -21,7 +22,7 @@
 	// portal's tabbed pager) can offset themselves with top: var(--header-height).
 	let headerHeight = $state(0);
 	$effect(() => {
-		if (typeof document !== 'undefined') {
+		if (browser) {
 			document.documentElement.style.setProperty('--header-height', `${headerHeight}px`);
 		}
 	});

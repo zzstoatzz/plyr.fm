@@ -46,7 +46,7 @@ export async function load({ fetch }: LoadEvent): Promise<PageData> {
 	try {
 		const [tracks, playlists] = await Promise.all([
 			fetchLikedTracks(),
-			fetchPlaylists().catch(() => [] as Playlist[])
+			fetchPlaylists().catch((): Playlist[] => [])
 		]);
 		return { likedCount: tracks.length, playlists };
 	} catch (e) {

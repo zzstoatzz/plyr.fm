@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { browser } from '$app/environment';
 	import { auth } from '$lib/auth.svelte';
 	import { swipeToDismiss } from '$lib/swipe-to-dismiss';
 	import { API_URL } from '$lib/config';
@@ -27,7 +28,7 @@
 	let { track }: { track: Track } = $props();
 
 	const reduceMotionComments =
-		typeof window !== 'undefined' &&
+		browser &&
 		window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 	// comments state - assume enabled until we know otherwise
@@ -41,7 +42,7 @@
 	let editingCommentId = $state<number | null>(null);
 	let editingCommentText = $state('');
 	const isMobileViewport = () =>
-		typeof window !== 'undefined' && window.matchMedia('(max-width: 768px)').matches;
+		browser && window.matchMedia('(max-width: 768px)').matches;
 
 
 	// a comment bubble emanates from the trigger when playback crosses its

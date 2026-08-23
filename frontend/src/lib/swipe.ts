@@ -116,7 +116,7 @@ export function swipeable(node: HTMLElement, params: SwipeParams = {}) {
 		swallowClick = false;
 		if (current.disabled || settling || pointerId !== null) return;
 		if (e.pointerType === 'mouse' && e.button !== 0) return;
-		if (current.ignore && (e.target as Element | null)?.closest?.(current.ignore)) return;
+		if (current.ignore && e.target instanceof Element && e.target.closest(current.ignore)) return;
 		pointerId = e.pointerId;
 		startX = e.clientX;
 		startY = e.clientY;

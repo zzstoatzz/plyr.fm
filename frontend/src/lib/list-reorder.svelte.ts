@@ -90,10 +90,11 @@ export function createListReorder(
 
 		// touch drag and drop
 		handleTouchStart(event: TouchEvent, index: number) {
+			if (!(event.currentTarget instanceof HTMLElement)) return;
 			const touch = event.touches[0];
 			touchDragIndex = index;
 			touchStartY = touch.clientY;
-			touchDragElement = event.currentTarget as HTMLElement;
+			touchDragElement = event.currentTarget;
 			touchDragElement.classList.add('touch-dragging');
 		},
 
@@ -105,9 +106,9 @@ export function createListReorder(
 			const offset = touch.clientY - touchStartY;
 			touchDragElement.style.transform = `translateY(${offset}px)`;
 
-			const rowElements = listElement.querySelectorAll(rowSelector);
+			const rowElements = listElement.querySelectorAll<HTMLElement>(rowSelector);
 			for (let i = 0; i < rowElements.length; i++) {
-				const rowEl = rowElements[i] as HTMLElement;
+				const rowEl = rowElements[i];
 				const rect = rowEl.getBoundingClientRect();
 				const midY = rect.top + rect.height / 2;
 

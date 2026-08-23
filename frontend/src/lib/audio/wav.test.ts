@@ -3,14 +3,19 @@ import { __testing } from './wav';
 
 const { encodeWav } = __testing;
 
-/** minimal AudioBuffer stand-in — encodeWav only reads these four members. */
+/** an in-memory AudioBuffer: jsdom has no Web Audio, so this implements the interface over plain arrays. */
 function fakeBuffer(channels: number[][], sampleRate = 48000): AudioBuffer {
+	const data = channels.map((samples) => Float32Array.from(samples));
+	const length = data[0].length;
 	return {
-		numberOfChannels: channels.length,
-		length: channels[0].length,
+		numberOfChannels: data.length,
+		length,
 		sampleRate,
-		getChannelData: (ch: number) => Float32Array.from(channels[ch])
-	} as unknown as AudioBuffer;
+		duration: length / sampleRate,
+		getChannelData: (ch) => data[ch],
+		copyFromChannel: (destination, ch, start = 0) => destination.set(data[ch].subarray(start, start + destination.length)),
+		copyToChannel: (source, ch, start = 0) => data[ch].set(source, start)
+	};
 }
 
 function parse(blob: ArrayBuffer) {
@@ -53,7 +58,7 @@ describe('encodeWav', () => {
 	});
 
 	it('sizes the data chunk and RIFF chunk to the samples written', async () => {
-		const wav = encodeWav(fakeBuffer([new Array(100).fill(0), new Array(100).fill(0)]));
+		const wav = encodeWav(fakeBuffer([Array.from({ length: 100 }, () => 0), Array.from({ length: 100 }, () => 0)]));
 		const h = parse(await wav.arrayBuffer());
 
 		// 100 frames x 2 channels x 2 bytes

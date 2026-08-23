@@ -147,7 +147,7 @@ max_lines = 730
 
 [[rules]]
 path = "frontend/src/routes/liked/+page.svelte"
-max_lines = 552
+max_lines = 553
 
 [[rules]]
 path = "frontend/src/routes/playlist/\\[id\\]/+page.svelte"
@@ -175,7 +175,7 @@ max_lines = 1299
 
 [[rules]]
 path = "frontend/src/routes/upload/+page.svelte"
-max_lines = 927
+max_lines = 930
 
 [[rules]]
 path = "services/moderation/src/admin.rs"
@@ -207,7 +207,7 @@ max_lines = 628
 
 [[rules]]
 path = "frontend/src/routes/login/+page.svelte"
-max_lines = 544
+max_lines = 545
 
 [[rules]]
 path = "backend/src/backend/_internal/tasks/ingest.py"
@@ -319,7 +319,7 @@ max_lines = 589
 
 [[rules]]
 path = "frontend/src/lib/components/portal/ProfileSection.svelte"
-max_lines = 613
+max_lines = 617
 
 [[rules]]
 path = "frontend/src/lib/components/portal/DataSection.svelte"
@@ -335,7 +335,7 @@ max_lines = 1424
 
 [[rules]]
 path = "frontend/src/lib/uploader.svelte.ts"
-max_lines = 520
+max_lines = 534
 
 [[rules]]
 path = "frontend/src/routes/track/[[]id[]]/+page.svelte"
@@ -347,7 +347,7 @@ max_lines = 668
 
 [[rules]]
 path = "frontend/src/lib/components/player/PlaybackControls.svelte"
-max_lines = 512
+max_lines = 515
 
 [[rules]]
 path = "backend/src/backend/_internal/clients/moderation.py"
@@ -359,7 +359,7 @@ max_lines = 879
 
 [[rules]]
 path = "frontend/src/routes/u/[[]handle[]]/+page.svelte"
-max_lines = 1478
+max_lines = 1481
 
 [[rules]]
 path = "scripts/build_atlas.py"
@@ -367,7 +367,7 @@ max_lines = 586
 
 [[rules]]
 path = "frontend/src/routes/atlas/renderer.ts"
-max_lines = 1178
+max_lines = 1182
 
 [[rules]]
 path = "backend/src/backend/api/audio.py"
@@ -388,3 +388,7 @@ max_lines = 599
 [[rules]]
 path = "backend/src/backend/_internal/atproto/spaces/client.py"
 max_lines = 523
+
+[[rules]]
+path = "frontend/tools/oxlint/anti-slop/shared/dictionary-types.ts"
+max_lines = 502

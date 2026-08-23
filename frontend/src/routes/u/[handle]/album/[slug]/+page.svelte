@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import { browser } from '$app/environment';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import Header from '$lib/components/Header.svelte';
 	import TrackItem from '$lib/components/TrackItem.svelte';
@@ -129,9 +130,8 @@
 			});
 	}
 
-	function handleCoverSelect(event: Event) {
-		const input = event.target as HTMLInputElement;
-		const file = input.files?.[0];
+	function handleCoverSelect(event: Event & { currentTarget: HTMLInputElement }) {
+		const file = event.currentTarget.files?.[0];
 		if (!file) return;
 
 		if (!file.type.startsWith('image/')) {
@@ -224,7 +224,7 @@
 	let shareUrl = $state('');
 
 	$effect(() => {
-		if (typeof window !== 'undefined') {
+		if (browser) {
 			shareUrl = `${window.location.origin}/u/${albumMetadata.artist_handle}/album/${albumMetadata.slug}`;
 		}
 	});

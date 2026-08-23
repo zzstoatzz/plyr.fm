@@ -38,8 +38,7 @@ export function horizontalSwipe(
 		function down(event: PointerEvent) {
 			if (event.pointerType === 'mouse') return;
 			// buttons (pills, tune-in) own their taps — never start a swipe on them
-			const el = event.target as HTMLElement | null;
-			if (el && el.closest('button')) return;
+			if (event.target instanceof Element && event.target.closest('button')) return;
 			tracking = true;
 			active = false;
 			startX = event.clientX;

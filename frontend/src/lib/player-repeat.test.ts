@@ -28,11 +28,12 @@ function track(id: number): Track {
 	};
 }
 
-let component: Record<string, unknown>;
+let cleanup: (() => void) | null = null;
 
 async function mountPlayer(): Promise<HTMLAudioElement> {
 	const Player = (await import('$lib/components/player/Player.svelte')).default;
-	component = mount(Player, { target: document.body });
+	const component = mount(Player, { target: document.body });
+	cleanup = () => unmount(component);
 	flushSync();
 	const audio = player.audioElement;
 	if (!audio) throw new Error('player audio element did not mount');
@@ -50,7 +51,8 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-	unmount(component);
+	cleanup?.();
+	cleanup = null;
 	document.body.innerHTML = '';
 });
 

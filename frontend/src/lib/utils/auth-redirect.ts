@@ -1,3 +1,4 @@
+import { browser } from '$app/environment';
 import { goto } from '$app/navigation';
 import { setReturnUrl, getReturnUrl, clearReturnUrl, isValidReturnPath } from './return-url';
 
@@ -13,7 +14,7 @@ import { setReturnUrl, getReturnUrl, clearReturnUrl, isValidReturnPath } from '.
 
 /** the spot a logged-out action should return to: path + query + hash */
 export function currentIntent(): string {
-	if (typeof window === 'undefined') return '/';
+	if (!browser) return '/';
 	return window.location.pathname + window.location.search + window.location.hash;
 }
 

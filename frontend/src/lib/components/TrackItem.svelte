@@ -109,7 +109,7 @@
 	let hiddenTagCount = $derived((track.tags?.length || 0) - MAX_VISIBLE_TAGS);
 
 	// shareable URL for link previews (track page redirects to home with query param)
-	const shareUrl = typeof window !== 'undefined' ? `${window.location.origin}/track/${track.id}` : '';
+	const shareUrl = browser ? `${window.location.origin}/track/${track.id}` : '';
 
 	function addToQueue(e: Event) {
 		e.stopPropagation();
@@ -144,7 +144,7 @@
 	}
 
 	function handleLikesClick(e: Event) {
-		if (e.target instanceof HTMLAnchorElement || (e.target as HTMLElement).closest('a')) {
+		if (e.target instanceof Element && e.target.closest('a')) {
 			return;
 		}
 		e.stopPropagation();

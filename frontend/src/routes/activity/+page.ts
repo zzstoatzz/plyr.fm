@@ -2,10 +2,13 @@ import { browser } from '$app/environment';
 import { API_URL } from '$lib/config';
 import type { ActivityEvent, ActivityHistogramBucket } from '$lib/types';
 
-export interface PageData {
+interface ActivityFeed {
 	events: ActivityEvent[];
 	next_cursor: string | null;
 	has_more: boolean;
+}
+
+export interface PageData extends ActivityFeed {
 	histogram: ActivityHistogramBucket[];
 }
 
@@ -24,7 +27,7 @@ export async function load(): Promise<PageData> {
 			fetch(`${API_URL}/activity/histogram?days=7`)
 		]);
 
-		let feed = { events: [] as ActivityEvent[], next_cursor: null as string | null, has_more: false };
+		let feed: ActivityFeed = { events: [], next_cursor: null, has_more: false };
 		if (feedResult.status === 'fulfilled' && feedResult.value.ok) {
 			feed = await feedResult.value.json();
 		}

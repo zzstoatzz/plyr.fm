@@ -2,6 +2,7 @@
 // fetches the shared station state and drives the global player's radio source
 // (player.playRadio / player.stopRadio). "active" is read from the player, the
 // single source of truth.
+import { browser } from '$app/environment';
 import { API_URL } from './config';
 import { player, type RadioNowPlaying } from './player.svelte';
 import { safeLocalStorage } from './utils/safe-storage';
@@ -108,7 +109,7 @@ class Radio {
 
 	/** the last station the listener picked, if any (drives bare /radio) */
 	private remembered(): string | null {
-		return typeof window !== 'undefined' ? safeLocalStorage.getItem(STATION_STORAGE_KEY) : null;
+		return browser ? safeLocalStorage.getItem(STATION_STORAGE_KEY) : null;
 	}
 
 	/** slug of the next/previous station in the lineup (wraps); null if <2 stations.
@@ -131,7 +132,7 @@ class Radio {
 		// fall through, or it never matches station_slug and reloads endlessly.
 		if (this.state && (target === null || target === this.state.station_slug)) return;
 		this.station = target;
-		if (slug && typeof window !== 'undefined') {
+		if (slug && browser) {
 			safeLocalStorage.setItem(STATION_STORAGE_KEY, slug);
 		}
 		this.switching = true;
@@ -144,7 +145,7 @@ class Radio {
 			// and being shown another would be worse than being told it is off air.
 			if (slug === null && target !== null && !this.hasSomethingOnAir) {
 				this.station = null;
-				if (typeof window !== 'undefined') {
+				if (browser) {
 					safeLocalStorage.removeItem(STATION_STORAGE_KEY);
 				}
 				await this.loadState();
@@ -226,7 +227,7 @@ class Radio {
 				// a persisted station slug no longer exists (e.g. renamed) — drop it
 				// and fall back to the server default rather than going "off air".
 				this.station = null;
-				if (typeof window !== 'undefined') safeLocalStorage.removeItem(STATION_STORAGE_KEY);
+				if (browser) safeLocalStorage.removeItem(STATION_STORAGE_KEY);
 				return this.loadState();
 			}
 			if (!response.ok) throw new Error(`radio returned ${response.status}`);
@@ -283,7 +284,7 @@ class Radio {
 			play_count: 0,
 			album: null,
 			features: []
-		} as Track;
+		};
 	}
 
 	stop(): void {

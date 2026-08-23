@@ -67,8 +67,7 @@
 	}
 
 	function handleClickOutside(e: MouseEvent) {
-		const target = e.target as HTMLElement;
-		if (!target.closest('.handle-autocomplete')) {
+		if (!(e.target instanceof Element && e.target.closest('.handle-autocomplete'))) {
 			showResults = false;
 		}
 	}

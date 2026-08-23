@@ -18,22 +18,9 @@ describe('resolveSwipe', () => {
 	});
 });
 
-const PointerEventCtor: typeof PointerEvent =
-	typeof PointerEvent === 'undefined'
-		? (class extends MouseEvent {
-				pointerId: number;
-				pointerType: string;
-				constructor(type: string, init: PointerEventInit = {}) {
-					super(type, init);
-					this.pointerId = init.pointerId ?? 1;
-					this.pointerType = init.pointerType ?? 'touch';
-				}
-			} as unknown as typeof PointerEvent)
-		: PointerEvent;
-
 function pointer(node: HTMLElement, type: string, x: number, y: number, extra: PointerEventInit = {}) {
 	node.dispatchEvent(
-		new PointerEventCtor(type, { clientX: x, clientY: y, pointerId: 1, pointerType: 'touch', bubbles: true, cancelable: true, ...extra })
+		new PointerEvent(type, { clientX: x, clientY: y, pointerId: 1, pointerType: 'touch', bubbles: true, cancelable: true, ...extra })
 	);
 }
 
@@ -146,7 +133,7 @@ describe('swipeable', () => {
 		node.appendChild(handle);
 		action = swipeable(node, { onLeft, onRight, onUpdate, ignore: '.drag-handle' });
 		handle.dispatchEvent(
-			new PointerEventCtor('pointerdown', { clientX: 200, clientY: 50, pointerId: 1, pointerType: 'touch', bubbles: true })
+			new PointerEvent('pointerdown', { clientX: 200, clientY: 50, pointerId: 1, pointerType: 'touch', bubbles: true })
 		);
 		pointer(node, 'pointermove', 60, 50);
 		pointer(node, 'pointerup', 60, 50);

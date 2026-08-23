@@ -15,6 +15,7 @@
 
 	let { collection }: { collection: CollectionData } = $props();
 
+	// SAFETY: bound via bind:this on the always-rendered <audio> before any handler below runs
 	let audio: HTMLAudioElement = $state() as HTMLAudioElement;
 	let paused = $state(true);
 	let currentTime = $state(0);
@@ -93,9 +94,8 @@
 		return `${m}:${s.toString().padStart(2, '0')}`;
 	}
 
-	function handleSeek(e: MouseEvent) {
-		const bar = e.currentTarget as HTMLElement;
-		const rect = bar.getBoundingClientRect();
+	function handleSeek(e: MouseEvent & { currentTarget: HTMLElement }) {
+		const rect = e.currentTarget.getBoundingClientRect();
 		const x = e.clientX - rect.left;
 		audio.currentTime = (x / rect.width) * duration;
 	}

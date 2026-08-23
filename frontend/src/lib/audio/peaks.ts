@@ -1,3 +1,5 @@
+import { audioContextCtor } from './wav';
+
 /**
  * extract normalized peak values from an audio source.
  *
@@ -20,14 +22,7 @@ export async function extractPeaks(
 ): Promise<number[]> {
 	const arrayBuffer = source instanceof Blob ? await source.arrayBuffer() : source;
 
-	// AudioContext is unprefixed in all current browsers; webkit prefix is
-	// still present on some older iOS Safari versions
-	const AudioCtor =
-		window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-	if (!AudioCtor) {
-		throw new Error('AudioContext is not available in this browser');
-	}
-	const ctx = new AudioCtor();
+	const ctx = new (audioContextCtor())();
 
 	try {
 		// decodeAudioData mutates/consumes the buffer on some implementations,
@@ -38,7 +33,7 @@ export async function extractPeaks(
 		const length = audioBuffer.length;
 		const channels = audioBuffer.numberOfChannels;
 		const samplesPerBucket = Math.max(1, Math.floor(length / buckets));
-		const peaks = new Array<number>(buckets).fill(0);
+		const peaks = Array.from({ length: buckets }, () => 0);
 
 		for (let ch = 0; ch < channels; ch++) {
 			const data = audioBuffer.getChannelData(ch);
@@ -66,7 +61,7 @@ export async function extractPeaks(
 		return peaks;
 	} finally {
 		// safari's AudioContext keeps the mic indicator alive if not closed
-		if (typeof ctx.close === 'function') {
+		if ('close' in ctx) {
 			await ctx.close().catch(() => undefined);
 		}
 	}

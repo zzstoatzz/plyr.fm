@@ -17,7 +17,11 @@
 	// support link mode: 'none' | 'atprotofans' | 'custom'
 	let supportLinkMode = $state<'none' | 'atprotofans' | 'custom'>('none');
 	// download policy: '' = auto (ask with a support link, open without)
-	let downloadPolicy = $state<'' | 'open' | 'ask' | 'supporters' | 'off'>('');
+	const DOWNLOAD_POLICIES = ['', 'open', 'ask', 'supporters', 'off'] as const;
+	type DownloadPolicy = (typeof DOWNLOAD_POLICIES)[number];
+	const parseDownloadPolicy = (raw: string | null | undefined): DownloadPolicy =>
+		DOWNLOAD_POLICIES.find((policy) => policy === raw) ?? '';
+	let downloadPolicy = $state<DownloadPolicy>('');
 	// whether a support relationship can be verified for this artist —
 	// currently backed by atprotofans, verifier-neutral by design (#1841)
 	let supportVerificationAvailable = $derived(atprotofansEligible);
@@ -40,7 +44,7 @@
 
 			if (prefsRes.ok) {
 				const prefs = await prefsRes.json();
-				downloadPolicy = (prefs.download_policy ?? '') as typeof downloadPolicy;
+				downloadPolicy = parseDownloadPolicy(prefs.download_policy);
 				// parse support_url into mode + custom URL
 				const url = prefs.support_url || '';
 				if (!url) {

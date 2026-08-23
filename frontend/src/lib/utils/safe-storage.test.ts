@@ -34,7 +34,7 @@ describe('safeLocalStorage with working storage', () => {
 	it('exposes length and key', () => {
 		safeLocalStorage.setItem('safe-storage-test', 'hi');
 		expect(safeLocalStorage.length).toBeGreaterThan(0);
-		expect(typeof safeLocalStorage.key(0)).toBe('string');
+		expect(safeLocalStorage.key(0)).toBe('safe-storage-test');
 		safeLocalStorage.removeItem('safe-storage-test');
 	});
 });

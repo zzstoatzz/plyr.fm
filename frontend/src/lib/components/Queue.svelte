@@ -165,13 +165,13 @@
 	}
 
 	// touch drag and drop — initiated by a touch on the row's drag handle
-	function handleTouchStart(event: TouchEvent, index: number) {
+	function handleTouchStart(event: TouchEvent & { currentTarget: HTMLElement }, index: number) {
 		const touch = event.touches[0];
 		touchDragIndex = index;
 		touchStartY = touch.clientY;
 		touchCurrentY = touch.clientY;
 		// lift the whole row, not just the handle the touch landed on
-		touchDragElement = (event.currentTarget as HTMLElement).closest('.queue-track');
+		touchDragElement = event.currentTarget.closest('.queue-track');
 		touchDragElement?.classList.add('touch-dragging');
 	}
 
@@ -197,9 +197,9 @@
 		}
 
 		// find which track we're hovering over
-		const tracks = queueTracksElement.querySelectorAll('.queue-track');
+		const tracks = queueTracksElement.querySelectorAll<HTMLElement>('.queue-track');
 		for (let i = 0; i < tracks.length; i++) {
-			const track = tracks[i] as HTMLElement;
+			const track = tracks[i];
 			const rect = track.getBoundingClientRect();
 			const midY = rect.top + rect.height / 2;
 
