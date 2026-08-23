@@ -13,6 +13,13 @@
 	import { likeTrack, unlikeTrack } from '$lib/tracks.svelte';
 	import { swipeable, type SwipeState } from '$lib/swipe';
 	import { HINTS, hintSeen, markHintSeen } from '$lib/hints.svelte';
+	import {
+		displacements,
+		insertionSlot,
+		landingLineY,
+		moveTarget,
+		type PlannedRow
+	} from '$lib/reorder-plan';
 	import type { Track, JamParticipant } from '$lib/types';
 
 	// the queue can cover the viewport (mobile); whoever renders it closes it
@@ -214,75 +221,118 @@
 		dragOverIndex = null;
 	}
 
-	// touch drag and drop — initiated by a touch on the row's drag handle
+	// touch reorder: rows are measured once at pickup; the finger's position
+	// against those measurements decides the landing slot, neighbours animate
+	// out of the way, and a line marks the gap — the iOS home-screen contract.
+	const ROW_GAP = 8;
+	let dragPlan: { rows: PlannedRow[]; wrappers: HTMLElement[]; draggedPos: number } | null = null;
+	let dragSlot = $state<number | null>(null);
+	let dropLineY = $state<number | null>(null);
+
 	function handleTouchStart(event: TouchEvent & { currentTarget: HTMLElement }, index: number) {
+		if (!queueTracksElement) return;
 		const touch = event.touches[0];
 		touchDragIndex = index;
 		touchStartY = touch.clientY;
 		touchCurrentY = touch.clientY;
-		// lift the whole row, not just the handle the touch landed on
 		touchDragElement = event.currentTarget.closest('.queue-track');
 		touchDragElement?.classList.add('touch-dragging');
+		// the swipe wrapper clips its row (the reveal design); a lifted row must
+		// escape that clip and sit above its neighbours
+		const draggedWrapper = touchDragElement?.closest<HTMLElement>('.swipe-row');
+		if (draggedWrapper) {
+			draggedWrapper.style.overflow = 'visible';
+			draggedWrapper.style.zIndex = '100';
+		}
+
+		const wrappers = [...queueTracksElement.querySelectorAll<HTMLElement>('.swipe-row')];
+		const containerTop = queueTracksElement.getBoundingClientRect().top;
+		const rows: PlannedRow[] = wrappers.map((w) => {
+			const rect = w.getBoundingClientRect();
+			const row = w.querySelector<HTMLElement>('.queue-track');
+			return {
+				queueIndex: parseInt(row?.dataset.index ?? '0'),
+				top: rect.top - containerTop,
+				height: rect.height
+			};
+		});
+		const draggedPos = wrappers.findIndex((w) => w.contains(touchDragElement));
+		dragPlan = { rows, wrappers, draggedPos };
+		dragSlot = draggedPos;
+		navigator.vibrate?.(8);
 	}
 
 	function handleTouchMove(event: TouchEvent) {
-		if (touchDragIndex === null || !touchDragElement || !queueTracksElement) return;
+		if (touchDragIndex === null || !touchDragElement || !queueTracksElement || !dragPlan) return;
 
 		event.preventDefault();
 		const touch = event.touches[0];
 		touchCurrentY = touch.clientY;
 
-		// calculate visual offset
 		const offset = touchCurrentY - touchStartY;
-		touchDragElement.style.transform = `translateY(${offset}px)`;
+		touchDragElement.style.transform = `translateY(${offset}px) scale(1.03)`;
 
 		// hovering the empty up-next drop zone promotes instead of reordering
 		if (dropZoneElement) {
 			const rect = dropZoneElement.getBoundingClientRect();
 			dropZoneActive = touch.clientY >= rect.top && touch.clientY <= rect.bottom;
 			if (dropZoneActive) {
-				dragOverIndex = null;
+				dragSlot = dragPlan.draggedPos;
+				settleNeighbours();
+				dropLineY = null;
 				return;
 			}
 		}
 
-		// find which track we're hovering over
-		const tracks = queueTracksElement.querySelectorAll<HTMLElement>('.queue-track');
-		for (let i = 0; i < tracks.length; i++) {
-			const track = tracks[i];
-			const rect = track.getBoundingClientRect();
-			const midY = rect.top + rect.height / 2;
-
-			if (touch.clientY < midY && i > 0) {
-				// get the actual index from the data attribute
-				const targetIndex = parseInt(track.dataset.index || '0');
-				if (targetIndex !== touchDragIndex) {
-					dragOverIndex = targetIndex;
-				}
-				break;
-			} else if (touch.clientY >= midY) {
-				const targetIndex = parseInt(track.dataset.index || '0');
-				if (targetIndex !== touchDragIndex) {
-					dragOverIndex = targetIndex;
-				}
-			}
+		const containerTop = queueTracksElement.getBoundingClientRect().top;
+		const { rows, draggedPos } = dragPlan;
+		const slot = insertionSlot(rows, draggedPos, touch.clientY - containerTop);
+		if (slot !== dragSlot) {
+			dragSlot = slot;
+			navigator.vibrate?.(4);
+			const shifts = displacements(rows, draggedPos, slot, ROW_GAP);
+			dragPlan.wrappers.forEach((w, i) => {
+				if (i === draggedPos) return;
+				w.style.transition = 'transform 180ms cubic-bezier(0.2, 0.9, 0.3, 1.05)';
+				w.style.transform = shifts[i] ? `translateY(${shifts[i]}px)` : '';
+			});
+			dropLineY = slot === draggedPos ? null : landingLineY(rows, draggedPos, slot, ROW_GAP);
 		}
+	}
+
+	function settleNeighbours() {
+		if (!dragPlan) return;
+		dragPlan.wrappers.forEach((w, i) => {
+			if (i === dragPlan!.draggedPos) return;
+			w.style.transform = '';
+		});
 	}
 
 	function handleTouchEnd() {
 		if (touchDragIndex !== null && dropZoneActive) {
 			queue.promoteToUpNext(touchDragIndex);
-		} else if (touchDragIndex !== null && dragOverIndex !== null && touchDragIndex !== dragOverIndex) {
-			queue.moveTrack(touchDragIndex, dragOverIndex);
+		} else if (touchDragIndex !== null && dragPlan && dragSlot !== null) {
+			const target = moveTarget(dragPlan.rows, dragPlan.draggedPos, dragSlot);
+			if (target !== null) queue.moveTrack(touchDragIndex, target);
 		}
 		dropZoneActive = false;
 
-		// cleanup
+		if (dragPlan) {
+			dragPlan.wrappers.forEach((w) => {
+				w.style.transition = '';
+				w.style.transform = '';
+				w.style.overflow = '';
+				w.style.zIndex = '';
+			});
+		}
 		if (touchDragElement) {
 			touchDragElement.classList.remove('touch-dragging');
 			touchDragElement.style.transform = '';
 		}
 
+		dragPlan = null;
+		dragSlot = null;
+		dropLineY = null;
 		touchDragIndex = null;
 		dragOverIndex = null;
 		touchDragElement = null;
@@ -587,6 +637,9 @@
 						ontouchend={handleTouchEnd}
 						ontouchcancel={handleTouchEnd}
 					>
+						{#if dropLineY !== null}
+							<div class="drop-line" style="top: {dropLineY}px" aria-hidden="true"></div>
+						{/if}
 						{#each explicitUpcoming as { track, index } (`${track.file_id}:${index}`)}
 							{@render queueRow(track, index)}
 						{/each}
@@ -1056,6 +1109,7 @@
 	}
 
 	.queue-tracks {
+		position: relative;
 		flex: 1;
 		overflow-y: auto;
 		display: flex;
@@ -1263,10 +1317,22 @@
 		z-index: 10;
 	}
 
-	/* applied dynamically via JS during touch drag */
+	/* applied dynamically via JS during touch drag — the lift */
 	:global(.queue-track.touch-dragging) {
 		z-index: 100;
-		box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+		box-shadow: 0 14px 36px rgba(0, 0, 0, 0.45);
+		transition: box-shadow 0.15s ease;
+	}
+
+	.drop-line {
+		position: absolute;
+		left: 0.35rem;
+		right: 0.75rem;
+		height: 2px;
+		border-radius: 1px;
+		background: color-mix(in srgb, var(--accent) 55%, transparent);
+		pointer-events: none;
+		z-index: 50;
 	}
 
 	.track-info {
