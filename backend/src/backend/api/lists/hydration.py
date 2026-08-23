@@ -4,11 +4,12 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from backend._internal import Session
 from backend._internal.content_labels import (
     LabelContext,
     filter_sensitive_audio_tracks_for_viewer,
 )
-from backend._internal.track_visibility import track_visible_filter
+from backend._internal.track_visibility import visible_filter
 from backend.models import Track, TrackLike
 from backend.schemas import TrackResponse
 from backend.utilities.aggregations import get_comment_counts, get_like_counts
@@ -17,7 +18,7 @@ from backend.utilities.aggregations import get_comment_counts, get_like_counts
 async def hydrate_tracks_from_uris(
     db: AsyncSession,
     track_uris: list[str],
-    session_did: str | None = None,
+    session: Session | None = None,
 ) -> list[TrackResponse]:
     """load tracks by AT-URI, aggregate counts, and return ordered TrackResponses.
 
@@ -26,13 +27,14 @@ async def hydrate_tracks_from_uris(
     """
     if not track_uris:
         return []
+    session_did = session.did if session else None
 
     track_result = await db.execute(
         select(Track)
         .options(selectinload(Track.artist), selectinload(Track.album_rel))
         .where(Track.atproto_record_uri.in_(track_uris))
         # a private track referenced by a list hydrates only for its owner
-        .where(track_visible_filter(session_did))
+        .where(await visible_filter(session))
     )
     # a playlist someone opened is a destination
     all_tracks, labels_by_id = await filter_sensitive_audio_tracks_for_viewer(

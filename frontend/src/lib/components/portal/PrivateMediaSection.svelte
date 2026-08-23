@@ -9,6 +9,7 @@
 
 	let members = $state<FeaturedArtist[]>([]);
 	let loading = $state(true);
+	let loadFailed = $state(false);
 	let busy = $state(false);
 
 	const supported = $derived(auth.user?.permissioned_spaces?.supported ?? false);
@@ -19,9 +20,12 @@
 			const res = await fetch(`${API_URL}/artists/me/private-media/members`, {
 				credentials: 'include'
 			});
-			if (res.ok) members = await res.json();
+			if (!res.ok) throw new Error(`members: ${res.status}`);
+			members = await res.json();
+			loadFailed = false;
 		} catch (_e) {
 			console.error('failed to load private media members:', _e);
+			loadFailed = true;
 		} finally {
 			loading = false;
 		}
@@ -97,6 +101,11 @@
 			<div class="loading-container">
 				<WaveLoading size="lg" message="loading..." />
 			</div>
+		{:else if loadFailed}
+			<p class="empty">
+				couldn't read your list from your PDS.
+				<button type="button" class="retry" onclick={load}>try again</button>
+			</p>
 		{:else}
 			<HandleSearch
 				selected={members}
@@ -145,6 +154,16 @@
 		margin: 0.75rem 0 0;
 		color: var(--text-muted);
 		font-size: var(--text-sm);
+	}
+
+	.retry {
+		background: none;
+		border: none;
+		padding: 0;
+		color: var(--accent);
+		font: inherit;
+		cursor: pointer;
+		text-decoration: underline;
 	}
 
 	.loading-container {

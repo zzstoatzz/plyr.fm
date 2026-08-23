@@ -23,7 +23,7 @@ from backend._internal import Session as AuthSession
 from backend._internal import get_optional_session, validate_supporter
 from backend._internal.export_tasks import schedule_album_download
 from backend._internal.jobs import job_service
-from backend._internal.track_visibility import track_visible_filter
+from backend._internal.track_visibility import visible_filter
 from backend.models import Album, Artist, Track, get_db
 from backend.models.job import JobType
 from backend.storage import storage
@@ -78,7 +78,7 @@ async def download_album(
                 .options(selectinload(Track.artist))
                 .where(Track.album_id == album.id)
                 # anonymous viewer: public tracks only
-                .where(track_visible_filter(None))
+                .where(await visible_filter(None))
             )
         )
         .scalars()

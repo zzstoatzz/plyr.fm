@@ -22,7 +22,7 @@ from backend._internal.content_labels import (
     get_track_label_values,
     label_visible_clause,
 )
-from backend._internal.track_visibility import track_visible_filter
+from backend._internal.track_visibility import visible_filter
 from backend.config import settings
 from backend.models import (
     Artist,
@@ -144,7 +144,7 @@ async def list_tracks(
     # filter by artist if provided
     if artist_did:
         stmt = stmt.where(Track.artist_did == artist_did)
-        stmt = stmt.where(track_visible_filter(session.did if session else None))
+        stmt = stmt.where(await visible_filter(session, artist_did=artist_did))
     else:
         # discovery feed: only listed visibilities (public + supporters); excludes
         # unlisted and private. plus tracks from deactivated accounts drop out.

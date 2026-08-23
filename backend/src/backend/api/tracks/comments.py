@@ -16,7 +16,7 @@ from backend._internal.tasks import (
     schedule_pds_delete_comment,
     schedule_pds_update_comment,
 )
-from backend._internal.track_visibility import ensure_track_visible, viewer_did
+from backend._internal.track_visibility import ensure_track_visible
 from backend.models import Artist, Track, TrackComment, UserPreferences, get_db
 from backend.schemas import DeletedResponse
 
@@ -79,7 +79,7 @@ async def get_track_comments(
 
     if not track:
         raise HTTPException(status_code=404, detail="track not found")
-    await ensure_track_visible(db, track, viewer_did(session))
+    await ensure_track_visible(track, session)
 
     # check if artist allows comments
     prefs_result = await db.execute(
@@ -139,7 +139,7 @@ async def create_comment(
 
     if not track:
         raise HTTPException(status_code=404, detail="track not found")
-    await ensure_track_visible(db, track, auth_session.did)
+    await ensure_track_visible(track, auth_session)
 
     if not track.atproto_record_uri or not track.atproto_record_cid:
         raise HTTPException(

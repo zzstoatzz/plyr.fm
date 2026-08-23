@@ -11,7 +11,7 @@ from sqlalchemy.orm import selectinload
 
 from backend._internal import Session, get_optional_session
 from backend._internal.content_labels import LabelContext, filter_sensitive_audio_tracks
-from backend._internal.track_visibility import track_visible_filter, viewer_did
+from backend._internal.track_visibility import visible_filter
 from backend.models import Artist, Track, TrackLike, get_db
 from backend.schemas import TrackResponse
 from backend.utilities.aggregations import get_comment_counts, get_like_counts
@@ -62,7 +62,7 @@ async def get_user_liked_tracks(
         .options(selectinload(Track.artist), selectinload(Track.album_rel))
         .where(TrackLike.user_did == artist.did)
         # a private track this user liked is shown only to that track's owner
-        .where(track_visible_filter(viewer_did(session)))
+        .where(await visible_filter(session))
         .order_by(TrackLike.created_at.desc())
     )
 

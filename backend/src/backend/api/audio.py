@@ -5,12 +5,11 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import RedirectResponse, StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy import or_, select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend._internal import Session, get_optional_session, validate_supporter
 from backend._internal.atproto.client import pds_blob_url
 from backend._internal.atproto.spaces.client import SpaceAccessError, open_space_blob
-from backend._internal.track_visibility import is_private_media_member
+from backend._internal.private_access import can_access
 from backend.config import settings
 from backend.models import Artist, Track, UserPreferences
 from backend.storage import storage
@@ -109,7 +108,7 @@ async def stream_audio(
             is_private,
             space_uri,
         ) = track_data
-        can_read_private = await _can_read_private(db, session, artist_did)
+        can_read_private = await can_access(session, artist_did)
 
     # private media lives in a permissioned space — proxy the bytes through the
     # reader's space credential (can't redirect: the browser has no credential).
@@ -410,7 +409,7 @@ async def get_audio_url(
             is_private,
             _space_uri,
         ) = track_data
-        can_read_private = await _can_read_private(db, session, artist_did)
+        can_read_private = await can_access(session, artist_did)
 
     # private media is proxied through the permissioned-space credential path,
     # so the cacheable "url" is this backend's own stream endpoint (which holds
@@ -489,16 +488,6 @@ def _relay_headers(resp) -> dict[str, str]:
     return {k: resp.headers[k] for k in _PROXY_HEADERS if k in resp.headers}
 
 
-async def _can_read_private(
-    db: AsyncSession, session: Session | None, artist_did: str
-) -> bool:
-    if session is None:
-        return False
-    return session.did == artist_did or await is_private_media_member(
-        db, artist_did, session.did
-    )
-
-
 async def _handle_private_audio(
     *,
     session: Session | None,
@@ -511,11 +500,12 @@ async def _handle_private_audio(
 ) -> Response:
     """proxy a private track's audio through the permissioned-space credential path.
 
-    the owner and the artist's private-media members pass; anyone else gets a
-    404 — the same as a missing file — so private tracks do not leak their
-    existence. the credential is minted from the requesting session, so a
-    member streams through their own PDS's delegation token. Range is passed
-    through so the 206/seek semantics survive the proxy.
+    the owner and anyone the space authority will credential pass; everyone
+    else gets a 404 — the same as a missing file — so private tracks do not leak
+    their existence, and a refusal at read time is the same 404. the credential
+    is minted from the requesting session, so a member streams through their own
+    PDS's delegation token. Range is passed through so the 206/seek semantics
+    survive the proxy.
     """
     if session is None or not allowed:
         raise HTTPException(status_code=404, detail="audio file not found")
@@ -532,9 +522,8 @@ async def _handle_private_audio(
     try:
         resp = await cm.__aenter__()
     except SpaceAccessError as exc:
-        raise HTTPException(
-            status_code=403, detail="permissioned access denied"
-        ) from exc
+        logfire.info("private audio: authority refused at read", reason=str(exc))
+        raise HTTPException(status_code=404, detail="audio file not found") from exc
 
     headers = _relay_headers(resp)
     if is_head_request:

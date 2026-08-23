@@ -175,7 +175,7 @@ async def remove_space_member(
     """take ``did`` off the member list and forget the credential this process
     minted for it. The PDS stops issuing new credentials at once; one already
     issued lasts until its host's lifetime runs out (the protocol's default is
-    two hours). plyr's own reads re-check membership per request regardless."""
+    two hours)."""
     await make_pds_request(
         auth_session,
         "POST",

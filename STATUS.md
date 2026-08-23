@@ -164,6 +164,35 @@ nate's call on consent (heads-up post or opt-in).
 publish and optimize paths already use. Regression test drives `PATCH` and
 asserts the `putRecord` payload keeps the blob; it failed on the old code.
 
+#### plyr never stores membership — access is the space credential (August 23)
+
+The access list shipped on August 22 decided who may see and hear private
+tracks from a `private_media_members` table that was refreshed from the PDS
+only when the artist opened their member list in the portal. That made the
+artist's attention in plyr a dependency of other people's access: an artist
+who added someone from pdsls (or any other client) left that person a stranger
+to plyr indefinitely, and someone they removed kept seeing the tracks and got
+a 403 on play — an existence tell — until the artist happened to visit. It was
+the only mirror in the backend kept current by a UI action; every other one
+is event-driven or scheduled. Wrong, and not inherited from anywhere.
+
+Now the authority answers. `backend/_internal/private_access.py` asks the
+artist's space host for a credential with the reader's own session and holds
+only that answer for as long as the protocol says it is good: a credential for
+its lifetime, a refusal for five minutes (the same window a verifier's answer
+gets in `atprotofans.py`), an unreachable host for no time at all. Nothing is
+refreshed by anything the artist does in plyr; add/remove through plyr only
+drop what plyr holds for that pair so the next request asks at once. Listings
+show the private tracks of artists the viewer currently holds a credential
+for and never fan out into mints; an artist's page asks for that one artist
+first. A refusal at read time is now the same 404 as a missing file. The
+table, model, mirror code and reconcile are gone (migration `a81c2d9e4f07`);
+`GET /me/private-media/members` reads the PDS every time and says so (502,
+with a retry in the portal) when the PDS cannot answer, instead of showing a
+copy. Design: `docs/internal/architecture/private-media-access-list.md` §3.
+Sources: Daniel Holmgren's "Boring Auth" diary and Nick Gerakines' "Space
+Access" (both via pub-search), `notes/protocols/atproto/spaces.md`.
+
 #### private media grows an access list (#1876–#1905, August 21–22 — prod `2026.0821.071650` → `2026.0822.185531`)
 
 Full write-up in `.status_history/2026-08.md`. Four days took private media from
@@ -183,11 +212,11 @@ owner-only to an artist-named list of people who can hear it:
   retries without it. Legacy sessions take a one-time upgrade that holds the
   in-flight upload or recording across the redirect.
 - **members** (#1897–#1901, #1905): the `simplespace` member list on the
-  artist's PDS is the source of truth, mirrored into `private_media_members` so
-  visibility can be expressed in SQL and reconciled from `listMembers` on every
-  owner read. Both private audio paths mint from the *requesting* session, so a
-  member streams through their own PDS's delegation token; non-members still
-  404. The portal gained a "private tracks" section for adding and removing by
+  artist's PDS is the source of truth. Both private audio paths mint from the
+  *requesting* session, so a member streams through their own PDS's delegation
+  token; non-members still 404. (This first shipped with a `private_media_members`
+  mirror refreshed only when the artist opened their list in plyr — removed the
+  next day, see below.) The portal gained a "private tracks" section for adding and removing by
   handle. Refusals now match the `getSpaceCredential` lexicon names instead of
   500ing. Membership and supporter standing stay separate facts by design —
   design doc: `docs/internal/architecture/private-media-access-list.md`.
@@ -279,7 +308,7 @@ See `.status_history/` for detailed history, one file per month: `2026-07.md`,
 
 **moderation: from inert labels to recorded decisions** (#1691–#1718, July 24–27 — prod `2026.0725.035625` → `2026.0728.043224`): `copyright-violation` de-lists instead of doing nothing; adult labels stopped gating permalinks; `LabelContext.LIST` vs `VIEW` keeps labels shaping discovery rather than destinations; and underneath all of it `moderation_events` carries the review queue, per-track overrides, the audit trail, and the source of public transparency posts from @moderation.plyr.fm. Published contact is now `help@plyr.fm` / `dmca@plyr.fm`, and rate limits are keyed per client rather than per site (#1716, #1718). August 8–9 sharpened what those decisions *mean*: `override_exclude` is curation, not removal, so it empties chosen surfaces (feeds, search, radio, atlas) and never a destination anyone navigated to (#1799), and radio and the atlas actually honor it now (#1797). **next in this arc**: triage the 18 queued subjects; merge or discard the transparency-post batching work parked on `feat/batched-transparency-posts` (six curation events currently mean six posts); per-actor authentication, which is what gates agent participation; then a proposed/applied split so an agent can propose a decision a human approves. The DMCA surface itself is still incomplete (see known issues).
 
-**still experimental — private media on permissioned spaces** (#1557→#1574, #1684, #1876–#1905, epic #1384): private audio in an artist-owned permissioned space (never R2), credential-gated playback, and since August 22 an artist-named member list rather than owner-only — the `simplespace` member list on the artist's PDS decides, mirrored into `private_media_members` for SQL-expressible visibility and reconciled from `listMembers` on every owner read. Every sign-in now requests the private-media permission set and a spaces PDS expands it into `space:` grants at consent, so the *grant* is the capability signal (advertised `scopes_supported` never listed the dynamic scopes and hid the feature from the official alpha PDS). **open**: the cross-account e2e leg needs its `ALPHA_TEST_*` secrets; membership and supporter standing stay separate facts by design; downloads of private tracks are still refused for everyone, owner included, until a private download byte path exists. Design: `docs/internal/architecture/private-media-access-list.md`. the wire contract is the spaces-alpha lexicons at the tip of atproto's `permissioned-data` branch, with Bulletin as the reference client; zds tracks that branch and has rejected stale bodies twice (#1656, #1876), so drift there shows up as a failed first private upload. The July Proposal-0016 alignment replaces the obsolete `ats://` draft addresses with canonical `at://{authority}/space/{type}/{skey}` addresses, separates the space-type lexicon from the OAuth permission set, resolves dedicated space hosts with PDS fallback, and sends a confidential-client attestation separately from the user's delegation token. The current owner-only policy remains intentionally narrow; interoperable catalog sharing needs a product policy and UX on top of the protocol primitives. See `docs/internal/architecture/permissioned-private-media.md`.
+**still experimental — private media on permissioned spaces** (#1557→#1574, #1684, #1876–#1905, epic #1384): private audio in an artist-owned permissioned space (never R2), credential-gated playback, and since August 22 an artist-named member list rather than owner-only — the `simplespace` member list on the artist's PDS decides, and plyr never stores membership: it asks the space host for a credential with the reader's session and holds that answer for the credential's lifetime (a refusal for five minutes), so a change the artist makes from any client is honored without plyr in the loop (August 23). Every sign-in now requests the private-media permission set and a spaces PDS expands it into `space:` grants at consent, so the *grant* is the capability signal (advertised `scopes_supported` never listed the dynamic scopes and hid the feature from the official alpha PDS). **open**: the cross-account e2e leg needs its `ALPHA_TEST_*` secrets; membership and supporter standing stay separate facts by design; downloads of private tracks are still refused for everyone, owner included, until a private download byte path exists. Design: `docs/internal/architecture/private-media-access-list.md`. the wire contract is the spaces-alpha lexicons at the tip of atproto's `permissioned-data` branch, with Bulletin as the reference client; zds tracks that branch and has rejected stale bodies twice (#1656, #1876), so drift there shows up as a failed first private upload. The July Proposal-0016 alignment replaces the obsolete `ats://` draft addresses with canonical `at://{authority}/space/{type}/{skey}` addresses, separates the space-type lexicon from the OAuth permission set, resolves dedicated space hosts with PDS fallback, and sends a confidential-client attestation separately from the user's delegation token. The current owner-only policy remains intentionally narrow; interoperable catalog sharing needs a product policy and UX on top of the protocol primitives. See `docs/internal/architecture/permissioned-private-media.md`.
 
 **identity, discovery and the queue** (#1620–#1730, July): a broken avatar led to five live artists hidden from every discovery surface because we read one host's `#account` event as a statement about the person — fixed at three levels, and the identity task that maintains the PDS cache is now actually registered with the worker (it had never run in production). The radio no longer plays one artist back-to-back (#1730). An experimental subsonic `/rest` shim lets off-the-shelf clients (Symfonium, Amperfy, Shelv) play plyr libraries with a developer token as the password (#1644–#1651); collection continuity queues the rest of an album or playlist as a labeled "next from" context (#1626); repeat-one shipped (#1653/#1654/#1657), reviving @AilaScott's #1518, with repeat-all deferred until the loop-vs-continuation interaction is designed.
 

@@ -1,22 +1,56 @@
 """private (permissioned-space) media must not leak through public surfaces (#1528).
 
 private tracks set is_private=True (and unlisted=True). they must be excluded from
-public search and from an artist page viewed by anyone but the owner, and must
-serialize without treating their permissioned at:// URI as a public record.
+public search and from an artist page viewed by anyone the space authority will
+not credential, and must serialize without treating their permissioned at://
+URI as a public record. membership is never stored: every test here that
+admits a member does so by making the authority's answer "yes".
 """
 
+import time
+from unittest.mock import patch
+
 import pytest
+import redis.asyncio as async_redis
+from atproto_oauth.dpop import DPoPManager
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from backend._internal import Session
+from backend._internal.atproto.spaces.client import SpaceAccessError, SpaceCredential
 from backend.api.search import _search_tracks
 from backend.api.tracks.listing import list_tracks
-from backend.models import Artist, PrivateMediaMember, Track
+from backend.models import Artist, Track
 from backend.schemas import TrackResponse
+from backend.utilities.redis import get_async_redis_client
 
 _DID = "did:test:private-vis"
+_MEMBER = "did:test:member"
+
+
+@pytest.fixture(autouse=True)
+async def _clean_access() -> None:
+    r: async_redis.Redis = get_async_redis_client()
+    async for key in r.scan_iter("private_access:*"):
+        await r.delete(key)
+
+
+@pytest.fixture(autouse=True)
+def authority_admits_member():
+    """the artist's space host credentials `_MEMBER` and refuses everyone else."""
+
+    async def mint(session: Session, space: str, *, force_refresh: bool = False):
+        if session.did == _MEMBER:
+            return SpaceCredential(
+                token="t",
+                dpop_key=DPoPManager.generate_keypair(),
+                expires_at=time.monotonic() + 600,
+            )
+        raise SpaceAccessError("UserNotAuthorized")
+
+    with patch("backend._internal.private_access.get_space_credential", mint):
+        yield
 
 
 def _session(did: str) -> Session:
@@ -137,23 +171,21 @@ async def test_visibility_helper_rules(db_session: AsyncSession, artist: Artist)
 
     public = await _make_track(db_session, title="p", fid="h_pub", private=False)
     private = await _make_track(db_session, title="x", fid="h_priv", private=True)
-    db_session.add(PrivateMediaMember(artist_did=_DID, member_did="did:test:member"))
-    await db_session.commit()
 
     # public: anyone
-    assert await can_view_track(db_session, None, public)
-    assert await can_view_track(db_session, "did:test:other", public)
-    # private: owner and members
-    assert await can_view_track(db_session, _DID, private)
-    assert await can_view_track(db_session, "did:test:member", private)
-    assert not await can_view_track(db_session, None, private)
-    assert not await can_view_track(db_session, "did:test:other", private)
+    assert await can_view_track(None, public)
+    assert await can_view_track(_session("did:test:other"), public)
+    # private: owner and whoever the authority credentials
+    assert await can_view_track(_session(_DID), private)
+    assert await can_view_track(_session(_MEMBER), private)
+    assert not await can_view_track(None, private)
+    assert not await can_view_track(_session("did:test:other"), private)
 
-    await ensure_track_visible(db_session, private, _DID)
-    await ensure_track_visible(db_session, private, "did:test:member")
-    for did in (None, "did:test:other"):
+    await ensure_track_visible(private, _session(_DID))
+    await ensure_track_visible(private, _session(_MEMBER))
+    for viewer in (None, _session("did:test:other")):
         with pytest.raises(HTTPException) as exc:
-            await ensure_track_visible(db_session, private, did)
+            await ensure_track_visible(private, viewer)
         assert exc.value.status_code == 404
 
 
@@ -161,8 +193,6 @@ async def test_member_sees_private_in_artist_listing(
     db_session: AsyncSession, artist: Artist
 ):
     await _make_track(db_session, title="for members", fid="m_priv", private=True)
-    db_session.add(PrivateMediaMember(artist_did=_DID, member_did="did:test:member"))
-    await db_session.commit()
 
     async def titles(session: Session | None) -> list[str]:
         page = await list_tracks(
@@ -170,7 +200,7 @@ async def test_member_sees_private_in_artist_listing(
         )
         return [t.title for t in page.tracks]
 
-    assert "for members" in await titles(_session("did:test:member"))
+    assert "for members" in await titles(_session(_MEMBER))
     assert "for members" not in await titles(_session("did:test:other"))
     assert "for members" not in await titles(None)
 
@@ -202,13 +232,8 @@ async def test_track_detail_endpoint_owner_only_for_private(
         with TestClient(app) as client:
             assert client.get(f"/tracks/{track.id}").status_code == 200
 
-        db_session.add(
-            PrivateMediaMember(artist_did=_DID, member_did="did:test:member")
-        )
-        await db_session.commit()
-
         async def _member() -> Session | None:
-            return _session("did:test:member")
+            return _session(_MEMBER)
 
         async def _stranger() -> Session | None:
             return _session("did:test:other")
@@ -227,15 +252,14 @@ async def test_audio_url_for_private_track_owner_and_members_only(
     db_session: AsyncSession, artist: Artist
 ):
     """/audio/{id}/url is the cacheable handle the player asks for first; it must
-    answer the owner and members with the proxy URL and everyone else with 404."""
+    answer the owner and credentialed readers with the proxy URL and everyone
+    else with 404."""
     from fastapi.testclient import TestClient
 
     from backend._internal import get_optional_session
     from backend.main import app
 
     track = await _make_track(db_session, title="hear", fid="aud_priv", private=True)
-    db_session.add(PrivateMediaMember(artist_did=_DID, member_did="did:test:member"))
-    await db_session.commit()
 
     async def statuses(session: Session | None) -> int:
         async def dep() -> Session | None:
@@ -247,8 +271,79 @@ async def test_audio_url_for_private_track_owner_and_members_only(
 
     try:
         assert await statuses(_session(_DID)) == 200
-        assert await statuses(_session("did:test:member")) == 200
+        assert await statuses(_session(_MEMBER)) == 200
         assert await statuses(_session("did:test:other")) == 404
         assert await statuses(None) == 404
+    finally:
+        app.dependency_overrides.clear()
+
+
+# --- the authority decides; plyr only holds its answer -----------------------
+
+
+async def test_membership_changes_at_the_authority_take_effect_without_plyr(
+    db_session: AsyncSession, artist: Artist
+):
+    """a reader the authority refused is admitted as soon as the refusal lapses and
+    the authority says yes; a reader it credentialed is refused as soon as the
+    credential lapses and the authority says no. nothing in plyr is edited."""
+    from backend._internal.track_visibility import can_view_track
+
+    track = await _make_track(db_session, title="turns", fid="turn_priv", private=True)
+    r: async_redis.Redis = get_async_redis_client()
+    stranger, member = _session("did:test:later"), _session(_MEMBER)
+
+    assert not await can_view_track(stranger, track)
+    assert await can_view_track(member, track)
+
+    # the artist adds `later` and removes `member` from another client
+    async def flipped(session: Session, space: str, *, force_refresh: bool = False):
+        if session.did == "did:test:later":
+            return SpaceCredential(
+                token="t",
+                dpop_key=DPoPManager.generate_keypair(),
+                expires_at=time.monotonic() + 600,
+            )
+        raise SpaceAccessError("UserNotAuthorized")
+
+    with patch("backend._internal.private_access.get_space_credential", flipped):
+        # what plyr holds still answers, for as long as it is valid
+        assert not await can_view_track(stranger, track)
+        assert await can_view_track(member, track)
+        # ...and no longer, once it lapses
+        await r.delete(f"private_access:refused:{stranger.did}:{_DID}")
+        await r.zadd(f"private_access:held:{_MEMBER}", {_DID: time.time() - 1})
+        assert await can_view_track(stranger, track)
+        assert not await can_view_track(member, track)
+
+
+async def test_audio_refusal_at_read_is_a_404(db_session: AsyncSession, artist: Artist):
+    """a refusal from the space host while streaming reads like a missing file."""
+    from fastapi.testclient import TestClient
+
+    from backend._internal import get_optional_session
+    from backend.main import app
+
+    track = await _make_track(db_session, title="gone", fid="gone_priv", private=True)
+    track.pds_blob_cid = "bafyfake"
+    await db_session.commit()
+
+    async def dep() -> Session | None:
+        return _session(_MEMBER)
+
+    class _Refused:
+        async def __aenter__(self):
+            raise SpaceAccessError("UserNotAuthorized")
+
+        async def __aexit__(self, *exc):
+            return False
+
+    app.dependency_overrides[get_optional_session] = dep
+    try:
+        with (
+            patch("backend.api.audio.open_space_blob", lambda *a, **k: _Refused()),
+            TestClient(app) as client,
+        ):
+            assert client.get(f"/audio/{track.file_id}").status_code == 404
     finally:
         app.dependency_overrides.clear()

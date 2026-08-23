@@ -8,7 +8,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel, ConfigDict, field_validator
 from redis.exceptions import RedisError
-from sqlalchemy import delete, func, select, text
+from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend._internal import Session, get_optional_session, require_auth
@@ -25,10 +25,10 @@ from backend._internal.atproto.spaces.client import (
     list_space_members,
     remove_space_member,
 )
-from backend._internal.track_visibility import track_visible_filter, viewer_did
+from backend._internal.private_access import forget_access
+from backend._internal.track_visibility import visible_filter
 from backend.models import (
     Artist,
-    PrivateMediaMember,
     Track,
     TrackLike,
     UserPreferences,
@@ -349,7 +349,7 @@ async def get_artist_analytics(
     returns zeros if artist has no tracks. private tracks count only for
     their owner.
     """
-    visible = track_visible_filter(viewer_did(session))
+    visible = await visible_filter(session)
     # get total plays, item count, and duration in one query
     result = await db.execute(
         select(
@@ -478,15 +478,6 @@ class AddPrivateMediaMemberRequest(BaseModel):
     actor: str
 
 
-async def _mirror(db: AsyncSession, artist_did: str) -> list[str]:
-    result = await db.execute(
-        select(PrivateMediaMember.member_did)
-        .where(PrivateMediaMember.artist_did == artist_did)
-        .order_by(PrivateMediaMember.created_at)
-    )
-    return list(result.scalars().all())
-
-
 async def _members_response(dids: list[str]) -> list[PrivateMediaMemberResponse]:
     return [
         PrivateMediaMemberResponse(
@@ -499,58 +490,42 @@ async def _members_response(dids: list[str]) -> list[PrivateMediaMemberResponse]
     ]
 
 
-async def _reconcile_from_pds(
-    db: AsyncSession, auth_session: Session, space: str
-) -> list[str] | None:
-    """replace the mirror with the PDS's member list; None when the PDS can't answer."""
+async def _pds_members(auth_session: Session, space: str) -> list[str]:
+    """the member list as the artist's PDS holds it right now. Authority-only."""
     members: list[str] = []
     cursor: str | None = None
-    try:
-        while True:
-            page, cursor = await list_space_members(
-                auth_session, space=space, cursor=cursor
-            )
-            members.extend(did for did in page if did != auth_session.did)
-            if not cursor:
-                break
-    except Exception as exc:
-        logger.warning(f"could not read the member list for {auth_session.did}: {exc}")
-        return None
-    await db.execute(
-        delete(PrivateMediaMember).where(
-            PrivateMediaMember.artist_did == auth_session.did,
-            PrivateMediaMember.member_did.not_in(members),
+    while True:
+        page, cursor = await list_space_members(
+            auth_session, space=space, cursor=cursor
         )
-    )
-    known = set(await _mirror(db, auth_session.did))
-    for did in members:
-        if did not in known:
-            db.add(PrivateMediaMember(artist_did=auth_session.did, member_did=did))
-    await db.commit()
-    return members
+        members.extend(did for did in page if did != auth_session.did)
+        if not cursor:
+            return members
 
 
 @router.get("/me/private-media/members")
 async def list_private_media_members(
-    db: Annotated[AsyncSession, Depends(get_db)],
     auth_session: Session = Depends(require_auth),
 ) -> list[PrivateMediaMemberResponse]:
-    """the DIDs allowed to hear the caller's private tracks.
+    """the DIDs allowed to hear the caller's private tracks, read from the PDS.
 
-    the PDS member list is the source of truth; plyr.fm's mirror is refreshed
-    from it here and served as a fallback when the PDS cannot answer.
+    plyr.fm keeps no copy: the list lives on the artist's PDS and is read with
+    the artist's session each time. when the PDS cannot answer, neither can we.
     """
     space = await ensure_personal_space(auth_session)
-    members = await _reconcile_from_pds(db, auth_session, space)
-    if members is None:
-        members = await _mirror(db, auth_session.did)
+    try:
+        members = await _pds_members(auth_session, space)
+    except Exception as exc:
+        logger.warning(f"could not read the member list for {auth_session.did}: {exc}")
+        raise HTTPException(
+            status_code=502, detail="your PDS did not answer for the member list"
+        ) from exc
     return await _members_response(members)
 
 
 @router.post("/me/private-media/members", status_code=201)
 async def add_private_media_member(
     body: AddPrivateMediaMemberRequest,
-    db: Annotated[AsyncSession, Depends(get_db)],
     auth_session: Session = Depends(require_auth),
 ) -> PrivateMediaMemberResponse:
     """let one more account hear the caller's private tracks."""
@@ -567,9 +542,7 @@ async def add_private_media_member(
 
     space = await ensure_personal_space(auth_session)
     await add_space_member(auth_session, space=space, did=did)
-    if did not in await _mirror(db, auth_session.did):
-        db.add(PrivateMediaMember(artist_did=auth_session.did, member_did=did))
-        await db.commit()
+    await forget_access(did, auth_session.did)
     (member,) = await _members_response([did])
     return member
 
@@ -577,23 +550,17 @@ async def add_private_media_member(
 @router.delete("/me/private-media/members/{did}", status_code=204)
 async def remove_private_media_member(
     did: str,
-    db: Annotated[AsyncSession, Depends(get_db)],
     auth_session: Session = Depends(require_auth),
 ) -> Response:
     """stop an account from hearing the caller's private tracks.
 
-    plyr stops serving them on their next request; the PDS refuses them a new
-    credential at once, and one already issued lasts its host's lifetime.
+    the PDS refuses them a new credential at once; plyr drops what it holds for
+    them so its next request asks again. a credential already issued lasts its
+    host's lifetime — the protocol has no revocation.
     """
     if did == auth_session.did:
         raise HTTPException(status_code=400, detail="you can't remove yourself")
     space = await ensure_personal_space(auth_session)
     await remove_space_member(auth_session, space=space, did=did)
-    await db.execute(
-        delete(PrivateMediaMember).where(
-            PrivateMediaMember.artist_did == auth_session.did,
-            PrivateMediaMember.member_did == did,
-        )
-    )
-    await db.commit()
+    await forget_access(did, auth_session.did)
     return Response(status_code=204)

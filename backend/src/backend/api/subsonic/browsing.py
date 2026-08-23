@@ -17,7 +17,7 @@ from backend._internal.content_labels import (
     LabelContext,
     filter_sensitive_audio_tracks_for_viewer,
 )
-from backend._internal.track_visibility import track_visible_filter
+from backend._internal.track_visibility import visible_filter
 from backend.api.subsonic.endpoints import Params, _require, _rest, _run, _song
 from backend.api.subsonic.responses import ERROR_NOT_FOUND, SubsonicError
 from backend.models import Album, Artist, Track
@@ -55,7 +55,7 @@ def _album_entry(
 
 async def _album_rows(
     db: AsyncSession,
-    session_did: str | None,
+    session: Session,
     order_by: Any,
     size: int,
     offset: int,
@@ -65,7 +65,7 @@ async def _album_rows(
         select(Album, Artist, func.count(Track.id))
         .join(Artist, Album.artist_did == Artist.did)
         .join(Track, Track.album_id == Album.id)
-        .where(track_visible_filter(session_did))
+        .where(await visible_filter(session))
         .group_by(Album.id, Artist.did)
         .order_by(order_by)
         .limit(size)
@@ -87,7 +87,7 @@ async def _album_list_payload(session: Session, params: Params) -> list[dict[str
     else:
         order_by = func.lower(Album.title)
     async with db_session() as db:
-        rows = await _album_rows(db, session.did, order_by, size, offset)
+        rows = await _album_rows(db, session, order_by, size, offset)
     return [_album_entry(album, artist, count, 0) for album, artist, count in rows]
 
 
@@ -125,7 +125,7 @@ async def get_album(request: Request) -> Response:
                 select(Track)
                 .options(selectinload(Track.artist))
                 .where(Track.album_id == album.id)
-                .where(track_visible_filter(session.did))
+                .where(await visible_filter(session))
                 .order_by(Track.created_at)
             )
             tracks, _ = await filter_sensitive_audio_tracks_for_viewer(
@@ -156,7 +156,7 @@ async def get_artists(request: Request) -> Response:
                     Artist, func.count(func.distinct(Track.album_id)).label("albums")
                 )
                 .join(Track, Track.artist_did == Artist.did)
-                .where(track_visible_filter(session.did))
+                .where(await visible_filter(session))
                 .group_by(Artist.did)
                 .order_by(func.lower(Artist.display_name))
             )
@@ -191,7 +191,7 @@ async def get_artist(request: Request) -> Response:
                 raise SubsonicError(ERROR_NOT_FOUND, "artist not found")
             rows = await _album_rows(
                 db,
-                session.did,
+                session,
                 func.lower(Album.title),
                 _MAX_LIST_SIZE,
                 0,
@@ -221,7 +221,7 @@ async def get_random_songs(request: Request) -> Response:
             result = await db.execute(
                 select(Track)
                 .options(selectinload(Track.artist))
-                .where(track_visible_filter(session.did))
+                .where(await visible_filter(session))
                 .order_by(func.random())
                 .limit(size)
             )

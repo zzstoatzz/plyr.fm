@@ -17,7 +17,7 @@ from backend._internal.content_labels import (
     copyright_visible_clause,
     filter_sensitive_audio_tracks,
 )
-from backend._internal.track_visibility import track_visible_filter, viewer_did
+from backend._internal.track_visibility import visible_filter
 from backend.models import Album, Artist, Track, TrackLike, get_db
 from backend.schemas import TrackResponse
 from backend.utilities.aggregations import (
@@ -205,7 +205,7 @@ async def get_album(
         .options(selectinload(Track.artist), selectinload(Track.album_rel))
         .where(Track.album_id == album.id)
         # a private track in an album is visible only to the album's owner
-        .where(track_visible_filter(viewer_did(session)))
+        .where(await visible_filter(session))
     )
     track_result = await db.execute(track_stmt)
     all_tracks = list(track_result.scalars().all())

@@ -1,16 +1,15 @@
-"""the artist's private-media member list: PDS is the source of truth, plyr mirrors."""
+"""the artist's private-media member list lives on the PDS; plyr keeps no copy."""
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import ANY, AsyncMock, patch
 
 import pytest
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend._internal import Session, require_auth
 from backend._internal.atproto.profiles import ResolvedProfile
 from backend.main import app
-from backend.models import Artist, PrivateMediaMember
+from backend.models import Artist
 
 _ARTIST = "did:test:pmm-artist"
 _SPACE = f"at://{_ARTIST}/space/fm.plyr.privateMedia/self"
@@ -52,31 +51,29 @@ def _profiles(dids):
     ]
 
 
-async def _mirror(db: AsyncSession) -> list[str]:
-    rows = await db.execute(
-        select(PrivateMediaMember.member_did).where(
-            PrivateMediaMember.artist_did == _ARTIST
-        )
+def _space():
+    return patch(
+        "backend.api.artists.ensure_personal_space", AsyncMock(return_value=_SPACE)
     )
-    return sorted(rows.scalars().all())
 
 
-async def test_add_writes_pds_then_mirror(
-    db_session: AsyncSession, artist: Artist, as_owner
-):
+def _resolves():
+    return patch(
+        "backend.api.artists.resolve_dids",
+        AsyncMock(side_effect=lambda d: _profiles(d)),
+    )
+
+
+async def test_add_writes_pds_and_forgets_what_plyr_held(artist: Artist, as_owner):
     with (
-        patch(
-            "backend.api.artists.ensure_personal_space", AsyncMock(return_value=_SPACE)
-        ),
+        _space(),
         patch("backend.api.artists.add_space_member", AsyncMock()) as add,
+        patch("backend.api.artists.forget_access", AsyncMock()) as forget,
         patch(
             "backend.api.artists.resolve_handle",
             AsyncMock(return_value={"did": "did:test:friend"}),
         ),
-        patch(
-            "backend.api.artists.resolve_dids",
-            AsyncMock(side_effect=lambda d: _profiles(d)),
-        ),
+        _resolves(),
     ):
         async with AsyncClient(
             transport=ASGITransport(app=app), base_url="http://test"
@@ -86,21 +83,13 @@ async def test_add_writes_pds_then_mirror(
             )
     assert r.status_code == 201, r.text
     assert r.json()["did"] == "did:test:friend"
-    add.assert_awaited_once_with(_owner_like(add), space=_SPACE, did="did:test:friend")
-    assert await _mirror(db_session) == ["did:test:friend"]
+    add.assert_awaited_once_with(ANY, space=_SPACE, did="did:test:friend")
+    forget.assert_awaited_once_with("did:test:friend", _ARTIST)
 
 
-def _owner_like(mock):
-    return mock.await_args.args[0]
-
-
-async def test_add_rejects_self_and_unknown(
-    db_session: AsyncSession, artist: Artist, as_owner
-):
+async def test_add_rejects_self_and_unknown(artist: Artist, as_owner):
     with (
-        patch(
-            "backend.api.artists.ensure_personal_space", AsyncMock(return_value=_SPACE)
-        ),
+        _space(),
         patch("backend.api.artists.add_space_member", AsyncMock()) as add,
         patch("backend.api.artists.resolve_handle", AsyncMock(return_value=None)),
     ):
@@ -116,46 +105,31 @@ async def test_add_rejects_self_and_unknown(
     assert me.status_code == 400
     assert nobody.status_code == 404
     add.assert_not_awaited()
-    assert await _mirror(db_session) == []
 
 
-async def test_remove_clears_pds_and_mirror(
-    db_session: AsyncSession, artist: Artist, as_owner
-):
-    db_session.add(PrivateMediaMember(artist_did=_ARTIST, member_did="did:test:friend"))
-    await db_session.commit()
+async def test_remove_writes_pds_and_forgets_what_plyr_held(artist: Artist, as_owner):
     with (
-        patch(
-            "backend.api.artists.ensure_personal_space", AsyncMock(return_value=_SPACE)
-        ),
+        _space(),
         patch("backend.api.artists.remove_space_member", AsyncMock()) as remove,
+        patch("backend.api.artists.forget_access", AsyncMock()) as forget,
     ):
         async with AsyncClient(
             transport=ASGITransport(app=app), base_url="http://test"
         ) as c:
             r = await c.delete("/artists/me/private-media/members/did:test:friend")
     assert r.status_code == 204
-    remove.assert_awaited_once()
-    assert remove.await_args.kwargs == {"space": _SPACE, "did": "did:test:friend"}
-    assert await _mirror(db_session) == []
+    remove.assert_awaited_once_with(ANY, space=_SPACE, did="did:test:friend")
+    forget.assert_awaited_once_with("did:test:friend", _ARTIST)
 
 
-async def test_list_reconciles_mirror_from_pds(
-    db_session: AsyncSession, artist: Artist, as_owner
-):
-    # plyr thinks `stale` is a member; the PDS says `a` and `b` (and the authority itself)
-    db_session.add(PrivateMediaMember(artist_did=_ARTIST, member_did="did:test:stale"))
-    await db_session.commit()
+async def test_list_reads_the_pds_every_time(artist: Artist, as_owner):
     pages = [(["did:test:a", _ARTIST], "c1"), (["did:test:b"], None)]
     with (
+        _space(),
         patch(
-            "backend.api.artists.ensure_personal_space", AsyncMock(return_value=_SPACE)
-        ),
-        patch("backend.api.artists.list_space_members", AsyncMock(side_effect=pages)),
-        patch(
-            "backend.api.artists.resolve_dids",
-            AsyncMock(side_effect=lambda d: _profiles(d)),
-        ),
+            "backend.api.artists.list_space_members", AsyncMock(side_effect=pages)
+        ) as listed,
+        _resolves(),
     ):
         async with AsyncClient(
             transport=ASGITransport(app=app), base_url="http://test"
@@ -163,34 +137,22 @@ async def test_list_reconciles_mirror_from_pds(
             r = await c.get("/artists/me/private-media/members")
     assert r.status_code == 200
     assert [m["did"] for m in r.json()] == ["did:test:a", "did:test:b"]
-    assert await _mirror(db_session) == ["did:test:a", "did:test:b"]
+    assert listed.await_count == 2
 
 
-async def test_list_falls_back_to_mirror_when_pds_cannot_answer(
-    db_session: AsyncSession, artist: Artist, as_owner
-):
-    db_session.add(PrivateMediaMember(artist_did=_ARTIST, member_did="did:test:kept"))
-    await db_session.commit()
+async def test_list_fails_honestly_when_pds_cannot_answer(artist: Artist, as_owner):
     with (
-        patch(
-            "backend.api.artists.ensure_personal_space", AsyncMock(return_value=_SPACE)
-        ),
+        _space(),
         patch(
             "backend.api.artists.list_space_members",
             AsyncMock(side_effect=RuntimeError("down")),
-        ),
-        patch(
-            "backend.api.artists.resolve_dids",
-            AsyncMock(side_effect=lambda d: _profiles(d)),
         ),
     ):
         async with AsyncClient(
             transport=ASGITransport(app=app), base_url="http://test"
         ) as c:
             r = await c.get("/artists/me/private-media/members")
-    assert r.status_code == 200
-    assert [m["did"] for m in r.json()] == ["did:test:kept"]
-    assert await _mirror(db_session) == ["did:test:kept"]
+    assert r.status_code == 502
 
 
 async def test_members_require_auth():
@@ -200,7 +162,7 @@ async def test_members_require_auth():
         assert (await c.get("/artists/me/private-media/members")).status_code == 401
 
 
-async def test_remove_rejects_self(db_session: AsyncSession, artist: Artist, as_owner):
+async def test_remove_rejects_self(artist: Artist, as_owner):
     with patch("backend.api.artists.remove_space_member", AsyncMock()) as remove:
         async with AsyncClient(
             transport=ASGITransport(app=app), base_url="http://test"
