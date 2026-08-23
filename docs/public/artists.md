@@ -190,7 +190,9 @@ proposal. Most PDSes do not support it yet.
 
 Choosing **private** stores the track record and audio in an artist-owned permissioned
 space on your PDS. There is no public record or R2 copy. The track is hidden from feeds,
-search, profiles, albums, and playlists, and only you can view or play it through plyr.fm.
+search, profiles, albums, and playlists. You and the people on your access list (portal →
+manage) can view and play it through plyr.fm; listed people need an account on a PDS that
+supports permissioned data.
 
 The first time you choose private media, plyr.fm may ask you to approve an additional OAuth
 permission. Playback is proxied through plyr.fm because browsers do not hold the short-lived

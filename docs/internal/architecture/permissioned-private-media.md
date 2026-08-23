@@ -113,7 +113,8 @@ the authenticated DID (no `did` field), and `policy` / `appAccess` are `$type` u
 
 The `simplespace` management layer has a member list even though the core sync protocol
 does not enumerate readers. The authority is authorized on its own member-list space
-without an explicit `addMember`, and plyr.fm adds nobody else, yielding owner-only access.
+without an explicit `addMember`; plyr.fm's portal access list adds and removes further
+members through `simplespace.addMember`/`removeMember` (see private-media-access-list.md).
 `getSpace` returns `{uri, policy, appAccess}` with the same unions; `updateSpace` takes
 `{space, policy?, appAccess?}`.
 

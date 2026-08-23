@@ -6,21 +6,24 @@ description: get up to speed on the project quickly
 
 get up to speed on the project quickly.
 
-## instructions
+## read, in this order
 
-1. **read STATUS.md** - the living document with project vision, recent work, and technical state
-2. **check recent commits** - `git log --oneline -10` for what's actively changing
-3. **check git status** - any uncommitted work in progress
-4. **review open issues** - `gh issue list` for known priorities
+1. **CLAUDE.md** — rules, stack, structure (auto-loaded, but honor it)
+2. **STATUS.md** — vision, recent work, current focus, known issues. deep history lives in `.status_history/`
+3. **memory** — the session memory index is auto-loaded; it holds what the repo doesn't (people, credentials-adjacent facts, recurring failure modes)
+4. `git log --oneline -15` and `git status` — what's moving and any work in progress
+5. `gh issue list` — open priorities
+6. `docs/internal/` — the organized knowledge base, when a subsystem comes up
+
+## how work happens here
+
+- features and fixes follow the `change` skill: branch → build with tests → real-browser verify (`ui-check` for UI) → PR → `self-review` → merge (= staging) → nate reviews → promote via `deploy`
+- merging to `main` deploys **staging**; production is a separate, nate-approved promote. "shipped" means production
+- the queue of other skills (`check-spans`, `status-update`, `toast-copy`, …) is listed per-session; reach for them before improvising
 
 ## then
 
-propose the next best step based on:
-- immediate priorities listed in STATUS.md
-- known issues blocking progress
-- in-progress work needing completion
-
-present your recommendation and ask for confirmation before proceeding.
+propose the next best step from current focus, known issues, or in-progress work. present the recommendation and confirm before proceeding.
 
 ## tone
 

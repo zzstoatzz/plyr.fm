@@ -194,7 +194,8 @@ at://{artistDid}/space/fm.plyr.privateMedia/{skey}/{artistDid}/fm.plyr.track/{rk
 ```
 
 This is not a public-repository URI. Reading its records or blobs requires a space
-credential. plyr.fm currently creates a `self` space with an owner-only product policy;
+credential. plyr.fm creates a `self` space whose member list the artist controls from the
+portal;
 the declaration itself does not require every implementation to use that audience policy.
 
 ### fm.plyr.privateMediaAccess
