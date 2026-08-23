@@ -82,7 +82,7 @@ async def _build_track_oembed(
     if not (track := result.scalar_one_or_none()):
         raise HTTPException(status_code=404, detail="track not found")
     # oEmbed is an unauthenticated public-embed surface — private media never embeds
-    await ensure_track_visible(db, track, None)
+    await ensure_track_visible(track, None)
 
     return OEmbedResponse(
         title=f"{track.title} - {track.artist.display_name}",

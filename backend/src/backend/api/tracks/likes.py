@@ -19,8 +19,7 @@ from backend._internal.tasks import (
 )
 from backend._internal.track_visibility import (
     ensure_track_visible,
-    track_visible_filter,
-    viewer_did,
+    visible_filter,
 )
 from backend.models import Artist, Track, TrackLike, get_db
 from backend.schemas import LikedResponse, TrackResponse
@@ -68,7 +67,7 @@ async def list_liked_tracks(
         .where(TrackLike.user_did == auth_session.did)
         # a user may have liked their own private track; never surface a private
         # track owned by someone else (shouldn't exist, but defense in depth)
-        .where(track_visible_filter(auth_session.did))
+        .where(await visible_filter(auth_session))
         .order_by(TrackLike.created_at.desc())
     )
 
@@ -116,7 +115,7 @@ async def like_track(
 
     if not track:
         raise HTTPException(status_code=404, detail="track not found")
-    await ensure_track_visible(db, track, auth_session.did)
+    await ensure_track_visible(track, auth_session)
 
     if not track.atproto_record_uri or not track.atproto_record_cid:
         raise HTTPException(
@@ -214,7 +213,7 @@ async def get_track_likes(
     if not row:
         raise HTTPException(status_code=404, detail="track not found")
     is_private, artist_did = row
-    if is_private and viewer_did(session) != artist_did:
+    if is_private and (session is None or session.did != artist_did):
         raise HTTPException(status_code=404, detail="track not found")
 
     stmt = (

@@ -377,7 +377,7 @@ async def get_playlist_by_uri(
     tracks = await hydrate_tracks_from_uris(
         db,
         [ref["uri"] for ref in item_refs],
-        session_did=session.did if session else None,
+        session=session,
     )
 
     await heal_preview_thumbnails(db, playlist, tracks)
@@ -452,7 +452,7 @@ async def get_playlist(
     tracks = await hydrate_tracks_from_uris(
         db,
         [ref["uri"] for ref in item_refs],
-        session_did=session.did if session else None,
+        session=session,
     )
 
     await heal_preview_thumbnails(db, playlist, tracks)

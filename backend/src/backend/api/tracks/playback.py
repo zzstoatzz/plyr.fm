@@ -16,7 +16,7 @@ from sqlalchemy.orm import selectinload
 from backend._internal import Session, get_optional_session
 from backend._internal.content_labels import get_track_label_values
 from backend._internal.tasks import schedule_teal_scrobble
-from backend._internal.track_visibility import ensure_track_visible, viewer_did
+from backend._internal.track_visibility import ensure_track_visible
 from backend.config import settings
 from backend.models import (
     Artist,
@@ -145,7 +145,7 @@ async def get_track_by_uri(
     )
     if not (track := result.scalar_one_or_none()):
         raise HTTPException(status_code=404, detail="track not found")
-    await ensure_track_visible(db, track, viewer_did(session))
+    await ensure_track_visible(track, session)
 
     return await _resolve_track(db, track, session)
 
@@ -165,7 +165,7 @@ async def get_track(
     )
     if not (track := result.scalar_one_or_none()):
         raise HTTPException(status_code=404, detail="track not found")
-    await ensure_track_visible(db, track, viewer_did(session))
+    await ensure_track_visible(track, session)
 
     return await _resolve_track(db, track, session)
 
@@ -199,7 +199,7 @@ async def increment_play_count(
 
     if not (track := result.scalar_one_or_none()):
         raise HTTPException(status_code=404, detail="track not found")
-    await ensure_track_visible(db, track, viewer_did(session))
+    await ensure_track_visible(track, session)
 
     ttl = max(
         _PLAY_DEDUP_MIN_TTL_S,

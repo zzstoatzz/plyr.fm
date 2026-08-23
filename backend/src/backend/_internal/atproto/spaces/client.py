@@ -12,8 +12,12 @@ Read path:
     attestation) -> reads (DPoP-bound space credential)
 """
 
+import asyncio
+import base64
+import json
 import logging
 import time
+from collections import defaultdict
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
@@ -37,9 +41,10 @@ from backend.config import settings
 
 logger = logging.getLogger(__name__)
 
-# space credentials are "a couple of hours"; refresh well under that and renew
-# eagerly on a read rejection.
-_CREDENTIAL_TTL_SECONDS = 50 * 60
+# a credential's `exp` is authoritative; this caps how long plyr trusts one that
+# doesn't carry a readable `exp`, and a safety margin keeps reads off the edge.
+_CREDENTIAL_FALLBACK_TTL_SECONDS = 50 * 60
+_CREDENTIAL_EXPIRY_MARGIN_SECONDS = 30
 
 
 class SpaceAccessError(Exception):
@@ -175,7 +180,7 @@ async def remove_space_member(
     """take ``did`` off the member list and forget the credential this process
     minted for it. The PDS stops issuing new credentials at once; one already
     issued lasts until its host's lifetime runs out (the protocol's default is
-    two hours). plyr's own reads re-check membership per request regardless."""
+    two hours)."""
     await make_pds_request(
         auth_session,
         "POST",
@@ -185,11 +190,14 @@ async def remove_space_member(
     forget_credential(did, space)
 
 
+MEMBERS_PAGE_LIMIT = 100
+
+
 async def list_space_members(
     auth_session: AuthSession, *, space: str, cursor: str | None = None
 ) -> tuple[list[str], str | None]:
     """one page of the member list (zds caps a page at 100). Authority-only."""
-    params: dict[str, Any] = {"space": space, "limit": 100}
+    params: dict[str, Any] = {"space": space, "limit": MEMBERS_PAGE_LIMIT}
     if cursor:
         params["cursor"] = cursor
     result = await make_pds_request(
@@ -260,6 +268,17 @@ class SpaceCredential:
 # useful without the other. Include the requesting user so an authorization
 # decision made for one account is never reused for another.
 _credential_cache: dict[tuple[str, str], SpaceCredential] = {}
+# delegation tokens are one-use: concurrent mints for the same pair must not
+# each burn one. waiters reuse what the first mint stored.
+_mint_locks: defaultdict[tuple[str, str], asyncio.Lock] = defaultdict(asyncio.Lock)
+
+
+def _cached_credential(cache_key: tuple[str, str]) -> SpaceCredential | None:
+    if (
+        cached := _credential_cache.get(cache_key)
+    ) and cached.expires_at > time.monotonic():
+        return cached
+    return None
 
 
 def forget_credential(did: str, space: str) -> None:
@@ -332,25 +351,51 @@ async def _mint_credential(auth_session: AuthSession, space: str) -> SpaceCreden
         if cred_resp.status_code == 403 or any(e in body for e in refused_errors):
             raise SpaceAccessError(f"space authority refused credential: {body}")
         raise Exception(f"getSpaceCredential failed: {cred_resp.status_code} {body}")
+    token = cred_resp.json()["credential"]
     return SpaceCredential(
-        token=cred_resp.json()["credential"],
-        dpop_key=dpop_key,
-        expires_at=time.monotonic() + _CREDENTIAL_TTL_SECONDS,
+        token=token, dpop_key=dpop_key, expires_at=_credential_expires_at(token)
     )
+
+
+def _jwt_exp(token: str) -> float | None:
+    try:
+        payload = token.split(".")[1]
+        payload += "=" * (-len(payload) % 4)
+        exp = json.loads(base64.urlsafe_b64decode(payload)).get("exp")
+    except (IndexError, ValueError, AttributeError):
+        return None
+    return float(exp) if isinstance(exp, int | float) else None
+
+
+def _credential_expires_at(token: str) -> float:
+    """monotonic deadline for trusting ``token``: its ``exp`` less a margin, or the
+    fallback cap when it carries none."""
+    ttl = _CREDENTIAL_FALLBACK_TTL_SECONDS
+    if (exp := _jwt_exp(token)) is not None:
+        ttl = min(ttl, exp - time.time() - _CREDENTIAL_EXPIRY_MARGIN_SECONDS)
+    return time.monotonic() + max(ttl, 0.0)
 
 
 async def get_space_credential(
     auth_session: AuthSession, space: str, *, force_refresh: bool = False
 ) -> SpaceCredential:
-    """obtain a space credential for `space`, minting+caching or renewing as needed."""
-    now = time.monotonic()
+    """obtain a space credential for `space`, minting+caching or renewing as needed.
+
+    ``force_refresh`` discards what this process holds before minting; a caller
+    that arrives while that mint is in flight reuses its result rather than
+    spending another delegation token.
+    """
     cache_key = (auth_session.did, space)
-    if not force_refresh and (cached := _credential_cache.get(cache_key)):
-        if cached.expires_at > now:
+    if force_refresh:
+        _credential_cache.pop(cache_key, None)
+    elif cached := _cached_credential(cache_key):
+        return cached
+    async with _mint_locks[cache_key]:
+        if cached := _cached_credential(cache_key):
             return cached
-    credential = await _mint_credential(auth_session, space)
-    _credential_cache[cache_key] = credential
-    return credential
+        credential = await _mint_credential(auth_session, space)
+        _credential_cache[cache_key] = credential
+        return credential
 
 
 @asynccontextmanager

@@ -22,7 +22,7 @@ from backend._internal.content_labels import (
     filter_sensitive_audio_tracks_for_viewer,
 )
 from backend._internal.tasks import schedule_teal_scrobble
-from backend._internal.track_visibility import track_visible_filter
+from backend._internal.track_visibility import visible_filter
 from backend.api.lists.playlists import _can_view, _read_playlist_items
 from backend.api.subsonic.auth import authenticate
 from backend.api.subsonic.responses import (
@@ -147,7 +147,7 @@ def _playlist(playlist: Playlist, owner_handle: str) -> dict[str, Any]:
 
 
 async def _tracks_by_uris(
-    db: AsyncSession, uris: list[str], session_did: str | None
+    db: AsyncSession, uris: list[str], session: Session
 ) -> list[Track]:
     """load visible tracks by AT-URI, preserving list order."""
     if not uris:
@@ -156,7 +156,7 @@ async def _tracks_by_uris(
         select(Track)
         .options(selectinload(Track.artist))
         .where(Track.atproto_record_uri.in_(uris))
-        .where(track_visible_filter(session_did))
+        .where(await visible_filter(session))
     )
     # a playlist's contents are a destination. The viewer is None because a
     # Subsonic client authenticates with a developer token rather than a
@@ -172,7 +172,7 @@ async def _tracks_by_uris(
     return [by_uri[uri] for uri in uris if uri in by_uri]
 
 
-async def _track_by_id(params: Params, session_did: str | None) -> Track:
+async def _track_by_id(params: Params, session: Session) -> Track:
     raw_id = _require(params, "id")
     try:
         track_id = int(raw_id)
@@ -183,7 +183,7 @@ async def _track_by_id(params: Params, session_did: str | None) -> Track:
             select(Track)
             .options(selectinload(Track.artist))
             .where(Track.id == track_id)
-            .where(track_visible_filter(session_did))
+            .where(await visible_filter(session))
         )
         if track := result.scalar_one_or_none():
             visible, _ = await filter_sensitive_audio_tracks_for_viewer(
@@ -261,7 +261,7 @@ async def get_playlist(request: Request) -> Response:
                     ERROR_GENERIC, f"failed to read playlist items: {exc}"
                 ) from exc
             tracks = await _tracks_by_uris(
-                db, [ref["uri"] for ref in item_refs], session.did
+                db, [ref["uri"] for ref in item_refs], session
             )
         songs = [_song(track) for track in tracks]
         return {
@@ -279,7 +279,7 @@ async def get_playlist(request: Request) -> Response:
 @_rest("getSong")
 async def get_song(request: Request) -> Response:
     async def impl(session: Session, params: Params) -> dict[str, Any]:
-        track = await _track_by_id(params, session.did)
+        track = await _track_by_id(params, session)
         return {"song": _song(track)}
 
     return await _run(request, impl)
@@ -289,7 +289,7 @@ async def get_song(request: Request) -> Response:
 @_rest("stream")
 async def stream(request: Request) -> Response:
     async def impl(session: Session, params: Params) -> Response:
-        track = await _track_by_id(params, session.did)
+        track = await _track_by_id(params, session)
         # gated and private tracks resolve their audio through cookie-bound
         # session checks that a redirected subsonic client can't satisfy
         if track.is_private or track.support_gate is not None:
@@ -319,7 +319,7 @@ async def scrobble(request: Request) -> Response:
                 select(Track)
                 .options(selectinload(Track.artist), selectinload(Track.album_rel))
                 .where(Track.id == track_id)
-                .where(track_visible_filter(session.did))
+                .where(await visible_filter(session))
             )
             if not (track := result.scalar_one_or_none()):
                 raise SubsonicError(ERROR_NOT_FOUND, "song not found")
@@ -374,7 +374,7 @@ async def get_cover_art(request: Request) -> Response:
                 raise SubsonicError(ERROR_NOT_FOUND, "cover art not found")
             url = album.image_url or album.thumbnail_url
         else:
-            track = await _track_by_id(params, session.did)
+            track = await _track_by_id(params, session)
             url = track.image_url or track.thumbnail_url
         if not url:
             raise SubsonicError(ERROR_NOT_FOUND, "cover art not found")

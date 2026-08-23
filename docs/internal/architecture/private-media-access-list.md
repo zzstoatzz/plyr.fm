@@ -5,7 +5,8 @@ title: "private media access list — reconciliation and design"
 Design for letting an artist name the people who can hear their private tracks.
 Written after surveying the three access mechanisms plyr.fm already has, so the
 list lands as one more *answer to the same question* rather than a fourth gate.
-Not shipped; staging first.
+Shipped 2026-08-22 (#1897–#1905); the membership mirror it first shipped with
+was removed the next day — see §3 for why plyr never stores membership.
 
 ## vocabulary (Proposal 0016, exact terms)
 
@@ -101,20 +102,45 @@ pin authority ≠ reader). The cache key is `(reader did, space)`. So once the
 grant exists, `open_space_blob(session, space=<artist's>, …)` works for a
 member unchanged. No server-held credential, no impersonation.
 
-### 3. the owner-only identity compares → membership
+### 3. the owner-only identity compares → the authority's answer
 
-- `track_visible_filter` becomes `not_private OR artist_did == viewer OR EXISTS member(artist_did, viewer)`;
-- `can_view_track` / `ensure_track_visible` consult the same;
-- `audio.py:504` and `audio.py:412` drop their bare DID compare for it.
+- `visible_filter` becomes `not_private OR artist_did == viewer OR artist_did IN (spaces the viewer holds a credential for)`;
+- `can_view_track` / `ensure_track_visible` ask the authority for the one artist in question;
+- `audio.py`'s two private gates do the same.
 
-This needs an app-side mirror of membership (a table keyed `(artist_did,
-member_did)`), because the PDS list is not queryable in SQL and not readable
-with a member's session. The **PDS list is the source of truth**; plyr's table
-is a cache written through on every `addMember`/`removeMember` plyr performs,
-and reconciled from `listMembers` with the artist's session (it cannot be
-reconciled any other way). If the artist edits the list from another app, plyr
-learns on the next reconcile; the PDS still refuses credentials instantly, so
-plyr's cache can only ever *over-show metadata*, never *over-serve bytes*.
+**plyr never stores membership.** The protocol commits to exactly one thing —
+"if you're on the list you can read from the space" — and the only way an app
+can ask is to request a space credential for the reader. The member list is
+host-internal, authority-only, and off the firehose, so there is nothing to
+subscribe to and no copy plyr could keep current on its own: a copy refreshed
+"when the artist next opens plyr" makes the artist's attention a dependency of
+other people's access, which is exactly backwards for a protocol whose point is
+that the app is not in the loop. (That was the shape of the first version,
+#1900, and it was wrong.)
+
+What plyr holds is the authority's *answer*, for as long as the protocol says
+it is good (`backend/_internal/private_access.py`):
+
+- a successful mint is remembered for the credential's own lifetime (Redis
+  sorted set per reader, scored by expiry) — the same TTL the protocol already
+  binds removal to, because "membership removal is not revocation";
+- a refusal (`UserNotAuthorized` and kin) is remembered for five minutes, the
+  same window `atprotofans.py` gives a verifier's answer, so an artist page
+  does not burn a one-use delegation token per logged-in visitor;
+- a failure to reach either host is not remembered at all: fail closed now, ask
+  again next time.
+
+Nothing here is refreshed by an artist action. Add/remove through plyr drop
+what plyr holds for that pair so the next request asks at once, and that is
+an optimisation, not a decision. An artist who edits the list from pdsls or
+any other client is honored within one refusal window for an add and one
+credential lifetime for a remove — the same bounds the protocol itself gives.
+
+Listings (feeds, search, liked, subsonic) show the private tracks of artists
+the viewer *currently holds* a credential for; they never fan out into mints.
+An artist's own page asks for that one artist first, so it is answered from
+the source of truth. Members therefore reach private tracks by the artist's
+page or a link, and feeds follow once a credential is held.
 
 ### 4. the client wrappers + endpoints + portal
 
@@ -138,30 +164,29 @@ plyr's cache can only ever *over-show metadata*, never *over-serve bytes*.
 - **Surfaces that short-circuit on `support_gate is not None`** (radio corpus,
   PDS-save eligibility, subsonic direct URLs) are untouched: private tracks are
   already excluded by `is_private`, and members do not change that.
-- **Revocation is eventual at the protocol, immediate through plyr.**
+- **Revocation is eventual, and plyr does not pretend otherwise.**
   `removeMember` only stops *future* mints; a space credential is verifiable
   offline against the authority's key and has no revocation list (proposal
   §Space credential: "short-lived (default 2 hours)" — a default, not a bound;
-  zds uses `exp = iat + 7200`). plyr re-checks membership in SQL on every
-  private read, so a removed member's next request through plyr is a 404
-  regardless of any credential. plyr's per-process credential cache (50 min,
-  keyed `(reader did, space)`) is dropped on `removeMember` in the process
-  that handled it; other machines keep theirs until expiry, which only
-  matters if the SQL check were bypassed (it isn't). Don't promise a time in
-  copy; "they can't play your private tracks anymore" is what plyr delivers.
+  zds uses `exp = iat + 7200`). A removal through plyr drops what plyr holds
+  for that reader, so their next request asks the authority and is refused;
+  a removal from another client is honored when the held credential lapses.
+  A refusal at read time (the host says no mid-stream) is the same 404 as a
+  missing file. Don't promise a time in copy.
 - **The authority is implicitly a member** on zds (`spacePolicyAllowsRequester`
   short-circuits on the authority; `removeSimpleSpaceMember` refuses it). The
   proposal's `memberListPolicy` text doesn't say so; plyr neither relies on it
-  (the authority is never stored in the mirror) nor stores it if a host lists
-  it. The portal list is everyone *else*.
+  nor stores it. The portal list is everyone *else*.
 - **`listMembers` is owner-only in practice.** the lexicon only says "OAuth
   with a covering read grant; a space credential is not sufficient; must be
   called on the space authority's PDS" — but the reference (`read_self` plus an
   owner assert), rsky and zds (`manage=update`) all restrict it to the owner;
   atproto-crates lets any member with `read_self` read it. plyr always calls
-  it with the owner's session, which satisfies every variant. zds pages at
-  most 100 per call. the table is in zds `docs/permissioned-data.md` under
-  "client-visible contract".
+  it with the owner's session, which satisfies every variant, and only to
+  *show* the artist their list — never to decide access. When the PDS cannot
+  answer, the portal says so and offers a retry rather than showing an empty
+  list. zds pages at most 100 per call. the table is in zds
+  `docs/permissioned-data.md` under "client-visible contract".
 - **There is no discovery primitive.** Being on a member list does not make the
   space appear in the member's `listSpaces`, and the protocol never enumerates
   readers. plyr must tell members what was shared with them at the app layer
@@ -193,7 +218,7 @@ different policy on the same space and a separate decision.
 
 1. permission set: add the `authority: "*"` read permission; publish to staging; re-consent via the (now honest) scope upgrade; e2e asserts the expanded grant includes it.
 2. spaces client: member wrappers + tests; two-account extension of `scripts/permissioned_smoke.py` proving a non-owner member streams a ranged `getBlob` through `getSpaceCredential`.
-3. membership mirror + `track_visible_filter` / `can_view_track` / audio checks; regression tests: member sees and streams, non-member 404s, owner unchanged, revocation takes effect.
+3. `private_access` + `visible_filter` / `can_view_track` / audio checks; regression tests: member sees and streams, non-member 404s, owner unchanged, a change at the authority takes effect with no plyr action.
 4. endpoints + portal section; e2e: owner adds the second fixture account, that account plays the private track in a real browser, owner removes, playback 404s.
 
 The second fixture account must be on a spaces-capable PDS. bufo.uk (zds) plus
@@ -212,11 +237,11 @@ Left as recorded facts:
 - per-reader minting is stricter than the proposal needs ("an application …
   may obtain its credential using any one user's session") and is the point:
   it makes the PDS the per-member backstop;
-- `SpaceDeleted` maps to 403 and does not purge plyr's derived rows (tracks,
-  members, cached credential) — the proposal asks syncers to; plyr is a
-  proxying client, and this is the cleanup item if a space is ever deleted;
-- the mirror has no `space` or `relation` column and the API body is `{actor}`;
-  adopting Habitat-style relations later means re-keying both. The
-  `is_private_media_member` / `_can_read_private` chokepoints are the seam;
+- `SpaceDeleted` is a refusal (404 to the reader) and does not purge plyr's
+  derived rows (tracks, held credentials) — the proposal asks syncers to; plyr
+  is a proxying client, and this is the cleanup item if a space is ever deleted;
+- the API body is `{actor}` and access is keyed `(reader, artist)`; adopting
+  Habitat-style relations later means re-keying the held-access set. The
+  `private_access.can_access` chokepoint is the seam;
 - nothing in the frontend consumes `permissioned_spaces.reader` yet, and there
   is no "shared with you" surface: a member finds a shared track only by link.
