@@ -35,7 +35,7 @@ Read the whole diff as someone who didn't write it: `gh pr diff NNN` (or `git di
 - new routes/routers are a product-surface decision — confirm they were asked for.
 
 ## 5. verification claims
-- "verified on staging" means the user-facing surface was rendered and measured, not that an API returned 200.
+- "verified on staging" means the user-facing surface was rendered and measured, not that an API returned 200. for UI diffs, the `ui-check` matrix (widths × themes × states) is the bar.
 - anything slow or failing in CI was diagnosed (telemetry, logs) — not labeled flaky and retried.
 - the PR body follows the repo shape: one-or-two-sentence punchline, minutiae under `<details>`, intentional non-behaviors listed.
 

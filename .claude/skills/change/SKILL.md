@@ -9,9 +9,9 @@ metadata:
 
 The path every change takes. Staging is `main`; production is a separate, user-approved promote.
 
-1. **orient** — `CLAUDE.md`, `STATUS.md`, and the code you'll touch. If the ask is ambiguous in a way that changes the work, ask once, with a recommendation. Otherwise decide and say what you assumed.
+1. **orient** — `CLAUDE.md`, `STATUS.md`, and the code you'll touch (`onboard` if fresh). note: `contribute` is the external-contributor fork guide, not this flow. If the ask is ambiguous in a way that changes the work, ask once, with a recommendation. Otherwise decide and say what you assumed.
 2. **branch** — `feat/…`, `fix/…`, `docs/…` from `main`.
-3. **build** — smallest change that does the whole ask. Bug fixes get a regression test that fails pre-fix. UX changes get verified in a real browser (Playwright from `frontend/`), on the sizes that matter, not by a green API call.
+3. **build** — smallest change that does the whole ask. Bug fixes get a regression test that fails pre-fix. UX changes get verified in a real browser on the sizes that matter, not by a green API call — load the `ui-check` skill for the matrix (widths × themes × states) and the standard of looking. toasts follow `toast-copy`.
 4. **validate** — `just backend lint && just backend test` / `bun run check && bun run lint && bun run test` in `frontend/`. The whole suite passes, no flags, no skips.
 5. **PR** — punchline first, `<details>` for the rest, intentional non-behaviors named. Bodies are read by reviewers and agents; be thorough, not long.
 6. **self-review** — run the `self-review` skill on the PR and fix what it finds in the same PR. (An automated reviewer will take this step over eventually.)
