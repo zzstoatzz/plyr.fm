@@ -337,9 +337,10 @@ class Queue {
 
 		// restore the continuation boundary (clamped). older states
 		// without the field => no tail (boundary at end).
+		// JSON-sourced: anything that isn't a finite number means "no tail"
 		const restored = state.continuation_from_index;
 		this.continuationFromIndex =
-			restored !== undefined
+			restored != null && Number.isFinite(restored)
 				? Math.max(0, Math.min(restored, this.tracks.length))
 				: this.tracks.length;
 

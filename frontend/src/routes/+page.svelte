@@ -177,7 +177,7 @@
 					forYouAvailable = (data?.tracks?.length ?? 0) > 0;
 					if (!forYouAvailable && feedMode === 'for-you') {
 						feedMode = 'latest';
-						localStorage.setItem('feedMode', 'latest');
+						safeLocalStorage.setItem('feedMode', 'latest');
 					}
 					// if starting in for-you mode, populate the cache
 					if (forYouAvailable && feedMode === 'for-you') {
@@ -192,7 +192,7 @@
 			forYouAvailable = false;
 			if (feedMode === 'for-you') {
 				feedMode = 'latest';
-				localStorage.setItem('feedMode', 'latest');
+				safeLocalStorage.setItem('feedMode', 'latest');
 			}
 		}
 	});
@@ -248,7 +248,7 @@
 			feedMode === 'latest' ? [...tracksCache.activeTags] : [...forYouCache.activeTags];
 		const next: FeedMode = feedMode === 'latest' ? 'for-you' : 'latest';
 		feedMode = next;
-		localStorage.setItem('feedMode', next);
+		safeLocalStorage.setItem('feedMode', next);
 
 		// setTags resets pagination and fetches with the synced tags
 		if (next === 'for-you') {
@@ -382,7 +382,7 @@
 					}
 					// persist tag selection regardless of feed mode
 					if (tags.length > 0) {
-						localStorage.setItem('active_tags', JSON.stringify(tags));
+						safeLocalStorage.setItem('active_tags', JSON.stringify(tags));
 					} else {
 						localStorage.removeItem('active_tags');
 					}

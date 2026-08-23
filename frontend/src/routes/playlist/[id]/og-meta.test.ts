@@ -2,7 +2,7 @@
 // object field-by-field from /meta; dropping a field there silently strips
 // it from the OG head render (preview_thumbnails went missing → imageless
 // link previews for composite covers).
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { trace } from '@opentelemetry/api';
 import type { LoadEvent } from '@sveltejs/kit';
 import type { Playlist } from '$lib/types';
@@ -50,4 +50,20 @@ describe('playlist SSR load', () => {
 
 		expect(result.playlist.preview_thumbnails).toEqual([]);
 	});
+});
+
+
+it('the default follows $app/environment, not a hardwired branch', async () => {
+	// vitest is a browser env, so load(event) with no override must take the
+	// client branch and fetch — the wiring the explicit-arg tests bypass
+	const fetchSpy = vi
+		.spyOn(globalThis, 'fetch')
+		.mockResolvedValue(new Response(JSON.stringify({ ...meta, tracks: [] })));
+	try {
+		const result = await load(loadEvent(meta));
+		expect(fetchSpy).toHaveBeenCalledOnce();
+		expect(result.playlist.name).toBe(meta.name);
+	} finally {
+		fetchSpy.mockRestore();
+	}
 });
