@@ -79,6 +79,8 @@ class Queue {
 
 	syncTimer: number | null = null;
 	pendingSync = false;
+	// bumped on every local mutation; guards server echoes from clobbering newer local state
+	mutationEpoch = 0;
 	channel: BroadcastChannel | null = null;
 	tabId: string | null = null;
 	private positionSaveInterval: number | null = null;
@@ -395,7 +397,7 @@ class Queue {
 		}
 	}
 
-	async pushQueue(): Promise<boolean> {
+	async pushQueue(retryingAfterConflict = false): Promise<boolean> {
 		if (!browser) return false;
 		if (!this.isAuthenticated()) return false; // skip if not authenticated
 		if (this.jamBridge) return false; // jam owns the queue state
@@ -412,6 +414,7 @@ class Queue {
 
 		this.syncInProgress = true;
 		this.pendingSync = false;
+		const epochAtSend = this.mutationEpoch;
 
 		try {
 			const state: QueueState = {
@@ -448,7 +451,22 @@ class Queue {
 			}
 
 			if (response.status === 409) {
-				console.warn('queue conflict detected, fetching latest state');
+				// the server moved on, but the local state is the user's intent —
+				// adopt the new revision and push it again. a second conflict in a
+				// row means another writer is active; concede to the server then.
+				if (retryingAfterConflict) {
+					console.warn('queue conflict persisted, adopting server state');
+					await this.fetchQueue(true);
+					return false;
+				}
+				const latest = await fetch(`${API_URL}/queue/`, { credentials: 'include' });
+				if (latest.ok) {
+					const data: QueueResponse = await latest.json();
+					this.revision = data.revision;
+					this.etag = latest.headers.get('etag');
+					this.syncInProgress = false;
+					return this.pushQueue(true);
+				}
 				await this.fetchQueue(true);
 				return false;
 			}
@@ -467,7 +485,12 @@ class Queue {
 			this.revision = data.revision;
 			this.etag = newEtag;
 
-			this.applySnapshot(data);
+			// the echo describes the state we sent; if the user changed the queue
+			// while the request was in flight, applying it would revert them —
+			// the pending re-push carries the newer state instead
+			if (this.mutationEpoch === epochAtSend && !this.pendingSync) {
+				this.applySnapshot(data);
+			}
 
 			// notify other tabs about the queue update
 			const sourceTabId = this.tabId ?? this.createTabId();
@@ -531,6 +554,7 @@ class Queue {
 		if (tracks.length === 0) return;
 
 		this.lastUpdateWasLocal = true;
+		this.mutationEpoch += 1;
 
 		// explicit adds slot ahead of the continuation tail (so the user's own picks
 		// play before recommendations) but never before the current track —
@@ -568,6 +592,7 @@ class Queue {
 		if (fresh.length === 0) return;
 
 		this.lastUpdateWasLocal = true;
+		this.mutationEpoch += 1;
 		// if there's no tail yet, it begins where the current queue ends
 		if (this.continuationFromIndex >= this.tracks.length) {
 			this.continuationFromIndex = this.tracks.length;
@@ -611,6 +636,7 @@ class Queue {
 		}
 		this.continuationFromIndex = this.tracks.length;
 		this.lastUpdateWasLocal = true;
+		this.mutationEpoch += 1;
 		this.syncState();
 	}
 
@@ -621,6 +647,7 @@ class Queue {
 		}
 
 		this.lastUpdateWasLocal = true;
+		this.mutationEpoch += 1;
 		this.tracks = [...tracks];
 		this.originalOrder = [...tracks];
 		this.currentIndex = this.clampIndex(startIndex);
@@ -655,6 +682,7 @@ class Queue {
 		if (tracks.length === 0) return;
 		player.radio = null; // playing a track leaves radio mode
 		this.lastUpdateWasLocal = true;
+		this.mutationEpoch += 1;
 
 		const start = Math.max(0, Math.min(startIndex, tracks.length - 1));
 		const tapped = tracks[start];
@@ -675,6 +703,7 @@ class Queue {
 
 	clear() {
 		this.lastUpdateWasLocal = true;
+		this.mutationEpoch += 1;
 		this.tracks = [];
 		this.originalOrder = [];
 		this.currentIndex = 0;
@@ -687,6 +716,7 @@ class Queue {
 
 		player.radio = null; // playing a queue item leaves radio mode
 		this.lastUpdateWasLocal = true;
+		this.mutationEpoch += 1;
 		this.currentIndex = index;
 		this.syncState();
 	}
@@ -699,6 +729,7 @@ class Queue {
 
 		if (this.currentIndex < this.tracks.length - 1) {
 			this.lastUpdateWasLocal = true;
+		this.mutationEpoch += 1;
 			this.currentIndex += 1;
 			this.syncState();
 		}
@@ -709,6 +740,7 @@ class Queue {
 
 		if (this.currentIndex > 0 || forceSkip) {
 			this.lastUpdateWasLocal = true;
+		this.mutationEpoch += 1;
 			if (this.currentIndex > 0) {
 				this.currentIndex -= 1;
 			}
@@ -726,6 +758,7 @@ class Queue {
 		}
 
 		this.lastUpdateWasLocal = true;
+		this.mutationEpoch += 1;
 
 		// shuffle only the explicit up-next; leave the current track, history,
 		// and the auto-generated continuation tail untouched
@@ -774,6 +807,7 @@ class Queue {
 		if (!this.isContinuationIndex(fromIndex)) return;
 
 		this.lastUpdateWasLocal = true;
+		this.mutationEpoch += 1;
 		const updated = [...this.tracks];
 		const [moved] = updated.splice(fromIndex, 1);
 		const insertAt = Math.max(this.currentIndex + 1, Math.min(this.continuationFromIndex, updated.length));
@@ -799,6 +833,7 @@ class Queue {
 		if (fromIndex === toIndex) return;
 
 		this.lastUpdateWasLocal = true;
+		this.mutationEpoch += 1;
 		const updated = [...this.tracks];
 		const [moved] = updated.splice(fromIndex, 1);
 		updated.splice(toIndex, 0, moved);
@@ -835,6 +870,7 @@ class Queue {
 		if (index === this.currentIndex) return;
 
 		this.lastUpdateWasLocal = true;
+		this.mutationEpoch += 1;
 		const updated = [...this.tracks];
 		const [removed] = updated.splice(index, 1);
 
@@ -874,6 +910,7 @@ class Queue {
 		if (end <= start) return;
 
 		this.lastUpdateWasLocal = true;
+		this.mutationEpoch += 1;
 		const removedIds = new Set(this.tracks.slice(start, end).map((t) => t.file_id));
 		this.tracks = [...this.tracks.slice(0, start), ...this.tracks.slice(end)];
 		this.originalOrder = this.originalOrder.filter((t) => !removedIds.has(t.file_id));

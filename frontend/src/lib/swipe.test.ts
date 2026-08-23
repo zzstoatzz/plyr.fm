@@ -159,6 +159,11 @@ describe('swipeable', () => {
 		vi.advanceTimersByTime(200);
 		expect(onLeft).toHaveBeenCalledTimes(1);
 		expect(onUpdate).toHaveBeenLastCalledWith({ side: null, progress: 0, committed: false, dx: 0 });
+		// the keyed list may reuse these nodes for a future row — no trace remains
+		vi.advanceTimersByTime(32);
+		expect(wrapper.style.height).toBe('');
+		expect(wrapper.style.overflow).toBe('');
+		expect(node.style.transform).toBe('');
 		vi.useRealTimers();
 		wrapper.remove();
 	});

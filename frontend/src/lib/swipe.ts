@@ -107,6 +107,17 @@ export function swipeable(node: HTMLElement, params: SwipeParams = {}) {
 		const finish = () => {
 			settling = false;
 			then();
+			// the keyed list may hand these nodes to a future row — leave no trace
+			requestAnimationFrame(() => {
+				if (wrapper) {
+					wrapper.style.height = '';
+					wrapper.style.overflow = '';
+					wrapper.style.transition = '';
+					wrapper.style.marginBottom = '';
+				}
+				node.style.transition = '';
+				node.style.transform = '';
+			});
 		};
 		setTimeout(collapse, 180);
 	}
