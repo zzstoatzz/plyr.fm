@@ -3,6 +3,7 @@
 	import { player } from '$lib/player.svelte';
 	import { goToIndex } from '$lib/playback.svelte';
 	import { goto } from '$app/navigation';
+	import { tick } from 'svelte';
 	import { jam } from '$lib/jam.svelte';
 	import { toast } from '$lib/toast.svelte';
 	import SensitiveImage from './SensitiveImage.svelte';
@@ -120,6 +121,47 @@
 	function handleRemoveTrack(index: number) {
 		queue.removeTrack(index);
 		dismissSwipeHint();
+	}
+
+	function queueRows(): HTMLElement[] {
+		return [...(queueTracksElement?.querySelectorAll<HTMLElement>('.queue-track') ?? [])];
+	}
+
+	// keyboard on a focused row: enter plays, delete removes, l likes,
+	// arrows move between rows. stopPropagation keeps the global shortcuts
+	// (l = next track, arrows = seek) out of the way while a row has focus.
+	async function handleRowKeydown(
+		e: KeyboardEvent & { currentTarget: HTMLElement },
+		track: Track,
+		index: number
+	) {
+		if (e.key === 'Enter') {
+			handleTrackClick(index);
+			return;
+		}
+		if (e.key === 'Delete' || e.key === 'Backspace') {
+			e.preventDefault();
+			e.stopPropagation();
+			const position = queueRows().indexOf(e.currentTarget);
+			handleRemoveTrack(index);
+			await tick();
+			const rows = queueRows();
+			rows[Math.min(Math.max(position, 0), rows.length - 1)]?.focus();
+			return;
+		}
+		if (e.key === 'l' || e.key === 'L') {
+			e.preventDefault();
+			e.stopPropagation();
+			void handleSwipeLike(track);
+			return;
+		}
+		if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+			e.preventDefault();
+			e.stopPropagation();
+			const rows = queueRows();
+			const here = rows.indexOf(e.currentTarget);
+			rows[here + (e.key === 'ArrowDown' ? 1 : -1)]?.focus();
+		}
 	}
 
 	// swipe: right reveals the heart (like / unlike), left reveals the trash
@@ -340,7 +382,7 @@
 		ondrop={(e) => handleDrop(e, index)}
 		ondragend={handleDragEnd}
 		onclick={() => handleTrackClick(index)}
-		onkeydown={(e) => e.key === 'Enter' && handleTrackClick(index)}
+		onkeydown={(e) => handleRowKeydown(e, track, index)}
 	>
 		{@render media(track)}
 
