@@ -499,8 +499,15 @@
 								class="clear-btn"
 								onclick={() => queue.clearUpNext()}
 								title="clear upcoming tracks"
+								aria-label="clear upcoming tracks"
 							>
-								clear
+								<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+								<line x1="3" y1="6" x2="21" y2="6"></line>
+								<line x1="3" y1="12" x2="21" y2="12"></line>
+								<line x1="3" y1="18" x2="11" y2="18"></line>
+								<line x1="15" y1="15" x2="21" y2="21"></line>
+								<line x1="21" y1="15" x2="15" y2="21"></line>
+							</svg>
 							</button>
 						{/if}
 						<button class="share-btn" onclick={shareJam} title="share jam link">
@@ -570,29 +577,20 @@
 							<line x1="4" y1="4" x2="9" y2="9"></line>
 						</svg>
 					</button>
-					<button
-						class="repeat-btn"
-						class:active={queue.repeatMode === 'one'}
-						onclick={() => queue.toggleRepeatMode()}
-						title={queue.repeatMode === 'one' ? 'stop repeating' : 'repeat this track'}
-					>
-						<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-							<path d="m17 2 4 4-4 4"></path>
-							<path d="M3 11v-1a4 4 0 0 1 4-4h14"></path>
-							<path d="m7 22-4-4 4-4"></path>
-							<path d="M21 13v1a4 4 0 0 1-4 4H3"></path>
-							{#if queue.repeatMode === 'one'}
-								<path d="M11 10h1v4"></path>
-							{/if}
-						</svg>
-					</button>
 					{#if explicitUpcoming.length > 0}
 						<button
 							class="clear-btn"
 							onclick={() => queue.clearUpNext()}
 							title="clear your queued tracks"
+							aria-label="clear your queued tracks"
 						>
-							clear
+							<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+								<line x1="3" y1="6" x2="21" y2="6"></line>
+								<line x1="3" y1="12" x2="21" y2="12"></line>
+								<line x1="3" y1="18" x2="11" y2="18"></line>
+								<line x1="15" y1="15" x2="21" y2="21"></line>
+								<line x1="21" y1="15" x2="15" y2="21"></line>
+							</svg>
 						</button>
 					{/if}
 				</div>
@@ -952,7 +950,7 @@
 	}
 
 	.shuffle-btn,
-	.repeat-btn {
+	.clear-btn {
 		display: flex;
 		align-items: center;
 		justify-content: center;
@@ -968,7 +966,7 @@
 	}
 
 	.shuffle-btn:hover:not(:disabled),
-	.repeat-btn:hover {
+	.clear-btn:hover {
 		color: var(--text-secondary);
 		border-color: var(--border-default);
 		background: var(--bg-secondary);
@@ -977,11 +975,6 @@
 	.shuffle-btn:disabled {
 		opacity: 0.4;
 		cursor: default;
-	}
-
-	.repeat-btn.active {
-		color: var(--accent);
-		border-color: var(--accent);
 	}
 
 	.jam-btn {
@@ -1003,26 +996,6 @@
 		color: var(--accent);
 		border-color: var(--accent);
 		background: color-mix(in srgb, var(--accent) 10%, transparent);
-	}
-
-	.clear-btn {
-		padding: 0.25rem 0.75rem;
-		font-size: var(--text-xs);
-		font-family: inherit;
-		text-transform: uppercase;
-		letter-spacing: 0.08em;
-		background: transparent;
-		border: 1px solid var(--border-subtle);
-		color: var(--text-tertiary);
-		border-radius: var(--radius-sm);
-		cursor: pointer;
-		transition: all 0.15s ease;
-	}
-
-	.clear-btn:hover {
-		background: var(--bg-secondary);
-		color: var(--text-secondary);
-		border-color: var(--border-medium);
 	}
 
 	.queue-body {
