@@ -316,7 +316,8 @@
 		use:swipeable={{
 			onLeft: () => handleRemoveTrack(index),
 			onRight: () => handleSwipeLike(track),
-			onUpdate: (state) => handleSwipeUpdate(index, state)
+			onUpdate: (state) => handleSwipeUpdate(index, state),
+			ignore: '.drag-handle'
 		}}
 		ondragstart={(e) => handleDragStart(e, index)}
 		ondragover={(e) => handleDragOver(e, index)}

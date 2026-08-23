@@ -28,6 +28,8 @@ export interface SwipeParams {
 	onRight?: () => void;
 	onUpdate?: (_state: SwipeState) => void;
 	disabled?: boolean;
+	/** selector for descendants that own their own gesture (e.g. a drag handle) */
+	ignore?: string;
 }
 
 /**
@@ -62,8 +64,11 @@ export function swipeable(node: HTMLElement, params: SwipeParams = {}) {
 	}
 
 	function onPointerDown(e: PointerEvent) {
+		// a swallow only applies to the click that trails a swipe, never to a new gesture
+		swallowClick = false;
 		if (current.disabled || pointerId !== null) return;
 		if (e.pointerType === 'mouse' && e.button !== 0) return;
+		if (current.ignore && (e.target as Element | null)?.closest?.(current.ignore)) return;
 		pointerId = e.pointerId;
 		startX = e.clientX;
 		startY = e.clientY;

@@ -113,6 +113,35 @@ describe('swipeable', () => {
 		pointer(node, 'pointerup', 200, 80);
 	});
 
+	it('a swipe with no trailing click does not eat the next tap', () => {
+		pointer(node, 'pointerdown', 200, 50);
+		pointer(node, 'pointermove', 60, 50);
+		pointer(node, 'pointerup', 60, 50);
+		expect(onLeft).toHaveBeenCalledTimes(1);
+		// touch: no click follows the swipe. the next tap must get through.
+		const click = vi.fn();
+		node.addEventListener('click', click);
+		pointer(node, 'pointerdown', 120, 50);
+		pointer(node, 'pointerup', 120, 50);
+		node.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+		expect(click).toHaveBeenCalledTimes(1);
+	});
+
+	it('a gesture that starts on an ignored descendant is not a swipe', () => {
+		action.destroy();
+		const handle = document.createElement('button');
+		handle.className = 'drag-handle';
+		node.appendChild(handle);
+		action = swipeable(node, { onLeft, onRight, onUpdate, ignore: '.drag-handle' });
+		handle.dispatchEvent(
+			new PointerEventCtor('pointerdown', { clientX: 200, clientY: 50, pointerId: 1, pointerType: 'touch', bubbles: true })
+		);
+		pointer(node, 'pointermove', 60, 50);
+		pointer(node, 'pointerup', 60, 50);
+		expect(onLeft).not.toHaveBeenCalled();
+		expect(node.style.transform).toBe('');
+	});
+
 	it('a right mouse button never starts a swipe', () => {
 		pointer(node, 'pointerdown', 200, 50, { pointerType: 'mouse', button: 2 });
 		pointer(node, 'pointermove', 60, 50, { pointerType: 'mouse' });
