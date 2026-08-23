@@ -97,6 +97,26 @@ describe('swipeable', () => {
 		expect(onLeft).not.toHaveBeenCalled();
 	});
 
+	it('a thumb-arc opening (slightly more vertical than horizontal) is still a swipe', () => {
+		pointer(node, 'pointerdown', 200, 50);
+		// dx 7, dy 9: more vertical than horizontal, but plausibly a swipe
+		pointer(node, 'pointermove', 193, 59);
+		expect(node.style.transform).not.toBe('');
+		pointer(node, 'pointermove', 60, 62);
+		pointer(node, 'pointerup', 60, 62);
+		expect(onLeft).toHaveBeenCalledTimes(1);
+	});
+
+	it('a clearly vertical opening still scrolls', () => {
+		pointer(node, 'pointerdown', 200, 50);
+		// dx 3, dy 12: unambiguous scroll
+		pointer(node, 'pointermove', 197, 62);
+		expect(node.style.transform).toBe('');
+		pointer(node, 'pointermove', 60, 70);
+		pointer(node, 'pointerup', 60, 70);
+		expect(onLeft).not.toHaveBeenCalled();
+	});
+
 	it('a sideways gesture cancels the native drag; a vertical one does not', () => {
 		pointer(node, 'pointerdown', 200, 50);
 		pointer(node, 'pointermove', 180, 51);
