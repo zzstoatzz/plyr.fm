@@ -144,7 +144,7 @@ async def list_tracks(
     # filter by artist if provided
     if artist_did:
         stmt = stmt.where(Track.artist_did == artist_did)
-        stmt = stmt.where(await visible_filter(session, artist_did=artist_did))
+        stmt = stmt.where(await visible_filter(session, artist_did=artist_did, db=db))
     else:
         # discovery feed: only listed visibilities (public + supporters); excludes
         # unlisted and private. plus tracks from deactivated accounts drop out.

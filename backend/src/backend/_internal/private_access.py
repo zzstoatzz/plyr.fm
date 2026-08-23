@@ -115,7 +115,8 @@ async def can_access(session: Session | None, artist_did: str) -> bool:
     from their own PDS against the artist's space host: success is remembered
     for the credential's lifetime, a refusal for ``REFUSAL_TTL_SECONDS``, and a
     failure to reach either host is not remembered at all — fail closed now,
-    ask again next time.
+    ask again next time. what is held in redis is the only thing that stands in
+    for asking; a token another process still caches for reads does not.
     """
     if session is None:
         return False
@@ -127,7 +128,7 @@ async def can_access(session: Session | None, artist_did: str) -> bool:
         return False
     space = artist_space_uri(artist_did)
     try:
-        credential = await get_space_credential(session, space)
+        credential = await get_space_credential(session, space, force_refresh=True)
     except SpaceAccessError as exc:
         logfire.info(
             "private access refused",

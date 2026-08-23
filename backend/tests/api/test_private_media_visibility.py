@@ -347,3 +347,48 @@ async def test_audio_refusal_at_read_is_a_404(db_session: AsyncSession, artist: 
             assert client.get(f"/audio/{track.file_id}").status_code == 404
     finally:
         app.dependency_overrides.clear()
+
+
+# --- the artist-page probe is cheap and bounded ------------------------------
+
+
+async def test_artist_page_does_not_ask_when_nothing_is_private(
+    db_session: AsyncSession, artist: Artist
+):
+    from unittest.mock import AsyncMock
+
+    await _make_track(db_session, title="only public", fid="op_pub", private=False)
+    with patch(
+        "backend._internal.private_access.get_space_credential", AsyncMock()
+    ) as mint:
+        page = await list_tracks(
+            db=db_session, session=_session("did:test:other"), artist_did=_DID
+        )
+    assert "only public" in {t.title for t in page.tracks}
+    mint.assert_not_awaited()
+
+
+async def test_artist_page_does_not_wait_on_a_slow_authority(
+    db_session: AsyncSession, artist: Artist
+):
+    import asyncio
+
+    await _make_track(db_session, title="slow", fid="slow_priv", private=True)
+    calls = 0
+
+    async def slow(session: Session, space: str, *, force_refresh: bool = False):
+        nonlocal calls
+        calls += 1
+        await asyncio.sleep(1)
+        raise AssertionError("unreachable")
+
+    with (
+        patch("backend._internal.private_access.get_space_credential", slow),
+        patch("backend._internal.track_visibility.LISTING_ASK_TIMEOUT_SECONDS", 0.05),
+    ):
+        for _ in range(2):
+            page = await list_tracks(
+                db=db_session, session=_session(_MEMBER), artist_did=_DID
+            )
+            assert "slow" not in {t.title for t in page.tracks}
+    assert calls == 2

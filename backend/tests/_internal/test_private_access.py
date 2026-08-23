@@ -5,7 +5,7 @@ refusal briefly — and asks again when that runs out.
 """
 
 import time
-from unittest.mock import AsyncMock, patch
+from unittest.mock import ANY, AsyncMock, patch
 
 import pytest
 import redis.asyncio as async_redis
@@ -65,8 +65,7 @@ async def test_credential_admits_and_is_held_for_its_lifetime():
     with _mint(return_value=_credential()) as mint:
         assert await can_access(_session(_READER), _ARTIST)
         assert await can_access(_session(_READER), _ARTIST)
-    mint.assert_awaited_once()
-    assert mint.await_args.args[1] == artist_space_uri(_ARTIST)
+    mint.assert_awaited_once_with(ANY, artist_space_uri(_ARTIST), force_refresh=True)
     assert await held_access(_READER) == {_ARTIST}
     assert await held_access("did:test:nobody") == set()
 
