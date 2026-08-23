@@ -177,13 +177,13 @@
 		if (track.is_liked) {
 			if (await unlikeTrack(track.id)) {
 				track.is_liked = false;
-				toast.info('removed from your likes');
+				toast.info(`unliked ${track.title}`);
 			}
 			return;
 		}
 		if (await likeTrack(track.id, track.file_id, track.gated)) {
 			track.is_liked = true;
-			toast.success('liked');
+			toast.success(`liked ${track.title}`);
 		}
 	}
 
