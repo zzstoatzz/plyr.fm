@@ -53,6 +53,8 @@ export interface UiSettings {
 	keep_playing?: boolean;
 	play_through_collections?: boolean;
 	pds_save_banner_dismissed?: boolean;
+	// one-time UI hints already shown to this account, as `id@version` strings
+	seen_hints?: string[];
 }
 
 export interface Preferences {
@@ -74,7 +76,7 @@ export interface Preferences {
 	terms_accepted_at: string | null;
 }
 
-const DEFAULT_PREFERENCES: Preferences = {
+export const DEFAULT_PREFERENCES: Preferences = {
 	accent_color: null,
 	auto_advance: true,
 	allow_comments: true,

@@ -10,6 +10,7 @@
 	import { auth } from '$lib/auth.svelte';
 	import { likeTrack, unlikeTrack } from '$lib/tracks.svelte';
 	import { swipeable, type SwipeState } from '$lib/swipe';
+	import { HINTS, hintSeen, markHintSeen } from '$lib/hints.svelte';
 	import type { Track, JamParticipant } from '$lib/types';
 
 	let draggedIndex = $state<number | null>(null);
@@ -103,8 +104,17 @@
 		goToIndex(index);
 	}
 
+	// localStorage isn't reactive, so dismissal also flips local state
+	let swipeHintDismissed = $state(false);
+
+	function dismissSwipeHint() {
+		swipeHintDismissed = true;
+		void markHintSeen(HINTS.queueSwipe);
+	}
+
 	function handleRemoveTrack(index: number) {
 		queue.removeTrack(index);
+		dismissSwipeHint();
 	}
 
 	// swipe: right reveals the heart (like / unlike), left reveals the trash
@@ -298,11 +308,11 @@
 			</svg>
 		</div>
 		<div class="swipe-reveal remove" aria-hidden="true">
-			<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-				<polyline points="3 6 5 6 21 6"></polyline>
-				<path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path>
-				<path d="M10 11v6M14 11v6"></path>
-				<path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"></path>
+			<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+				<line x1="3" y1="6" x2="21" y2="6"></line>
+				<line x1="3" y1="12" x2="21" y2="12"></line>
+				<line x1="3" y1="18" x2="12" y2="18"></line>
+				<line x1="16" y1="18" x2="22" y2="18"></line>
 			</svg>
 		</div>
 	<div
@@ -328,21 +338,6 @@
 		onkeydown={(e) => e.key === 'Enter' && handleTrackClick(index)}
 	>
 		{@render media(track)}
-
-		<button
-			class="remove-btn"
-			onclick={(e) => {
-				e.stopPropagation();
-				handleRemoveTrack(index);
-			}}
-			aria-label="remove from queue"
-			title="remove from queue"
-		>
-			<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-				<line x1="18" y1="6" x2="6" y2="18"></line>
-				<line x1="6" y1="6" x2="18" y2="18"></line>
-			</svg>
-		</button>
 
 		<button
 			class="drag-handle"
@@ -536,6 +531,12 @@
 					<h3>up next</h3>
 					<span>{explicitUpcoming.length}</span>
 				</div>
+				{#if (explicitUpcoming.length > 0 || continuationUpcoming.length > 0) && !swipeHintDismissed && !hintSeen(HINTS.queueSwipe)}
+					<div class="swipe-hint" role="note">
+						<span>swipe a track left to remove it, right to like it</span>
+						<button type="button" onclick={dismissSwipeHint}>got it</button>
+					</div>
+				{/if}
 
 				{#if explicitUpcoming.length > 0 || continuationUpcoming.length > 0}
 					<div
@@ -1094,6 +1095,29 @@
 		color: var(--accent);
 	}
 
+	.swipe-hint {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.75rem;
+		margin: 0.25rem 0 0.5rem;
+		padding: 0.5rem 0.75rem;
+		border: 1px dashed var(--border-subtle);
+		border-radius: var(--radius-md);
+		font-size: var(--text-xs);
+		color: var(--text-tertiary);
+	}
+
+	.swipe-hint button {
+		background: none;
+		border: none;
+		color: var(--accent);
+		font-family: inherit;
+		font-size: var(--text-xs);
+		cursor: pointer;
+		padding: 0.15rem 0.3rem;
+	}
+
 	.swipe-row {
 		position: relative;
 		flex-shrink: 0;
@@ -1125,7 +1149,15 @@
 
 	.swipe-reveal.remove {
 		justify-content: flex-end;
-		background: #e5484d;
+		background: var(--bg-hover);
+		border: 1px solid var(--border-subtle);
+		border-radius: var(--radius-md);
+		color: var(--text-secondary);
+	}
+
+	.swipe-row.armed[data-side='left'] .swipe-reveal.remove {
+		background: var(--accent);
+		color: var(--text-primary);
 	}
 
 	.swipe-row[data-side='right'] .swipe-reveal.like,
@@ -1215,35 +1247,11 @@
 		color: var(--text-secondary);
 	}
 
-	.remove-btn {
-		background: transparent;
-		border: none;
-		color: var(--text-tertiary);
-		cursor: pointer;
-		padding: 0.5rem;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		transition: all 0.2s;
-		border-radius: var(--radius-sm);
-		opacity: 0;
-		flex-shrink: 0;
-	}
 
-	.queue-track:hover .remove-btn {
-		opacity: 1;
-	}
 
-	.remove-btn:hover {
-		color: var(--error);
-		background: color-mix(in srgb, var(--error) 12%, transparent);
-	}
 
 	/* always show remove button on touch devices */
 	@media (pointer: coarse) {
-		.remove-btn {
-			opacity: 1;
-		}
 	}
 
 	.up-next-drop-zone {
