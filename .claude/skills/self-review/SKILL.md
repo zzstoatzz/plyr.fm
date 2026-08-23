@@ -29,6 +29,8 @@ Read the whole diff as someone who didn't write it: `gh pr diff NNN` (or `git di
 - `loq` limits: `just loq-relax <file>`, never hand-edit `loq.toml` or golf lines.
 - never revert formatter output.
 - copy: lowercase voice, outcome not mechanism, no protocol vocabulary in user-facing strings, no promises the system doesn't keep (times, guarantees). toasts ≤10 words (`toast-copy` skill).
+- a new surface for an existing action reuses that action's existing copy — grep for the sibling's toast/label before writing a fresh one (the queue's bare "liked" vs the menu's "liked <title>", #1917).
+- a keyboard/shortcut addition checks the global shortcut map first; a collision is a question for the user, never a silent contextual override (#1915).
 - frontend: no `localStorage` for auth; per-user prefs from the account-scoped store; `redirectToLogin()` helpers, never `goto('/login')`; `$effect` that reads and writes the same state needs `untrack`.
 - new routes/routers are a product-surface decision — confirm they were asked for.
 
