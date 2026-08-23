@@ -127,7 +127,7 @@ max_lines = 1009
 
 [[rules]]
 path = "frontend/src/lib/queue.svelte.ts"
-max_lines = 955
+max_lines = 992
 
 [[rules]]
 path = "frontend/src/routes/+layout.svelte"
