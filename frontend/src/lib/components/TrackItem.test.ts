@@ -4,8 +4,7 @@ import TrackItem from '$lib/components/TrackItem.svelte';
 import TrackCard from '$lib/components/TrackCard.svelte';
 import type { Track } from '$lib/types';
 
-// jsdom's <audio> answers '' to every canPlayType, so an aiff interim rendition
-// is "awaiting playable" here — same as Chrome/Firefox in real life.
+// jsdom's <audio> can't play aiff, so an aiff interim is "awaiting playable" here.
 function track(overrides: Partial<Track> = {}): Track {
 	return {
 		id: 1,

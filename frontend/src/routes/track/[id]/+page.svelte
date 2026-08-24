@@ -549,7 +549,7 @@ $effect(() => {
 							</span>
 						{/if}
 						</div>
-						<button class="btn-play" class:playing={isCurrentlyPlaying} disabled={isProcessing} onclick={handlePlay} aria-label={isProcessing ? 'still processing — playable shortly' : isCurrentlyPlaying ? 'pause' : 'play'} title={isProcessing ? 'still processing — playable shortly' : isCurrentlyPlaying ? 'pause' : 'play'}>
+						<button class="btn-play" class:playing={isCurrentlyPlaying} disabled={isProcessing && !isCurrentlyPlaying} onclick={handlePlay} aria-label={isProcessing && !isCurrentlyPlaying ? 'still processing — playable shortly' : isCurrentlyPlaying ? 'pause' : 'play'} title={isProcessing && !isCurrentlyPlaying ? 'still processing — playable shortly' : isCurrentlyPlaying ? 'pause' : 'play'}>
 							{#if isCurrentlyPlaying}
 								<svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor">
 									<path d="M6 4h4v16H6zM14 4h4v16h-4z"/>
