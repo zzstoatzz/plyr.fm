@@ -204,9 +204,9 @@
 	class="track-container"
 	class:playing={isPlaying}
 	class:processing={isProcessing}
-	class:lossless={hasPlayableLossless(track.original_file_type) || isLosslessFormat(track.file_type)}
+	class:lossless={!isProcessing && (hasPlayableLossless(track.original_file_type) || isLosslessFormat(track.file_type))}
 	class:likers-tooltip-open={showLikersTooltip}
-	title={hasPlayableLossless(track.original_file_type) || isLosslessFormat(track.file_type) ? 'lossless audio available' : undefined}
+	title={isProcessing ? 'still processing — playable shortly' : hasPlayableLossless(track.original_file_type) || isLosslessFormat(track.file_type) ? 'lossless audio available' : undefined}
 >
 	{#if showIndex}
 		<span class="track-index">{index + 1}</span>
@@ -397,7 +397,10 @@
 						{/if}
 					</span>
 				{/if}
-			{#if hasPlayableLossless(track.original_file_type) || isLosslessFormat(track.file_type)}
+			{#if isProcessing}
+				<span class="meta-separator">·</span>
+				<span class="processing-indicator" title="still processing — playable shortly">processing</span>
+			{:else if hasPlayableLossless(track.original_file_type) || isLosslessFormat(track.file_type)}
 				<span class="meta-separator">·</span>
 				<span class="lossless-indicator" title="lossless audio available">lossless</span>
 			{/if}
@@ -953,6 +956,12 @@
 
 	.lossless-indicator:hover {
 		color: var(--accent);
+	}
+
+	.processing-indicator {
+		color: var(--text-muted);
+		font-weight: 500;
+		cursor: default;
 	}
 
 	.action-button {
