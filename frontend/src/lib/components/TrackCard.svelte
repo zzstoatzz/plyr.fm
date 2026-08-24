@@ -5,6 +5,7 @@
 	import { likersSheet } from '$lib/likers-sheet.svelte';
 	import { trackCoverUrl, trackThumbnailUrl } from '$lib/track-cover';
 	import type { Track } from '$lib/types';
+	import { isAwaitingPlayableRendition } from '$lib/audio-source';
 
 	interface Props {
 		track: Track;
@@ -21,6 +22,7 @@
 	// cover art with album fallback (matches the player bar's rule)
 	let coverFullUrl = $derived(trackCoverUrl(track));
 	let coverThumbUrl = $derived(trackThumbnailUrl(track));
+	let isProcessing = $derived(isAwaitingPlayableRendition(track));
 
 	let isMobile = $state(false);
 
@@ -85,13 +87,17 @@
 <button
 	class="track-card"
 	class:playing={isPlaying}
+	class:processing={isProcessing}
 	class:tooltip-open={showLikersTooltip}
+	aria-disabled={isProcessing}
+	title={isProcessing ? 'still processing — playable shortly' : undefined}
 	onclick={(e) => {
 		if (e.target instanceof HTMLAnchorElement || (e.target as HTMLElement).closest('a')) return;
+		if (isProcessing) return;
 		onPlay(track);
 	}}
 >
-	<div class="artwork" class:gated={track.gated} class:avatar-fallback={!coverFullUrl && track.artist_avatar_url}>
+	<div class="artwork" class:gated={track.gated} class:processing={isProcessing} class:avatar-fallback={!coverFullUrl && track.artist_avatar_url}>
 		{#if coverFullUrl || coverThumbUrl}
 			<SensitiveImage src={coverThumbUrl ?? coverFullUrl}>
 				<img
@@ -117,7 +123,11 @@
 				</svg>
 			</div>
 		{/if}
-		{#if track.gated}
+		{#if isProcessing}
+			<div class="processing-badge" title="still processing — playable shortly">
+				<svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l2.5 2.5"/></svg>
+			</div>
+		{:else if track.gated}
 			<div class="gated-badge" title="supporters only">
 				<svg width="8" height="8" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
 					<path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/>
@@ -246,6 +256,16 @@
 		color: var(--text-muted);
 	}
 
+	.track-card.processing {
+		cursor: default;
+	}
+
+	.track-card.processing .artwork,
+	.track-card.processing .title {
+		opacity: 0.5;
+	}
+
+	.processing-badge,
 	.gated-badge {
 		position: absolute;
 		bottom: -3px;
@@ -260,6 +280,11 @@
 		border-radius: var(--radius-full);
 		color: white;
 		z-index: 1;
+	}
+
+	.processing-badge {
+		background: var(--bg-tertiary);
+		color: var(--text-muted);
 	}
 
 	.info {
