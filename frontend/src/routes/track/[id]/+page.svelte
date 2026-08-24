@@ -23,6 +23,7 @@
 	import { player } from '$lib/player.svelte';
 	import { queue } from '$lib/queue.svelte';
 	import { playTrack, guardGatedTrack } from '$lib/playback.svelte';
+	import { isAwaitingPlayableRendition } from '$lib/audio-source';
 	import { auth } from '$lib/auth.svelte';
 	import { preferences } from '$lib/preferences.svelte';
 	import { toast } from '$lib/toast.svelte';
@@ -41,6 +42,7 @@
 	let isAdultLabeled = $derived(
 		track?.labels?.some((label) => label === 'sexual' || label === 'porn') ?? false
 	);
+	let isProcessing = $derived(track ? isAwaitingPlayableRendition(track) : false);
 	let mayPlayAdultAudio = $derived(
 		!isAdultLabeled ||
 		preferences.showSensitiveAudio ||
@@ -445,6 +447,9 @@ $effect(() => {
 				<div class="track-info">
 					<h1 class="track-title">
 						{track.title}
+						{#if isProcessing}
+							<span class="processing-badge" title="still processing — playable shortly">processing</span>
+						{/if}
 						{#if track.gated}
 							<span class="gated-badge" title="supporters only">
 								<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
@@ -544,7 +549,7 @@ $effect(() => {
 							</span>
 						{/if}
 						</div>
-						<button class="btn-play" class:playing={isCurrentlyPlaying} onclick={handlePlay} aria-label={isCurrentlyPlaying ? 'pause' : 'play'} title={isCurrentlyPlaying ? 'pause' : 'play'}>
+						<button class="btn-play" class:playing={isCurrentlyPlaying} disabled={isProcessing} onclick={handlePlay} aria-label={isProcessing ? 'still processing — playable shortly' : isCurrentlyPlaying ? 'pause' : 'play'} title={isProcessing ? 'still processing — playable shortly' : isCurrentlyPlaying ? 'pause' : 'play'}>
 							{#if isCurrentlyPlaying}
 								<svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor">
 									<path d="M6 4h4v16H6zM14 4h4v16h-4z"/>
@@ -1030,6 +1035,24 @@ $effect(() => {
 
 	.track-actions .btn-queue {
 		justify-self: start;
+	}
+
+	.btn-play:disabled {
+		opacity: 0.4;
+		cursor: default;
+	}
+
+	.processing-badge {
+		display: inline-block;
+		vertical-align: middle;
+		margin-left: 0.5rem;
+		padding: 0.1rem 0.5rem;
+		font-size: 0.7rem;
+		font-weight: 500;
+		letter-spacing: 0.02em;
+		color: var(--text-muted);
+		background: var(--bg-tertiary);
+		border-radius: var(--radius-full, 999px);
 	}
 
 	.btn-play {

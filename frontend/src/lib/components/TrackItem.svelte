@@ -7,6 +7,7 @@
 	import CommentersTooltip from './CommentersTooltip.svelte';
 	import SensitiveImage from './SensitiveImage.svelte';
 	import { hasPlayableLossless, isLosslessFormat } from '$lib/audio-support';
+	import { isAwaitingPlayableRendition } from '$lib/audio-source';
 	import { likersSheet } from '$lib/likers-sheet.svelte';
 	import { trackCoverUrl, trackThumbnailUrl } from '$lib/track-cover';
 	import type { Track } from '$lib/types';
@@ -79,6 +80,7 @@
 	// the player bar's existing inheritance rule.
 	let coverFullUrl = $derived(trackCoverUrl(track));
 	let coverThumbUrl = $derived(trackThumbnailUrl(track));
+	let isProcessing = $derived(isAwaitingPlayableRendition(track));
 
 	// reset local UI state when track changes (component may be recycled)
 	// using $effect.pre so state is ready before render
@@ -201,6 +203,7 @@
 <div
 	class="track-container"
 	class:playing={isPlaying}
+	class:processing={isProcessing}
 	class:lossless={hasPlayableLossless(track.original_file_type) || isLosslessFormat(track.file_type)}
 	class:likers-tooltip-open={showLikersTooltip}
 	title={hasPlayableLossless(track.original_file_type) || isLosslessFormat(track.file_type) ? 'lossless audio available' : undefined}
@@ -215,7 +218,8 @@
 		     before, without nesting interactive controls inside a button. -->
 		<button
 			class="track-play"
-			aria-label="play {track.title}"
+			aria-label={isProcessing ? `${track.title} is still processing` : `play ${track.title}`}
+			disabled={isProcessing}
 			onclick={async () => {
 				if (track.gated) {
 					await playTrack(track);
@@ -224,7 +228,7 @@
 				}
 			}}
 		></button>
-		<div class="track-image-wrapper" class:gated={track.gated}>
+		<div class="track-image-wrapper" class:gated={track.gated} class:processing={isProcessing}>
 			{#if (coverFullUrl || coverThumbUrl) && !trackImageError}
 				<SensitiveImage src={coverThumbUrl ?? coverFullUrl}>
 					<div class="track-image">
@@ -264,7 +268,11 @@
 					</svg>
 				</div>
 			{/if}
-			{#if track.gated}
+			{#if isProcessing}
+				<div class="processing-badge" title="still processing — playable shortly">
+					<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l2.5 2.5"/></svg>
+				</div>
+			{:else if track.gated}
 				<div class="gated-badge" title="supporters only">
 					<svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
 						<path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/>
@@ -580,6 +588,16 @@
 		pointer-events: none;
 	}
 
+	.track-container.processing .track-title,
+	.track-container.processing .track-image-wrapper {
+		opacity: 0.5;
+	}
+
+	.track-play:disabled {
+		cursor: default;
+	}
+
+	.processing-badge,
 	.gated-badge {
 		position: absolute;
 		bottom: -4px;
@@ -594,6 +612,11 @@
 		border-radius: var(--radius-full);
 		color: white;
 		z-index: 1;
+	}
+
+	.processing-badge {
+		background: var(--bg-tertiary);
+		color: var(--text-muted);
 	}
 
 	.track-image,
