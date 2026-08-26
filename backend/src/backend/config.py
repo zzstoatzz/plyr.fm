@@ -395,6 +395,11 @@ class AtprotoSettings(AppSettingsSection):
         validation_alias="ATPROTO_APP_NAMESPACE",
         description="ATProto app namespace used for record collections",
     )
+    trusted_payment_brokers: list[str] = Field(
+        default=["did:plc:7srqsetux75b6flzbbyag2ro"],  # broker.atmosphere.money
+        validation_alias="ATPROTO_TRUSTED_PAYMENT_BROKERS",
+        description="DIDs whose network.attested.payment.proof records are accepted as payment verification",
+    )
     old_app_namespace: str | None = Field(
         default=None,
         validation_alias="ATPROTO_OLD_APP_NAMESPACE",

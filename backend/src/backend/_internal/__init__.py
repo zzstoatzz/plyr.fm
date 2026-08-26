@@ -51,7 +51,7 @@ from backend._internal.feature_flags import (
 from backend._internal.notifications import notification_service
 from backend._internal.now_playing import now_playing_service
 from backend._internal.queue import queue_service
-from backend._internal.atprotofans import get_supported_artists, validate_supporter
+from backend._internal.supporters import get_supported_artists, validate_supporter
 
 __all__ = [
     "KNOWN_FLAGS",
