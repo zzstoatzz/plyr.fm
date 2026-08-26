@@ -12,6 +12,7 @@ current content (observed 2026-08-26: 0/7 sampled proofs match), so mutable
 payer-record fields are taken on the payer's word pending broker guidance.
 """
 
+import asyncio
 import logging
 
 import httpx
@@ -28,6 +29,7 @@ PAYMENT_COLLECTIONS = (
     "network.attested.payment.recurring",
 )
 MAX_LIST_PAGES = 5
+OVERALL_DEADLINE = 10.0
 
 
 async def check_attested_support(
@@ -42,8 +44,9 @@ async def check_attested_support(
         artist_did=artist_did,
     ):
         try:
-            return await _check(supporter_did, artist_did, timeout)
-        except httpx.TimeoutException:
+            async with asyncio.timeout(OVERALL_DEADLINE):
+                return await _check(supporter_did, artist_did, timeout)
+        except (httpx.TimeoutException, TimeoutError):
             logfire.warn("attested verification timeout")
             return False
         except Exception as e:

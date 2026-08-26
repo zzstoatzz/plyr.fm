@@ -3,7 +3,8 @@
 answers "does DID X support artist DID Y" from, in order: attested.network
 payment attestations (broker-verified, portable across apps), then the
 atprotofans validateSupporter endpoint. results are cached per pair in Redis;
-transient failures are not cached. all supporter gating flows through here —
+transient atprotofans failures are not cached. all supporter gating flows
+through here —
 new verification sources become branches of validate_supporter, not new
 call sites.
 """
