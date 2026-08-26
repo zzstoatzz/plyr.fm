@@ -123,124 +123,7 @@ collections.
 
 ---
 
-#### the queue header settles on three matching buttons (#1924, August 23 — prod)
-
-**why**: the header carried three square icon buttons and one uppercase text
-pill, plus a repeat control the player bar already owns.
-
-**what shipped**: repeat left the header (the player bar keeps it); clear
-became the same 32px square as jam and shuffle, with a list-x glyph from the
-same icon family as add-to-queue (list+) and the swipe reveal (list-minus).
-Applies to both the queue and jam headers; the pill's words live on as
-title/aria-label.
-
-#### queue polish round two: keyboard, races, physics everywhere (#1914–#1922, August 23 — prod, frontend-only promotes; reorder engine promoted with #1924's release)
-
-**why**: nate drove the queue hard on staging and prod and kept filing what he
-felt: no keyboard path after the X went away, toasts that looked crude and
-spoke in two voices, adds that "weirdly disappear", a reorder that felt cheap
-on mobile, and a desktop that quietly kept an older, worse reorder.
-
-**what shipped**:
-- keyboard on a focused queue row: arrows move, delete/backspace removes
-  (focus stays in the list). the first cut also bound `l` to like — it
-  shadowed the global `l` = next-track and nate called it out: a shortcut
-  collision is a question, not a silent contextual override. reverted
-  (#1915); a like key waits on his pick. both lessons are now `self-review`
-  checklist items (#1918), along with "reuse an existing action's copy"
-  (#1917: the queue toasted bare "liked" while the menu said "liked <title>").
-- toasts wear the app's glass (#1916): the container hardcoded a dark rgba in
-  both themes — wrong in light. now the same color-mix surface, glass border
-  and shadow as the queue cards. aesthetic only, per nate.
-- two real races (#1919), diagnosed from staging spans (11 PUT + 12 GET + a
-  409 in one minute): a 409 on `PUT /queue/` adopted server state wholesale,
-  discarding the mutation whose toast had just fired (refresh showed it once a
-  later push rewrote it); and even a 200's echo snapshot clobbered anything
-  done mid-flight. now: a conflict re-pushes local intent once under the new
-  revision (a second conflict concedes — another writer is real), and a
-  mutation-epoch guard skips stale echoes. plus: the swipe dismiss left a
-  height-0 wrapper that the keyed each handed back to a re-added track — an
-  invisible row with the count disagreeing (nate's screenshot).
-- gesture discrimination (#1920): the swipe used to die at the first pointer
-  event where vertical wobble edged past 6px — exactly how a thumb-arc swipe
-  opens. now 8px of travel, one decision, swipes winning to ~53° off-axis.
-- reorder physics (#1921, #1922): rows are measured once at pickup
-  (`reorder-plan.ts`, pure and unit-tested); the lifted row scales under a
-  real shadow (escaping its swipe wrapper's clip), neighbours animate out of
-  the way iOS-home-screen style, a subtle accent line marks the landing gap,
-  haptics tick on pickup and slot change. #1922 unified it: native HTML5 drag
-  is deleted, mouse and touch share the engine (mouse: vertical drag anywhere
-  on the row; the swipe owns horizontal via the same mirrored 0.75 bias), and
-  the landing line moved from viewport space to the scroll container's content
-  space — the "line in the wrong spot" was a `scrollTop` bug.
-
-**technical notes**: the row now has exactly two pointer grammars — horizontal
-= swipe, vertical = reorder — partitioned by one bias constant, with scroll
-untouched on touch except from the drag handle. feel constants (scale 1.03,
-180ms spring, line at 55% accent) are each one line if nate wants to tune.
-
-#### queue swipe actions, hints, and the anti-slop sweep (#1907–#1912, August 23 — prod, frontend-only promote)
-
-**swipe** (#1907, #1908): a queue row swiped right reveals a heart (like /
-unlike), left a trash (remove from the queue), mouse or finger — Spotify's
-queue gesture. threshold 35% of the row (72px floor); one-to-one tracking to
-the threshold then rubber-band resistance; spring snap-back; a committed
-remove slides the row out and collapses its slot; crossing the threshold pops
-the icon with a haptic where offered. verified in a real browser (desktop +
-390×844 touch) against the staging API. #1908 also fixed a phone regression
-nate caught on staging: the wrapper's overflow:hidden let flex items shrink,
-clipping every row — flex-shrink: 0.
-
-**anti-slop** (#1909): doodl's oxlint plugin (15 rules) now runs in
-`bun run lint` after eslint. all 237 findings across 91 files fixed at the
-root — casts removed by real narrowing, runtime typeof replaced by boundary
-parsing or `browser`, open dictionaries by named contracts, vi.mock by real
-modules (three minimal seams: player.importHls, playlist load's ssr default
-arg, RadioEmbed reading window.location). two SAFETY one-liners remain. an
-independent review pass found three nits, fixed pre-merge (null at the queue's
-JSON boundary, half-converted safe-storage writes, an untested default).
-
-**follow-ups from nate's staging review** (#1911, #1912): the X button is
-gone — swipe-left is the removal; the reveal dropped the red trash for the
-app's own surface (muted panel, list-minus glyph, accent when armed) since
-queue removal isn't destructive and shouldn't look scary. moving the cheese
-introduced one-time **versioned hints** (`id@version` in
-`ui_settings.seen_hints`, server-merged, device-local when signed out; bump
-the version when a mechanism changes) with `queue-swipe@1` as the first. and
-the empty-queue "find something to play" CTA now closes the full-screen
-mobile queue when it navigates, styled as a real 44px button. promoted with
-nate's go-ahead as `production-fe` @ 6979bc1c.
-
-**process**: `change` and `self-review` skills now encode the delivery flow
-(PR → self-review → merge = staging → nate reviews → promote via `deploy`).
-lesson repeated with a new face: the post-merge e2e raced the **Pages**
-deploy this time (HTML/chunk skew, pages stuck unhydrated with zero
-requests); a local production build was healthy and the re-run passed —
-diagnose the deploy window before suspecting the change.
-
-#### editing a track deleted its audio from the PDS (#1904, August 22 — prod `2026.0822.185531`)
-
-**why**: nate's 4:32 am upload went to his PDS — `uploadBlob` 200 and the record
-rewritten with `audioBlob` by the deferred optimize task — and his edit nine
-minutes later deleted it. `rebuild_track_pds_record`, which every metadata edit
-runs, rebuilt the record from the row with `audioUrl` only and never passed
-`audio_blob`. The official PDS garbage-collects a blob no record references
-(`sync.getBlob` → "Blob not found"), and jetstream ingest mirrored the blob-less
-record back into the DB: `audio_storage='r2'`, `pds_blob_cid=NULL`, with the
-stale `pds_blob_size` left behind — the fingerprint.
-
-**blast radius**: 66 production tracks across 21 artists since March 18 carry
-the fingerprint (graham.systems 7, whereditgo.diamonds 6, darkhart 6, …). Their
-audio exists only in R2 now. Repairing them means re-uploading from R2 and
-rewriting each record — a PDS write on other people's behalf — **not done**;
-nate's call on consent (heads-up post or opt-in).
-
-**what shipped**: the rebuilt record carries `audioBlob` built from the row
-(cid, mime from the file type, size) next to `audioUrl`, the pairing the
-publish and optimize paths already use. Regression test drives `PATCH` and
-asserts the `putRecord` payload keeps the blob; it failed on the old code.
-
-#### plyr never stores membership — access is the space credential (August 23)
+#### plyr never stores membership — access is the space credential (#1930, August 23)
 
 The access list shipped on August 22 decided who may see and hear private
 tracks from a `private_media_members` table that was refreshed from the PDS
@@ -269,37 +152,28 @@ copy. Design: `docs/internal/architecture/private-media-access-list.md` §3.
 Sources: Daniel Holmgren's "Boring Auth" diary and Nick Gerakines' "Space
 Access" (both via pub-search), `notes/protocols/atproto/spaces.md`.
 
+#### the queue became a direct-manipulation surface (#1904, #1907–#1924, August 22–23 — prod)
+
+See `.status_history/2026-08.md` for detailed history: swipe-to-like /
+swipe-to-remove and the anti-slop oxlint sweep across 91 files
+(#1907–#1912), keyboard actions on rows, toasts in the app's glass, two queue
+sync races diagnosed from staging spans, and the unified mouse/touch reorder
+engine that deleted native HTML5 drag (#1914–#1922), plus the three matching
+header buttons (#1924). Also archived: **editing a track deleted its audio from
+the PDS** (#1904) — every metadata edit rebuilt the record without `audioBlob`,
+the PDS garbage-collected the blob, and jetstream mirrored the blob-less record
+back; the 66-track blast radius stays in known issues.
+
 #### private media grows an access list (#1876–#1905, August 21–22 — prod `2026.0821.071650` → `2026.0822.185531`)
 
-Full write-up in `.status_history/2026-08.md`. Four days took private media from
-owner-only to an artist-named list of people who can hear it:
-
-- **the contract caught up** (#1876–#1878): zds moved to the published
-  spaces-alpha lexicons on August 20 and rejected plyr's pre-alpha
-  `createSpace` body with `400 Missing policy`, failing every first private
-  upload; `ensure_personal_space` now sends the alpha body, space reads page by
-  cursor, and the pre-DPoP Bearer bridge is deleted.
-- **the grant is the capability** (#1881, #1885, #1891, #1903): deciding "can
-  this PDS do spaces" from advertised `scopes_supported` was wrong — the
-  reference `oauth-provider` never lists dynamic scopes, so the official
-  alpha PDS looked incapable. Every sign-in now requests
-  `include:<ns>.privateMediaAccess`; a spaces PDS expands it into `space:`
-  grants at consent, others leave it unexpanded, and a PAR `invalid_scope`
-  retries without it. Legacy sessions take a one-time upgrade that holds the
-  in-flight upload or recording across the redirect.
-- **members** (#1897–#1901, #1905): the `simplespace` member list on the
-  artist's PDS is the source of truth. Both private audio paths mint from the
-  *requesting* session, so a member streams through their own PDS's delegation
-  token; non-members still 404. (This first shipped with a `private_media_members`
-  mirror refreshed only when the artist opened their list in plyr — removed the
-  next day, see below.) The portal gained a "private tracks" section for adding and removing by
-  handle. Refusals now match the `getSpaceCredential` lexicon names instead of
-  500ing. Membership and supporter standing stay separate facts by design —
-  design doc: `docs/internal/architecture/private-media-access-list.md`.
-- **verification**: a real session on `nate.spaces-alpha.bsky.network` (the
-  official implementation) created a space, wrote the record, and streamed it
-  back through the credential proxy; Playwright drives the private-media and
-  `/record` flows against staging on every merge to main (#1887–#1889).
+See `.status_history/2026-08.md` for detailed history: the spaces-alpha
+contract catch-up after zds rejected plyr's pre-alpha `createSpace` body
+(#1876–#1878), the grant rather than advertised `scopes_supported` as the
+capability signal (#1881, #1885, #1891, #1903), the `simplespace` member list
+on the artist's PDS becoming the source of truth (#1897–#1901, #1905), and
+verification against the official alpha PDS plus Playwright e2e on every merge
+(#1887–#1889). Design:
+`docs/internal/architecture/private-media-access-list.md`.
 
 #### August 14 – 17 (archived)
 
@@ -366,9 +240,11 @@ See `.status_history/` for detailed history, one file per month: `2026-07.md`,
 
 ### current focus
 
+**supporter standing is becoming a network fact, not a vendor's answer** (#1936, #1938, #1939, August 25–26 — prod `2026.0826.054059`): supporter gating recognized only atprotofans, which sees roughly one supporter record a month network-wide. attested.network — the spec ATM implements, with 861+ payer records across ~69 DIDs — is where the payments actually are, and phase 0 now reads them: `validate_supporter` sits at a neutral choke point (`_internal/supporters.py`) that owns the per-pair redis cache and tries attestations before atprotofans. The boundary with ATM is settled and deliberately lopsided — their hosted checkout owns the payer's OAuth relationship and writes the payer record; plyr only reads, and holds no payments-scoped credential of its own. **next in this arc**: Joe allowlists plyr's DID (~end of the week, after breaking API changes), then phase 1 — app registration, a webhook receiver with delivery-id dedupe, and a service-auth XRPC client. Two questions go with it: broker proofs don't pin the payer record's current content, so `subject` is the payer's word; and `payment.lookup` is public and unauthenticated, which may make the whole repo-walk unnecessary.
+
 **the queue became a direct-manipulation surface** (#1907–#1924, August 23 — prod, mostly frontend-only promotes): a queue row now has exactly two pointer grammars, partitioned by one bias constant — horizontal is swipe (right likes, left removes, and swipe is now the *only* remove), vertical is reorder. The reorder engine measures rows once at pickup into a pure, unit-tested plan, lifts the dragged row under a real shadow, displaces neighbours iOS-home-screen style, and marks the landing gap with an accent line; mouse and touch run the same engine after #1922 deleted native HTML5 drag. Keyboard reaches the same actions on a focused row. Two sync races found in staging spans were closed in #1919 — a `409` on `PUT /queue/` used to adopt server state wholesale and discard the mutation whose toast had already fired, and even a `200`'s echo could clobber a mid-flight change. **next in this arc**: nate's pick for a like key (the obvious `l` collided with global next-track); whether the landing line needs more than a subtle underline now that displacement carries the signal; the swipe hint's `queue-swipe@1` is the first user of versioned one-time hints, and other mechanisms that moved recently could use them.
 
-**downloads are a relationship dial** (#1824–#1858, August 13–14 — prod `2026.0813.195021` → `2026.0814.213524`, detail archived): a four-value per-artist policy (open / ask / supporters / off, defaulting to `ask` when the artist has a support link) covering single tracks and whole albums as worker-built cached zips, through one `download_refusal`/`download_key` pair that three endpoints and the UI's `downloadable` flag all derive from. **next in this arc**: the attested.network entitlement path (#1871) swapping in behind `viewer_is_supporter`, which the schema was deliberately kept ignorant of; per-track toggles and download counts; elevation tokens done holistically rather than as a one-page snowflake (#1835).
+**downloads are a relationship dial** (#1824–#1858, August 13–14 — prod `2026.0813.195021` → `2026.0814.213524`, detail archived): a four-value per-artist policy (open / ask / supporters / off, defaulting to `ask` when the artist has a support link) covering single tracks and whole albums as worker-built cached zips, through one `download_refusal`/`download_key` pair that three endpoints and the UI's `downloadable` flag all derive from. **next in this arc**: ~~the attested.network entitlement path (#1871) swapping in behind `viewer_is_supporter`~~ — shipped August 26 as #1939 (see above), exactly the swap the schema was kept ignorant of; per-track toggles and download counts; elevation tokens done holistically rather than as a one-page snowflake (#1835).
 
 **the iOS lock-screen scrubber is the standing unknown** (#1860–#1870, August 15–16): ⏮/⏭ arrows, metadata, and times all work on a physical iPhone; the scrubber cannot be grabbed under any of five media-session recipes, while SoundCloud's web player scrubs in the same Safari. Everything after #1860 was reverted byte-for-byte because none of it changed on-device behavior — codec/range support, artwork MIME, and call churn are ruled out, and the simulator disagrees with the phone. **next in this arc**: the deciding experiment, which is a minimal page on a physical device or Web Inspector attached to one — not another recipe (#1870).
 
@@ -391,6 +267,7 @@ See `.status_history/` for detailed history, one file per month: `2026-07.md`,
 **next**: remove the `/admin/*` machine-endpoint aliases now that prod calls `/internal/*` (#1691); re-enable `test_private_media.py` somewhere that has the local postgres/redis fixtures (it is excluded from the staging-facing workflow). which surfaces beyond albums/playlists count as queueable contexts (artist catalogs #1353, feeds/search). publish the five record lexicons (`fm.plyr.track`, `.like`, `.comment`, `.list`, `.actor.profile`) with a docs-quality pass on each (next phase after #1569); a production smoke-test harness for private media (file-types × visibilities, fully inert — no DM/listing/stats — per prod release); enable the `copyright-paradigm` flag for own DID and start dogfooding on prod; co-writer / publisher editing UI for `additionalInterestedParties` (backend plumbed end-to-end, frontend deferred); prefill ISWC/ISRC/masterOwner on the portal edit form (we only have the URIs locally, not field contents); fly worker tcp health check (running-but-stuck symptom detector); upstream `atproto_oauth.OAuthClient` body-factory support (lets us drop `_signed_streaming_post`); deploy-docs sanity check; `config.py` decomposition.
 
 ### known issues
+- **a broker proof does not pin the payer record it signs** (#1939, observed August 26): across 7 sampled live attestations, the proof's inner `cid` matches no recomputable CID of the payer record's current content, with or without `signatures`. So verification pins the *proof* and trusts the broker's `verified` status, while mutable payer fields — including `subject`, the artist being supported — are taken on the payer's word. Forging supporter standing for an arbitrary artist still costs one real broker-verified payment to someone, which is why this shipped rather than blocked. Queued as a question for ATM; if the answer is "proofs aren't meant to pin content", the public `network.attested.payment.lookup` endpoint is the better branch anyway.
 - **66 production tracks lost their PDS blob to the edit bug** (#1904 fixed the bug, August 22): every metadata edit rebuilt the PDS record without `audioBlob`, so the PDS garbage-collected the blob and jetstream mirrored the blob-less record back. 21 artists affected since March 18; the audio still exists in R2. Repairing means re-uploading and rewriting records on other people's behalf, so it is **deliberately not done** — it waits on nate's call about consent (heads-up post or opt-in). affected rows: `audio_storage='r2' AND pds_blob_size IS NOT NULL AND pds_blob_cid IS NULL`.
 - **non-web-playable uploads wait ~5 minutes to become playable in Chrome/Firefox** ([#1932](https://github.com/zzstoatzz/plyr.fm/issues/1932), [#1933](https://github.com/zzstoatzz/plyr.fm/issues/1933)): the optimize task took 4m40s and 4m52s for two AIFF uploads on August 24, ~90s of which is streaming the source out of R2 before ffmpeg starts, and the "new track" DM goes out at +3s — so a listener following the notification lands on the greyed state #1934 added rather than a player. defer the DM for `is_optimizing` tracks until the swap lands, and profile the R2→disk stream.
 - **the revised private-media permission set is a re-consent event** (#1898): the `authority: "*"` reader permission only takes effect for sessions that consented after it was published, so a member added before their next sign-in cannot mint a credential yet. Credentials also live two hours by protocol with no revocation, so removal from a member list is eventual.
@@ -565,4 +442,4 @@ see the [contributing guide](https://docs.plyr.fm/contributing/) for setup instr
 
 ---
 
-this is a living document. last updated 2026-08-26 (**supporter gating learns attested.network payments**. the plyr × ATM arc went from first call to production in two days: position doc #1936 and integration plan #1938 settle the boundary — ATM's checkout owns the payer OAuth and writes the payer record, plyr reads/respects and never holds a payments-write credential — and #1939 ships phase 0, a neutral `validate_supporter` choke point that verifies attested.network payer records against trusted-broker proofs ahead of the atprotofans branch, released as `2026.0826.054059`. live-data spike found broker proofs don't pin payer-record content and that ATM's `payment.lookup` is public — both queued as questions for Joe ahead of the allowlist.) previously 2026-08-24 (**a processing track looks processing before you press play**. #1934 surfaces the interim-rendition state on rows, cards and the track page instead of only toasting on click, after woody's AIFF upload sat unplayable in Chrome for ~4.5 minutes; the delay itself is now two issues (#1932 notification timing, #1933 the 90s R2→disk stream). also opened eurosky-social/eurosky-social-app#199 so mu.social renders plyr album and playlist links as inline players.) previously 2026-08-23 (**status maintenance for the August 17–23 window**. Archived the August 14–22 detail to `.status_history/2026-08.md` — the private-media access-list arc, the first-click comment-timestamp seek, the iOS scrub unwind, the comments panel, and the download policy — taking STATUS.md from 719 lines to ~460, and trimmed this trailer, whose older entries now live in the same archive file. Rewrote current focus around the two arcs that are actually live: the queue as a direct-manipulation surface, and private media now that it has a member list rather than an owner. Corrected the queue entries' dates, which were a day or two ahead of the merges they describe. Two new known issues recorded rather than left in a PR body: the 66 production tracks whose PDS blobs the edit bug deleted, which nobody has decided how to repair, and the re-consent the revised permission set requires of existing sessions. Recorded the podcast recap for August 17–23.) previously 2026-08-21 (**the createSpace body drifted from the spaces-alpha lexicons**. zds moved to the alpha lexicons on August 20 and rejected plyr's pre-alpha `createSpace` body, failing every first private upload on pds.zat.dev; #1877 sends the alpha body and lets `listRepos`/`listRepoOps` page by cursor, #1878 deletes the now-dead pre-DPoP Bearer bridge from #1856. verified old-vs-new body directly against zds, the smoke script, and the live private-media integration in CI; no user impact since prod has zero private tracks. the architecture doc now names the branch-tip lexicons and Bulletin as the contract, and the entry records how plyr's proxying client compares to Bulletin's syncing service.) previously last updated 2026-08-17 (**status maintenance for the August 9–17 window**. Archived the August 3–14 detail block to `.status_history/2026-08.md`, taking STATUS.md from 916 lines to ~410 — the credential chain, the `file_id` storage-key family, the media-bucket CORS policy, the upload memory wedge, and the whole track/album download build-out are now history rather than current state, kept as a single dated cross-reference. Rewrote current focus around the two arcs that are actually live: downloads as a per-artist relationship dial with the redrawn track page and non-modal comments panel around it, and the iOS lock-screen scrubber, which remains unexplained after five media-session recipes and a byte-for-byte revert to #1860. Left the known-issues list intact — nothing in it was retired by this window. Recorded the podcast recap for August 9–17.) previously last updated 2026-08-14 (**albums download as cached zips**. #1836 extends yesterday's download policy to albums — same shared `download_refusal`/`download_key`, zip built on the worker via the export machinery, cached in R2 under a digest of the ordered member keys so edits invalidate naturally, CDN-served by redirect; verified cold-build → SSE → zip → cache-hit on both staging and prod. #1834 brought the regrouped track page's mobile controls up to the 44px touch floor with press feedback on the play disc, punting the material treatment to #1835 rather than hardcoding a token-less one-off. #1837/#1838 fixed the brutal cold-download toast and captured the research as a `toast-copy` skill; #1839 caught the settings copy and docs.plyr.fm up to the feature. also: a 10-day orphaned vite on port 5199 had been silently absorbing every local dev-server start.)
+this is a living document. last updated 2026-08-26 (**status maintenance for the August 23–26 window**. Archived the August 21–23 detail to `.status_history/2026-08.md` — the whole queue direct-manipulation arc (#1907–#1924), the metadata edit that deleted a track's audio from its PDS (#1904), and the private-media access-list build-out (#1876–#1905) — taking STATUS.md from 568 lines to ~445, and trimmed this trailer, whose older entries now live in the same archive file. Reordered the remaining August 23 entries so #1930 sits above the queue arc it postdates, and gave it its PR number. Rewrote current focus to lead with the arc that is actually live: supporter standing moving off atprotofans and onto attested.network attestations, with the ATM boundary settled and phase 1 waiting on an allowlist. Retired the downloads arc's 'next' item, since #1939 is exactly the entitlement swap it was waiting for. One new known issue recorded rather than left in a PR body: a broker proof does not pin the payer record it signs, so `subject` is the payer's word. Recorded the podcast recap for August 23–26.) previously 2026-08-26 (**supporter gating learns attested.network payments**. the plyr × ATM arc went from first call to production in two days: position doc #1936 and integration plan #1938 settle the boundary — ATM's checkout owns the payer OAuth and writes the payer record, plyr reads/respects and never holds a payments-write credential — and #1939 ships phase 0, a neutral `validate_supporter` choke point that verifies attested.network payer records against trusted-broker proofs ahead of the atprotofans branch, released as `2026.0826.054059`. live-data spike found broker proofs don't pin payer-record content and that ATM's `payment.lookup` is public — both queued as questions for Joe ahead of the allowlist.) previously 2026-08-24 (**a processing track looks processing before you press play**. #1934 surfaces the interim-rendition state on rows, cards and the track page instead of only toasting on click, after woody's AIFF upload sat unplayable in Chrome for ~4.5 minutes; the delay itself is now two issues (#1932 notification timing, #1933 the 90s R2→disk stream). also opened eurosky-social/eurosky-social-app#199 so mu.social renders plyr album and playlist links as inline players.) previously 2026-08-23 (**status maintenance for the August 17–23 window**. Archived the August 14–22 detail to `.status_history/2026-08.md` — the private-media access-list arc, the first-click comment-timestamp seek, the iOS scrub unwind, the comments panel, and the download policy — taking STATUS.md from 719 lines to ~460, and trimmed this trailer, whose older entries now live in the same archive file. Rewrote current focus around the two arcs that are actually live: the queue as a direct-manipulation surface, and private media now that it has a member list rather than an owner. Corrected the queue entries' dates, which were a day or two ahead of the merges they describe. Two new known issues recorded rather than left in a PR body: the 66 production tracks whose PDS blobs the edit bug deleted, which nobody has decided how to repair, and the re-consent the revised permission set requires of existing sessions. Recorded the podcast recap for August 17–23.) previously 2026-08-21 (**the createSpace body drifted from the spaces-alpha lexicons**. zds moved to the alpha lexicons on August 20 and rejected plyr's pre-alpha `createSpace` body, failing every first private upload on pds.zat.dev; #1877 sends the alpha body and lets `listRepos`/`listRepoOps` page by cursor, #1878 deletes the now-dead pre-DPoP Bearer bridge from #1856. verified old-vs-new body directly against zds, the smoke script, and the live private-media integration in CI; no user impact since prod has zero private tracks. the architecture doc now names the branch-tip lexicons and Bulletin as the contract, and the entry records how plyr's proxying client compares to Bulletin's syncing service.) earlier entries are preserved in `.status_history/2026-08.md`.
