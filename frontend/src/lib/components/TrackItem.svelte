@@ -733,7 +733,14 @@
 		align-items: center;
 		gap: 0.35rem;
 		min-width: 0;
+		max-width: 100%;
+		overflow: hidden;
 		flex-wrap: nowrap;
+	}
+
+	.artist-line:has(.features-inline) .artist-link {
+		max-width: 60%;
+		flex-shrink: 0;
 	}
 
 	.artist-line.only-features {
@@ -763,11 +770,12 @@
 	}
 
 	.features-inline {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.25rem;
+		display: inline;
 		color: var(--text-secondary);
+		min-width: 0;
 		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
 	}
 
 	.features-label {
