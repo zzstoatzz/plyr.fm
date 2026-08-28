@@ -108,7 +108,7 @@ function buildNetworkErrorMessage(progressPercent: number, fileSizeMB: number, i
 		return `upload failed${progressInfo}: the server had trouble processing your file. please try again in a moment`;
 	}
 
-	return `upload failed${progressInfo}: connection failed. check your internet connection and try again`;
+	return `upload failed before sending — try re-selecting the file`;
 }
 
 function buildTimeoutErrorMessage(progressPercent: number, fileSizeMB: number, isMobile: boolean): string {
