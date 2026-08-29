@@ -1,8 +1,13 @@
 """storage protocol for type-safe dependency injection."""
 
+from __future__ import annotations
+
 from collections.abc import AsyncIterator, Callable
 from io import BytesIO
-from typing import BinaryIO, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, BinaryIO, Protocol, runtime_checkable
+
+if TYPE_CHECKING:
+    from backend.storage.keys import AudioKey, StagedUploadKey
 
 
 @runtime_checkable
@@ -64,6 +69,38 @@ class StorageProtocol(Protocol):
         ...
 
     async def delete(self, file_id: str, file_type: str | None = None) -> bool: ...
+
+    async def begin_staged_upload(self, staged: StagedUploadKey) -> str: ...
+
+    async def put_staged_part(
+        self,
+        staged: StagedUploadKey,
+        multipart_id: str,
+        part_number: int,
+        body: bytes,
+    ) -> str: ...
+
+    async def complete_staged_upload(
+        self, staged: StagedUploadKey, multipart_id: str
+    ) -> int: ...
+
+    async def staged_part_numbers(
+        self, staged: StagedUploadKey, multipart_id: str
+    ) -> list[int]: ...
+
+    async def abort_staged_upload(
+        self, staged: StagedUploadKey, multipart_id: str
+    ) -> None: ...
+
+    def stream_staged(
+        self, staged: StagedUploadKey, *, chunk_size: int = 1024 * 1024
+    ) -> AsyncIterator[bytes]: ...
+
+    async def promote_staged(
+        self, staged: StagedUploadKey, audio: AudioKey, *, gated: bool
+    ) -> None: ...
+
+    async def delete_staged(self, staged: StagedUploadKey) -> None: ...
 
     async def discard_staged(
         self, file_id: str, file_type: str | None = None, *, gated: bool = False

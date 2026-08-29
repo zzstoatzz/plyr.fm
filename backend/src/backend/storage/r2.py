@@ -6,7 +6,7 @@ from collections.abc import AsyncIterator, Callable
 from functools import reduce
 from io import BytesIO
 from pathlib import Path, PurePosixPath
-from typing import BinaryIO
+from typing import Any, BinaryIO
 from urllib.parse import quote
 
 import aioboto3
@@ -23,7 +23,12 @@ from backend.config import settings
 from backend.models.album import Album
 from backend.models.playlist import Playlist
 from backend.models.track import Track
-from backend.storage.keys import AudioKey, ImageKey, InvalidMediaExtension
+from backend.storage.keys import (
+    AudioKey,
+    ImageKey,
+    InvalidMediaExtension,
+    StagedUploadKey,
+)
 from backend.utilities.audio_formats import AudioFormat
 from backend.utilities.database import db_session
 from backend.utilities.hashing import hash_file_chunked
@@ -483,6 +488,160 @@ class R2Storage:
                 raise
             size = response.get("ContentLength")
             return int(size) if size is not None else None
+
+    def _staged_bucket(self) -> str:
+        if not self.private_audio_bucket_name:
+            raise ValueError("R2_PRIVATE_BUCKET not configured")
+        return self.private_audio_bucket_name
+
+    async def begin_staged_upload(self, staged: StagedUploadKey) -> str:
+        """open an R2 multipart upload for a resumable transfer.
+
+        staged bytes always live in the private bucket: the public bucket is
+        served verbatim from a custom domain, and a supporter-gated master
+        must never be reachable there, even under an unguessable key.
+        """
+        async with self._s3_client() as client:
+            response = await client.create_multipart_upload(
+                Bucket=self._staged_bucket(),
+                Key=staged.key,
+                ContentType=staged.format.media_type,
+            )
+        multipart_id = response["UploadId"]
+        logfire.info(
+            "R2 staged upload opened", key=staged.key, multipart_id=multipart_id
+        )
+        return multipart_id
+
+    async def put_staged_part(
+        self,
+        staged: StagedUploadKey,
+        multipart_id: str,
+        part_number: int,
+        body: bytes,
+    ) -> str:
+        """upload one part; returns its ETag."""
+        async with self._s3_client() as client:
+            response = await client.upload_part(
+                Bucket=self._staged_bucket(),
+                Key=staged.key,
+                UploadId=multipart_id,
+                PartNumber=part_number,
+                Body=body,
+            )
+        return response["ETag"]
+
+    async def complete_staged_upload(
+        self, staged: StagedUploadKey, multipart_id: str
+    ) -> int:
+        """assemble the parts R2 has received; returns the object size in bytes.
+
+        the part list is read back from R2 rather than tracked in the job row,
+        so a part retried after a lost response can't leave a stale ETag behind.
+        """
+        bucket = self._staged_bucket()
+        async with self._s3_client() as client:
+            parts: list[dict[str, Any]] = []
+            marker = 0
+            while True:
+                listed = await client.list_parts(
+                    Bucket=bucket,
+                    Key=staged.key,
+                    UploadId=multipart_id,
+                    PartNumberMarker=marker,
+                )
+                parts.extend(
+                    {"PartNumber": p["PartNumber"], "ETag": p["ETag"]}
+                    for p in listed.get("Parts", [])
+                )
+                if not listed.get("IsTruncated"):
+                    break
+                marker = listed["NextPartNumberMarker"]
+            if not parts:
+                raise ValueError("no parts uploaded")
+            parts.sort(key=operator.itemgetter("PartNumber"))
+            await client.complete_multipart_upload(
+                Bucket=bucket,
+                Key=staged.key,
+                UploadId=multipart_id,
+                MultipartUpload={"Parts": parts},
+            )
+            head = await client.head_object(Bucket=bucket, Key=staged.key)
+        size = int(head["ContentLength"])
+        logfire.info(
+            "R2 staged upload completed",
+            key=staged.key,
+            parts=len(parts),
+            size=size,
+        )
+        return size
+
+    async def staged_part_numbers(
+        self, staged: StagedUploadKey, multipart_id: str
+    ) -> list[int]:
+        """part numbers R2 has already accepted for this upload."""
+        async with self._s3_client() as client:
+            listed = await client.list_parts(
+                Bucket=self._staged_bucket(),
+                Key=staged.key,
+                UploadId=multipart_id,
+            )
+        return sorted(p["PartNumber"] for p in listed.get("Parts", []))
+
+    async def abort_staged_upload(
+        self, staged: StagedUploadKey, multipart_id: str
+    ) -> None:
+        async with self._s3_client() as client:
+            try:
+                await client.abort_multipart_upload(
+                    Bucket=self._staged_bucket(),
+                    Key=staged.key,
+                    UploadId=multipart_id,
+                )
+            except ClientError as e:
+                if e.response.get("Error", {}).get("Code") != "NoSuchUpload":
+                    raise
+
+    async def stream_staged(
+        self, staged: StagedUploadKey, *, chunk_size: int = STREAM_CHUNK_SIZE
+    ) -> AsyncIterator[bytes]:
+        async with self._s3_client() as client:
+            response = await client.get_object(
+                Bucket=self._staged_bucket(), Key=staged.key
+            )
+            async for chunk in response["Body"].iter_chunks(chunk_size=chunk_size):
+                yield chunk
+
+    async def promote_staged(
+        self, staged: StagedUploadKey, audio: AudioKey, *, gated: bool
+    ) -> None:
+        """server-side copy of a completed staged object to its content-hash key.
+
+        the copy carries the public cache headers the direct `save` path
+        writes; the staged object is deleted afterwards. a copy onto a key
+        that already holds these exact bytes (a re-upload of a published
+        file) is harmless — the duplicate check downstream rejects the track
+        and `discard_staged` keeps the referenced object.
+        """
+        src_bucket = self._staged_bucket()
+        dst_bucket = self.private_audio_bucket_name if gated else self.audio_bucket_name
+        with logfire.span(
+            "R2 promote_staged", src=staged.key, dst=audio.key, gated=gated
+        ):
+            async with self._s3_client() as client:
+                await client.copy_object(
+                    CopySource={"Bucket": src_bucket, "Key": staged.key},
+                    Bucket=dst_bucket,
+                    Key=audio.key,
+                    MetadataDirective="REPLACE",
+                    ContentType=audio.format.media_type,
+                    CacheControl=IMMUTABLE_CACHE_CONTROL,
+                )
+                await client.delete_object(Bucket=src_bucket, Key=staged.key)
+
+    async def delete_staged(self, staged: StagedUploadKey) -> None:
+        async with self._s3_client() as client:
+            await client.delete_object(Bucket=self._staged_bucket(), Key=staged.key)
 
     async def _reference_count(self, file_id: str) -> int:
         """how many live rows point at ``file_id``, across every media column.

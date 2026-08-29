@@ -17,7 +17,7 @@ services:
     command:
       - postgres
       - -c
-      - max_connections=100
+      - max_connections=300
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U relay_test -d relay_test"]
       interval: 1s

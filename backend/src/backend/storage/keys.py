@@ -125,6 +125,43 @@ class AudioKey:
 
 
 @dataclass(frozen=True, slots=True)
+class StagedUploadKey:
+    """R2 key for bytes mid-transfer, stored under `staged/<upload_id>.<ext>`.
+
+    a resumable upload lands here part by part before anything knows its
+    content hash. the worker settles it into an `AudioKey` (or a PDS blob)
+    and deletes it; nothing is ever served from this prefix.
+    """
+
+    upload_id: str
+    extension: str
+
+    def __post_init__(self) -> None:
+        if not self.upload_id:
+            raise InvalidMediaExtension("upload_id is required")
+        if AudioFormat.from_extension(self.extension) is None:
+            raise InvalidMediaExtension(
+                f"unsupported audio extension: {self.extension!r} "
+                f"(supported: {AudioFormat.supported_extensions_str()})"
+            )
+
+    @classmethod
+    def from_filename(cls, upload_id: str, filename: str) -> StagedUploadKey:
+        return cls(
+            upload_id=upload_id,
+            extension=_strip_ext(PurePosixPath(filename).suffix),
+        )
+
+    @property
+    def key(self) -> str:
+        return f"staged/{self.upload_id}.{self.extension}"
+
+    @property
+    def format(self) -> AudioFormat:
+        return AudioFormat.from_extension(self.extension)  # type: ignore[return-value]
+
+
+@dataclass(frozen=True, slots=True)
 class ImageKey:
     """R2 key for an image object stored under `images/<file_id>.<ext>`.
 

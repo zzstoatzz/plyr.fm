@@ -34,7 +34,7 @@ from backend._internal.tasks.moderation import (
     scan_image_moderation,
     schedule_image_moderation_scan,
 )
-from backend._internal.tasks.reaper import reap_stuck_uploads
+from backend._internal.tasks.reaper import reap_abandoned_transfers, reap_stuck_uploads
 from backend._internal.tasks.ingest import (
     SubjectNotFoundError,
     ingest_account_reactivated,
@@ -143,6 +143,7 @@ def _build_background_tasks() -> list:
         run_track_audio_replace,
         optimize_track_audio,
         reap_stuck_uploads,
+        reap_abandoned_transfers,
     ]
 
 
@@ -189,6 +190,7 @@ __all__ = [
     "pds_delete_like",
     "pds_update_comment",
     "publish_moderation_decisions",
+    "reap_abandoned_transfers",
     "reap_stuck_uploads",
     "run_post_track_create_hooks",
     "scan_copyright",
