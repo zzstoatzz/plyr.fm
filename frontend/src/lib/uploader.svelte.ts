@@ -7,6 +7,13 @@ import { tracksCache } from './tracks.svelte';
 import type { FeaturedArtist } from './types';
 import type { TrackRights } from './components/CopyrightRightsPanel.svelte';
 import { setReturnUrl } from './utils/return-url';
+import {
+	finishUploadSession,
+	startUploadSession,
+	uploadParts,
+	UploadPartError,
+	UploadSessionHttpError
+} from './upload-session';
 
 interface UploadTask {
 	id: string;
@@ -19,6 +26,7 @@ interface UploadTask {
 	toastId: string;
 	eventSource?: EventSource;
 	xhr?: XMLHttpRequest;
+	abort?: AbortController;
 }
 
 interface UploadProgressCallback {
@@ -125,6 +133,51 @@ function buildTimeoutErrorMessage(progressPercent: number, fileSizeMB: number, i
 	return `upload timed out${progressInfo}: try again with a better connection`;
 }
 
+/**
+ * map a session-upload failure to toast copy. returns null when the failure
+ * was handled by a redirect (scope upgrade, sign-in) and no toast is due.
+ */
+type UploadFailure = UploadSessionHttpError | UploadPartError | Error;
+
+function describeUploadFailure(
+	error: UploadFailure,
+	progressPercent: number,
+	fileSizeMB: number,
+	isMobile: boolean
+): string | null {
+	if (error instanceof UploadSessionHttpError) {
+		if (error.status === 403 && error.detail === 'permissioned_scope_required') {
+			void startPermissionedScopeUpgrade();
+			return null;
+		}
+		if (error.status === 401 && error.detail === 'session_expired') {
+			toast.error('your session expired — sign in to finish your upload');
+			setReturnUrl('/upload');
+			if (browser) void goto('/login');
+			return null;
+		}
+		if (error.status === 413) return 'file too large: please use a smaller file';
+		if (error.status === 409) return 'upload incomplete — try again';
+		if (error.status >= 500) return 'server error: please try again in a moment';
+		return error.detail ?? `upload failed (${error.status})`;
+	}
+	if (error instanceof UploadPartError) {
+		const failure = error.failure;
+		if (failure.kind === 'timeout') return buildTimeoutErrorMessage(progressPercent, fileSizeMB, isMobile);
+		if (failure.kind === 'network') return buildNetworkErrorMessage(progressPercent, fileSizeMB, isMobile);
+		if (failure.status === 401) {
+			toast.error('your session expired — sign in to finish your upload');
+			setReturnUrl('/upload');
+			if (browser) void goto('/login');
+			return null;
+		}
+		if (failure.status === 413) return 'file too large: please use a smaller file';
+		if (failure.status >= 500) return 'server error: please try again in a moment';
+		return failure.detail ?? `upload failed (${failure.status})`;
+	}
+	return 'upload failed — try again';
+}
+
 // global upload manager using Svelte 5 runes
 class UploaderState {
 	activeUploads = $state<Map<string, UploadTask>>(new Map());
@@ -167,7 +220,6 @@ class UploaderState {
 
 		if (!browser) return;
 		const formData = new FormData();
-		formData.append('file', file);
 		formData.append('title', title);
 		if (albumId) {
 			formData.append('album_id', albumId);
@@ -200,184 +252,129 @@ class UploaderState {
 			formData.append('self_labels', JSON.stringify(selfLabels));
 		}
 
-		const xhr = new XMLHttpRequest();
-		xhr.open('POST', `${API_URL}/tracks/`);
-		xhr.withCredentials = true;
+		const abort = new AbortController();
+		const task: UploadTask = {
+			id: taskId,
+			upload_id: '',
+			file,
+			title,
+			album,
+			features,
+			tags,
+			toastId,
+			abort
+		};
+		this.activeUploads.set(taskId, task);
 
-		let uploadComplete = false;
+		const fail = (message: string) => {
+			toast.dismiss(toastId);
+			this.activeUploads.delete(taskId);
+			toast.error(message);
+			callbacks?.onError?.(message);
+		};
 
-		xhr.upload.addEventListener('progress', (e) => {
-			if (e.lengthComputable && !uploadComplete) {
-				const percent = Math.round((e.loaded / e.total) * 100);
-				lastProgressPercent = percent;
-				const progressMsg = `retrieving your file... ${percent}%`;
-				toast.update(toastId, progressMsg);
-				if (callbacks?.onProgress) {
-					callbacks.onProgress(e.loaded, e.total);
-				}
-			}
-		});
-
-		xhr.addEventListener('load', () => {
-			if (xhr.status >= 200 && xhr.status < 300) {
-				try {
-					uploadComplete = true;
-					const result = JSON.parse(xhr.responseText);
-					const upload_id = result.upload_id;
-
-					if (callbacks?.onSuccess) {
-						callbacks.onSuccess(upload_id);
+		void (async () => {
+			try {
+				const session = await startUploadSession(file);
+				task.upload_id = session.upload_id;
+				await uploadParts({
+					file,
+					session,
+					signal: abort.signal,
+					onProgress: (loaded, total) => {
+						const percent = Math.round((loaded / total) * 100);
+						lastProgressPercent = percent;
+						toast.update(toastId, `retrieving your file... ${percent}%`);
+						callbacks?.onProgress?.(loaded, total);
 					}
-
-					const task: UploadTask = {
-						id: taskId,
-						upload_id,
-						file,
-						title,
-						album,
-						features,
-						tags,
-						toastId,
-						xhr
-					};
-
-					this.activeUploads.set(taskId, task);
-
-					const eventSource = new EventSource(`${API_URL}/tracks/uploads/${upload_id}/progress`);
-					task.eventSource = eventSource;
-
-					eventSource.onmessage = (event) => {
-						const update: UploadProgressUpdate = JSON.parse(event.data);
-
-						// show backend processing messages
-						if (update.message && update.status === 'processing') {
-							// if we have meaningful server-side progress, show it
-							// (skip 0% as it looks wrong during phase transitions)
-							const serverProgress = update.server_progress_pct;
-							if (serverProgress !== undefined && serverProgress !== null && serverProgress > 0) {
-								toast.update(task.toastId, `${update.message} (${Math.round(serverProgress)}%)`);
-							} else {
-								toast.update(task.toastId, update.message);
-							}
-						}
-
-						if (update.status === 'completed') {
-							eventSource.close();
-							toast.dismiss(task.toastId);
-							this.activeUploads.delete(taskId);
-
-							const trackId = update.track_id ?? null;
-							toast.success(`"${displayName}" uploaded`, 5000, trackId ? {
-								label: 'view track',
-								href: `/track/${trackId}`
-							} : undefined);
-
-							const warnings: string[] = update.warnings ?? [];
-							const warningAction = update.pds_blob_failed
-								? { label: 'save to your PDS', href: '/portal/manage?save=pds' }
-								: undefined;
-							for (const w of warnings) {
-								toast.warning(w, 0, warningAction);
-							}
-
-							tracksCache.invalidate();
-							tracksCache.fetch(true);
-							if (onSuccess) {
-								onSuccess(
-									trackId !== null
-										? {
-												trackId,
-												atprotoUri: update.atproto_uri ?? null,
-												atprotoCid: update.atproto_cid ?? null
-											}
-										: undefined
-								);
-							}
-						}
-
-						if (update.status === 'failed') {
-							eventSource.close();
-							toast.dismiss(task.toastId);
-							this.activeUploads.delete(taskId);
-
-							const errorMsg = update.error || 'upload failed';
-							toast.error(errorMsg);
-						}
-					};
-
-					eventSource.onerror = () => {
-						eventSource.close();
-						toast.dismiss(task.toastId);
-						this.activeUploads.delete(taskId);
-						toast.error('lost connection to server');
-					};
-				} catch {
+				});
+				toast.update(toastId, 'finishing up…');
+				const upload_id = await finishUploadSession(session.upload_id, formData);
+				task.upload_id = upload_id;
+				callbacks?.onSuccess?.(upload_id);
+				this.followProcessing(task, displayName, onSuccess);
+			} catch (error) {
+				const failure: UploadFailure = error instanceof Error ? error : new Error(String(error));
+				const message = describeUploadFailure(failure, lastProgressPercent, fileSizeMB, isMobile);
+				if (message === null) {
 					toast.dismiss(toastId);
-					toast.error('failed to parse server response');
-					if (callbacks?.onError) {
-						callbacks.onError('failed to parse server response');
-					}
+					this.activeUploads.delete(taskId);
+					return;
 				}
-			} else {
-				toast.dismiss(toastId);
-				let errorMsg = `upload failed (${xhr.status} ${xhr.statusText})`;
-				try {
-					const error = JSON.parse(xhr.responseText);
-					// private media needs the permissioned-space scope granted — kick
-					// off the one-time opt-in upgrade, then the user retries the upload.
-					if (xhr.status === 403 && error.detail === 'permissioned_scope_required') {
-						void startPermissionedScopeUpgrade();
-						return;
-					}
-					// the atproto session's refresh token died — the upload couldn't
-					// authenticate to the PDS. /auth/me preflight can't catch this (it
-					// doesn't force a token refresh), so handle it at runtime: bounce to
-					// sign-in instead of showing a misleading "connection failed".
-					if (xhr.status === 401 && error.detail === 'session_expired') {
-						toast.error('your session expired — sign in to finish your upload');
-						setReturnUrl('/upload');
-						if (browser) void goto('/login');
-						return;
-					}
-					errorMsg = error.detail || errorMsg;
-				} catch {
-					if (xhr.status === 0) {
-						errorMsg = buildNetworkErrorMessage(lastProgressPercent, fileSizeMB, isMobile);
-					} else if (xhr.status >= 500) {
-						errorMsg = 'server error: please try again in a moment';
-					} else if (xhr.status === 413) {
-						errorMsg = 'file too large: please use a smaller file';
-					} else if (xhr.status === 408 || xhr.status === 504) {
-						errorMsg = buildTimeoutErrorMessage(lastProgressPercent, fileSizeMB, isMobile);
-					}
-				}
-				toast.error(errorMsg);
-				if (callbacks?.onError) {
-					callbacks.onError(errorMsg);
+				fail(message);
+			}
+		})();
+	}
+
+	/** subscribe to the worker's SSE progress once the transfer is done. */
+	private followProcessing(
+		task: UploadTask,
+		displayName: string,
+		onSuccess?: (_result?: UploadResult) => void
+	): void {
+		const eventSource = new EventSource(`${API_URL}/tracks/uploads/${task.upload_id}/progress`);
+		task.eventSource = eventSource;
+
+		eventSource.onmessage = (event) => {
+			const update: UploadProgressUpdate = JSON.parse(event.data);
+
+			if (update.message && update.status === 'processing') {
+				const serverProgress = update.server_progress_pct;
+				if (serverProgress !== undefined && serverProgress !== null && serverProgress > 0) {
+					toast.update(task.toastId, `${update.message} (${Math.round(serverProgress)}%)`);
+				} else {
+					toast.update(task.toastId, update.message);
 				}
 			}
-		});
 
-		xhr.addEventListener('error', () => {
-			toast.dismiss(toastId);
-			const errorMsg = buildNetworkErrorMessage(lastProgressPercent, fileSizeMB, isMobile);
-			toast.error(errorMsg);
-			if (callbacks?.onError) {
-				callbacks.onError(errorMsg);
+			if (update.status === 'completed') {
+				eventSource.close();
+				toast.dismiss(task.toastId);
+				this.activeUploads.delete(task.id);
+
+				const trackId = update.track_id ?? null;
+				toast.success(`"${displayName}" uploaded`, 5000, trackId ? {
+					label: 'view track',
+					href: `/track/${trackId}`
+				} : undefined);
+
+				const warnings: string[] = update.warnings ?? [];
+				const warningAction = update.pds_blob_failed
+					? { label: 'save to your PDS', href: '/portal/manage?save=pds' }
+					: undefined;
+				for (const w of warnings) {
+					toast.warning(w, 0, warningAction);
+				}
+
+				tracksCache.invalidate();
+				tracksCache.fetch(true);
+				if (onSuccess) {
+					onSuccess(
+						trackId !== null
+							? {
+									trackId,
+									atprotoUri: update.atproto_uri ?? null,
+									atprotoCid: update.atproto_cid ?? null
+								}
+							: undefined
+					);
+				}
 			}
-		});
 
-		xhr.addEventListener('timeout', () => {
-			toast.dismiss(toastId);
-			const errorMsg = buildTimeoutErrorMessage(lastProgressPercent, fileSizeMB, isMobile);
-			toast.error(errorMsg);
-			if (callbacks?.onError) {
-				callbacks.onError(errorMsg);
+			if (update.status === 'failed') {
+				eventSource.close();
+				toast.dismiss(task.toastId);
+				this.activeUploads.delete(task.id);
+				toast.error(update.error || 'upload failed');
 			}
-		});
+		};
 
-		xhr.timeout = 300000;
-		xhr.send(formData);
+		eventSource.onerror = () => {
+			eventSource.close();
+			toast.dismiss(task.toastId);
+			this.activeUploads.delete(task.id);
+			toast.error('lost connection to server');
+		};
 	}
 
 	/**

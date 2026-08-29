@@ -3,7 +3,7 @@
 import asyncio
 import contextlib
 import os
-from collections.abc import AsyncGenerator, Callable, Generator
+from collections.abc import AsyncGenerator, AsyncIterator, Callable, Generator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from io import BytesIO
@@ -26,6 +26,7 @@ from sqlalchemy.orm import sessionmaker
 
 from backend.config import settings
 from backend.models import Base
+from backend.storage.keys import AudioKey, StagedUploadKey
 from backend.storage.r2 import R2Storage
 from backend.utilities.redis import clear_client_cache
 
@@ -91,7 +92,9 @@ class MockStorage(R2Storage):
 
     def __init__(self):
         # skip R2Storage.__init__ which requires credentials
-        pass
+        self.staged_parts: dict[str, dict[int, bytes]] = {}
+        self.staged_objects: dict[str, bytes] = {}
+        self.promoted: dict[str, tuple[str, bool]] = {}
 
     async def save(
         self,
@@ -128,6 +131,64 @@ class MockStorage(R2Storage):
     ) -> str:
         """Mock save_gated."""
         return "mock_gated_file_id_456"
+
+    # resumable uploads: a faithful in-memory multipart store, keyed by
+    # staged key, so endpoint tests drive the real start → parts → finish
+    # contract (uniform part sizes, completion from the parts that landed).
+    async def begin_staged_upload(self, staged: StagedUploadKey) -> str:
+        self.staged_parts[staged.key] = {}
+        return f"multipart-{staged.upload_id}"
+
+    async def put_staged_part(
+        self,
+        staged: StagedUploadKey,
+        multipart_id: str,
+        part_number: int,
+        body: bytes,
+    ) -> str:
+        self.staged_parts[staged.key][part_number] = body
+        return f'"etag-{part_number}"'
+
+    async def complete_staged_upload(
+        self, staged: StagedUploadKey, multipart_id: str
+    ) -> int:
+        parts = self.staged_parts.get(staged.key, {})
+        if not parts:
+            raise ValueError("no parts uploaded")
+        numbers = sorted(parts)
+        if numbers != list(range(1, numbers[-1] + 1)):
+            raise ValueError("InvalidPart")
+        body = b"".join(parts[n] for n in numbers)
+        self.staged_objects[staged.key] = body
+        del self.staged_parts[staged.key]
+        return len(body)
+
+    async def staged_part_numbers(
+        self, staged: StagedUploadKey, multipart_id: str
+    ) -> list[int]:
+        return sorted(self.staged_parts.get(staged.key, {}))
+
+    async def abort_staged_upload(
+        self, staged: StagedUploadKey, multipart_id: str
+    ) -> None:
+        self.staged_parts.pop(staged.key, None)
+
+    async def stream_staged(
+        self, staged: StagedUploadKey, *, chunk_size: int = 1024 * 1024
+    ) -> AsyncIterator[bytes]:
+        body = self.staged_objects[staged.key]
+        for start in range(0, len(body), chunk_size):
+            yield body[start : start + chunk_size]
+
+    async def promote_staged(
+        self, staged: StagedUploadKey, audio: AudioKey, *, gated: bool
+    ) -> None:
+        self.promoted[audio.key] = (staged.key, gated)
+        del self.staged_objects[staged.key]
+
+    async def delete_staged(self, staged: StagedUploadKey) -> None:
+        self.staged_objects.pop(staged.key, None)
+        self.staged_parts.pop(staged.key, None)
 
 
 def pytest_configure(config: pytest.Config) -> None:

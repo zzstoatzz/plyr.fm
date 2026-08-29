@@ -427,3 +427,54 @@ async def test_reaper_second_run_does_not_reclaim_already_failed_jobs(
     mock_notify.assert_awaited_once()
     await db_session.refresh(job)
     assert job.status == JobStatus.FAILED.value
+
+
+async def test_abandoned_transfer_is_closed_and_its_multipart_aborted(
+    db_session: AsyncSession,
+) -> None:
+    from backend._internal.tasks.reaper import reap_abandoned_transfers
+    from backend.storage.keys import StagedUploadKey
+
+    transfer = {
+        "multipart_id": "mp-1",
+        "filename": "song.wav",
+        "extension": "wav",
+        "size_bytes": 8,
+        "part_size_bytes": 8,
+        "part_count": 1,
+    }
+    stale = Job(
+        type=JobType.UPLOAD.value,
+        status=JobStatus.PENDING.value,
+        owner_did="did:test:walked-away",
+        message="uploading your file...",
+        phase="transfer",
+        result={"transfer": transfer},
+        updated_at=datetime.now(UTC) - timedelta(hours=25),
+    )
+    fresh = Job(
+        type=JobType.UPLOAD.value,
+        status=JobStatus.PENDING.value,
+        owner_did="did:test:still-sending",
+        message="uploading your file...",
+        phase="transfer",
+        result={"transfer": transfer},
+        updated_at=datetime.now(UTC) - timedelta(hours=1),
+    )
+    db_session.add_all([stale, fresh])
+    await db_session.commit()
+
+    with patch(
+        "backend._internal.tasks.reaper.storage.abort_staged_upload",
+        new=AsyncMock(),
+    ) as abort:
+        await reap_abandoned_transfers()
+
+    abort.assert_awaited_once_with(
+        StagedUploadKey(upload_id=stale.id, extension="wav"), "mp-1"
+    )
+    await db_session.refresh(stale)
+    await db_session.refresh(fresh)
+    assert stale.status == JobStatus.FAILED.value
+    assert "expired" in (stale.error or "")
+    assert fresh.status == JobStatus.PENDING.value

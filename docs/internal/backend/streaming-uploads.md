@@ -5,6 +5,8 @@ title: "streaming uploads"
 **status**: implemented in PR #182
 **date**: 2025-11-03
 
+> the web uploader now transfers files as a resumable session — see [resumable-uploads.md](resumable-uploads.md). this page documents the single-request path (`POST /tracks/`) that the SDK still uses.
+
 ## overview
 
 plyr.fm uses streaming uploads for audio files to maintain constant memory usage regardless of file size. this prevents out-of-memory errors when handling large files on constrained environments (fly.io shared-cpu VMs).

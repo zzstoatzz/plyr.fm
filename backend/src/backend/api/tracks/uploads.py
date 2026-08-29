@@ -2,6 +2,7 @@
 
 import asyncio
 import contextlib
+import hashlib
 import json
 import logging
 import tempfile
@@ -68,6 +69,7 @@ from backend.config import settings
 from backend.models import Album, Artist, Track, UserPreferences
 from backend.models.job import JobStatus, JobType
 from backend.storage import storage
+from backend.storage.keys import AudioKey, StagedUploadKey
 from backend.utilities.audio import extract_duration, is_alac
 from backend.utilities.audio_formats import AudioFormat
 from backend.utilities.database import db_session
@@ -158,6 +160,13 @@ class UploadContext:
     # boundary so the worker only writes the permissioned record.
     audio_blob: BlobRef | None = None
 
+    staged: bool = False
+
+    @property
+    def staged_key(self) -> StagedUploadKey:
+        """where a resumable upload's bytes wait until the worker settles them."""
+        return StagedUploadKey(upload_id=self.upload_id, extension=self.audio_extension)
+
     @property
     def private(self) -> bool:
         """private (permissioned-space) media."""
@@ -172,6 +181,13 @@ class UploadContext:
     def audio_extension(self) -> str:
         """source-format extension, normalized (lowercase, no leading dot)."""
         return Path(self.filename).suffix.lower().lstrip(".")
+
+    @property
+    def audio_format(self) -> AudioFormat:
+        fmt = AudioFormat.from_extension(f".{self.audio_extension}")
+        if fmt is None:
+            raise UploadPhaseError(f"unsupported file type: .{self.audio_extension}")
+        return fmt
 
 
 @dataclass
@@ -597,6 +613,85 @@ async def _transcode_audio(
         transcoded_file_id=transcoded_file_id,
         transcoded_file_type=target_format,
     )
+
+
+async def _settle_staged_audio(ctx: UploadContext) -> None:
+    """phase 0 (resumable uploads only): turn staged bytes into what the
+    single-request handler would have produced — a content-hash `file_id`
+    in the right bucket (or a PDS blob for private media), plus the duration
+    and ALAC scan the handler used to do while the bytes were on its /tmp.
+
+    the staged object is read exactly once: hashed as it streams onto the
+    worker's disk, scanned from that local copy, then promoted with a
+    server-side copy — the worker never re-uploads the audio. on any
+    failure the staged object is deleted; nothing else exists yet.
+    """
+    staged = ctx.staged_key
+    await job_service.update_progress(
+        ctx.upload_id, JobStatus.PROCESSING, "checking your file...", phase="settle"
+    )
+    with (
+        logfire.span("settle staged audio", upload_id=ctx.upload_id),
+        tempfile.NamedTemporaryFile(suffix=f".{ctx.audio_extension}") as tmp,
+    ):
+        try:
+            digest = hashlib.sha256()
+            size = 0
+            async with aiofiles.open(tmp.name, "wb") as out:
+                async for chunk in storage.stream_staged(staged):
+                    digest.update(chunk)
+                    size += len(chunk)
+                    await out.write(chunk)
+            if size == 0:
+                raise UploadPhaseError("uploaded file is empty")
+            file_id = digest.hexdigest()[:16]
+
+            def _scan() -> tuple[int | None, bool]:
+                with open(tmp.name, "rb") as f:
+                    duration = extract_duration(f)
+                alac = False
+                if ctx.audio_format is AudioFormat.M4A:
+                    with open(tmp.name, "rb") as f:
+                        alac = is_alac(f)
+                return duration, alac
+
+            ctx.duration, ctx.needs_transcode = await anyio.to_thread.run_sync(_scan)
+
+            if ctx.private:
+
+                def _body() -> AsyncIterable[bytes]:
+                    async def _gen() -> AsyncIterable[bytes]:
+                        async with aiofiles.open(tmp.name, "rb") as af:
+                            while chunk := await af.read(CHUNK_SIZE):
+                                yield chunk
+
+                    return _gen()
+
+                ctx.audio_blob = await upload_blob(
+                    ctx.auth_session,
+                    body_factory=_body,
+                    content_length=size,
+                    content_type=ctx.audio_format.media_type,
+                )
+                await storage.delete_staged(staged)
+            else:
+                is_gated = ctx.support_gate is not None
+                await storage.promote_staged(
+                    staged,
+                    AudioKey.for_file(file_id, ctx.audio_extension),
+                    gated=is_gated,
+                )
+                await job_service.set_cleanup_hints(
+                    ctx.upload_id,
+                    file_id=file_id,
+                    file_type=ctx.audio_extension,
+                    is_gated=is_gated,
+                )
+            ctx.audio_file_id = file_id
+        except Exception:
+            with contextlib.suppress(Exception):
+                await storage.delete_staged(staged)
+            raise
 
 
 async def _validate_audio(ctx: UploadContext) -> AudioInfo:
@@ -1194,9 +1289,10 @@ async def _cleanup_staged_media_pre_db(
         # `_store_audio` either didn't run, or returned the staged file
         # as-is (web-playable). either way, only ctx.audio_file_id is
         # in storage, in the bucket the handler chose.
-        await _delete_staged_audio(
-            ctx.audio_file_id, ctx.audio_extension, gated=is_gated
-        )
+        if ctx.audio_file_id:
+            await _delete_staged_audio(
+                ctx.audio_file_id, ctx.audio_extension, gated=is_gated
+            )
 
     if ctx.image_id:
         with contextlib.suppress(Exception):
@@ -1223,6 +1319,12 @@ async def _process_upload_background(ctx: UploadContext) -> None:
             await job_service.update_progress(
                 ctx.upload_id, JobStatus.PROCESSING, "processing upload..."
             )
+
+            # phase 0: a resumable upload's bytes are still under the staged
+            # key; settle them into a content-hash object (or a PDS blob) so
+            # every later phase sees exactly what a single-request upload sees.
+            if ctx.staged:
+                await _settle_staged_audio(ctx)
 
             # phase 1: validate and prepare audio
             audio_info = await _validate_audio(ctx)
@@ -1354,6 +1456,7 @@ async def run_track_upload(
     audio_blob: BlobRef | None = None,
     visibility: str = "public",
     needs_transcode: bool = False,
+    staged: bool = False,
     concurrency: ConcurrencyLimit = ConcurrencyLimit("artist_did", max_concurrent=3),
 ) -> None:
     """docket task entry point for track uploads.
@@ -1391,7 +1494,12 @@ async def run_track_upload(
         # without a fresh sign-in, so clean up the staged storage objects
         # rather than leaving them as durable orphans. private media has no R2
         # object (the audio is a PDS blob); nothing to delete there.
-        if visibility != "private":
+        if staged:
+            with contextlib.suppress(Exception):
+                await storage.delete_staged(
+                    StagedUploadKey.from_filename(upload_id, filename)
+                )
+        elif visibility != "private":
             await _delete_staged_audio(
                 audio_file_id,
                 Path(filename).suffix.lower().lstrip(".") or None,
@@ -1431,6 +1539,7 @@ async def run_track_upload(
         visibility=visibility,
         audio_blob=audio_blob,
         needs_transcode=needs_transcode,
+        staged=staged,
     )
     await _process_upload_background(ctx)
 
@@ -1473,6 +1582,163 @@ async def schedule_track_upload(ctx: UploadContext) -> None:
         visibility=ctx.visibility,
         audio_blob=ctx.audio_blob,
         needs_transcode=ctx.needs_transcode,
+        staged=ctx.staged,
+    )
+
+
+_VISIBILITIES = frozenset({"public", "unlisted", "supporters", "private"})
+
+
+@dataclass(frozen=True)
+class UploadMetadata:
+    """the validated, non-audio half of an upload request.
+
+    shared by the single-request `POST /tracks/` and the resumable
+    `POST /tracks/uploads/{id}/finish`, so both accept exactly the same
+    fields and reject them for exactly the same reasons.
+    """
+
+    title: str
+    audio_format: AudioFormat
+    audio_extension: str
+    album: str | None
+    album_id: str | None
+    features_json: str | None
+    tags: list[str]
+    self_labels: list[str]
+    description: str | None
+    visibility: str
+    support_gate: dict | None
+    copyright_rights: dict | None
+    auto_tag: bool
+
+    @property
+    def is_private(self) -> bool:
+        return self.visibility == "private"
+
+    @property
+    def is_gated(self) -> bool:
+        return self.support_gate is not None
+
+
+def parse_upload_metadata(
+    auth_session: AuthSession,
+    *,
+    filename: str | None,
+    title: str,
+    album: str | None,
+    album_id: str | None,
+    features: str | None,
+    tags: str | None,
+    visibility: str,
+    copyright: str | None,
+    description: str | None,
+    self_labels: str | None,
+    auto_tag: str | None,
+) -> UploadMetadata:
+    """validate upload form fields; raises HTTPException with the user-facing detail."""
+    if album and album_id:
+        raise HTTPException(
+            status_code=400,
+            detail="album and album_id are mutually exclusive — provide one or the other",
+        )
+
+    try:
+        validated_tags = parse_tags_json(tags)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+    try:
+        validated_self_labels = parse_self_label_values_json(self_labels)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+    if visibility not in _VISIBILITIES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"invalid visibility: {visibility} (one of {sorted(_VISIBILITIES)})",
+        )
+    is_private = visibility == "private"
+    support_gate: dict | None = {"type": "any"} if visibility == "supporters" else None
+
+    copyright_rights: dict | None = None
+    if copyright:
+        if visibility in ("supporters", "private"):
+            raise HTTPException(
+                status_code=400,
+                detail=f"copyright cannot combine with {visibility} visibility",
+            )
+        try:
+            copyright_rights = TrackRightsInput.model_validate_json(
+                copyright
+            ).model_dump(by_alias=True, exclude_none=True)
+        except ValidationError as e:
+            raise HTTPException(
+                status_code=400, detail=f"invalid copyright payload: {e}"
+            ) from e
+        support_gate = {"type": "copyright"}
+
+    if not filename:
+        raise HTTPException(status_code=400, detail="no filename provided")
+
+    ext = Path(filename).suffix.lower()
+    audio_format = AudioFormat.from_extension(ext)
+    if not audio_format:
+        raise HTTPException(
+            status_code=400,
+            detail=f"unsupported file type: {ext}. "
+            f"supported: {AudioFormat.supported_extensions_str()}",
+        )
+
+    if is_private:
+        if not session_has_private_media_access(auth_session):
+            raise HTTPException(status_code=403, detail="permissioned_scope_required")
+        if not audio_format.is_web_playable:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"private media currently supports web-playable audio only "
+                    f"({ext} needs transcoding); convert to mp3/wav/m4a/flac first"
+                ),
+            )
+
+    return UploadMetadata(
+        title=title,
+        audio_format=audio_format,
+        audio_extension=ext.lstrip("."),
+        album=album,
+        album_id=album_id,
+        features_json=features,
+        tags=validated_tags,
+        self_labels=validated_self_labels,
+        description=description,
+        visibility=visibility,
+        support_gate=support_gate,
+        copyright_rights=copyright_rights,
+        auto_tag=auto_tag == "true",
+    )
+
+
+async def stage_image_from_upload(
+    image: UploadFile | None, *, is_private: bool
+) -> tuple[str | None, str | None, str | None]:
+    """read an optional cover image and stage it; (image_id, image_url, thumbnail_url).
+
+    best-effort: a missing or invalid image never fails the upload. private
+    media has no public cover in this MVP.
+    """
+    if not (image and image.filename) or is_private:
+        return None, None, None
+    max_image_size = 20 * 1024 * 1024
+    image_buffer = BytesIO()
+    image_bytes_read = 0
+    while chunk := await image.read(CHUNK_SIZE):
+        image_bytes_read += len(chunk)
+        if image_bytes_read > max_image_size:
+            raise HTTPException(status_code=413, detail="image too large (max 20MB)")
+        image_buffer.write(chunk)
+    return await stage_image_to_storage(
+        image_buffer.getvalue(), image.filename, image.content_type
     )
 
 
@@ -1539,82 +1805,30 @@ async def upload_track(
     Returns:
         dict: A payload containing `upload_id` for monitoring progress via SSE.
     """
-    # album and album_id are mutually exclusive
-    if album and album_id:
-        raise HTTPException(
-            status_code=400,
-            detail="album and album_id are mutually exclusive — provide one or the other",
-        )
-
-    # validate tags upfront before any processing
-    try:
-        validated_tags = parse_tags_json(tags)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
-
-    try:
-        validated_self_labels = parse_self_label_values_json(self_labels)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
-
-    # visibility is the single source of truth; derive the transient gating flags.
-    _VISIBILITIES = {"public", "unlisted", "supporters", "private"}
-    if visibility not in _VISIBILITIES:
-        raise HTTPException(
-            status_code=400,
-            detail=f"invalid visibility: {visibility} (one of {sorted(_VISIBILITIES)})",
-        )
-    is_private = visibility == "private"
-    # supporters → atprotofans gate; carried as support_gate on the public record
-    parsed_support_gate: dict | None = (
-        {"type": "any"} if visibility == "supporters" else None
-    )
-
-    # copyright (indiemusi) is orthogonal — it rides on a public/unlisted track and
-    # gates audio at the app layer. it can't combine with supporters or private.
-    parsed_copyright: dict | None = None
-    if copyright:
-        if visibility in ("supporters", "private"):
-            raise HTTPException(
-                status_code=400,
-                detail=f"copyright cannot combine with {visibility} visibility",
-            )
-        try:
-            parsed_copyright = TrackRightsInput.model_validate_json(
-                copyright
-            ).model_dump(by_alias=True, exclude_none=True)
-        except ValidationError as e:
-            raise HTTPException(
-                status_code=400, detail=f"invalid copyright payload: {e}"
-            ) from e
-        parsed_support_gate = {"type": "copyright"}
-
-    # validate audio file type upfront
     if not file.filename:
         raise HTTPException(status_code=400, detail="no filename provided")
-
-    ext = Path(file.filename).suffix.lower()
-    audio_format = AudioFormat.from_extension(ext)
-    if not audio_format:
-        raise HTTPException(
-            status_code=400,
-            detail=f"unsupported file type: {ext}. "
-            f"supported: {AudioFormat.supported_extensions_str()}",
-        )
-
-    # web-playable only: the blob is written at publish time, and the deferred
-    # transcode path still targets the public repo.
-    if is_private:
-        if not session_has_private_media_access(auth_session):
-            raise HTTPException(status_code=403, detail="permissioned_scope_required")
-        if not audio_format.is_web_playable:
-            raise HTTPException(
-                status_code=400,
-                detail=(
-                    f"private media currently supports web-playable audio only "
-                    f"({ext} needs transcoding); convert to mp3/wav/m4a/flac first"
-                ),
-            )
+    filename = file.filename
+    meta = parse_upload_metadata(
+        auth_session,
+        filename=filename,
+        title=title,
+        album=album,
+        album_id=album_id,
+        features=features,
+        tags=tags,
+        visibility=visibility,
+        copyright=copyright,
+        description=description,
+        self_labels=self_labels,
+        auto_tag=auto_tag,
+    )
+    audio_format = meta.audio_format
+    is_private = meta.is_private
+    parsed_support_gate = meta.support_gate
+    parsed_copyright = meta.copyright_rights
+    validated_tags = meta.tags
+    validated_self_labels = meta.self_labels
+    ext = f".{meta.audio_extension}"
 
     # stage audio + image to shared object storage BEFORE enqueueing the
     # docket task. only stable file_ids travel over Redis to the worker —
@@ -1709,7 +1923,7 @@ async def upload_track(
             # copyright) go to the private bucket; public tracks to the public one.
             with open(file_path, "rb") as f:
                 audio_file_id = await stage_audio_to_storage(
-                    upload_id, f, file.filename, gated=is_gated
+                    upload_id, f, filename, gated=is_gated
                 )
             if audio_extension:
                 await job_service.set_cleanup_hints(
@@ -1724,27 +1938,15 @@ async def upload_track(
         # treats `image_id is None` as "no track artwork").
         # private media has no public cover in this MVP (a public imageUrl would
         # leak the artwork); cover-as-PDS-blob is a follow-up.
-        if image and image.filename and not is_private:
-            max_image_size = 20 * 1024 * 1024
-            image_buffer = BytesIO()
-            image_bytes_read = 0
-            while chunk := await image.read(CHUNK_SIZE):
-                image_bytes_read += len(chunk)
-                if image_bytes_read > max_image_size:
-                    raise HTTPException(
-                        status_code=413,
-                        detail="image too large (max 20MB)",
-                    )
-                image_buffer.write(chunk)
-            image_id, image_url, thumbnail_url = await stage_image_to_storage(
-                image_buffer.getvalue(), image.filename, image.content_type
-            )
+        image_id, image_url, thumbnail_url = await stage_image_from_upload(
+            image, is_private=is_private
+        )
 
         ctx = UploadContext(
             upload_id=upload_id,
             auth_session=auth_session,
             audio_file_id=audio_file_id,
-            filename=file.filename,
+            filename=filename,
             duration=duration,
             title=title,
             artist_did=auth_session.did,

@@ -43,6 +43,7 @@ from backend._internal.notifications import notification_service
 from backend.models import Artist, Track
 from backend.models.job import Job, JobStatus, JobType
 from backend.storage import storage
+from backend.storage.keys import StagedUploadKey
 from backend.utilities.database import db_session
 
 logger = logging.getLogger(__name__)
@@ -121,6 +122,66 @@ async def reap_stuck_uploads(
                 threshold_minutes=int(STUCK_UPLOAD_THRESHOLD.total_seconds() / 60),
                 job_ids=[j.id for j in reaped],
             )
+
+
+ABANDONED_TRANSFER_THRESHOLD = timedelta(hours=24)
+
+
+async def reap_abandoned_transfers(
+    perpetual: Perpetual = Perpetual(every=timedelta(minutes=30), automatic=True),  # noqa: B008
+) -> None:
+    """close resumable upload sessions nobody has sent a part to in a day.
+
+    a session sits in `pending` / phase `transfer` while the browser sends
+    parts (each part heartbeats `updated_at`); a closed tab leaves it there
+    with an open R2 multipart upload. R2 aborts those itself after 7 days;
+    this just makes the job row say so sooner and stops the client resuming
+    into a session that will never finish. no notification — the user
+    walked away, nothing failed.
+    """
+    cutoff = datetime.now(UTC) - ABANDONED_TRANSFER_THRESHOLD
+    now = datetime.now(UTC)
+    async with db_session() as db:
+        stale_ids = (
+            select(Job.id)
+            .where(
+                Job.type == JobType.UPLOAD.value,
+                Job.status == JobStatus.PENDING.value,
+                Job.phase == "transfer",
+                Job.updated_at < cutoff,
+            )
+            .with_for_update(skip_locked=True)
+        )
+        result = await db.execute(
+            update(Job)
+            .where(Job.id.in_(stale_ids))
+            .values(
+                status=JobStatus.FAILED.value,
+                message="upload failed",
+                error="upload session expired — please re-upload",
+                completed_at=now,
+                updated_at=now,
+            )
+            .returning(Job)
+        )
+        abandoned = list(result.scalars().all())
+        await db.commit()
+
+    for job in abandoned:
+        transfer = (job.result or {}).get("transfer") or {}
+        try:
+            staged = StagedUploadKey(
+                upload_id=job.id, extension=str(transfer["extension"])
+            )
+            await storage.abort_staged_upload(staged, str(transfer["multipart_id"]))
+        except Exception as e:
+            logfire.warning(
+                "could not abort abandoned multipart upload",
+                job_id=job.id,
+                error=str(e),
+            )
+    if abandoned:
+        logfire.info("reaped abandoned upload sessions", count=len(abandoned))
 
 
 async def _maybe_cleanup_staged_blob(db, job: Job) -> None:
