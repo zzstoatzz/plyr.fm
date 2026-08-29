@@ -87,7 +87,9 @@
 			if (include.length > 0) {
 				params.set('include', include.join(','));
 			}
-			const response = await fetch(`https://find-bufo.fly.dev/api/search?${params}`);
+			const response = await fetch(`https://find-bufo.com/api/search?${params}`, {
+				headers: { 'X-Client': 'plyr.fm' }
+			});
 			if (response.ok) {
 				const data = await response.json();
 				bufos = data.results || [];
