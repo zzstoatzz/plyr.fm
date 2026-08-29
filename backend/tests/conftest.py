@@ -132,9 +132,7 @@ class MockStorage(R2Storage):
         """Mock save_gated."""
         return "mock_gated_file_id_456"
 
-    # resumable uploads: a faithful in-memory multipart store, keyed by
-    # staged key, so endpoint tests drive the real start → parts → finish
-    # contract (uniform part sizes, completion from the parts that landed).
+    # in-memory multipart store so endpoint tests drive the real session contract
     async def begin_staged_upload(self, staged: StagedUploadKey) -> str:
         self.staged_parts[staged.key] = {}
         return f"multipart-{staged.upload_id}"

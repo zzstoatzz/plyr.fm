@@ -6,6 +6,7 @@ import hashlib
 import json
 import logging
 import tempfile
+import time
 from collections.abc import AsyncIterable, Callable
 from dataclasses import dataclass, field
 from io import BytesIO
@@ -29,6 +30,7 @@ from pydantic import BaseModel, ValidationError
 from sqlalchemy import delete, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.datastructures import UploadFile as StarletteUploadFile
 
 from backend._internal import Session as AuthSession
 from backend._internal import get_session, require_artist_profile
@@ -637,11 +639,15 @@ async def _settle_staged_audio(ctx: UploadContext) -> None:
         try:
             digest = hashlib.sha256()
             size = 0
+            last_beat = time.monotonic()
             async with aiofiles.open(tmp.name, "wb") as out:
                 async for chunk in storage.stream_staged(staged):
                     digest.update(chunk)
                     size += len(chunk)
                     await out.write(chunk)
+                    if time.monotonic() - last_beat >= 5:
+                        await job_service.heartbeat(ctx.upload_id)
+                        last_beat = time.monotonic()
             if size == 0:
                 raise UploadPhaseError("uploaded file is empty")
             file_id = digest.hexdigest()[:16]
@@ -667,12 +673,17 @@ async def _settle_staged_audio(ctx: UploadContext) -> None:
 
                     return _gen()
 
+                async def _heartbeat() -> None:
+                    await job_service.heartbeat(ctx.upload_id)
+
                 ctx.audio_blob = await upload_blob(
                     ctx.auth_session,
                     body_factory=_body,
                     content_length=size,
                     content_type=ctx.audio_format.media_type,
+                    heartbeat=_heartbeat,
                 )
+                ctx.audio_file_id = file_id
                 await storage.delete_staged(staged)
             else:
                 is_gated = ctx.support_gate is not None
@@ -681,13 +692,13 @@ async def _settle_staged_audio(ctx: UploadContext) -> None:
                     AudioKey.for_file(file_id, ctx.audio_extension),
                     gated=is_gated,
                 )
+                ctx.audio_file_id = file_id
                 await job_service.set_cleanup_hints(
                     ctx.upload_id,
                     file_id=file_id,
                     file_type=ctx.audio_extension,
                     is_gated=is_gated,
                 )
-            ctx.audio_file_id = file_id
         except Exception:
             with contextlib.suppress(Exception):
                 await storage.delete_staged(staged)
@@ -1320,9 +1331,6 @@ async def _process_upload_background(ctx: UploadContext) -> None:
                 ctx.upload_id, JobStatus.PROCESSING, "processing upload..."
             )
 
-            # phase 0: a resumable upload's bytes are still under the staged
-            # key; settle them into a content-hash object (or a PDS blob) so
-            # every later phase sees exactly what a single-request upload sees.
             if ctx.staged:
                 await _settle_staged_audio(ctx)
 
@@ -1720,7 +1728,7 @@ def parse_upload_metadata(
 
 
 async def stage_image_from_upload(
-    image: UploadFile | None, *, is_private: bool
+    image: StarletteUploadFile | None, *, is_private: bool
 ) -> tuple[str | None, str | None, str | None]:
     """read an optional cover image and stage it; (image_id, image_url, thumbnail_url).
 

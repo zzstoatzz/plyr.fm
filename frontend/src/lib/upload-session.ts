@@ -12,7 +12,8 @@
 import { API_URL } from './config';
 
 export const PART_CONCURRENCY = 3;
-export const PART_TIMEOUT_MS = 120_000;
+export const PART_STALL_MS = 60_000;
+export const PART_MAX_MS = 15 * 60_000;
 export const PART_ATTEMPTS = 5;
 const RETRY_BASE_MS = 500;
 
@@ -148,21 +149,41 @@ export async function finishUploadSession(uploadId: string, form: FormData): Pro
 }
 
 export interface SendPartOptions {
-	timeoutMs: number;
+	/** abort when no upload progress has been reported for this long */
+	stallMs: number;
+	/** absolute ceiling for one part, however slowly it moves */
+	maxMs: number;
 	onProgress: (loadedBytes: number) => void;
 	signal?: AbortSignal;
 }
 
-/** one part over XHR — the only browser transport with upload progress events. */
+/**
+ * one part over XHR — the only browser transport with upload progress events.
+ * a slow part is not a dead part: the timeout is measured from the last
+ * progress event, so a transfer that keeps moving is never cut off.
+ */
 export function sendPart(url: string, body: Blob, options: SendPartOptions): Promise<void> {
 	return new Promise((resolve, reject) => {
 		const xhr = new XMLHttpRequest();
 		xhr.open('PUT', url);
 		xhr.withCredentials = true;
-		xhr.timeout = options.timeoutMs;
+		xhr.timeout = options.maxMs;
+		let stallTimer: ReturnType<typeof setTimeout> | undefined;
+		const armStall = () => {
+			if (stallTimer !== undefined) clearTimeout(stallTimer);
+			stallTimer = setTimeout(() => {
+				xhr.abort();
+				reject(new PartAttemptError({ kind: 'timeout' }));
+			}, options.stallMs);
+		};
+		const settle = () => {
+			if (stallTimer !== undefined) clearTimeout(stallTimer);
+		};
 		xhr.upload.addEventListener('progress', (event) => {
+			armStall();
 			if (event.lengthComputable) options.onProgress(event.loaded);
 		});
+		xhr.addEventListener('loadend', settle);
 		xhr.addEventListener('load', () => {
 			if (xhr.status >= 200 && xhr.status < 300) {
 				options.onProgress(body.size);
@@ -182,6 +203,7 @@ export function sendPart(url: string, body: Blob, options: SendPartOptions): Pro
 		xhr.addEventListener('timeout', () => reject(new PartAttemptError({ kind: 'timeout' })));
 		xhr.addEventListener('abort', () => reject(new PartAttemptError({ kind: 'network' })));
 		options.signal?.addEventListener('abort', () => xhr.abort(), { once: true });
+		armStall();
 		xhr.send(body);
 	});
 }
@@ -195,7 +217,8 @@ export interface UploadPartsOptions {
 	send?: PartSender;
 	concurrency?: number;
 	attempts?: number;
-	timeoutMs?: number;
+	stallMs?: number;
+	maxMs?: number;
 	sleep?: (ms: number) => Promise<void>;
 	signal?: AbortSignal;
 }
@@ -213,7 +236,8 @@ export async function uploadParts(options: UploadPartsOptions): Promise<void> {
 		send = sendPart,
 		concurrency = PART_CONCURRENCY,
 		attempts = PART_ATTEMPTS,
-		timeoutMs = PART_TIMEOUT_MS,
+		stallMs = PART_STALL_MS,
+		maxMs = PART_MAX_MS,
 		sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
 		signal
 	} = options;
@@ -241,7 +265,8 @@ export async function uploadParts(options: UploadPartsOptions): Promise<void> {
 			for (let attempt = 1; ; attempt++) {
 				try {
 					await send(url, body, {
-						timeoutMs,
+						stallMs,
+						maxMs,
 						signal,
 						onProgress: (bytes) => {
 							loadedByPart.set(plan.partNumber, bytes);

@@ -28,9 +28,9 @@ browser                                api                              R2 / wor
   │  PUT /tracks/uploads/{id}/parts/{n}  │  upload_part, heartbeat job      │  ×N, 3 in flight
   │ ───────────────────────────────────▶ │ ─────────────────────────────▶   │
   │                                      │                                  │
-  │  POST /tracks/uploads/{id}/finish    │  list_parts → all present?       │
-  │  (same form fields, minus file)      │  complete_multipart_upload       │
-  │ ───────────────────────────────────▶ │  stage image, enqueue worker     │
+  │  POST /tracks/uploads/{id}/finish    │  validate fields, list_parts,    │
+  │  (same form fields, minus file)      │  stage image, then complete      │
+  │ ───────────────────────────────────▶ │  multipart, enqueue worker       │
   │ ◀─ {upload_id}                       │                                  │
   │                                      │                                  │
   │  GET /tracks/uploads/{id}/progress   │        run_track_upload(staged=True)
@@ -51,9 +51,10 @@ browser                                api                              R2 / wor
   `audio.plyr.fm`; a supporter-gated master must never be reachable there, even
   under an unguessable key.
 - **`finish` validates the metadata before completing the multipart**, using the
-  same `parse_upload_metadata` as `POST /tracks/`; a 400 there leaves the parts
-  in place. a missing part is a 409 and the session stays open for the client to
-  resend (`GET /tracks/uploads/{id}` lists received parts).
+  same `parse_upload_metadata` as `POST /tracks/`; a 400 there, a 409 for a
+  missing part, or a 413 for a rejected cover image all leave the parts in place
+  and the session open (`GET /tracks/uploads/{id}` lists received parts). the
+  multipart is completed only once nothing else can refuse the upload.
 - **the worker settles** (`_settle_staged_audio`): the staged object is read
   once onto the worker's disk while its sha256 is computed; duration and the
   ALAC scan run from that local copy (the handler used to do this on its own
@@ -72,7 +73,7 @@ browser                                api                              R2 / wor
 ## client
 
 `frontend/src/lib/upload-session.ts` is the transport: `startUploadSession`,
-`uploadParts` (3 in flight, 120s per-part timeout, 5 attempts with exponential
+`uploadParts` (3 in flight, a 60s *stall* timeout per part — measured from the last progress event, so a slow part is never cut off — plus a 15 min ceiling, 5 attempts with exponential
 backoff, progress = acknowledged bytes), `finishUploadSession`. it takes an
 injectable `send` so its tests exercise the retry and progress logic without a
 DOM. `uploader.svelte.ts` composes it with the unchanged SSE follow-up.

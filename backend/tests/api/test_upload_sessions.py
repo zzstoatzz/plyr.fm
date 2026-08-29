@@ -172,6 +172,26 @@ def test_metadata_is_validated_before_the_parts_are_assembled(
         ]
 
 
+def test_rejected_cover_image_keeps_the_session_open(artist_app: FastAPI) -> None:
+    with TestClient(artist_app) as client:
+        upload_id = _start(client)["upload_id"]
+        _send_parts(client, upload_id)
+        resp = client.post(
+            f"/tracks/uploads/{upload_id}/finish",
+            data={"title": "song"},
+            files={
+                "image": (
+                    "cover.png",
+                    b"\x89PNG" + b"0" * (20 * 1024 * 1024),
+                    "image/png",
+                )
+            },
+        )
+        assert resp.status_code == 413
+        state = client.get(f"/tracks/uploads/{upload_id}").json()
+        assert state["received_parts"] == [1, 2, 3]
+
+
 def test_start_rejects_unsupported_and_oversized_files(artist_app: FastAPI) -> None:
     with TestClient(artist_app) as client:
         resp = client.post(

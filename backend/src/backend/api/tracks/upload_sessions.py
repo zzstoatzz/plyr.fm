@@ -10,6 +10,7 @@ parts are assembled. the worker then settles the staged bytes
 (`uploads._settle_staged_audio`) and runs the ordinary upload pipeline.
 """
 
+import contextlib
 import math
 from dataclasses import dataclass
 from typing import Annotated
@@ -39,7 +40,7 @@ from .uploads import (
 )
 
 PART_SIZE_BYTES = 10 * 1024 * 1024
-MAX_PARTS = 10_000
+MAX_PARTS = 1_000
 TRANSFER_PHASE = "transfer"
 
 
@@ -246,8 +247,9 @@ async def finish_upload_session(
 ) -> UploadStartResponse:
     """assemble the parts and queue the track; same fields as `POST /tracks/` minus `file`.
 
-    a missing part leaves the session open (409) so the client can resend it;
-    only a fully assembled file is handed to the worker.
+    a missing part (409) or a rejected cover image (413) leaves the session
+    open so the client can fix and retry; the multipart is only completed
+    once nothing else can refuse the upload.
     """
     _, transfer = await _open_transfer(upload_id, auth_session.did)
     meta = parse_upload_metadata(
@@ -276,32 +278,25 @@ async def finish_upload_session(
             status_code=409,
             detail=f"upload incomplete — {len(missing)} part(s) missing",
         )
-    try:
-        size = await storage.complete_staged_upload(staged, transfer.multipart_id)
-    except (ClientError, ValueError) as e:
-        logfire.info("upload session incomplete", upload_id=upload_id, error=str(e))
-        raise HTTPException(
-            status_code=409, detail="upload incomplete — some parts are missing"
-        ) from e
-    if size != transfer.size_bytes:
-        await storage.delete_staged(staged)
-        await job_service.update_progress(
-            upload_id,
-            JobStatus.FAILED,
-            "upload failed",
-            error="uploaded size does not match the declared size",
-        )
-        raise HTTPException(
-            status_code=400,
-            detail=f"uploaded {size} bytes but {transfer.size_bytes} were declared",
-        )
+
+    image_id, image_url, thumbnail_url = await stage_image_from_upload(
+        image, is_private=meta.is_private
+    )
 
     enqueued = False
-    image_id: str | None = None
     try:
-        image_id, image_url, thumbnail_url = await stage_image_from_upload(
-            image, is_private=meta.is_private
-        )
+        try:
+            size = await storage.complete_staged_upload(staged, transfer.multipart_id)
+        except (ClientError, ValueError) as e:
+            logfire.info("upload session incomplete", upload_id=upload_id, error=str(e))
+            raise HTTPException(
+                status_code=409, detail="upload incomplete — some parts are missing"
+            ) from e
+        if size != transfer.size_bytes:
+            raise HTTPException(
+                status_code=400,
+                detail=f"uploaded {size} bytes but {transfer.size_bytes} were declared",
+            )
         ctx = UploadContext(
             upload_id=upload_id,
             auth_session=auth_session,
@@ -336,15 +331,18 @@ async def finish_upload_session(
         enqueued = True
     finally:
         if not enqueued:
-            await storage.delete_staged(staged)
+            with contextlib.suppress(Exception):
+                await storage.delete_staged(staged)
             if image_id:
-                await storage.discard_staged(image_id)
-            await job_service.update_progress(
-                upload_id,
-                JobStatus.FAILED,
-                "upload failed",
-                error="upload aborted before queueing",
-            )
+                with contextlib.suppress(Exception):
+                    await storage.discard_staged(image_id)
+            with contextlib.suppress(Exception):
+                await job_service.update_progress(
+                    upload_id,
+                    JobStatus.FAILED,
+                    "upload failed",
+                    error="upload aborted before queueing",
+                )
 
     return UploadStartResponse(
         upload_id=upload_id,
