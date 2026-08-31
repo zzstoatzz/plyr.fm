@@ -9,6 +9,7 @@ export default [
 	{
 		ignores: [
 			'.svelte-kit/**',
+			'.scratch/**',
 			'.vercel/**',
 			'build/**',
 			'node_modules/**',
