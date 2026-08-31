@@ -79,7 +79,7 @@ max_lines = 1026
 
 [[rules]]
 path = "docs/internal/authentication.md"
-max_lines = 645
+max_lines = 674
 
 [[rules]]
 path = "docs/internal/backend/liked-tracks.md"

@@ -206,6 +206,35 @@ async initialize() {
 }
 ```
 
+## the browser's own atproto session (client writes)
+
+everything above describes the **cookie session**: the backend is a
+confidential OAuth client, holds the user's tokens, and is the only thing that
+can act on the user's PDS. since the client-writes migration
+(`docs/plans/2026-08-31-client-side-writes.md`, phase 0) a second session
+exists alongside it:
+
+- the frontend is a **public OAuth client** (`/oauth-client-metadata.json`
+  served per origin; `src/lib/atproto/metadata.ts` is the single builder both
+  the hosted document and the running client use). tokens live in the
+  browser's IndexedDB, managed by `@atproto/oauth-client-browser`
+  (`src/lib/atproto/client.ts`, lazily imported).
+- it is linked once, right after a login exchange
+  (`auth.linkAtprotoSession()`): the first ever trip shows the PDS consent
+  screen, later trips are silent, and once the session is stored there is no
+  navigation at all. `/atproto/callback` completes the round-trip.
+- its scope is only what migrated writes need (likes, to start); scopes grow
+  per phase via re-authorization, which prompts only for the delta.
+- the two sessions answer different questions: the cookie identifies the user
+  to plyr's API; the browser session lets the browser write to the user's own
+  repo. a browser without one (older sign-in, cleared storage) falls back to
+  the server write endpoints.
+- `POST /ingest/record` (`api/ingest.py`) is the read-after-write bridge: the
+  client names an `at://` URI in its own repo, and the appview fetches the
+  record from the caller's PDS and indexes it through the same functions
+  jetstream uses — the claim is never trusted, and jetstream remains the
+  reconciler.
+
 ## environment architecture
 
 all environments use custom domains on the same eTLD+1 (`.plyr.fm`) to enable cookie sharing between frontend and backend within each environment:
