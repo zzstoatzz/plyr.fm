@@ -35,6 +35,7 @@
 					// invalidate all load functions so they rerun with the new session cookie
 					await invalidateAll();
 					await auth.refresh();
+					await auth.linkAtprotoSession('/profile/setup');
 				}
 			} catch (_e) {
 				console.error('failed to exchange token:', _e);

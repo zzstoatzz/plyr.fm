@@ -43,6 +43,7 @@ from backend.api import (
     xrpc_router,
 )
 from backend.api.albums import router as albums_router
+from backend.api.ingest import router as ingest_router
 from backend.api.lists import router as lists_router
 from backend.api.migration import router as migration_router
 from backend.api.subsonic import compat_router as subsonic_compat_router
@@ -193,6 +194,7 @@ app.include_router(queue_router)
 app.include_router(radio_router)
 app.include_router(now_playing_router)
 app.include_router(migration_router)
+app.include_router(ingest_router)
 app.include_router(exports_router)
 app.include_router(for_you_router)
 app.include_router(jams_router)
