@@ -36,6 +36,7 @@ async def get_public_config() -> dict[str, int | str | list[str]]:
 
     return {
         "max_upload_size_mb": settings.storage.max_upload_size_mb,
+        "app_namespace": settings.atproto.app_namespace,
         "max_image_size_mb": 20,  # hardcoded limit for cover art
         "browser_observability": settings.app.browser_observability,
         "default_hidden_tags": DEFAULT_HIDDEN_TAGS,

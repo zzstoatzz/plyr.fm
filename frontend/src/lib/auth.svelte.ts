@@ -92,6 +92,23 @@ class AuthManager {
 	getAuthHeaders(): Record<string, string> {
 		return {};
 	}
+
+	/**
+	 * make sure this browser holds the user's own atproto OAuth session (the
+	 * client-writes substrate). called right after a login exchange — the one
+	 * moment the user is already in an auth context. first ever call shows the
+	 * PDS consent screen once; after that the round-trip is silent, and once
+	 * the session is in this browser there is no navigation at all.
+	 */
+	async linkAtprotoSession(returnTo: string): Promise<void> {
+		if (!browser || !this.user) return;
+		try {
+			const { ensureSession } = await import('./atproto/client');
+			await ensureSession(this.user.handle, this.user.did, returnTo);
+		} catch (e) {
+			console.error('atproto session link failed:', e);
+		}
+	}
 }
 
 export const auth = new AuthManager();
