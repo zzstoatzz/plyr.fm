@@ -538,6 +538,7 @@
 		.control-btn.skip {
 			grid-row: 2;
 			padding: 0.25rem;
+			justify-self: center;
 		}
 
 		.control-btn.skip-back {
