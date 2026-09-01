@@ -18,7 +18,7 @@
 		name?: string;
 		/** a length known before the browser has scanned the container (a recording's tick count). */
 		fallbackDurationSeconds?: number;
-		/** the file's journey into staging, when it started ahead of the form. */
+		/** the file's transfer into staging, once the form has been submitted. */
 		transfer?: StagedTransfer | null;
 		height?: number;
 	}
@@ -160,14 +160,14 @@
 			<progress max={transfer.total} value={transfer.loaded} aria-label="file transfer"></progress>
 			<div class="transfer-row">
 				{#if transfer.status === 'transferred'}
-					<span class="transfer-text">file received — upload when you're ready</span>
+					<span class="transfer-text">file sent — finishing up</span>
 				{:else if transfer.status === 'failed'}
 					<span class="transfer-text">{transfer.error ?? "your file didn't finish sending"}</span>
 					<button type="button" class="retry" onclick={() => transfer.retry()}>retry</button>
 				{:else if transfer.status === 'transferring'}
-					<span class="transfer-text">receiving your file… {transfer.progressPercent}%</span>
+					<span class="transfer-text">sending your file… {transfer.progressPercent}%</span>
 				{:else}
-					<span class="transfer-text">getting ready…</span>
+					<span class="transfer-text">starting…</span>
 				{/if}
 			</div>
 		</div>

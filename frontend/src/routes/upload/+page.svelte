@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onDestroy, onMount } from "svelte";
+	import { onMount } from "svelte";
 	import { browser } from "$app/environment";
 	import Header from "$lib/components/Header.svelte";
 	import HandleSearch from "$lib/components/HandleSearch.svelte";
@@ -69,7 +69,7 @@
 	let title = $state("");
 	let albumTitle = $state("");
 	let file = $state<File | null>(null);
-	// the chosen file's transfer into staging; starts on selection, finished by submit
+	// the file's transfer into staging; nothing leaves the browser until submit
 	let staged = $state<StagedTransfer | null>(null);
 	let imageFile = $state<File | null>(null);
 	let featuredArtists = $state<FeaturedArtist[]>([]);
@@ -155,14 +155,9 @@
 		loading = false;
 	});
 
-	onDestroy(() => {
-		if (staged && !staged.claimed) staged.abort();
-	});
-
 	function chooseFile(selected: File | null) {
-		if (staged && !staged.claimed) staged.abort();
 		file = selected;
-		staged = selected ? uploader.stage(selected) : null;
+		staged = null;
 	}
 
 	async function loadArtistProfile() {
@@ -217,7 +212,7 @@
 	}
 
 	async function submitUpload() {
-		if (!file || !staged) return;
+		if (!file) return;
 
 		// private media has no transcode step (audio is stored as-is as a PDS
 		// blob), so reject non-web-playable formats here instead of uploading the
@@ -255,7 +250,6 @@
 		}
 
 		const uploadFile = file;
-		const uploadTransfer = staged;
 		const uploadTitle = title;
 		const uploadAlbum = albumTitle;
 		const uploadFeatures = [...featuredArtists];
@@ -309,8 +303,9 @@
 			}
 		}
 
+		staged = uploader.stage(uploadFile);
 		uploader.upload(
-			uploadTransfer,
+			staged,
 			uploadTitle,
 			uploadAlbum,
 			uploadFeatures,

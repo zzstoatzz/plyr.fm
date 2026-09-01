@@ -66,15 +66,15 @@
 	});
 </script>
 
-<Story name="Chosen file, no transfer">
+<Story name="Chosen file, before submit">
 	<AudioPreview source={tone()} />
 </Story>
 
-<Story name="Transferring">
+<Story name="Sending">
 	<AudioPreview source={tone()} transfer={new StagedTransfer(tone(), stuckAt(2560), describe)} />
 </Story>
 
-<Story name="Received">
+<Story name="Sent">
 	<AudioPreview source={tone()} transfer={new StagedTransfer(tone(), done, describe)} />
 </Story>
 
