@@ -42,9 +42,7 @@ class NotificationResult:
     success: bool
     recipient_did: str
     error: str | None = None
-    error_type: str | None = (
-        None  # "dm_blocked", "network", "auth", "session", "unknown"
-    )
+    error_type: str | None = None  # dm_blocked|network|auth|session|unknown
 
 
 _SESSION_ERRORS = frozenset({"ExpiredToken", "InvalidToken"})
