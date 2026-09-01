@@ -2,11 +2,11 @@
  * the browser's own atproto OAuth session — the client-writes substrate.
  *
  * this session is what lets the browser author records in the user's repo
- * (`createRecord`/`uploadBlob`) instead of asking the backend to. it exists
- * alongside the cookie session: the cookie identifies the user to plyr's API;
- * this identifies them to their own PDS. a user without one (older sign-in,
- * cleared storage, new device) falls back to the server endpoints — callers
- * must treat `sessionFor` returning null as that fallback.
+ * (`createRecord`/`uploadBlob` via an `Agent`) instead of asking the backend
+ * to. it exists alongside the cookie session: the cookie identifies the user
+ * to plyr's API; this identifies them to their own PDS. a user without one
+ * (older sign-in, cleared storage, new device) falls back to the server
+ * endpoints — callers must treat `agentFor` returning null as that fallback.
  *
  * everything here is loaded lazily so the OAuth library stays out of the main
  * bundle for signed-out visitors.
@@ -15,6 +15,7 @@
 import { browser } from '$app/environment';
 import { getServerConfig } from '$lib/config';
 import { buildClientMetadata } from './metadata';
+import type { Agent } from '@atproto/api';
 import type { BrowserOAuthClient, OAuthSession } from '@atproto/oauth-client-browser';
 
 let clientPromise: Promise<BrowserOAuthClient> | null = null;
@@ -34,6 +35,11 @@ async function getClient(): Promise<BrowserOAuthClient> {
 	return clientPromise;
 }
 
+async function toAgent(session: OAuthSession): Promise<Agent> {
+	const { Agent } = await import('@atproto/api');
+	return new Agent(session);
+}
+
 /**
  * finish an in-flight authorization if the current URL is the callback.
  * returns the page to send the user back to, or null when there was nothing
@@ -46,16 +52,12 @@ export async function completeCallback(): Promise<string | null> {
 	return result.state.startsWith('/') ? result.state : '/';
 }
 
-/**
- * the signed-in user's own PDS session, or null when this browser holds none.
- * write phases wrap this in an XRPC agent; `@atproto/api` itself must stay
- * out of the dependency tree until its `import … with { type: 'json' }`
- * syntax survives the CF Pages builder (wrangler 3.x chokes on it).
- */
-export async function sessionFor(did: string): Promise<OAuthSession | null> {
+/** the signed-in user's PDS agent, or null when this browser holds no session. */
+export async function agentFor(did: string): Promise<Agent | null> {
 	try {
 		const client = await getClient();
-		return await client.restore(did);
+		const session = await client.restore(did);
+		return await toAgent(session);
 	} catch {
 		return null;
 	}
@@ -71,7 +73,7 @@ export async function ensureSession(
 	did: string,
 	returnTo: string
 ): Promise<boolean> {
-	if (await sessionFor(did)) return true;
+	if (await agentFor(did)) return true;
 	const client = await getClient();
 	try {
 		await client.signIn(handle, { state: returnTo });
