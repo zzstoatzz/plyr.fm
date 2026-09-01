@@ -3,9 +3,13 @@
 	import { browser } from '$app/environment';
 	import { player } from '$lib/player.svelte';
 	import { queue } from '$lib/queue.svelte';
+	import { auth } from '$lib/auth.svelte';
+	import { SKIP_BUTTONS_FLAG, SKIP_STEP_SECONDS } from '$lib/config';
 
 	// radio mode: live stream — no prev/next or scrubbing, just play/pause + volume
 	let { radioMode = false }: { radioMode?: boolean } = $props();
+
+	const skipButtons = $derived(auth.user?.enabled_flags?.includes(SKIP_BUTTONS_FLAG) ?? false);
 
 	let seekValue = $state(0);
 	let isScrubbing = $state(false);
@@ -124,10 +128,25 @@
 			</svg>
 		</button>
 	{:else}
-		<button class="control-btn" onclick={handlePrevious} title="previous track / restart">
+		<button class="control-btn prev" onclick={handlePrevious} title="previous track / restart">
 			<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
 				<path d="M6 4h2v16H6V4zm12 0l-10 8 10 8V4z" />
 			</svg>
+		</button>
+	{/if}
+
+	{#if skipButtons && !radioMode}
+		<button
+			class="control-btn skip skip-back"
+			onclick={() => queue.seekBy(-SKIP_STEP_SECONDS)}
+			title="back {SKIP_STEP_SECONDS} seconds"
+			aria-label="back {SKIP_STEP_SECONDS} seconds"
+		>
+			<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+				<path d="M3 12a9 9 0 1 0 3-6.7" />
+				<path d="M3 4v5h5" />
+			</svg>
+			<span class="skip-step">{SKIP_STEP_SECONDS}</span>
 		</button>
 	{/if}
 
@@ -148,9 +167,24 @@
 		{/if}
 	</button>
 
+	{#if skipButtons && !radioMode}
+		<button
+			class="control-btn skip skip-forward"
+			onclick={() => queue.seekBy(SKIP_STEP_SECONDS)}
+			title="forward {SKIP_STEP_SECONDS} seconds"
+			aria-label="forward {SKIP_STEP_SECONDS} seconds"
+		>
+			<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+				<path d="M21 12a9 9 0 1 1-3-6.7" />
+				<path d="M21 4v5h-5" />
+			</svg>
+			<span class="skip-step">{SKIP_STEP_SECONDS}</span>
+		</button>
+	{/if}
+
 	{#if !radioMode}
 		<button
-			class="control-btn"
+			class="control-btn next"
 			class:disabled={!queue.hasNext}
 			onclick={() => queue.next()}
 			title="next track"
@@ -293,6 +327,29 @@
 
 	.control-btn.play-pause:active {
 		transform: scale(0.95);
+	}
+
+	/* skip: the icon carries its step count so the arc reads as "15 back", not "restart" */
+	.control-btn.skip {
+		position: relative;
+	}
+
+	.control-btn.skip svg {
+		width: 22px;
+		height: 22px;
+	}
+
+	.skip-step {
+		position: absolute;
+		inset: 0;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		font-size: 8px;
+		font-weight: 700;
+		letter-spacing: -0.02em;
+		pointer-events: none;
+		transform: translateY(1px);
 	}
 
 	.control-btn.disabled {
@@ -460,7 +517,8 @@
 			padding: 0.5rem;
 		}
 
-		.control-btn:nth-of-type(1) {
+		.control-btn.prev,
+		.control-btn.infinity {
 			grid-column: 4;
 		}
 
@@ -468,12 +526,31 @@
 			grid-column: 5;
 		}
 
-		.control-btn:nth-of-type(3) {
+		.control-btn.next {
 			grid-column: 6;
 		}
 
-		.control-btn:nth-of-type(4) {
+		.control-btn.repeat {
 			grid-column: 7;
+		}
+
+		/* skips sit on the scrubber row, under the thumb, not in the transport row */
+		.control-btn.skip {
+			grid-row: 2;
+			padding: 0.25rem;
+		}
+
+		.control-btn.skip-back {
+			grid-column: 1;
+		}
+
+		.control-btn.skip-forward {
+			grid-column: 8;
+		}
+
+		.control-btn.skip svg {
+			width: 24px;
+			height: 24px;
 		}
 
 		.control-btn svg {
@@ -493,13 +570,17 @@
 
 		.time-control {
 			grid-row: 2;
-			grid-column: 1 / 8;
+			grid-column: 1 / 9;
+		}
+
+		.player-controls:has(.skip) .time-control {
+			grid-column: 2 / 8;
 		}
 
 		/* radio: "live" takes the scrubber's row instead of the control row */
 		.live-pill {
 			grid-row: 2;
-			grid-column: 1 / 8;
+			grid-column: 1 / 9;
 			text-align: center;
 		}
 

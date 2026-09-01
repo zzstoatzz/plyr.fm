@@ -14,6 +14,7 @@ KNOWN_FLAGS = frozenset(
     {
         "vibe-search",  # enable semantic vibe search in Cmd+K
         "copyright-paradigm",  # enable the indiemusi.ch copyright paradigm UI + endpoints
+        "skip-buttons",  # ±15s skip buttons in the player + media-session seek handlers
     }
 )
 

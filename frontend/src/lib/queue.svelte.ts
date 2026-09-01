@@ -548,6 +548,13 @@ class Queue {
 		}
 	}
 
+	/** move by a signed number of seconds, clamped to the track; a no-op with nothing loaded. */
+	seekBy(seconds: number): void {
+		if (!player.audioElement || !player.duration) return;
+		const target = Math.max(0, Math.min(player.duration, player.currentTime + seconds));
+		this.seek(Math.round(target * 1000));
+	}
+
 	// ── track mutations (routed through bridge when jam active) ──
 
 	addTracks(tracks: Track[], playNow = false) {

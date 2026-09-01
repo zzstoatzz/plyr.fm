@@ -20,6 +20,8 @@
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import { loginHref } from '$lib/utils/auth-redirect';
+	import { SKIP_BUTTONS_FLAG, SKIP_STEP_SECONDS } from '$lib/config';
+	import { auth } from '$lib/auth.svelte';
 	import TrackInfo from './TrackInfo.svelte';
 	import PlaybackControls from './PlaybackControls.svelte';
 	import type { Track } from '$lib/types';
@@ -76,9 +78,8 @@
 			}
 		});
 
-		// deliberately NO seekbackward/seekforward: iOS replaces the ⏮/⏭ track
-		// buttons with 10s-skip buttons when those handlers exist, and seekto +
-		// the lock-screen scrubber already cover in-track seeking
+		// seekbackward/seekforward are registered reactively below, only under the
+		// skip-buttons flag: iOS shows them in place of ⏮/⏭ when they exist
 	}
 
 	// check if we're on the current track's detail page
@@ -233,6 +234,21 @@
 		navigator.mediaSession.setActionHandler(
 			'nexttrack',
 			!player.radio && queue.hasNext ? () => queue.next() : null
+		);
+	});
+
+	// lock-screen skips, only for the flag: registering them makes iOS show
+	// ±15s in place of the ⏮/⏭ arrows, which is the trade the flag exists to try
+	$effect(() => {
+		if (!('mediaSession' in navigator)) return;
+		const skips = !player.radio && (auth.user?.enabled_flags?.includes(SKIP_BUTTONS_FLAG) ?? false);
+		navigator.mediaSession.setActionHandler(
+			'seekbackward',
+			skips ? (details) => queue.seekBy(-(details.seekOffset ?? SKIP_STEP_SECONDS)) : null
+		);
+		navigator.mediaSession.setActionHandler(
+			'seekforward',
+			skips ? (details) => queue.seekBy(details.seekOffset ?? SKIP_STEP_SECONDS) : null
 		);
 	});
 
@@ -996,7 +1012,7 @@
 		}
 
 		.player-content {
-			grid-template-columns: 48px 1fr auto auto auto auto auto;
+			grid-template-columns: 48px 1fr auto auto auto auto auto auto;
 			grid-template-rows: auto auto;
 			gap: 0.5rem 0.75rem;
 		}
