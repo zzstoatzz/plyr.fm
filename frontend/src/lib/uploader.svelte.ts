@@ -185,9 +185,8 @@ class UploaderState {
 	activeUploads = $state<Map<string, UploadTask>>(new Map());
 
 	/**
-	 * start moving a chosen file into staging before the form is submitted.
-	 * `upload()` takes the result to finish; an unclaimed transfer is the
-	 * caller's to abort when the file is re-chosen or the page is left.
+	 * start moving a file into staging as observable state. `upload()` takes the
+	 * result to finish; an unclaimed transfer is the caller's to abort.
 	 */
 	stage(file: File, transport: StagedTransport = sessionTransport): StagedTransfer {
 		const fileSizeMB = file.size / 1024 / 1024;

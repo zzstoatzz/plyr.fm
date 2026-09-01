@@ -1,11 +1,10 @@
 /**
- * a file moving into a resumable upload session ahead of the form.
+ * a file moving into a resumable upload session, as observable state.
  *
- * the bytes start travelling the moment a file is chosen and land in plyr's
- * staging storage; nothing is published, and nothing reaches the PDS, until
- * `finish` is called with the form. a dropped transfer resumes from the parts
- * the server already holds, and a re-selected or abandoned file is simply
- * aborted — the server reaps the open session on its own schedule.
+ * the bytes land in plyr's staging storage; nothing is published, and nothing
+ * reaches the PDS, until `finish` is called with the form. a dropped transfer
+ * resumes from the parts the server already holds, and an abandoned one is
+ * simply aborted — the server reaps the open session on its own schedule.
  */
 
 import {
