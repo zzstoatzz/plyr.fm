@@ -5,11 +5,11 @@
 	import { UploadPartError, type UploadSessionState } from '$lib/upload-session';
 	import { __testing } from '$lib/audio/wav';
 
-	// a real, playable file: half a second of 440 Hz, encoded on the spot so the
+	// a real, playable file: two seconds of 440 Hz, encoded on the spot so the
 	// stories carry no binary fixture.
 	function tone(): File {
 		const sampleRate = 8000;
-		const frames = sampleRate / 2;
+		const frames = sampleRate * 2;
 		const samples = Float32Array.from(
 			{ length: frames },
 			(_, i) => Math.sin((2 * Math.PI * 440 * i) / sampleRate) * (1 - i / frames)
@@ -62,7 +62,6 @@
 
 	const { Story } = defineMeta({
 		title: 'upload/AudioPreview',
-		component: AudioPreview,
 		parameters: { layout: 'padded' }
 	});
 </script>
@@ -87,6 +86,6 @@
 	<AudioPreview
 		source={new Blob([tone()], { type: 'audio/webm' })}
 		name="voice memo"
-		fallbackDurationSeconds={1}
+		fallbackDurationSeconds={2}
 	/>
 </Story>

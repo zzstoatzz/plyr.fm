@@ -81,7 +81,8 @@ export class StagedTransfer {
 		this.#abort.abort();
 	}
 
-	async #run(): Promise<string> {
+	/** the attempt promise itself, with a handler attached so a failure nobody awaits yet is not "unhandled". */
+	#run(): Promise<string> {
 		const attempt = this.#drive();
 		attempt.catch(() => undefined);
 		return attempt;

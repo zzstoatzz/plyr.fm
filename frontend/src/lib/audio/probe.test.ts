@@ -3,7 +3,7 @@ import {
 	audioFormatOf,
 	canRenderWaveform,
 	formatClock,
-	formatMegabytes,
+	formatFileSize,
 	isUsableDuration,
 	mediaDuration,
 	type MediaDurationSource,
@@ -93,7 +93,9 @@ describe('formatting', () => {
 	});
 
 	it('formats sizes with fewer decimals as they grow', () => {
-		expect(formatMegabytes(3.14159 * 1024 * 1024)).toBe('3.1 MB');
-		expect(formatMegabytes(200.4 * 1024 * 1024)).toBe('200 MB');
+		expect(formatFileSize(3.14159 * 1024 * 1024)).toBe('3.1 MB');
+		expect(formatFileSize(200.4 * 1024 * 1024)).toBe('200 MB');
+		expect(formatFileSize(8 * 1024)).toBe('8 KB');
+		expect(formatFileSize(10)).toBe('1 KB');
 	});
 });

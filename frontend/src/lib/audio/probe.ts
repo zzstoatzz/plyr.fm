@@ -102,7 +102,8 @@ export function formatClock(seconds: number): string {
 	return `${h}:${m.toString().padStart(2, '0')}:${ss}`;
 }
 
-export function formatMegabytes(bytes: number): string {
+export function formatFileSize(bytes: number): string {
 	const mb = bytes / 1024 / 1024;
+	if (mb < 1) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
 	return `${mb >= 100 ? mb.toFixed(0) : mb.toFixed(1)} MB`;
 }

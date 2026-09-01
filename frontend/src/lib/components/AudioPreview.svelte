@@ -5,7 +5,7 @@
 		audioFormatOf,
 		canRenderWaveform,
 		formatClock,
-		formatMegabytes,
+		formatFileSize,
 		mediaDuration,
 		waveformMaxSeconds,
 		WAVEFORM_DECODE_RATE
@@ -53,7 +53,7 @@
 	const facts = $derived(
 		[
 			format,
-			formatMegabytes(source.size),
+			formatFileSize(source.size),
 			durationSeconds === null ? null : formatClock(durationSeconds)
 		]
 			.filter((fact) => fact !== null && fact !== '')
@@ -205,18 +205,19 @@
 
 	.facts {
 		font-size: var(--text-xs);
-		color: var(--text-muted);
+		color: var(--text-secondary);
 		font-variant-numeric: tabular-nums;
 	}
 
 	.wf-wrap {
 		padding: 0.25rem 0;
+		--wf-base: color-mix(in srgb, var(--text-muted) 55%, transparent);
 	}
 
 	.note {
 		margin: 0;
 		font-size: var(--text-xs);
-		color: var(--text-muted);
+		color: var(--text-secondary);
 	}
 
 	.playback-row {
@@ -246,7 +247,7 @@
 
 	.time-display {
 		font-size: var(--text-sm);
-		color: var(--text-muted);
+		color: var(--text-secondary);
 		font-variant-numeric: tabular-nums;
 		letter-spacing: 0.02em;
 	}
@@ -280,7 +281,10 @@
 		background: var(--accent);
 	}
 
-	.failed progress::-webkit-progress-value,
+	.failed progress::-webkit-progress-value {
+		background: var(--error);
+	}
+
 	.failed progress::-moz-progress-bar {
 		background: var(--error);
 	}
@@ -294,7 +298,7 @@
 
 	.transfer-text {
 		font-size: var(--text-xs);
-		color: var(--text-muted);
+		color: var(--text-secondary);
 		font-variant-numeric: tabular-nums;
 	}
 
