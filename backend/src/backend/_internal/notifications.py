@@ -7,6 +7,13 @@ from dataclasses import dataclass
 
 import logfire
 from atproto import AsyncClient, client_utils, models
+from atproto_client.exceptions import (
+    BadRequestError,
+    LoginRequiredError,
+    NetworkError,
+    UnauthorizedError,
+)
+from atproto_client.models.common import XrpcError
 
 from backend._internal.transparency import Segment
 from backend.config import settings
@@ -35,7 +42,22 @@ class NotificationResult:
     success: bool
     recipient_did: str
     error: str | None = None
-    error_type: str | None = None  # "dm_blocked", "network", "auth", "unknown"
+    error_type: str | None = (
+        None  # "dm_blocked", "network", "auth", "session", "unknown"
+    )
+
+
+_SESSION_ERRORS = frozenset({"ExpiredToken", "InvalidToken"})
+
+
+def _is_session_error(e: Exception) -> bool:
+    """true when the bot's session itself is dead, so only a fresh login helps."""
+    if isinstance(e, UnauthorizedError | LoginRequiredError):
+        return True
+    if isinstance(e, BadRequestError):
+        content = e.response.content if e.response is not None else None
+        return isinstance(content, XrpcError) and content.error in _SESSION_ERRORS
+    return False
 
 
 class NotificationService:
@@ -100,9 +122,18 @@ class NotificationService:
             logger.exception(
                 "failed to authenticate notification bot or resolve recipient"
             )
-            self.client = None
-            self.dm_client = None
-            self.recipient_did = None
+            self._reset()
+
+    def _reset(self) -> None:
+        self.client = None
+        self.dm_client = None
+        self.recipient_did = None
+
+    def _discard_session(self) -> None:
+        """forget a dead session so the next `ensure_ready()` logs in again."""
+        logger.warning("notification bot session rejected; will re-authenticate")
+        self._reset()
+        self._last_setup_attempt = 0.0
 
     async def ensure_ready(self) -> str | None:
         """return the resolved recipient DID if the service is ready, else None.
@@ -124,10 +155,21 @@ class NotificationService:
     async def _send_dm_to_did(
         self, recipient_did: str, message_text: str
     ) -> NotificationResult:
-        """send a DM to a specific DID.
+        """send a DM to a specific DID, re-authenticating once if the session is dead.
 
         returns NotificationResult with success status and error details.
         """
+        result = await self._send_dm_once(recipient_did, message_text)
+        if result.error_type != "session":
+            return result
+        self._discard_session()
+        if await self.ensure_ready() is None:
+            return result
+        return await self._send_dm_once(recipient_did, message_text)
+
+    async def _send_dm_once(
+        self, recipient_did: str, message_text: str
+    ) -> NotificationResult:
         if not self.dm_client:
             return NotificationResult(
                 success=False,
@@ -176,9 +218,17 @@ class NotificationService:
                 error_type = "unknown"
 
                 # try to categorize the error
-                if "blocked" in error_str.lower() or "not allowed" in error_str.lower():
+                if _is_session_error(e):
+                    error_type = "session"
+                elif (
+                    "blocked" in error_str.lower() or "not allowed" in error_str.lower()
+                ):
                     error_type = "dm_blocked"
-                elif "timeout" in error_str.lower() or "connect" in error_str.lower():
+                elif (
+                    isinstance(e, NetworkError)
+                    or "timeout" in error_str.lower()
+                    or "connect" in error_str.lower()
+                ):
                     error_type = "network"
                 elif "auth" in error_str.lower() or "401" in error_str:
                     error_type = "auth"
