@@ -117,13 +117,10 @@ def main() -> int:
     print(f"\n✓ release {version} created")
     print("✓ production backend deployment starting...")
 
-    # merge main -> production-fe to trigger frontend deployment
+    # fast-forward production-fe to main to trigger frontend deployment.
+    # a plain push refuses a non-fast-forward, so no local branch is needed.
     print("\n🔄 updating production-fe branch...")
-    subprocess.run(["git", "fetch", "origin"], check=True)
-    subprocess.run(["git", "checkout", "production-fe"], check=True)
-    subprocess.run(["git", "merge", "main", "--ff-only"], check=True)
-    subprocess.run(["git", "push", "origin", "production-fe"], check=True)
-    subprocess.run(["git", "checkout", "main"], check=True)
+    subprocess.run(["git", "push", "origin", "main:production-fe"], check=True)
 
     print("✓ production frontend deployment starting...")
 
