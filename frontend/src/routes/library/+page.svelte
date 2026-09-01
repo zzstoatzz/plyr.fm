@@ -52,7 +52,6 @@
 					// invalidate all load functions so they rerun with the new session cookie
 					await invalidateAll();
 					await auth.refresh();
-					await auth.linkAtprotoSession('/library');
 					await preferences.fetch();
 				}
 			} catch (_e) {

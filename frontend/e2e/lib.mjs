@@ -97,17 +97,6 @@ export async function authorizeOnPds(page, who = HANDLE, secret = PASSWORD) {
 	await page.waitForURL((u) => u.href.startsWith(APP), { timeout: 30000 });
 }
 
-/** the chained browser-client consent right after login; silent once granted. */
-async function approveChainedConsent(page, who, secret) {
-	await page.waitForTimeout(800);
-	if (await page.locator('input[name="username"]').count()) {
-		await authorizeOnPds(page, who, secret);
-		return;
-	}
-	await page.getByRole('button', { name: 'authorize' }).click();
-	await page.waitForURL((u) => u.href.startsWith(APP), { timeout: 30000 });
-}
-
 export async function signIn(page, who = HANDLE, secret = PASSWORD) {
 	await page.goto(`${APP}/login`, { waitUntil: 'networkidle' });
 	const handle = page.getByPlaceholder('you.example.com');
@@ -116,12 +105,6 @@ export async function signIn(page, who = HANDLE, secret = PASSWORD) {
 	await handle.press('Enter');
 	await page.waitForURL(/oauth\/authorize/, { timeout: 30000 });
 	await authorizeOnPds(page, who, secret);
-	try {
-		await page.waitForURL(/oauth\/authorize/, { timeout: 20000 });
-		await approveChainedConsent(page, who, secret);
-	} catch {
-		// no second redirect: this browser context already holds the session
-	}
 	await page.waitForTimeout(2500);
 	const terms = page.locator('.terms-overlay');
 	if (await terms.count()) {
