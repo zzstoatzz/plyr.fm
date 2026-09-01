@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onMount } from "svelte";
+	import { onDestroy, onMount } from "svelte";
 	import { browser } from "$app/environment";
 	import Header from "$lib/components/Header.svelte";
 	import HandleSearch from "$lib/components/HandleSearch.svelte";
@@ -8,6 +8,7 @@
 	import PdsTooltip from "$lib/components/PdsTooltip.svelte";
 	import InfoTooltip from "$lib/components/InfoTooltip.svelte";
 	import WaveLoading from "$lib/components/WaveLoading.svelte";
+	import AudioPreview from "$lib/components/AudioPreview.svelte";
 	import TagInput from "$lib/components/TagInput.svelte";
 	import CopyrightRightsPanel from "$lib/components/CopyrightRightsPanel.svelte";
 	import VisibilityPicker from "$lib/components/VisibilityPicker.svelte";
@@ -28,6 +29,7 @@
 	} from "$lib/upload-form-stash";
 	import { stashUploadFiles, takeUploadFiles } from "$lib/record-stash";
 	import { startPermissionedScopeUpgrade } from "$lib/uploader.svelte";
+	import type { StagedTransfer } from "$lib/staged-transfer.svelte";
 
 	const AUDIO_EXTENSIONS = [".mp3", ".wav", ".m4a", ".aiff", ".aif", ".flac"];
 	const AUDIO_MIME_TYPES = [
@@ -67,6 +69,8 @@
 	let title = $state("");
 	let albumTitle = $state("");
 	let file = $state<File | null>(null);
+	// the chosen file's transfer into staging; starts on selection, finished by submit
+	let staged = $state<StagedTransfer | null>(null);
 	let imageFile = $state<File | null>(null);
 	let featuredArtists = $state<FeaturedArtist[]>([]);
 	let uploadTags = $state<string[]>([]);
@@ -131,7 +135,7 @@
 			clearTrackFormStash();
 			const files = await takeUploadFiles();
 			if (files) {
-				file = files.file;
+				chooseFile(files.file);
 				imageFile = files.imageFile;
 			}
 			if (visibility === "private" && !permissionedGranted) {
@@ -150,6 +154,16 @@
 		await Promise.all([loadMyAlbums(), loadArtistProfile()]);
 		loading = false;
 	});
+
+	onDestroy(() => {
+		if (staged && !staged.claimed) staged.abort();
+	});
+
+	function chooseFile(selected: File | null) {
+		if (staged && !staged.claimed) staged.abort();
+		file = selected;
+		staged = selected ? uploader.stage(selected) : null;
+	}
 
 	async function loadArtistProfile() {
 		if (!auth.user) return;
@@ -203,7 +217,7 @@
 	}
 
 	async function submitUpload() {
-		if (!file) return;
+		if (!file || !staged) return;
 
 		// private media has no transcode step (audio is stored as-is as a PDS
 		// blob), so reject non-web-playable formats here instead of uploading the
@@ -241,6 +255,7 @@
 		}
 
 		const uploadFile = file;
+		const uploadTransfer = staged;
 		const uploadTitle = title;
 		const uploadAlbum = albumTitle;
 		const uploadFeatures = [...featuredArtists];
@@ -256,6 +271,7 @@
 			albumTitle = "";
 			description = "";
 			file = null;
+			staged = null;
 			imageFile = null;
 			featuredArtists = [];
 			uploadTags = [];
@@ -294,7 +310,7 @@
 		}
 
 		uploader.upload(
-			uploadFile,
+			uploadTransfer,
 			uploadTitle,
 			uploadAlbum,
 			uploadFeatures,
@@ -331,7 +347,7 @@
 					`unsupported file type. supported: ${AUDIO_EXTENSIONS.join(", ")}`,
 				);
 				target.value = "";
-				file = null;
+				chooseFile(null);
 				return;
 			}
 
@@ -343,14 +359,14 @@
 						`audio file too large (${sizeMB.toFixed(1)}MB). max: ${config.max_upload_size_mb}MB`,
 					);
 					target.value = "";
-					file = null;
+					chooseFile(null);
 					return;
 				}
 			} catch (_e) {
 				console.error("failed to validate file size:", _e);
 			}
 
-			file = selected;
+			chooseFile(selected);
 		}
 	}
 
@@ -448,9 +464,9 @@
 					supported: {AUDIO_EXTENSIONS.map(e => e.slice(1)).join(", ")}
 				</p>
 				{#if file}
-					<p class="file-info">
-						{file.name} ({(file.size / 1024 / 1024).toFixed(2)} MB)
-					</p>
+					<div class="file-preview">
+						<AudioPreview source={file} transfer={staged} />
+					</div>
 				{/if}
 			</div>
 
@@ -781,6 +797,10 @@
 		margin-top: 0.5rem;
 		font-size: var(--text-sm);
 		color: var(--text-muted);
+	}
+
+	.file-preview {
+		margin-top: 0.75rem;
 	}
 
 	button {

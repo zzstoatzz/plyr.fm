@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
+	getUploadSession,
 	PartAttemptError,
 	planParts,
 	uploadParts,
 	UploadPartError,
+	UploadSessionHttpError,
 	type PartSender,
 	type UploadSessionState
 } from './upload-session';
@@ -104,5 +106,38 @@ describe('uploadParts', () => {
 			})
 		).rejects.toMatchObject({ failure: { kind: 'network' }, partNumber: 1 });
 		expect(calls).toBe(2);
+	});
+});
+
+describe('getUploadSession', () => {
+	const withFetch = async (response: Response, run: () => Promise<void>) => {
+		const original = globalThis.fetch;
+		const calls: string[] = [];
+		globalThis.fetch = async (input) => {
+			calls.push(String(input));
+			return response;
+		};
+		try {
+			await run();
+		} finally {
+			globalThis.fetch = original;
+		}
+		return calls;
+	};
+
+	it('parses the parts the server already holds', async () => {
+		const calls = await withFetch(Response.json(session({ received_parts: [1, 3] })), async () => {
+			const resumed = await getUploadSession('u1');
+			expect(resumed.received_parts).toEqual([1, 3]);
+		});
+		expect(calls[0]).toMatch(/\/tracks\/uploads\/u1$/);
+	});
+
+	it('surfaces the server detail on an error', async () => {
+		await withFetch(Response.json({ detail: 'upload not found' }, { status: 404 }), async () => {
+			await expect(getUploadSession('gone')).rejects.toMatchObject(
+				new UploadSessionHttpError(404, 'upload not found')
+			);
+		});
 	});
 });
