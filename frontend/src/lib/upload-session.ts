@@ -134,6 +134,15 @@ export async function startUploadSession(file: File): Promise<UploadSessionState
 	return parseSessionState(await response.json());
 }
 
+/** which parts the server already holds, so a dropped transfer resumes instead of restarting. */
+export async function getUploadSession(uploadId: string): Promise<UploadSessionState> {
+	const response = await fetch(`${API_URL}/tracks/uploads/${uploadId}`, { credentials: 'include' });
+	if (!response.ok) {
+		throw new UploadSessionHttpError(response.status, await errorDetail(response));
+	}
+	return parseSessionState(await response.json());
+}
+
 export async function finishUploadSession(uploadId: string, form: FormData): Promise<string> {
 	const response = await fetch(`${API_URL}/tracks/uploads/${uploadId}/finish`, {
 		method: 'POST',

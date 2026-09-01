@@ -7,13 +7,8 @@ import { tracksCache } from './tracks.svelte';
 import type { FeaturedArtist } from './types';
 import type { TrackRights } from './components/CopyrightRightsPanel.svelte';
 import { setReturnUrl } from './utils/return-url';
-import {
-	finishUploadSession,
-	startUploadSession,
-	uploadParts,
-	UploadPartError,
-	UploadSessionHttpError
-} from './upload-session';
+import { finishUploadSession, UploadPartError, UploadSessionHttpError } from './upload-session';
+import { sessionTransport, StagedTransfer, type StagedTransport } from './staged-transfer.svelte';
 
 interface UploadTask {
 	id: string;
@@ -26,7 +21,7 @@ interface UploadTask {
 	toastId: string;
 	eventSource?: EventSource;
 	xhr?: XMLHttpRequest;
-	abort?: AbortController;
+	abort?: { abort(): void };
 }
 
 interface UploadProgressCallback {
@@ -182,8 +177,24 @@ function describeUploadFailure(
 class UploaderState {
 	activeUploads = $state<Map<string, UploadTask>>(new Map());
 
+	/**
+	 * start moving a chosen file into staging before the form is submitted.
+	 * `upload()` takes the result to finish; an unclaimed transfer is the
+	 * caller's to abort when the file is re-chosen or the page is left.
+	 */
+	stage(file: File, transport: StagedTransport = sessionTransport): StagedTransfer {
+		const fileSizeMB = file.size / 1024 / 1024;
+		const isMobile = isMobileDevice();
+		if (isMobile && fileSizeMB > MOBILE_LARGE_FILE_THRESHOLD_MB) {
+			toast.info(`uploading ${Math.round(fileSizeMB)}MB file on mobile - ensure stable connection`, 5000);
+		}
+		return new StagedTransfer(file, transport, (failure, percent) =>
+			describeUploadFailure(failure, percent, fileSizeMB, isMobile)
+		);
+	}
+
 	upload(
-		file: File,
+		source: File | StagedTransfer,
 		title: string,
 		album: string,
 		features: FeaturedArtist[],
@@ -199,15 +210,14 @@ class UploaderState {
 		copyright?: TrackRights | null,
 		selfLabels: string[] = []
 	): void {
+		if (!browser) return;
+		const staged = source instanceof StagedTransfer ? source : this.stage(source);
+		staged.claimed = true;
+		const file = staged.file;
 		const taskId = crypto.randomUUID();
 		const fileSizeMB = file.size / 1024 / 1024;
 		const isMobile = isMobileDevice();
 		const displayName = label ?? title;
-
-		// warn about large files on mobile
-		if (isMobile && fileSizeMB > MOBILE_LARGE_FILE_THRESHOLD_MB) {
-			toast.info(`uploading ${Math.round(fileSizeMB)}MB file on mobile - ensure stable connection`, 5000);
-		}
 
 		const uploadMessage = fileSizeMB > 10
 			? `uploading "${displayName}"... (large file)`
@@ -215,10 +225,6 @@ class UploaderState {
 		// 0 means infinite/persist until dismissed
 		const toastId = toast.info(uploadMessage, 0);
 
-		// track upload progress for error messages
-		let lastProgressPercent = 0;
-
-		if (!browser) return;
 		const formData = new FormData();
 		formData.append('title', title);
 		if (albumId) {
@@ -252,17 +258,16 @@ class UploaderState {
 			formData.append('self_labels', JSON.stringify(selfLabels));
 		}
 
-		const abort = new AbortController();
 		const task: UploadTask = {
 			id: taskId,
-			upload_id: '',
+			upload_id: staged.uploadId ?? '',
 			file,
 			title,
 			album,
 			features,
 			tags,
 			toastId,
-			abort
+			abort: staged
 		};
 		this.activeUploads.set(taskId, task);
 
@@ -273,29 +278,25 @@ class UploaderState {
 			callbacks?.onError?.(message);
 		};
 
+		const showTransfer = (loaded: number, total: number) => {
+			toast.update(toastId, `retrieving your file... ${Math.round((loaded / total) * 100)}%`);
+			callbacks?.onProgress?.(loaded, total);
+		};
+		staged.onProgress = showTransfer;
+		if (staged.status === 'transferring') showTransfer(staged.loaded, staged.total);
+
 		void (async () => {
 			try {
-				const session = await startUploadSession(file);
-				task.upload_id = session.upload_id;
-				await uploadParts({
-					file,
-					session,
-					signal: abort.signal,
-					onProgress: (loaded, total) => {
-						const percent = Math.round((loaded / total) * 100);
-						lastProgressPercent = percent;
-						toast.update(toastId, `retrieving your file... ${percent}%`);
-						callbacks?.onProgress?.(loaded, total);
-					}
-				});
+				const sessionId = await staged.whenTransferred();
+				task.upload_id = sessionId;
 				toast.update(toastId, 'finishing up…');
-				const upload_id = await finishUploadSession(session.upload_id, formData);
+				const upload_id = await finishUploadSession(sessionId, formData);
 				task.upload_id = upload_id;
 				callbacks?.onSuccess?.(upload_id);
 				this.followProcessing(task, displayName, onSuccess);
 			} catch (error) {
 				const failure: UploadFailure = error instanceof Error ? error : new Error(String(error));
-				const message = describeUploadFailure(failure, lastProgressPercent, fileSizeMB, isMobile);
+				const message = describeUploadFailure(failure, staged.progressPercent, fileSizeMB, isMobile);
 				if (message === null) {
 					toast.dismiss(toastId);
 					this.activeUploads.delete(taskId);

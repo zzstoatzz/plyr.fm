@@ -8,6 +8,8 @@
 		source?: Blob | string | null;
 		/** number of bars to render when decoding from source. ignored if peaks is provided. */
 		barCount?: number;
+		/** decode `source` at this sample rate; see `extractPeaks`. */
+		decodeSampleRate?: number;
 		/** visual height of the waveform in pixels. */
 		height?: number;
 		/** playback progress 0..1, drives the playhead overlay. */
@@ -22,6 +24,7 @@
 		peaks: peaksProp,
 		source = null,
 		barCount = 120,
+		decodeSampleRate,
 		height = 64,
 		progress = 0,
 		onSeek,
@@ -64,13 +67,13 @@
 			try {
 				let result: number[];
 				if (source instanceof Blob) {
-					result = await extractPeaks(source, barCount);
+					result = await extractPeaks(source, barCount, { decodeSampleRate });
 				} else {
 					const res = await fetch(source);
 					if (!res.ok) throw new Error(`fetch failed: ${res.status}`);
 					const buf = await res.arrayBuffer();
 					if (aborted) return;
-					result = await extractPeaks(buf, barCount);
+					result = await extractPeaks(buf, barCount, { decodeSampleRate });
 				}
 				if (aborted) return;
 				decodedPeaks = result;

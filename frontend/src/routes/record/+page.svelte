@@ -4,7 +4,7 @@
 	import { goto } from '$app/navigation';
 	import Header from '$lib/components/Header.svelte';
 	import TagInput from '$lib/components/TagInput.svelte';
-	import Waveform from '$lib/components/Waveform.svelte';
+	import AudioPreview from '$lib/components/AudioPreview.svelte';
 	import VisibilityPicker, { type Visibility } from '$lib/components/VisibilityPicker.svelte';
 	import { auth } from '$lib/auth.svelte';
 	import { toast } from '$lib/toast.svelte';
@@ -20,6 +20,7 @@
 	import { Recorder, RecorderError, extensionForMime } from '$lib/recorder.svelte';
 	import { isWebPlayableExtension } from '$lib/utils/web-playable';
 	import { toWav } from '$lib/audio/wav';
+	import { formatClock } from '$lib/audio/probe';
 	import logo from '$lib/assets/logo.png';
 
 	type RecordState = 'idle' | 'recording' | 'preview' | 'converting' | 'uploading';
@@ -31,17 +32,9 @@
 	let title = $state('');
 	let tags = $state<string[]>([]);
 	let visibility = $state<Visibility>('public');
-	let previewUrl = $state<string | null>(null);
 	let previewBlob = $state<Blob | null>(null);
-	let audioEl = $state<HTMLAudioElement | null>(null);
-	let currentTime = $state(0);
-	let duration = $state(0);
-	let isPlaying = $state(false);
-	// captured at recording stop-time from the live-tick counter. gives us a
-	// correct (1s-resolution) display duration immediately, before the browser
-	// has finished scanning the blob for its real length. we prefer the audio
-	// element's duration once it becomes a positive finite number, but fall
-	// back to this so the UI never shows "0:00" for a valid recording.
+	// the live tick count at stop time: a length the preview can show before the
+	// browser has scanned the recording for its real one
 	let capturedDuration = $state(0);
 
 	const reducedMotion =
@@ -54,16 +47,6 @@
 		auth.user?.permissioned_spaces?.granted ?? false
 	);
 
-
-	const effectiveDuration = $derived(
-		Number.isFinite(duration) && duration > 0 ? duration : capturedDuration
-	);
-	const playbackProgress = $derived(
-		effectiveDuration > 0 ? currentTime / effectiveDuration : 0
-	);
-	const timeDisplay = $derived(
-		`${formatTime(currentTime)} / ${formatTime(effectiveDuration)}`
-	);
 	const recorder = new Recorder({
 		maxSeconds: MAX_SECONDS,
 		warnAtSeconds: WARN_SECONDS,
@@ -73,60 +56,9 @@
 	});
 
 	const remainingDisplay = $derived(
-		formatTime(Math.max(0, MAX_SECONDS - recorder.elapsedSeconds))
+		formatClock(Math.max(0, MAX_SECONDS - recorder.elapsedSeconds))
 	);
-
-	function handleSeek(ratio: number) {
-		if (audioEl && effectiveDuration > 0) {
-			audioEl.currentTime = ratio * effectiveDuration;
-		}
-	}
-
-	function togglePlay() {
-		if (!audioEl) return;
-		if (isPlaying) audioEl.pause();
-		else audioEl.play().catch((e) => console.error('playback failed:', e));
-	}
-
-	function isUsableDuration(d: number): boolean {
-		return Number.isFinite(d) && d > 0;
-	}
-
-	// MediaRecorder-produced webm/ogg blobs have no duration written into the
-	// container header — the recorder streams output without knowing the final
-	// length. different browsers surface this as Infinity (Firefox), 0 (some
-	// Chrome versions), or NaN until the file is scanned to EOF. the
-	// MDN-documented fix is to seek to a huge time value; the browser clamps
-	// to real EOF, scans the file, and emits a `durationchange` with the real
-	// duration, at which point we reset currentTime to 0.
-	function handleLoadedMetadata() {
-		if (!audioEl) return;
-		if (isUsableDuration(audioEl.duration)) return;
-
-		const el = audioEl;
-		const onDurationChange = () => {
-			if (isUsableDuration(el.duration)) {
-				el.currentTime = 0;
-				el.removeEventListener('durationchange', onDurationChange);
-			}
-		};
-		el.addEventListener('durationchange', onDurationChange);
-		// jump past any plausible duration — the browser clamps to real EOF
-		el.currentTime = 1e101;
-	}
-
-	const elapsedDisplay = $derived(formatTime(recorder.elapsedSeconds));
-
-	function formatTime(seconds: number): string {
-		if (!Number.isFinite(seconds) || seconds < 0) seconds = 0;
-		const mm = Math.floor(seconds / 60)
-			.toString()
-			.padStart(2, '0');
-		const ss = Math.floor(seconds % 60)
-			.toString()
-			.padStart(2, '0');
-		return `${mm}:${ss}`;
-	}
+	const elapsedDisplay = $derived(formatClock(recorder.elapsedSeconds));
 
 	async function startRecording() {
 		try {
@@ -139,10 +71,6 @@
 
 	function finalizeRecording(blob: Blob, elapsedSeconds: number) {
 		previewBlob = blob;
-		if (previewUrl) URL.revokeObjectURL(previewUrl);
-		previewUrl = URL.createObjectURL(blob);
-		// capture the elapsed tick count as a fallback duration — shown until
-		// the audio element reports a real positive finite duration
 		capturedDuration = elapsedSeconds;
 		const now = new Date();
 		const pad = (n: number) => String(n).padStart(2, '0');
@@ -152,17 +80,10 @@
 	}
 
 	function reRecord() {
-		if (previewUrl) {
-			URL.revokeObjectURL(previewUrl);
-			previewUrl = null;
-		}
 		previewBlob = null;
 		title = '';
 		tags = [];
-		currentTime = 0;
-		duration = 0;
 		capturedDuration = 0;
-		isPlaying = false;
 		void clearStashedRecording();
 		uiState = 'idle';
 	}
@@ -287,8 +208,6 @@
 		const stashed = await takeStashedRecording();
 		if (!stashed) return;
 		previewBlob = stashed.blob;
-		if (previewUrl) URL.revokeObjectURL(previewUrl);
-		previewUrl = URL.createObjectURL(stashed.blob);
 		title = stashed.title;
 		tags = stashed.tags;
 		capturedDuration = stashed.capturedDuration;
@@ -309,7 +228,6 @@
 
 	onDestroy(() => {
 		recorder.dispose();
-		if (previewUrl) URL.revokeObjectURL(previewUrl);
 	});
 </script>
 
@@ -382,47 +300,12 @@
 	{:else if uiState === 'preview'}
 		<div class="preview-card">
 			{#if previewBlob}
-				<div class="wf-wrap">
-					<Waveform
-						source={previewBlob}
-						progress={playbackProgress}
-						onSeek={handleSeek}
-						height={96}
-					/>
-				</div>
-			{/if}
-			{#if previewUrl}
-				<!-- hidden native element — custom controls below drive it -->
-				<audio
-					bind:this={audioEl}
-					bind:currentTime
-					bind:duration
-					src={previewUrl}
-					onloadedmetadata={handleLoadedMetadata}
-					onplay={() => (isPlaying = true)}
-					onpause={() => (isPlaying = false)}
-					onended={() => (isPlaying = false)}
-				></audio>
-				<div class="playback-row">
-					<button
-						type="button"
-						class="play-btn"
-						onclick={togglePlay}
-						aria-label={isPlaying ? 'pause' : 'play'}
-					>
-						{#if isPlaying}
-							<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-								<rect x="6" y="5" width="4" height="14" rx="1" />
-								<rect x="14" y="5" width="4" height="14" rx="1" />
-							</svg>
-						{:else}
-							<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-								<path d="M8 5v14l11-7z" />
-							</svg>
-						{/if}
-					</button>
-					<span class="time-display" aria-live="off">{timeDisplay}</span>
-				</div>
+				<AudioPreview
+					source={previewBlob}
+					name={title}
+					fallbackDurationSeconds={capturedDuration}
+					height={96}
+				/>
 			{/if}
 
 			<div class="form-group">
@@ -622,7 +505,6 @@
 		color: var(--text-muted);
 	}
 
-
 	.preview-card {
 		background: color-mix(in srgb, var(--track-bg, var(--bg-primary)) 70%, transparent);
 		backdrop-filter: blur(14px);
@@ -634,51 +516,6 @@
 		flex-direction: column;
 		gap: clamp(1rem, 2.5vh, 1.25rem);
 		box-shadow: 0 8px 32px color-mix(in srgb, #000 30%, transparent);
-	}
-
-	.wf-wrap {
-		padding: 0.5rem 0;
-	}
-
-	.playback-row {
-		display: flex;
-		align-items: center;
-		gap: 0.875rem;
-		margin-top: -0.25rem;
-	}
-
-	.play-btn {
-		width: 44px;
-		height: 44px;
-		border-radius: 50%;
-		background: var(--accent);
-		color: var(--text-primary);
-		border: none;
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		cursor: pointer;
-		flex-shrink: 0;
-		box-shadow: 0 4px 12px color-mix(in srgb, var(--accent) 28%, transparent);
-		transition:
-			transform 0.15s ease,
-			box-shadow 0.2s ease;
-	}
-
-	.play-btn:hover {
-		transform: translateY(-1px);
-		box-shadow: 0 6px 16px color-mix(in srgb, var(--accent) 38%, transparent);
-	}
-
-	.play-btn:active {
-		transform: scale(0.94);
-	}
-
-	.time-display {
-		font-size: var(--text-sm);
-		color: var(--text-muted);
-		font-variant-numeric: tabular-nums;
-		letter-spacing: 0.02em;
 	}
 
 	.form-group {
@@ -785,7 +622,6 @@
 
 	@media (prefers-reduced-motion: reduce) {
 		.record-btn,
-		.play-btn,
 		.primary-btn,
 		.secondary-btn,
 		.mic-aura::before,

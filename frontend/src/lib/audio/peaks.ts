@@ -16,13 +16,30 @@ import { audioContextCtor } from './wav';
  * make it trivial to cache peaks in localStorage, IndexedDB, or memoized
  * maps once we start reusing the Waveform component elsewhere in the app.
  */
+export interface PeaksOptions {
+	/** decode through an OfflineAudioContext at this rate so long files cost a fraction of the PCM. */
+	decodeSampleRate?: number;
+}
+
+function decodeContext(sampleRate: number | undefined): BaseAudioContext {
+	if (sampleRate !== undefined) {
+		try {
+			return new OfflineAudioContext(1, 1, sampleRate);
+		} catch (e) {
+			console.error('offline decode unavailable, decoding at full rate:', e);
+		}
+	}
+	return new (audioContextCtor())();
+}
+
 export async function extractPeaks(
 	source: Blob | ArrayBuffer,
-	buckets: number = 120
+	buckets: number = 120,
+	options: PeaksOptions = {}
 ): Promise<number[]> {
 	const arrayBuffer = source instanceof Blob ? await source.arrayBuffer() : source;
 
-	const ctx = new (audioContextCtor())();
+	const ctx = decodeContext(options.decodeSampleRate);
 
 	try {
 		// decodeAudioData mutates/consumes the buffer on some implementations,
@@ -61,7 +78,7 @@ export async function extractPeaks(
 		return peaks;
 	} finally {
 		// safari's AudioContext keeps the mic indicator alive if not closed
-		if ('close' in ctx) {
+		if (ctx instanceof AudioContext) {
 			await ctx.close().catch(() => undefined);
 		}
 	}
