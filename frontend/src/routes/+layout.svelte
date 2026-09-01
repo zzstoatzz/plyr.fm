@@ -317,12 +317,12 @@
 
 			case 'ArrowLeft': // seek backward
 				event.preventDefault();
-				seekBy(-SEEK_AMOUNT);
+				queue.seekBy(-SEEK_AMOUNT);
 				break;
 
 			case 'ArrowRight': // seek forward
 				event.preventDefault();
-				seekBy(SEEK_AMOUNT);
+				queue.seekBy(SEEK_AMOUNT);
 				break;
 
 			case 'j': // previous track (youtube-style)
@@ -345,13 +345,6 @@
 				toggleMute();
 				break;
 		}
-	}
-
-	function seekBy(seconds: number) {
-		if (!player.audioElement || !player.duration) return;
-
-		const newTime = Math.max(0, Math.min(player.duration, player.currentTime + seconds));
-		queue.seek(newTime * 1000);
 	}
 
 	function handlePreviousTrack() {

@@ -5,6 +5,9 @@ export const TYPEAHEAD_URL = 'https://typeahead.waow.tech';
 
 export const VIBE_SEARCH_FLAG = 'vibe-search';
 export const COPYRIGHT_PARADIGM_FLAG = 'copyright-paradigm';
+export const SKIP_BUTTONS_FLAG = 'skip-buttons';
+/** how far the in-player skip buttons and lock-screen skips move. */
+export const SKIP_STEP_SECONDS = 15;
 
 /**
  * generate atprotofans support URL for an artist.

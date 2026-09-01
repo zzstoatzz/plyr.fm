@@ -123,11 +123,11 @@ max_lines = 622
 
 [[rules]]
 path = "frontend/src/lib/components/player/Player.svelte"
-max_lines = 1009
+max_lines = 1020
 
 [[rules]]
 path = "frontend/src/lib/queue.svelte.ts"
-max_lines = 992
+max_lines = 999
 
 [[rules]]
 path = "frontend/src/routes/+layout.svelte"
@@ -347,7 +347,7 @@ max_lines = 668
 
 [[rules]]
 path = "frontend/src/lib/components/player/PlaybackControls.svelte"
-max_lines = 515
+max_lines = 596
 
 [[rules]]
 path = "backend/src/backend/_internal/clients/moderation.py"

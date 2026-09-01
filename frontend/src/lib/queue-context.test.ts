@@ -213,3 +213,43 @@ describe('shuffleInPlace (continuation ordering)', () => {
 		expect([...result].sort()).toEqual([1, 2, 3, 4]); // permutation, no loss
 	});
 });
+
+describe('queue.seekBy', () => {
+	const seeks: number[] = [];
+	beforeEach(() => {
+		seeks.length = 0;
+		player.audioElement = document.createElement('audio');
+		player.duration = 100;
+		player.currentTime = 50;
+		queue.setJamBridge({
+			pushQueueState() {},
+			play() {},
+			pause() {},
+			seek: (ms) => seeks.push(ms)
+		});
+	});
+	afterEach(() => {
+		queue.setJamBridge(null);
+		player.audioElement = undefined;
+		player.duration = 0;
+		player.currentTime = 0;
+	});
+
+	it('moves relative to the current position in milliseconds', () => {
+		queue.seekBy(15);
+		queue.seekBy(-15);
+		expect(seeks).toEqual([65000, 35000]);
+	});
+
+	it('clamps to the track bounds', () => {
+		queue.seekBy(60);
+		queue.seekBy(-80);
+		expect(seeks).toEqual([100000, 0]);
+	});
+
+	it('does nothing without a loaded duration', () => {
+		player.duration = 0;
+		queue.seekBy(15);
+		expect(seeks).toEqual([]);
+	});
+});
