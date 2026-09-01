@@ -614,9 +614,7 @@
 				<span
 					>{visibility === "private" && !permissionedGranted
 						? "approve private media"
-						: staged && staged.status !== "transferred"
-							? "publish when received"
-							: "upload track"}</span
+						: "upload track"}</span
 				>
 			</button>
 

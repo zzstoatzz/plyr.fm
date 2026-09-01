@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { onDestroy } from 'svelte';
 	import Waveform from './Waveform.svelte';
 	import {
 		audioFormatOf,
@@ -69,10 +68,6 @@
 		isPlaying = false;
 		currentTime = 0;
 		return () => URL.revokeObjectURL(url);
-	});
-
-	onDestroy(() => {
-		if (objectUrl) URL.revokeObjectURL(objectUrl);
 	});
 
 	async function handleLoadedMetadata() {
@@ -165,7 +160,7 @@
 			<progress max={transfer.total} value={transfer.loaded} aria-label="file transfer"></progress>
 			<div class="transfer-row">
 				{#if transfer.status === 'transferred'}
-					<span class="transfer-text">file received — publish when you're ready</span>
+					<span class="transfer-text">file received — upload when you're ready</span>
 				{:else if transfer.status === 'failed'}
 					<span class="transfer-text">{transfer.error ?? "your file didn't finish sending"}</span>
 					<button type="button" class="retry" onclick={() => transfer.retry()}>retry</button>

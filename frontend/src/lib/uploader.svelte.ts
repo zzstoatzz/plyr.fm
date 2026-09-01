@@ -128,11 +128,18 @@ function buildTimeoutErrorMessage(progressPercent: number, fileSizeMB: number, i
 	return `upload timed out${progressInfo}: try again with a better connection`;
 }
 
+type UploadFailure = UploadSessionHttpError | UploadPartError | Error;
+
+/** a transfer the server refused for want of a session; submit's preflight owns the sign-in bounce. */
+function sessionExpired(error: UploadFailure): boolean {
+	if (error instanceof UploadSessionHttpError) return error.status === 401;
+	return error instanceof UploadPartError && error.failure.kind === 'http' && error.failure.status === 401;
+}
+
 /**
  * map a session-upload failure to toast copy. returns null when the failure
  * was handled by a redirect (scope upgrade, sign-in) and no toast is due.
  */
-type UploadFailure = UploadSessionHttpError | UploadPartError | Error;
 
 function describeUploadFailure(
 	error: UploadFailure,
@@ -189,7 +196,9 @@ class UploaderState {
 			toast.info(`uploading ${Math.round(fileSizeMB)}MB file on mobile - ensure stable connection`, 5000);
 		}
 		return new StagedTransfer(file, transport, (failure, percent) =>
-			describeUploadFailure(failure, percent, fileSizeMB, isMobile)
+			sessionExpired(failure)
+				? 'your session expired — sign in to finish your upload'
+				: describeUploadFailure(failure, percent, fileSizeMB, isMobile)
 		);
 	}
 

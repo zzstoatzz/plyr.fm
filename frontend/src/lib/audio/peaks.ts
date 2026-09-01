@@ -21,15 +21,14 @@ export interface PeaksOptions {
 	decodeSampleRate?: number;
 }
 
-function decodeContext(sampleRate: number | undefined): BaseAudioContext {
-	if (sampleRate !== undefined) {
-		try {
-			return new OfflineAudioContext(1, 1, sampleRate);
-		} catch (e) {
-			console.error('offline decode unavailable, decoding at full rate:', e);
-		}
+function offlineContext(sampleRate: number | undefined): OfflineAudioContext | null {
+	if (sampleRate === undefined) return null;
+	try {
+		return new OfflineAudioContext(1, 1, sampleRate);
+	} catch (e) {
+		console.error('offline decode unavailable, decoding at full rate:', e);
+		return null;
 	}
-	return new (audioContextCtor())();
 }
 
 export async function extractPeaks(
@@ -39,7 +38,9 @@ export async function extractPeaks(
 ): Promise<number[]> {
 	const arrayBuffer = source instanceof Blob ? await source.arrayBuffer() : source;
 
-	const ctx = decodeContext(options.decodeSampleRate);
+	const offline = offlineContext(options.decodeSampleRate);
+	const realtime = offline === null ? new (audioContextCtor())() : null;
+	const ctx: BaseAudioContext = offline ?? realtime ?? new (audioContextCtor())();
 
 	try {
 		// decodeAudioData mutates/consumes the buffer on some implementations,
@@ -78,8 +79,8 @@ export async function extractPeaks(
 		return peaks;
 	} finally {
 		// safari's AudioContext keeps the mic indicator alive if not closed
-		if (ctx instanceof AudioContext) {
-			await ctx.close().catch(() => undefined);
+		if (realtime) {
+			await realtime.close().catch(() => undefined);
 		}
 	}
 }
