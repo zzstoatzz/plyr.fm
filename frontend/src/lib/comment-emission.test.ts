@@ -3,6 +3,8 @@ import {
 	EMISSION_BUBBLE_PX,
 	EMISSION_GAP_PX,
 	EMISSION_INNER_GAP_PX,
+	EMISSION_SIDE_GAP_PX,
+	EMISSION_SIDE_MIN_PX,
 	EMISSION_STACK_MAX,
 	emissionCapacity,
 	emissionLayout,
@@ -24,16 +26,44 @@ describe('emissionCapacity', () => {
 	});
 });
 
+const bands = (b: Partial<{ above: number; below: number; right: number; left: number }>) => ({
+	above: 0,
+	below: 0,
+	right: 0,
+	left: 0,
+	...b
+});
+
 describe('emissionLayout', () => {
-	it('takes the band with more room, below on a tie', () => {
-		expect(emissionLayout({ above: 300, below: 300 })).toEqual({ placement: 'below', capacity: 3 });
-		expect(emissionLayout({ above: 300, below: 53 })).toEqual({ placement: 'above', capacity: 3 });
-		expect(emissionLayout({ above: 10, below: 53 })).toEqual({ placement: 'below', capacity: 1 });
+	it('takes the vertical band with more room, below on a tie', () => {
+		expect(emissionLayout(bands({ above: 300, below: 300 }))).toEqual({ placement: 'below', capacity: 3 });
+		expect(emissionLayout(bands({ above: 300, below: 53 }))).toEqual({ placement: 'above', capacity: 3 });
+		expect(emissionLayout(bands({ above: 10, below: 53 }))).toEqual({ placement: 'below', capacity: 1 });
 	});
 
-	it('docks one bubble when neither band holds one', () => {
-		expect(emissionLayout({ above: 10, below: 41 })).toEqual({ placement: 'docked', capacity: 1 });
-		expect(emissionLayout({ above: -40, below: -10 })).toEqual({ placement: 'docked', capacity: 1 });
+	it('goes beside the trigger when the vertical bands are full, on the roomier side', () => {
+		expect(emissionLayout(bands({ above: 16, below: 20, right: 350, left: 60 }))).toEqual({
+			placement: 'beside-right',
+			capacity: 1,
+			maxWidth: 350 - EMISSION_SIDE_GAP_PX
+		});
+		expect(emissionLayout(bands({ above: 16, below: 20, right: 40, left: 240 }))).toEqual({
+			placement: 'beside-left',
+			capacity: 1,
+			maxWidth: 240 - EMISSION_SIDE_GAP_PX
+		});
+	});
+
+	it('prefers a vertical band over a side, and needs a usable width beside', () => {
+		expect(emissionLayout(bands({ above: 16, below: 53, right: 400 }))).toEqual({ placement: 'below', capacity: 1 });
+		expect(emissionLayout(bands({ right: EMISSION_SIDE_MIN_PX + EMISSION_SIDE_GAP_PX - 1 }))).toEqual({
+			placement: 'docked',
+			capacity: 1
+		});
+	});
+
+	it('docks one bubble when nothing fits anywhere', () => {
+		expect(emissionLayout(bands({ above: 10, below: 41, right: 100, left: 100 }))).toEqual({ placement: 'docked', capacity: 1 });
 	});
 });
 

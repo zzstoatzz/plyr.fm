@@ -10,19 +10,29 @@
  * viewport horizontally, since its trigger may sit near an edge.
  */
 
-export type EmissionPlacement = 'below' | 'above' | 'docked';
+export type EmissionPlacement = 'below' | 'above' | 'beside-right' | 'beside-left' | 'docked';
 
-/** free vertical room around the trigger's row, in px; negative when content presses in. */
+/** free room around the trigger, in px; negative when content presses in. above/below are
+ * measured from the trigger's whole row, right/left from the trigger itself along that row. */
 export interface EmissionBands {
 	above: number;
 	below: number;
+	right: number;
+	left: number;
 }
 
 export interface EmissionLayout {
 	placement: EmissionPlacement;
 	/** how many bubbles may show at once in this band. */
 	capacity: number;
+	/** the widest a bubble may be here, in px; unset where the default max applies. */
+	maxWidth?: number;
 }
+
+/** the narrowest a bubble beside the trigger is worth showing at, in px. */
+export const EMISSION_SIDE_MIN_PX = 160;
+/** gap between the trigger and a bubble beside it, in px (the stack's css offset). */
+export const EMISSION_SIDE_GAP_PX = 8;
 
 /** gap between the trigger's row and the first bubble, in px (the stack's css offset). */
 export const EMISSION_GAP_PX = 6;
@@ -48,8 +58,17 @@ export function emissionCapacity(freePx: number): number {
 export function emissionLayout(bands: EmissionBands): EmissionLayout {
 	const below = emissionCapacity(bands.below);
 	const above = emissionCapacity(bands.above);
-	if (below === 0 && above === 0) return { placement: 'docked', capacity: 1 };
-	return below >= above ? { placement: 'below', capacity: below } : { placement: 'above', capacity: above };
+	if (below > 0 || above > 0) {
+		return below >= above ? { placement: 'below', capacity: below } : { placement: 'above', capacity: above };
+	}
+	const right = bands.right - EMISSION_SIDE_GAP_PX;
+	const left = bands.left - EMISSION_SIDE_GAP_PX;
+	if (right >= EMISSION_SIDE_MIN_PX || left >= EMISSION_SIDE_MIN_PX) {
+		return right >= left
+			? { placement: 'beside-right', capacity: 1, maxWidth: right }
+			: { placement: 'beside-left', capacity: 1, maxWidth: left };
+	}
+	return { placement: 'docked', capacity: 1 };
 }
 
 /** a horizontal span something else already occupies, in viewport px. */

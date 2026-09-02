@@ -20,6 +20,7 @@
 		type EmissionPlacement
 	} from '$lib/comment-emission';
 	import { flip } from 'svelte/animate';
+	import { backOut } from 'svelte/easing';
 	import RichText from '$lib/components/RichText.svelte';
 	import SensitiveImage from '$lib/components/SensitiveImage.svelte';
 	import { redirectToLogin } from '$lib/utils/auth-redirect';
@@ -63,6 +64,10 @@
 	let emissions = $state<Comment[]>([]);
 	let emissionPlace = $state<EmissionPlacement>('below');
 	let emissionCap = $state(1);
+	let emissionMaxWidth = $state<number | null>(null);
+	// the trigger lights when a comment passes; each pass restarts the ring
+	let litTick = $state(0);
+	let litTimer: ReturnType<typeof setTimeout> | null = null;
 	let emissionShiftPx = $state(0);
 	let emissionsEl = $state<HTMLDivElement | null>(null);
 	const emissionTimers = new Map<number, ReturnType<typeof setTimeout>>();
@@ -72,10 +77,12 @@
 	// whatever is drawn over a point that is not the stack itself or the page
 	// behind it — fixed chrome such as the queue toggle
 	function obstacleAt(x: number, y: number): EmissionObstacle | null {
-		if (!emissionsEl) return null;
-		const hit = document.elementsFromPoint(x, y).find((el) => !emissionsEl?.contains(el));
+		const row = triggerAnchor?.parentElement;
+		const hit = document
+			.elementsFromPoint(x, y)
+			.find((el) => !emissionsEl?.contains(el) && !row?.contains(el));
 		if (!hit || hit === document.body || hit === document.documentElement) return null;
-		if (hit.contains(emissionsEl)) return null;
+		if (row && hit.contains(row)) return null;
 		const r = hit.getBoundingClientRect();
 		return { left: r.left, right: r.right };
 	}
@@ -83,7 +90,8 @@
 	// once the stack has a size, keep it inside the viewport and clear of
 	// anything fixed over its ends
 	$effect(() => {
-		if (!emissionsEl || emissionPlace === 'docked' || emissions.length === 0) return;
+		if (!emissionsEl || emissions.length === 0) return;
+		if (emissionPlace === 'docked' || emissionPlace.startsWith('beside')) return;
 		const rect = emissionsEl.getBoundingClientRect();
 		// measure from where the stack sits unshifted, so a re-run after a shift
 		// sees the same obstacle and lands on the same answer
@@ -110,6 +118,24 @@
 		for (const id of Array.from(emissionTimers.keys())) dismissEmission(id);
 	}
 
+	/** a bubble grows out of the trigger: scale from the tail's side with a small overshoot. */
+	function pop(node: Element, { duration = 320 }: { duration?: number } = {}) {
+		const origin =
+			emissionPlace === 'below'
+				? '50% 0%'
+				: emissionPlace === 'beside-right'
+					? '0% 50%'
+					: emissionPlace === 'beside-left'
+						? '100% 50%'
+						: '50% 100%';
+		return {
+			duration: reduceMotionComments ? 0 : duration,
+			easing: backOut,
+			css: (t: number, u: number) =>
+				`transform-origin: ${origin}; transform: scale(${0.6 + 0.4 * t}); opacity: ${Math.min(1, t * 1.6)}; filter: blur(${u * 1.5}px)`
+		};
+	}
+
 	function playerHeightPx(): number {
 		const raw = window.getComputedStyle(document.documentElement).getPropertyValue('--player-height');
 		const px = Number.parseFloat(raw);
@@ -120,14 +146,26 @@
 	// header) and down to the next content (or the fixed player)
 	function freeBands(): EmissionBands {
 		const row = triggerAnchor?.parentElement;
-		if (!row) return { above: 0, below: 0 };
+		if (!triggerAnchor || !row) return { above: 0, below: 0, right: 0, left: 0 };
 		const rect = row.getBoundingClientRect();
+		const self = triggerAnchor.getBoundingClientRect();
 		const prevBottom = row.previousElementSibling?.getBoundingClientRect().bottom ?? 0;
 		const nextTop = row.nextElementSibling?.getBoundingClientRect().top ?? Number.POSITIVE_INFINITY;
 		const playerTop = window.innerHeight - playerHeightPx();
+		// along the row: to the trigger's neighbours, else the viewport margin, less
+		// anything fixed drawn over that stretch (the queue toggle)
+		const y = self.top + self.height / 2;
+		let rightEdge = triggerAnchor.nextElementSibling?.getBoundingClientRect().left ?? window.innerWidth - 16;
+		const rightHit = obstacleAt(Math.min(rightEdge, self.right + 120), y);
+		if (rightHit && rightHit.left > self.right) rightEdge = Math.min(rightEdge, rightHit.left - 16);
+		let leftEdge = triggerAnchor.previousElementSibling?.getBoundingClientRect().right ?? 16;
+		const leftHit = obstacleAt(Math.max(leftEdge, self.left - 120), y);
+		if (leftHit && leftHit.right < self.left) leftEdge = Math.max(leftEdge, leftHit.right + 16);
 		return {
 			above: rect.top - Math.max(prevBottom, HEADER_CLEARANCE_PX),
-			below: Math.min(nextTop, playerTop) - rect.bottom
+			below: Math.min(nextTop, playerTop) - rect.bottom,
+			right: rightEdge - self.right,
+			left: self.left - leftEdge
 		};
 	}
 
@@ -137,8 +175,12 @@
 			const layout = emissionLayout(bands);
 			emissionPlace = layout.placement;
 			emissionCap = layout.capacity;
+			emissionMaxWidth = layout.maxWidth ?? null;
 			emissionShiftPx = 0;
 		}
+		litTick += 1;
+		if (litTimer) clearTimeout(litTimer);
+		litTimer = setTimeout(() => (litTick = 0), 1100);
 		const existing = emissionTimers.get(comment.id);
 		if (existing) clearTimeout(existing);
 		else {
@@ -374,7 +416,8 @@
 			{#each emissions as passing (passing.id)}
 				<button
 					class="comment-emission"
-					in:fly={{ y: emissionPlace === 'below' ? -8 : 8, duration: reduceMotionComments ? 0 : 300 }}
+					in:pop
+					style:max-width={emissionMaxWidth === null ? null : `${emissionMaxWidth}px`}
 					out:fade={{ duration: reduceMotionComments ? 0 : 400 }}
 					animate:flip={{ duration: reduceMotionComments ? 0 : 250 }}
 					onclick={() => {
@@ -394,15 +437,23 @@
 	{/if}
 	<button
 		class="comments-trigger"
+		class:lit={litTick > 0}
 		onclick={() => (commentsOpen = true)}
 		aria-haspopup="dialog"
 		title="comments"
 	>
+		{#if litTick > 0 && !reduceMotionComments}
+			{#key litTick}
+				<span class="comments-trigger-ping" aria-hidden="true"></span>
+			{/key}
+		{/if}
 		<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
 			<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
 		</svg>
 		{#if commentCount > 0}
-			<span class="comments-trigger-count">{commentCount}</span>
+			{#key litTick}
+				<span class="comments-trigger-count" class:bump={litTick > 0 && !reduceMotionComments}>{commentCount}</span>
+			{/key}
 		{/if}
 	</button>
 	</span>
@@ -598,6 +649,37 @@
 		rotate: 225deg;
 	}
 
+	/* the vertical bands are full: sit beside the trigger along its row, one
+	   bubble, sized to the room there */
+	.comment-emissions.beside-right,
+	.comment-emissions.beside-left {
+		top: 50%;
+		left: calc(100% + 8px);
+		translate: 0 -50%;
+		flex-direction: row;
+		max-height: none;
+	}
+
+	.comment-emissions.beside-left {
+		left: auto;
+		right: calc(100% + 8px);
+	}
+
+	.comment-emissions.beside-right .comment-emission-tail {
+		top: 50%;
+		left: -5px;
+		translate: 0 -50%;
+		rotate: -45deg;
+	}
+
+	.comment-emissions.beside-left .comment-emission-tail {
+		top: 50%;
+		left: auto;
+		right: -5px;
+		translate: 0 -50%;
+		rotate: 135deg;
+	}
+
 	/* neither band exists: sit at the player's edge, where the comments panel docks */
 	.comment-emissions.docked {
 		position: fixed;
@@ -653,6 +735,7 @@
 
 	/* quiet utility trigger — sits in the page's share/download row */
 	.comments-trigger {
+		position: relative;
 		display: flex;
 		align-items: center;
 		gap: 0.35rem;
@@ -667,12 +750,57 @@
 		transition: all 0.15s;
 	}
 
+	/* a comment is passing: the icon is the source — it takes the accent and
+	   sends one soft ring outward; the bubble grows from here */
+	.comments-trigger.lit {
+		color: var(--accent);
+		text-shadow: 0 0 12px color-mix(in srgb, var(--accent) 45%, transparent);
+	}
+
+	.comments-trigger-ping {
+		position: absolute;
+		inset: 0;
+		border-radius: var(--radius-full);
+		border: 1.5px solid var(--accent);
+		opacity: 0;
+		pointer-events: none;
+		animation: comments-ping 900ms cubic-bezier(0.2, 0.7, 0.3, 1) forwards;
+	}
+
+	@keyframes comments-ping {
+		0% {
+			transform: scale(0.6);
+			opacity: 0.9;
+		}
+		100% {
+			transform: scale(2.1);
+			opacity: 0;
+		}
+	}
+
+	.comments-trigger-count.bump {
+		animation: comments-bump 420ms cubic-bezier(0.34, 1.56, 0.64, 1);
+	}
+
+	@keyframes comments-bump {
+		0% {
+			transform: scale(1);
+		}
+		35% {
+			transform: scale(1.25);
+		}
+		100% {
+			transform: scale(1);
+		}
+	}
+
 	.comments-trigger:hover {
 		color: var(--accent);
 		background: color-mix(in srgb, var(--accent) 10%, transparent);
 	}
 
 	.comments-trigger-count {
+		display: inline-block;
 		font-variant-numeric: tabular-nums;
 	}
 
