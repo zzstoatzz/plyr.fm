@@ -379,7 +379,7 @@ max_lines = 524
 
 [[rules]]
 path = "frontend/src/lib/components/TrackComments.svelte"
-max_lines = 1159
+max_lines = 1207
 
 [[rules]]
 path = "backend/src/backend/api/artists.py"

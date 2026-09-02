@@ -10,8 +10,17 @@
 
 export type EmissionPlacement = 'below' | 'above' | 'docked';
 
-/** bubble height plus its gap to the trigger, in px; generous so a two-line wrap still fits. */
+/** one bubble's height plus its gap to the trigger, in px; generous so a two-line wrap still fits. */
 export const EMISSION_SPACE_PX = 56;
+/** each further bubble in a stack, in px. */
+export const EMISSION_ROW_PX = 40;
+/** how many passing comments show at once; older ones leave early when a burst exceeds it. */
+export const EMISSION_STACK_MAX = 3;
+/** how long one bubble lives. */
+export const EMISSION_TTL_MS = 4000;
+
+/** the vertical room a full stack needs. */
+export const EMISSION_STACK_PX = EMISSION_SPACE_PX + (EMISSION_STACK_MAX - 1) * EMISSION_ROW_PX;
 
 /** the page header's height; a bubble rising under it would be covered. */
 export const HEADER_CLEARANCE_PX = 64;
@@ -20,11 +29,12 @@ export function emissionPlacement(
 	anchorTop: number,
 	anchorBottom: number,
 	viewportHeight: number,
-	playerHeight: number
+	playerHeight: number,
+	needed = EMISSION_STACK_PX
 ): EmissionPlacement {
 	if (anchorBottom < 0) return 'docked';
-	if (anchorBottom + EMISSION_SPACE_PX <= viewportHeight - playerHeight) return 'below';
-	if (anchorTop - EMISSION_SPACE_PX >= HEADER_CLEARANCE_PX) return 'above';
+	if (anchorBottom + needed <= viewportHeight - playerHeight) return 'below';
+	if (anchorTop - needed >= HEADER_CLEARANCE_PX) return 'above';
 	return 'docked';
 }
 
