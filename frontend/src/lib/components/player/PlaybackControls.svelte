@@ -493,7 +493,7 @@
 		}
 
 		.player-controls.stacked .control-btn.play-pause {
-			grid-column: 4;
+			grid-column: 8;
 			justify-self: end;
 		}
 
