@@ -14,7 +14,7 @@ gotchas:
 - queue sync: uses BroadcastChannel for cross-tab, not SSE
 - preferences: managed in UserMenu (desktop) and ProfileMenu (mobile) components, not dedicated state file
 - keyboard shortcuts: handled in root layout (+layout.svelte), with context-aware filtering
-- keyboard seeks go through `queue.seekBy()` at a fixed 10 s; the player's skip buttons (flag `skip-buttons`) use the duration ladder in `lib/skip-step.ts` — two rules on purpose
+- keyboard seeks go through `queue.seekBy()` at a fixed 10 s; the player's skip buttons use the duration ladder in `lib/skip-step.ts` — two rules on purpose
 - flag-gated UI reads `auth.user?.enabled_flags` against a constant in `lib/config.ts`; never ship a flagged feature into the public docs as if it were GA
 - icons with text inside an svg inside a `<button>`: the button must `font-family: inherit` or the text renders in the UA font, not the app's `--font-family`; serif fonts need `font-variant-numeric: lining-nums`
 - the passing-comment bubbles on the track page measure their room from the DOM (`lib/comment-emission.ts`); don't place them by rule — see `docs/internal/frontend/passing-comments.md`

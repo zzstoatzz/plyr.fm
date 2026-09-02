@@ -1,9 +1,6 @@
 <script lang="ts">
 	import { player } from '$lib/player.svelte';
 
-	/** stage: the polished look — click-to-mute icon, thin track, thumb on hover */
-	let { stage = false }: { stage?: boolean } = $props();
-
 	// the level to come back to after a mute; a fresh session unmutes to 0.7
 	let lastVolume = 0.7;
 
@@ -23,7 +20,7 @@
 	});
 </script>
 
-<div class="volume-control" class:stage>
+<div class="volume-control">
 	<button
 		type="button"
 		class="volume-icon"
@@ -66,13 +63,18 @@
 </div>
 
 <style>
+	/* spotify's ~93px slider: thin, click-to-mute icon, thumb only under the pointer */
 	.volume-control {
 		display: flex;
 		align-items: center;
 		gap: 0.5rem;
-		color: var(--text-tertiary);
-		min-width: 140px;
+		width: 125px;
+		color: var(--text-secondary);
 		position: relative;
+	}
+
+	.volume-control:hover {
+		color: var(--text-primary);
 	}
 
 	.volume-icon {
@@ -92,74 +94,6 @@
 		border-radius: var(--radius-sm);
 	}
 
-	/* stage: spotify's ~93px slider, thin, thumb only under the pointer */
-	.volume-control.stage {
-		min-width: 0;
-		width: 125px;
-		color: var(--text-secondary);
-	}
-
-	.volume-control.stage:hover {
-		color: var(--text-primary);
-	}
-
-	.volume-control.stage .volume-bar {
-		height: 4px;
-		background: linear-gradient(
-			to right,
-			var(--text-primary) 0%,
-			var(--text-primary) calc(var(--level, 0) * 100%),
-			color-mix(in srgb, var(--text-primary) 28%, transparent) calc(var(--level, 0) * 100%),
-			color-mix(in srgb, var(--text-primary) 28%, transparent) 100%
-		);
-		transition: background 150ms cubic-bezier(0.2, 0, 0, 1);
-	}
-
-	.volume-control.stage .volume-bar:hover,
-	.volume-control.stage .volume-bar:active,
-	.volume-control.stage .volume-bar:focus-visible {
-		background: linear-gradient(
-			to right,
-			var(--accent) 0%,
-			var(--accent) calc(var(--level, 0) * 100%),
-			color-mix(in srgb, var(--text-primary) 28%, transparent) calc(var(--level, 0) * 100%),
-			color-mix(in srgb, var(--text-primary) 28%, transparent) 100%
-		);
-	}
-
-	.volume-control.stage .volume-bar::-webkit-slider-thumb {
-		width: 12px;
-		height: 12px;
-		background: var(--text-primary);
-		opacity: 0;
-		transition: opacity 150ms cubic-bezier(0.2, 0, 0, 1);
-	}
-
-	.volume-control.stage .volume-bar::-moz-range-thumb {
-		width: 12px;
-		height: 12px;
-		background: var(--text-primary);
-		opacity: 0;
-		transition: opacity 150ms cubic-bezier(0.2, 0, 0, 1);
-	}
-
-	.volume-control.stage .volume-bar:hover::-webkit-slider-thumb,
-	.volume-control.stage .volume-bar:active::-webkit-slider-thumb,
-	.volume-control.stage .volume-bar:focus-visible::-webkit-slider-thumb {
-		opacity: 1;
-	}
-
-	.volume-control.stage .volume-bar:hover::-moz-range-thumb,
-	.volume-control.stage .volume-bar:active::-moz-range-thumb,
-	.volume-control.stage .volume-bar:focus-visible::-moz-range-thumb {
-		opacity: 1;
-	}
-
-	.volume-control.stage .volume-bar:focus-visible {
-		outline: 2px solid var(--text-primary);
-		outline-offset: 4px;
-	}
-
 	.volume-icon.muted {
 		color: var(--error);
 		animation: shake 0.5s ease-in-out;
@@ -175,10 +109,34 @@
 		-webkit-appearance: none;
 		appearance: none;
 		height: 4px;
-		background: var(--bg-hover);
 		border-radius: var(--radius-sm);
 		outline: none;
 		cursor: pointer;
+		background: linear-gradient(
+			to right,
+			var(--text-primary) 0%,
+			var(--text-primary) calc(var(--level, 0) * 100%),
+			color-mix(in srgb, var(--text-primary) 28%, transparent) calc(var(--level, 0) * 100%),
+			color-mix(in srgb, var(--text-primary) 28%, transparent) 100%
+		);
+		transition: background 150ms cubic-bezier(0.2, 0, 0, 1);
+	}
+
+	.volume-bar:hover,
+	.volume-bar:active,
+	.volume-bar:focus-visible {
+		background: linear-gradient(
+			to right,
+			var(--accent) 0%,
+			var(--accent) calc(var(--level, 0) * 100%),
+			color-mix(in srgb, var(--text-primary) 28%, transparent) calc(var(--level, 0) * 100%),
+			color-mix(in srgb, var(--text-primary) 28%, transparent) 100%
+		);
+	}
+
+	.volume-bar:focus-visible {
+		outline: 2px solid var(--text-primary);
+		outline-offset: 4px;
 	}
 
 	.volume-bar::-webkit-slider-thumb {
@@ -187,19 +145,34 @@
 		width: 12px;
 		height: 12px;
 		border-radius: 50%;
-		background: var(--accent);
+		background: var(--text-primary);
 		cursor: pointer;
+		opacity: 0;
+		transition: opacity 150ms cubic-bezier(0.2, 0, 0, 1);
 	}
 
 	.volume-bar::-moz-range-thumb {
 		width: 12px;
 		height: 12px;
 		border-radius: 50%;
-		background: var(--accent);
+		background: var(--text-primary);
 		cursor: pointer;
 		border: none;
+		opacity: 0;
+		transition: opacity 150ms cubic-bezier(0.2, 0, 0, 1);
 	}
 
+	.volume-bar:hover::-webkit-slider-thumb,
+	.volume-bar:active::-webkit-slider-thumb,
+	.volume-bar:focus-visible::-webkit-slider-thumb {
+		opacity: 1;
+	}
+
+	.volume-bar:hover::-moz-range-thumb,
+	.volume-bar:active::-moz-range-thumb,
+	.volume-bar:focus-visible::-moz-range-thumb {
+		opacity: 1;
+	}
 
 	.volume-bar.muted::-webkit-slider-thumb {
 		background: var(--error);

@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { SKIP_BUTTONS_FLAG } from '$lib/config';
 	import favicon from '$lib/assets/favicon.png';
 	import {
 		APP_NAME,
@@ -542,7 +541,6 @@
 {#if !isEmbed}
 	<button
 		class="queue-toggle"
-		class:stage={auth.user?.enabled_flags?.includes(SKIP_BUTTONS_FLAG) ?? false}
 		onclick={toggleQueue}
 		aria-pressed={showQueue}
 		aria-label="toggle queue (Q)"
@@ -812,9 +810,9 @@
 		}
 	}
 
-	/* the stage footer carries its own queue button on desktop */
+	/* the footer carries its own queue button on desktop */
 	@media (min-width: 769px) {
-		.queue-toggle.stage {
+		.queue-toggle {
 			display: none;
 		}
 	}

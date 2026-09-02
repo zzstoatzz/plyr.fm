@@ -3,18 +3,11 @@
 	import { browser } from '$app/environment';
 	import { player } from '$lib/player.svelte';
 	import { queue } from '$lib/queue.svelte';
-	import { auth } from '$lib/auth.svelte';
-	import { SKIP_BUTTONS_FLAG } from '$lib/config';
 	import { skipStepSeconds } from '$lib/skip-step';
 
-	import VolumeControl from './VolumeControl.svelte';
+	// radio mode: live stream — no prev/next, skips or scrubbing, just play/pause
+	let { radioMode = false }: { radioMode?: boolean } = $props();
 
-	// radio mode: live stream — no prev/next or scrubbing, just play/pause + volume.
-	// stacked: the transport on one row and the scrubber on its own full-width
-	// row beneath it, with volume owned by the footer's right cluster
-	let { radioMode = false, stacked = false }: { radioMode?: boolean; stacked?: boolean } = $props();
-
-	const skipButtons = $derived(auth.user?.enabled_flags?.includes(SKIP_BUTTONS_FLAG) ?? false);
 	const skipStep = $derived(skipStepSeconds(player.duration));
 
 	let seekValue = $state(0);
@@ -118,9 +111,9 @@
 	}
 </script>
 
-<div class="player-controls" class:radio-mode={radioMode} class:stacked>
+<div class="player-controls" class:radio-mode={radioMode}>
 	<div class="transport">
-	{#if stacked && !radioMode}
+	{#if !radioMode}
 		<button
 			class="control-btn shuffle"
 			class:active={queue.shuffle}
@@ -143,19 +136,13 @@
 		</button>
 	{:else}
 		<button class="control-btn prev" onclick={handlePrevious} title="previous track / restart">
-			{#if stacked}
-				<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-					<path d="M6 5h2v14H6zM19 5.5v13a.7.7 0 0 1-1.1.6L9 12.6a.7.7 0 0 1 0-1.2l8.9-6.5A.7.7 0 0 1 19 5.5z" />
-				</svg>
-			{:else}
-				<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-					<path d="M6 4h2v16H6V4zm12 0l-10 8 10 8V4z" />
-				</svg>
-			{/if}
+			<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+				<path d="M6 5h2v14H6zM19 5.5v13a.7.7 0 0 1-1.1.6L9 12.6a.7.7 0 0 1 0-1.2l8.9-6.5A.7.7 0 0 1 19 5.5z" />
+			</svg>
 		</button>
 	{/if}
 
-	{#if skipButtons && !radioMode}
+	{#if !radioMode}
 		<button
 			class="control-btn skip skip-back"
 			onclick={() => queue.seekBy(-skipStep)}
@@ -177,29 +164,18 @@
 		onclick={() => queue.togglePlayPause()}
 		title={player.paused ? 'play' : 'pause'}
 	>
-		{#if stacked}
-			{#if !player.paused}
-				<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-					<path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z" />
-				</svg>
-			{:else}
-				<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-					<path d="M8.5 5.6v12.8a.8.8 0 0 0 1.2.7l10.3-6.4a.8.8 0 0 0 0-1.4L9.7 4.9a.8.8 0 0 0-1.2.7z" />
-				</svg>
-			{/if}
-		{:else if !player.paused}
-			<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-				<rect x="6" y="4" width="4" height="16" rx="1"></rect>
-				<rect x="14" y="4" width="4" height="16" rx="1"></rect>
+		{#if !player.paused}
+			<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+				<path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z" />
 			</svg>
 		{:else}
-			<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-				<path d="M8 5v14l11-7z"></path>
+			<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+				<path d="M8.5 5.6v12.8a.8.8 0 0 0 1.2.7l10.3-6.4a.8.8 0 0 0 0-1.4L9.7 4.9a.8.8 0 0 0-1.2.7z" />
 			</svg>
 		{/if}
 	</button>
 
-	{#if skipButtons && !radioMode}
+	{#if !radioMode}
 		<button
 			class="control-btn skip skip-forward"
 			onclick={() => queue.seekBy(skipStep)}
@@ -224,15 +200,9 @@
 			title="next track"
 			disabled={!queue.hasNext}
 		>
-			{#if stacked}
-				<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-					<path d="M18 5h-2v14h2zM5 5.5v13a.7.7 0 0 0 1.1.6L15 12.6a.7.7 0 0 0 0-1.2L6.1 4.9A.7.7 0 0 0 5 5.5z" />
-				</svg>
-			{:else}
-				<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-					<path d="M16 4h2v16h-2V4zM6 4l10 8-10 8V4z"></path>
-				</svg>
-			{/if}
+			<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+				<path d="M18 5h-2v14h2zM5 5.5v13a.7.7 0 0 0 1.1.6L15 12.6a.7.7 0 0 0 0-1.2L6.1 4.9A.7.7 0 0 0 5 5.5z" />
+			</svg>
 		</button>
 
 		<button
@@ -241,24 +211,12 @@
 			onclick={() => queue.toggleRepeatMode()}
 			title={queue.repeatMode === 'one' ? 'stop repeating' : 'repeat this track'}
 		>
-			{#if stacked}
-				<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-					<path d="M17.2 2.4 21 6.1l-3.8 3.7V7.2H7.6a2.1 2.1 0 0 0-2.1 2.1V12H3.3V9.3a4.3 4.3 0 0 1 4.3-4.3h9.6V2.4zM6.8 21.6 3 17.9l3.8-3.7v2.6h9.6a2.1 2.1 0 0 0 2.1-2.1V12h2.2v2.7a4.3 4.3 0 0 1-4.3 4.3H6.8v2.6z" />
-					{#if queue.repeatMode === 'one'}
-						<text x="12" y="14.6" text-anchor="middle" font-size="7" font-weight="700" font-family="inherit" fill="currentColor" stroke="none">1</text>
-					{/if}
-				</svg>
-			{:else}
-				<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-				<path d="m17 2 4 4-4 4"></path>
-				<path d="M3 11v-1a4 4 0 0 1 4-4h14"></path>
-				<path d="m7 22-4-4 4-4"></path>
-				<path d="M21 13v1a4 4 0 0 1-4 4H3"></path>
+			<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+				<path d="M17.2 2.4 21 6.1l-3.8 3.7V7.2H7.6a2.1 2.1 0 0 0-2.1 2.1V12H3.3V9.3a4.3 4.3 0 0 1 4.3-4.3h9.6V2.4zM6.8 21.6 3 17.9l3.8-3.7v2.6h9.6a2.1 2.1 0 0 0 2.1-2.1V12h2.2v2.7a4.3 4.3 0 0 1-4.3 4.3H6.8v2.6z" />
 				{#if queue.repeatMode === 'one'}
-					<path d="M11 10h1v4"></path>
+					<text x="12" y="14.6" text-anchor="middle" font-size="7" font-weight="700" font-family="inherit" fill="currentColor" stroke="none">1</text>
 				{/if}
 			</svg>
-			{/if}
 		</button>
 	{/if}
 	</div>
@@ -288,85 +246,32 @@
 	{:else}
 		<span class="live-pill">live</span>
 	{/if}
-
-	{#if !stacked}
-		<VolumeControl />
-	{/if}
 </div>
 
 <style>
 	.player-controls {
 		flex: 1;
 		display: flex;
-		align-items: center;
-		gap: 1rem;
+		flex-direction: column;
+		align-items: stretch;
+		gap: 0.2rem;
 		min-width: 0;
 		width: 100%;
 	}
 
-	/* radio: "live" fills the slot the scrubber would occupy, keeping play/pause
-	   left and volume right — same control row, no scrubber/skip */
+	/* radio: "live" takes the scrubber's place under play/pause */
 	.live-pill {
-		flex: 1;
 		font-size: var(--text-xs);
 		font-weight: 600;
 		letter-spacing: 0.08em;
 		text-transform: uppercase;
 		color: var(--accent);
+		text-align: center;
 	}
 
-	.control-btn {
-		background: transparent;
-		border: none;
-		color: inherit;
-		cursor: pointer;
-		padding: 0.6rem;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		transition: all 0.2s;
-		border-radius: var(--radius-full);
-	}
-
-	.control-btn svg {
-		width: 24px;
-		height: 24px;
-	}
-
-	.control-btn:hover {
-		color: var(--accent);
-		background: color-mix(in srgb, var(--accent) 10%, transparent);
-	}
-
-	.control-btn.active {
-		color: var(--accent);
-	}
-
-	/* secondary control: quieter than transport buttons */
-	.control-btn.repeat svg {
-		width: 18px;
-		height: 18px;
-	}
-
-	.control-btn.play-pause:active {
-		transform: scale(0.95);
-	}
-
-	/* the transport is a row only in the stage layout; elsewhere its children
-	   sit in the parent flex/grid as before */
+	/* the transport is one centred row that never wraps; the scrubber sits on its
+	   own row taking the whole centre column */
 	.transport {
-		display: contents;
-	}
-
-	/* stacked (the stage layout): the transport centred on one row that never
-	   wraps, the scrubber on its own row taking the whole centre column */
-	.player-controls.stacked {
-		flex-direction: column;
-		align-items: stretch;
-		gap: 0.2rem;
-	}
-
-	.player-controls.stacked .transport {
 		display: flex;
 		align-items: center;
 		justify-content: center;
@@ -374,74 +279,50 @@
 		flex-wrap: nowrap;
 	}
 
-	.player-controls.stacked .control-btn {
+	/* transport idle secondary → primary on hover, active toggles carry a dot;
+	   keyboard focus is a ring */
+	.control-btn {
+		background: transparent;
+		border: none;
+		color: var(--text-secondary);
+		cursor: pointer;
 		padding: 0.4rem;
 		flex-shrink: 0;
-	}
-
-	.player-controls.stacked .control-btn svg {
-		width: 22px;
-		height: 22px;
-	}
-
-	.player-controls.stacked .control-btn.play-pause {
-		width: 36px;
-		height: 36px;
-		padding: 0;
-		background: var(--text-primary);
-		color: var(--bg-primary);
-	}
-
-	.player-controls.stacked .control-btn.play-pause:hover {
-		background: var(--text-primary);
-		color: var(--bg-primary);
-		transform: scale(1.05);
-	}
-
-	.player-controls.stacked .control-btn.play-pause svg {
-		width: 18px;
-		height: 18px;
-	}
-
-	.player-controls.stacked .time-control {
-		width: 100%;
-		max-width: none;
-		margin: 0;
-	}
-
-	/* stage polish — the conventions modern players share:
-	   transport idle secondary → primary on hover, active toggles carry a dot;
-	   the scrubber is thin with a hidden thumb until hovered, primary fill that
-	   turns accent under the pointer, a tall hit area; keyboard focus is a ring */
-	.player-controls.stacked .control-btn {
-		color: var(--text-secondary);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		border-radius: var(--radius-full);
 		transition:
 			color 150ms cubic-bezier(0.2, 0, 0, 1),
 			transform 150ms cubic-bezier(0.2, 0, 0, 1),
 			background 150ms cubic-bezier(0.2, 0, 0, 1);
 	}
 
-	.player-controls.stacked .control-btn:hover {
-		color: var(--text-primary);
-		background: transparent;
+	.control-btn svg {
+		width: 22px;
+		height: 22px;
 	}
 
-	.player-controls.stacked .control-btn:active {
+	.control-btn:hover {
+		color: var(--text-primary);
+	}
+
+	.control-btn:active {
 		transform: scale(0.94);
 	}
 
-	.player-controls.stacked .control-btn.disabled,
-	.player-controls.stacked .control-btn:disabled {
+	.control-btn.disabled,
+	.control-btn:disabled {
 		opacity: 0.38;
 		pointer-events: none;
 	}
 
-	.player-controls.stacked .control-btn.active {
+	.control-btn.active {
 		color: var(--accent);
 		position: relative;
 	}
 
-	.player-controls.stacked .control-btn.active::after {
+	.control-btn.active::after {
 		content: '';
 		position: absolute;
 		left: 50%;
@@ -453,103 +334,33 @@
 		translate: -50% 0;
 	}
 
-	.player-controls.stacked .control-btn:focus-visible,
-	.player-controls.stacked .seek-bar:focus-visible {
+	.control-btn:focus-visible,
+	.seek-bar:focus-visible {
 		outline: 2px solid var(--text-primary);
 		outline-offset: 2px;
 	}
 
-	.player-controls.stacked .time {
-		color: var(--text-secondary);
-		font-size: var(--text-xs);
-		min-width: 40px;
-	}
-
-	.player-controls.stacked .time:last-child {
-		text-align: right;
-	}
-
-	.player-controls.stacked .seek-bar {
-		height: 20px;
-		margin: -8px 0;
-		--fill: var(--text-primary);
-		--rest: color-mix(in srgb, var(--text-primary) 28%, transparent);
-	}
-
-	.player-controls.stacked .seek-bar::-webkit-slider-runnable-track {
-		height: 4px;
-		border-radius: 2px;
-		margin-top: 8px;
-		background: linear-gradient(
-			to right,
-			var(--fill) 0%,
-			var(--fill) var(--progress, 0%),
-			var(--rest) var(--progress, 0%),
-			var(--rest) 100%
-		);
-		transition: background 150ms cubic-bezier(0.2, 0, 0, 1);
-	}
-
-	.player-controls.stacked .seek-bar::-moz-range-track {
-		height: 4px;
-		border-radius: 2px;
-		background: var(--rest);
-	}
-
-	.player-controls.stacked .seek-bar::-moz-range-progress {
-		height: 4px;
-		border-radius: 2px;
-		background: var(--fill);
-	}
-
-	.player-controls.stacked .seek-bar::-webkit-slider-thumb {
-		width: 12px;
-		height: 12px;
-		margin-top: -4px;
+	.control-btn.play-pause {
+		width: 36px;
+		height: 36px;
+		padding: 0;
 		background: var(--text-primary);
-		opacity: 0;
-		box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
-		transform: none;
-		transition: opacity 150ms cubic-bezier(0.2, 0, 0, 1);
+		color: var(--bg-primary);
 	}
 
-	.player-controls.stacked .seek-bar::-moz-range-thumb {
-		width: 12px;
-		height: 12px;
+	.control-btn.play-pause:hover {
 		background: var(--text-primary);
-		border: none;
-		opacity: 0;
-		box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
-		transition: opacity 150ms cubic-bezier(0.2, 0, 0, 1);
+		color: var(--bg-primary);
+		transform: scale(1.05);
 	}
 
-	.player-controls.stacked .seek-bar:hover,
-	.player-controls.stacked .seek-bar:focus-visible,
-	.player-controls.stacked .seek-bar:active {
-		--fill: var(--accent);
+	.control-btn.play-pause:active {
+		transform: scale(0.95);
 	}
 
-	.player-controls.stacked .seek-bar:hover::-webkit-slider-thumb,
-	.player-controls.stacked .seek-bar:focus-visible::-webkit-slider-thumb,
-	.player-controls.stacked .seek-bar:active::-webkit-slider-thumb {
-		opacity: 1;
-		transform: none;
-		box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
-	}
-
-	.player-controls.stacked .seek-bar:hover::-moz-range-thumb,
-	.player-controls.stacked .seek-bar:focus-visible::-moz-range-thumb,
-	.player-controls.stacked .seek-bar:active::-moz-range-thumb {
-		opacity: 1;
-	}
-
-	@media (prefers-reduced-motion: reduce) {
-		.player-controls.stacked .control-btn,
-		.player-controls.stacked .control-btn:active,
-		.player-controls.stacked .control-btn.play-pause:hover {
-			transform: none;
-			transition: color 150ms, background 150ms;
-		}
+	.control-btn.play-pause svg {
+		width: 18px;
+		height: 18px;
 	}
 
 	.control-btn.shuffle svg {
@@ -569,11 +380,6 @@
 		font-variant-numeric: lining-nums tabular-nums;
 	}
 
-	.control-btn.disabled {
-		opacity: 0.4;
-		pointer-events: none;
-	}
-
 	/* radio: static, non-interactive marker that holds play/pause in place */
 	.control-btn.infinity {
 		color: var(--text-tertiary);
@@ -586,91 +392,120 @@
 		background: transparent;
 	}
 
+	@media (prefers-reduced-motion: reduce) {
+		.control-btn,
+		.control-btn:active,
+		.control-btn.play-pause:hover {
+			transform: none;
+			transition: color 150ms, background 150ms;
+		}
+	}
+
 	.time-control {
-		flex: 1;
+		width: 100%;
 		display: flex;
 		align-items: center;
 		gap: 0.75rem;
 	}
 
 	.time {
-		font-size: var(--text-sm);
-		color: var(--text-tertiary);
-		min-width: 45px;
+		font-size: var(--text-xs);
+		color: var(--text-secondary);
+		min-width: 40px;
 		font-variant-numeric: tabular-nums;
 	}
 
-	.seek-bar {
-		flex: 1;
+	.time:last-child {
+		text-align: right;
 	}
 
-	input[type="range"] {
+	/* the scrubber: thin, a hidden thumb until hovered, primary fill that turns
+	   accent under the pointer, a 20px hit area around the 4px track */
+	.seek-bar {
+		flex: 1;
 		-webkit-appearance: none;
 		appearance: none;
 		background: transparent;
 		cursor: pointer;
+		height: 20px;
+		margin: -8px 0;
+		--fill: var(--text-primary);
+		--rest: color-mix(in srgb, var(--text-primary) 28%, transparent);
 	}
 
-	input[type="range"]::-webkit-slider-runnable-track {
+	.seek-bar::-webkit-slider-runnable-track {
+		height: 4px;
+		border-radius: 2px;
+		margin-top: 8px;
 		background: linear-gradient(
 			to right,
-			color-mix(in srgb, var(--accent) 60%, transparent) 0%,
-			color-mix(in srgb, var(--accent) 60%, transparent) var(--progress, 0%),
-			color-mix(in srgb, var(--accent) 20%, transparent) var(--progress, 0%),
-			color-mix(in srgb, var(--accent) 20%, transparent) 100%
+			var(--fill) 0%,
+			var(--fill) var(--progress, 0%),
+			var(--rest) var(--progress, 0%),
+			var(--rest) 100%
 		);
-		height: 4px;
-		border-radius: 2px;
+		transition: background 150ms cubic-bezier(0.2, 0, 0, 1);
 	}
 
-	input[type="range"]::-webkit-slider-thumb {
+	.seek-bar::-moz-range-track {
+		height: 4px;
+		border-radius: 2px;
+		background: var(--rest);
+	}
+
+	.seek-bar::-moz-range-progress {
+		height: 4px;
+		border-radius: 2px;
+		background: var(--fill);
+	}
+
+	.seek-bar::-webkit-slider-thumb {
 		-webkit-appearance: none;
 		appearance: none;
-		background: var(--accent);
-		height: 14px;
-		width: 14px;
+		width: 12px;
+		height: 12px;
+		margin-top: -4px;
 		border-radius: var(--radius-full);
-		margin-top: -5px;
-		transition: all 0.2s;
-		box-shadow: 0 0 0 8px transparent;
+		background: var(--text-primary);
+		opacity: 0;
+		box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+		transition: opacity 150ms cubic-bezier(0.2, 0, 0, 1);
 	}
 
-	input[type="range"]::-webkit-slider-thumb:hover {
-		background: var(--accent-hover);
-		transform: scale(1.2);
-		box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 20%, transparent);
-	}
-
-	input[type="range"]::-moz-range-track {
-		background: color-mix(in srgb, var(--accent) 20%, transparent);
-		height: 4px;
-		border-radius: 2px;
-	}
-
-	input[type="range"]::-moz-range-progress {
-		background: color-mix(in srgb, var(--accent) 60%, transparent);
-		height: 4px;
-		border-radius: 2px;
-	}
-
-	input[type="range"]::-moz-range-thumb {
-		background: var(--accent);
-		height: 14px;
-		width: 14px;
+	.seek-bar::-moz-range-thumb {
+		width: 12px;
+		height: 12px;
 		border-radius: var(--radius-full);
+		background: var(--text-primary);
 		border: none;
-		transition: all 0.2s;
-		box-shadow: 0 0 0 8px transparent;
+		opacity: 0;
+		box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+		transition: opacity 150ms cubic-bezier(0.2, 0, 0, 1);
 	}
 
-	input[type="range"]::-moz-range-thumb:hover {
-		background: var(--accent-hover);
-		transform: scale(1.2);
-		box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 20%, transparent);
+	.seek-bar:hover,
+	.seek-bar:focus-visible,
+	.seek-bar:active {
+		--fill: var(--accent);
 	}
 
+	.seek-bar:hover::-webkit-slider-thumb,
+	.seek-bar:focus-visible::-webkit-slider-thumb,
+	.seek-bar:active::-webkit-slider-thumb {
+		opacity: 1;
+	}
+
+	.seek-bar:hover::-moz-range-thumb,
+	.seek-bar:focus-visible::-moz-range-thumb,
+	.seek-bar:active::-moz-range-thumb {
+		opacity: 1;
+	}
+
+	/* the phone bar: art, title, heart, play, next on the first row; skips flank
+	   the scrubber on the second. prev, repeat and shuffle live in the queue */
 	@media (max-width: 768px) {
-		.player-controls {
+		.player-controls,
+		.transport {
 			display: contents;
 		}
 
@@ -680,52 +515,25 @@
 		}
 
 		.control-btn.prev,
-		.control-btn.infinity {
-			grid-column: 4;
-		}
-
-		.control-btn.play-pause {
-			grid-column: 5;
-		}
-
-		.control-btn.next {
-			grid-column: 6;
-		}
-
-		.control-btn.repeat {
-			grid-column: 7;
-		}
-
+		.control-btn.repeat,
 		.control-btn.shuffle {
 			display: none;
 		}
 
-		.player-controls.stacked .transport {
-			display: contents;
+		.control-btn.infinity {
+			grid-column: 7;
 		}
 
-		.player-controls.stacked .control-btn {
-			padding: 0.5rem;
-		}
-
-		/* the stage bar on a phone: art, title, heart, play, next */
-		.player-controls.stacked .control-btn.prev,
-		.player-controls.stacked .control-btn.repeat {
-			display: none;
-		}
-
-		.player-controls.stacked .control-btn.play-pause {
+		.control-btn.play-pause {
 			grid-column: 7;
 			justify-self: end;
 		}
 
-		.player-controls.stacked .control-btn.next {
-			grid-row: 1;
+		.control-btn.next {
 			grid-column: 8;
 			justify-self: end;
 		}
 
-		/* skips sit on the scrubber row, under the thumb, not in the transport row */
 		.control-btn.skip {
 			grid-row: 2;
 			padding: 0.25rem;
@@ -738,26 +546,6 @@
 
 		.control-btn.skip-forward {
 			grid-column: 8;
-		}
-
-		.control-btn.skip svg {
-			width: 24px;
-			height: 24px;
-		}
-
-		.control-btn svg {
-			width: 28px;
-			height: 28px;
-		}
-
-		.control-btn.repeat svg {
-			width: 22px;
-			height: 22px;
-		}
-
-		.control-btn.play-pause svg {
-			width: 32px;
-			height: 32px;
 		}
 
 		.time-control {
@@ -773,13 +561,10 @@
 		.live-pill {
 			grid-row: 2;
 			grid-column: 1 / 9;
-			text-align: center;
 		}
 
 		.time {
-			font-size: var(--text-xs);
 			min-width: 38px;
 		}
-
 	}
 </style>

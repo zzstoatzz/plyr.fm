@@ -7,7 +7,7 @@
 	import { IMAGE_WIDTHS, resizedImageUrl } from '$lib/utils/display-image';
 
 	interface Props {
-		/** a heart rendered beside the title (the stage layout) */
+		/** the heart rendered beside the title (absent in radio mode) */
 		like?: Snippet;
 		track: Track;
 		isOnTrackDetailPage: boolean;
@@ -421,7 +421,7 @@
 			grid-column: 1;
 		}
 
-		/* the stage bar: title takes the row; heart, play and next sit at its end */
+		/* the phone bar: title takes the row; heart, play and next sit at its end */
 		.player-like {
 			grid-row: 1;
 			grid-column: 6;

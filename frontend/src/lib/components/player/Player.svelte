@@ -20,7 +20,6 @@
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import { loginHref } from '$lib/utils/auth-redirect';
-	import { SKIP_BUTTONS_FLAG } from '$lib/config';
 	import { skipStepSeconds } from '$lib/skip-step';
 
 	interface Props {
@@ -30,12 +29,8 @@
 
 	let { queueOpen = false, onToggleQueue }: Props = $props();
 
-	// the stage layout: spotify's three regions, behind the same per-user flag
-	// as the skip buttons while it is judged
-	const stage = $derived(auth.user?.enabled_flags?.includes(SKIP_BUTTONS_FLAG) ?? false);
-
 	$effect(() => {
-		if (stage && auth.isAuthenticated) void likes.ensureLoaded();
+		if (auth.isAuthenticated) void likes.ensureLoaded();
 	});
 	import { auth } from '$lib/auth.svelte';
 	import TrackInfo from './TrackInfo.svelte';
@@ -97,8 +92,7 @@
 			}
 		});
 
-		// seekbackward/seekforward are registered reactively below, only under the
-		// skip-buttons flag: iOS shows them in place of ⏮/⏭ when they exist
+		// seekbackward/seekforward are registered reactively below
 	}
 
 	// check if we're on the current track's detail page
@@ -256,11 +250,10 @@
 		);
 	});
 
-	// lock-screen skips, only for the flag: registering them makes iOS show
-	// ±15s in place of the ⏮/⏭ arrows, which is the trade the flag exists to try
+	// lock-screen skips: registering them makes iOS show ±skip in place of ⏮/⏭
 	$effect(() => {
 		if (!('mediaSession' in navigator)) return;
-		const skips = !player.radio && (auth.user?.enabled_flags?.includes(SKIP_BUTTONS_FLAG) ?? false);
+		const skips = !player.radio;
 		navigator.mediaSession.setActionHandler(
 			'seekbackward',
 			skips ? (details) => queue.seekBy(-(details.seekOffset ?? skipStepSeconds(player.duration))) : null
@@ -930,7 +923,7 @@
 			</div>
 		{/if}
 
-		<div class="player-content" class:stage>
+		<div class="player-content">
 			<TrackInfo
 				track={nowPlayingTrack}
 				isOnTrackDetailPage={Boolean(isOnTrackDetailPage)}
@@ -938,7 +931,7 @@
 				bind:this={trackInfoRef}
 			>
 				{#snippet like()}
-					{#if stage && nowPlayingTrack && !player.radio && nowPlayingTrack.id}
+					{#if nowPlayingTrack && !player.radio && nowPlayingTrack.id}
 						<AddToMenu
 							trackId={nowPlayingTrack.id}
 							trackTitle={nowPlayingTrack.title}
@@ -953,28 +946,26 @@
 					{/if}
 				{/snippet}
 			</TrackInfo>
-			<PlaybackControls radioMode={Boolean(player.radio)} stacked={stage} />
-			{#if stage}
-				<div class="stage-right">
-					{#if onToggleQueue}
-						<button
-							class="stage-btn"
-							class:active={queueOpen}
-							onclick={onToggleQueue}
-							aria-pressed={queueOpen}
-							aria-label="toggle queue (Q)"
-							title={queueOpen ? 'hide queue (Q)' : 'show queue (Q)'}
-						>
-							<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-								<line x1="3" y1="6" x2="21" y2="6"></line>
-								<line x1="3" y1="12" x2="21" y2="12"></line>
-								<line x1="3" y1="18" x2="21" y2="18"></line>
-							</svg>
-						</button>
-					{/if}
-					<VolumeControl stage />
-				</div>
-			{/if}
+			<PlaybackControls radioMode={Boolean(player.radio)} />
+			<div class="player-right">
+				{#if onToggleQueue}
+					<button
+						class="queue-btn"
+						class:active={queueOpen}
+						onclick={onToggleQueue}
+						aria-pressed={queueOpen}
+						aria-label="toggle queue (Q)"
+						title={queueOpen ? 'hide queue (Q)' : 'show queue (Q)'}
+					>
+						<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+							<line x1="3" y1="6" x2="21" y2="6"></line>
+							<line x1="3" y1="12" x2="21" y2="12"></line>
+							<line x1="3" y1="18" x2="21" y2="18"></line>
+						</svg>
+					</button>
+				{/if}
+				<VolumeControl />
+			</div>
 		</div>
 	</div>
 {/if}
@@ -1001,36 +992,24 @@
 	.player::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px; background: var(--top-bar-color); opacity: 0.32; filter: saturate(0.9) brightness(0.75); box-shadow: 0 0 0 transparent; transition: opacity 0.15s ease-out, filter 0.15s ease-out, box-shadow 0.2s ease-out; pointer-events: none; z-index: 2; }
 	.player.is-playing::before { opacity: 0.95; filter: saturate(1.25) brightness(1.28); box-shadow: 0 0 6px color-mix(in srgb, var(--accent) 65%, transparent), 0 0 14px color-mix(in srgb, var(--accent) 45%, transparent); }
 
+	/* track on the left, transport + scrubber centred, queue and volume on the right */
 	.player-content {
 		width: 100%;
 		margin: 0;
 		display: grid;
-		grid-template-columns: minmax(200px, 420px) minmax(0, 1fr);
+		grid-template-columns: minmax(120px, 24%) minmax(0, 1fr) minmax(120px, 24%);
 		align-items: center;
 		gap: 1.5rem;
 	}
 
-	@media (max-width: 1100px) {
-		.player-content {
-			grid-template-columns: minmax(160px, 360px) minmax(0, 1fr);
-			gap: 1rem;
-		}
-	}
-
-	/* the stage layout: track on the left, transport + scrubber centred, queue and
-	   volume on the right — spotify's footer, which is what the flag tries */
-	.player-content.stage {
-		grid-template-columns: minmax(120px, 24%) minmax(0, 1fr) minmax(120px, 24%);
-	}
-
-	.stage-right {
+	.player-right {
 		display: flex;
 		align-items: center;
 		justify-content: flex-end;
 		gap: 0.75rem;
 	}
 
-	.stage-btn {
+	.queue-btn {
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
@@ -1044,15 +1023,15 @@
 		transition: color 150ms cubic-bezier(0.2, 0, 0, 1);
 	}
 
-	.stage-btn:hover {
+	.queue-btn:hover {
 		color: var(--text-primary);
 	}
 
-	.stage-btn.active {
+	.queue-btn.active {
 		color: var(--accent);
 	}
 
-	.stage-btn.active::after {
+	.queue-btn.active::after {
 		content: '';
 		position: absolute;
 		left: 50%;
@@ -1064,7 +1043,7 @@
 		translate: -50% 0;
 	}
 
-	.stage-btn:focus-visible {
+	.queue-btn:focus-visible {
 		outline: 2px solid var(--text-primary);
 		outline-offset: 2px;
 	}
@@ -1126,11 +1105,7 @@
 		}
 
 		/* the phone keeps its two rows; the right cluster is desktop chrome */
-		.player-content.stage {
-			grid-template-columns: 48px 1fr auto auto auto auto auto auto;
-		}
-
-		.stage-right {
+		.player-right {
 			display: none;
 		}
 	}
