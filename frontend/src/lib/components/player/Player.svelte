@@ -947,6 +947,8 @@
 							fileId={nowPlayingTrack.file_id}
 							gated={nowPlayingTrack.gated}
 							initialLiked={likes.isLiked(nowPlayingTrack)}
+							plain
+							align="start"
 						/>
 					{/if}
 				{/snippet}

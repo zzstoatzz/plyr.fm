@@ -95,7 +95,7 @@ max_lines = 523
 
 [[rules]]
 path = "frontend/src/lib/components/AddToMenu.svelte"
-max_lines = 806
+max_lines = 857
 
 [[rules]]
 path = "frontend/src/lib/components/ProfileMenu.svelte"
@@ -123,7 +123,7 @@ max_lines = 622
 
 [[rules]]
 path = "frontend/src/lib/components/player/Player.svelte"
-max_lines = 1135
+max_lines = 1137
 
 [[rules]]
 path = "frontend/src/lib/queue.svelte.ts"

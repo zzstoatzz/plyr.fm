@@ -21,6 +21,10 @@
 		excludePlaylistId?: string;
 		shareUrl?: string;
 		onQueue?: () => void;
+		/** borderless glyph for chrome like the player footer */
+		plain?: boolean;
+		/** which edge of the trigger the menu hangs from */
+		align?: 'end' | 'start';
 	}
 
 	let {
@@ -36,7 +40,9 @@
 		onLikeChange,
 		excludePlaylistId,
 		shareUrl,
-		onQueue
+		onQueue,
+		plain = false,
+		align = 'end'
 	}: Props = $props();
 
 	let liked = $state(initialLiked);
@@ -271,6 +277,7 @@
 	<button
 		bind:this={triggerRef}
 		class="trigger-button"
+		class:plain
 		class:liked
 		class:loading
 		class:disabled-state={disabled}
@@ -288,7 +295,7 @@
 		<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
 		<div class="menu-backdrop" role="presentation" onclick={() => { menuOpen = false; showPlaylistPicker = false; }}></div>
 		<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-		<div class="menu-dropdown" class:open-upward={openUpward} role="menu" tabindex="-1" onclick={(e) => {
+		<div class="menu-dropdown" class:open-upward={openUpward} class:align-start={align === 'start'} role="menu" tabindex="-1" onclick={(e) => {
 			// don't stop propagation for links - let SvelteKit handle navigation
 			if (e.target instanceof HTMLAnchorElement || (e.target as HTMLElement).closest('a')) {
 				return;
@@ -504,6 +511,50 @@
 	.menu-dropdown.open-upward {
 		top: auto;
 		bottom: calc(100% + 4px);
+	}
+
+	.menu-dropdown.align-start {
+		right: auto;
+		left: 0;
+	}
+
+	.menu-dropdown.open-upward.align-start {
+		bottom: calc(100% + 10px);
+	}
+
+	.trigger-button.plain {
+		border: none;
+		border-radius: var(--radius-full);
+		color: var(--text-secondary);
+	}
+
+	.trigger-button.plain svg {
+		width: 18px;
+		height: 18px;
+	}
+
+	.trigger-button.plain:hover,
+	.trigger-button.plain.menu-open {
+		background: transparent;
+		color: var(--text-primary);
+		transform: scale(1.06);
+	}
+
+	.trigger-button.plain.liked,
+	.trigger-button.plain.liked:hover {
+		color: var(--accent);
+	}
+
+	.trigger-button.plain:focus-visible {
+		outline: 2px solid var(--text-primary);
+		outline-offset: 2px;
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.trigger-button.plain:hover,
+		.trigger-button.plain.menu-open {
+			transform: none;
+		}
 	}
 
 	.menu-item {
