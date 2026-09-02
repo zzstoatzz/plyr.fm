@@ -17,10 +17,14 @@ automated workflow that archives old STATUS.md content and generates audio updat
 
 ## triggers
 
-- **manual**: `workflow_dispatch` (run from Actions tab)
+- **weekly**: `schedule` — mondays 14:00 UTC (9am central). the run opens the
+  PR; a human merges it, and the merge triggers the audio upload
+- **manual**: `workflow_dispatch` (run from Actions tab, or
+  `gh workflow run "status maintenance" --ref main`)
 - **on PR merge**: uploads audio after status-maintenance PR is merged
 
-schedule is currently disabled but can be enabled for weekly runs.
+github pauses scheduled workflows in repositories with no activity for 60
+days; a push re-enables them.
 
 ## how it determines the time window
 
