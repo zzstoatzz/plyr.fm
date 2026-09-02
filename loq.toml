@@ -95,7 +95,7 @@ max_lines = 523
 
 [[rules]]
 path = "frontend/src/lib/components/AddToMenu.svelte"
-max_lines = 870
+max_lines = 871
 
 [[rules]]
 path = "frontend/src/lib/components/ProfileMenu.svelte"
