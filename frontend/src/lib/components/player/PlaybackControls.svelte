@@ -142,9 +142,12 @@
 			title="back {SKIP_STEP_SECONDS} seconds"
 			aria-label="back {SKIP_STEP_SECONDS} seconds"
 		>
-			<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-				<path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z" />
-				<text x="12" y="16.4" text-anchor="middle" font-size="7.2" font-weight="700" font-family="system-ui, sans-serif" letter-spacing="-0.3">{SKIP_STEP_SECONDS}</text>
+			<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+				<g>
+					<path d="M9.99 4.45A8.3 8.3 0 1 1 3.72 11.92" />
+					<path d="M12.24 5.54L9.99 4.45L11.46 2.42" />
+				</g>
+				<text x="12" y="15.45" text-anchor="middle" font-size="8.2" font-weight="600" font-family="-apple-system, system-ui, Inter, Roboto, sans-serif" letter-spacing="-0.03em" fill="currentColor" stroke="none">{SKIP_STEP_SECONDS}</text>
 			</svg>
 		</button>
 	{/if}
@@ -173,9 +176,12 @@
 			title="forward {SKIP_STEP_SECONDS} seconds"
 			aria-label="forward {SKIP_STEP_SECONDS} seconds"
 		>
-			<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-				<path d="M12 5V1l5 5-5 5V7c-3.31 0-6 2.69-6 6s2.69 6 6 6 6-2.69 6-6h2c0 4.42-3.58 8-8 8s-8-3.58-8-8 3.58-8 8-8z" />
-				<text x="12" y="16.4" text-anchor="middle" font-size="7.2" font-weight="700" font-family="system-ui, sans-serif" letter-spacing="-0.3">{SKIP_STEP_SECONDS}</text>
+			<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+				<g transform="translate(24 0) scale(-1 1)">
+					<path d="M9.99 4.45A8.3 8.3 0 1 1 3.72 11.92" />
+					<path d="M12.24 5.54L9.99 4.45L11.46 2.42" />
+				</g>
+				<text x="12" y="15.45" text-anchor="middle" font-size="8.2" font-weight="600" font-family="-apple-system, system-ui, Inter, Roboto, sans-serif" letter-spacing="-0.03em" fill="currentColor" stroke="none">{SKIP_STEP_SECONDS}</text>
 			</svg>
 		</button>
 	{/if}
@@ -327,7 +333,7 @@
 		transform: scale(0.95);
 	}
 
-	/* skip glyphs are filled like ⏮/⏭; the step count lives inside the svg so it scales with it */
+	/* the step count lives inside the svg so it scales with the glyph */
 	.control-btn.skip svg text {
 		fill: currentColor;
 	}
