@@ -85,11 +85,15 @@
 	$effect(() => {
 		if (!emissionsEl || emissionPlace === 'docked' || emissions.length === 0) return;
 		const rect = emissionsEl.getBoundingClientRect();
+		// measure from where the stack sits unshifted, so a re-run after a shift
+		// sees the same obstacle and lands on the same answer
+		const left = rect.left - emissionShiftPx;
+		const right = rect.right - emissionShiftPx;
 		const y = rect.top + Math.min(rect.height, 36) / 2;
-		const obstacles = [obstacleAt(rect.right - 4, y), obstacleAt(rect.left + 4, y)].filter(
+		const obstacles = [obstacleAt(right - 4, y), obstacleAt(left + 4, y)].filter(
 			(o): o is EmissionObstacle => o !== null
 		);
-		emissionShiftPx = emissionShift(rect.left, rect.right, window.innerWidth, obstacles);
+		emissionShiftPx = emissionShift(left, right, window.innerWidth, obstacles);
 	});
 
 	function dismissEmission(id: number) {
