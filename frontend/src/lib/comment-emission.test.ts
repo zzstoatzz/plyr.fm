@@ -6,7 +6,8 @@ import {
 	EMISSION_STACK_MAX,
 	emissionCapacity,
 	emissionLayout,
-	emissionShift
+	emissionShift,
+	emissionStackHeight
 } from './comment-emission';
 
 describe('emissionCapacity', () => {
@@ -38,14 +39,33 @@ describe('emissionLayout', () => {
 
 describe('emissionShift', () => {
 	it('leaves a stack that fits where it is', () => {
-		expect(emissionShift(195, 200, 390)).toBe(0);
+		expect(emissionShift(95, 295, 390)).toBe(0);
 	});
 
 	it('pushes a stack in from the right edge', () => {
-		expect(emissionShift(300, 280, 390)).toBe(390 - 16 - 440);
+		expect(emissionShift(160, 440, 390)).toBe(390 - 16 - 440);
 	});
 
 	it('pushes a stack in from the left edge', () => {
-		expect(emissionShift(80, 280, 390)).toBe(16 + 60);
+		expect(emissionShift(-60, 220, 390)).toBe(16 + 60);
+	});
+
+	it('moves left of something fixed over its right end', () => {
+		expect(emissionShift(180, 380, 390, [{ left: 330, right: 380 }])).toBe(330 - 16 - 380);
+	});
+
+	it('moves right of something fixed over its left end', () => {
+		expect(emissionShift(20, 220, 390, [{ left: 0, right: 60 }])).toBe(60 + 16 - 20);
+	});
+
+	it('keeps the viewport edge when an obstacle would push it out', () => {
+		expect(emissionShift(10, 290, 390, [{ left: 250, right: 300 }])).toBe(6);
+	});
+});
+
+describe('emissionStackHeight', () => {
+	it('is the bubbles plus the gaps between them', () => {
+		expect(emissionStackHeight(1)).toBe(36);
+		expect(emissionStackHeight(3)).toBe(36 * 3 + 4 * 2);
 	});
 });

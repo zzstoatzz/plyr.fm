@@ -14,7 +14,9 @@
 		HEADER_CLEARANCE_PX,
 		emissionLayout,
 		emissionShift,
+		emissionStackHeight,
 		type EmissionBands,
+		type EmissionObstacle,
 		type EmissionPlacement
 	} from '$lib/comment-emission';
 	import { flip } from 'svelte/animate';
@@ -60,18 +62,34 @@
 	// plain let for the playback cursor: previous position must not retrigger.
 	let emissions = $state<Comment[]>([]);
 	let emissionPlace = $state<EmissionPlacement>('below');
-	let emissionCap = 1;
+	let emissionCap = $state(1);
 	let emissionShiftPx = $state(0);
 	let emissionsEl = $state<HTMLDivElement | null>(null);
 	const emissionTimers = new Map<number, ReturnType<typeof setTimeout>>();
 	let prevPlaybackMs = -1;
 	let triggerAnchor = $state<HTMLSpanElement | null>(null);
 
-	// once the stack has a size, keep it inside the viewport horizontally
+	// whatever is drawn over a point that is not the stack itself or the page
+	// behind it — fixed chrome such as the queue toggle
+	function obstacleAt(x: number, y: number): EmissionObstacle | null {
+		if (!emissionsEl) return null;
+		const hit = document.elementsFromPoint(x, y).find((el) => !emissionsEl?.contains(el));
+		if (!hit || hit === document.body || hit === document.documentElement) return null;
+		if (hit.contains(emissionsEl)) return null;
+		const r = hit.getBoundingClientRect();
+		return { left: r.left, right: r.right };
+	}
+
+	// once the stack has a size, keep it inside the viewport and clear of
+	// anything fixed over its ends
 	$effect(() => {
 		if (!emissionsEl || emissionPlace === 'docked' || emissions.length === 0) return;
 		const rect = emissionsEl.getBoundingClientRect();
-		emissionShiftPx = emissionShift(rect.left + rect.width / 2, rect.width, window.innerWidth);
+		const y = rect.top + Math.min(rect.height, 36) / 2;
+		const obstacles = [obstacleAt(rect.right - 4, y), obstacleAt(rect.left + 4, y)].filter(
+			(o): o is EmissionObstacle => o !== null
+		);
+		emissionShiftPx = emissionShift(rect.left, rect.right, window.innerWidth, obstacles);
 	});
 
 	function dismissEmission(id: number) {
@@ -342,6 +360,7 @@
 		<div
 			class="comment-emissions {emissionPlace}"
 			style:--shift="{emissionShiftPx}px"
+			style:max-height="{emissionStackHeight(emissionCap)}px"
 			bind:this={emissionsEl}
 		>
 			{#if emissionPlace !== 'docked'}<span class="comment-emission-tail" aria-hidden="true"></span>{/if}
@@ -539,6 +558,7 @@
 		flex-direction: column;
 		align-items: center;
 		gap: 4px;
+		overflow: hidden;
 		z-index: 40;
 	}
 

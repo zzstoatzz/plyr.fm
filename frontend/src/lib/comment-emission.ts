@@ -52,11 +52,37 @@ export function emissionLayout(bands: EmissionBands): EmissionLayout {
 	return below >= above ? { placement: 'below', capacity: below } : { placement: 'above', capacity: above };
 }
 
-/** how far to shift a stack centered at `centerX` so it stays `margin` inside the viewport. */
-export function emissionShift(centerX: number, width: number, viewportWidth: number, margin = 16): number {
-	const left = centerX - width / 2;
-	const right = centerX + width / 2;
-	if (left < margin) return margin - left;
-	if (right > viewportWidth - margin) return viewportWidth - margin - right;
-	return 0;
+/** a horizontal span something else already occupies, in viewport px. */
+export interface EmissionObstacle {
+	left: number;
+	right: number;
+}
+
+/**
+ * how far to shift a stack spanning [left, right] so it stays `margin` inside
+ * the viewport and clear of anything fixed over its ends (the queue toggle,
+ * say). obstacles win over centering; the viewport edge wins over obstacles.
+ */
+export function emissionShift(
+	left: number,
+	right: number,
+	viewportWidth: number,
+	obstacles: EmissionObstacle[] = [],
+	margin = 16
+): number {
+	let shift = 0;
+	for (const o of obstacles) {
+		const overlapsRight = o.left < right + shift && o.right > left + shift && o.left > left + shift;
+		const overlapsLeft = o.right > left + shift && o.left < right + shift && !overlapsRight;
+		if (overlapsRight) shift += o.left - margin - (right + shift);
+		else if (overlapsLeft) shift += o.right + margin - (left + shift);
+	}
+	if (left + shift < margin) shift = margin - left;
+	if (right + shift > viewportWidth - margin) shift = viewportWidth - margin - right;
+	return shift;
+}
+
+/** the stack's tallest allowed height for `capacity` bubbles, in px; evicted bubbles fade inside it. */
+export function emissionStackHeight(capacity: number): number {
+	return capacity * EMISSION_BUBBLE_PX + Math.max(0, capacity - 1) * EMISSION_INNER_GAP_PX;
 }
