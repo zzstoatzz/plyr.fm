@@ -20,7 +20,8 @@
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import { loginHref } from '$lib/utils/auth-redirect';
-	import { SKIP_BUTTONS_FLAG, SKIP_STEP_SECONDS } from '$lib/config';
+	import { SKIP_BUTTONS_FLAG } from '$lib/config';
+	import { skipStepSeconds } from '$lib/skip-step';
 	import { auth } from '$lib/auth.svelte';
 	import TrackInfo from './TrackInfo.svelte';
 	import PlaybackControls from './PlaybackControls.svelte';
@@ -244,11 +245,11 @@
 		const skips = !player.radio && (auth.user?.enabled_flags?.includes(SKIP_BUTTONS_FLAG) ?? false);
 		navigator.mediaSession.setActionHandler(
 			'seekbackward',
-			skips ? (details) => queue.seekBy(-(details.seekOffset ?? SKIP_STEP_SECONDS)) : null
+			skips ? (details) => queue.seekBy(-(details.seekOffset ?? skipStepSeconds(player.duration))) : null
 		);
 		navigator.mediaSession.setActionHandler(
 			'seekforward',
-			skips ? (details) => queue.seekBy(details.seekOffset ?? SKIP_STEP_SECONDS) : null
+			skips ? (details) => queue.seekBy(details.seekOffset ?? skipStepSeconds(player.duration)) : null
 		);
 	});
 

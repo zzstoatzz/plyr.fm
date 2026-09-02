@@ -4,12 +4,14 @@
 	import { player } from '$lib/player.svelte';
 	import { queue } from '$lib/queue.svelte';
 	import { auth } from '$lib/auth.svelte';
-	import { SKIP_BUTTONS_FLAG, SKIP_STEP_SECONDS } from '$lib/config';
+	import { SKIP_BUTTONS_FLAG } from '$lib/config';
+	import { skipStepSeconds } from '$lib/skip-step';
 
 	// radio mode: live stream — no prev/next or scrubbing, just play/pause + volume
 	let { radioMode = false }: { radioMode?: boolean } = $props();
 
 	const skipButtons = $derived(auth.user?.enabled_flags?.includes(SKIP_BUTTONS_FLAG) ?? false);
+	const skipStep = $derived(skipStepSeconds(player.duration));
 
 	let seekValue = $state(0);
 	let isScrubbing = $state(false);
@@ -138,16 +140,16 @@
 	{#if skipButtons && !radioMode}
 		<button
 			class="control-btn skip skip-back"
-			onclick={() => queue.seekBy(-SKIP_STEP_SECONDS)}
-			title="back {SKIP_STEP_SECONDS} seconds"
-			aria-label="back {SKIP_STEP_SECONDS} seconds"
+			onclick={() => queue.seekBy(-skipStep)}
+			title="back {skipStep} seconds"
+			aria-label="back {skipStep} seconds"
 		>
 			<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
 				<g>
 					<path stroke-linecap="butt" d="M9.98 4.35A8.4 8.4 0 1 1 3.62 11.91" />
 					<path fill="currentColor" stroke-width="0.6" d="M10.36 6.16L6.12 5.58L9.21 2.62Z" />
 				</g>
-				<text x="12" y="15.60" text-anchor="middle" font-size="8.6" font-weight="700" font-family="inherit" letter-spacing="-0.02em" fill="currentColor" stroke="none">{SKIP_STEP_SECONDS}</text>
+				<text x="12" y="15.60" text-anchor="middle" font-size="8.6" font-weight="700" font-family="inherit" letter-spacing="-0.02em" fill="currentColor" stroke="none">{skipStep}</text>
 			</svg>
 		</button>
 	{/if}
@@ -172,16 +174,16 @@
 	{#if skipButtons && !radioMode}
 		<button
 			class="control-btn skip skip-forward"
-			onclick={() => queue.seekBy(SKIP_STEP_SECONDS)}
-			title="forward {SKIP_STEP_SECONDS} seconds"
-			aria-label="forward {SKIP_STEP_SECONDS} seconds"
+			onclick={() => queue.seekBy(skipStep)}
+			title="forward {skipStep} seconds"
+			aria-label="forward {skipStep} seconds"
 		>
 			<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
 				<g transform="translate(24 0) scale(-1 1)">
 					<path stroke-linecap="butt" d="M9.98 4.35A8.4 8.4 0 1 1 3.62 11.91" />
 					<path fill="currentColor" stroke-width="0.6" d="M10.36 6.16L6.12 5.58L9.21 2.62Z" />
 				</g>
-				<text x="12" y="15.60" text-anchor="middle" font-size="8.6" font-weight="700" font-family="inherit" letter-spacing="-0.02em" fill="currentColor" stroke="none">{SKIP_STEP_SECONDS}</text>
+				<text x="12" y="15.60" text-anchor="middle" font-size="8.6" font-weight="700" font-family="inherit" letter-spacing="-0.02em" fill="currentColor" stroke="none">{skipStep}</text>
 			</svg>
 		</button>
 	{/if}
