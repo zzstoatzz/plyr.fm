@@ -73,7 +73,8 @@
 
 	// close menu when clicking outside
 	function handleClickOutside(event: MouseEvent) {
-		if (!(event.target instanceof Element && event.target.closest('.add-to-menu, .add-to-menu-sheet'))) {
+		const inside = event.composedPath().some((node) => node instanceof Element && node.matches('.add-to-menu, .add-to-menu-sheet'));
+		if (!inside) {
 			menuOpen = false;
 			showPlaylistPicker = false;
 		}
