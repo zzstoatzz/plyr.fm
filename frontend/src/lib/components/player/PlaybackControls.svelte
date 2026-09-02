@@ -333,7 +333,12 @@
 		transform: scale(0.95);
 	}
 
-	/* the step count lives inside the svg so it scales with the glyph */
+	/* the step count lives inside the svg so it scales with the glyph; the button
+	   must pass the app font down — a <button> otherwise carries the UA font */
+	.control-btn.skip {
+		font-family: inherit;
+	}
+
 	.control-btn.skip svg text {
 		fill: currentColor;
 	}
