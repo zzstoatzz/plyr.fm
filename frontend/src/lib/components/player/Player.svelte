@@ -1005,7 +1005,7 @@
 	/* the stage layout: track on the left, transport + scrubber centred, queue and
 	   volume on the right — spotify's footer, which is what the flag tries */
 	.player-content.stage {
-		grid-template-columns: minmax(180px, 30%) minmax(0, 1fr) minmax(180px, 30%);
+		grid-template-columns: minmax(120px, 24%) minmax(0, 1fr) minmax(120px, 24%);
 	}
 
 	.stage-right {
