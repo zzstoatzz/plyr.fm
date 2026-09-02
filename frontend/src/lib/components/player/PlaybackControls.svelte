@@ -409,6 +409,149 @@
 		margin: 0;
 	}
 
+	/* stage polish — the conventions modern players share:
+	   transport idle secondary → primary on hover, active toggles carry a dot;
+	   the scrubber is thin with a hidden thumb until hovered, primary fill that
+	   turns accent under the pointer, a tall hit area; keyboard focus is a ring */
+	.player-controls.stacked .control-btn {
+		color: var(--text-secondary);
+		transition:
+			color 150ms cubic-bezier(0.2, 0, 0, 1),
+			transform 150ms cubic-bezier(0.2, 0, 0, 1),
+			background 150ms cubic-bezier(0.2, 0, 0, 1);
+	}
+
+	.player-controls.stacked .control-btn:hover {
+		color: var(--text-primary);
+		background: transparent;
+	}
+
+	.player-controls.stacked .control-btn:active {
+		transform: scale(0.94);
+	}
+
+	.player-controls.stacked .control-btn.disabled,
+	.player-controls.stacked .control-btn:disabled {
+		opacity: 0.38;
+		pointer-events: none;
+	}
+
+	.player-controls.stacked .control-btn.active {
+		color: var(--accent);
+		position: relative;
+	}
+
+	.player-controls.stacked .control-btn.active::after {
+		content: '';
+		position: absolute;
+		left: 50%;
+		bottom: 1px;
+		width: 4px;
+		height: 4px;
+		border-radius: var(--radius-full);
+		background: var(--accent);
+		translate: -50% 0;
+	}
+
+	.player-controls.stacked .control-btn:focus-visible,
+	.player-controls.stacked .seek-bar:focus-visible {
+		outline: 2px solid var(--text-primary);
+		outline-offset: 2px;
+	}
+
+	.player-controls.stacked .time {
+		color: var(--text-secondary);
+		font-size: var(--text-xs);
+		min-width: 40px;
+	}
+
+	.player-controls.stacked .time:last-child {
+		text-align: right;
+	}
+
+	.player-controls.stacked .seek-bar {
+		height: 20px;
+		margin: -8px 0;
+		--fill: var(--text-primary);
+		--rest: color-mix(in srgb, var(--text-primary) 28%, transparent);
+	}
+
+	.player-controls.stacked .seek-bar::-webkit-slider-runnable-track {
+		height: 4px;
+		border-radius: 2px;
+		margin-top: 8px;
+		background: linear-gradient(
+			to right,
+			var(--fill) 0%,
+			var(--fill) var(--progress, 0%),
+			var(--rest) var(--progress, 0%),
+			var(--rest) 100%
+		);
+		transition: background 150ms cubic-bezier(0.2, 0, 0, 1);
+	}
+
+	.player-controls.stacked .seek-bar::-moz-range-track {
+		height: 4px;
+		border-radius: 2px;
+		background: var(--rest);
+	}
+
+	.player-controls.stacked .seek-bar::-moz-range-progress {
+		height: 4px;
+		border-radius: 2px;
+		background: var(--fill);
+	}
+
+	.player-controls.stacked .seek-bar::-webkit-slider-thumb {
+		width: 12px;
+		height: 12px;
+		margin-top: -4px;
+		background: var(--text-primary);
+		opacity: 0;
+		box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+		transform: none;
+		transition: opacity 150ms cubic-bezier(0.2, 0, 0, 1);
+	}
+
+	.player-controls.stacked .seek-bar::-moz-range-thumb {
+		width: 12px;
+		height: 12px;
+		background: var(--text-primary);
+		border: none;
+		opacity: 0;
+		box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+		transition: opacity 150ms cubic-bezier(0.2, 0, 0, 1);
+	}
+
+	.player-controls.stacked .seek-bar:hover,
+	.player-controls.stacked .seek-bar:focus-visible,
+	.player-controls.stacked .seek-bar:active {
+		--fill: var(--accent);
+	}
+
+	.player-controls.stacked .seek-bar:hover::-webkit-slider-thumb,
+	.player-controls.stacked .seek-bar:focus-visible::-webkit-slider-thumb,
+	.player-controls.stacked .seek-bar:active::-webkit-slider-thumb {
+		opacity: 1;
+		transform: none;
+		box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+	}
+
+	.player-controls.stacked .seek-bar:hover::-moz-range-thumb,
+	.player-controls.stacked .seek-bar:focus-visible::-moz-range-thumb,
+	.player-controls.stacked .seek-bar:active::-moz-range-thumb {
+		opacity: 1;
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.player-controls.stacked .control-btn,
+		.player-controls.stacked .control-btn:active,
+		.player-controls.stacked .control-btn.play-pause:hover {
+			transform: none;
+			transition: color 150ms, background 150ms;
+		}
+	}
+
 	.control-btn.shuffle svg {
 		width: 18px;
 		height: 18px;

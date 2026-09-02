@@ -957,7 +957,7 @@
 							</svg>
 						</button>
 					{/if}
-					<VolumeControl />
+					<VolumeControl stage />
 				</div>
 			{/if}
 		</div>
@@ -1023,18 +1023,35 @@
 		background: transparent;
 		border: none;
 		border-radius: var(--radius-full);
-		color: var(--text-tertiary);
+		color: var(--text-secondary);
 		cursor: pointer;
-		transition: all 0.15s;
+		position: relative;
+		transition: color 150ms cubic-bezier(0.2, 0, 0, 1);
 	}
 
-	.stage-btn:hover,
+	.stage-btn:hover {
+		color: var(--text-primary);
+	}
+
 	.stage-btn.active {
 		color: var(--accent);
 	}
 
-	.stage-btn.active {
-		background: color-mix(in srgb, var(--accent) 10%, transparent);
+	.stage-btn.active::after {
+		content: '';
+		position: absolute;
+		left: 50%;
+		bottom: 1px;
+		width: 4px;
+		height: 4px;
+		border-radius: var(--radius-full);
+		background: var(--accent);
+		translate: -50% 0;
+	}
+
+	.stage-btn:focus-visible {
+		outline: 2px solid var(--text-primary);
+		outline-offset: 2px;
 	}
 
 	.player.jam-active { --top-bar-color: linear-gradient(90deg, #ff6b6b, #ffd93d, #6bcb77, #4d96ff, #9b59b6, #ff6b6b); }
