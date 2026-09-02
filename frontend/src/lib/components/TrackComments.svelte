@@ -9,7 +9,7 @@
 	import { toast } from '$lib/toast.svelte';
 	import type { Track } from '$lib/types';
 	import { fade, fly } from 'svelte/transition';
-	import { emissionPlacement } from '$lib/comment-emission';
+	import { emissionPlacement, emissionShift, type EmissionPlacement } from '$lib/comment-emission';
 	import RichText from '$lib/components/RichText.svelte';
 	import SensitiveImage from '$lib/components/SensitiveImage.svelte';
 	import { redirectToLogin } from '$lib/utils/auth-redirect';
@@ -50,10 +50,19 @@
 	// timestamp (the soundcloud move). plain let: previous position must not
 	// retrigger the effect.
 	let emission = $state<Comment | null>(null);
-	let emissionDocked = $state(false);
+	let emissionPlace = $state<EmissionPlacement>('below');
+	let emissionShiftPx = $state(0);
+	let emissionEl = $state<HTMLButtonElement | null>(null);
 	let emissionTimer: ReturnType<typeof setTimeout> | null = null;
 	let prevPlaybackMs = -1;
 	let triggerAnchor = $state<HTMLSpanElement | null>(null);
+
+	// once the bubble has a size, keep it inside the viewport horizontally
+	$effect(() => {
+		if (!emissionEl || emissionPlace === 'docked') return;
+		const rect = emissionEl.getBoundingClientRect();
+		emissionShiftPx = emissionShift(rect.left + rect.width / 2, rect.width, window.innerWidth);
+	});
 
 	function playerHeightPx(): number {
 		const raw = window.getComputedStyle(document.documentElement).getPropertyValue('--player-height');
@@ -63,9 +72,14 @@
 
 	function showEmission(comment: Comment) {
 		if (emissionTimer) clearTimeout(emissionTimer);
-		const anchorBottom = triggerAnchor?.getBoundingClientRect().bottom ?? 0;
-		emissionDocked =
-			emissionPlacement(anchorBottom, window.innerHeight, playerHeightPx()) === 'docked';
+		const anchor = triggerAnchor?.getBoundingClientRect();
+		emissionPlace = emissionPlacement(
+			anchor?.top ?? 0,
+			anchor?.bottom ?? 0,
+			window.innerHeight,
+			playerHeightPx()
+		);
+		emissionShiftPx = 0;
 		emission = comment;
 		emissionTimer = setTimeout(() => (emission = null), 4000);
 	}
@@ -284,16 +298,17 @@
 	<span class="comments-trigger-anchor" bind:this={triggerAnchor}>
 	{#if emission}
 		<button
-			class="comment-emission"
-			class:docked={emissionDocked}
-			transition:fly={{ y: emissionDocked ? 8 : -8, duration: reduceMotionComments ? 0 : 300 }}
+			class="comment-emission {emissionPlace}"
+			style:--shift="{emissionShiftPx}px"
+			bind:this={emissionEl}
+			transition:fly={{ y: emissionPlace === 'below' ? -8 : 8, duration: reduceMotionComments ? 0 : 300 }}
 			onclick={() => {
 				emission = null;
 				commentsOpen = true;
 			}}
 			aria-label={`comment at ${formatTimestamp(emission.timestamp_ms)} from @${emission.user_handle}: ${emission.text}`}
 		>
-			{#if !emissionDocked}<span class="comment-emission-tail" aria-hidden="true"></span>{/if}
+			{#if emissionPlace !== 'docked'}<span class="comment-emission-tail" aria-hidden="true"></span>{/if}
 			{#if emission.user_avatar_url}
 				<img src={emission.user_avatar_url} alt="" class="comment-emission-avatar" />
 			{/if}
@@ -467,7 +482,7 @@
 		position: absolute;
 		top: calc(100% + 0.4rem);
 		left: 50%;
-		translate: -50% 0;
+		translate: calc(-50% + var(--shift, 0px)) 0;
 		display: flex;
 		align-items: center;
 		gap: 0.5rem;
@@ -488,11 +503,12 @@
 		z-index: 40;
 	}
 
-	/* points at the trigger it came from; docked bubbles have no origin to point at */
+	/* points at the trigger it came from; docked bubbles have no origin to point at.
+	   the tail stays under the trigger even when the bubble has been shifted inward */
 	.comment-emission-tail {
 		position: absolute;
 		top: -5px;
-		left: 50%;
+		left: calc(50% - var(--shift, 0px));
 		width: 9px;
 		height: 9px;
 		translate: -50% 0;
@@ -502,8 +518,19 @@
 		border-top: 1px solid var(--glass-border, var(--border-default));
 	}
 
-	/* no room under the trigger: sit just above the footer player, where the
-	   comments panel docks, instead of being drawn underneath it */
+	/* the band below the trigger belongs to the player: rise into the space above the row */
+	.comment-emission.above {
+		top: auto;
+		bottom: calc(100% + 0.4rem);
+	}
+
+	.comment-emission.above .comment-emission-tail {
+		top: auto;
+		bottom: -5px;
+		rotate: 225deg;
+	}
+
+	/* neither band exists: sit at the player's edge, where the comments panel docks */
 	.comment-emission.docked {
 		position: fixed;
 		top: auto;
