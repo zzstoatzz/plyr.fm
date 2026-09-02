@@ -20,7 +20,7 @@
 		type EmissionPlacement
 	} from '$lib/comment-emission';
 	import { flip } from 'svelte/animate';
-	import { backOut } from 'svelte/easing';
+	import { cubicOut } from 'svelte/easing';
 	import RichText from '$lib/components/RichText.svelte';
 	import SensitiveImage from '$lib/components/SensitiveImage.svelte';
 	import { redirectToLogin } from '$lib/utils/auth-redirect';
@@ -121,21 +121,23 @@
 		for (const id of Array.from(emissionTimers.keys())) dismissEmission(id);
 	}
 
-	/** a bubble grows out of the trigger: scale from the tail's side with a small overshoot. */
-	function pop(node: Element, { duration = 320 }: { duration?: number } = {}) {
-		const origin =
+	/** a bubble emerges from the icon after its breath begins: a short fade over a few px, no overshoot. */
+	function emerge(node: Element, { duration = 260, delay = 140 }: { duration?: number; delay?: number } = {}) {
+		const [dx, dy] =
 			emissionPlace === 'below'
-				? '50% 0%'
+				? [0, -4]
 				: emissionPlace === 'beside-right'
-					? '0% 50%'
+					? [-4, 0]
 					: emissionPlace === 'beside-left'
-						? '100% 50%'
-						: '50% 100%';
+						? [4, 0]
+						: [0, 4];
+		if (reduceMotionComments) return { duration: 0, css: () => '' };
 		return {
-			duration: reduceMotionComments ? 0 : duration,
-			easing: backOut,
+			delay,
+			duration,
+			easing: cubicOut,
 			css: (t: number, u: number) =>
-				`transform-origin: ${origin}; transform: scale(${0.6 + 0.4 * t}); opacity: ${Math.min(1, t * 1.6)}; filter: blur(${u * 1.5}px)`
+				`opacity: ${t}; transform: translate(${dx * u}px, ${dy * u}px) scale(${0.97 + 0.03 * t})`
 		};
 	}
 
@@ -185,7 +187,7 @@
 		}
 		litTick += 1;
 		if (litTimer) clearTimeout(litTimer);
-		litTimer = setTimeout(() => (litTick = 0), 1100);
+		litTimer = setTimeout(() => (litTick = 0), 700);
 		const existing = emissionTimers.get(comment.id);
 		if (existing) clearTimeout(existing);
 		else {
@@ -421,9 +423,9 @@
 			{#each emissions as passing (passing.id)}
 				<button
 					class="comment-emission"
-					in:pop
+					in:emerge
 					style:max-width={emissionMaxWidth === null ? null : `${emissionMaxWidth}px`}
-					out:fade={{ duration: reduceMotionComments ? 0 : 400 }}
+					out:fade={{ duration: reduceMotionComments ? 0 : 260 }}
 					animate:flip={{ duration: reduceMotionComments ? 0 : 250 }}
 					onclick={() => {
 						clearEmissions();
@@ -447,18 +449,15 @@
 		aria-haspopup="dialog"
 		title="comments"
 	>
-		{#if litTick > 0 && !reduceMotionComments}
-			{#key litTick}
-				<span class="comments-trigger-ping" aria-hidden="true"></span>
-			{/key}
-		{/if}
-		<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-			<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
-		</svg>
+		{#key litTick}
+			<span class="comments-trigger-icon" class:breathe={litTick > 0 && !reduceMotionComments}>
+				<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+					<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+				</svg>
+			</span>
+		{/key}
 		{#if commentCount > 0}
-			{#key litTick}
-				<span class="comments-trigger-count" class:bump={litTick > 0 && !reduceMotionComments}>{commentCount}</span>
-			{/key}
+			<span class="comments-trigger-count">{commentCount}</span>
 		{/if}
 	</button>
 	</span>
@@ -755,57 +754,39 @@
 		transition: all 0.15s;
 	}
 
-	/* a comment is passing: the icon is the source — it takes the accent and
-	   sends one soft ring outward; the bubble grows from here */
+	/* a comment is passing: the icon takes one breath — colour eases to the
+	   accent and one gentle pulse — and the bubble emerges from it after that */
+	.comments-trigger {
+		transition:
+			color 240ms ease,
+			background 0.15s;
+	}
+
 	.comments-trigger.lit {
 		color: var(--accent);
-		text-shadow: 0 0 12px color-mix(in srgb, var(--accent) 45%, transparent);
 	}
 
-	.comments-trigger-ping {
-		position: absolute;
-		inset: 0;
-		border-radius: var(--radius-full);
-		border: 1.5px solid var(--accent);
-		opacity: 0;
-		pointer-events: none;
-		animation: comments-ping 900ms cubic-bezier(0.2, 0.7, 0.3, 1) forwards;
+	.comments-trigger-icon {
+		display: inline-flex;
 	}
 
-	@keyframes comments-ping {
-		0% {
-			transform: scale(0.6);
-			opacity: 0.9;
-		}
-		100% {
-			transform: scale(2.1);
-			opacity: 0;
-		}
+	.comments-trigger-icon.breathe {
+		animation: comments-breathe 520ms ease-in-out 1;
 	}
 
-	.comments-trigger-count.bump {
-		animation: comments-bump 420ms cubic-bezier(0.34, 1.56, 0.64, 1);
-	}
-
-	@keyframes comments-bump {
+	@keyframes comments-breathe {
 		0% {
 			transform: scale(1);
 		}
-		35% {
-			transform: scale(1.25);
+		45% {
+			transform: scale(1.08);
 		}
 		100% {
 			transform: scale(1);
 		}
-	}
-
-	.comments-trigger:hover {
-		color: var(--accent);
-		background: color-mix(in srgb, var(--accent) 10%, transparent);
 	}
 
 	.comments-trigger-count {
-		display: inline-block;
 		font-variant-numeric: tabular-nums;
 	}
 
