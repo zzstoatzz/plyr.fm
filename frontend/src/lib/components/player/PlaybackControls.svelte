@@ -142,11 +142,10 @@
 			title="back {SKIP_STEP_SECONDS} seconds"
 			aria-label="back {SKIP_STEP_SECONDS} seconds"
 		>
-			<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-				<path d="M3 12a9 9 0 1 0 3-6.7" />
-				<path d="M3 4v5h5" />
+			<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+				<path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z" />
+				<text x="12" y="16.4" text-anchor="middle" font-size="7.2" font-weight="700" font-family="system-ui, sans-serif" letter-spacing="-0.3">{SKIP_STEP_SECONDS}</text>
 			</svg>
-			<span class="skip-step">{SKIP_STEP_SECONDS}</span>
 		</button>
 	{/if}
 
@@ -174,11 +173,10 @@
 			title="forward {SKIP_STEP_SECONDS} seconds"
 			aria-label="forward {SKIP_STEP_SECONDS} seconds"
 		>
-			<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-				<path d="M21 12a9 9 0 1 1-3-6.7" />
-				<path d="M21 4v5h-5" />
+			<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+				<path d="M12 5V1l5 5-5 5V7c-3.31 0-6 2.69-6 6s2.69 6 6 6 6-2.69 6-6h2c0 4.42-3.58 8-8 8s-8-3.58-8-8 3.58-8 8-8z" />
+				<text x="12" y="16.4" text-anchor="middle" font-size="7.2" font-weight="700" font-family="system-ui, sans-serif" letter-spacing="-0.3">{SKIP_STEP_SECONDS}</text>
 			</svg>
-			<span class="skip-step">{SKIP_STEP_SECONDS}</span>
 		</button>
 	{/if}
 
@@ -329,27 +327,9 @@
 		transform: scale(0.95);
 	}
 
-	/* skip: the icon carries its step count so the arc reads as "15 back", not "restart" */
-	.control-btn.skip {
-		position: relative;
-	}
-
-	.control-btn.skip svg {
-		width: 22px;
-		height: 22px;
-	}
-
-	.skip-step {
-		position: absolute;
-		inset: 0;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		font-size: 8px;
-		font-weight: 700;
-		letter-spacing: -0.02em;
-		pointer-events: none;
-		transform: translateY(1px);
+	/* skip glyphs are filled like ⏮/⏭; the step count lives inside the svg so it scales with it */
+	.control-btn.skip svg text {
+		fill: currentColor;
 	}
 
 	.control-btn.disabled {
@@ -553,6 +533,7 @@
 			width: 24px;
 			height: 24px;
 		}
+
 
 		.control-btn svg {
 			width: 28px;
