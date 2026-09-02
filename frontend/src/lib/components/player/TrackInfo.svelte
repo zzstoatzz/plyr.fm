@@ -420,6 +420,7 @@
 		.player-like {
 			grid-row: 1;
 			grid-column: 3;
+			justify-self: end;
 		}
 
 		.player-track:has(.player-like) .player-info {
