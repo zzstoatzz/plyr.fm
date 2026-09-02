@@ -84,7 +84,7 @@ row it lives in.
 real iPhone lock screen — that combination has not been on a phone before
 this. the phone scrubber narrows from 254 px to 150 px when flagged.
 
-#### passing comments became a stack that reads the page (#1968–#1978, September 2 — prod frontend-only promotes September 2)
+#### passing comments became a stack that reads the page (#1968–#1980, September 2 — prod frontend-only promotes September 2)
 
 **why**: #1962's docked bubble sat at the player's edge, which on phones is
 exactly where the share/download/comments row is — nate: "thoughtlessly
@@ -120,6 +120,13 @@ gets a plain fade. two more corrections came from frame captures: a
 bubble beside a trigger scrolled under the player was cut too (dock), and
 `elementsFromPoint` hands back the icon inside a button, so the margin
 was measured from the icon (take the control).
+then #1980: the ring, the count bump, the glow and the overshoot were
+"really corny and heavy handed" — the pill-shaped ripple especially. what
+remains is one breath: the icon's colour eases to the accent with a
+single small pulse, and the bubble fades in over a few px from the icon's
+side 140 ms later. one gesture, not four; nate's rule from here: these UI
+iterations go to prod after the staging check without asking, because he
+judges them against real data.
 
 **ten PRs, five of them corrections to the one before**, each found by
 replaying the same five-comment burst on staging after the merge: the
