@@ -119,6 +119,7 @@
 </script>
 
 <div class="player-controls" class:radio-mode={radioMode} class:stacked>
+	<div class="transport">
 	{#if stacked && !radioMode}
 		<button
 			class="control-btn shuffle"
@@ -127,12 +128,8 @@
 			title={queue.shuffle ? 'shuffle on' : 'shuffle'}
 			aria-pressed={queue.shuffle}
 		>
-			<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-				<polyline points="16 3 21 3 21 8"></polyline>
-				<line x1="4" y1="20" x2="21" y2="3"></line>
-				<polyline points="21 16 21 21 16 21"></polyline>
-				<line x1="15" y1="15" x2="21" y2="21"></line>
-				<line x1="4" y1="4" x2="9" y2="9"></line>
+			<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+				<path d="M15.6 3.6h4.9v4.9l-1.7-1.7L7.4 18.2a4.6 4.6 0 0 1-3.3 1.4H2.5v-2.2h1.6c.7 0 1.4-.3 1.9-.8L17.3 5.3l-1.7-1.7zM2.5 4.6h1.6a4.6 4.6 0 0 1 3.3 1.4l2.5 2.5-1.6 1.6-2.5-2.5a2.5 2.5 0 0 0-1.7-.8H2.5V4.6zm12.1 8.3 1.6-1.6 2.6 2.6 1.7-1.7v4.9h-4.9l1.7-1.7-2.7-2.5z" />
 			</svg>
 		</button>
 	{/if}
@@ -146,9 +143,15 @@
 		</button>
 	{:else}
 		<button class="control-btn prev" onclick={handlePrevious} title="previous track / restart">
-			<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-				<path d="M6 4h2v16H6V4zm12 0l-10 8 10 8V4z" />
-			</svg>
+			{#if stacked}
+				<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+					<path d="M6 5h2v14H6zM19 5.5v13a.7.7 0 0 1-1.1.6L9 12.6a.7.7 0 0 1 0-1.2l8.9-6.5A.7.7 0 0 1 19 5.5z" />
+				</svg>
+			{:else}
+				<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+					<path d="M6 4h2v16H6V4zm12 0l-10 8 10 8V4z" />
+				</svg>
+			{/if}
 		</button>
 	{/if}
 
@@ -159,12 +162,12 @@
 			title="back {skipStep} seconds"
 			aria-label="back {skipStep} seconds"
 		>
-			<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+			<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
 				<g>
-					<path stroke-linecap="butt" d="M9.98 4.35A8.4 8.4 0 1 1 3.62 11.91" />
-					<path fill="currentColor" stroke-width="0.6" d="M10.36 6.16L6.12 5.58L9.21 2.62Z" />
+					<path stroke-linecap="butt" d="M9.22 4.99A8.2 8.2 0 1 1 4.40 15.77" />
+					<path fill="currentColor" stroke-width="0.6" d="M9.99 7.20L4.67 6.99L8.07 2.89Z" />
 				</g>
-				<text x="12" y="15.60" text-anchor="middle" font-size="8.6" font-weight="700" font-family="inherit" letter-spacing="-0.02em" fill="currentColor" stroke="none">{skipStep}</text>
+				<text x="12" y="15.72" text-anchor="middle" font-size="8.4" font-weight="700" font-family="inherit" letter-spacing="-0.02em" fill="currentColor" stroke="none">{skipStep}</text>
 			</svg>
 		</button>
 	{/if}
@@ -174,7 +177,17 @@
 		onclick={() => queue.togglePlayPause()}
 		title={player.paused ? 'play' : 'pause'}
 	>
-		{#if !player.paused}
+		{#if stacked}
+			{#if !player.paused}
+				<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+					<path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z" />
+				</svg>
+			{:else}
+				<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+					<path d="M8.5 5.6v12.8a.8.8 0 0 0 1.2.7l10.3-6.4a.8.8 0 0 0 0-1.4L9.7 4.9a.8.8 0 0 0-1.2.7z" />
+				</svg>
+			{/if}
+		{:else if !player.paused}
 			<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor">
 				<rect x="6" y="4" width="4" height="16" rx="1"></rect>
 				<rect x="14" y="4" width="4" height="16" rx="1"></rect>
@@ -193,12 +206,12 @@
 			title="forward {skipStep} seconds"
 			aria-label="forward {skipStep} seconds"
 		>
-			<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+			<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
 				<g transform="translate(24 0) scale(-1 1)">
-					<path stroke-linecap="butt" d="M9.98 4.35A8.4 8.4 0 1 1 3.62 11.91" />
-					<path fill="currentColor" stroke-width="0.6" d="M10.36 6.16L6.12 5.58L9.21 2.62Z" />
+					<path stroke-linecap="butt" d="M9.22 4.99A8.2 8.2 0 1 1 4.40 15.77" />
+					<path fill="currentColor" stroke-width="0.6" d="M9.99 7.20L4.67 6.99L8.07 2.89Z" />
 				</g>
-				<text x="12" y="15.60" text-anchor="middle" font-size="8.6" font-weight="700" font-family="inherit" letter-spacing="-0.02em" fill="currentColor" stroke="none">{skipStep}</text>
+				<text x="12" y="15.72" text-anchor="middle" font-size="8.4" font-weight="700" font-family="inherit" letter-spacing="-0.02em" fill="currentColor" stroke="none">{skipStep}</text>
 			</svg>
 		</button>
 	{/if}
@@ -211,9 +224,15 @@
 			title="next track"
 			disabled={!queue.hasNext}
 		>
-			<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-				<path d="M16 4h2v16h-2V4zM6 4l10 8-10 8V4z"></path>
-			</svg>
+			{#if stacked}
+				<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+					<path d="M18 5h-2v14h2zM5 5.5v13a.7.7 0 0 0 1.1.6L15 12.6a.7.7 0 0 0 0-1.2L6.1 4.9A.7.7 0 0 0 5 5.5z" />
+				</svg>
+			{:else}
+				<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+					<path d="M16 4h2v16h-2V4zM6 4l10 8-10 8V4z"></path>
+				</svg>
+			{/if}
 		</button>
 
 		<button
@@ -222,7 +241,15 @@
 			onclick={() => queue.toggleRepeatMode()}
 			title={queue.repeatMode === 'one' ? 'stop repeating' : 'repeat this track'}
 		>
-			<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+			{#if stacked}
+				<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+					<path d="M17.2 2.4 21 6.1l-3.8 3.7V7.2H7.6a2.1 2.1 0 0 0-2.1 2.1V12H3.3V9.3a4.3 4.3 0 0 1 4.3-4.3h9.6V2.4zM6.8 21.6 3 17.9l3.8-3.7v2.6h9.6a2.1 2.1 0 0 0 2.1-2.1V12h2.2v2.7a4.3 4.3 0 0 1-4.3 4.3H6.8v2.6z" />
+					{#if queue.repeatMode === 'one'}
+						<text x="12" y="14.6" text-anchor="middle" font-size="7" font-weight="700" font-family="inherit" fill="currentColor" stroke="none">1</text>
+					{/if}
+				</svg>
+			{:else}
+				<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
 				<path d="m17 2 4 4-4 4"></path>
 				<path d="M3 11v-1a4 4 0 0 1 4-4h14"></path>
 				<path d="m7 22-4-4 4-4"></path>
@@ -231,8 +258,12 @@
 					<path d="M11 10h1v4"></path>
 				{/if}
 			</svg>
+			{/if}
 		</button>
+	{/if}
+	</div>
 
+	{#if !radioMode}
 		<div class="time-control">
 			<span class="time">{formattedCurrentTime}</span>
 			<input
@@ -321,19 +352,61 @@
 		transform: scale(0.95);
 	}
 
-	/* stacked (the stage layout): the transport centred on one row, the scrubber
-	   on a full-width row beneath — spotify's footer, which is what the flag tries */
+	/* the transport is a row only in the stage layout; elsewhere its children
+	   sit in the parent flex/grid as before */
+	.transport {
+		display: contents;
+	}
+
+	/* stacked (the stage layout): the transport centred on one row that never
+	   wraps, the scrubber on its own row taking the whole centre column */
 	.player-controls.stacked {
-		flex-wrap: wrap;
+		flex-direction: column;
+		align-items: stretch;
+		gap: 0.2rem;
+	}
+
+	.player-controls.stacked .transport {
+		display: flex;
+		align-items: center;
 		justify-content: center;
-		row-gap: 0.25rem;
-		column-gap: 0.75rem;
+		gap: 0.5rem;
+		flex-wrap: nowrap;
+	}
+
+	.player-controls.stacked .control-btn {
+		padding: 0.4rem;
+		flex-shrink: 0;
+	}
+
+	.player-controls.stacked .control-btn svg {
+		width: 22px;
+		height: 22px;
+	}
+
+	.player-controls.stacked .control-btn.play-pause {
+		width: 36px;
+		height: 36px;
+		padding: 0;
+		background: var(--text-primary);
+		color: var(--bg-primary);
+	}
+
+	.player-controls.stacked .control-btn.play-pause:hover {
+		background: var(--text-primary);
+		color: var(--bg-primary);
+		transform: scale(1.05);
+	}
+
+	.player-controls.stacked .control-btn.play-pause svg {
+		width: 18px;
+		height: 18px;
 	}
 
 	.player-controls.stacked .time-control {
-		flex-basis: 100%;
-		max-width: 722px;
-		margin: 0 auto;
+		width: 100%;
+		max-width: none;
+		margin: 0;
 	}
 
 	.control-btn.shuffle svg {
@@ -482,6 +555,14 @@
 
 		.control-btn.shuffle {
 			display: none;
+		}
+
+		.player-controls.stacked .transport {
+			display: contents;
+		}
+
+		.player-controls.stacked .control-btn {
+			padding: 0.5rem;
 		}
 
 		/* the stage bar on a phone is spotify's compact bar: art, title, heart, play.
