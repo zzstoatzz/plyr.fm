@@ -84,7 +84,7 @@ row it lives in.
 real iPhone lock screen — that combination has not been on a phone before
 this. the phone scrubber narrows from 254 px to 150 px when flagged.
 
-#### passing comments became a stack that reads the page (#1968–#1974, September 2 — prod frontend-only promote September 2)
+#### passing comments became a stack that reads the page (#1968–#1978, September 2 — prod frontend-only promotes September 2)
 
 **why**: #1962's docked bubble sat at the player's edge, which on phones is
 exactly where the share/download/comments row is — nate: "thoughtlessly
@@ -106,7 +106,22 @@ when nothing fits anywhere. the stack also probes what is drawn under its
 ends and moves off fixed chrome (the queue toggle), and clips an evicted
 bubble's fade inside its band.
 
-**seven PRs, three of them corrections to the one before**, each found by
+**then the desktop case, and the motion (#1976–#1978)**: on desktop the
+row sits 16 px under the listen count and against the player, so neither
+vertical band exists and the last-resort dock landed on the row (nate's
+second screenshot). the free room along the row is measured too, and a
+single bubble sits beside the trigger, sized to that room, with a sideways
+tail; docking is truly last, and applies when the trigger itself is under
+the player. and nate: "it's just a pill … the comment section lights up."
+the icon is now the source: it takes the accent, sends one ring outward,
+bumps its count, and the bubble grows out of it with a small overshoot
+instead of sliding in. one ring per comment, nothing loops, reduced motion
+gets a plain fade. two more corrections came from frame captures: a
+bubble beside a trigger scrolled under the player was cut too (dock), and
+`elementsFromPoint` hands back the icon inside a button, so the margin
+was measured from the icon (take the control).
+
+**ten PRs, five of them corrections to the one before**, each found by
 replaying the same five-comment burst on staging after the merge: the
 "above the row" fallback covered the play button and listen count
 (regions named in a rule are still blind — measure the DOM); the capacity
