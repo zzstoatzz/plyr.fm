@@ -216,6 +216,10 @@
 		flex-shrink: 0;
 	}
 
+	.player-track:has(.player-like) .player-info {
+		flex: 0 1 auto;
+	}
+
 	.player-artwork-placeholder {
 		width: 100%;
 		height: 100%;

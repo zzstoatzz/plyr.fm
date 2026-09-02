@@ -713,6 +713,10 @@
 		}
 	}
 
+	:global(html) {
+		scrollbar-color: color-mix(in srgb, var(--text-tertiary) 55%, transparent) transparent;
+	}
+
 	:global(body) {
 		margin: 0;
 		padding: 0;
