@@ -28,6 +28,7 @@ afterEach(() => {
 	globalThis.fetch = originalFetch;
 	auth.isAuthenticated = false;
 	toast.toasts = [];
+	likes.reset();
 });
 
 describe('likes', () => {
@@ -58,6 +59,18 @@ describe('likes', () => {
 		expect(await likes.toggle(t)).toBe(false);
 		expect(requests).toEqual([]);
 		expect(toast.toasts.at(-1)?.message).toBe('sign in to like tracks');
+	});
+
+	it('learns the viewer\'s liked ids once and answers from them over the object', async () => {
+		respond = (url) =>
+			url.includes('/tracks/liked')
+				? Response.json({ tracks: [{ id: 11, title: 'a' }, { id: 12, title: 'b' }] })
+				: new Response('{}', { status: 200 });
+		await likes.ensureLoaded();
+		await likes.ensureLoaded();
+		expect(requests.filter((r) => r.includes('/tracks/liked')).length).toBe(1);
+		expect(likes.isLiked({ id: 11, is_liked: false })).toBe(true);
+		expect(likes.isLiked({ id: 13, is_liked: true })).toBe(false);
 	});
 
 	it('takes a result recorded by another surface', () => {

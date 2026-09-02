@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { auth } from '$lib/auth.svelte';
 	import { likes } from '$lib/likes.svelte';
 	import type { Track } from '$lib/types';
 
@@ -8,6 +9,10 @@
 	}
 
 	let { track, size = 18 }: Props = $props();
+
+	$effect(() => {
+		if (auth.isAuthenticated) void likes.ensureLoaded();
+	});
 
 	const liked = $derived(likes.isLiked(track));
 </script>
