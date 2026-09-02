@@ -833,7 +833,8 @@
 		}
 
 		.menu-dropdown,
-		.menu-dropdown.open-upward {
+		.menu-dropdown.open-upward,
+		.menu-dropdown.open-upward.align-start {
 			position: fixed;
 			top: 0;
 			bottom: auto;
