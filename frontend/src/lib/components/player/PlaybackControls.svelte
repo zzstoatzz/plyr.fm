@@ -142,12 +142,12 @@
 			title="back {SKIP_STEP_SECONDS} seconds"
 			aria-label="back {SKIP_STEP_SECONDS} seconds"
 		>
-			<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+			<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
 				<g>
-					<path d="M9.99 4.45A8.3 8.3 0 1 1 3.72 11.92" />
-					<path d="M12.24 5.54L9.99 4.45L11.46 2.42" />
+					<path stroke-linecap="butt" d="M9.98 4.35A8.4 8.4 0 1 1 3.62 11.91" />
+					<path fill="currentColor" stroke-width="0.6" d="M10.36 6.16L6.12 5.58L9.21 2.62Z" />
 				</g>
-				<text x="12" y="15.45" text-anchor="middle" font-size="8.2" font-weight="600" font-family="-apple-system, system-ui, Inter, Roboto, sans-serif" letter-spacing="-0.03em" fill="currentColor" stroke="none">{SKIP_STEP_SECONDS}</text>
+				<text x="12" y="15.60" text-anchor="middle" font-size="8.6" font-weight="600" font-family="inherit" letter-spacing="-0.02em" fill="currentColor" stroke="none">{SKIP_STEP_SECONDS}</text>
 			</svg>
 		</button>
 	{/if}
@@ -176,12 +176,12 @@
 			title="forward {SKIP_STEP_SECONDS} seconds"
 			aria-label="forward {SKIP_STEP_SECONDS} seconds"
 		>
-			<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+			<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
 				<g transform="translate(24 0) scale(-1 1)">
-					<path d="M9.99 4.45A8.3 8.3 0 1 1 3.72 11.92" />
-					<path d="M12.24 5.54L9.99 4.45L11.46 2.42" />
+					<path stroke-linecap="butt" d="M9.98 4.35A8.4 8.4 0 1 1 3.62 11.91" />
+					<path fill="currentColor" stroke-width="0.6" d="M10.36 6.16L6.12 5.58L9.21 2.62Z" />
 				</g>
-				<text x="12" y="15.45" text-anchor="middle" font-size="8.2" font-weight="600" font-family="-apple-system, system-ui, Inter, Roboto, sans-serif" letter-spacing="-0.03em" fill="currentColor" stroke="none">{SKIP_STEP_SECONDS}</text>
+				<text x="12" y="15.60" text-anchor="middle" font-size="8.6" font-weight="600" font-family="inherit" letter-spacing="-0.02em" fill="currentColor" stroke="none">{SKIP_STEP_SECONDS}</text>
 			</svg>
 		</button>
 	{/if}
