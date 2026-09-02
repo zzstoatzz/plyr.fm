@@ -9,8 +9,7 @@
 	import SensitiveImage from './SensitiveImage.svelte';
 	import ScrollingText from './ScrollingText.svelte';
 	import { trackCoverUrl, trackThumbnailUrl } from '$lib/track-cover';
-	import { auth } from '$lib/auth.svelte';
-	import { likeTrack, unlikeTrack } from '$lib/tracks.svelte';
+	import { likes } from '$lib/likes.svelte';
 	import { swipeable, type SwipeState } from '$lib/swipe';
 	import { HINTS, hintSeen, markHintSeen } from '$lib/hints.svelte';
 	import {
@@ -174,21 +173,7 @@
 	}
 
 	async function handleSwipeLike(track: Track) {
-		if (!auth.isAuthenticated) {
-			toast.error('sign in to like tracks');
-			return;
-		}
-		if (track.is_liked) {
-			if (await unlikeTrack(track.id)) {
-				track.is_liked = false;
-				toast.info(`unliked ${track.title}`);
-			}
-			return;
-		}
-		if (await likeTrack(track.id, track.file_id, track.gated)) {
-			track.is_liked = true;
-			toast.success(`liked ${track.title}`);
-		}
+		await likes.toggle(track);
 	}
 
 
@@ -427,7 +412,7 @@
 		style="--swipe-progress: {swipe?.progress ?? 0}"
 	>
 		<div class="swipe-reveal like" aria-hidden="true">
-			<svg width="20" height="20" viewBox="0 0 24 24" fill={track.is_liked ? 'none' : 'currentColor'} stroke="currentColor" stroke-width="2">
+			<svg width="20" height="20" viewBox="0 0 24 24" fill={likes.isLiked(track) ? 'none' : 'currentColor'} stroke="currentColor" stroke-width="2">
 				<path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
 			</svg>
 		</div>

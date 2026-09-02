@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { Snippet } from 'svelte';
 	import type { Track } from '$lib/types';
 	import { onMount } from 'svelte';
 	import { browser } from '$app/environment';
@@ -6,12 +7,14 @@
 	import { IMAGE_WIDTHS, resizedImageUrl } from '$lib/utils/display-image';
 
 	interface Props {
+		/** a heart rendered beside the title (the stage layout) */
+		like?: Snippet;
 		track: Track;
 		isOnTrackDetailPage: boolean;
 		radioMode?: boolean;
 	}
 
-	let { track, isOnTrackDetailPage, radioMode = false }: Props = $props();
+	let { track, isOnTrackDetailPage, radioMode = false, like }: Props = $props();
 
 	let titleEl = $state<HTMLElement | null>(null);
 	let artistEl = $state<HTMLElement | null>(null);
@@ -166,6 +169,9 @@
 			</div>
 		</div>
 	</div>
+	{#if like}
+		<div class="player-like">{@render like()}</div>
+	{/if}
 </div>
 
 <style>
@@ -202,6 +208,12 @@
 		width: 100%;
 		height: 100%;
 		object-fit: cover;
+	}
+
+	.player-like {
+		display: flex;
+		align-items: center;
+		flex-shrink: 0;
 	}
 
 	.player-artwork-placeholder {
@@ -403,6 +415,15 @@
 			height: 48px;
 			grid-row: 1;
 			grid-column: 1;
+		}
+
+		.player-like {
+			grid-row: 1;
+			grid-column: 3;
+		}
+
+		.player-track:has(.player-like) .player-info {
+			grid-column: 2 / 3;
 		}
 
 		.player-info {

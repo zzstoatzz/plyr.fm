@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { SKIP_BUTTONS_FLAG } from '$lib/config';
 	import favicon from '$lib/assets/favicon.png';
 	import {
 		APP_NAME,
@@ -541,6 +542,7 @@
 {#if !isEmbed}
 	<button
 		class="queue-toggle"
+		class:stage={auth.user?.enabled_flags?.includes(SKIP_BUTTONS_FLAG) ?? false}
 		onclick={toggleQueue}
 		aria-pressed={showQueue}
 		aria-label="toggle queue (Q)"
@@ -553,7 +555,7 @@
 		</svg>
 	</button>
 
-	<Player />
+	<Player queueOpen={showQueue} onToggleQueue={toggleQueue} />
 {/if}
 <Toast />
 <SearchModal />
@@ -803,6 +805,13 @@
 	@supports (height: 100dvh) {
 		.queue-sidebar {
 			height: 100dvh; /* dynamic viewport height (accounts for mobile browser UI) */
+		}
+	}
+
+	/* the stage footer carries its own queue button on desktop */
+	@media (min-width: 769px) {
+		.queue-toggle.stage {
+			display: none;
 		}
 	}
 

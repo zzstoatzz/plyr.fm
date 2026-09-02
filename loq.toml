@@ -95,7 +95,7 @@ max_lines = 523
 
 [[rules]]
 path = "frontend/src/lib/components/AddToMenu.svelte"
-max_lines = 805
+max_lines = 806
 
 [[rules]]
 path = "frontend/src/lib/components/ProfileMenu.svelte"
@@ -111,7 +111,7 @@ max_lines = 627
 
 [[rules]]
 path = "frontend/src/lib/components/TrackActionsMenu.svelte"
-max_lines = 797
+max_lines = 799
 
 [[rules]]
 path = "frontend/src/lib/components/TrackItem.svelte"
@@ -123,7 +123,7 @@ max_lines = 622
 
 [[rules]]
 path = "frontend/src/lib/components/player/Player.svelte"
-max_lines = 1021
+max_lines = 1105
 
 [[rules]]
 path = "frontend/src/lib/queue.svelte.ts"
@@ -131,7 +131,7 @@ max_lines = 999
 
 [[rules]]
 path = "frontend/src/routes/+layout.svelte"
-max_lines = 858
+max_lines = 860
 
 [[rules]]
 path = "frontend/src/routes/costs/+page.svelte"
