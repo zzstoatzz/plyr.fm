@@ -9,6 +9,7 @@
 	import { toast } from '$lib/toast.svelte';
 	import type { Track } from '$lib/types';
 	import { fade, fly } from 'svelte/transition';
+	import { emissionPlacement } from '$lib/comment-emission';
 	import RichText from '$lib/components/RichText.svelte';
 	import SensitiveImage from '$lib/components/SensitiveImage.svelte';
 	import { redirectToLogin } from '$lib/utils/auth-redirect';
@@ -49,11 +50,22 @@
 	// timestamp (the soundcloud move). plain let: previous position must not
 	// retrigger the effect.
 	let emission = $state<Comment | null>(null);
+	let emissionDocked = $state(false);
 	let emissionTimer: ReturnType<typeof setTimeout> | null = null;
 	let prevPlaybackMs = -1;
+	let triggerAnchor = $state<HTMLSpanElement | null>(null);
+
+	function playerHeightPx(): number {
+		const raw = window.getComputedStyle(document.documentElement).getPropertyValue('--player-height');
+		const px = Number.parseFloat(raw);
+		return Number.isFinite(px) ? px : 0;
+	}
 
 	function showEmission(comment: Comment) {
 		if (emissionTimer) clearTimeout(emissionTimer);
+		const anchorBottom = triggerAnchor?.getBoundingClientRect().bottom ?? 0;
+		emissionDocked =
+			emissionPlacement(anchorBottom, window.innerHeight, playerHeightPx()) === 'docked';
 		emission = comment;
 		emissionTimer = setTimeout(() => (emission = null), 4000);
 	}
@@ -269,19 +281,23 @@
 <!-- a quiet utility trigger (icon + count) for the page's share/download
      row; the full section opens as a bottom sheet on every viewport -->
 {#if commentsEnabled !== false}
-	<span class="comments-trigger-anchor">
+	<span class="comments-trigger-anchor" bind:this={triggerAnchor}>
 	{#if emission}
 		<button
 			class="comment-emission"
-			transition:fly={{ y: -8, duration: reduceMotionComments ? 0 : 300 }}
+			class:docked={emissionDocked}
+			transition:fly={{ y: emissionDocked ? 8 : -8, duration: reduceMotionComments ? 0 : 300 }}
 			onclick={() => {
 				emission = null;
 				commentsOpen = true;
 			}}
+			aria-label={`comment at ${formatTimestamp(emission.timestamp_ms)} from @${emission.user_handle}: ${emission.text}`}
 		>
+			{#if !emissionDocked}<span class="comment-emission-tail" aria-hidden="true"></span>{/if}
 			{#if emission.user_avatar_url}
 				<img src={emission.user_avatar_url} alt="" class="comment-emission-avatar" />
 			{/if}
+			<span class="comment-emission-at">{formatTimestamp(emission.timestamp_ms)}</span>
 			<span class="comment-emission-text">{emission.text}</span>
 		</button>
 	{/if}
@@ -449,36 +465,72 @@
 	   below the utilities row — never over the stats line above */
 	.comment-emission {
 		position: absolute;
-		top: calc(100% + 0.5rem);
+		top: calc(100% + 0.4rem);
 		left: 50%;
 		translate: -50% 0;
 		display: flex;
 		align-items: center;
-		gap: 0.45rem;
-		max-width: 240px;
-		padding: 0.4rem 0.7rem;
+		gap: 0.5rem;
+		max-width: min(280px, calc(100vw - 2rem));
+		padding: 0.3rem 0.85rem 0.3rem 0.3rem;
 		background: var(--glass-bg, var(--bg-secondary));
 		backdrop-filter: var(--glass-blur, none);
 		-webkit-backdrop-filter: var(--glass-blur, none);
 		border: 1px solid var(--glass-border, var(--border-default));
-		border-radius: var(--radius-2xl);
-		box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
-		color: var(--text-secondary);
+		border-radius: var(--radius-full);
+		box-shadow: 0 6px 20px rgba(0, 0, 0, 0.28);
+		color: var(--text-primary);
 		font-size: var(--text-sm);
+		line-height: 1.25;
 		font-family: inherit;
 		cursor: pointer;
 		white-space: nowrap;
 		z-index: 40;
 	}
 
+	/* points at the trigger it came from; docked bubbles have no origin to point at */
+	.comment-emission-tail {
+		position: absolute;
+		top: -5px;
+		left: 50%;
+		width: 9px;
+		height: 9px;
+		translate: -50% 0;
+		rotate: 45deg;
+		background: var(--glass-bg, var(--bg-secondary));
+		border-left: 1px solid var(--glass-border, var(--border-default));
+		border-top: 1px solid var(--glass-border, var(--border-default));
+	}
+
+	/* no room under the trigger: sit just above the footer player, where the
+	   comments panel docks, instead of being drawn underneath it */
+	.comment-emission.docked {
+		position: fixed;
+		top: auto;
+		bottom: calc(var(--player-height, 0px) + env(safe-area-inset-bottom, 0px) + 0.75rem);
+		left: 50%;
+		z-index: 45;
+	}
+
 	.comment-emission-avatar {
-		width: 18px;
-		height: 18px;
+		width: 24px;
+		height: 24px;
 		border-radius: var(--radius-full);
+		box-shadow: 0 0 0 1px var(--glass-border, var(--border-default));
+		flex-shrink: 0;
+	}
+
+	.comment-emission-at {
+		color: var(--accent);
+		font-size: var(--text-xs);
+		font-weight: 600;
+		font-variant-numeric: tabular-nums;
+		letter-spacing: 0.02em;
 		flex-shrink: 0;
 	}
 
 	.comment-emission-text {
+		min-width: 0;
 		overflow: hidden;
 		text-overflow: ellipsis;
 	}
