@@ -83,7 +83,9 @@
 			.find((el) => !emissionsEl?.contains(el) && !row?.contains(el));
 		if (!hit || hit === document.body || hit === document.documentElement) return null;
 		if (row && hit.contains(row)) return null;
-		const r = hit.getBoundingClientRect();
+		// the topmost hit is often an icon inside a button; the control is the obstacle
+		const control = hit.closest('button, a, [role="button"]') ?? hit;
+		const r = control.getBoundingClientRect();
 		return { left: r.left, right: r.right };
 	}
 
