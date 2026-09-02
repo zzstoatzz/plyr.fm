@@ -147,7 +147,7 @@
 					<path stroke-linecap="butt" d="M9.98 4.35A8.4 8.4 0 1 1 3.62 11.91" />
 					<path fill="currentColor" stroke-width="0.6" d="M10.36 6.16L6.12 5.58L9.21 2.62Z" />
 				</g>
-				<text x="12" y="15.60" text-anchor="middle" font-size="8.6" font-weight="600" font-family="inherit" letter-spacing="-0.02em" fill="currentColor" stroke="none">{SKIP_STEP_SECONDS}</text>
+				<text x="12" y="15.60" text-anchor="middle" font-size="8.6" font-weight="700" font-family="inherit" letter-spacing="-0.02em" fill="currentColor" stroke="none">{SKIP_STEP_SECONDS}</text>
 			</svg>
 		</button>
 	{/if}
@@ -181,7 +181,7 @@
 					<path stroke-linecap="butt" d="M9.98 4.35A8.4 8.4 0 1 1 3.62 11.91" />
 					<path fill="currentColor" stroke-width="0.6" d="M10.36 6.16L6.12 5.58L9.21 2.62Z" />
 				</g>
-				<text x="12" y="15.60" text-anchor="middle" font-size="8.6" font-weight="600" font-family="inherit" letter-spacing="-0.02em" fill="currentColor" stroke="none">{SKIP_STEP_SECONDS}</text>
+				<text x="12" y="15.60" text-anchor="middle" font-size="8.6" font-weight="700" font-family="inherit" letter-spacing="-0.02em" fill="currentColor" stroke="none">{SKIP_STEP_SECONDS}</text>
 			</svg>
 		</button>
 	{/if}
@@ -339,8 +339,10 @@
 		font-family: inherit;
 	}
 
+	/* lining figures: serif fonts (georgia, the default) otherwise drop the 5 below the 1 */
 	.control-btn.skip svg text {
 		fill: currentColor;
+		font-variant-numeric: lining-nums tabular-nums;
 	}
 
 	.control-btn.disabled {
