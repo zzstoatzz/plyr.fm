@@ -17,6 +17,7 @@ organized knowledge base for plyr.fm development.
 - **[configuration.md](./backend/configuration.md)** - environment setup and settings
 - **[database/](./backend/database/)** - connection pooling, neon-specific patterns
 - **[feature-flags.md](./backend/feature-flags.md)** - per-user feature rollout system
+- **[resumable-uploads.md](./backend/resumable-uploads.md)** - the web upload path: start → parts → finish, worker-side settle, the client's staged transfer
 - **[streaming-uploads.md](./backend/streaming-uploads.md)** - SSE progress tracking
 - **[audio-streaming.md](./backend/audio-streaming.md)** - the `GET /audio` dispatch tree (public / gated / private), driven by visibility + support_gate
 - **[album-uploads.md](./backend/album-uploads.md)** - multi-track album upload flow (create → finalize) and why the ATProto list record is authoritative for track order
@@ -37,6 +38,14 @@ organized knowledge base for plyr.fm development.
 - **[keyboard-shortcuts.md](./frontend/keyboard-shortcuts.md)** - global shortcuts
 - **[navigation.md](./frontend/navigation.md)** - SvelteKit routing patterns
 - **[search.md](./frontend/search.md)** - unified search with Cmd+K
+- **[queue.md](./frontend/queue.md)** - the queue as a direct-manipulation surface
+- **[portals.md](./frontend/portals.md)** - the portal and its manage page
+- **[toast-notifications.md](./frontend/toast-notifications.md)** - the toast stack and its copy rules
+- **[passing-comments.md](./frontend/passing-comments.md)** - timestamped comments surfacing during playback: the stack, DOM-measured placement, the icon's breath
+- **[design-tokens.md](./frontend/design-tokens.md)** - CSS variables from `+layout.svelte`
+- **[data-loading.md](./frontend/data-loading.md)** - `+page.ts` vs client fetches
+- **[collection-pages.md](./frontend/collection-pages.md)** - album and playlist pages
+- **[redirect-after-login.md](./frontend/redirect-after-login.md)** - the return-url cookie and the auth-redirect helpers
 
 ### deployment
 - **[environments.md](./deployment/environments.md)** - staging vs production

@@ -25,7 +25,7 @@ your catalog isn't trapped here — other apps can access your tracks without pl
 
    ![plyr.fm sign-in page — enter your atmosphere account to get started](/screenshots/login-page.png)
 
-2. **upload** — click the upload button and drop your audio file (MP3, WAV, or M4A)
+2. **upload** — click the upload button and choose your audio file (MP3, WAV, M4A, FLAC, AIFF). as soon as you pick it, the form shows what it knows about the file — format, size, length, a waveform for shorter tracks, and a play button to check it's the right one — without sending anything. nothing leaves your browser until you press upload, so picking the wrong file costs nothing.
 
    ![the upload form — title, audio file, description, album, tags, and artwork](/screenshots/upload-form.png)
 

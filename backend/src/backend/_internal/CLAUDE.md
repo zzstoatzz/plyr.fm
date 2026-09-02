@@ -15,6 +15,7 @@ internal services and business logic.
 - **uploads**: streaming chunked uploads to R2/filesystem, duplicate detection via file_id
 - **moderation**: copyright scanning via AudD, sensitive image flagging
 - **jobs**: job tracking for long-running operations (exports)
+- **notifications**: the operator DM bot (a Bluesky app-password session via `atproto`). `ensure_ready()` re-runs `setup()` lazily when the service is broken, rate-limited by a cooldown; a DM that fails with a *session* error (`ExpiredToken`/`InvalidToken`/401) discards the client, re-logs in through `ensure_ready()`, and is retried once (#1953). network errors keep the session. only the worker process boots it — see `worker.py`
 
 gotchas:
 - ATProto records organized under `_internal/atproto/records/` by lexicon namespace

@@ -210,6 +210,34 @@ plyr.fm uses global state managers following the Svelte 5 runes pattern for cros
 - shows toast notifications for progress/completion
 - triggers cache refresh on success
 - server-sent events for real-time progress
+- `stage(file)` returns a `StagedTransfer` (`frontend/src/lib/staged-transfer.svelte.ts`):
+  the resumable session as observable `$state` — `status`, `loaded`, `total`,
+  `error`, `retry()` resuming from the parts the server already holds,
+  `abort()`. `upload()` takes a `File` or a `StagedTransfer`. nothing leaves
+  the browser until the form is submitted; the `/upload` page stages at
+  submit time so the same card that previewed the file shows its transfer
+  (see `docs/internal/backend/resumable-uploads.md`)
+
+### audio probe (`frontend/src/lib/audio/probe.ts`)
+- what the browser can learn about an audio file locally: format from the
+  name, duration from the container header (`mediaDuration`, the
+  seek-past-the-end scan for header-less MediaRecorder output), and whether a
+  waveform can be decoded within a memory budget (`canRenderWaveform`)
+- `AudioPreview.svelte` (used by `/upload` and `/record`) owns the element and
+  the probing; `Waveform.svelte` decodes at a low sample rate through an
+  `OfflineAudioContext`, but decoding still costs the browser roughly 100 MB
+  of transient memory per minute of audio, so the caps are 10 min on desktop,
+  3 on touch, 100 MB either way
+
+### skip step (`frontend/src/lib/skip-step.ts`)
+- one ladder for how far a skip moves by track length: under 60 s → 5,
+  under 180 s → 10, else 15, and 15 before the duration is known. the player's
+  skip buttons, their labels, and the media-session seek handlers all read it;
+  `queue.seekBy(seconds)` owns the clamped relative seek
+
+### comment emission (`frontend/src/lib/comment-emission.ts`)
+- placement and capacity for the passing-comment bubbles on the track page;
+  see `docs/internal/frontend/passing-comments.md`
 
 ### tracks cache (`frontend/src/lib/tracks.svelte.ts`)
 - caches track list globally in localStorage
@@ -276,8 +304,14 @@ export const globalState = new GlobalState();
 
 ### upload flow
 
-1. user clicks upload on dedicated `/upload` page (linked from portal or ProfileMenu)
-2. `uploader.upload()` called - returns immediately
+1. user opens the dedicated `/upload` page (linked from portal or ProfileMenu)
+   and chooses a file; `AudioPreview` shows format, size, duration, a
+   waveform (under the decode cap) and playback, all from the local file —
+   nothing has been sent yet
+2. on submit, `uploader.stage(file)` opens the resumable session and sends the
+   parts (the card shows the transfer bar, with retry on a drop), then
+   `uploader.upload(staged, …)` waits for it and calls `finish` — returns
+   immediately
 3. user navigates to homepage
 4. homepage renders cached tracks instantly (no blocking)
 5. upload completes in background
@@ -353,11 +387,18 @@ when a track plays, we update `navigator.mediaSession.metadata` with:
 
 ### action handlers
 
-set up in `onMount`, these respond to system media controls:
-- `play` / `pause` - toggle playback
-- `previoustrack` / `nexttrack` - navigate queue
-- `seekto` - jump to position
-- `seekbackward` / `seekforward` - skip 10 seconds
+these respond to system media controls:
+- `play` / `pause` - toggle playback (registered once)
+- `seekto` - jump to position (registered once; load-bearing — without it iOS
+  renders the lock-screen scrubber but ignores drags)
+- `previoustrack` / `nexttrack` - navigate queue; (de)registered reactively
+  from `queue.hasPrevious` / `queue.hasNext` and radio mode, because the OS
+  only shows ⏮/⏭ for commands it believes are live
+- `seekbackward` / `seekforward` - registered reactively only for users with
+  the `skip-buttons` flag and not in radio mode; the offset is the OS's
+  `seekOffset` when it sends one, else `skipStepSeconds(player.duration)`.
+  once these exist, iOS shows ±skip buttons in place of ⏮/⏭ — that trade is
+  why they are flagged
 
 ### position state
 
@@ -365,7 +406,9 @@ reactive effects keep `navigator.mediaSession.setPositionState()` synced with pl
 
 ### implementation notes
 
-- handlers are registered once in `onMount`
+- play/pause/seekto are registered once in `onMount`; prev/next and the skip
+  handlers are `$effect`s that call `setActionHandler(action, fn | null)` —
+  a no-op inside a callback tells the OS nothing, registration does
 - metadata updates reactively via `$effect` when `player.currentTrack` changes
 - playback state syncs reactively with `player.paused`
 - position updates on every `player.currentTime` / `player.duration` change
