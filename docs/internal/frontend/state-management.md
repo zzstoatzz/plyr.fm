@@ -394,8 +394,8 @@ these respond to system media controls:
 - `previoustrack` / `nexttrack` - navigate queue; (de)registered reactively
   from `queue.hasPrevious` / `queue.hasNext` and radio mode, because the OS
   only shows ⏮/⏭ for commands it believes are live
-- `seekbackward` / `seekforward` - registered reactively only for users with
-  the `skip-buttons` flag and not in radio mode; the offset is the OS's
+- `seekbackward` / `seekforward` - registered reactively whenever not in radio
+  mode; the offset is the OS's
   `seekOffset` when it sends one, else `skipStepSeconds(player.duration)`.
   once these exist, iOS shows ±skip buttons in place of ⏮/⏭ — that trade is
   why they are flagged

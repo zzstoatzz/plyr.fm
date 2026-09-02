@@ -37,7 +37,6 @@ flags are documented in `backend/src/backend/_internal/feature_flags.py`:
 KNOWN_FLAGS = frozenset({
     "vibe-search",  # semantic vibe search in Cmd+K
     "copyright-paradigm",  # the indiemusi.ch copyright paradigm UI + endpoints
-    "skip-buttons",  # ±skip buttons in the player + media-session seek handlers
 })
 ```
 
@@ -56,12 +55,12 @@ every user gets; a flagged feature is described here and in `STATUS.md`.
 from backend._internal import has_flag, get_user_flags
 
 # check a specific flag
-if await has_flag(db, user_did, "skip-buttons"):
+if await has_flag(db, user_did, "vibe-search"):
     # feature is enabled for this user
     pass
 
 # get all flags for a user
-flags = await get_user_flags(db, user_did)  # ["skip-buttons", "vibe-search", ...]
+flags = await get_user_flags(db, user_did)  # ["vibe-search", "copyright-paradigm", ...]
 ```
 
 ### frontend
@@ -71,9 +70,9 @@ flags are returned in the `/auth/me` response:
 ```typescript
 // $lib/auth.svelte.ts holds the signed-in user; flag names live in $lib/config.ts
 import { auth } from '$lib/auth.svelte';
-import { SKIP_BUTTONS_FLAG } from '$lib/config';
+import { VIBE_SEARCH_FLAG } from '$lib/config';
 
-const skipButtons = $derived(auth.user?.enabled_flags?.includes(SKIP_BUTTONS_FLAG) ?? false);
+const vibeSearch = $derived(auth.user?.enabled_flags?.includes(VIBE_SEARCH_FLAG) ?? false);
 ```
 
 ## api
@@ -87,7 +86,7 @@ returns the current user's enabled flags:
     "did": "did:plc:abc123",
     "handle": "alice.bsky.social",
     "linked_accounts": [...],
-    "enabled_flags": ["skip-buttons"]
+    "enabled_flags": ["vibe-search"]
 }
 ```
 
@@ -99,10 +98,10 @@ manage flags via the admin script (requires `DATABASE_URL`):
 cd backend
 
 # enable a flag for a user
-DATABASE_URL="..." uv run python ../scripts/feature_flag.py enable --user zzstoatzz.io --flag skip-buttons
+DATABASE_URL="..." uv run python ../scripts/feature_flag.py enable --user zzstoatzz.io --flag vibe-search
 
 # disable a flag
-DATABASE_URL="..." uv run python ../scripts/feature_flag.py disable --user zzstoatzz.io --flag skip-buttons
+DATABASE_URL="..." uv run python ../scripts/feature_flag.py disable --user zzstoatzz.io --flag vibe-search
 
 # list flags for a user
 DATABASE_URL="..." uv run python ../scripts/feature_flag.py list --user zzstoatzz.io
@@ -120,7 +119,6 @@ users can be specified by handle or DID.
    KNOWN_FLAGS = frozenset({
        "vibe-search",
        "copyright-paradigm",
-       "skip-buttons",
        "new-feature",  # description of what this enables
    })
    ```

@@ -539,6 +539,7 @@
 		border: none;
 		border-radius: var(--radius-full);
 		color: var(--text-secondary);
+		transition: color 150ms cubic-bezier(0.2, 0, 0, 1);
 	}
 
 	.trigger-button.plain svg {
@@ -550,7 +551,6 @@
 	.trigger-button.plain.menu-open {
 		background: transparent;
 		color: var(--text-primary);
-		transform: scale(1.06);
 	}
 
 	.trigger-button.plain.liked,
@@ -563,12 +563,6 @@
 		outline-offset: 2px;
 	}
 
-	@media (prefers-reduced-motion: reduce) {
-		.trigger-button.plain:hover,
-		.trigger-button.plain.menu-open {
-			transform: none;
-		}
-	}
 
 	.menu-item {
 		width: 100%;
