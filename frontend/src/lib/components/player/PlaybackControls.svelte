@@ -708,15 +708,19 @@
 			padding: 0.5rem;
 		}
 
-		/* the stage bar on a phone is spotify's compact bar: art, title, heart, play.
-		   prev/next/repeat live in the queue and the now-playing view */
+		/* the stage bar on a phone: art, title, heart, play, next */
 		.player-controls.stacked .control-btn.prev,
-		.player-controls.stacked .control-btn.next,
 		.player-controls.stacked .control-btn.repeat {
 			display: none;
 		}
 
 		.player-controls.stacked .control-btn.play-pause {
+			grid-column: 7;
+			justify-self: end;
+		}
+
+		.player-controls.stacked .control-btn.next {
+			grid-row: 1;
 			grid-column: 8;
 			justify-self: end;
 		}

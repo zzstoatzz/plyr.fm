@@ -808,7 +808,7 @@
 		display: none;
 	}
 
-	/* mobile: show as top sheet */
+	/* mobile: a sheet above the player */
 	@media (max-width: 768px) {
 		.trigger-button {
 			width: 28px;
@@ -837,15 +837,15 @@
 		.menu-dropdown.open-upward,
 		.menu-dropdown.open-upward.align-start {
 			position: fixed;
-			top: 0;
-			bottom: auto;
+			top: auto;
+			bottom: max(var(--player-height, 0px), env(safe-area-inset-bottom, 0px));
 			left: 0;
 			right: 0;
 			width: 100%;
 			min-width: 100%;
 			max-width: 100vw;
-			border-radius: 0 0 16px 16px;
-			padding-top: env(safe-area-inset-top, 0);
+			border-radius: 16px 16px 0 0;
+			padding-bottom: 0.25rem;
 			z-index: 200;
 			-webkit-transform: translateZ(0);
 			transform: translateZ(0);

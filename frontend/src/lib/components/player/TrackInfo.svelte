@@ -421,15 +421,15 @@
 			grid-column: 1;
 		}
 
-		/* the stage bar: title takes the row, heart and play sit at its end */
+		/* the stage bar: title takes the row; heart, play and next sit at its end */
 		.player-like {
 			grid-row: 1;
-			grid-column: 7;
+			grid-column: 6;
 			justify-self: end;
 		}
 
 		.player-track:has(.player-like) .player-info {
-			grid-column: 2 / 7;
+			grid-column: 2 / 6;
 		}
 
 		.player-info {
