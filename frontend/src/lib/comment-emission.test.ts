@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
+	EMISSION_BUBBLE_PX,
 	EMISSION_GAP_PX,
-	EMISSION_ROW_PX,
+	EMISSION_INNER_GAP_PX,
 	EMISSION_STACK_MAX,
 	emissionCapacity,
 	emissionLayout,
@@ -9,11 +10,15 @@ import {
 } from './comment-emission';
 
 describe('emissionCapacity', () => {
-	it('counts whole bubbles that fit after the gap', () => {
+	it('counts whole bubbles that fit: the row gap first, the inner gap between', () => {
+		const one = EMISSION_GAP_PX + EMISSION_BUBBLE_PX;
+		const each = EMISSION_BUBBLE_PX + EMISSION_INNER_GAP_PX;
 		expect(emissionCapacity(0)).toBe(0);
-		expect(emissionCapacity(EMISSION_GAP_PX + EMISSION_ROW_PX - 1)).toBe(0);
-		expect(emissionCapacity(EMISSION_GAP_PX + EMISSION_ROW_PX)).toBe(1);
-		expect(emissionCapacity(53)).toBe(1);
+		expect(emissionCapacity(one - 1)).toBe(0);
+		expect(emissionCapacity(one)).toBe(1);
+		expect(emissionCapacity(47)).toBe(1);
+		expect(emissionCapacity(one + each - 1)).toBe(1);
+		expect(emissionCapacity(one + each)).toBe(2);
 		expect(emissionCapacity(1000)).toBe(EMISSION_STACK_MAX);
 	});
 });
@@ -26,7 +31,7 @@ describe('emissionLayout', () => {
 	});
 
 	it('docks one bubble when neither band holds one', () => {
-		expect(emissionLayout({ above: 10, below: 20 })).toEqual({ placement: 'docked', capacity: 1 });
+		expect(emissionLayout({ above: 10, below: 41 })).toEqual({ placement: 'docked', capacity: 1 });
 		expect(emissionLayout({ above: -40, below: -10 })).toEqual({ placement: 'docked', capacity: 1 });
 	});
 });
