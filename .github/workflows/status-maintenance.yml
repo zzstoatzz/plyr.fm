@@ -12,6 +12,9 @@
 name: status maintenance
 
 on:
+  schedule:
+    # mondays 14:00 UTC (9am central): archive, podcast, PR — a human still merges
+    - cron: "0 14 * * 1"
   workflow_dispatch:
     inputs:
       skip_audio:
