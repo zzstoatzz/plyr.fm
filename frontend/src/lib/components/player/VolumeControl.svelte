@@ -106,6 +106,8 @@
 
 	.volume-bar {
 		flex: 1;
+		min-width: 0;
+		width: 100%;
 		-webkit-appearance: none;
 		appearance: none;
 		height: 4px;
