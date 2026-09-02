@@ -10,10 +10,11 @@
 	import type { Track } from '$lib/types';
 	import { fade, fly } from 'svelte/transition';
 	import {
-		EMISSION_STACK_MAX,
 		EMISSION_TTL_MS,
-		emissionPlacement,
+		HEADER_CLEARANCE_PX,
+		emissionLayout,
 		emissionShift,
+		type EmissionBands,
 		type EmissionPlacement
 	} from '$lib/comment-emission';
 	import { flip } from 'svelte/animate';
@@ -59,6 +60,7 @@
 	// plain let for the playback cursor: previous position must not retrigger.
 	let emissions = $state<Comment[]>([]);
 	let emissionPlace = $state<EmissionPlacement>('below');
+	let emissionCap = 1;
 	let emissionShiftPx = $state(0);
 	let emissionsEl = $state<HTMLDivElement | null>(null);
 	const emissionTimers = new Map<number, ReturnType<typeof setTimeout>>();
@@ -80,7 +82,7 @@
 	}
 
 	function clearEmissions() {
-		for (const id of [...emissionTimers.keys()]) dismissEmission(id);
+		for (const id of Array.from(emissionTimers.keys())) dismissEmission(id);
 	}
 
 	function playerHeightPx(): number {
@@ -89,22 +91,34 @@
 		return Number.isFinite(px) ? px : 0;
 	}
 
+	// the free bands around the trigger's row: up to the previous content (or the
+	// header) and down to the next content (or the fixed player)
+	function freeBands(): EmissionBands {
+		const row = triggerAnchor?.parentElement;
+		if (!row) return { above: 0, below: 0 };
+		const rect = row.getBoundingClientRect();
+		const prevBottom = row.previousElementSibling?.getBoundingClientRect().bottom ?? 0;
+		const nextTop = row.nextElementSibling?.getBoundingClientRect().top ?? Number.POSITIVE_INFINITY;
+		const playerTop = window.innerHeight - playerHeightPx();
+		return {
+			above: rect.top - Math.max(prevBottom, HEADER_CLEARANCE_PX),
+			below: Math.min(nextTop, playerTop) - rect.bottom
+		};
+	}
+
 	function showEmission(comment: Comment) {
 		if (emissions.length === 0) {
-			const anchor = triggerAnchor?.getBoundingClientRect();
-			emissionPlace = emissionPlacement(
-				anchor?.top ?? 0,
-				anchor?.bottom ?? 0,
-				window.innerHeight,
-				playerHeightPx()
-			);
+			const bands = freeBands();
+			const layout = emissionLayout(bands);
+			emissionPlace = layout.placement;
+			emissionCap = layout.capacity;
 			emissionShiftPx = 0;
 		}
 		const existing = emissionTimers.get(comment.id);
 		if (existing) clearTimeout(existing);
 		else {
 			emissions = [comment, ...emissions];
-			for (const stale of emissions.slice(EMISSION_STACK_MAX)) dismissEmission(stale.id);
+			for (const stale of emissions.slice(emissionCap)) dismissEmission(stale.id);
 		}
 		emissionTimers.set(
 			comment.id,
