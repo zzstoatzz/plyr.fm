@@ -37,7 +37,8 @@
 	import TrackInfo from './TrackInfo.svelte';
 	import PlaybackControls from './PlaybackControls.svelte';
 	import VolumeControl from './VolumeControl.svelte';
-	import LikeToggle from '$lib/components/LikeToggle.svelte';
+	import AddToMenu from '$lib/components/AddToMenu.svelte';
+	import { likes } from '$lib/likes.svelte';
 	import type { Track } from '$lib/types';
 
 	// atprotofans base URL for supporter CTAs
@@ -934,7 +935,15 @@
 			>
 				{#snippet like()}
 					{#if stage && nowPlayingTrack && !player.radio && nowPlayingTrack.id}
-						<LikeToggle track={nowPlayingTrack} />
+						<AddToMenu
+							trackId={nowPlayingTrack.id}
+							trackTitle={nowPlayingTrack.title}
+							trackUri={nowPlayingTrack.atproto_record_uri}
+							trackCid={nowPlayingTrack.atproto_record_cid}
+							fileId={nowPlayingTrack.file_id}
+							gated={nowPlayingTrack.gated}
+							initialLiked={likes.isLiked(nowPlayingTrack)}
+						/>
 					{/if}
 				{/snippet}
 			</TrackInfo>
