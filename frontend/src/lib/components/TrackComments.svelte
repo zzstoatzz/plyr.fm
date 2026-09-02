@@ -90,9 +90,12 @@
 		const left = rect.left - emissionShiftPx;
 		const right = rect.right - emissionShiftPx;
 		const y = rect.top + Math.min(rect.height, 36) / 2;
-		const obstacles = [obstacleAt(right - 4, y), obstacleAt(left + 4, y)].filter(
-			(o): o is EmissionObstacle => o !== null
-		);
+		// probe where the stack will sit once inside the viewport, a little in
+		// from each end so a round button at the edge is not missed
+		const edge = emissionShift(left, right, window.innerWidth);
+		const obstacles = [right + edge - 8, right + edge - 24, left + edge + 8, left + edge + 24]
+			.map((x) => obstacleAt(x, y))
+			.filter((o): o is EmissionObstacle => o !== null);
 		emissionShiftPx = emissionShift(left, right, window.innerWidth, obstacles);
 	});
 
