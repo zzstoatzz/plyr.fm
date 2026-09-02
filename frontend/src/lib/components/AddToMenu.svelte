@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { portal } from 'svelte-portal';
+	import { MOBILE_BREAKPOINT } from '$lib/breakpoints';
 	import { likes } from '$lib/likes.svelte';
 	import { likeTrack, unlikeTrack } from '$lib/tracks.svelte';
 	import { toast } from '$lib/toast.svelte';
@@ -56,6 +58,7 @@
 	let loadingPlaylists = $state(false);
 	let addingToPlaylist = $state<string | null>(null);
 	let openUpward = $state(false);
+	let phoneSheet = $state(false);
 	let triggerRef = $state<HTMLButtonElement | null>(null);
 
 	// filter out the excluded playlist (must be after playlists state declaration)
@@ -70,7 +73,7 @@
 
 	// close menu when clicking outside
 	function handleClickOutside(event: MouseEvent) {
-		if (!(event.target instanceof Element && event.target.closest('.add-to-menu'))) {
+		if (!(event.target instanceof Element && event.target.closest('.add-to-menu, .add-to-menu-sheet'))) {
 			menuOpen = false;
 			showPlaylistPicker = false;
 		}
@@ -94,6 +97,7 @@
 			const menuHeight = 300; // approximate menu height
 			const playerHeight = 150; // approximate player height
 			openUpward = spaceBelow < menuHeight + playerHeight;
+			phoneSheet = window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT}px)`).matches;
 		}
 
 		menuOpen = !menuOpen;
@@ -291,7 +295,7 @@
 		</svg>
 	</button>
 
-	{#if menuOpen}
+	{#snippet menu()}
 		<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
 		<div class="menu-backdrop" role="presentation" onclick={() => { menuOpen = false; showPlaylistPicker = false; }}></div>
 		<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
@@ -435,6 +439,14 @@
 				</div>
 			{/if}
 		</div>
+	{/snippet}
+
+	{#if menuOpen}
+		{#if phoneSheet}
+			<div class="add-to-menu-sheet" use:portal={'body'}>{@render menu()}</div>
+		{:else}
+			{@render menu()}
+		{/if}
 	{/if}
 </div>
 
