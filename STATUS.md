@@ -287,149 +287,25 @@ flow.
 
 ### August 2026
 
-#### an upload that fails before sending stops blaming the internet (#1943, August 27 — prod, frontend-only promote)
+#### August 24 – 27 (archived)
 
-**why**: woody reported four upload attempts over two days all dying with
-"upload failed: connection failed. check your internet connection and try
-again" — and correctly observed his internet was fine. Logfire showed the
-signature each time: the CORS preflight (`OPTIONS /tracks/`) landed, the
-`POST /tracks/` never arrived, and other artists' uploads (one a 226-second
-transfer) succeeded in between. His console named it:
-`net::ERR_ACCESS_DENIED` — macOS denied the browser read access to the
-.aiff, which lives on a NAS (the per-app Network Volumes permission under
-Privacy & Security → Files & Folders). The request died inside the browser;
-the toast blamed his connection.
+See `.status_history/2026-08.md` for detailed history:
 
-**what shipped**: the fallback branch of `buildNetworkErrorMessage` — only
-reachable at exactly 0% progress, i.e. zero bytes acknowledged — now says
-`upload failed before sending — try re-selecting the file`. It states what
-we know (nothing was sent) and the one step that resolves the common causes
-(stale file handle after a re-export, cloud-placeholder file, denied
-network volume) without enumerating any of them. The mobile-large-file,
-interrupted (>0%), and 100% (server-side) branches are untouched, so
-genuine connectivity failures keep connectivity copy.
-
-**technical notes**: the diagnostic ladder that settled it — preflight
-without a POST means the browser never sent the body; `api.plyr.fm` is
-served directly by Fly (not Cloudflare), ruling out the same-day JAX colo
-fault; woody was authenticated and browsing normally in the same minutes,
-ruling out auth. one loose end worth its own issue: `xhr.timeout` is 300s
-while woody's successful August 24 upload ran 578s server-side — a browser
-that gives up at 300s toasts a timeout for an upload that then succeeds,
-the same "reads as failed but wasn't" family as the ~300MB wav report
-below.
-
-#### two field reports, zero plyr bugs (August 27 — no code change)
-
-**why**: two user reports arrived the same day and both initially read as
-plyr defects — a fresh upload that "seemed unlisted", and a track whose
-player showed `NaN:NaN` duration with no cover art. Both were run to
-ground; neither was ours, and the evidence is worth keeping.
-
-**what was found**:
-- *the "unlisted" upload*: a ~300MB wav took ~4 minutes between
-  `POST /tracks/` starting and the track row existing. During that window
-  the track is invisible everywhere, which reads as a failed upload to the
-  uploader and as "unlisted" to anyone checking. Verified end-state was
-  fully public: DB row, PDS record, API `unlisted: false`, first item in
-  the public feed. The confusion is the same family as #1932/#1934 —
-  long processing windows with thin feedback — but on the *transfer*
-  side rather than transcode; worth checking what the upload toast shows
-  during the finalize window before filing anything new.
-- *the `NaN:NaN` player*: one listener's media requests were 100% 5xx
-  while everyone else was fine — because every 5xx on `audio.plyr.fm` /
-  `images.plyr.fm` came from exactly one Cloudflare colo (JAX,
-  Jacksonville FL): 63/63 requests 500/502 with `cf-cache-status: BYPASS`
-  since ~17:00Z, zero 5xx from any other colo, while other colos served
-  the same objects as cache HITs. Cloudflare's status page showed no
-  incident, no JAX maintenance, component "operational" — a reminder that
-  single-PoP faults go unacknowledged and the zone's own GraphQL
-  analytics (`httpRequestsAdaptiveGroups` grouped by `coloCode`) are the
-  real instrument. Diagnostic anchor if it recurs: a user's `cf-ray`
-  suffix names the colo.
-
-**technical notes**: the failure split is diagnostic by itself —
-`api.plyr.fm` (Fly) worked while both R2 custom domains (Cloudflare)
-failed, so pages rendered with dead media. "Works for us, fails for one
-user across all their browsers" pointed at their machine until the
-devtools screenshot showed the 500 was *server: cloudflare*; the colo
-dimension settled it in one query.
-
-#### supporter gating learns attested.network payments (#1936, #1938, #1939, August 25–26 — prod `2026.0826.054059`)
-
-**why**: supporter-gated content only recognized atprotofans, a near-dormant
-service (~1 supporter record/month network-wide). [atmosphere.money](https://atmosphere.money)
-(ATM) is a live payments broker implementing the attested.network spec —
-861+ payer records across ~69 DIDs — and after the first call with Joe
-(8/25) the integration boundary is settled: ATM's hosted checkout owns the
-payer OAuth relationship and writes the payer record; plyr reads and
-respects attestations, writes no payment records, and holds no
-payments-scoped credential. position: `docs/internal/research/2026-08-25-plyr-atm-position.md`;
-plan: `docs/internal/research/2026-08-26-atm-integration-plan.md`; design #1871, stance #1722.
-
-**what shipped**: `validate_supporter` moved to a neutral choke point
-(`backend/_internal/supporters.py`) that owns the per-pair redis cache and
-checks, in order: attested.network payment attestations, then atprotofans.
-The attested branch reads `network.attested.payment.{oneTime,recurring}`
-from the viewer's own PDS, filters `subject` = artist DID, and accepts a
-record only when its signatures strongRef resolves to a
-`network.attested.payment.proof` at the same rkey in a trusted broker's
-repo (settings allowlist, seeded with broker.atmosphere.money) whose actual
-CID matches the strongRef and whose status is "verified". The whole chain is
-bounded by a 10s deadline so a slow PDS can't hang a play. Cross-app
-support — e.g. a Supper subscription — now unlocks supporter-gated
-streams/downloads in plyr with zero ATM registration.
-
-**technical notes**:
-- verified against live records: broker proofs do **not** pin the payer
-  record's current content (0/7 sampled proofs match any recomputable CID of
-  the record), so mutable payer fields — including `subject` — are taken on
-  the payer's word; forging support still requires one real broker-verified
-  payment to someone. flagged as a question for ATM.
-- probing found `network.attested.payment.lookup?payer&recipient` is
-  **public and unauthenticated** on both ATM hosts and returns full payment
-  objects from ATM's canonical view — a candidate simpler verification
-  branch once its record-policy semantics and stability are confirmed.
-  `checkout.atmosphere.money` hosts the rest of the surface
-  (`getPayoutStatus`, `requestRecipientApproval`, `listSubscriptions`,
-  checkout procedures); the appview implements almost nothing.
-- private-record-policy payments never appear in repo reads — correct per
-  spec, not a gap. recurring records have no liveness check until ATM
-  events exist (phase 1+).
-
-**next**: Joe allowlists plyr's DID (~end of week; breaking API changes
-expected first), then phase 1 of the plan — app registration, webhook
-receiver with delivery-id dedupe, service-auth XRPC client.
-
-#### a processing track looks processing before you press play (#1934, August 24 — prod, frontend-only promote)
-
-**why**: an AIFF (or recorder webm/ogg) upload publishes immediately on an
-interim raw rendition that Chrome and Firefox can't decode; until the deferred
-optimize task swaps in the mp3 — 4m40s and 4m52s for the two uploads that
-prompted this — the only signal was a toast *after* the click. Woody hit it
-within minutes of uploading.
-
-**what shipped**: track rows, cards and the track page now derive
-`isAwaitingPlayableRendition(track)` up front (server `is_optimizing` &&
-`!canPlayFormat`) — artwork and title dim, a clock badge sits in the artwork
-corner where the gated lock goes, "· processing" replaces "· lossless" in the
-row meta (the interim is lossless on paper but unplayable here), and the play
-control is inert. The click-time toast stays as the fallback for queued and
-auto-advanced tracks. No polling: the state flips on the next payload refresh.
-Safari plays AIFF natively, so it sees the track live while Chrome sees it
-greyed — a faithful reflection of what would happen on click.
-
-**follow-ups filed**: #1932 — the "new track" DM fires on create, before a
-playable rendition exists for these uploads; #1933 — of the ~4.5 min, ~90s is
-just streaming the source from R2 to the api machine's disk before ffmpeg runs.
-
-**also**: a draft PR to mu.social (eurosky-social/eurosky-social-app#199)
-extends its existing `plyr_track` embed to `plyr_album` and `plyr_playlist`,
-so album and playlist links render inline players there. nate will ping mu
-about review; the 380px height matches plyr's own oEmbed answer for
-collections.
-
----
+- **an upload that fails before sending stops blaming the internet** (#1943)
+  — woody's third field report ran to macOS denying the browser a NAS-hosted
+  .aiff (`net::ERR_ACCESS_DENIED`); the 0%-instant branch got honest copy.
+- **two field reports, zero plyr bugs** (August 27) — a ~300MB wav's transfer
+  window read as a failed upload; a dead player traced to Cloudflare's JAX
+  colo serving 100% 5xx on the R2 media domains while the status page said
+  nothing.
+- **supporter gating learns attested.network payments** (#1936, #1938, #1939)
+  — position doc, integration plan, and phase 0: a neutral `validate_supporter`
+  choke point verifying attested.network payer records against trusted-broker
+  proofs ahead of the atprotofans branch. ATM's checkout owns the payer OAuth;
+  plyr reads and never holds a payments-write credential.
+- **a processing track looks processing before you press play** (#1934) —
+  the interim-rendition state on rows, cards and the track page; the delay
+  itself became #1932 (notification timing) and #1933 (the 90s R2→disk stream).
 
 #### plyr never stores membership — access is the space credential (#1930, August 23)
 
@@ -548,7 +424,9 @@ See `.status_history/` for detailed history, one file per month: `2026-07.md`,
 
 ### current focus
 
-**records are moving into the client's hands — but phase 0 was reverted** (plan `docs/plans/2026-08-31-client-side-writes.md`; #1948–#1950 shipped in prod `2026.0901.065150`, reverted September 1): the phase 0 browser OAuth session added a second authorization screen at sign-in because the frontend became a second OAuth client with its own consent. the direction stands — the file an artist uploads goes in their PDS as-is, plyr indexes/mirrors/serves, and the backend stops authoring records on anyone's behalf — but the next attempt must fit inside the single existing login, with scope growing only when a feature that needs it is used. **next**: redesign how the browser gets a repo-write capability without a second flow, then phase 1 (likes).
+**the player and the track page are in a taste pass** (#1958–#1980, September 1–2 — prod): ±skip buttons and lock-screen seek handlers behind the per-user `skip-buttons` flag (nate's DID on prod and staging), with the step following track length through one ladder in `lib/skip-step.ts`; the passing-comment bubble became an ephemeral stack placed in the measured free band around its row — under it on phones, beside the icon on desktop, docked only when the icon is hidden — with the icon taking one breath as the bubble emerges. the rule that came out of it: judge an icon as a drawing at both the largest and the shipped size, in its row, and measure placement from the DOM rather than naming regions. nate's standing instruction for this kind of iteration: promote to prod after the staging check without asking. **next**: his phone verdict on the flagged skips (the lock-screen trade — iOS shows ±15 in place of ⏮/⏭ — and whether skip handlers with `seekto` scrub); GA or keep flagged; the drawn-iconography idea (people draw plyr's icons, doodl-style, with published icon collections and an explore page) is parked as "soon, not now".
+
+**records are moving into the client's hands — parked until the sign-in design is redone** (plan `docs/plans/2026-08-31-client-side-writes.md`; #1948–#1950 shipped in prod `2026.0901.065150`, reverted September 1 in #1952): phase 0 made the frontend a second OAuth client and chained its consent after the cookie login, so every sign-in showed two authorization screens. the direction stands — the file an artist uploads goes in their PDS as-is, plyr indexes/mirrors/serves, and the backend stops authoring records on anyone's behalf — but the next attempt must fit inside the single existing login, with scope growing only when a feature that needs it is used. **next**: redesign how the browser gets a repo-write capability without a second flow, then phase 1 (likes).
 
 **supporter standing is becoming a network fact, not a vendor's answer** (#1936, #1938, #1939, August 25–26 — prod `2026.0826.054059`): supporter gating recognized only atprotofans, which sees roughly one supporter record a month network-wide. attested.network — the spec ATM implements, with 861+ payer records across ~69 DIDs — is where the payments actually are, and phase 0 now reads them: `validate_supporter` sits at a neutral choke point (`_internal/supporters.py`) that owns the per-pair redis cache and tries attestations before atprotofans. The boundary with ATM is settled and deliberately lopsided — their hosted checkout owns the payer's OAuth relationship and writes the payer record; plyr only reads, and holds no payments-scoped credential of its own. **next in this arc**: Joe allowlists plyr's DID (~end of the week, after breaking API changes), then phase 1 — app registration, a webhook receiver with delivery-id dedupe, and a service-auth XRPC client. Two questions go with it: broker proofs don't pin the payer record's current content, so `subject` is the payer's word; and `payment.lookup` is public and unauthenticated, which may make the whole repo-walk unnecessary.
 
@@ -613,6 +491,7 @@ See `.status_history/` for detailed history, one file per month: `2026-07.md`,
 - **no per-actor authentication**: the moderation service trusts one shared `MODERATION_AUTH_TOKEN`, so the event log's `actor` is a claim rather than a verified identity. This is the gate on letting an agent *act* rather than propose, and on review genuinely not always being one person.
 - **the DMCA surface is incomplete** ([#1715](https://github.com/zzstoatzz/plyr.fm/issues/1715)): the agent is registered and reachable at `dmca@plyr.fm`, but the site does not publish the notice requirements or a counter-notice procedure, and there is no repeat-infringer counter — takedowns are recorded per track in `moderation_events`, never aggregated per uploader. The published-agent half is additionally blocked on a non-residential address.
 - `/costs` shows Cloudflare at $0 — upstream gap: CF line items aren't yet tagged `project=="plyr.fm"` in my-prefect-server, so the live feed can't attribute them (#1599).
+- **skip handlers together with `seekto` have never been on a physical iPhone** (#1958, September 1): the `skip-buttons` flag registers `seekbackward`/`seekforward` next to the existing `seekto`, a combination none of the #1860–#1869 recipes tried. iOS shows ±15 in place of ⏮/⏭ once the skip handlers exist; whether the lock-screen scrubber behaves differently with both is nate's phone to answer.
 - **the iOS lock-screen scrubber cannot be dragged in the real app** ([#1870](https://github.com/zzstoatzz/plyr.fm/issues/1870)): metadata, times, and ⏮/⏭ all work; the scrubber never grabs on a physical iPhone under any of five media-session recipes, while SoundCloud's web player scrubs in the same Safari. the deciding experiment — a minimal page on a physical phone, or Web Inspector attached to the device — has not run yet; the code is deliberately parked at the #1860 state.
 - iOS PWA audio may hang on first play after backgrounding
 - audio may persist after closing bluesky in-app browser on iOS ([#779](https://github.com/zzstoatzz/plyr.fm/issues/779)) - user reported audio and lock screen controls continue after dismissing SFSafariViewController. expo-web-browser has a [known fix](https://github.com/expo/expo/issues/22406) that calls `dismissBrowser()` on close, and bluesky uses a version with the fix, but it didn't help in this case. we [opened an upstream issue](https://github.com/expo/expo/issues/42454) then closed it as duplicate after finding prior art. root cause unclear - may be iOS version specific or edge case timing issue.
@@ -758,4 +637,4 @@ see the [contributing guide](https://docs.plyr.fm/contributing/) for setup instr
 
 ---
 
-this is a living document. last updated 2026-09-02 (**passing comments became a stack that reads the page**. #1968–#1974 replace the single docked bubble with a capped ephemeral stack placed in the measured free band around its row, off fixed chrome; three of the seven PRs corrected the one before, each caught by replaying the same burst on staging. promoted frontend-only the same day.) previously 2026-09-02 (**skip buttons behind a flag, and a comment bubble that stays visible**. #1958–#1966 add ±15 s skips and lock-screen seek handlers for users with `skip-buttons`, with the step following track length through one ladder; the glyph took four passes and left a rule — judge an icon as a drawing at both the largest and the shipped size, in its row. #1962 docks the passing-comment bubble above the player when the trigger has no room. #1956's release-script fix ran clean on the first full release after it, so that known issue is retired.) previously 2026-09-01 (**the upload form looks at the file**. #1954 mounts a preview card under the file input — format, size, duration, a waveform under a measured decode budget (~100 MB transient per audio minute in chromium), playback — all from the local file. it also started the transfer on selection, which #1957 withdrew the same evening: a wrong pick sat in staging for a day, and plyr should hold nothing until submit. `/record` shares the card. #1953 makes the notification bot re-login when Bluesky revokes its session, after two uploads went un-notified. both in prod as `2026.0901.203801`; two known issues recorded: transient DM failures have no retry path, and `just release` trips on the ambiguous `production-fe` checkout.) previously 2026-09-01 (**client-writes phase 0 reverted**. nate signed in and was shown two authorization screens: #1948 had made the frontend a second OAuth client and chained its consent after the cookie login. reverted #1948–#1950 the same day; the direction stays, the sign-in design does not — one login flow, scope upgrades only on feature use.) previously 2026-09-01 (**uploads became resumable sessions and the browser got its own atproto session**. release `2026.0901.065150` carries two arcs: #1947 replaces the single five-minute `POST /tracks/` with a resumable multipart session — 10 MiB parts, stall-based timeouts, worker-side settle — retiring the false-timeout known issue woody's 579s upload exposed; and #1948–#1950 ship phase 0 of the client-side-writes plan — the frontend is a public OAuth client whose session lives in the browser, chained once at sign-in, with `POST /ingest/record` as the verified read-after-write bridge to the jetstream ingest functions. both smoke-verified on prod through the real UI. the CF Pages lesson is recorded: a deployment can be "Active" with a failed Functions step and no worker, and wrangler 3.x cannot parse import attributes — `ssr.noExternal` keeps `@atproto/api` bundled.) previously 2026-08-27 (**an upload that fails before sending stops blaming the internet**. woody's third field report in a week ran to a client-side cause with server-side evidence: four attempts each left a CORS preflight and no POST in Logfire, and his console's `net::ERR_ACCESS_DENIED` named macOS denying the browser read access to a NAS-hosted .aiff. #1943 gives the 0%-instant failure branch honest copy — `upload failed before sending — try re-selecting the file` — shipped to prod as a frontend-only promote and verified in the live chunk graph. one loose end recorded in known issues: the upload XHR's 300s timeout is shorter than real successful uploads.) previously 2026-08-27 (**two field reports, zero plyr bugs**. a ~300MB wav's multi-minute transfer window read as a failed/unlisted upload — end-state verified fully public, no defect; and one listener's dead player traced to Cloudflare's JAX colo serving 100% 5xx on the R2 media domains while every other colo was healthy and the status page said nothing — recorded as a known issue with the ray ID and the colo-scoped analytics recipe. two backlog items captured from the same conversations: text-forward audio UX and community-contributed audio for text posts.) previously 2026-08-26 (**status maintenance for the August 23–26 window**. Archived the August 21–23 detail to `.status_history/2026-08.md` — the whole queue direct-manipulation arc (#1907–#1924), the metadata edit that deleted a track's audio from its PDS (#1904), and the private-media access-list build-out (#1876–#1905) — taking STATUS.md from 568 lines to ~445, and trimmed this trailer, whose older entries now live in the same archive file. Reordered the remaining August 23 entries so #1930 sits above the queue arc it postdates, and gave it its PR number. Rewrote current focus to lead with the arc that is actually live: supporter standing moving off atprotofans and onto attested.network attestations, with the ATM boundary settled and phase 1 waiting on an allowlist. Retired the downloads arc's 'next' item, since #1939 is exactly the entitlement swap it was waiting for. One new known issue recorded rather than left in a PR body: a broker proof does not pin the payer record it signs, so `subject` is the payer's word. Recorded the podcast recap for August 23–26.) previously 2026-08-26 (**supporter gating learns attested.network payments**. the plyr × ATM arc went from first call to production in two days: position doc #1936 and integration plan #1938 settle the boundary — ATM's checkout owns the payer OAuth and writes the payer record, plyr reads/respects and never holds a payments-write credential — and #1939 ships phase 0, a neutral `validate_supporter` choke point that verifies attested.network payer records against trusted-broker proofs ahead of the atprotofans branch, released as `2026.0826.054059`. live-data spike found broker proofs don't pin payer-record content and that ATM's `payment.lookup` is public — both queued as questions for Joe ahead of the allowlist.) previously 2026-08-24 (**a processing track looks processing before you press play**. #1934 surfaces the interim-rendition state on rows, cards and the track page instead of only toasting on click, after woody's AIFF upload sat unplayable in Chrome for ~4.5 minutes; the delay itself is now two issues (#1932 notification timing, #1933 the 90s R2→disk stream). also opened eurosky-social/eurosky-social-app#199 so mu.social renders plyr album and playlist links as inline players.) previously 2026-08-23 (**status maintenance for the August 17–23 window**. Archived the August 14–22 detail to `.status_history/2026-08.md` — the private-media access-list arc, the first-click comment-timestamp seek, the iOS scrub unwind, the comments panel, and the download policy — taking STATUS.md from 719 lines to ~460, and trimmed this trailer, whose older entries now live in the same archive file. Rewrote current focus around the two arcs that are actually live: the queue as a direct-manipulation surface, and private media now that it has a member list rather than an owner. Corrected the queue entries' dates, which were a day or two ahead of the merges they describe. Two new known issues recorded rather than left in a PR body: the 66 production tracks whose PDS blobs the edit bug deleted, which nobody has decided how to repair, and the re-consent the revised permission set requires of existing sessions. Recorded the podcast recap for August 17–23.) previously 2026-08-21 (**the createSpace body drifted from the spaces-alpha lexicons**. zds moved to the alpha lexicons on August 20 and rejected plyr's pre-alpha `createSpace` body, failing every first private upload on pds.zat.dev; #1877 sends the alpha body and lets `listRepos`/`listRepoOps` page by cursor, #1878 deletes the now-dead pre-DPoP Bearer bridge from #1856. verified old-vs-new body directly against zds, the smoke script, and the live private-media integration in CI; no user impact since prod has zero private tracks. the architecture doc now names the branch-tip lexicons and Bulletin as the contract, and the entry records how plyr's proxying client compares to Bulletin's syncing service.) earlier entries are preserved in `.status_history/2026-08.md`.
+this is a living document. last updated 2026-09-02 (**status maintenance for the August 24 – September 2 window**. Archived the August 24–27 detail (#1943, the two field reports, the attested.network phase 0, #1934) to `.status_history/2026-08.md` and trimmed this trailer, whose older entries now live in the same archive file. Rewrote current focus to lead with what is actually live: the player and track-page taste pass (flagged skip buttons, the passing-comment stack, the drawn-iconography idea), with the client-writes direction parked until its sign-in design is redone. One known issue added: skip handlers together with `seekto` have never been on a physical iPhone.) previously 2026-09-02 (**passing comments became a stack that reads the page**. #1968–#1974 replace the single docked bubble with a capped ephemeral stack placed in the measured free band around its row, off fixed chrome; three of the seven PRs corrected the one before, each caught by replaying the same burst on staging. promoted frontend-only the same day.) previously 2026-09-02 (**skip buttons behind a flag, and a comment bubble that stays visible**. #1958–#1966 add ±15 s skips and lock-screen seek handlers for users with `skip-buttons`, with the step following track length through one ladder; the glyph took four passes and left a rule — judge an icon as a drawing at both the largest and the shipped size, in its row. #1962 docks the passing-comment bubble above the player when the trigger has no room. #1956's release-script fix ran clean on the first full release after it, so that known issue is retired.) previously 2026-09-01 (**the upload form looks at the file**. #1954 mounts a preview card under the file input — format, size, duration, a waveform under a measured decode budget (~100 MB transient per audio minute in chromium), playback — all from the local file. it also started the transfer on selection, which #1957 withdrew the same evening: a wrong pick sat in staging for a day, and plyr should hold nothing until submit. `/record` shares the card. #1953 makes the notification bot re-login when Bluesky revokes its session, after two uploads went un-notified. both in prod as `2026.0901.203801`; two known issues recorded: transient DM failures have no retry path, and `just release` trips on the ambiguous `production-fe` checkout.) previously 2026-09-01 (**client-writes phase 0 reverted**. nate signed in and was shown two authorization screens: #1948 had made the frontend a second OAuth client and chained its consent after the cookie login. reverted #1948–#1950 the same day; the direction stays, the sign-in design does not — one login flow, scope upgrades only on feature use.) previously 2026-09-01 (**uploads became resumable sessions and the browser got its own atproto session**. release `2026.0901.065150` carries two arcs: #1947 replaces the single five-minute `POST /tracks/` with a resumable multipart session — 10 MiB parts, stall-based timeouts, worker-side settle — retiring the false-timeout known issue woody's 579s upload exposed; and #1948–#1950 ship phase 0 of the client-side-writes plan — the frontend is a public OAuth client whose session lives in the browser, chained once at sign-in, with `POST /ingest/record` as the verified read-after-write bridge to the jetstream ingest functions. both smoke-verified on prod through the real UI. the CF Pages lesson is recorded: a deployment can be "Active" with a failed Functions step and no worker, and wrangler 3.x cannot parse import attributes — `ssr.noExternal` keeps `@atproto/api` bundled.) earlier entries are preserved in `.status_history/2026-08.md`.
