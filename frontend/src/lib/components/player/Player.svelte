@@ -22,9 +22,22 @@
 	import { loginHref } from '$lib/utils/auth-redirect';
 	import { SKIP_BUTTONS_FLAG } from '$lib/config';
 	import { skipStepSeconds } from '$lib/skip-step';
+
+	interface Props {
+		queueOpen?: boolean;
+		onToggleQueue?: () => void;
+	}
+
+	let { queueOpen = false, onToggleQueue }: Props = $props();
+
+	// the stage layout: spotify's three regions, behind the same per-user flag
+	// as the skip buttons while it is judged
+	const stage = $derived(auth.user?.enabled_flags?.includes(SKIP_BUTTONS_FLAG) ?? false);
 	import { auth } from '$lib/auth.svelte';
 	import TrackInfo from './TrackInfo.svelte';
 	import PlaybackControls from './PlaybackControls.svelte';
+	import VolumeControl from './VolumeControl.svelte';
+	import LikeToggle from '$lib/components/LikeToggle.svelte';
 	import type { Track } from '$lib/types';
 
 	// atprotofans base URL for supporter CTAs
@@ -912,14 +925,41 @@
 			</div>
 		{/if}
 
-		<div class="player-content">
+		<div class="player-content" class:stage>
 			<TrackInfo
 				track={nowPlayingTrack}
 				isOnTrackDetailPage={Boolean(isOnTrackDetailPage)}
 				radioMode={Boolean(player.radio)}
 				bind:this={trackInfoRef}
-			/>
-			<PlaybackControls radioMode={Boolean(player.radio)} />
+			>
+				{#snippet like()}
+					{#if stage && nowPlayingTrack && !player.radio && nowPlayingTrack.id}
+						<LikeToggle track={nowPlayingTrack} />
+					{/if}
+				{/snippet}
+			</TrackInfo>
+			<PlaybackControls radioMode={Boolean(player.radio)} stacked={stage} />
+			{#if stage}
+				<div class="stage-right">
+					{#if onToggleQueue}
+						<button
+							class="stage-btn"
+							class:active={queueOpen}
+							onclick={onToggleQueue}
+							aria-pressed={queueOpen}
+							aria-label="toggle queue (Q)"
+							title={queueOpen ? 'hide queue (Q)' : 'show queue (Q)'}
+						>
+							<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+								<line x1="3" y1="6" x2="21" y2="6"></line>
+								<line x1="3" y1="12" x2="21" y2="12"></line>
+								<line x1="3" y1="18" x2="21" y2="18"></line>
+							</svg>
+						</button>
+					{/if}
+					<VolumeControl />
+				</div>
+			{/if}
 		</div>
 	</div>
 {/if}
@@ -960,6 +1000,41 @@
 			grid-template-columns: minmax(160px, 360px) minmax(0, 1fr);
 			gap: 1rem;
 		}
+	}
+
+	/* the stage layout: track on the left, transport + scrubber centred, queue and
+	   volume on the right — spotify's footer, which is what the flag tries */
+	.player-content.stage {
+		grid-template-columns: minmax(180px, 30%) minmax(0, 1fr) minmax(180px, 30%);
+	}
+
+	.stage-right {
+		display: flex;
+		align-items: center;
+		justify-content: flex-end;
+		gap: 0.75rem;
+	}
+
+	.stage-btn {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		padding: 0.5rem;
+		background: transparent;
+		border: none;
+		border-radius: var(--radius-full);
+		color: var(--text-tertiary);
+		cursor: pointer;
+		transition: all 0.15s;
+	}
+
+	.stage-btn:hover,
+	.stage-btn.active {
+		color: var(--accent);
+	}
+
+	.stage-btn.active {
+		background: color-mix(in srgb, var(--accent) 10%, transparent);
 	}
 
 	.player.jam-active { --top-bar-color: linear-gradient(90deg, #ff6b6b, #ffd93d, #6bcb77, #4d96ff, #9b59b6, #ff6b6b); }
@@ -1016,6 +1091,15 @@
 			grid-template-columns: 48px 1fr auto auto auto auto auto auto;
 			grid-template-rows: auto auto;
 			gap: 0.5rem 0.75rem;
+		}
+
+		/* the phone keeps its two rows; the right cluster is desktop chrome */
+		.player-content.stage {
+			grid-template-columns: 48px 1fr auto auto auto auto auto auto;
+		}
+
+		.stage-right {
+			display: none;
 		}
 	}
 </style>

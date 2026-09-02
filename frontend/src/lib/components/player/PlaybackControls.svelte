@@ -7,8 +7,12 @@
 	import { SKIP_BUTTONS_FLAG } from '$lib/config';
 	import { skipStepSeconds } from '$lib/skip-step';
 
-	// radio mode: live stream — no prev/next or scrubbing, just play/pause + volume
-	let { radioMode = false }: { radioMode?: boolean } = $props();
+	import VolumeControl from './VolumeControl.svelte';
+
+	// radio mode: live stream — no prev/next or scrubbing, just play/pause + volume.
+	// stacked: the transport on one row and the scrubber on its own full-width
+	// row beneath it, with volume owned by the footer's right cluster
+	let { radioMode = false, stacked = false }: { radioMode?: boolean; stacked?: boolean } = $props();
 
 	const skipButtons = $derived(auth.user?.enabled_flags?.includes(SKIP_BUTTONS_FLAG) ?? false);
 	const skipStep = $derived(skipStepSeconds(player.duration));
@@ -23,12 +27,6 @@
 	let progressPercent = $derived.by(() => {
 		if (!player.duration || player.duration === 0) return 0;
 		return (seekValue / player.duration) * 100;
-	});
-
-	let volumeState = $derived.by(() => {
-		if (player.volume === 0) return 'muted';
-		if (player.volume >= 0.99) return 'max';
-		return 'normal';
 	});
 
 	function animateSeek() {
@@ -120,7 +118,24 @@
 	}
 </script>
 
-<div class="player-controls" class:radio-mode={radioMode}>
+<div class="player-controls" class:radio-mode={radioMode} class:stacked>
+	{#if stacked && !radioMode}
+		<button
+			class="control-btn shuffle"
+			class:active={queue.shuffle}
+			onclick={() => queue.toggleShuffle()}
+			title={queue.shuffle ? 'shuffle on' : 'shuffle'}
+			aria-pressed={queue.shuffle}
+		>
+			<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+				<polyline points="16 3 21 3 21 8"></polyline>
+				<line x1="4" y1="20" x2="21" y2="3"></line>
+				<polyline points="21 16 21 21 16 21"></polyline>
+				<line x1="15" y1="15" x2="21" y2="21"></line>
+				<line x1="4" y1="4" x2="9" y2="9"></line>
+			</svg>
+		</button>
+	{/if}
 	{#if radioMode}
 		<!-- live stream: a static ∞ marker holds play/pause in its normal slot
 		     instead of letting it jump left where the prev button used to be -->
@@ -243,38 +258,9 @@
 		<span class="live-pill">live</span>
 	{/if}
 
-	<div class="volume-control">
-		<div class="volume-icon" class:muted={volumeState === 'muted'}>
-			{#if volumeState === 'muted'}
-				<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-					<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
-					<line x1="23" y1="9" x2="17" y2="15"></line>
-					<line x1="17" y1="9" x2="23" y2="15"></line>
-				</svg>
-			{:else if volumeState === 'max'}
-				<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="max-volume">
-					<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
-					<path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
-					<path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path>
-				</svg>
-			{:else}
-				<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-					<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
-					<path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
-				</svg>
-			{/if}
-		</div>
-		<input
-			type="range"
-			class="volume-bar"
-			class:muted={volumeState === 'muted'}
-			class:max={volumeState === 'max'}
-			min="0"
-			max="1"
-			step="0.01"
-			bind:value={player.volume}
-		/>
-	</div>
+	{#if !stacked}
+		<VolumeControl />
+	{/if}
 </div>
 
 <style>
@@ -335,6 +321,26 @@
 		transform: scale(0.95);
 	}
 
+	/* stacked (the stage layout): the transport centred on one row, the scrubber
+	   on a full-width row beneath — spotify's footer, which is what the flag tries */
+	.player-controls.stacked {
+		flex-wrap: wrap;
+		justify-content: center;
+		row-gap: 0.25rem;
+		column-gap: 0.75rem;
+	}
+
+	.player-controls.stacked .time-control {
+		flex-basis: 100%;
+		max-width: 722px;
+		margin: 0 auto;
+	}
+
+	.control-btn.shuffle svg {
+		width: 18px;
+		height: 18px;
+	}
+
 	/* the step count lives inside the svg so it scales with the glyph; the button
 	   must pass the app font down — a <button> otherwise carries the UA font */
 	.control-btn.skip {
@@ -378,45 +384,8 @@
 		font-variant-numeric: tabular-nums;
 	}
 
-	.seek-bar,
-	.volume-bar {
+	.seek-bar {
 		flex: 1;
-	}
-
-	.volume-control {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		color: var(--text-tertiary);
-		min-width: 140px;
-		position: relative;
-	}
-
-	.volume-icon {
-		display: flex;
-		align-items: center;
-		transition: all 0.3s;
-	}
-
-	.volume-icon.muted {
-		color: var(--error);
-		animation: shake 0.5s ease-in-out;
-	}
-
-	.volume-icon .max-volume {
-		color: var(--accent);
-		animation: pulse 0.5s ease-in-out;
-	}
-
-	@keyframes shake {
-		0%, 100% { transform: translateX(0); }
-		25% { transform: translateX(-3px); }
-		75% { transform: translateX(3px); }
-	}
-
-	@keyframes pulse {
-		0%, 100% { transform: scale(1); }
-		50% { transform: scale(1.15); }
 	}
 
 	input[type="range"] {
@@ -456,15 +425,6 @@
 		box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 20%, transparent);
 	}
 
-	input[type="range"].muted::-webkit-slider-thumb {
-		background: var(--error);
-	}
-
-	input[type="range"].max::-webkit-slider-thumb {
-		background: var(--accent);
-		box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 30%, transparent);
-	}
-
 	input[type="range"]::-moz-range-track {
 		background: color-mix(in srgb, var(--accent) 20%, transparent);
 		height: 4px;
@@ -491,15 +451,6 @@
 		background: var(--accent-hover);
 		transform: scale(1.2);
 		box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 20%, transparent);
-	}
-
-	input[type="range"].muted::-moz-range-thumb {
-		background: var(--error);
-	}
-
-	input[type="range"].max::-moz-range-thumb {
-		background: var(--accent);
-		box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 30%, transparent);
 	}
 
 	@media (max-width: 768px) {
@@ -529,6 +480,10 @@
 			grid-column: 7;
 		}
 
+		.control-btn.shuffle {
+			display: none;
+		}
+
 		/* skips sit on the scrubber row, under the thumb, not in the transport row */
 		.control-btn.skip {
 			grid-row: 2;
@@ -548,7 +503,6 @@
 			width: 24px;
 			height: 24px;
 		}
-
 
 		.control-btn svg {
 			width: 28px;
@@ -586,8 +540,5 @@
 			min-width: 38px;
 		}
 
-		.volume-control {
-			display: none;
-		}
 	}
 </style>

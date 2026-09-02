@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { likes } from '$lib/likes.svelte';
 	import { likeTrack, unlikeTrack } from '$lib/tracks.svelte';
 	import { toast } from '$lib/toast.svelte';
 	import { API_URL } from '$lib/config';
@@ -112,6 +113,7 @@
 				liked = previousState;
 				toast.error('failed to update like');
 			} else {
+				likes.record(trackId, liked);
 				onLikeChange?.(liked);
 				if (liked) {
 					toast.success(`liked ${trackTitle}`);
