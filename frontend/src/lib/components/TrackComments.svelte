@@ -101,7 +101,8 @@
 		// probe where the stack will sit once inside the viewport, a little in
 		// from each end so a round button at the edge is not missed
 		const edge = emissionShift(left, right, window.innerWidth);
-		const obstacles = [right + edge - 8, right + edge - 24, left + edge + 8, left + edge + 24]
+		// just past each end too, so the margin holds against chrome the stack only grazes
+		const obstacles = [right + edge + 8, right + edge - 8, right + edge - 24, left + edge - 8, left + edge + 8, left + edge + 24]
 			.map((x) => obstacleAt(x, y))
 			.filter((o): o is EmissionObstacle => o !== null);
 		emissionShiftPx = emissionShift(left, right, window.innerWidth, obstacles);
@@ -161,11 +162,13 @@
 		let leftEdge = triggerAnchor.previousElementSibling?.getBoundingClientRect().right ?? 16;
 		const leftHit = obstacleAt(Math.max(leftEdge, self.left - 120), y);
 		if (leftHit && leftHit.right < self.left) leftEdge = Math.max(leftEdge, leftHit.right + 16);
+		// a trigger under the player cannot be seen, and neither can anything beside it
+		const hidden = self.bottom > playerTop;
 		return {
 			above: rect.top - Math.max(prevBottom, HEADER_CLEARANCE_PX),
 			below: Math.min(nextTop, playerTop) - rect.bottom,
-			right: rightEdge - self.right,
-			left: self.left - leftEdge
+			right: hidden ? 0 : rightEdge - self.right,
+			left: hidden ? 0 : self.left - leftEdge
 		};
 	}
 
