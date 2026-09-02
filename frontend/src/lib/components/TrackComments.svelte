@@ -9,7 +9,14 @@
 	import { toast } from '$lib/toast.svelte';
 	import type { Track } from '$lib/types';
 	import { fade, fly } from 'svelte/transition';
-	import { emissionPlacement, emissionShift, type EmissionPlacement } from '$lib/comment-emission';
+	import {
+		EMISSION_STACK_MAX,
+		EMISSION_TTL_MS,
+		emissionPlacement,
+		emissionShift,
+		type EmissionPlacement
+	} from '$lib/comment-emission';
+	import { flip } from 'svelte/animate';
 	import RichText from '$lib/components/RichText.svelte';
 	import SensitiveImage from '$lib/components/SensitiveImage.svelte';
 	import { redirectToLogin } from '$lib/utils/auth-redirect';
@@ -46,23 +53,35 @@
 		browser && window.matchMedia('(max-width: 768px)').matches;
 
 
-	// a comment bubble emanates from the trigger when playback crosses its
-	// timestamp (the soundcloud move). plain let: previous position must not
-	// retrigger the effect.
-	let emission = $state<Comment | null>(null);
+	// comment bubbles emanate from the trigger when playback crosses their
+	// timestamps (the soundcloud move): an ephemeral stack, newest nearest the
+	// trigger, each living its own few seconds, capped so a burst stays legible.
+	// plain let for the playback cursor: previous position must not retrigger.
+	let emissions = $state<Comment[]>([]);
 	let emissionPlace = $state<EmissionPlacement>('below');
 	let emissionShiftPx = $state(0);
-	let emissionEl = $state<HTMLButtonElement | null>(null);
-	let emissionTimer: ReturnType<typeof setTimeout> | null = null;
+	let emissionsEl = $state<HTMLDivElement | null>(null);
+	const emissionTimers = new Map<number, ReturnType<typeof setTimeout>>();
 	let prevPlaybackMs = -1;
 	let triggerAnchor = $state<HTMLSpanElement | null>(null);
 
-	// once the bubble has a size, keep it inside the viewport horizontally
+	// once the stack has a size, keep it inside the viewport horizontally
 	$effect(() => {
-		if (!emissionEl || emissionPlace === 'docked') return;
-		const rect = emissionEl.getBoundingClientRect();
+		if (!emissionsEl || emissionPlace === 'docked' || emissions.length === 0) return;
+		const rect = emissionsEl.getBoundingClientRect();
 		emissionShiftPx = emissionShift(rect.left + rect.width / 2, rect.width, window.innerWidth);
 	});
+
+	function dismissEmission(id: number) {
+		const timer = emissionTimers.get(id);
+		if (timer) clearTimeout(timer);
+		emissionTimers.delete(id);
+		emissions = emissions.filter((c) => c.id !== id);
+	}
+
+	function clearEmissions() {
+		for (const id of [...emissionTimers.keys()]) dismissEmission(id);
+	}
 
 	function playerHeightPx(): number {
 		const raw = window.getComputedStyle(document.documentElement).getPropertyValue('--player-height');
@@ -71,17 +90,26 @@
 	}
 
 	function showEmission(comment: Comment) {
-		if (emissionTimer) clearTimeout(emissionTimer);
-		const anchor = triggerAnchor?.getBoundingClientRect();
-		emissionPlace = emissionPlacement(
-			anchor?.top ?? 0,
-			anchor?.bottom ?? 0,
-			window.innerHeight,
-			playerHeightPx()
+		if (emissions.length === 0) {
+			const anchor = triggerAnchor?.getBoundingClientRect();
+			emissionPlace = emissionPlacement(
+				anchor?.top ?? 0,
+				anchor?.bottom ?? 0,
+				window.innerHeight,
+				playerHeightPx()
+			);
+			emissionShiftPx = 0;
+		}
+		const existing = emissionTimers.get(comment.id);
+		if (existing) clearTimeout(existing);
+		else {
+			emissions = [comment, ...emissions];
+			for (const stale of emissions.slice(EMISSION_STACK_MAX)) dismissEmission(stale.id);
+		}
+		emissionTimers.set(
+			comment.id,
+			setTimeout(() => dismissEmission(comment.id), EMISSION_TTL_MS)
 		);
-		emissionShiftPx = 0;
-		emission = comment;
-		emissionTimer = setTimeout(() => (emission = null), 4000);
 	}
 
 	$effect(() => {
@@ -96,10 +124,10 @@
 		// first tick after play/seek, or a jump: don't spray missed comments
 		if (fromMs < 0 || nowMs <= fromMs || nowMs - fromMs > 3000) return;
 		// untimed comments default to 0:00 — those aren't "at" a moment
-		const hit = comments.find(
+		for (const hit of comments.filter(
 			(c) => c.timestamp_ms > 0 && c.timestamp_ms > fromMs && c.timestamp_ms <= nowMs
-		);
-		if (hit) showEmission(hit);
+		))
+			showEmission(hit);
 	});
 
 	// reload + reset when the track *id* changes. keyed on the value, not the
@@ -296,25 +324,33 @@
      row; the full section opens as a bottom sheet on every viewport -->
 {#if commentsEnabled !== false}
 	<span class="comments-trigger-anchor" bind:this={triggerAnchor}>
-	{#if emission}
-		<button
-			class="comment-emission {emissionPlace}"
+	{#if emissions.length > 0}
+		<div
+			class="comment-emissions {emissionPlace}"
 			style:--shift="{emissionShiftPx}px"
-			bind:this={emissionEl}
-			transition:fly={{ y: emissionPlace === 'below' ? -8 : 8, duration: reduceMotionComments ? 0 : 300 }}
-			onclick={() => {
-				emission = null;
-				commentsOpen = true;
-			}}
-			aria-label={`comment at ${formatTimestamp(emission.timestamp_ms)} from @${emission.user_handle}: ${emission.text}`}
+			bind:this={emissionsEl}
 		>
 			{#if emissionPlace !== 'docked'}<span class="comment-emission-tail" aria-hidden="true"></span>{/if}
-			{#if emission.user_avatar_url}
-				<img src={emission.user_avatar_url} alt="" class="comment-emission-avatar" />
-			{/if}
-			<span class="comment-emission-at">{formatTimestamp(emission.timestamp_ms)}</span>
-			<span class="comment-emission-text">{emission.text}</span>
-		</button>
+			{#each emissions as passing (passing.id)}
+				<button
+					class="comment-emission"
+					in:fly={{ y: emissionPlace === 'below' ? -8 : 8, duration: reduceMotionComments ? 0 : 300 }}
+					out:fade={{ duration: reduceMotionComments ? 0 : 400 }}
+					animate:flip={{ duration: reduceMotionComments ? 0 : 250 }}
+					onclick={() => {
+						clearEmissions();
+						commentsOpen = true;
+					}}
+					aria-label={`comment at ${formatTimestamp(passing.timestamp_ms)} from @${passing.user_handle}: ${passing.text}`}
+				>
+					{#if passing.user_avatar_url}
+						<img src={passing.user_avatar_url} alt="" class="comment-emission-avatar" />
+					{/if}
+					<span class="comment-emission-at">{formatTimestamp(passing.timestamp_ms)}</span>
+					<span class="comment-emission-text">{passing.text}</span>
+				</button>
+			{/each}
+		</div>
 	{/if}
 	<button
 		class="comments-trigger"
@@ -478,11 +514,60 @@
 
 	/* the emission: a passing comment surfaces briefly in the open space
 	   below the utilities row — never over the stats line above */
-	.comment-emission {
+	/* the stack: positioned once, relative to the trigger (or the player when
+	   docked); newest bubble nearest the trigger */
+	.comment-emissions {
 		position: absolute;
 		top: calc(100% + 0.4rem);
 		left: 50%;
 		translate: calc(-50% + var(--shift, 0px)) 0;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 0.35rem;
+		z-index: 40;
+	}
+
+	/* points at the trigger it came from; docked stacks have no origin to point at.
+	   the tail stays under the trigger even when the stack has been shifted inward */
+	.comment-emission-tail {
+		position: absolute;
+		top: -5px;
+		left: calc(50% - var(--shift, 0px));
+		width: 9px;
+		height: 9px;
+		translate: -50% 0;
+		rotate: 45deg;
+		background: var(--glass-bg, var(--bg-secondary));
+		border-left: 1px solid var(--glass-border, var(--border-default));
+		border-top: 1px solid var(--glass-border, var(--border-default));
+		z-index: 1;
+	}
+
+	/* the band below the trigger belongs to the player: rise into the space above the row */
+	.comment-emissions.above {
+		top: auto;
+		bottom: calc(100% + 0.4rem);
+		flex-direction: column-reverse;
+	}
+
+	.comment-emissions.above .comment-emission-tail {
+		top: auto;
+		bottom: -5px;
+		rotate: 225deg;
+	}
+
+	/* neither band exists: sit at the player's edge, where the comments panel docks */
+	.comment-emissions.docked {
+		position: fixed;
+		top: auto;
+		bottom: calc(var(--player-height, 0px) + env(safe-area-inset-bottom, 0px) + 0.75rem);
+		left: 50%;
+		flex-direction: column-reverse;
+		z-index: 45;
+	}
+
+	.comment-emission {
 		display: flex;
 		align-items: center;
 		gap: 0.5rem;
@@ -500,43 +585,6 @@
 		font-family: inherit;
 		cursor: pointer;
 		white-space: nowrap;
-		z-index: 40;
-	}
-
-	/* points at the trigger it came from; docked bubbles have no origin to point at.
-	   the tail stays under the trigger even when the bubble has been shifted inward */
-	.comment-emission-tail {
-		position: absolute;
-		top: -5px;
-		left: calc(50% - var(--shift, 0px));
-		width: 9px;
-		height: 9px;
-		translate: -50% 0;
-		rotate: 45deg;
-		background: var(--glass-bg, var(--bg-secondary));
-		border-left: 1px solid var(--glass-border, var(--border-default));
-		border-top: 1px solid var(--glass-border, var(--border-default));
-	}
-
-	/* the band below the trigger belongs to the player: rise into the space above the row */
-	.comment-emission.above {
-		top: auto;
-		bottom: calc(100% + 0.4rem);
-	}
-
-	.comment-emission.above .comment-emission-tail {
-		top: auto;
-		bottom: -5px;
-		rotate: 225deg;
-	}
-
-	/* neither band exists: sit at the player's edge, where the comments panel docks */
-	.comment-emission.docked {
-		position: fixed;
-		top: auto;
-		bottom: calc(var(--player-height, 0px) + env(safe-area-inset-bottom, 0px) + 0.75rem);
-		left: 50%;
-		z-index: 45;
 	}
 
 	.comment-emission-avatar {
