@@ -484,6 +484,19 @@
 			display: none;
 		}
 
+		/* the stage bar on a phone is spotify's compact bar: art, title, heart, play.
+		   prev/next/repeat live in the queue and the now-playing view */
+		.player-controls.stacked .control-btn.prev,
+		.player-controls.stacked .control-btn.next,
+		.player-controls.stacked .control-btn.repeat {
+			display: none;
+		}
+
+		.player-controls.stacked .control-btn.play-pause {
+			grid-column: 4;
+			justify-self: end;
+		}
+
 		/* skips sit on the scrubber row, under the thumb, not in the transport row */
 		.control-btn.skip {
 			grid-row: 2;
