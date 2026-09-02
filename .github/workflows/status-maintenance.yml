@@ -284,6 +284,26 @@ jobs:
         id: prbranch
         run: echo "branch=$(git branch --show-current)" >> "$GITHUB_OUTPUT"
 
+      # the transcript is what a reviewer needs before merging (the audio only
+      # uploads after the merge), so put it in the PR body where it can be read
+      - name: Post transcript to the PR
+        if: startsWith(steps.prbranch.outputs.branch, 'status-maintenance-')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BRANCH: ${{ steps.prbranch.outputs.branch }}
+        run: |
+          if [ ! -f podcast_script.txt ]; then
+            echo "no podcast_script.txt, nothing to post"
+            exit 0
+          fi
+          BODY=$(gh pr view "$BRANCH" --json body --jq .body)
+          {
+            printf '%s\n\n<details>\n<summary>podcast transcript</summary>\n\n```\n' "$BODY"
+            cat podcast_script.txt
+            printf '\n```\n\n</details>\n'
+          } > pr-body.md
+          gh pr edit "$BRANCH" --body-file pr-body.md
+
       - name: Upload audio + transcript artifact
         uses: actions/upload-artifact@v4
         with:

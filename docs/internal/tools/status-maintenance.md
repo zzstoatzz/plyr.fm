@@ -8,8 +8,11 @@ automated workflow that archives old STATUS.md content and generates audio updat
 
 1. **archives old content**: moves previous month's sections from STATUS.md to `.status_history/YYYY-MM.md`
 2. **generates audio**: creates a podcast-style audio update covering recent work
-3. **opens PR**: commits changes and opens a PR for review
-4. **uploads audio**: after PR merge, uploads the audio to plyr.fm
+3. **opens PR**: commits changes and opens a PR for review, with the podcast
+   transcript in the PR body under a collapsible section so it can be read
+   before deciding to merge
+4. **uploads audio**: after PR merge, uploads the audio to plyr.fm (the
+   transcript becomes the track description)
 
 ## workflow file
 
