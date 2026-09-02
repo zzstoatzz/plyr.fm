@@ -65,7 +65,9 @@ connects to `plyr-dev` neon database, local Redis, and uses `fm.plyr.dev` atprot
 3. backend available at `https://api.plyr.fm`
 
 **frontend**:
-1. release script merges `main` → `production-fe` branch
+1. release script fast-forwards `production-fe` to `main` with a direct push
+   (`git push origin main:production-fe` — no local branch, no merge; the
+   push refuses a non-fast-forward the way `--ff-only` did)
 2. cloudflare pages production environment tracks `production-fe` branch
 3. uses production environment with `PUBLIC_API_URL=https://api.plyr.fm`
 4. available at `https://plyr.fm`
@@ -78,7 +80,8 @@ just release
 
 this will:
 1. create timestamped github tag (triggers backend deploy)
-2. merge main → production-fe (triggers frontend deploy)
+2. push main → production-fe (triggers frontend deploy)
+3. mirror `main` and the tags to tangled
 
 for a frontend-only diff, `just release` intentionally exits with “no backend
 changes since last release.” Use:

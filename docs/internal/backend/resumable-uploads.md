@@ -74,9 +74,19 @@ browser                                api                              R2 / wor
 
 `frontend/src/lib/upload-session.ts` is the transport: `startUploadSession`,
 `uploadParts` (3 in flight, a 60s *stall* timeout per part — measured from the last progress event, so a slow part is never cut off — plus a 15 min ceiling, 5 attempts with exponential
-backoff, progress = acknowledged bytes), `finishUploadSession`. it takes an
-injectable `send` so its tests exercise the retry and progress logic without a
-DOM. `uploader.svelte.ts` composes it with the unchanged SSE follow-up.
+backoff, progress = acknowledged bytes), `getUploadSession` (which parts the
+server holds, for resuming), `finishUploadSession`. it takes an injectable
+`send` so its tests exercise the retry and progress logic without a DOM.
+
+`frontend/src/lib/staged-transfer.svelte.ts` wraps the transport as observable
+state — `StagedTransfer` with `status`/`loaded`/`total`/`error`, `retry()`
+resuming from `received_parts`, `abort()` — and `uploader.svelte.ts` composes
+that with the unchanged SSE follow-up: `uploader.stage(file)` starts a
+transfer, `uploader.upload(staged | file, …)` waits for it and calls `finish`.
+the `/upload` page stages **at submit**, not at file selection: a chosen file
+is previewed from the local file (`AudioPreview.svelte`) and nothing leaves
+the browser until the user presses upload (#1957 withdrew transfer-on-select —
+a mistakenly chosen file must not sit in staging).
 
 `replaceAudio` (`PUT /tracks/{id}/audio`) still uses the single-request path.
 

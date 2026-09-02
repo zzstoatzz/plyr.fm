@@ -81,6 +81,12 @@ seeks backward 10 seconds in the current track.
 
 seeks forward 10 seconds in the current track.
 
+both arrows go through `queue.seekBy(seconds)`, which clamps to the track.
+the step is a fixed 10 s here; the player's on-screen skip buttons (behind
+the `skip-buttons` flag) use a different, duration-dependent step from
+`$lib/skip-step.ts` (5 / 10 / 15 s), on purpose — the keys are a power-user
+nudge, the buttons are the visible affordance sized to the track.
+
 ### J - previous track
 
 goes to the previous track in the queue. if more than 3 seconds into the current track, restarts it instead.

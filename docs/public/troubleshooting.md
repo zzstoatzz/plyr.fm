@@ -37,8 +37,9 @@ description: "common issues and solutions for plyr.fm"
 
 **solutions**:
 - check file size — uploads are limited (see `GET /config` for current limits)
-- supported formats: **MP3**, **WAV**, **M4A**. other formats will be rejected
-- ensure you have a stable connection — large files (especially WAV) upload via streaming and can fail on intermittent connections
+- supported formats: **MP3**, **WAV**, **M4A**, **FLAC**, **AIFF**. other formats will be rejected
+- picked the wrong file? just choose another — nothing is sent until you press upload
+- ensure you have a stable connection — large files (especially WAV) go up in parts, and a dropped part is retried; if the card under the file shows a failure, its **retry** picks up from the parts that already arrived
 - check the upload progress indicator in the portal for status
 
 ### track appears without audio

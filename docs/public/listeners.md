@@ -87,6 +87,7 @@ if there's no download icon, the artist has switched downloads off, or the audio
 | key | action |
 |-----|--------|
 | `space` | play / pause |
+| `←` / `→` | seek back / forward 10 seconds |
 | `j` | previous track |
 | `l` | next track |
 | `q` | toggle queue |

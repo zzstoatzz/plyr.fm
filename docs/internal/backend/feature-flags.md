@@ -31,16 +31,22 @@ each row represents one flag enabled for one user. the unique constraint prevent
 
 ## known flags
 
-flags are documented in `backend/_internal/feature_flags.py`:
+flags are documented in `backend/src/backend/_internal/feature_flags.py`:
 
 ```python
 KNOWN_FLAGS = frozenset({
-    "lossless-uploads",  # enable AIFF/FLAC upload support
-    "pds-audio-uploads",  # enable PDS audio blob uploads
+    "vibe-search",  # semantic vibe search in Cmd+K
+    "copyright-paradigm",  # the indiemusi.ch copyright paradigm UI + endpoints
+    "skip-buttons",  # ±skip buttons in the player + media-session seek handlers
 })
 ```
 
-add new flags to `KNOWN_FLAGS` for documentation purposes.
+`KNOWN_FLAGS` is documentation: `/auth/me` returns whatever rows the table
+holds, so a flag enabled before its name lands in the set still reaches the
+client. add new flags to `KNOWN_FLAGS` all the same.
+
+flag-gated UI is not general availability. the public docs describe only what
+every user gets; a flagged feature is described here and in `STATUS.md`.
 
 ## checking flags in code
 
@@ -50,12 +56,12 @@ add new flags to `KNOWN_FLAGS` for documentation purposes.
 from backend._internal import has_flag, get_user_flags
 
 # check a specific flag
-if await has_flag(db, user_did, "lossless-uploads"):
+if await has_flag(db, user_did, "skip-buttons"):
     # feature is enabled for this user
     pass
 
 # get all flags for a user
-flags = await get_user_flags(db, user_did)  # ["lossless-uploads", "pds-audio-uploads", ...]
+flags = await get_user_flags(db, user_did)  # ["skip-buttons", "vibe-search", ...]
 ```
 
 ### frontend
@@ -63,12 +69,11 @@ flags = await get_user_flags(db, user_did)  # ["lossless-uploads", "pds-audio-up
 flags are returned in the `/auth/me` response:
 
 ```typescript
-// $lib/state/auth.svelte.ts
-const auth = getAuth();
+// $lib/auth.svelte.ts holds the signed-in user; flag names live in $lib/config.ts
+import { auth } from '$lib/auth.svelte';
+import { SKIP_BUTTONS_FLAG } from '$lib/config';
 
-if (auth.user?.enabled_flags.includes("lossless-uploads")) {
-    // show lossless upload UI
-}
+const skipButtons = $derived(auth.user?.enabled_flags?.includes(SKIP_BUTTONS_FLAG) ?? false);
 ```
 
 ## api
@@ -82,7 +87,7 @@ returns the current user's enabled flags:
     "did": "did:plc:abc123",
     "handle": "alice.bsky.social",
     "linked_accounts": [...],
-    "enabled_flags": ["lossless-uploads"]
+    "enabled_flags": ["skip-buttons"]
 }
 ```
 
@@ -94,10 +99,10 @@ manage flags via the admin script (requires `DATABASE_URL`):
 cd backend
 
 # enable a flag for a user
-DATABASE_URL="..." uv run python ../scripts/feature_flag.py enable --user zzstoatzz.io --flag lossless-uploads
+DATABASE_URL="..." uv run python ../scripts/feature_flag.py enable --user zzstoatzz.io --flag skip-buttons
 
 # disable a flag
-DATABASE_URL="..." uv run python ../scripts/feature_flag.py disable --user zzstoatzz.io --flag lossless-uploads
+DATABASE_URL="..." uv run python ../scripts/feature_flag.py disable --user zzstoatzz.io --flag skip-buttons
 
 # list flags for a user
 DATABASE_URL="..." uv run python ../scripts/feature_flag.py list --user zzstoatzz.io
@@ -110,13 +115,16 @@ users can be specified by handle or DID.
 
 ## adding a new flag
 
-1. **add to KNOWN_FLAGS** in `backend/_internal/feature_flags.py`:
+1. **add to KNOWN_FLAGS** in `backend/src/backend/_internal/feature_flags.py`:
    ```python
    KNOWN_FLAGS = frozenset({
-       "lossless-uploads",
+       "vibe-search",
+       "copyright-paradigm",
+       "skip-buttons",
        "new-feature",  # description of what this enables
    })
    ```
+   and the matching `NEW_FEATURE_FLAG` constant in `frontend/src/lib/config.ts`.
 
 2. **check the flag** in backend code where the feature is gated:
    ```python
