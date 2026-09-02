@@ -532,13 +532,13 @@
 	   docked); newest bubble nearest the trigger */
 	.comment-emissions {
 		position: absolute;
-		top: calc(100% + 0.4rem);
+		top: calc(100% + 6px);
 		left: 50%;
 		translate: calc(-50% + var(--shift, 0px)) 0;
 		display: flex;
 		flex-direction: column;
 		align-items: center;
-		gap: 0.35rem;
+		gap: 4px;
 		z-index: 40;
 	}
 
@@ -561,7 +561,7 @@
 	/* the band below the trigger belongs to the player: rise into the space above the row */
 	.comment-emissions.above {
 		top: auto;
-		bottom: calc(100% + 0.4rem);
+		bottom: calc(100% + 6px);
 		flex-direction: column-reverse;
 	}
 

@@ -24,10 +24,12 @@ export interface EmissionLayout {
 	capacity: number;
 }
 
-/** gap between the trigger's row and the first bubble, in px. */
-export const EMISSION_GAP_PX = 8;
-/** one bubble's height plus the gap to the next, in px. */
-export const EMISSION_ROW_PX = 42;
+/** gap between the trigger's row and the first bubble, in px (the stack's css offset). */
+export const EMISSION_GAP_PX = 6;
+/** one bubble's rendered height, in px. */
+export const EMISSION_BUBBLE_PX = 36;
+/** gap between stacked bubbles, in px (the stack's css gap). */
+export const EMISSION_INNER_GAP_PX = 4;
 /** how many passing comments show at once; older ones leave early when a burst exceeds it. */
 export const EMISSION_STACK_MAX = 3;
 /** how long one bubble lives. */
@@ -35,9 +37,12 @@ export const EMISSION_TTL_MS = 4000;
 /** the page header's height; a bubble rising under it would be covered. */
 export const HEADER_CLEARANCE_PX = 64;
 
-/** bubbles that fit in a free band of `freePx`. */
+/** bubbles that fit in a free band of `freePx`: the first needs the row gap, each further one the inner gap. */
 export function emissionCapacity(freePx: number): number {
-	return Math.max(0, Math.min(EMISSION_STACK_MAX, Math.floor((freePx - EMISSION_GAP_PX) / EMISSION_ROW_PX)));
+	const first = EMISSION_GAP_PX + EMISSION_BUBBLE_PX;
+	if (freePx < first) return 0;
+	const more = Math.floor((freePx - first) / (EMISSION_BUBBLE_PX + EMISSION_INNER_GAP_PX));
+	return Math.min(EMISSION_STACK_MAX, 1 + more);
 }
 
 export function emissionLayout(bands: EmissionBands): EmissionLayout {
