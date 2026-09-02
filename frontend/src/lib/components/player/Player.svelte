@@ -33,6 +33,10 @@
 	// the stage layout: spotify's three regions, behind the same per-user flag
 	// as the skip buttons while it is judged
 	const stage = $derived(auth.user?.enabled_flags?.includes(SKIP_BUTTONS_FLAG) ?? false);
+
+	$effect(() => {
+		if (stage && auth.isAuthenticated) void likes.ensureLoaded();
+	});
 	import { auth } from '$lib/auth.svelte';
 	import TrackInfo from './TrackInfo.svelte';
 	import PlaybackControls from './PlaybackControls.svelte';
