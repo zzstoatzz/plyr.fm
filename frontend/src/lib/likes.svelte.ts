@@ -11,15 +11,45 @@
 
 import { auth } from './auth.svelte';
 import { toast } from './toast.svelte';
-import { likeTrack, unlikeTrack } from './tracks.svelte';
+import { fetchLikedTracks, likeTrack, unlikeTrack } from './tracks.svelte';
 import type { Track } from './types';
 
 class Likes {
 	#known = $state<Record<number, boolean>>({});
 	#pending = new Set<number>();
+	/** the viewer's liked ids, loaded once per session; null until then */
+	#liked = $state<Set<number> | null>(null);
+	#loading: Promise<void> | null = null;
+
+	/**
+	 * a track object cannot be trusted to carry the viewer's `is_liked` — the
+	 * queue's server sync hands back tracks without it — so the owner learns
+	 * the viewer's liked ids itself. cheap, once, and only when signed in.
+	 */
+	ensureLoaded(): Promise<void> {
+		if (!auth.isAuthenticated || this.#liked !== null) return Promise.resolve();
+		this.#loading ??= fetchLikedTracks()
+			.then((tracks) => {
+				this.#liked = new Set(tracks.map((t) => t.id));
+			})
+			.catch((e) => console.error('failed to load liked ids:', e))
+			.finally(() => {
+				this.#loading = null;
+			});
+		return this.#loading;
+	}
+
+	/** forget the loaded list (sign-out); the next `ensureLoaded` refetches */
+	reset(): void {
+		this.#liked = null;
+		this.#known = {};
+	}
 
 	isLiked(track: Pick<Track, 'id' | 'is_liked'>): boolean {
-		return this.#known[track.id] ?? track.is_liked === true;
+		const known = this.#known[track.id];
+		if (known !== undefined) return known;
+		if (this.#liked !== null) return this.#liked.has(track.id);
+		return track.is_liked === true;
 	}
 
 	/** a surface that toggled a like on its own (the menus) tells the owner the result. */
@@ -38,6 +68,10 @@ class Likes {
 		const next = !was;
 		this.#pending.add(track.id);
 		this.#known[track.id] = next;
+		if (this.#liked !== null) {
+			if (next) this.#liked.add(track.id);
+			else this.#liked.delete(track.id);
+		}
 		track.is_liked = next;
 		if (track.like_count !== undefined) track.like_count = Math.max(0, track.like_count + (next ? 1 : -1));
 		try {
