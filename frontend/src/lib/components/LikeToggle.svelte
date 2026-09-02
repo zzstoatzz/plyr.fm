@@ -15,6 +15,15 @@
 	});
 
 	const liked = $derived(likes.isLiked(track));
+
+	// a pop when a like lands; the key remounts the svg so it replays each time
+	let popKey = $state(0);
+	let previous: boolean | null = null;
+	$effect(() => {
+		const now = liked;
+		if (previous !== null && now && !previous) popKey += 1;
+		previous = now;
+	});
 </script>
 
 <button
@@ -26,7 +35,10 @@
 	aria-label={liked ? `unlike ${track.title}` : `like ${track.title}`}
 	title={liked ? 'unlike' : 'like'}
 >
+	{#key popKey}
 	<svg
+		class="heart"
+		class:pop={popKey > 0 && liked}
 		width={size}
 		height={size}
 		viewBox="0 0 24 24"
@@ -41,6 +53,7 @@
 			d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"
 		></path>
 	</svg>
+	{/key}
 </button>
 
 <style>
@@ -71,5 +84,36 @@
 
 	.like-toggle:active {
 		transform: scale(0.92);
+	}
+
+	.like-toggle:focus-visible {
+		outline: 2px solid var(--text-primary);
+		outline-offset: 2px;
+	}
+
+	.heart.pop {
+		animation: heart-pop 400ms cubic-bezier(0.175, 0.885, 0.32, 1.275);
+	}
+
+	@keyframes heart-pop {
+		0% {
+			transform: scale(0.7);
+		}
+		60% {
+			transform: scale(1.2);
+		}
+		100% {
+			transform: scale(1);
+		}
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.heart.pop {
+			animation: none;
+		}
+
+		.like-toggle:active {
+			transform: none;
+		}
 	}
 </style>
