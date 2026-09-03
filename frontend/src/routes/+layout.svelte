@@ -539,20 +539,6 @@
 </div>
 
 {#if !isEmbed}
-	<button
-		class="queue-toggle"
-		onclick={toggleQueue}
-		aria-pressed={showQueue}
-		aria-label="toggle queue (Q)"
-		title={showQueue ? 'hide queue (Q)' : 'show queue (Q)'}
-	>
-		<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-			<line x1="3" y1="6" x2="21" y2="6"></line>
-			<line x1="3" y1="12" x2="21" y2="12"></line>
-			<line x1="3" y1="18" x2="21" y2="18"></line>
-		</svg>
-	</button>
-
 	<Player queueOpen={showQueue} onToggleQueue={toggleQueue} />
 {/if}
 <Toast />
@@ -810,33 +796,7 @@
 		}
 	}
 
-	.queue-toggle {
-		position: fixed;
-		bottom: calc(var(--player-height, 0px) + 20px + env(safe-area-inset-bottom, 0px));
-		right: 20px;
-		width: 48px;
-		height: 48px;
-		border-radius: var(--radius-full);
-		background: var(--bg-secondary);
-		border: 1px solid var(--border-default);
-		color: var(--text-secondary);
-		cursor: pointer;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		transition: all 0.2s;
-		z-index: 60;
-		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-		transform: translate3d(0, var(--visual-viewport-offset, 0px), 0);
-		will-change: transform;
-	}
 
-	.queue-toggle:hover {
-		background: var(--bg-hover);
-		color: var(--accent);
-		border-color: var(--accent);
-		transform: translate3d(0, var(--visual-viewport-offset, 0px), 0) scale(1.05);
-	}
 
 	@media (max-width: 768px) {
 		.main-content.with-queue {
@@ -847,16 +807,7 @@
 			width: 100%;
 		}
 
-		.queue-toggle {
-			bottom: calc(var(--player-height, 0px) + 20px + env(safe-area-inset-bottom, 0px));
-		}
 
 	}
 
-	/* the footer carries its own queue button on desktop; the fab is the phone's */
-	@media (min-width: 769px) {
-		.queue-toggle {
-			display: none;
-		}
-	}
 </style>

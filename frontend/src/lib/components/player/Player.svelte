@@ -1104,9 +1104,17 @@
 			gap: 0.5rem 0.75rem;
 		}
 
-		/* the phone keeps its two rows; the right cluster is desktop chrome */
+		/* the phone keeps its two rows; the queue button ends the scrubber row,
+		   volume is desktop chrome */
 		.player-right {
-			display: none;
+			display: contents;
+		}
+
+		.queue-btn {
+			grid-row: 2;
+			grid-column: 8;
+			justify-self: end;
+			padding: 0.25rem;
 		}
 	}
 </style>
