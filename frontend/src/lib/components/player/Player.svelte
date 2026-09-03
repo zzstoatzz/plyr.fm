@@ -946,29 +946,33 @@
 					{/if}
 				{/snippet}
 			</TrackInfo>
-			<PlaybackControls radioMode={Boolean(player.radio)} />
+			<PlaybackControls radioMode={Boolean(player.radio)} trailing={onToggleQueue ? queueButton : undefined} />
 			<div class="player-right">
 				{#if onToggleQueue}
-					<button
-						class="queue-btn"
-						class:active={queueOpen}
-						onclick={onToggleQueue}
-						aria-pressed={queueOpen}
-						aria-label="toggle queue (Q)"
-						title={queueOpen ? 'hide queue (Q)' : 'show queue (Q)'}
-					>
-						<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-							<line x1="3" y1="6" x2="21" y2="6"></line>
-							<line x1="3" y1="12" x2="21" y2="12"></line>
-							<line x1="3" y1="18" x2="21" y2="18"></line>
-						</svg>
-					</button>
+					{@render queueButton()}
 				{/if}
 				<VolumeControl />
 			</div>
 		</div>
 	</div>
 {/if}
+
+{#snippet queueButton()}
+	<button
+		class="queue-btn"
+		class:active={queueOpen}
+		onclick={onToggleQueue}
+		aria-pressed={queueOpen}
+		aria-label="toggle queue (Q)"
+		title={queueOpen ? 'hide queue (Q)' : 'show queue (Q)'}
+	>
+		<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+			<line x1="3" y1="6" x2="21" y2="6"></line>
+			<line x1="3" y1="12" x2="21" y2="12"></line>
+			<line x1="3" y1="18" x2="21" y2="18"></line>
+		</svg>
+	</button>
+{/snippet}
 
 <style>
 	.player {
@@ -1104,17 +1108,10 @@
 			gap: 0.5rem 0.75rem;
 		}
 
-		/* the phone keeps its two rows; the queue button ends the scrubber row,
-		   volume is desktop chrome */
+		/* the phone keeps its two rows; the queue button rides the scrubber row
+		   via PlaybackControls, volume is desktop chrome */
 		.player-right {
-			display: contents;
-		}
-
-		.queue-btn {
-			grid-row: 2;
-			grid-column: 8;
-			justify-self: end;
-			padding: 0.25rem;
+			display: none;
 		}
 	}
 </style>

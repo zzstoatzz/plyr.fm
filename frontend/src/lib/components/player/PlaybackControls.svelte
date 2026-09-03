@@ -3,10 +3,17 @@
 	import { browser } from '$app/environment';
 	import { player } from '$lib/player.svelte';
 	import { queue } from '$lib/queue.svelte';
+	import type { Snippet } from 'svelte';
 	import { skipStepSeconds } from '$lib/skip-step';
 
-	// radio mode: live stream — no prev/next, skips or scrubbing, just play/pause
-	let { radioMode = false }: { radioMode?: boolean } = $props();
+	interface Props {
+		/** radio mode: live stream — no prev/next, skips or scrubbing, just play/pause */
+		radioMode?: boolean;
+		/** the footer's queue button; the phone's scrubber row ends with it */
+		trailing?: Snippet;
+	}
+
+	let { radioMode = false, trailing }: Props = $props();
 
 	const skipStep = $derived(skipStepSeconds(player.duration));
 
@@ -143,20 +150,7 @@
 	{/if}
 
 	{#if !radioMode}
-		<button
-			class="control-btn skip skip-back"
-			onclick={() => queue.seekBy(-skipStep)}
-			title="back {skipStep} seconds"
-			aria-label="back {skipStep} seconds"
-		>
-			<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-				<g>
-					<path stroke-linecap="butt" d="M9.22 4.99A8.2 8.2 0 1 1 4.40 15.77" />
-					<path fill="currentColor" stroke-width="0.6" d="M9.99 7.20L4.67 6.99L8.07 2.89Z" />
-				</g>
-				<text x="12" y="15.72" text-anchor="middle" font-size="8.4" font-weight="700" font-family="inherit" letter-spacing="-0.02em" fill="currentColor" stroke="none">{skipStep}</text>
-			</svg>
-		</button>
+		{@render skip('back', 'in-transport')}
 	{/if}
 
 	<button
@@ -176,20 +170,7 @@
 	</button>
 
 	{#if !radioMode}
-		<button
-			class="control-btn skip skip-forward"
-			onclick={() => queue.seekBy(skipStep)}
-			title="forward {skipStep} seconds"
-			aria-label="forward {skipStep} seconds"
-		>
-			<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-				<g transform="translate(24 0) scale(-1 1)">
-					<path stroke-linecap="butt" d="M9.22 4.99A8.2 8.2 0 1 1 4.40 15.77" />
-					<path fill="currentColor" stroke-width="0.6" d="M9.99 7.20L4.67 6.99L8.07 2.89Z" />
-				</g>
-				<text x="12" y="15.72" text-anchor="middle" font-size="8.4" font-weight="700" font-family="inherit" letter-spacing="-0.02em" fill="currentColor" stroke="none">{skipStep}</text>
-			</svg>
-		</button>
+		{@render skip('forward', 'in-transport')}
 	{/if}
 
 	{#if !radioMode}
@@ -223,6 +204,7 @@
 
 	{#if !radioMode}
 		<div class="time-control">
+			{@render skip('back', 'in-scrub')}
 			<span class="time">{formattedCurrentTime}</span>
 			<input
 				type="range"
@@ -242,11 +224,40 @@
 				style="--progress: {progressPercent}%"
 			/>
 			<span class="time">{formattedDuration}</span>
+			{@render skip('forward', 'in-scrub')}
+			{#if trailing}
+				<div class="scrub-trailing">{@render trailing()}</div>
+			{/if}
 		</div>
 	{:else}
-		<span class="live-pill">live</span>
+		<div class="live-row">
+			<span class="live-pill">live</span>
+			{#if trailing}
+				<div class="scrub-trailing">{@render trailing()}</div>
+			{/if}
+		</div>
 	{/if}
 </div>
+
+{#snippet skip(direction: 'back' | 'forward', place: 'in-transport' | 'in-scrub')}
+	{@const forward = direction === 'forward'}
+	<button
+		class="control-btn skip {place}"
+		class:skip-back={!forward}
+		class:skip-forward={forward}
+		onclick={() => queue.seekBy(forward ? skipStep : -skipStep)}
+		title="{direction} {skipStep} seconds"
+		aria-label="{direction} {skipStep} seconds"
+	>
+		<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+			<g transform={forward ? 'translate(24 0) scale(-1 1)' : undefined}>
+				<path stroke-linecap="butt" d="M9.22 4.99A8.2 8.2 0 1 1 4.40 15.77" />
+				<path fill="currentColor" stroke-width="0.6" d="M9.99 7.20L4.67 6.99L8.07 2.89Z" />
+			</g>
+			<text x="12" y="15.72" text-anchor="middle" font-size="8.4" font-weight="700" font-family="inherit" letter-spacing="-0.02em" fill="currentColor" stroke="none">{skipStep}</text>
+		</svg>
+	</button>
+{/snippet}
 
 <style>
 	.player-controls {
@@ -260,6 +271,12 @@
 	}
 
 	/* radio: "live" takes the scrubber's place under play/pause */
+	.live-row {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+	}
+
 	.live-pill {
 		font-size: var(--text-xs);
 		font-weight: 600;
@@ -267,6 +284,13 @@
 		text-transform: uppercase;
 		color: var(--accent);
 		text-align: center;
+	}
+
+	/* the skips render twice — in the transport for desktop, in the scrubber row
+	   for phones — and each breakpoint shows one; the queue button likewise */
+	.skip.in-scrub,
+	.scrub-trailing {
+		display: none;
 	}
 
 	/* the transport is one centred row that never wraps; the scrubber sits on its
@@ -423,6 +447,7 @@
 	   accent under the pointer, a 20px hit area around the 4px track */
 	.seek-bar {
 		flex: 1;
+		min-width: 0;
 		-webkit-appearance: none;
 		appearance: none;
 		background: transparent;
@@ -501,9 +526,9 @@
 		opacity: 1;
 	}
 
-	/* the phone bar: art, title, heart, play, next on the first row; skips flank
-	   the scrubber on the second with the queue button at its end. prev, repeat
-	   and shuffle live in the queue */
+	/* the phone bar: art, title, heart, play, next on the first row; the second
+	   row is its own flex row — skip-back, times and scrubber, skip-forward, queue.
+	   prev, repeat and shuffle live in the queue */
 	@media (max-width: 768px) {
 		.player-controls,
 		.transport {
@@ -517,7 +542,8 @@
 
 		.control-btn.prev,
 		.control-btn.repeat,
-		.control-btn.shuffle {
+		.control-btn.shuffle,
+		.skip.in-transport {
 			display: none;
 		}
 
@@ -535,37 +561,26 @@
 			justify-self: end;
 		}
 
-		.control-btn.skip {
+		.time-control,
+		.live-row {
 			grid-row: 2;
+			grid-column: 1 / -1;
+			gap: 0.5rem;
+		}
+
+		.skip.in-scrub {
+			display: flex;
+			grid-row: auto;
 			padding: 0.25rem;
-			justify-self: center;
 		}
 
-		.control-btn.skip-back {
-			grid-column: 1;
-		}
-
-		.control-btn.skip-forward {
-			grid-column: 7;
-		}
-
-		.time-control {
-			grid-row: 2;
-			grid-column: 1 / 8;
-		}
-
-		.player-controls:has(.skip) .time-control {
-			grid-column: 2 / 7;
-		}
-
-		/* radio: "live" takes the scrubber's row instead of the control row */
-		.live-pill {
-			grid-row: 2;
-			grid-column: 1 / 8;
+		.scrub-trailing {
+			display: flex;
+			align-items: center;
 		}
 
 		.time {
-			min-width: 38px;
+			min-width: 0;
 		}
 	}
 </style>
