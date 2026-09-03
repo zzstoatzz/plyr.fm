@@ -532,7 +532,7 @@ _RECORD_WRITE_OPERATIONS = {
 }
 
 
-def _log_own_record_write(endpoint: str, payload: dict[str, Any] | None) -> None:
+async def _log_own_record_write(endpoint: str, payload: dict[str, Any] | None) -> None:
     """emit the write half of the jetstream echo signal.
 
     every record plyr writes to a PDS in its own namespace must come back
@@ -540,6 +540,9 @@ def _log_own_record_write(endpoint: str, payload: dict[str, Any] | None) -> None
     on "writes happened but zero dispatches" is the only quiet-immune way to
     detect an ingest blackout: fm.plyr.* traffic is user writes, so a silent
     window alone cannot distinguish an outage from a quiet night (#1739).
+
+    the same write is stamped in redis so the consumer can tell a host that
+    is not delivering our records from a network that has none to deliver.
     """
     operation = _RECORD_WRITE_OPERATIONS.get(endpoint)
     collection = (payload or {}).get("collection", "")
@@ -551,6 +554,10 @@ def _log_own_record_write(endpoint: str, payload: dict[str, Any] | None) -> None
         operation=operation,
         repo=(payload or {}).get("repo"),
     )
+    with contextlib.suppress(RedisError, OSError):
+        await get_async_redis_client().set(
+            settings.jetstream.last_write_key, str(time.time())
+        )
 
 
 async def make_pds_request(
@@ -597,7 +604,7 @@ async def make_pds_request(
             success_codes,
             parse_response,
         )
-        _log_own_record_write(endpoint, payload)
+        await _log_own_record_write(endpoint, payload)
         return result
 
     oauth_session = reconstruct_oauth_session(oauth_data)
@@ -634,7 +641,7 @@ async def make_pds_request(
             ) from e
 
         if response.status_code in success_codes:
-            _log_own_record_write(endpoint, payload)
+            await _log_own_record_write(endpoint, payload)
             if response.status_code == 204 or not parse_response:
                 return {}
             return response.json()

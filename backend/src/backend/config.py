@@ -979,12 +979,18 @@ class JetstreamSettings(AppSettingsSection):
         ],
         description="Jetstream hosts, tried round-robin on each reconnect",
     )
-    blind_host_timeout_seconds: float = Field(
-        default=1800.0,
+    echo_grace_seconds: float = Field(
+        default=120.0,
         description=(
-            "Rotate hosts when no record in our own collections arrives for this "
-            "long while other traffic is still flowing (a host serving some "
-            "collections but not ours). 0 disables the check."
+            "Rotate hosts when a record plyr wrote to a PDS has not come back "
+            "through the firehose within this long. 0 disables the check."
+        ),
+    )
+    last_write_key: str = Field(
+        default="plyr:jetstream:last_own_write",
+        description=(
+            "Redis key holding the wall-clock time of plyr's latest record write "
+            "in its own namespace"
         ),
     )
     cursor_key: str = Field(

@@ -123,4 +123,31 @@ title back by an hour, while both PDS records were correct throughout.
 - **tombstones**: a deleted URI is tombstoned in Redis for 5 min so a cursor
   rewind can't resurrect a just-deleted record as a ghost. plyr always mints
   fresh TID rkeys, so a legitimate same-URI re-create never happens.
-- **unknown artist**: events for a DID with no `Artist` row are skipped.
+- **unknown artist**: events for a DID with no `Artist` row are skipped. the
+  known set refreshes from the database every five minutes, and a commit in
+  our own namespace from an unknown DID forces a refresh (rate-limited to one
+  per ten seconds) before the drop — a new account's first records land seconds
+  after its artist row, which is how a sign-up's like was lost on 2026-09-03.
+  Bluesky profile commits never force a refresh; they arrive for every DID on
+  the network.
+
+## hosts: rotate on evidence, never on quiet
+
+one jetstream instance can serve some collections and silently drop others
+(jetstream2 did exactly that for 10h on 2026-07-30) without ever disconnecting,
+so the consumer keeps a list of hosts and moves to the next one on every
+reconnect. what makes it *decide* to reconnect matters: `fm.plyr.*` traffic is
+user writes, so a silent window on a healthy host looks identical to a blind
+one, and a timer on silence just rotates through every host each quiet night.
+
+the trigger is plyr's own write instead. every own-namespace record write in
+`_internal/atproto/client.py` logs `pds record write` (the write half of the
+ingest-blackout alert, #1739) and stamps `jetstream.last_write_key` in redis
+with the wall-clock time. the consumer compares that stamp with the firehose
+time of the newest event it has seen in our collections; a write older than
+`jetstream.echo_grace_seconds` with nothing of ours since is a host that is not
+delivering our records, and the consumer rewinds the cursor to before the write
+and rotates. one rotation per write — if the next host lacks the record too,
+the network does, and the alert is the right place for that. writes stamped
+before the process started are ignored, since their echo may have arrived
+before it existed.

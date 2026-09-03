@@ -176,6 +176,105 @@ class TestJetstreamConsumer:
         await consumer._process_event(event)
         consumer._dispatch.assert_not_called()  # type: ignore[union-attr]
 
+    async def test_own_collection_commit_from_unknown_did_refreshes_dids(self) -> None:
+        """a new account's first records land seconds after its artist row
+        and inside the refresh interval; that like used to be dropped."""
+        consumer = JetstreamConsumer()
+        consumer._known_dids = {"did:plc:known"}
+        consumer._last_did_refresh = 0.0
+
+        async def refresh() -> None:
+            consumer._known_dids.add("did:plc:new")
+            consumer._last_did_refresh = time.monotonic()
+
+        consumer._refresh_known_dids = refresh  # type: ignore[method-assign]
+        consumer._dispatch = AsyncMock()  # type: ignore[method-assign]
+        await consumer._process_event(
+            {
+                "kind": "commit",
+                "did": "did:plc:new",
+                "time_us": 1,
+                "commit": {
+                    "collection": settings.atproto.like_collection,
+                    "operation": "create",
+                    "rkey": "abc",
+                    "record": {},
+                },
+            }
+        )
+        consumer._dispatch.assert_called_once()  # type: ignore[union-attr]
+        assert consumer._dispatch.call_args.kwargs["did"] == "did:plc:new"  # type: ignore[union-attr]
+
+    async def test_unknown_did_refresh_is_rate_limited(self) -> None:
+        consumer = JetstreamConsumer()
+        consumer._known_dids = {"did:plc:known"}
+        consumer._last_did_refresh = time.monotonic()
+        consumer._refresh_known_dids = AsyncMock()  # type: ignore[method-assign]
+        consumer._dispatch = AsyncMock()  # type: ignore[method-assign]
+        await consumer._process_event(
+            {
+                "kind": "commit",
+                "did": "did:plc:new",
+                "commit": {
+                    "collection": settings.atproto.like_collection,
+                    "operation": "create",
+                    "rkey": "abc",
+                },
+            }
+        )
+        consumer._refresh_known_dids.assert_not_called()  # type: ignore[union-attr]
+        consumer._dispatch.assert_not_called()  # type: ignore[union-attr]
+
+    async def test_bsky_commit_from_unknown_did_does_not_refresh(self) -> None:
+        """~2 profile commits a second network-wide must not hit the database."""
+        consumer = JetstreamConsumer()
+        consumer._known_dids = {"did:plc:known"}
+        consumer._last_did_refresh = 0.0
+        consumer._refresh_known_dids = AsyncMock()  # type: ignore[method-assign]
+        await consumer._process_event(
+            {
+                "kind": "commit",
+                "did": "did:plc:stranger",
+                "commit": {
+                    "collection": BSKY_PROFILE_COLLECTION,
+                    "operation": "update",
+                    "rkey": "self",
+                },
+            }
+        )
+        consumer._refresh_known_dids.assert_not_called()  # type: ignore[union-attr]
+
+    async def test_dispatches_profile_create(self) -> None:
+        """sign-up writes the profile record; it must echo like any other write."""
+        consumer = JetstreamConsumer()
+        consumer._known_dids = {"did:plc:jetstream_test"}
+        dispatched: list[object] = []
+        mock_docket = MagicMock()
+
+        def add(task: object) -> object:
+            dispatched.append(task)
+
+            async def call(**kwargs: object) -> None:
+                pass
+
+            return call
+
+        mock_docket.add = add
+        event = {
+            "kind": "commit",
+            "did": "did:plc:jetstream_test",
+            "time_us": 1,
+            "commit": {
+                "collection": settings.atproto.profile_collection,
+                "operation": "create",
+                "rkey": "self",
+                "record": {"bio": "hi"},
+            },
+        }
+        with patch("backend._internal.jetstream.get_docket", return_value=mock_docket):
+            await consumer._process_event(event)
+        assert dispatched == [ingest_profile_update]
+
     async def test_skips_non_commit_non_identity_non_account_events(self) -> None:
         consumer = JetstreamConsumer()
         consumer._known_dids = {"did:plc:jetstream_test"}
@@ -2726,40 +2825,101 @@ class TestHostRotation:
             consumer._rotate_host()
         assert consumer._cursor == 1_000_000_000 - 10_000_000
 
-
-class TestBlindHostDetection:
-    def test_other_traffic_flowing_but_ours_silent_is_blind(self) -> None:
+    async def test_a_rewound_cursor_survives_the_reload_before_reconnect(self) -> None:
+        """`run` reloads the cursor from redis before every connection; the
+        stored value is the pre-rewind position, so loading must never move
+        forward past what is in memory."""
         consumer = JetstreamConsumer()
-        now = time.monotonic()
-        with patch.object(settings.jetstream, "blind_host_timeout_seconds", 1800.0):
-            consumer._last_own_event = now - 3600  # an hour of nothing from us
-            consumer._last_any_event = now - 5  # bsky events still arriving
-            assert consumer._is_blind() is True
+        consumer._cursor = 1_000_000_000 - 10_000_000
+        redis = MagicMock()
+        redis.get = AsyncMock(return_value="1000000000")
+        with patch(
+            "backend._internal.jetstream.get_async_redis_client", return_value=redis
+        ):
+            await consumer._load_cursor()
+        assert consumer._cursor == 1_000_000_000 - 10_000_000
 
-    def test_a_quiet_network_is_not_blind(self) -> None:
-        """both silent means no traffic, not a bad host — don't rotate."""
-        consumer = JetstreamConsumer()
-        now = time.monotonic()
-        with patch.object(settings.jetstream, "blind_host_timeout_seconds", 1800.0):
-            consumer._last_own_event = now - 3600
-            consumer._last_any_event = now - 3600
-            assert consumer._is_blind() is False
 
-    def test_recent_own_traffic_is_not_blind(self) -> None:
-        consumer = JetstreamConsumer()
-        now = time.monotonic()
-        with patch.object(settings.jetstream, "blind_host_timeout_seconds", 1800.0):
-            consumer._last_own_event = now - 10
-            consumer._last_any_event = now - 5
-            assert consumer._is_blind() is False
+def _redis_with_write(written: float | None) -> MagicMock:
+    redis = MagicMock()
+    redis.get = AsyncMock(return_value=None if written is None else str(written))
+    return redis
 
-    def test_detection_can_be_disabled(self) -> None:
+
+class TestEchoDrivenRotation:
+    """a host is only judged blind when plyr's own write fails to echo."""
+
+    def _consumer(self) -> JetstreamConsumer:
         consumer = JetstreamConsumer()
-        now = time.monotonic()
-        with patch.object(settings.jetstream, "blind_host_timeout_seconds", 0.0):
-            consumer._last_own_event = now - 86400
-            consumer._last_any_event = now - 1
-            assert consumer._is_blind() is False
+        consumer._started_at = time.time() - 3600
+        consumer._cursor = int(time.time() * 1_000_000)
+        return consumer
+
+    async def _check(self, consumer: JetstreamConsumer, written: float | None) -> bool:
+        with (
+            patch.object(settings.jetstream, "echo_grace_seconds", 120.0),
+            patch(
+                "backend._internal.jetstream.get_async_redis_client",
+                return_value=_redis_with_write(written),
+            ),
+        ):
+            return await consumer._own_write_unechoed()
+
+    async def test_a_write_unechoed_past_grace_rotates_and_replays_it(self) -> None:
+        consumer = self._consumer()
+        written = time.time() - 300
+        consumer._last_own_event = written - 60  # last thing of ours predates it
+        assert await self._check(consumer, written) is True
+        assert consumer._cursor == int((written - 10) * 1_000_000)
+
+    async def test_one_rotation_per_write(self) -> None:
+        """the next host missing the record too means the network lacks it."""
+        consumer = self._consumer()
+        written = time.time() - 300
+        assert await self._check(consumer, written) is True
+        consumer._last_write_check = 0.0
+        assert await self._check(consumer, written) is False
+
+    async def test_an_echoed_write_is_not_blind(self) -> None:
+        consumer = self._consumer()
+        written = time.time() - 300
+        consumer._last_own_event = written + 3
+        assert await self._check(consumer, written) is False
+
+    async def test_a_write_inside_grace_waits(self) -> None:
+        consumer = self._consumer()
+        assert await self._check(consumer, time.time() - 30) is False
+
+    async def test_a_quiet_network_never_rotates(self) -> None:
+        """no write stamp at all — the old timer-based heuristic is gone."""
+        consumer = self._consumer()
+        consumer._last_own_event = 0.0
+        assert await self._check(consumer, None) is False
+        assert not hasattr(consumer, "_is_blind")
+
+    async def test_a_write_before_startup_is_ignored(self) -> None:
+        """its echo may have arrived before this process existed."""
+        consumer = self._consumer()
+        assert await self._check(consumer, consumer._started_at - 10) is False
+
+    async def test_detection_can_be_disabled(self) -> None:
+        consumer = self._consumer()
+        with patch.object(settings.jetstream, "echo_grace_seconds", 0.0):
+            assert await consumer._own_write_unechoed() is False
+
+    async def test_checks_redis_at_most_every_ten_seconds(self) -> None:
+        consumer = self._consumer()
+        redis = _redis_with_write(time.time() - 300)
+        with (
+            patch.object(settings.jetstream, "echo_grace_seconds", 120.0),
+            patch(
+                "backend._internal.jetstream.get_async_redis_client",
+                return_value=redis,
+            ),
+        ):
+            consumer._last_write_check = time.time()
+            assert await consumer._own_write_unechoed() is False
+        redis.get.assert_not_called()
 
     def test_bsky_profile_events_do_not_count_as_ours(self) -> None:
         """the exact traffic that made the blind host look alive."""

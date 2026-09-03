@@ -19,6 +19,7 @@ import logfire
 import orjson
 import websockets
 from atproto_core.nsid import NSID
+from redis.exceptions import RedisError
 from sqlalchemy import select
 from websockets.asyncio.client import ClientConnection
 
@@ -53,6 +54,8 @@ logger = logging.getLogger(__name__)
 # `_process_event` drops everything outside `_known_dids`.
 BSKY_PROFILE_COLLECTION = "app.bsky.actor.profile"
 
+_UNKNOWN_DID_REFRESH_SECONDS = 10.0
+
 
 class JetstreamConsumer:
     """consumes ATProto Jetstream events for this environment's collections.
@@ -81,11 +84,12 @@ class JetstreamConsumer:
         self._last_did_refresh: float = 0.0
         self._shutdown_event = asyncio.Event()
         self._host_index = 0
-        # blind-host detection: a host can stay connected and keep delivering
-        # some collections while dropping ours entirely. tracked separately so
-        # "our collections are silent" can be told apart from "the network is".
+        self._started_at: float = time.time()
+        # firehose time of the newest event seen in our own collections, and
+        # the write timestamp a rotation was last spent on
         self._last_own_event: float = 0.0
-        self._last_any_event: float = 0.0
+        self._rotated_for_write: float = 0.0
+        self._last_write_check: float = 0.0
 
     def stop(self) -> None:
         """signal the consumer to shut down and unblock the recv loop.
@@ -139,10 +143,6 @@ class JetstreamConsumer:
         url = self._build_url()
         logger.info("jetstream connecting to %s", url)
 
-        # a fresh connection has not yet proven anything about this host
-        self._last_own_event = 0.0
-        self._last_any_event = 0.0
-
         with logfire.span(
             "jetstream consume",
             known_dids=len(self._known_dids),
@@ -156,7 +156,6 @@ class JetstreamConsumer:
                     known_dids=len(self._known_dids),
                     endpoint=self._current_endpoint(),
                 )
-                self._last_own_event = self._last_any_event = time.monotonic()
 
                 async for raw in ws:
                     if self._shutdown_event.is_set():
@@ -167,26 +166,14 @@ class JetstreamConsumer:
                     except (orjson.JSONDecodeError, TypeError):
                         continue
 
-                    self._last_any_event = time.monotonic()
                     if self._is_own_collection_event(event):
-                        self._last_own_event = self._last_any_event
+                        self._last_own_event = event.get("time_us", 0) / 1_000_000
 
                     await self._process_event(event)
                     await self._maybe_flush_cursor()
                     await self._maybe_refresh_dids()
 
-                    if self._is_blind():
-                        # info, not warn: this fires on every quiet fm.plyr
-                        # window (see _is_blind), so it is a breadcrumb for
-                        # rotation history, not a failure signal.
-                        logfire.info(
-                            "jetstream host is serving other collections but "
-                            "none of ours, rotating",
-                            endpoint=self._current_endpoint(),
-                            silent_seconds=round(
-                                time.monotonic() - self._last_own_event
-                            ),
-                        )
+                    if await self._own_write_unechoed():
                         return  # the reconnect loop rotates and resumes
 
     async def _process_event(self, event: dict[str, Any]) -> None:
@@ -233,8 +220,14 @@ class JetstreamConsumer:
             return
 
         did = event.get("did")
-        if not did or did not in self._known_dids:
+        if not did:
             return
+        if did not in self._known_dids:
+            if not self._is_own_collection_event(event):
+                return
+            await self._refresh_known_dids_for_unknown(did)
+            if did not in self._known_dids:
+                return
 
         # a commit proves the repo is being served, which is what `active`
         # claims to describe — so it retires a stale `deactivated` flag that
@@ -320,11 +313,16 @@ class JetstreamConsumer:
             ("list", "delete"): ingest_list_delete,
         }
 
-        # profile updates are a special case (nested collection)
-        if collection.endswith(".actor.profile") and operation == "update":
+        # the profile record is written at sign-up and rewritten on edit; the
+        # task only copies fields, so create and update are the same ingest
+        if collection.endswith(".actor.profile") and operation in (
+            "create",
+            "update",
+        ):
             await docket.add(ingest_profile_update)(did=did, record=record or {})
-            logfire.debug(
-                "jetstream dispatched profile.update",
+            logfire.info(
+                "jetstream dispatched profile.{operation}",
+                operation=operation,
                 did=did,
             )
             return
@@ -379,28 +377,42 @@ class JetstreamConsumer:
         if self._cursor is not None:
             self._cursor -= 10_000_000
 
-    def _is_blind(self) -> bool:
-        """is this host delivering other collections but none of ours?
+    async def _own_write_unechoed(self) -> bool:
+        """has a record plyr wrote failed to come back through this host?
 
         the failure this catches never disconnects: jetstream2 kept serving
         `app.bsky.actor.profile` for 10h on 2026-07-30 while dropping every
-        `fm.plyr.*` event. requiring recent *other* traffic separates a blind
-        host from a fully quiet stream — but NOT from an organically quiet
-        fm.plyr window, because the profile mirror flows constantly and keeps
-        `_last_any_event` fresh. so on any night with no fm.plyr writes this
-        trips on every host, one rotation per timeout, by design: rotating is
-        cheap and the false positive costs a reconnect. it does mean a
-        rotation is not evidence of a broken host — the trustworthy outage
-        signal is the write echo ("pds record write" with no matching
-        "jetstream dispatched"), which is quiet-immune.
+        `fm.plyr.*` event. quiet is not evidence — a night with no writes looks
+        the same on a healthy host — so the only trigger is plyr's own write
+        stamp (`_log_own_record_write`) going unanswered past the grace period.
+        one rotation per write: if the next host lacks the record too, the
+        network does, and the write-echo alert is the right place for that.
         """
-        timeout = settings.jetstream.blind_host_timeout_seconds
-        if timeout <= 0 or not self._last_own_event or not self._last_any_event:
+        grace = settings.jetstream.echo_grace_seconds
+        now = time.time()
+        if grace <= 0 or now - self._last_write_check < 10:
             return False
-        now = time.monotonic()
-        return (now - self._last_own_event) > timeout and (
-            now - self._last_any_event
-        ) < (timeout / 2)
+        self._last_write_check = now
+        try:
+            raw = await get_async_redis_client().get(settings.jetstream.last_write_key)
+        except (RedisError, OSError, ValueError):
+            return False
+        if not raw:
+            return False
+        written = float(raw)
+        if written <= max(self._rotated_for_write, self._started_at):
+            return False
+        if self._last_own_event >= written - 2 or now - written < grace:
+            return False
+        self._rotated_for_write = written
+        replay_from = int((written - 10) * 1_000_000)
+        self._cursor = min(self._cursor or replay_from, replay_from)
+        logfire.warn(
+            "jetstream host has not echoed plyr's own write, rotating",
+            endpoint=self._current_endpoint(),
+            unechoed_seconds=round(now - written),
+        )
+        return True
 
     def _build_url(self) -> str:
         """build WebSocket URL with query parameters."""
@@ -416,7 +428,11 @@ class JetstreamConsumer:
         try:
             redis = get_async_redis_client()
             if raw := await redis.get(settings.jetstream.cursor_key):
-                self._cursor = int(raw)
+                stored = int(raw)
+                # a rewind for rotation must survive the reload that follows it
+                self._cursor = (
+                    stored if self._cursor is None else min(self._cursor, stored)
+                )
                 logger.info("jetstream resuming from cursor %d", self._cursor)
         except Exception:
             logger.debug("jetstream could not load cursor from redis")
@@ -461,6 +477,15 @@ class JetstreamConsumer:
         except Exception:
             logger.warning("jetstream could not refresh known DIDs", exc_info=True)
         self._last_did_refresh = time.monotonic()
+
+    async def _refresh_known_dids_for_unknown(self, did: str) -> None:
+        """a commit in our namespace from a DID we do not know is usually an
+        account created since the last refresh — its first records land
+        seconds after the artist row, well inside the refresh interval."""
+        if time.monotonic() - self._last_did_refresh < _UNKNOWN_DID_REFRESH_SECONDS:
+            return
+        logger.info("jetstream refreshing known DIDs for unknown %s", did)
+        await self._refresh_known_dids()
 
     async def _maybe_refresh_dids(self) -> None:
         """refresh known DIDs if enough time has elapsed."""
