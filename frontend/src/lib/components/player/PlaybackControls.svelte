@@ -547,13 +547,18 @@
 			display: none;
 		}
 
+		.control-btn.play-pause {
+			grid-column: 7;
+			justify-self: end;
+		}
+
+		/* radio: no next, so the ∞ marker takes play's slot and play ends the row */
 		.control-btn.infinity {
 			grid-column: 7;
 		}
 
-		.control-btn.play-pause {
-			grid-column: 7;
-			justify-self: end;
+		.radio-mode .control-btn.play-pause {
+			grid-column: 8;
 		}
 
 		.control-btn.next {
@@ -577,6 +582,10 @@
 		.scrub-trailing {
 			display: flex;
 			align-items: center;
+		}
+
+		.live-row .live-pill {
+			flex: 1;
 		}
 
 		.time {
