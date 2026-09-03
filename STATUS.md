@@ -139,6 +139,69 @@ position so it drifted. final state on the 640 px phone layout: one
 bubble in the 47 px band under the row, 16 px clear of the queue toggle,
 covering nothing; at full height, three stacked below.
 
+#### the footer became spotify's, then became the only footer (#1987–#2004, September 2 — GA in prod `2026.0902.232901`, frontend-only promotes after)
+
+**why**: nate: "standardize the player by shamelessly copying Spotify and
+cease all experimentation with the player component." the pitch named the
+one thing the old footer never managed — a like control — and a fungible
+now-playing page as the follow-on. the whole thing rode the `skip-buttons`
+flag for half a day of staging review, then "open it up for everyone".
+
+**what shipped**: three regions on desktop — art, title and heart on the
+left; shuffle, previous, ±skip, play, ±skip, next, repeat on one row with
+the scrubber beneath spanning the centre column; queue button and volume on
+the right. on phones the compact bar is art, title, heart, play, next, and
+the second row is skip-back, times and scrubber, skip-forward, queue. the
+polish pass (#1992) came from a checklist across spotify, apple music,
+youtube music, tidal, soundcloud, vidstack, plyr and material 3: transport
+idle secondary → primary on hover, active toggles carry a 4 px dot, the
+scrubber is 4 px with a thumb hidden until hover and a 20 px hit area,
+the volume icon click-mutes and restores, keyboard focus is a 2 px ring.
+the classic footer, the `stacked`/`stage` props and the flag are deleted
+(#2000) — one layout, one style block. the floating queue button is gone
+(#2001, #2002): it "confused people" and duplicated the footer's own.
+
+**the heart is the add menu, not a toggle** (#1993–#1998): nate: "when I
+click the Like button, it should do what the Like button does on pretty
+much every other page" — like, or add to a playlist. so the footer mounts
+`AddToMenu` with a `plain` (borderless) trigger and `align="start"`, so the
+menu opens upward from the heart's left edge into the footer's empty middle
+rather than leftwards over the toast stack. every heart reads through the
+like owner in `lib/likes.svelte.ts`, which loads the viewer's liked ids
+once because the queue's server sync hands back tracks without `is_liked`
+(#1988; dropping that load made the footer heart start unliked, #1994). the
+phone sheet is portaled to `body` (#1996) because the footer's
+backdrop-filter made itself the containing block of a `position: fixed`
+sheet, and it now rises from the bottom above the player strip instead of
+dropping from the top of the screen (#1999). two bugs came with the portal
+and are the lesson: a stronger desktop selector left `bottom: calc(100% +
+10px)` on the phone sheet with `top: 0`, squashing it to its borders
+(#1997); and with the sheet outside the app root svelte dispatches its
+clicks from `document`, so the component's outside-click listener ran for
+taps inside the sheet after the tapped item had already been swapped for
+the picker — `closest()` on a detached target found nothing and closed the
+menu. judge inside/outside by `composedPath()`, not the target's ancestors
+(#1998).
+
+**the phone scrubber row shared the bar's grid columns** (#2003): the
+range input sat at its intrinsic 129 px at every width and, once the queue
+button joined the row, collided with skip-forward at 320 px. the second
+row is now its own flex row spanning the grid; the skips render through a
+snippet in both the transport (desktop) and the scrubber row (phone), the
+queue button is a snippet Player passes as `trailing`, and each breakpoint
+displays one copy. #2004 fixed radio on phones, where GA had put the ∞
+marker and play in the same column.
+
+**what the GA changed for everyone**: `seekbackward`/`seekforward` are
+registered for all now, so iOS shows ±skip in place of ⏮/⏭ on the lock
+screen — the trade the flag existed to try, accepted. previous, repeat and
+shuffle are not on the phone bar; they live in the queue until the
+now-playing page exists. with nothing playing there is no footer and so no
+queue button (Q still opens the panel).
+
+**next**: the fungible `/now` page reading `player.currentTrack`, with the
+footer as its handle on phones — that is where the queue moves.
+
 #### September 1 (archived)
 
 See `.status_history/2026-09.md` for detailed history:
@@ -245,7 +308,7 @@ open threads; anything still live from them is in known issues.
 
 ### current focus
 
-**the player and the track page are in a taste pass** (#1958–#1980, September 1–2 — prod): ±skip buttons and lock-screen seek handlers behind the per-user `skip-buttons` flag (nate's DID on prod and staging), with the step following track length through one ladder in `lib/skip-step.ts`; the passing-comment bubble became an ephemeral stack placed in the measured free band around its row — under it on phones, beside the icon on desktop, docked only when the icon is hidden — with the icon taking one breath as the bubble emerges. the rule that came out of it: judge an icon as a drawing at both the largest and the shipped size, in its row, and measure placement from the DOM rather than naming regions. nate's standing instruction for this kind of iteration: promote to prod after the staging check without asking. **next**: his phone verdict on the flagged skips (the lock-screen trade — iOS shows ±15 in place of ⏮/⏭ — and whether skip handlers with `seekto` scrub); GA or keep flagged; the drawn-iconography idea (people draw plyr's icons, doodl-style, with published icon collections and an explore page) is parked as "soon, not now".
+**the player is spotify's footer now, for everyone** (#1987–#2004, September 2 — GA in prod `2026.0902.232901`): one layout — art, title, heart | shuffle, previous, ±skip, play, ±skip, next, repeat over a full-width scrubber | queue, volume — and on phones the compact bar plus a scrubber row that ends with the queue button; the floating queue button and the `skip-buttons` flag are gone. the heart is the add menu (like, or add to a playlist), reading through the like owner; the phone sheet rises from above the player. the passing-comment stack (#1968–#1980) and the drawn-icon rule (judge an icon as a drawing at the largest and the shipped size, in its row) stand. nate's standing instruction for this kind of iteration: promote to prod after the staging check without asking; design changes to the phone bar pause at staging for his eyes. **next**: the fungible `/now` page (the footer as its handle on phones, the queue moving there); whether skip handlers with `seekto` scrub on a real iPhone lock screen; the drawn-iconography idea (people draw plyr's icons, doodl-style, with published icon collections and an explore page) is parked as "soon, not now".
 
 **records are moving into the client's hands — parked until the sign-in design is redone** (plan `docs/plans/2026-08-31-client-side-writes.md`; #1948–#1950 shipped in prod `2026.0901.065150`, reverted September 1 in #1952): phase 0 made the frontend a second OAuth client and chained its consent after the cookie login, so every sign-in showed two authorization screens. the direction stands — the file an artist uploads goes in their PDS as-is, plyr indexes/mirrors/serves, and the backend stops authoring records on anyone's behalf — but the next attempt must fit inside the single existing login, with scope growing only when a feature that needs it is used. **next**: redesign how the browser gets a repo-write capability without a second flow, then phase 1 (likes).
 
@@ -437,4 +500,4 @@ see the [contributing guide](https://docs.plyr.fm/contributing/) for setup instr
 
 ---
 
-this is a living document. last updated 2026-09-02 (**status maintenance for the August 26 – September 2 window**. Archived the last August-dated detail still in STATUS.md — resumable upload sessions (#1947), the reverted client-writes phase 0 (#1948–#1950), and the space-credential rewrite that deleted the membership mirror (#1930) — to `.status_history/2026-08.md`, and collapsed the whole August section into one cross-referenced list. Opened `.status_history/2026-09.md` with the September 1 detail (#1953, #1954) and the bubble placement #1968–#1980 replaced within a day (#1962), plus the eight arcs that were still listed under current focus with nothing current left in them. Dropped the resolved artwork-accent-wash known issue. STATUS.md went from 640 lines to 440. Recorded the podcast recap for August 26 – September 2.) earlier entries are preserved in `.status_history/2026-08.md`.
+this is a living document. last updated 2026-09-02 (**the footer became spotify's and then the only footer**, #1987–#2004 — GA in prod `2026.0902.232901`; current focus rewritten around it. the earlier September 2 note recorded status maintenance for August 26 – September 2, which archived the last August detail to `.status_history/2026-08.md` and opened `.status_history/2026-09.md`.) earlier entries are preserved in `.status_history/2026-08.md`.
