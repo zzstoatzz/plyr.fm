@@ -502,7 +502,8 @@
 	}
 
 	/* the phone bar: art, title, heart, play, next on the first row; skips flank
-	   the scrubber on the second. prev, repeat and shuffle live in the queue */
+	   the scrubber on the second with the queue button at its end. prev, repeat
+	   and shuffle live in the queue */
 	@media (max-width: 768px) {
 		.player-controls,
 		.transport {
@@ -545,22 +546,22 @@
 		}
 
 		.control-btn.skip-forward {
-			grid-column: 8;
+			grid-column: 7;
 		}
 
 		.time-control {
 			grid-row: 2;
-			grid-column: 1 / 9;
+			grid-column: 1 / 8;
 		}
 
 		.player-controls:has(.skip) .time-control {
-			grid-column: 2 / 8;
+			grid-column: 2 / 7;
 		}
 
 		/* radio: "live" takes the scrubber's row instead of the control row */
 		.live-pill {
 			grid-row: 2;
-			grid-column: 1 / 9;
+			grid-column: 1 / 8;
 		}
 
 		.time {
