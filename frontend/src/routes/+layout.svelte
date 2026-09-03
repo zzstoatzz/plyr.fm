@@ -810,13 +810,6 @@
 		}
 	}
 
-	/* the footer carries its own queue button on desktop */
-	@media (min-width: 769px) {
-		.queue-toggle {
-			display: none;
-		}
-	}
-
 	.queue-toggle {
 		position: fixed;
 		bottom: calc(var(--player-height, 0px) + 20px + env(safe-area-inset-bottom, 0px));
@@ -858,5 +851,12 @@
 			bottom: calc(var(--player-height, 0px) + 20px + env(safe-area-inset-bottom, 0px));
 		}
 
+	}
+
+	/* the footer carries its own queue button on desktop; the fab is the phone's */
+	@media (min-width: 769px) {
+		.queue-toggle {
+			display: none;
+		}
 	}
 </style>
