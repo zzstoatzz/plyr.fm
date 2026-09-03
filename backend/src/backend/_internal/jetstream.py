@@ -55,6 +55,7 @@ logger = logging.getLogger(__name__)
 BSKY_PROFILE_COLLECTION = "app.bsky.actor.profile"
 
 _UNKNOWN_DID_REFRESH_SECONDS = 10.0
+_ECHO_SKEW_SECONDS = 30.0
 
 
 class JetstreamConsumer:
@@ -313,8 +314,7 @@ class JetstreamConsumer:
             ("list", "delete"): ingest_list_delete,
         }
 
-        # the profile record is written at sign-up and rewritten on edit; the
-        # task only copies fields, so create and update are the same ingest
+        # written at sign-up, rewritten on edit: the same ingest either way
         if collection.endswith(".actor.profile") and operation in (
             "create",
             "update",
@@ -402,7 +402,9 @@ class JetstreamConsumer:
         written = float(raw)
         if written <= max(self._rotated_for_write, self._started_at):
             return False
-        if self._last_own_event >= written - 2 or now - written < grace:
+        if self._last_own_event >= written - _ECHO_SKEW_SECONDS:
+            return False
+        if now - written < grace:
             return False
         self._rotated_for_write = written
         replay_from = int((written - 10) * 1_000_000)

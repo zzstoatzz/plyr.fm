@@ -2868,7 +2868,7 @@ class TestEchoDrivenRotation:
     async def test_a_write_unechoed_past_grace_rotates_and_replays_it(self) -> None:
         consumer = self._consumer()
         written = time.time() - 300
-        consumer._last_own_event = written - 60  # last thing of ours predates it
+        consumer._last_own_event = written - 120  # last thing of ours predates it
         assert await self._check(consumer, written) is True
         assert consumer._cursor == int((written - 10) * 1_000_000)
 
@@ -2884,6 +2884,14 @@ class TestEchoDrivenRotation:
         consumer = self._consumer()
         written = time.time() - 300
         consumer._last_own_event = written + 3
+        assert await self._check(consumer, written) is False
+
+    async def test_clock_skew_between_stamp_and_firehose_is_tolerated(self) -> None:
+        """jetstream stamps `time_us` on its own clock; a few seconds behind
+        the app machine's write stamp is still the echo, not a blind host."""
+        consumer = self._consumer()
+        written = time.time() - 300
+        consumer._last_own_event = written - 5
         assert await self._check(consumer, written) is False
 
     async def test_a_write_inside_grace_waits(self) -> None:
