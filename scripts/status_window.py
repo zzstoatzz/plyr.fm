@@ -112,7 +112,7 @@ def merged_prs(since: datetime) -> list[dict]:
             "--search",
             f"merged:>={since.date().isoformat()}",
             "--limit",
-            "100",
+            "300",
             "--json",
             "number,title,mergedAt,mergeCommit,files,url",
         )
