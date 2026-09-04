@@ -8,9 +8,10 @@ automated workflow that archives old STATUS.md content and generates audio updat
 
 1. **archives old content**: moves previous month's sections from STATUS.md to `.status_history/YYYY-MM.md`
 2. **generates audio**: creates a podcast-style audio update covering recent work
-3. **opens PR**: commits changes and opens a PR for review, with the podcast
-   transcript in the PR body under a collapsible section so it can be read
-   before deciding to merge
+3. **opens PR**: commits changes and opens a PR for review, with the window
+   report (what landed where, what was posted) and the podcast transcript in
+   the PR body under collapsible sections so both can be read before deciding
+   to merge
 4. **uploads audio**: after PR merge, uploads the audio to plyr.fm (the
    transcript becomes the track description)
 
@@ -29,29 +30,49 @@ automated workflow that archives old STATUS.md content and generates audio updat
 github pauses scheduled workflows in repositories with no activity for 60
 days; a push re-enables them.
 
-## how it determines the time window
+## the window report
 
-the workflow finds the most recently merged PR with a branch starting with `status-maintenance-`:
+the run begins by generating `window_report.md` with `scripts/status_window.py`
+(also runnable locally: `uv run scripts/status_window.py`, or with
+`--since <iso time>`). the report is the run's ground truth:
 
-```bash
-gh pr list --state merged --search "status-maintenance" --limit 20 \
-  --json number,title,mergedAt,headRefName | \
-  jq '[.[] | select(.headRefName | startswith("status-maintenance-"))] | sort_by(.mergedAt) | reverse | .[0]'
-```
+- **window**: from the merge time of the most recently merged PR whose branch
+  starts with `status-maintenance-` until now
+- **backend releases**: GitHub releases (timestamp tags) published in the
+  window, each with the PRs it carried to production (from the squash subjects
+  between consecutive tags)
+- **frontend promotes**: Cloudflare Pages production deployments of
+  `production-fe` in the window — a `just release-frontend-only` is a bare
+  branch push that triggers no GitHub workflow, so Pages is its only record.
+  needs `CLOUDFLARE_API_TOKEN` (or `SCRIPT_CF_API_TOKEN` with Pages read)
+  and `CLOUDFLARE_ACCOUNT_ID`; without them the section says so and the
+  frontend rows below fall back to "promote unknown"
+- **PRs merged in the window** with a `landed` column: `prod via release
+  <tag>`, `prod via frontend promote <time>`, `staging only`, or `docs only`.
+  a PR is classified by its files (`backend/`, `scripts/`, `services/` →
+  needs a release; `frontend/` only → a promote or a release, whichever came
+  first); landing is decided by `git tag --contains` and
+  `git merge-base --is-ancestor` against the promoted commits
+- **public posts** in the window from the plyr.fm account, and from
+  zzstoatzz.io where the post mentions plyr, read from the public AppView
+  without auth
+- **project scope**: first commit, release count, STATUS.md line count, the
+  months still carrying detail, and the arcs archived in `.status_history/`
+  (titles for the newest three months, counts for the rest)
 
-everything merged since that date is considered "new work" for the audio script.
+the report goes into the maintenance PR body above the transcript, so a
+reviewer can check every "shipped" against where it actually landed.
 
-### handling reverted PRs
+### what the prompt does with it
 
-if a status-maintenance PR is merged then reverted, it still appears as "merged" in GitHub's API. this can cause the workflow to think there's no new content.
-
-**workaround**: temporarily add an exclusion to the jq filter:
-
-```bash
-| select(.number != 724)  # exclude reverted PR
-```
-
-remove the exclusion after the next successful run.
+the subject of the episode and of the STATUS.md edits is the diff — what
+changed in the window. the releases, promotes, posts and archived arcs are
+context: "shipped" is reserved for rows landed in production and names the
+date; merged-but-not-promoted work is "on staging"; an announcement gets one
+clause, an unannounced significant change gets one sentence; the archive
+places the window in the project's history in a phrase, not a recap. if
+STATUS.md disagrees with the report about what is in production, the run
+corrects STATUS.md.
 
 ## archival rules
 
@@ -114,6 +135,7 @@ dry, matter-of-fact, slightly sardonic. avoid:
 | `ANTHROPIC_API_KEY` | claude code |
 | `GOOGLE_API_KEY` | gemini TTS |
 | `PLYR_BOT_TOKEN` | plyr.fm upload |
+| `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` | Pages deployment history for the frontend promotes in the window report |
 
 ## manual run
 

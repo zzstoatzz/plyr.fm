@@ -57,29 +57,33 @@ jobs:
             2. archive content MUST be moved to .status_history/, not deleted
             3. podcast tone MUST be dry, matter-of-fact, slightly sardonic - NOT enthusiastic or complimentary
 
-            ## task 1: gather temporal context
+            ## task 1: gather the window report
 
-            CRITICAL: you must determine the correct time window by finding when the LAST status maintenance PR was MERGED (not opened).
+            the window is from the moment the LAST status-maintenance PR was MERGED (not opened) until now. `scripts/status_window.py` computes it and everything else you need to know about the window:
 
-            run these commands:
             ```bash
             date
-            # get the most recently merged status-maintenance PR (filter by branch name, sort by merge date)
-            # NOTE: excluding #724 and #846 which were reverted - remove these exclusions after next successful run
-            gh pr list --state merged --search "status-maintenance" --limit 20 --json number,title,mergedAt,headRefName | jq '[.[] | select(.headRefName | startswith("status-maintenance-")) | select(.number != 724 and .number != 846 and .number != 882)] | sort_by(.mergedAt) | reverse | .[0]'
+            uv run scripts/status_window.py > window_report.md
             git log --oneline -50
-            ls -la .status_history/ 2>/dev/null || echo "no archive directory yet"
-            wc -l STATUS.md
             ```
 
-            determine:
-            - what is today's date?
-            - when was the last status-maintenance PR MERGED? (use the mergedAt field from the jq output - it's the most recent PR with a branch starting with "status-maintenance-")
-            - what shipped SINCE that merge date? (this is your focus window - NOT "last week")
-            - does .status_history/ exist? (this implies whether or not this is the first episode)
-            - how many lines is STATUS.md currently?
+            read window_report.md in full. it is the ground truth for this run and contains:
+            - the window and which maintenance PR opened it
+            - backend releases (GitHub releases, timestamp tags) published in the window and the PRs each carried to production
+            - frontend promotes — Cloudflare Pages production deployments of `production-fe`, the only record a frontend-only release leaves
+            - every PR merged in the window with a `landed` column: `prod via release <tag>`, `prod via frontend promote <time>`, `staging only`, or `docs only`
+            - public posts in the window from the plyr.fm account, and from zzstoatzz.io where they mention plyr
+            - project scope: first commit, release count, STATUS.md's line count, and the arcs already archived in .status_history/ (titles for the newest months; read the older files when you need them)
 
-            IMPORTANT: the time window for this maintenance run is from the last merged status-maintenance PR until now. if the last PR was merged on Dec 2nd and today is Dec 8th, you should focus on everything from Dec 3rd onwards, NOT just "the last week".
+            IMPORTANT: if the last PR was merged on Dec 2nd and today is Dec 8th, the window is Dec 2nd onwards, NOT "the last week".
+
+            ## how to use the report
+
+            - **the subject is the diff.** the episode and the STATUS.md changes are about what changed in the window. the releases, promotes, posts and archived arcs are context for placing that work, never a list to recite — a recap of releases is duplicative of the release page.
+            - **the `landed` column decides tense.** "shipped", "launched", "live" and "in production" are only for rows landed in prod, and the first mention names when (the release or promote date). a row that is `staging only` is "merged" or "on staging", however confident its PR body sounds. never say "shipped" from a merge date.
+            - **the posts are what the audience was told.** when a change was announced, one clause noting it is enough; when a significant change went out unannounced, say so once. do not read posts aloud.
+            - **the archived arcs are the project's memory.** use them to place the window — what this continues, what it closes, what it reverses — one phrase at a time, and only where a listener with no history would otherwise be lost.
+            - **STATUS.md must agree with the report.** if STATUS.md calls something shipped that the report shows as `staging only`, or the reverse, correct STATUS.md in this PR and say so in the PR body.
 
             ## task 2: archive old month sections
 
@@ -126,10 +130,7 @@ jobs:
             before writing anything, you need to deeply understand what happened in the time window.
             use subagents liberally to investigate in parallel:
 
-            1. **get the full picture of PRs merged in the time window**:
-               ```bash
-               gh pr list --state merged --search "merged:>={mergedAt date}" --limit 50 --json number,title,body,mergedAt,additions,deletions,files
-               ```
+            1. **start from the PR table in window_report.md** — it lists every PR merged in the window and where each landed. read bodies with `gh pr view {number} --json body` for the ones that matter:
 
             2. **for each significant PR, read its body and understand the design decisions**:
                - what problem was being solved?
@@ -222,7 +223,8 @@ jobs:
 
             read the commit messages and PR bodies carefully to understand what changed.
 
-            - if something is completely NEW (didn't exist before), say it "shipped" or "launched"
+            - "shipped" and "launched" mean the `landed` column in window_report.md says prod; a merged PR that is `staging only` is not shipped, whatever its body says
+            - if something is completely NEW (didn't exist before) and is in prod, say it "shipped" or "launched"
             - if something existing got improved or fixed, call it what it is: fixes, improvements, polish
 
             don't rely on commit message prefixes like `feat:` or `fix:` - they're not always accurate.
@@ -245,11 +247,12 @@ jobs:
 
             run: uv run scripts/generate_tts.py podcast_script.txt update.wav
 
-            keep podcast_script.txt in place — do NOT delete it. a later
-            workflow step uploads both update.wav and podcast_script.txt as a
-            build artifact so the phase-2 upload job can attach the transcript
-            as the track description. neither file is committed to the repo
-            (both are gitignored).
+            keep podcast_script.txt and window_report.md in place — do NOT
+            delete them. a later workflow step posts the report and the
+            transcript into the PR body and uploads update.wav and
+            podcast_script.txt as a build artifact so the phase-2 upload job
+            can attach the transcript as the track description. none of these
+            files is committed to the repo (all are gitignored).
 
             ## task 4: open PR
 
@@ -257,8 +260,9 @@ jobs:
             1. first, generate a unique branch name: BRANCH="status-maintenance-$(date +%Y%m%d-%H%M%S)"
             2. git checkout -b $BRANCH
             3. git add .status_history/ STATUS.md
-               (do NOT add update.wav or podcast_script.txt — they are
-               gitignored and carried to phase 2 as a build artifact instead)
+               (do NOT add update.wav, podcast_script.txt or window_report.md —
+               they are gitignored; the audio and transcript are carried to
+               phase 2 as a build artifact instead)
             4. git commit -m "chore: status maintenance"
             5. git push -u origin $BRANCH
             6. gh pr create with a title and body you craft:
@@ -271,6 +275,8 @@ jobs:
 
         env:
           GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
       # carry the generated audio + transcript to phase 2 (the merge run is a
       # separate run with a fresh checkout, so it can't see these files
@@ -284,23 +290,32 @@ jobs:
         id: prbranch
         run: echo "branch=$(git branch --show-current)" >> "$GITHUB_OUTPUT"
 
-      # the transcript is what a reviewer needs before merging (the audio only
-      # uploads after the merge), so put it in the PR body where it can be read
-      - name: Post transcript to the PR
+      # the reviewer needs the window report (what landed where, what was
+      # posted) to check the transcript's claims, and the transcript itself
+      # (the audio only uploads after the merge), so both go in the PR body
+      - name: Post the window report and transcript to the PR
         if: startsWith(steps.prbranch.outputs.branch, 'status-maintenance-')
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           BRANCH: ${{ steps.prbranch.outputs.branch }}
         run: |
-          if [ ! -f podcast_script.txt ]; then
-            echo "no podcast_script.txt, nothing to post"
+          if [ ! -f podcast_script.txt ] && [ ! -f window_report.md ]; then
+            echo "nothing to post"
             exit 0
           fi
           BODY=$(gh pr view "$BRANCH" --json body --jq .body)
           {
-            printf '%s\n\n<details>\n<summary>podcast transcript</summary>\n\n```\n' "$BODY"
-            cat podcast_script.txt
-            printf '\n```\n\n</details>\n'
+            printf '%s\n' "$BODY"
+            if [ -f window_report.md ]; then
+              printf '\n<details>\n<summary>window report — what landed where, what was posted</summary>\n\n'
+              cat window_report.md
+              printf '\n\n</details>\n'
+            fi
+            if [ -f podcast_script.txt ]; then
+              printf '\n<details>\n<summary>podcast transcript</summary>\n\n```\n'
+              cat podcast_script.txt
+              printf '\n```\n\n</details>\n'
+            fi
           } > pr-body.md
           gh pr edit "$BRANCH" --body-file pr-body.md
 
