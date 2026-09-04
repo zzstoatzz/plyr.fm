@@ -47,99 +47,7 @@ plyr.fm should become:
 
 ### September 2026
 
-#### skip buttons, behind a flag, drawn until they were right (#1958–#1966, September 1–2 — prod frontend-only promote September 2)
-
-**why**: nate: "I can put my thumb exactly on the scrubber and drag it
-around, but I really want some ten or fifteen second forward and backwards
-things." the media-session half is a trade — registering
-`seekbackward`/`seekforward` makes iOS show ±15 in place of ⏮/⏭ on the lock
-screen — so the whole thing sits behind a per-user `skip-buttons` flag to be
-judged by feel (nate's DID on staging and prod). he floated per-track
-configuration of the lock-screen control surface and parked it himself as
-"potentially sloppy".
-
-**what shipped**: two skip buttons — flanking play/pause on desktop, one at
-each end of the scrubber on phones — plus the lock-screen handlers, all
-flag-gated. `queue.seekBy()` owns the clamped relative seek the arrow keys
-used to carry privately. the step follows track length through one ladder
-in `lib/skip-step.ts` (under 60 s → 5, under 180 s → 10, else 15; 15 before
-the duration is known); the rungs are data, and nate reserved the right to
-change them.
-
-**the glyph took four passes, and that is the lesson**: #1958 shipped a
-stroked arc with the number floated on top by CSS, #1960 a filled material
-arc — both checked as a 28 px strip and both "brutish" on a phone. #1961
-came from a rendered candidate sheet (four parameterized glyphs at 84 px
-and in the transport row at 24 px, dark and light), #1963 swapped the
-chevron tip, which reads as a hook at 24 px, for a filled triangle. two
-font bugs followed: the numeral was locked to a system stack, and fixing
-that with `font-family: inherit` on the `<text>` did nothing because an svg
-inherits from its `<button>`, which carries the UA font — the button must
-inherit (#1964); and georgia, the default app font, sets old-style figures,
-so the 5 dropped below the 1 until `lining-nums` (#1965). judge an icon as
-a drawing, at the largest size and the smallest one it ships at, in the
-row it lives in.
-
-**still open**: whether skip handlers together with `seekto` scrub on a
-real iPhone lock screen — that combination has not been on a phone before
-this. the phone scrubber narrows from 254 px to 150 px when flagged.
-
-#### passing comments became a stack that reads the page (#1968–#1980, September 2 — prod frontend-only promotes September 2)
-
-**why**: #1962's docked bubble sat at the player's edge, which on phones is
-exactly where the share/download/comments row is — nate: "thoughtlessly
-placed. unaware of what else is on the page, it weirdly blocks the stuff
-that's there even tho we have so much space." and a burst of comments
-replaced the single bubble each time, so ten comments in three seconds
-showed one.
-
-**what shipped**: bubbles are an ephemeral stack, toast-style — newest
-nearest the trigger, each on its own 4 s timer, a comment already showing
-refreshes rather than duplicates, capped with the oldest leaving early,
-fly in / fade out / reflow. every comment crossed in a playback tick
-surfaces (it was `find`, so only the first). placement reads the page: the
-free band above the trigger's row (to the previous content or the header)
-and below it (to the next content or the player) are measured from the
-DOM, the larger band wins and the stack is capped to the bubbles that
-fit there, and docking at the player is the last resort, one bubble, only
-when nothing fits anywhere. the stack also probes what is drawn under its
-ends and moves off fixed chrome (the queue toggle), and clips an evicted
-bubble's fade inside its band.
-
-**then the desktop case, and the motion (#1976–#1978)**: on desktop the
-row sits 16 px under the listen count and against the player, so neither
-vertical band exists and the last-resort dock landed on the row (nate's
-second screenshot). the free room along the row is measured too, and a
-single bubble sits beside the trigger, sized to that room, with a sideways
-tail; docking is truly last, and applies when the trigger itself is under
-the player. and nate: "it's just a pill … the comment section lights up."
-the icon is now the source: it takes the accent, sends one ring outward,
-bumps its count, and the bubble grows out of it with a small overshoot
-instead of sliding in. one ring per comment, nothing loops, reduced motion
-gets a plain fade. two more corrections came from frame captures: a
-bubble beside a trigger scrolled under the player was cut too (dock), and
-`elementsFromPoint` hands back the icon inside a button, so the margin
-was measured from the icon (take the control).
-then #1980: the ring, the count bump, the glow and the overshoot were
-"really corny and heavy handed" — the pill-shaped ripple especially. what
-remains is one breath: the icon's colour eases to the accent with a
-single small pulse, and the bubble fades in over a few px from the icon's
-side 140 ms later. one gesture, not four; nate's rule from here: these UI
-iterations go to prod after the staging check without asking, because he
-judges them against real data.
-
-**ten PRs, five of them corrections to the one before**, each found by
-replaying the same five-comment burst on staging after the merge: the
-"above the row" fallback covered the play button and listen count
-(regions named in a rule are still blind — measure the DOM); the capacity
-arithmetic asked 50 px for a 36 px bubble, so a 47 px band read as "no
-room"; the obstacle probe landed past the viewport edge where
-`elementsFromPoint` sees nothing, and re-measured from the shifted
-position so it drifted. final state on the 640 px phone layout: one
-bubble in the 47 px band under the row, 16 px clear of the queue toggle,
-covering nothing; at full height, three stacked below.
-
-#### the footer became spotify's, then became the only footer (#1987–#2004, September 2 — GA in prod `2026.0902.232901`, frontend-only promotes after)
+#### the footer became spotify's, then became the only footer (#1987–#2004, September 2–3 — GA in prod `2026.0902.232901`; the phone follow-ups #2001–#2004 in prod `2026.0903.222140`)
 
 **why**: nate: "standardize the player by shamelessly copying Spotify and
 cease all experimentation with the player component." the pitch named the
@@ -153,10 +61,10 @@ the scrubber beneath spanning the centre column; queue button and volume on
 the right. on phones the compact bar is art, title, heart, play, next, and
 the second row is skip-back, times and scrubber, skip-forward, queue. the
 polish pass (#1992) came from a checklist across spotify, apple music,
-youtube music, tidal, soundcloud, vidstack, plyr and material 3: transport
-idle secondary → primary on hover, active toggles carry a 4 px dot, the
-scrubber is 4 px with a thumb hidden until hover and a 20 px hit area,
-the volume icon click-mutes and restores, keyboard focus is a 2 px ring.
+youtube music, tidal, soundcloud, vidstack and material 3: transport idle
+secondary → primary on hover, active toggles carry a 4 px dot, a 4 px
+scrubber with a thumb hidden until hover and a 20 px hit area, click-to-mute
+volume, a 2 px focus ring.
 the classic footer, the `stacked`/`stage` props and the flag are deleted
 (#2000) — one layout, one style block. the floating queue button is gone
 (#2001, #2002): it "confused people" and duplicated the footer's own.
@@ -172,25 +80,20 @@ once because the queue's server sync hands back tracks without `is_liked`
 (#1988; dropping that load made the footer heart start unliked, #1994). the
 phone sheet is portaled to `body` (#1996) because the footer's
 backdrop-filter made itself the containing block of a `position: fixed`
-sheet, and it now rises from the bottom above the player strip instead of
-dropping from the top of the screen (#1999). two bugs came with the portal
-and are the lesson: a stronger desktop selector left `bottom: calc(100% +
-10px)` on the phone sheet with `top: 0`, squashing it to its borders
-(#1997); and with the sheet outside the app root svelte dispatches its
-clicks from `document`, so the component's outside-click listener ran for
-taps inside the sheet after the tapped item had already been swapped for
-the picker — `closest()` on a detached target found nothing and closed the
-menu. judge inside/outside by `composedPath()`, not the target's ancestors
-(#1998).
+sheet, and it rises from above the player strip rather than dropping from
+the top of the screen (#1999). the portal brought two bugs, and the second
+is the lesson: a stronger desktop selector squashed the phone sheet to its
+borders (#1997), and with the sheet outside the app root svelte dispatches
+its clicks from `document`, so `closest()` on an already-swapped target
+found nothing and closed the menu on taps *inside* it — judge
+inside/outside by `composedPath()`, not the target's ancestors (#1998).
 
-**the phone scrubber row shared the bar's grid columns** (#2003): the
-range input sat at its intrinsic 129 px at every width and, once the queue
-button joined the row, collided with skip-forward at 320 px. the second
-row is now its own flex row spanning the grid; the skips render through a
-snippet in both the transport (desktop) and the scrubber row (phone), the
-queue button is a snippet Player passes as `trailing`, and each breakpoint
-displays one copy. #2004 fixed radio on phones, where GA had put the ∞
-marker and play in the same column.
+**the phone scrubber row shared the bar's grid columns** (#2003): the range
+input sat at its intrinsic 129 px at every width and, once the queue button
+joined the row, collided with skip-forward at 320 px. the second row is now
+its own flex row spanning the grid, with the skips and the queue button as
+snippets rendered once per breakpoint. #2004 fixed radio on phones, where GA
+had put the ∞ marker and play in the same column.
 
 **what the GA changed for everyone**: `seekbackward`/`seekforward` are
 registered for all now, so iOS shows ±skip in place of ⏮/⏭ on the lock
@@ -231,38 +134,61 @@ job. `_load_cursor` no longer moves the cursor forward past memory — the
 reload before every reconnect had been erasing the rewind, so the
 existing 10 s rotation rewind was a no-op.
 
-**verified**: staging's e2e run wrote seventeen records and each `pds
-record write` was followed by a `jetstream dispatched` within a second,
-with no rotation. prod held one connection through the night with zero
-own writes, so the prod echo path waits on the first real write.
-`fly logs` from these machines ships in batches an hour or more behind;
-liveness was read from redis (cursor age) and Logfire, not the log tail.
-design: `docs/internal/architecture/jetstream-ingest.md`, "hosts: rotate
-on evidence, never on quiet".
+**verified**: staging's e2e run wrote seventeen records and each `pds record
+write` was followed by a `jetstream dispatched` within a second, with no
+rotation. prod held one connection through the night with zero own writes, so
+the prod echo path waits on the first real write. `fly logs` from these
+machines ships in batches an hour or more behind, so liveness was read from
+redis (cursor age) and Logfire. design:
+`docs/internal/architecture/jetstream-ingest.md`, "hosts: rotate on evidence,
+never on quiet".
 
-#### September 1 (archived)
+#### the status-maintenance run starts from a window report (#2008, September 4 — merged, staging only; the workflow itself)
+
+the weekly run only knew which PRs had merged since the last one, so its
+transcript called merges to main "shipped" and never named a production
+release. `scripts/status_window.py` now computes the window from the last
+maintenance merge and reports, per PR, where it actually landed —
+`prod via release <tag>`, `prod via frontend promote <time>`, `staging
+only`, `docs only` — alongside the releases and Cloudflare Pages
+`production-fe` promotes in the window, the plyr.fm account's public posts,
+and the arcs already in `.status_history/`. a frontend-only release is a
+bare branch push with no GitHub workflow, so Pages is its only record; the
+first live run had no Pages credential and the promotes section said so
+rather than guessing. docs: `docs/internal/tools/status-maintenance.md`.
+
+#### September 1–2 (archived)
 
 See `.status_history/2026-09.md` for detailed history:
 
+- **skip buttons, drawn until they were right** (#1958–#1966, September 1–2)
+  — ±5/10/15 s buttons behind the `skip-buttons` flag, the step following
+  track length through one ladder in `lib/skip-step.ts`, and four passes on
+  the glyph (a chevron tip reads as a hook at 24 px; an svg inherits its font
+  from the `<button>`, and georgia's old-style figures need `lining-nums`).
+  the flag died with #2000; the rule survives — judge an icon as a drawing,
+  at the largest size and the shipped size, in the row it lives in.
+- **passing comments became a stack that reads the page** (#1968–#1980,
+  September 2) — bubbles stack toast-style instead of replacing each other,
+  placement measures the free bands above and below the trigger's row from
+  the DOM and caps the stack to what fits, docking at the player is the last
+  resort, and the motion settled at one breath after "really corny and heavy
+  handed". ten PRs, five of them corrections to the one before, each found by
+  replaying a five-comment burst on staging after the merge.
 - **the upload form shows what it knows about the file** (#1954, prod
-  `2026.0901.203801`; transfer-on-select withdrawn in #1957) — choosing a file
-  mounts an `AudioPreview` card: name, `m4a · 88 MB · 1:02:14`, a waveform,
-  play/pause with seek, all read locally, and `/record` shares the card. the
-  waveform has a measured cap because chromium spends ~100 MB of transient
-  memory per audio minute in `decodeAudioData`. #1954 as first shipped began
-  the transfer on selection, so a mistaken pick sat in staging storage for up
-  to a day; #1957 moved it back to submit — plyr holds nothing until you say
-  so.
+  `2026.0901.203801`) — choosing a file mounts an `AudioPreview` card: name,
+  `m4a · 88 MB · 1:02:14`, a waveform, play/pause with seek, all read locally.
+  the waveform has a measured cap because chromium spends ~100 MB of transient
+  memory per audio minute in `decodeAudioData`. as first shipped it began the
+  transfer on selection; #1957 moved it back to submit — plyr holds nothing
+  until you say so.
 - **the notification bot survives a revoked Bluesky session** (#1953, prod
-  `2026.0901.203801`) — two uploads went un-DM'd; the service only re-ran
-  login when `recipient_did` was unset, and the old string match on
-  `"auth"`/`"401"` never saw `ExpiredToken: Token has been revoked`. session
-  errors are classified by exception type now, with one re-login and retry.
-  transient failures still have no retry path (known issues).
+  `2026.0901.203801`) — session errors are classified by exception type now,
+  with one re-login and retry; the old string match on `"auth"`/`"401"` never
+  saw `ExpiredToken: Token has been revoked`. transient failures still have no
+  retry path (known issues).
 - **a passing comment no longer hides under the player** (#1962, prod
-  `2026.0902.045540`) — `emissionPlacement()` docked the bubble above the
-  player when the trigger had no room, and the bubble itself was redrawn.
-  superseded within a day by the measured-band stack below.
+  `2026.0902.045540`) — superseded within a day by the measured-band stack.
 
 ### August 2026
 
@@ -275,55 +201,40 @@ See `.status_history/2026-08.md` for detailed history:
   (`docs/plans/2026-08-31-client-side-writes.md`) stays as the direction; its
   sign-in section must be redesigned before any phase ships.
 - **uploads became resumable sessions, and "slow" stopped meaning "dead"**
-  (#1947, August 29 — prod `2026.0901.065150`) — `POST /tracks/uploads` opens
-  an R2 multipart session, 10 MiB parts each with a stall timeout and retries,
-  and a worker phase 0 that settles the staged bytes; woody's 391–579s uploads
-  had been called failures by a fixed 300s client timeout. docs:
-  `docs/internal/backend/resumable-uploads.md`.
-- **an upload that fails before sending stops blaming the internet** (#1943)
-  — woody's third field report ran to macOS denying the browser a NAS-hosted
-  .aiff (`net::ERR_ACCESS_DENIED`); the 0%-instant branch got honest copy.
-- **two field reports, zero plyr bugs** (August 27) — a ~300MB wav's transfer
-  window read as a failed upload; a dead player traced to Cloudflare's JAX
-  colo serving 100% 5xx on the R2 media domains while the status page said
-  nothing.
+  (#1947, August 29 — prod `2026.0901.065150`) — an R2 multipart session with
+  10 MiB parts, stall timeouts and retries, and a worker phase that settles the
+  staged bytes; woody's 391–579s uploads had been called failures by a fixed
+  300s client timeout. docs: `docs/internal/backend/resumable-uploads.md`. the
+  field reports around it (#1943) were an upload failing before it sent, a
+  transfer window read as a failure, and Cloudflare's JAX colo 5xx-ing the R2
+  media domains.
 - **supporter gating learns attested.network payments** (#1936, #1938, #1939)
-  — position doc, integration plan, and phase 0: a neutral `validate_supporter`
-  choke point verifying attested.network payer records against trusted-broker
-  proofs ahead of the atprotofans branch. ATM's checkout owns the payer OAuth;
-  plyr reads and never holds a payments-write credential.
-- **a processing track looks processing before you press play** (#1934) —
-  the interim-rendition state on rows, cards and the track page; the delay
-  itself became #1932 (notification timing) and #1933 (the 90s R2→disk stream).
+  — a neutral `validate_supporter` choke point verifying attested.network payer
+  records against trusted-broker proofs ahead of the atprotofans branch. ATM's
+  checkout owns the payer OAuth; plyr reads and never holds a payments-write
+  credential.
 - **plyr never stores membership — access is the space credential** (#1930,
-  August 23) — the `private_media_members` mirror was refreshed only when the
-  artist opened their member list, making their attention in plyr a dependency
-  of other people's access. `_internal/private_access.py` now asks the artist's
-  space host with the reader's own session and caches only that answer (a
-  credential for its lifetime, a refusal five minutes, an unreachable host not
-  at all); table, model, mirror and reconcile deleted in `a81c2d9e4f07`.
+  August 23) — the `private_media_members` mirror depended on the artist
+  opening their member list, so `_internal/private_access.py` now asks the
+  artist's space host with the reader's own session and caches only that
+  answer; table, model, mirror and reconcile deleted in `a81c2d9e4f07`. the
+  contract catch-up that got there is #1876–#1905, design in
+  `docs/internal/architecture/private-media-access-list.md`.
 - **the queue became a direct-manipulation surface** (#1904, #1907–#1924,
   August 22–23) — swipe-to-like / swipe-to-remove, the anti-slop oxlint sweep
   across 91 files, keyboard actions on rows, two sync races found in staging
   spans, and the unified mouse/touch reorder engine that deleted native HTML5
   drag. Also **editing a track deleted its audio from the PDS** (#1904), whose
   66-track blast radius stays in known issues.
-- **private media grows an access list** (#1876–#1905, August 21–22) — the
-  spaces-alpha contract catch-up after zds rejected plyr's pre-alpha
-  `createSpace` body, the grant rather than advertised `scopes_supported` as
-  the capability signal, and the `simplespace` member list on the artist's PDS
-  as source of truth. Design:
-  `docs/internal/architecture/private-media-access-list.md`.
-- **August 14–17** — comment timestamps seek on the first click (#1873); the
-  iOS lock-screen scrub unwind, reverted byte-for-byte (#1860–#1869, open as
-  #1870); teal scrobbles on the production lexicons (#1823); transliterating
-  slugs (#1858); DPoP-bound space credentials (#1856); the non-modal docked
-  comments panel and the track page's finished redesign (#1843–#1855); the
-  per-artist download policy (#1841, #1842).
-- **August 3–14** — downloads from a flag into a policy, albums as cached zips
-  (#1824–#1839); the album batch that wedged the app VM on an aioboto3 default
-  (#1831, #1832); the media hosts' missing CORS policy (#1821), which is also
-  why the artwork accent wash was inert (#1753); `file_id` is not a storage key
+- **August 3–24** — a processing track looks processing before you press play
+  (#1934); comment timestamps seek on the first click (#1873); the iOS
+  lock-screen scrub unwind, reverted byte-for-byte (#1860–#1869, open as
+  #1870); teal scrobbles on the production lexicons (#1823); the non-modal
+  docked comments panel and the track page's redesign (#1843–#1855); downloads
+  from a flag into a per-artist policy, albums as cached zips (#1824–#1842);
+  the album batch that wedged the app VM on an aioboto3 default (#1831,
+  #1832); the media hosts' missing CORS policy (#1821), which is also why the
+  artwork accent wash was inert (#1753); `file_id` is not a storage key
   (#1805–#1811); the credential chain closed one step at a time (#1778–#1790);
   exclude as curation (#1797, #1799); search ranking lexical intent above
   trigram fuzz (#1801); `/atlas`, the 2D semantic map of the catalog
@@ -332,21 +243,20 @@ See `.status_history/2026-08.md` for detailed history:
 
 ### November 2025 – July 2026
 
-See `.status_history/` for detailed history, one file per month: `2026-07.md`,
-`2026-06.md`, `2026-05.md`, `2026-04.md`, `2026-03.md`, `2026-02.md`,
-`2026-01.md`, `2025-12.md`, `2025-11.md`. The arcs that used to sit under
-current focus — radio's live source (#1741–#1750), firehose ordering
-(#1732–#1740), moderation's recorded decisions (#1691–#1718), identity and
-discovery (#1620–#1730), `/atlas` (#1766–#1768), the player-architecture note
-(#1757–#1762), downloads as a relationship dial (#1824–#1858), and the queue as
-a direct-manipulation surface (#1907–#1924) — are in `2026-09.md` with their
-open threads; anything still live from them is in known issues.
+See `.status_history/` for detailed history, one file per month, `2025-11.md`
+through `2026-07.md`. The arcs that used to sit under current focus — radio's
+live source (#1741–#1750), firehose ordering (#1732–#1740), moderation's
+recorded decisions (#1691–#1718), identity and discovery (#1620–#1730),
+`/atlas` (#1766–#1768), the player-architecture note (#1757–#1762), downloads
+as a relationship dial (#1824–#1858), and the queue as a direct-manipulation
+surface (#1907–#1924) — are in `2026-09.md` with their open threads; anything
+still live from them is in known issues.
 
 ## priorities
 
 ### current focus
 
-**the player is spotify's footer now, for everyone** (#1987–#2004, September 2 — GA in prod `2026.0902.232901`): one layout — art, title, heart | shuffle, previous, ±skip, play, ±skip, next, repeat over a full-width scrubber | queue, volume — and on phones the compact bar plus a scrubber row that ends with the queue button; the floating queue button and the `skip-buttons` flag are gone. the heart is the add menu (like, or add to a playlist), reading through the like owner; the phone sheet rises from above the player. the passing-comment stack (#1968–#1980) and the drawn-icon rule (judge an icon as a drawing at the largest and the shipped size, in its row) stand. nate's standing instruction for this kind of iteration: promote to prod after the staging check without asking; design changes to the phone bar pause at staging for his eyes. **next**: the fungible `/now` page (the footer as its handle on phones, the queue moving there); whether skip handlers with `seekto` scrub on a real iPhone lock screen; the drawn-iconography idea (people draw plyr's icons, doodl-style, with published icon collections and an explore page) is parked as "soon, not now".
+**the player is spotify's footer now, for everyone** (#1987–#2004, September 2–3 — GA in prod `2026.0902.232901`, the phone follow-ups in `2026.0903.222140`): one layout — art, title, heart | shuffle, previous, ±skip, play, ±skip, next, repeat over a full-width scrubber | queue, volume — and on phones the compact bar plus a scrubber row that ends with the queue button; the floating queue button and the `skip-buttons` flag are gone. the heart is the add menu (like, or add to a playlist), reading through the like owner; the phone sheet rises from above the player. the passing-comment stack (#1968–#1980) and the drawn-icon rule (judge an icon as a drawing at the largest and the shipped size, in its row) stand. nate's standing instruction for this kind of iteration: promote to prod after the staging check without asking; design changes to the phone bar pause at staging for his eyes. **next**: the fungible `/now` page (the footer as its handle on phones, the queue moving there); whether skip handlers with `seekto` scrub on a real iPhone lock screen; the drawn-iconography idea (people draw plyr's icons, doodl-style, with published icon collections and an explore page) is parked as "soon, not now".
 
 **records are moving into the client's hands — parked until the sign-in design is redone** (plan `docs/plans/2026-08-31-client-side-writes.md`; #1948–#1950 shipped in prod `2026.0901.065150`, reverted September 1 in #1952): phase 0 made the frontend a second OAuth client and chained its consent after the cookie login, so every sign-in showed two authorization screens. the direction stands — the file an artist uploads goes in their PDS as-is, plyr indexes/mirrors/serves, and the backend stops authoring records on anyone's behalf — but the next attempt must fit inside the single existing login, with scope growing only when a feature that needs it is used. **next**: redesign how the browser gets a repo-write capability without a second flow, then phase 1 (likes).
 
@@ -378,7 +288,7 @@ open threads; anything still live from them is in known issues.
 - **PDS-hosted audio is still scanned from a mutable source** ([#1778](https://github.com/zzstoatzz/plyr.fm/issues/1778), narrowed by #1790): the SSRF half is closed — `is_safe_url` now validates the endpoint where a miniDoc enters the system and at both `pds_blob_url` construction sites, and vendors are no longer pointed at the uploader-controlled URL. What remains is the scan-integrity half: a `did:web` track's bytes are served by the user's own host on every request, so a clean copyright scan does not pin what listeners later hear. Pinning the scan to `pds_blob_cid` means fetching and hashing blobs on the track-creation hook — the path #1519 deliberately made non-blocking — so it is a real change, not a validation tweak.
 - **the transcoder's auth fails open** ([#1780](https://github.com/zzstoatzz/plyr.fm/issues/1780)): with `TRANSCODER_AUTH_TOKEN` unset it logs a warning and accepts every request, and the app has a public IP. Currently latent — the secret is set and the app is suspended — but `services/moderation/src/auth.rs` returns `SERVICE_UNAVAILABLE` in the same situation, so the transcoder is the outlier and this is a consistency fix.
 - **CORS permits every HTTPS origin with credentials** (from #208, closed Feb 2026): `allow_origin_regex` resolves to `^(https://.+|http://localhost:\d+|null)$` with `allow_credentials=True`. Harmless today only because the session cookie is same-site and `SameSite=Lax` is carrying the entire defense — it would become a full CSRF-and-read hole the moment anyone sets `samesite="none"` for an embed, or moves the API off the `plyr.fm` registrable domain. #208's closing summary claimed "CORS validation" and its own item 1 (magic-byte MIME validation) never shipped; uploads still trust the client's `Content-Type`. Worth treating as a lesson about closing security issues against a summary rather than the running system.
-- **staging's error-level `SELECT neondb` spans are a pool/suspend mismatch, now mitigated** (August 8): diagnosed and traced to `pool_recycle` (1800s, the default) being **6x longer than staging Neon's `suspend_timeout_seconds` of 300**. The compute scales to zero after 5 minutes idle and kills pooled connections; the next checkout gets a dead one, SQLAlchemy's `handle_error` fires and the OTel instrumentation stamps the span `ERROR` with `str(exc)` — which is empty for this exception class, hence an error with no message and no exception type. Production never sees it because its compute has `suspend_timeout_seconds: -1` (scale-to-zero disabled). **Functionally benign**: all 95 traces containing the error had a succeeding root span (`POST /tracks/` 200 x76, `optimize_track_audio` OK x11, `PUT /audio` 200 x8) — `pool_pre_ping` recovers transparently, so the cost was error-level noise rather than failed requests. `DATABASE_POOL_RECYCLE=240` was set on `relay-api-staging` and **has since been unset — the mitigation was worse than the problem**. Forcing a reconnect every 240s starved concurrent uploads behind the 3-per-artist gate: jobs stuck past ten minutes, the stuck-upload reaper firing repeatedly, and three album integration tests timing out at 300s. Unsetting it removed the timeouts in a single A/B (the failure signature changed from `Timeout (>300s)` to assertion errors, which is what identified it — not pass/fail). The residual assertion failures were debris: `_create_album` is idempotent on `(artist_did, slug)`, so a run killed by pytest-timeout before cleanup leaves its album behind and the next run reuses it and counts double. With the variable unset and the leftovers cleared, integration is green. The `SELECT neondb` noise is therefore back, and staying: it is benign, and the correct fix if it ever matters is disabling scale-to-zero on the staging compute, not shortening `pool_recycle`. The clusters were never "restart noise"; they track integration-test runs (03:25, 03:33, 05:10 on Aug 8; 04:36 on Aug 7), which is what a burst of uploads after an idle window looks like.
+- **staging's error-level `SELECT neondb` spans are benign and staying** (August 8; full diagnosis in `.status_history/2026-08.md`): staging's Neon compute suspends after 5 minutes idle while `pool_recycle` is 1800s, so the next checkout gets a dead connection and the OTel instrumentation stamps an `ERROR` span with no message. `pool_pre_ping` recovers transparently — all 95 traces had a succeeding root span. `DATABASE_POOL_RECYCLE=240` was tried and unset again: forcing a reconnect every 240s starved concurrent uploads behind the 3-per-artist gate and timed out three album integration tests. The correct fix, if it ever matters, is disabling scale-to-zero on the staging compute.
 - **nothing records listening over time** (August 5 accounting; retention figure corrected August 9): `play_count` is a counter on the track row, so plays-per-day exists only inside Logfire's retention window — which is **far shorter than the 14 days assumed here**: on August 9 the earliest record in the project was the same day at 06:12 (see [#1813](https://github.com/zzstoatzz/plyr.fm/issues/1813)). The history before that is unrecoverable. Every day without an append-only play-events table (or a daily `/stats` snapshot) is another day of curve we cannot draw later. Deliberately not built yet — it is new surface, and the shape of it is undecided.
 - **the `firehose` station has no recorded fallback** (#1741): waow.tech's sonification segments are `unlisted` and the radio corpus is public-only, so when the broadcast stops the station has nothing to play. It now says "off air" and keeps the tuner reachable (#1744) instead of stranding anyone, but publishing some segments publicly is the only thing that gives it real fallback material — a content decision, not a code one.
 - **a failed radio play retries forever** (#1750): while the mobile tune-in was broken, the console logged `playback failed: AbortError` on a loop rather than once — something retries a failed radio `play()` indefinitely. Harmless now that playback works, which is exactly why it is worth writing down: it turned a single failure into continuous noise and would do so again for any future playback fault.
@@ -392,7 +302,7 @@ open threads; anything still live from them is in known issues.
 - **no per-actor authentication**: the moderation service trusts one shared `MODERATION_AUTH_TOKEN`, so the event log's `actor` is a claim rather than a verified identity. This is the gate on letting an agent *act* rather than propose, and on review genuinely not always being one person.
 - **the DMCA surface is incomplete** ([#1715](https://github.com/zzstoatzz/plyr.fm/issues/1715)): the agent is registered and reachable at `dmca@plyr.fm`, but the site does not publish the notice requirements or a counter-notice procedure, and there is no repeat-infringer counter — takedowns are recorded per track in `moderation_events`, never aggregated per uploader. The published-agent half is additionally blocked on a non-residential address.
 - `/costs` shows Cloudflare at $0 — upstream gap: CF line items aren't yet tagged `project=="plyr.fm"` in my-prefect-server, so the live feed can't attribute them (#1599).
-- **skip handlers together with `seekto` have never been on a physical iPhone** (#1958, September 1): the `skip-buttons` flag registers `seekbackward`/`seekforward` next to the existing `seekto`, a combination none of the #1860–#1869 recipes tried. iOS shows ±15 in place of ⏮/⏭ once the skip handlers exist; whether the lock-screen scrubber behaves differently with both is nate's phone to answer.
+- **skip handlers together with `seekto` have never been on a physical iPhone** (#1958, September 1; now true for everyone since the #2000 GA, prod `2026.0902.232901`): `seekbackward`/`seekforward` are registered next to the existing `seekto`, a combination none of the #1860–#1869 recipes tried, and iOS shows ±skip in place of ⏮/⏭ because of it. whether the lock-screen scrubber behaves differently with both is nate's phone to answer — and the flag that used to limit the blast radius is gone.
 - **the iOS lock-screen scrubber cannot be dragged in the real app** ([#1870](https://github.com/zzstoatzz/plyr.fm/issues/1870)): metadata, times, and ⏮/⏭ all work; the scrubber never grabs on a physical iPhone under any of five media-session recipes, while SoundCloud's web player scrubs in the same Safari. the deciding experiment — a minimal page on a physical phone, or Web Inspector attached to the device — has not run yet; the code is deliberately parked at the #1860 state.
 - iOS PWA audio may hang on first play after backgrounding
 - audio may persist after closing bluesky in-app browser on iOS ([#779](https://github.com/zzstoatzz/plyr.fm/issues/779)) - user reported audio and lock screen controls continue after dismissing SFSafariViewController. expo-web-browser has a [known fix](https://github.com/expo/expo/issues/22406) that calls `dismissBrowser()` on close, and bluesky uses a version with the fix, but it didn't help in this case. we [opened an upstream issue](https://github.com/expo/expo/issues/42454) then closed it as duplicate after finding prior art. root cause unclear - may be iOS version specific or edge case timing issue.
@@ -538,4 +448,4 @@ see the [contributing guide](https://docs.plyr.fm/contributing/) for setup instr
 
 ---
 
-this is a living document. last updated 2026-09-04 (**the ingest-blackout alert fired on a sign-up**, #2006 — prod `2026.0903.222140`; the quiet-window host rotation is gone, #1796 narrowed). the 2026-09-02 note: (**the footer became spotify's and then the only footer**, #1987–#2004 — GA in prod `2026.0902.232901`; current focus rewritten around it. the earlier September 2 note recorded status maintenance for August 26 – September 2, which archived the last August detail to `.status_history/2026-08.md` and opened `.status_history/2026-09.md`.) earlier entries are preserved in `.status_history/2026-08.md`.
+this is a living document. last updated 2026-09-04 (status maintenance for the September 2–4 window: the September 1–2 player arcs — skip buttons #1958–#1966 and the passing-comment stack #1968–#1980 — moved to `.status_history/2026-09.md`, the August index and the `SELECT neondb` known issue compressed against `.status_history/2026-08.md`, and the footer arc's landing corrected — #2001–#2004 are in prod with `2026.0903.222140`, not a frontend promote. #2008, the window report that feeds this run, is merged and staging only.) the same day's earlier note recorded **the ingest-blackout alert fired on a sign-up** (#2006 — prod `2026.0903.222140`; the quiet-window host rotation is gone, #1796 narrowed), and September 2's recorded **the footer became spotify's and then the only footer**. earlier entries are preserved in `.status_history/`.
