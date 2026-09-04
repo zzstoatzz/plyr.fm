@@ -202,6 +202,44 @@ queue button (Q still opens the panel).
 **next**: the fungible `/now` page reading `player.currentTrack`, with the
 footer as its handle on phones — that is where the queue moves.
 
+#### the ingest-blackout alert fired on a sign-up, and the quiet-window host rotation is gone (#2006, September 3 — prod `2026.0903.222140`)
+
+**why**: the `jetstream ingest blackout` alert (writes happened, zero
+dispatches) fired for ten hours on September 3. replaying two public
+jetstream hosts with the `fm.plyr.*` filter showed both writes on the
+network: one sign-up — the profile record, whose `create` was never in the
+dispatch table, and a like twenty seconds after the artist row, dropped as
+an unknown DID because the consumer's known set refreshes every five
+minutes. no data was lost (the API writes the database before the PDS);
+the echo signal itself had two permanent holes, and every future sign-up
+on a quiet night would have tripped it.
+
+**what shipped**: a commit in plyr's own namespace from an unknown DID
+forces a known-DID refresh (at most one per ten seconds) before the drop;
+bluesky profile commits never do. `.actor.profile` create dispatches to
+the same ingest as update. and the blind-host timer is deleted: nate —
+"we need to stop randomly rotating just because its quiet." the old
+`_is_blind` rotated whenever `fm.plyr.*` was silent while bluesky traffic
+flowed, which on a healthy host is every quiet night. rotation now needs
+evidence: the write site stamps redis with the time of plyr's latest
+own-namespace write, and the consumer rotates when that write is older
+than `echo_grace_seconds` (120) with no own event since (compared on
+firehose `time_us`, 30 s of skew tolerated), once per write, rewinding the
+cursor to before the write so the next host replays it. a second host
+missing the same record means the network lacks it, which is the alert's
+job. `_load_cursor` no longer moves the cursor forward past memory — the
+reload before every reconnect had been erasing the rewind, so the
+existing 10 s rotation rewind was a no-op.
+
+**verified**: staging's e2e run wrote seventeen records and each `pds
+record write` was followed by a `jetstream dispatched` within a second,
+with no rotation. prod held one connection through the night with zero
+own writes, so the prod echo path waits on the first real write.
+`fly logs` from these machines ships in batches an hour or more behind;
+liveness was read from redis (cursor age) and Logfire, not the log tail.
+design: `docs/internal/architecture/jetstream-ingest.md`, "hosts: rotate
+on evidence, never on quiet".
+
 #### September 1 (archived)
 
 See `.status_history/2026-09.md` for detailed history:
@@ -335,7 +373,7 @@ open threads; anything still live from them is in known issues.
 - **unlike may leave the track in the liked list** ([#1812](https://github.com/zzstoatzz/plyr.fm/issues/1812)): `test_cross_user_like` failed once against staging on August 9 and has passed since. Filed rather than dismissed as flaky, because the assertion describes a read-your-own-write guarantee. Ruled out: stale cache (the liked list is a direct DB query) and a failed delete (it commits before returning). Untested hypothesis: `unlike_track` deletes the row and backgrounds the PDS deletion, so a replayed like-create event could resurrect it — the #1736 family. Track deletes write a tombstone for exactly this reason; likes may have no equivalent.
 - **`just backend test` runs serially, CI runs `-n auto`** ([#1815](https://github.com/zzstoatzz/plyr.fm/issues/1815)): the two take different paths through `conftest.py` — serial uses `_setup_database_direct` with no template database, no advisory lock, and no per-worker redis db. The entire parallel bootstrap only ever executed in CI, which is why #1809's bugs were invisible locally despite failing 5/5 once run CI's way. Distinct from the shared-compose-project issue below, which is about *concurrent* sessions rather than parallel workers.
 - **pre-#1811 deletes orphaned R2 objects** ([#1367](https://github.com/zzstoatzz/plyr.fm/issues/1367)): track delete and account deletion keyed off `file_id`, so for firehose-ingested rows the delete was a silent no-op and the real object stayed in the bucket with nothing referencing it. Fixed going forward; anything already orphaned is still there. Production has only 5 ingested rows today so the historical blast radius is small, and the sweep that would confirm it is the audit #1367 already asks for.
-- **a blind jetstream host permanently discards our events** ([#1796](https://github.com/zzstoatzz/plyr.fm/issues/1796)): rotation's fixed 10s cursor rewind cannot cover a blind window in which bsky traffic kept advancing the cursor (verified in production August 8 — see recent work). Silent loss for third-party-client writes, which the write-echo alert cannot see.
+- **a blind jetstream host permanently discards our events** ([#1796](https://github.com/zzstoatzz/plyr.fm/issues/1796)): rotation's fixed 10s cursor rewind cannot cover a blind window in which bsky traffic kept advancing the cursor (verified in production August 8 — see recent work). Silent loss for third-party-client writes, which the write-echo alert cannot see. Narrowed by #2006 (September 3): a rotation triggered by plyr's own unechoed write rewinds the cursor to before that write, so plyr's own records are replayed; foreign-client writes have no stamp, so a blind host still loses them and nothing rotates for them.
 - **parallel agent sessions share one test database** (found August 9): `backend/tests/docker-compose.yml` has no `name:` field, so compose derives the project name from the directory — every checkout/worktree of this repo maps to the same `tests-test-db-1`/`tests-test-redis-1` containers, and two sessions running tests concurrently silently recreate each other's schemas (see the #1801 technical notes for the evening this cost). A `name:` derived from the checkout path, or `COMPOSE_PROJECT_NAME`, would isolate them.
 - **PDS-hosted audio is still scanned from a mutable source** ([#1778](https://github.com/zzstoatzz/plyr.fm/issues/1778), narrowed by #1790): the SSRF half is closed — `is_safe_url` now validates the endpoint where a miniDoc enters the system and at both `pds_blob_url` construction sites, and vendors are no longer pointed at the uploader-controlled URL. What remains is the scan-integrity half: a `did:web` track's bytes are served by the user's own host on every request, so a clean copyright scan does not pin what listeners later hear. Pinning the scan to `pds_blob_cid` means fetching and hashing blobs on the track-creation hook — the path #1519 deliberately made non-blocking — so it is a real change, not a validation tweak.
 - **the transcoder's auth fails open** ([#1780](https://github.com/zzstoatzz/plyr.fm/issues/1780)): with `TRANSCODER_AUTH_TOKEN` unset it logs a warning and accepts every request, and the app has a public IP. Currently latent — the secret is set and the app is suspended — but `services/moderation/src/auth.rs` returns `SERVICE_UNAVAILABLE` in the same situation, so the transcoder is the outlier and this is a consistency fix.
@@ -500,4 +538,4 @@ see the [contributing guide](https://docs.plyr.fm/contributing/) for setup instr
 
 ---
 
-this is a living document. last updated 2026-09-02 (**the footer became spotify's and then the only footer**, #1987–#2004 — GA in prod `2026.0902.232901`; current focus rewritten around it. the earlier September 2 note recorded status maintenance for August 26 – September 2, which archived the last August detail to `.status_history/2026-08.md` and opened `.status_history/2026-09.md`.) earlier entries are preserved in `.status_history/2026-08.md`.
+this is a living document. last updated 2026-09-04 (**the ingest-blackout alert fired on a sign-up**, #2006 — prod `2026.0903.222140`; the quiet-window host rotation is gone, #1796 narrowed). the 2026-09-02 note: (**the footer became spotify's and then the only footer**, #1987–#2004 — GA in prod `2026.0902.232901`; current focus rewritten around it. the earlier September 2 note recorded status maintenance for August 26 – September 2, which archived the last August detail to `.status_history/2026-08.md` and opened `.status_history/2026-09.md`.) earlier entries are preserved in `.status_history/2026-08.md`.
