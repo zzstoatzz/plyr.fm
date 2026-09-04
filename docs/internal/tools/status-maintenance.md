@@ -32,8 +32,8 @@ days; a push re-enables them.
 
 ## the window report
 
-the run begins by generating `window_report.md` with `scripts/status_window.py`
-(also runnable locally: `uv run scripts/status_window.py`, or with
+a plain workflow step generates `window_report.md` with `scripts/status_window.py`
+before Claude starts, and prints it to the job log (also runnable locally: `uv run scripts/status_window.py`, or with
 `--since <iso time>`). the report is the run's ground truth:
 
 - **window**: from the merge time of the most recently merged PR whose branch
@@ -127,6 +127,7 @@ dry, matter-of-fact, slightly sardonic. avoid:
 | input | type | default | description |
 |-------|------|---------|-------------|
 | `skip_audio` | boolean | false | skip audio generation |
+| `report_only` | boolean | false | print the window report to the job log and stop — no Claude run, no PR |
 
 ## secrets required
 

@@ -165,20 +165,20 @@ def first_tag_containing(sha: str) -> tuple[str, datetime] | None:
     return tag, parse_time(when)
 
 
-def promotes(since: datetime) -> list[dict] | None:
+def promotes(since: datetime) -> list[dict] | str:
+    """production-fe deployments in the window, or the reason they are unknown."""
     token = os.environ.get("CLOUDFLARE_API_TOKEN") or os.environ.get(
         "SCRIPT_CF_API_TOKEN"
     )
     if not token:
-        return None
+        return "no CLOUDFLARE_API_TOKEN (or SCRIPT_CF_API_TOKEN) in the environment"
     account = os.environ.get("CLOUDFLARE_ACCOUNT_ID", PAGES_ACCOUNT)
     query = urllib.parse.urlencode({"env": "production", "per_page": 50})
     url = f"https://api.cloudflare.com/client/v4/accounts/{account}/pages/projects/{PAGES_PROJECT}/deployments?{query}"
     try:
         body = fetch_json(url, {"Authorization": f"Bearer {token}"})
     except Exception as exc:
-        print(f"<!-- pages deployments unavailable: {exc} -->", file=sys.stderr)
-        return None
+        return f"Pages API failed: {exc} (does the token have Pages read on project `{PAGES_PROJECT}`?)"
     out = []
     for d in body.get("result", []):
         meta = d.get("deployment_trigger", {}).get("metadata", {})
@@ -204,7 +204,7 @@ def is_ancestor(sha: str, of: str) -> bool:
     return result.returncode == 0
 
 
-def landed(pr: dict, promoted: list[dict] | None) -> str:
+def landed(pr: dict, promoted: list[dict] | str) -> str:
     sha = (pr.get("mergeCommit") or {}).get("oid")
     kind = classify([f["path"] for f in pr.get("files", [])])
     if kind == "docs":
@@ -214,8 +214,8 @@ def landed(pr: dict, promoted: list[dict] | None) -> str:
     candidates: list[tuple[datetime, str]] = []
     if tagged := first_tag_containing(sha):
         candidates.append((tagged[1], f"prod via release {tagged[0]}"))
-    if kind == "frontend":
-        for p in promoted or []:
+    if kind == "frontend" and isinstance(promoted, list):
+        for p in promoted:
             if p["sha"] and is_ancestor(sha, p["sha"]):
                 candidates.append(
                     (p["at"], f"prod via frontend promote {fmt(p['at'])}")
@@ -223,8 +223,8 @@ def landed(pr: dict, promoted: list[dict] | None) -> str:
                 break
     if candidates:
         return min(candidates)[1]
-    if kind == "frontend" and promoted is None:
-        return "no release; frontend promote unknown (no Cloudflare token)"
+    if kind == "frontend" and isinstance(promoted, str):
+        return "no release; frontend promote unknown (Pages unavailable)"
     return "staging only"
 
 
@@ -331,12 +331,13 @@ def main() -> int:
 
     print("\n## frontend promotes in the window (`production-fe` on Cloudflare Pages)")
     promoted = promotes(since)
-    if promoted is None:
-        print("- unavailable: set CLOUDFLARE_API_TOKEN (or SCRIPT_CF_API_TOKEN)")
+    if isinstance(promoted, str):
+        print(f"- unavailable: {promoted}")
     elif not promoted:
         print("- none")
-    for p in promoted or []:
-        print(f"- {fmt(p['at'])} — `{p['sha'][:8]}` ({p['status']})")
+    else:
+        for p in promoted:
+            print(f"- {fmt(p['at'])} — `{p['sha'][:8]}` ({p['status']})")
 
     print("\n## PRs merged in the window and where they landed")
     prs = merged_prs(since)

@@ -21,6 +21,10 @@ on:
         description: "skip audio generation"
         type: boolean
         default: false
+      report_only:
+        description: "print the window report to the job log and stop (no Claude, no PR)"
+        type: boolean
+        default: false
   pull_request:
     types: [closed]
     branches: [main]
@@ -42,7 +46,19 @@ jobs:
 
       - uses: astral-sh/setup-uv@v7
 
+      # the report is deterministic, so it is built here where its output is
+      # in the job log and the Cloudflare secrets never enter the Claude step
+      - name: Generate the window report
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          uv run scripts/status_window.py > window_report.md
+          cat window_report.md
+
       - uses: anthropics/claude-code-action@v1
+        if: ${{ !inputs.report_only }}
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           claude_args: |
@@ -59,15 +75,14 @@ jobs:
 
             ## task 1: gather the window report
 
-            the window is from the moment the LAST status-maintenance PR was MERGED (not opened) until now. `scripts/status_window.py` computes it and everything else you need to know about the window:
+            the window is from the moment the LAST status-maintenance PR was MERGED (not opened) until now. `scripts/status_window.py` computed it before you started and wrote `window_report.md` into the working directory. run:
 
             ```bash
             date
-            uv run scripts/status_window.py > window_report.md
             git log --oneline -50
             ```
 
-            read window_report.md in full. it is the ground truth for this run and contains:
+            then read window_report.md in full. it is the ground truth for this run and contains:
             - the window and which maintenance PR opened it
             - backend releases (GitHub releases, timestamp tags) published in the window and the PRs each carried to production
             - frontend promotes — Cloudflare Pages production deployments of `production-fe`, the only record a frontend-only release leaves
@@ -275,8 +290,6 @@ jobs:
 
         env:
           GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
       # carry the generated audio + transcript to phase 2 (the merge run is a
       # separate run with a fresh checkout, so it can't see these files
@@ -287,6 +300,7 @@ jobs:
       # main — the only durable join to the merge run is the branch name, which
       # phase 2 reads from the merged PR's head ref.
       - name: Resolve PR branch
+        if: ${{ !inputs.report_only }}
         id: prbranch
         run: echo "branch=$(git branch --show-current)" >> "$GITHUB_OUTPUT"
 
