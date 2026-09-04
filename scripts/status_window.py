@@ -42,6 +42,7 @@ from pathlib import Path
 REPO = "zzstoatzz/plyr.fm"
 PAGES_PROJECT = "plyr-fm"
 PAGES_ACCOUNT = "3e9ba01cd687b3c4d29033908177072e"
+PAGES_MAX_PAGES = 8
 PUBLIC_APPVIEW = "https://public.api.bsky.app/xrpc"
 POST_ACCOUNTS = {"plyr.fm": None, "zzstoatzz.io": "plyr"}
 
@@ -173,27 +174,34 @@ def promotes(since: datetime) -> list[dict] | str:
     if not token:
         return "no CLOUDFLARE_API_TOKEN (or SCRIPT_CF_API_TOKEN) in the environment"
     account = os.environ.get("CLOUDFLARE_ACCOUNT_ID", PAGES_ACCOUNT)
-    query = urllib.parse.urlencode({"env": "production", "per_page": 50})
-    url = f"https://api.cloudflare.com/client/v4/accounts/{account}/pages/projects/{PAGES_PROJECT}/deployments?{query}"
-    try:
-        body = fetch_json(url, {"Authorization": f"Bearer {token}"})
-    except Exception as exc:
-        return f"Pages API failed: {exc} (does the token have Pages read on project `{PAGES_PROJECT}`?)"
+    base = f"https://api.cloudflare.com/client/v4/accounts/{account}/pages/projects/{PAGES_PROJECT}/deployments"
     out = []
-    for d in body.get("result", []):
-        meta = d.get("deployment_trigger", {}).get("metadata", {})
-        if meta.get("branch") != "production-fe":
-            continue
-        created = parse_time(d["created_on"])
-        if created < since:
-            continue
-        out.append(
-            {
-                "at": created,
-                "sha": meta.get("commit_hash", ""),
-                "status": d.get("latest_stage", {}).get("status"),
-            }
+    for page in range(1, PAGES_MAX_PAGES + 1):
+        # the endpoint caps per_page at 25 and answers 400 above it
+        query = urllib.parse.urlencode(
+            {"env": "production", "per_page": 25, "page": page}
         )
+        try:
+            body = fetch_json(f"{base}?{query}", {"Authorization": f"Bearer {token}"})
+        except Exception as exc:
+            return f"Pages API failed: {exc} (does the token have Pages read on project `{PAGES_PROJECT}`?)"
+        rows = body.get("result", [])
+        for d in rows:
+            meta = d.get("deployment_trigger", {}).get("metadata", {})
+            created = parse_time(d["created_on"])
+            if created < since:
+                return sorted(out, key=lambda p: p["at"])
+            if meta.get("branch") != "production-fe":
+                continue
+            out.append(
+                {
+                    "at": created,
+                    "sha": meta.get("commit_hash", ""),
+                    "status": d.get("latest_stage", {}).get("status"),
+                }
+            )
+        if len(rows) < 25:
+            break
     return sorted(out, key=lambda p: p["at"])
 
 
