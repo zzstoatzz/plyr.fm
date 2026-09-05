@@ -100,7 +100,7 @@ needed" can still be read: `gh run download <run id> --name status-run-outputs-<
 ## model
 
 the model is set once, as the workflow-level `STATUS_MODEL` env
-(`claude-opus-5` today), resolved with the optional `model` dispatch input
+(`claude-fable-5-1` since September 5, 2026; `claude-opus-5` before), resolved with the optional `model` dispatch input
 into `MODEL`, passed to `--model` for both Claude steps, and printed into the
 PR body ("written by …") so every maintenance PR says which model wrote it.
 
