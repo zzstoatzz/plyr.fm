@@ -100,8 +100,9 @@ needed" can still be read: `gh run download <run id> --name status-run-outputs-<
 ## model
 
 the model is set once, as the workflow-level `STATUS_MODEL` env
-(`claude-opus-5` today), passed to `--model`, and printed into the PR body
-("written by …") so every maintenance PR says which model wrote it.
+(`claude-opus-5` today), resolved with the optional `model` dispatch input
+into `MODEL`, passed to `--model` for both Claude steps, and printed into the
+PR body ("written by …") so every maintenance PR says which model wrote it.
 
 ### what the prompt does with it
 
@@ -170,6 +171,7 @@ dry, matter-of-fact, slightly sardonic. avoid:
 | `report_only` | boolean | false | print the window report to the job log and stop — no Claude run, no PR |
 | `window_since` | string | "" | override the window start (ISO time) for reruns and for evaluating the process against a past window; the prompt then covers that window even if STATUS.md already documents it |
 | `research_only` | boolean | false | stop after the ecosystem research — no writer, no PR; read `ecosystem_context.md` from the job summary or the run artifact |
+| `model` | string | "" | model for this run only; empty means `STATUS_MODEL` from the workflow env |
 
 ## secrets required
 
