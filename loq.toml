@@ -395,4 +395,4 @@ max_lines = 502
 
 [[rules]]
 path = ".github/workflows/status-maintenance.yml"
-max_lines = 513
+max_lines = 519

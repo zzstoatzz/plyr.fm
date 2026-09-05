@@ -74,9 +74,12 @@ STATUS.md's current focus, searches each with `since` = the window start
 (keyword) and without it for background (hybrid), one call at a time with a
 retry on 502 (the index is a small shared service and a parallel burst made
 it 502 on a quarter of calls), reads the top hits with `get_document`, and
-writes `ecosystem_context.md`: per seed, the documents that bear on it with
-title, publication, date, URL and two sentences on the relation, at most ~15
-in all, citing only what it read. the writer uses it like the posts: one
+writes `ecosystem_context.md`: only the documents that bear on a specific
+change in the window or an item in current focus, grouped by that change,
+with title, publication, date, URL and two sentences on the relation, at most
+~12 in all, citing only what it read. the file holds findings and nothing
+else — no seed list, no method notes, nothing about discarded hits or empty
+topics — because telling the writer what to ignore plants it. the writer uses it like the posts: one
 clause where a change responds to something written, never a segment. the
 file is posted into the PR body so the reviewer can judge what was found.
 
@@ -166,6 +169,7 @@ dry, matter-of-fact, slightly sardonic. avoid:
 | `skip_audio` | boolean | false | skip audio generation |
 | `report_only` | boolean | false | print the window report to the job log and stop — no Claude run, no PR |
 | `window_since` | string | "" | override the window start (ISO time) for reruns and for evaluating the process against a past window; the prompt then covers that window even if STATUS.md already documents it |
+| `research_only` | boolean | false | stop after the ecosystem research — no writer, no PR; read `ecosystem_context.md` from the job summary or the run artifact |
 
 ## secrets required
 
