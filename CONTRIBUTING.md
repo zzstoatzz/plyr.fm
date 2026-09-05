@@ -41,14 +41,14 @@ generated code is welcome, but you have to be able to explain what your change d
 - test it manually — for UI work, attach a screenshot or recording
 - note in the PR description that the change was AI-assisted and which tool you used (the auto-attribution is fine)
 
-if you're using claude code, cursor, codex, or similar, the [`contribute` skill](.claude/skills/contribute/SKILL.md) gets your agent oriented quickly.
+if you're using claude code, cursor, codex, or similar, the [`contribute` skill](.agents/skills/contribute/SKILL.md) gets your agent oriented quickly. Skills are checked into `.agents/skills` for automatic Codex discovery; `.claude/skills` contains symlinks to the same sources. See the [skill catalog](docs/internal/tools/skills.md).
 
 ## code conventions
 
 - **type hints** required (python and typescript)
 - **async everywhere** in the backend — never block the event loop
-- **lowercase aesthetic** in naming, docs, and commits — match the existing voice
+- **writing**: concise, conversational, and usually lowercase — preserve proper names and technical identifiers
 - **svelte 5 runes** (`$state`, `$derived`, `$effect`), not legacy stores
 - `uv` for python, `bun` for the frontend, `just` as the task runner
 
-when in doubt, the existing code is the source of truth. [`CLAUDE.md`](CLAUDE.md) at the repo root spells out the full set of project rules.
+when in doubt, the existing code is the source of truth. [`AGENTS.md`](AGENTS.md) at the repo root spells out the full set of project rules.

@@ -12,8 +12,8 @@ if you're using Claude Code, Cursor, Codex, or similar — copy the prompt below
 ```
 i want to contribute to plyr.fm. the repo is at https://github.com/zzstoatzz/plyr.fm
 
-read the CLAUDE.md at the repo root for project context, then read STATUS.md
-for active tasks. fork the repo, make your change on a branch, run linting
+read STATUS.md first for active tasks, then AGENTS.md at the repo root for
+project context. fork the repo, make your change on a branch, run linting
 (just backend lint / just frontend check), add tests for bug fixes, and open a PR.
 
 the stack is FastAPI + SvelteKit + Postgres + Redis. use `uv` for Python, `bun`
@@ -21,7 +21,7 @@ for frontend, and `just` as the task runner. see backend/.env.example for all
 environment variables.
 ```
 
-or install the [contribute skill](https://github.com/zzstoatzz/plyr.fm/tree/main/.claude/skills/contribute) for richer agent context.
+or use the repository’s [contribute skill](https://github.com/zzstoatzz/plyr.fm/tree/main/.agents/skills/contribute) for richer agent context. Shared skills live in `.agents/skills`, which Codex discovers automatically; Claude Code reads the same files through `.claude/skills` symlinks.
 
 ## prerequisites
 
@@ -95,7 +95,7 @@ just backend migrate-up   # apply database migrations
 
 - **type hints** required everywhere (Python and TypeScript)
 - **async everywhere** — never block the event loop
-- **lowercase aesthetic** in naming, docs, and commits
+- **writing**: concise, conversational, and usually lowercase; preserve proper names and technical identifiers
 - SvelteKit with **Svelte 5 Runes** (`$state`, `$derived`, `$effect`)
 - use `uv` for Python (never `pip`)
 - add regression tests when fixing bugs
