@@ -1,76 +1,60 @@
 ---
-title: "claude code skills"
+title: "agent skills"
 ---
 
-## overview
+## shared sources
 
-plyr.fm uses [Claude Code skills](https://docs.anthropic.com/en/docs/claude-code/skills) to encode repeatable workflows as slash commands. skills live in `.claude/skills/<name>/SKILL.md` and are invoked with `/<name>` in any Claude Code session.
+Project skills live in `.agents/skills/<name>/SKILL.md`. Codex discovers that directory automatically; `.claude/skills/<name>` links to the same folder for Claude Code. Edit the canonical `.agents` file once. The per-skill symlinks follow the [FastMCP migration pattern](https://github.com/PrefectHQ/fastmcp/pull/5013).
 
-skills replaced the older `.claude/commands/` format (migrated March 2026). the old format still works but skills are preferred — they support bundled supporting files, richer frontmatter (`context`, `agent`, `effort`, `allowed-tools`), and take precedence over commands with the same name.
+Root `AGENTS.md` points to `.agents/AGENTS.md`, and root `CLAUDE.md` points to `AGENTS.md`. Scoped `AGENTS.md` files stay beside the code they govern, with sibling `CLAUDE.md` symlinks. Git tracks these links, so a clone needs no installation step. `just setup` checks the root entrypoints and skill links.
 
-reference: [skills docs](https://docs.anthropic.com/en/docs/claude-code/skills), [slash commands docs](https://docs.anthropic.com/en/docs/claude-code/slash-commands)
+Use the skill picker or mention a skill explicitly (`$onboard` in Codex CLI, `/onboard` in Claude Code). Automatic selection uses the skill's description. See [OpenAI's skill documentation](https://learn.chatgpt.com/docs/build-skills) and [Claude Code's skill documentation](https://code.claude.com/docs/en/skills) for host-specific behavior. If a Codex skill update does not appear, restart the session.
 
 ## project skills
 
-### development workflow
+| skill | use it for |
+| --- | --- |
+| `onboard` | current status, recent commits, and open priorities |
+| `change` | the project development workflow, from implementation through review |
+| `contribute` | setup and fork workflow for external contributors |
+| `plan` | implementation planning before a substantial change |
+| `implement` | executing an agreed plan |
+| `research` | investigating unfamiliar areas and recording findings |
+| `self-review` | reviewing a change before human review |
+| `consider-review` | assessing and addressing PR feedback |
+| `investigate-report` | triaging a user report and fixing a confirmed bug |
+| `backlog-maintenance` | issue triage and proposed backlog cleanup |
+| `digest` | extracting useful actions from an external resource |
+| `status-update` | maintaining STATUS.md and its history |
+| `toast-copy` | writing notifications that fit the product |
+| `screenshot-docs` | capturing product screenshots for documentation |
+| `deploy` | production release preflight and promotion |
+| `enable-flag` | granting feature access |
+| `resolve-flag` | reviewing copyright flags and proposing decisions |
+| `check-spans` | investigating Logfire traces |
+| `traffic-overview` | reporting traffic and performance across time windows |
 
-| skill | description | when to use |
-|-------|-------------|-------------|
-| `/onboard` | read STATUS.md, recent commits, open issues, propose next step | starting a new session |
-| `/plan` | create an implementation plan before coding | before non-trivial changes |
-| `/implement` | execute an implementation plan phase by phase | after `/plan` is approved |
-| `/research` | research a topic thoroughly and persist findings | investigating unfamiliar areas |
-| `/status-update` | update STATUS.md to reflect recent work | after shipping PRs |
+Discovery is not authorization: publishing, moderation writes, and production promotion still require the user's authorization under the project instructions. Some workflows use Claude-specific tools or session memory; use available equivalents where appropriate and report unavailable dependencies.
 
-### operations
+## adding a skill
 
-| skill | description | when to use |
-|-------|-------------|-------------|
-| `/deploy` | deploy to production with preflight checks | releasing to prod (never auto-invoked) |
-| `/enable-flag` | enable a feature flag for a user | granting feature access |
-| `/check-spans` | investigate Logfire spans and traces | debugging production behavior |
-| `/screenshot-docs` | capture UI screenshots for documentation | updating docs with visuals |
+Create `.agents/skills/<name>/SKILL.md` with a name matching its directory and a description explaining when to use it:
 
-### code review
-
-| skill | description | when to use |
-|-------|-------------|-------------|
-| `/consider-review` | review PR feedback and address comments | responding to PR reviews |
-| `/investigate-report` | investigate a user report and fix if it's a bug | triaging bug reports |
-| `/digest` | extract actionable insights from an external resource | processing links, docs, threads |
-
-### external
-
-| skill | description | when to use |
-|-------|-------------|-------------|
-| `/contribute` | contributing guide for AI coding assistants | external contributors using Claude Code, Cursor, etc. |
-
-## adding a new skill
-
-create `.claude/skills/<name>/SKILL.md`:
-
-```yaml
+```markdown
 ---
-description: what this skill does (required for auto-discovery)
-disable-model-invocation: true  # set for destructive operations like deploy
-argument-hint: "[arg]"          # shown in autocomplete
+name: example
+description: Explain the workflow and the requests it applies to.
 ---
 
-# skill name
-
-instructions for the agent...
+Instructions for the agent.
 ```
 
-the `description` field is how Claude decides when to auto-invoke a skill. without it, the skill only runs when explicitly called with `/<name>`.
+Then add the Claude entrypoint from the repository root:
 
-use `disable-model-invocation: true` for skills that shouldn't be triggered automatically (deploy, destructive operations).
+```sh
+ln -s ../../.agents/skills/example .claude/skills/example
+```
 
-## skill scoping
+Keep supporting files in the same skill folder and use relative references. Preserve any host-specific metadata when editing an existing skill; Claude frontmatter settings do not automatically configure Codex. Codex's optional `agents/openai.yaml` configures its own interface and invocation policy.
 
-skills are discovered from multiple scopes (highest priority first):
-
-1. **personal**: `~/.claude/commands/` or `~/.claude/skills/` — applies to all projects
-2. **project**: `.claude/skills/` — checked into the repo
-3. **plugins**: installed via Claude Code plugin system (e.g., `cloudflare:*`, `svelte:*`)
-
-project skills are shared with all contributors. personal skills are private to your machine.
+Personal skills remain outside the repo; plugin-provided skills are managed by their plugin. A workflow mentioned by a project skill may come from one of those sources rather than this catalog.

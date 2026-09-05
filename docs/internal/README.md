@@ -115,4 +115,4 @@ see [local-development/setup.md](./local-development/setup.md) for complete setu
 1. check docs before researching externally
 2. document decisions as you make them
 3. keep it simple - MVP over perfection
-4. use lowercase aesthetic
+4. write concise, conversational docs; preserve proper names and technical identifiers

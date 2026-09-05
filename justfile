@@ -10,10 +10,12 @@ mod docs 'docs/site'
 default:
     @just --list
 
-# get setup
+# verify shared agent entrypoints (symlinks are checked into git)
 setup:
-    # symlink AGENTS.md to CLAUDE.md
-    ln -s AGENTS.md CLAUDE.md
+    test -L AGENTS.md && test -f AGENTS.md
+    test -L CLAUDE.md && test -f CLAUDE.md
+    test -d .agents/skills
+    for skill in .agents/skills/*; do test -L ".claude/skills/$(basename "$skill")" && test -f ".claude/skills/$(basename "$skill")/SKILL.md" || exit 1; done
 
 
 # show commits since last release
