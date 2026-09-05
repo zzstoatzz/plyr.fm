@@ -17,7 +17,7 @@ that needs the user's authorization.
 | what you are doing | use | why |
 | --- | --- | --- |
 | asking a chat assistant to find audio or inspect a library | hosted MCP: `https://plyrfm.fastmcp.app/mcp` | focused read tools; no local package setup |
-| running those agent tools locally | `uvx plyrfm-mcp` | same interface with local credentials and backend selection |
+| running those agent tools locally | `uvx --prerelease=allow plyrfm-mcp` | same interface with local credentials and backend selection |
 | working in a terminal, including uploads and library edits | CLI: `uvx plyrfm --help` | explicit commands and readable output |
 | composing a Python application or repeatable workflow | SDK: `PlyrClient` / `AsyncPlyrClient` | typed results, sync/async composition, reads and authorized writes |
 | using another language, precise schemas, or API-only services | HTTP: `https://api.plyr.fm/openapi.json` | the full API, including features not wrapped by the SDK |
@@ -39,7 +39,7 @@ explains the contract checks and Pi evaluation workflow.
 ## discover the MCP
 
 Connect your MCP client to `https://plyrfm.fastmcp.app/mcp`, or launch
-`uvx plyrfm-mcp` as a local stdio server. Public catalog tools need no token.
+`uvx --prerelease=allow plyrfm-mcp` as a local stdio server. Public catalog tools need no token.
 For account reads, the local server accepts `PLYR_TOKEN`; the hosted server
 accepts the `x-plyr-token` header. Create tokens in
 [settings → developer](https://plyr.fm/settings#developer).
