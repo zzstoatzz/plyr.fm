@@ -143,19 +143,56 @@ redis (cursor age) and Logfire. design:
 `docs/internal/architecture/jetstream-ingest.md`, "hosts: rotate on evidence,
 never on quiet".
 
-#### the status-maintenance run starts from a window report (#2008, September 4 — merged, staging only; the workflow itself)
+#### the status-maintenance run knows where things landed, reads the atmosphere, and runs on fable 5.1 (#2008–#2020, September 4–5 — the workflow itself)
 
-the weekly run only knew which PRs had merged since the last one, so its
-transcript called merges to main "shipped" and never named a production
-release. `scripts/status_window.py` now computes the window from the last
-maintenance merge and reports, per PR, where it actually landed —
-`prod via release <tag>`, `prod via frontend promote <time>`, `staging
-only`, `docs only` — alongside the releases and Cloudflare Pages
-`production-fe` promotes in the window, the plyr.fm account's public posts,
-and the arcs already in `.status_history/`. a frontend-only release is a
-bare branch push with no GitHub workflow, so Pages is its only record; the
-first live run had no Pages credential and the promotes section said so
-rather than guessing. docs: `docs/internal/tools/status-maintenance.md`.
+**why**: nate, on the weekly transcript: it "is often not picking up on
+where things actually landed in terms of production releases. it should
+know about releases and posts on bsky"; then: "a lot of times changes in
+this app are precipitated by changes on Bluesky that appear in long-form
+writing", so the agent in CI should read the pub-search index; and "we
+should know what model we're using."
+
+**what shipped**: `scripts/status_window.py` (#2008, #2010, #2011) writes
+a window report the run starts from — per merged PR, where it landed
+(`prod via release <tag>`, `prod via frontend promote <time>`, `staging
+only`, `docs only`), the releases and the Cloudflare Pages `production-fe`
+promotes in the window, the plyr.fm account's public posts, and the arcs
+already archived. a frontend-only release is a bare branch push with no
+GitHub workflow, so Pages is its only record; the Pages API caps
+`per_page` at 25 and answers 400 above it, which is why the first live run
+had no promotes and re-dated #2001–#2004 to the later backend release
+(#2012 corrected STATUS.md). the run also reads the atmosphere (#2013,
+#2016, #2018): a research step with the pub-search MCP server seeds 3–6
+topics from the window and current focus, searches each with the window
+start as `since`, reads the top hits, and writes `ecosystem_context.md` —
+only writing that bears on a specific change in the window, grouped by that
+change, with nothing about discarded hits or empty topics, because nate:
+"mentioning that things are irrelevant is also not good, 'don't think about
+elephants'". the writer uses it one clause at a time and never as a
+segment. every run publishes its report, context, transcript and both
+Claude execution files to the job summary and a `status-run-outputs-<run
+id>` artifact (#2014, #2015), with `window_since`, `research_only` and
+`model` dispatch inputs for evaluating the process against a past window.
+the model is named once (`STATUS_MODEL`) and printed in every maintenance
+PR body; a research-only trial on the September 2–4 window put
+`claude-fable-5-1` at $2.20 against opus 5's $1.86 with three on-target
+documents opus had missed, so the run moved to fable (#2019, #2020). the
+whole run costs about $5 a week.
+
+**two things the runs taught**: the research began as a Task subagent
+inside the writer's run; the agent ran in the background, the writer ended
+its turn "waiting on the research subagent", and the session closed with
+nothing written (run 33936254221) — a separate step that finishes first is
+the fix. and a parallel burst of searches made pub-search answer 502 on a
+quarter of calls, so the step searches one call at a time with a retry.
+docs: `docs/internal/tools/status-maintenance.md`.
+
+**still open**: the writer has not yet run on fable; the next scheduled run
+(Mondays 14:00 UTC) is the first full run of the whole process. #2017, a
+forced-window evaluation PR from the September 4 runs, was closed as
+superseded by this entry. `.status_history/2026-07.md` carries duplicated
+arc entries from earlier maintenance runs, which the report's project-scope
+section surfaces and nothing yet fixes.
 
 #### September 1–2 (archived)
 
@@ -448,4 +485,4 @@ see the [contributing guide](https://docs.plyr.fm/contributing/) for setup instr
 
 ---
 
-this is a living document. last updated 2026-09-04 (status maintenance for the September 2–4 window: the September 1–2 player arcs — skip buttons #1958–#1966 and the passing-comment stack #1968–#1980 — moved to `.status_history/2026-09.md`, the August index and the `SELECT neondb` known issue compressed against `.status_history/2026-08.md`, and the footer arc's landing corrected — #2001–#2004 are in prod with `2026.0903.222140`, not a frontend promote. #2008, the window report that feeds this run, is merged and staging only.) the same day's earlier note recorded **the ingest-blackout alert fired on a sign-up** (#2006 — prod `2026.0903.222140`; the quiet-window host rotation is gone, #1796 narrowed), and September 2's recorded **the footer became spotify's and then the only footer**. earlier entries are preserved in `.status_history/`.
+this is a living document. last updated 2026-09-05 (**the status-maintenance run knows where things landed, reads the atmosphere, and runs on fable 5.1**, #2008–#2020). the 2026-09-04 note: (status maintenance for the September 2–4 window: the September 1–2 player arcs — skip buttons #1958–#1966 and the passing-comment stack #1968–#1980 — moved to `.status_history/2026-09.md`, the August index and the `SELECT neondb` known issue compressed against `.status_history/2026-08.md`, and the footer arc's landing corrected — #2001–#2004 are in prod with `2026.0903.222140`, not a frontend promote. #2008, the window report that feeds this run, is merged and staging only.) the same day's earlier note recorded **the ingest-blackout alert fired on a sign-up** (#2006 — prod `2026.0903.222140`; the quiet-window host rotation is gone, #1796 narrowed), and September 2's recorded **the footer became spotify's and then the only footer**. earlier entries are preserved in `.status_history/`.
