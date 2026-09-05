@@ -66,24 +66,32 @@ reviewer can check every "shipped" against where it actually landed.
 ## ecosystem context
 
 changes in plyr.fm are usually precipitated by changes in the atmosphere that
-appear first as long-form writing. the run has the `pub-search` MCP server
-(`.github/mcp/status-maintenance.json`, public endpoint, no auth) and
-delegates the reading to one Task subagent: the parent seeds 3–6 topics from
-the window report and STATUS.md's current focus; the subagent searches each
-with `since` = the window start (keyword) and without it for background
-(hybrid), reads the top hits with `get_document`, and writes
-`ecosystem_context.md` — per seed, the documents that bear on it with title,
-publication, date, URL and two sentences on the relation, at most ~15 in all,
-citing only what it read. the parent uses it like the posts: one clause where
-a change responds to something written, never a segment. the file is posted
-into the PR body so the reviewer can judge what was found.
+appear first as long-form writing. a **research step** — its own
+claude-code-action invocation, run before the writer so it always finishes
+first — has the `pub-search` MCP server (`.github/mcp/status-maintenance.json`,
+public endpoint, no auth). it seeds 3–6 topics from the window report and
+STATUS.md's current focus, searches each with `since` = the window start
+(keyword) and without it for background (hybrid), one call at a time with a
+retry on 502 (the index is a small shared service and a parallel burst made
+it 502 on a quarter of calls), reads the top hits with `get_document`, and
+writes `ecosystem_context.md`: per seed, the documents that bear on it with
+title, publication, date, URL and two sentences on the relation, at most ~15
+in all, citing only what it read. the writer uses it like the posts: one
+clause where a change responds to something written, never a segment. the
+file is posted into the PR body so the reviewer can judge what was found.
+
+it was first built as a Task subagent inside the writer's run; the agent ran
+in the background, the writer ended its turn "waiting" for it, and the
+session closed with nothing written (run 33936254221). the separate step is
+the fix.
 
 ## run outputs
 
 every run (not just one that opens a PR) writes `window_report.md`,
 `ecosystem_context.md` and `podcast_script.txt` to the job summary and, with
-`claude-execution.json` (the full Claude transcript: every tool call and
-result), to an artifact `status-run-outputs-<run id>`, so a run that judged "no maintenance
+`claude-execution.json` and `claude-research-execution.json` (the full Claude
+transcripts of the writer and the research step: every tool call and result),
+to an artifact `status-run-outputs-<run id>`, so a run that judged "no maintenance
 needed" can still be read: `gh run download <run id> --name status-run-outputs-<run id>`.
 
 ## model

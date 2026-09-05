@@ -69,6 +69,43 @@ jobs:
           fi
           cat window_report.md
 
+      # the research is its own Claude invocation so it finishes, in order,
+      # before the writer starts — a background subagent inside the writer's
+      # run was abandoned when the writer ended its turn (run 33936254221)
+      - name: Ecosystem research
+        uses: anthropics/claude-code-action@v1
+        id: research
+        if: ${{ !inputs.report_only }}
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          claude_args: |
+            --model ${{ env.STATUS_MODEL }}
+            --mcp-config .github/mcp/status-maintenance.json
+            --allowedTools "Read,Write,Bash,mcp__pub-search__search,mcp__pub-search__get_document,mcp__pub-search__find_similar,mcp__pub-search__author_profile"
+          prompt: |
+            you are the research half of the plyr.fm status-maintenance run. your ENTIRE purpose is to gather ecosystem context from the `pub-search` MCP server and write `ecosystem_context.md` in the repository root. you edit nothing else and open no PR.
+
+            why: changes in this app are usually precipitated by changes in the atmosphere that show up first as long-form writing — protocol proposals, other apps' release notes, essays. pub-search indexes that writing across leaflet, pckt, offprint, greengale, whitewind and independent sites. its tools: `search` (with `since` and `author` filters; `since` applies in keyword mode and to the keyword half of hybrid), `get_document`, `find_similar`, `author_profile`.
+
+            1. read `window_report.md` (its first line gives the window start) and the "current focus" section of `STATUS.md`.
+            2. write 3–6 seed topics: the subjects of the window's significant PRs and the protocol or ecosystem terms they touch (for example "atproto spaces / permissioned data", "jetstream firehose delivery", "media player conventions"). they go at the top of the file.
+            3. for each seed, in order, one call at a time — the index is a small shared service, so never issue searches in parallel; if a call returns a 502, wait five seconds and retry once, then move on:
+               - `search`, mode keyword, `since` = the window start, limit 8
+               - `search`, mode hybrid, no `since`, limit 8, for the background the window's work responds to
+               - `get_document` for the 2–3 most relevant hits, and read them
+            4. keep only writing that bears on the seed — published in the window, or earlier but clearly what the window's work responds to — and mark which. drop keyword coincidences (a "lock screen" hit about cosmetics is noise).
+            5. write `ecosystem_context.md`: the seed list, then per seed the kept documents — title, publication or author, date, URL, and two sentences: what it says, and how it relates to the seed. at most ~15 documents in all. say plainly when a seed turned up nothing. cite only documents you actually read with `get_document`; never infer content from a title or snippet.
+
+            when the file is written, you are done. do not summarize it back; the writer reads the file.
+
+      - name: Collect the research execution file
+        if: ${{ !inputs.report_only && always() }}
+        run: |
+          if [ -n "${{ steps.research.outputs.execution_file }}" ] && [ -f "${{ steps.research.outputs.execution_file }}" ]; then
+            cp "${{ steps.research.outputs.execution_file }}" claude-research-execution.json
+          fi
+          ls -la ecosystem_context.md 2>/dev/null || echo "research wrote no ecosystem_context.md"
+
       - uses: anthropics/claude-code-action@v1
         id: claude
         if: ${{ !inputs.report_only }}
@@ -77,8 +114,7 @@ jobs:
           display_report: "true"
           claude_args: |
             --model ${{ env.STATUS_MODEL }}
-            --mcp-config .github/mcp/status-maintenance.json
-            --allowedTools "Read,Write,Edit,Bash,Fetch,Task,mcp__pub-search__search,mcp__pub-search__get_document,mcp__pub-search__find_similar,mcp__pub-search__author_profile"
+            --allowedTools "Read,Write,Edit,Bash,Fetch,Task"
           prompt: |
             you are maintaining the plyr.fm (pronounced "player FM") project status file.
 
@@ -115,18 +151,11 @@ jobs:
             - **the archived arcs are the project's memory.** use them to place the window — what this continues, what it closes, what it reverses — one phrase at a time, and only where a listener with no history would otherwise be lost.
             - **STATUS.md must agree with the report.** if STATUS.md calls something shipped that the report shows as `staging only`, or the reverse, correct STATUS.md in this PR and say so in the PR body.
 
-            ## task 1b: ecosystem context, through one research subagent
+            ## task 1b: ecosystem context
 
-            changes in this app are usually precipitated by changes in the atmosphere that show up first as long-form writing — protocol proposals, other apps' release notes, essays. the `pub-search` MCP server (search, get_document, find_similar, author_profile) indexes that writing across leaflet, pckt, offprint, greengale, whitewind and independent sites, with `since` and `author` filters (`since` applies in keyword mode and to the keyword half of hybrid).
+            changes in this app are usually precipitated by changes in the atmosphere that show up first as long-form writing — protocol proposals, other apps' release notes, essays. a research run finished before you started: it seeded 3–6 topics from the window report and STATUS.md's current focus, searched the pub-search index of long-form atmosphere writing for each (filtered to the window, plus background), read the top hits, and wrote `ecosystem_context.md` in the working directory — per seed, the documents that bear on it, with title, publication, date, URL and two sentences on the relation.
 
-            seed it, then delegate the reading. from window_report.md and STATUS.md's current focus, write 3–6 seed topics — the subjects of the window's significant PRs and the protocol or ecosystem terms they touch (for example: "atproto spaces / permissioned data", "jetstream firehose delivery", "media player conventions"). then launch ONE Task subagent whose entire purpose is pub-search research, with this brief:
-
-            - for each seed topic: `search` with `since` = the window start (mode keyword, then hybrid without `since` for background, limit 8 each); for the 2–3 most relevant hits, `get_document` and read the actual text
-            - keep only writing that bears on the seed — published in the window, or earlier but clearly what the window's work responds to. mark which
-            - write `ecosystem_context.md`: for each kept document, title, publication or author, date, URL, and two sentences: what it says, and how it relates to the seed. group by seed topic. at most ~15 documents. say plainly when a topic turned up nothing
-            - cite only documents actually read; never infer a document's content from its title or snippet
-
-            read ecosystem_context.md when the subagent returns. it is context for the transcript and STATUS.md, used the same way as the posts: where a change in the window responds to something written in the atmosphere, one clause naming the publication is enough ("after Habitat's write-up on organizational spaces…"); the subagent's findings are never a segment of their own. keep the file in place — a later step posts it into the PR body so a reviewer can judge what was found.
+            read ecosystem_context.md if it exists (the research run can fail; then there is simply no context this week). it is context for the transcript and STATUS.md, used the same way as the posts: where a change in the window responds to something written in the atmosphere, one clause naming the publication is enough ("after Habitat's write-up on organizational spaces…"); the research findings are never a segment of their own. keep the file in place — a later step posts it into the PR body so a reviewer can judge what was found.
 
             ## task 2: archive old month sections
 
@@ -360,6 +389,7 @@ jobs:
             ecosystem_context.md
             podcast_script.txt
             claude-execution.json
+            claude-research-execution.json
           if-no-files-found: ignore
           retention-days: 14
 
@@ -377,7 +407,10 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           BRANCH: ${{ steps.prbranch.outputs.branch }}
         run: |
-          BODY=$(gh pr view "$BRANCH" --json body --jq .body)
+          if ! BODY=$(gh pr view "$BRANCH" --json body --jq .body 2>/dev/null); then
+            echo "no PR for $BRANCH (the run opened none); outputs are in the job summary and artifact"
+            exit 0
+          fi
           {
             printf '%s\n\nwritten by `%s` (claude-code-action).\n' "$BODY" "$STATUS_MODEL"
             if [ -f window_report.md ]; then
