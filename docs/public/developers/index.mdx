@@ -3,6 +3,8 @@ title: "for developers"
 description: "build on plyr.fm — API, lexicons, and architecture"
 ---
 
+import LlmsPreview from '../../../components/LlmsPreview.astro';
+
 open API, open data, open protocol. build a player, a recommendation engine, or something nobody's thought of yet.
 
 plyr.fm exposes a public API, a Python SDK, and an MCP server. public track data is
@@ -12,20 +14,11 @@ repository or API surface.
 
 ## using a coding assistant?
 
-Start with [for agents](/developers/agents/) or [llms.txt](https://plyr.fm/llms.txt)
-for interface selection, result contracts, and a search → track-detail workflow.
+give your assistant [llms.txt](https://plyr.fm/llms.txt) for the API, SDK, and MCP
+entrypoints. This is the file itself — copy it below, then describe what you want
+to build. The [agent guide](/developers/agents/) walks through the workflows.
 
-paste this into Claude Code, Cursor, or similar to get started:
-
-```
-i want to build an integration with plyr.fm. the API docs are at
-https://docs.plyr.fm/developers/api-reference/ and the OpenAPI spec is at
-https://api.plyr.fm/openapi.json. the Python SDK is `plyrfm` (uv add plyrfm).
-
-public endpoints (no auth): search, list tracks, stream audio, top tracks,
-tags, albums, playlists, RSS feeds, oEmbed. authenticated endpoints require
-a developer token from plyr.fm/settings#developer.
-```
+<LlmsPreview />
 
 ## get started
 

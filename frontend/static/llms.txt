@@ -38,6 +38,13 @@ unknown; don't invent a value or describe the sound from its title alone.
 - Public playlists publish ATProto records; private playlists remain in plyr.fm's database. Experimental private tracks use permissioned data on a compatible PDS. Supporter gating is a separate access model.
 - [Moderation](https://docs.plyr.fm/moderation/): discovery filtering differs from direct access. Labels are assertions; a successful metadata lookup does not waive access controls or authorize downloading.
 
+## Contributing to plyr.fm
+
+- [Contributor guide](https://docs.plyr.fm/contributing/): local setup and the contribution workflow.
+- [Project status](https://github.com/zzstoatzz/plyr.fm/blob/main/STATUS.md): read first for active work and known issues.
+- [Repository instructions](https://github.com/zzstoatzz/plyr.fm/blob/main/AGENTS.md): project conventions, commands, and deployment boundaries.
+- [Contribution skill](https://github.com/zzstoatzz/plyr.fm/blob/main/.agents/skills/contribute/SKILL.md): fork, implement, validate, and prepare a pull request. Read the checked-out repository's instructions before editing; use its justfiles for commands.
+
 ## Guides and source
 
 - [Listeners](https://docs.plyr.fm/listeners/): player, queue, playlists, downloads, and shortcuts.
