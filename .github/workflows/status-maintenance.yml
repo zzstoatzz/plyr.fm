@@ -70,9 +70,11 @@ jobs:
           cat window_report.md
 
       - uses: anthropics/claude-code-action@v1
+        id: claude
         if: ${{ !inputs.report_only }}
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          display_report: "true"
           claude_args: |
             --model ${{ env.STATUS_MODEL }}
             --mcp-config .github/mcp/status-maintenance.json
@@ -339,8 +341,17 @@ jobs:
             fi
           done
 
+      # the execution file is the full Claude transcript (every tool call and
+      # result) — the only way to see what a run that opened no PR actually did
+      - name: Collect the Claude execution file
+        if: ${{ !inputs.report_only && always() }}
+        run: |
+          if [ -n "${{ steps.claude.outputs.execution_file }}" ] && [ -f "${{ steps.claude.outputs.execution_file }}" ]; then
+            cp "${{ steps.claude.outputs.execution_file }}" claude-execution.json
+          fi
+
       - name: Upload run outputs artifact
-        if: ${{ !inputs.report_only }}
+        if: ${{ !inputs.report_only && always() }}
         uses: actions/upload-artifact@v4
         with:
           name: status-run-outputs-${{ github.run_id }}
@@ -348,6 +359,7 @@ jobs:
             window_report.md
             ecosystem_context.md
             podcast_script.txt
+            claude-execution.json
           if-no-files-found: ignore
           retention-days: 14
 

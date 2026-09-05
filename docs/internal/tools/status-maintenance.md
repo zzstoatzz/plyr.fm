@@ -81,8 +81,9 @@ into the PR body so the reviewer can judge what was found.
 ## run outputs
 
 every run (not just one that opens a PR) writes `window_report.md`,
-`ecosystem_context.md` and `podcast_script.txt` to the job summary and to an
-artifact `status-run-outputs-<run id>`, so a run that judged "no maintenance
+`ecosystem_context.md` and `podcast_script.txt` to the job summary and, with
+`claude-execution.json` (the full Claude transcript: every tool call and
+result), to an artifact `status-run-outputs-<run id>`, so a run that judged "no maintenance
 needed" can still be read: `gh run download <run id> --name status-run-outputs-<run id>`.
 
 ## model
