@@ -396,3 +396,7 @@ max_lines = 502
 [[rules]]
 path = ".github/workflows/status-maintenance.yml"
 max_lines = 527
+
+[[rules]]
+path = "docs/internal/contracts/client-api.json"
+max_lines = 8280

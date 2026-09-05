@@ -51,3 +51,7 @@ tunnel:
 # mint a browserless dev token from an app-password (see scripts/mint_dev_token.py)
 mint-dev-token *ARGS:
     uv run --project backend scripts/mint_dev_token.py {{ ARGS }}
+
+# offline schema guard; the fixed dummy key is only for importing route definitions
+check-client-contract:
+    OAUTH_ENCRYPTION_KEY=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA= uv run --directory backend python ../scripts/check_client_contract.py

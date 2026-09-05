@@ -14,28 +14,38 @@ that needs the user's authorization.
 
 ## choose an interface
 
-| task | interface | starting point |
+| what you are doing | use | why |
 | --- | --- | --- |
-| search and browse from a tool-calling agent | hosted MCP | `https://plyrfm.fastmcp.app/mcp` |
-| compose a workflow in Python | SDK | `uv add plyrfm`; `PlyrClient` or `AsyncPlyrClient` |
-| use a terminal | CLI | `uvx plyrfm --help` |
-| build a client or inspect exact responses | HTTP | `https://api.plyr.fm/openapi.json` |
-| listen in a browser | app | `https://plyr.fm/track/{id}` |
+| asking a chat assistant to find audio or inspect a library | hosted MCP: `https://plyrfm.fastmcp.app/mcp` | focused read tools; no local package setup |
+| running those agent tools locally | `uvx --prerelease=allow plyrfm-mcp` | same interface with local credentials and backend selection |
+| working in a terminal, including uploads and library edits | CLI: `uvx plyrfm --help` | explicit commands and readable output |
+| composing a Python application or repeatable workflow | SDK: `PlyrClient` / `AsyncPlyrClient` | typed results, sync/async composition, reads and authorized writes |
+| using another language, precise schemas, or API-only services | HTTP: `https://api.plyr.fm/openapi.json` | the full API, including features not wrapped by the SDK |
+| listening in a browser | `https://plyr.fm/track/{id}` | opens the player for the listener |
 
-The SDK, CLI, and MCP are maintained in
-[plyr-python-client](https://github.com/zzstoatzz/plyr-python-client). The MCP
-exposes read operations; the SDK, CLI, and HTTP API also support mutations.
-Use the live OpenAPI schema for HTTP details and installed CLI help for commands.
+The CLI also handles reads. Its display output is for a terminal; use SDK objects
+or HTTP JSON when another program consumes the result. MCP is read-only and does
+not control the web player's queue. Browser sessions, radio and jams are examples
+of API capabilities outside the SDK namespaces.
+
+The SDK, CLI, and MCP live in
+[plyr-python-client](https://github.com/zzstoatzz/plyr-python-client).
+Their [capability table](https://github.com/zzstoatzz/plyr-python-client/blob/main/docs/surfaces.md)
+records each SDK operation's CLI/MCP mapping and explains deliberate omissions.
+Parity means shared behavior agrees; it does not require every API endpoint to
+become a tool. The [interface guide](https://github.com/zzstoatzz/plyr-python-client/blob/main/docs/interfaces.md)
+explains the contract checks and Pi evaluation workflow.
 
 ## discover the MCP
 
 Connect your MCP client to `https://plyrfm.fastmcp.app/mcp`, or launch
-`uvx plyrfm-mcp` as a local stdio server. Public catalog tools need no token.
+`uvx --prerelease=allow plyrfm-mcp` as a local stdio server. Public catalog tools need no token.
 For account reads, the local server accepts `PLYR_TOKEN`; the hosted server
 accepts the `x-plyr-token` header. Create tokens in
 [settings → developer](https://plyr.fm/settings#developer).
 
-Discover tools when connecting. The current groups are:
+Discover tools when connecting. Read `plyr://interfaces` for interface guidance
+and `plyr://me` for your authenticated identity. The current groups are:
 
 - **find audio:** `search`, `top_tracks`, `list_tags`, `tracks_by_tag`, `list_tracks`
 - **inspect a selection:** `get_track`, `get_playlist`, `playlists_by_artist`
@@ -137,3 +147,31 @@ A useful read-only integration check is:
 
 Do not issue likes, uploads, or play-count writes as a connectivity test.
 The [quickstart](/developers/quickstart/) contains executable SDK and HTTP examples.
+
+## writing an MCP server
+
+The webinar [Is Your MCP Server Good?](https://github.com/PrefectHQ/is-your-mcp-server-good/)
+compares several ways to expose the Prefect API, with runnable examples for
+OpenAPI generation, response trimming, code mode, and a hand-written server.
+A few practices carry over to plyr.fm integrations:
+
+1. **Choose tasks before tools.** Write down what someone should accomplish,
+   such as finding audio and inspecting a selection. Give each tool a clear
+   role in that workflow, with enough information to choose the next step.
+2. **Make inputs and results precise.** Include units, bounds, identifiers,
+   access requirements, and what a result establishes. Preserve the distinction
+   between unknown values and empty collections when reducing a response.
+3. **Inspect the context cost.** Measure tool listings and representative
+   responses. Code mode can make initial discovery smaller; include the schemas
+   and results fetched during the task when evaluating the whole interaction.
+4. **Exercise realistic requests.** Run an agent with only the server's tools.
+   Review its calls, evidence, answer, and handling of missing credentials or
+   unavailable operations. Repeat after changing names, descriptions, or schemas.
+5. **Check shared behavior automatically.** Keep HTTP logic and models in a
+   shared client. Test filters, result fields, permissions, and write payloads
+   across the interfaces that expose them. Keep repeatable checks in pre-commit
+   and CI, and run live checks against the deployed server too.
+
+The webinar scripts estimate token counts from serialized length. Those estimates
+help compare designs; reviewing completed agent workflows establishes whether
+people can use the resulting tools successfully.

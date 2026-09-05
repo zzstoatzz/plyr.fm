@@ -14,10 +14,11 @@
 
 ## Choose a surface
 
-- HTTP: `https://api.plyr.fm`. Public search and track metadata need no token.
-- Python SDK / CLI: `uv add plyrfm` / `uvx plyrfm --help`. SDK operations use namespaces: `client.discover.search(...)`, `client.tracks.get(...)`, `client.playlists.list()`.
+- HTTP: `https://api.plyr.fm`. Choose it for other languages, exact response schemas, or API-only features. Public search and track metadata need no token.
+- Python SDK: `uv add plyrfm` for typed, composable sync/async workflows. Operations use namespaces: `client.discover.search(...)`, `client.tracks.get(...)`, `client.playlists.list()`.
+- CLI: `uvx plyrfm --help` for terminal reads and authorized uploads, edits, and library changes. Use SDK objects or HTTP JSON for programmatic output.
 - Hosted MCP: `https://plyrfm.fastmcp.app/mcp`. Discover its tools at connection time. It exposes read-only catalog and library operations; it does not play audio in the user's browser or mutate their library.
-- Local MCP: `uvx plyrfm-mcp`. Optional `PLYR_TOKEN` enables the user's private library reads; the hosted server accepts `x-plyr-token`.
+- Local MCP: `uvx --prerelease=allow plyrfm-mcp`. Optional `PLYR_TOKEN` enables the user's private library reads; the hosted server accepts `x-plyr-token`.
 - App: [plyr.fm](https://plyr.fm) for listening, publishing, and account settings.
 
 ## Search, inspect, then act

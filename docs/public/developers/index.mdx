@@ -60,13 +60,13 @@ see the [plyr-python-client repo](https://github.com/zzstoatzz/plyr-python-clien
 the `plyrfm-mcp` package provides an MCP server for AI assistants:
 
 ```bash
-uv add plyrfm-mcp
+uv add --prerelease=allow plyrfm-mcp
 ```
 
 add to Claude Code:
 
 ```bash
-claude mcp add plyr-fm -- uvx plyrfm-mcp
+claude mcp add plyr-fm -- uvx --prerelease=allow plyrfm-mcp
 ```
 
 The hosted endpoint is `https://plyrfm.fastmcp.app/mcp`. The MCP is read-only: it
