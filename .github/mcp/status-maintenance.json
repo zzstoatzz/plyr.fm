@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "pub-search": {
+      "type": "http",
+      "url": "https://pub-search-by-zzstoatzz.fastmcp.app/mcp"
+    }
+  }
+}
