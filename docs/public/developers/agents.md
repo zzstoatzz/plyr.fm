@@ -147,3 +147,31 @@ A useful read-only integration check is:
 
 Do not issue likes, uploads, or play-count writes as a connectivity test.
 The [quickstart](/developers/quickstart/) contains executable SDK and HTTP examples.
+
+## writing an MCP server
+
+The webinar [Is Your MCP Server Good?](https://github.com/PrefectHQ/is-your-mcp-server-good/)
+compares several ways to expose the Prefect API, with runnable examples for
+OpenAPI generation, response trimming, code mode, and a hand-written server.
+A few practices carry over to plyr.fm integrations:
+
+1. **Choose tasks before tools.** Write down what someone should accomplish,
+   such as finding audio and inspecting a selection. Give each tool a clear
+   role in that workflow, with enough information to choose the next step.
+2. **Make inputs and results precise.** Include units, bounds, identifiers,
+   access requirements, and what a result establishes. Preserve the distinction
+   between unknown values and empty collections when reducing a response.
+3. **Inspect the context cost.** Measure tool listings and representative
+   responses. Code mode can make initial discovery smaller; include the schemas
+   and results fetched during the task when evaluating the whole interaction.
+4. **Exercise realistic requests.** Run an agent with only the server's tools.
+   Review its calls, evidence, answer, and handling of missing credentials or
+   unavailable operations. Repeat after changing names, descriptions, or schemas.
+5. **Check shared behavior automatically.** Keep HTTP logic and models in a
+   shared client. Test filters, result fields, permissions, and write payloads
+   across the interfaces that expose them. Keep repeatable checks in pre-commit
+   and CI, and run live checks against the deployed server too.
+
+The webinar scripts estimate token counts from serialized length. Those estimates
+help compare designs; reviewing completed agent workflows establishes whether
+people can use the resulting tools successfully.
