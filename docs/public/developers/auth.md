@@ -17,7 +17,7 @@ curl -H "Authorization: Bearer your_token" https://api.plyr.fm/tracks/liked
 from plyrfm import PlyrClient
 
 client = PlyrClient(token="your_token")
-my_tracks = client.my_tracks()
+my_tracks = client.tracks.my()
 ```
 
 tokens are scoped to your account and have independent OAuth credentials — refreshing your browser session won't invalidate them. revoke tokens at any time from settings.

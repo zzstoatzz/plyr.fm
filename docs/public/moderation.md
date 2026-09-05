@@ -29,8 +29,9 @@ a rendering default that **you** control. These are
 [standard AT Protocol values](https://github.com/bluesky-social/atproto/blob/main/packages/api/definitions/labels.json),
 not plyr.fm inventions.
 
-- hidden from discovery, search, recommendations, collections, queues, and
-  Subsonic browsing unless you enable **sensitive audio** in settings
+- hidden from discovery, search, and recommendations unless you enable
+  **sensitive audio** in settings
+- shown in albums, playlists, likes, queues, and Subsonic browsing
 - never in shared radio, for anyone — radio is one synchronized stream, so no
   single listener's preference can decide what everyone else hears
 - **still listed on the artist's own page**, and **a direct link plays for
@@ -76,7 +77,7 @@ hidden in a feed but visible when you open it.
 | your own uploads, in your portal | **shown** | **shown** |
 | Subsonic browsing | **shown** | hidden |
 | Subsonic shuffle | hidden | hidden |
-| listening rooms (jams) | hidden unless you opt in | hidden |
+| listening rooms (jams) | hidden | hidden |
 
 radio and jams are shared, synchronized surfaces: one listener's preference
 cannot decide what everyone else hears, so adult audio stays out.
@@ -87,10 +88,9 @@ cannot decide what everyone else hears, so adult audio stays out.
 settings say. A label on your own upload never hides it from you — except in
 radio, which is shared, and except for copyright, which is not a preference.
 
-**a copyright label is not a preference.** No setting reveals a
-copyright-labeled track, including for the person who uploaded it, because it
-is about what we are willing to keep serving rather than about what you would
-rather see. Playback from a direct link still works: a fingerprint match is not
+**a copyright label is not a preference.** No listener setting reveals a
+copyright-labeled track in discovery or collections. Creators can still see and
+manage their own uploads in the portal. Playback from a direct link still works: a fingerprint match is not
 a finding, and covers and remixes match.
 
 ### operator overrides

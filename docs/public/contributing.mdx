@@ -3,25 +3,19 @@ title: "contributing"
 description: "contribute to plyr.fm development"
 ---
 
+import LlmsPreview from '../../components/LlmsPreview.astro';
+
 plyr.fm is open source. development happens on [GitHub](https://github.com/zzstoatzz/plyr.fm) (mirrored to [tangled.org](https://tangled.org/zzstoatzz.io/plyr.fm)). contributions welcome — fork the repo and open a PR.
 
 ## using a coding assistant?
 
-if you're using Claude Code, Cursor, Codex, or similar — copy the prompt below into your assistant to get oriented:
+give your assistant the project’s [llms.txt](https://plyr.fm/llms.txt). Preview it
+here, copy the full text with one click, then tell your assistant what you want
+to work on.
 
-```
-i want to contribute to plyr.fm. the repo is at https://github.com/zzstoatzz/plyr.fm
+<LlmsPreview />
 
-read STATUS.md first for active tasks, then AGENTS.md at the repo root for
-project context. fork the repo, make your change on a branch, run linting
-(just backend lint / just frontend check), add tests for bug fixes, and open a PR.
-
-the stack is FastAPI + SvelteKit + Postgres + Redis. use `uv` for Python, `bun`
-for frontend, and `just` as the task runner. see backend/.env.example for all
-environment variables.
-```
-
-or use the repository’s [contribute skill](https://github.com/zzstoatzz/plyr.fm/tree/main/.agents/skills/contribute) for richer agent context. Shared skills live in `.agents/skills`, which Codex discovers automatically; Claude Code reads the same files through `.claude/skills` symlinks.
+For repository work, use the repository’s [contribute skill](https://github.com/zzstoatzz/plyr.fm/tree/main/.agents/skills/contribute) for richer agent context. Shared skills live in `.agents/skills`, which Codex discovers automatically; Claude Code reads the same files through `.claude/skills` symlinks.
 
 ## prerequisites
 

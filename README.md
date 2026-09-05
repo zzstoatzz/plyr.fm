@@ -38,6 +38,10 @@ this is a small, actively evolving project. [STATUS.md](STATUS.md) records curre
 
 [Pydantic Logfire](https://logfire.pydantic.dev) provides observability. CLAP embeddings and [turbopuffer](https://turbopuffer.com) power the feature-flagged mood search and audio recommendations. developers can use the [public API](https://api.plyr.fm/docs), [ATProto lexicons](https://docs.plyr.fm/lexicons/overview/), or the [Python SDK / MCP server](https://github.com/zzstoatzz/plyr-python-client).
 
+## build with an agent
+
+start at [llms.txt](https://plyr.fm/llms.txt) or the [agent guide](https://docs.plyr.fm/developers/agents/). choose HTTP, the Python SDK / CLI, or the read-only [hosted MCP](https://plyrfm.fastmcp.app/mcp); follow a search result through to track detail and a playable link. the [live OpenAPI schema](https://api.plyr.fm/openapi.json) describes the HTTP contract.
+
 ## work on plyr.fm
 
 start with the [contributing guide](CONTRIBUTING.md) and [local setup](https://docs.plyr.fm/contributing/). once configured, run these from the repository root in separate terminals:

@@ -230,8 +230,9 @@ if you believe a match is a false positive, or you hold the rights to the matche
 
 plyr.fm uses the global AT Protocol labels `sexual` and `porn` for adult audio.
 They are content warnings, not takedowns: the track and its ATProto record remain
-in place, while plyr.fm hides the track and blocks playback by default. The
-creator can always see and play their own track.
+in place. plyr.fm hides the track from discovery by default, while artist pages,
+collections, and direct links still show it and allow playback. Shared radio and
+jams exclude adult-labeled audio. The creator can always manage it in the portal.
 
 enable **contains adult or sexual audio** during upload, or change the content
 notice later in the track editor. The notice is stored with your track as a

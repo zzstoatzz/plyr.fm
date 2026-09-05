@@ -1,6 +1,6 @@
 ---
 name: contribute
-description: Contributing to plyr.fm — an audio streaming app built on ATProto. Use when making changes to the plyr.fm codebase, fixing bugs, adding features, or opening pull requests.
+description: Set up an external contribution to plyr.fm using a fork. Use for first-time contributor setup or fork-based pull requests; use change for work in the maintainer’s checkout.
 metadata:
   author: zzstoatzz
   repo: https://github.com/zzstoatzz/plyr.fm

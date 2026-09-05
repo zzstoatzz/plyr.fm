@@ -1,0 +1,124 @@
+---
+import content from '../../../../frontend/static/llms.txt?raw';
+---
+
+<llms-preview class="not-content">
+  <div class="file-header">
+    <a class="file-name" href="/llms.txt">
+      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r=".5" fill="currentColor"/></svg>
+      <span>llms.txt</span>
+    </a>
+    <button class="copy" type="button" hidden>
+      <svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="6" y="6" width="10" height="11" rx="2"/><path d="M12 6V4a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h2"/></svg>
+      <span>copy full text</span>
+    </button>
+  </div>
+  <pre tabindex="0" aria-label="llms.txt content"><code>{content}</code></pre>
+  <div class="file-footer">
+    <button class="expand" type="button" aria-expanded="false" hidden>show full file</button>
+    <span class="status" role="status" aria-live="polite">ready for your assistant</span>
+    <a href="/llms.txt">open text file</a>
+  </div>
+</llms-preview>
+
+<script>
+  class LlmsPreview extends HTMLElement {
+    connectedCallback(): void {
+      const copy = this.querySelector<HTMLButtonElement>('.copy');
+      const expand = this.querySelector<HTMLButtonElement>('.expand');
+      const text = this.querySelector<HTMLElement>('code');
+      const preview = this.querySelector<HTMLPreElement>('pre');
+      const status = this.querySelector<HTMLElement>('.status');
+      if (!copy || !expand || !text || !preview || !status) return;
+      copy.hidden = false;
+      expand.hidden = false;
+      copy.onclick = async (): Promise<void> => {
+        copy.disabled = true;
+        try {
+          await navigator.clipboard.writeText(text.textContent ?? '');
+          status.textContent = 'full text copied';
+        } catch {
+          status.textContent = 'select the text to copy';
+          const selection = window.getSelection();
+          const range = document.createRange();
+          range.selectNodeContents(text);
+          selection?.removeAllRanges();
+          selection?.addRange(range);
+          preview.focus();
+        } finally {
+          copy.disabled = false;
+        }
+      };
+      expand.onclick = (): void => {
+        const expanded = expand.getAttribute('aria-expanded') !== 'true';
+        expand.setAttribute('aria-expanded', String(expanded));
+        this.classList.toggle('expanded', expanded);
+        expand.textContent = expanded ? 'collapse file' : 'show full file';
+      };
+    }
+  }
+  customElements.define('llms-preview', LlmsPreview);
+</script>
+
+<style>
+  llms-preview {
+    display: block;
+    margin-block: 1.5rem 2rem;
+    overflow: hidden;
+    border: 1px solid var(--sl-color-gray-4);
+    border-top: 3px solid var(--sl-color-text-accent);
+    border-radius: .65rem;
+    background: var(--sl-color-black);
+    color: var(--sl-color-white);
+  }
+  .file-header, .file-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: .75rem;
+    padding: .85rem 1.1rem;
+    background: var(--sl-color-gray-6);
+  }
+  .file-header { border-bottom: 1px solid var(--sl-color-gray-5); }
+  .file-name { display: inline-flex; align-items: center; gap: .6rem; font: 600 .95rem var(--sl-font-system-mono); text-decoration: none; }
+  a { color: var(--sl-color-text-accent); }
+  button { font: inherit; cursor: pointer; }
+  button[hidden] { display: none; }
+  .copy {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: .5rem;
+    min-height: 2.75rem;
+    padding: .5rem .85rem;
+    border: 1px solid var(--sl-color-text-accent);
+    border-radius: .35rem;
+    background: var(--sl-color-accent-low);
+    color: var(--sl-color-accent-high);
+    font-size: .9rem;
+  }
+  .copy:hover { background: var(--sl-color-text-accent); color: var(--sl-color-black); }
+  :is(button, a, pre):focus-visible { outline: 2px solid var(--sl-color-text-accent); outline-offset: 3px; }
+  pre {
+    margin: 0;
+    max-height: 18rem;
+    overflow: auto;
+    overscroll-behavior: contain;
+    padding: 1.25rem;
+    scrollbar-color: var(--sl-color-gray-3) transparent;
+    font: .8rem/1.8 var(--sl-font-system-mono);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    tab-size: 2;
+  }
+  code { font: inherit; }
+  .expanded pre { max-height: none; }
+  .file-footer { border-top: 1px solid var(--sl-color-gray-5); flex-wrap: wrap; font-size: .8rem; }
+  .expand { min-height: 2.75rem; border: 0; padding: 0; color: var(--sl-color-text-accent); background: transparent; text-decoration: underline; text-underline-offset: .2em; }
+  .status { color: var(--sl-color-gray-1); }
+  @media (max-width: 420px) {
+    .file-header, .file-footer { padding-inline: .8rem; }
+    .file-footer .status { order: 3; flex-basis: 100%; }
+    pre { padding: 1rem; }
+  }
+</style>

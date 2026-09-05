@@ -21,7 +21,7 @@ description: "common issues and solutions for plyr.fm"
 
 **cause**: sessions last 14 days with auto-refresh. if the underlying OAuth token refresh fails (e.g. your PDS revokes the grant), the session becomes invalid.
 
-**solution**: sign in again. your data (likes, playlists, tracks) is stored on your PDS — nothing is lost.
+**solution**: sign in again. signing out does not delete your library. public records remain on your PDS; private playlists remain in plyr.fm.
 
 ### developer token stopped working
 
