@@ -47,6 +47,52 @@ plyr.fm should become:
 
 ### September 2026
 
+#### the player’s clipped “g” exposed a track-identity collision (#2026–#2028, September 5)
+
+**why**: nate first spotted the bottom of the “g” missing from the player’s
+“single” label, then reported hearing “ft sando (live on logan)” while the
+footer showed bufo.uk’s “test”. Both uploads share audio file
+`b3d77f40b53a7e57`: track 1249 is nate’s original, 1261 is the other upload.
+The queue persisted audio file IDs, and both server hydration and frontend
+restoration collapsed that file to one track. The audio was right; the title,
+artist, artwork, and track-page link could all belong to the other upload.
+
+**what shipped**: #2026 raises metadata line height from 1.15 to 1.4, leaving
+room for handwritten-font descenders. It reached production first as a
+frontend-only promote. #2027 teaches server hydration to use database track
+IDs; #2028 saves those IDs for queue order, original shuffle order, and the
+current track, then restores metadata by that identity. Repeated occurrences
+remain separate, and a missing record is omitted instead of substituted with
+another upload of the same audio. Backend support reached production in
+`2026.0905.202501` before the frontend promote enabled the new fields.
+
+**compatibility**: queue state is JSONB, so this needed no migration. The
+legacy file-ID fields remain for older clients. Old snapshots cannot tell us
+which upload was selected; they resolve deterministically to the lowest track
+ID. Selecting the intended track again in the updated frontend saves its exact
+identity. Audio identity is useful for caching bytes; it cannot stand in for
+a published track’s identity. Design: `docs/internal/frontend/queue.md`.
+
+**verified**: regression tests reproduced the substitution before the fix;
+1,626 backend and 216 frontend tests passed (25 existing backend skips).
+The “single” label was inspected at 1280px and 390px in dark and light themes
+on staging and production. Staging hydration preserved shared-audio uploads
+and repeated entries. The production frontend’s intercepted queue round trip
+reproduced the original swap before deployment and retained the selected track
+after save and reload with the fix, without modifying a listener’s queue.
+
+
+The staging integration suite passed all 22 tests on rerun. Its first run
+hit a 120-second album-upload HTTP timeout during a staging slowdown that
+coincided with an extra diagnostic process; the other 21 tests passed. The
+rerun ran without that probe. No application change was needed for the retry.
+
+A second Python process used for a production hydration probe coincided with
+one 1 GB app instance becoming unresponsive. The public API remained available
+through the other instance; the affected instance was restarted and recovered.
+The probe returned no result. Avoid importing the application in an extra
+process on production app VMs; use staging and HTTP-level verification.
+
 #### the footer became spotify's, then became the only footer (#1987–#2004, September 2–3 — GA in prod `2026.0902.232901`; the phone follow-ups #2001–#2004 reached prod as frontend-only promotes on September 3, 00:13Z and 00:54Z)
 
 **why**: nate: "standardize the player by shamelessly copying Spotify and
@@ -487,4 +533,4 @@ see the [contributing guide](https://docs.plyr.fm/contributing/) for setup instr
 
 ---
 
-this is a living document. last updated 2026-09-05 (**the status-maintenance run knows where things landed, reads the atmosphere, and runs on fable 5.1**, #2008–#2020). the 2026-09-04 note: (status maintenance for the September 2–4 window: the September 1–2 player arcs — skip buttons #1958–#1966 and the passing-comment stack #1968–#1980 — moved to `.status_history/2026-09.md`, the August index and the `SELECT neondb` known issue compressed against `.status_history/2026-08.md`, and the footer arc's landing corrected — #2001–#2004 are in prod with `2026.0903.222140`, not a frontend promote. #2008, the window report that feeds this run, is merged and staging only.) the same day's earlier note recorded **the ingest-blackout alert fired on a sign-up** (#2006 — prod `2026.0903.222140`; the quiet-window host rotation is gone, #1796 narrowed), and September 2's recorded **the footer became spotify's and then the only footer**. earlier entries are preserved in `.status_history/`.
+this is a living document. last updated 2026-09-05 (**player descenders and exact queue track identity**, #2026–#2028; backend release `2026.0905.202501`, then frontend promote). Earlier that day: (**the status-maintenance run knows where things landed, reads the atmosphere, and runs on fable 5.1**, #2008–#2020). the 2026-09-04 note: (status maintenance for the September 2–4 window: the September 1–2 player arcs — skip buttons #1958–#1966 and the passing-comment stack #1968–#1980 — moved to `.status_history/2026-09.md`, the August index and the `SELECT neondb` known issue compressed against `.status_history/2026-08.md`, and the footer arc's landing corrected — #2001–#2004 are in prod with `2026.0903.222140`, not a frontend promote. #2008, the window report that feeds this run, is merged and staging only.) the same day's earlier note recorded **the ingest-blackout alert fired on a sign-up** (#2006 — prod `2026.0903.222140`; the quiet-window host rotation is gone, #1796 narrowed), and September 2's recorded **the footer became spotify's and then the only footer**. earlier entries are preserved in `.status_history/`.
