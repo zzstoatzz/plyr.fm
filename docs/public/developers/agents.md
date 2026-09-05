@@ -14,18 +14,27 @@ that needs the user's authorization.
 
 ## choose an interface
 
-| task | interface | starting point |
+| what you are doing | use | why |
 | --- | --- | --- |
-| search and browse from a tool-calling agent | hosted MCP | `https://plyrfm.fastmcp.app/mcp` |
-| compose a workflow in Python | SDK | `uv add plyrfm`; `PlyrClient` or `AsyncPlyrClient` |
-| use a terminal | CLI | `uvx plyrfm --help` |
-| build a client or inspect exact responses | HTTP | `https://api.plyr.fm/openapi.json` |
-| listen in a browser | app | `https://plyr.fm/track/{id}` |
+| asking a chat assistant to find audio or inspect a library | hosted MCP: `https://plyrfm.fastmcp.app/mcp` | focused read tools; no local package setup |
+| running those agent tools locally | `uvx plyrfm-mcp` | same interface with local credentials and backend selection |
+| working in a terminal, including uploads and library edits | CLI: `uvx plyrfm --help` | explicit commands and readable output |
+| composing a Python application or repeatable workflow | SDK: `PlyrClient` / `AsyncPlyrClient` | typed results, sync/async composition, reads and authorized writes |
+| using another language, precise schemas, or API-only services | HTTP: `https://api.plyr.fm/openapi.json` | the full API, including features not wrapped by the SDK |
+| listening in a browser | `https://plyr.fm/track/{id}` | opens the player for the listener |
 
-The SDK, CLI, and MCP are maintained in
-[plyr-python-client](https://github.com/zzstoatzz/plyr-python-client). The MCP
-exposes read operations; the SDK, CLI, and HTTP API also support mutations.
-Use the live OpenAPI schema for HTTP details and installed CLI help for commands.
+The CLI also handles reads. Its display output is for a terminal; use SDK objects
+or HTTP JSON when another program consumes the result. MCP is read-only and does
+not control the web player's queue. Browser sessions, radio and jams are examples
+of API capabilities outside the SDK namespaces.
+
+The SDK, CLI, and MCP live in
+[plyr-python-client](https://github.com/zzstoatzz/plyr-python-client).
+Their [capability table](https://github.com/zzstoatzz/plyr-python-client/blob/main/docs/surfaces.md)
+records each SDK operation's CLI/MCP mapping and explains deliberate omissions.
+Parity means shared behavior agrees; it does not require every API endpoint to
+become a tool. The [interface guide](https://github.com/zzstoatzz/plyr-python-client/blob/main/docs/interfaces.md)
+explains the contract checks and Pi evaluation workflow.
 
 ## discover the MCP
 
@@ -35,7 +44,8 @@ For account reads, the local server accepts `PLYR_TOKEN`; the hosted server
 accepts the `x-plyr-token` header. Create tokens in
 [settings → developer](https://plyr.fm/settings#developer).
 
-Discover tools when connecting. The current groups are:
+Discover tools when connecting. Read `plyr://interfaces` for interface guidance
+and `plyr://me` for your authenticated identity. The current groups are:
 
 - **find audio:** `search`, `top_tracks`, `list_tags`, `tracks_by_tag`, `list_tracks`
 - **inspect a selection:** `get_track`, `get_playlist`, `playlists_by_artist`

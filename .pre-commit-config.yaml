@@ -27,6 +27,13 @@ repos:
 
   - repo: local
     hooks:
+      - id: client-api-contract
+        name: SDK CLI MCP API contract
+        entry: just check-client-contract
+        language: system
+        pass_filenames: false
+        files: ^(backend/src/|scripts/check_client_contract.py|docs/internal/contracts/)
+
       - id: type-check
         name: type check
         entry: bash -c 'cd backend && uv run ty check'
