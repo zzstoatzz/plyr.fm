@@ -11,9 +11,26 @@ The queue is a cross-device, server-authoritative data model with optimistic loc
 - `queue_state` table (`did`, `state`, `revision`, `updated_at`). `state` is JSONB containing `track_ids`, `current_index`, `current_track_id`, `shuffle`, `repeat_mode`, `original_order_ids`, and the continuation-tail fields (`continuation_from_index`, `continuation_suppressed`, `continuation_label`). The server persists `state` opaquely, so new tail fields need no schema or endpoint change.
 - `QueueService` keeps a TTL LRU cache (`maxsize 100`, `ttl 5m`). Cache entries include both the raw state and the hydrated track list.
 - On startup the service opens an asyncpg connection, registers a `queue_changes` listener, and reconnects on failure. Notifications simply invalidate the cache entry; consumers fetch on demand.
-- `GET /queue/` returns `{ state, revision, tracks }`. `tracks` is hydrated server-side by joining against `tracks`+`artists`. Duplicate queue entries are preserved—hydration walks the `track_ids` array by index so the same `file_id` can appear multiple times. Response includes an ETag (`"revision"`).
+- `GET /queue/` returns `{ state, revision, tracks }`. `tracks` is hydrated server-side by joining against `tracks`+`artists`. Hydration walks `track_record_ids` (database track IDs) in order, preserving distinct uploads of the same audio and repeated entries. Response includes an ETag (`"revision"`).
 - `PUT /queue/` expects an optional `If-Match: "revision"`. Mismatched revisions return 409. Successful writes increment the revision, emit LISTEN/NOTIFY, and rehydrate so the response mirrors GET semantics.
 - Hydration preserves order even when duplicates exist by pairing each `track_id` position with the track returned by the DB. We never de-duplicate on the server.
+
+### track identity
+
+Audio `file_id` is not a track identity: two artists can upload identical bytes.
+The queue writes `track_record_ids`, `original_order_record_ids`, and
+`current_record_id` alongside the legacy file-ID fields. Both server hydration
+and frontend restoration use the record IDs when present. A missing record is
+omitted, never replaced by another upload sharing its audio. The current index
+still distinguishes repeated occurrences of the same record.
+
+Older saved queues and older clients remain readable through the file-ID fields.
+Those snapshots cannot identify which upload was originally selected; hydration
+chooses the lowest track ID deterministically. Playing the intended track again
+with the updated frontend saves its exact identity. No database migration is
+needed because queue state is JSONB. Deploy backend support before the frontend
+that writes record IDs; the previous backend would echo the new fields without
+using them to hydrate metadata.
 
 ## client implementation (Svelte 5)
 
