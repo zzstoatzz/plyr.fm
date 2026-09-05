@@ -315,7 +315,7 @@
 		transition: color 0.2s;
 		min-width: 0;
 		white-space: nowrap;
-		line-height: 1.15;
+		line-height: 1.4;
 	}
 
 	/* radio source indicator — sits in the album/single slot, tinted to signal
