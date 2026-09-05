@@ -1,125 +1,58 @@
-# [plyr.fm](https://plyr.fm)
+<p align="center">
+  <a href="https://plyr.fm"><img src="frontend/src/lib/assets/logo.svg" alt="plyr.fm record logo" width="128" height="128"></a>
+</p>
 
-audio streaming app
+<h1 align="center">plyr.fm</h1>
+<p align="center"><strong>audio streaming on ATProto</strong><br>put something on. make something of your own.</p>
+<p align="center">
+  <a href="https://plyr.fm">listen</a> ·
+  <a href="https://docs.plyr.fm/artists/">publish audio</a> ·
+  <a href="https://docs.plyr.fm">docs</a> ·
+  <a href="CONTRIBUTING.md">contribute</a>
+</p>
 
-check the [plyr.fm artist page](https://plyr.fm/u/plyr.fm) for the latest [auto-generated](.github/workflows/status-maintenance.yml) development podcast!
+plyr.fm is an open-source home for music and other audio, built on the protocol behind Bluesky. sign in with your ATProto identity, upload a track, or settle into someone else's corner of the catalog. tracks, likes, comments, and public playlists are published as records in your personal data server (PDS). private playlists stay private in plyr.fm’s database.
 
-<details>
-<summary>tech stack</summary>
+## find your next listen
 
-### backend
-- **framework**: [FastAPI](https://fastapi.tiangolo.com)
-- **database**: [Neon PostgreSQL](https://neon.com)
-- **storage**: [Cloudflare R2](https://developers.cloudflare.com/r2/)
-- **background tasks**: [docket](https://github.com/zzstoatzz/docket) (Redis-backed)
-- **hosting**: [Fly.io](https://fly.io)
-- **observability**: [Pydantic Logfire](https://logfire.pydantic.dev)
-- **auth**: [atproto OAuth 2.1](https://atproto.com/specs/oauth)
+- **make a queue** — browse artists, albums, tags, and playlists; search with Cmd/Ctrl+K; like a track or add it to a playlist from the player.
+- **stay a while** — shuffle, repeat, skip through longer tracks, or let “keep playing” pick from your For You feed when the queue ends.
+- **listen together** — tune into radio or join a jam for synchronized listening. leave a timed comment at the part you came back for.
+- **take it with you** — download public tracks and whole albums where the artist allows it, with lossless originals preferred. connect teal.fm for scrobbling.
 
-### frontend
-- **framework**: [SvelteKit](https://kit.svelte.dev) with Svelte 5 runes
-- **runtime**: [Bun](https://bun.sh)
-- **hosting**: [Cloudflare Pages](https://pages.cloudflare.com)
-- **styling**: vanilla CSS (lowercase aesthetic)
+## put something into the world
 
-### services
-- **transcoder**: Rust audio conversion service (ffmpeg, Fly.io)
-- **moderation**: Rust ATProto labeler for copyright/sensitive content (Fly.io)
-- **mood search**: [CLAP](https://github.com/LAION-AI/CLAP) audio embeddings ([Modal](https://modal.com))
-- **genre classification**: [effnet-discogs](https://replicate.com/) ML tagging ([Replicate](https://replicate.com))
-- **vector search**: [turbopuffer](https://turbopuffer.com) for semantic audio queries
+upload audio with artwork, tags, and featured artists; arrange it into albums; share a track, playlist, album, or radio embed. AIFF and FLAC uploads get compatible playback renditions, and automatic genre suggestions help with tagging. artists can add support links and offer supporter-gated tracks.
 
-</details>
+your ATProto identity and public audio records are usable beyond plyr.fm. audio is served through a CDN, with PDS audio mirroring and bulk export available; [the artist guide](https://docs.plyr.fm/artists/) explains publishing, downloads, and leaving the platform. [moderation](https://docs.plyr.fm/moderation/) uses signed ATProto labels, listener preferences, and a review queue.
 
-<details>
-<summary>local development</summary>
+this is a small, actively evolving project. [STATUS.md](STATUS.md) records current work and known rough edges. you can also **[hear the development notes](https://plyr.fm/u/plyr.fm)** — the project's own artist page carries its [automatically generated development podcast](.github/workflows/status-maintenance.yml).
 
-setup, prerequisites, and `just` commands live in the **[contributing guide on docs.plyr.fm](https://docs.plyr.fm/contributing/)**. PR rules, code conventions, and the social/process side are in [`CONTRIBUTING.md`](CONTRIBUTING.md).
+## under the hood
 
-</details>
+| piece | what it does | built with |
+| --- | --- | --- |
+| [frontend](frontend/) | persistent player and queue, discovery, publishing tools, shared listening, and embeds | SvelteKit, Svelte 5 runes, Bun, vanilla CSS; Cloudflare Pages |
+| [backend](backend/) | ATProto OAuth, audio delivery, records, catalog, and background jobs | FastAPI, Neon Postgres, R2, [docket](https://github.com/zzstoatzz/docket), Redis; Fly.io |
+| [services](services/) | audio conversion, signed moderation labels, and audio analysis | Rust + ffmpeg transcoder, Rust labeler, CLAP on Modal, genre classification on Replicate |
 
-<details>
-<summary>features</summary>
+[Pydantic Logfire](https://logfire.pydantic.dev) provides observability. CLAP embeddings and [turbopuffer](https://turbopuffer.com) power the feature-flagged mood search and audio recommendations. developers can use the [public API](https://api.plyr.fm/docs), [ATProto lexicons](https://docs.plyr.fm/lexicons/overview/), or the [Python SDK / MCP server](https://github.com/zzstoatzz/plyr-python-client).
 
-### listening
-- audio playback with persistent queue across tabs
-- like tracks, add to playlists
-- browse by artist, album, tag, or playlist
-- share tracks and albums with embeddable players and link previews
-- unified search with Cmd/Ctrl+K (fuzzy match across tracks, artists, albums, tags, playlists)
-- genre browsing and tag filtering
-- platform media controls (Media Session API)
-- teal.fm scrobbling and now-playing reporting
+## work on plyr.fm
 
-### creating
-- OAuth authentication via ATProto (atmosphere accounts), multi-account support
-- upload tracks with title, artwork, tags, and featured artists
-- lossless audio support (AIFF/FLAC) with automatic MP3 transcoding for universal playback
-- auto-tagging via ML genre classification
-- organize tracks into albums and playlists with drag-and-drop reordering
-- timed comments with clickable timestamps
-- artist support links and supporter-gated content
-- copyright scanning via audio fingerprinting
-- content reporting and automated sensitive content filtering
+start with the [contributing guide](CONTRIBUTING.md) and [local setup](https://docs.plyr.fm/contributing/). once configured, run these from the repository root in separate terminals:
 
-### data ownership
-- tracks, likes, playlists synced to your PDS as ATProto records
-- bulk media export (download all your tracks)
-- portable identity - your data travels with you
-- public by default - any client can read your audio records
-
-> some features may be paywalled in the future for the financial viability of the project. if you have thoughts on what should or shouldn't be gated, open a [discussion on GitHub](https://github.com/zzstoatzz/plyr.fm/discussions) or [tangled](https://tangled.sh/@zzstoatzz.io/plyr.fm).
-
-</details>
-
-<details>
-<summary>project structure</summary>
-
-```
-plyr.fm/
-├── backend/              # FastAPI app & Python tooling
-│   ├── src/backend/      # application code
-│   ├── tests/            # pytest suite
-│   └── alembic/          # database migrations
-├── frontend/             # SvelteKit app
-│   ├── src/lib/          # components & state
-│   └── src/routes/       # pages
-├── services/
-│   ├── transcoder/       # Rust audio transcoding (Fly.io)
-│   ├── moderation/       # Rust content moderation (Fly.io)
-│   └── clap/             # ML embeddings (Python, Modal)
-├── infrastructure/
-│   └── redis/            # self-hosted Redis (Fly.io)
-├── docs/                 # documentation
-└── justfile              # task runner
+```sh
+just backend run       # FastAPI, port 8001
+just frontend run      # SvelteKit, port 5173
 ```
 
-</details>
+`just --list` shows the available workflows. coding assistants should read [STATUS.md](STATUS.md) and [AGENTS.md](AGENTS.md); shared skills live in [.agents/skills](.agents/skills), with Claude-compatible symlinks. [the skill catalog](docs/internal/tools/skills.md) explains discovery and usage.
 
-<details>
-<summary>costs</summary>
+merges to `main` deploy **[staging](https://stg.plyr.fm)**. production is a separate promote through the [release workflow](docs/internal/deployment/environments.md).
 
-~$25/month:
-- fly.io (backend + transcoder + redis + moderation): ~$14/month
-- neon postgres: $5/month
-- cloudflare (pages + r2): ~$1/month
-- audd audio fingerprinting: $5-10/month (usage-based)
-- modal (CLAP embeddings): free tier / scales to zero
-- replicate (genre classification): <$1/month
+## keeping it running
 
-live dashboard: https://plyr.fm/costs
+[the live cost dashboard](https://plyr.fm/costs) and [COSTS.md](COSTS.md) track the infrastructure bill and its attribution gaps. some features may eventually be paid to keep the project sustainable; [join the discussion](https://github.com/zzstoatzz/plyr.fm/discussions).
 
-</details>
-
-## links
-
-- **docs**: https://docs.plyr.fm
-- **production**: https://plyr.fm
-- **staging**: https://stg.plyr.fm
-- **API docs**: https://api.plyr.fm/docs
-- **python SDK / MCP server**: [plyrfm](https://github.com/zzstoatzz/plyr-python-client) ([PyPI](https://pypi.org/project/plyrfm/))
-- **status**: [STATUS.md](STATUS.md)
-
-### mirrors
-- **github**: https://github.com/zzstoatzz/plyr.fm
-- **tangled**: https://tangled.sh/@zzstoatzz.io/plyr.fm
+development happens on [GitHub](https://github.com/zzstoatzz/plyr.fm), with a [Tangled mirror](https://tangled.org/zzstoatzz.io/plyr.fm). public guides live at [docs.plyr.fm](https://docs.plyr.fm); architecture and runbooks live in [docs/internal](docs/internal/).

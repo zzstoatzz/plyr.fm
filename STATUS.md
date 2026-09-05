@@ -371,16 +371,17 @@ still live from them is in known issues.
 - auth: ATProto OAuth 2.1
 
 **frontend**
-- framework: SvelteKit (v2.43.2)
+- framework: SvelteKit with Svelte 5 runes
 - runtime: Bun
 - hosting: Cloudflare Pages
-- styling: vanilla CSS with lowercase aesthetic
+- interface: persistent player and queue, search and discovery, publishing tools, shared listening, and embeds
+- styling: vanilla CSS with shared design tokens
 - state management: Svelte 5 runes
 
 **deployment**
 - ci/cd: GitHub Actions
-- backend: automatic on main branch merge (fly.io)
-- frontend: automatic on every push to main (cloudflare pages)
+- staging: backend (Fly.io) and frontend (Cloudflare Pages) deploy from `main`
+- production: separate promote via `just release` (backend/mixed) or `just release-frontend-only` (frontend only); see `docs/internal/deployment/environments.md`
 - migrations: automated via fly.io release_command
 
 **what's working**
@@ -475,7 +476,7 @@ uv run scripts/delete_track.py --url https://plyr.fm/track/34
 
 ## for new contributors
 
-see the [contributing guide](https://docs.plyr.fm/contributing/) for setup instructions, or install the [contribute skill](.claude/skills/contribute/SKILL.md) for AI coding assistants.
+see the [contributing guide](https://docs.plyr.fm/contributing/) for setup instructions, or use the shared [contribute skill](.agents/skills/contribute/SKILL.md) for AI coding assistants.
 
 ## documentation
 
