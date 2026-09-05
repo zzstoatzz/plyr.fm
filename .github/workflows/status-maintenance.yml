@@ -11,6 +11,10 @@
 
 name: status maintenance
 
+# the model is named once here so the PR body can say which one wrote the run
+env:
+  STATUS_MODEL: claude-opus-5
+
 on:
   schedule:
     # mondays 14:00 UTC (9am central): archive, podcast, PR — a human still merges
@@ -62,8 +66,9 @@ jobs:
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           claude_args: |
-            --model opus
-            --allowedTools "Read,Write,Edit,Bash,Fetch,Task"
+            --model ${{ env.STATUS_MODEL }}
+            --mcp-config .github/mcp/status-maintenance.json
+            --allowedTools "Read,Write,Edit,Bash,Fetch,Task,mcp__pub-search__search,mcp__pub-search__get_document,mcp__pub-search__find_similar,mcp__pub-search__author_profile"
           prompt: |
             you are maintaining the plyr.fm (pronounced "player FM") project status file.
 
@@ -99,6 +104,19 @@ jobs:
             - **the posts are what the audience was told.** when a change was announced, one clause noting it is enough; when a significant change went out unannounced, say so once. do not read posts aloud.
             - **the archived arcs are the project's memory.** use them to place the window — what this continues, what it closes, what it reverses — one phrase at a time, and only where a listener with no history would otherwise be lost.
             - **STATUS.md must agree with the report.** if STATUS.md calls something shipped that the report shows as `staging only`, or the reverse, correct STATUS.md in this PR and say so in the PR body.
+
+            ## task 1b: ecosystem context, through one research subagent
+
+            changes in this app are usually precipitated by changes in the atmosphere that show up first as long-form writing — protocol proposals, other apps' release notes, essays. the `pub-search` MCP server (search, get_document, find_similar, author_profile) indexes that writing across leaflet, pckt, offprint, greengale, whitewind and independent sites, with `since` and `author` filters (`since` applies in keyword mode and to the keyword half of hybrid).
+
+            seed it, then delegate the reading. from window_report.md and STATUS.md's current focus, write 3–6 seed topics — the subjects of the window's significant PRs and the protocol or ecosystem terms they touch (for example: "atproto spaces / permissioned data", "jetstream firehose delivery", "media player conventions"). then launch ONE Task subagent whose entire purpose is pub-search research, with this brief:
+
+            - for each seed topic: `search` with `since` = the window start (mode keyword, then hybrid without `since` for background, limit 8 each); for the 2–3 most relevant hits, `get_document` and read the actual text
+            - keep only writing that bears on the seed — published in the window, or earlier but clearly what the window's work responds to. mark which
+            - write `ecosystem_context.md`: for each kept document, title, publication or author, date, URL, and two sentences: what it says, and how it relates to the seed. group by seed topic. at most ~15 documents. say plainly when a topic turned up nothing
+            - cite only documents actually read; never infer a document's content from its title or snippet
+
+            read ecosystem_context.md when the subagent returns. it is context for the transcript and STATUS.md, used the same way as the posts: where a change in the window responds to something written in the atmosphere, one clause naming the publication is enough ("after Habitat's write-up on organizational spaces…"); the subagent's findings are never a segment of their own. keep the file in place — a later step posts it into the PR body so a reviewer can judge what was found.
 
             ## task 2: archive old month sections
 
@@ -262,12 +280,13 @@ jobs:
 
             run: uv run scripts/generate_tts.py podcast_script.txt update.wav
 
-            keep podcast_script.txt and window_report.md in place — do NOT
-            delete them. a later workflow step posts the report and the
-            transcript into the PR body and uploads update.wav and
-            podcast_script.txt as a build artifact so the phase-2 upload job
-            can attach the transcript as the track description. none of these
-            files is committed to the repo (all are gitignored).
+            keep podcast_script.txt, window_report.md and ecosystem_context.md
+            in place — do NOT delete them. a later workflow step posts the
+            report, the ecosystem context and the transcript into the PR body
+            and uploads update.wav and podcast_script.txt as a build artifact
+            so the phase-2 upload job can attach the transcript as the track
+            description. none of these files is committed to the repo (all
+            are gitignored).
 
             ## task 4: open PR
 
@@ -275,9 +294,9 @@ jobs:
             1. first, generate a unique branch name: BRANCH="status-maintenance-$(date +%Y%m%d-%H%M%S)"
             2. git checkout -b $BRANCH
             3. git add .status_history/ STATUS.md
-               (do NOT add update.wav, podcast_script.txt or window_report.md —
-               they are gitignored; the audio and transcript are carried to
-               phase 2 as a build artifact instead)
+               (do NOT add update.wav, podcast_script.txt, window_report.md or
+               ecosystem_context.md — they are gitignored; the audio and
+               transcript are carried to phase 2 as a build artifact instead)
             4. git commit -m "chore: status maintenance"
             5. git push -u origin $BRANCH
             6. gh pr create with a title and body you craft:
@@ -307,22 +326,23 @@ jobs:
       # the reviewer needs the window report (what landed where, what was
       # posted) to check the transcript's claims, and the transcript itself
       # (the audio only uploads after the merge), so both go in the PR body
-      - name: Post the window report and transcript to the PR
+      - name: Post the window report, ecosystem context and transcript to the PR
         if: startsWith(steps.prbranch.outputs.branch, 'status-maintenance-')
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           BRANCH: ${{ steps.prbranch.outputs.branch }}
         run: |
-          if [ ! -f podcast_script.txt ] && [ ! -f window_report.md ]; then
-            echo "nothing to post"
-            exit 0
-          fi
           BODY=$(gh pr view "$BRANCH" --json body --jq .body)
           {
-            printf '%s\n' "$BODY"
+            printf '%s\n\nwritten by `%s` (claude-code-action).\n' "$BODY" "$STATUS_MODEL"
             if [ -f window_report.md ]; then
               printf '\n<details>\n<summary>window report — what landed where, what was posted</summary>\n\n'
               cat window_report.md
+              printf '\n\n</details>\n'
+            fi
+            if [ -f ecosystem_context.md ]; then
+              printf '\n<details>\n<summary>ecosystem context — what the atmosphere wrote (pub-search)</summary>\n\n'
+              cat ecosystem_context.md
               printf '\n\n</details>\n'
             fi
             if [ -f podcast_script.txt ]; then

@@ -63,6 +63,27 @@ before Claude starts, and prints it to the job log (also runnable locally: `uv r
 the report goes into the maintenance PR body above the transcript, so a
 reviewer can check every "shipped" against where it actually landed.
 
+## ecosystem context
+
+changes in plyr.fm are usually precipitated by changes in the atmosphere that
+appear first as long-form writing. the run has the `pub-search` MCP server
+(`.github/mcp/status-maintenance.json`, public endpoint, no auth) and
+delegates the reading to one Task subagent: the parent seeds 3–6 topics from
+the window report and STATUS.md's current focus; the subagent searches each
+with `since` = the window start (keyword) and without it for background
+(hybrid), reads the top hits with `get_document`, and writes
+`ecosystem_context.md` — per seed, the documents that bear on it with title,
+publication, date, URL and two sentences on the relation, at most ~15 in all,
+citing only what it read. the parent uses it like the posts: one clause where
+a change responds to something written, never a segment. the file is posted
+into the PR body so the reviewer can judge what was found.
+
+## model
+
+the model is set once, as the workflow-level `STATUS_MODEL` env
+(`claude-opus-5` today), passed to `--model`, and printed into the PR body
+("written by …") so every maintenance PR says which model wrote it.
+
 ### what the prompt does with it
 
 the subject of the episode and of the STATUS.md edits is the diff — what
@@ -136,6 +157,7 @@ dry, matter-of-fact, slightly sardonic. avoid:
 | `ANTHROPIC_API_KEY` | claude code |
 | `GOOGLE_API_KEY` | gemini TTS |
 | `PLYR_BOT_TOKEN` | plyr.fm upload |
+| — | pub-search needs no secret; its MCP endpoint is public |
 | `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` | Pages deployment history for the frontend promotes in the window report |
 
 ## manual run
