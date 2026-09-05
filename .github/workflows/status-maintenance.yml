@@ -33,6 +33,10 @@ on:
         description: "override the window start (ISO time) — for reruns and evaluating the process against a past window"
         type: string
         default: ""
+      research_only:
+        description: "stop after the ecosystem research (no writer, no PR); read ecosystem_context.md from the job summary or artifact"
+        type: boolean
+        default: false
   pull_request:
     types: [closed]
     branches: [main]
@@ -83,18 +87,20 @@ jobs:
             --mcp-config .github/mcp/status-maintenance.json
             --allowedTools "Read,Write,Bash,mcp__pub-search__search,mcp__pub-search__get_document,mcp__pub-search__find_similar,mcp__pub-search__author_profile"
           prompt: |
-            you are the research half of the plyr.fm status-maintenance run. your ENTIRE purpose is to gather ecosystem context from the `pub-search` MCP server and write `ecosystem_context.md` in the repository root. you edit nothing else and open no PR.
+            you are the research half of the plyr.fm status-maintenance run. your ENTIRE purpose is to find the atmosphere writing that plyr.fm's recent changes respond to, and write it into `ecosystem_context.md` in the repository root. you edit nothing else and open no PR.
 
             why: changes in this app are usually precipitated by changes in the atmosphere that show up first as long-form writing — protocol proposals, other apps' release notes, essays. pub-search indexes that writing across leaflet, pckt, offprint, greengale, whitewind and independent sites. its tools: `search` (with `since` and `author` filters; `since` applies in keyword mode and to the keyword half of hybrid), `get_document`, `find_similar`, `author_profile`.
 
             1. read `window_report.md` (its first line gives the window start) and the "current focus" section of `STATUS.md`.
-            2. write 3–6 seed topics: the subjects of the window's significant PRs and the protocol or ecosystem terms they touch (for example "atproto spaces / permissioned data", "jetstream firehose delivery", "media player conventions"). they go at the top of the file.
+            2. write 3–6 seed topics: the subjects of the window's significant PRs and the protocol or ecosystem terms they touch (for example "atproto spaces / permissioned data", "jetstream firehose delivery", "media player conventions").
             3. for each seed, in order, one call at a time — the index is a small shared service, so never issue searches in parallel; if a call returns a 502, wait five seconds and retry once, then move on:
                - `search`, mode keyword, `since` = the window start, limit 8
                - `search`, mode hybrid, no `since`, limit 8, for the background the window's work responds to
-               - `get_document` for the 2–3 most relevant hits, and read them
-            4. keep only writing that bears on the seed — published in the window, or earlier but clearly what the window's work responds to — and mark which. drop keyword coincidences (a "lock screen" hit about cosmetics is noise).
-            5. write `ecosystem_context.md`: the seed list, then per seed the kept documents — title, publication or author, date, URL, and two sentences: what it says, and how it relates to the seed. at most ~15 documents in all. say plainly when a seed turned up nothing. cite only documents you actually read with `get_document`; never infer content from a title or snippet.
+               - `get_document` for the 2–3 most promising hits, and read them
+            4. the bar for keeping a document is that it bears on a specific change in the window (a PR in the report) or on an item in current focus: it describes the thing plyr built or fixed, the protocol feature it uses, or the same problem solved by another app. a document that merely shares words with a seed, or is about the atmosphere in general, does not clear the bar. everything that does not clear it is thrown away without a trace.
+            5. write `ecosystem_context.md`: only the documents that cleared the bar, grouped by the change or focus item they bear on — for each, title, publication or author, date, URL, whether it was published in the window or earlier, and two sentences: what it says, and which change it bears on. at most ~12 documents. cite only documents you actually read with `get_document`; never infer content from a title or snippet.
+
+            the file contains findings and nothing else: no seed list, no method notes, no mention of searches that failed, of hits you discarded, or of topics that turned up nothing — a topic with nothing relevant is simply absent. the writer must not be told what to ignore. if nothing at all cleared the bar, write a one-line file saying there is no ecosystem context for this window.
 
             when the file is written, you are done. do not summarize it back; the writer reads the file.
 
@@ -108,7 +114,7 @@ jobs:
 
       - uses: anthropics/claude-code-action@v1
         id: claude
-        if: ${{ !inputs.report_only }}
+        if: ${{ !inputs.report_only && !inputs.research_only }}
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           display_report: "true"
@@ -155,7 +161,7 @@ jobs:
 
             changes in this app are usually precipitated by changes in the atmosphere that show up first as long-form writing — protocol proposals, other apps' release notes, essays. a research run finished before you started: it seeded 3–6 topics from the window report and STATUS.md's current focus, searched the pub-search index of long-form atmosphere writing for each (filtered to the window, plus background), read the top hits, and wrote `ecosystem_context.md` in the working directory — per seed, the documents that bear on it, with title, publication, date, URL and two sentences on the relation.
 
-            read ecosystem_context.md if it exists (the research run can fail; then there is simply no context this week). it is context for the transcript and STATUS.md, used the same way as the posts: where a change in the window responds to something written in the atmosphere, one clause naming the publication is enough ("after Habitat's write-up on organizational spaces…"); the research findings are never a segment of their own. keep the file in place — a later step posts it into the PR body so a reviewer can judge what was found.
+            read ecosystem_context.md if it exists (the research run can fail; then there is simply no context this week). it contains only writing that bears on the window's changes, grouped by change. use it the same way as the posts: where a change in the window responds to something written in the atmosphere, one clause naming the publication is enough ("after Habitat's write-up on organizational spaces…"); the findings are never a segment of their own, and neither the transcript nor STATUS.md ever says what was not found or not relevant. keep the file in place — a later step posts it into the PR body so a reviewer can judge what was found.
 
             ## task 2: archive old month sections
 
@@ -394,7 +400,7 @@ jobs:
           retention-days: 14
 
       - name: Resolve PR branch
-        if: ${{ !inputs.report_only }}
+        if: ${{ !inputs.report_only && !inputs.research_only }}
         id: prbranch
         run: echo "branch=$(git branch --show-current)" >> "$GITHUB_OUTPUT"
 
