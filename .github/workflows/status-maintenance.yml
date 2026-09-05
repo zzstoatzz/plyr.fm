@@ -13,7 +13,7 @@ name: status maintenance
 
 # the model is named once here so the PR body can say which one wrote the run
 env:
-  STATUS_MODEL: claude-opus-5
+  STATUS_MODEL: claude-fable-5-1
 
 on:
   schedule:
