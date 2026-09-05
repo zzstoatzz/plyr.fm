@@ -12,7 +12,7 @@ import route definitions; it is not a service credential.
 
 The `interface contracts` workflow runs on every PR and main push. It checks out
 `zzstoatzz/plyr-python-client` and runs its request/schema compatibility checker,
-behavioral surface tests, and generated-docs check against this backend. The
+behavioral surface tests, SDK example signature checks, and generated-docs check against this backend. The
 client repository performs the reciprocal check against this repository's main.
 Live MCP deployment checks and Pi evaluations are separate, explicit commands;
 network availability and model variability do not belong in pre-commit.
