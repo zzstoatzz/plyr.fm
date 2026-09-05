@@ -24,6 +24,16 @@ export function shuffleInPlace<T>(arr: T[]): T[] {
 	return arr;
 }
 
+function restoreTrackOrder<Id extends string | number>(
+	ids: readonly Id[],
+	tracksById: ReadonlyMap<Id, Track>
+): Track[] {
+	return ids.flatMap((id) => {
+		const track = tracksById.get(id);
+		return track ? [{ ...track }] : [];
+	});
+}
+
 /** bridge for routing queue mutations through a jam's WebSocket transport */
 export interface JamBridge {
 	pushQueueState(): void;
@@ -227,10 +237,7 @@ class Queue {
 		if (this.jamBridge) return; // jam owns the queue state
 
 		// while we have unsent or in-flight local changes, skip non-forced fetches
-		if (
-			!force &&
-			(this.syncInProgress || this.syncTimer !== null || this.pendingSync)
-		) {
+		if (!force && (this.syncInProgress || this.syncTimer !== null || this.pendingSync)) {
 			return;
 		}
 
@@ -280,10 +287,10 @@ class Queue {
 
 	applySnapshot(snapshot: QueueResponse) {
 		const { state, tracks } = snapshot;
-		const trackIds = state.track_ids ?? [];
+		const trackIds = state.track_record_ids ?? state.track_ids ?? [];
 		const serverTracks = tracks ?? [];
 
-		// build track lookup by file_id from server tracks (deduplicated)
+		const trackById = new Map(serverTracks.map((track) => [track.id, track]));
 		const trackByFileId = new Map<string, Track>();
 		for (const track of serverTracks) {
 			if (track) {
@@ -291,36 +298,29 @@ class Queue {
 			}
 		}
 
-		// build ordered tracks array, using track metadata for each file_id
-		const orderedTracks: Track[] = [];
-		for (const fileId of trackIds) {
-			const track = trackByFileId.get(fileId);
-			if (track) {
-				// always use a copy to ensure each queue position is independent
-				orderedTracks.push({ ...track });
-			}
-		}
+		const orderedTracks =
+			state.track_record_ids !== undefined
+				? restoreTrackOrder(state.track_record_ids, trackById)
+				: restoreTrackOrder(state.track_ids ?? [], trackByFileId);
 
-		if (orderedTracks.length > 0 || trackIds.length === 0) {
+		if (state.track_record_ids !== undefined || orderedTracks.length > 0 || trackIds.length === 0) {
 			this.tracks = orderedTracks;
 		}
 
-		// build original order array
-		const originalIds =
-			state.original_order_ids && state.original_order_ids.length > 0
-				? state.original_order_ids
-				: trackIds;
+		const originalRecordIds = state.original_order_record_ids ?? state.track_record_ids;
+		const originalFileIds = state.original_order_ids?.length
+			? state.original_order_ids
+			: (state.track_ids ?? []);
+		const originalTracks =
+			originalRecordIds !== undefined
+				? restoreTrackOrder(originalRecordIds, trackById)
+				: restoreTrackOrder(originalFileIds, trackByFileId);
 
-		const originalTracks: Track[] = [];
-		for (const fileId of originalIds) {
-			const track = trackByFileId.get(fileId);
-			if (track) {
-				// always use a copy to ensure independence
-				originalTracks.push({ ...track });
-			}
-		}
-
-		if (originalTracks.length > 0 || originalIds.length === 0) {
+		if (
+			state.track_record_ids !== undefined ||
+			originalTracks.length > 0 ||
+			(originalRecordIds ?? originalFileIds).length === 0
+		) {
 			this.originalOrder = originalTracks.length ? originalTracks : [...orderedTracks];
 		}
 
@@ -334,7 +334,8 @@ class Queue {
 		this.currentIndex = this.resolveCurrentIndex(
 			state.current_track_id,
 			state.current_index,
-			this.tracks
+			this.tracks,
+			state.current_record_id
 		);
 
 		// restore the continuation boundary (clamped). older states
@@ -350,14 +351,24 @@ class Queue {
 			this.continuationFromIndex < this.tracks.length ? (state.continuation_label ?? null) : null;
 	}
 
-	resolveCurrentIndex(currentTrackId: string | null, index: number, tracks: Track[]): number {
+	resolveCurrentIndex(
+		currentTrackId: string | null,
+		index: number,
+		tracks: Track[],
+		currentRecordId?: number | null
+	): number {
 		if (tracks.length === 0) return 0;
 
 		const indexInRange = Number.isInteger(index) && index >= 0 && index < tracks.length;
 
 		// trust the explicit index first – the server always sends the correct slot
-		if (indexInRange) {
+		if (indexInRange && (currentRecordId == null || tracks[index].id === currentRecordId)) {
 			return index;
+		}
+
+		if (currentRecordId != null) {
+			const match = tracks.findIndex((track) => track.id === currentRecordId);
+			return match === -1 ? (indexInRange ? index : 0) : match;
 		}
 
 		if (currentTrackId) {
@@ -419,11 +430,14 @@ class Queue {
 		try {
 			const state: QueueState = {
 				track_ids: this.tracks.map((t) => t.file_id),
+				track_record_ids: this.tracks.map((t) => t.id),
 				current_index: this.currentIndex,
 				current_track_id: this.currentTrack?.file_id ?? null,
+				current_record_id: this.currentTrack?.id ?? null,
 				shuffle: this.shuffle,
 				repeat_mode: this.repeatMode,
 				original_order_ids: this.originalOrder.map((t) => t.file_id),
+				original_order_record_ids: this.originalOrder.map((t) => t.id),
 				progress_ms: this.progressMs,
 				continuation_from_index: this.continuationFromIndex,
 				continuation_label: this.continuationLabel
@@ -567,11 +581,7 @@ class Queue {
 		// play before recommendations) but never before the current track —
 		// which may itself be in the continuation once playback advances into it
 		const insertAt = Math.max(this.continuationFromIndex, this.currentIndex + 1);
-		this.tracks = [
-			...this.tracks.slice(0, insertAt),
-			...tracks,
-			...this.tracks.slice(insertAt)
-		];
+		this.tracks = [...this.tracks.slice(0, insertAt), ...tracks, ...this.tracks.slice(insertAt)];
 		this.originalOrder = [...this.originalOrder, ...tracks];
 
 		// keep the continuation suffix starting after the inserted explicit tracks
@@ -736,7 +746,7 @@ class Queue {
 
 		if (this.currentIndex < this.tracks.length - 1) {
 			this.lastUpdateWasLocal = true;
-		this.mutationEpoch += 1;
+			this.mutationEpoch += 1;
 			this.currentIndex += 1;
 			this.syncState();
 		}
@@ -747,7 +757,7 @@ class Queue {
 
 		if (this.currentIndex > 0 || forceSkip) {
 			this.lastUpdateWasLocal = true;
-		this.mutationEpoch += 1;
+			this.mutationEpoch += 1;
 			if (this.currentIndex > 0) {
 				this.currentIndex -= 1;
 			}
@@ -817,7 +827,10 @@ class Queue {
 		this.mutationEpoch += 1;
 		const updated = [...this.tracks];
 		const [moved] = updated.splice(fromIndex, 1);
-		const insertAt = Math.max(this.currentIndex + 1, Math.min(this.continuationFromIndex, updated.length));
+		const insertAt = Math.max(
+			this.currentIndex + 1,
+			Math.min(this.continuationFromIndex, updated.length)
+		);
 		updated.splice(insertAt, 0, moved);
 		this.tracks = updated;
 		this.continuationFromIndex = Math.min(this.continuationFromIndex + 1, updated.length);
@@ -946,9 +959,7 @@ class Queue {
 			const inQueue = new Set(this.tracks.map((t) => t.file_id));
 			const currentId = this.currentTrack?.file_id;
 			const candidates = () =>
-				forYouCache.tracks.filter(
-					(t) => !inQueue.has(t.file_id) && t.file_id !== currentId
-				);
+				forYouCache.tracks.filter((t) => !inQueue.has(t.file_id) && t.file_id !== currentId);
 
 			let fresh = candidates();
 			if (fresh.length < CONTINUATION_BATCH && forYouCache.hasMore) {

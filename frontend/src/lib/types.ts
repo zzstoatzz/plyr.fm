@@ -107,10 +107,13 @@ export type RepeatMode = 'none' | 'one';
 
 export interface QueueState {
 	track_ids: string[];
+	track_record_ids?: number[];
 	current_index: number;
 	current_track_id: string | null;
+	current_record_id?: number | null;
 	shuffle: boolean;
 	original_order_ids: string[];
+	original_order_record_ids?: number[];
 	auto_advance?: boolean;
 	progress_ms?: number;
 	/** index where the auto-generated continuation tail begins (== length when none) */
@@ -220,7 +223,14 @@ export interface ActivityCollection {
 }
 
 export interface ActivityEvent {
-	type: 'like' | 'track' | 'comment' | 'join' | 'playlist_create' | 'album_release' | 'track_added_to_playlist';
+	type:
+		| 'like'
+		| 'track'
+		| 'comment'
+		| 'join'
+		| 'playlist_create'
+		| 'album_release'
+		| 'track_added_to_playlist';
 	actor: ActivityActor;
 	track: ActivityTrack | null;
 	comment_text: string | null;
