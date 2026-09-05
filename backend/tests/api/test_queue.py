@@ -12,6 +12,69 @@ from backend.main import app
 from backend.models import Album, Artist, Track
 
 
+async def test_queue_preserves_upload_identity_with_shared_audio(
+    test_app: FastAPI, db_session: AsyncSession
+) -> None:
+    artist = Artist(
+        did="did:test:shared-audio", handle="shared.test", display_name="artist"
+    )
+    db_session.add(artist)
+    await db_session.flush()
+    original = Track(
+        title="original", file_id="shared-audio", file_type="mp3", artist_did=artist.did
+    )
+    reupload = Track(
+        title="reupload", file_id="shared-audio", file_type="mp3", artist_did=artist.did
+    )
+    db_session.add_all([original, reupload])
+    await db_session.commit()
+    record_ids = [original.id, reupload.id, original.id]
+    state = {
+        "track_ids": ["shared-audio"] * 3,
+        "track_record_ids": record_ids,
+        "current_index": 2,
+        "current_record_id": original.id,
+    }
+
+    async with AsyncClient(
+        transport=ASGITransport(app=test_app), base_url="http://test"
+    ) as client:
+        put_response = await client.put("/queue/", json={"state": state})
+        assert put_response.status_code == 200
+        assert [track["id"] for track in put_response.json()["tracks"]] == record_ids
+        queue_service.cache.clear()
+        get_response = await client.get("/queue/")
+
+    assert get_response.status_code == 200
+    assert [track["id"] for track in get_response.json()["tracks"]] == record_ids
+
+
+async def test_queue_does_not_replace_missing_track_with_shared_audio(
+    test_app: FastAPI, db_session: AsyncSession
+) -> None:
+    artist = Artist(
+        did="did:test:remaining-upload", handle="remaining.test", display_name="artist"
+    )
+    db_session.add(artist)
+    await db_session.flush()
+    reupload = Track(
+        title="reupload", file_id="shared-audio", file_type="mp3", artist_did=artist.did
+    )
+    db_session.add(reupload)
+    await db_session.commit()
+
+    async with AsyncClient(
+        transport=ASGITransport(app=test_app), base_url="http://test"
+    ) as client:
+        response = await client.put(
+            "/queue/",
+            json={"state": {"track_ids": ["shared-audio"], "track_record_ids": [-1]}},
+        )
+
+    assert response.status_code == 200
+    assert response.json()["tracks"] == []
+
+
 # create a mock session object
 class MockSession(Session):
     """mock session for auth bypass in tests."""

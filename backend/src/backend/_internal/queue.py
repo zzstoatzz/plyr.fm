@@ -11,6 +11,7 @@ import asyncpg
 from cachetools import TTLCache
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from backend._internal.content_labels import (
@@ -187,6 +188,7 @@ class QueueService:
                     db,
                     queue_state.state.get("track_ids", []),
                     did,
+                    record_ids=queue_state.state.get("track_record_ids"),
                 )
                 # include auto_advance in state
                 state = {**queue_state.state, "auto_advance": auto_advance}
@@ -259,6 +261,7 @@ class QueueService:
                     db,
                     existing.state.get("track_ids", []),
                     did,
+                    record_ids=existing.state.get("track_record_ids"),
                 )
 
                 # notify other instances
@@ -329,29 +332,42 @@ class QueueService:
 
     async def _hydrate_tracks(
         self,
-        db,
+        db: AsyncSession,
         track_ids: list[str],
         viewer_did: str,
+        *,
+        record_ids: list[int] | None = None,
     ) -> list[dict[str, Any]]:
         """fetch track metadata for queue display, preserving order."""
-        if not track_ids:
+        if not (record_ids if record_ids is not None else track_ids):
             return []
 
         stmt = (
             select(Track)
             .options(selectinload(Track.artist), selectinload(Track.album_rel))
-            .where(Track.file_id.in_(track_ids))
+            .where(
+                Track.id.in_(record_ids)
+                if record_ids is not None
+                else Track.file_id.in_(track_ids)
+            )
+            .order_by(Track.id)
         )
         result = await db.execute(stmt)
         tracks = result.scalars().all()
-        track_by_file_id = {track.file_id: track for track in tracks}
-
-        # collect tracks in order
-        tracks_in_order = []
-        for file_id in track_ids:
-            track = track_by_file_id.get(file_id)
-            if track:
-                tracks_in_order.append(track)
+        if record_ids is not None:
+            track_by_id = {track.id: track for track in tracks}
+            tracks_in_order = [
+                track_by_id[id] for id in record_ids if id in track_by_id
+            ]
+        else:
+            track_by_file_id: dict[str, Track] = {}
+            for track in tracks:
+                track_by_file_id.setdefault(track.file_id, track)
+            tracks_in_order = [
+                track_by_file_id[file_id]
+                for file_id in track_ids
+                if file_id in track_by_file_id
+            ]
 
         # your own queue is the strongest destination there is: you put these
         # here. A track silently disappearing from it because it was labeled
