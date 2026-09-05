@@ -4,6 +4,11 @@ title: "plyrfm"
 
 python SDK and CLI for plyr.fm - available on [PyPI](https://pypi.org/project/plyrfm/) and [GitHub](https://github.com/zzstoatzz/plyr-python-client).
 
+For consuming the API, SDK, or MCP in an agent, start with the
+[public agent guide](../../public/developers/agents.md). The shared discovery
+entrypoint lives at `frontend/static/llms.txt`; the docs site serves a symlink
+to it, and serves the agent guide source as `/agents.md`.
+
 ## installation
 
 ```bash
@@ -54,7 +59,7 @@ the `--unlisted` flag excludes the track from public discovery feeds (latest, to
 
 use staging API:
 ```bash
-PLYR_API_URL=https://api-stg.plyr.fm plyrfm list
+PLYR_API_URL=https://api-stg.plyr.fm plyrfm tracks list
 ```
 
 ## SDK

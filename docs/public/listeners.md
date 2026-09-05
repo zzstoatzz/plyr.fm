@@ -27,7 +27,7 @@ when you find something you like:
 - **leave a comment** at a specific moment in the track
 - **support the creator** via [atprotofans](https://atprotofans.com), [ko-fi](https://ko-fi.com), or a custom link
 
-your records live on [your own data repo](https://at-me.zzstoatzz.io/view/?handle=zzstoatzz.io) — take them with you to any other atproto audio app whenever you want, no migration step.
+your likes, comments, and public playlists live in [your personal data server](/glossary/#pds), where compatible apps can read them. private playlists stay in plyr.fm.
 
 even today, other apps (like [aetheros.computer](https://aetheros.computer)) already use plyr.fm records to provide an [alternate user interface to audio stored on plyr.fm](https://bsky.app/profile/plyr.fm/post/3mh23kjcelc2u).
 
@@ -49,12 +49,10 @@ even today, other apps (like [aetheros.computer](https://aetheros.computer)) alr
 
    ![a track card showing title, artist, tags, and play count](/screenshots/feed-track-card.png)
 
-4. **like it** — click the three-dot menu on any track and hit "add to liked"
-5. **build a playlist** — click "add to playlist" from the same menu, name your collection
+4. **like it** — click the heart on a track or in the player, then choose "add to liked"
+5. **build a playlist** — choose "add to playlist" from that same heart menu, then pick or create a playlist
 
-   ![track actions menu — like, add to playlist, queue, share](/screenshots/track-actions-menu.png)
-
-   playlists can be **public** (published to your atmosphere account, readable by any compatible app) or **private** (stays in plyr.fm). private playlists still live in plyr.fm's database; they have not moved to the experimental [ATProto permissioned-data proposal](https://github.com/bluesky-social/proposals/tree/main/0016-permissioned-data). a future playlist migration needs its own sharing, sync, and revocation design.
+   playlists can be **public** (published to your atmosphere account, readable by any compatible app) or **private** (stays in plyr.fm). private playlists are visible only to you and stay in plyr.fm’s database.
 
 to track and [visualize your listening history](https://teal-appview-production.up.railway.app/), you can [enable teal.fm scrobbling in your settings](https://plyr.fm/settings).
 
@@ -69,18 +67,24 @@ links, radio, and playback behave.
 ## what's here
 
 - **stream audio** — music, podcasts, sound art, whatever creators publish
-- **like, comment, and build playlists** — public (visible to other atproto apps) or private
+- **like tracks and build playlists** — choose public or private when creating a playlist
 - **timed comments** — leave a reaction at a specific moment in a track
 - **jams** — shared listening rooms, in real time with friends
 - **downloads** — save a track, or a whole album as a zip, when the artist allows it
 
-your records — likes, playlists, comments — are stored on your [PDS](/glossary/#pds), the same place a Bluesky post lives. they belong to your atmosphere account, not to plyr.fm.
+your likes, public playlists, and comments are stored on your [PDS](/glossary/#pds), the same place a Bluesky post lives. private playlists and app preferences stay in plyr.fm.
 
 ## downloads
 
 most public audio can be downloaded — look for the download icon next to share on track and album pages. files come named (`artist - title.ext`) and prefer the lossless original when one exists; albums arrive as a numbered zip in the artist's track order. the first album download takes a minute to prepare — it's safe to leave, it stays ready once built.
 
 if there's no download icon, the artist has switched downloads off, or the audio is supporter-gated or under a copyright notice.
+
+## the player and queue
+
+the player stays at the bottom while you browse. use its heart to like the current track or add it to a playlist, and its queue button to see what is next. the skip buttons move by 5, 10, or 15 seconds depending on track length.
+
+open the queue to reorder upcoming tracks or shuffle them. enable **keep playing** in [settings](https://plyr.fm/settings) to continue with picks from your For You feed when your queue ends.
 
 ## keyboard shortcuts
 

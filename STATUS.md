@@ -98,8 +98,9 @@ had put the ∞ marker and play in the same column.
 **what the GA changed for everyone**: `seekbackward`/`seekforward` are
 registered for all now, so iOS shows ±skip in place of ⏮/⏭ on the lock
 screen — the trade the flag existed to try, accepted. previous, repeat and
-shuffle are not on the phone bar; they live in the queue until the
-now-playing page exists. with nothing playing there is no footer and so no
+shuffle are not on the phone bar. the queue can shuffle upcoming tracks,
+but it has no previous-track or repeat control; those remain a gap for the
+now-playing page. with nothing playing there is no footer and so no
 queue button (Q still opens the panel).
 
 **next**: the fungible `/now` page reading `player.currentTrack`, with the
@@ -400,7 +401,7 @@ still live from them is in known issues.
 - ✅ PDS blob storage for audio (user data ownership)
 - ✅ play count tracking, likes, queue management
 - ✅ downloads — public ungated tracks (lossless originals preferred) and whole albums as cached zips, with a per-artist opt-out
-- ✅ repeat-one on the player + queue sidebar toggle
+- ✅ repeat-one on the desktop player
 - ✅ experimental subsonic-compatible surface at `/rest` (developer token as password)
 - ✅ "keep playing" — opt-in continuous playback from the For You feed when the queue runs dry ("next from: for you")
 - ✅ queue items with artwork thumbnails + right-side drag-to-reorder (desktop + touch)

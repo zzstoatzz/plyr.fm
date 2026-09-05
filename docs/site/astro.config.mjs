@@ -21,6 +21,7 @@ export default defineConfig({
           label: "developers",
           items: [
             { slug: "developers", label: "overview" },
+            { slug: "developers/agents" },
             { slug: "developers/quickstart" },
             {
               label: "API reference",

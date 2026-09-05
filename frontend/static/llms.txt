@@ -1,0 +1,49 @@
+# plyr.fm
+
+> An open-source audio streaming app on ATProto. Discover music and other audio,
+> inspect tracks and playlists, and publish with the creator's authorization.
+> Public records live on the user's PDS; private playlists stay in plyr.fm.
+
+## Start here
+
+- [Agent guide](https://docs.plyr.fm/developers/agents/): choose a surface, discover capabilities, search, inspect, and verify results.
+- [Agent guide as Markdown](https://docs.plyr.fm/agents.md): the same guide without the documentation UI.
+- [Developer quickstart](https://docs.plyr.fm/developers/quickstart/): working Python SDK and HTTP examples.
+- [OpenAPI JSON](https://api.plyr.fm/openapi.json): current HTTP paths, parameters, response schemas, and authentication requirements.
+- [Interactive API reference](https://api.plyr.fm/docs): browse the live schema.
+
+## Choose a surface
+
+- HTTP: `https://api.plyr.fm`. Public search and track metadata need no token.
+- Python SDK / CLI: `uv add plyrfm` / `uvx plyrfm --help`. SDK operations use namespaces: `client.discover.search(...)`, `client.tracks.get(...)`, `client.playlists.list()`.
+- Hosted MCP: `https://plyrfm.fastmcp.app/mcp`. Discover its tools at connection time. It exposes read-only catalog and library operations; it does not play audio in the user's browser or mutate their library.
+- Local MCP: `uvx plyrfm-mcp`. Optional `PLYR_TOKEN` enables the user's private library reads; the hosted server accepts `x-plyr-token`.
+- App: [plyr.fm](https://plyr.fm) for listening, publishing, and account settings.
+
+## Search, inspect, then act
+
+1. `GET https://api.plyr.fm/search/?q=ambient&type=tracks&limit=5`
+2. Read `results` and its `type` discriminator. `counts` describes this response, not the full catalog. Search takes a 2–100 character query and a limit of 1–50 per type; narrow the query rather than inventing an offset.
+3. `GET https://api.plyr.fm/tracks/{id}` for a chosen track. Inspect its title, artist, tags, visibility, gating, and labels. Search hits are summaries, not full track records.
+4. Share `https://plyr.fm/track/{id}`. HTTP track detail returns its audio URL in `r2_url`; the Python SDK calls it `audio_url`. Use that returned URL, preserving any access requirements. There is no `/tracks/{id}/stream` endpoint.
+
+A metadata response is not proof that audio played. A successful audio fetch is
+not proof that the listener heard it. Unknown duration or missing metadata remains
+unknown; don't invent a value or describe the sound from its title alone.
+
+## Account actions and visibility
+
+- [Authentication](https://docs.plyr.fm/developers/auth/): developer tokens come from [settings](https://plyr.fm/settings#developer). Browser sessions use HttpOnly cookies. Keep tokens out of URLs, logs, and public files.
+- Uploads, likes, comments, playlist edits, and deletions can change the user's library or PDS. Use the SDK, CLI, or HTTP API only with authorization for the action; read the affected resource afterward to verify it.
+- Public playlists publish ATProto records; private playlists remain in plyr.fm's database. Experimental private tracks use permissioned data on a compatible PDS. Supporter gating is a separate access model.
+- [Moderation](https://docs.plyr.fm/moderation/): discovery filtering differs from direct access. Labels are assertions; a successful metadata lookup does not waive access controls or authorize downloading.
+
+## Guides and source
+
+- [Listeners](https://docs.plyr.fm/listeners/): player, queue, playlists, downloads, and shortcuts.
+- [Creators](https://docs.plyr.fm/artists/): uploads, artwork, embeds, visibility, and export.
+- [Sensitive content](https://docs.plyr.fm/sensitive-content/): artwork and audio preferences.
+- [Lexicons](https://docs.plyr.fm/lexicons/overview/): environment-aware ATProto records; production uses `fm.plyr`, staging `fm.plyr.stg`, development `fm.plyr.dev`. NSIDs are identifiers, not URLs.
+- [Troubleshooting](https://docs.plyr.fm/troubleshooting/): authentication, playback, and indexing.
+- [App source](https://github.com/zzstoatzz/plyr.fm)
+- [SDK, CLI, and MCP source](https://github.com/zzstoatzz/plyr-python-client)

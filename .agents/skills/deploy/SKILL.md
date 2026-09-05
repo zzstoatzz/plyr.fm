@@ -27,8 +27,8 @@ just changelog
 Use `git diff` on the commit range to determine which directories were touched. Then pick the right release command — this is not a choice, it's deterministic:
 
 - **backend changes** (anything in `backend/`, `scripts/`, root config files like `pyproject.toml`): `just release` (full release — tags, bumps version, triggers backend + frontend deploy)
-- **frontend-only** (only `frontend/`, `.claude/`, `docs/`, `STATUS.md`, other non-backend files): `just release-frontend-only` (skips backend deploy)
-- **docs/config only** (only `.claude/`, `docs/`, `STATUS.md`, `.md` files, no runtime code): no deployment needed — tell the user and stop
+- **frontend-only** (only `frontend/`, `.agents/`, `.claude/`, `docs/`, `STATUS.md`, other non-backend files): `just release-frontend-only` (skips backend deploy)
+- **docs/config only** (only `.agents/`, `.claude/`, `docs/`, `STATUS.md`, `.md` files, no runtime code): no deployment needed — tell the user and stop
 
 Report the change summary and which release command you've determined, then **ask the user to confirm before executing**. The changes determine the command, but the user must approve it.
 

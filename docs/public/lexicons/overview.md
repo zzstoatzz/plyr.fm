@@ -275,10 +275,10 @@ when you sign in to plyr.fm, the app requests OAuth scopes for the collections i
 
 | scope | purpose |
 |-------|---------|
-| `repo:fm.plyr.feed.track` | create, update, delete tracks |
-| `repo:fm.plyr.feed.like` | like and unlike tracks |
-| `repo:fm.plyr.feed.comment` | timed comments |
-| `repo:fm.plyr.graph.list` | playlists, albums, liked lists |
+| `repo:fm.plyr.track` | create, update, delete tracks |
+| `repo:fm.plyr.like` | like and unlike tracks |
+| `repo:fm.plyr.comment` | timed comments |
+| `repo:fm.plyr.list` | playlists, albums, liked lists |
 | `repo:fm.plyr.actor.profile` | artist profile |
 | `repo:fm.teal.feed.play` | scrobbles to [teal.fm](https://teal.fm) |
 | `repo:fm.teal.actor.status` | now-playing status |
