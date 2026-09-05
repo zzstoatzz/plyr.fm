@@ -47,120 +47,81 @@ plyr.fm should become:
 
 ### September 2026
 
-#### the footer became spotify's, then became the only footer (#1987–#2004, September 2–3 — GA in prod `2026.0902.232901`; the phone follow-ups #2001–#2004 reached prod as frontend-only promotes on September 3, 00:13Z and 00:54Z)
+#### the weekly status run learned where a PR actually lands, then learned to read the atmosphere (#2008–#2016, September 4–5 — workflow and docs on main; no production release carries them)
 
-**why**: nate: "standardize the player by shamelessly copying Spotify and
-cease all experimentation with the player component." the pitch named the
-one thing the old footer never managed — a like control — and a fungible
-now-playing page as the follow-on. the whole thing rode the `skip-buttons`
-flag for half a day of staging review, then "open it up for everyone".
+**why**: the run that maintains this file only knew which PRs had merged
+since the last one, so its transcript called merges to main "shipped" and
+never named a production release. merging is not shipping here: a
+backend release is a tag, and a frontend-only release is a bare branch
+push with no GitHub workflow at all, so a Cloudflare Pages deployment of
+`production-fe` is its only record.
 
-**what shipped**: three regions on desktop — art, title and heart on the
-left; shuffle, previous, ±skip, play, ±skip, next, repeat on one row with
-the scrubber beneath spanning the centre column; queue button and volume on
-the right. on phones the compact bar is art, title, heart, play, next, and
-the second row is skip-back, times and scrubber, skip-forward, queue. the
-polish pass (#1992) came from a checklist across spotify, apple music,
-youtube music, tidal, soundcloud, vidstack and material 3: transport idle
-secondary → primary on hover, active toggles carry a 4 px dot, a 4 px
-scrubber with a thumb hidden until hover and a 20 px hit area, click-to-mute
-volume, a 2 px focus ring.
-the classic footer, the `stacked`/`stage` props and the flag are deleted
-(#2000) — one layout, one style block. the floating queue button is gone
-(#2001, #2002): it "confused people" and duplicated the footer's own.
+**what the report is** (#2008): `scripts/status_window.py` computes the
+window from the last maintenance *merge* and reports, per PR, where it
+landed — `prod via release <tag>`, `prod via frontend promote <time>`,
+`staging only`, `docs only` — alongside the releases and Pages promotes in
+the window, the plyr.fm account's public posts, and the arcs already in
+`.status_history/`. docs: `docs/internal/tools/status-maintenance.md`.
 
-**the heart is the add menu, not a toggle** (#1993–#1998): nate: "when I
-click the Like button, it should do what the Like button does on pretty
-much every other page" — like, or add to a playlist. so the footer mounts
-`AddToMenu` with a `plain` (borderless) trigger and `align="start"`, so the
-menu opens upward from the heart's left edge into the footer's empty middle
-rather than leftwards over the toast stack. every heart reads through the
-like owner in `lib/likes.svelte.ts`, which loads the viewer's liked ids
-once because the queue's server sync hands back tracks without `is_liked`
-(#1988; dropping that load made the footer heart start unliked, #1994). the
-phone sheet is portaled to `body` (#1996) because the footer's
-backdrop-filter made itself the containing block of a `position: fixed`
-sheet, and it rises from above the player strip rather than dropping from
-the top of the screen (#1999). the portal brought two bugs, and the second
-is the lesson: a stronger desktop selector squashed the phone sheet to its
-borders (#1997), and with the sheet outside the app root svelte dispatches
-its clicks from `document`, so `closest()` on an already-swapped target
-found nothing and closed the menu on taps *inside* it — judge
-inside/outside by `composedPath()`, not the target's ancestors (#1998).
+**three runs to make the report true**: the first live run had no
+Cloudflare credential, so #2009 saw no promotes and re-dated #2001–#2004 to
+the later backend release. the reason was invisible because the script ran
+inside the Claude step, whose tool output never reaches the job log — so
+#2010 moved it to its own plain step that prints, scoped the Cloudflare
+secrets to that step, and added a `report_only` dispatch that previews a
+window with no Claude run. that made the actual fault readable: the Pages
+deployments endpoint caps `per_page` at 25 and answers 400 above it
+(#2011). #2012 put the promote dates back.
 
-**the phone scrubber row shared the bar's grid columns** (#2003): the range
-input sat at its intrinsic 129 px at every width and, once the queue button
-joined the row, collided with skip-forward at 320 px. the second row is now
-its own flex row spanning the grid, with the skips and the queue button as
-snippets rendered once per breakpoint. #2004 fixed radio on phones, where GA
-had put the ∞ marker and play in the same column.
+**then the run got context, and a trace of itself**: #2013 gave the run the
+pub-search MCP server — long-form writing across leaflet, pckt, offprint,
+greengale, whitewind and independent sites — because changes here are
+usually precipitated by changes in the atmosphere that surface as writing
+first, and named the model (`claude-opus-5`) in every maintenance PR
+instead of hiding behind the `opus` alias. #2014 added a `window_since`
+input for reruns and evaluations against a past window, and started
+publishing the window report, the ecosystem context and the transcript to
+the job summary and a run-id artifact — a run that judges "no maintenance
+needed" opens no PR, and the PR body had been the only place any of it
+landed. #2015 kept the action's execution file with those outputs, since
+two silent runs had left nothing at all to read. that file then showed why
+(#2016): the research subagent was launched in the background, the writer
+edited STATUS.md meanwhile and ended its turn waiting on it, and the
+session closed with no `ecosystem_context.md`. research is now its own
+step before the writer, searching one call at a time with a retry on 502 —
+a parallel burst made pub-search answer 502 on roughly a quarter of calls.
 
-**what the GA changed for everyone**: `seekbackward`/`seekforward` are
-registered for all now, so iOS shows ±skip in place of ⏮/⏭ on the lock
-screen — the trade the flag existed to try, accepted. previous, repeat and
-shuffle are not on the phone bar; they live in the queue until the
-now-playing page exists. with nothing playing there is no footer and so no
-queue button (Q still opens the panel).
+**this run is the first with all of it**: a given window (September 2 07:43Z
+→ September 5 01:37Z, so it re-covers arcs already written up here), a
+report whose promote column is populated, and an ecosystem pass whose
+findings are folded into the entries below.
 
-**next**: the fungible `/now` page reading `player.currentTrack`, with the
-footer as its handle on phones — that is where the queue moves.
-
-#### the ingest-blackout alert fired on a sign-up, and the quiet-window host rotation is gone (#2006, September 3 — prod `2026.0903.222140`)
-
-**why**: the `jetstream ingest blackout` alert (writes happened, zero
-dispatches) fired for ten hours on September 3. replaying two public
-jetstream hosts with the `fm.plyr.*` filter showed both writes on the
-network: one sign-up — the profile record, whose `create` was never in the
-dispatch table, and a like twenty seconds after the artist row, dropped as
-an unknown DID because the consumer's known set refreshes every five
-minutes. no data was lost (the API writes the database before the PDS);
-the echo signal itself had two permanent holes, and every future sign-up
-on a quiet night would have tripped it.
-
-**what shipped**: a commit in plyr's own namespace from an unknown DID
-forces a known-DID refresh (at most one per ten seconds) before the drop;
-bluesky profile commits never do. `.actor.profile` create dispatches to
-the same ingest as update. and the blind-host timer is deleted: nate —
-"we need to stop randomly rotating just because its quiet." the old
-`_is_blind` rotated whenever `fm.plyr.*` was silent while bluesky traffic
-flowed, which on a healthy host is every quiet night. rotation now needs
-evidence: the write site stamps redis with the time of plyr's latest
-own-namespace write, and the consumer rotates when that write is older
-than `echo_grace_seconds` (120) with no own event since (compared on
-firehose `time_us`, 30 s of skew tolerated), once per write, rewinding the
-cursor to before the write so the next host replays it. a second host
-missing the same record means the network lacks it, which is the alert's
-job. `_load_cursor` no longer moves the cursor forward past memory — the
-reload before every reconnect had been erasing the rewind, so the
-existing 10 s rotation rewind was a no-op.
-
-**verified**: staging's e2e run wrote seventeen records and each `pds record
-write` was followed by a `jetstream dispatched` within a second, with no
-rotation. prod held one connection through the night with zero own writes, so
-the prod echo path waits on the first real write. `fly logs` from these
-machines ships in batches an hour or more behind, so liveness was read from
-redis (cursor age) and Logfire. design:
-`docs/internal/architecture/jetstream-ingest.md`, "hosts: rotate on evidence,
-never on quiet".
-
-#### the status-maintenance run starts from a window report (#2008, September 4 — merged, staging only; the workflow itself)
-
-the weekly run only knew which PRs had merged since the last one, so its
-transcript called merges to main "shipped" and never named a production
-release. `scripts/status_window.py` now computes the window from the last
-maintenance merge and reports, per PR, where it actually landed —
-`prod via release <tag>`, `prod via frontend promote <time>`, `staging
-only`, `docs only` — alongside the releases and Cloudflare Pages
-`production-fe` promotes in the window, the plyr.fm account's public posts,
-and the arcs already in `.status_history/`. a frontend-only release is a
-bare branch push with no GitHub workflow, so Pages is its only record; the
-first live run had no Pages credential and the promotes section said so
-rather than guessing. docs: `docs/internal/tools/status-maintenance.md`.
-
-#### September 1–2 (archived)
+#### September 1–3 (archived)
 
 See `.status_history/2026-09.md` for detailed history:
 
+- **the footer became spotify's, then the only footer** (#1987–#2004,
+  September 2–3 — GA in prod `2026.0902.232901`; the phone follow-ups
+  #2001–#2004 as frontend-only promotes on September 3, 00:13Z and 00:54Z)
+  — one layout, one style block: the classic footer, the `stacked`/`stage`
+  props and the `skip-buttons` flag are deleted, and the floating queue
+  button with them. the heart is the add menu (like, or add to a playlist)
+  reading through the like owner in `lib/likes.svelte.ts`; the phone sheet
+  is portaled to `body` past the footer's backdrop-filter, which cost two
+  corrections — the lesson being to judge inside/outside clicks by
+  `composedPath()`, not the target's ancestors. announced with a video post
+  on September 3, whose reply names what is still wanted: gestures to remove
+  or like from the queue, an ambient queue hydrated by For You, better
+  reorder animations.
+- **the ingest-blackout alert fired on a sign-up, and quiet-window rotation
+  is gone** (#2006, September 3 — prod `2026.0903.222140`) — a sign-up's
+  profile `create` was never in the dispatch table and a like arrived from a
+  DID the consumer would not learn about for five minutes, so the echo
+  signal had two permanent holes. host rotation now needs evidence: redis
+  carries the time of plyr's latest own-namespace write, and the consumer
+  rotates only when that write goes unechoed past a 120 s grace, rewinding
+  the cursor to before it. no data was lost — the API writes the database
+  before the PDS.
 - **skip buttons, drawn until they were right** (#1958–#1966, September 1–2)
   — ±5/10/15 s buttons behind the `skip-buttons` flag, the step following
   track length through one ladder in `lib/skip-step.ts`, and four passes on
@@ -258,7 +219,7 @@ still live from them is in known issues.
 
 **the player is spotify's footer now, for everyone** (#1987–#2004, September 2–3 — GA in prod `2026.0902.232901`, the phone follow-ups as frontend-only promotes on September 3): one layout — art, title, heart | shuffle, previous, ±skip, play, ±skip, next, repeat over a full-width scrubber | queue, volume — and on phones the compact bar plus a scrubber row that ends with the queue button; the floating queue button and the `skip-buttons` flag are gone. the heart is the add menu (like, or add to a playlist), reading through the like owner; the phone sheet rises from above the player. the passing-comment stack (#1968–#1980) and the drawn-icon rule (judge an icon as a drawing at the largest and the shipped size, in its row) stand. nate's standing instruction for this kind of iteration: promote to prod after the staging check without asking; design changes to the phone bar pause at staging for his eyes. **next**: the fungible `/now` page (the footer as its handle on phones, the queue moving there); whether skip handlers with `seekto` scrub on a real iPhone lock screen; the drawn-iconography idea (people draw plyr's icons, doodl-style, with published icon collections and an explore page) is parked as "soon, not now".
 
-**records are moving into the client's hands — parked until the sign-in design is redone** (plan `docs/plans/2026-08-31-client-side-writes.md`; #1948–#1950 shipped in prod `2026.0901.065150`, reverted September 1 in #1952): phase 0 made the frontend a second OAuth client and chained its consent after the cookie login, so every sign-in showed two authorization screens. the direction stands — the file an artist uploads goes in their PDS as-is, plyr indexes/mirrors/serves, and the backend stops authoring records on anyone's behalf — but the next attempt must fit inside the single existing login, with scope growing only when a feature that needs it is used. **next**: redesign how the browser gets a repo-write capability without a second flow, then phase 1 (likes).
+**records are moving into the client's hands — parked until the sign-in design is redone** (plan `docs/plans/2026-08-31-client-side-writes.md`; #1948–#1950 shipped in prod `2026.0901.065150`, reverted September 1 in #1952): phase 0 made the frontend a second OAuth client and chained its consent after the cookie login, so every sign-in showed two authorization screens. the direction stands — the file an artist uploads goes in their PDS as-is, plyr indexes/mirrors/serves, and the backend stops authoring records on anyone's behalf — but the next attempt must fit inside the single existing login, with scope growing only when a feature that needs it is used. two September write-ups are worth reading before phase 1: Keith's avatar builder (September 2) is the end state as a static site — a browser client asking for exactly two `repo:` collections and writing with `swapRecord` pinned to the CID it read, so a concurrent edit fails instead of clobbering — and HappyView's 2.14 notes (September 3) are the hazards on the way, where a second confidential client brought a refresh race that deleted sessions mid-flight and a logout that never called the PDS revocation endpoint. **next**: redesign how the browser gets a repo-write capability without a second flow, then phase 1 (likes).
 
 **supporter standing is becoming a network fact, not a vendor's answer** (#1936, #1938, #1939, August 25–26 — prod `2026.0826.054059`): supporter gating recognized only atprotofans, which sees roughly one supporter record a month network-wide. attested.network — the spec ATM implements, with 861+ payer records across ~69 DIDs — is where the payments actually are, and phase 0 now reads them: `validate_supporter` sits at a neutral choke point (`_internal/supporters.py`) that owns the per-pair redis cache and tries attestations before atprotofans. The boundary with ATM is settled and deliberately lopsided — their hosted checkout owns the payer's OAuth relationship and writes the payer record; plyr only reads, and holds no payments-scoped credential of its own. **next in this arc**: Joe allowlists plyr's DID (~end of the week, after breaking API changes), then phase 1 — app registration, a webhook receiver with delivery-id dedupe, and a service-auth XRPC client. Two questions go with it: broker proofs don't pin the payer record's current content, so `subject` is the payer's word; and `payment.lookup` is public and unauthenticated, which may make the whole repo-walk unnecessary.
 
@@ -266,7 +227,7 @@ still live from them is in known issues.
 
 **the credential chain, closed one step at a time** (#1778–#1790, August 7–8): asking "what do these findings compose into" rather than "is each one severe" found the session cache writing decrypted OAuth tokens *and the DPoP private key* into an unauthenticated Redis, keyed by the bearer token itself. Four steps closed — ciphertext-only cache (#1783), developer-token-only `/rest` (#1784), redis password (#1786), vendors off the uploader-controlled endpoint (#1790) — each verified against the running system rather than the diff. **next in this arc**: the scan-integrity half of #1778 (a `did:web` track's bytes are still served fresh on every request, so a clean scan does not pin what listeners hear) and the transcoder's fail-open auth (#1780), both in known issues; and auditing what a *blob* contains rather than what a field is named.
 
-**still experimental — private media on permissioned spaces** (#1557→#1574, #1684, #1876–#1905, epic #1384): private audio in an artist-owned permissioned space (never R2), credential-gated playback, and since August 22 an artist-named member list rather than owner-only — the `simplespace` member list on the artist's PDS decides, and plyr never stores membership: it asks the space host for a credential with the reader's session and holds that answer for the credential's lifetime (a refusal for five minutes), so a change the artist makes from any client is honored without plyr in the loop (August 23). Every sign-in now requests the private-media permission set and a spaces PDS expands it into `space:` grants at consent, so the *grant* is the capability signal (advertised `scopes_supported` never listed the dynamic scopes and hid the feature from the official alpha PDS). **open**: the cross-account e2e leg needs its `ALPHA_TEST_*` secrets; membership and supporter standing stay separate facts by design; downloads of private tracks are still refused for everyone, owner included, until a private download byte path exists. Design: `docs/internal/architecture/private-media-access-list.md`. the wire contract is the spaces-alpha lexicons at the tip of atproto's `permissioned-data` branch, with Bulletin as the reference client; zds tracks that branch and has rejected stale bodies twice (#1656, #1876), so drift there shows up as a failed first private upload. The July Proposal-0016 alignment replaces the obsolete `ats://` draft addresses with canonical `at://{authority}/space/{type}/{skey}` addresses, separates the space-type lexicon from the OAuth permission set, resolves dedicated space hosts with PDS fallback, and sends a confidential-client attestation separately from the user's delegation token. The current owner-only policy remains intentionally narrow; interoperable catalog sharing needs a product policy and UX on top of the protocol primitives. See `docs/internal/architecture/permissioned-private-media.md`.
+**still experimental — private media on permissioned spaces** (#1557→#1574, #1684, #1876–#1905, epic #1384): private audio in an artist-owned permissioned space (never R2), credential-gated playback, and since August 22 an artist-named member list rather than owner-only — the `simplespace` member list on the artist's PDS decides, and plyr never stores membership: it asks the space host for a credential with the reader's session and holds that answer for the credential's lifetime (a refusal for five minutes), so a change the artist makes from any client is honored without plyr in the loop (August 23). Every sign-in now requests the private-media permission set and a spaces PDS expands it into `space:` grants at consent, so the *grant* is the capability signal (advertised `scopes_supported` never listed the dynamic scopes and hid the feature from the official alpha PDS). **open**: the cross-account e2e leg needs its `ALPHA_TEST_*` secrets; membership and supporter standing stay separate facts by design; downloads of private tracks are still refused for everyone, owner included, until a private download byte path exists. Design: `docs/internal/architecture/private-media-access-list.md`. the wire contract is the spaces-alpha lexicons at the tip of atproto's `permissioned-data` branch, with Bulletin as the reference client; zds tracks that branch and has rejected stale bodies twice (#1656, #1876), so drift there shows up as a failed first private upload. The July Proposal-0016 alignment replaces the obsolete `ats://` draft addresses with canonical `at://{authority}/space/{type}/{skey}` addresses, separates the space-type lexicon from the OAuth permission set, resolves dedicated space hosts with PDS fallback, and sends a confidential-client attestation separately from the user's delegation token. The current owner-only policy remains intentionally narrow; interoperable catalog sharing needs a product policy and UX on top of the protocol primitives. See `docs/internal/architecture/permissioned-private-media.md`. Three groups wrote about this substrate in the September 2–5 window, and two things they say are worth holding onto: Cameron's reading of the spaces alpha (September 3) states plainly that spaces give access control but not confidentiality — data is unencrypted and readable by every member *and application* with access, and already-synchronized copies are not recalled by revocation, which is exactly what plyr's credential-lifetime-plus-five-minute-refusal answer does and does not cover; and Habitat (September 4) adopts a subset of `opensocial.community` where admins approve which apps may touch an org's spaces, because otherwise a malicious AppView can exfiltrate from people who never consented to it — the same client-attestation wire plyr already sends, plus an app-vetting layer plyr does not have. Roomy's Arbiter report (September 4) is the third: their answer to scopes being all-or-nothing on someone else's repo is to encode granularity in the NSID and carry a policy in the permission set, moving enforcement from the PDS to the XRPC server.
 
 **next**: remove the `/admin/*` machine-endpoint aliases now that prod calls `/internal/*` (#1691); re-enable `test_private_media.py` somewhere that has the local postgres/redis fixtures (it is excluded from the staging-facing workflow). which surfaces beyond albums/playlists count as queueable contexts (artist catalogs #1353, feeds/search). publish the five record lexicons (`fm.plyr.track`, `.like`, `.comment`, `.list`, `.actor.profile`) with a docs-quality pass on each (next phase after #1569); a production smoke-test harness for private media (file-types × visibilities, fully inert — no DM/listing/stats — per prod release); enable the `copyright-paradigm` flag for own DID and start dogfooding on prod; co-writer / publisher editing UI for `additionalInterestedParties` (backend plumbed end-to-end, frontend deferred); prefill ISWC/ISRC/masterOwner on the portal edit form (we only have the URIs locally, not field contents); fly worker tcp health check (running-but-stuck symptom detector); upstream `atproto_oauth.OAuthClient` body-factory support (lets us drop `_signed_streaming_post`); deploy-docs sanity check; `config.py` decomposition.
 
@@ -283,7 +244,7 @@ still live from them is in known issues.
 - **unlike may leave the track in the liked list** ([#1812](https://github.com/zzstoatzz/plyr.fm/issues/1812)): `test_cross_user_like` failed once against staging on August 9 and has passed since. Filed rather than dismissed as flaky, because the assertion describes a read-your-own-write guarantee. Ruled out: stale cache (the liked list is a direct DB query) and a failed delete (it commits before returning). Untested hypothesis: `unlike_track` deletes the row and backgrounds the PDS deletion, so a replayed like-create event could resurrect it — the #1736 family. Track deletes write a tombstone for exactly this reason; likes may have no equivalent.
 - **`just backend test` runs serially, CI runs `-n auto`** ([#1815](https://github.com/zzstoatzz/plyr.fm/issues/1815)): the two take different paths through `conftest.py` — serial uses `_setup_database_direct` with no template database, no advisory lock, and no per-worker redis db. The entire parallel bootstrap only ever executed in CI, which is why #1809's bugs were invisible locally despite failing 5/5 once run CI's way. Distinct from the shared-compose-project issue below, which is about *concurrent* sessions rather than parallel workers.
 - **pre-#1811 deletes orphaned R2 objects** ([#1367](https://github.com/zzstoatzz/plyr.fm/issues/1367)): track delete and account deletion keyed off `file_id`, so for firehose-ingested rows the delete was a silent no-op and the real object stayed in the bucket with nothing referencing it. Fixed going forward; anything already orphaned is still there. Production has only 5 ingested rows today so the historical blast radius is small, and the sweep that would confirm it is the audit #1367 already asks for.
-- **a blind jetstream host permanently discards our events** ([#1796](https://github.com/zzstoatzz/plyr.fm/issues/1796)): rotation's fixed 10s cursor rewind cannot cover a blind window in which bsky traffic kept advancing the cursor (verified in production August 8 — see recent work). Silent loss for third-party-client writes, which the write-echo alert cannot see. Narrowed by #2006 (September 3): a rotation triggered by plyr's own unechoed write rewinds the cursor to before that write, so plyr's own records are replayed; foreign-client writes have no stamp, so a blind host still loses them and nothing rotates for them.
+- **a blind jetstream host permanently discards our events** ([#1796](https://github.com/zzstoatzz/plyr.fm/issues/1796)): rotation's fixed 10s cursor rewind cannot cover a blind window in which bsky traffic kept advancing the cursor (verified in production August 8 — see recent work). Silent loss for third-party-client writes, which the write-echo alert cannot see. Narrowed by #2006 (September 3): a rotation triggered by plyr's own unechoed write rewinds the cursor to before that write, so plyr's own records are replayed; foreign-client writes have no stamp, so a blind host still loses them and nothing rotates for them. The structural fix may be upstream rather than in our heuristics: jetstream v2's sealed archive with `planSnapshot` → replay → live cutover (zat's devlog 015, September 2) turns a missed window into a bounded replay, and LocalStack's September 3 write-up states the same delivery contract from the consumer side — advance the cursor only after a successful publish, expect inclusive at-least-once replay, dedupe on a stable key, and report an aged-out cursor rather than skipping past it. Worth checking whether the hosts we rotate through expose v2 replay before investing further in rotation.
 - **parallel agent sessions share one test database** (found August 9): `backend/tests/docker-compose.yml` has no `name:` field, so compose derives the project name from the directory — every checkout/worktree of this repo maps to the same `tests-test-db-1`/`tests-test-redis-1` containers, and two sessions running tests concurrently silently recreate each other's schemas (see the #1801 technical notes for the evening this cost). A `name:` derived from the checkout path, or `COMPOSE_PROJECT_NAME`, would isolate them.
 - **PDS-hosted audio is still scanned from a mutable source** ([#1778](https://github.com/zzstoatzz/plyr.fm/issues/1778), narrowed by #1790): the SSRF half is closed — `is_safe_url` now validates the endpoint where a miniDoc enters the system and at both `pds_blob_url` construction sites, and vendors are no longer pointed at the uploader-controlled URL. What remains is the scan-integrity half: a `did:web` track's bytes are served by the user's own host on every request, so a clean copyright scan does not pin what listeners later hear. Pinning the scan to `pds_blob_cid` means fetching and hashing blobs on the track-creation hook — the path #1519 deliberately made non-blocking — so it is a real change, not a validation tweak.
 - **the transcoder's auth fails open** ([#1780](https://github.com/zzstoatzz/plyr.fm/issues/1780)): with `TRANSCODER_AUTH_TOKEN` unset it logs a warning and accepts every request, and the app has a public IP. Currently latent — the secret is set and the app is suspended — but `services/moderation/src/auth.rs` returns `SERVICE_UNAVAILABLE` in the same situation, so the transcoder is the outlier and this is a consistency fix.
@@ -304,10 +265,11 @@ still live from them is in known issues.
 - `/costs` shows Cloudflare at $0 — upstream gap: CF line items aren't yet tagged `project=="plyr.fm"` in my-prefect-server, so the live feed can't attribute them (#1599).
 - **skip handlers together with `seekto` have never been on a physical iPhone** (#1958, September 1; now true for everyone since the #2000 GA, prod `2026.0902.232901`): `seekbackward`/`seekforward` are registered next to the existing `seekto`, a combination none of the #1860–#1869 recipes tried, and iOS shows ±skip in place of ⏮/⏭ because of it. whether the lock-screen scrubber behaves differently with both is nate's phone to answer — and the flag that used to limit the blast radius is gone.
 - **the iOS lock-screen scrubber cannot be dragged in the real app** ([#1870](https://github.com/zzstoatzz/plyr.fm/issues/1870)): metadata, times, and ⏮/⏭ all work; the scrubber never grabs on a physical iPhone under any of five media-session recipes, while SoundCloud's web player scrubs in the same Safari. the deciding experiment — a minimal page on a physical phone, or Web Inspector attached to the device — has not run yet; the code is deliberately parked at the #1860 state.
-- iOS PWA audio may hang on first play after backgrounding
+- iOS PWA audio may hang on first play after backgrounding — independently corroborated outside plyr: coryd.dev's note on why he built a native Navidrome client says audio plays but never advances to the next track in Safari or a home-screen PWA, which puts continuous playback on the platform rather than on our queue code
 - audio may persist after closing bluesky in-app browser on iOS ([#779](https://github.com/zzstoatzz/plyr.fm/issues/779)) - user reported audio and lock screen controls continue after dismissing SFSafariViewController. expo-web-browser has a [known fix](https://github.com/expo/expo/issues/22406) that calls `dismissBrowser()` on close, and bluesky uses a version with the fix, but it didn't help in this case. we [opened an upstream issue](https://github.com/expo/expo/issues/42454) then closed it as duplicate after finding prior art. root cause unclear - may be iOS version specific or edge case timing issue.
 
 ### backlog
+- the queue's own wishlist, from the September 3 post announcing it: swipe gestures for remove-from-queue and like on the queue rows, an ambient queue hydrated by For You rather than only refilled when it runs dry, and better reorder animations
 - drawn iconography: let people draw plyr's own icons doodl-style — slottable icon components, published icon collections, an explore page for them (nate, September 1: "soon, not exactly now"; the sibling repo `doodl` is the reference: `tech.waow.doodl.iconset` maps UI slots to drawing strongRefs)
 - Jetstream audit trail / activity feed integration — persistent log of firehose events, toggle for visibility
 - share to bluesky (#334)
@@ -448,4 +410,4 @@ see the [contributing guide](https://docs.plyr.fm/contributing/) for setup instr
 
 ---
 
-this is a living document. last updated 2026-09-04 (status maintenance for the September 2–4 window: the September 1–2 player arcs — skip buttons #1958–#1966 and the passing-comment stack #1968–#1980 — moved to `.status_history/2026-09.md`, the August index and the `SELECT neondb` known issue compressed against `.status_history/2026-08.md`, and the footer arc's landing corrected — #2001–#2004 are in prod with `2026.0903.222140`, not a frontend promote. #2008, the window report that feeds this run, is merged and staging only.) the same day's earlier note recorded **the ingest-blackout alert fired on a sign-up** (#2006 — prod `2026.0903.222140`; the quiet-window host rotation is gone, #1796 narrowed), and September 2's recorded **the footer became spotify's and then the only footer**. earlier entries are preserved in `.status_history/`.
+this is a living document. last updated 2026-09-05 (status maintenance over a given window, September 2 07:43Z – September 5 01:37Z, which re-covers arcs already written up here: the footer GA #1987–#2004 and the jetstream rotation rewrite #2006 moved to `.status_history/2026-09.md`, and the maintenance run's own arc #2008–#2016 written up in their place. one correction carried over from #2012 that this note had kept stating the old way: **#2001–#2004 reached prod as frontend-only promotes on September 3, 00:13Z and 00:54Z**, not as part of the backend release `2026.0903.222140`, which carried #2006. the first ecosystem pass ran this window, and its findings are folded into the client-side-writes and private-media entries under current focus and into the blind-host and iOS-PWA known issues.) earlier entries are preserved in `.status_history/`.
