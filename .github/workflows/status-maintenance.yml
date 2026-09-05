@@ -37,6 +37,10 @@ on:
         description: "stop after the ecosystem research (no writer, no PR); read ecosystem_context.md from the job summary or artifact"
         type: boolean
         default: false
+      model:
+        description: "model for this run only (default: STATUS_MODEL from the workflow env)"
+        type: string
+        default: ""
   pull_request:
     types: [closed]
     branches: [main]
@@ -57,6 +61,10 @@ jobs:
           fetch-depth: 0
 
       - uses: astral-sh/setup-uv@v7
+
+      # one resolved model for both Claude steps and the PR body line
+      - name: Resolve the model
+        run: echo "MODEL=${{ inputs.model || env.STATUS_MODEL }}" >> "$GITHUB_ENV"
 
       # the report is deterministic, so it is built here where its output is
       # in the job log and the Cloudflare secrets never enter the Claude step
@@ -83,7 +91,7 @@ jobs:
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           claude_args: |
-            --model ${{ env.STATUS_MODEL }}
+            --model ${{ env.MODEL }}
             --mcp-config .github/mcp/status-maintenance.json
             --allowedTools "Read,Write,Bash,mcp__pub-search__search,mcp__pub-search__get_document,mcp__pub-search__find_similar,mcp__pub-search__author_profile"
           prompt: |
@@ -119,7 +127,7 @@ jobs:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           display_report: "true"
           claude_args: |
-            --model ${{ env.STATUS_MODEL }}
+            --model ${{ env.MODEL }}
             --allowedTools "Read,Write,Edit,Bash,Fetch,Task"
           prompt: |
             you are maintaining the plyr.fm (pronounced "player FM") project status file.
@@ -418,7 +426,7 @@ jobs:
             exit 0
           fi
           {
-            printf '%s\n\nwritten by `%s` (claude-code-action).\n' "$BODY" "$STATUS_MODEL"
+            printf '%s\n\nwritten by `%s` (claude-code-action).\n' "$BODY" "$MODEL"
             if [ -f window_report.md ]; then
               printf '\n<details>\n<summary>window report — what landed where, what was posted</summary>\n\n'
               cat window_report.md
