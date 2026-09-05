@@ -16,6 +16,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: install just
+        uses: extractions/setup-just@v3
+
       - name: detect changed paths
         uses: dorny/paths-filter@v3
         id: filter
@@ -30,7 +33,6 @@ jobs:
               - 'services/transcoder/**'
 
       - name: install uv
-        if: steps.filter.outputs.backend == 'true'
         uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
@@ -96,5 +98,5 @@ jobs:
           SKIP: ${{ steps.skip.outputs.list }}
 
       - name: prune uv cache
-        if: always() && steps.filter.outputs.backend == 'true'
+        if: always()
         run: uv cache prune --ci
