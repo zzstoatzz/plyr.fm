@@ -392,3 +392,7 @@ max_lines = 568
 [[rules]]
 path = "frontend/tools/oxlint/anti-slop/shared/dictionary-types.ts"
 max_lines = 502
+
+[[rules]]
+path = ".github/workflows/status-maintenance.yml"
+max_lines = 513
