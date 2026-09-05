@@ -78,6 +78,13 @@ citing only what it read. the parent uses it like the posts: one clause where
 a change responds to something written, never a segment. the file is posted
 into the PR body so the reviewer can judge what was found.
 
+## run outputs
+
+every run (not just one that opens a PR) writes `window_report.md`,
+`ecosystem_context.md` and `podcast_script.txt` to the job summary and to an
+artifact `status-run-outputs-<run id>`, so a run that judged "no maintenance
+needed" can still be read: `gh run download <run id> --name status-run-outputs-<run id>`.
+
 ## model
 
 the model is set once, as the workflow-level `STATUS_MODEL` env
@@ -149,6 +156,7 @@ dry, matter-of-fact, slightly sardonic. avoid:
 |-------|------|---------|-------------|
 | `skip_audio` | boolean | false | skip audio generation |
 | `report_only` | boolean | false | print the window report to the job log and stop — no Claude run, no PR |
+| `window_since` | string | "" | override the window start (ISO time) for reruns and for evaluating the process against a past window; the prompt then covers that window even if STATUS.md already documents it |
 
 ## secrets required
 

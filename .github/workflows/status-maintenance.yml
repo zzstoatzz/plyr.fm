@@ -29,6 +29,10 @@ on:
         description: "print the window report to the job log and stop (no Claude, no PR)"
         type: boolean
         default: false
+      window_since:
+        description: "override the window start (ISO time) — for reruns and evaluating the process against a past window"
+        type: string
+        default: ""
   pull_request:
     types: [closed]
     branches: [main]
@@ -58,7 +62,11 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
-          uv run scripts/status_window.py > window_report.md
+          if [ -n "${{ inputs.window_since }}" ]; then
+            uv run scripts/status_window.py --since "${{ inputs.window_since }}" > window_report.md
+          else
+            uv run scripts/status_window.py > window_report.md
+          fi
           cat window_report.md
 
       - uses: anthropics/claude-code-action@v1
@@ -80,7 +88,7 @@ jobs:
 
             ## task 1: gather the window report
 
-            the window is from the moment the LAST status-maintenance PR was MERGED (not opened) until now. `scripts/status_window.py` computed it before you started and wrote `window_report.md` into the working directory. run:
+            the window is from the moment the LAST status-maintenance PR was MERGED (not opened) until now — unless the report's first line says the start was given, in which case someone chose the window deliberately (a rerun or an evaluation) and you cover it even if STATUS.md already documents that work. `scripts/status_window.py` computed it before you started and wrote `window_report.md` into the working directory. run:
 
             ```bash
             date
@@ -318,6 +326,31 @@ jobs:
       # this run was dispatched on main, so its run-level branch/sha point at
       # main — the only durable join to the merge run is the branch name, which
       # phase 2 reads from the merged PR's head ref.
+      # the run's outputs are reviewable even when it opened no PR: they go to
+      # the job summary and an artifact named by run id
+      - name: Publish run outputs
+        if: ${{ !inputs.report_only }}
+        run: |
+          for f in window_report.md ecosystem_context.md podcast_script.txt; do
+            if [ -f "$f" ]; then
+              { printf '## %s\n\n' "$f"; if [ "$f" = podcast_script.txt ]; then printf '```\n'; cat "$f"; printf '\n```\n'; else cat "$f"; fi; printf '\n\n'; } >> "$GITHUB_STEP_SUMMARY"
+            else
+              printf '## %s\n\nnot produced by this run\n\n' "$f" >> "$GITHUB_STEP_SUMMARY"
+            fi
+          done
+
+      - name: Upload run outputs artifact
+        if: ${{ !inputs.report_only }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: status-run-outputs-${{ github.run_id }}
+          path: |
+            window_report.md
+            ecosystem_context.md
+            podcast_script.txt
+          if-no-files-found: ignore
+          retention-days: 14
+
       - name: Resolve PR branch
         if: ${{ !inputs.report_only }}
         id: prbranch
