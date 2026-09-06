@@ -494,7 +494,8 @@
 										stroke-linecap="round"
 										stroke-linejoin="round"
 										aria-hidden="true"
-										><path d="m16 3 5 5M4 20l5-1L21 7a2.12 2.12 0 0 0-3-3L6 16l-2 4Z" /></svg
+										><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+										<path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg
 									>
 								</button>
 							{/if}
@@ -744,7 +745,7 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		gap: 0.5rem;
+		gap: 1rem;
 		max-width: 100%;
 	}
 	.track-title-row .edit-track-button {
@@ -757,17 +758,15 @@
 		min-height: 44px;
 		padding: 0.5rem;
 		border: none;
-		border-radius: var(--radius-full);
+		border-radius: var(--radius-md);
 		background: transparent;
 		color: var(--text-secondary);
 		cursor: pointer;
 		transition:
-			background var(--motion-feedback) ease-out,
 			color var(--motion-feedback) ease-out,
 			transform var(--motion-feedback) ease-out;
 	}
 	.edit-track-button:hover {
-		background: color-mix(in srgb, var(--accent) 10%, transparent);
 		color: var(--accent);
 	}
 	.edit-track-button:active {
