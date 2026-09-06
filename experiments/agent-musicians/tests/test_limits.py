@@ -62,3 +62,22 @@ def test_peer_distribution_excludes_self_and_keeps_exploration() -> None:
     assert peer != "a" and set(probabilities) == {"b", "c"}
     assert sum(probabilities.values()) == pytest.approx(1)
     assert all(p > 0 for p in probabilities.values())
+
+
+def test_explicit_retry_keeps_the_original_budget(tmp_path: Path) -> None:
+    store = Store(tmp_path)
+    now = datetime.now(UTC)
+    session = store.reserve(now)
+    assert session is not None
+    store.call(session)
+    store.charge(session, 0.01)
+    store.finish(session, "failed")
+    assert store.reserve(now) is None
+    assert store.reserve(now, retry_failed=True) == session
+    with store.connect() as db:
+        assert db.execute("SELECT calls, spent, reserved FROM sessions").fetchone() == (
+            1,
+            0.01,
+            0.05,
+        )
+    assert store.reserve(now, retry_failed=True) is None

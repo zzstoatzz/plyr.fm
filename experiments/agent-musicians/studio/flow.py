@@ -133,7 +133,7 @@ def curate_peer(name: str, roster: dict, study: dict) -> None:
     persist_result=False,
     timeout_seconds=600,
 )
-def community() -> Completed:
+def community(retry_failed: bool = False) -> Completed:
     directory = Path(os.environ["STUDIO_STATE_DIR"])
     directory.mkdir(parents=True, exist_ok=True)
     with (directory / "session.lock").open("w") as lock:
@@ -144,7 +144,7 @@ def community() -> Completed:
                 name="Skipped", message="Another studio session holds the worker lock"
             )
         store = Store(directory)
-        session = store.reserve(datetime.now(UTC))
+        session = store.reserve(datetime.now(UTC), retry_failed=retry_failed)
         if session is None:
             return Completed(
                 name="Skipped",

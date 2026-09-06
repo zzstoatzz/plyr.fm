@@ -30,7 +30,7 @@ class Store:
     def connect(self) -> sqlite3.Connection:
         return sqlite3.connect(self.path, timeout=30)
 
-    def reserve(self, now: datetime) -> str | None:
+    def reserve(self, now: datetime, retry_failed: bool = False) -> str | None:
         day, month = now.strftime("%Y-%m-%d"), now.strftime("%Y-%m")
         key = f"{day}-{now.hour // 6}"
         with self.connect() as db:
@@ -40,7 +40,20 @@ class Store:
             ).fetchone()[0]
             if now >= datetime.fromisoformat(expiry):
                 return None
-            if db.execute("SELECT 1 FROM sessions WHERE id=?", (key,)).fetchone():
+            existing = db.execute(
+                "SELECT status,spent,calls FROM sessions WHERE id=?", (key,)
+            ).fetchone()
+            if existing:
+                if (
+                    retry_failed
+                    and existing[0] == "failed"
+                    and existing[1] < 0.05
+                    and existing[2] < 12
+                ):
+                    db.execute(
+                        "UPDATE sessions SET status='running' WHERE id=?", (key,)
+                    )
+                    return key
                 return None
             for field, value, limit in [("day", day, 0.20), ("month", month, 5.0)]:
                 used = db.execute(

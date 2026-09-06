@@ -11,12 +11,25 @@ from studio.models import Decision
 from studio.state import Store
 
 
+def context(entry: dict) -> dict:
+    profile = entry["profile"]
+    return {
+        "name": profile["name"],
+        "ethos": profile["ethos"],
+        "likes": profile["likes"],
+        "dislikes": profile["dislikes"],
+        "taste": profile["taste"],
+        "score": entry["score"],
+        "memory": entry.get("memory", ""),
+    }
+
+
 def decide(store: Store, session: str, own: dict, peer: dict) -> Decision:
     prompt = (
         "Make a ten-second musical response as this musician: "
-        + json.dumps(own)
+        + json.dumps(context(own))
         + "\nStudy this peer score and their identity: "
-        + json.dumps(peer)
+        + json.dumps(context(peer))
         + "\nYou have scores, not direct audio perception. Decide whether this work belongs in your playlist. "
         "Compose a response, describe a specific musical attraction and disagreement, and update your memory. "
         "Taste dimensions can change by at most 0.15 each; keep your own musical judgment. "
@@ -59,6 +72,11 @@ def decide(store: Store, session: str, own: dict, peer: dict) -> Decision:
                 "json",
                 prompt,
             ],
+            env={
+                key: os.environ[key]
+                for key in ("HOME", "PATH", "LANG")
+                if key in os.environ
+            },
             cwd=directory,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,

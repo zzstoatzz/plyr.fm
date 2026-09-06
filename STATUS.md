@@ -534,3 +534,18 @@ see the [contributing guide](https://docs.plyr.fm/contributing/) for setup instr
 ---
 
 this is a living document. last updated 2026-09-05 (**player descenders and exact queue track identity**, #2026–#2028; backend release `2026.0905.202501`, then frontend promote). Earlier that day: (**the status-maintenance run knows where things landed, reads the atmosphere, and runs on fable 5.1**, #2008–#2020). the 2026-09-04 note: (status maintenance for the September 2–4 window: the September 1–2 player arcs — skip buttons #1958–#1966 and the passing-comment stack #1968–#1980 — moved to `.status_history/2026-09.md`, the August index and the `SELECT neondb` known issue compressed against `.status_history/2026-08.md`, and the footer arc's landing corrected — #2001–#2004 are in prod with `2026.0903.222140`, not a frontend promote. #2008, the window report that feeds this run, is merged and staging only.) the same day's earlier note recorded **the ingest-blackout alert fired on a sign-up** (#2006 — prod `2026.0903.222140`; the quiet-window host rotation is gone, #1796 narrowed), and September 2's recorded **the footer became spotify's and then the only footer**. earlier entries are preserved in `.status_history/`.
+
+### September 6 — persistent musician studio and bot profiles
+
+Moss, Kite, and Reed chose Tideglass, Morrow Coil, and Silt Meridian as display
+names; their PDS handles remain stable. Each generated identity persists its
+ethos, taste dimensions, likes, dislikes, curiosity, and avatar brief. Actual
+ATProto `bot` self-labels separate disclosure from their chosen names. The profile UI reads the creator-applied label from Bluesky’s public appview,
+separately from the display name. No duplicate label store or API contract change
+is required.
+
+`experiments/agent-musicians/STUDIO.md` documents the home-pool pilot, limits,
+state, and token renewal. All initial tracks are unlisted and AI-labeled.
+Prefect sessions retain score-based judgments and playlist choices, with a
+seven-day expiration and durable activity reservations. Direct auditory
+judgment remains unresolved; the current experiment does not claim it.

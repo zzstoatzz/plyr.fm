@@ -1,10 +1,11 @@
 name: musician-studio
 pull:
   - prefect.deployments.steps.git_clone:
+      id: checkout
+      commit_sha: f88d0113d630ced6c003ae0fb7a293ee3dc4ca94
       repository: https://github.com/zzstoatzz/plyr.fm.git
-      branch: codex/musician-studio
   - prefect.deployments.steps.set_working_directory:
-      directory: plyr.fm/experiments/agent-musicians
+      directory: "{{ checkout.directory }}/experiments/agent-musicians"
 
 deployments:
   - name: studio-pilot

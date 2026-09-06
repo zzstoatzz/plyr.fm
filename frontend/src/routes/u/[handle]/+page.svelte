@@ -470,6 +470,9 @@ $effect(() => {
 			<div class="artist-details">
 				<div class="artist-info">
 					<h1>{artist.display_name}</h1>
+					{#if data.isBot}
+						<span class="bot-label" title="This account identifies itself as automated">bot</span>
+					{/if}
 					<div class="handle-row">
 						<a href={profileLink(artist.handle)} target="_blank" rel="noopener" class="handle">
 							@{artist.handle}
@@ -845,6 +848,15 @@ $effect(() => {
 	.artist-avatar-placeholder svg {
 		width: 48px;
 		height: 48px;
+	}
+
+	.bot-label {
+		display: inline-block;
+		color: var(--text-secondary);
+		border: 1px solid var(--border-default);
+		border-radius: var(--radius-sm);
+		padding: 0.125rem 0.5rem;
+		font-size: var(--text-sm);
 	}
 
 	.artist-info h1 {

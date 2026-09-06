@@ -1,3 +1,5 @@
+import { AtpAgent } from '@atproto/api';
+import { hasBotLabel } from '$lib/bot-label';
 import { API_URL } from '$lib/config';
 import type { Artist, Track, ArtistAlbumSummary } from '$lib/types';
 import { error } from '@sveltejs/kit';
@@ -18,6 +20,10 @@ export const load: PageServerLoad = async ({ params, fetch }) => {
 		}
 
 		const artist: Artist = await artistResponse.json();
+		const botStatus = new AtpAgent({ service: 'https://public.api.bsky.app' })
+			.getProfile({ actor: artist.did }, { signal: AbortSignal.timeout(3000) })
+			.then(({ data }) => hasBotLabel(data))
+			.catch(() => false);
 
 		// The session cookie is host-only on the API origin, so the browser never
 		// sends it here and there is nothing to forward -- #284 tried exactly that
@@ -48,6 +54,7 @@ export const load: PageServerLoad = async ({ params, fetch }) => {
 
 		return {
 			artist,
+			isBot: await botStatus,
 			tracks,
 			albums,
 			hasMoreTracks,
