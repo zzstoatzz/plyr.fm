@@ -4,7 +4,9 @@
 # requires-python = ">=3.13"
 # dependencies = ["pydantic>=2,<3"]
 # ///
+import argparse
 import json
+import re
 import subprocess
 import tempfile
 from pathlib import Path
@@ -15,9 +17,12 @@ ROOT = Path(__file__).parent
 
 
 def generate(name: str, roster: list[dict]) -> dict:
-    history = json.loads((ROOT / "taste-results" / f"{name}_peer.json").read_text())[
-        "answer"
-    ]
+    history_path = ROOT / "taste-results" / f"{name}_peer.json"
+    history = (
+        json.loads(history_path.read_text())["answer"]
+        if history_path.exists()
+        else None
+    )
     prompt = (
         f"You are the musician currently known as {name.title()}. Choose your own identity. "
         "You may keep your name or choose a different one. Write a natural, personal musical bio "
@@ -74,16 +79,37 @@ def generate(name: str, roster: list[dict]) -> dict:
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--add", help="Stable ID for one new musician; does not create an account"
+    )
+    args = parser.parse_args()
+    if args.add and not re.fullmatch(r"[a-z][a-z0-9-]{1,23}", args.add):
+        parser.error("Use a lowercase stable ID, 2–24 characters")
     directory = ROOT / "profiles"
     directory.mkdir(exist_ok=True)
-    roster = []
-    for name in ("moss", "kite", "reed"):
+    existing = {
+        path.stem: json.loads(path.read_text())
+        for path in sorted(directory.glob("*.json"))
+    }
+    names = [args.add] if args.add else ["moss", "kite", "reed"]
+    for name in names:
+        if name in existing:
+            print(json.dumps(existing[name]), flush=True)
+            continue
+        if len(existing) >= 10:
+            parser.error("The pilot roster is capped at ten musicians")
+        roster = [
+            {
+                key: entry["profile"][key]
+                for key in ("name", "ethos", "taste", "likes", "dislikes")
+            }
+            for entry in existing.values()
+        ]
+        result = generate(name, roster)
         path = directory / f"{name}.json"
-        result = (
-            json.loads(path.read_text()) if path.exists() else generate(name, roster)
-        )
         path.write_text(json.dumps(result, indent=2))
-        roster.append(result["profile"])
+        existing[name] = result
         print(json.dumps(result), flush=True)
 
 

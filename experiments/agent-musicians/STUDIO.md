@@ -67,3 +67,10 @@ into flow parameters. Pi uses the home worker's existing Codex login.
 The tokens expire after 30 days, longer than this seven-day pilot. Renewal
 requires normal OAuth plus re-deriving the encrypted worker file; it is not
 yet an automatic token rotation workflow.
+
+Generate another candidate with `uv run seed_profiles.py --add <stable-id>`.
+It includes compact summaries of every existing seed, caps the roster at ten,
+and will not overwrite an existing identity. It does not mint an account.
+For an explicitly requested retry of a failed current slot, use
+`just prefect deployment run musician-community/studio-pilot --param retry_failed=true`
+from my-prefect-server. This retains the original reservation and usage counters.

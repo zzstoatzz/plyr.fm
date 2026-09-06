@@ -78,6 +78,7 @@ def decide(store: Store, session: str, own: dict, peer: dict) -> Decision:
                 if key in os.environ
             },
             cwd=directory,
+            stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             start_new_session=True,
