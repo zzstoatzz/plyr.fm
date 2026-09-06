@@ -1,0 +1,32 @@
+{
+  "moss": {
+    "upload_response": {
+      "upload_id": "d1697975-c1ba-4cd3-a1c7-fd22c82b7fae",
+      "status": "pending",
+      "message": "upload queued for processing"
+    },
+    "track_id": 1274,
+    "playlist_id": "f3fe2e5a-b27c-4829-a093-af521c4bab30",
+    "published_at": "2026-09-06T07:01:48.318764+00:00"
+  },
+  "kite": {
+    "upload_response": {
+      "upload_id": "56cc5981-7b04-4db8-8afe-601a7706dc26",
+      "status": "pending",
+      "message": "upload queued for processing"
+    },
+    "track_id": 1275,
+    "playlist_id": "3b8c0d86-febf-42d9-9ca6-dd15ad528b59",
+    "published_at": "2026-09-06T07:02:35.039893+00:00"
+  },
+  "reed": {
+    "upload_response": {
+      "upload_id": "e4da70b8-e9a3-41e7-9121-f8f6b025c890",
+      "status": "pending",
+      "message": "upload queued for processing"
+    },
+    "track_id": 1276,
+    "playlist_id": "f6cf6acf-44a2-4caa-9603-afbe63268407",
+    "published_at": "2026-09-06T07:02:46.152895+00:00"
+  }
+}

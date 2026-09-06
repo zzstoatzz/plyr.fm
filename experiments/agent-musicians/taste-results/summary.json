@@ -1,0 +1,173 @@
+{
+  "musicians": {
+    "moss": {
+      "profile": "You value sustained harmony, common tones, gentle harmonic movement and overlapping voices. You dislike busy repetition without harmonic purpose.",
+      "wins": {
+        "harmony": 4,
+        "rhythm": 0,
+        "space": 2
+      },
+      "preferred": "harmony",
+      "order_consistent_pairs": 3,
+      "pairs": 3,
+      "choices": [
+        {
+          "left": "harmony",
+          "right": "rhythm",
+          "chosen": "harmony"
+        },
+        {
+          "left": "harmony",
+          "right": "space",
+          "chosen": "harmony"
+        },
+        {
+          "left": "rhythm",
+          "right": "harmony",
+          "chosen": "harmony"
+        },
+        {
+          "left": "rhythm",
+          "right": "space",
+          "chosen": "space"
+        },
+        {
+          "left": "space",
+          "right": "harmony",
+          "chosen": "harmony"
+        },
+        {
+          "left": "space",
+          "right": "rhythm",
+          "chosen": "space"
+        }
+      ]
+    },
+    "kite": {
+      "profile": "You value syncopation, rhythmic variation, crisp articulation and playful momentum. You dislike music that remains static.",
+      "wins": {
+        "harmony": 0,
+        "rhythm": 4,
+        "space": 2
+      },
+      "preferred": "rhythm",
+      "order_consistent_pairs": 3,
+      "pairs": 3,
+      "choices": [
+        {
+          "left": "harmony",
+          "right": "rhythm",
+          "chosen": "rhythm"
+        },
+        {
+          "left": "harmony",
+          "right": "space",
+          "chosen": "space"
+        },
+        {
+          "left": "rhythm",
+          "right": "harmony",
+          "chosen": "rhythm"
+        },
+        {
+          "left": "rhythm",
+          "right": "space",
+          "chosen": "rhythm"
+        },
+        {
+          "left": "space",
+          "right": "harmony",
+          "chosen": "space"
+        },
+        {
+          "left": "space",
+          "right": "rhythm",
+          "chosen": "rhythm"
+        }
+      ]
+    },
+    "reed": {
+      "profile": "You value sparse melodic gestures, expressive rests and clear phrase endings. You dislike continuous sound that leaves no room for a phrase to breathe.",
+      "wins": {
+        "harmony": 0,
+        "rhythm": 2,
+        "space": 4
+      },
+      "preferred": "space",
+      "order_consistent_pairs": 3,
+      "pairs": 3,
+      "choices": [
+        {
+          "left": "harmony",
+          "right": "rhythm",
+          "chosen": "rhythm"
+        },
+        {
+          "left": "harmony",
+          "right": "space",
+          "chosen": "space"
+        },
+        {
+          "left": "rhythm",
+          "right": "harmony",
+          "chosen": "rhythm"
+        },
+        {
+          "left": "rhythm",
+          "right": "space",
+          "chosen": "space"
+        },
+        {
+          "left": "space",
+          "right": "harmony",
+          "chosen": "space"
+        },
+        {
+          "left": "space",
+          "right": "rhythm",
+          "chosen": "space"
+        }
+      ]
+    }
+  },
+  "renders": {
+    "harmony": {
+      "events": 7,
+      "rms_dbfs": -22.0,
+      "peak_dbfs": -11.49279993965597,
+      "duration": 9.5
+    },
+    "rhythm": {
+      "events": 12,
+      "rms_dbfs": -22.0,
+      "peak_dbfs": -13.683106980579634,
+      "duration": 9.0
+    },
+    "space": {
+      "events": 5,
+      "rms_dbfs": -22.0,
+      "peak_dbfs": -11.453149776663867,
+      "duration": 9.4
+    },
+    "moss": {
+      "events": 11,
+      "rms_dbfs": -22.0,
+      "peak_dbfs": -10.151276205564868,
+      "duration": 10.0
+    },
+    "reed": {
+      "events": 6,
+      "rms_dbfs": -22.0,
+      "peak_dbfs": -10.449167602527387,
+      "duration": 9.5
+    },
+    "kite": {
+      "events": 16,
+      "rms_dbfs": -22.0,
+      "peak_dbfs": -12.997363234471571,
+      "duration": 9.7
+    }
+  },
+  "estimated_usd": 0.0066864,
+  "limitation": "Assigned aesthetic briefs; score-only reasoning; no evidence of audio perception or spontaneous preference formation."
+}

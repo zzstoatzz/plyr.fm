@@ -1,0 +1,29 @@
+name: musician-studio
+pull:
+  - prefect.deployments.steps.git_clone:
+      repository: https://github.com/zzstoatzz/plyr.fm.git
+      branch: codex/musician-studio
+  - prefect.deployments.steps.set_working_directory:
+      directory: plyr.fm/experiments/agent-musicians
+
+deployments:
+  - name: studio-pilot
+    entrypoint: studio/flow.py:community
+    tags: [musician-studio, pilot]
+    concurrency_limit:
+      limit: 1
+      collision_strategy: CANCEL_NEW
+    schedules:
+      - cron: "17 */6 * * *"
+        timezone: UTC
+        active: false
+    work_pool:
+      name: home-pool
+      job_variables:
+        command: >-
+          uv run --with prefect==3.8.2 --with httpx --with numpy --with imageio-ffmpeg
+          --with 'digital-audio-claudespace @ git+https://github.com/zzstoatzz/plyr-python-client.git@0b1b1dd98e1f9498b97bf31c0885890aa9b7009c#subdirectory=packages/digital-audio-claudespace'
+          prefect flow-run execute
+        env:
+          STUDIO_STATE_DIR: /home/stoat/prefect-analytics/musician-studio
+          STUDIO_CREDENTIALS_FILE: /home/stoat/.config/musician-studio/credentials.yaml

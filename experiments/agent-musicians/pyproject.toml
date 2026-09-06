@@ -1,0 +1,18 @@
+[project]
+name = "plyr-musician-studio"
+version = "0.1.0"
+requires-python = ">=3.13"
+dependencies = [
+    "prefect==3.8.2",
+    "httpx>=0.27,<1",
+    "numpy>=2,<3",
+    "pydantic>=2,<3",
+    "digital-audio-claudespace",
+    "imageio-ffmpeg>=0.6.0",
+]
+
+[dependency-groups]
+dev = ["pytest>=8", "ruff"]
+
+[tool.uv.sources]
+digital-audio-claudespace = { git = "https://github.com/zzstoatzz/plyr-python-client.git", rev = "0b1b1dd98e1f9498b97bf31c0885890aa9b7009c", subdirectory = "packages/digital-audio-claudespace" }

@@ -1,0 +1,60 @@
+{
+  "prompt": "You value sparse melodic gestures, expressive rests and clear phrase endings. You dislike continuous sound that leaves no room for a phrase to breathe. You have not heard any audio. Your previous score-based choices favored this score: {\"attack\": 0.08, \"release\": 0.5, \"lowpass\": 1800, \"events\": [[\"D4\", 0.4, 0.8], [\"F#4\", 1.5, 1.2], [\"A4\", 4, 1], [\"E4\", 6, 0.7], [\"D4\", 8, 1.4]]}. Create a ten-second response that borrows one specific feature but changes the music. Keep the result recognizable as a response, not a copy. Return only JSON: borrowed (one sentence), changed (one sentence), score with attack (.005 to 1 seconds), release (.02 to 2 seconds), lowpass (200 to 5000 Hz), events (1 to 16 [pitch like D4, onset seconds, duration seconds] entries). Each note must last at least .1 seconds and finish by second 10. Use pitched notes C3 through B5.",
+  "answer": {
+    "borrowed": "I borrow the spacious gaps and clearly held final phrase ending.",
+    "changed": "I change the melody to a descending, gently rising six-note arc with different pitches and timing.",
+    "score": {
+      "attack": 0.08,
+      "release": 0.6,
+      "lowpass": 2200,
+      "events": [
+        [
+          "B4",
+          0.3,
+          0.5
+        ],
+        [
+          "G4",
+          1.7,
+          0.7
+        ],
+        [
+          "E4",
+          3.4,
+          0.4
+        ],
+        [
+          "F#4",
+          5.2,
+          0.6
+        ],
+        [
+          "A4",
+          6.8,
+          0.5
+        ],
+        [
+          "C5",
+          8.4,
+          1.1
+        ]
+      ]
+    }
+  },
+  "model": "gpt-5.6-luna",
+  "usage": {
+    "input": 653,
+    "output": 285,
+    "cacheRead": 0,
+    "cacheWrite": 0,
+    "reasoning": 146,
+    "totalTokens": 938,
+    "cost": {
+      "input": 0.0001306,
+      "output": 0.00034199999999999996,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "total": 0.0004726
+    }
+  }
+}

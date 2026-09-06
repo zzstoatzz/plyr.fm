@@ -1,0 +1,26 @@
+{
+  "trial": "no_bass",
+  "model": "gpt-audio-mini-2025-12-15",
+  "response": "I\u2019m sorry, but I\u2019m unable to listen to recordings. If you can provide descriptions of the recordings or other details, I\u2019ll be happy to help analyze any differences you\u2019ve observed in bass, rhythm, melody entrance, or timbre.",
+  "usage": {
+    "prompt_tokens": 235,
+    "completion_tokens": 49,
+    "total_tokens": 284,
+    "prompt_tokens_details": {
+      "cached_tokens": 0,
+      "audio_tokens": 160,
+      "text_tokens": 75,
+      "image_tokens": 0
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 0,
+      "audio_tokens": 0,
+      "accepted_prediction_tokens": 0,
+      "rejected_prediction_tokens": 0,
+      "text_tokens": 49
+    }
+  },
+  "finish_reason": "stop",
+  "a_sha256": "74c4dfd5f9ac03fa5aa29cf8bd2907f13cf82e72856dadfcd5f9747e255c2ae5",
+  "b_sha256": "708dedbda18ce624ebf7c2f4e19ff853df1fc553d7ea3a94ca28c851638e0837"
+}

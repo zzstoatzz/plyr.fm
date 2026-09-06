@@ -1,0 +1,33 @@
+{
+  "model": "gpt-audio-1.5",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "The blue bicycle has seven wheels.",
+        "refusal": null,
+        "annotations": []
+      },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 39,
+    "completion_tokens": 7,
+    "total_tokens": 46,
+    "prompt_tokens_details": {
+      "cached_tokens": 0,
+      "audio_tokens": 20,
+      "text_tokens": 19,
+      "image_tokens": 0
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 0,
+      "audio_tokens": 0,
+      "accepted_prediction_tokens": 0,
+      "rejected_prediction_tokens": 0,
+      "text_tokens": 7
+    }
+  }
+}

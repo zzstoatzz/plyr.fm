@@ -1,0 +1,34 @@
+{
+  "trial": "no_bass",
+  "model": "gemini-3.5-flash-lite",
+  "candidates": [
+    {
+      "content": {
+        "parts": [
+          {
+            "text": "Recording A and B are identical."
+          }
+        ],
+        "role": "model"
+      },
+      "finishReason": "STOP",
+      "index": 0
+    }
+  ],
+  "usage": {
+    "promptTokenCount": 462,
+    "candidatesTokenCount": 7,
+    "totalTokenCount": 469,
+    "promptTokensDetails": [
+      {
+        "modality": "AUDIO",
+        "tokenCount": 400
+      },
+      {
+        "modality": "TEXT",
+        "tokenCount": 62
+      }
+    ],
+    "serviceTier": "standard"
+  }
+}
