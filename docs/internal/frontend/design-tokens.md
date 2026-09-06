@@ -117,3 +117,20 @@ border-radius: var(--radius-md);
 font-size: var(--text-base);
 background: var(--bg-tertiary);
 ```
+
+## motion
+
+The shared track editor starts the adoption of these tokens:
+
+```css
+--motion-feedback: 140ms;
+--motion-enter: 200ms;
+--motion-exit: 140ms;
+--ease-surface: cubic-bezier(0.2, 0, 0, 1);
+```
+
+Use feedback timing for control hover/press changes, and surface timing for
+opening and closing dialogs. Disable movement under `prefers-reduced-motion`.
+The editor reads its exit duration from the token before unmounting so visual
+and focus restoration timing stay aligned. See [interaction quality](./interaction-quality.md)
+for the ongoing adoption plan.

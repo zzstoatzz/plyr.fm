@@ -18,6 +18,7 @@
 	import RichText from '$lib/components/RichText.svelte';
 	import ShareButton from '$lib/components/ShareButton.svelte';
 	import DownloadButton from '$lib/components/DownloadButton.svelte';
+	import EditTrackModal from '$lib/components/EditTrackModal.svelte';
 	import { requestTrackDownload } from '$lib/downloads';
 	import { moderation } from '$lib/moderation.svelte';
 	import { player } from '$lib/player.svelte';
@@ -31,7 +32,6 @@
 	import { loginHref, redirectToLogin } from '$lib/utils/auth-redirect';
 	import type { Track } from '$lib/types';
 
-
 	// receive server-loaded data
 	let { data }: { data: PageData } = $props();
 
@@ -39,14 +39,18 @@
 	// refetch below fills it in for the owner, or flips `notFound`.
 	let track = $state<Track | null>(data.track);
 	let notFound = $state(false);
+	let editingTrack = $state<Track | null>(null);
+	let isOwner = $derived(
+		auth.isAuthenticated && auth.user?.did != null && auth.user.did === track?.artist_did
+	);
 	let isAdultLabeled = $derived(
 		track?.labels?.some((label) => label === 'sexual' || label === 'porn') ?? false
 	);
 	let isProcessing = $derived(track ? isAwaitingPlayableRendition(track) : false);
 	let mayPlayAdultAudio = $derived(
 		!isAdultLabeled ||
-		preferences.showSensitiveAudio ||
-		(auth.user?.did != null && auth.user.did === track?.artist_did)
+			preferences.showSensitiveAudio ||
+			(auth.user?.did != null && auth.user.did === track?.artist_did)
 	);
 
 	// the visible cover and the og:image cascade share the same root rule
@@ -88,8 +92,7 @@
 
 	// metadata disclosure panel
 	let metadataOpen = $state(false);
-	const reduceMotion =
-		browser && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+	const reduceMotion = browser && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 	let heartShake = $state(false);
 
 	function nudgeSignIn() {
@@ -140,7 +143,6 @@
 			showLikersTooltip = false;
 		}
 	}
-
 
 	async function loadLikedState() {
 		if (!track) return;
@@ -197,200 +199,199 @@
 		toast.success(`queued ${track.title}`, 1800);
 	}
 
+	// track which track we've loaded data for to detect navigation
+	let loadedForTrackId = $state<number | null>(null);
+	// track if we've loaded liked state for this track (separate from general load)
+	let likedStateLoadedForTrackId = $state<number | null>(null);
 
+	// pending seek time from ?t= URL param (milliseconds)
+	let pendingSeekMs = $state<number | null>(null);
 
-// track which track we've loaded data for to detect navigation
-let loadedForTrackId = $state<number | null>(null);
-// track if we've loaded liked state for this track (separate from general load)
-let likedStateLoadedForTrackId = $state<number | null>(null);
+	// reload data when navigating between track pages
+	// watch data.track.id (from server) not track.id (local state)
+	$effect(() => {
+		const currentId = data.track?.id;
+		if (!currentId || !browser) return;
 
-// pending seek time from ?t= URL param (milliseconds)
-let pendingSeekMs = $state<number | null>(null);
+		// check if we navigated to a different track
+		if (loadedForTrackId !== currentId) {
+			editingTrack = null;
+			// reset state for new track (comments reset themselves — the
+			// TrackComments component reloads on track.id change)
+			likedStateLoadedForTrackId = null; // reset liked state tracking
+			pendingSeekMs = null; // reset pending seek
 
-// reload data when navigating between track pages
-// watch data.track.id (from server) not track.id (local state)
-$effect(() => {
-	const currentId = data.track?.id;
-	if (!currentId || !browser) return;
+			// sync track from server data
+			track = data.track;
 
-	// check if we navigated to a different track
-	if (loadedForTrackId !== currentId) {
-		// reset state for new track (comments reset themselves — the
-		// TrackComments component reloads on track.id change)
-		likedStateLoadedForTrackId = null; // reset liked state tracking
-		pendingSeekMs = null; // reset pending seek
+			// mark as loaded for this track
+			loadedForTrackId = currentId;
+		}
+	});
 
-		// sync track from server data
-		track = data.track;
+	// separate effect to load liked state when auth becomes available
+	$effect(() => {
+		const currentId = data.track?.id;
+		if (!currentId || !browser) return;
 
-		// mark as loaded for this track
-		loadedForTrackId = currentId;
+		// load liked state when authenticated and haven't loaded for this track yet
+		if (auth.isAuthenticated && likedStateLoadedForTrackId !== currentId) {
+			likedStateLoadedForTrackId = currentId;
+			void loadLikedState();
+		}
+	});
 
-	}
-});
-
-// separate effect to load liked state when auth becomes available
-$effect(() => {
-	const currentId = data.track?.id;
-	if (!currentId || !browser) return;
-
-	// load liked state when authenticated and haven't loaded for this track yet
-	if (auth.isAuthenticated && likedStateLoadedForTrackId !== currentId) {
-		likedStateLoadedForTrackId = currentId;
-		void loadLikedState();
-	}
-});
-
-// SSR loads anonymously, so a private (owner-only) track arrives as null. retry
-// once on the client WITH the session cookie — an owner can read their own
-// private track; anyone else (or logged-out) gets a real 404 → notFound.
-let triedClientFetch = $state(false);
-$effect(() => {
-	if (track || triedClientFetch || !browser) return;
-	triedClientFetch = true;
-	void (async () => {
-		try {
-			const r = await fetch(`${API_URL}/tracks/${$page.params.id}`, {
-				credentials: 'include'
-			});
-			if (r.ok) {
-				track = await r.json();
-			} else {
+	// SSR loads anonymously, so a private (owner-only) track arrives as null. retry
+	// once on the client WITH the session cookie — an owner can read their own
+	// private track; anyone else (or logged-out) gets a real 404 → notFound.
+	let triedClientFetch = $state(false);
+	$effect(() => {
+		if (track || triedClientFetch || !browser) return;
+		triedClientFetch = true;
+		void (async () => {
+			try {
+				const r = await fetch(`${API_URL}/tracks/${$page.params.id}`, {
+					credentials: 'include'
+				});
+				if (r.ok) {
+					track = await r.json();
+				} else {
+					notFound = true;
+				}
+			} catch {
 				notFound = true;
 			}
-		} catch {
-			notFound = true;
-		}
-	})();
-});
+		})();
+	});
 
-let shareUrl = $derived(`${browser ? window.location.origin : ''}/track/${track?.id ?? $page.params.id}`);
+	let shareUrl = $derived(
+		`${browser ? window.location.origin : ''}/track/${track?.id ?? $page.params.id}`
+	);
 
-// handle ?t= timestamp param for deep linking (youtube-style)
-// handle ?ref= param for share link tracking
-onMount(() => {
-	// deep-link seek + share-ref attribution only apply to a track we already
-	// have (public tracks render server-side); private tracks are owner-only and
-	// don't carry these affordances.
-	if (!track) return;
-	const t = $page.url.searchParams.get('t');
-	if (t) {
-		const seconds = parseInt(t, 10);
-		if (!isNaN(seconds) && seconds >= 0) {
-			pendingSeekMs = seconds * 1000;
-			// load the track without auto-playing (browser blocks autoplay without interaction)
-			if (track.gated) {
-				void playTrack(track);
-			} else {
-				queue.playNow(track, false);
+	// handle ?t= timestamp param for deep linking (youtube-style)
+	// handle ?ref= param for share link tracking
+	onMount(() => {
+		// deep-link seek + share-ref attribution only apply to a track we already
+		// have (public tracks render server-side); private tracks are owner-only and
+		// don't carry these affordances.
+		if (!track) return;
+		const t = $page.url.searchParams.get('t');
+		if (t) {
+			const seconds = parseInt(t, 10);
+			if (!isNaN(seconds) && seconds >= 0) {
+				pendingSeekMs = seconds * 1000;
+				// load the track without auto-playing (browser blocks autoplay without interaction)
+				if (track.gated) {
+					void playTrack(track);
+				} else {
+					queue.playNow(track, false);
+				}
 			}
 		}
-	}
 
-	// capture ref for share link tracking
-	const ref = $page.url.searchParams.get('ref');
-	if (ref) {
-		// store ref in player state for attribution on play
-		player.setRef(ref, track.id);
+		// capture ref for share link tracking
+		const ref = $page.url.searchParams.get('ref');
+		if (ref) {
+			// store ref in player state for attribution on play
+			player.setRef(ref, track.id);
 
-		// record click event (fire-and-forget)
-		fetch(`${API_URL}/tracks/${track.id}/ref/${ref}/click`, {
-			method: 'POST',
-			credentials: 'include'
-		}).catch(() => {
-			// silently ignore errors - tracking is best-effort
-		});
-	}
-});
+			// record click event (fire-and-forget)
+			fetch(`${API_URL}/tracks/${track.id}/ref/${ref}/click`, {
+				method: 'POST',
+				credentials: 'include'
+			}).catch(() => {
+				// silently ignore errors - tracking is best-effort
+			});
+		}
+	});
 
-// perform pending seek once track is loaded and ready
-$effect(() => {
-	if (
-		pendingSeekMs !== null &&
-		track != null &&
-		player.currentTrack?.id === track.id &&
-		player.audioElement &&
-		player.audioElement.readyState >= 1
-	) {
-		const seekMs = pendingSeekMs;
-		pendingSeekMs = null;
-		queue.seek(seekMs);
-		// don't auto-play - browser policy blocks it without user interaction
-		// user will click play themselves
-	}
-});
+	// perform pending seek once track is loaded and ready
+	$effect(() => {
+		if (
+			pendingSeekMs !== null &&
+			track != null &&
+			player.currentTrack?.id === track.id &&
+			player.audioElement &&
+			player.audioElement.readyState >= 1
+		) {
+			const seekMs = pendingSeekMs;
+			pendingSeekMs = null;
+			queue.seek(seekMs);
+			// don't auto-play - browser policy blocks it without user interaction
+			// user will click play themselves
+		}
+	});
 </script>
 
 <svelte:head>
 	{#if !track}
 		<title>{APP_NAME}</title>
 	{:else}
-	{#if !player.currentTrack || player.currentTrack.id === track.id}
-		<title>{track.title} - {track.artist}{track.album ? ` • ${track.album.title}` : ''}</title>
-	{/if}
-	<meta
-		name="description"
-		content="{track.title} by {track.artist}{track.album ? ` from ${track.album.title}` : ''} - listen on {APP_NAME}"
-	/>
+		{#if !player.currentTrack || player.currentTrack.id === track.id}
+			<title>{track.title} - {track.artist}{track.album ? ` • ${track.album.title}` : ''}</title>
+		{/if}
+		<meta
+			name="description"
+			content="{track.title} by {track.artist}{track.album
+				? ` from ${track.album.title}`
+				: ''} - listen on {APP_NAME}"
+		/>
 
-	<!-- Open Graph / Facebook -->
-	<meta property="og:type" content="music.song" />
-	<meta property="og:title" content="{track.title} - {track.artist}" />
-	<meta
-		property="og:description"
-		content="{track.artist}{track.album ? ` • ${track.album.title}` : ''}"
-	/>
-	<meta
-		property="og:url"
-		content={`${APP_CANONICAL_URL}/track/${track.id}`}
-	/>
-	<meta property="og:site_name" content={APP_NAME} />
-	<meta property="music:musician" content="{track.artist_handle}" />
-	{#if track.album}
-		<meta property="music:album" content="{track.album.title}" />
-	{/if}
-	<!--
+		<!-- Open Graph / Facebook -->
+		<meta property="og:type" content="music.song" />
+		<meta property="og:title" content="{track.title} - {track.artist}" />
+		<meta
+			property="og:description"
+			content="{track.artist}{track.album ? ` • ${track.album.title}` : ''}"
+		/>
+		<meta property="og:url" content={`${APP_CANONICAL_URL}/track/${track.id}`} />
+		<meta property="og:site_name" content={APP_NAME} />
+		<meta property="music:musician" content={track.artist_handle} />
+		{#if track.album}
+			<meta property="music:album" content={track.album.title} />
+		{/if}
+		<!--
 		og:image cascade — track art → album art → artist avatar → brand logo.
 		always emit SOMETHING so scrapers don't fall back to their own heuristics
 		(favicon, first visible image, or whatever the posting client had cached).
 		see: https://github.com/zzstoatzz/plyr.fm/pull/1257
 	-->
-	<meta property="og:image" content={previewImage} />
-	<meta property="og:image:secure_url" content={previewImage} />
-	{#if previewIsTrackArt}
-		<meta property="og:image:width" content="1200" />
-		<meta property="og:image:height" content="1200" />
-	{/if}
-	<meta property="og:image:alt" content="{track.title} by {track.artist}" />
-	{#if track.r2_url && !isAdultLabeled}
-		<meta property="og:audio" content="{track.r2_url}" />
-		<meta property="og:audio:type" content="audio/{track.file_type}" />
-	{/if}
+		<meta property="og:image" content={previewImage} />
+		<meta property="og:image:secure_url" content={previewImage} />
+		{#if previewIsTrackArt}
+			<meta property="og:image:width" content="1200" />
+			<meta property="og:image:height" content="1200" />
+		{/if}
+		<meta property="og:image:alt" content="{track.title} by {track.artist}" />
+		{#if track.r2_url && !isAdultLabeled}
+			<meta property="og:audio" content={track.r2_url} />
+			<meta property="og:audio:type" content="audio/{track.file_type}" />
+		{/if}
 
-	<!-- Twitter -->
-	<meta name="twitter:card" content="summary_large_image" />
-	<meta name="twitter:title" content="{track.title}" />
-	<meta
-		name="twitter:description"
-		content="{track.artist}{track.album ? ` • ${track.album.title}` : ''}"
-	/>
-	<meta name="twitter:image" content={previewImage} />
+		<!-- Twitter -->
+		<meta name="twitter:card" content="summary_large_image" />
+		<meta name="twitter:title" content={track.title} />
+		<meta
+			name="twitter:description"
+			content="{track.artist}{track.album ? ` • ${track.album.title}` : ''}"
+		/>
+		<meta name="twitter:image" content={previewImage} />
 
-	<!-- oEmbed discovery for embed services like iframely -->
-	<link
-		rel="alternate"
-		type="application/json+oembed"
-		href="{API_URL}/oembed?url={encodeURIComponent(`${APP_CANONICAL_URL}/track/${track.id}`)}"
-		title="{track.title} - {track.artist}"
-	/>
+		<!-- oEmbed discovery for embed services like iframely -->
+		<link
+			rel="alternate"
+			type="application/json+oembed"
+			href="{API_URL}/oembed?url={encodeURIComponent(`${APP_CANONICAL_URL}/track/${track.id}`)}"
+			title="{track.title} - {track.artist}"
+		/>
 
-	<!-- at-tags: map this page to its atproto records (https://tangled.org/chrisshank.com/at-tags/) -->
-	{#if track.atproto_record_uri}
-		<meta name="at:canonical" content={track.atproto_record_uri} />
-	{/if}
-	{#if track.artist_did}
-		<meta name="at:author" content="at://{track.artist_did}" />
-	{/if}
+		<!-- at-tags: map this page to its atproto records (https://tangled.org/chrisshank.com/at-tags/) -->
+		{#if track.atproto_record_uri}
+			<meta name="at:canonical" content={track.atproto_record_uri} />
+		{/if}
+		{#if track.artist_did}
+			<meta name="at:author" content="at://{track.artist_did}" />
+		{/if}
 	{/if}
 </svelte:head>
 
@@ -399,17 +400,19 @@ $effect(() => {
 		<Header user={auth.user} isAuthenticated={auth.isAuthenticated} onLogout={handleLogout} />
 		<main>
 			<div class="track-detail">
-			{#if isAdultLabeled && !mayPlayAdultAudio}
-				<div class="adult-content-warning" role="note">
-					<strong>adult content</strong>
-					<span>this audio has been labeled as sexually explicit and is hidden by default.</span>
-					{#if auth.isAuthenticated}
-						<a href="/settings">enable sensitive audio in settings</a>
-					{:else}
-						<button type="button" onclick={() => redirectToLogin()}>sign in to change this setting</button>
-					{/if}
-				</div>
-			{/if}
+				{#if isAdultLabeled && !mayPlayAdultAudio}
+					<div class="adult-content-warning" role="note">
+						<strong>adult content</strong>
+						<span>this audio has been labeled as sexually explicit and is hidden by default.</span>
+						{#if auth.isAuthenticated}
+							<a href="/settings">enable sensitive audio in settings</a>
+						{:else}
+							<button type="button" onclick={() => redirectToLogin()}
+								>sign in to change this setting</button
+							>
+						{/if}
+					</div>
+				{/if}
 				{#if notFound}
 					<p class="track-missing">track not found</p>
 				{:else}
@@ -418,206 +421,367 @@ $effect(() => {
 			</div>
 		</main>
 	{:else}
-	{#if track.tags && track.tags.length > 0}
-		<TagEffects tags={track.tags} trackTitle={track.title} />
-	{/if}
-	<Header user={auth.user} isAuthenticated={auth.isAuthenticated} onLogout={handleLogout} />
+		{#if track.tags && track.tags.length > 0}
+			<TagEffects tags={track.tags} trackTitle={track.title} />
+		{/if}
+		<Header user={auth.user} isAuthenticated={auth.isAuthenticated} onLogout={handleLogout} />
 
-	<main>
-		<div class="track-detail">
-			<!-- cover art (inherits from album when no per-track image is set) -->
-			<SensitiveImage src={coverUrl} tooltipPosition="center">
-				<div class="cover-art-container">
-					{#if coverUrl}
-						<img src={coverUrl} alt="{track.title} artwork" class="cover-art" />
-					{:else}
-						<div class="cover-art-placeholder">
-							<svg width="120" height="120" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
-								<path d="M9 18V5l12-2v13"></path>
-								<circle cx="6" cy="18" r="3"></circle>
-								<circle cx="18" cy="16" r="3"></circle>
-							</svg>
-						</div>
-					{/if}
-				</div>
-			</SensitiveImage>
-
-			<!-- track info wrapper -->
-			<div class="track-info-wrapper">
-				<div class="track-info">
-					<h1 class="track-title">
-						{track.title}
-						{#if isProcessing}
-							<span class="processing-badge" title="still processing — playable shortly">processing</span>
-						{/if}
-						{#if track.gated}
-							<span class="gated-badge" title="supporters only">
-								<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-									<path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/>
+		<main>
+			<div class="track-detail">
+				<!-- cover art (inherits from album when no per-track image is set) -->
+				<SensitiveImage src={coverUrl} tooltipPosition="center">
+					<div class="cover-art-container">
+						{#if coverUrl}
+							<img src={coverUrl} alt="{track.title} artwork" class="cover-art" />
+						{:else}
+							<div class="cover-art-placeholder">
+								<svg
+									width="120"
+									height="120"
+									viewBox="0 0 24 24"
+									fill="none"
+									stroke="currentColor"
+									stroke-width="1"
+								>
+									<path d="M9 18V5l12-2v13"></path>
+									<circle cx="6" cy="18" r="3"></circle>
+									<circle cx="18" cy="16" r="3"></circle>
 								</svg>
-							</span>
-						{/if}
-					</h1>
-					<div class="track-metadata">
-						<a href="/u/{track.artist_handle}" class="artist-link">
-							{track.artist}
-						</a>
-						{#if track.features && track.features.length > 0}
-							<span class="separator">•</span>
-							<span class="features">
-								<span class="features-label">feat.</span>
-								{#each track.features as feature, i}
-									{#if i > 0}<span class="feature-separator">, </span>{/if}
-									<a href="/u/{feature.handle}" class="feature-link">
-										{feature.display_name}
-									</a>
-								{/each}
-							</span>
-						{/if}
-						{#if track.album}
-							<span class="separator">•</span>
-							<a href="/u/{track.artist_handle}/album/{track.album.slug}" class="album album-link">
-								<svg class="album-icon" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-									<rect x="2" y="2" width="12" height="12" stroke="currentColor" stroke-width="1.5" fill="none"/>
-									<circle cx="8" cy="8" r="2.5" fill="currentColor"/>
-								</svg>
-								<span class="album-title-text">{track.album.title}</span>
-							</a>
+							</div>
 						{/if}
 					</div>
+				</SensitiveImage>
 
-					{#if track.tags && track.tags.length > 0}
-						<div class="track-tags">
-							{#each track.tags as tag}
-								<a href="/tag/{encodeURIComponent(tag)}" class="tag-badge">{tag}</a>
-							{/each}
-						</div>
-					{/if}
+				<!-- track info wrapper -->
+				<div class="track-info-wrapper">
+					<div class="track-info">
+						<div class="track-title-row">
+							<h1 class="track-title">
+								{track.title}
+								{#if isProcessing}
+									<span class="processing-badge" title="still processing — playable shortly"
+										>processing</span
+									>
+								{/if}
+								{#if track.gated}
+									<span class="gated-badge" title="supporters only">
+										<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+											<path
+												d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"
+											/>
+										</svg>
+									</span>
+								{/if}
+							</h1>
 
-					<!-- controls: like · play · queue (nate's sketch, 2026-08) -->
-					<div class="track-actions">
-						<div class="like-chip">
-							{#if auth.isAuthenticated}
-								<AddToMenu
-									trackId={track.id}
-									trackTitle={track.title}
-									trackUri={track.atproto_record_uri}
-									trackCid={track.atproto_record_cid}
-									fileId={track.file_id}
-									gated={track.gated}
-									initialLiked={track.is_liked || false}
-									onLikeChange={(liked) => {
-										if (track) {
-											track.like_count = (track.like_count || 0) + (liked ? 1 : -1);
-											track.is_liked = liked;
-										}
+							{#if isOwner}
+								<button
+									class="edit-track-button"
+									type="button"
+									aria-label="edit track"
+									title="edit track"
+									onclick={() => {
+										editingTrack = track;
 									}}
-								/>
-							{:else}
-								<button class="heart-static" class:shake={heartShake} onclick={nudgeSignIn} aria-label="sign in to like tracks" title="sign in to like tracks">
-									<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-										<path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
-									</svg>
+								>
+									<svg
+										width="20"
+										height="20"
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="1.75"
+										stroke-linecap="round"
+										stroke-linejoin="round"
+										aria-hidden="true"
+										><path d="m16 3 5 5M4 20l5-1L21 7a2.12 2.12 0 0 0-3-3L6 16l-2 4Z" /></svg
+									>
 								</button>
 							{/if}
-							{#if track.like_count && track.like_count > 0}
-							<span
-								in:scale={{ start: 0.5, duration: reduceMotion ? 0 : 260, easing: backOut }}
-								class="likes"
-								role="button"
-								tabindex="0"
-								aria-label={`${track.like_count} ${track.like_count === 1 ? 'like' : 'likes'} (focus to view users)`}
-								aria-expanded={showLikersTooltip}
-								onclick={handleLikesClick}
-								onmouseenter={handleLikesMouseEnter}
-								onmouseleave={handleLikesMouseLeave}
-								onfocus={handleLikesMouseEnter}
-								onblur={handleLikesMouseLeave}
-								onkeydown={handleLikesKeydown}
-							>
-								{#key track.like_count}
-									<span class="likes-num" in:fly={{ y: 9, duration: reduceMotion ? 0 : 220 }}>{track.like_count}</span>
-								{/key}
-								{#if showLikersTooltip && !isMobile}
-									<LikersTooltip
-										trackId={track.id}
-										likeCount={track.like_count}
-										onMouseEnter={handleLikesMouseEnter}
-										onMouseLeave={handleLikesMouseLeave}
-									/>
-								{/if}
-							</span>
-						{/if}
 						</div>
-						<button class="btn-play" class:playing={isCurrentlyPlaying} disabled={isProcessing && !isCurrentlyPlaying} onclick={handlePlay} aria-label={isProcessing && !isCurrentlyPlaying ? 'still processing — playable shortly' : isCurrentlyPlaying ? 'pause' : 'play'} title={isProcessing && !isCurrentlyPlaying ? 'still processing — playable shortly' : isCurrentlyPlaying ? 'pause' : 'play'}>
-							{#if isCurrentlyPlaying}
-								<svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor">
-									<path d="M6 4h4v16H6zM14 4h4v16h-4z"/>
-								</svg>
-							{:else}
-								<svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor">
-									<path d="M8 5v14l11-7z"/>
-								</svg>
+						<div class="track-metadata">
+							<a href="/u/{track.artist_handle}" class="artist-link">
+								{track.artist}
+							</a>
+							{#if track.features && track.features.length > 0}
+								<span class="separator">•</span>
+								<span class="features">
+									<span class="features-label">feat.</span>
+									{#each track.features as feature, i}
+										{#if i > 0}<span class="feature-separator">, </span>{/if}
+										<a href="/u/{feature.handle}" class="feature-link">
+											{feature.display_name}
+										</a>
+									{/each}
+								</span>
 							{/if}
-						</button>
-						<button class="btn-queue" onclick={addToQueue} aria-label="add to queue" title="add to queue">
-							<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-								<line x1="5" y1="15" x2="5" y2="21"></line>
-								<line x1="2" y1="18" x2="8" y2="18"></line>
-								<line x1="9" y1="6" x2="21" y2="6"></line>
-								<line x1="9" y1="12" x2="21" y2="12"></line>
-								<line x1="9" y1="18" x2="21" y2="18"></line>
-							</svg>
-						</button>
-					</div>
-
-					<div class="track-stats">
-						<span class="plays">{track.play_count} {track.play_count === 1 ? 'listen' : 'listens'}</span>
-						<LosslessBadge originalFileType={track.original_file_type} fileType={track.file_type} withSeparator separatorClass="separator" />
-						{#if track.description}
-							<span class="separator">•</span>
-							<button
-								class="metadata-toggle"
-								class:open={metadataOpen}
-								onclick={() => metadataOpen = !metadataOpen}
-								aria-label={metadataOpen ? 'hide details' : 'show details'}
-								aria-expanded={metadataOpen}
-							>i</button>
-						{/if}
-					</div>
-
-					{#if track.description && metadataOpen}
-						<div class="metadata-panel" transition:slide={{ duration: 200 }}>
-							<p class="metadata-description"><RichText text={track.description} /></p>
+							{#if track.album}
+								<span class="separator">•</span>
+								<a
+									href="/u/{track.artist_handle}/album/{track.album.slug}"
+									class="album album-link"
+								>
+									<svg
+										class="album-icon"
+										viewBox="0 0 16 16"
+										fill="none"
+										xmlns="http://www.w3.org/2000/svg"
+									>
+										<rect
+											x="2"
+											y="2"
+											width="12"
+											height="12"
+											stroke="currentColor"
+											stroke-width="1.5"
+											fill="none"
+										/>
+										<circle cx="8" cy="8" r="2.5" fill="currentColor" />
+									</svg>
+									<span class="album-title-text">{track.album.title}</span>
+								</a>
+							{/if}
 						</div>
-					{/if}
 
-					<div class="side-buttons">
-						<ShareButton url={shareUrl} title="share track" trackId={track.id} />
-						{#if track.downloadable}
-							<DownloadButton
-								onDownload={() =>
-									track &&
-									requestTrackDownload(track.file_id, {
-										artistName: track.artist,
-										artistDid: track.artist_did,
-										policy: track.download_policy,
-										supportUrl: track.artist_support_url
-									})}
-							/>
+						{#if track.tags && track.tags.length > 0}
+							<div class="track-tags">
+								{#each track.tags as tag}
+									<a href="/tag/{encodeURIComponent(tag)}" class="tag-badge">{tag}</a>
+								{/each}
+							</div>
 						{/if}
-						<TrackComments {track} />
+
+						<!-- controls: like · play · queue (nate's sketch, 2026-08) -->
+						<div class="track-actions">
+							<div class="like-chip">
+								{#if auth.isAuthenticated}
+									<AddToMenu
+										trackId={track.id}
+										trackTitle={track.title}
+										trackUri={track.atproto_record_uri}
+										trackCid={track.atproto_record_cid}
+										fileId={track.file_id}
+										gated={track.gated}
+										initialLiked={track.is_liked || false}
+										onLikeChange={(liked) => {
+											if (track) {
+												track.like_count = (track.like_count || 0) + (liked ? 1 : -1);
+												track.is_liked = liked;
+											}
+										}}
+									/>
+								{:else}
+									<button
+										class="heart-static"
+										class:shake={heartShake}
+										onclick={nudgeSignIn}
+										aria-label="sign in to like tracks"
+										title="sign in to like tracks"
+									>
+										<svg
+											width="16"
+											height="16"
+											viewBox="0 0 24 24"
+											fill="none"
+											stroke="currentColor"
+											stroke-width="2"
+											stroke-linecap="round"
+											stroke-linejoin="round"
+										>
+											<path
+												d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"
+											></path>
+										</svg>
+									</button>
+								{/if}
+								{#if track.like_count && track.like_count > 0}
+									<span
+										in:scale={{ start: 0.5, duration: reduceMotion ? 0 : 260, easing: backOut }}
+										class="likes"
+										role="button"
+										tabindex="0"
+										aria-label={`${track.like_count} ${track.like_count === 1 ? 'like' : 'likes'} (focus to view users)`}
+										aria-expanded={showLikersTooltip}
+										onclick={handleLikesClick}
+										onmouseenter={handleLikesMouseEnter}
+										onmouseleave={handleLikesMouseLeave}
+										onfocus={handleLikesMouseEnter}
+										onblur={handleLikesMouseLeave}
+										onkeydown={handleLikesKeydown}
+									>
+										{#key track.like_count}
+											<span class="likes-num" in:fly={{ y: 9, duration: reduceMotion ? 0 : 220 }}
+												>{track.like_count}</span
+											>
+										{/key}
+										{#if showLikersTooltip && !isMobile}
+											<LikersTooltip
+												trackId={track.id}
+												likeCount={track.like_count}
+												onMouseEnter={handleLikesMouseEnter}
+												onMouseLeave={handleLikesMouseLeave}
+											/>
+										{/if}
+									</span>
+								{/if}
+							</div>
+							<button
+								class="btn-play"
+								class:playing={isCurrentlyPlaying}
+								disabled={isProcessing && !isCurrentlyPlaying}
+								onclick={handlePlay}
+								aria-label={isProcessing && !isCurrentlyPlaying
+									? 'still processing — playable shortly'
+									: isCurrentlyPlaying
+										? 'pause'
+										: 'play'}
+								title={isProcessing && !isCurrentlyPlaying
+									? 'still processing — playable shortly'
+									: isCurrentlyPlaying
+										? 'pause'
+										: 'play'}
+							>
+								{#if isCurrentlyPlaying}
+									<svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor">
+										<path d="M6 4h4v16H6zM14 4h4v16h-4z" />
+									</svg>
+								{:else}
+									<svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor">
+										<path d="M8 5v14l11-7z" />
+									</svg>
+								{/if}
+							</button>
+							<button
+								class="btn-queue"
+								onclick={addToQueue}
+								aria-label="add to queue"
+								title="add to queue"
+							>
+								<svg
+									width="20"
+									height="20"
+									viewBox="0 0 24 24"
+									fill="none"
+									stroke="currentColor"
+									stroke-width="2"
+								>
+									<line x1="5" y1="15" x2="5" y2="21"></line>
+									<line x1="2" y1="18" x2="8" y2="18"></line>
+									<line x1="9" y1="6" x2="21" y2="6"></line>
+									<line x1="9" y1="12" x2="21" y2="12"></line>
+									<line x1="9" y1="18" x2="21" y2="18"></line>
+								</svg>
+							</button>
+						</div>
+
+						<div class="track-stats">
+							<span class="plays"
+								>{track.play_count} {track.play_count === 1 ? 'listen' : 'listens'}</span
+							>
+							<LosslessBadge
+								originalFileType={track.original_file_type}
+								fileType={track.file_type}
+								withSeparator
+								separatorClass="separator"
+							/>
+							{#if track.description}
+								<span class="separator">•</span>
+								<button
+									class="metadata-toggle"
+									class:open={metadataOpen}
+									onclick={() => (metadataOpen = !metadataOpen)}
+									aria-label={metadataOpen ? 'hide details' : 'show details'}
+									aria-expanded={metadataOpen}>i</button
+								>
+							{/if}
+						</div>
+
+						{#if track.description && metadataOpen}
+							<div class="metadata-panel" transition:slide={{ duration: 200 }}>
+								<p class="metadata-description"><RichText text={track.description} /></p>
+							</div>
+						{/if}
+
+						<div class="side-buttons">
+							<ShareButton url={shareUrl} title="share track" trackId={track.id} />
+							{#if track.downloadable}
+								<DownloadButton
+									onDownload={() =>
+										track &&
+										requestTrackDownload(track.file_id, {
+											artistName: track.artist,
+											artistDid: track.artist_did,
+											policy: track.download_policy,
+											supportUrl: track.artist_support_url
+										})}
+								/>
+							{/if}
+							<TrackComments {track} />
+						</div>
 					</div>
 				</div>
 			</div>
-		</div>
-
-
-	</main>
+		</main>
 	{/if}
 </div>
 
+{#if editingTrack && isOwner}
+	{#key editingTrack.id}
+		<EditTrackModal
+			track={editingTrack}
+			onClose={() => {
+				editingTrack = null;
+			}}
+			onSaved={(updated) => {
+				if (track?.id === updated.id) track = updated;
+			}}
+		/>
+	{/key}
+{/if}
+
 <style>
+	.track-title-row {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 0.5rem;
+		max-width: 100%;
+	}
+	.track-title-row .edit-track-button {
+		flex-shrink: 0;
+	}
+	.edit-track-button {
+		display: grid;
+		place-items: center;
+		min-width: 44px;
+		min-height: 44px;
+		padding: 0.5rem;
+		border: none;
+		border-radius: var(--radius-full);
+		background: transparent;
+		color: var(--text-secondary);
+		cursor: pointer;
+		transition:
+			background var(--motion-feedback) ease-out,
+			color var(--motion-feedback) ease-out,
+			transform var(--motion-feedback) ease-out;
+	}
+	.edit-track-button:hover {
+		background: color-mix(in srgb, var(--accent) 10%, transparent);
+		color: var(--accent);
+	}
+	.edit-track-button:active {
+		transform: scale(0.94);
+	}
+	.edit-track-button:focus-visible {
+		outline: 2px solid var(--accent);
+		outline-offset: 2px;
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.edit-track-button {
+			transition: none;
+		}
+	}
 	.track-missing {
 		text-align: center;
 		color: var(--text-muted);
@@ -700,6 +864,8 @@ $effect(() => {
 	}
 
 	.track-title {
+		min-width: 0;
+		overflow-wrap: anywhere;
 		font-size: 2rem;
 		font-weight: 700;
 		color: var(--text-primary);
@@ -852,11 +1018,22 @@ $effect(() => {
 	}
 
 	@keyframes head-shake {
-		0%, 100% { transform: translateX(0); }
-		20% { transform: translateX(-4px); }
-		40% { transform: translateX(4px); }
-		60% { transform: translateX(-3px); }
-		80% { transform: translateX(3px); }
+		0%,
+		100% {
+			transform: translateX(0);
+		}
+		20% {
+			transform: translateX(-4px);
+		}
+		40% {
+			transform: translateX(4px);
+		}
+		60% {
+			transform: translateX(-3px);
+		}
+		80% {
+			transform: translateX(3px);
+		}
 	}
 
 	@media (prefers-reduced-motion: reduce) {
@@ -882,10 +1059,18 @@ $effect(() => {
 	}
 
 	@keyframes heart-beat {
-		0% { transform: scale(1); }
-		35% { transform: scale(1.35); }
-		65% { transform: scale(0.92); }
-		100% { transform: scale(1); }
+		0% {
+			transform: scale(1);
+		}
+		35% {
+			transform: scale(1.35);
+		}
+		65% {
+			transform: scale(0.92);
+		}
+		100% {
+			transform: scale(1);
+		}
 	}
 
 	.likes-num {
@@ -911,7 +1096,9 @@ $effect(() => {
 		padding: 0.125rem 0.25rem;
 		margin: -0.125rem -0.25rem;
 		border-radius: var(--radius-sm);
-		transition: background 0.15s, color 0.15s;
+		transition:
+			background 0.15s,
+			color 0.15s;
 	}
 
 	.like-chip .likes:hover,
@@ -936,7 +1123,9 @@ $effect(() => {
 		background: none;
 		font-family: inherit;
 		line-height: 1;
-		transition: color 0.15s, border-color 0.15s;
+		transition:
+			color 0.15s,
+			border-color 0.15s;
 		padding: 0;
 	}
 

@@ -399,6 +399,19 @@ class Queue {
 		}, SYNC_DEBOUNCE_MS);
 	}
 
+	updateTrackMetadata(updated: Track) {
+		if (!this.tracks.some((track) => track.id === updated.id)) return;
+		this.lastUpdateWasLocal = true;
+		this.mutationEpoch += 1;
+		this.tracks = this.tracks.map((track) =>
+			track.id === updated.id ? { ...track, ...updated } : track
+		);
+		this.originalOrder = this.originalOrder.map((track) =>
+			track.id === updated.id ? { ...track, ...updated } : track
+		);
+		this.syncState();
+	}
+
 	private syncState() {
 		if (!browser) return;
 		if (this.jamBridge) {

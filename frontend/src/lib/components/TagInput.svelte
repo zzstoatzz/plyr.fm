@@ -10,6 +10,7 @@
 	const MAX_TAG_LENGTH = 50;
 
 	interface Props {
+		id?: string;
 		tags: string[];
 		onAdd: (_tag: string) => void;
 		onRemove: (_tag: string) => void;
@@ -17,7 +18,14 @@
 		disabled?: boolean;
 	}
 
-	let { tags = $bindable([]), onAdd, onRemove, placeholder = 'add tag...', disabled = false }: Props = $props();
+	let {
+		id,
+		tags = $bindable([]),
+		onAdd,
+		onRemove,
+		placeholder = 'add tag...',
+		disabled = false
+	}: Props = $props();
 
 	let inputValue = $state('');
 	let suggestions = $state<TagSuggestion[]>([]);
@@ -34,13 +42,16 @@
 
 		searching = true;
 		try {
-			const response = await fetch(`${API_URL}/tracks/tags?q=${encodeURIComponent(inputValue)}&limit=10`, {
-				credentials: 'include'
-			});
+			const response = await fetch(
+				`${API_URL}/tracks/tags?q=${encodeURIComponent(inputValue)}&limit=10`,
+				{
+					credentials: 'include'
+				}
+			);
 			if (response.ok) {
 				const data: TagSuggestion[] = await response.json();
 				// filter out tags already added
-				suggestions = data.filter(s => !tags.includes(s.name));
+				suggestions = data.filter((s) => !tags.includes(s.name));
 				showSuggestions = suggestions.length > 0;
 			}
 		} catch (e) {
@@ -81,7 +92,8 @@
 			}
 		} else if (e.key === 'Backspace' && !inputValue && tags.length > 0) {
 			onRemove(tags[tags.length - 1]);
-		} else if (e.key === 'Escape') {
+		} else if (e.key === 'Escape' && showSuggestions) {
+			e.preventDefault();
 			showSuggestions = false;
 			selectedIndex = -1;
 		} else if (e.key === 'ArrowDown') {
@@ -98,14 +110,11 @@
 	}
 
 	function handleBlur() {
-		// delay to allow click on suggestion
-		setTimeout(() => {
-			if (inputValue.trim()) {
-				addTag(inputValue);
-			}
-			showSuggestions = false;
-			selectedIndex = -1;
-		}, 150);
+		if (inputValue.trim()) {
+			addTag(inputValue);
+		}
+		showSuggestions = false;
+		selectedIndex = -1;
 	}
 
 	function handleClickOutside(e: MouseEvent) {
@@ -127,18 +136,21 @@
 					class="tag-remove"
 					aria-label="remove {tag}"
 					onclick={() => onRemove(tag)}
-					{disabled}
-				>×</button>
+					{disabled}>×</button
+				>
 			</span>
 		{/each}
 		<input
+			{id}
 			type="text"
-			aria-label="add tag"
+			aria-label={id ? undefined : 'add tag'}
 			bind:value={inputValue}
 			oninput={handleInput}
 			onkeydown={handleKeydown}
 			onblur={handleBlur}
-			onfocus={() => { if (suggestions.length > 0) showSuggestions = true; }}
+			onfocus={() => {
+				if (suggestions.length > 0) showSuggestions = true;
+			}}
 			placeholder={tags.length === 0 ? placeholder : ''}
 			class="tag-input"
 			disabled={disabled || tags.length >= MAX_TAGS}
@@ -163,10 +175,13 @@
 					type="button"
 					class="suggestion-item"
 					class:selected={i === selectedIndex}
+					onpointerdown={(event) => event.preventDefault()}
 					onclick={() => selectSuggestion(suggestion)}
 				>
 					<span class="tag-name">{suggestion.name}</span>
-					<span class="tag-count">{suggestion.track_count} {suggestion.track_count === 1 ? 'track' : 'tracks'}</span>
+					<span class="tag-count"
+						>{suggestion.track_count} {suggestion.track_count === 1 ? 'track' : 'tracks'}</span
+					>
 				</button>
 			{/each}
 		</div>
@@ -203,7 +218,7 @@
 		padding: 0.35rem 0.6rem;
 		background: color-mix(in srgb, var(--accent) 10%, transparent);
 		border: 1px solid color-mix(in srgb, var(--accent) 20%, transparent);
-		color: var(--accent-hover);
+		color: var(--text-primary);
 		border-radius: var(--radius-xl);
 		font-size: var(--text-base);
 		font-weight: 500;
