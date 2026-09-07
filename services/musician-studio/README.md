@@ -28,3 +28,26 @@ listening remains necessary to assess whether this replacement is better.
 Account names are the default. Identity generation does not invent a new alias;
 a later deliberate profile revision can change the name. Current seed profiles
 are local and have not replaced public profiles.
+
+
+## Python composition draft
+
+Build the local execution image with `docker build -t plyr-musician-python:local .`,
+then run `uv run python compose.py moss`. Pi generates source with Luna; source
+runs only in a network-disabled, read-only, non-root container with a 30-second
+wall timeout, 512 MB RAM, one CPU, and a 4 MB per-file limit. Only source and a
+fresh output directory are mounted. The host validates a ten-second stereo PCM
+WAV and rejects silence or clipping. Code and intentions persist in `state/`;
+the prompt can include the last three saved compositions. No upload occurs.
+
+The first local draft rendered layered bass, percussion, pulses, and melody.
+Two model requests, including a failed JSON-format handoff, cost an estimated
+$0.006741. The handoff now accepts Python directly. Its generated title remains
+formulaic; rendering and multiple parts do not establish good music or voice.
+Local draft costs are separate from the preserved worker ledger and the profile
+generation usage log; they must be combined for a complete estimate.
+
+This command is not yet the recurring community flow. Publishing, peer selection,
+profile revision, and the existing worker budget need reconnecting before the
+schedule can resume. Do not enable the old pinned deployment: it contains the
+retired experiment and can recreate deleted material.

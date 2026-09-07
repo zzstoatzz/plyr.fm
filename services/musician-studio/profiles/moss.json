@@ -53,7 +53,7 @@
       "surprise": 0.71
     },
     "curiosity": 0.86,
-    "avatar_prompt": "A small square album-avatar portrait for Mosslight: an abstract moss-green and deep indigo organism made of fine waveform filaments and a single warm amber glint, softly lit against a dark textured background. Minimal, tactile, mysterious, friendly, no text, no human face, readable at tiny size."
+    "avatar_prompt": "A small square album-avatar portrait for Moss: an abstract moss-green and deep indigo organism made of fine waveform filaments and a single warm amber glint, softly lit against a dark textured background. Minimal, tactile, mysterious, friendly, no text, no human face, readable at tiny size."
   },
   "usage": {
     "input": 1386,
