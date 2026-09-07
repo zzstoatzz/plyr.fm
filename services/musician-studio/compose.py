@@ -16,7 +16,7 @@ import numpy as np
 from pydantic import BaseModel, Field
 
 from studio.context import history_context, musical_identity
-from studio.identity import Musician
+from studio.identity import Inspiration, Musician, Taste
 from studio.state import Store
 
 ROOT = Path(__file__).parent
@@ -29,6 +29,10 @@ class Composition(BaseModel):
     memory: str = Field(default="", max_length=1500)
     peer_note: str = Field(default="", max_length=1500)
     keep_peer: bool = False
+    taste: Taste | None = None
+    inspirations: list[Inspiration] | None = Field(
+        default=None, min_length=1, max_length=4
+    )
 
 
 def compose(
@@ -56,6 +60,8 @@ def compose(
         + "\nYou have code, not auditory perception. Respond to the peer if their work interests you. "
         "Set KEEP_PEER to a literal bool for whether to include their track in your playlist and PEER_NOTE "
         "to a short reason. Set MEMORY to what you want your future self to remember about this piece. "
+        "If your preferences or influences have changed, optionally include TASTE (a literal dictionary using your existing dimensions) "
+        "or INSPIRATIONS (a literal list using the existing inspiration fields). Otherwise omit them. "
         + "\nReturn only executable Python source, no JSON or markdown. Include TITLE and IDEA as string constants."
     )
     if len(prompt.encode()) > 48000:
@@ -121,32 +127,27 @@ def compose(
     if source.startswith("```python\n") and source.endswith("```"):
         source = source[len("```python\n") : -3].strip()
     store.save_study(session, musician_id or profile.name.lower(), {"source": source})
+    return parse_composition(source)
+
+
+def parse_composition(source: str) -> Composition:
     tree = ast.parse(source)
-    strings = {}
+    values = {}
+    fields = {
+        "TITLE": "title",
+        "IDEA": "idea",
+        "MEMORY": "memory",
+        "PEER_NOTE": "peer_note",
+        "KEEP_PEER": "keep_peer",
+        "TASTE": "taste",
+        "INSPIRATIONS": "inspirations",
+    }
     for node in tree.body:
-        if (
-            isinstance(node, ast.Assign)
-            and isinstance(node.value, ast.Constant)
-            and isinstance(node.value.value, (str, bool))
-        ):
+        if isinstance(node, ast.Assign):
             for target in node.targets:
-                if isinstance(target, ast.Name) and target.id in (
-                    "TITLE",
-                    "IDEA",
-                    "MEMORY",
-                    "PEER_NOTE",
-                    "KEEP_PEER",
-                ):
-                    strings[target.id] = node.value.value
-    answer = Composition(
-        title=strings["TITLE"],
-        idea=strings["IDEA"],
-        python=source,
-        memory=strings.get("MEMORY", ""),
-        peer_note=strings.get("PEER_NOTE", ""),
-        keep_peer=strings.get("KEEP_PEER", False),
-    )
-    return answer
+                if isinstance(target, ast.Name) and target.id in fields:
+                    values[fields[target.id]] = ast.literal_eval(node.value)
+    return Composition(python=source, **values)
 
 
 def render(code: str, output: Path) -> dict:

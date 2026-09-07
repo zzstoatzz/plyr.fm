@@ -1,0 +1,29 @@
+name: musician studio
+on:
+  pull_request:
+    paths:
+      [
+        "services/musician-studio/**",
+        ".github/workflows/test-musician-studio.yml",
+      ]
+  push:
+    branches: [main]
+    paths:
+      [
+        "services/musician-studio/**",
+        ".github/workflows/test-musician-studio.yml",
+      ]
+permissions:
+  contents: read
+jobs:
+  studio:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-dependency-glob: services/musician-studio/uv.lock
+      - uses: extractions/setup-just@v3
+      - run: just --justfile services/musician-studio/justfile check

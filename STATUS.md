@@ -537,15 +537,19 @@ this is a living document. last updated 2026-09-05 (**player descenders and exac
 
 ### September 6 — musician studio reset
 
-Nate rejected the score-entry experiment's simplistic harp output and repetitive
-names. Its seven tracks and three shared-study playlists were deleted; the local
-experiment files and worker compositions were removed. The accounts, encrypted
-credentials, and session cost ledger remain. The Prefect schedule and daily
-monitor are paused while the creative setup is replaced.
+The rejected score-entry experiment's seven tracks, three study playlists, and
+local/worker compositions were deleted. Accounts, encrypted credentials, and
+historical cost reservations remain. `services/musician-studio` replaces the
+single-instrument schema with isolated generated Python, named inspirations,
+persisted previous work, weighted peer selection, and optional taste revisions.
+Bot's influence-choice and self-authored personality work informed the setup.
 
-`services/musician-studio` retains identity creation and cost accounting. Every
-new musician must state specific musical inspirations and what they want to try
-from them. Bot's influence-choice and self-authored personality work informed
-this change. Generated Python with access to prior compositions will replace the
-single-instrument note schema; that path is not yet deployed. Ten-second pieces,
-unlisted AI-labeled uploads, and bounded ongoing scheduling remain the goal.
+The replacement auto-scheduled Prefect run `77c97743-2d28-45e0-8bfe-85198e7b8a83`
+completed: three ten-second unlisted AI-labeled uploads (1283–1285), with Reed
+adding Kite's piece to a listening playlist. Estimated model usage for the run
+was $0.01225. The normal cadence is six-hourly, with one upload attempt per
+musician/day and $0.05/session, $0.20/day, $5/month reservation limits. Activation
+and the final deployed source are recorded in Prefect; the retired deployment
+must stay disabled. Model understanding of audio and title quality remain
+unproven; generated names are still formulaic. Current public display names have
+not been overwritten by the local account-name defaults.

@@ -1,63 +1,71 @@
 # musician studio
 
-The first score-entry experiment was retired at Nate's request. Its seven tracks
-and three study playlists were deleted September 7 UTC. Accounts and encrypted
-credentials remain. Historical session costs are retained so cleanup does not
-reset the budget. Both old Prefect deployments are paused.
+Moss, Kite, and Reed make ten-second pieces with Luna through Pi. Each has a
+persisted identity with named musical inspirations, specific works, reasons for
+those choices, and an experiment to try. Their generated Python runs in a
+container with NumPy and the standard library. They receive up to three earlier
+compositions and one published peer's work, including source and intentions.
+This is code-based study; it is not reliable audio perception.
 
-Musician creation is `uv run seed_profiles.py`. Every identity must name specific
-artists and works, why they matter, and a musical experiment to pursue. Those
-choices persist in the profile and can be revised. A chosen influence is not
-proof of listening or of successful stylistic transfer.
+The bot project's voice work informed the identity setup: influences and
+self-authored personality are separate from operational rules. See bot commits
+3a5f576 and 60f3b55. A valid response or a rendered file does not establish good
+music. Titles remain formulaic and human listening is still needed.
 
-The bot project's September voice work informs this design: influence choices
-and self-authored personality are distinct from operational rules; a well-formed
-response does not establish quality; judge the actual output. See bot commits
-3a5f576 (influence choices) and 60f3b55 (versioned personalities).
+The original score-entry experiment was deleted at Nate's request: seven tracks,
+three study playlists, and local/worker compositions. Accounts, avatars, bot
+labels, encrypted credentials, and historical cost reservations were preserved.
+The retired deployment remains disabled. Local identities use account names;
+they have not overwritten the earlier public display names.
 
-The replacement composition path will give musicians Python rather than a
-16-note harp schema, with saved previous code and a bounded selection of prior
-work. It is not deployed yet. The old schedule must remain paused until that
-path is verified. Ten-second audio, unlisted AI-labeled publishing, six-hour
-cadence, and the existing $5/month reservation budget remain the requirements.
+## recurring work
 
-The previous audio-model probes did not reliably distinguish controlled musical
-changes. Do not turn unsupported auditory claims into revision feedback. Human
-listening remains necessary to assess whether this replacement is better.
+`flow.py:community` runs as `plyr.fm-musician-community/continuous` on the existing
+Prefect `home-pool` worker, heavypad. The schedule is every six hours at :17 UTC.
+A file lock and deployment concurrency limit prevent overlap. SQLite state lives
+at `/home/stoat/prefect-analytics/musician-studio`; a fresh checkout does not reset
+identities, memory, upload reservations, or spending.
 
-Account names are the default. Identity generation does not invent a new alias;
-a later deliberate profile revision can change the name. Current seed profiles
-are local and have not replaced public profiles.
+Each musician composes, renders, considers publishing, and decides whether to
+keep its selected peer in its listening playlist. Peer selection is weighted by
+persisted taste and curiosity. Optional validated taste/inspiration revisions
+persist for later sessions. A daily upload reservation permits at most one
+upload attempt per musician per UTC day; the other sessions still compose and
+consider peers. Uploads are unlisted, tagged `ai`, and self-labeled `ai-generated`.
+Unlisted tracks retain plyr.fm's existing search and artist-page behavior.
 
+Each session reserves $0.05, with $0.20/day and $5/month available. Failed sessions
+retain reservations, and retries reuse the same session. At most 12 model calls
+are permitted per session; observed spending is checked before another call.
+These are conservative activity limits using estimated model costs, not a hard
+provider billing cap. Hosting, subscriptions, and monitoring are excluded.
+Budget exhaustion skips work until a later UTC budget window. There is no expiry
+date on the schedule. The one-time bootstrap also consumes the same budget.
 
-## Python composition draft
+Prefect artifacts `plyr-fm-musician-progress` and `plyr-fm-musician-costs` show
+intentions, memory, track/playlist links, failures, and monthly usage. The first
+replacement scheduled run completed with three uploads and one peer playlist
+addition: https://prefect-server.waow.tech/runs/flow-run/77c97743-2d28-45e0-8bfe-85198e7b8a83
+It used about $0.01225 in estimated model usage. Known local draft and profile
+usage were imported into the worker ledger; early unrecorded probes are not an
+invoice-quality total.
 
-Build the local execution image with `docker build -t plyr-musician-python:local .`,
-then run `uv run python compose.py moss`. Pi generates source with Luna; source
-runs only in a network-disabled, read-only, non-root container with a 30-second
-wall timeout, 512 MB RAM, one CPU, and a 4 MB per-file limit. Only source and a
-fresh output directory are mounted. The host validates a ten-second stereo PCM
-WAV and rejects silence or clipping. Code and intentions persist in `state/`;
-the prompt can include the last three saved compositions. No upload occurs.
+## runtime and credentials
 
-The first local draft rendered layered bass, percussion, pulses, and melody.
-Two model requests, including a failed JSON-format handoff, cost an estimated
-$0.006741. The handoff now accepts Python directly. Its generated title remains
-formulaic; rendering and multiple parts do not establish good music or voice.
-Local draft costs are separate from the preserved worker ledger and the profile
-generation usage log; they must be combined for a complete estimate.
+Build the image with `just image`. Source executes as non-root with no network,
+a read-only root filesystem, one CPU, 512 MB RAM, a 30-second timeout, and a fresh
+output mount. Host checks require ten seconds of stereo PCM without silence or
+clipping. The worker uses `DOCKER_CONTEXT=default`.
 
-This command is not yet the recurring community flow. Publishing, peer selection,
-profile revision, and the existing worker budget need reconnecting before the
-schedule can resume. Do not enable the old pinned deployment: it contains the
-retired experiment and can recreate deleted material.
+`uv run python compose.py moss` runs a local draft without publishing. `just check`
+runs the offline service tests. Deployment uses the my-prefect-server justfile
+and the source commit pinned in `prefect.yaml`.
 
-
-Composition context excludes avatar instructions and the redundant public bio.
-The first Python prompt accidentally included the avatar's "warm amber glint";
-that phrase appeared in generated source and its title. This is evidence of
-context contamination, not a validated title-quality fix. History carries at
-most three earlier rendered pieces within 18 KB. Peer selection considers only
-another musician's earlier published work and records its probabilities. The
-new renderer was verified on heavypad using DOCKER_CONTEXT=default; the desktop
-Docker context there points at a stopped service.
+The canonical sops store owns credentials. `provision_tokens.py` derives only
+developer tokens into the worker's encrypted consumer, compares decrypted values
+in memory, and prints no credentials. `renew_tokens.py` checks effective expiry;
+`--renew-if-needed` renews within seven days through normal OAuth and syncs the
+consumer, including after a partial renewal. The local daily monitor runs this
+maintenance command. PDS passwords stay in the canonical local store. Renewal
+network behavior is covered with mocks; current tokens expire October 6 and
+have not been rotated just to test renewal.

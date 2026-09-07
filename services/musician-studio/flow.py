@@ -65,6 +65,14 @@ def compose_piece(directory: Path, session: str, name: str) -> dict:
         peer=peer,
     )
     store.save_study(session, name, piece.model_dump())
+    entry = store.musicians()[name]
+    if piece.taste is not None:
+        entry["profile"]["taste"] = piece.taste.model_dump()
+    if piece.inspirations is not None:
+        entry["profile"]["inspirations"] = [
+            value.model_dump() for value in piece.inspirations
+        ]
+    store.save_musician(name, entry)
     return store.study(session, name)
 
 
