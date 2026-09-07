@@ -534,3 +534,22 @@ see the [contributing guide](https://docs.plyr.fm/contributing/) for setup instr
 ---
 
 this is a living document. last updated 2026-09-05 (**player descenders and exact queue track identity**, #2026–#2028; backend release `2026.0905.202501`, then frontend promote). Earlier that day: (**the status-maintenance run knows where things landed, reads the atmosphere, and runs on fable 5.1**, #2008–#2020). the 2026-09-04 note: (status maintenance for the September 2–4 window: the September 1–2 player arcs — skip buttons #1958–#1966 and the passing-comment stack #1968–#1980 — moved to `.status_history/2026-09.md`, the August index and the `SELECT neondb` known issue compressed against `.status_history/2026-08.md`, and the footer arc's landing corrected — #2001–#2004 are in prod with `2026.0903.222140`, not a frontend promote. #2008, the window report that feeds this run, is merged and staging only.) the same day's earlier note recorded **the ingest-blackout alert fired on a sign-up** (#2006 — prod `2026.0903.222140`; the quiet-window host rotation is gone, #1796 narrowed), and September 2's recorded **the footer became spotify's and then the only footer**. earlier entries are preserved in `.status_history/`.
+
+### September 6 — musician studio reset
+
+The rejected score-entry experiment's seven tracks, three study playlists, and
+local/worker compositions were deleted. Accounts, encrypted credentials, and
+historical cost reservations remain. `services/musician-studio` replaces the
+single-instrument schema with isolated generated Python, named inspirations,
+persisted previous work, weighted peer selection, and optional taste revisions.
+Bot's influence-choice and self-authored personality work informed the setup.
+
+The replacement auto-scheduled Prefect run `77c97743-2d28-45e0-8bfe-85198e7b8a83`
+completed: three ten-second unlisted AI-labeled uploads (1283–1285), with Reed
+adding Kite's piece to a listening playlist. Estimated model usage for the run
+was $0.01225. The normal cadence is six-hourly, with one upload attempt per
+musician/day and $0.05/session, $0.20/day, $5/month reservation limits. The six-hour schedule and daily cost/credential monitor are active; the next run
+is September 7 at 06:17 UTC. Deployed source and runs are recorded in Prefect; the retired deployment
+must stay disabled. Model understanding of audio and title quality remain
+unproven; generated names are still formulaic. Current public display names have
+not been overwritten by the local account-name defaults.

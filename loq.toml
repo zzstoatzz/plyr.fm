@@ -359,7 +359,7 @@ max_lines = 972
 
 [[rules]]
 path = "frontend/src/routes/u/[[]handle[]]/+page.svelte"
-max_lines = 1481
+max_lines = 1493
 
 [[rules]]
 path = "scripts/build_atlas.py"

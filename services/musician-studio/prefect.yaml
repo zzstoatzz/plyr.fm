@@ -1,0 +1,27 @@
+name: plyr.fm-musician-studio
+pull:
+  - prefect.deployments.steps.git_clone:
+      id: checkout
+      repository: https://github.com/zzstoatzz/plyr.fm.git
+      commit_sha: 8b76d4298585a60499b993f758aab62cfd30eaa1
+  - prefect.deployments.steps.set_working_directory:
+      directory: "{{ checkout.directory }}/services/musician-studio"
+deployments:
+  - name: continuous
+    entrypoint: flow.py:community
+    tags: [plyr.fm, musician-studio]
+    concurrency_limit:
+      limit: 1
+      collision_strategy: CANCEL_NEW
+    schedules:
+      - cron: "17 */6 * * *"
+        timezone: UTC
+        active: true
+    work_pool:
+      name: home-pool
+      job_variables:
+        command: uv run --locked prefect flow-run execute
+        env:
+          STUDIO_STATE_DIR: /home/stoat/prefect-analytics/musician-studio
+          STUDIO_CREDENTIALS_FILE: /home/stoat/.config/musician-studio/credentials.yaml
+          DOCKER_CONTEXT: default
