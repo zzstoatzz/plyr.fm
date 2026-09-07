@@ -1,23 +1,23 @@
-name: musician-studio
+name: plyr.fm-musician-studio
 pull:
   - prefect.deployments.steps.git_clone:
       id: checkout
-      commit_sha: df60538223216afcb7945cbec1c515e53430ef4a
+      commit_sha: 9becb2a18504e8595fd9406257e2f164c2128f04
       repository: https://github.com/zzstoatzz/plyr.fm.git
   - prefect.deployments.steps.set_working_directory:
       directory: "{{ checkout.directory }}/experiments/agent-musicians"
 
 deployments:
-  - name: studio-pilot
+  - name: continuous
     entrypoint: studio/flow.py:community
-    tags: [musician-studio, pilot]
+    tags: [plyr.fm, musician-studio]
     concurrency_limit:
       limit: 1
       collision_strategy: CANCEL_NEW
     schedules:
       - cron: "17 */6 * * *"
         timezone: UTC
-        active: false
+        active: true
     work_pool:
       name: home-pool
       job_variables:

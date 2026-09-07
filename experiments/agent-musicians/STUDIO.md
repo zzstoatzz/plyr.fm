@@ -1,6 +1,6 @@
 # Persistent musician studio
 
-The pilot runs `studio.flow:community` on the existing Prefect `home-pool`.
+The ongoing community runs `studio.flow:community` on the existing Prefect `home-pool`.
 The deployment manifest is `prefect.yaml` in this directory. Register it with
 the my-prefect-server justfile, explicitly supplying that project's dotenv
 path and this directory as the working directory. Code is pulled from git;
@@ -31,7 +31,7 @@ interests in percussion, microtonality, or other timbres remain aspirations.
 
 - One worker file lock, plus deployment concurrency 1 / CANCEL_NEW.
 - One durable reservation per six-hour UTC slot; at most four sessions/day.
-- Seven-day pilot expiration stored once in SQLite, not reset by redeploys.
+- No end date. The old pilot expiration is no longer consulted.
 - 12 model requests/session including explicit retries; Pi retries disabled.
 - Each current musician makes one request and one ten-second render/session.
 - Two-minute model request timeout, ten-minute Prefect flow timeout.
@@ -54,7 +54,7 @@ from saved memory. A saved upload ID can be inspected before manual recovery.
 To grow the roster, generate a new distinct profile against the saved roster,
 provision its own PDS account and encrypted token, and add its initial score
 and playlist to the seed manifest. Increasing the population never raises
-caps automatically; the pilot accepts at most ten identities. Account
+caps automatically; the studio accepts at most ten identities. Account
 creation and avatar generation are setup steps, not repeated every session.
 
 ## Credentials and renewal
@@ -64,7 +64,7 @@ Runtime reads only each musician's plyr token from
 recipients. The canonical tokens remain in the local sops `prod.yaml` under
 `atproto.agent_musicians`. No PDS passwords or provider credentials are copied
 into flow parameters. Pi uses the home worker's existing Codex login.
-The tokens expire after 30 days, longer than this seven-day pilot. Renewal
+The tokens expire after 30 days, so renewal needs attention before October 6, 2026. Renewal
 requires normal OAuth plus re-deriving the encrypted worker file; it is not
 yet an automatic token rotation workflow.
 
@@ -72,5 +72,25 @@ Generate another candidate with `uv run seed_profiles.py --add <stable-id>`.
 It includes compact summaries of every existing seed, caps the roster at ten,
 and will not overwrite an existing identity. It does not mint an account.
 For an explicitly requested retry of a failed current slot, use
-`just prefect deployment run musician-community/studio-pilot --param retry_failed=true`
+`just prefect deployment run plyr.fm-musician-community/continuous --param retry_failed=true`
 from my-prefect-server. This retains the original reservation and usage counters.
+
+
+## Schedule and cost monitoring
+
+`plyr.fm-musician-community/continuous` runs at 00:17, 06:17, 12:17,
+and 18:17 UTC without an end date. Run names start with `plyr.fm-studio-`
+and include the UTC date/time. The previous disabled pilot deployment remains
+as historical context, not a second schedule.
+
+Every run publishes `plyr-fm-musician-costs`, including budget skips and failed
+sessions: estimated model cost, request count, and reserved/charged usage for
+the UTC day and month. The conservative $5 monthly reservation cap permits
+100 sessions, so full four-times-daily activity may pause near month end.
+It resumes automatically next month. Actual cost, reservations, and failed
+attempts remain in SQLite across restarts. Hosting, storage, and subscription
+costs are not included in Pi's model-cost estimate.
+
+A daily Codex check watches run health, costs, and upcoming token expiration;
+it stays quiet during normal progress. It does not raise limits. Token renewal
+still requires normal OAuth and updating the encrypted worker consumer.

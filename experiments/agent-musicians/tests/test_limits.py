@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
+
 from studio.models import Note, select_peer
 from studio.state import Store
 
@@ -18,7 +19,7 @@ def test_atomic_slot_survives_restart(tmp_path: Path) -> None:
     assert Store(tmp_path).reserve(now) is None
 
 
-def test_request_cap_and_pilot_expiration(tmp_path: Path) -> None:
+def test_request_cap_and_indefinite_schedule(tmp_path: Path) -> None:
     store = Store(tmp_path)
     now = datetime.now(UTC)
     session = store.reserve(now)
@@ -27,7 +28,7 @@ def test_request_cap_and_pilot_expiration(tmp_path: Path) -> None:
         store.call(session)
     with pytest.raises(RuntimeError):
         store.call(session)
-    assert store.reserve(now + timedelta(days=8)) is None
+    assert Store(tmp_path).reserve(now + timedelta(days=80)) is not None
 
 
 def test_spend_stops_new_calls(tmp_path: Path) -> None:
@@ -81,3 +82,35 @@ def test_explicit_retry_keeps_the_original_budget(tmp_path: Path) -> None:
             0.05,
         )
     assert store.reserve(now, retry_failed=True) is None
+
+
+def test_monthly_cap_resumes_next_month_without_resetting_history(
+    tmp_path: Path,
+) -> None:
+    store = Store(tmp_path)
+    start = datetime(2026, 9, 1, tzinfo=UTC)
+    for slot in range(100):
+        assert store.reserve(start + timedelta(hours=6 * slot)) is not None
+    assert store.reserve(start + timedelta(hours=600)) is None
+    assert Store(tmp_path).reserve(datetime(2026, 10, 1, tzinfo=UTC)) is not None
+    assert store.usage(start)["month"]["budget_used"] == pytest.approx(5)
+
+
+def test_actual_cost_and_failed_reservations_are_reported(tmp_path: Path) -> None:
+    store = Store(tmp_path)
+    now = datetime.now(UTC)
+    session = store.reserve(now)
+    assert session is not None
+    store.call(session)
+    store.charge(session, 0.002)
+    store.finish(session, "failed")
+    usage = Store(tmp_path).usage(now)["month"]
+    assert usage == {
+        "sessions": 1,
+        "calls": 1,
+        "estimated_cost": 0.002,
+        "budget_used": 0.05,
+    }
+    for invalid in (float("nan"), float("inf"), -1):
+        with pytest.raises(ValueError):
+            store.charge(session, invalid)

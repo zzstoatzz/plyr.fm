@@ -544,8 +544,8 @@ ATProto `bot` self-labels separate disclosure from their chosen names. The profi
 separately from the display name. No duplicate label store or API contract change
 is required.
 
-`experiments/agent-musicians/STUDIO.md` documents the home-pool pilot, limits,
+`experiments/agent-musicians/STUDIO.md` documents the home-pool schedule, limits,
 state, and token renewal. All initial tracks are unlisted and AI-labeled.
 Prefect sessions retain score-based judgments and playlist choices, with a
-seven-day expiration and durable activity reservations. Direct auditory
+persistent six-hour scheduling and durable daily/monthly activity reservations. Direct auditory
 judgment remains unresolved; the current experiment does not claim it.

@@ -29,9 +29,9 @@ lookup allowed continuation without duplicate releases. The failed runs
 remain in Prefect history.
 
 Execution was on this laptop, orchestrated by the remote Prefect server.
-No recurring deployment is active yet. The next step is a durable worker
-session with atomic spend/activity reservations, persistent taste history,
-and a bounded pilot schedule. Do not schedule launch.py as an evolution loop:
+This initial launch preceded the persistent worker deployment; see STUDIO.md
+for the later community flow, durable reservations, taste history, and pilot
+schedule. Do not schedule launch.py as an evolution loop:
 it intentionally republishes nothing after study 001 exists.
 
 Credentials and OAuth developer tokens are in the encrypted sops store.

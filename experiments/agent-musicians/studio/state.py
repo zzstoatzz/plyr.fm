@@ -1,8 +1,9 @@
 """Durable session reservations and musician memory."""
 
 import json
+import math
 import sqlite3
-from datetime import UTC, datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 
 
@@ -22,10 +23,6 @@ class Store:
                     session TEXT NOT NULL, musician TEXT NOT NULL, body TEXT NOT NULL,
                     PRIMARY KEY(session, musician));
             """)
-            expiry = (datetime.now(UTC) + timedelta(days=7)).isoformat()
-            db.execute(
-                "INSERT OR IGNORE INTO settings VALUES (?, ?)", ("expires_at", expiry)
-            )
 
     def connect(self) -> sqlite3.Connection:
         return sqlite3.connect(self.path, timeout=30)
@@ -35,11 +32,6 @@ class Store:
         key = f"{day}-{now.hour // 6}"
         with self.connect() as db:
             db.execute("BEGIN IMMEDIATE")
-            expiry = db.execute(
-                "SELECT value FROM settings WHERE key='expires_at'"
-            ).fetchone()[0]
-            if now >= datetime.fromisoformat(expiry):
-                return None
             existing = db.execute(
                 "SELECT status,spent,calls FROM sessions WHERE id=?", (key,)
             ).fetchone()
@@ -79,7 +71,7 @@ class Store:
                 raise RuntimeError("Session request or estimated-spend cap reached")
 
     def charge(self, session: str, cost: float) -> None:
-        if cost < 0:
+        if not math.isfinite(cost) or cost < 0:
             raise ValueError("Invalid model cost")
         with self.connect() as db:
             db.execute("UPDATE sessions SET spent=spent+? WHERE id=?", (cost, session))
@@ -115,3 +107,21 @@ class Store:
     def finish(self, session: str, status: str) -> None:
         with self.connect() as db:
             db.execute("UPDATE sessions SET status=? WHERE id=?", (status, session))
+
+    def usage(self, now: datetime) -> dict:
+        with self.connect() as db:
+
+            def totals(field: str, value: str) -> dict:
+                row = db.execute(
+                    f"SELECT COUNT(*), COALESCE(SUM(calls),0), COALESCE(SUM(spent),0), "
+                    f"COALESCE(SUM(MAX(reserved,spent)),0) FROM sessions WHERE {field}=?",
+                    (value,),
+                ).fetchone()
+                return dict(
+                    zip(("sessions", "calls", "estimated_cost", "budget_used"), row)
+                )
+
+            return {
+                "day": totals("day", now.strftime("%Y-%m-%d")),
+                "month": totals("month", now.strftime("%Y-%m")),
+            }

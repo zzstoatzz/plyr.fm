@@ -1,3 +1,5 @@
+"""Derive only musician tokens into the encrypted worker consumer."""
+
 import json
 import subprocess
 from pathlib import Path
@@ -10,6 +12,20 @@ raw = subprocess.run(
 )
 entries = json.loads(raw.stdout)["atproto"]["agent_musicians"]
 subset = {name: {"plyr_token": entry["plyr_token"]} for name, entry in entries.items()}
+current = subprocess.run(
+    [
+        "ssh",
+        "-o",
+        "BatchMode=yes",
+        "stoat@heavypad",
+        "sops -d --output-type json ~/.config/musician-studio/credentials.yaml",
+    ],
+    capture_output=True,
+    check=False,
+)
+if current.returncode == 0 and json.loads(current.stdout) == subset:
+    print("Encrypted musician tokens already current")
+    raise SystemExit(0)
 encrypted = subprocess.run(
     [
         "sops",
@@ -33,7 +49,7 @@ result = subprocess.run(
         "-o",
         "BatchMode=yes",
         "stoat@heavypad",
-        "umask 077; mkdir -p ~/.config/musician-studio; cat > ~/.config/musician-studio/credentials.yaml",
+        "umask 077; mkdir -p ~/.config/musician-studio; cat > ~/.config/musician-studio/credentials.next.yaml && mv ~/.config/musician-studio/credentials.next.yaml ~/.config/musician-studio/credentials.yaml",
     ],
     input=encrypted.stdout,
     capture_output=True,
@@ -52,5 +68,5 @@ verify = subprocess.run(
 )
 assert json.loads(verify.stdout) == subset
 print(
-    "Three encrypted musician tokens provisioned and equality verified on heavypad; no account passwords copied."
+    f"{len(subset)} encrypted musician tokens provisioned and equality verified on heavypad."
 )

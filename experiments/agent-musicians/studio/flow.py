@@ -128,7 +128,10 @@ def curate_peer(name: str, roster: dict, study: dict) -> None:
 
 
 @flow(
-    name="musician-community",
+    name="plyr.fm-musician-community",
+    flow_run_name=lambda: (
+        "plyr.fm-studio-" + datetime.now(UTC).strftime("%Y-%m-%d-%H%MZ")
+    ),
     log_prints=True,
     persist_result=False,
     timeout_seconds=600,
@@ -146,9 +149,10 @@ def community(retry_failed: bool = False) -> Completed:
         store = Store(directory)
         session = store.reserve(datetime.now(UTC), retry_failed=retry_failed)
         if session is None:
+            report_cost(store)
             return Completed(
                 name="Skipped",
-                message="Session slot, budget, or seven-day pilot limit reached",
+                message="Session slot or estimated budget limit reached",
             )
         try:
             roster = seed(directory)
@@ -176,4 +180,26 @@ def community(retry_failed: bool = False) -> Completed:
         except BaseException:
             store.finish(session, "failed")
             raise
+        finally:
+            report_cost(store)
     return Completed(message="Persistent musician exchange completed")
+
+
+def report_cost(store: Store) -> None:
+    usage = store.usage(datetime.now(UTC))
+    month = usage["month"]
+    print(f"Studio cost ledger: {json.dumps(usage)}")
+    create_markdown_artifact(
+        key="plyr-fm-musician-costs",
+        markdown=(
+            "# Musician studio usage\n\n"
+            f"This UTC month: {month['sessions']} sessions, {month['calls']} requests.\n\n"
+            f"Pi-reported estimated model cost: ${month['estimated_cost']:.6f}.\n\n"
+            f"Reserved/charged budget: ${month['budget_used']:.2f} / $5.00 monthly.\n\n"
+            f"Today: ${usage['day']['budget_used']:.2f} / $0.20 reserved/charged.\n\n"
+            "Budgets include failed reservations. Model costs are estimates, not provider invoices; "
+            "worker hosting, storage, and account subscription costs are excluded. "
+            "No model work starts when the next reservation would exceed a budget. "
+            "The schedule resumes work in the next available budget window."
+        ),
+    )
