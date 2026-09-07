@@ -127,7 +127,7 @@ max_lines = 1137
 
 [[rules]]
 path = "frontend/src/lib/queue.svelte.ts"
-max_lines = 1010
+max_lines = 1023
 
 [[rules]]
 path = "frontend/src/routes/+layout.svelte"
@@ -335,7 +335,7 @@ max_lines = 1424
 
 [[rules]]
 path = "frontend/src/lib/uploader.svelte.ts"
-max_lines = 541
+max_lines = 623
 
 [[rules]]
 path = "frontend/src/routes/track/[[]id[]]/+page.svelte"
@@ -400,3 +400,11 @@ max_lines = 527
 [[rules]]
 path = "docs/internal/contracts/client-api.json"
 max_lines = 8280
+
+[[rules]]
+path = "frontend/src/lib/components/TrackEditForm.svelte"
+max_lines = 528
+
+[[rules]]
+path = "frontend/src/lib/components/track-edit/TrackAudioEditor.svelte"
+max_lines = 555

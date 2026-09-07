@@ -28,7 +28,7 @@
 		component: TracksSection,
 		parameters: { layout: 'padded' },
 		play: async ({ canvas }) => {
-			await userEvent.click(canvas.getByRole('button', { name: 'edit' }));
+			await userEvent.click(canvas.getByRole('button', { name: 'edit track' }));
 		},
 		args: {
 			tracks: [track],

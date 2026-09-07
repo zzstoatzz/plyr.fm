@@ -22,6 +22,41 @@ afterEach(() => {
 });
 
 describe('queue track identity', () => {
+	it('keeps an edit when an older queue write returns during the save', async () => {
+		auth.isAuthenticated = true;
+		queue.setQueue([original, reupload, original], 2);
+		queue.progressMs = 42000;
+		let finish: ((response: Response) => void) | undefined;
+		const response = new Promise<Response>((resolve) => {
+			finish = resolve;
+		});
+		vi.spyOn(globalThis, 'fetch').mockReturnValue(response);
+		const push = queue.pushQueue();
+		queue.updateTrackMetadata({ ...original, title: 'new title' });
+		finish?.(
+			new Response(
+				JSON.stringify({
+					revision: 1,
+					state: {
+						track_record_ids: [1249, 1261, 1249],
+						current_index: 2,
+						progress_ms: 42000
+					},
+					tracks: [original, reupload]
+				})
+			)
+		);
+		await push;
+		expect(queue.tracks.map((track) => track.title)).toEqual(['new title', 'test', 'new title']);
+		expect(queue.originalOrder.map((track) => track.title)).toEqual([
+			'new title',
+			'test',
+			'new title'
+		]);
+		expect(queue.currentIndex).toBe(2);
+		expect(queue.progressMs).toBe(42000);
+	});
+
 	it('saves track identities alongside legacy audio IDs and accepts the echo', async () => {
 		auth.isAuthenticated = true;
 		queue.setQueue([original, reupload, original], 2);

@@ -1,10 +1,6 @@
 <script lang="ts">
 	import favicon from '$lib/assets/favicon.png';
-	import {
-		APP_NAME,
-		APP_TAGLINE,
-		APP_CANONICAL_URL
-	} from '$lib/branding';
+	import { APP_NAME, APP_TAGLINE, APP_CANONICAL_URL } from '$lib/branding';
 	import Player from '$lib/components/Player.svelte';
 	import Toast from '$lib/components/Toast.svelte';
 	import Queue from '$lib/components/Queue.svelte';
@@ -36,16 +32,16 @@
 	// pages that define their own <title> in svelte:head
 	let hasPageMetadata = $derived(
 		$page.url.pathname === '/' || // homepage
-		$page.url.pathname === '/activity' || // activity feed
-		$page.url.pathname === '/record' || // in-browser recording
-		$page.url.pathname.startsWith('/radio') || // radio + per-station previews
-		$page.url.pathname.startsWith('/track/') || // track detail
-		$page.url.pathname.startsWith('/playlist/') || // playlist detail
-		$page.url.pathname.startsWith('/tag/') || // tag detail
-		$page.url.pathname === '/liked' || // liked tracks
-		$page.url.pathname.startsWith('/jam/') || // jam invite
-		$page.url.pathname.match(/^\/u\/[^/]+$/) || // artist detail
-		$page.url.pathname.match(/^\/u\/[^/]+\/album\/[^/]+/) // album detail
+			$page.url.pathname === '/activity' || // activity feed
+			$page.url.pathname === '/record' || // in-browser recording
+			$page.url.pathname.startsWith('/radio') || // radio + per-station previews
+			$page.url.pathname.startsWith('/track/') || // track detail
+			$page.url.pathname.startsWith('/playlist/') || // playlist detail
+			$page.url.pathname.startsWith('/tag/') || // tag detail
+			$page.url.pathname === '/liked' || // liked tracks
+			$page.url.pathname.startsWith('/jam/') || // jam invite
+			$page.url.pathname.match(/^\/u\/[^/]+$/) || // artist detail
+			$page.url.pathname.match(/^\/u\/[^/]+\/album\/[^/]+/) // album detail
 	);
 
 	let isEmbed = $derived($page.url.pathname.startsWith('/embed/'));
@@ -55,10 +51,10 @@
 	// uses preferences.needsTermsAcceptance which compares accepted_at vs terms_last_updated
 	let showTermsOverlay = $derived(
 		auth.isAuthenticated &&
-		preferences.needsTermsAcceptance &&
-		!$page.url.pathname.startsWith('/terms') &&
-		!$page.url.pathname.startsWith('/privacy') &&
-		!$page.url.pathname.startsWith('/cookies')
+			preferences.needsTermsAcceptance &&
+			!$page.url.pathname.startsWith('/terms') &&
+			!$page.url.pathname.startsWith('/privacy') &&
+			!$page.url.pathname.startsWith('/cookies')
 	);
 
 	// initialize auth and preferences once on mount (not on every navigation)
@@ -190,16 +186,31 @@
 			const shouldTile = isUsingPlayingArtwork || uiSettings.background_tile;
 			root.style.setProperty('--bg-image-mode', shouldTile ? 'repeat' : 'no-repeat');
 			// playing artwork: 25% size (4x4 grid), custom: auto if tiled, cover if not
-			root.style.setProperty('--bg-image-size', isUsingPlayingArtwork ? '25%' : (uiSettings.background_tile ? 'auto' : 'cover'));
+			root.style.setProperty(
+				'--bg-image-size',
+				isUsingPlayingArtwork ? '25%' : uiSettings.background_tile ? 'auto' : 'cover'
+			);
 			// blur playing artwork for smoother look
 			root.style.setProperty('--bg-blur', isUsingPlayingArtwork ? '40px' : '0px');
 			// glass button styling for visibility against background images
 			const isLight = root.classList.contains('theme-light');
-			root.style.setProperty('--glass-btn-bg', isLight ? 'rgba(255, 255, 255, 0.8)' : 'rgba(18, 18, 18, 0.8)');
-			root.style.setProperty('--glass-btn-bg-hover', isLight ? 'rgba(255, 255, 255, 0.9)' : 'rgba(30, 30, 30, 0.9)');
-			root.style.setProperty('--glass-btn-border', isLight ? 'rgba(0, 0, 0, 0.12)' : 'rgba(255, 255, 255, 0.12)');
+			root.style.setProperty(
+				'--glass-btn-bg',
+				isLight ? 'rgba(255, 255, 255, 0.8)' : 'rgba(18, 18, 18, 0.8)'
+			);
+			root.style.setProperty(
+				'--glass-btn-bg-hover',
+				isLight ? 'rgba(255, 255, 255, 0.9)' : 'rgba(30, 30, 30, 0.9)'
+			);
+			root.style.setProperty(
+				'--glass-btn-border',
+				isLight ? 'rgba(0, 0, 0, 0.12)' : 'rgba(255, 255, 255, 0.12)'
+			);
 			// very subtle text outline for readability against background images
-			root.style.setProperty('--text-shadow', isLight ? '0 0 8px rgba(255, 255, 255, 0.6)' : '0 0 8px rgba(0, 0, 0, 0.6)');
+			root.style.setProperty(
+				'--text-shadow',
+				isLight ? '0 0 8px rgba(255, 255, 255, 0.6)' : '0 0 8px rgba(0, 0, 0, 0.6)'
+			);
 			// scrim layer painted over the cover art so foreground text/buttons keep
 			// the contrast floor they were designed for. only applied when the bg is
 			// auto-derived from the playing track — user-chosen custom images are an
@@ -209,8 +220,10 @@
 			root.style.setProperty(
 				'--bg-scrim',
 				isUsingPlayingArtwork
-					? (isLight ? 'rgba(250, 250, 250, 0.65)' : 'rgba(10, 10, 10, 0.65)')
-					: 'transparent',
+					? isLight
+						? 'rgba(250, 250, 250, 0.65)'
+						: 'rgba(10, 10, 10, 0.65)'
+					: 'transparent'
 			);
 		} else {
 			root.style.removeProperty('--bg-image');
@@ -253,6 +266,7 @@
 	let previousVolume = 0.7; // for mute toggle
 
 	function handleKeyboardShortcuts(event: KeyboardEvent) {
+		if (document.querySelector('dialog[open]')) return;
 		// Cmd/Ctrl+K: toggle search
 		if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
 			event.preventDefault();
@@ -374,7 +388,10 @@
 		if (savedAccent) {
 			document.documentElement.style.setProperty('--accent', savedAccent);
 			document.documentElement.style.setProperty('--accent-hover', getHoverColor(savedAccent));
-			document.documentElement.style.setProperty('--accent-contrast', getContrastColor(savedAccent));
+			document.documentElement.style.setProperty(
+				'--accent-contrast',
+				getContrastColor(savedAccent)
+			);
 		}
 
 		// apply saved theme from localStorage
@@ -437,7 +454,10 @@
 	<meta name="theme-color" content="#0a0a0a" />
 	<link rel="preconnect" href="https://fonts.googleapis.com" />
 	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
-	<link href="https://fonts.googleapis.com/css2?family=Comic+Neue:wght@400;700&family=Geist:wght@300..900&family=Inter:wght@300..900&display=swap" rel="stylesheet" />
+	<link
+		href="https://fonts.googleapis.com/css2?family=Comic+Neue:wght@400;700&family=Geist:wght@300..900&family=Inter:wght@300..900&display=swap"
+		rel="stylesheet"
+	/>
 
 	{#if !hasPageMetadata}
 		<!-- default meta tags for pages without specific metadata -->
@@ -476,52 +496,53 @@
 		// prevent flash by applying saved settings immediately.
 		// inline script — can't import the safe-storage helper, so read via a
 		// local shim (localStorage access throws in sandboxed embeds).
-		(function() {
-				const root = document.documentElement;
-				const getItem = (key) => {
-					try {
-						return localStorage.getItem(key);
-					} catch {
-						return null;
-					}
+		(function () {
+			const root = document.documentElement;
+			const getItem = (key) => {
+				try {
+					return localStorage.getItem(key);
+				} catch {
+					return null;
+				}
+			};
+
+			// apply accent color
+			const savedAccent = getItem('accentColor');
+			if (savedAccent) {
+				root.style.setProperty('--accent', savedAccent);
+				// simple lightening for hover state
+				const r = parseInt(savedAccent.slice(1, 3), 16);
+				const g = parseInt(savedAccent.slice(3, 5), 16);
+				const b = parseInt(savedAccent.slice(5, 7), 16);
+				const hover = `rgb(${Math.min(255, r + 30)}, ${Math.min(255, g + 30)}, ${Math.min(255, b + 30)})`;
+				root.style.setProperty('--accent-hover', hover);
+			}
+
+			// apply font
+			const savedFont = getItem('fontFamily');
+			if (savedFont) {
+				const fonts = {
+					mono: "'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', 'Consolas', monospace",
+					geist: "'Geist', 'Inter', system-ui, sans-serif",
+					inter: "'Inter', system-ui, sans-serif",
+					'system-ui': "system-ui, -apple-system, 'Segoe UI', sans-serif",
+					georgia: "'Georgia', 'Times New Roman', serif",
+					'comic-sans': "'Comic Sans MS', 'Comic Sans', 'Comic Neue', cursive"
 				};
+				if (fonts[savedFont]) root.style.setProperty('--font-family', fonts[savedFont]);
+			}
 
-				// apply accent color
-				const savedAccent = getItem('accentColor');
-				if (savedAccent) {
-					root.style.setProperty('--accent', savedAccent);
-					// simple lightening for hover state
-					const r = parseInt(savedAccent.slice(1, 3), 16);
-					const g = parseInt(savedAccent.slice(3, 5), 16);
-					const b = parseInt(savedAccent.slice(5, 7), 16);
-					const hover = `rgb(${Math.min(255, r + 30)}, ${Math.min(255, g + 30)}, ${Math.min(255, b + 30)})`;
-					root.style.setProperty('--accent-hover', hover);
-				}
-
-				// apply font
-				const savedFont = getItem('fontFamily');
-				if (savedFont) {
-					const fonts = {
-						'mono': "'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', 'Consolas', monospace",
-						'geist': "'Geist', 'Inter', system-ui, sans-serif",
-						'inter': "'Inter', system-ui, sans-serif",
-						'system-ui': "system-ui, -apple-system, 'Segoe UI', sans-serif",
-						'georgia': "'Georgia', 'Times New Roman', serif",
-						'comic-sans': "'Comic Sans MS', 'Comic Sans', 'Comic Neue', cursive",
-					};
-					if (fonts[savedFont]) root.style.setProperty('--font-family', fonts[savedFont]);
-				}
-
-				// apply theme
-				const savedTheme = getItem('theme') || 'dark';
-				let effectiveTheme = savedTheme;
-				if (savedTheme === 'live') {
-					effectiveTheme = 'dark';
-				} else if (savedTheme === 'system') {
-					effectiveTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-				}
-				root.classList.add('theme-' + effectiveTheme);
-
+			// apply theme
+			const savedTheme = getItem('theme') || 'dark';
+			let effectiveTheme = savedTheme;
+			if (savedTheme === 'live') {
+				effectiveTheme = 'dark';
+			} else if (savedTheme === 'system') {
+				effectiveTheme = window.matchMedia('(prefers-color-scheme: dark)').matches
+					? 'dark'
+					: 'light';
+			}
+			root.classList.add('theme-' + effectiveTheme);
 		})();
 	</script>
 </svelte:head>
@@ -603,6 +624,11 @@
 		--text-small: var(--text-base);
 
 		/* border radius scale */
+		--motion-feedback: 140ms;
+		--motion-enter: 200ms;
+		--motion-exit: 140ms;
+		--ease-surface: cubic-bezier(0.2, 0, 0, 1);
+
 		--radius-sm: 4px;
 		--radius-base: 6px;
 		--radius-md: 8px;
@@ -689,7 +715,8 @@
 
 	/* shared animation for active play buttons */
 	@keyframes -global-ethereal-glow {
-		0%, 100% {
+		0%,
+		100% {
 			box-shadow: 0 0 8px 1px color-mix(in srgb, var(--accent) 25%, transparent);
 		}
 		50% {
@@ -719,7 +746,9 @@
 		opacity: 0;
 		z-index: -2;
 		pointer-events: none;
-		transition: opacity 1.5s ease-in-out, background 3s ease-in-out;
+		transition:
+			opacity 1.5s ease-in-out,
+			background 3s ease-in-out;
 	}
 
 	:global(body.ambient-active::after) {
@@ -728,8 +757,15 @@
 	}
 
 	@keyframes -global-ambient-drift {
-		0%, 100% { opacity: 0.35; filter: brightness(1); }
-		50% { opacity: 0.5; filter: brightness(1.08); }
+		0%,
+		100% {
+			opacity: 0.35;
+			filter: brightness(1);
+		}
+		50% {
+			opacity: 0.5;
+			filter: brightness(1.08);
+		}
 	}
 
 	/* background image with blur effect.
@@ -796,8 +832,6 @@
 		}
 	}
 
-
-
 	@media (max-width: 768px) {
 		.main-content.with-queue {
 			margin-right: 0;
@@ -806,8 +840,5 @@
 		.queue-sidebar {
 			width: 100%;
 		}
-
-
 	}
-
 </style>

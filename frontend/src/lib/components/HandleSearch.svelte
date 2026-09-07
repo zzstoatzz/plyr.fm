@@ -4,6 +4,7 @@
 	import type { FeaturedArtist } from '$lib/types';
 
 	interface Props {
+		id?: string;
 		selected: FeaturedArtist[];
 		onAdd: (_artist: FeaturedArtist) => void;
 		onRemove: (_did: string) => void;
@@ -12,7 +13,15 @@
 		hasUnresolvedInput?: boolean;
 	}
 
-	let { selected = $bindable([]), onAdd, onRemove, maxFeatures = 10, disabled = false, hasUnresolvedInput = $bindable(false) }: Props = $props();
+	let {
+		id,
+		selected = $bindable([]),
+		onAdd,
+		onRemove,
+		maxFeatures = 10,
+		disabled = false,
+		hasUnresolvedInput = $bindable(false)
+	}: Props = $props();
 
 	let query = $state('');
 	let results = $state<FeaturedArtist[]>([]);
@@ -36,17 +45,22 @@
 		searching = true;
 		noResultsFound = false;
 		try {
-			const response = await fetch(`${TYPEAHEAD_URL}/xrpc/app.bsky.actor.searchActorsTypeahead?q=${encodeURIComponent(query)}&limit=10`, {
-				headers: { 'X-Client': 'plyr.fm' }
-			});
+			const response = await fetch(
+				`${TYPEAHEAD_URL}/xrpc/app.bsky.actor.searchActorsTypeahead?q=${encodeURIComponent(query)}&limit=10`,
+				{
+					headers: { 'X-Client': 'plyr.fm' }
+				}
+			);
 			if (response.ok) {
 				const data = await response.json();
-				results = (data.actors ?? []).map((actor: { did: string; handle: string; displayName?: string; avatar?: string }) => ({
-					did: actor.did,
-					handle: actor.handle,
-					display_name: actor.displayName ?? actor.handle,
-					avatar_url: actor.avatar ?? null,
-				}));
+				results = (data.actors ?? []).map(
+					(actor: { did: string; handle: string; displayName?: string; avatar?: string }) => ({
+						did: actor.did,
+						handle: actor.handle,
+						display_name: actor.displayName ?? actor.handle,
+						avatar_url: actor.avatar ?? null
+					})
+				);
 				if (results.length === 0) {
 					noResultsFound = true;
 				}
@@ -66,7 +80,7 @@
 
 	function selectArtist(artist: FeaturedArtist) {
 		// check if already selected
-		if (selected.some(a => a.did === artist.did)) {
+		if (selected.some((a) => a.did === artist.did)) {
 			return;
 		}
 		// check max limit
@@ -85,6 +99,13 @@
 	}
 
 	// close dropdown when clicking outside
+	function handleKeydown(event: KeyboardEvent) {
+		if (event.key === 'Escape' && showResults) {
+			event.preventDefault();
+			showResults = false;
+		}
+	}
+
 	function handleClickOutside(e: MouseEvent) {
 		if (!(e.target instanceof Element && e.target.closest('.handle-search-container'))) {
 			showResults = false;
@@ -97,13 +118,18 @@
 <div class="handle-search-container">
 	<div class="search-input-wrapper">
 		<input
+			{id}
+			onkeydown={handleKeydown}
+			aria-label={id ? undefined : 'featured artists'}
 			type="text"
 			bind:value={query}
 			oninput={handleInput}
 			placeholder="search for artists by handle..."
 			{disabled}
 			class="search-input"
-			onfocus={() => { if (results.length > 0) showResults = true; }}
+			onfocus={() => {
+				if (results.length > 0) showResults = true;
+			}}
 		/>
 		{#if searching}
 			<span class="search-spinner">searching...</span>
@@ -115,9 +141,9 @@
 					<button
 						type="button"
 						class="search-result-item"
-						class:selected={selected.some(a => a.did === result.did)}
+						class:selected={selected.some((a) => a.did === result.did)}
 						onclick={() => selectArtist(result)}
-						disabled={selected.some(a => a.did === result.did) || selected.length >= maxFeatures}
+						disabled={selected.some((a) => a.did === result.did) || selected.length >= maxFeatures}
 					>
 						{#if result.avatar_url}
 							<SensitiveImage src={result.avatar_url} compact>

@@ -2,13 +2,18 @@ import { browser } from '$app/environment';
 import { goto } from '$app/navigation';
 import { auth } from './auth.svelte';
 import { API_URL } from './config';
-import { toast } from './toast.svelte';
+import { toast, type ToastType } from './toast.svelte';
 import { tracksCache } from './tracks.svelte';
 import type { FeaturedArtist } from './types';
 import type { TrackRights } from './components/CopyrightRightsPanel.svelte';
 import { setReturnUrl } from './utils/return-url';
 import { finishUploadSession, UploadPartError, UploadSessionHttpError } from './upload-session';
 import { sessionTransport, StagedTransfer, type StagedTransport } from './staged-transfer.svelte';
+
+export interface AudioReplacementStatus {
+	type: ToastType;
+	message: string;
+}
 
 interface UploadTask {
 	id: string;
@@ -77,7 +82,7 @@ export async function startPermissionedScopeUpgrade(): Promise<void> {
 			// the backend has recorded that, so refreshing auth stops offering it.
 			const detail = await res.json().catch(() => null);
 			if (detail?.detail === 'spaces_refused') {
-				toast.error("your PDS refused private media", 8000);
+				toast.error('your PDS refused private media', 8000);
 				await auth.refresh();
 				return;
 			}
@@ -94,7 +99,11 @@ export async function startPermissionedScopeUpgrade(): Promise<void> {
 	}
 }
 
-function buildNetworkErrorMessage(progressPercent: number, fileSizeMB: number, isMobile: boolean): string {
+function buildNetworkErrorMessage(
+	progressPercent: number,
+	fileSizeMB: number,
+	isMobile: boolean
+): string {
 	const progressInfo = progressPercent > 0 ? ` (failed at ${progressPercent}%)` : '';
 
 	if (isMobile && fileSizeMB > MOBILE_LARGE_FILE_THRESHOLD_MB) {
@@ -114,7 +123,11 @@ function buildNetworkErrorMessage(progressPercent: number, fileSizeMB: number, i
 	return `upload failed before sending — try re-selecting the file`;
 }
 
-function buildTimeoutErrorMessage(progressPercent: number, fileSizeMB: number, isMobile: boolean): string {
+function buildTimeoutErrorMessage(
+	progressPercent: number,
+	fileSizeMB: number,
+	isMobile: boolean
+): string {
 	const progressInfo = progressPercent > 0 ? ` (stopped at ${progressPercent}%)` : '';
 
 	if (isMobile) {
@@ -133,7 +146,11 @@ type UploadFailure = UploadSessionHttpError | UploadPartError | Error;
 /** a transfer the server refused for want of a session; submit's preflight owns the sign-in bounce. */
 function sessionExpired(error: UploadFailure): boolean {
 	if (error instanceof UploadSessionHttpError) return error.status === 401;
-	return error instanceof UploadPartError && error.failure.kind === 'http' && error.failure.status === 401;
+	return (
+		error instanceof UploadPartError &&
+		error.failure.kind === 'http' &&
+		error.failure.status === 401
+	);
 }
 
 /**
@@ -165,8 +182,10 @@ function describeUploadFailure(
 	}
 	if (error instanceof UploadPartError) {
 		const failure = error.failure;
-		if (failure.kind === 'timeout') return buildTimeoutErrorMessage(progressPercent, fileSizeMB, isMobile);
-		if (failure.kind === 'network') return buildNetworkErrorMessage(progressPercent, fileSizeMB, isMobile);
+		if (failure.kind === 'timeout')
+			return buildTimeoutErrorMessage(progressPercent, fileSizeMB, isMobile);
+		if (failure.kind === 'network')
+			return buildNetworkErrorMessage(progressPercent, fileSizeMB, isMobile);
 		if (failure.status === 401) {
 			toast.error('your session expired — sign in to finish your upload');
 			setReturnUrl('/upload');
@@ -192,7 +211,10 @@ class UploaderState {
 		const fileSizeMB = file.size / 1024 / 1024;
 		const isMobile = isMobileDevice();
 		if (isMobile && fileSizeMB > MOBILE_LARGE_FILE_THRESHOLD_MB) {
-			toast.info(`uploading ${Math.round(fileSizeMB)}MB file on mobile - ensure stable connection`, 5000);
+			toast.info(
+				`uploading ${Math.round(fileSizeMB)}MB file on mobile - ensure stable connection`,
+				5000
+			);
 		}
 		return new StagedTransfer(file, transport, (failure, percent) =>
 			sessionExpired(failure)
@@ -227,9 +249,10 @@ class UploaderState {
 		const isMobile = isMobileDevice();
 		const displayName = label ?? title;
 
-		const uploadMessage = fileSizeMB > 10
-			? `uploading "${displayName}"... (large file)`
-			: `uploading "${displayName}"...`;
+		const uploadMessage =
+			fileSizeMB > 10
+				? `uploading "${displayName}"... (large file)`
+				: `uploading "${displayName}"...`;
 		// 0 means infinite/persist until dismissed
 		const toastId = toast.info(uploadMessage, 0);
 
@@ -241,7 +264,7 @@ class UploaderState {
 			formData.append('album', album);
 		}
 		if (features.length > 0) {
-			const handles = features.map(a => a.handle);
+			const handles = features.map((a) => a.handle);
 			formData.append('features', JSON.stringify(handles));
 		}
 		if (tags.length > 0) {
@@ -304,7 +327,12 @@ class UploaderState {
 				this.followProcessing(task, displayName, onSuccess);
 			} catch (error) {
 				const failure: UploadFailure = error instanceof Error ? error : new Error(String(error));
-				const message = describeUploadFailure(failure, staged.progressPercent, fileSizeMB, isMobile);
+				const message = describeUploadFailure(
+					failure,
+					staged.progressPercent,
+					fileSizeMB,
+					isMobile
+				);
 				if (message === null) {
 					toast.dismiss(toastId);
 					this.activeUploads.delete(taskId);
@@ -342,10 +370,16 @@ class UploaderState {
 				this.activeUploads.delete(task.id);
 
 				const trackId = update.track_id ?? null;
-				toast.success(`"${displayName}" uploaded`, 5000, trackId ? {
-					label: 'view track',
-					href: `/track/${trackId}`
-				} : undefined);
+				toast.success(
+					`"${displayName}" uploaded`,
+					5000,
+					trackId
+						? {
+								label: 'view track',
+								href: `/track/${trackId}`
+							}
+						: undefined
+				);
 
 				const warnings: string[] = update.warnings ?? [];
 				const warningAction = update.pds_blob_failed
@@ -399,22 +433,31 @@ class UploaderState {
 		trackId: number,
 		file: File,
 		title: string,
-		onComplete?: (_result: { trackId: number; atprotoCid: string | null }) => void
+		onComplete?: (_result: { trackId: number; atprotoCid: string | null }) => void | Promise<void>,
+		onStatus?: (status: AudioReplacementStatus) => void
 	): void {
 		if (!browser) return;
+		const report = (message: string, type: ToastType = 'info'): void => {
+			onStatus?.({ message, type });
+		};
 
 		const taskId = crypto.randomUUID();
 		const fileSizeMB = file.size / 1024 / 1024;
 		const isMobile = isMobileDevice();
 
 		if (isMobile && fileSizeMB > MOBILE_LARGE_FILE_THRESHOLD_MB) {
-			toast.info(`replacing audio: ${Math.round(fileSizeMB)}MB on mobile - ensure stable connection`, 5000);
+			toast.info(
+				`replacing audio: ${Math.round(fileSizeMB)}MB on mobile - ensure stable connection`,
+				5000
+			);
 		}
 
-		const startMessage = fileSizeMB > 10
-			? `replacing audio for "${title}"... (large file)`
-			: `replacing audio for "${title}"...`;
+		const startMessage =
+			fileSizeMB > 10
+				? `replacing audio for "${title}"... (large file)`
+				: `replacing audio for "${title}"...`;
 		const toastId = toast.info(startMessage, 0);
+		report('uploading replacement audio…');
 
 		let lastProgressPercent = 0;
 		const formData = new FormData();
@@ -431,6 +474,7 @@ class UploaderState {
 				const percent = Math.round((e.loaded / e.total) * 100);
 				lastProgressPercent = percent;
 				toast.update(toastId, `uploading new audio... ${percent}%`);
+				report(`uploading new audio… ${percent}%`);
 			}
 		});
 
@@ -438,6 +482,7 @@ class UploaderState {
 			if (xhr.status >= 200 && xhr.status < 300) {
 				try {
 					uploadComplete = true;
+					report('processing replacement audio…');
 					const result = JSON.parse(xhr.responseText);
 					const upload_id = result.upload_id;
 
@@ -455,14 +500,26 @@ class UploaderState {
 					task.eventSource = eventSource;
 
 					eventSource.onmessage = (event) => {
-						const update: UploadProgressUpdate = JSON.parse(event.data);
+						let update: UploadProgressUpdate;
+						try {
+							update = JSON.parse(event.data);
+						} catch {
+							eventSource.close();
+							toast.dismiss(task.toastId);
+							this.activeUploads.delete(taskId);
+							toast.error('could not read replacement status — reload to check');
+							report('could not read replacement status — reload to check', 'error');
+							return;
+						}
 
 						if (update.message && update.status === 'processing') {
 							const serverProgress = update.server_progress_pct;
 							if (serverProgress !== undefined && serverProgress !== null && serverProgress > 0) {
 								toast.update(task.toastId, `${update.message} (${Math.round(serverProgress)}%)`);
+								report(`${update.message} (${Math.round(serverProgress)}%)`);
 							} else {
 								toast.update(task.toastId, update.message);
+								report(update.message);
 							}
 						}
 
@@ -472,13 +529,20 @@ class UploaderState {
 							this.activeUploads.delete(taskId);
 
 							toast.success(`audio for "${title}" replaced`, 5000);
+							report('audio replaced', 'success');
 							tracksCache.invalidate();
 							tracksCache.fetch(true);
 
-							onComplete?.({
-								trackId,
-								atprotoCid: update.atproto_cid ?? null
-							});
+							void Promise.resolve()
+								.then(() =>
+									onComplete?.({
+										trackId,
+										atprotoCid: update.atproto_cid ?? null
+									})
+								)
+								.catch(() => {
+									report('audio replaced — reload to see the update', 'warning');
+								});
 						}
 
 						if (update.status === 'failed') {
@@ -486,6 +550,7 @@ class UploaderState {
 							toast.dismiss(task.toastId);
 							this.activeUploads.delete(taskId);
 							toast.error(update.error || 'audio replace failed');
+							report(update.error || 'audio replacement failed — try again', 'error');
 						}
 					};
 
@@ -494,10 +559,14 @@ class UploaderState {
 						toast.dismiss(task.toastId);
 						this.activeUploads.delete(taskId);
 						toast.error('lost connection during audio replace');
+						report('connection lost — reload to check replacement status', 'error');
 					};
 				} catch {
+					this.activeUploads.get(taskId)?.eventSource?.close();
+					this.activeUploads.delete(taskId);
 					toast.dismiss(toastId);
 					toast.error('failed to parse server response');
+					report('could not read replacement status — reload to check', 'error');
 				}
 			} else {
 				toast.dismiss(toastId);
@@ -511,7 +580,7 @@ class UploaderState {
 					} else if (xhr.status === 413) {
 						errorMsg = 'file too large: please use a smaller file';
 					} else if (xhr.status === 403) {
-						errorMsg = "you can only replace audio on your own tracks";
+						errorMsg = 'you can only replace audio on your own tracks';
 					} else if (xhr.status === 404) {
 						errorMsg = 'track not found';
 					} else if (xhr.status >= 500) {
@@ -519,21 +588,35 @@ class UploaderState {
 					}
 				}
 				toast.error(errorMsg);
+				report(errorMsg, 'error');
 			}
 		});
 
 		xhr.addEventListener('error', () => {
 			toast.dismiss(toastId);
 			toast.error(buildNetworkErrorMessage(lastProgressPercent, fileSizeMB, isMobile));
+			report(buildNetworkErrorMessage(lastProgressPercent, fileSizeMB, isMobile), 'error');
 		});
 
 		xhr.addEventListener('timeout', () => {
 			toast.dismiss(toastId);
 			toast.error(buildTimeoutErrorMessage(lastProgressPercent, fileSizeMB, isMobile));
+			report(buildTimeoutErrorMessage(lastProgressPercent, fileSizeMB, isMobile), 'error');
+		});
+
+		xhr.addEventListener('abort', () => {
+			toast.dismiss(toastId);
+			report('audio replacement canceled', 'warning');
 		});
 
 		xhr.timeout = 300000;
-		xhr.send(formData);
+		try {
+			xhr.send(formData);
+		} catch {
+			toast.dismiss(toastId);
+			toast.error('audio upload could not start — try again');
+			report('audio upload could not start — try again', 'error');
+		}
 	}
 }
 

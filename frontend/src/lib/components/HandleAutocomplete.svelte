@@ -16,7 +16,12 @@
 		disabled?: boolean;
 	}
 
-	let { value = $bindable(''), onSelect, placeholder = 'search by handle...', disabled = false }: Props = $props();
+	let {
+		value = $bindable(''),
+		onSelect,
+		placeholder = 'search by handle...',
+		disabled = false
+	}: Props = $props();
 
 	let results = $state<HandleResult[]>([]);
 	let searching = $state(false);
@@ -31,17 +36,22 @@
 
 		searching = true;
 		try {
-			const response = await fetch(`${TYPEAHEAD_URL}/xrpc/app.bsky.actor.searchActorsTypeahead?q=${encodeURIComponent(value)}&limit=10`, {
-				headers: { 'X-Client': 'plyr.fm' }
-			});
+			const response = await fetch(
+				`${TYPEAHEAD_URL}/xrpc/app.bsky.actor.searchActorsTypeahead?q=${encodeURIComponent(value)}&limit=10`,
+				{
+					headers: { 'X-Client': 'plyr.fm' }
+				}
+			);
 			if (response.ok) {
 				const data = await response.json();
-				results = (data.actors ?? []).map((actor: { did: string; handle: string; displayName?: string; avatar?: string }) => ({
-					did: actor.did,
-					handle: actor.handle,
-					display_name: actor.displayName ?? actor.handle,
-					avatar_url: actor.avatar ?? null,
-				}));
+				results = (data.actors ?? []).map(
+					(actor: { did: string; handle: string; displayName?: string; avatar?: string }) => ({
+						did: actor.did,
+						handle: actor.handle,
+						display_name: actor.displayName ?? actor.handle,
+						avatar_url: actor.avatar ?? null
+					})
+				);
 				showResults = results.length > 0;
 			}
 		} catch (e) {
@@ -73,7 +83,8 @@
 	}
 
 	function handleKeydown(e: KeyboardEvent) {
-		if (e.key === 'Escape') {
+		if (e.key === 'Escape' && showResults) {
+			e.preventDefault();
 			showResults = false;
 		}
 	}
@@ -88,7 +99,9 @@
 			bind:value
 			oninput={handleInput}
 			onkeydown={handleKeydown}
-			onfocus={() => { if (results.length > 0) showResults = true; }}
+			onfocus={() => {
+				if (results.length > 0) showResults = true;
+			}}
 			{placeholder}
 			{disabled}
 			autocomplete="off"
@@ -103,11 +116,7 @@
 	{#if showResults && results.length > 0}
 		<div class="results">
 			{#each results as result}
-				<button
-					type="button"
-					class="result-item"
-					onclick={(e) => selectHandle(e, result)}
-				>
+				<button type="button" class="result-item" onclick={(e) => selectHandle(e, result)}>
 					{#if result.avatar_url}
 						<SensitiveImage src={result.avatar_url} compact>
 							<img src={result.avatar_url} alt="" class="avatar" />

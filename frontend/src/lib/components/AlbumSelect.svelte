@@ -2,39 +2,52 @@
 	import type { AlbumSummary } from '$lib/types';
 
 	interface Props {
+		id?: string;
 		albums: AlbumSummary[];
 		value: string;
 		placeholder?: string;
 		disabled?: boolean;
 	}
 
-	let { albums = [], value = $bindable(''), placeholder = 'album name', disabled = false }: Props = $props();
+	let {
+		id,
+		albums = [],
+		value = $bindable(''),
+		placeholder = 'album name',
+		disabled = false
+	}: Props = $props();
 
 	let showResults = $state(false);
 	let filteredAlbums = $derived.by(() => {
 		if (!value || value.length === 0) {
 			return albums;
 		}
-		return albums.filter(album =>
-			album.title.toLowerCase().includes(value.toLowerCase())
-		);
+		return albums.filter((album) => album.title.toLowerCase().includes(value.toLowerCase()));
 	});
 
 	let exactMatch = $derived.by(() => {
-		return albums.find(a => a.title.toLowerCase() === value.toLowerCase());
+		return albums.find((a) => a.title.toLowerCase() === value.toLowerCase());
 	});
 
 	let similarAlbums = $derived.by(() => {
 		if (exactMatch || !value) return [];
-		return albums.filter(a =>
-			a.title.toLowerCase() !== value.toLowerCase() &&
-			a.title.toLowerCase().includes(value.toLowerCase())
+		return albums.filter(
+			(a) =>
+				a.title.toLowerCase() !== value.toLowerCase() &&
+				a.title.toLowerCase().includes(value.toLowerCase())
 		);
 	});
 
 	function selectAlbum(albumTitle: string) {
 		value = albumTitle;
 		showResults = false;
+	}
+
+	function handleKeydown(event: KeyboardEvent) {
+		if (event.key === 'Escape' && showResults) {
+			event.preventDefault();
+			showResults = false;
+		}
 	}
 
 	function handleClickOutside(e: MouseEvent) {
@@ -49,14 +62,21 @@
 <div class="album-select-container">
 	<div class="input-wrapper">
 		<input
+			{id}
+			onkeydown={handleKeydown}
+			aria-label={id ? undefined : 'album'}
 			type="text"
 			bind:value
-			placeholder={placeholder}
+			{placeholder}
 			{disabled}
 			class="album-input"
 			maxlength="256"
-			onfocus={() => { if (albums.length > 0) showResults = true; }}
-			oninput={() => { showResults = albums.length > 0; }}
+			onfocus={() => {
+				if (albums.length > 0) showResults = true;
+			}}
+			oninput={() => {
+				showResults = albums.length > 0;
+			}}
 			autocomplete="off"
 		/>
 
@@ -72,7 +92,8 @@
 						<div class="album-info">
 							<div class="album-title">{album.title}</div>
 							<div class="album-stats">
-								{album.track_count} {album.track_count === 1 ? 'track' : 'tracks'}
+								{album.track_count}
+								{album.track_count === 1 ? 'track' : 'tracks'}
 							</div>
 						</div>
 					</button>
@@ -83,7 +104,7 @@
 
 	{#if !exactMatch && similarAlbums.length > 0}
 		<p class="similar-hint">
-			similar: {similarAlbums.map(a => a.title).join(', ')}
+			similar: {similarAlbums.map((a) => a.title).join(', ')}
 		</p>
 	{/if}
 </div>
