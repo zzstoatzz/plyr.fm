@@ -83,7 +83,9 @@ async def test_description_in_track_listing(
     track_without_description: Track,
 ) -> None:
     """track listing includes description field."""
-    response = client.get("/tracks/")
+    response = client.get(
+        "/tracks/", params={"artist_did": track_with_description.artist_did}
+    )
     assert response.status_code == 200
     data = response.json()
     tracks = data["tracks"]

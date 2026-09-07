@@ -12,6 +12,8 @@ from sqlalchemy.orm import selectinload
 
 from backend._internal import Session as AuthSession
 from backend._internal import get_optional_session
+from backend._internal.clients.replicate import get_replicate_client
+from backend._internal.tasks.hooks import resolve_audio_url
 from backend._internal.track_visibility import (
     ensure_track_visible,
     visible_filter,
@@ -215,12 +217,17 @@ async def get_recommended_tags(
     ):
         predictions = None
 
-    if predictions is None and settings.replicate.enabled and track.r2_url:
-        # classify on-demand
-        from backend._internal.clients.replicate import get_replicate_client
+    if predictions is None and settings.replicate.enabled:
+        audio_url = None if track.is_private else await resolve_audio_url(track.id)
+        if not audio_url:
+            return RecommendedTagsResponse(track_id=track_id, tags=[], available=False)
 
         client = get_replicate_client()
-        classify_result = await client.classify(track.r2_url)
+        classify_result = await client.classify(audio_url)
+        if not classify_result.success:
+            raise HTTPException(
+                status_code=502, detail="could not generate suggested tags"
+            )
 
         if classify_result.success and classify_result.genres:
             predictions = [

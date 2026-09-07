@@ -116,11 +116,21 @@ async def test_recommended_tags_returns_stored_predictions(
     assert data["tags"][1]["name"] == "Electronic"
 
 
+@pytest.mark.parametrize("audio_storage", ["r2", "pds"])
 async def test_recommended_tags_on_demand_classification(
     test_app: FastAPI,
     target_track: Track,
-):
+    db_session: AsyncSession,
+    artist: Artist,
+    audio_storage: str,
+) -> None:
     """test that on-demand classification happens when no predictions stored."""
+    if audio_storage == "pds":
+        target_track.r2_url = None
+        target_track.audio_storage = "pds"
+        target_track.pds_blob_cid = "bafyaudio001"
+        await db_session.commit()
+
     mock_result = ClassificationResult(
         success=True,
         genres=[
@@ -131,9 +141,7 @@ async def test_recommended_tags_on_demand_classification(
 
     with (
         patch("backend.config.settings.replicate") as mock_replicate,
-        patch(
-            "backend._internal.clients.replicate.get_replicate_client"
-        ) as mock_get_client,
+        patch("backend.api.tracks.tags.get_replicate_client") as mock_get_client,
     ):
         mock_replicate.enabled = True
         mock_client = AsyncMock()
@@ -154,7 +162,13 @@ async def test_recommended_tags_on_demand_classification(
     assert data["tags"][0]["score"] == 0.91
 
     # verify classify was called with the track's R2 URL
-    mock_client.classify.assert_called_once_with(target_track.r2_url)
+    expected_url = target_track.r2_url or (
+        f"{artist.pds_url}/xrpc/com.atproto.sync.getBlob"
+        f"?did={artist.did}&cid={target_track.pds_blob_cid}"
+    )
+    mock_client.classify.assert_called_once_with(expected_url)
+    await db_session.refresh(target_track)
+    assert target_track.extra["genre_predictions"][0]["name"] == "Drum and Bass"
 
 
 async def test_recommended_tags_excludes_existing_tags(
@@ -240,9 +254,7 @@ async def test_recommended_tags_reclassifies_when_file_id_changes(
 
     with (
         patch("backend.config.settings.replicate") as mock_replicate,
-        patch(
-            "backend._internal.clients.replicate.get_replicate_client"
-        ) as mock_get_client,
+        patch("backend.api.tracks.tags.get_replicate_client") as mock_get_client,
     ):
         mock_replicate.enabled = True
         mock_client = AsyncMock()
@@ -279,3 +291,25 @@ async def test_recommended_tags_replicate_disabled(
     data = response.json()
     assert data["available"] is False
     assert data["tags"] == []
+
+
+async def test_recommended_tags_classification_failure_is_retryable(
+    test_app: FastAPI,
+    target_track: Track,
+) -> None:
+    with (
+        patch("backend.config.settings.replicate") as config,
+        patch("backend.api.tracks.tags.get_replicate_client") as get_client,
+    ):
+        config.enabled = True
+        get_client.return_value.classify = AsyncMock(
+            return_value=ClassificationResult(
+                success=False, error="upstream unavailable"
+            )
+        )
+        async with AsyncClient(
+            transport=ASGITransport(app=test_app), base_url="http://test"
+        ) as client:
+            response = await client.get(f"/tracks/{target_track.id}/recommended-tags")
+    assert response.status_code == 502
+    assert response.json()["detail"] == "could not generate suggested tags"
