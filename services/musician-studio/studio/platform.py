@@ -8,6 +8,7 @@ from typing import Any, Self
 
 import httpx
 
+from studio.listening import require_listening
 from studio.state import Store
 
 API = "https://api.plyr.fm"
@@ -58,6 +59,7 @@ class Platform:
         study = store.study(session, name)
         if study.get("track_id"):
             return study["track_id"]
+        require_listening(study, name, path, store.listening_reviews(session, name))
         if study.get("upload_id"):
             return self.finish_upload(store, session, name, study["upload_id"])
         if not store.claim_upload(session, name):

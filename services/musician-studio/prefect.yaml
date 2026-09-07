@@ -3,7 +3,7 @@ pull:
   - prefect.deployments.steps.git_clone:
       id: checkout
       repository: https://github.com/zzstoatzz/plyr.fm.git
-      commit_sha: 8b76d4298585a60499b993f758aab62cfd30eaa1
+      commit_sha: 48021d38ff5c86ba0727b6b58698c902aa4b0ee6
   - prefect.deployments.steps.set_working_directory:
       directory: "{{ checkout.directory }}/services/musician-studio"
 deployments:
@@ -16,7 +16,7 @@ deployments:
     schedules:
       - cron: "17 */6 * * *"
         timezone: UTC
-        active: true
+        active: false
     work_pool:
       name: home-pool
       job_variables:

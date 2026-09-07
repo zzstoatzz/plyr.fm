@@ -4,6 +4,7 @@ from pathlib import Path
 import httpx
 import pytest
 
+from studio.listening import ListeningReview, digest, inspiration_digest, record_review
 from studio.platform import Platform
 from studio.state import Store
 
@@ -15,6 +16,35 @@ def saved(tmp_path: Path) -> tuple[Store, Path]:
     )
     audio = tmp_path / "audio.wav"
     audio.write_bytes(b"mock audio")
+    inspirations = [
+        {"artist": "test", "work": "test", "reason": "test", "experiment": "test"}
+    ]
+    store.save_study(
+        "2026-09-07-0",
+        "moss",
+        {"draft_audio_sha256": "a" * 64, "review_inspirations": inspirations},
+    )
+    for listener, sha in [
+        ("moss", "a" * 64),
+        ("moss", digest(audio)),
+        ("reed", digest(audio)),
+    ]:
+        record_review(
+            store,
+            "2026-09-07-0",
+            "moss",
+            ListeningReview(
+                listener=listener,
+                author="moss",
+                audio_sha256=sha,
+                model="test-audio",
+                audio_tokens=250,
+                inspirations_sha256=inspiration_digest(inspirations),
+                observations="An audible sustained chord.",
+                changes="Reduce the bass level.",
+                ready=True,
+            ),
+        )
     return store, audio
 
 
@@ -88,3 +118,56 @@ def test_playlist_reuses_existing_owned_list() -> None:
     with Platform("test", transport=httpx.MockTransport(handle)) as api:
         assert api.playlist("Moss") == "playlist"
     assert calls == ["GET"]
+
+
+def test_missing_audio_evidence_blocks_upload_before_network(tmp_path: Path) -> None:
+    store, audio = saved(tmp_path)
+    with store.connect() as db:
+        db.execute("DELETE FROM listening_reviews")
+
+    def forbidden(request: httpx.Request) -> httpx.Response:
+        pytest.fail("No HTTP request is allowed without listening evidence")
+
+    with (
+        Platform("test", transport=httpx.MockTransport(forbidden)) as api,
+        pytest.raises(ValueError, match="audio self-review"),
+    ):
+        api.publish(store, "2026-09-07-0", "moss", audio)
+    assert not store.released_today("moss", "2026-09-07")
+
+
+@pytest.mark.parametrize(
+    "change", ["audio", "inspirations", "peer", "approval", "revision"]
+)
+def test_stale_or_incomplete_evidence_cannot_publish(
+    tmp_path: Path, change: str
+) -> None:
+    store, audio = saved(tmp_path)
+    if change == "audio":
+        audio.write_bytes(b"different recording")
+    elif change == "inspirations":
+        store.save_study(
+            "2026-09-07-0", "moss", {"review_inspirations": [{"artist": "different"}]}
+        )
+    elif change == "revision":
+        store.save_study("2026-09-07-0", "moss", {"draft_audio_sha256": digest(audio)})
+    else:
+        with store.connect() as db:
+            if change == "peer":
+                db.execute(
+                    "DELETE FROM listening_reviews WHERE json_extract(body, '$.listener')='reed'"
+                )
+            else:
+                db.execute(
+                    "UPDATE listening_reviews SET body=json_set(body, '$.ready', json('false'))"
+                )
+    with (
+        Platform(
+            "test",
+            transport=httpx.MockTransport(
+                lambda _: pytest.fail("Unexpected network request")
+            ),
+        ) as api,
+        pytest.raises(ValueError),
+    ):
+        api.publish(store, "2026-09-07-0", "moss", audio)
