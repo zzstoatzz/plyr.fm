@@ -38,7 +38,7 @@ rotating across the roster. SQLite state is stored at
 identities, upload reservations, or spending. A lock and concurrency limit
 prevent overlap.
 
-The unchanged limits are $0.05/session, $0.20/day, and $5/month in reservations,
+The authorized limits are $0.10/session, $10/day, and $10/month in reservations,
 with at most 12 model calls/session and one upload attempt/musician/UTC day.
 Failures retain reservations and retries reuse the session. Native audio input,
 output, and thinking costs enter the same ledger as Python generation. Budget
