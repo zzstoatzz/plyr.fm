@@ -1,7 +1,0 @@
-__pycache__/
-results/*.wav
-taste-results/*.wav
-
-.venv/
-.pytest_cache/
-*.sqlite3

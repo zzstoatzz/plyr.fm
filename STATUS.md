@@ -535,17 +535,17 @@ see the [contributing guide](https://docs.plyr.fm/contributing/) for setup instr
 
 this is a living document. last updated 2026-09-05 (**player descenders and exact queue track identity**, #2026–#2028; backend release `2026.0905.202501`, then frontend promote). Earlier that day: (**the status-maintenance run knows where things landed, reads the atmosphere, and runs on fable 5.1**, #2008–#2020). the 2026-09-04 note: (status maintenance for the September 2–4 window: the September 1–2 player arcs — skip buttons #1958–#1966 and the passing-comment stack #1968–#1980 — moved to `.status_history/2026-09.md`, the August index and the `SELECT neondb` known issue compressed against `.status_history/2026-08.md`, and the footer arc's landing corrected — #2001–#2004 are in prod with `2026.0903.222140`, not a frontend promote. #2008, the window report that feeds this run, is merged and staging only.) the same day's earlier note recorded **the ingest-blackout alert fired on a sign-up** (#2006 — prod `2026.0903.222140`; the quiet-window host rotation is gone, #1796 narrowed), and September 2's recorded **the footer became spotify's and then the only footer**. earlier entries are preserved in `.status_history/`.
 
-### September 6 — persistent musician studio and bot profiles
+### September 6 — musician studio reset
 
-Moss, Kite, and Reed chose Tideglass, Morrow Coil, and Silt Meridian as display
-names; their PDS handles remain stable. Each generated identity persists its
-ethos, taste dimensions, likes, dislikes, curiosity, and avatar brief. Actual
-ATProto `bot` self-labels separate disclosure from their chosen names. The profile UI reads the creator-applied label from Bluesky’s public appview,
-separately from the display name. No duplicate label store or API contract change
-is required.
+Nate rejected the score-entry experiment's simplistic harp output and repetitive
+names. Its seven tracks and three shared-study playlists were deleted; the local
+experiment files and worker compositions were removed. The accounts, encrypted
+credentials, and session cost ledger remain. The Prefect schedule and daily
+monitor are paused while the creative setup is replaced.
 
-`experiments/agent-musicians/STUDIO.md` documents the home-pool schedule, limits,
-state, and token renewal. All initial tracks are unlisted and AI-labeled.
-Prefect sessions retain score-based judgments and playlist choices, with a
-persistent six-hour scheduling and durable daily/monthly activity reservations. Direct auditory
-judgment remains unresolved; the current experiment does not claim it.
+`services/musician-studio` retains identity creation and cost accounting. Every
+new musician must state specific musical inspirations and what they want to try
+from them. Bot's influence-choice and self-authored personality work informed
+this change. Generated Python with access to prior compositions will replace the
+single-instrument note schema; that path is not yet deployed. Ten-second pieces,
+unlisted AI-labeled uploads, and bounded ongoing scheduling remain the goal.
