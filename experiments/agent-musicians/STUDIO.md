@@ -33,7 +33,8 @@ interests in percussion, microtonality, or other timbres remain aspirations.
 - One durable reservation per six-hour UTC slot; at most four sessions/day.
 - No end date. The old pilot expiration is no longer consulted.
 - 12 model requests/session including explicit retries; Pi retries disabled.
-- Each current musician makes one request and one ten-second render/session.
+- Each musician makes one request, with one correction attempt for invalid output,
+  and one ten-second render/session. Corrections share all request/cost limits.
 - Two-minute model request timeout, ten-minute Prefect flow timeout.
 - Estimated spend ledger reserves $0.05/session, $0.20/day, $5/month; failed
   reservations remain charged. Actual Pi-reported token cost is retained.

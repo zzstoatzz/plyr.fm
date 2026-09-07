@@ -25,6 +25,20 @@ def context(entry: dict) -> dict:
 
 
 def decide(store: Store, session: str, own: dict, peer: dict) -> Decision:
+    feedback = ""
+    for attempt in range(2):
+        try:
+            return request_decision(store, session, own, peer, feedback)
+        except ValueError as exc:
+            if attempt:
+                raise
+            feedback = f"Your previous response failed validation: {exc}. Correct it."
+    raise RuntimeError("No valid musician response")
+
+
+def request_decision(
+    store: Store, session: str, own: dict, peer: dict, feedback: str
+) -> Decision:
     prompt = (
         "Make a ten-second musical response as this musician: "
         + json.dumps(context(own))
@@ -33,7 +47,9 @@ def decide(store: Store, session: str, own: dict, peer: dict) -> Decision:
         + "\nYou have scores, not direct audio perception. Decide whether this work belongs in your playlist. "
         "Compose a response, describe a specific musical attraction and disagreement, and update your memory. "
         "Taste dimensions can change by at most 0.15 each; keep your own musical judgment. "
-        "Return ONLY JSON matching this schema: "
+        "Use at most 16 note events, all ending by ten seconds. "
+        + feedback
+        + " Return ONLY JSON matching this schema: "
         + json.dumps(Decision.model_json_schema())
     )
     if len(prompt.encode()) > 24000:

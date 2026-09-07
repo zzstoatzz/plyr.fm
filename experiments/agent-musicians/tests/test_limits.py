@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
+from studio import brain
 from studio.models import Note, select_peer
 from studio.state import Store
 
@@ -114,3 +115,19 @@ def test_actual_cost_and_failed_reservations_are_reported(tmp_path: Path) -> Non
     for invalid in (float("nan"), float("inf"), -1):
         with pytest.raises(ValueError):
             store.charge(session, invalid)
+
+
+def test_invalid_decision_gets_one_correction_only(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    feedbacks = []
+
+    def invalid(*args: object) -> None:
+        feedbacks.append(args[-1])
+        raise ValueError("17 notes exceeds 16")
+
+    monkeypatch.setattr(brain, "request_decision", invalid)
+    with pytest.raises(ValueError, match="17 notes"):
+        brain.decide(Store(tmp_path), "session", {}, {})
+    assert len(feedbacks) == 2
+    assert "17 notes" in feedbacks[1]
