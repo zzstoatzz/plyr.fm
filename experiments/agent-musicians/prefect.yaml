@@ -2,7 +2,7 @@ name: plyr.fm-musician-studio
 pull:
   - prefect.deployments.steps.git_clone:
       id: checkout
-      commit_sha: 9becb2a18504e8595fd9406257e2f164c2128f04
+      commit_sha: ebd43ccd7d6ec23eb737eab61af3c098d48894d8
       repository: https://github.com/zzstoatzz/plyr.fm.git
   - prefect.deployments.steps.set_working_directory:
       directory: "{{ checkout.directory }}/experiments/agent-musicians"
