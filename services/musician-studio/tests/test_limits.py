@@ -32,7 +32,7 @@ def test_spend_stops_new_calls(tmp_path: Path) -> None:
     store = Store(tmp_path)
     session = store.reserve(datetime.now(UTC))
     assert session is not None
-    store.charge(session, 0.051)
+    store.charge(session, 0.101)
     with pytest.raises(RuntimeError):
         store.call(session)
 
@@ -58,7 +58,7 @@ def test_explicit_retry_keeps_the_original_budget(tmp_path: Path) -> None:
         assert db.execute("SELECT calls, spent, reserved FROM sessions").fetchone() == (
             1,
             0.01,
-            0.05,
+            0.10,
         )
     assert store.reserve(now, retry_failed=True) is None
 
@@ -72,7 +72,7 @@ def test_monthly_cap_resumes_next_month_without_resetting_history(
         assert store.reserve(start + timedelta(hours=6 * slot)) is not None
     assert store.reserve(start + timedelta(hours=600)) is None
     assert Store(tmp_path).reserve(datetime(2026, 10, 1, tzinfo=UTC)) is not None
-    assert store.usage(start)["month"]["budget_used"] == pytest.approx(5)
+    assert store.usage(start)["month"]["budget_used"] == pytest.approx(10)
 
 
 def test_actual_cost_and_failed_reservations_are_reported(tmp_path: Path) -> None:
@@ -88,7 +88,7 @@ def test_actual_cost_and_failed_reservations_are_reported(tmp_path: Path) -> Non
         "sessions": 1,
         "calls": 1,
         "estimated_cost": 0.002,
-        "budget_used": 0.05,
+        "budget_used": 0.10,
     }
     for invalid in (float("nan"), float("inf"), -1):
         with pytest.raises(ValueError):
@@ -112,6 +112,6 @@ def test_bootstrap_is_once_and_charged_to_normal_budgets(tmp_path: Path) -> None
     assert session is not None
     store.finish(session, "completed")
     assert store.reserve(now + timedelta(days=1), bootstrap=True) is None
-    assert store.usage(now)["day"]["budget_used"] == 0.05
+    assert store.usage(now)["day"]["budget_used"] == 0.10
     with pytest.raises(RuntimeError):
         store.call(session)

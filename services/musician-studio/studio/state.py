@@ -6,6 +6,10 @@ import sqlite3
 from datetime import datetime
 from pathlib import Path
 
+SESSION_BUDGET = 0.10
+DAILY_BUDGET = 10.0
+MONTHLY_BUDGET = 10.0
+
 
 class Store:
     def __init__(self, directory: Path) -> None:
@@ -49,7 +53,7 @@ class Store:
                 if (
                     retry_failed
                     and existing[0] == "failed"
-                    and existing[1] < 0.05
+                    and existing[1] < SESSION_BUDGET
                     and existing[2] < 12
                 ):
                     db.execute(
@@ -57,16 +61,19 @@ class Store:
                     )
                     return key
                 return None
-            for field, value, limit in [("day", day, 0.20), ("month", month, 5.0)]:
+            for field, value, limit in [
+                ("day", day, DAILY_BUDGET),
+                ("month", month, MONTHLY_BUDGET),
+            ]:
                 used = db.execute(
                     f"SELECT COALESCE(SUM(MAX(reserved,spent)),0) FROM sessions WHERE {field}=?",
                     (value,),
                 ).fetchone()[0]
-                if used + 0.05 > limit + 1e-9:
+                if used + SESSION_BUDGET > limit + 1e-9:
                     return None
             db.execute(
                 "INSERT INTO sessions(id,day,month,status,reserved) VALUES (?,?,?,?,?)",
-                (key, day, month, "running", 0.05),
+                (key, day, month, "running", SESSION_BUDGET),
             )
         return key
 
@@ -74,8 +81,8 @@ class Store:
         with self.connect() as db:
             db.execute("BEGIN IMMEDIATE")
             changed = db.execute(
-                "UPDATE sessions SET calls=calls+1 WHERE id=? AND status='running' AND calls<12 AND spent<0.05",
-                (session,),
+                "UPDATE sessions SET calls=calls+1 WHERE id=? AND status='running' AND calls<12 AND spent<?",
+                (session, SESSION_BUDGET),
             ).rowcount
             if not changed:
                 raise RuntimeError("Session request or estimated-spend cap reached")

@@ -17,7 +17,7 @@ from studio.context import choose_peer
 from studio.identity import Musician
 from studio.listening import NotReady
 from studio.platform import Platform, credentials
-from studio.state import Store
+from studio.state import DAILY_BUDGET, MONTHLY_BUDGET, Store
 
 ROOT = Path(__file__).parent
 
@@ -148,8 +148,8 @@ def report(store: Store, session: str | None, errors: list[str]) -> None:
         key="plyr-fm-musician-costs",
         markdown=(
             f"# Musician cost ledger\n\n{month['sessions']} sessions; {month['calls']} requests this UTC month.\n\n"
-            f"Estimated model usage: ${month['estimated_cost']:.6f}. Reserved/charged: ${month['budget_used']:.2f} / $5 monthly.\n\n"
-            f"Today: ${usage['day']['budget_used']:.2f} / $0.20 reserved/charged.\n\n"
+            f"Estimated model usage: ${month['estimated_cost']:.6f}. Reserved/charged: ${month['budget_used']:.2f} / ${MONTHLY_BUDGET:g} monthly.\n\n"
+            f"Today: ${usage['day']['budget_used']:.2f} / ${DAILY_BUDGET:g} reserved/charged.\n\n"
             "Failed reservations remain charged. Model usage is an estimate, not an invoice; hosting, storage, and subscriptions are excluded. "
             "Exhausted budgets pause model work until the next available UTC budget window."
         ),

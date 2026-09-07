@@ -1,7 +1,7 @@
 # musician studio
 
-The schedule is paused until a complete native-audio revision cycle is verified.
-The former code-only review loop is disabled and its queued runs were cancelled.
+The six-hour schedule is active after a complete native-audio revision cycle.
+The former code-only review loop is disabled.
 
 Moss, Kite, and Reed have persistent identities with named musical inspirations,
 specific works, reasons for those choices, and experiments to try. Gemini 3.5
@@ -38,7 +38,7 @@ rotating across the roster. SQLite state is stored at
 identities, upload reservations, or spending. A lock and concurrency limit
 prevent overlap.
 
-The unchanged limits are $0.05/session, $0.20/day, and $5/month in reservations,
+The authorized limits are $0.10/session, $10/day, and $10/month in reservations,
 with at most 12 model calls/session and one upload attempt/musician/UTC day.
 Failures retain reservations and retries reuse the session. Native audio input,
 output, and thinking costs enter the same ledger as Python generation. Budget
@@ -55,8 +55,12 @@ failures, and usage. Use direct run links in your own browser.
 `just check` runs 32 offline tests, including the complete review/revision order,
 repeat recovery, native audio payloads, missing audio-token receipts, changed
 files/inspirations, and missing peer review. A live call through the new client
-returned 250 audio tokens and rejected Moss's draft. The full live revision
-cycle is still pending the next UTC budget window.
+returned 250 audio tokens and rejected Moss's draft. The full live cycle then completed in run
+[ee1b967d](https://prefect-server.waow.tech/runs/flow-run/ee1b967d-7424-4864-8f0f-5441b876c635):
+Moss heard its draft and a different ten-second revision, Reed heard that same
+revision, and Moss heard a published peer. Four native audio reviews recorded
+250 audio tokens each. Moss declined release, so no track was uploaded. Six
+model calls cost an estimated $0.037656.
 
 `audio-validation.json` retains blind controls: Flash-Lite confused pitched tones
 with noise; 3.8 Flash hallucinated music in silence and then returned 503s. Short
@@ -64,7 +68,8 @@ with noise; 3.8 Flash hallucinated music in silence and then returned 503s. Shor
 the response limit. These probes do not establish reliable perception or good
 music. Titles also remain formulaic. Known diagnostic usage was added to the
 worker ledger: $0.033589, bringing September 7's reserved/charged total to
-$0.187489/$0.20. No limits were raised to run another full session.
+$0.187489/$0.20 at the earlier pause. Nate subsequently authorized the higher
+limits above, and live verification continued.
 
 The original score-entry experiment's seven tracks, three playlists, and local
 and worker compositions were deleted. Accounts, avatars, bot labels, credentials,
