@@ -58,6 +58,9 @@ def seed(directory: Path) -> dict:
 )
 def study_peer(directory: Path, session: str, name: str, roster: dict) -> dict:
     store = Store(directory)
+    existing = store.study(session, name)
+    if existing and "decision" in existing:
+        return existing
     peer, probabilities = select_peer(name, roster, random.Random(f"{session}:{name}"))
     decision = decide(
         store,

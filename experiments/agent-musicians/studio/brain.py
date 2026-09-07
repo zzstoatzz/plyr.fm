@@ -1,4 +1,4 @@
-"""One isolated Pi request with no tools, retries, or ambient instructions."""
+"""Isolated Pi decisions with one budgeted validation correction."""
 
 import json
 import os

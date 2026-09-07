@@ -89,11 +89,29 @@ class Store:
                 "INSERT OR REPLACE INTO musicians VALUES (?,?)", (key, json.dumps(body))
             )
 
+    def study(self, session: str, musician: str) -> dict | None:
+        with self.connect() as db:
+            row = db.execute(
+                "SELECT body FROM studies WHERE session=? AND musician=?",
+                (session, musician),
+            ).fetchone()
+            return json.loads(row[0]) if row else None
+
     def save_study(self, session: str, musician: str, body: dict) -> None:
         with self.connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            row = db.execute(
+                "SELECT body FROM studies WHERE session=? AND musician=?",
+                (session, musician),
+            ).fetchone()
+            previous = json.loads(row[0]) if row else {}
+            merged = {**previous, **body}
+            for key in ("upload_attempted", "upload_id", "track_id"):
+                if key in previous:
+                    merged[key] = previous[key]
             db.execute(
                 "INSERT OR REPLACE INTO studies VALUES (?,?,?)",
-                (session, musician, json.dumps(body)),
+                (session, musician, json.dumps(merged)),
             )
 
     def released_today(self, musician: str, day: str) -> bool:

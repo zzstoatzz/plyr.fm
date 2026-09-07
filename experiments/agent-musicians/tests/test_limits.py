@@ -131,3 +131,13 @@ def test_invalid_decision_gets_one_correction_only(
         brain.decide(Store(tmp_path), "session", {}, {})
     assert len(feedbacks) == 2
     assert "17 notes" in feedbacks[1]
+
+
+def test_rewriting_a_study_cannot_erase_upload_attempt(tmp_path: Path) -> None:
+    store = Store(tmp_path)
+    store.save_study(
+        "2026-09-07-0", "moss", {"upload_attempted": True, "upload_id": "pending"}
+    )
+    store.save_study("2026-09-07-0", "moss", {"decision": {"title": "a revision"}})
+    assert Store(tmp_path).released_today("moss", "2026-09-07")
+    assert store.study("2026-09-07-0", "moss")["upload_id"] == "pending"
