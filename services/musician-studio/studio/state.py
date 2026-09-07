@@ -19,6 +19,8 @@ class Store:
                     id TEXT PRIMARY KEY, day TEXT NOT NULL, month TEXT NOT NULL,
                     status TEXT NOT NULL, reserved REAL NOT NULL, spent REAL NOT NULL DEFAULT 0,
                     calls INTEGER NOT NULL DEFAULT 0);
+                CREATE TABLE IF NOT EXISTS listening_reviews (
+                    session TEXT NOT NULL, musician TEXT NOT NULL, body TEXT NOT NULL);
                 CREATE TABLE IF NOT EXISTS studies (
                     session TEXT NOT NULL, musician TEXT NOT NULL, body TEXT NOT NULL,
                     PRIMARY KEY(session, musician));
@@ -192,3 +194,13 @@ class Store:
                 (json.dumps(body), session, musician),
             )
             return True
+
+    def listening_reviews(self, session: str, musician: str) -> list[dict]:
+        with self.connect() as db:
+            return [
+                json.loads(row[0])
+                for row in db.execute(
+                    "SELECT body FROM listening_reviews WHERE session=? AND musician=?",
+                    (session, musician),
+                )
+            ]

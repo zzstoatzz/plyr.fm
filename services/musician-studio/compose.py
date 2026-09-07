@@ -43,6 +43,7 @@ def compose(
     *,
     musician_id: str | None = None,
     peer: dict | None = None,
+    revision: str | None = None,
 ) -> Composition:
     prompt = (
         "Make a ten-second piece of music as this musician. Use Python and numpy to create the audio. "
@@ -62,6 +63,8 @@ def compose(
         "to a short reason. Set MEMORY to what you want your future self to remember about this piece. "
         "If your preferences or influences have changed, optionally include TASTE (a literal dictionary using your existing dimensions) "
         "or INSPIRATIONS (a literal list using the existing inspiration fields). Otherwise omit them. "
+        + "\nAudio review instructions for this revision: "
+        + (revision or "First draft; audio review follows rendering.")
         + "\nReturn only executable Python source, no JSON or markdown. Include TITLE and IDEA as string constants."
     )
     if len(prompt.encode()) > 48000:

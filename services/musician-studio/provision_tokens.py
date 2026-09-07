@@ -12,6 +12,7 @@ raw = subprocess.run(
 )
 entries = json.loads(raw.stdout)["atproto"]["agent_musicians"]
 subset = {name: {"plyr_token": entry["plyr_token"]} for name, entry in entries.items()}
+subset["gemini_api_key"] = json.loads(raw.stdout)["local"]["gemini_api_key"]
 current = subprocess.run(
     [
         "ssh",
@@ -68,5 +69,5 @@ verify = subprocess.run(
 )
 assert json.loads(verify.stdout) == subset
 print(
-    f"{len(subset)} encrypted musician tokens provisioned and equality verified on heavypad."
+    f"{len(entries)} encrypted musician tokens and audio credential provisioned and equality verified on heavypad."
 )

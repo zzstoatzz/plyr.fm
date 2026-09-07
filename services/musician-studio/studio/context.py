@@ -23,6 +23,7 @@ def history_context(history: list[dict], byte_limit: int = 18000) -> list[dict]:
                 "idea",
                 "python",
                 "memory",
+                "audio_feedback",
                 "metrics",
                 "track_id",
             )

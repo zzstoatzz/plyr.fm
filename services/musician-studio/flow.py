@@ -11,9 +11,11 @@ from prefect.artifacts import create_markdown_artifact
 from prefect.cache_policies import NO_CACHE
 from prefect.states import Completed, State
 
+from audio_round import prepare_release
 from compose import Composition, compose, render
 from studio.context import choose_peer
 from studio.identity import Musician
+from studio.listening import NotReady
 from studio.platform import Platform, credentials
 from studio.state import Store
 
@@ -94,6 +96,16 @@ def render_piece(directory: Path, session: str, name: str) -> Path:
 
 
 @task(
+    name="listen-revise-and-peer-review",
+    task_run_name="{name}-audio-review",
+    cache_policy=NO_CACHE,
+    persist_result=False,
+)
+def review_audio(directory: Path, session: str, name: str, path: Path) -> Path:
+    return prepare_release(directory, session, name, path)
+
+
+@task(
     name="publish-unlisted",
     task_run_name="{name}-publish",
     cache_policy=NO_CACHE,
@@ -152,6 +164,11 @@ def report(store: Store, session: str | None, errors: list[str]) -> None:
             notes.append(
                 f"## {name}: {study.get('title', 'unfinished')}\n\n{study.get('idea', '')}\n\n"
                 f"Memory: {study.get('memory', '')}\n\n"
+                + "\n\n".join(
+                    f"Audio review by {r['listener']} ({r['model']}, {r['audio_tokens']} audio tokens): {r['observations']} Next: {r['changes']}"
+                    for r in study.get("audio_feedback", [])
+                )
+                + "\n\n"
                 + (
                     f"Studied {peer['name']}: {study.get('peer_note', '')}\n\n"
                     if peer
@@ -209,12 +226,19 @@ def community(retry_failed: bool = False, bootstrap: bool = False) -> State:
                 name="Skipped", message="Session slot or estimated budget unavailable"
             )
         try:
-            for name in seed(directory):
+            names = seed(directory)
+            now = datetime.now(UTC)
+            selected = names[(now.toordinal() * 4 + now.hour // 6) % len(names)]
+            for name in [selected]:
                 try:
                     compose_piece(directory, session, name)
                     audio = render_piece(directory, session, name)
+                    audio = review_audio(directory, session, name, audio)
                     publish_piece(directory, session, name, audio)
                     curate_peer(directory, session, name)
+                except NotReady as exc:
+                    store.save_study(session, name, {"withheld": True})
+                    logger.info("%s: %s", name, exc)
                 except Exception as exc:
                     errors.append(f"{name}: {type(exc).__name__}: {exc}")
                     logger.exception("Musician %s failed", name)
@@ -226,6 +250,4 @@ def community(retry_failed: bool = False, bootstrap: bool = False) -> State:
             raise
         finally:
             report(store, session, errors)
-    return Completed(
-        message="Musicians composed, published, and considered peer curation"
-    )
+    return Completed(message="Music study finished; publication follows audio review")

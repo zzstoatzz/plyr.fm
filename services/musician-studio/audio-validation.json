@@ -1,0 +1,215 @@
+{
+  "date": "2026-09-07",
+  "controls": [
+    {
+      "control": "silent",
+      "model": "gemini-3.5-flash-lite",
+      "text": "I hear unpitched broadband noise.",
+      "usage": {
+        "promptTokenCount": 295,
+        "candidatesTokenCount": 7,
+        "totalTokenCount": 302,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 45
+          },
+          {
+            "modality": "AUDIO",
+            "tokenCount": 250
+          }
+        ],
+        "serviceTier": "standard"
+      },
+      "estimated_cost": 0.000106
+    },
+    {
+      "control": "chord",
+      "model": "gemini-3.5-flash-lite",
+      "text": "Unpitched broadband noise. There is uncertainty as to whether it is entirely unpitched.",
+      "usage": {
+        "promptTokenCount": 295,
+        "candidatesTokenCount": 17,
+        "totalTokenCount": 312,
+        "promptTokensDetails": [
+          {
+            "modality": "AUDIO",
+            "tokenCount": 250
+          },
+          {
+            "modality": "TEXT",
+            "tokenCount": 45
+          }
+        ],
+        "serviceTier": "standard"
+      },
+      "estimated_cost": 0.000131
+    },
+    {
+      "control": "noise",
+      "model": "gemini-3.5-flash-lite",
+      "text": "Unpitched broadband noise. I am certain.",
+      "usage": {
+        "promptTokenCount": 295,
+        "candidatesTokenCount": 9,
+        "totalTokenCount": 304,
+        "promptTokensDetails": [
+          {
+            "modality": "AUDIO",
+            "tokenCount": 250
+          },
+          {
+            "modality": "TEXT",
+            "tokenCount": 45
+          }
+        ],
+        "serviceTier": "standard"
+      },
+      "estimated_cost": 0.000111
+    },
+    {
+      "control": "silent",
+      "model": "gemini-3.8-flash",
+      "text": "This recording contains pitched musical tones. A sequence of distinct, melodic, resonant tones plays with clear pitch center and rhythmic repetition. The pitches vary in frequency, creating a short, repeating musical phrase that decays between notes. There is no significant unpitched broadband noise or complete silence. While the tonal quality is unmistakably pitched, there is some uncertainty regarding the exact frequency intervals or whether subtle background acoustic artifacts are present.",
+      "usage": {
+        "promptTokenCount": 295,
+        "candidatesTokenCount": 82,
+        "totalTokenCount": 569,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 45
+          },
+          {
+            "modality": "AUDIO",
+            "tokenCount": 250
+          }
+        ],
+        "thoughtsTokenCount": 192,
+        "serviceTier": "standard"
+      },
+      "estimated_cost": 0.00124875
+    },
+    {
+      "control": "chord",
+      "model": "gemini-3.8-flash",
+      "text": "The recording consists of pitched musical tones, specifically a continuous, low-frequency sustained drone. A steady pitch is audible along with subtle harmonic overtones and a gentle, pulsing amplitude modulation or  beating sensation. It is not silence. It is uncertain whether a faint layer of broadband noise is present beneath the sound, but the dominant, clearly discernible characteristic is a pitched, resonant tone.",
+      "usage": {
+        "promptTokenCount": 295,
+        "candidatesTokenCount": 75,
+        "totalTokenCount": 732,
+        "promptTokensDetails": [
+          {
+            "modality": "AUDIO",
+            "tokenCount": 250
+          },
+          {
+            "modality": "TEXT",
+            "tokenCount": 45
+          }
+        ],
+        "thoughtsTokenCount": 362,
+        "serviceTier": "standard"
+      },
+      "estimated_cost": 0.00186
+    },
+    {
+      "control": "noise",
+      "model": "gemini-3.8-flash",
+      "text": "The recording consists of continuous, unpitched broadband noise. It is a steady, rushing and hissing sound with acoustic energy distributed across a wide frequency spectrum, featuring slight fluctuations in volume throughout. There are no discernible pitched musical tones or periods of silence. It is uncertain what physical source generated this sound, as it could be environmental noise, fluid flow, or electronic static.",
+      "usage": {
+        "promptTokenCount": 295,
+        "candidatesTokenCount": 74,
+        "totalTokenCount": 558,
+        "promptTokensDetails": [
+          {
+            "modality": "AUDIO",
+            "tokenCount": 250
+          },
+          {
+            "modality": "TEXT",
+            "tokenCount": 45
+          }
+        ],
+        "thoughtsTokenCount": 189,
+        "serviceTier": "standard"
+      },
+      "estimated_cost": 0.0012075
+    },
+    {
+      "control": "steady",
+      "model": "gemini-3.5-flash",
+      "text": "The recording features a continuous tone where both the pitch and loudness remain steady and unchanging from 0:00 to 0:09. There are no interruptions, repetitions, or major pitch changes. The sound is completely uniform. There is slight uncertainty regarding any extremely subtle, imperceptible fluctuations, but the signal appears entirely constant.",
+      "usage": {
+        "promptTokenCount": 302,
+        "candidatesTokenCount": 67,
+        "totalTokenCount": 774,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 52
+          },
+          {
+            "modality": "AUDIO",
+            "tokenCount": 250
+          }
+        ],
+        "thoughtsTokenCount": 405,
+        "serviceTier": "standard"
+      },
+      "estimated_cost": 0.004701
+    },
+    {
+      "control": "step",
+      "model": "gemini-3.5-flash",
+      "text": "The recording features a steady tone with constant pitch and loudness from 0:00 to approximately 0:04. A brief period of silence interrupts the sound from about 0:04 to ",
+      "usage": {
+        "promptTokenCount": 302,
+        "candidatesTokenCount": 42,
+        "totalTokenCount": 798,
+        "promptTokensDetails": [
+          {
+            "modality": "AUDIO",
+            "tokenCount": 250
+          },
+          {
+            "modality": "TEXT",
+            "tokenCount": 52
+          }
+        ],
+        "thoughtsTokenCount": 454,
+        "serviceTier": "standard"
+      },
+      "estimated_cost": 0.004917
+    },
+    {
+      "control": "pulse",
+      "model": "gemini-3.5-flash",
+      "text": "The audio consists of a highly regular repetition of short, identical pulses occurring approximately once per second from ",
+      "usage": {
+        "promptTokenCount": 302,
+        "candidatesTokenCount": 20,
+        "totalTokenCount": 798,
+        "promptTokensDetails": [
+          {
+            "modality": "AUDIO",
+            "tokenCount": 250
+          },
+          {
+            "modality": "TEXT",
+            "tokenCount": 52
+          }
+        ],
+        "thoughtsTokenCount": 476,
+        "serviceTier": "standard"
+      },
+      "estimated_cost": 0.004917
+    }
+  ],
+  "limitations": [
+    "Two Gemini 3.8 temporal-control requests returned HTTP 503.",
+    "The 3.5 temporal responses for step and pulse exhausted the 500-token output limit.",
+    "Silence hallucinations and pitch-change errors mean these controls do not establish reliable musical judgment."
+  ],
+  "estimated_probe_cost": 0.01919925
+}

@@ -1,3 +1,7 @@
+> The schedule is paused pending a complete native-audio revision run. The
+> September 7 change adds mandatory audio review; the earlier code-only run
+> below is historical evidence of publishing, not listening.
+
 # musician studio
 
 Moss, Kite, and Reed make ten-second pieces with Luna through Pi. Each has a
@@ -69,3 +73,38 @@ consumer, including after a partial renewal. The local daily monitor runs this
 maintenance command. PDS passwords stay in the canonical local store. Renewal
 network behavior is covered with mocks; current tokens expire October 6 and
 have not been rotated just to test renewal.
+
+## mandatory audio review
+
+Gemini 3.5 Flash receives the actual WAV and the listener's identity, plus the
+author's explicit inspirations. Reviews focus on audible pitch relationships,
+timbre, bass, balance, articulation, and development. Luna implements Python
+changes; it is not the listener and cannot approve publication.
+
+Every release requires an initial self-review, a different rendered revision,
+a self-review approving that exact revision, and another musician's audio
+feedback. The host records audio SHA256, provider model/version, positive audio
+token count, listener/author identities, and the inspirations supplied. Evidence
+is stored separately from generated composition metadata. Missing, truncated,
+text-only, stale, or rejected self-review blocks publication before an upload
+reservation or network request. Curation decisions also come from audio review.
+The feedback persists alongside compositions for future iterations.
+
+One artist takes a turn per six-hour run, rotating across the roster. This leaves
+room for listening and revision under the existing $0.05/session, $0.20/day, and
+$5/month reservation limits. Audio requests, including thinking tokens, enter
+the same ledger. No fallback to code-only approval is allowed. The encrypted
+worker consumer now also derives the existing Gemini key from canonical sops.
+
+`audio-validation.json` records the blind controls. Native audio-token receipts
+confirm input processing, not accuracy: Flash-Lite confused a chord with noise,
+and 3.8 Flash hallucinated music in silence. 3.5 Flash recognized steady tone and
+pulses, but the short response limit truncated temporal descriptions. A real
+Moss review through the new client returned 250 audio tokens and rejected the
+draft. None of this establishes improved musical quality. The full revision
+cycle must be verified before resuming recurring publication.
+
+Audio API: https://ai.google.dev/gemini-api/docs/audio
+Rates checked September 7: https://ai.google.dev/gemini-api/docs/pricing
+Gemini 3.5 Flash standard rates used here are $1.50/million input tokens and
+$9/million output tokens, including thinking. These are estimates, not invoices.

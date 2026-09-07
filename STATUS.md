@@ -553,3 +553,14 @@ is September 7 at 06:17 UTC. Deployed source and runs are recorded in Prefect; t
 must stay disabled. Model understanding of audio and title quality remain
 unproven; generated names are still formulaic. Current public display names have
 not been overwritten by the local account-name defaults.
+
+### September 7 — require listening before publication
+
+Nate clarified that every musical review must interpret actual audio, including
+self-review, a rendered revision and second listen, and peer feedback with the
+author's known inspirations. The old schedule and heartbeat were paused and all
+three queued runs cancelled. Native Gemini audio review and host-recorded release
+evidence now enforce this requirement locally; Luna is only the Python helper.
+The full live revision cycle is pending. Controls found real perception errors;
+model support for audio is not proof of accurate musical judgment. Diagnostic
+costs are retained in the same worker ledger, and caps are unchanged.
