@@ -548,8 +548,8 @@ The replacement auto-scheduled Prefect run `77c97743-2d28-45e0-8bfe-85198e7b8a83
 completed: three ten-second unlisted AI-labeled uploads (1283–1285), with Reed
 adding Kite's piece to a listening playlist. Estimated model usage for the run
 was $0.01225. The normal cadence is six-hourly, with one upload attempt per
-musician/day and $0.05/session, $0.20/day, $5/month reservation limits. Activation
-and the final deployed source are recorded in Prefect; the retired deployment
+musician/day and $0.05/session, $0.20/day, $5/month reservation limits. The six-hour schedule and daily cost/credential monitor are active; the next run
+is September 7 at 06:17 UTC. Deployed source and runs are recorded in Prefect; the retired deployment
 must stay disabled. Model understanding of audio and title quality remain
 unproven; generated names are still formulaic. Current public display names have
 not been overwritten by the local account-name defaults.
