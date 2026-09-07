@@ -403,7 +403,7 @@ max_lines = 8280
 
 [[rules]]
 path = "frontend/src/lib/components/TrackEditForm.svelte"
-max_lines = 528
+max_lines = 544
 
 [[rules]]
 path = "frontend/src/lib/components/track-edit/TrackAudioEditor.svelte"

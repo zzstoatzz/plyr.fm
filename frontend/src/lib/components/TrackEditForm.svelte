@@ -91,7 +91,7 @@
 	let editCopyrightWasEnabled = $state(false);
 	let hasUnresolvedEditFeaturesInput = $state(false);
 	let recommendedTags = $state<{ name: string; score: number }[]>([]);
-	let loadingRecommendedTags = $state(false);
+	let recommendedTagsStatus = $state<'loading' | 'ready' | 'unavailable' | 'error'>('loading');
 	let recommendedTagsTrackId = $state<number | null>(null);
 	let visibleRecommendedTags = $derived(
 		recommendedTags.filter((r) => !editTags.includes(r.name.toLowerCase()))
@@ -117,22 +117,20 @@
 	}
 
 	async function fetchRecommendedTags(trackId: number) {
-		loadingRecommendedTags = true;
+		recommendedTagsStatus = 'loading';
 		recommendedTags = [];
 		recommendedTagsTrackId = trackId;
 		try {
 			const response = await fetch(`${API_URL}/tracks/${trackId}/recommended-tags?limit=8`, {
 				credentials: 'include'
 			});
-			if (!response.ok) return;
+			if (!response.ok) throw new Error('could not load suggested tags');
 			const data = await response.json();
 			if (recommendedTagsTrackId !== trackId) return;
-			if (!data.available || data.tags.length === 0) return;
+			recommendedTagsStatus = data.available ? 'ready' : 'unavailable';
 			recommendedTags = data.tags;
 		} catch {
-			recommendedTags = [];
-		} finally {
-			loadingRecommendedTags = false;
+			recommendedTagsStatus = 'error';
 		}
 	}
 
@@ -274,10 +272,21 @@
 				}}
 				placeholder="type to search tags..."
 			/>
-			{#if loadingRecommendedTags}
+			{#if recommendedTagsStatus === 'loading'}
 				<div class="suggested-tags-row">
 					<span class="suggested-label">suggested</span>
 					<WaveLoading size="sm" />
+				</div>
+			{:else if recommendedTagsStatus === 'unavailable'}
+				<p class="suggested-status" role="status">suggested tags unavailable</p>
+			{:else if recommendedTagsStatus === 'error'}
+				<div class="suggested-tags-row">
+					<span class="suggested-status" role="status">could not load suggested tags</span>
+					<button
+						type="button"
+						class="suggested-tag-chip"
+						onclick={() => fetchRecommendedTags(track.id)}>retry</button
+					>
 				</div>
 			{:else if visibleRecommendedTags.length > 0}
 				<div class="suggested-tags-row">
@@ -297,6 +306,8 @@
 						{/each}
 					</div>
 				</div>
+			{:else}
+				<p class="suggested-status" role="status">no new suggested tags</p>
 			{/if}
 		</div>
 		<TrackArtworkField imageUrl={track.image_url} bind:editImageFile bind:editRemoveImage />
@@ -423,6 +434,11 @@
 		flex-wrap: wrap;
 		align-items: center;
 		gap: 0.5rem;
+	}
+	.suggested-status {
+		margin: 0;
+		font-size: var(--text-sm);
+		color: var(--text-secondary);
 	}
 	.suggested-label {
 		font-size: var(--text-xs);

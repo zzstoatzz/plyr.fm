@@ -132,3 +132,43 @@ describe('shared track editor', () => {
 		expect(onClose).not.toHaveBeenCalled();
 	});
 });
+
+describe('suggested tag feedback', () => {
+	it.each([
+		[{ available: false, tags: [] }, 'suggested tags unavailable'],
+		[{ available: true, tags: [] }, 'no new suggested tags']
+	])('explains an empty response %j', async (response, message) => {
+		vi.spyOn(globalThis, 'fetch').mockResolvedValue(Response.json(response));
+		mountEditor();
+		await vi.waitFor(() => expect(document.body.textContent).toContain(message));
+	});
+
+	it('retries a failed request and lets the owner select the resulting tag', async () => {
+		const fetch = vi
+			.spyOn(globalThis, 'fetch')
+			.mockResolvedValueOnce(new Response(null, { status: 503 }))
+			.mockResolvedValueOnce(
+				Response.json({ available: true, tags: [{ name: 'Drone', score: 0.8 }] })
+			);
+		mountEditor();
+		await vi.waitFor(() =>
+			expect(document.body.textContent).toContain('could not load suggested tags')
+		);
+		const retry = [...document.querySelectorAll('button')].find(
+			(button) => button.textContent?.trim() === 'retry'
+		);
+		if (!retry) throw new Error('retry button missing');
+		retry.click();
+		await vi.waitFor(() => expect(document.body.textContent).toContain('+ Drone'));
+		expect(fetch).toHaveBeenCalledTimes(2);
+		const suggestion = [...document.querySelectorAll('button')].find((button) =>
+			button.textContent?.includes('+ Drone')
+		);
+		if (!suggestion) throw new Error('suggestion missing');
+		suggestion.click();
+		flushSync();
+		expect(document.body.textContent).toContain('no new suggested tags');
+		expect(document.body.textContent).not.toContain('could not load suggested tags');
+		expect(document.querySelector('#edit-tags')?.parentElement?.textContent).toContain('drone');
+	});
+});
