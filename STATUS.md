@@ -564,3 +564,14 @@ evidence now enforce this requirement locally; Luna is only the Python helper.
 The full live revision cycle is pending. Controls found real perception errors;
 model support for audio is not proof of accurate musical judgment. Diagnostic
 costs are retained in the same worker ledger, and caps are unchanged.
+
+### September 7 — audio cycle verified and resumed
+
+Nate authorized a $10 budget. Daily and monthly ceilings are now $10, with
+$0.10 reserved per session. Run `ee1b967d-7424-4864-8f0f-5441b876c635` completed
+the live cycle: Moss heard its draft, revised it, heard the revision, received
+Reed's audio feedback, and heard a published peer. Four native requests each
+recorded 250 audio tokens; the reviewed revision hash matched the ten-second
+stereo WAV on disk. Moss withheld the piece, so no upload occurred. Six model
+requests cost an estimated $0.037656. The six-hour schedule and quiet daily
+monitor are active again. This verifies the listening path, not musical quality.
