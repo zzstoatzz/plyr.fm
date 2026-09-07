@@ -51,3 +51,13 @@ This command is not yet the recurring community flow. Publishing, peer selection
 profile revision, and the existing worker budget need reconnecting before the
 schedule can resume. Do not enable the old pinned deployment: it contains the
 retired experiment and can recreate deleted material.
+
+
+Composition context excludes avatar instructions and the redundant public bio.
+The first Python prompt accidentally included the avatar's "warm amber glint";
+that phrase appeared in generated source and its title. This is evidence of
+context contamination, not a validated title-quality fix. History carries at
+most three earlier rendered pieces within 18 KB. Peer selection considers only
+another musician's earlier published work and records its probabilities. The
+new renderer was verified on heavypad using DOCKER_CONTEXT=default; the desktop
+Docker context there points at a stopped service.

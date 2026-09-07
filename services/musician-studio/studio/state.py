@@ -143,3 +143,16 @@ class Store:
                 "day": totals("day", now.strftime("%Y-%m-%d")),
                 "month": totals("month", now.strftime("%Y-%m")),
             }
+
+    def history(
+        self, musician: str, before: str, *, published: bool = False
+    ) -> list[dict]:
+        with self.connect() as db:
+            rows = db.execute(
+                "SELECT session,body FROM studies WHERE musician=? AND session<? "
+                "AND json_extract(body,'$.rendered')=1 "
+                "AND (?=0 OR json_extract(body,'$.track_id') IS NOT NULL) "
+                "ORDER BY session DESC LIMIT 3",
+                (musician, before, int(published)),
+            ).fetchall()
+        return [{"session": session, **json.loads(body)} for session, body in rows]

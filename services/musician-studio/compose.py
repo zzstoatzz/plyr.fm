@@ -4,6 +4,7 @@ import argparse
 import ast
 import json
 import os
+import shutil
 import subprocess
 import tempfile
 import uuid
@@ -14,6 +15,7 @@ from pathlib import Path
 import numpy as np
 from pydantic import BaseModel, Field
 
+from studio.context import history_context, musical_identity
 from studio.identity import Musician
 from studio.state import Store
 
@@ -24,10 +26,19 @@ class Composition(BaseModel):
     title: str = Field(min_length=1, max_length=80)
     idea: str = Field(min_length=1, max_length=1500)
     python: str = Field(min_length=1, max_length=40000)
+    memory: str = Field(default="", max_length=1500)
+    peer_note: str = Field(default="", max_length=1500)
+    keep_peer: bool = False
 
 
 def compose(
-    profile: Musician, previous: list[dict], store: Store, session: str
+    profile: Musician,
+    previous: list[dict],
+    store: Store,
+    session: str,
+    *,
+    musician_id: str | None = None,
+    peer: dict | None = None,
 ) -> Composition:
     prompt = (
         "Make a ten-second piece of music as this musician. Use Python and numpy to create the audio. "
@@ -37,11 +48,18 @@ def compose(
         "The environment has no network or external files; runtime is limited to 30 seconds and 512 MB. "
         "Avoid clipping. Choose a title for this particular composition. "
         "Identity and inspirations: "
-        + profile.model_dump_json()
+        + json.dumps(musical_identity(profile))
         + "\nYour earlier work (code and intentions, not an audio listening experience): "
-        + json.dumps(previous)
+        + json.dumps(history_context(previous))
+        + "\nPeer work, if available: "
+        + json.dumps(peer)
+        + "\nYou have code, not auditory perception. Respond to the peer if their work interests you. "
+        "Set KEEP_PEER to a literal bool for whether to include their track in your playlist and PEER_NOTE "
+        "to a short reason. Set MEMORY to what you want your future self to remember about this piece. "
         + "\nReturn only executable Python source, no JSON or markdown. Include TITLE and IDEA as string constants."
     )
+    if len(prompt.encode()) > 48000:
+        raise ValueError("Composition context exceeds 48 KB")
     store.call(session)
     with tempfile.TemporaryDirectory() as scratch:
         pi = Path(scratch) / ".pi"
@@ -102,27 +120,42 @@ def compose(
     ).strip()
     if source.startswith("```python\n") and source.endswith("```"):
         source = source[len("```python\n") : -3].strip()
-    store.save_study(session, profile.name.lower(), {"source": source})
+    store.save_study(session, musician_id or profile.name.lower(), {"source": source})
     tree = ast.parse(source)
     strings = {}
     for node in tree.body:
         if (
             isinstance(node, ast.Assign)
             and isinstance(node.value, ast.Constant)
-            and isinstance(node.value.value, str)
+            and isinstance(node.value.value, (str, bool))
         ):
             for target in node.targets:
-                if isinstance(target, ast.Name) and target.id in ("TITLE", "IDEA"):
+                if isinstance(target, ast.Name) and target.id in (
+                    "TITLE",
+                    "IDEA",
+                    "MEMORY",
+                    "PEER_NOTE",
+                    "KEEP_PEER",
+                ):
                     strings[target.id] = node.value.value
-    answer = Composition(title=strings["TITLE"], idea=strings["IDEA"], python=source)
+    answer = Composition(
+        title=strings["TITLE"],
+        idea=strings["IDEA"],
+        python=source,
+        memory=strings.get("MEMORY", ""),
+        peer_note=strings.get("PEER_NOTE", ""),
+        keep_peer=strings.get("KEEP_PEER", False),
+    )
     return answer
 
 
 def render(code: str, output: Path) -> dict:
     output.mkdir(parents=True, exist_ok=True)
-    output.chmod(0o777)
     container = "plyr-composition-" + uuid.uuid4().hex
     with tempfile.TemporaryDirectory() as scratch:
+        fresh = Path(scratch) / "output"
+        fresh.mkdir(mode=0o777)
+        fresh.chmod(0o777)
         source = Path(scratch) / "compose.py"
         source.write_text(code)
         source.chmod(0o644)
@@ -157,7 +190,7 @@ def render(code: str, output: Path) -> dict:
             "-v",
             f"{source.resolve()}:/input/compose.py:ro",
             "-v",
-            f"{output.resolve()}:/output",
+            f"{fresh.resolve()}:/output",
             "plyr-musician-python:local",
         ]
         try:
@@ -175,6 +208,12 @@ def render(code: str, output: Path) -> dict:
                 timeout=15,
                 check=False,
             )
+        path = fresh / "track.wav"
+        if path.is_symlink() or not path.is_file() or path.stat().st_size > 4_000_000:
+            raise ValueError("Invalid audio output")
+        if (output / "track.wav").is_symlink():
+            raise ValueError("Output destination must not be a symlink")
+        shutil.copyfile(path, output / "track.wav")
     path = output / "track.wav"
     if path.is_symlink() or path.stat().st_size > 4_000_000:
         raise ValueError("Invalid audio output")
@@ -213,22 +252,22 @@ def main() -> None:
     profile = Musician.model_validate(
         json.loads((ROOT / "profiles" / f"{args.musician}.json").read_text())["profile"]
     )
-    previous = []
-    with store.connect() as db:
-        for (body,) in db.execute(
-            "SELECT body FROM studies WHERE musician=? ORDER BY session DESC LIMIT 3",
-            (args.musician,),
-        ):
-            previous.append(json.loads(body))
+    previous = store.history(args.musician, session)
     try:
-        composition = compose(profile, previous, store, session)
+        composition = compose(
+            profile, previous, store, session, musician_id=args.musician
+        )
         directory = root / f"{session}-{args.musician}"
         directory.mkdir(parents=True, exist_ok=True)
         (directory / "composition.json").write_text(
             composition.model_dump_json(indent=2)
         )
         metrics = render(composition.python, directory / "audio")
-        store.save_study(session, args.musician, composition.model_dump())
+        store.save_study(
+            session,
+            args.musician,
+            {**composition.model_dump(), "rendered": True, "metrics": metrics},
+        )
         store.finish(session, "completed")
         print(
             json.dumps(
