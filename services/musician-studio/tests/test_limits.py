@@ -103,3 +103,15 @@ def test_rewriting_a_study_cannot_erase_upload_attempt(tmp_path: Path) -> None:
     store.save_study("2026-09-07-0", "moss", {"decision": {"title": "a revision"}})
     assert Store(tmp_path).released_today("moss", "2026-09-07")
     assert store.study("2026-09-07-0", "moss")["upload_id"] == "pending"
+
+
+def test_bootstrap_is_once_and_charged_to_normal_budgets(tmp_path: Path) -> None:
+    store = Store(tmp_path)
+    now = datetime.now(UTC)
+    session = store.reserve(now, bootstrap=True)
+    assert session is not None
+    store.finish(session, "completed")
+    assert store.reserve(now + timedelta(days=1), bootstrap=True) is None
+    assert store.usage(now)["day"]["budget_used"] == 0.05
+    with pytest.raises(RuntimeError):
+        store.call(session)

@@ -27,11 +27,19 @@ class Store:
     def connect(self) -> sqlite3.Connection:
         return sqlite3.connect(self.path, timeout=30)
 
-    def reserve(self, now: datetime, retry_failed: bool = False) -> str | None:
+    def reserve(
+        self, now: datetime, retry_failed: bool = False, *, bootstrap: bool = False
+    ) -> str | None:
         day, month = now.strftime("%Y-%m-%d"), now.strftime("%Y-%m")
-        key = f"{day}-{now.hour // 6}"
+        key = f"{day}-{now.hour // 6}" + ("-bootstrap" if bootstrap else "")
         with self.connect() as db:
             db.execute("BEGIN IMMEDIATE")
+            if bootstrap:
+                prior = db.execute(
+                    "SELECT id FROM sessions WHERE id LIKE '%-bootstrap'"
+                ).fetchone()
+                if prior and prior[0] != key:
+                    return None
             existing = db.execute(
                 "SELECT status,spent,calls FROM sessions WHERE id=?", (key,)
             ).fetchone()
@@ -64,7 +72,7 @@ class Store:
         with self.connect() as db:
             db.execute("BEGIN IMMEDIATE")
             changed = db.execute(
-                "UPDATE sessions SET calls=calls+1 WHERE id=? AND calls<12 AND spent<0.05",
+                "UPDATE sessions SET calls=calls+1 WHERE id=? AND status='running' AND calls<12 AND spent<0.05",
                 (session,),
             ).rowcount
             if not changed:
@@ -145,14 +153,42 @@ class Store:
             }
 
     def history(
-        self, musician: str, before: str, *, published: bool = False
+        self,
+        musician: str,
+        before: str,
+        *,
+        published: bool = False,
+        include_current: bool = False,
     ) -> list[dict]:
         with self.connect() as db:
             rows = db.execute(
-                "SELECT session,body FROM studies WHERE musician=? AND session<? "
+                f"SELECT session,body FROM studies WHERE musician=? AND session{'<=' if include_current else '<'}? "
                 "AND json_extract(body,'$.rendered')=1 "
                 "AND (?=0 OR json_extract(body,'$.track_id') IS NOT NULL) "
                 "ORDER BY session DESC LIMIT 3",
                 (musician, before, int(published)),
             ).fetchall()
         return [{"session": session, **json.loads(body)} for session, body in rows]
+
+    def claim_upload(self, session: str, musician: str) -> bool:
+        with self.connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            rows = db.execute(
+                "SELECT body FROM studies WHERE musician=? AND session LIKE ?",
+                (musician, session[:10] + "%"),
+            ).fetchall()
+            if any(json.loads(row[0]).get("upload_attempted") for row in rows):
+                return False
+            row = db.execute(
+                "SELECT body FROM studies WHERE session=? AND musician=?",
+                (session, musician),
+            ).fetchone()
+            if row is None:
+                raise ValueError("A saved composition is required before upload")
+            body = json.loads(row[0])
+            body["upload_attempted"] = True
+            db.execute(
+                "UPDATE studies SET body=? WHERE session=? AND musician=?",
+                (json.dumps(body), session, musician),
+            )
+            return True

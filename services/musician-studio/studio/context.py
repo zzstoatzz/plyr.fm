@@ -46,7 +46,7 @@ def choose_peer(store: Store, name: str, session: str) -> dict | None:
     for key, entry in roster.items():
         if key == name:
             continue
-        history = store.history(key, session, published=True)
+        history = store.history(key, session, published=True, include_current=True)
         if not history:
             continue
         peer = Musician.model_validate(entry["profile"])
