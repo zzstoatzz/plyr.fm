@@ -95,3 +95,7 @@ costs are not included in Pi's model-cost estimate.
 A daily Codex check watches run health, costs, and upcoming token expiration;
 it stays quiet during normal progress. It does not raise limits. Token renewal
 still requires normal OAuth and updating the encrypted worker consumer.
+
+Explicit recovery reuses each saved decision and preserves upload markers, even
+when the model or audio-processing step failed. It never clears the daily
+upload reservation to try again.
