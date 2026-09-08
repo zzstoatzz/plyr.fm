@@ -129,3 +129,18 @@ listeners no longer receive it. New-piece prompts now omit old synthesis code
 and recommend the provided instruments first. Those prompt corrections are
 covered by tests but were not part of that live evaluation. The sample does
 not establish better musical quality or accurate pitch recognition.
+
+## listener calibration
+
+An explicit run with `evaluation=true` and `calibration=true` classifies six
+unnamed, shuffled ten-second controls through the same native audio client:
+silence, regular noise pulses, sequential notes, and stacked notes. The source
+and expected answers stay on the host. Results retain wrong answers, confidence,
+audio hashes and positive provider audio-token receipts in
+`plyr-fm-listener-calibration` and the worker state directory.
+
+Calibration shares the one evaluation reservation per six-hour window, uses six model
+calls on a complete first attempt, and cannot publish. Explicit recovery remains
+subject to the same twelve-call session cap. It measures basic factual perception,
+not taste, pitch transcription, or quality of musical criticism. It does not run
+automatically before each composition or change the normal publication gate.

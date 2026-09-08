@@ -601,3 +601,13 @@ The peer context still included entire old synthesizers after own-history code
 was removed. Peer selection now supplies metadata, plans and feedback without
 source code; the selected recording is still heard later. The regression test
 checks that boundary. No published audio or musician state was replaced.
+
+### September 8 — factual listener calibration
+
+The timing audit motivates a separate calibration mode: six anonymous audio
+controls with host-known silence, pulse, sequential-note and stacked-note
+answers. It uses the same audio client and existing evaluation reservation;
+wrong answers and audio receipts are retained. Normal music runs and publication
+rules are unchanged. Offline tests verify actual event timing and that repeated
+calibration reads saved receipts without spending again. Live calibration is
+pending the next evaluation window; no accuracy claim is made yet.

@@ -61,6 +61,27 @@ def listen(
         "Suggest a specific revision to how it sounds. Ready means you would release it as the author, or keep it as a peer. "
         "A difference from your own taste is not a technical defect. Return JSON with observations, changes, and ready."
     )
+    feedback, receipt = request_audio(store, session, path, prompt, Feedback)
+    review = ListeningReview(
+        listener=listener,
+        author=author,
+        **receipt.model_dump(),
+        inspirations_sha256=inspiration_digest(inspirations),
+        **feedback.model_dump(),
+    )
+    record_review(store, session, author, review)
+    return review
+
+
+class AudioReceipt(BaseModel):
+    audio_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    model: str = Field(min_length=1)
+    audio_tokens: int = Field(gt=0)
+
+
+def request_audio[Response: BaseModel](
+    store: Store, session: str, path: Path, prompt: str, schema: type[Response]
+) -> tuple[Response, AudioReceipt]:
     data = path.read_bytes()
     if not data or len(data) > 4_000_000:
         raise ValueError("Missing or oversized review audio")
@@ -87,7 +108,7 @@ def listen(
                     "maxOutputTokens": 1600,
                     "thinkingConfig": {"thinkingLevel": "LOW"},
                     "responseMimeType": "application/json",
-                    "responseJsonSchema": Feedback.model_json_schema(),
+                    "responseJsonSchema": schema.model_json_schema(),
                 },
             },
         )
@@ -117,21 +138,15 @@ def listen(
     candidate = result["candidates"][0]
     if candidate.get("finishReason") != "STOP":
         raise ValueError("Audio review was incomplete")
-    feedback = Feedback.model_validate_json(
+    parsed = schema.model_validate_json(
         "".join(
             p.get("text", "")
             for p in candidate["content"]["parts"]
             if not p.get("thought")
         )
     )
-    review = ListeningReview(
-        listener=listener,
-        author=author,
+    return parsed, AudioReceipt(
         audio_sha256=hashlib.sha256(data).hexdigest(),
         model=result["modelVersion"],
         audio_tokens=audio_tokens,
-        inspirations_sha256=inspiration_digest(inspirations),
-        **feedback.model_dump(),
     )
-    record_review(store, session, author, review)
-    return review
