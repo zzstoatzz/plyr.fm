@@ -97,3 +97,4 @@ def test_round_reviews_draft_and_revision_and_obtains_peer_feedback(
     assert len(store.study(session, "moss")["audio_feedback"]) == 2
     assert audio_round.prepare_release(tmp_path, session, "moss", draft) == final
     assert len(heard) == 5
+    assert len(store.listening_reviews(session, "moss")) == 3

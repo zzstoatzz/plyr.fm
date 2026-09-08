@@ -85,6 +85,14 @@ def record_review(
 ) -> None:
     with store.connect() as db:
         db.execute(
-            "INSERT INTO listening_reviews VALUES (?,?,?)",
-            (session, name, review.model_dump_json()),
+            "INSERT INTO listening_reviews SELECT ?,?,? WHERE NOT EXISTS "
+            "(SELECT 1 FROM listening_reviews WHERE session=? AND musician=? AND body=?)",
+            (
+                session,
+                name,
+                review.model_dump_json(),
+                session,
+                name,
+                review.model_dump_json(),
+            ),
         )
