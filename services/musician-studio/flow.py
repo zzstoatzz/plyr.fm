@@ -12,7 +12,7 @@ from prefect.cache_policies import NO_CACHE
 from prefect.states import Completed, State
 
 from audio_round import prepare_release
-from compose import Composition, compose, render
+from compose import Composition, compose, plan_music, render
 from studio.context import choose_peer
 from studio.identity import Musician
 from studio.listening import NotReady
@@ -58,6 +58,7 @@ def compose_piece(directory: Path, session: str, name: str) -> dict:
     profile = Musician.model_validate(store.musicians()[name]["profile"])
     peer = saved.get("peer") or choose_peer(store, name, session)
     store.save_study(session, name, {"peer": peer})
+    plan_piece(directory, session, name)
     piece = compose(
         profile,
         store.history(name, session),
@@ -76,6 +77,15 @@ def compose_piece(directory: Path, session: str, name: str) -> dict:
         ]
     store.save_musician(name, entry)
     return store.study(session, name)
+
+
+@task(name="plan-musical-phrase", cache_policy=NO_CACHE, persist_result=False)
+def plan_piece(directory: Path, session: str, name: str) -> dict:
+    store = Store(directory)
+    profile = Musician.model_validate(store.musicians()[name]["profile"])
+    return plan_music(
+        profile, store.history(name, session), store, session, name
+    ).model_dump()
 
 
 @task(
@@ -164,6 +174,11 @@ def report(store: Store, session: str | None, errors: list[str]) -> None:
             notes.append(
                 f"## {name}: {study.get('title', 'unfinished')}\n\n{study.get('idea', '')}\n\n"
                 f"Memory: {study.get('memory', '')}\n\n"
+                + (
+                    "Musical plan: " + json.dumps(study["musical_plan"]) + "\n\n"
+                    if study.get("musical_plan")
+                    else ""
+                )
                 + "\n\n".join(
                     f"Audio review by {r['listener']} ({r['model']}, {r['audio_tokens']} audio tokens): {r['observations']} Next: {r['changes']}"
                     for r in study.get("audio_feedback", [])
@@ -204,7 +219,9 @@ def report(store: Store, session: str | None, errors: list[str]) -> None:
     log_prints=True,
     persist_result=False,
 )
-def community(retry_failed: bool = False, bootstrap: bool = False) -> State:
+def community(
+    retry_failed: bool = False, bootstrap: bool = False, evaluation: bool = False
+) -> State:
     directory = Path(os.environ["STUDIO_STATE_DIR"])
     directory.mkdir(parents=True, exist_ok=True)
     with (directory / "session.lock").open("w") as lock:
@@ -216,7 +233,10 @@ def community(retry_failed: bool = False, bootstrap: bool = False) -> State:
             )
         store = Store(directory)
         session = store.reserve(
-            datetime.now(UTC), retry_failed=retry_failed, bootstrap=bootstrap
+            datetime.now(UTC),
+            retry_failed=retry_failed,
+            bootstrap=bootstrap,
+            evaluation=evaluation,
         )
         errors = []
         logger = get_run_logger()
@@ -234,8 +254,13 @@ def community(retry_failed: bool = False, bootstrap: bool = False) -> State:
                     compose_piece(directory, session, name)
                     audio = render_piece(directory, session, name)
                     audio = review_audio(directory, session, name, audio)
-                    publish_piece(directory, session, name, audio)
-                    curate_peer(directory, session, name)
+                    if evaluation:
+                        store.save_study(
+                            session, name, {"withheld": True, "evaluation": True}
+                        )
+                    else:
+                        publish_piece(directory, session, name, audio)
+                        curate_peer(directory, session, name)
                 except NotReady as exc:
                     store.save_study(session, name, {"withheld": True})
                     logger.info("%s: %s", name, exc)

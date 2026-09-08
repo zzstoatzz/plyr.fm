@@ -115,3 +115,17 @@ def test_bootstrap_is_once_and_charged_to_normal_budgets(tmp_path: Path) -> None
     assert store.usage(now)["day"]["budget_used"] == 0.10
     with pytest.raises(RuntimeError):
         store.call(session)
+
+
+def test_evaluation_reserves_separately_without_resetting_budget(
+    tmp_path: Path,
+) -> None:
+    store = Store(tmp_path)
+    now = datetime(2026, 9, 8, 8, tzinfo=UTC)
+    normal = store.reserve(now)
+    evaluation = store.reserve(now, evaluation=True)
+    assert normal != evaluation
+    assert store.reserve(now, evaluation=True) is None
+    assert store.usage(now)["day"]["budget_used"] == pytest.approx(0.2)
+    store.charge(evaluation, 10)
+    assert store.reserve(now.replace(hour=14), evaluation=True) is None
