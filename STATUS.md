@@ -611,3 +611,19 @@ wrong answers and audio receipts are retained. Normal music runs and publication
 rules are unchanged. Offline tests verify actual event timing and that repeated
 calibration reads saved receipts without spending again. Live calibration is
 pending the next evaluation window; no accuracy claim is made yet.
+
+### September 8 — native Prefect audio recovery
+
+Each paid audio interpretation and composition request now has its own Prefect
+task and durable result under the worker's studio directory. Audio requests
+retry transient provider/transport failures up to three times; invalid responses,
+auth errors and budget exhaustion fail immediately. Inputs include audio bytes,
+review context, schema, model and session. Cached results do not charge the ledger.
+A flow ID owns its original budget reservation across same-day reruns, keeping
+musician rotation stable; cross-day recovery cannot spend an old reservation.
+Musician history, release evidence and upload idempotency remain application data.
+
+An isolated SDK test and a mocked-provider run against the actual Prefect server
+both verified task retry, flow retry reusing a completed audio result, and cache
+invalidation after audio/context changes. This proves orchestration behavior;
+it does not establish that the upstream audio provider has recovered.

@@ -9,6 +9,7 @@ from pathlib import Path
 from prefect import flow, get_run_logger, task
 from prefect.artifacts import create_markdown_artifact
 from prefect.cache_policies import NO_CACHE
+from prefect.context import FlowRunContext
 from prefect.states import Completed, State
 
 from audio_round import prepare_release
@@ -106,12 +107,6 @@ def render_piece(directory: Path, session: str, name: str) -> Path:
     return output / "track.wav"
 
 
-@task(
-    name="listen-revise-and-peer-review",
-    task_run_name="{name}-audio-review",
-    cache_policy=NO_CACHE,
-    persist_result=False,
-)
 def review_audio(directory: Path, session: str, name: str, path: Path) -> Path:
     return prepare_release(directory, session, name, path)
 
@@ -246,6 +241,9 @@ def community(
             retry_failed=retry_failed,
             bootstrap=bootstrap,
             evaluation=evaluation,
+            flow_run_id=str(context.flow_run.id)
+            if (context := FlowRunContext.get())
+            else None,
         )
         errors = []
         logger = get_run_logger()
@@ -262,8 +260,9 @@ def community(
                     message=f"Listener calibration: {result['correct']}/{result['total']} correct"
                 )
             names = seed(directory)
-            now = datetime.now(UTC)
-            selected = names[(now.toordinal() * 4 + now.hour // 6) % len(names)]
+            day = datetime.strptime(session[:10], "%Y-%m-%d").replace(tzinfo=UTC)
+            slot = int(session[11])
+            selected = names[(day.toordinal() * 4 + slot) % len(names)]
             for name in [selected]:
                 try:
                     compose_piece(directory, session, name)

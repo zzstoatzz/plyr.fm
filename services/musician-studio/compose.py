@@ -13,6 +13,9 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import numpy as np
+from prefect import task
+from prefect.cache_policies import INPUTS, TASK_SOURCE
+from prefect.context import FlowRunContext
 from pydantic import BaseModel, Field
 
 from studio.context import history_context, musical_identity
@@ -150,6 +153,16 @@ def compose(
 
 
 def request_music(prompt: str, store: Store, session: str) -> str:
+    operation = composition_request.with_options(
+        result_storage=store.path.parent / "prefect-results"
+    )
+    call = operation if FlowRunContext.get() else operation.fn
+    return call(prompt, store.path.parent, session, "openai-codex/gpt-5.6-luna")
+
+
+@task(name="write-music-python", cache_policy=INPUTS + TASK_SOURCE, persist_result=True)
+def composition_request(prompt: str, directory: Path, session: str, model: str) -> str:
+    store = Store(directory)
     if len(prompt.encode()) > 48000:
         raise ValueError("Music context exceeds 48 KB")
     store.call(session)
@@ -171,7 +184,7 @@ def request_music(prompt: str, store: Store, session: str) -> str:
             [
                 "pi",
                 "--model",
-                "openai-codex/gpt-5.6-luna",
+                model,
                 "--thinking",
                 "low",
                 "--no-session",

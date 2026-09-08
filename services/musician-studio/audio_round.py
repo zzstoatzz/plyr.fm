@@ -2,13 +2,16 @@
 
 from pathlib import Path
 
+from prefect import task
+from prefect.cache_policies import NO_CACHE
+from prefect.context import FlowRunContext
+
 from compose import compose, render
 from studio.audio_model import listen
 from studio.identity import Musician
 from studio.listening import (
     ListeningReview,
     digest,
-    inspiration_digest,
     require_listening,
 )
 from studio.state import Store
@@ -22,15 +25,12 @@ def reviewed(
     path: Path,
     inspirations: list[dict],
 ) -> ListeningReview:
-    for value in store.listening_reviews(session, author):
-        review = ListeningReview.model_validate(value)
-        if (
-            review.listener == listener
-            and review.audio_sha256 == digest(path)
-            and review.inspirations_sha256 == inspiration_digest(inspirations)
-        ):
-            return review
     return listen(store, session, author, listener, path, inspirations)
+
+
+@task(name="render-revision", cache_policy=NO_CACHE, persist_result=False)
+def render_revision(source: str, output: Path) -> dict:
+    return render(source, output)
 
 
 def prepare_release(directory: Path, session: str, name: str, draft_path: Path) -> Path:
@@ -52,7 +52,8 @@ def prepare_release(directory: Path, session: str, name: str, draft_path: Path) 
             revision=feedback.observations + "\n" + feedback.changes,
         )
         revised_path = directory / f"{session}-{name}" / "revision"
-        metrics = render(revision.python, revised_path)
+        renderer = render_revision if FlowRunContext.get() else render_revision.fn
+        metrics = renderer(revision.python, revised_path)
         store.save_study(
             session,
             name,
