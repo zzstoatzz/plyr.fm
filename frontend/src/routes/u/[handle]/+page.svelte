@@ -25,7 +25,11 @@
 	} from '$lib/avatar-refresh.svelte';
 	import { APP_NAME, APP_CANONICAL_URL } from '$lib/branding';
 	import { profileLink } from '$lib/atclients';
-	import { getAtprotofansProfile, getAtprotofansSupporters, type Supporter } from '$lib/atprotofans';
+	import {
+		getAtprotofansProfile,
+		getAtprotofansSupporters,
+		type Supporter
+	} from '$lib/atprotofans';
 	import type { PageData } from './$types';
 
 	interface TracksCacheSnapshot {
@@ -36,35 +40,35 @@
 	let { data }: { data: PageData } = $props();
 
 	// use server-loaded data directly
-const artist = $derived(data.artist);
-let tracks = $state(data.tracks ?? []);
-const albums = $derived(data.albums ?? []);
-let hasMoreTracks = $state(data.hasMoreTracks ?? false);
-let nextCursor = $state<string | null>(data.nextCursor ?? null);
-let loadingMoreTracks = $state(false);
-let shareUrl = $state('');
+	const artist = $derived(data.artist);
+	let tracks = $state(data.tracks ?? []);
+	const albums = $derived(data.albums ?? []);
+	let hasMoreTracks = $state(data.hasMoreTracks ?? false);
+	let nextCursor = $state<string | null>(data.nextCursor ?? null);
+	let loadingMoreTracks = $state(false);
+	let shareUrl = $state('');
 
-// compute support URL - handle 'atprotofans' magic value
-const supportUrl = $derived(() => {
-	if (!artist?.support_url) return null;
-	if (artist.support_url === 'atprotofans') {
-		return getAtprotofansSupportUrl(artist.did);
-	}
-	return artist.support_url;
-});
+	// compute support URL - handle 'atprotofans' magic value
+	const supportUrl = $derived(() => {
+		if (!artist?.support_url) return null;
+		if (artist.support_url === 'atprotofans') {
+			return getAtprotofansSupportUrl(artist.did);
+		}
+		return artist.support_url;
+	});
 
-$effect(() => {
-	if (!artist?.handle) {
-		shareUrl = '';
-		return;
-	}
+	$effect(() => {
+		if (!artist?.handle) {
+			shareUrl = '';
+			return;
+		}
 
-	if (browser) {
-		shareUrl = `${window.location.origin}/u/${artist.handle}`;
-	} else {
-		shareUrl = `${APP_CANONICAL_URL}/u/${artist.handle}`;
-	}
-});
+		if (browser) {
+			shareUrl = `${window.location.origin}/u/${artist.handle}`;
+		} else {
+			shareUrl = `${APP_CANONICAL_URL}/u/${artist.handle}`;
+		}
+	});
 
 	let analytics: Analytics | null = $state(null);
 	let analyticsLoading = $state(false);
@@ -288,7 +292,7 @@ $effect(() => {
 				// hydrate with liked status if authenticated
 				if (auth.isAuthenticated) {
 					const likedTracks = await fetchLikedTracks();
-					const likedIds = new Set(likedTracks.map(track => track.id));
+					const likedIds = new Set(likedTracks.map((track) => track.id));
 					for (const track of newTracks) {
 						track.is_liked = likedIds.has(track.id);
 					}
@@ -350,7 +354,7 @@ $effect(() => {
 		tracksLoading = true;
 		try {
 			const likedTracks = await fetchLikedTracks();
-			const likedIds = new Set(likedTracks.map(track => track.id));
+			const likedIds = new Set(likedTracks.map((track) => track.id));
 			applyLikedFlags(likedIds);
 		} catch (_e) {
 			console.error('failed to hydrate artist likes:', _e);
@@ -363,7 +367,7 @@ $effect(() => {
 	function applyLikedFlags(likedIds: Set<number>) {
 		let changed = false;
 
-		const nextTracks = tracks.map(track => {
+		const nextTracks = tracks.map((track) => {
 			const nextLiked = likedIds.has(track.id);
 			const currentLiked = Boolean(track.is_liked);
 			if (currentLiked !== nextLiked) {
@@ -388,7 +392,7 @@ $effect(() => {
 			if (cachedTracks.length === 0) return;
 
 			const likedIds = new Set(
-				cachedTracks.filter(track => Boolean(track.is_liked)).map(track => track.id)
+				cachedTracks.filter((track) => Boolean(track.is_liked)).map((track) => track.id)
 			);
 
 			if (likedIds.size > 0) {
@@ -410,39 +414,30 @@ $effect(() => {
 
 		<!-- Open Graph / Facebook -->
 		<meta property="og:type" content="profile" />
-		<meta property="og:title" content="{data.artist.display_name}" />
-		<meta
-			property="og:description"
-			content="@{data.artist.handle} on {APP_NAME}"
-		/>
-		<meta
-			property="og:url"
-			content={`${APP_CANONICAL_URL}/u/${data.artist.handle}`}
-		/>
+		<meta property="og:title" content={data.artist.display_name} />
+		<meta property="og:description" content="@{data.artist.handle} on {APP_NAME}" />
+		<meta property="og:url" content={`${APP_CANONICAL_URL}/u/${data.artist.handle}`} />
 		<meta property="og:site_name" content={APP_NAME} />
-		<meta property="profile:username" content="{data.artist.handle}" />
+		<meta property="profile:username" content={data.artist.handle} />
 		{#if data.artist.avatar_url && !moderation.isSensitive(data.artist.avatar_url)}
-			<meta property="og:image" content="{data.artist.avatar_url}" />
-			<meta property="og:image:secure_url" content="{data.artist.avatar_url}" />
+			<meta property="og:image" content={data.artist.avatar_url} />
+			<meta property="og:image:secure_url" content={data.artist.avatar_url} />
 			<meta property="og:image:width" content="400" />
 			<meta property="og:image:height" content="400" />
-			<meta property="og:image:alt" content="{data.artist.display_name}" />
+			<meta property="og:image:alt" content={data.artist.display_name} />
 		{/if}
 
 		<!-- Twitter -->
 		<meta name="twitter:card" content="summary" />
-		<meta name="twitter:title" content="{data.artist.display_name}" />
-		<meta
-			name="twitter:description"
-			content="@{data.artist.handle} on {APP_NAME}"
-		/>
+		<meta name="twitter:title" content={data.artist.display_name} />
+		<meta name="twitter:description" content="@{data.artist.handle} on {APP_NAME}" />
 		{#if data.artist.avatar_url && !moderation.isSensitive(data.artist.avatar_url)}
-			<meta name="twitter:image" content="{data.artist.avatar_url}" />
+			<meta name="twitter:image" content={data.artist.avatar_url} />
 		{/if}
 
 		<!-- at-tags: map this page to its atproto identity (https://tangled.org/chrisshank.com/at-tags/) -->
 		<meta name="at:canonical" content="at://{data.artist.did}" />
-		{/if}
+	{/if}
 </svelte:head>
 
 {#if artist}
@@ -463,16 +458,34 @@ $effect(() => {
 				<div class="artist-avatar-placeholder">
 					<svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
 						<circle cx="8" cy="5" r="3" stroke="currentColor" stroke-width="1.5" fill="none" />
-						<path d="M3 14c0-2.5 2-4.5 5-4.5s5 2 5 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+						<path
+							d="M3 14c0-2.5 2-4.5 5-4.5s5 2 5 4.5"
+							stroke="currentColor"
+							stroke-width="1.5"
+							stroke-linecap="round"
+						/>
 					</svg>
 				</div>
 			{/if}
 			<div class="artist-details">
 				<div class="artist-info">
-					<h1>{artist.display_name}</h1>
-					{#if data.isBot}
-						<span class="bot-label" title="This account identifies itself as automated">bot</span>
-					{/if}
+					<h1>
+						{artist.display_name}{#if data.isBot}<svg
+								class="bot-label"
+								viewBox="0 0 24 24"
+								fill="currentColor"
+								role="img"
+								aria-label="Automated account"
+							>
+								<title>Automated account</title>
+								<path d="M11 4h2v4h-2zM2 12h3v6H2zm17 0h3v6h-3z" />
+								<circle cx="12" cy="4" r="2" />
+								<path
+									fill-rule="evenodd"
+									d="M8 7a4 4 0 0 0-4 4v7a4 4 0 0 0 4 4h8a4 4 0 0 0 4-4v-7a4 4 0 0 0-4-4zm0 6a1.5 1.5 0 0 1 3 0v2a1.5 1.5 0 0 1-3 0zm5 0a1.5 1.5 0 0 1 3 0v2a1.5 1.5 0 0 1-3 0z"
+								/>
+							</svg>{/if}
+					</h1>
 					<div class="handle-row">
 						<a href={profileLink(artist.handle)} target="_blank" rel="noopener" class="handle">
 							@{artist.handle}
@@ -489,7 +502,9 @@ $effect(() => {
 					{#if supportUrl()}
 						<a href={supportUrl()} target="_blank" rel="noopener" class="support-btn">
 							<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-								<path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+								<path
+									d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"
+								/>
 							</svg>
 							support
 						</a>
@@ -501,7 +516,9 @@ $effect(() => {
 				{#if supportUrl()}
 					<a href={supportUrl()} target="_blank" rel="noopener" class="support-btn">
 						<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-							<path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+							<path
+								d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"
+							/>
 						</svg>
 						support
 					</a>
@@ -513,7 +530,10 @@ $effect(() => {
 		{#if artist.support_url === 'atprotofans' && supporters.length > 0}
 			<section class="supporters-section">
 				<div class="supporters-row">
-					<span class="supporters-label">{supporterCount ?? supporters.length} {(supporterCount ?? supporters.length) === 1 ? 'supporter' : 'supporters'}</span>
+					<span class="supporters-label"
+						>{supporterCount ?? supporters.length}
+						{(supporterCount ?? supporters.length) === 1 ? 'supporter' : 'supporters'}</span
+					>
 					<div class="supporters-avatars">
 						{#each supporters.slice(0, 20) as supporter}
 							<a
@@ -524,7 +544,8 @@ $effect(() => {
 								{#if supporter.avatar_url}
 									<img src={supporter.avatar_url} alt="" />
 								{:else}
-									<span>{(supporter.display_name || supporter.handle).charAt(0).toUpperCase()}</span>
+									<span>{(supporter.display_name || supporter.handle).charAt(0).toUpperCase()}</span
+									>
 								{/if}
 							</a>
 						{/each}
@@ -575,17 +596,30 @@ $effect(() => {
 							{/if}
 						</div>
 						{#if analytics.top_item}
-							<a href="/track/{analytics.top_item.id}" class="stat-card top-item" transition:fade={{ duration: 200 }}>
+							<a
+								href="/track/{analytics.top_item.id}"
+								class="stat-card top-item"
+								transition:fade={{ duration: 200 }}
+							>
 								<div class="stat-label">most played</div>
 								<div class="top-item-title">{analytics.top_item.title}</div>
-								<div class="top-item-plays">{analytics.top_item.play_count.toLocaleString()} plays</div>
+								<div class="top-item-plays">
+									{analytics.top_item.play_count.toLocaleString()} plays
+								</div>
 							</a>
 						{/if}
 						{#if analytics.top_liked}
-							<a href="/track/{analytics.top_liked.id}" class="stat-card top-item" transition:fade={{ duration: 200 }}>
+							<a
+								href="/track/{analytics.top_liked.id}"
+								class="stat-card top-item"
+								transition:fade={{ duration: 200 }}
+							>
 								<div class="stat-label">most liked</div>
 								<div class="top-item-title">{analytics.top_liked.title}</div>
-								<div class="top-item-plays">{analytics.top_liked.play_count.toLocaleString()} {analytics.top_liked.play_count === 1 ? 'like' : 'likes'}</div>
+								<div class="top-item-plays">
+									{analytics.top_liked.play_count.toLocaleString()}
+									{analytics.top_liked.play_count === 1 ? 'like' : 'likes'}
+								</div>
 							</a>
 						{/if}
 					{/if}
@@ -611,12 +645,7 @@ $effect(() => {
 					<p class="empty-detail">
 						{artist.display_name} hasn't uploaded any music to {APP_NAME}.
 					</p>
-					<a
-						href={profileLink(artist.handle)}
-						target="_blank"
-						rel="noopener"
-						class="profile-link"
-					>
+					<a href={profileLink(artist.handle)} target="_blank" rel="noopener" class="profile-link">
 						view their profile
 					</a>
 				</div>
@@ -634,11 +663,7 @@ $effect(() => {
 					{/each}
 				</div>
 				{#if hasMoreTracks}
-					<button
-						class="load-more-btn"
-						onclick={loadMoreTracks}
-						disabled={loadingMoreTracks}
-					>
+					<button class="load-more-btn" onclick={loadMoreTracks} disabled={loadingMoreTracks}>
 						{#if loadingMoreTracks}
 							loading…
 						{:else}
@@ -665,8 +690,23 @@ $effect(() => {
 									</SensitiveImage>
 								{:else}
 									<div class="album-cover-placeholder">
-										<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-											<rect x="3" y="3" width="18" height="18" stroke="currentColor" stroke-width="1.5" fill="none" />
+										<svg
+											width="32"
+											height="32"
+											viewBox="0 0 24 24"
+											fill="none"
+											stroke="currentColor"
+											stroke-width="1.5"
+										>
+											<rect
+												x="3"
+												y="3"
+												width="18"
+												height="18"
+												stroke="currentColor"
+												stroke-width="1.5"
+												fill="none"
+											/>
 											<circle cx="12" cy="12" r="4" fill="currentColor" />
 										</svg>
 									</div>
@@ -675,9 +715,11 @@ $effect(() => {
 							<div class="album-card-meta">
 								<h3>{album.title}</h3>
 								<p>
-									{album.track_count} {album.track_count === 1 ? 'track' : 'tracks'}
+									{album.track_count}
+									{album.track_count === 1 ? 'track' : 'tracks'}
 									<span class="dot">•</span>
-									{album.total_plays.toLocaleString()} {album.total_plays === 1 ? 'play' : 'plays'}
+									{album.total_plays.toLocaleString()}
+									{album.total_plays === 1 ? 'play' : 'plays'}
 								</p>
 							</div>
 						</a>
@@ -696,7 +738,9 @@ $effect(() => {
 						<a href="/u/{artist.handle}/liked" class="collection-link">
 							<div class="collection-icon liked">
 								<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-									<path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+									<path
+										d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"
+									/>
 								</svg>
 							</div>
 							<div class="collection-info">
@@ -708,8 +752,15 @@ $effect(() => {
 								{/if}
 							</div>
 							<div class="collection-arrow">
-								<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-									<path d="M9 18l6-6-6-6"/>
+								<svg
+									width="20"
+									height="20"
+									viewBox="0 0 24 24"
+									fill="none"
+									stroke="currentColor"
+									stroke-width="2"
+								>
+									<path d="M9 18l6-6-6-6" />
 								</svg>
 							</div>
 						</a>
@@ -724,10 +775,17 @@ $effect(() => {
 										alt="{playlist.name} cover"
 									/>
 								{:else}
-									<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-										<path d="M9 18V5l12-2v13"/>
-										<circle cx="6" cy="18" r="3"/>
-										<circle cx="18" cy="16" r="3"/>
+									<svg
+										width="24"
+										height="24"
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="2"
+									>
+										<path d="M9 18V5l12-2v13" />
+										<circle cx="6" cy="18" r="3" />
+										<circle cx="18" cy="16" r="3" />
 									</svg>
 								{/if}
 							</div>
@@ -736,8 +794,15 @@ $effect(() => {
 								<p>{playlist.track_count} {playlist.track_count === 1 ? 'track' : 'tracks'}</p>
 							</div>
 							<div class="collection-arrow">
-								<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-									<path d="M9 18l6-6-6-6"/>
+								<svg
+									width="20"
+									height="20"
+									viewBox="0 0 24 24"
+									fill="none"
+									stroke="currentColor"
+									stroke-width="2"
+								>
+									<path d="M9 18l6-6-6-6" />
 								</svg>
 							</div>
 						</a>
@@ -852,11 +917,11 @@ $effect(() => {
 
 	.bot-label {
 		display: inline-block;
+		width: 0.55em;
+		height: 0.55em;
+		margin-inline-start: 0.2em;
+		vertical-align: baseline;
 		color: var(--text-secondary);
-		border: 1px solid var(--border-default);
-		border-radius: var(--radius-sm);
-		padding: 0.125rem 0.5rem;
-		font-size: var(--text-sm);
 	}
 
 	.artist-info h1 {
@@ -926,7 +991,9 @@ $effect(() => {
 		justify-content: center;
 		overflow: hidden;
 		margin-left: -8px;
-		transition: transform 0.15s ease, z-index 0.15s ease;
+		transition:
+			transform 0.15s ease,
+			z-index 0.15s ease;
 		position: relative;
 		text-decoration: none;
 	}
@@ -1012,7 +1079,9 @@ $effect(() => {
 		border-radius: var(--radius-md);
 		color: inherit;
 		text-decoration: none;
-		transition: transform 0.15s ease, border-color 0.15s ease;
+		transition:
+			transform 0.15s ease,
+			border-color 0.15s ease;
 		overflow: hidden;
 		max-width: 100%;
 	}
@@ -1425,7 +1494,9 @@ $effect(() => {
 		border-radius: var(--radius-md);
 		color: inherit;
 		text-decoration: none;
-		transition: transform 0.15s ease, border-color 0.15s ease;
+		transition:
+			transform 0.15s ease,
+			border-color 0.15s ease;
 	}
 
 	.collection-link:hover {
@@ -1473,7 +1544,9 @@ $effect(() => {
 
 	.collection-arrow {
 		color: var(--text-muted);
-		transition: transform 0.15s ease, color 0.15s ease;
+		transition:
+			transform 0.15s ease,
+			color 0.15s ease;
 	}
 
 	.collection-link:hover .collection-arrow {
