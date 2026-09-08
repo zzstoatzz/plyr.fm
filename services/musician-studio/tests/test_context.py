@@ -71,3 +71,17 @@ def test_composition_context_excludes_visual_profile_instructions() -> None:
     assert "avatar_prompt" not in context and "bio" not in context
     assert context["inspirations"] == [i.model_dump() for i in profile.inspirations]
     assert context["ethos"] == profile.ethos
+
+
+def test_planning_history_keeps_lessons_without_old_synthesis() -> None:
+    history = [
+        {
+            "python": "old oscillator code",
+            "memory": "bass masks melody",
+            "musical_plan": {"motif": "D F E D"},
+        }
+    ]
+    context = history_context(history, include_code=False)
+    assert context == [
+        {"memory": "bass masks melody", "musical_plan": {"motif": "D F E D"}}
+    ]

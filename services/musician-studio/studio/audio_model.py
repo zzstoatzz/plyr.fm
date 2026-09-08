@@ -45,7 +45,6 @@ def listen(
     inspirations: list[dict],
 ) -> ListeningReview:
     profile = Musician.model_validate(store.musicians()[listener]["profile"])
-    study = store.study(session, author) or {}
     prompt = (
         "Listen to the attached ten-second recording as this musician: "
         + json.dumps(musical_identity(profile))
@@ -53,17 +52,14 @@ def listen(
         + json.dumps(inspirations)
         + ". Review the audible tonality, pitch relationships, timbre, bass, balance, articulation, and development. "
         "Describe concrete audible moments and uncertainty; do not invent instrument names or infer sound from inspirations. "
-        "First describe what you hear independently of the plan: is there a discernible pulse or intentional "
+        "Describe only what you hear: is there a discernible pulse or intentional "
         "free rhythm, a motif with phrasing, coherent pitch relationships, and development? "
         "Name timestamps and uncertainty. Do not reward theory words or effects without audible organization. "
-        "Then compare what you heard with the author's plan below; intentions are not evidence. "
         "Explain which musical relationship works or fails, and give an actionable note/rhythm/voicing "
         "or arrangement change rather than just more hiss, reverb or saturation. "
-        "Judge percussion-led or non-tonal work by its stated organization, not compulsory chords. "
+        "Judge percussion-led or non-tonal work by audible organization, not compulsory chords. "
         "Suggest a specific revision to how it sounds. Ready means you would release it as the author, or keep it as a peer. "
         "A difference from your own taste is not a technical defect. Return JSON with observations, changes, and ready."
-        + "\nAuthor's plan (may be absent for older work): "
-        + json.dumps(study.get("musical_plan"))
     )
     data = path.read_bytes()
     if not data or len(data) > 4_000_000:

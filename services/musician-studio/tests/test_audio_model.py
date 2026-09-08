@@ -33,7 +33,7 @@ def test_review_sends_audio_and_records_provider_evidence(
         assert base64.b64decode(parts[1]["inline_data"]["data"]) == audio.read_bytes()
         assert parts[1]["inline_data"]["mime_type"] == "audio/wav"
         assert inspirations[0]["artist"] in parts[0]["text"]
-        assert "D F E D, answered in the bass" in parts[0]["text"]
+        assert "D F E D, answered in the bass" not in parts[0]["text"]
         return httpx.Response(
             200,
             json={

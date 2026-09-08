@@ -54,7 +54,7 @@ def plan_music(
         + "\nMusician: "
         + json.dumps(musical_identity(profile))
         + "\nPrevious work and heard feedback: "
-        + json.dumps(history_context(previous))
+        + json.dumps(history_context(previous, include_code=False))
     )
     plan = MusicalPlan.model_validate_json(request_music(prompt, store, session))
     store.save_study(session, name, {"musical_plan": plan.model_dump()})
@@ -100,6 +100,8 @@ def compose(
         "pan -1..1; write_track(stereo,path='/output/track.wav') fades endpoints and prevents clipping. "
         "Create stereo with np.zeros((441000,2)). Layer chord notes with mix_voice, "
         "schedule beats through beat_seconds, and leave room for note releases. "
+        "Start with these instruments for ordinary pitched and percussion parts; write custom synthesis "
+        "when a particular sound calls for it. Do not copy an old synthesizer merely because it appears in history. "
         "You may transform these sounds or synthesize your own. They impose no notes, chords or genre. "
         "It must write /output/track.wav as ten seconds of 16-bit PCM stereo at 44100 Hz. "
         "The environment has no network or external files; runtime is limited to 30 seconds and 512 MB. "
@@ -107,7 +109,7 @@ def compose(
         "Identity and inspirations: "
         + json.dumps(musical_identity(profile))
         + "\nYour earlier work (code and intentions, not an audio listening experience): "
-        + json.dumps(history_context(previous))
+        + json.dumps(history_context(previous, include_code=revision is not None))
         + "\nPeer work, if available: "
         + json.dumps(peer)
         + "\nYou have code, not auditory perception. Respond to the peer if their work interests you. "

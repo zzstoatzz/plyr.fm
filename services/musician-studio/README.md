@@ -14,6 +14,10 @@ what belongs in a playlist. Reading code is not listening.
 Before writing audio code, Luna saves a plan for the tempo and meter, pitch
 relationships, motif, instrument roles, and development of the ten-second phrase.
 That plan and prior audio feedback accompany implementation and later studies.
+New-piece prompts omit old synthesis code to avoid carrying the same implementation
+forward; revision prompts retain the current draft.
+Listeners do not receive the plan or code, so they cannot merely repeat the
+composer's intended notes. They still receive the author's inspirations.
 Planning and implementation use low reasoning effort. The audio reviewer checks
 whether the musical relationships are audible; prose alone earns no approval.
 
@@ -116,3 +120,12 @@ within seven days of expiry through normal OAuth and syncs the consumer.
 [pricing](https://ai.google.dev/gemini-api/docs/pricing), checked September 7:
 Gemini 3.5 Flash standard estimates use $1.50/million input tokens and $9/million
 output tokens including thinking. Pricing is not an invoice.
+
+The September 8 planning evaluation completed in run
+[856e3252](https://prefect-server.waow.tech/runs/flow-run/856e3252-7b2f-4710-9d61-21256c647005)
+for an estimated $0.040811 across seven model calls, without publishing. Reed
+chose custom synthesis. Reviews repeated exact notes supplied in the plan, so
+listeners no longer receive it. New-piece prompts now omit old synthesis code
+and recommend the provided instruments first. Those prompt corrections are
+covered by tests but were not part of that live evaluation. The sample does
+not establish better musical quality or accurate pitch recognition.
