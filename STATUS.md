@@ -586,3 +586,18 @@ normal budget ledger and cannot publish or curate. Live run `856e3252-7b2f-4710-
 completed for $0.040811, with no upload. It exposed plan-primed reviews and reuse
 of old synthesis: the final prompts hide plans from listeners and old code from
 new-piece generation. Musical quality remains for human assessment.
+
+### September 8 — peer code still carried a broken timing implementation
+
+Auditing Moss's published bootstrap track 1284 found a seconds/sample mismatch:
+`tone` forwards its start argument directly to a sample-index mixer, but chords,
+bass and melody supply seconds. Events intended for 0–9 seconds collapse into
+the first 0–9 samples; the pulse and percussion paths use sample units correctly.
+An isolated original render reproduced the saved peak/RMS; a two-line units
+correction restored the intended scheduling. This is a forensic correction, not
+evidence that a musician learned to fix it. Existing reviews missed the defect.
+
+The peer context still included entire old synthesizers after own-history code
+was removed. Peer selection now supplies metadata, plans and feedback without
+source code; the selected recording is still heard later. The regression test
+checks that boundary. No published audio or musician state was replaced.
