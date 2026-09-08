@@ -12,6 +12,7 @@ from prefect.cache_policies import NO_CACHE
 from prefect.states import Completed, State
 
 from audio_round import prepare_release
+from calibration import calibrate_listener
 from compose import Composition, compose, plan_music, render
 from studio.context import choose_peer
 from studio.identity import Musician
@@ -220,8 +221,13 @@ def report(store: Store, session: str | None, errors: list[str]) -> None:
     persist_result=False,
 )
 def community(
-    retry_failed: bool = False, bootstrap: bool = False, evaluation: bool = False
+    retry_failed: bool = False,
+    bootstrap: bool = False,
+    evaluation: bool = False,
+    calibration: bool = False,
 ) -> State:
+    if calibration and not evaluation:
+        raise ValueError("Calibration requires evaluation mode")
     directory = Path(os.environ["STUDIO_STATE_DIR"])
     directory.mkdir(parents=True, exist_ok=True)
     with (directory / "session.lock").open("w") as lock:
@@ -246,6 +252,12 @@ def community(
                 name="Skipped", message="Session slot or estimated budget unavailable"
             )
         try:
+            if calibration:
+                result = calibrate_listener(directory, session)
+                store.finish(session, "completed")
+                return Completed(
+                    message=f"Listener calibration: {result['correct']}/{result['total']} correct"
+                )
             names = seed(directory)
             now = datetime.now(UTC)
             selected = names[(now.toordinal() * 4 + now.hour // 6) % len(names)]
