@@ -59,7 +59,7 @@ def test_peer_choice_uses_only_another_artists_published_previous_work(
     peer = choose_peer(store, "moss", "2026-09-02-0")
     assert peer["id"] == "kite"
     assert peer["work"]["track_id"] == 123
-    assert peer["work"]["python"] == "pass"
+    assert "python" not in peer["work"]
     assert peer["probabilities"] == {"kite": 1.0}
 
 

@@ -72,7 +72,7 @@ def choose_peer(store: Store, name: str, session: str) -> dict | None:
             "id": key,
             "name": peer.name,
             "inspirations": [i.model_dump() for i in peer.inspirations],
-            "work": history_context(history[:1], 12000)[0],
+            "work": history_context(history[:1], 12000, include_code=False)[0],
         }
     if not weights:
         return None
