@@ -97,6 +97,7 @@ def test_native_retry_and_audio_cache(
     operation = audio_model.audio_request.with_options(
         retry_delay_seconds=0, result_storage=tmp_path / "results"
     )
+    monkeypatch.setattr(audio_model, "audio_request", operation)
     stages = []
 
     @flow(
@@ -106,7 +107,9 @@ def test_native_retry_and_audio_cache(
         retry_delay_seconds=0,
     )
     def pipeline(data: bytes, prompt: str) -> None:
-        operation(tmp_path, session, data, prompt, Feedback, "test-model")
+        audio = tmp_path / "recording.wav"
+        audio.write_bytes(data)
+        audio_model.request_audio(store, session, audio, prompt, Feedback)
         stages.append(True)
         if len(stages) == 1:
             raise ValueError("later step failed")
