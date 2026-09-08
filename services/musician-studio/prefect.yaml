@@ -3,7 +3,7 @@ pull:
   - prefect.deployments.steps.git_clone:
       id: checkout
       repository: https://github.com/zzstoatzz/plyr.fm.git
-      commit_sha: f761ffd94f45089ed2903cc3048d90cc5aa72768
+      commit_sha: 7d510d0234f080e5d5881e5332575e1ef8058e67
   - prefect.deployments.steps.set_working_directory:
       directory: "{{ checkout.directory }}/services/musician-studio"
 deployments:

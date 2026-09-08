@@ -9,6 +9,23 @@ Flash receives the actual WAV and makes musical judgments. Luna implements
 Python drafts and requested revisions; it cannot approve a release or decide
 what belongs in a playlist. Reading code is not listening.
 
+## composition
+
+Before writing audio code, Luna saves a plan for the tempo and meter, pitch
+relationships, motif, instrument roles, and development of the ten-second phrase.
+That plan and prior audio feedback accompany implementation and later studies.
+New-piece prompts omit old synthesis code to avoid carrying the same implementation
+forward; revision prompts retain the current draft.
+Listeners do not receive the plan or code, so they cannot merely repeat the
+composer's intended notes. They still receive the author's inspirations.
+Planning and implementation use low reasoning effort. The audio reviewer checks
+whether the musical relationships are audible; prose alone earns no approval.
+
+The optional `studio_instruments` module supplies pitched plucks, bass and pads,
+percussion, beat-to-second conversion, mixing and WAV output. It is mounted
+read-only in the existing isolated Python container. Artists can alter the
+sounds or synthesize their own; the helpers prescribe no score or genre.
+
 ## before publication
 
 For each ten-second piece, the author listens to the rendered draft and requests
@@ -45,6 +62,11 @@ output, and thinking costs enter the same ledger as Python generation. Budget
 exhaustion skips work until a later UTC window. These are estimates, not a hard
 provider billing cap; subscriptions, hosting, and monitoring are excluded.
 
+An explicit `evaluation=true` run performs planning, composition and audio
+reviews without publishing or editing playlists. It has one separate reservation
+per six-hour window, charged against the same daily/monthly limits. Normal runs
+do not enable it.
+
 Uploads remain unlisted, tagged `ai`, and self-labeled `ai-generated`. Existing
 unlisted search and artist-page behavior is preserved. Prefect artifacts
 `plyr-fm-musician-progress` and `plyr-fm-musician-costs` show reviews, links,
@@ -52,7 +74,7 @@ failures, and usage. Use direct run links in your own browser.
 
 ## validation and limitations
 
-`just check` runs 32 offline tests, including the complete review/revision order,
+`just check` runs offline tests, including the complete review/revision order,
 repeat recovery, native audio payloads, missing audio-token receipts, changed
 files/inspirations, and missing peer review. A live call through the new client
 returned 250 audio tokens and rejected Moss's draft. The full live cycle then completed in run
@@ -98,3 +120,12 @@ within seven days of expiry through normal OAuth and syncs the consumer.
 [pricing](https://ai.google.dev/gemini-api/docs/pricing), checked September 7:
 Gemini 3.5 Flash standard estimates use $1.50/million input tokens and $9/million
 output tokens including thinking. Pricing is not an invoice.
+
+The September 8 planning evaluation completed in run
+[856e3252](https://prefect-server.waow.tech/runs/flow-run/856e3252-7b2f-4710-9d61-21256c647005)
+for an estimated $0.040811 across seven model calls, without publishing. Reed
+chose custom synthesis. Reviews repeated exact notes supplied in the plan, so
+listeners no longer receive it. New-piece prompts now omit old synthesis code
+and recommend the provided instruments first. Those prompt corrections are
+covered by tests but were not part of that live evaluation. The sample does
+not establish better musical quality or accurate pitch recognition.

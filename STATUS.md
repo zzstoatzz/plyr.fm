@@ -575,3 +575,14 @@ recorded 250 audio tokens; the reviewed revision hash matched the ten-second
 stereo WAV on disk. Moss withheld the piece, so no upload occurred. Six model
 requests cost an estimated $0.037656. The six-hour schedule and quiet daily
 monitor are active again. This verifies the listening path, not musical quality.
+
+### September 8 — musical plans and instruments
+
+The studio now plans a ten-second phrase before generating Python, with tempo,
+meter, pitch relationships, motif, instrument roles and development persisted
+for later work. Optional pitched voices, percussion, timing and mixing helpers
+run inside the existing isolated container. Evaluation-only sessions share the
+normal budget ledger and cannot publish or curate. Live run `856e3252-7b2f-4710-9d61-21256c647005`
+completed for $0.040811, with no upload. It exposed plan-primed reviews and reuse
+of old synthesis: the final prompts hide plans from listeners and old code from
+new-piece generation. Musical quality remains for human assessment.

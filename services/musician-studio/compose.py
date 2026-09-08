@@ -22,6 +22,45 @@ from studio.state import Store
 ROOT = Path(__file__).parent
 
 
+class MusicalPlan(BaseModel):
+    tempo_bpm: float = Field(gt=0, le=400)
+    meter: str = Field(min_length=1, max_length=300)
+    tonal_organization: str = Field(min_length=20, max_length=1000)
+    motif: str = Field(min_length=20, max_length=1000)
+    instrument_roles: list[str] = Field(min_length=1, max_length=6)
+    development: str = Field(min_length=20, max_length=1000)
+
+
+def plan_music(
+    profile: Musician, previous: list[dict], store: Store, session: str, name: str
+) -> MusicalPlan:
+    saved = store.study(session, name) or {}
+    if saved.get("musical_plan"):
+        return MusicalPlan.model_validate(saved["musical_plan"])
+    prompt = (
+        "Plan a ten-second piece before writing any synthesis code. "
+        "Use your inspirations and lessons from previous audio reviews. "
+        "Choose a coherent musical idea that can be recognized by listening. "
+        "Specify tempo and meter (or explain free timing), a tonal center/mode and chord or "
+        "pitch relationships, a short motif with concrete notes or intervals and rhythmic values, "
+        "the role/register of each instrument, and how the phrase develops and ends within ten seconds. "
+        "Relate bass notes and voicings to the motif; use repetition with purposeful variation, "
+        "space, phrasing and tension/release. Texture alone is not a composition plan. "
+        "Non-tonal and percussion-led music are welcome: explain the organizing relationships "
+        "instead of inventing a key or forcing melody or chords. A single voice can be sufficient. "
+        "Avoid unrelated effects and competing ideas. Pick the few musical relationships that matter. "
+        "Return only JSON matching this schema: "
+        + json.dumps(MusicalPlan.model_json_schema())
+        + "\nMusician: "
+        + json.dumps(musical_identity(profile))
+        + "\nPrevious work and heard feedback: "
+        + json.dumps(history_context(previous, include_code=False))
+    )
+    plan = MusicalPlan.model_validate_json(request_music(prompt, store, session))
+    store.save_study(session, name, {"musical_plan": plan.model_dump()})
+    return plan
+
+
 class Composition(BaseModel):
     title: str = Field(min_length=1, max_length=80)
     idea: str = Field(min_length=1, max_length=1500)
@@ -45,17 +84,32 @@ def compose(
     peer: dict | None = None,
     revision: str | None = None,
 ) -> Composition:
+    name = musician_id or profile.name.lower()
+    plan = plan_music(profile, previous, store, session, name)
     prompt = (
         "Make a ten-second piece of music as this musician. Use Python and numpy to create the audio. "
         "You control the instruments, synthesis, musical structure, rhythm, harmony, and mix. "
-        "Write a complete executable script using only numpy and the Python standard library. "
+        "Write a complete executable script using numpy, the Python standard library, and optionally studio_instruments. "
+        "Implement this musical plan, prioritizing audible phrasing and relationships over effects: "
+        + plan.model_dump_json()
+        + "\nOptional tested tools from studio_instruments: SAMPLE_RATE=44100; "
+        "note_hz(midi) supports fractional MIDI; beat_seconds(beat,bpm) converts beats to seconds; "
+        "pitched_note(midi,seconds,voice='pluck') returns mono numpy audio, voice is pluck/bass/pad, "
+        "duration includes release; drum_hit(voice,seed=0) returns a 0.3-second kick/snare/hat; "
+        "mix_voice(stereo,mono,start,gain=0.2,pan=0) adds a voice in-place at start SECONDS, "
+        "pan -1..1; write_track(stereo,path='/output/track.wav') fades endpoints and prevents clipping. "
+        "Create stereo with np.zeros((441000,2)). Layer chord notes with mix_voice, "
+        "schedule beats through beat_seconds, and leave room for note releases. "
+        "Start with these instruments for ordinary pitched and percussion parts; write custom synthesis "
+        "when a particular sound calls for it. Do not copy an old synthesizer merely because it appears in history. "
+        "You may transform these sounds or synthesize your own. They impose no notes, chords or genre. "
         "It must write /output/track.wav as ten seconds of 16-bit PCM stereo at 44100 Hz. "
         "The environment has no network or external files; runtime is limited to 30 seconds and 512 MB. "
         "Avoid clipping. Choose a title for this particular composition. "
         "Identity and inspirations: "
         + json.dumps(musical_identity(profile))
         + "\nYour earlier work (code and intentions, not an audio listening experience): "
-        + json.dumps(history_context(previous))
+        + json.dumps(history_context(previous, include_code=revision is not None))
         + "\nPeer work, if available: "
         + json.dumps(peer)
         + "\nYou have code, not auditory perception. Respond to the peer if their work interests you. "
@@ -69,6 +123,16 @@ def compose(
     )
     if len(prompt.encode()) > 48000:
         raise ValueError("Composition context exceeds 48 KB")
+    source = request_music(prompt, store, session)
+    if source.startswith("```python\n") and source.endswith("```"):
+        source = source[len("```python\n") : -3].strip()
+    store.save_study(session, musician_id or profile.name.lower(), {"source": source})
+    return parse_composition(source)
+
+
+def request_music(prompt: str, store: Store, session: str) -> str:
+    if len(prompt.encode()) > 48000:
+        raise ValueError("Music context exceeds 48 KB")
     store.call(session)
     with tempfile.TemporaryDirectory() as scratch:
         pi = Path(scratch) / ".pi"
@@ -90,7 +154,7 @@ def compose(
                 "--model",
                 "openai-codex/gpt-5.6-luna",
                 "--thinking",
-                "off",
+                "low",
                 "--no-session",
                 "--no-extensions",
                 "--no-context-files",
@@ -127,10 +191,7 @@ def compose(
     source = "".join(
         p["text"] for p in messages[0]["content"] if p["type"] == "text"
     ).strip()
-    if source.startswith("```python\n") and source.endswith("```"):
-        source = source[len("```python\n") : -3].strip()
-    store.save_study(session, musician_id or profile.name.lower(), {"source": source})
-    return parse_composition(source)
+    return source
 
 
 def parse_composition(source: str) -> Composition:
@@ -195,6 +256,8 @@ def render(code: str, output: Path) -> dict:
             f"{source.resolve()}:/input/compose.py:ro",
             "-v",
             f"{fresh.resolve()}:/output",
+            "-v",
+            f"{ROOT / 'studio_instruments.py'}:/usr/local/lib/python3.13/site-packages/studio_instruments.py:ro",
             "plyr-musician-python:local",
         ]
         try:

@@ -34,10 +34,18 @@ class Store:
         return sqlite3.connect(self.path, timeout=30)
 
     def reserve(
-        self, now: datetime, retry_failed: bool = False, *, bootstrap: bool = False
+        self,
+        now: datetime,
+        retry_failed: bool = False,
+        *,
+        bootstrap: bool = False,
+        evaluation: bool = False,
     ) -> str | None:
+        if bootstrap and evaluation:
+            raise ValueError("Bootstrap and evaluation are separate sessions")
         day, month = now.strftime("%Y-%m-%d"), now.strftime("%Y-%m")
         key = f"{day}-{now.hour // 6}" + ("-bootstrap" if bootstrap else "")
+        key += "-evaluation" if evaluation else ""
         with self.connect() as db:
             db.execute("BEGIN IMMEDIATE")
             if bootstrap:

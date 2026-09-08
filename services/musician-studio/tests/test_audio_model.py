@@ -20,6 +20,9 @@ def test_review_sends_audio_and_records_provider_evidence(
     profile = json.loads((Path(__file__).parents[1] / "profiles/moss.json").read_text())
     store.save_musician("moss", profile)
     session = store.reserve(datetime.now(UTC))
+    store.save_study(
+        session, "moss", {"musical_plan": {"motif": "D F E D, answered in the bass"}}
+    )
     audio = tmp_path / "recording.wav"
     audio.write_bytes(b"the exact rendered audio")
     inspirations = profile["profile"]["inspirations"]
@@ -30,6 +33,7 @@ def test_review_sends_audio_and_records_provider_evidence(
         assert base64.b64decode(parts[1]["inline_data"]["data"]) == audio.read_bytes()
         assert parts[1]["inline_data"]["mime_type"] == "audio/wav"
         assert inspirations[0]["artist"] in parts[0]["text"]
+        assert "D F E D, answered in the bass" not in parts[0]["text"]
         return httpx.Response(
             200,
             json={

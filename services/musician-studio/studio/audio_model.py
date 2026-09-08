@@ -52,6 +52,12 @@ def listen(
         + json.dumps(inspirations)
         + ". Review the audible tonality, pitch relationships, timbre, bass, balance, articulation, and development. "
         "Describe concrete audible moments and uncertainty; do not invent instrument names or infer sound from inspirations. "
+        "Describe only what you hear: is there a discernible pulse or intentional "
+        "free rhythm, a motif with phrasing, coherent pitch relationships, and development? "
+        "Name timestamps and uncertainty. Do not reward theory words or effects without audible organization. "
+        "Explain which musical relationship works or fails, and give an actionable note/rhythm/voicing "
+        "or arrangement change rather than just more hiss, reverb or saturation. "
+        "Judge percussion-led or non-tonal work by audible organization, not compulsory chords. "
         "Suggest a specific revision to how it sounds. Ready means you would release it as the author, or keep it as a peer. "
         "A difference from your own taste is not a technical defect. Return JSON with observations, changes, and ready."
     )

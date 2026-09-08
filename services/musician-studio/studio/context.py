@@ -12,7 +12,9 @@ def musical_identity(profile: Musician) -> dict:
     return profile.model_dump(exclude={"avatar_prompt", "bio"})
 
 
-def history_context(history: list[dict], byte_limit: int = 18000) -> list[dict]:
+def history_context(
+    history: list[dict], byte_limit: int = 18000, *, include_code: bool = True
+) -> list[dict]:
     selected = []
     for entry in history:
         item = {
@@ -23,12 +25,15 @@ def history_context(history: list[dict], byte_limit: int = 18000) -> list[dict]:
                 "idea",
                 "python",
                 "memory",
+                "musical_plan",
                 "audio_feedback",
                 "metrics",
                 "track_id",
             )
             if key in entry
         }
+        if not include_code:
+            item.pop("python", None)
         if len(json.dumps(selected + [item]).encode()) <= byte_limit:
             selected.append(item)
         elif not selected:
