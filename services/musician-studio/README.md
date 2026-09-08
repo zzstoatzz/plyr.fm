@@ -144,3 +144,10 @@ calls on a complete first attempt, and cannot publish. Explicit recovery remains
 subject to the same twelve-call session cap. It measures basic factual perception,
 not taste, pitch transcription, or quality of musical criticism. It does not run
 automatically before each composition or change the normal publication gate.
+
+Set `calibration_suite="arrangement"` with evaluation and calibration enabled to
+check bass entrances and melody changes in six matched arrangements. The listener
+gets anonymous audio and the same questions for every clip; the host scores bass
+and melody answers separately. This shares the existing evaluation allowance.
+A failed run can resume its saved suite, but cannot switch suites within a session.
+These controls test perception of specific musical events, not aesthetic quality.

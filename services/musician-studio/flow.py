@@ -12,7 +12,7 @@ from prefect.cache_policies import NO_CACHE
 from prefect.states import Completed, State
 
 from audio_round import prepare_release
-from calibration import calibrate_listener
+from calibration import CalibrationSuite, calibrate_listener
 from compose import Composition, compose, plan_music, render
 from studio.context import choose_peer
 from studio.identity import Musician
@@ -225,9 +225,12 @@ def community(
     bootstrap: bool = False,
     evaluation: bool = False,
     calibration: bool = False,
+    calibration_suite: CalibrationSuite = "basic",
 ) -> State:
     if calibration and not evaluation:
         raise ValueError("Calibration requires evaluation mode")
+    if calibration_suite != "basic" and not calibration:
+        raise ValueError("A calibration suite requires calibration mode")
     directory = Path(os.environ["STUDIO_STATE_DIR"])
     directory.mkdir(parents=True, exist_ok=True)
     with (directory / "session.lock").open("w") as lock:
@@ -253,7 +256,7 @@ def community(
             )
         try:
             if calibration:
-                result = calibrate_listener(directory, session)
+                result = calibrate_listener(directory, session, calibration_suite)
                 store.finish(session, "completed")
                 return Completed(
                     message=f"Listener calibration: {result['correct']}/{result['total']} correct"

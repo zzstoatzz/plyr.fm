@@ -30,3 +30,30 @@ def test_evaluation_never_calls_publication_or_curation(
     assert session.endswith("-evaluation")
     assert status == "completed"
     assert store.study(session, "reed")["withheld"]
+
+
+def test_arrangement_calibration_uses_evaluation_without_loading_musicians(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("STUDIO_STATE_DIR", str(tmp_path))
+    monkeypatch.setattr(flow, "get_run_logger", lambda: logging.getLogger("test"))
+    monkeypatch.setattr(flow, "report", lambda *_args: None)
+    seen = []
+
+    def calibrate(directory: Path, session: str, suite: str) -> dict:
+        seen.append((directory, session, suite))
+        return {"correct": 2, "total": 6}
+
+    def forbid(*_args: object) -> None:
+        pytest.fail("Calibration must not load musicians or publish")
+
+    monkeypatch.setattr(flow, "calibrate_listener", calibrate)
+    monkeypatch.setattr(flow, "seed", forbid)
+    monkeypatch.setattr(flow, "publish_piece", forbid)
+    assert flow.community.fn(
+        evaluation=True, calibration=True, calibration_suite="arrangement"
+    ).is_completed()
+    assert seen[0][1].endswith("-evaluation")
+    assert seen[0][2] == "arrangement"
+    with pytest.raises(ValueError, match="requires calibration"):
+        flow.community.fn(calibration_suite="arrangement")
