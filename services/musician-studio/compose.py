@@ -124,10 +124,29 @@ def compose(
     if len(prompt.encode()) > 48000:
         raise ValueError("Composition context exceeds 48 KB")
     source = request_music(prompt, store, session)
-    if source.startswith("```python\n") and source.endswith("```"):
-        source = source[len("```python\n") : -3].strip()
-    store.save_study(session, musician_id or profile.name.lower(), {"source": source})
-    return parse_composition(source)
+    for attempt in range(2):
+        if source.startswith("```python\n") and source.endswith("```"):
+            source = source[len("```python\n") : -3].strip()
+        store.save_study(session, name, {"source": source})
+        try:
+            return parse_composition(source)
+        except SyntaxError as error:
+            if attempt:
+                raise
+            store.save_study(
+                session,
+                name,
+                {"syntax_failure": {"source": source, "error": str(error)}},
+            )
+            source = request_music(
+                "Correct the Python syntax error in this music script. Preserve the composition, "
+                "metadata and musical intent. Return the complete executable Python source only. "
+                "It must still write /output/track.wav; no extra tools are available.\n"
+                + f"Compiler error: {error}\nSource:\n{source}",
+                store,
+                session,
+            )
+    raise AssertionError("Unreachable composition attempt")
 
 
 def request_music(prompt: str, store: Store, session: str) -> str:
