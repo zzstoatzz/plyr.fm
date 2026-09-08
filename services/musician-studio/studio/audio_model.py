@@ -8,6 +8,10 @@ import subprocess
 from pathlib import Path
 
 import httpx
+from prefect import task
+from prefect.cache_policies import INPUTS, TASK_SOURCE
+from prefect.context import FlowRunContext
+from prefect.states import State
 from pydantic import BaseModel, Field
 
 from studio.context import musical_identity
@@ -79,16 +83,57 @@ class AudioReceipt(BaseModel):
     audio_tokens: int = Field(gt=0)
 
 
+class AudioProviderError(RuntimeError):
+    def __init__(self, status: int) -> None:
+        self.status = status
+        super().__init__(status)
+
+    def __str__(self) -> str:
+        return f"Audio review HTTP {self.status}; no text fallback"
+
+
+def retry_audio(task: object, task_run: object, state: State) -> bool:
+    error = state.result(raise_on_failure=False)
+    if isinstance(error, AudioProviderError):
+        return error.status in {408, 429, 500, 502, 503, 504}
+    return isinstance(error, httpx.TransportError)
+
+
 def request_audio[Response: BaseModel](
     store: Store, session: str, path: Path, prompt: str, schema: type[Response]
 ) -> tuple[Response, AudioReceipt]:
     data = path.read_bytes()
+    operation = audio_request.with_options(
+        result_storage=store.path.parent / "prefect-results"
+    )
+    call = operation if FlowRunContext.get() else operation.fn
+    return call(store.path.parent, session, data, prompt, schema, MODEL)
+
+
+@task(
+    name="interpret-audio",
+    retries=3,
+    retry_delay_seconds=[15, 45, 120],
+    retry_jitter_factor=0.2,
+    retry_condition_fn=retry_audio,
+    cache_policy=INPUTS + TASK_SOURCE,
+    persist_result=True,
+)
+def audio_request[Response: BaseModel](
+    directory: Path,
+    session: str,
+    data: bytes,
+    prompt: str,
+    schema: type[Response],
+    model: str,
+) -> tuple[Response, AudioReceipt]:
+    store = Store(directory)
     if not data or len(data) > 4_000_000:
         raise ValueError("Missing or oversized review audio")
     store.call(session)
     with httpx.Client(timeout=90) as client:
         response = client.post(
-            f"https://generativelanguage.googleapis.com/v1beta/models/{MODEL}:generateContent",
+            f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
             headers={"x-goog-api-key": key()},
             json={
                 "contents": [
@@ -113,9 +158,7 @@ def request_audio[Response: BaseModel](
             },
         )
     if response.status_code != 200:
-        raise RuntimeError(
-            f"Audio review HTTP {response.status_code}; no text fallback"
-        )
+        raise AudioProviderError(response.status_code)
     result = response.json()
     usage = result["usageMetadata"]
     store.charge(

@@ -40,6 +40,7 @@ class Store:
         *,
         bootstrap: bool = False,
         evaluation: bool = False,
+        flow_run_id: str | None = None,
     ) -> str | None:
         if bootstrap and evaluation:
             raise ValueError("Bootstrap and evaluation are separate sessions")
@@ -48,6 +49,28 @@ class Store:
         key += "-evaluation" if evaluation else ""
         with self.connect() as db:
             db.execute("BEGIN IMMEDIATE")
+            owner_key = f"flow-reservation:{flow_run_id}"
+            if flow_run_id:
+                owned = db.execute(
+                    "SELECT value FROM settings WHERE key=?", (owner_key,)
+                ).fetchone()
+                if owned:
+                    reservation = db.execute(
+                        "SELECT day,month,spent,calls FROM sessions WHERE id=?",
+                        (owned[0],),
+                    ).fetchone()
+                    if (
+                        reservation is None
+                        or reservation[0] != day
+                        or reservation[1] != month
+                    ):
+                        return None
+                    if reservation[2] >= SESSION_BUDGET or reservation[3] >= 12:
+                        return None
+                    db.execute(
+                        "UPDATE sessions SET status='running' WHERE id=?", (owned[0],)
+                    )
+                    return owned[0]
             if bootstrap:
                 prior = db.execute(
                     "SELECT id FROM sessions WHERE id LIKE '%-bootstrap'"
@@ -67,6 +90,11 @@ class Store:
                     db.execute(
                         "UPDATE sessions SET status='running' WHERE id=?", (key,)
                     )
+                    if flow_run_id:
+                        db.execute(
+                            "INSERT INTO settings(key,value) VALUES (?,?)",
+                            (owner_key, key),
+                        )
                     return key
                 return None
             for field, value, limit in [
@@ -83,6 +111,10 @@ class Store:
                 "INSERT INTO sessions(id,day,month,status,reserved) VALUES (?,?,?,?,?)",
                 (key, day, month, "running", SESSION_BUDGET),
             )
+            if flow_run_id:
+                db.execute(
+                    "INSERT INTO settings(key,value) VALUES (?,?)", (owner_key, key)
+                )
         return key
 
     def call(self, session: str) -> None:
