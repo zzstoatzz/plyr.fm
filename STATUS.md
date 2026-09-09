@@ -660,3 +660,18 @@ zero and overflow-y auto; its header stays visible and the existing sticky
 save/cancel row remains reachable. A real-browser Storybook regression fails
 without the scroll rules and passes with them. The header also links the
 published track record to pds.ls when an AT URI is available.
+
+### September 9 — diagnose the studio's Gemini daily quota
+
+A budgeted native-audio request reproduced HTTP 429 with quota
+`GenerateRequestsPerDayPerProjectPerModel-FreeTier=20` for Gemini 3.5 Flash.
+The provider also suggested a five-second retry, despite identifying a daily
+limit. Audio errors now retain structured quota IDs and limits in Prefect while
+omitting raw provider messages. Daily quota exhaustion stops task retries;
+minute limits, unknown 429s and transient service failures remain retryable.
+The diagnostic cost was zero. Billing/quota configuration remains an external
+blocker; this change does not claim restored listening or musical progress.
+
+The full studio check passes 65 tests. The two HTTP-boundary quota regression
+cases fail against the previous audio client. Existing retry/cache integration
+coverage still passes. Schedule, publication policy and spending caps are unchanged.
