@@ -283,7 +283,7 @@ max_lines = 2589
 
 [[rules]]
 path = "backend/src/backend/_internal/atproto/client.py"
-max_lines = 930
+max_lines = 936
 
 [[rules]]
 path = "backend/src/backend/_internal/auth/oauth.py"

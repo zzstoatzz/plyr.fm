@@ -627,3 +627,14 @@ An isolated SDK test and a mocked-provider run against the actual Prefect server
 both verified task retry, flow retry reusing a completed audio result, and cache
 invalidation after audio/context changes. This proves orchestration behavior;
 it does not establish that the upstream audio provider has recovered.
+
+### September 9 — close interrupted PDS upload streams
+
+Track 1288's Blacksky mirroring failures exposed unclosed source sessions.
+A transport-level regression reproduced an audio iterator remaining open after
+an interrupted POST, including through the progress-heartbeat wrapper. Upload
+attempts now explicitly own and close both the wrapper and source iterator for
+OAuth and app-password sessions, including cancellation and early rejection.
+The twelve regression cases fail on the previous implementation and pass with
+the fix. This repairs cleanup; it does not identify or resolve the original
+Blacksky transport failure, and no user track was retried or rewritten.

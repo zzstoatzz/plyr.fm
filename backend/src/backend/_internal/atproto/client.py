@@ -75,6 +75,23 @@ async def _heartbeating_body(
             bytes_since_beat = 0
 
 
+@contextlib.asynccontextmanager
+async def _upload_body(
+    factory: StreamBodyFactory, heartbeat: ProgressHeartbeat | None
+) -> AsyncIterator[AsyncIterable[bytes]]:
+    source = aiter(factory())
+    content = _heartbeating_body(lambda: source, heartbeat) if heartbeat else source
+    try:
+        yield content
+    finally:
+        try:
+            if content is not source and (close := getattr(content, "aclose", None)):
+                await close()
+        finally:
+            if close := getattr(source, "aclose", None):
+                await close()
+
+
 logger = logging.getLogger(__name__)
 
 
@@ -486,12 +503,10 @@ async def _app_password_upload_blob(
                 if body_factory is not None:
                     assert content_length is not None
                     headers["Content-Length"] = str(content_length)
-                    content = (
-                        _heartbeating_body(body_factory, heartbeat)
-                        if heartbeat is not None
-                        else body_factory()
-                    )
-                    response = await http.post(url, headers=headers, content=content)
+                    async with _upload_body(body_factory, heartbeat) as content:
+                        response = await http.post(
+                            url, headers=headers, content=content
+                        )
                 else:
                     response = await http.post(url, headers=headers, content=blob_data)
         except _TRANSIENT_HTTP_ERRORS as e:
@@ -740,18 +755,11 @@ async def _signed_streaming_post(
         request_headers = dict(headers)
         request_headers["Authorization"] = f"DPoP {oauth_session.access_token}"
         request_headers["DPoP"] = proof
-        # wrap the per-attempt factory so each retry gets a fresh iterator
-        # AND a fresh heartbeat throttle state.
-        if heartbeat is not None:
-
-            def attempt_body() -> AsyncIterable[bytes]:
-                return _heartbeating_body(body_factory, heartbeat)
-        else:
-            attempt_body = body_factory
-        async with httpx.AsyncClient(timeout=httpx.Timeout(None)) as http:
-            response = await http.post(
-                url, headers=request_headers, content=attempt_body()
-            )
+        async with (
+            httpx.AsyncClient(timeout=httpx.Timeout(None)) as http,
+            _upload_body(body_factory, heartbeat) as content,
+        ):
+            response = await http.post(url, headers=request_headers, content=content)
         if dpop.is_dpop_nonce_error(response):
             new_nonce = dpop.extract_nonce_from_response(response)
             if new_nonce and attempt == 0:
