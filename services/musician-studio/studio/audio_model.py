@@ -14,6 +14,7 @@ from prefect.context import FlowRunContext
 from prefect.states import State
 from pydantic import BaseModel, Field
 
+from studio.audio_errors import AudioProviderError
 from studio.context import musical_identity
 from studio.identity import Musician
 from studio.listening import ListeningReview, inspiration_digest, record_review
@@ -83,19 +84,17 @@ class AudioReceipt(BaseModel):
     audio_tokens: int = Field(gt=0)
 
 
-class AudioProviderError(RuntimeError):
-    def __init__(self, status: int) -> None:
-        self.status = status
-        super().__init__(status)
-
-    def __str__(self) -> str:
-        return f"Audio review HTTP {self.status}; no text fallback"
-
-
 def retry_audio(task: object, task_run: object, state: State) -> bool:
     error = state.result(raise_on_failure=False)
     if isinstance(error, AudioProviderError):
-        return error.status in {408, 429, 500, 502, 503, 504}
+        return not error.daily_quota_exhausted and error.status in {
+            408,
+            429,
+            500,
+            502,
+            503,
+            504,
+        }
     return isinstance(error, httpx.TransportError)
 
 
@@ -158,7 +157,7 @@ def audio_request[Response: BaseModel](
             },
         )
     if response.status_code != 200:
-        raise AudioProviderError(response.status_code)
+        raise AudioProviderError.from_response(response)
     result = response.json()
     usage = result["usageMetadata"]
     store.charge(

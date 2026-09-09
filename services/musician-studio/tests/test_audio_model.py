@@ -5,9 +5,11 @@ from pathlib import Path
 
 import httpx
 import pytest
+from prefect.states import Failed
 from pydantic import ValidationError
 
 from studio import audio_model
+from studio.audio_model import AudioProviderError, Feedback, retry_audio
 from studio.listening import digest
 from studio.state import Store
 
@@ -87,3 +89,60 @@ def test_review_sends_audio_and_records_provider_evidence(
     assert store.usage(datetime.now(UTC))["month"]["estimated_cost"] == pytest.approx(
         0.0021
     )
+
+
+@pytest.mark.parametrize("period,expected_retry", [("Day", False), ("Minute", True)])
+def test_quota_failure_retains_daily_limit_and_controls_retry(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, period: str, expected_retry: bool
+) -> None:
+    store = Store(tmp_path)
+    session = store.reserve(datetime.now(UTC))
+    client = httpx.Client
+    quota = f"GenerateRequestsPer{period}PerProjectPerModel-FreeTier"
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            429,
+            json={
+                "error": {
+                    "message": "sensitive provider message must not be logged",
+                    "details": [
+                        {
+                            "@type": "type.googleapis.com/google.rpc.QuotaFailure",
+                            "violations": [{"quotaId": quota, "quotaValue": "20"}],
+                        },
+                        {
+                            "@type": "type.googleapis.com/google.rpc.RetryInfo",
+                            "retryDelay": "5s",
+                        },
+                    ],
+                }
+            },
+        )
+
+    monkeypatch.setattr(audio_model, "key", lambda: "fake")
+    monkeypatch.setattr(
+        audio_model.httpx,
+        "Client",
+        lambda **kwargs: client(transport=httpx.MockTransport(handle), **kwargs),
+    )
+    with pytest.raises(AudioProviderError) as raised:
+        audio_model.audio_request.fn(
+            tmp_path, session, b"audio", "review", Feedback, "test"
+        )
+    error = raised.value
+    assert f"{quota}=20" in str(error)
+    assert "sensitive" not in str(error)
+    assert error.daily_quota_exhausted is (not expected_retry)
+    assert store.usage(datetime.now(UTC))["day"]["calls"] == 1
+    assert store.usage(datetime.now(UTC))["day"]["estimated_cost"] == 0
+    assert retry_audio(None, None, Failed(data=error)) is expected_retry
+
+
+@pytest.mark.parametrize(
+    "body", [None, [], {"error": []}, {"error": {"details": [None]}}]
+)
+def test_unstructured_provider_error_keeps_http_status(body: object) -> None:
+    error = AudioProviderError.from_response(httpx.Response(503, json=body))
+    assert error.status == 503
+    assert not error.quotas
