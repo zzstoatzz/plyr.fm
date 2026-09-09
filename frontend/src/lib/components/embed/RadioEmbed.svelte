@@ -110,7 +110,9 @@
 			// user gesture — safe to start audio
 			tunedIn = true;
 			syncAudio(radioState!);
-			el.play().then(() => (playing = true)).catch(() => (playing = tunedIn = false));
+			el.play()
+				.then(() => (playing = true))
+				.catch(() => (playing = tunedIn = false));
 		}
 	}
 
@@ -157,10 +159,27 @@
 ></audio>
 
 <div class="radio-embed">
-	<a class="brand" href={`https://plyr.fm/radio${activeSlug ? `/${activeSlug}` : ''}`} target="_blank" rel="noopener">
-		<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+	<a
+		class="brand"
+		href={`https://plyr.fm/radio${activeSlug ? `/${activeSlug}` : ''}`}
+		target="_blank"
+		rel="noopener"
+	>
+		<svg
+			width="14"
+			height="14"
+			viewBox="0 0 24 24"
+			fill="none"
+			stroke="currentColor"
+			stroke-width="2"
+			stroke-linecap="round"
+			stroke-linejoin="round"
+			aria-hidden="true"
+		>
 			<circle cx="12" cy="12" r="2"></circle>
-			<path d="M16.24 7.76a6 6 0 0 1 0 8.49M7.76 16.24a6 6 0 0 1 0-8.49M19.07 4.93a10 10 0 0 1 0 14.14M4.93 19.07a10 10 0 0 1 0-14.14"></path>
+			<path
+				d="M16.24 7.76a6 6 0 0 1 0 8.49M7.76 16.24a6 6 0 0 1 0-8.49M19.07 4.93a10 10 0 0 1 0 14.14M4.93 19.07a10 10 0 0 1 0-14.14"
+			></path>
 		</svg>
 		<span>plyr.fm radio</span>
 	</a>
@@ -183,15 +202,36 @@
 				<div class="art fallback"></div>
 			{/if}
 			<div class="meta">
-				<span class="label">{playing ? 'on air' : "what's on"}</span>
-				<span class="title">{current.title}</span>
-				<a class="artist" href={`https://plyr.fm/u/${current.artist_handle}`} target="_blank" rel="noopener">{current.artist}</a>
+				<span class="label">{playing ? 'listening now' : 'on air'}</span>
+				<a
+					class="title"
+					href={`https://plyr.fm/track/${current.id}`}
+					target="_blank"
+					rel="noopener"
+					title={current.title}>{current.title}</a
+				>
+				<a
+					class="artist"
+					href={`https://plyr.fm/u/${current.artist_handle}`}
+					target="_blank"
+					rel="noopener">{current.artist}</a
+				>
 			</div>
 			<button class="play" onclick={toggle} aria-label={playing ? 'pause radio' : 'play radio'}>
 				{#if playing}
-					<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1"></rect><rect x="14" y="5" width="4" height="14" rx="1"></rect></svg>
+					<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"
+						><rect x="6" y="5" width="4" height="14" rx="1"></rect><rect
+							x="14"
+							y="5"
+							width="4"
+							height="14"
+							rx="1"
+						></rect></svg
+					>
 				{:else}
-					<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><polygon points="7 4 20 12 7 20 7 4"></polygon></svg>
+					<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"
+						><polygon points="7 4 20 12 7 20 7 4"></polygon></svg
+					>
 				{/if}
 			</button>
 		</div>
@@ -206,150 +246,141 @@
 		width: 100%;
 		display: flex;
 		flex-direction: column;
-		gap: 1rem;
-		padding: 1rem;
-		background: var(--bg-primary);
+		gap: var(--embed-gap);
+		padding: var(--embed-space);
+		background: var(--bg-secondary);
 		color: var(--text-primary);
-		font-family:
-			'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', 'Consolas', monospace;
 	}
-
 	.brand {
 		display: inline-flex;
 		align-items: center;
-		gap: 0.4rem;
-		color: var(--accent);
+		gap: 6px;
+		align-self: start;
+		color: var(--text-secondary);
+		font-size: var(--text-xs);
+		font-weight: 600;
 		text-decoration: none;
-		font-size: 0.75rem;
-		text-transform: uppercase;
-		letter-spacing: 0.06em;
 	}
-
 	.brand:hover {
-		text-decoration: underline;
+		color: var(--text-primary);
 	}
-
 	.dial-row {
 		display: flex;
 		justify-content: center;
 	}
-
-	/* iframes sized for the pre-dial layout are too short for an extra row —
-	   keep them uncropped and let ?station= still pin the station */
-	@media (max-height: 11.5rem) {
-		.dial-row {
-			display: none;
-		}
-	}
-
 	.status {
 		flex: 1;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		color: var(--text-tertiary);
+		display: grid;
+		place-items: center;
+		font-size: var(--text-sm);
+		color: var(--text-secondary);
 	}
-
 	.status.error {
-		color: #ef4444;
+		color: var(--error);
 	}
-
 	.now {
 		flex: 1;
+		min-height: 0;
 		display: flex;
 		align-items: center;
-		gap: 1rem;
-		min-height: 0;
-		transition:
-			opacity 0.22s ease,
-			filter 0.22s ease;
+		gap: var(--embed-gap);
 	}
-
-	/* the swappable station content fades while tuning, same as the radio page */
-	.now.tuning {
-		opacity: 0.35;
-		filter: blur(2px);
+	.now.tuning .meta {
+		opacity: 0.6;
 	}
-
-	@media (prefers-reduced-motion: reduce) {
-		.now {
-			transition: none;
-		}
-
-		.now.tuning {
-			opacity: 0.6;
-			filter: none;
-		}
-	}
-
 	.art {
-		width: 5rem;
-		height: 5rem;
-		border-radius: 8px;
-		object-fit: cover;
-		border: 1px solid var(--border-default);
+		width: min(32vw, 200px, max(48px, calc(100vh - 140px)));
+		aspect-ratio: 1;
+		height: auto;
+		object-fit: contain;
+		border-radius: var(--radius-md);
 		flex-shrink: 0;
 	}
-
 	.art.fallback {
-		background:
-			linear-gradient(135deg, rgba(255, 255, 255, 0.08), transparent 45%),
-			var(--bg-secondary);
+		background: var(--bg-tertiary);
 	}
-
 	.meta {
 		flex: 1;
 		min-width: 0;
 		display: flex;
 		flex-direction: column;
-		gap: 0.2rem;
+		gap: 2px;
 	}
-
 	.label {
-		font-size: 0.7rem;
-		text-transform: uppercase;
-		letter-spacing: 0.06em;
-		color: var(--text-tertiary);
-	}
-
-	.title {
-		font-size: 1.1rem;
-		font-weight: 600;
-		color: var(--text-primary);
-		white-space: nowrap;
-		overflow: hidden;
-		text-overflow: ellipsis;
-	}
-
-	.artist {
-		font-size: 0.85rem;
 		color: var(--text-secondary);
-		text-decoration: none;
+		font-size: var(--text-xs);
+	}
+	.title {
+		color: var(--text-primary);
+		font-size: var(--text-lg);
+		font-weight: 650;
+		line-height: 1.4;
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
+		text-decoration: none;
 	}
-
+	.artist {
+		color: var(--text-secondary);
+		font-size: var(--text-sm);
+		line-height: 1.4;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		text-decoration: none;
+	}
+	.title:hover,
 	.artist:hover {
-		color: var(--text-primary);
+		text-decoration: underline;
 	}
-
 	.play {
-		flex-shrink: 0;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		width: 3rem;
-		height: 3rem;
+		display: grid;
+		place-items: center;
+		width: var(--embed-play);
+		height: var(--embed-play);
 		border-radius: var(--radius-full);
-		border: none;
-		background: var(--accent);
+		background: var(--text-primary);
 		color: var(--bg-primary);
+		border: 0;
 		cursor: pointer;
-		transition: filter 0.15s;
+		flex-shrink: 0;
 	}
-
 	.play:hover {
-		filter: brightness(1.1);
+		background: var(--accent);
+	}
+	@media (max-height: 183px) {
+		.dial-row {
+			display: none;
+		}
+		.art {
+			width: min(20vw, calc(100vh - 64px));
+		}
+	}
+	@media (max-height: 99px) {
+		.brand,
+		.label {
+			display: none;
+		}
+		.art {
+			width: calc(100vh - 2 * var(--embed-space));
+		}
+	}
+	@media (max-width: 279px) {
+		.art {
+			display: none;
+		}
+	}
+	@media (min-height: 300px) and (max-aspect-ratio: 6/5) {
+		.now {
+			flex-wrap: wrap;
+			align-content: center;
+		}
+		.art {
+			width: min(100%, calc(100vh - 210px));
+			margin: 0 auto;
+		}
+		.meta {
+			flex-basis: calc(100% - var(--embed-play) - var(--embed-gap));
+		}
 	}
 </style>
