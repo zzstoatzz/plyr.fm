@@ -638,3 +638,15 @@ OAuth and app-password sessions, including cancellation and early rejection.
 The twelve regression cases fail on the previous implementation and pass with
 the fix. This repairs cleanup; it does not identify or resolve the original
 Blacksky transport failure, and no user track was retried or rewritten.
+
+### September 9 — refresh the embeds from the player work
+
+Radio, track, album, playlist and artist embeds now use consistent typography,
+neutral surfaces, intact artwork and prominent transport controls. The review
+started with their last edits (August 23's lint sweep), the January–March
+track/collection layouts and May–June radio layout, then followed the later
+player history: readable metadata, generous seek targets and unobscured covers.
+Track and collection seeking now uses a keyboard-accessible native range input.
+Collection lists scroll within the space above the transport; the iframe layout
+owns its viewport height so long lists cannot push controls out of view.
+Existing station/autoplay URLs, media-session behavior and moderation remain.

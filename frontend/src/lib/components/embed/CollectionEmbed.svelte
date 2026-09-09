@@ -15,8 +15,7 @@
 
 	let { collection }: { collection: CollectionData } = $props();
 
-	// SAFETY: bound via bind:this on the always-rendered <audio> before any handler below runs
-	let audio: HTMLAudioElement = $state() as HTMLAudioElement;
+	let audio = $state<HTMLAudioElement>();
 	let paused = $state(true);
 	let currentTime = $state(0);
 	let duration = $state(0);
@@ -32,18 +31,32 @@
 
 	async function copyShareLink() {
 		const url = collection.collectionUrl;
-		try { await navigator.clipboard.writeText(url); }
-		catch { if (navigator.share) { try { await navigator.share({ url }); } catch { /* dismissed */ } } return; }
+		try {
+			await navigator.clipboard.writeText(url);
+		} catch {
+			if (navigator.share) {
+				try {
+					await navigator.share({ url });
+				} catch {
+					/* dismissed */
+				}
+			}
+			return;
+		}
 		showCopied = true;
-		setTimeout(() => { showCopied = false; }, 2000);
+		setTimeout(() => {
+			showCopied = false;
+		}, 2000);
 	}
 
 	function togglePlay() {
-		if (!isPlayable) return;
+		if (!isPlayable || !audio) return;
 		if (audio.paused) {
-			audio.play();
+			audio?.play().catch(() => {
+				paused = true;
+			});
 		} else {
-			audio.pause();
+			audio?.pause();
 		}
 	}
 
@@ -51,16 +64,18 @@
 		const track = collection.tracks[index];
 		if (!track?.r2_url || track.gated || hasAdultLabel(track)) return;
 		if (index === currentIndex && !paused) {
-			audio.pause();
+			audio?.pause();
 		} else {
 			currentIndex = index;
 			await tick();
-			audio.play().catch(() => { paused = true; });
+			audio?.play().catch(() => {
+				paused = true;
+			});
 		}
 	}
 
 	async function skipPrev() {
-		if (currentTime > 3) {
+		if (audio && currentTime > 3) {
 			audio.currentTime = 0;
 			return;
 		}
@@ -69,7 +84,7 @@
 			if (t.r2_url && !t.gated && !hasAdultLabel(t)) {
 				currentIndex = i;
 				await tick();
-				audio.play().catch(() => {});
+				audio?.play().catch(() => {});
 				return;
 			}
 		}
@@ -81,7 +96,7 @@
 			if (t.r2_url && !t.gated && !hasAdultLabel(t)) {
 				currentIndex = i;
 				await tick();
-				audio.play().catch(() => {});
+				audio?.play().catch(() => {});
 				return;
 			}
 		}
@@ -89,20 +104,23 @@
 	}
 
 	function formatTime(seconds: number): string {
+		if (!Number.isFinite(seconds) || seconds < 0) return '0:00';
 		const m = Math.floor(seconds / 60);
 		const s = Math.floor(seconds % 60);
 		return `${m}:${s.toString().padStart(2, '0')}`;
 	}
 
-	function handleSeek(e: MouseEvent & { currentTarget: HTMLElement }) {
-		const rect = e.currentTarget.getBoundingClientRect();
-		const x = e.clientX - rect.left;
-		audio.currentTime = (x / rect.width) * duration;
+	function handleSeek(event: Event & { currentTarget: HTMLInputElement }): void {
+		if (audio && Number.isFinite(duration) && duration > 0) {
+			audio.currentTime = event.currentTarget.valueAsNumber;
+		}
 	}
 
 	onMount(() => {
 		if ($page.url.searchParams.get('autoplay') === '1' && isPlayable) {
-			audio.play().catch(() => { paused = true; });
+			audio?.play().catch(() => {
+				paused = true;
+			});
 		}
 
 		// route OS-level lock-screen / system-media controls to the embed's
@@ -110,10 +128,18 @@
 		// only knew that an `<audio>` element was playing — no title, no
 		// artwork, and the next/previous buttons were ignored.
 		setMediaSessionActionHandlers({
-			play: () => { audio?.play().catch(() => {}); },
-			pause: () => { audio?.pause(); },
-			previoustrack: () => { void skipPrev(); },
-			nexttrack: () => { void skipNext(); },
+			play: () => {
+				audio?.play().catch(() => {});
+			},
+			pause: () => {
+				audio?.pause();
+			},
+			previoustrack: () => {
+				void skipPrev();
+			},
+			nexttrack: () => {
+				void skipNext();
+			},
 			seekto: (details) => {
 				if (audio && details.seekTime !== undefined) {
 					audio.currentTime = details.seekTime;
@@ -121,17 +147,11 @@
 			},
 			seekbackward: (details) => {
 				if (!audio) return;
-				audio.currentTime = Math.max(
-					0,
-					audio.currentTime - (details.seekOffset ?? 10)
-				);
+				audio.currentTime = Math.max(0, audio.currentTime - (details.seekOffset ?? 10));
 			},
 			seekforward: (details) => {
 				if (!audio) return;
-				audio.currentTime = Math.min(
-					duration,
-					audio.currentTime + (details.seekOffset ?? 10)
-				);
+				audio.currentTime = Math.min(duration, audio.currentTime + (details.seekOffset ?? 10));
 			}
 		});
 
@@ -175,13 +195,6 @@
 </script>
 
 <div class="embed-container">
-	{#if collection.imageUrl}
-		<SensitiveImage src={collection.imageUrl} respectPreference={false}>
-			<div class="bg-image" style="background-image: url({collection.imageUrl})"></div>
-		</SensitiveImage>
-	{/if}
-	<div class="bg-overlay"></div>
-
 	<div class="art-container">
 		{#if collection.imageUrl}
 			<SensitiveImage src={collection.imageUrl} respectPreference={false}>
@@ -195,39 +208,60 @@
 	<div class="content">
 		<div class="collection-header">
 			<div class="meta">
-				<a href={collection.collectionUrl} target="_blank" rel="noopener noreferrer" class="title">{collection.title}</a>
+				<a href={collection.collectionUrl} target="_blank" rel="noopener noreferrer" class="title"
+					>{collection.title}</a
+				>
 				<span class="meta-sep">&middot;</span>
-				<a href={collection.subtitleUrl} target="_blank" rel="noopener noreferrer" class="subtitle">{collection.subtitle}</a>
+				<a href={collection.subtitleUrl} target="_blank" rel="noopener noreferrer" class="subtitle"
+					>{collection.subtitle}</a
+				>
 			</div>
 			<div class="actions">
-			<button class="share-btn" onclick={copyShareLink} title="copy link">
-				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="share-icon">
-					<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
-					<path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
-				</svg>
-				{#if showCopied}<span class="copied">copied!</span>{/if}
-			</button>
-			<a href="https://plyr.fm" target="_blank" rel="noopener noreferrer" class="logo">plyr.fm</a>
-		</div>
+				<button class="share-btn" onclick={copyShareLink} title="copy link">
+					<svg
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="2.5"
+						class="share-icon"
+					>
+						<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+						<path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+					</svg>
+					{#if showCopied}<span class="copied">copied!</span>{/if}
+				</button>
+				<a href="https://plyr.fm" target="_blank" rel="noopener noreferrer" class="logo">plyr.fm</a>
+			</div>
 		</div>
 
 		<div class="track-list">
 			{#each collection.tracks as track, i (track.id)}
 				<button
-					class="track-row" class:active={i === currentIndex} class:gated={!track.r2_url || track.gated || hasAdultLabel(track)}
+					class="track-row"
+					class:active={i === currentIndex}
+					class:gated={!track.r2_url || track.gated || hasAdultLabel(track)}
 					onclick={(e) => {
-						if ((e.target as HTMLElement).closest?.('a')) return;
+						if (e.composedPath().some((node) => node instanceof HTMLAnchorElement)) return;
 						playTrack(i);
 					}}
 					disabled={!track.r2_url || track.gated || hasAdultLabel(track)}
 				>
 					<span class="track-num">
 						{#if i === currentIndex && !paused}
-							<span class="eq-bars"><span class="eq-bar"></span><span class="eq-bar"></span><span class="eq-bar"></span></span>
+							<span class="eq-bars"
+								><span class="eq-bar"></span><span class="eq-bar"></span><span class="eq-bar"
+								></span></span
+							>
 						{:else}{i + 1}{/if}
 					</span>
 					<span class="track-title">{track.title}</span>
-					<a class="track-artist" href="https://plyr.fm/u/{track.artist_handle}" target="_blank" rel="noopener noreferrer" onclick={(e) => e.stopPropagation()}>{track.artist}</a>
+					<a
+						class="track-artist"
+						href="https://plyr.fm/u/{track.artist_handle}"
+						target="_blank"
+						rel="noopener noreferrer"
+						onclick={(e) => e.stopPropagation()}>{track.artist}</a
+					>
 				</button>
 			{/each}
 			{#if collection.tracks.length === 0}
@@ -237,49 +271,82 @@
 
 		<div class="player-bar" class:is-playing={!paused}>
 			<div class="now-playing">
-				{#if currentTrack?.image_url}
-					<SensitiveImage src={currentTrack.image_url} compact respectPreference={false}>
-						<img class="np-art" src={resizedImageUrl(currentTrack.image_url, IMAGE_WIDTHS.thumb)} alt="" />
+				{#if currentTrack && trackCoverUrl(currentTrack)}
+					<SensitiveImage src={trackCoverUrl(currentTrack)} compact respectPreference={false}>
+						<img
+							class="np-art"
+							src={resizedImageUrl(trackCoverUrl(currentTrack), IMAGE_WIDTHS.thumb)}
+							alt=""
+						/>
 					</SensitiveImage>
 				{:else}
 					<div class="np-art-placeholder">&#9835;</div>
 				{/if}
 				<div class="np-meta">
 					{#if currentTrack?.id}
-						<a class="np-title" href="https://plyr.fm/track/{currentTrack.id}" target="_blank" rel="noopener noreferrer">{currentTrack?.title ?? ''}</a>
+						<a
+							class="np-title"
+							href="https://plyr.fm/track/{currentTrack.id}"
+							target="_blank"
+							rel="noopener noreferrer">{currentTrack?.title ?? ''}</a
+						>
 					{:else}
 						<span class="np-title">{currentTrack?.title ?? ''}</span>
 					{/if}
 					{#if currentTrack?.artist_handle}
-						<a class="np-artist" href="https://plyr.fm/u/{currentTrack.artist_handle}" target="_blank" rel="noopener noreferrer">{currentTrack?.artist ?? ''}</a>
+						<a
+							class="np-artist"
+							href="https://plyr.fm/u/{currentTrack.artist_handle}"
+							target="_blank"
+							rel="noopener noreferrer">{currentTrack?.artist ?? ''}</a
+						>
 					{:else}
 						<span class="np-artist">{currentTrack?.artist ?? ''}</span>
 					{/if}
 				</div>
 				<div class="transport">
 					<button class="ctrl-btn" onclick={skipPrev} aria-label="Previous">
-						<svg viewBox="0 0 24 24" fill="currentColor" class="ctrl-icon"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z" /></svg>
+						<svg viewBox="0 0 24 24" fill="currentColor" class="ctrl-icon"
+							><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z" /></svg
+						>
 					</button>
-					<button class="play-btn" onclick={togglePlay} aria-label={paused ? 'Play' : 'Pause'}>
+					<button
+						class="play-btn"
+						disabled={!isPlayable}
+						onclick={togglePlay}
+						aria-label={paused ? 'Play' : 'Pause'}
+					>
 						{#if paused}
-							<svg viewBox="0 0 24 24" fill="currentColor" class="icon"><path d="M8 5v14l11-7z" /></svg>
+							<svg viewBox="0 0 24 24" fill="currentColor" class="icon"
+								><path d="M8 5v14l11-7z" /></svg
+							>
 						{:else}
-							<svg viewBox="0 0 24 24" fill="currentColor" class="icon"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" /></svg>
+							<svg viewBox="0 0 24 24" fill="currentColor" class="icon"
+								><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" /></svg
+							>
 						{/if}
 					</button>
 					<button class="ctrl-btn" onclick={skipNext} aria-label="Next">
-						<svg viewBox="0 0 24 24" fill="currentColor" class="ctrl-icon"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z" /></svg>
+						<svg viewBox="0 0 24 24" fill="currentColor" class="ctrl-icon"
+							><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z" /></svg
+						>
 					</button>
 				</div>
 			</div>
 			<div class="scrubber">
 				<div class="time">{formatTime(currentTime)}</div>
-				<!-- svelte-ignore a11y_click_events_have_key_events -->
-				<!-- svelte-ignore a11y_no_static_element_interactions -->
-				<div class="progress-bar" onclick={handleSeek}>
-					<div class="progress-bg"></div>
-					<div class="progress-fill" style="width: {(currentTime / (duration || 1)) * 100}%"></div>
-				</div>
+				<input
+					class="seek-bar"
+					type="range"
+					aria-label="Seek"
+					min="0"
+					max={Number.isFinite(duration) && duration > 0 ? duration : 1}
+					step="0.1"
+					value={Number.isFinite(currentTime) ? currentTime : 0}
+					disabled={!Number.isFinite(duration) || duration <= 0}
+					style={`--progress: ${duration > 0 ? (currentTime / duration) * 100 : 0}%`}
+					oninput={handleSeek}
+				/>
 				<div class="time">{formatTime(duration)}</div>
 			</div>
 		</div>
@@ -287,364 +354,362 @@
 
 	{#if currentTrack?.r2_url && !currentTrack.gated && !hasAdultLabel(currentTrack)}
 		<audio
-			bind:this={audio} src={currentTrack.r2_url}
-			bind:paused bind:currentTime bind:duration
+			bind:this={audio}
+			src={currentTrack.r2_url}
+			bind:paused
+			bind:currentTime
+			bind:duration
 			onended={skipNext}
 		></audio>
 	{/if}
 </div>
 
 <style>
-	:global(body) {
-		font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', 'Consolas', monospace;
-		background: var(--bg-primary);
-		color: var(--text-primary);
-	}
-
 	.embed-container {
 		display: flex;
 		height: 100%;
-		background: var(--bg-tertiary);
+		padding: var(--embed-space);
+		gap: var(--embed-space);
+		background: var(--bg-secondary);
+		color: var(--text-primary);
 		overflow: hidden;
-		position: relative;
-		container-type: size;
-		--pad: clamp(8px, 4cqi, 16px);
-		--gap: clamp(6px, 2cqi, 12px);
-		--play-size: clamp(24px, 7cqi, 32px);
-		--icon-size: clamp(14px, 5cqi, 20px);
-		--ctrl-size: clamp(10px, 3.5cqi, 16px);
-		--title-size: clamp(12px, 3.5cqi, 15px);
-		--artist-size: clamp(10px, 3cqi, 13px);
-		--time-size: clamp(10px, 2.5cqi, 12px);
-		--logo-size: clamp(8px, 2cqi, 11px);
-		--row-size: clamp(10px, 2.8cqi, 13px);
-		--thumb-size: clamp(24px, 6cqi, 32px);
-		/* color tokens — overridden by blurred-mode container queries */
-		--c-title: var(--text-primary);
-		--c-artist: var(--text-secondary);
-		--c-ctrl: var(--text-secondary);
-		--c-ctrl-hover: var(--text-primary);
-		--c-logo: var(--border-emphasis);
-		--c-logo-hover: var(--text-muted);
-		--c-time: var(--text-tertiary);
-		--c-progress-bg: var(--border-default);
-		--c-progress-fill: var(--text-primary);
-		--c-row: var(--text-secondary);
-		--c-row-dim: var(--text-muted);
 	}
-
-	.bg-image {
-		display: none;
-		position: absolute;
-		inset: 0;
-		background-size: cover;
-		background-position: center;
-		filter: blur(24px);
-		transform: scale(1.3);
-		z-index: 0;
-		pointer-events: none;
-	}
-
-	.bg-overlay {
-		display: none;
-		position: absolute;
-		inset: 0;
-		background: linear-gradient(to bottom, rgba(0,0,0,0.4) 0%, rgba(0,0,0,0.2) 40%, rgba(0,0,0,0.5) 100%);
-		z-index: 0;
-		pointer-events: none;
-	}
-
 	.art-container {
-		flex: 0 0 clamp(80px, 30cqi, 240px);
-		height: 100%;
+		flex: 0 0 auto;
+		width: min(28vw, 200px, calc(100vh - 2 * var(--embed-space)));
+		aspect-ratio: 1;
+		align-self: center;
 		position: relative;
 	}
-
-	.art { width: 100%; height: 100%; object-fit: cover; }
-
-	.art-placeholder {
-		width: 100%; height: 100%;
-		background: var(--border-default);
-		display: flex; align-items: center; justify-content: center;
-		font-size: clamp(24px, 10cqi, 48px);
-		color: var(--text-muted);
+	.art {
+		width: 100%;
+		height: 100%;
+		object-fit: contain;
+		border-radius: var(--radius-md);
 	}
-
+	.art-placeholder {
+		width: 100%;
+		height: 100%;
+		background: var(--bg-tertiary);
+		display: grid;
+		place-items: center;
+		border-radius: var(--radius-md);
+		font-size: var(--text-3xl);
+		color: var(--text-tertiary);
+	}
 	.content {
 		flex: 1;
-		padding: var(--pad);
+		min-width: 0;
+		min-height: 0;
 		display: flex;
 		flex-direction: column;
-		position: relative;
+		gap: var(--embed-gap);
+	}
+	.meta {
 		min-width: 0;
-		z-index: 1;
-		gap: var(--gap);
+	}
+	.title {
+		display: block;
+		font-size: var(--text-lg);
+		font-weight: 650;
+		line-height: 1.4;
+		color: var(--text-primary);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		text-decoration: none;
+	}
+	.subtitle {
+		display: block;
+		font-size: var(--text-sm);
+		line-height: 1.4;
+		color: var(--text-secondary);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		text-decoration: none;
+	}
+	.title:hover,
+	.subtitle:hover {
+		text-decoration: underline;
+	}
+	.actions {
+		display: flex;
+		align-items: center;
+		gap: 4px;
+		flex-shrink: 0;
+	}
+	.logo {
+		color: var(--text-secondary);
+		font-size: var(--text-xs);
+		font-weight: 600;
+		text-decoration: none;
+		white-space: nowrap;
+	}
+	.logo:hover {
+		color: var(--text-primary);
+	}
+	.share-btn {
+		display: grid;
+		place-items: center;
+		width: 32px;
+		height: 32px;
+		border: 0;
+		background: none;
+		color: var(--text-secondary);
+		cursor: pointer;
+		position: relative;
+	}
+	.share-icon {
+		width: 16px;
+		height: 16px;
+	}
+	.copied {
+		position: absolute;
+		right: 0;
+		top: 100%;
+		padding: 4px 8px;
+		background: var(--bg-primary);
+		border: 1px solid var(--border-default);
+		border-radius: var(--radius-sm);
+		color: var(--text-primary);
+		font-size: var(--text-xs);
+		z-index: 2;
+	}
+	.play-btn {
+		display: grid;
+		place-items: center;
+		width: var(--embed-play);
+		height: var(--embed-play);
+		flex-shrink: 0;
+		border: none;
+		border-radius: var(--radius-full);
+		background: var(--text-primary);
+		color: var(--bg-primary);
+		cursor: pointer;
+	}
+	.play-btn:hover:not(:disabled) {
+		background: var(--accent);
+	}
+	.play-btn:disabled {
+		opacity: 0.4;
+		cursor: default;
+	}
+	.icon {
+		width: 24px;
+		height: 24px;
+	}
+	.time {
+		font-size: var(--text-xs);
+		color: var(--text-secondary);
+		font-variant-numeric: tabular-nums;
+		min-width: 2.5em;
+		text-align: center;
+	}
+	@media (max-width: 279px) {
+		.art-container {
+			display: none;
+		}
+		.logo {
+			display: none;
+		}
+	}
+	@media (max-width: 199px) {
+		.time,
+		.share-btn {
+			display: none;
+		}
 	}
 
 	.collection-header {
 		display: flex;
-		justify-content: space-between;
 		align-items: center;
-		gap: var(--gap);
+		justify-content: space-between;
+		gap: var(--embed-gap);
+		padding-bottom: var(--embed-gap);
+		border-bottom: 1px solid var(--border-subtle);
 	}
-
-	.ctrl-btn {
-		background: none; border: none;
-		color: var(--c-ctrl);
-		cursor: pointer; padding: 2px;
-		display: flex; align-items: center; justify-content: center;
-	}
-	.ctrl-btn:hover { color: var(--c-ctrl-hover); }
-	.ctrl-icon { width: var(--ctrl-size); height: var(--ctrl-size); }
-
-	.play-btn {
-		width: var(--play-size); height: var(--play-size);
-		border-radius: var(--radius-full);
-		background: #fff; color: #000; border: none;
-		display: flex; align-items: center; justify-content: center;
-		cursor: pointer; flex-shrink: 0;
-		transition: transform 0.1s;
-	}
-	.play-btn:active { transform: scale(0.95); }
-	.icon { width: var(--icon-size); height: var(--icon-size); }
-
-	.meta {
-		min-width: 0; display: flex; align-items: baseline; gap: 0.4em;
-		overflow: hidden;
-	}
-
-	.title {
-		font-size: var(--title-size); font-weight: 700;
-		white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-		text-decoration: none; color: var(--c-title); line-height: 1.3;
-		flex-shrink: 1; min-width: 0;
-	}
-	.title:hover { text-decoration: underline; }
-
 	.meta-sep {
-		color: var(--c-artist); flex-shrink: 0;
-		font-size: var(--artist-size);
+		display: none;
 	}
-
-	.subtitle {
-		font-size: var(--artist-size);
-		color: var(--c-artist);
-		white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-		text-decoration: none; line-height: 1.3;
-		flex-shrink: 1; min-width: 0;
-	}
-	.subtitle:hover { text-decoration: underline; }
-
-	.logo {
-		font-size: var(--logo-size); font-weight: 700;
-		color: var(--c-logo);
-		text-decoration: none; text-transform: uppercase; letter-spacing: 0.5px;
-		white-space: nowrap; padding-top: 4px;
-	}
-	.logo:hover { color: var(--c-logo-hover); }
-
-	.actions { display: flex; align-items: center; gap: clamp(4px, 1.5cqi, 8px); flex-shrink: 0; }
-	.share-btn { background: none; border: none; color: var(--text-tertiary); cursor: pointer; padding: 2px; display: flex; align-items: center; position: relative; }
-	.share-btn:hover { color: var(--text-primary); }
-	.share-icon { width: var(--logo-size); height: var(--logo-size); }
-	.copied { position: absolute; top: -1.5rem; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); color: #fff; padding: 2px 8px; border-radius: 4px; font-size: 10px; white-space: nowrap; pointer-events: none; animation: fadeIn 0.15s ease-in; }
-	@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-
 	.track-list {
-		flex: 1; overflow-y: auto; min-height: 0;
+		flex: 1;
+		min-height: 0;
+		overflow-y: auto;
 		scrollbar-width: thin;
 		scrollbar-color: var(--border-default) transparent;
 	}
-
 	.track-row {
-		display: flex; align-items: center; gap: 0.5em; width: 100%;
-		padding: 3px 4px; border: none; background: none;
-		color: var(--c-row); font-family: inherit; font-size: var(--row-size);
-		cursor: pointer; text-align: left; border-radius: 3px; line-height: 1.4;
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		width: 100%;
+		min-height: 36px;
+		padding: 6px;
+		border: 0;
+		border-radius: var(--radius-sm);
+		background: none;
+		color: var(--text-secondary);
+		font: inherit;
+		font-size: var(--text-sm);
+		text-align: left;
+		cursor: pointer;
 	}
-	.track-row:hover:not(:disabled) { background: var(--bg-hover); }
-	.track-row.active { color: var(--accent); }
-	.track-row.gated { opacity: 0.35; cursor: default; }
-
+	.track-row:hover:not(:disabled) {
+		background: var(--bg-hover);
+	}
+	.track-row.active {
+		color: var(--accent);
+	}
+	.track-row.gated {
+		opacity: 0.4;
+		cursor: default;
+	}
 	.track-num {
-		flex: 0 0 1.5em; text-align: right;
-		font-variant-numeric: tabular-nums; color: var(--c-row-dim);
+		width: 1.5em;
+		flex-shrink: 0;
+		text-align: center;
+		font-variant-numeric: tabular-nums;
 	}
-	.track-row.active .track-num { color: var(--accent); }
-
-	.track-title { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-
+	.track-title {
+		flex: 1;
+		min-width: 0;
+		overflow: hidden;
+		white-space: nowrap;
+		text-overflow: ellipsis;
+		line-height: 1.4;
+	}
 	.track-artist {
-		flex: 0 1 auto; max-width: 30%;
-		white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-		color: var(--c-row-dim); font-size: 0.9em;
+		max-width: 35%;
+		overflow: hidden;
+		white-space: nowrap;
+		text-overflow: ellipsis;
+		color: var(--text-secondary);
 		text-decoration: none;
 	}
-	.track-artist:hover { text-decoration: underline; }
-
-	.empty { color: var(--text-muted); font-size: var(--row-size); padding: 8px 4px; }
-
-	.eq-bars { display: inline-flex; align-items: flex-end; gap: 1px; height: 1em; }
-	.eq-bar {
-		display: inline-block; width: 2px; background: var(--accent);
-		animation: eq 0.8s ease-in-out infinite alternate;
+	.track-artist:hover {
+		text-decoration: underline;
 	}
-	.eq-bar:nth-child(1) { height: 40%; animation-delay: 0s; }
-	.eq-bar:nth-child(2) { height: 70%; animation-delay: 0.2s; }
-	.eq-bar:nth-child(3) { height: 50%; animation-delay: 0.4s; }
-	@keyframes eq { 0% { height: 20%; } 100% { height: 90%; } }
-
+	.empty {
+		color: var(--text-secondary);
+		font-size: var(--text-sm);
+		padding: 8px;
+	}
+	.eq-bars {
+		display: inline-flex;
+		align-items: end;
+		gap: 2px;
+		height: 12px;
+	}
+	.eq-bar {
+		width: 2px;
+		height: 50%;
+		background: currentColor;
+	}
+	.eq-bar:nth-child(2) {
+		height: 100%;
+	}
+	.eq-bar:nth-child(3) {
+		height: 70%;
+	}
 	.player-bar {
 		display: flex;
 		flex-direction: column;
 		gap: 4px;
-		padding-top: var(--gap);
-		position: relative;
+		padding-top: var(--embed-gap);
+		border-top: 1px solid var(--border-subtle);
 	}
-
-	.player-bar::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px; background: #6a9fff; opacity: 0.32; filter: saturate(0.9) brightness(0.75); box-shadow: 0 0 0 transparent; transition: opacity 0.15s ease-out, filter 0.15s ease-out, box-shadow 0.2s ease-out; pointer-events: none; z-index: 2; }
-	.player-bar.is-playing::before { opacity: 0.95; filter: saturate(1.25) brightness(1.28); box-shadow: 0 0 6px color-mix(in srgb, #6a9fff 65%, transparent), 0 0 14px color-mix(in srgb, #6a9fff 45%, transparent); }
-
 	.now-playing {
 		display: flex;
 		align-items: center;
-		gap: var(--gap);
+		gap: 8px;
 	}
-
-	.np-art {
-		width: var(--thumb-size);
-		height: var(--thumb-size);
-		border-radius: 3px;
-		object-fit: cover;
-		flex-shrink: 0;
-	}
-
+	.np-art,
 	.np-art-placeholder {
-		width: var(--thumb-size);
-		height: var(--thumb-size);
-		border-radius: 3px;
-		background: var(--border-default);
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		font-size: calc(var(--thumb-size) * 0.5);
-		color: var(--text-muted);
+		width: 40px;
+		height: 40px;
 		flex-shrink: 0;
+		object-fit: contain;
+		border-radius: var(--radius-sm);
 	}
-
+	.np-art-placeholder {
+		display: grid;
+		place-items: center;
+		background: var(--bg-tertiary);
+		color: var(--text-secondary);
+	}
 	.np-meta {
 		flex: 1;
 		min-width: 0;
-		display: flex;
-		flex-direction: column;
-		gap: 1px;
 	}
-
-	.np-title {
-		font-size: var(--row-size);
-		font-weight: 600;
-		white-space: nowrap;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		color: var(--c-title);
-		text-decoration: none;
-	}
-	a.np-title:hover { text-decoration: underline; }
-
+	.np-title,
 	.np-artist {
-		font-size: calc(var(--row-size) * 0.85);
-		white-space: nowrap;
+		display: block;
 		overflow: hidden;
 		text-overflow: ellipsis;
-		color: var(--c-artist);
+		white-space: nowrap;
+		line-height: 1.4;
+		font-size: var(--text-sm);
+		color: var(--text-primary);
 		text-decoration: none;
 	}
-	a.np-artist:hover { text-decoration: underline; }
-
+	.np-artist {
+		font-size: var(--text-xs);
+		color: var(--text-secondary);
+	}
 	.transport {
 		display: flex;
 		align-items: center;
-		gap: 2px;
-		flex-shrink: 0;
+		gap: 4px;
 	}
-
+	.ctrl-btn {
+		display: grid;
+		place-items: center;
+		width: 32px;
+		height: 36px;
+		background: none;
+		color: var(--text-secondary);
+		border: 0;
+		cursor: pointer;
+	}
+	.ctrl-btn:hover {
+		color: var(--text-primary);
+	}
+	.ctrl-icon {
+		width: 18px;
+		height: 18px;
+	}
 	.scrubber {
 		display: flex;
 		align-items: center;
-		gap: var(--gap);
+		gap: 8px;
 	}
-
-	.time {
-		font-size: var(--time-size); color: var(--c-time);
-		font-variant-numeric: tabular-nums; min-width: 2.5em; text-align: center;
-	}
-
-	.progress-bar {
-		flex: 1; height: clamp(20px, 6cqi, 28px);
-		display: flex; align-items: center; cursor: pointer;
-		position: relative; min-width: 40px;
-	}
-	.progress-bg {
-		width: 100%; height: clamp(3px, 1cqi, 5px);
-		background: var(--c-progress-bg); border-radius: 2px;
-	}
-	.progress-fill {
-		position: absolute; left: 0; top: 50%; transform: translateY(-50%);
-		height: clamp(3px, 1cqi, 5px);
-		background: var(--c-progress-fill); border-radius: 2px; pointer-events: none;
-	}
-	.progress-bar:hover .progress-fill { background: var(--accent); }
-
-	/* ===== NARROW (< 280px): blurred bg, hide art + track list ===== */
-	@container (max-width: 279px) {
-		.embed-container {
-			--c-title: #fff; --c-artist: rgba(255,255,255,0.85);
-			--c-ctrl: rgba(255,255,255,0.7); --c-ctrl-hover: #fff;
-			--c-logo: rgba(255,255,255,0.5); --c-logo-hover: rgba(255,255,255,0.75);
-			--c-time: rgba(255,255,255,0.6);
-			--c-progress-bg: rgba(255,255,255,0.25); --c-progress-fill: #fff;
+	@media (max-width: 499px) {
+		.art-container {
+			display: none;
 		}
-		.bg-image, .bg-overlay { display: block; }
-		.art-container, .track-list { display: none; }
-		.share-btn { color: rgba(255,255,255,0.5); }
-		.share-btn:hover { color: rgba(255,255,255,0.75); }
-		.np-art, .np-art-placeholder { display: none; }
-		.content { justify-content: center; gap: clamp(4px, 1.5cqi, 8px); }
-		.collection-header { flex-direction: column; gap: 0; }
-		.meta { flex-wrap: wrap; }
-		.meta-sep { display: none; }
-		.title { text-shadow: 0 1px 4px rgba(0,0,0,0.6); }
-		.subtitle { text-shadow: 0 1px 4px rgba(0,0,0,0.4); }
-		.logo { align-self: flex-start; }
-		.player-bar { gap: 2px; }
 	}
-
-	/* ===== MICRO (< 200px): hide times, logo, np-meta ===== */
-	@container (max-width: 199px) {
-		.time, .logo, .np-meta, .share-btn { display: none; }
-	}
-
-	/* ===== TALL (aspect-ratio <= 1.2, >= 200px, >= 300px height): blurred bg, vertical ===== */
-	@container (aspect-ratio <= 1.2) and (min-width: 200px) and (min-height: 300px) {
-		.embed-container {
-			flex-direction: column;
-			--c-title: #fff; --c-artist: rgba(255,255,255,0.85);
-			--c-ctrl: rgba(255,255,255,0.7); --c-ctrl-hover: #fff;
-			--c-logo: rgba(255,255,255,0.5); --c-logo-hover: rgba(255,255,255,0.75);
-			--c-time: rgba(255,255,255,0.6);
-			--c-progress-bg: rgba(255,255,255,0.25); --c-progress-fill: #fff;
-			--c-row: rgba(255,255,255,0.7); --c-row-dim: rgba(255,255,255,0.4);
+	@media (max-width: 319px) {
+		.np-art,
+		.np-art-placeholder,
+		.track-artist {
+			display: none;
 		}
-		.bg-image, .bg-overlay { display: block; }
-		.art-container { display: none; }
-		.content { flex: 1; }
-		.title { text-shadow: 0 1px 4px rgba(0,0,0,0.6); }
-		.share-btn { color: rgba(255,255,255,0.5); }
-		.share-btn:hover { color: rgba(255,255,255,0.75); }
+		.collection-header {
+			align-items: start;
+		}
 	}
-
-	/* ===== WIDE (>= 500px): more room for artist column ===== */
-	@container (min-width: 500px) and (aspect-ratio > 1.2) {
-		.track-artist { max-width: 40%; }
+	@media (max-height: 199px) {
+		.track-list,
+		.collection-header {
+			display: none;
+		}
+		.content {
+			justify-content: center;
+		}
+		.player-bar {
+			border: 0;
+			padding: 0;
+		}
 	}
 </style>
