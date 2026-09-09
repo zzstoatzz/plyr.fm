@@ -650,3 +650,13 @@ Track and collection seeking now uses a keyboard-accessible native range input.
 Collection lists scroll within the space above the transport; the iframe layout
 owns its viewport height so long lists cannot push controls out of view.
 Existing station/autoplay URLs, media-session behavior and moderation remain.
+
+### September 9 — restore scrolling in the mobile track editor
+
+The in-place editor locked body scrolling and clipped its dialog, but its form
+had no scroll owner. On a 390×640 viewport the form grew to 1,093px and lower
+fields could not be reached. The modal now constrains the form with min-height
+zero and overflow-y auto; its header stays visible and the existing sticky
+save/cancel row remains reachable. A real-browser Storybook regression fails
+without the scroll rules and passes with them. The header also links the
+published track record to pds.ls when an AT URI is available.

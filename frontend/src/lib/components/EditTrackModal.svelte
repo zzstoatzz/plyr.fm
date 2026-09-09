@@ -109,7 +109,17 @@
 >
 	<div class="editor">
 		<header>
-			<h2 id={titleId}>edit track</h2>
+			<div class="heading">
+				<h2 id={titleId}>edit track</h2>
+				{#if track.atproto_record_uri?.startsWith('at://')}
+					<a
+						class="record-link"
+						href={`https://pds.ls/at/${track.atproto_record_uri.slice(5)}`}
+						target="_blank"
+						rel="noopener noreferrer">view record on pds.ls</a
+					>
+				{/if}
+			</div>
 			<button
 				class="close-button"
 				type="button"
@@ -192,6 +202,11 @@
 		flex-direction: column;
 		max-height: calc(100dvh - 48px);
 	}
+	.editor > :global(.edit-container) {
+		min-height: 0;
+		overflow-y: auto;
+		overscroll-behavior: contain;
+	}
 	header {
 		display: flex;
 		align-items: center;
@@ -199,6 +214,23 @@
 		padding: 12px 24px;
 		border-bottom: 1px solid var(--border-subtle);
 		flex-shrink: 0;
+	}
+	.heading {
+		min-width: 0;
+	}
+	.record-link {
+		display: inline-block;
+		padding-block: 4px;
+		font-size: var(--text-sm);
+		color: var(--text-secondary);
+		text-underline-offset: 3px;
+	}
+	.record-link:hover {
+		color: var(--text-primary);
+	}
+	.record-link:focus-visible {
+		outline: 2px solid var(--accent);
+		outline-offset: 2px;
 	}
 	h2 {
 		margin: 0;
