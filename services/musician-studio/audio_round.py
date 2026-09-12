@@ -6,7 +6,7 @@ from prefect import task
 from prefect.cache_policies import NO_CACHE
 from prefect.context import FlowRunContext
 
-from compose import compose, render
+from compose import Composition, compose
 from studio.audio_model import listen
 from studio.identity import Musician
 from studio.listening import (
@@ -14,6 +14,7 @@ from studio.listening import (
     digest,
     require_listening,
 )
+from studio.render_repair import render_with_repair
 from studio.state import Store
 
 
@@ -29,8 +30,12 @@ def reviewed(
 
 
 @task(name="render-revision", cache_policy=NO_CACHE, persist_result=False)
-def render_revision(source: str, output: Path) -> dict:
-    return render(source, output)
+def render_revision(
+    piece: Composition, output: Path, directory: Path, session: str, name: str
+) -> tuple[Composition, dict]:
+    return render_with_repair(
+        piece, output, Store(directory), session, name, "revision"
+    )
 
 
 def prepare_release(directory: Path, session: str, name: str, draft_path: Path) -> Path:
@@ -53,7 +58,7 @@ def prepare_release(directory: Path, session: str, name: str, draft_path: Path) 
         )
         revised_path = directory / f"{session}-{name}" / "revision"
         renderer = render_revision if FlowRunContext.get() else render_revision.fn
-        metrics = renderer(revision.python, revised_path)
+        revision, metrics = renderer(revision, revised_path, directory, session, name)
         store.save_study(
             session,
             name,

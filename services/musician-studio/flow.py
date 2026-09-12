@@ -14,11 +14,12 @@ from prefect.states import Completed, State
 
 from audio_round import prepare_release
 from calibration import CalibrationSuite, calibrate_listener
-from compose import Composition, compose, plan_music, render
+from compose import Composition, compose, plan_music
 from studio.context import choose_peer
 from studio.identity import Musician
 from studio.listening import NotReady
 from studio.platform import Platform, credentials
+from studio.render_repair import render_with_repair
 from studio.state import DAILY_BUDGET, MONTHLY_BUDGET, Store
 
 ROOT = Path(__file__).parent
@@ -102,8 +103,12 @@ def render_piece(directory: Path, session: str, name: str) -> Path:
     output = directory / f"{session}-{name}" / "audio"
     if study.get("rendered") and (output / "track.wav").is_file():
         return output / "track.wav"
-    metrics = render(study["python"], output)
-    store.save_study(session, name, {"rendered": True, "metrics": metrics})
+    piece, metrics = render_with_repair(
+        Composition.model_validate(study), output, store, session, name, "draft"
+    )
+    store.save_study(
+        session, name, {**piece.model_dump(), "rendered": True, "metrics": metrics}
+    )
     return output / "track.wav"
 
 
