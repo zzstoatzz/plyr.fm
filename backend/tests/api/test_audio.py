@@ -884,3 +884,31 @@ class TestAudioPdsRedirect:
         assert "com.atproto.sync.getBlob" in location
         assert f"did={artist.did}" in location
         assert f"cid={gated_pds_track.pds_blob_cid}" in location
+
+
+async def test_private_r2_allows_anonymous_playback(
+    test_app: FastAPI, gated_track: Track, db_session: AsyncSession
+) -> None:
+    gated_track.support_gate = None
+    gated_track.audio_storage = "r2_private"
+    gated_track.extra = {"download_policy": "off"}
+    await db_session.commit()
+    signed_url = "https://private.example/audio.mp3?signature=test"
+    with patch(
+        "backend.api.audio.storage.generate_presigned_url",
+        new=AsyncMock(return_value=signed_url),
+    ) as presign:
+        async with AsyncClient(
+            transport=ASGITransport(app=test_app), base_url="http://test"
+        ) as client:
+            head = await client.head(f"/audio/{gated_track.file_id}")
+            assert head.status_code == 200
+            presign.assert_not_awaited()
+            stream = await client.get(
+                f"/audio/{gated_track.file_id}", follow_redirects=False
+            )
+            assert stream.status_code == 307
+            assert stream.headers["location"] == signed_url
+            resolved = await client.get(f"/audio/{gated_track.file_id}/url")
+            assert resolved.status_code == 200
+            assert resolved.json()["url"] == signed_url

@@ -21,6 +21,7 @@ from backend._internal.tasks.ml import (
 from backend._internal.tasks.pds_mirror import schedule_pds_blob_mirror
 from backend.config import settings
 from backend.models import Artist, CopyrightScan, Track
+from backend.storage import storage
 from backend.utilities.database import db_session
 from backend.utilities.redis import get_async_redis_client
 
@@ -47,6 +48,8 @@ async def resolve_audio_url(track_id: int) -> str | None:
                 Track.audio_storage,
                 Track.pds_blob_cid,
                 Track.artist_did,
+                Track.file_id,
+                Track.file_type,
             )
             .where(Track.id == track_id)
             .limit(1)
@@ -55,8 +58,12 @@ async def resolve_audio_url(track_id: int) -> str | None:
         if not row:
             return None
 
-        r2_url, audio_storage, pds_blob_cid, artist_did = row
+        r2_url, audio_storage, pds_blob_cid, artist_did, file_id, file_type = row
 
+        if audio_storage == "r2_private":
+            return await storage.generate_presigned_url(
+                file_id=file_id, extension=file_type
+            )
         if r2_url:
             return r2_url
 
@@ -77,7 +84,13 @@ async def resolve_audio_url(track_id: int) -> str | None:
 async def _has_own_audio_object(track_id: int) -> bool:
     """whether the track's audio is stored by us rather than only on a PDS."""
     async with db_session() as db:
-        return bool(await db.scalar(select(Track.r2_url).where(Track.id == track_id)))
+        return bool(
+            await db.scalar(
+                select(
+                    Track.r2_url.isnot(None) | (Track.audio_storage == "r2_private")
+                ).where(Track.id == track_id)
+            )
+        )
 
 
 async def run_post_track_create_hooks(

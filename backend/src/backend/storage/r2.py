@@ -1052,11 +1052,16 @@ class R2Storage:
                 )
                 return url
 
-    async def object_exists(self, key: str) -> bool:
+    async def object_exists(self, key: str, *, private: bool = False) -> bool:
         """HEAD an audio-bucket object by raw key (cache checks, not media reads)."""
         async with self._s3_client() as client:
             try:
-                await client.head_object(Bucket=self.audio_bucket_name, Key=key)
+                await client.head_object(
+                    Bucket=self.private_audio_bucket_name
+                    if private
+                    else self.audio_bucket_name,
+                    Key=key,
+                )
                 return True
             except ClientError:
                 return False
@@ -1066,14 +1071,10 @@ class R2Storage:
         *,
         key: str,
         filename: str,
+        private: bool = False,
         expires_in: int | None = None,
     ) -> str:
-        """presigned public-bucket URL that downloads as ``filename``.
-
-        the object is publicly readable anyway; presigning exists only to carry
-        a signed ``response-content-disposition`` so the browser saves the file
-        under a human filename instead of the content-hash key.
-        """
+        """sign a download from the selected bucket with a human filename."""
         expiry = expires_in or self.presigned_url_expiry
         with logfire.span("R2 generate_download_url", key=key, expires_in=expiry):
             async with self._s3_client(
@@ -1082,7 +1083,9 @@ class R2Storage:
                 return await client.generate_presigned_url(
                     "get_object",
                     Params={
-                        "Bucket": self.audio_bucket_name,
+                        "Bucket": self.private_audio_bucket_name
+                        if private
+                        else self.audio_bucket_name,
                         "Key": key,
                         "ResponseContentDisposition": content_disposition(filename),
                     },

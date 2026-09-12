@@ -874,8 +874,9 @@ async def test_optimize_raw_interim_does_not_delete_the_lossless_original(
     assert "AIFFID" not in deleted
 
 
+@pytest.mark.parametrize("private_source", [False, True])
 async def test_optimize_gated_lossless_uses_private_storage_and_backend_audio_url(
-    db_session: AsyncSession, owner: Artist
+    db_session: AsyncSession, owner: Artist, private_source: bool
 ) -> None:
     """for gated lossless tracks, the deferred MP3 stays private and the PDS
     record points at the auth-protected backend audio endpoint."""
@@ -885,7 +886,8 @@ async def test_optimize_gated_lossless_uses_private_storage_and_backend_audio_ur
         original_file_id="GATEDAIFF",
         original_file_type="aiff",
         r2_url=None,
-        support_gate={"type": "any"},
+        support_gate=None if private_source else {"type": "any"},
+        audio_storage="r2_private" if private_source else "r2",
     )
     db_session.add(track)
     await db_session.commit()
@@ -913,11 +915,13 @@ async def test_optimize_gated_lossless_uses_private_storage_and_backend_audio_ur
 
     record_kwargs = mocks["build_record"].await_args.kwargs
     assert record_kwargs["audio_url"].endswith("/audio/GATEDMP3")
-    assert record_kwargs["support_gate"] == {"type": "any"}
+    assert record_kwargs["support_gate"] == (
+        None if private_source else {"type": "any"}
+    )
 
     await db_session.refresh(track)
     assert track.file_id == "GATEDMP3"
     assert track.file_type == "mp3"
     assert track.r2_url is None
-    assert track.audio_storage == "r2"
+    assert track.audio_storage == ("r2_private" if private_source else "r2")
     assert track.pds_blob_cid is None

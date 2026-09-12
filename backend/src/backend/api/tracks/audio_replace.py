@@ -115,6 +115,8 @@ class TrackAudioState:
     self_labels: list[str]
     support_gate: dict | None
     created_at: datetime  # original record creation time — must survive replace
+    private_audio: bool = False
+    audio_storage: str = "r2"
 
 
 @dataclass
@@ -182,6 +184,8 @@ async def _load_and_authorize(
             self_labels=list(track.self_labels or []),
             support_gate=dict(track.support_gate) if track.support_gate else None,
             created_at=track.created_at,
+            private_audio=track.uses_private_audio,
+            audio_storage=track.audio_storage,
         )
 
 
@@ -207,6 +211,7 @@ def _build_upload_context_for_phases(
         features_json=None,
         tags=[],
         support_gate=state.support_gate,
+        private_audio=state.private_audio,
     )
 
 
@@ -216,7 +221,7 @@ def _audio_url_for_record(state: TrackAudioState, sr: StorageResult) -> str:
     gated tracks point at the auth-protected backend endpoint; public tracks
     point at the public storage URL.
     """
-    if state.support_gate is not None:
+    if state.private_audio or state.support_gate is not None:
         backend_url = settings.atproto.redirect_uri.rsplit("/", 2)[0]
         return urljoin(backend_url + "/", f"audio/{sr.file_id}")
     assert sr.r2_url is not None  # public tracks always have an r2_url
@@ -322,7 +327,7 @@ async def _commit_db_swap(
             pds_blob_cid=track.pds_blob_cid,
             pds_blob_size=track.pds_blob_size,
             duration=track.duration,
-            was_gated=track.support_gate is not None,
+            was_gated=track.uses_private_audio,
         )
         db.add(snapshot)
 
@@ -331,7 +336,11 @@ async def _commit_db_swap(
         track.original_file_id = sr.original_file_id
         track.original_file_type = sr.original_file_type
         track.r2_url = sr.r2_url
-        track.audio_storage = "both" if has_pds_blob else "r2"
+        track.audio_storage = (
+            "r2_private"
+            if state.audio_storage == "r2_private"
+            else ("both" if has_pds_blob else "r2")
+        )
         track.pds_blob_cid = pds_result.cid if pds_result else None
         track.pds_blob_size = pds_result.size if pds_result else None
         track.atproto_record_cid = new_record_cid
@@ -561,6 +570,8 @@ async def _refresh_metadata_state(state: TrackAudioState) -> TrackAudioState:
             self_labels=list(track.self_labels or []),
             support_gate=dict(track.support_gate) if track.support_gate else None,
             created_at=state.created_at,
+            private_audio=state.private_audio,
+            audio_storage=state.audio_storage,
         )
 
 
@@ -574,9 +585,7 @@ async def _rollback_new_files(
 ) -> None:
     """delete any new storage object we wrote before discovering the operation must abort.
 
-    `gated=True` routes the playable-file delete to the private bucket. transcode
-    originals always live in the public bucket (gated tracks can't be lossless),
-    so the original delete uses the public path unconditionally.
+    `gated=True` routes both rendition and original cleanup to the private bucket.
 
     `new_file_type` is the playable extension used to derive the storage
     key. it MUST be threaded through so the early-abort case (where the
@@ -589,7 +598,9 @@ async def _rollback_new_files(
             await delete_fn(new_file_id, new_file_type)
     if new_original_file_id:
         with contextlib.suppress(Exception):
-            await storage.delete(new_original_file_id, new_original_file_type)
+            await (storage.delete_gated if gated else storage.delete)(
+                new_original_file_id, new_original_file_type
+            )
 
 
 # -- background task registration -----------------------------------------------
@@ -718,13 +729,14 @@ async def replace_track_audio(
                 Track.artist_did,
                 Track.atproto_record_uri,
                 Track.support_gate,
+                Track.uses_private_audio,
                 Track.is_private,
             ).where(Track.id == track_id)
         )
         row = result.first()
         if not row:
             raise HTTPException(status_code=404, detail="track not found")
-        artist_did, atproto_uri, support_gate, is_private = row
+        artist_did, atproto_uri, _support_gate, private_audio, is_private = row
         if artist_did != auth_session.did:
             raise HTTPException(
                 status_code=403,
@@ -746,7 +758,7 @@ async def replace_track_audio(
                     "replacing audio"
                 ),
             )
-        is_gated = support_gate is not None
+        is_gated = private_audio
 
     # stage the new audio bytes to shared object storage BEFORE enqueueing
     # the docket task. workers may pick up the task on a different fly

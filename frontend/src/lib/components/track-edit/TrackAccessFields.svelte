@@ -46,7 +46,10 @@
 <details class="advanced-section">
 	<summary>visibility &amp; access</summary>
 	<div class="advanced-content">
-		{#if atprotofansEligible || (track.support_gate && track.support_gate.type !== 'copyright')}
+		{#if track.audio_storage === 'r2_private'}
+			<p class="field-hint">download policy: {track.download_policy}. listening follows the track’s visibility.</p>
+		{/if}
+		{#if atprotofansEligible || track.support_gate?.type === 'any'}
 			<div class="edit-field-group access-field">
 				<span class="edit-label">supporter access</span>
 				<label class="toggle-row">

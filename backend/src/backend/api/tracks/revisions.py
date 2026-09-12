@@ -188,7 +188,7 @@ async def restore_track_revision(
         raise HTTPException(status_code=404, detail="revision not found")
 
     # gating compat check — see module docstring
-    track_is_gated = track.support_gate is not None
+    track_is_gated = track.uses_private_audio
     if revision.was_gated != track_is_gated:
         raise HTTPException(
             status_code=409,
@@ -357,7 +357,7 @@ async def restore_track_revision(
             pds_blob_cid=live_track.pds_blob_cid,
             pds_blob_size=live_track.pds_blob_size,
             duration=live_track.duration,
-            was_gated=live_track.support_gate is not None,
+            was_gated=live_track.uses_private_audio,
         )
         db.add(snapshot)
 
@@ -365,7 +365,7 @@ async def restore_track_revision(
         live_track.file_type = revision.file_type
         live_track.original_file_id = revision.original_file_id
         live_track.original_file_type = revision.original_file_type
-        live_track.r2_url = revision.audio_url
+        live_track.r2_url = None if revision.was_gated else revision.audio_url
         live_track.atproto_record_cid = new_cid
 
         # if the PDS lost the blob AND we couldn't re-upload it, downgrade the
@@ -384,7 +384,11 @@ async def restore_track_revision(
             if effective_blob_cid is not None:
                 live_track.audio_storage = "both"
             else:
-                live_track.audio_storage = revision.audio_storage
+                live_track.audio_storage = (
+                    "r2_private"
+                    if revision.was_gated and live_track.support_gate is None
+                    else revision.audio_storage
+                )
             live_track.pds_blob_cid = effective_blob_cid
             live_track.pds_blob_size = effective_blob_size
 

@@ -27,13 +27,13 @@ afterEach(() => {
 	auth.user = null;
 });
 
-function mountEditor() {
+function mountEditor(editorTrack: Track = track, atprotofansEligible = false) {
 	const onSaved = vi.fn();
 	const onClose = vi.fn();
 	const onDirtyChange = vi.fn();
 	const component = mount(TrackEditForm, {
 		target: document.body,
-		props: { track, albums: [], atprotofansEligible: false, onSaved, onClose, onDirtyChange }
+		props: { track: editorTrack, albums: [], atprotofansEligible, onSaved, onClose, onDirtyChange }
 	});
 	cleanup = () => {
 		void unmount(component);
@@ -58,6 +58,26 @@ function submit(): void {
 }
 
 describe('shared track editor', () => {
+	it('preserves private files when editing public listening metadata', async () => {
+		const streamTrack = { ...track, copyright_song_uri: null, support_gate: null, audio_storage: 'r2_private' as const, download_policy: 'off' };
+		const requests: Request[] = [];
+		vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+			const request = new Request(input, init);
+			requests.push(request);
+			if (request.url.includes('/recommended-tags')) return Response.json({ available: false, tags: [] });
+			return Response.json({ ...streamTrack, title: 'new title' });
+		});
+		const { onSaved } = mountEditor(streamTrack, true);
+		expect(document.body.textContent).toContain('download policy: off');
+		expect(document.body.textContent).toContain('only supporters can play');
+		editTitle('new title');
+		submit();
+		await vi.waitFor(() => expect(onSaved).toHaveBeenCalled());
+		const saved = await requests.find((request) => request.method === 'PATCH')?.formData();
+		expect(saved?.get('support_gate')).toBe('null');
+		expect(saved?.has('download_policy')).toBe(false);
+	});
+
 	it('saves ordinary details without overwriting existing copyright records', async () => {
 		const requests: Request[] = [];
 		vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {

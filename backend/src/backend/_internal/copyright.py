@@ -611,7 +611,7 @@ async def clear_track_rights(
         except Exception as e:
             logger.warning("failed to delete %s: %s", uri, e)
 
-    if was_copyright_gated:
+    if was_copyright_gated and track.audio_storage != "r2_private":
         # move the file back to the public bucket synchronously so the
         # rebuild below has a valid r2_url to write into the PDS record.
         # `move_track_audio` updates the row's r2_url after a successful

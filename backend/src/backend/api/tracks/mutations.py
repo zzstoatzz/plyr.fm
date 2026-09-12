@@ -117,7 +117,9 @@ async def delete_track(
                 file_type=track.file_type,
                 r2_url=track.r2_url,
             )
-            await storage.delete(delete_key.file_id, delete_key.extension)
+            await (
+                storage.delete_gated if track.uses_private_audio else storage.delete
+            )(delete_key.file_id, delete_key.extension)
         except Exception as e:
             # log but don't fail - maybe file was already deleted
             logger.warning(f"failed to delete file {track.file_id}: {e}", exc_info=True)
@@ -243,7 +245,11 @@ async def update_track_metadata(
         was_gated = track.support_gate is not None
         if support_gate.lower() == "null" or support_gate == "":
             # removing gating - need to move file back to public if it was gated
-            if was_gated and track.r2_url is None:
+            if (
+                was_gated
+                and track.r2_url is None
+                and track.audio_storage != "r2_private"
+            ):
                 move_to_private = False
             track.support_gate = None
             # keep visibility consistent: dropping the supporter gate returns the
@@ -373,7 +379,7 @@ async def update_track_metadata(
             updated_tags.add(tag_name)
 
     # always update ATProto record if any metadata changed
-    support_gate_changed = move_to_private is not None
+    support_gate_changed = support_gate is not None
     metadata_changed = (
         title_changed
         or description_changed
@@ -673,11 +679,11 @@ async def migrate_track_to_pds(
             message="track already has PDS blob",
         )
 
-    # gated tracks can't be migrated (they need auth-protected access)
-    if track.support_gate:
+    # Public PDS blobs cannot preserve protected source access.
+    if track.is_private or track.uses_private_audio:
         raise HTTPException(
             status_code=400,
-            detail="supporter-gated tracks cannot be migrated to PDS",
+            detail="protected audio cannot be saved to a public PDS blob",
         )
 
     # `file_id` addresses storage only for uploads that came through us — an

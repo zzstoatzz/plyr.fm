@@ -8,6 +8,7 @@
 	interface Props {
 		/** the selected visibility. */
 		visibility: Visibility;
+		downloadPolicy?: string;
 		/** when set, offer "supporters only" and link to this atprotofans page. */
 		supportUrl?: string | null;
 		/** offer "private" — only meaningful on a spaces-capable PDS. */
@@ -24,6 +25,7 @@
 
 	let {
 		visibility = $bindable(),
+		downloadPolicy = $bindable(''),
 		supportUrl = null,
 		showPrivate = false,
 		privateDisabled = false,
@@ -106,7 +108,38 @@
 	{/if}
 </fieldset>
 
+{#if (visibility === 'public' || visibility === 'unlisted') && !restrictedToPublic}
+	<label class="download-field">
+		<span class="access-title">downloads</span>
+		<select aria-label="downloads" bind:value={downloadPolicy}>
+			<option value="">use artist settings</option>
+			<option value="open">allow downloads</option>
+			<option value="ask">ask for support</option>
+			<option value="supporters">supporters can download</option>
+			<option value="off">downloads off</option>
+		</select>
+		<span class="access-note">downloads off keeps audio with plyr.fm while anyone can listen. use artist settings follows your download preference.</span>
+	</label>
+{/if}
+
 <style>
+	.download-field {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+		margin-top: 1rem;
+	}
+
+	.download-field select {
+		width: 100%;
+		padding: 0.65rem;
+		border: 1px solid var(--border-default);
+		border-radius: var(--radius-sm);
+		background: var(--bg-primary);
+		color: var(--text-primary);
+		font: inherit;
+	}
+
 	.access-card {
 		display: flex;
 		flex-direction: column;

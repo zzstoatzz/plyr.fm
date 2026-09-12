@@ -2,6 +2,7 @@
 
 from unittest.mock import AsyncMock, patch
 
+import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend._internal.atproto.client import pds_blob_url
@@ -125,11 +126,26 @@ class TestResolveAudioUrl:
 
 
 class TestRunPostTrackCreateHooks:
-    async def test_schedules_copyright_scan(self, db_session: AsyncSession) -> None:
+    @pytest.mark.parametrize("private_source", [False, True])
+    async def test_schedules_copyright_scan(
+        self, db_session: AsyncSession, private_source: bool
+    ) -> None:
         artist = await _create_artist(db_session)
-        track = await _create_track(db_session, artist)
+        track = await _create_track(
+            db_session,
+            artist,
+            r2_url=None if private_source else "https://r2.example.com/test.mp3",
+            audio_storage="r2_private" if private_source else "r2",
+        )
 
         with (
+            patch(
+                "backend._internal.tasks.hooks.storage.generate_presigned_url",
+                AsyncMock(return_value="https://private.test/signed"),
+            ),
+            patch(
+                "backend._internal.tasks.hooks.schedule_pds_blob_mirror", AsyncMock()
+            ) as mirror,
             patch(MOCK_COPYRIGHT_PATH, new_callable=AsyncMock) as mock_copyright,
             patch(MOCK_EMBEDDING_PATH, new_callable=AsyncMock),
             patch(MOCK_GENRE_PATH, new_callable=AsyncMock),
@@ -140,13 +156,16 @@ class TestRunPostTrackCreateHooks:
             mock_settings.modal.enabled = False
             mock_settings.turbopuffer.enabled = False
             mock_settings.replicate.enabled = False
-            await run_post_track_create_hooks(
-                track.id, audio_url="https://r2.example.com/test.mp3"
-            )
+            await run_post_track_create_hooks(track.id)
 
         mock_copyright.assert_called_once_with(
-            track.id, "https://r2.example.com/test.mp3"
+            track.id,
+            "https://private.test/signed"
+            if private_source
+            else "https://r2.example.com/test.mp3",
         )
+
+        mirror.assert_not_awaited()
 
     async def test_schedules_embedding(self, db_session: AsyncSession) -> None:
         artist = await _create_artist(db_session)

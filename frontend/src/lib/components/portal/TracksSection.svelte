@@ -140,7 +140,7 @@
 					<div class="track-info">
 						<div class="track-title">
 							{track.title}
-							{#if track.support_gate}
+							{#if track.support_gate?.type === 'any'}
 								<span class="support-gate-badge" title="supporters only">
 									<svg
 										width="12"

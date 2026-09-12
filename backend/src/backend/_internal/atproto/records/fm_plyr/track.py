@@ -338,7 +338,7 @@ async def rebuild_track_pds_record(
     if not record_uri:
         return
 
-    if track.support_gate is not None:
+    if track.uses_private_audio:
         backend_url = settings.atproto.redirect_uri.rsplit("/", 2)[0]
         audio_url = urljoin(backend_url + "/", f"audio/{track.file_id}")
     else:

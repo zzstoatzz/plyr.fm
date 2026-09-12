@@ -190,9 +190,13 @@ async def test_refcount_prevents_r2_deletion(db_session: AsyncSession):
     s3.delete_object.assert_not_awaited()
 
 
+@pytest.mark.parametrize("private_source", [False, True])
 async def test_atproto_cleanup_on_track_delete(
-    test_app: FastAPI, db_session: AsyncSession, test_artist: Artist
-):
+    test_app: FastAPI,
+    db_session: AsyncSession,
+    test_artist: Artist,
+    private_source: bool,
+) -> None:
     """test that ATProto records are cleaned up when track is deleted.
 
     regression test for banana mix incident where deleting track 57 left
@@ -205,6 +209,7 @@ async def test_atproto_cleanup_on_track_delete(
         file_id="test_file_789",
         file_type="mp3",
         extra={},
+        audio_storage="r2_private" if private_source else "r2",
         atproto_record_uri="at://did:plc:artist123/fm.plyr.track/abc123",
         atproto_record_cid="bafytest123",
     )
@@ -215,7 +220,12 @@ async def test_atproto_cleanup_on_track_delete(
     # mock storage delete to avoid R2 errors
     # mock ATProto delete at the records module level before import
     with (
-        patch("backend.api.tracks.mutations.storage.delete", new_callable=AsyncMock),
+        patch(
+            "backend.api.tracks.mutations.storage.delete", new_callable=AsyncMock
+        ) as public_delete,
+        patch(
+            "backend.api.tracks.mutations.storage.delete_gated", new_callable=AsyncMock
+        ) as private_delete,
         patch(
             "backend.api.tracks.mutations.delete_record_by_uri",
             new_callable=AsyncMock,
@@ -227,6 +237,10 @@ async def test_atproto_cleanup_on_track_delete(
             response = await client.delete(f"/tracks/{track.id}")
 
     assert response.status_code == 200
+    (private_delete if private_source else public_delete).assert_awaited_once_with(
+        "test_file_789", "mp3"
+    )
+    (public_delete if private_source else private_delete).assert_not_awaited()
 
     # verify ATProto record deletion was called
     mock_delete_atproto.assert_called_once()

@@ -24,6 +24,7 @@ from backend._internal import get_optional_session, validate_supporter
 from backend._internal.export_tasks import schedule_album_download
 from backend._internal.jobs import job_service
 from backend._internal.track_visibility import visible_filter
+from backend.config import settings
 from backend.models import Album, Artist, Track, get_db
 from backend.models.job import JobType
 from backend.storage import storage
@@ -97,7 +98,13 @@ async def download_album(
         artist_prefs.download_policy if artist_prefs else None,
         artist_prefs.support_url if artist_prefs else None,
     )
-    if album_policy == "supporters" and session is not None and not viewer_is_artist:
+    if (
+        any(
+            (track.download_policy or album_policy) == "supporters" for track in ordered
+        )
+        and session is not None
+        and not viewer_is_artist
+    ):
         validation = await validate_supporter(
             supporter_did=session.did, artist_did=album.artist_did
         )
@@ -110,7 +117,7 @@ async def download_album(
             support_gate=track.support_gate,
             labels=set(track.self_labels or []) | set(track.operator_labels or []),
             moderation_override=track.moderation_override,
-            download_policy=album_policy,
+            download_policy=track.download_policy or album_policy,
             viewer_is_artist=viewer_is_artist,
             viewer_is_supporter=viewer_is_supporter,
         )
@@ -149,14 +156,22 @@ async def download_album(
     ).hexdigest()[:16]
     r2_key = f"exports/albums/{album.id}-{digest}.zip"
 
-    if await storage.object_exists(r2_key):
-        return RedirectResponse(url=f"{storage.public_audio_bucket_url}/{r2_key}")
-
     zip_filename = download_filename(artist.display_name, album.title, "zip")
+    if await storage.object_exists(r2_key, private=True):
+        return RedirectResponse(
+            url=await storage.generate_download_url(
+                key=r2_key, filename=zip_filename, private=True
+            )
+        )
     job_id = await job_service.create_job(
         JobType.EXPORT, album.artist_did, "album download queued"
     )
     await schedule_album_download(
-        job_id, [track_id for track_id, _, _ in entries], r2_key, zip_filename
+        job_id,
+        [track_id for track_id, _, _ in entries],
+        r2_key,
+        zip_filename,
+        download_path=settings.atproto.redirect_uri.rsplit("/", 2)[0]
+        + f"/albums/{handle}/{slug}/download",
     )
     return AlbumDownloadPending(job_id=job_id)

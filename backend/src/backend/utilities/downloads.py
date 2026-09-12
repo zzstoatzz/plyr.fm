@@ -40,7 +40,7 @@ def download_key(
     r2_url: str | None,
     audio_storage: str,
 ) -> AudioKey | None:
-    """the public-bucket key a download would serve, or None if we hold none.
+    """the R2 key a download would serve, or None if we hold none.
 
     None for PDS-only rows (the R2 copy is gone or never existed — a PDS
     getBlob URL can't carry a filename disposition) and for firehose-ingested
@@ -80,7 +80,7 @@ def download_refusal(
     and streaming already filter on — never raw scan flags, which mark a
     pending review, not a finding.
 
-    `download_policy` is the artist's *effective* tier (callers resolve NULL
+    `download_policy` is the resolved track or artist tier (callers resolve NULL
     via effective_download_policy first). "ask" never refuses
     — it is a request the UI makes, not a lock. how a viewer came to count
     as a supporter is the caller's verifier concern (#1841), never this
@@ -88,12 +88,12 @@ def download_refusal(
     """
     if is_private:
         return "private"
-    if support_gate is not None:
+    if support_gate is not None and not viewer_is_artist:
         return "gated"
     if has_copyright_label(labels) and moderation_override != "allow":
         return "copyright"
     policy = download_policy or "open"  # tolerate unresolved None as open
-    if policy == "off":
+    if policy == "off" and not viewer_is_artist:
         return "artist_opt_out"
     if policy == "supporters" and not (viewer_is_artist or viewer_is_supporter):
         return "supporters_only"

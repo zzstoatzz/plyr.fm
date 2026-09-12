@@ -225,12 +225,7 @@ async def list_tracks(
         gated_artist_dids = {
             t.artist_did
             for t in tracks
-            if t.support_gate
-            and t.artist_did != viewer_did
-            and (
-                not isinstance(t.support_gate, dict)
-                or t.support_gate.get("type") != "copyright"
-            )
+            if t.needs_supporter_check and t.artist_did != viewer_did
         }
         if gated_artist_dids:
             supporter_task = asyncio.create_task(
@@ -438,12 +433,7 @@ async def list_top_tracks(
         gated_artist_dids = {
             t.artist_did
             for t in tracks
-            if t.support_gate
-            and t.artist_did != viewer_did
-            and (
-                not isinstance(t.support_gate, dict)
-                or t.support_gate.get("type") != "copyright"
-            )
+            if t.needs_supporter_check and t.artist_did != viewer_did
         }
         if gated_artist_dids:
             supported_artist_dids = await get_supported_artists(

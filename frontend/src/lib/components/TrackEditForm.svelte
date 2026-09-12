@@ -106,7 +106,7 @@
 		editSupportGate =
 			track.support_gate !== null &&
 			track.support_gate !== undefined &&
-			track.support_gate.type !== 'copyright';
+			track.support_gate.type === 'any';
 		editUnlisted = track.unlisted ?? false;
 		editSelfLabels = [...(track.self_labels ?? [])];
 

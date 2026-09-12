@@ -292,7 +292,8 @@ class TrackResponse(BaseModel):
         # selectin-loads prefs)
         artist_prefs = track.artist.preferences
         download_policy = effective_download_policy(
-            artist_prefs.download_policy if artist_prefs else None,
+            track.download_policy
+            or (artist_prefs.download_policy if artist_prefs else None),
             artist_prefs.support_url if artist_prefs else None,
         )
         downloadable = (
