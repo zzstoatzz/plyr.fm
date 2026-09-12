@@ -358,3 +358,10 @@ the Portal controls at 390px in dark and light themes and 1280px in light theme.
 The expanded discovery controls, save button and following share-links section
 have distinct spacing and align with their parent form. These remain local
 checks, not evidence of staging deployment or real R2 permissions.
+
+Recording review: expose the existing rights checkbox in the recording preview
+for artists with the copyright feature enabled, matching uploads. This lets a
+recording opt out of inherited rights attachment without changing Portal.
+Desktop dark Portal controls also inspected at 1280px; the form, disclosure,
+save button and following section have distinct spacing. Recording preview
+still needs browser verification with a test microphone.

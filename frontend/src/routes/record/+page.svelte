@@ -13,7 +13,7 @@
 	import { toast } from '$lib/toast.svelte';
 	import { uploader } from '$lib/uploader.svelte';
 	import { APP_NAME, APP_CANONICAL_URL } from '$lib/branding';
-	import { API_URL } from '$lib/config';
+	import { API_URL, COPYRIGHT_PARADIGM_FLAG } from '$lib/config';
 	import { setReturnUrl } from '$lib/utils/return-url';
 	import {
 		clearStashedRecording,
@@ -344,7 +344,8 @@
 				/>
 			</div>
 
-			<PublishingSettings bind:value={publishingOverride} defaults={preferences.publishingDefaults} showSpace={permissionedSupported} />
+			<PublishingSettings bind:value={publishingOverride} defaults={preferences.publishingDefaults} showSpace={permissionedSupported}
+				showRights={auth.user?.enabled_flags?.includes(COPYRIGHT_PARADIGM_FLAG)} />
 
 			<div class="actions">
 				<button type="button" class="secondary-btn" onclick={reRecord}>
