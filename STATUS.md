@@ -675,3 +675,15 @@ blocker; this change does not claim restored listening or musical progress.
 The full studio check passes 65 tests. The two HTTP-boundary quota regression
 cases fail against the previous audio client. Existing retry/cache integration
 coverage still passes. Schedule, publication policy and spending caps are unchanged.
+
+### September 12 — retain isolated renderer failures
+
+Repeated musician runs ended in Docker exit code 1 with no Python traceback,
+because the renderer discarded stderr. Rendering now drains stderr while
+retaining its last 8 KB, reports that tail in the Prefect exception, and writes
+`render-error.txt` beside the intended audio output. The 30-second deadline,
+container isolation and forced container cleanup remain. Tests cover actual
+child-process failures, noisy output, timeout and the renderer's cleanup path;
+the renderer regression fails against the previous implementation. The original
+generated-code failure still requires reproduction; diagnostics alone do not
+claim it is repaired.
