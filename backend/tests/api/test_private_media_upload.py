@@ -97,6 +97,23 @@ def test_private_without_grant_requests_upgrade(app_no_scope: FastAPI):
     assert resp.json()["detail"] == "permissioned_scope_required"
 
 
+@pytest.mark.parametrize("downloads", ["open", "ask", "supporters"])
+def test_private_rejects_unavailable_downloads(
+    app_no_scope: FastAPI, downloads: str
+) -> None:
+    with TestClient(app_no_scope) as client:
+        resp = _post(
+            client,
+            data={
+                "publishing": '{"access":{"listening":"space","downloads":"'
+                + downloads
+                + '","visibility":"private"}}'
+            },
+        )
+    assert resp.status_code == 400
+    assert resp.json()["detail"] == "direct downloads from Spaces are not available yet"
+
+
 def test_private_app_password_session_bypasses_oauth_scope_gate(
     app_no_scope: FastAPI,
 ) -> None:

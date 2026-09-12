@@ -461,3 +461,23 @@ at 390px and 1280px. Dark desktop and collapsed mobile, plus light expanded
 mobile and desktop opt-out states, were visually inspected: controls align with
 the surrounding form column, and the cards have distinct separation. This
 does not complete the remaining recording, rights and deployed visual checks.
+
+### Space download contract review
+
+Direct upload requests could specify open, ask or supporter downloads for a
+Space work even though native download endpoints refuse them. Upload preflight
+now rejects those unsupported combinations before consent or audio storage.
+Three endpoint regressions reproduce the previous acceptance of invalid settings
+(the request reached the scope gate) and pass with the explicit 400 response.
+The full backend suite passes 1,726 tests with 25 existing skips.
+
+Space controls no longer show a disabled “only me” download selector, which
+incorrectly suggested owner downloads were available, or an empty “more options”
+disclosure. They retain the explanation that Space admission controls listening
+and direct downloads are not available yet. The real-browser story regression
+failed before removing the selector. This does not change native Space authority
+or introduce a migration between public records and Spaces.
+The expanded Space story was inspected at 390px and 1280px in dark and light
+themes: the explanation wraps inside the card with space above the reset
+action, and the audience select stays inside the card's gutters. This is
+component evidence; authenticated native Space staging smoke remains pending.

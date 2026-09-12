@@ -49,6 +49,13 @@
 />
 <Story
 	name="Space audience"
+	play={async ({ canvasElement }) => {
+		const canvas = within(canvasElement);
+		await userEvent.click(canvas.getByText('change for this track'));
+		await expect(canvas.getByRole('checkbox', { name: 'anyone can download' })).toBeDisabled();
+		await expect(canvas.queryByLabelText('who can download?')).not.toBeInTheDocument();
+		await expect(canvas.queryByText('more options')).not.toBeInTheDocument();
+	}}
 	args={{
 		value: {
 			access: { listening: 'space', downloads: 'off', visibility: 'private' },

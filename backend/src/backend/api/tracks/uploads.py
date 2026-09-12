@@ -1716,6 +1716,11 @@ async def parse_upload_metadata(
     policy = resolved.settings.access
     visibility = policy.visibility
     is_private = visibility == "private"
+    if is_private and policy.downloads != "off":
+        raise HTTPException(
+            status_code=400,
+            detail="direct downloads from Spaces are not available yet",
+        )
     if is_private != (policy.listening == "space"):
         raise HTTPException(
             status_code=400,

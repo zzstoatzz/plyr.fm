@@ -82,11 +82,10 @@
 		/>
 		<span>anyone can download</span>
 	</label>
-	{#if value.access.downloads === 'off' || value.access.downloads === 'supporters'}
+	{#if value.access.listening !== 'space' && (value.access.downloads === 'off' || value.access.downloads === 'supporters')}
 		<label class="audience"
 			>who can download?
 			<select
-				disabled={value.access.listening === 'space'}
 				value={value.access.downloads}
 				onchange={(event) => {
 					const downloads = event.currentTarget.value;
@@ -119,40 +118,42 @@
 				download.
 			</p>{/if}
 	{/if}
-	<details>
-		<summary>more options</summary>
-		{#if value.access.visibility !== 'private'}
-			<label class="choice"
-				><input
-					type="checkbox"
-					checked={value.access.visibility === 'public'}
-					onchange={(event) =>
-						(value = {
-							...value,
-							access: {
-								...value.access,
-								visibility: event.currentTarget.checked ? 'public' : 'unlisted'
-							}
-						})}
-				/><span>show in feeds</span></label
-			>
-			<p>when off, this can still appear on your profile, in albums, playlists and search.</p>
-		{/if}
-		{#if value.access.downloads === 'open' || value.access.downloads === 'ask'}
-			<label class="choice"
-				><input
-					type="checkbox"
-					checked={value.access.downloads === 'ask'}
-					onchange={(event) =>
-						(value = {
-							...value,
-							access: { ...value.access, downloads: event.currentTarget.checked ? 'ask' : 'open' }
-						})}
-				/><span>ask for support before downloading</span></label
-			>
-			<p>a request, not a payment requirement.</p>
-		{/if}
-	</details>
+	{#if value.access.listening !== 'space'}
+		<details>
+			<summary>more options</summary>
+			{#if value.access.visibility !== 'private'}
+				<label class="choice"
+					><input
+						type="checkbox"
+						checked={value.access.visibility === 'public'}
+						onchange={(event) =>
+							(value = {
+								...value,
+								access: {
+									...value.access,
+									visibility: event.currentTarget.checked ? 'public' : 'unlisted'
+								}
+							})}
+					/><span>show in feeds</span></label
+				>
+				<p>when off, this can still appear on your profile, in albums, playlists and search.</p>
+			{/if}
+			{#if value.access.downloads === 'open' || value.access.downloads === 'ask'}
+				<label class="choice"
+					><input
+						type="checkbox"
+						checked={value.access.downloads === 'ask'}
+						onchange={(event) =>
+							(value = {
+								...value,
+								access: { ...value.access, downloads: event.currentTarget.checked ? 'ask' : 'open' }
+							})}
+					/><span>ask for support before downloading</span></label
+				>
+				<p>a request, not a payment requirement.</p>
+			{/if}
+		</details>
+	{/if}
 </fieldset>
 
 <style>
