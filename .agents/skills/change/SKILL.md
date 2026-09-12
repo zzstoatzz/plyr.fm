@@ -19,3 +19,8 @@ The path every change takes. Staging is `main`; production is a separate, user-a
 8. **hand off** — tell the user what to look at on staging. Production is their call: when they say so, run the `deploy` skill. Never `just release` on your own.
 
 Visual changes always pause at step 8 for the user's eyes. Non-visual bug fixes may be promoted when the user has said that's fine for this kind of change.
+
+Staging smoke uploads must include the `integration-test` tag. This uses the
+existing upload hook to suppress notification DMs and copyright scans; check
+that suppression before running a batch. Do not disable global alerting for a
+test run. The tag does not exclude tracks from discovery or radio.
