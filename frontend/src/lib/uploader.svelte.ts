@@ -238,7 +238,8 @@ class UploaderState {
 		label?: string,
 		albumId?: string,
 		copyright?: TrackRights | null,
-		selfLabels: string[] = []
+		selfLabels: string[] = [],
+		allowDownloads = true
 	): void {
 		if (!browser) return;
 		const staged = source instanceof StagedTransfer ? source : this.stage(source);
@@ -276,6 +277,7 @@ class UploaderState {
 		// visibility is the single source of truth (public | unlisted | supporters
 		// | private); copyright is orthogonal (rides on public/unlisted).
 		formData.append('visibility', visibility);
+		formData.append('allow_downloads', String(allowDownloads));
 		if (copyright) {
 			formData.append('copyright', JSON.stringify(copyright));
 		}

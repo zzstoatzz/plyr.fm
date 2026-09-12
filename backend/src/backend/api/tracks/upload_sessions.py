@@ -239,6 +239,7 @@ async def finish_upload_session(
     features: Annotated[str | None, Form()] = None,
     tags: Annotated[str | None, Form()] = None,
     visibility: Annotated[str, Form()] = "public",
+    allow_downloads: Annotated[bool, Form()] = True,
     copyright: Annotated[str | None, Form()] = None,
     description: Annotated[str | None, Form()] = None,
     self_labels: Annotated[str | None, Form()] = None,
@@ -265,6 +266,7 @@ async def finish_upload_session(
         description=description,
         self_labels=self_labels,
         auto_tag=auto_tag,
+        allow_downloads=allow_downloads,
     )
     staged = _staged(upload_id, transfer)
 

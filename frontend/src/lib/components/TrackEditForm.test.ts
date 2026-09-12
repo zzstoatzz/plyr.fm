@@ -68,7 +68,7 @@ describe('shared track editor', () => {
 			return Response.json({ ...streamTrack, title: 'new title' });
 		});
 		const { onSaved } = mountEditor(streamTrack);
-		expect(document.body.textContent).toContain('public listening, private files');
+		expect(document.body.textContent).toContain('downloads are off');
 		expect(document.body.textContent).not.toContain('only supporters can play');
 		editTitle('new title');
 		submit();

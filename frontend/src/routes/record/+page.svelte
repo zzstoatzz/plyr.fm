@@ -32,6 +32,7 @@
 	let title = $state('');
 	let tags = $state<string[]>([]);
 	let visibility = $state<Visibility>('public');
+	let allowDownloads = $state(true);
 	let previewBlob = $state<Blob | null>(null);
 	// the live tick count at stop time: a length the preview can show before the
 	// browser has scanned the recording for its real one
@@ -192,7 +193,11 @@
 			'',
 			() => {},
 			undefined,
-			title
+			title,
+			undefined,
+			undefined,
+			[],
+			visibility === 'public' || visibility === 'unlisted' ? allowDownloads : true
 		);
 		uiState = 'uploading';
 		void clearStashedRecording();
@@ -335,6 +340,7 @@
 
 			<VisibilityPicker
 				bind:visibility
+				bind:allowDownloads
 				showPrivate={permissionedSupported}
 				privateGranted={permissionedGranted}
 			/>

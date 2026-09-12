@@ -39,7 +39,7 @@ max_lines = 850
 
 [[rules]]
 path = "backend/src/backend/api/tracks/uploads.py"
-max_lines = 2083
+max_lines = 2090
 
 [[rules]]
 path = "backend/src/backend/config.py"
@@ -335,7 +335,7 @@ max_lines = 1424
 
 [[rules]]
 path = "frontend/src/lib/uploader.svelte.ts"
-max_lines = 623
+max_lines = 625
 
 [[rules]]
 path = "frontend/src/routes/track/[[]id[]]/+page.svelte"
@@ -399,7 +399,7 @@ max_lines = 527
 
 [[rules]]
 path = "docs/internal/contracts/client-api.json"
-max_lines = 8280
+max_lines = 8290
 
 [[rules]]
 path = "frontend/src/lib/components/TrackEditForm.svelte"

@@ -3,11 +3,12 @@
 	 * The one "visibility & access" choice, shared by /upload and /record so
 	 * both surfaces describe the same options in the same words.
 	 */
-	export type Visibility = 'public' | 'unlisted' | 'supporters' | 'private' | 'stream';
+	export type Visibility = 'public' | 'unlisted' | 'supporters' | 'private';
 
 	interface Props {
 		/** the selected visibility. */
 		visibility: Visibility;
+		allowDownloads?: boolean;
 		/** when set, offer "supporters only" and link to this atprotofans page. */
 		supportUrl?: string | null;
 		/** offer "private" — only meaningful on a spaces-capable PDS. */
@@ -24,6 +25,7 @@
 
 	let {
 		visibility = $bindable(),
+		allowDownloads = $bindable(true),
 		supportUrl = null,
 		showPrivate = false,
 		privateDisabled = false,
@@ -103,16 +105,18 @@
 				<span class="access-note">{privateNote ?? defaultPrivateNote}</span>
 			</span>
 		</label>
-	{:else}
-		<label class="access-row" class:unavailable={restrictedToPublic}>
-			<input type="radio" bind:group={visibility} value="stream" disabled={restrictedToPublic} />
-			<span class="access-body">
-				<span class="access-title">public listening, private files</span>
-				<span class="access-note">appears in feeds; anyone can listen. downloads are off and your audio stays with plyr.fm.</span>
-			</span>
-		</label>
 	{/if}
 </fieldset>
+
+{#if (visibility === 'public' || visibility === 'unlisted') && !restrictedToPublic}
+	<label class="access-row">
+		<input type="checkbox" bind:checked={allowDownloads} />
+		<span class="access-body">
+			<span class="access-title">allow downloads</span>
+			<span class="access-note">when off, anyone can still listen. audio stays with plyr.fm and downloads are unavailable.</span>
+		</span>
+	</label>
+{/if}
 
 <style>
 	.access-card {
@@ -157,7 +161,8 @@
 		color: var(--text-muted);
 	}
 
-	.access-row input[type='radio'] {
+	.access-row input[type='radio'],
+	.access-row input[type='checkbox'] {
 		margin-top: 0.2rem;
 		flex-shrink: 0;
 		accent-color: var(--accent);

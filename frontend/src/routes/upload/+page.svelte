@@ -82,9 +82,10 @@
 	// visibility/access — one mutually-exclusive choice:
 	//   public | unlisted | supporters | private
 	// "private" is only offered when the PDS supports com.atproto.space.* (/auth/me).
-	const VISIBILITIES = ['public', 'unlisted', 'supporters', 'private', 'stream'] as const;
+	const VISIBILITIES = ['public', 'unlisted', 'supporters', 'private'] as const;
 	type Visibility = (typeof VISIBILITIES)[number];
 	let visibility = $state<Visibility>('public');
+	let allowDownloads = $state(true);
 
 	function parseVisibility(raw: string | undefined): Visibility {
 		return VISIBILITIES.find((option) => option === raw) ?? 'public';
@@ -273,6 +274,7 @@
 			autoTag = false;
 			sensitiveAudio = false;
 			visibility = 'public';
+			allowDownloads = true;
 			copyrightEnabled = false;
 			copyrightRights = {};
 
@@ -330,6 +332,7 @@
 			undefined, // albumId
 			copyrightToSend,
 			uploadSelfLabels,
+			(uploadVisibility === 'public' || uploadVisibility === 'unlisted') && !copyrightEnabled ? allowDownloads : true,
 		);
 	}
 
@@ -561,6 +564,7 @@
 
 			<VisibilityPicker
 				bind:visibility
+				bind:allowDownloads
 				supportUrl={artistProfile?.support_url}
 				showPrivate={permissionedSupported}
 				restrictedToPublic={copyrightEnabled}

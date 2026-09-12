@@ -1594,7 +1594,7 @@ async def schedule_track_upload(ctx: UploadContext) -> None:
     )
 
 
-_VISIBILITIES = frozenset({"public", "unlisted", "supporters", "private", "stream"})
+_VISIBILITIES = frozenset({"public", "unlisted", "supporters", "private"})
 
 
 @dataclass(frozen=True)
@@ -1643,6 +1643,7 @@ def parse_upload_metadata(
     description: str | None,
     self_labels: str | None,
     auto_tag: str | None,
+    allow_downloads: bool = True,
 ) -> UploadMetadata:
     """validate upload form fields; raises HTTPException with the user-facing detail."""
     if album and album_id:
@@ -1671,7 +1672,7 @@ def parse_upload_metadata(
 
     copyright_rights: dict | None = None
     if copyright:
-        if visibility in ("supporters", "private", "stream"):
+        if visibility in ("supporters", "private"):
             raise HTTPException(
                 status_code=400,
                 detail=f"copyright cannot combine with {visibility} visibility",
@@ -1710,8 +1711,12 @@ def parse_upload_metadata(
                 ),
             )
 
-    if visibility == "stream":
-        visibility = "public"
+    if not allow_downloads:
+        if visibility not in ("public", "unlisted") or copyright:
+            raise HTTPException(
+                status_code=400,
+                detail="allow_downloads applies to public or unlisted tracks without copyright metadata",
+            )
         support_gate = {"type": "stream"}
 
     return UploadMetadata(
@@ -1772,11 +1777,12 @@ async def upload_track(
     visibility: Annotated[
         str,
         Form(
-            description="one of: public | unlisted | supporters | private | stream. "
+            description="one of: public | unlisted | supporters | private. "
             "supporters = atprotofans-gated; private = PDS permissioned space "
-            "(requires a PDS supporting com.atproto.space.*); stream = public listening, private files."
+            "(requires a PDS supporting com.atproto.space.*)."
         ),
     ] = "public",
+    allow_downloads: Annotated[bool, Form()] = True,
     copyright: Annotated[
         str | None,
         Form(
@@ -1833,6 +1839,7 @@ async def upload_track(
         description=description,
         self_labels=self_labels,
         auto_tag=auto_tag,
+        allow_downloads=allow_downloads,
     )
     visibility = meta.visibility
     audio_format = meta.audio_format

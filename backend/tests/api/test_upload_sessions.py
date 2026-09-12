@@ -82,9 +82,10 @@ def _send_parts(
         assert resp.json()["part_number"] == n
 
 
-@pytest.mark.parametrize("visibility", ["public", "stream"])
+@pytest.mark.parametrize("visibility", ["public", "unlisted"])
+@pytest.mark.parametrize("allow_downloads", [True, False])
 def test_session_round_trip_enqueues_a_staged_upload(
-    artist_app: FastAPI, visibility: str
+    artist_app: FastAPI, visibility: str, allow_downloads: bool
 ) -> None:
     with (
         TestClient(artist_app) as client,
@@ -105,7 +106,12 @@ def test_session_round_trip_enqueues_a_staged_upload(
         _send_parts(client, upload_id)
         resp = client.post(
             f"/tracks/uploads/{upload_id}/finish",
-            data={"title": "song", "visibility": visibility, "tags": '["a"]'},
+            data={
+                "title": "song",
+                "visibility": visibility,
+                "allow_downloads": str(allow_downloads).lower(),
+                "tags": '["a"]',
+            },
         )
         assert resp.status_code == 200, resp.text
         assert resp.json()["upload_id"] == upload_id
@@ -113,8 +119,8 @@ def test_session_round_trip_enqueues_a_staged_upload(
     schedule.assert_awaited_once()
     assert schedule.await_args is not None
     ctx: UploadContext = schedule.await_args.args[0]
-    assert ctx.visibility == "public"
-    assert ctx.support_gate == ({"type": "stream"} if visibility == "stream" else None)
+    assert ctx.visibility == visibility
+    assert ctx.support_gate == (None if allow_downloads else {"type": "stream"})
     assert ctx.copyright_rights is None
     assert ctx.staged is True
     assert ctx.audio_file_id == ""

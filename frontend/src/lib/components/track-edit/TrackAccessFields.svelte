@@ -47,7 +47,7 @@
 	<summary>visibility &amp; access</summary>
 	<div class="advanced-content">
 		{#if track.support_gate?.type === 'stream'}
-			<p class="field-hint">public listening, private files — downloads are off.</p>
+			<p class="field-hint">downloads are off. listening follows the track’s visibility.</p>
 		{:else if atprotofansEligible || track.support_gate?.type === 'any'}
 			<div class="edit-field-group access-field">
 				<span class="edit-label">supporter access</span>
