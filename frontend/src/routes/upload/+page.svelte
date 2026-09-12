@@ -561,9 +561,11 @@
 				</label>
 			</fieldset>
 
-			<PublishingSettings bind:value={publishingOverride} defaults={publishingDefaults}
-				source={albumDefaults ? 'album' : 'Portal'} showSpace={permissionedSupported}
-				showRights={auth.user?.enabled_flags?.includes(COPYRIGHT_PARADIGM_FLAG) ?? false} />
+			<div class="form-group">
+				<PublishingSettings bind:value={publishingOverride} defaults={publishingDefaults}
+					source={albumDefaults ? 'album' : 'Portal'} showSpace={permissionedSupported}
+					showRights={auth.user?.enabled_flags?.includes(COPYRIGHT_PARADIGM_FLAG) ?? false} />
+			</div>
 			{#if copyrightEnabled}
 				<CopyrightRightsPanel enabled={true} showToggle={false} bind:rights={copyrightRights} />
 			{/if}

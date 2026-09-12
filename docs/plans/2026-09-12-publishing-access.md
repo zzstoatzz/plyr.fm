@@ -448,3 +448,16 @@ the rendition's download endpoint also returned 403. Both fixture rows retain
 `r2_private` storage. These are local fixture checks against the S3 emulator,
 not real R2, PDS publication or staging evidence. Recording preview, upload
 matrix cells and deployed checks remain outstanding.
+
+The first-use upload hint appeared for the fresh listener fixture, and “got it”
+remained dismissed after a browser reload. Both access checkboxes start enabled;
+turning downloads off updates the summary and reveals the download audience.
+“Use Portal defaults” restores the inherited public-listening/open-download
+policy. This was an unsaved draft, not a publication.
+
+The upload access card touched the distribution-rights attestation below it.
+Wrapping it in the form's existing spacing group restores a measured 24px gap
+at 390px and 1280px. Dark desktop and collapsed mobile, plus light expanded
+mobile and desktop opt-out states, were visually inspected: controls align with
+the surrounding form column, and the cards have distinct separation. This
+does not complete the remaining recording, rights and deployed visual checks.
