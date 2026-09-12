@@ -637,7 +637,7 @@
           "tracks"
         ],
         "summary": "Upload Track",
-        "description": "Upload a new track (requires authentication and artist profile).\n\nParameters:\n    title: Track title (required).\n    album: Optional album name/ID to associate with the track.\n    features: Optional JSON array of ATProto handles, e.g.,\n        [\"user1.bsky.social\", \"user2.bsky.social\"].\n    support_gate: Optional JSON object for supporter gating.\n        Requires atprotofans to be enabled in settings.\n        Example: {\"type\": \"any\"} - requires any atprotofans support.\n    file: Audio file to upload (required).\n    image: Optional image file for track artwork.\n    auth_session: Authenticated artist session (dependency-injected).\n\nReturns:\n    dict: A payload containing `upload_id` for monitoring progress via SSE.",
+        "description": "Upload a new track (requires authentication and artist profile).\n\nParameters:\n    title: Track title (required).\n    album: Optional album name/ID to associate with the track.\n    features: Optional JSON array of ATProto handles, e.g.,\n        [\"user1.bsky.social\", \"user2.bsky.social\"].\n    publishing: Optional complete per-track publishing override.\n    file: Audio file to upload (required).\n    image: Optional image file for track artwork.\n    auth_session: Authenticated artist session (dependency-injected).\n\nReturns:\n    dict: A payload containing `upload_id` for monitoring progress via SSE.",
         "operationId": "upload_track_tracks__post",
         "parameters": [
           {
@@ -2885,7 +2885,7 @@
           "tracks"
         ],
         "summary": "Set Track Copyright",
-        "description": "write/update indiemusi rights records for this track.\n\ncreates a fresh song + recording on first call, updates existing rkeys on\nsubsequent calls. always flips the track into copyright gating.",
+        "description": "Write or update rights information without changing access.",
         "operationId": "set_track_copyright_tracks__track_id__copyright_post",
         "parameters": [
           {
@@ -2968,7 +2968,7 @@
           "tracks"
         ],
         "summary": "Clear Track Copyright",
-        "description": "delete rights records for this track and clear the columns + gate.",
+        "description": "Delete rights records without changing access.",
         "operationId": "clear_track_copyright_tracks__track_id__copyright_delete",
         "parameters": [
           {
@@ -4758,7 +4758,7 @@
           "audio"
         ],
         "summary": "Download Audio",
-        "description": "download a track's audio as an attachment named `artist - title.ext`.\n\ndownloads are offered only where the bytes are already publicly\nreachable (the artist's PDS serves them to anyone): public and unlisted\ntracks that are not supporter-gated, not copyright-flagged, and whose\nartist has not switched downloads off. prefers the preserved lossless\noriginal over the streaming rendition.",
+        "description": "download a track's audio as an attachment named `artist - title.ext`.\n\nresolves the track override before the artist policy and signs the source\nbucket only after authorization. prefers the preserved original; artists\ncan recover protected R2 audio. Space audio uses the owner export path.",
         "operationId": "download_audio_audio__file_id__download_get",
         "parameters": [
           {
@@ -5505,12 +5505,7 @@
             ],
             "title": "Tags"
           },
-          "visibility": {
-            "type": "string",
-            "title": "Visibility",
-            "default": "public"
-          },
-          "download_policy": {
+          "publishing": {
             "anyOf": [
               {
                 "type": "string"
@@ -5519,7 +5514,7 @@
                 "type": "null"
               }
             ],
-            "title": "Download Policy"
+            "title": "Publishing"
           },
           "copyright": {
             "anyOf": [
@@ -5696,18 +5691,6 @@
             "title": "Description",
             "description": "Track description (liner notes, show notes), or empty string to remove"
           },
-          "support_gate": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Support Gate",
-            "description": "JSON object for supporter gating, or 'null' to remove"
-          },
           "image": {
             "anyOf": [
               {
@@ -5731,18 +5714,6 @@
             ],
             "title": "Remove Image",
             "description": "Set to 'true' to remove artwork"
-          },
-          "unlisted": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Unlisted",
-            "description": "Set to 'true' to exclude from feeds, 'false' to include"
           },
           "self_labels": {
             "anyOf": [
@@ -5826,13 +5797,7 @@
             "title": "Tags",
             "description": "JSON array of tag names"
           },
-          "visibility": {
-            "type": "string",
-            "title": "Visibility",
-            "description": "one of: public | unlisted | supporters | private. supporters = atprotofans-gated; private = PDS permissioned space (requires a PDS supporting com.atproto.space.*).",
-            "default": "public"
-          },
-          "download_policy": {
+          "publishing": {
             "anyOf": [
               {
                 "type": "string"
@@ -5841,7 +5806,7 @@
                 "type": "null"
               }
             ],
-            "title": "Download Policy"
+            "title": "Publishing"
           },
           "copyright": {
             "anyOf": [
@@ -5853,7 +5818,7 @@
               }
             ],
             "title": "Copyright",
-            "description": "JSON object with indiemusi rights metadata (iswc, isrc, masterOwner, additionalInterestedParties). When present, the track is copyright-gated and audio lives in private storage."
+            "description": "JSON object with indiemusi rights metadata (iswc, isrc, masterOwner, additionalInterestedParties). Does not change access."
           },
           "description": {
             "anyOf": [
@@ -7561,17 +7526,12 @@
               }
             ],
             "title": "Recording Uri"
-          },
-          "is_copyright_gated": {
-            "type": "boolean",
-            "title": "Is Copyright Gated"
           }
         },
         "type": "object",
         "required": [
           "song_uri",
-          "recording_uri",
-          "is_copyright_gated"
+          "recording_uri"
         ],
         "title": "TrackCopyrightResponse",
         "description": "rights metadata pointers for a track."
@@ -7799,6 +7759,22 @@
             "type": "string",
             "title": "Download Policy",
             "default": "open"
+          },
+          "publishing": {
+            "$ref": "#/components/schemas/PublishingDefaults",
+            "default": {
+              "access": {
+                "downloads": "open",
+                "listening": "public",
+                "visibility": "public"
+              },
+              "attach_rights": false
+            }
+          },
+          "policy_origin": {
+            "type": "string",
+            "title": "Policy Origin",
+            "default": "track"
           },
           "artist_support_url": {
             "anyOf": [
@@ -8296,6 +8272,68 @@
           "type"
         ],
         "title": "ValidationError"
+      },
+      "PublishingDefaults": {
+        "properties": {
+          "access": {
+            "$ref": "#/components/schemas/PublishingPolicy",
+            "default": {
+              "listening": "public",
+              "downloads": "open",
+              "visibility": "public"
+            }
+          },
+          "attach_rights": {
+            "type": "boolean",
+            "title": "Attach Rights",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "PublishingDefaults",
+        "description": "Settings applied to new works, never read as live catalog permissions."
+      },
+      "PublishingPolicy": {
+        "properties": {
+          "listening": {
+            "type": "string",
+            "enum": [
+              "public",
+              "signed_in",
+              "supporters",
+              "owner",
+              "space"
+            ],
+            "title": "Listening",
+            "default": "public"
+          },
+          "downloads": {
+            "type": "string",
+            "enum": [
+              "open",
+              "ask",
+              "supporters",
+              "off"
+            ],
+            "title": "Downloads",
+            "default": "open"
+          },
+          "visibility": {
+            "type": "string",
+            "enum": [
+              "public",
+              "unlisted",
+              "private"
+            ],
+            "title": "Visibility",
+            "default": "public"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "PublishingPolicy",
+        "description": "A complete policy snapshot for a work or publishing template."
       }
     }
   }

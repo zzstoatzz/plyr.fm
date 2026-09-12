@@ -3,6 +3,7 @@
 	import { browser } from '$app/environment';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import Header from '$lib/components/Header.svelte';
+	import AlbumPublishingEditor from '$lib/components/AlbumPublishingEditor.svelte';
 	import TrackItem from '$lib/components/TrackItem.svelte';
 	import ShareButton from '$lib/components/ShareButton.svelte';
 	import DownloadButton from '$lib/components/DownloadButton.svelte';
@@ -499,6 +500,10 @@
 				{/if}
 			</div>
 		</div>
+
+		{#if isEditMode && isOwner}
+			<AlbumPublishingEditor album={albumMetadata} {tracks} />
+		{/if}
 
 		<div class="tracks-section">
 			<h2 class="section-heading">tracks</h2>

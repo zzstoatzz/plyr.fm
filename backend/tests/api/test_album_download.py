@@ -5,10 +5,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.main import app
-from backend.models import Album, Artist, Track, UserPreferences
+from backend.models import Album, Artist, Track
 
 
 @pytest.fixture
@@ -115,7 +116,10 @@ async def test_album_download_redirects_when_cached(
 async def test_album_download_refuses_if_any_track_gated(
     test_app: FastAPI, db_session: AsyncSession
 ):
-    await _make_album(db_session, track_overrides={"support_gate": {"type": "any"}})
+    await _make_album(
+        db_session,
+        track_overrides={"support_gate": {"type": "any"}, "download_policy": "off"},
+    )
     response = await _download(test_app)
     assert response.status_code == 403
 
@@ -124,7 +128,9 @@ async def test_album_download_refuses_if_artist_opted_out(
     test_app: FastAPI, db_session: AsyncSession
 ):
     album, _ = await _make_album(db_session)
-    db_session.add(UserPreferences(did=album.artist_did, download_policy="off"))
+    await db_session.execute(
+        update(Track).where(Track.album_id == album.id).values(download_policy="off")
+    )
     await db_session.commit()
 
     response = await _download(test_app)
@@ -153,7 +159,7 @@ async def test_cached_album_rechecks_track_policy(
     test_app: FastAPI, db_session: AsyncSession
 ) -> None:
     _, tracks = await _make_album(db_session)
-    tracks[0].extra = {"download_policy": "off"}
+    tracks[0].download_policy = "off"
     await db_session.commit()
     with patch(
         "backend.api.albums.downloads.storage.object_exists",

@@ -1,3 +1,4 @@
+import type { PublishingDefaults } from './publishing';
 export interface FeaturedArtist {
 	did: string;
 	handle: string;
@@ -6,6 +7,7 @@ export interface FeaturedArtist {
 }
 
 export interface AlbumSummary {
+	publishing_defaults?: PublishingDefaults | null;
 	id: string;
 	title: string;
 	slug: string;
@@ -57,6 +59,8 @@ export interface Track {
 	is_liked?: boolean;
 	copyright_flagged?: boolean | null; // null = not scanned, false = clear, true = flagged
 	downloadable?: boolean; // server-computed: the download endpoint would serve this track
+	publishing?: PublishingDefaults;
+	policy_origin?: 'portal' | 'album' | 'track';
 	download_policy?: string; // artist's download policy: open | ask | supporters | off
 	artist_support_url?: string | null; // raw support link ('atprotofans' magic included)
 	copyright_match?: string | null; // "Title by Artist" of primary match

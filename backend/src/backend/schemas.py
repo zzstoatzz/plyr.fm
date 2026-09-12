@@ -11,8 +11,8 @@ from backend.utilities.aggregations import CopyrightInfo
 from backend.utilities.downloads import (
     download_key,
     download_refusal,
-    effective_download_policy,
 )
+from backend.utilities.publishing import PublishingDefaults
 
 # --- common simple response types ---
 
@@ -150,12 +150,14 @@ class TrackResponse(BaseModel):
     support_gate: dict[str, Any] | None = None  # supporter gating config
     gated: bool = False  # true if track is gated AND viewer lacks access
     # true when the download endpoint would hand this track out *to this
-    # viewer*: public, ungated, not copyright-blocked, and permitted by the
+    # viewer*: metadata visible, not copyright-blocked, and permitted by the
     # artist's download policy (viewer-dependent for the supporters tier)
     downloadable: bool = False
     # the artist's download policy ("open"|"ask"|"supporters"|"off") — lets
     # the UI ask (support nudge) or explain (supporters tier)
     download_policy: str = "open"
+    publishing: PublishingDefaults = PublishingDefaults()
+    policy_origin: str = "track"
     # the artist's support link, raw ("atprotofans" magic value included; the
     # frontend resolves it) — present so ask/supporters UIs can link out
     artist_support_url: str | None = None
@@ -167,10 +169,10 @@ class TrackResponse(BaseModel):
         None  # original format if transcoded (e.g., aiff, flac)
     )
     description: str | None = None  # track description (liner notes, show notes)
-    audio_storage: str = "r2"  # "r2" | "pds" | "both"
+    audio_storage: str = "r2"  # "r2" | "r2_private" | "pds" | "both"
     pds_blob_cid: str | None = None  # CID if stored on user's PDS
     is_optimizing: bool = False  # deferred mp3 optimize still pending
-    visibility: str = "public"  # public | unlisted | supporters | private
+    visibility: str = "public"  # public | unlisted | private
     unlisted: bool = False  # derived: excluded from discovery feeds
     self_labels: list[str] = Field(default_factory=list)
     operator_labels: set[str] = Field(default_factory=set)
@@ -254,15 +256,14 @@ class TrackResponse(BaseModel):
                 if isinstance(track.support_gate, dict)
                 else None
             )
-            if gate_type == "copyright":
-                # copyright tracks just need any authenticated listener
+            if gate_type == "signed_in":
                 gated = not viewer_did
             else:
                 is_owner = viewer_did and viewer_did == track.artist_did
                 is_supporter = (
                     supported_artist_dids and track.artist_did in supported_artist_dids
                 )
-                gated = not (is_owner or is_supporter)
+                gated = not (is_owner or (gate_type == "any" and is_supporter))
 
         active_operator_labels = (
             set(operator_labels.get(track.id, set())) if operator_labels else set()
@@ -291,15 +292,10 @@ class TrackResponse(BaseModel):
         # UI only offers what the endpoint would serve (the artist relationship
         # selectin-loads prefs)
         artist_prefs = track.artist.preferences
-        download_policy = effective_download_policy(
-            track.download_policy
-            or (artist_prefs.download_policy if artist_prefs else None),
-            artist_prefs.support_url if artist_prefs else None,
-        )
+        download_policy = track.download_policy
         downloadable = (
             download_refusal(
                 is_private=track.is_private,
-                support_gate=track.support_gate,
                 labels=labels,
                 moderation_override=track.moderation_override,
                 download_policy=download_policy,
@@ -350,6 +346,8 @@ class TrackResponse(BaseModel):
             downloadable=downloadable,
             download_policy=download_policy,
             artist_support_url=artist_prefs.support_url if artist_prefs else None,
+            publishing=track.publishing,
+            policy_origin=track.policy_origin,
             description=track.description,
             original_file_id=track.original_file_id,
             original_file_type=track.original_file_type,

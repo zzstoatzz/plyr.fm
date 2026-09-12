@@ -1,13 +1,12 @@
 """Track mutation endpoints (delete/update/restore)."""
 
 import contextlib
-import json
 import logging
 from collections.abc import AsyncIterable
 from typing import Annotated
 
 import logfire
-from fastapi import Depends, File, Form, HTTPException, UploadFile
+from fastapi import Depends, File, Form, HTTPException, Request, UploadFile
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -36,7 +35,6 @@ from backend._internal.atproto.tid import datetime_to_tid
 from backend._internal.image_uploads import process_image_upload
 from backend._internal.tasks import (
     schedule_album_list_sync,
-    schedule_move_track_audio,
 )
 from backend._internal.tasks.hooks import invalidate_tracks_discovery_cache
 from backend._internal.tasks.ingest import _write_tombstone
@@ -170,6 +168,7 @@ async def delete_track(
 @router.patch("/{track_id}")
 async def update_track_metadata(
     track_id: int,
+    request: Request,
     db: Annotated[AsyncSession, Depends(get_db)],
     auth_session: AuthSession = Depends(require_auth),
     title: Annotated[str | None, Form()] = None,
@@ -182,18 +181,10 @@ async def update_track_metadata(
             description="Track description (liner notes, show notes), or empty string to remove"
         ),
     ] = None,
-    support_gate: Annotated[
-        str | None,
-        Form(description="JSON object for supporter gating, or 'null' to remove"),
-    ] = None,
     image: UploadFile | None = File(None),
     remove_image: Annotated[
         str | None,
         Form(description="Set to 'true' to remove artwork"),
-    ] = None,
-    unlisted: Annotated[
-        str | None,
-        Form(description="Set to 'true' to exclude from feeds, 'false' to include"),
     ] = None,
     self_labels: Annotated[
         str | None,
@@ -201,6 +192,21 @@ async def update_track_metadata(
     ] = None,
 ) -> TrackResponse:
     """Update track metadata (only by owner)."""
+    allowed = {
+        "title",
+        "album",
+        "features",
+        "tags",
+        "description",
+        "image",
+        "remove_image",
+        "self_labels",
+    }
+    if set(await request.form()) - allowed:
+        raise HTTPException(
+            status_code=422,
+            detail="unknown metadata fields; use the publishing endpoint for access changes",
+        )
     result = await db.execute(
         select(Track)
         .join(Artist)
@@ -237,52 +243,6 @@ async def update_track_metadata(
     if description is not None:
         track.description = description if description != "" else None
         description_changed = True
-
-    # handle support_gate update
-    # track migration direction: None = no move, True = to private, False = to public
-    move_to_private: bool | None = None
-    if support_gate is not None:
-        was_gated = track.support_gate is not None
-        if support_gate.lower() == "null" or support_gate == "":
-            # removing gating - need to move file back to public if it was gated
-            if (
-                was_gated
-                and track.r2_url is None
-                and track.audio_storage != "r2_private"
-            ):
-                move_to_private = False
-            track.support_gate = None
-            # keep visibility consistent: dropping the supporter gate returns the
-            # track to public (copyright gating doesn't change visibility)
-            if track.visibility == "supporters":
-                track.visibility = "public"
-        else:
-            try:
-                parsed_gate = json.loads(support_gate)
-                if not isinstance(parsed_gate, dict):
-                    raise ValueError("support_gate must be a JSON object")
-                if "type" not in parsed_gate:
-                    raise ValueError("support_gate must have a 'type' field")
-                if parsed_gate["type"] not in ("any",):
-                    raise ValueError(
-                        f"unsupported support_gate type: {parsed_gate['type']}"
-                    )
-                # enabling gating - need to move file to private if it was public
-                if not was_gated and track.r2_url is not None:
-                    move_to_private = True
-                track.support_gate = parsed_gate
-                track.visibility = "supporters"
-            except json.JSONDecodeError as e:
-                raise HTTPException(
-                    status_code=400, detail=f"invalid support_gate JSON: {e}"
-                ) from e
-            except ValueError as e:
-                raise HTTPException(status_code=400, detail=str(e)) from e
-
-    # handle unlisted toggle — flips public ↔ unlisted only (supporters keep their
-    # visibility; private tracks are rejected earlier with 409)
-    if unlisted is not None and track.visibility in ("public", "unlisted"):
-        track.visibility = "unlisted" if unlisted.lower() == "true" else "public"
 
     self_labels_changed = False
     if self_labels is not None:
@@ -379,14 +339,12 @@ async def update_track_metadata(
             updated_tags.add(tag_name)
 
     # always update ATProto record if any metadata changed
-    support_gate_changed = support_gate is not None
     metadata_changed = (
         title_changed
         or description_changed
         or album is not None
         or features is not None
         or image_changed
-        or support_gate_changed
         or self_labels_changed
     )
     if track.atproto_record_uri and metadata_changed:
@@ -423,10 +381,6 @@ async def update_track_metadata(
             await invalidate_album_cache_by_id(db, new_album_id)
     elif metadata_changed and track.album_id:
         await invalidate_album_cache_by_id(db, track.album_id)
-
-    # move audio file between buckets if support_gate was toggled
-    if move_to_private is not None:
-        await schedule_move_track_audio(track.id, to_private=move_to_private)
 
     # build track_tags dict for response
     # if tags were updated, use updated_tags; otherwise query for existing

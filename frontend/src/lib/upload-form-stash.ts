@@ -1,3 +1,4 @@
+import { parsePublishing, type PublishingDefaults } from './publishing';
 // sessionStorage stash for the track upload form, used when an auth check
 // before submit detects an expired session. the page redirects to /login and
 // rehydrates the form on return so the user doesn't lose what they typed.
@@ -23,7 +24,7 @@ export interface TrackFormStash {
 	sensitiveAudio?: boolean;
 	// single visibility value (public | unlisted | supporters | private) — the
 	// draft must survive a private-media scope-upgrade redirect with its choice intact.
-	visibility: string;
+	publishing: PublishingDefaults;
 }
 
 export function stashTrackForm(state: TrackFormStash): void {
@@ -45,7 +46,7 @@ function parseTrackFormStash(raw: string): TrackFormStash | null {
 		attestedRights: parsed.attestedRights ?? false,
 		autoTag: parsed.autoTag ?? false,
 		sensitiveAudio: parsed.sensitiveAudio,
-		visibility: parsed.visibility ?? 'public'
+		publishing: parsePublishing(JSON.stringify(parsed.publishing))
 	};
 }
 

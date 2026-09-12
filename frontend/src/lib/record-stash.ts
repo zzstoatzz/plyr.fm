@@ -1,3 +1,4 @@
+import type { PublishingDefaults } from './publishing';
 /**
  * Holds a pending recording across the one-time private-media consent redirect.
  *
@@ -22,7 +23,7 @@ export interface StashedRecording {
 	blob: Blob;
 	title: string;
 	tags: string[];
-	visibility: string;
+	publishing: PublishingDefaults;
 	capturedDuration: number;
 }
 

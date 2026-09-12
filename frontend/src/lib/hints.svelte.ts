@@ -10,7 +10,8 @@ import { safeLocalStorage } from '$lib/utils/safe-storage';
  * get a device-local record, never read back once signed in.
  */
 export const HINTS = {
-	queueSwipe: 'queue-swipe@1'
+	queueSwipe: 'queue-swipe@1',
+	publishing: 'publishing-access@1'
 } as const;
 
 export type Hint = (typeof HINTS)[keyof typeof HINTS];

@@ -15,7 +15,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend._internal import Session
 from backend.api.tracks.uploads import (
     UploadContext,
-    UploadPhaseError,
     _validate_audio,
 )
 from backend.models import Artist
@@ -61,7 +60,7 @@ async def test_copyright_gate_does_not_require_atprotofans(
     assert info.is_gated is True
 
 
-async def test_supporter_gate_still_requires_atprotofans(
+async def test_supporter_gate_does_not_bind_upload_to_one_verifier(
     db_session: AsyncSession,
 ) -> None:
     """the original guard for supporter gating remains: type=="any" without
@@ -72,8 +71,8 @@ async def test_supporter_gate_still_requires_atprotofans(
     await db_session.commit()
 
     ctx = _ctx(did, support_gate={"type": "any"})
-    with pytest.raises(UploadPhaseError, match="atprotofans"):
-        await _validate_audio(ctx)
+    info = await _validate_audio(ctx)
+    assert info.is_gated is True
 
 
 async def test_public_upload_skips_atprotofans_check(

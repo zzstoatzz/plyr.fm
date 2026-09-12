@@ -1,4 +1,5 @@
 <script lang="ts">
+	import PublishingIntro from '$lib/components/PublishingIntro.svelte';
 	import { onMount } from "svelte";
 	import { browser } from "$app/environment";
 	import Header from "$lib/components/Header.svelte";
@@ -11,11 +12,13 @@
 	import AudioPreview from "$lib/components/AudioPreview.svelte";
 	import TagInput from "$lib/components/TagInput.svelte";
 	import CopyrightRightsPanel from "$lib/components/CopyrightRightsPanel.svelte";
-	import VisibilityPicker from "$lib/components/VisibilityPicker.svelte";
+	import PublishingSettings from "$lib/components/PublishingSettings.svelte";
+	import { preferences } from "$lib/preferences.svelte";
+	import type { PublishingDefaults } from "$lib/publishing";
 	import { isWebPlayableAudioFile } from "$lib/utils/web-playable";
 	import type { TrackRights } from "$lib/components/CopyrightRightsPanel.svelte";
 	import type { FeaturedArtist, AlbumSummary, Artist } from "$lib/types";
-	import { API_URL, getServerConfig } from "$lib/config";
+	import { API_URL, COPYRIGHT_PARADIGM_FLAG, getServerConfig } from "$lib/config";
 	import { profileLink } from "$lib/atclients";
 	import { uploader } from "$lib/uploader.svelte";
 	import { toast } from "$lib/toast.svelte";
@@ -71,6 +74,7 @@
 	let file = $state<File | null>(null);
 	// the file's transfer into staging; nothing leaves the browser until submit
 	let staged = $state<StagedTransfer | null>(null);
+	let uploadError = $state<string | null>(null);
 	let imageFile = $state<File | null>(null);
 	let featuredArtists = $state<FeaturedArtist[]>([]);
 	let uploadTags = $state<string[]>([]);
@@ -79,17 +83,12 @@
 	let attestedRights = $state(false);
 	let autoTag = $state(false);
 	let sensitiveAudio = $state(false);
-	// visibility/access — one mutually-exclusive choice:
-	//   public | unlisted | supporters | private
-	// "private" is only offered when the PDS supports com.atproto.space.* (/auth/me).
-	const VISIBILITIES = ['public', 'unlisted', 'supporters', 'private'] as const;
-	type Visibility = (typeof VISIBILITIES)[number];
-	let visibility = $state<Visibility>('public');
-	let downloadPolicy = $state('');
-
-	function parseVisibility(raw: string | undefined): Visibility {
-		return VISIBILITIES.find((option) => option === raw) ?? 'public';
-	}
+	let albums = $state<AlbumSummary[]>([]);
+	let publishingOverride = $state<PublishingDefaults | null>(null);
+	const albumDefaults = $derived(albums.find((album) => album.title === albumTitle)?.publishing_defaults ?? null);
+	const publishingDefaults = $derived(albumDefaults ?? preferences.publishingDefaults);
+	const publishing = $derived(publishingOverride ?? publishingDefaults);
+	const visibility = $derived(publishing.access.visibility);
 	const permissionedSupported = $derived(
 		auth.user?.permissioned_spaces?.supported ?? false
 	);
@@ -99,11 +98,10 @@
 	// copyright rights metadata — orthogonal, rides on public/unlisted tracks.
 	// when enabled, audio is uploaded to private storage and the backend writes
 	// indiemusi song + recording records after the track is published.
-	let copyrightEnabled = $state(false);
+	const copyrightEnabled = $derived(publishing.attach_rights);
 	let copyrightRights = $state<TrackRights>({});
 
-	// albums for selection
-	let albums = $state<AlbumSummary[]>([]);
+
 
 	// artist profile for checking atprotofans eligibility
 	let artistProfile = $state<Artist | null>(null);
@@ -119,6 +117,8 @@
 			return;
 		}
 
+		await preferences.fetch();
+
 		// restore a draft stashed when the user was bounced to /login by an
 		// expired-session pre-flight. files can't be serialized, so the user
 		// re-attaches the audio (and cover art) — everything else is restored.
@@ -132,7 +132,7 @@
 			attestedRights = stashed.attestedRights;
 			autoTag = stashed.autoTag;
 			sensitiveAudio = stashed.sensitiveAudio ?? false;
-			visibility = parseVisibility(stashed.visibility);
+			publishingOverride = stashed.publishing;
 			clearTrackFormStash();
 			const files = await takeUploadFiles();
 			if (files) {
@@ -203,7 +203,7 @@
 			attestedRights,
 			autoTag,
 			sensitiveAudio,
-			visibility,
+			publishing: publishing,
 		};
 	}
 
@@ -213,6 +213,7 @@
 	}
 
 	async function submitUpload() {
+		if (!preferences.data) return;
 		if (!file) return;
 
 		// private media has no transcode step (audio is stored as-is as a PDS
@@ -256,7 +257,7 @@
 		const uploadFeatures = [...featuredArtists];
 		const uploadImage = imageFile;
 		const tagsToUpload = [...uploadTags];
-		const uploadVisibility = visibility;
+		const uploadPublishing = publishingOverride;
 		const shouldAutoTag = autoTag;
 		const uploadSelfLabels = sensitiveAudio ? ['sexual'] : [];
 		const uploadDescription = description;
@@ -273,9 +274,7 @@
 			attestedRights = false;
 			autoTag = false;
 			sensitiveAudio = false;
-			visibility = 'public';
-			downloadPolicy = '';
-			copyrightEnabled = false;
+			publishingOverride = null;
 			copyrightRights = {};
 
 			const fileInput = document.getElementById("file-input");
@@ -292,7 +291,7 @@
 		// the session doesn't yet hold the permissioned-space scope). stash the
 		// draft first so it survives that redirect; cleared on success or on a
 		// terminal error (the scope-upgrade path returns without firing onError).
-		if (uploadVisibility === "private") {
+		if (visibility === "private") {
 			stashTrackForm(currentFormStash());
 			if (!permissionedGranted) {
 				if (!(await stashUploadFiles({ file: uploadFile, imageFile: uploadImage }))) {
@@ -305,15 +304,16 @@
 			}
 		}
 
+		uploadError = null;
 		staged = uploader.stage(uploadFile);
 		uploader.upload(
 			staged,
 			uploadTitle,
-			uploadAlbum,
+			albums.some((album) => album.title === uploadAlbum) ? '' : uploadAlbum,
 			uploadFeatures,
 			uploadImage,
 			tagsToUpload,
-			uploadVisibility,
+			uploadPublishing,
 			shouldAutoTag,
 			uploadDescription,
 			// completion (SSE 'completed') — only NOW is it safe to wipe the form and
@@ -327,12 +327,11 @@
 			},
 			// enqueue / terminal-error callbacks: leave the form intact so a failed
 			// upload (duplicate, worker error) is recoverable without re-typing.
-			{},
+			{ onError: (message) => { uploadError = message; staged = null; } },
 			undefined, // label
-			undefined, // albumId
+			albums.find((album) => album.title === uploadAlbum)?.id, // albumId
 			copyrightToSend,
 			uploadSelfLabels,
-			(uploadVisibility === 'public' || uploadVisibility === 'unlisted') && !copyrightEnabled ? downloadPolicy : '',
 		);
 	}
 
@@ -432,6 +431,8 @@
 			>album</button>
 		</div>
 
+		<PublishingIntro />
+
 		{#if mode === 'track'}
 		<form onsubmit={handleUpload}>
 			<div class="form-group">
@@ -464,6 +465,7 @@
 				{#if file}
 					<div class="file-preview">
 						<AudioPreview source={file} transfer={staged} />
+					{#if uploadError}<p role="alert">{uploadError}</p>{/if}
 					</div>
 				{/if}
 			</div>
@@ -545,11 +547,6 @@
 				{/if}
 			</div>
 
-			<CopyrightRightsPanel
-				bind:enabled={copyrightEnabled}
-				bind:rights={copyrightRights}
-				disabled={visibility !== 'public' && visibility !== 'unlisted'}
-			/>
 
 			<fieldset class="form-group content-notice-card">
 				<legend>content notice</legend>
@@ -562,14 +559,12 @@
 				</label>
 			</fieldset>
 
-			<VisibilityPicker
-				bind:visibility
-				bind:downloadPolicy
-				supportUrl={artistProfile?.support_url}
-				showPrivate={permissionedSupported}
-				restrictedToPublic={copyrightEnabled}
-				privateGranted={permissionedGranted}
-			/>
+			<PublishingSettings bind:value={publishingOverride} defaults={publishingDefaults}
+				source={albumDefaults ? 'album' : 'Portal'} showSpace={permissionedSupported}
+				showRights={auth.user?.enabled_flags?.includes(COPYRIGHT_PARADIGM_FLAG) ?? false} />
+			{#if copyrightEnabled}
+				<CopyrightRightsPanel enabled={true} showToggle={false} bind:rights={copyrightRights} />
+			{/if}
 
 			<div class="form-group attestation">
 				<label class="checkbox-label">
@@ -600,7 +595,7 @@
 
 			<button
 				type="submit"
-				disabled={!file ||
+				disabled={!preferences.data || !file ||
 					hasUnresolvedFeaturesInput ||
 					!attestedRights}
 				class="upload-btn"

@@ -66,7 +66,7 @@ async def _upload_support_gated_track(
     audio_path: Path,
     title: str,
 ) -> int:
-    """upload a supporter-gated track via raw HTTP; the SDK lacks visibility."""
+    """upload an explicit supporter-listening policy via raw HTTP."""
     with audio_path.open("rb") as audio_file:
         response = await http.post(
             f"{api_url}/tracks/",
@@ -74,9 +74,16 @@ async def _upload_support_gated_track(
             data={
                 "title": title,
                 "tags": json.dumps(["integration-test", "lossless", "gated"]),
-                # visibility is the single visibility/access input (#1557);
-                # the server derives support_gate {"type": "any"} from it
-                "visibility": "supporters",
+                "publishing": json.dumps(
+                    {
+                        "access": {
+                            "listening": "supporters",
+                            "downloads": "off",
+                            "visibility": "public",
+                        },
+                        "attach_rights": False,
+                    }
+                ),
             },
             files={
                 "file": (
@@ -200,10 +207,10 @@ async def test_upload_support_gated_aiff_optimizes_to_private_mp3(
 
             assert track.title == "Test Support-Gated AIFF Upload"
             assert track.file_type == "mp3"
-            assert track.visibility == "supporters"
+            assert track.visibility == "public"
             assert track.support_gate == {"type": "any"}
             assert track.audio_url is None  # gated: no public r2 url
-            assert track.audio_storage == "r2"
+            assert track.audio_storage == "r2_private"
             assert track.pds_blob_cid is None
             assert track.original_file_id is not None
             assert track.original_file_type == "aiff"

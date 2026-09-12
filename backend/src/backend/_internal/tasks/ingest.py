@@ -437,49 +437,52 @@ async def ingest_track_update(
         # the creator assertion instead of preserving stale indexed values.
         track.self_labels = self_label_values_from_record(record.get("labels"))
 
-        # audio storage fields
-        audio_blob = record.get("audioBlob")
-        audio_url = record.get("audioUrl")
+        if track.audio_storage != "r2_private" and not track.is_private:
+            # audio storage fields
+            audio_blob = record.get("audioBlob")
+            audio_url = record.get("audioUrl")
 
-        # strip untrusted audioUrl on update (don't reject the whole update)
-        if audio_url and not await is_trusted_audio_origin(audio_url, artist_did=did):
-            logfire.warn(
-                "ingest: stripping untrusted audioUrl on update",
-                uri=uri,
-                audio_url=audio_url,
-            )
-            audio_url = None
+            # strip untrusted audioUrl on update (don't reject the whole update)
+            if audio_url and not await is_trusted_audio_origin(
+                audio_url, artist_did=did
+            ):
+                logfire.warn(
+                    "ingest: stripping untrusted audioUrl on update",
+                    uri=uri,
+                    audio_url=audio_url,
+                )
+                audio_url = None
 
-        # origin trust is not existence — same reasoning as the create path.
-        # create has HEADed the object since #1616; update had not, justified by
-        # "an update can only mutate an already-ingested track", but an
-        # already-ingested track is precisely what a stale audioUrl corrupts.
-        if audio_url and not await _audio_object_exists(audio_url):
-            logfire.warn(
-                "ingest: audioUrl has no backing R2 object on update, ignoring",
-                uri=uri,
-                audio_url=audio_url,
-            )
-            audio_url = None
+            # origin trust is not existence — same reasoning as the create path.
+            # create has HEADed the object since #1616; update had not, justified by
+            # "an update can only mutate an already-ingested track", but an
+            # already-ingested track is precisely what a stale audioUrl corrupts.
+            if audio_url and not await _audio_object_exists(audio_url):
+                logfire.warn(
+                    "ingest: audioUrl has no backing R2 object on update, ignoring",
+                    uri=uri,
+                    audio_url=audio_url,
+                )
+                audio_url = None
 
-        if audio_blob and isinstance(audio_blob, dict) and audio_url:
-            track.audio_storage = "both"
-            track.pds_blob_cid = audio_blob.get("ref", {}).get("$link")
-            track.r2_url = audio_url
-        elif audio_blob and isinstance(audio_blob, dict):
-            track.audio_storage = "pds"
-            track.pds_blob_cid = audio_blob.get("ref", {}).get("$link")
-            track.r2_url = None
-        elif audio_url:
-            track.audio_storage = "r2"
-            track.r2_url = audio_url
-            track.pds_blob_cid = None
-        if file_type := record.get("fileType"):
-            track.file_type = file_type
+            if audio_blob and isinstance(audio_blob, dict) and audio_url:
+                track.audio_storage = "both"
+                track.pds_blob_cid = audio_blob.get("ref", {}).get("$link")
+                track.r2_url = audio_url
+            elif audio_blob and isinstance(audio_blob, dict):
+                track.audio_storage = "pds"
+                track.pds_blob_cid = audio_blob.get("ref", {}).get("$link")
+                track.r2_url = None
+            elif audio_url:
+                track.audio_storage = "r2"
+                track.r2_url = audio_url
+                track.pds_blob_cid = None
+            if file_type := record.get("fileType"):
+                track.file_type = file_type
 
-        # gating
-        if "supportGate" in record:
-            track.support_gate = record["supportGate"]
+            # gating
+            if "supportGate" in record:
+                track.support_gate = record["supportGate"]
 
         if (features := record.get("features")) is not None:
             track.features = _features_to_did_list(features)

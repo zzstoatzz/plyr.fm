@@ -32,7 +32,6 @@ from backend.utilities.downloads import (
     download_filename,
     download_key,
     download_refusal,
-    effective_download_policy,
 )
 
 from .listing import order_album_tracks
@@ -93,15 +92,8 @@ async def download_album(
     # supporter standing: the album's tracks share one artist, so one check
     viewer_is_artist = session is not None and session.did == album.artist_did
     viewer_is_supporter = False
-    artist_prefs = ordered[0].artist.preferences
-    album_policy = effective_download_policy(
-        artist_prefs.download_policy if artist_prefs else None,
-        artist_prefs.support_url if artist_prefs else None,
-    )
     if (
-        any(
-            (track.download_policy or album_policy) == "supporters" for track in ordered
-        )
+        any(track.download_policy == "supporters" for track in ordered)
         and session is not None
         and not viewer_is_artist
     ):
@@ -114,10 +106,9 @@ async def download_album(
     for position, track in enumerate(ordered, start=1):
         refusal = download_refusal(
             is_private=track.is_private,
-            support_gate=track.support_gate,
             labels=set(track.self_labels or []) | set(track.operator_labels or []),
             moderation_override=track.moderation_override,
-            download_policy=track.download_policy or album_policy,
+            download_policy=track.download_policy,
             viewer_is_artist=viewer_is_artist,
             viewer_is_supporter=viewer_is_supporter,
         )

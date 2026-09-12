@@ -11,6 +11,30 @@ from backend.config import settings
 from backend.main import app
 
 
+async def test_publishing_defaults_round_trip(client_no_teal: AsyncClient) -> None:
+    defaults = {
+        "access": {"listening": "public", "downloads": "off", "visibility": "public"},
+        "attach_rights": True,
+    }
+    response = await client_no_teal.post(
+        "/preferences/", json={"publishing_defaults": defaults}
+    )
+    assert response.status_code == 200
+    assert response.json()["publishing_defaults"] == defaults
+    response = await client_no_teal.get("/preferences/")
+    assert response.json()["publishing_defaults"] == defaults
+
+
+async def test_publishing_defaults_reject_unknown_audience(
+    client_no_teal: AsyncClient,
+) -> None:
+    response = await client_no_teal.post(
+        "/preferences/",
+        json={"publishing_defaults": {"access": {"listening": "purchasers"}}},
+    )
+    assert response.status_code == 422
+
+
 class MockSession(Session):
     """mock session for auth bypass in tests."""
 

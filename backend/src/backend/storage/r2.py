@@ -1113,6 +1113,16 @@ class R2Storage:
                 )
             return f"{self.public_image_bucket_url}/{key}"
 
+    async def copy_audio_to_private(self, file_id: str, extension: str) -> None:
+        """Copy a public object without deleting potentially shared public bytes."""
+        key = AudioKey.for_file(file_id, extension).key
+        async with self._s3_client() as client:
+            await client.copy_object(
+                CopySource={"Bucket": self.audio_bucket_name, "Key": key},
+                Bucket=self.private_audio_bucket_name,
+                Key=key,
+            )
+
     async def move_audio(
         self,
         file_id: str,

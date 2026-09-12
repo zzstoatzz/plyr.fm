@@ -10,6 +10,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from backend.models.database import Base
 from backend.utilities.audio_formats import AudioFormat
+from backend.utilities.publishing import PublishingDefaults, PublishingPolicy
 
 if TYPE_CHECKING:
     from backend.models.album import Album
@@ -128,18 +129,7 @@ class Track(Base):
     image_url: Mapped[str | None] = mapped_column(String, nullable=True)
     thumbnail_url: Mapped[str | None] = mapped_column(String, nullable=True)
 
-    # visibility — single source of truth for discovery + access + where audio
-    # lives. one mutually-exclusive value (no overlapping booleans):
-    #   public     — in feeds; audio on R2/CDN; anyone
-    #   unlisted   — NOT in feeds; audio on R2/CDN; anyone with the link
-    #   supporters — in feeds (locked); audio in R2 private bucket; plyr.fm gates
-    #                on atprotofans support; carries support_gate={"type":"any"}
-    #   private    — NOT in feeds; audio + record live in the artist's ATProto
-    #                permissioned space ON THEIR PDS (never R2); the PDS gates via
-    #                a space credential; owner-only. space_uri holds the canonical
-    #                at://<authority>/space/<type>/<skey> identifier.
-    # copyright gating (indiemusi) is orthogonal — it rides on public/unlisted via
-    # support_gate={"type":"copyright"} and the copyright_* pointers below.
+    # Discovery and metadata visibility; action permissions are independent.
     visibility: Mapped[str] = mapped_column(
         String, nullable=False, default="public", server_default="public", index=True
     )
@@ -149,9 +139,7 @@ class Track(Base):
         nullable=False, default=False, server_default="false"
     )
 
-    # gating mechanism detail (drives the ATProto record's supportGate field +
-    # audio access checks): {"type": "any"} for supporters, {"type": "copyright"}
-    # for the indiemusi paradigm. None for ungated tracks.
+    # Listening audience: any (supporters), signed_in, owner, or no gate.
     support_gate: Mapped[dict | None] = mapped_column(
         JSONB(none_as_null=True), nullable=True, default=None
     )
@@ -181,12 +169,12 @@ class Track(Base):
     @hybrid_property
     def in_discovery(self) -> bool:
         """appears in discovery feeds (latest / top / for-you / radio)."""
-        return self.visibility in ("public", "supporters")
+        return self.visibility == "public"
 
     @in_discovery.inplace.expression
     @classmethod
     def _in_discovery_expr(cls) -> ColumnElement[bool]:
-        return cls.visibility.in_(("public", "supporters"))
+        return cls.visibility == "public"
 
     @hybrid_property
     def is_optimizing(self) -> bool:
@@ -220,17 +208,40 @@ class Track(Base):
     def _uses_private_audio_expr(cls) -> ColumnElement[bool]:
         return (cls.audio_storage == "r2_private") | cls.support_gate.isnot(None)
 
+    download_policy: Mapped[str] = mapped_column(
+        String, nullable=False, default="open", server_default="open"
+    )
+    policy_origin: Mapped[str] = mapped_column(
+        String, nullable=False, default="track", server_default="track"
+    )
+
     @property
-    def download_policy(self) -> str | None:
-        return (self.extra or {}).get("download_policy")
+    def publishing(self) -> PublishingDefaults:
+        gate = (self.support_gate or {}).get("type")
+        listening = (
+            "space"
+            if self.is_private
+            else {"any": "supporters", "signed_in": "signed_in", "owner": "owner"}.get(
+                gate, "owner"
+            )
+            if self.support_gate
+            else "public"
+        )
+        return PublishingDefaults(
+            access=PublishingPolicy.model_validate(
+                {
+                    "listening": listening,
+                    "downloads": self.download_policy,
+                    "visibility": self.visibility,
+                }
+            ),
+            attach_rights=bool(self.copyright_song_uri or self.copyright_recording_uri),
+        )
 
     @property
     def needs_supporter_check(self) -> bool:
-        policy = self.download_policy or (
-            self.artist.preferences.download_policy if self.artist.preferences else None
-        )
-        return policy == "supporters" or bool(
-            self.support_gate and self.support_gate.get("type") != "copyright"
+        return self.download_policy == "supporters" or bool(
+            self.support_gate and self.support_gate.get("type") == "any"
         )
 
     @property

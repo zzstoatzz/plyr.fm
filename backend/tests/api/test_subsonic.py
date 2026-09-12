@@ -12,12 +12,13 @@ import socket
 import threading
 from collections.abc import AsyncGenerator, Generator
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from unittest.mock import AsyncMock, patch
 
 import httpx
 import libsonic
 import pytest
 import uvicorn
-from libsonic.errors import CredentialError, SonicError
+from libsonic.errors import CredentialError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend._internal import create_session
@@ -239,7 +240,7 @@ async def test_get_cover_art_returns_bytes(
     )  # origin stub serves one payload for all paths
 
 
-async def test_stream_refuses_gated_track(
+async def test_stream_uses_authenticated_owner_for_protected_track(
     live_server: str, dev_token: str, db_session: AsyncSession, audio_origin: str
 ) -> None:
     artist = Artist(did=DID, handle=HANDLE, display_name="Subsonic Tester")
@@ -257,8 +258,13 @@ async def test_stream_refuses_gated_track(
     await db_session.refresh(track)
 
     conn = _connection(live_server, dev_token)
-    with pytest.raises(SonicError):
-        await asyncio.to_thread(conn.stream, str(track.id))
+    with patch(
+        "backend.api.audio.storage.generate_presigned_url",
+        new_callable=AsyncMock,
+        return_value=f"{audio_origin}/gated.mp3",
+    ):
+        response = await asyncio.to_thread(conn.stream, str(track.id))
+    assert response.read() == AUDIO_BYTES
 
 
 async def test_xml_is_the_default_format(live_server: str, dev_token: str) -> None:

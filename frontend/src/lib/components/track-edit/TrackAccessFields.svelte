@@ -1,4 +1,6 @@
 <script lang="ts">
+	import PublishingSettings from '$lib/components/PublishingSettings.svelte';
+	import type { PublishingDefaults } from '$lib/publishing';
 	import { auth } from '$lib/auth.svelte';
 	import { COPYRIGHT_PARADIGM_FLAG } from '$lib/config';
 	import CopyrightRightsPanel from '$lib/components/CopyrightRightsPanel.svelte';
@@ -6,9 +8,10 @@
 	import type { Track } from '$lib/types';
 	interface Props {
 		track: Track;
-		atprotofansEligible: boolean;
-		editSupportGate: boolean;
-		editUnlisted: boolean;
+		publishingOverride: PublishingDefaults | null;
+		publishingDefaults: PublishingDefaults;
+		publishingSource: string;
+		valueLabel?: string;
 		editSelfLabels: string[];
 		editCopyrightEnabled: boolean;
 		editCopyrightRights: TrackRights;
@@ -17,11 +20,12 @@
 	}
 	let {
 		track,
-		atprotofansEligible,
-		editSupportGate = $bindable(),
-		editUnlisted = $bindable(),
+		publishingOverride = $bindable(),
+		publishingDefaults,
+		publishingSource,
+		valueLabel,
 		editSelfLabels = $bindable(),
-		editCopyrightEnabled = $bindable(),
+		editCopyrightEnabled,
 		editCopyrightRights = $bindable(),
 		replaceCopyrightRights = $bindable(),
 		editCopyrightWasEnabled
@@ -43,36 +47,19 @@
 	}
 </script>
 
+<PublishingSettings
+	{valueLabel}
+	bind:value={publishingOverride}
+	defaults={publishingDefaults}
+	source={publishingSource}
+	showRights={auth.user?.enabled_flags?.includes(COPYRIGHT_PARADIGM_FLAG)}
+/>
+{#if track.audio_storage !== 'r2_private'}
+	<p class="field-hint">changing access cannot recall audio that was already public.</p>
+{/if}
 <details class="advanced-section">
-	<summary>visibility &amp; access</summary>
+	<summary>content notice</summary>
 	<div class="advanced-content">
-		{#if track.audio_storage === 'r2_private'}
-			<p class="field-hint">download policy: {track.download_policy}. listening follows the track’s visibility.</p>
-		{/if}
-		{#if atprotofansEligible || track.support_gate?.type === 'any'}
-			<div class="edit-field-group access-field">
-				<span class="edit-label">supporter access</span>
-				<label class="toggle-row">
-					<input type="checkbox" bind:checked={editSupportGate} disabled={editCopyrightEnabled} />
-					<span>only supporters can play this track</span>
-				</label>
-				{#if editSupportGate}
-					<p class="field-hint">
-						only users who support you via <a
-							href="https://atprotofans.com"
-							target="_blank"
-							rel="noopener">atprotofans</a
-						>
-						can play this track.
-						<a
-							href="https://docs.plyr.fm/artists/#supporter-gated-tracks"
-							target="_blank"
-							rel="noopener">learn more</a
-						>
-					</p>
-				{/if}
-			</div>
-		{/if}
 		<div class="edit-field-group content-notice-field">
 			<span class="edit-label">content notice</span>
 			<label class="toggle-row">
@@ -101,23 +88,9 @@
 				</p>
 			{/if}
 		</div>
-
-		<div class="edit-field-group access-field">
-			<span class="edit-label">visibility</span>
-			<label class="toggle-row">
-				<input type="checkbox" bind:checked={editUnlisted} />
-				<span>unlisted — won't appear in feeds</span>
-			</label>
-			{#if editUnlisted}
-				<p class="field-hint">
-					this track won't show up in the latest, top, or for-you feeds. it's still accessible via
-					direct link, your profile, albums, playlists, and search.
-				</p>
-			{/if}
-		</div>
 	</div>
 </details>
-{#if auth.user?.enabled_flags?.includes(COPYRIGHT_PARADIGM_FLAG)}
+{#if editCopyrightEnabled && auth.user?.enabled_flags?.includes(COPYRIGHT_PARADIGM_FLAG)}
 	<details class="advanced-section">
 		<summary>rights &amp; licensing</summary>
 		<div class="advanced-content">
@@ -129,19 +102,15 @@
 					><input type="checkbox" bind:checked={replaceCopyrightRights} />replace existing rights
 					details</label
 				>
-				{#if !replaceCopyrightRights}<label class="toggle-row"
-						><input type="checkbox" bind:checked={editCopyrightEnabled} />copyright licensing
-						enabled</label
-					>{/if}
 			{/if}
 			{#if !editCopyrightWasEnabled || replaceCopyrightRights}
 				{#if editCopyrightWasEnabled}<p class="field-hint">
 						enter the full rights details below. blank fields clear previously saved values.
 					</p>{/if}
 				<CopyrightRightsPanel
-					bind:enabled={editCopyrightEnabled}
+					enabled={editCopyrightEnabled}
+					showToggle={false}
 					bind:rights={editCopyrightRights}
-					disabled={editSupportGate}
 				/>
 			{/if}
 		</div>
@@ -195,13 +164,6 @@
 	.moderation-status strong {
 		color: var(--text-primary);
 		font-weight: 600;
-	}
-	.field-hint a {
-		color: var(--text-primary);
-		text-decoration: none;
-	}
-	.field-hint a:hover {
-		text-decoration: underline;
 	}
 	@media (max-width: 600px) {
 		.edit-field-group {

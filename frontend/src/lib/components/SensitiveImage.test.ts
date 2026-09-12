@@ -1,3 +1,4 @@
+import { defaultPublishing } from '$lib/publishing';
 // SensitiveImage blur contract: the viewer's saved preference can reveal
 // sensitive artwork in the app, but unauthenticated contexts (embeds) pass
 // respectPreference={false} and must always blur.
@@ -14,7 +15,7 @@ function prefs(showSensitiveArtwork: boolean): Preferences {
 		accent_color: null,
 		auto_advance: true,
 		allow_comments: true,
-		download_policy: null,
+		publishing_defaults: defaultPublishing(),
 		hidden_tags: [],
 		theme: 'dark',
 		enable_teal_scrobbling: false,

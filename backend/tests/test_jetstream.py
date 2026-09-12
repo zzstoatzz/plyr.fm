@@ -1030,6 +1030,37 @@ class TestIngestTrackDelete:
 
 
 class TestIngestTrackUpdate:
+    async def test_public_record_cannot_repoint_managed_protected_audio(
+        self, db_session: AsyncSession, artist: Artist, track: Track
+    ) -> None:
+        track.audio_storage = "r2_private"
+        track.r2_url = None
+        track.support_gate = {"type": "owner"}
+        track.download_policy = "off"
+        await db_session.commit()
+        assert track.atproto_record_uri is not None
+        await ingest_track_update(
+            did=artist.did,
+            rkey="existing",
+            uri=track.atproto_record_uri,
+            cid="new-cid",
+            record={
+                "title": "Updated metadata",
+                "audioUrl": "https://r2.example.com/public.mp3",
+                "audioBlob": {"ref": {"$link": "public-blob"}},
+                "supportGate": {"type": "any"},
+                "fileType": "wav",
+            },
+        )
+        await db_session.refresh(track)
+        assert track.title == "Updated metadata"
+        assert track.audio_storage == "r2_private"
+        assert track.file_type == "mp3"
+        assert track.pds_blob_cid is None
+        assert track.r2_url is None
+        assert track.support_gate == {"type": "owner"}
+        assert track.download_policy == "off"
+
     async def test_replaces_creator_self_labels_from_full_record(
         self, db_session: AsyncSession, artist: Artist, track: Track
     ) -> None:

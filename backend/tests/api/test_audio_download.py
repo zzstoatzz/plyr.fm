@@ -99,11 +99,13 @@ async def test_download_prefers_lossless_original(
     )
 
 
-@pytest.mark.parametrize("gate_type", ["any", "copyright"])
+@pytest.mark.parametrize("gate_type", ["any", "signed_in"])
 async def test_download_refuses_gated_track(
     test_app: FastAPI, db_session: AsyncSession, gate_type: str
 ) -> None:
-    track = await _make_track(db_session, support_gate={"type": gate_type})
+    track = await _make_track(
+        db_session, support_gate={"type": gate_type}, download_policy="off"
+    )
     response = await _download(test_app, track.file_id)
     assert response.status_code == 403
 
@@ -157,7 +159,7 @@ async def test_download_refuses_when_artist_disabled_downloads(
     test_app: FastAPI, db_session: AsyncSession
 ):
     track = await _make_track(db_session)
-    db_session.add(UserPreferences(did=track.artist_did, download_policy="off"))
+    track.download_policy = "off"
     await db_session.commit()
 
     response = await _download(test_app, track.file_id)
@@ -217,7 +219,7 @@ async def test_track_response_not_downloadable_when_artist_opted_out(
     test_app: FastAPI, db_session: AsyncSession
 ):
     track = await _make_track(db_session)
-    db_session.add(UserPreferences(did=track.artist_did, download_policy="off"))
+    track.download_policy = "off"
     await db_session.commit()
 
     response = await _response_for(db_session, track.id)
@@ -227,7 +229,9 @@ async def test_track_response_not_downloadable_when_artist_opted_out(
 async def test_track_response_not_downloadable_when_gated_or_labeled(
     test_app: FastAPI, db_session: AsyncSession
 ):
-    gated = await _make_track(db_session, support_gate={"type": "any"})
+    gated = await _make_track(
+        db_session, support_gate={"type": "any"}, download_policy="off"
+    )
     labeled = await _make_track(
         db_session,
         artist_did="did:plc:dlartist2",
@@ -288,7 +292,7 @@ async def test_supporters_policy_requires_sign_in(
     test_app: FastAPI, db_session: AsyncSession
 ):
     track = await _make_track(db_session)
-    db_session.add(UserPreferences(did=track.artist_did, download_policy="supporters"))
+    track.download_policy = "supporters"
     await db_session.commit()
 
     response = await _download(test_app, track.file_id)
@@ -299,10 +303,10 @@ async def test_supporters_policy_requires_sign_in(
     assert resp.download_policy == "supporters"
 
 
-async def test_support_link_defaults_policy_to_ask(
+async def test_support_link_does_not_change_published_policy(
     test_app: FastAPI, db_session: AsyncSession
 ):
-    """NULL policy + support link = auto ask: downloadable, policy exposed."""
+    """Adding a support link does not mutate a published download policy."""
     track = await _make_track(db_session)
     db_session.add(
         UserPreferences(did=track.artist_did, support_url="https://ko-fi.example")
@@ -317,7 +321,7 @@ async def test_support_link_defaults_policy_to_ask(
 
     resp = await _response_for(db_session, track.id)
     assert resp.downloadable is True
-    assert resp.download_policy == "ask"
+    assert resp.download_policy == "open"
     assert resp.artist_support_url == "https://ko-fi.example"
 
 
@@ -334,7 +338,7 @@ async def test_stream_track_is_playable_but_not_downloadable(
     test_app: FastAPI, db_session: AsyncSession
 ) -> None:
     track = await _make_track(
-        db_session, audio_storage="r2_private", extra={"download_policy": "off"}
+        db_session, audio_storage="r2_private", download_policy="off"
     )
     response = await _response_for(db_session, track.id)
     assert response.visibility == "public"
@@ -349,7 +353,7 @@ async def test_protected_master_is_not_public_playback(
     track = await _make_track(
         db_session,
         audio_storage="r2_private",
-        extra={"download_policy": "off"},
+        download_policy="off",
         original_file_id="ccddeeff00112233",
         original_file_type="flac",
     )
@@ -376,7 +380,7 @@ async def test_artist_recovers_protected_original(
     track = await _make_track(
         db_session,
         audio_storage="r2_private",
-        extra={"download_policy": "off"},
+        download_policy="off",
         original_file_id="ccddeeff00112233",
         original_file_type="flac",
     )
@@ -401,19 +405,24 @@ async def test_artist_recovers_protected_original(
 
 @pytest.mark.parametrize(
     "override,artist_policy,allowed",
-    [(None, "off", False), ("open", "off", True), ("off", "open", False)],
+    [("open", "off", True), ("off", "open", False), ("supporters", "open", False)],
 )
 async def test_track_download_policy_overrides_artist_default(
     test_app: FastAPI,
     db_session: AsyncSession,
-    override: str | None,
+    override: str,
     artist_policy: str,
     allowed: bool,
 ) -> None:
     track = await _make_track(
-        db_session, audio_storage="r2_private", extra={"download_policy": override}
+        db_session, audio_storage="r2_private", download_policy=override
     )
-    db_session.add(UserPreferences(did=track.artist_did, download_policy=artist_policy))
+    db_session.add(
+        UserPreferences(
+            did=track.artist_did,
+            publishing_defaults={"access": {"downloads": artist_policy}},
+        )
+    )
     await db_session.commit()
     with patch(
         "backend.api.audio.storage.generate_download_url",
@@ -431,7 +440,7 @@ async def test_protected_supporter_download_uses_existing_verifier(
     test_app: FastAPI, db_session: AsyncSession, is_supporter: bool
 ) -> None:
     track = await _make_track(
-        db_session, audio_storage="r2_private", extra={"download_policy": "supporters"}
+        db_session, audio_storage="r2_private", download_policy="supporters"
     )
     test_app.dependency_overrides[get_optional_session] = lambda: MockSession(
         "did:plc:listener"

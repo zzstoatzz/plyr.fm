@@ -75,9 +75,9 @@ from backend.storage.keys import AudioKey, StagedUploadKey
 from backend.utilities.audio import extract_duration, is_alac
 from backend.utilities.audio_formats import AudioFormat
 from backend.utilities.database import db_session
-from backend.utilities.downloads import DOWNLOAD_POLICIES
 from backend.utilities.hashing import CHUNK_SIZE, hash_file_chunked
 from backend.utilities.progress import R2ProgressTracker
+from backend.utilities.publishing import PublishingDefaults, resolve_publishing
 from backend.utilities.rate_limit import limiter
 from backend.utilities.tags import add_tags_to_track, parse_tags_json
 
@@ -138,13 +138,10 @@ class UploadContext:
     # supporter-gated content (e.g., {"type": "any"} or {"type": "copyright"})
     support_gate: dict | None = None
     download_policy: str | None = None
+    policy_origin: str = "portal"
     private_audio: bool = False
 
-    # indiemusi rights metadata, written as song + recording records after PDS
-    # publish. when set, the upload is treated as copyright-gated (audio lives
-    # in private storage; support_gate is forced to {"type": "copyright"}).
-    # stored as a dict for serializability across the docket boundary; the
-    # worker rehydrates via TrackRightsInput.model_validate.
+    # Rights metadata is serialized independently of access for the worker.
     copyright_rights: dict | None = None
 
     # source has a web-playable extension but a non-browser codec (ALAC-in-m4a),
@@ -722,24 +719,6 @@ async def _validate_audio(ctx: UploadContext) -> AudioInfo:
         raise UploadPhaseError(f"unsupported file type: .{ctx.audio_extension}")
 
     is_gated = ctx.private_audio or ctx.support_gate is not None
-    # the atprotofans requirement applies ONLY to supporter-gated tracks
-    # (support_gate.type == "any"). copyright-typed gates use the same
-    # private-storage pipeline but have a different access policy (any
-    # authenticated listener), so atprotofans setup must not be required.
-    gate_type = (
-        ctx.support_gate.get("type") if isinstance(ctx.support_gate, dict) else None
-    )
-    if gate_type == "any":
-        async with db_session() as db:
-            prefs_result = await db.execute(
-                select(UserPreferences).where(UserPreferences.did == ctx.artist_did)
-            )
-            prefs = prefs_result.scalar_one_or_none()
-            if not prefs or prefs.support_url != "atprotofans":
-                raise UploadPhaseError(
-                    "supporter gating requires atprotofans to be enabled in settings"
-                )
-
     return AudioInfo(
         format=audio_format,
         duration=ctx.duration,
@@ -750,28 +729,28 @@ async def _validate_audio(ctx: UploadContext) -> AudioInfo:
 
 
 async def _store_audio(ctx: UploadContext, audio_info: AudioInfo) -> StorageResult:
-    """phase 2: settle on the playable file_id. NEVER transcodes.
+    """Prepare protected playback before publication; optimize public audio later."""
+    if audio_info.is_gated and not audio_info.is_private:
+        rendition = await _transcode_audio(
+            ctx.upload_id,
+            ctx.audio_file_id,
+            ctx.filename,
+            ctx.audio_extension,
+            target_format="mp3",
+            gated=True,
+            timeout_seconds=settings.transcoder.optimize_timeout_seconds,
+        )
+        if rendition is None or rendition.transcoded_file_id == ctx.audio_file_id:
+            raise UploadPhaseError("could not prepare a separate playback rendition")
+        return StorageResult(
+            file_id=rendition.transcoded_file_id,
+            original_file_id=ctx.audio_file_id,
+            original_file_type=ctx.audio_extension,
+            playable_format=AudioFormat.MP3,
+            r2_url=None,
+            transcode_info=rendition,
+        )
 
-    track creation is the critical path and must not block on the transcoder
-    (a slow or wedged encode of a large lossless file would otherwise fail the
-    whole upload and produce no track — exactly the woody.fm 939 MB AIFF
-    incident). so this phase only ever points at the already-staged bytes:
-
-    - web-playable formats (mp3, wav, m4a, flac): the staged file IS the
-      playable file. nothing else to do.
-    - non-web-playable formats (aiff, and the browser-recorder webm/ogg): we
-      publish the staged file directly as BOTH the interim playable rendition
-      (a stopgap — it plays for clients that support the source format; others
-      see a "processing" state until the mp3 lands) AND the `original_file_id`
-      (the archival master). the deferred `optimize_track_audio` docket task
-      produces the mp3 streaming rendition off the critical path and swaps it
-      in, writing the single canonical PDS blob.
-
-    the transcode that used to live here moved wholesale into the optimize
-    task; see `audio_optimize.optimize_track_audio`.
-    """
-    # non-web-playable formats (aiff/webm/ogg) always optimize; a web-playable
-    # extension hiding a non-browser codec (ALAC-in-m4a) does too.
     needs_optimization = (
         not audio_info.format.is_web_playable or audio_info.needs_transcode
     )
@@ -1019,8 +998,6 @@ async def _create_records(
         audio_storage = (
             "r2_private" if ctx.private_audio else ("both" if has_pds_blob else "r2")
         )
-        if ctx.download_policy is not None:
-            extra["download_policy"] = ctx.download_policy
 
         artist_display_name = artist.display_name
 
@@ -1047,6 +1024,8 @@ async def _create_records(
             image_url=image_url,
             thumbnail_url=thumbnail_url,
             support_gate=ctx.support_gate,
+            download_policy=ctx.download_policy or "open",
+            policy_origin=ctx.policy_origin,
             visibility=ctx.visibility,
             audio_storage="pds" if ctx.private else audio_storage,
             pds_blob_cid=pds_result.cid if pds_result else None,
@@ -1473,6 +1452,7 @@ async def run_track_upload(
     needs_transcode: bool = False,
     staged: bool = False,
     download_policy: str | None = None,
+    policy_origin: str = "portal",
     private_audio: bool = False,
     concurrency: ConcurrencyLimit = ConcurrencyLimit("artist_did", max_concurrent=3),
 ) -> None:
@@ -1553,6 +1533,7 @@ async def run_track_upload(
         support_gate=support_gate,
         private_audio=private_audio,
         download_policy=download_policy,
+        policy_origin=policy_origin,
         copyright_rights=copyright_rights,
         auto_tag=auto_tag,
         visibility=visibility,
@@ -1598,6 +1579,7 @@ async def schedule_track_upload(ctx: UploadContext) -> None:
         support_gate=ctx.support_gate,
         private_audio=ctx.private_audio,
         download_policy=ctx.download_policy,
+        policy_origin=ctx.policy_origin,
         copyright_rights=ctx.copyright_rights,
         auto_tag=ctx.auto_tag,
         visibility=ctx.visibility,
@@ -1605,9 +1587,6 @@ async def schedule_track_upload(ctx: UploadContext) -> None:
         needs_transcode=ctx.needs_transcode,
         staged=ctx.staged,
     )
-
-
-_VISIBILITIES = frozenset({"public", "unlisted", "supporters", "private"})
 
 
 @dataclass(frozen=True)
@@ -1633,6 +1612,7 @@ class UploadMetadata:
     copyright_rights: dict | None
     auto_tag: bool
     download_policy: str | None = None
+    policy_origin: str = "portal"
     private_audio: bool = False
 
     @property
@@ -1644,6 +1624,29 @@ class UploadMetadata:
         return self.private_audio or self.support_gate is not None
 
 
+async def validate_upload_form(request: Request) -> None:
+    allowed = {
+        "title",
+        "publishing",
+        "album",
+        "album_id",
+        "features",
+        "tags",
+        "copyright",
+        "description",
+        "self_labels",
+        "auto_tag",
+        "file",
+        "image",
+    }
+    unknown = set(await request.form()) - allowed
+    if unknown:
+        raise HTTPException(
+            status_code=400,
+            detail=f"unknown upload fields: {', '.join(sorted(unknown))}",
+        )
+
+
 async def parse_upload_metadata(
     auth_session: AuthSession,
     *,
@@ -1653,12 +1656,11 @@ async def parse_upload_metadata(
     album_id: str | None,
     features: str | None,
     tags: str | None,
-    visibility: str,
+    publishing: str | None,
     copyright: str | None,
     description: str | None,
     self_labels: str | None,
     auto_tag: str | None,
-    download_policy: str | None = None,
 ) -> UploadMetadata:
     """validate upload form fields; raises HTTPException with the user-facing detail."""
     if album and album_id:
@@ -1677,30 +1679,61 @@ async def parse_upload_metadata(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
 
-    if visibility not in _VISIBILITIES:
+    try:
+        override = (
+            PublishingDefaults.model_validate_json(publishing) if publishing else None
+        )
+        async with db_session() as db:
+            prefs = await db.get(UserPreferences, auth_session.did)
+            portal = PublishingDefaults.model_validate(
+                prefs.publishing_defaults if prefs else {}
+            )
+            album_row = await db.get(Album, album_id) if album_id else None
+            if album_id and (
+                album_row is None or album_row.artist_did != auth_session.did
+            ):
+                raise HTTPException(status_code=404, detail="album not found")
+            album_defaults = (
+                PublishingDefaults.model_validate(album_row.publishing_defaults)
+                if album_row and album_row.publishing_defaults is not None
+                else None
+            )
+        resolved = resolve_publishing(
+            portal=portal, album=album_defaults, track=override
+        )
+    except ValidationError as e:
+        raise HTTPException(
+            status_code=400, detail=f"invalid publishing settings: {e}"
+        ) from e
+    policy = resolved.settings.access
+    visibility = policy.visibility
+    is_private = visibility == "private"
+    if is_private != (policy.listening == "space"):
         raise HTTPException(
             status_code=400,
-            detail=f"invalid visibility: {visibility} (one of {sorted(_VISIBILITIES)})",
+            detail="private metadata currently requires Space listening",
         )
-    is_private = visibility == "private"
-    support_gate: dict | None = {"type": "any"} if visibility == "supporters" else None
+    support_gate = (
+        {"type": "any" if policy.listening == "supporters" else policy.listening}
+        if policy.listening not in ("public", "space")
+        else None
+    )
 
     copyright_rights: dict | None = None
-    if copyright:
-        if visibility in ("supporters", "private"):
+    if copyright or resolved.settings.attach_rights:
+        if visibility == "private":
             raise HTTPException(
                 status_code=400,
                 detail=f"copyright cannot combine with {visibility} visibility",
             )
         try:
             copyright_rights = TrackRightsInput.model_validate_json(
-                copyright
+                copyright or "{}"
             ).model_dump(by_alias=True, exclude_none=True)
         except ValidationError as e:
             raise HTTPException(
                 status_code=400, detail=f"invalid copyright payload: {e}"
             ) from e
-        support_gate = {"type": "copyright"}
 
     if not filename:
         raise HTTPException(status_code=400, detail="no filename provided")
@@ -1726,18 +1759,7 @@ async def parse_upload_metadata(
                 ),
             )
 
-    if download_policy is not None:
-        if download_policy not in DOWNLOAD_POLICIES:
-            raise HTTPException(status_code=400, detail="invalid download policy")
-        if visibility not in ("public", "unlisted") or copyright:
-            raise HTTPException(
-                status_code=400,
-                detail="download policy applies to public or unlisted tracks without copyright metadata",
-            )
-    async with db_session() as db:
-        prefs = await db.get(UserPreferences, auth_session.did)
-        policy = download_policy or (prefs.download_policy if prefs else None)
-    private_audio = policy in ("off", "supporters") and not is_private
+    private_audio = policy.requires_protected_audio and not is_private
 
     return UploadMetadata(
         title=title,
@@ -1753,7 +1775,8 @@ async def parse_upload_metadata(
         support_gate=support_gate,
         copyright_rights=copyright_rights,
         auto_tag=auto_tag == "true",
-        download_policy=download_policy,
+        download_policy=policy.downloads,
+        policy_origin=resolved.origin,
         private_audio=private_audio,
     )
 
@@ -1796,21 +1819,12 @@ async def upload_track(
     ] = None,
     features: Annotated[str | None, Form()] = None,
     tags: Annotated[str | None, Form(description="JSON array of tag names")] = None,
-    visibility: Annotated[
-        str,
-        Form(
-            description="one of: public | unlisted | supporters | private. "
-            "supporters = atprotofans-gated; private = PDS permissioned space "
-            "(requires a PDS supporting com.atproto.space.*)."
-        ),
-    ] = "public",
-    download_policy: Annotated[str | None, Form()] = None,
+    publishing: Annotated[str | None, Form()] = None,
     copyright: Annotated[
         str | None,
         Form(
             description="JSON object with indiemusi rights metadata (iswc, isrc, "
-            "masterOwner, additionalInterestedParties). When present, the track "
-            "is copyright-gated and audio lives in private storage."
+            "masterOwner, additionalInterestedParties). Does not change access."
         ),
     ] = None,
     description: Annotated[
@@ -1835,9 +1849,7 @@ async def upload_track(
         album: Optional album name/ID to associate with the track.
         features: Optional JSON array of ATProto handles, e.g.,
             ["user1.bsky.social", "user2.bsky.social"].
-        support_gate: Optional JSON object for supporter gating.
-            Requires atprotofans to be enabled in settings.
-            Example: {"type": "any"} - requires any atprotofans support.
+        publishing: Optional complete per-track publishing override.
         file: Audio file to upload (required).
         image: Optional image file for track artwork.
         auth_session: Authenticated artist session (dependency-injected).
@@ -1845,6 +1857,7 @@ async def upload_track(
     Returns:
         dict: A payload containing `upload_id` for monitoring progress via SSE.
     """
+    await validate_upload_form(request)
     if not file.filename:
         raise HTTPException(status_code=400, detail="no filename provided")
     filename = file.filename
@@ -1856,12 +1869,11 @@ async def upload_track(
         album_id=album_id,
         features=features,
         tags=tags,
-        visibility=visibility,
+        publishing=publishing,
         copyright=copyright,
         description=description,
         self_labels=self_labels,
         auto_tag=auto_tag,
-        download_policy=download_policy,
     )
     visibility = meta.visibility
     audio_format = meta.audio_format
@@ -2004,6 +2016,7 @@ async def upload_track(
             support_gate=parsed_support_gate,
             private_audio=meta.private_audio,
             download_policy=meta.download_policy,
+            policy_origin=meta.policy_origin,
             copyright_rights=parsed_copyright,
             auto_tag=auto_tag == "true",
             visibility=visibility,

@@ -66,6 +66,13 @@ async def create_album(
     this preserves the "type an existing album name to add tracks to it"
     UX — see finalize_album for the append semantics.
     """
+    if (
+        body.publishing_defaults
+        and body.publishing_defaults.access.visibility == "private"
+    ):
+        raise HTTPException(
+            status_code=400, detail="private album metadata is not supported yet"
+        )
     title = body.title.strip()
     if not title:
         raise HTTPException(status_code=400, detail="title is required")
@@ -87,6 +94,10 @@ async def create_album(
         select(Album).where(Album.artist_did == artist.did, Album.slug == slug)
     )
     if existing := existing_result.scalar_one_or_none():
+        if body.publishing_defaults is not None:
+            existing.publishing_defaults = body.publishing_defaults.model_dump()
+            await db.commit()
+            await invalidate_album_cache(artist.handle, existing.slug)
         track_count, total_plays = await _album_stats(db, existing.id)
         return await _album_metadata(existing, artist, track_count, total_plays)
 
@@ -95,6 +106,9 @@ async def create_album(
         slug=slug,
         title=title,
         description=description,
+        publishing_defaults=body.publishing_defaults.model_dump()
+        if body.publishing_defaults
+        else None,
     )
     db.add(album)
     try:

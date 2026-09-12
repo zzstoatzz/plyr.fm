@@ -20,19 +20,17 @@
 		tracks.filter(
 			(t) =>
 				!t.support_gate &&
+				t.audio_storage !== 'r2_private' &&
+				t.publishing?.access.visibility !== 'private' &&
 				!t.pds_blob_cid &&
 				t.file_id &&
 				!isOptimizing(t)
 		)
 	);
 
-	let allSelected = $derived(
-		eligible.length > 0 && eligible.every((t) => selected.has(t.id))
-	);
+	let allSelected = $derived(eligible.length > 0 && eligible.every((t) => selected.has(t.id)));
 
-	let selectedBytes = $derived(
-		[...selected].reduce((sum, id) => sum + (fileSizes[id] ?? 0), 0)
-	);
+	let selectedBytes = $derived([...selected].reduce((sum, id) => sum + (fileSizes[id] ?? 0), 0));
 
 	function formatBytes(bytes: number): string {
 		if (bytes === 0) return '0 B';
@@ -41,10 +39,13 @@
 		return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 	}
 
-	function trackStatus(
-		track: Track
-	): 'eligible' | 'saved' | 'gated' | 'optimizing' {
-		if (track.support_gate) return 'gated';
+	function trackStatus(track: Track): 'eligible' | 'saved' | 'gated' | 'optimizing' {
+		if (
+			track.support_gate ||
+			track.audio_storage === 'r2_private' ||
+			track.publishing?.access.visibility === 'private'
+		)
+			return 'gated';
 		if (track.audio_storage === 'both' || track.pds_blob_cid) return 'saved';
 		if (isOptimizing(track)) return 'optimizing';
 		return 'eligible';
@@ -128,8 +129,8 @@
 
 		<p class="pds-description">
 			select tracks to save to your personal data server. gated, already-saved, and
-			currently-optimizing tracks are shown for reference — optimizing tracks land on your
-			PDS automatically once the mp3 rendition is ready.
+			currently-optimizing tracks are shown for reference — optimizing tracks land on your PDS
+			automatically once the mp3 rendition is ready.
 		</p>
 
 		{#if eligible.length > 0}
@@ -168,7 +169,8 @@
 							<span
 								class="pds-badge optimizing"
 								title="mp3 rendition is being prepared; it will be written to your PDS automatically when ready"
-							>optimizing</span>
+								>optimizing</span
+							>
 						{/if}
 					</div>
 				</div>
@@ -366,7 +368,6 @@
 		white-space: nowrap;
 		font-weight: 500;
 	}
-
 
 	.pds-badge.gated {
 		background: color-mix(in srgb, var(--text-tertiary) 15%, transparent);

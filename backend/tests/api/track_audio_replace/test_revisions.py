@@ -324,7 +324,8 @@ class TestRestoreEndpoint:
         track.audio_storage = "r2_private" if private_source else "r2"
         if private_source:
             track.r2_url = None
-            track.extra = {"duration": 200, "download_policy": "off"}
+            track.extra = {"duration": 200}
+            track.download_policy = "off"
         db_session.add(track)
         await db_session.commit()
         await db_session.refresh(track)

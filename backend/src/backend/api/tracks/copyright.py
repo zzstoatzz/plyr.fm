@@ -1,14 +1,4 @@
-"""per-track copyright endpoints.
-
-POST /tracks/{track_id}/copyright — write or update rights metadata (song +
-recording records on the user's PDS) for a track. flips the track into private
-storage by setting support_gate = {"type": "copyright"}.
-
-DELETE /tracks/{track_id}/copyright — best-effort delete the song + recording
-records, clear the URI columns, and (when support_gate was set to copyright)
-clear the gate. moving the audio back to the public bucket is a follow-up if
-we want it.
-"""
+"""Per-track rights metadata, independent of publication permissions."""
 
 import logging
 from typing import Annotated
@@ -38,7 +28,6 @@ class TrackCopyrightResponse(BaseModel):
 
     song_uri: str | None
     recording_uri: str | None
-    is_copyright_gated: bool
 
 
 async def _load_owned_track(
@@ -60,11 +49,7 @@ async def set_track_copyright(
     db: Annotated[AsyncSession, Depends(get_db)],
     auth_session: AuthSession = Depends(require_auth),
 ) -> TrackCopyrightResponse:
-    """write/update indiemusi rights records for this track.
-
-    creates a fresh song + recording on first call, updates existing rkeys on
-    subsequent calls. always flips the track into copyright gating.
-    """
+    """Write or update rights information without changing access."""
     await _require_copyright_flag(auth_session)
     track = await _load_owned_track(db, track_id, auth_session)
     try:
@@ -74,7 +59,6 @@ async def set_track_copyright(
     return TrackCopyrightResponse(
         song_uri=result.song_uri,
         recording_uri=result.recording_uri,
-        is_copyright_gated=True,
     )
 
 
@@ -84,10 +68,8 @@ async def clear_track_copyright(
     db: Annotated[AsyncSession, Depends(get_db)],
     auth_session: AuthSession = Depends(require_auth),
 ) -> TrackCopyrightResponse:
-    """delete rights records for this track and clear the columns + gate."""
+    """Delete rights records without changing access."""
     await _require_copyright_flag(auth_session)
     track = await _load_owned_track(db, track_id, auth_session)
     await clear_track_rights(auth_session, track)
-    return TrackCopyrightResponse(
-        song_uri=None, recording_uri=None, is_copyright_gated=False
-    )
+    return TrackCopyrightResponse(song_uri=None, recording_uri=None)

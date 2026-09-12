@@ -1,3 +1,4 @@
+import { defaultPublishing, parsePublishing, type PublishingDefaults } from './publishing';
 // user preferences state management
 import { browser } from '$app/environment';
 import { safeLocalStorage } from './utils/safe-storage';
@@ -61,8 +62,7 @@ export interface Preferences {
 	accent_color: string | null;
 	auto_advance: boolean;
 	allow_comments: boolean;
-	// null = auto: ask when a support link is set, open otherwise
-	download_policy: string | null;
+	publishing_defaults: PublishingDefaults;
 	hidden_tags: string[];
 	theme: Theme;
 	enable_teal_scrobbling: boolean;
@@ -80,7 +80,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
 	accent_color: null,
 	auto_advance: true,
 	allow_comments: true,
-	download_policy: null,
+	publishing_defaults: defaultPublishing(),
 	hidden_tags: ['ai', 'ai-slop', 'suno'],
 	theme: 'dark',
 	enable_teal_scrobbling: false,
@@ -127,8 +127,8 @@ class PreferencesManager {
 		return this.data?.allow_comments ?? DEFAULT_PREFERENCES.allow_comments;
 	}
 
-	get downloadPolicy(): string | null {
-		return this.data?.download_policy ?? DEFAULT_PREFERENCES.download_policy;
+	get publishingDefaults(): PublishingDefaults {
+		return this.data?.publishing_defaults ?? DEFAULT_PREFERENCES.publishing_defaults;
 	}
 
 	get theme(): Theme {
@@ -289,7 +289,7 @@ class PreferencesManager {
 					accent_color: data.accent_color ?? null,
 					auto_advance: data.auto_advance ?? DEFAULT_PREFERENCES.auto_advance,
 					allow_comments: data.allow_comments ?? DEFAULT_PREFERENCES.allow_comments,
-				download_policy: data.download_policy ?? DEFAULT_PREFERENCES.download_policy,
+				publishing_defaults: parsePublishing(JSON.stringify(data.publishing_defaults)),
 					hidden_tags: data.hidden_tags ?? DEFAULT_PREFERENCES.hidden_tags,
 					theme: serverTheme,
 					enable_teal_scrobbling: data.enable_teal_scrobbling ?? DEFAULT_PREFERENCES.enable_teal_scrobbling,

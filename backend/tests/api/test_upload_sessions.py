@@ -5,6 +5,7 @@ drives the real endpoints against the in-memory multipart store in
 """
 
 import hashlib
+import json
 from collections.abc import Generator
 from unittest.mock import AsyncMock, patch
 
@@ -21,7 +22,7 @@ from backend.api.tracks.uploads import (
     _settle_staged_audio,
     parse_upload_metadata,
 )
-from backend.models import Artist, UserPreferences
+from backend.models import Album, Artist, UserPreferences
 from backend.models.job import JobStatus, JobType
 from backend.storage.keys import StagedUploadKey
 
@@ -113,8 +114,9 @@ def test_session_round_trip_enqueues_a_staged_upload(
             f"/tracks/uploads/{upload_id}/finish",
             data={
                 "title": "song",
-                "visibility": visibility,
-                "download_policy": download_policy,
+                "publishing": json.dumps(
+                    {"access": {"visibility": visibility, "downloads": download_policy}}
+                ),
                 "tags": '["a"]',
             },
         )
@@ -180,10 +182,10 @@ def test_metadata_is_validated_before_the_parts_are_assembled(
         _send_parts(client, upload_id)
         resp = client.post(
             f"/tracks/uploads/{upload_id}/finish",
-            data={"title": "song", "visibility": "sideways"},
+            data={"title": "song", "visibility": "private"},
         )
         assert resp.status_code == 400
-        assert "invalid visibility" in resp.json()["detail"]
+        assert "unknown upload fields" in resp.json()["detail"]
         assert client.get(f"/tracks/uploads/{upload_id}").json()["received_parts"] == [
             1,
             2,
@@ -356,32 +358,54 @@ def _staged_ctx(
 @pytest.mark.parametrize(
     "override,expected_private", [(None, True), ("open", False), ("off", True)]
 )
+@pytest.mark.parametrize("rights", [None, "{}"])
+@pytest.mark.parametrize("source", ["portal", "album"])
 async def test_upload_storage_resolves_artist_download_default(
-    db_session: AsyncSession, override: str | None, expected_private: bool
+    db_session: AsyncSession,
+    override: str | None,
+    expected_private: bool,
+    rights: str | None,
+    source: str,
 ) -> None:
     session = _ArtistSession("did:test:inherit-downloads")
     db_session.add(
         Artist(did=session.did, handle=session.handle, display_name="Artist")
     )
     await db_session.flush()
-    db_session.add(UserPreferences(did=session.did, download_policy="off"))
+    db_session.add(
+        UserPreferences(
+            did=session.did, publishing_defaults={"access": {"downloads": "off"}}
+        )
+    )
     await db_session.commit()
+    album = None
+    if source == "album":
+        album = Album(
+            artist_did=session.did,
+            title="Album",
+            slug="album",
+            publishing_defaults={"access": {"downloads": "supporters"}},
+        )
+        db_session.add(album)
+        await db_session.commit()
     meta = await parse_upload_metadata(
         session,
         filename="song.mp3",
         title="Song",
         album=None,
-        album_id=None,
+        album_id=album.id if album else None,
         features=None,
         tags=None,
-        visibility="public",
-        copyright=None,
+        publishing=json.dumps({"access": {"downloads": override}})
+        if override
+        else None,
+        copyright=rights,
         description=None,
         self_labels=None,
         auto_tag=None,
-        download_policy=override,
     )
     assert meta.private_audio is expected_private
     assert meta.support_gate is None
-    assert meta.download_policy == override
+    assert meta.download_policy == (override or ("supporters" if album else "off"))
+    assert meta.policy_origin == ("track" if override else source)
     assert meta.visibility == "public"

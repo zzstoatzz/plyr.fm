@@ -5,14 +5,14 @@ from typing import Annotated, Any
 
 from atproto_oauth.scopes import ScopesSet
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, ConfigDict, field_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend._internal import Session, require_auth
 from backend.config import settings
 from backend.models import UserPreferences, get_db
-from backend.utilities.downloads import DOWNLOAD_POLICIES
+from backend.utilities.publishing import PublishingDefaults
 from backend.utilities.tags import DEFAULT_HIDDEN_TAGS
 
 router = APIRouter(prefix="/preferences", tags=["preferences"])
@@ -28,8 +28,7 @@ class PreferencesResponse(BaseModel):
     accent_color: str
     auto_advance: bool
     allow_comments: bool
-    # None = auto: ask when a support link is set, open otherwise
-    download_policy: str | None = None
+    publishing_defaults: PublishingDefaults
     hidden_tags: list[str]
     enable_teal_scrobbling: bool
     # indicates if user needs to re-login to activate teal scrobbling
@@ -46,12 +45,13 @@ class PreferencesResponse(BaseModel):
 class PreferencesUpdate(BaseModel):
     """user preferences update model."""
 
+    model_config = ConfigDict(extra="forbid")
+
     theme: str | None = None
     accent_color: str | None = None
     auto_advance: bool | None = None
     allow_comments: bool | None = None
-    # "auto" resets to the automatic default (stored as NULL)
-    download_policy: str | None = None
+    publishing_defaults: PublishingDefaults | None = None
     hidden_tags: list[str] | None = None
     enable_teal_scrobbling: bool | None = None
     show_sensitive_artwork: bool | None = None
@@ -116,7 +116,9 @@ async def get_preferences(
         accent_color=prefs.accent_color,
         auto_advance=prefs.auto_advance,
         allow_comments=prefs.allow_comments,
-        download_policy=prefs.download_policy,
+        publishing_defaults=PublishingDefaults.model_validate(
+            prefs.publishing_defaults
+        ),
         hidden_tags=prefs.hidden_tags or [],
         enable_teal_scrobbling=prefs.enable_teal_scrobbling,
         teal_needs_reauth=teal_needs_reauth,
@@ -153,9 +155,9 @@ async def update_preferences(
             allow_comments=update.allow_comments
             if update.allow_comments is not None
             else False,
-            download_policy=update.download_policy
-            if update.download_policy in DOWNLOAD_POLICIES
-            else None,
+            publishing_defaults=(
+                update.publishing_defaults or PublishingDefaults()
+            ).model_dump(),
             hidden_tags=update.hidden_tags
             if update.hidden_tags is not None
             else list(DEFAULT_HIDDEN_TAGS),
@@ -177,6 +179,8 @@ async def update_preferences(
         db.add(prefs)
     else:
         # update existing
+        if update.publishing_defaults is not None:
+            prefs.publishing_defaults = update.publishing_defaults.model_dump()
         if update.theme is not None:
             prefs.theme = update.theme
         if update.accent_color is not None:
@@ -185,13 +189,6 @@ async def update_preferences(
             prefs.auto_advance = update.auto_advance
         if update.allow_comments is not None:
             prefs.allow_comments = update.allow_comments
-        if update.download_policy is not None:
-            # "auto" clears the explicit choice back to NULL
-            prefs.download_policy = (
-                update.download_policy
-                if update.download_policy in DOWNLOAD_POLICIES
-                else None
-            )
         if update.hidden_tags is not None:
             prefs.hidden_tags = update.hidden_tags
         if update.enable_teal_scrobbling is not None:
@@ -221,7 +218,9 @@ async def update_preferences(
         accent_color=prefs.accent_color,
         auto_advance=prefs.auto_advance,
         allow_comments=prefs.allow_comments,
-        download_policy=prefs.download_policy,
+        publishing_defaults=PublishingDefaults.model_validate(
+            prefs.publishing_defaults
+        ),
         hidden_tags=prefs.hidden_tags or [],
         enable_teal_scrobbling=prefs.enable_teal_scrobbling,
         teal_needs_reauth=teal_needs_reauth,

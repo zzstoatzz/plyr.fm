@@ -3,6 +3,7 @@ import { flushSync, mount, unmount } from 'svelte';
 import TrackEditForm from './TrackEditForm.svelte';
 import { auth } from '$lib/auth.svelte';
 import { COPYRIGHT_PARADIGM_FLAG } from '$lib/config';
+import { defaultPublishing } from '$lib/publishing';
 import type { Track } from '$lib/types';
 
 const track = {
@@ -15,7 +16,13 @@ const track = {
 	file_type: 'mp3',
 	play_count: 0,
 	copyright_song_uri: 'at://did:plc:owner/song/7',
-	support_gate: { type: 'copyright' }
+	support_gate: { type: 'signed_in' },
+	publishing: {
+		...defaultPublishing(),
+		access: { ...defaultPublishing().access, listening: 'signed_in' },
+		attach_rights: true
+	},
+	policy_origin: 'track'
 } satisfies Track;
 let cleanup: (() => void) | undefined;
 
@@ -59,22 +66,32 @@ function submit(): void {
 
 describe('shared track editor', () => {
 	it('preserves private files when editing public listening metadata', async () => {
-		const streamTrack = { ...track, copyright_song_uri: null, support_gate: null, audio_storage: 'r2_private' as const, download_policy: 'off' };
+		const streamTrack = {
+			...track,
+			copyright_song_uri: null,
+			support_gate: null,
+			audio_storage: 'r2_private' as const,
+			download_policy: 'off',
+			publishing: {
+				...defaultPublishing(),
+				access: { ...defaultPublishing().access, downloads: 'off' as const }
+			}
+		};
 		const requests: Request[] = [];
 		vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
 			const request = new Request(input, init);
 			requests.push(request);
-			if (request.url.includes('/recommended-tags')) return Response.json({ available: false, tags: [] });
+			if (request.url.includes('/recommended-tags'))
+				return Response.json({ available: false, tags: [] });
 			return Response.json({ ...streamTrack, title: 'new title' });
 		});
 		const { onSaved } = mountEditor(streamTrack, true);
-		expect(document.body.textContent).toContain('download policy: off');
-		expect(document.body.textContent).toContain('only supporters can play');
+		expect(document.body.textContent).toContain('anyone can listen · downloads off');
 		editTitle('new title');
 		submit();
 		await vi.waitFor(() => expect(onSaved).toHaveBeenCalled());
 		const saved = await requests.find((request) => request.method === 'PATCH')?.formData();
-		expect(saved?.get('support_gate')).toBe('null');
+		expect(saved?.has('support_gate')).toBe(false);
 		expect(saved?.has('download_policy')).toBe(false);
 	});
 
@@ -121,7 +138,7 @@ describe('shared track editor', () => {
 			false
 		);
 	});
-	it('keeps the editor open when copyright removal fails after metadata saved', async () => {
+	it('keeps the editor open when the access change fails after metadata saved', async () => {
 		auth.user = {
 			did: track.artist_did,
 			handle: track.artist_handle,
@@ -130,14 +147,22 @@ describe('shared track editor', () => {
 		};
 		vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
 			const request = new Request(input, init);
-			if (request.method === 'DELETE')
-				return Response.json({ detail: 'PDS unavailable' }, { status: 503 });
+			if (request.url.includes('/publishing-jobs/'))
+				return Response.json({
+					status: 'failed',
+					message: 'rights unavailable',
+					updated_track_ids: [],
+					failed_track_ids: [7]
+				});
+			if (request.url.endsWith('/publishing')) return Response.json({ job_id: 'job' });
+			if (request.url.includes('/preferences/'))
+				return Response.json({ publishing_defaults: defaultPublishing() });
 			if (request.method === 'PATCH') return Response.json(track);
 			return Response.json({ available: false, tags: [] });
 		});
 		const { onSaved, onClose } = mountEditor();
 		const licensing = [...document.querySelectorAll('label')]
-			.find((label) => label.textContent?.includes('copyright licensing'))
+			.find((label) => label.textContent?.includes('attach rights information'))
 			?.querySelector('input');
 		if (!licensing) throw new Error('copyright toggle missing');
 		licensing.click();
@@ -145,7 +170,7 @@ describe('shared track editor', () => {
 		submit();
 		await vi.waitFor(() =>
 			expect(document.querySelector('[role="alert"]')?.textContent).toContain(
-				'copyright could not be cleared'
+				'1 could not be updated'
 			)
 		);
 		expect(onSaved).not.toHaveBeenCalled();

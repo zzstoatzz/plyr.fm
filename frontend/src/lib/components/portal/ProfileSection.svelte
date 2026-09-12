@@ -1,8 +1,10 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { API_URL } from '$lib/config';
+	import { API_URL, COPYRIGHT_PARADIGM_FLAG } from '$lib/config';
 	import { toast } from '$lib/toast.svelte';
 	import { auth } from '$lib/auth.svelte';
+	import PublishingControls from '$lib/components/PublishingControls.svelte';
+	import { defaultPublishing, parsePublishing } from '$lib/publishing';
 
 	interface Props {
 		atprotofansEligible: boolean;
@@ -16,15 +18,7 @@
 	let avatarUrl = $state('');
 	// support link mode: 'none' | 'atprotofans' | 'custom'
 	let supportLinkMode = $state<'none' | 'atprotofans' | 'custom'>('none');
-	// download policy: '' = auto (ask with a support link, open without)
-	const DOWNLOAD_POLICIES = ['', 'open', 'ask', 'supporters', 'off'] as const;
-	type DownloadPolicy = (typeof DOWNLOAD_POLICIES)[number];
-	const parseDownloadPolicy = (raw: string | null | undefined): DownloadPolicy =>
-		DOWNLOAD_POLICIES.find((policy) => policy === raw) ?? '';
-	let downloadPolicy = $state<DownloadPolicy>('');
-	// whether a support relationship can be verified for this artist —
-	// currently backed by atprotofans, verifier-neutral by design (#1841)
-	let supportVerificationAvailable = $derived(atprotofansEligible);
+	let publishingDefaults = $state(defaultPublishing());
 	let customSupportUrl = $state('');
 	let savingProfile = $state(false);
 
@@ -44,7 +38,7 @@
 
 			if (prefsRes.ok) {
 				const prefs = await prefsRes.json();
-				downloadPolicy = parseDownloadPolicy(prefs.download_policy);
+				publishingDefaults = parsePublishing(JSON.stringify(prefs.publishing_defaults));
 				// parse support_url into mode + custom URL
 				const url = prefs.support_url || '';
 				if (!url) {
@@ -98,8 +92,9 @@
 					method: 'POST',
 					headers: { 'Content-Type': 'application/json' },
 					credentials: 'include',
-					body: JSON.stringify({ support_url: supportUrlValue,
-						download_policy: downloadPolicy || 'auto'
+					body: JSON.stringify({
+						support_url: supportUrlValue,
+						publishing_defaults: publishingDefaults
 					})
 				})
 			]);
@@ -188,7 +183,10 @@
 					/>
 					<span>none</span>
 				</label>
-				<label class="support-option" class:disabled={!atprotofansEligible && supportLinkMode !== 'atprotofans'}>
+				<label
+					class="support-option"
+					class:disabled={!atprotofansEligible && supportLinkMode !== 'atprotofans'}
+				>
 					<input
 						type="radio"
 						name="support-mode"
@@ -200,9 +198,19 @@
 					{#if checkingAtprotofans}
 						<span class="support-status">checking...</span>
 					{:else if !atprotofansEligible}
-						<a href="https://atprotofans.com" target="_blank" rel="noopener" class="support-setup-link">set up</a>
+						<a
+							href="https://atprotofans.com"
+							target="_blank"
+							rel="noopener"
+							class="support-setup-link">set up</a
+						>
 					{:else}
-						<a href="https://atprotofans.com/u/{auth.user?.did}" target="_blank" rel="noopener" class="support-status-link">profile ready</a>
+						<a
+							href="https://atprotofans.com/u/{auth.user?.did}"
+							target="_blank"
+							rel="noopener"
+							class="support-status-link">profile ready</a
+						>
 					{/if}
 				</label>
 				<label class="support-option">
@@ -228,7 +236,8 @@
 			{/if}
 			<p class="hint">
 				{#if supportLinkMode === 'atprotofans'}
-					uses <a href="https://atprotofans.com" target="_blank" rel="noopener">atprotofans</a> for ATProto-native support
+					uses <a href="https://atprotofans.com" target="_blank" rel="noopener">atprotofans</a> for ATProto-native
+					support
 				{:else if supportLinkMode === 'custom'}
 					link to Ko-fi, Patreon, or similar - shown on your profile
 				{:else}
@@ -238,36 +247,14 @@
 		</div>
 
 		<div class="form-group">
-			<label class="form-label" for="download-policy">downloads</label>
-			<select
-				id="download-policy"
-				bind:value={downloadPolicy}
+			<h3 id="music-access">music access</h3>
+			<p class="hint">defaults for new uploads. existing tracks keep their settings.</p>
+			<PublishingControls
+				bind:value={publishingDefaults}
+				showSpace={auth.user?.permissioned_spaces?.supported ?? false}
+				showRights={auth.user?.enabled_flags?.includes(COPYRIGHT_PARADIGM_FLAG) ?? false}
 				disabled={savingProfile}
-				class="download-policy-select"
-			>
-				<option value="">auto — ask when you have a support link</option>
-				<option value="open">open — anyone can download</option>
-				<option value="ask">ask — downloads work, listeners see your support link first</option>
-				<option value="supporters" disabled={!supportVerificationAvailable}>
-					supporters — only verified supporters can download
-				</option>
-				<option value="off">off — no downloads</option>
-			</select>
-			<p class="hint">
-				{#if downloadPolicy === 'supporters'}
-					listeners need a verified support relationship to download your tracks and albums
-				{:else if downloadPolicy === 'ask' && supportLinkMode === 'none'}
-					set a support link above so the ask has somewhere to point
-				{:else if downloadPolicy === '' && supportLinkMode !== 'none'}
-					with your support link set, listeners are asked to consider supporting before downloading
-				{:else if downloadPolicy === '' || downloadPolicy === 'open'}
-					your public, ungated audio can be downloaded — single tracks and whole albums
-				{:else if downloadPolicy === 'off'}
-					no download buttons anywhere
-				{:else}
-					listeners see your support link before the download starts
-				{/if}
-			</p>
+			/>
 		</div>
 
 		<button type="submit" disabled={savingProfile || !displayName}>
@@ -434,17 +421,6 @@
 		background: color-mix(in srgb, var(--accent) 8%, var(--bg-primary));
 	}
 
-	.download-policy-select {
-		width: 100%;
-		padding: 0.6rem 0.75rem;
-		background: var(--bg-tertiary);
-		border: 1px solid var(--border-default);
-		border-radius: var(--radius-md);
-		color: var(--text-primary);
-		font-family: inherit;
-		font-size: var(--text-base);
-	}
-
 	.support-option input[type='radio'] {
 		width: 16px;
 		height: 16px;
@@ -531,7 +507,7 @@
 	}
 
 	/* form submit buttons only */
-	form button[type="submit"] {
+	form button[type='submit'] {
 		width: 100%;
 		padding: 0.75rem;
 		background: var(--accent);
@@ -545,19 +521,19 @@
 		transition: all 0.2s;
 	}
 
-	form button[type="submit"]:hover:not(:disabled) {
+	form button[type='submit']:hover:not(:disabled) {
 		background: var(--accent-hover);
 		transform: translateY(-1px);
 		box-shadow: 0 4px 12px color-mix(in srgb, var(--accent) 30%, transparent);
 	}
 
-	form button[type="submit"]:disabled {
+	form button[type='submit']:disabled {
 		opacity: 0.5;
 		cursor: not-allowed;
 		transform: none;
 	}
 
-	form button[type="submit"]:active:not(:disabled) {
+	form button[type='submit']:active:not(:disabled) {
 		transform: translateY(0);
 	}
 
@@ -609,7 +585,7 @@
 			height: 48px;
 		}
 
-		form button[type="submit"] {
+		form button[type='submit'] {
 			padding: 0.6rem;
 			font-size: var(--text-base);
 		}

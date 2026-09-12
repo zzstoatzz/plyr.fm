@@ -1,3 +1,4 @@
+import { defaultPublishing } from '$lib/publishing';
 // tests for collection playback: the empty-collection guards and the
 // "toast only when playback actually started" gating around playQueue.
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -26,7 +27,7 @@ function prefs(playThroughCollections: boolean): Preferences {
 		accent_color: null,
 		auto_advance: true,
 		allow_comments: true,
-		download_policy: null,
+		publishing_defaults: defaultPublishing(),
 		hidden_tags: [],
 		theme: 'dark',
 		enable_teal_scrobbling: false,
