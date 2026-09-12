@@ -13,6 +13,10 @@ import { auth } from './auth.svelte';
 import { toast } from './toast.svelte';
 import { fetchLikedTracks, likeTrack, unlikeTrack } from './tracks.svelte';
 import type { Track } from './types';
+import { loginHref } from './utils/auth-redirect';
+
+type LikeTarget = Pick<Track, 'id' | 'title'> &
+	Partial<Pick<Track, 'is_liked' | 'like_count' | 'file_id' | 'gated'>>;
 
 class Likes {
 	#known = $state<Record<number, boolean>>({});
@@ -58,9 +62,9 @@ class Likes {
 	}
 
 	/** optimistic flip, request, revert on failure. resolves to the liked state afterwards. */
-	async toggle(track: Track): Promise<boolean> {
+	async toggle(track: LikeTarget): Promise<boolean> {
 		if (!auth.isAuthenticated) {
-			toast.error('sign in to like tracks');
+			toast.info('', 3000, { label: 'sign in to like tracks', href: loginHref() });
 			return this.isLiked(track);
 		}
 		if (this.#pending.has(track.id)) return this.isLiked(track);
