@@ -18,7 +18,7 @@
 <div class="setting-row">
 	<div class="setting-info">
 		<h3>store audio on your pds</h3>
-		<p>new uploads are stored on your pds by default (falls back to plyr.fm storage if too large)</p>
+		<p>public audio is stored on your pds when it fits. restricted audio uses protected storage according to your music access settings.</p>
 	</div>
 	<label class="toggle-switch">
 		<input type="checkbox" checked={enabled} onchange={handleToggle} />

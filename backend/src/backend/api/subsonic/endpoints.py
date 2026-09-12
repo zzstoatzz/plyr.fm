@@ -23,7 +23,7 @@ from backend._internal.content_labels import (
 )
 from backend._internal.tasks import schedule_teal_scrobble
 from backend._internal.track_visibility import visible_filter
-from backend.api.audio import download_audio
+from backend.api.audio import download_audio, stream_audio
 from backend.api.lists.playlists import _can_view, _read_playlist_items
 from backend.api.subsonic.auth import authenticate
 from backend.api.subsonic.responses import (
@@ -304,12 +304,16 @@ async def download(request: Request) -> Response:
 async def stream(request: Request) -> Response:
     async def impl(session: Session, params: Params) -> Response:
         track = await _track_by_id(params, session)
-        # gated and private tracks resolve their audio through cookie-bound
-        # session checks that a redirected subsonic client can't satisfy
-        if track.is_private or track.support_gate is not None:
-            raise SubsonicError(
-                ERROR_NOT_AUTHORIZED, "not authorized to stream this track"
-            )
+        if track.uses_private_audio or track.is_private:
+            try:
+                response = await stream_audio(
+                    file_id=track.file_id, request=request, session=session
+                )
+            except HTTPException as exc:
+                raise SubsonicError(ERROR_NOT_AUTHORIZED, str(exc.detail)) from exc
+            if response.status_code == 307:
+                response.status_code = 302
+            return response
         # 302 (not the default 307): clients may POST, and a method-preserving
         # redirect of a POST is refused by urllib-family HTTP stacks
         return RedirectResponse(url=f"/audio/{track.file_id}", status_code=302)

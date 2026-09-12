@@ -19,7 +19,7 @@
 	} from '$lib/audio-source';
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
-	import { loginHref } from '$lib/utils/auth-redirect';
+	import { showAccessDenied } from '$lib/access-denial';
 	import { skipStepSeconds } from '$lib/skip-step';
 
 	interface Props {
@@ -41,7 +41,6 @@
 	import type { Track } from '$lib/types';
 
 	// atprotofans base URL for supporter CTAs
-	const ATPROTOFANS_URL = 'https://atprotofans.com';
 
 	// check if artwork should be shown in media session (respects sensitive content settings)
 	function shouldShowArtwork(url: string | null | undefined): boolean {
@@ -450,20 +449,7 @@
 	}
 
 	function handleGatedDenial(err: GatedError): void {
-		if (err.requiresAuth) {
-			toast.info('sign in to play supporter-only tracks', 5000, {
-				label: 'sign in',
-				href: loginHref()
-			});
-		} else {
-			const supportUrl = err.artistDid
-				? `${ATPROTOFANS_URL}/${err.artistDid}`
-				: `${ATPROTOFANS_URL}/${err.artistHandle}`;
-			toast.info('this track is for supporters only', 5000, {
-				label: 'become a supporter',
-				href: supportUrl
-			});
-		}
+		showAccessDenied(err.requiresAuth, err.artistDid, err.listening);
 
 		// skip to next playable (non-gated) track in queue. always intend to
 		// auto-play the skipped-to track: whether the user clicked a gated

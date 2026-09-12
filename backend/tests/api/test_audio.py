@@ -411,7 +411,7 @@ async def test_get_audio_url_gated_requires_auth(
         response = await client.get(f"/audio/{track.file_id}/url")
 
     assert response.status_code == 401
-    assert "authentication required" in response.json()["detail"]
+    assert "sign in" in response.json()["detail"]
 
 
 # gated content regression tests
@@ -485,7 +485,7 @@ async def test_gated_stream_requires_auth(test_app: FastAPI, gated_track: Track)
         )
 
     assert response.status_code == 401
-    assert "authentication required" in response.json()["detail"]
+    assert "sign in" in response.json()["detail"]
 
 
 async def test_gated_head_requires_auth(test_app: FastAPI, gated_track: Track):
@@ -891,7 +891,7 @@ async def test_private_r2_allows_anonymous_playback(
 ) -> None:
     gated_track.support_gate = None
     gated_track.audio_storage = "r2_private"
-    gated_track.extra = {"download_policy": "off"}
+    gated_track.download_policy = "off"
     await db_session.commit()
     signed_url = "https://private.example/audio.mp3?signature=test"
     with patch(

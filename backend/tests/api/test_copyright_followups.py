@@ -1,15 +1,4 @@
-"""regression tests for the copyright-paradigm review findings.
-
-each test corresponds to one finding from the post-phase-3 review:
-- P1.1: write_track_rights migrates audio + rebuilds the fm.plyr.track PDS record
-- P2.1: write_track_rights rejects tracks that are already supporter-gated
-- P1.2: /copyright/disconnect refuses with 409 when copyright tracks exist
-- P2.2: listing/for_you supporter probe skips copyright-gated artists
-- P3: TrackRightsInput rejects aggregate royalty splits over 100%
-
-P3 is a pure pydantic test; the rest exercise the API/helpers through mocked PDS
-+ docket dependencies so we don't need network or a real worker.
-"""
+"""Rights metadata, setup safeguards and access independence."""
 
 from collections.abc import Generator
 from types import SimpleNamespace
@@ -158,302 +147,98 @@ async def _insert_track(
     return track
 
 
-# --- P2.1: write_track_rights refuses non-copyright support_gate -------------
-
-
-async def test_p2_1_write_track_rights_rejects_supporter_gated_track(
-    _user_with_paradigm: str, db_session: AsyncSession
+@pytest.mark.parametrize("gate", [None, {"type": "any"}, {"type": "copyright"}])
+@pytest.mark.parametrize("audio_storage", ["r2", "r2_private"])
+async def test_rights_write_and_clear_preserve_access_and_storage(
+    _user_with_paradigm: str,
+    db_session: AsyncSession,
+    gate: dict[str, str] | None,
+    audio_storage: str,
 ) -> None:
-    """a track already carrying {"type":"any"} must not silently accept copyright."""
-    track = await _insert_track(
-        db_session, _user_with_paradigm, support_gate={"type": "any"}, r2_url=None
-    )
-    sess = _fake_session(_user_with_paradigm)
-
-    with pytest.raises(ValueError, match="supporter-gated"):
-        await write_track_rights(sess, track, TrackRightsInput())
-
-
-async def test_p2_1_write_track_rights_accepts_already_copyright_gated(
-    _user_with_paradigm: str, db_session: AsyncSession
-) -> None:
-    """idempotent updates to a copyright-gated track must still go through."""
     track = await _insert_track(
         db_session,
         _user_with_paradigm,
-        support_gate={"type": "copyright"},
-        r2_url=None,
-        copyright_song_uri="at://did:test:copyright-user/ch.indiemusi.alpha.song/old",
+        support_gate=gate,
+        r2_url="https://audio.example.com/abc.mp3" if audio_storage == "r2" else None,
     )
-    sess = _fake_session(_user_with_paradigm)
-
-    with (
-        patch(
-            "backend._internal.copyright.update_song_record",
-            new_callable=AsyncMock,
-        ) as up_song,
-        patch(
-            "backend._internal.copyright.create_recording_record",
-            new_callable=AsyncMock,
-        ) as cr_rec,
-        patch(
-            "backend._internal.copyright.rebuild_track_pds_record",
-            new_callable=AsyncMock,
-        ),
-        patch(
-            "backend._internal.copyright.schedule_move_track_audio",
-            new_callable=AsyncMock,
-        ) as sched_move,
-    ):
-        up_song.return_value = (
-            "at://did:test:copyright-user/ch.indiemusi.alpha.song/old",
-            "cid1",
-        )
-        cr_rec.return_value = (
-            "at://did:test:copyright-user/ch.indiemusi.alpha.recording/new",
-            "cid2",
-        )
-        await write_track_rights(sess, track, TrackRightsInput(iswc="T-1234567890"))
-
-    # idempotent path: no transition, no move scheduled
-    sched_move.assert_not_called()
-
-
-# --- P1.1: write_track_rights migrates audio + rebuilds PDS record -----------
-
-
-async def test_p1_1_public_to_copyright_schedules_move_and_rebuild(
-    _user_with_paradigm: str, db_session: AsyncSession
-) -> None:
-    """a previously-public track must move to private and have its PDS record rebuilt."""
-    track = await _insert_track(
-        db_session,
-        _user_with_paradigm,
-        support_gate=None,
-        r2_url="https://audio.example.com/abc.mp3",
-    )
-    sess = _fake_session(_user_with_paradigm)
-
-    with (
-        patch(
-            "backend._internal.copyright.create_song_record",
-            new_callable=AsyncMock,
-        ) as cr_song,
-        patch(
-            "backend._internal.copyright.create_recording_record",
-            new_callable=AsyncMock,
-        ) as cr_rec,
-        patch(
-            "backend._internal.copyright.rebuild_track_pds_record",
-            new_callable=AsyncMock,
-        ) as rebuild,
-        patch(
-            "backend._internal.copyright.schedule_move_track_audio",
-            new_callable=AsyncMock,
-        ) as sched_move,
-    ):
-        cr_song.return_value = (
-            "at://did:test:copyright-user/ch.indiemusi.alpha.song/s",
-            "cid1",
-        )
-        cr_rec.return_value = (
-            "at://did:test:copyright-user/ch.indiemusi.alpha.recording/r",
-            "cid2",
-        )
-        await write_track_rights(sess, track, TrackRightsInput())
-
-        # public → copyright should schedule a private move
-        sched_move.assert_awaited_once()
-        assert sched_move.await_args.kwargs.get("to_private") is True or (
-            sched_move.await_args.args[1] is True
-        )
-        # PDS fm.plyr.track record must be rebuilt
-        rebuild.assert_awaited()
-
-    # row was updated in place. capture id before expire_all so the eventual
-    # comparison doesn't trigger a lazy-load on the expired ORM object.
-    track_id = track.id
-    db_session.expire_all()
-    refreshed = (
-        await db_session.execute(select(Track).where(Track.id == track_id))
-    ).scalar_one()
-    assert refreshed.support_gate == {"type": "copyright"}
-    assert refreshed.copyright_song_uri is not None
-    assert refreshed.r2_url is None  # cached public URL cleared
-
-
-async def test_p1_1_already_private_track_does_not_schedule_move(
-    _user_with_paradigm: str, db_session: AsyncSession
-) -> None:
-    """uploads that landed private to begin with don't need an audio migration."""
-    track = await _insert_track(
-        db_session,
-        _user_with_paradigm,
-        support_gate=None,
-        r2_url=None,  # never had a public URL
-    )
-    sess = _fake_session(_user_with_paradigm)
-
-    with (
-        patch(
-            "backend._internal.copyright.create_song_record",
-            new_callable=AsyncMock,
-        ) as cr_song,
-        patch(
-            "backend._internal.copyright.create_recording_record",
-            new_callable=AsyncMock,
-        ) as cr_rec,
-        patch(
-            "backend._internal.copyright.rebuild_track_pds_record",
-            new_callable=AsyncMock,
-        ),
-        patch(
-            "backend._internal.copyright.schedule_move_track_audio",
-            new_callable=AsyncMock,
-        ) as sched_move,
-    ):
-        cr_song.return_value = ("at://x/ch.indiemusi.alpha.song/s", "c1")
-        cr_rec.return_value = ("at://x/ch.indiemusi.alpha.recording/r", "c2")
-        await write_track_rights(sess, track, TrackRightsInput())
-        sched_move.assert_not_called()
-
-
-async def test_p1_1_clear_track_rights_moves_audio_then_rebuilds_pds(
-    _user_with_paradigm: str, db_session: AsyncSession
-) -> None:
-    """clearing copyright must move audio public synchronously THEN rebuild PDS.
-
-    the ordering matters: rebuild_track_pds_record needs r2_url set on the row,
-    which only happens after move_track_audio commits. doing the move async
-    (as we used to) left the PDS record stale with the old copyright audioUrl
-    indefinitely.
-    """
-    track = await _insert_track(
-        db_session,
-        _user_with_paradigm,
-        support_gate={"type": "copyright"},
-        r2_url=None,
-        copyright_song_uri="at://did:test:copyright-user/ch.indiemusi.alpha.song/s",
-    )
-    track.copyright_recording_uri = (
-        "at://did:test:copyright-user/ch.indiemusi.alpha.recording/r"
-    )
+    track.audio_storage = audio_storage
+    track.extra = {"download_policy": "off"}
     await db_session.commit()
     track_id = track.id
+    before = (
+        track.visibility,
+        track.support_gate,
+        track.audio_storage,
+        track.r2_url,
+        track.extra,
+    )
+    song_uri = "at://x/ch.indiemusi.alpha.song/s"
+    recording_uri = "at://x/ch.indiemusi.alpha.recording/r"
     sess = _fake_session(_user_with_paradigm)
-
-    call_order: list[str] = []
-
-    async def fake_move(track_id_: int, to_private: bool) -> None:
-        # simulate what move_track_audio commits: r2_url repopulated on the row
-        from sqlalchemy import update as _update
-
-        call_order.append(f"move(to_private={to_private})")
-        await db_session.execute(
-            _update(Track)
-            .where(Track.id == track_id_)
-            .values(r2_url="https://audio.example.com/abc.mp3")
-        )
-        await db_session.commit()
-
-    async def fake_rebuild(track_: Track, _session) -> None:
-        call_order.append(
-            f"rebuild(r2_url={track_.r2_url}, gate={track_.support_gate})"
-        )
-
     with (
         patch(
-            "backend._internal.copyright.delete_record_by_uri",
-            new_callable=AsyncMock,
-        ),
-        patch(
-            "backend._internal.copyright.rebuild_track_pds_record",
-            side_effect=fake_rebuild,
-        ),
-        patch(
-            "backend._internal.copyright.move_track_audio",
-            side_effect=fake_move,
-        ),
-    ):
-        await clear_track_rights(sess, track)
-
-    # move must have fired before rebuild, with to_private=False
-    assert call_order[0].startswith("move(to_private=False")
-    # rebuild must see the freshly-populated r2_url AND the cleared gate
-    assert (
-        "rebuild(r2_url=https://audio.example.com/abc.mp3, gate=None)" in call_order[1]
-    )
-
-    db_session.expire_all()
-    refreshed = (
-        await db_session.execute(select(Track).where(Track.id == track_id))
-    ).scalar_one()
-    assert refreshed.support_gate is None
-    assert refreshed.copyright_song_uri is None
-    assert refreshed.copyright_recording_uri is None
-
-
-async def test_p1_1_write_rolls_back_on_pds_rebuild_failure(
-    _user_with_paradigm: str, db_session: AsyncSession
-) -> None:
-    """if rebuild_track_pds_record fails for a public→copyright transition, the
-    local gate state must NOT be committed — otherwise the PDS record keeps
-    pointing at the public R2 URL while local state says gated, leaving a
-    bypassable security gap.
-    """
-    track = await _insert_track(
-        db_session,
-        _user_with_paradigm,
-        support_gate=None,
-        r2_url="https://audio.example.com/abc.mp3",
-    )
-    track_id = track.id
-    sess = _fake_session(_user_with_paradigm)
-
-    with (
-        patch(
-            "backend._internal.copyright.create_song_record",
-            new_callable=AsyncMock,
-        ) as cr_song,
+            "backend._internal.copyright.create_song_record", new_callable=AsyncMock
+        ) as song,
         patch(
             "backend._internal.copyright.create_recording_record",
             new_callable=AsyncMock,
-        ) as cr_rec,
+        ) as recording,
         patch(
-            "backend._internal.copyright.rebuild_track_pds_record",
-            new_callable=AsyncMock,
-            side_effect=RuntimeError("PDS rebuild boom"),
-        ),
+            "backend._internal.copyright.update_song_record", new_callable=AsyncMock
+        ) as update_song,
         patch(
-            "backend._internal.copyright.schedule_move_track_audio",
+            "backend._internal.copyright.update_recording_record",
             new_callable=AsyncMock,
-        ) as sched_move,
+        ) as update_recording,
+        patch(
+            "backend._internal.copyright.delete_record_by_uri", new_callable=AsyncMock
+        ) as delete,
     ):
-        cr_song.return_value = (
-            "at://did:test:copyright-user/ch.indiemusi.alpha.song/s",
-            "cid1",
-        )
-        cr_rec.return_value = (
-            "at://did:test:copyright-user/ch.indiemusi.alpha.recording/r",
-            "cid2",
-        )
-        with pytest.raises(RuntimeError, match="PDS rebuild boom"):
-            await write_track_rights(sess, track, TrackRightsInput())
+        song.return_value = update_song.return_value = (song_uri, "cid1")
+        recording.return_value = update_recording.return_value = (recording_uri, "cid2")
+        await write_track_rights(sess, track, TrackRightsInput())
+        await db_session.refresh(track)
+        assert (
+            track.visibility,
+            track.support_gate,
+            track.audio_storage,
+            track.r2_url,
+            track.extra,
+        ) == before
+        assert track.copyright_song_uri == song_uri
+        assert track.copyright_recording_uri == recording_uri
+        await write_track_rights(sess, track, TrackRightsInput())
+        song.assert_awaited_once()
+        recording.assert_awaited_once()
+        update_song.assert_awaited_once()
+        update_recording.assert_awaited_once()
+        await clear_track_rights(sess, track)
+        assert delete.await_count == 2
+    await db_session.refresh(track)
+    assert track.id == track_id
+    assert track.copyright_song_uri is None
+    assert track.copyright_recording_uri is None
+    assert (
+        track.visibility,
+        track.support_gate,
+        track.audio_storage,
+        track.r2_url,
+        track.extra,
+    ) == before
 
-        # the move must NOT have been scheduled — we never got past the rebuild
-        sched_move.assert_not_called()
 
-    db_session.expire_all()
-    refreshed = (
-        await db_session.execute(select(Track).where(Track.id == track_id))
-    ).scalar_one()
-    # phase A's URI write committed (idempotent retry shape); but the gate
-    # transition and r2_url null must have rolled back
-    assert refreshed.support_gate is None
-    assert refreshed.r2_url == "https://audio.example.com/abc.mp3"
-    assert refreshed.copyright_song_uri == (
-        "at://did:test:copyright-user/ch.indiemusi.alpha.song/s"
-    )
+async def test_private_work_cannot_leak_through_public_rights_records(
+    _user_with_paradigm: str, db_session: AsyncSession
+) -> None:
+    track = await _insert_track(db_session, _user_with_paradigm, r2_url=None)
+    track.visibility = "private"
+    await db_session.commit()
+    with patch(
+        "backend._internal.copyright.create_song_record", new_callable=AsyncMock
+    ) as create_song:
+        with pytest.raises(ValueError, match="public rights records"):
+            await write_track_rights(_fake_session(), track, TrackRightsInput())
+        create_song.assert_not_awaited()
 
 
 # --- P1.2: disconnect blocked by copyright-gated tracks ----------------------

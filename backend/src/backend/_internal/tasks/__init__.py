@@ -99,6 +99,7 @@ def _build_background_tasks() -> list:
     """
     from backend.api.tracks.audio_optimize import optimize_track_audio
     from backend.api.tracks.audio_replace import run_track_audio_replace
+    from backend.api.tracks.publishing import run_publishing_change
     from backend.api.tracks.uploads import run_track_upload
 
     return [
@@ -140,6 +141,7 @@ def _build_background_tasks() -> list:
         ingest_account_reactivated,
         scan_image_moderation,
         run_track_upload,
+        run_publishing_change,
         run_track_audio_replace,
         optimize_track_audio,
         reap_stuck_uploads,

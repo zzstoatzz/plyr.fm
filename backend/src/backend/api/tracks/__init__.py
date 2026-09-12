@@ -15,6 +15,7 @@ from . import uploads as _uploads  # /, /uploads/{upload_id}/progress
 from . import (
     upload_sessions as _upload_sessions,
 )  # /uploads, /uploads/{id}/parts/{n}, /uploads/{id}/finish
+from . import publishing as _publishing
 from . import comments as _comments  # /{track_id}/comments, /comments/{comment_id}
 from . import mutations as _mutations  # /{track_id}, /{track_id}/restore-record
 from . import copyright as _copyright  # /{track_id}/copyright

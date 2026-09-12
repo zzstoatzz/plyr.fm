@@ -62,13 +62,13 @@ async def test_check_gate_access_copyright_requires_any_auth() -> None:
     """any authenticated session passes; not-the-artist is fine too."""
     listener = _MockSession(did="did:test:listener")
     await _check_gate_access(
-        {"type": "copyright"}, listener, artist_did="did:test:someone-else"
+        {"type": "signed_in"}, listener, artist_did="did:test:someone-else"
     )
 
 
 async def test_check_gate_access_copyright_rejects_anon() -> None:
     with pytest.raises(HTTPException) as exc:
-        await _check_gate_access({"type": "copyright"}, None, artist_did="did:test:x")
+        await _check_gate_access({"type": "signed_in"}, None, artist_did="did:test:x")
     assert exc.value.status_code == 401
 
 

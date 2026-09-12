@@ -32,19 +32,9 @@ class UserPreferences(Base):
         Boolean, nullable=False, default=False, server_default=text("false")
     )
 
-    # who may download this artist's public tracks as files. the bytes are
-    # already publicly reachable (PDS, streaming), so every tier is a policy
-    # about the *offer*, not byte-level access control:
-    #   open       — download button for everyone (default)
-    #   ask        — download works; the UI asks the listener to consider the
-    #                artist's support link (a request, never a lock)
-    #   supporters — only viewers with a verified support relationship
-    #   off        — no downloads offered
-    # named by mechanism; how "supporters" is verified is a verifier detail
-    # (#1841), never part of this schema.
-    # NULL means "auto": ask when the artist has a support link, open when
-    # not — set explicitly to pin a tier.
-    download_policy: Mapped[str | None] = mapped_column(String, nullable=True)
+    publishing_defaults: Mapped[dict] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default=text("'{}'::jsonb")
+    )
 
     # tag filtering preferences
     # stores a list of tag names that should be hidden from track listings

@@ -37,6 +37,7 @@ from .uploads import (
     parse_upload_metadata,
     schedule_track_upload,
     stage_image_from_upload,
+    validate_upload_form,
 )
 
 PART_SIZE_BYTES = 10 * 1024 * 1024
@@ -238,8 +239,7 @@ async def finish_upload_session(
     album_id: Annotated[str | None, Form()] = None,
     features: Annotated[str | None, Form()] = None,
     tags: Annotated[str | None, Form()] = None,
-    visibility: Annotated[str, Form()] = "public",
-    download_policy: Annotated[str | None, Form()] = None,
+    publishing: Annotated[str | None, Form()] = None,
     copyright: Annotated[str | None, Form()] = None,
     description: Annotated[str | None, Form()] = None,
     self_labels: Annotated[str | None, Form()] = None,
@@ -252,6 +252,7 @@ async def finish_upload_session(
     open so the client can fix and retry; the multipart is only completed
     once nothing else can refuse the upload.
     """
+    await validate_upload_form(request)
     _, transfer = await _open_transfer(upload_id, auth_session.did)
     meta = await parse_upload_metadata(
         auth_session,
@@ -261,12 +262,11 @@ async def finish_upload_session(
         album_id=album_id,
         features=features,
         tags=tags,
-        visibility=visibility,
+        publishing=publishing,
         copyright=copyright,
         description=description,
         self_labels=self_labels,
         auto_tag=auto_tag,
-        download_policy=download_policy,
     )
     staged = _staged(upload_id, transfer)
 
@@ -319,6 +319,7 @@ async def finish_upload_session(
             support_gate=meta.support_gate,
             private_audio=meta.private_audio,
             download_policy=meta.download_policy,
+            policy_origin=meta.policy_origin,
             copyright_rights=meta.copyright_rights,
             auto_tag=meta.auto_tag,
             visibility=meta.visibility,

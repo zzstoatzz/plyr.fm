@@ -7,7 +7,11 @@
 	import { toast } from '$lib/toast.svelte';
 	import { redirectToLogin } from '$lib/utils/auth-redirect';
 	import { preflightAuth } from '$lib/upload-form-stash';
-	import { getServerConfig, API_URL } from '$lib/config';
+	import { getServerConfig, API_URL, COPYRIGHT_PARADIGM_FLAG } from '$lib/config';
+	import PublishingSettings from '$lib/components/PublishingSettings.svelte';
+	import { preferences } from '$lib/preferences.svelte';
+	import { auth } from '$lib/auth.svelte';
+	import type { PublishingDefaults } from '$lib/publishing';
 	import { profileLink } from '$lib/atclients';
 
 	const AUDIO_EXTENSIONS = ['.mp3', '.wav', '.m4a', '.aiff', '.aif', '.flac'];
@@ -24,6 +28,10 @@
 	let { albums, artistProfile, onAlbumsReload }: Props = $props();
 
 	let albumTitle = $state('');
+	let publishingOverride = $state<PublishingDefaults | null>(null);
+	const existingAlbum = $derived(albums.find((album) => album.title.toLowerCase() === albumTitle.trim().toLowerCase()));
+	const albumDefaults = $derived(existingAlbum?.publishing_defaults ?? preferences.publishingDefaults);
+	const publishing = $derived(publishingOverride ?? albumDefaults);
 	let coverArtFile = $state<File | null>(null);
 	const initialTrack = createEmptyTrack();
 	let tracks = $state<TrackEntry[]>([initialTrack]);
@@ -41,7 +49,7 @@
 	let hasUnresolvedFeatures = $derived(tracks.some((t) => t.hasUnresolvedFeaturesInput));
 
 	let canSubmit = $derived(
-		albumTitle.trim().length > 0 &&
+		albumTitle.trim().length > 0 && preferences.data !== null && publishing.access.visibility !== 'private' &&
 			tracks.every((t) => t.file !== null && t.title.trim().length > 0) &&
 			attestedRights &&
 			!hasUnresolvedFeatures &&
@@ -59,7 +67,7 @@
 			hasUnresolvedFeaturesInput: false,
 			autoTag: false,
 			sensitiveAudio: false,
-			supportGated: false,
+			publishing: null,
 			status: 'pending',
 			error: null,
 		};
@@ -132,7 +140,7 @@
 				hasUnresolvedFeaturesInput: false,
 				autoTag: false,
 				sensitiveAudio: false,
-				supportGated: false,
+				publishing: null,
 				status: 'pending',
 				error: null,
 			};
@@ -271,6 +279,7 @@
 				credentials: 'include',
 				body: JSON.stringify({
 					title: albumTitle.trim(),
+					publishing_defaults: publishing,
 				}),
 			});
 			if (!createResponse.ok) {
@@ -339,7 +348,7 @@
 					[...track.featuredArtists],
 					null, // no per-track cover — album cover was uploaded above
 					[...track.tags],
-					track.supportGated ? 'supporters' : 'public',
+					track.publishing,
 					track.autoTag,
 					track.description,
 					(result) => {
@@ -469,6 +478,12 @@
 		{/if}
 	</div>
 
+	<PublishingSettings bind:value={publishingOverride} defaults={albumDefaults} scope="album"
+		source={existingAlbum ? 'existing album' : 'Portal'}
+		showRights={auth.user?.enabled_flags?.includes(COPYRIGHT_PARADIGM_FLAG) ?? false} />
+
+	{#if publishing.access.visibility === 'private'}<p class="title-warning">private album metadata is not supported yet. choose an audience with public album details to continue.</p>{/if}
+
 	<div class="tracks-section">
 		<span class="tracks-label">tracks</span>
 		<div class="track-list">
@@ -478,6 +493,7 @@
 					index={i}
 					expanded={expandedTrackId === track.id}
 					{artistProfile}
+					publishingDefaults={publishing}
 					disabled={uploading}
 					onUpdate={(field, value) => updateTrack(track.id, field, value)}
 					onRemove={() => removeTrack(track.id)}
@@ -644,7 +660,7 @@
 	}
 
 	.tracks-section {
-		margin-bottom: 1.5rem;
+		margin: 1.5rem 0;
 	}
 
 	.tracks-label {

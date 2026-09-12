@@ -2,8 +2,12 @@
 
 from pydantic import BaseModel
 
+from backend.utilities.publishing import PublishingDefaults
+
 
 class AlbumMetadata(BaseModel):
+    publishing_defaults: PublishingDefaults | None = None
+
     """album metadata response."""
 
     id: str
@@ -52,6 +56,8 @@ class DeleteAlbumResponse(BaseModel):
 
 
 class ArtistAlbumListItem(BaseModel):
+    publishing_defaults: PublishingDefaults | None = None
+
     """album info for a specific artist (used on artist pages)."""
 
     id: str
@@ -63,6 +69,7 @@ class ArtistAlbumListItem(BaseModel):
 
 
 class AlbumCreatePayload(BaseModel):
+    publishing_defaults: PublishingDefaults | None = None
     title: str
     slug: str | None = None
     description: str | None = None

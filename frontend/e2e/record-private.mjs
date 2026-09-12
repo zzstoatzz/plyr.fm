@@ -33,11 +33,11 @@ let createdTrackId = null;
 let context = null;
 let dump = null;
 
-const privateRadio = (page) => page.locator('input[type="radio"][value="private"]');
-
 async function choosePrivateAndSave(page, granted) {
 	await page.locator('#record-title').fill(title);
-	await page.locator('label:has(input[type="radio"][value="private"])').click();
+	await page.getByText('change for this track', { exact: true }).click();
+	await page.getByRole('checkbox', { name: 'anyone can listen', exact: true }).uncheck();
+	await page.getByLabel('who can listen?', { exact: true }).selectOption('space');
 	const expected = granted ? 'save privately' : 'approve private media';
 	const save = page.getByRole('button', { name: expected });
 	if (!(await save.count())) fail(`choosing private did not relabel the button "${expected}"`);
@@ -78,7 +78,6 @@ try {
 		return el?.src?.startsWith('blob:') ? 'blob attached' : 'no preview blob';
 	});
 	step('preview', mime);
-	if ((await privateRadio(page).count()) !== 1) fail('private option not offered on /record');
 
 	await choosePrivateAndSave(page, before.permissioned_spaces.granted);
 

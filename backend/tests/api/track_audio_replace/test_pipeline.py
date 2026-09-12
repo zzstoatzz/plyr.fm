@@ -198,7 +198,7 @@ class TestReplaceOrchestration:
         they need the auth-protected `/audio/{file_id}` redirect endpoint."""
         track = make_track(support_gate=None if private_source else {"type": "any"})
         track.audio_storage = "r2_private" if private_source else "r2"
-        track.extra = {"download_policy": "off"} if private_source else {}
+        track.download_policy = "off" if private_source else "open"
         db_session.add(track)
         await db_session.commit()
         await db_session.refresh(track)
@@ -227,7 +227,7 @@ class TestReplaceOrchestration:
         )
         await db_session.refresh(track)
         assert track.audio_storage == ("r2_private" if private_source else "r2")
-        assert track.download_policy == ("off" if private_source else None)
+        assert track.download_policy == ("off" if private_source else "open")
 
     async def test_pds_record_preserves_original_created_at(
         self, db_session: AsyncSession, owner: Artist

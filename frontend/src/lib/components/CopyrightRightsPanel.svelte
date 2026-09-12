@@ -27,12 +27,14 @@
 		enabled: boolean;
 		rights: TrackRights;
 		disabled?: boolean;
+		showToggle?: boolean;
 	};
 
 	let {
 		enabled = $bindable(),
 		rights = $bindable(),
-		disabled = false
+		disabled = false,
+		showToggle = true
 	}: Props = $props();
 
 	let config = $state<CopyrightConfig | null>(null);
@@ -96,14 +98,16 @@
 
 {#if flagEnabled}
 <div class="rights-panel" class:disabled>
+	{#if showToggle}
 	<label class="enable-row">
 		<input
 			type="checkbox"
 			bind:checked={enabled}
 			disabled={disabled || !config}
 		/>
-		<span>this is a copyrighted work</span>
+		<span>attach rights information</span>
 	</label>
+	{/if}
 
 	{#if !configLoaded}
 		<p class="hint">loading…</p>
@@ -111,7 +115,7 @@
 		<p class="hint missing-config">
 			set up copyright in
 			<a href="/portal">your portal</a>
-			before flagging tracks as copyrighted.
+			before attaching rights information.
 		</p>
 	{:else if enabled}
 		{#if ownerSummary}

@@ -31,6 +31,7 @@ class JobType(str, Enum):
     # rendition. a distinct type so the stuck-upload reaper (which scans
     # type='upload') never reaps a legitimately long encode running here.
     OPTIMIZE = "optimize"
+    PUBLISHING = "publishing"
 
 
 class Job(Base):

@@ -1,16 +1,19 @@
 <script lang="ts">
+	import PublishingIntro from '$lib/components/PublishingIntro.svelte';
 	import { onDestroy, onMount } from 'svelte';
 	import { browser } from '$app/environment';
 	import { goto } from '$app/navigation';
 	import Header from '$lib/components/Header.svelte';
 	import TagInput from '$lib/components/TagInput.svelte';
 	import AudioPreview from '$lib/components/AudioPreview.svelte';
-	import VisibilityPicker, { type Visibility } from '$lib/components/VisibilityPicker.svelte';
+	import PublishingSettings from '$lib/components/PublishingSettings.svelte';
+	import { preferences } from '$lib/preferences.svelte';
+	import { parsePublishing, type PublishingDefaults } from '$lib/publishing';
 	import { auth } from '$lib/auth.svelte';
 	import { toast } from '$lib/toast.svelte';
 	import { uploader } from '$lib/uploader.svelte';
 	import { APP_NAME, APP_CANONICAL_URL } from '$lib/branding';
-	import { API_URL } from '$lib/config';
+	import { API_URL, COPYRIGHT_PARADIGM_FLAG } from '$lib/config';
 	import { setReturnUrl } from '$lib/utils/return-url';
 	import {
 		clearStashedRecording,
@@ -31,8 +34,9 @@
 	let uiState = $state<RecordState>('idle');
 	let title = $state('');
 	let tags = $state<string[]>([]);
-	let visibility = $state<Visibility>('public');
-	let downloadPolicy = $state('');
+	let publishingOverride = $state<PublishingDefaults | null>(null);
+	const publishing = $derived(publishingOverride ?? preferences.publishingDefaults);
+	const visibility = $derived(publishing.access.visibility);
 	let previewBlob = $state<Blob | null>(null);
 	// the live tick count at stop time: a length the preview can show before the
 	// browser has scanned the recording for its real one
@@ -123,7 +127,7 @@
 			blob,
 			title,
 			tags: $state.snapshot(tags),
-			visibility: 'private',
+			publishing,
 			capturedDuration
 		});
 		if (!stashed) {
@@ -162,6 +166,7 @@
 	}
 
 	async function handleUpload() {
+		if (!preferences.data) return;
 		if (!previewBlob) return;
 		let blob = previewBlob;
 
@@ -188,7 +193,7 @@
 			[],
 			null,
 			tags,
-			visibility,
+			publishingOverride,
 			false,
 			'',
 			() => {},
@@ -196,8 +201,7 @@
 			title,
 			undefined,
 			undefined,
-			[],
-			visibility === 'public' || visibility === 'unlisted' ? downloadPolicy : ''
+			[]
 		);
 		uiState = 'uploading';
 		void clearStashedRecording();
@@ -217,17 +221,18 @@
 		tags = stashed.tags;
 		capturedDuration = stashed.capturedDuration;
 		uiState = 'preview';
+		publishingOverride = parsePublishing(JSON.stringify(stashed.publishing));
 		if (!permissionedGranted) {
 			toast.error("not approved — your recording is still here", 6000);
 			return;
 		}
-		visibility = 'private';
 		toast.success('approved — saving your recording', 4000);
 		await handleUpload();
 	}
 
 	onMount(async () => {
 		await auth.initialize();
+		await preferences.fetch();
 		await restoreStashedRecording();
 	});
 
@@ -268,6 +273,7 @@
 <Header user={auth.user} isAuthenticated={auth.isAuthenticated} onLogout={handleLogout} />
 
 <main>
+	<PublishingIntro />
 	<div class="section-header">
 		<h2>record</h2>
 		<p class="subtitle">capture audio from your mic, publish it as a track</p>
@@ -338,12 +344,8 @@
 				/>
 			</div>
 
-			<VisibilityPicker
-				bind:visibility
-				bind:downloadPolicy
-				showPrivate={permissionedSupported}
-				privateGranted={permissionedGranted}
-			/>
+			<PublishingSettings bind:value={publishingOverride} defaults={preferences.publishingDefaults} showSpace={permissionedSupported}
+				showRights={auth.user?.enabled_flags?.includes(COPYRIGHT_PARADIGM_FLAG)} />
 
 			<div class="actions">
 				<button type="button" class="secondary-btn" onclick={reRecord}>
@@ -353,7 +355,7 @@
 					</svg>
 					re-record
 				</button>
-				<button type="button" class="primary-btn" onclick={handleUpload} disabled={!previewBlob}>
+				<button type="button" class="primary-btn" onclick={handleUpload} disabled={!previewBlob || !preferences.data}>
 					<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
 						<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
 						<polyline points="17 8 12 3 7 8" />

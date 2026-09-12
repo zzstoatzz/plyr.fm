@@ -3,6 +3,7 @@
 	import { fn, userEvent } from 'storybook/test';
 	import TracksSection from './TracksSection.svelte';
 	import type { Track } from '$lib/types';
+	import { defaultPublishing } from '$lib/publishing';
 
 	const track: Track = {
 		id: 1177,
@@ -12,6 +13,8 @@
 		artist_did: 'did:plc:demoartist',
 		file_id: 'midnight-transmission',
 		file_type: 'wav',
+		publishing: defaultPublishing(),
+		policy_origin: 'portal',
 		play_count: 42,
 		created_at: '2026-07-17T00:00:00Z',
 		description: 'A long-form late-night broadcast.',

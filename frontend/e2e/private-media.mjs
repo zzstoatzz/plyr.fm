@@ -60,8 +60,6 @@ try {
 
 	await page.goto(`${APP}/upload`, { waitUntil: 'networkidle' });
 	await page.waitForTimeout(1500);
-	const privateRadio = page.locator('input[type="radio"][value="private"]');
-	if ((await privateRadio.count()) !== 1) fail('private option not offered');
 
 	const fillForm = async () => {
 		await page.locator('input[type="text"]').first().fill(title);
@@ -69,7 +67,9 @@ try {
 			.locator('input[type="file"]')
 			.first()
 			.setInputFiles({ name: 'e2e.wav', mimeType: 'audio/wav', buffer: wavBuffer() });
-		await page.locator('label:has(input[type="radio"][value="private"])').click();
+		await page.getByText('change for this track', { exact: true }).click();
+		await page.getByRole('checkbox', { name: 'anyone can listen', exact: true }).uncheck();
+		await page.getByLabel('who can listen?', { exact: true }).selectOption('space');
 		const attest = page.locator('.attestation input[type="checkbox"]').first();
 		if (!(await attest.isChecked())) await attest.check();
 	};

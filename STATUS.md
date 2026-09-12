@@ -47,6 +47,24 @@ plyr.fm should become:
 
 ### September 2026
 
+#### publishing defaults and independent audio access (in review)
+
+Portal defaults now supply listening, downloads, discovery and optional rights
+settings to uploads. Tracks save a concrete policy; album application preserves
+explicit track exceptions unless the artist elects to replace them. Restricting
+an existing work prepares protected audio before updating its published source.
+Previously public copies cannot be recalled. Native Space boundaries remain
+explicit and are not rewritten by this operation.
+
+The migration snapshots existing download behavior and removes the old write
+contract rather than maintaining compatibility aliases. Inventory, source-history
+review, migration implications and smoke evidence live in
+`docs/plans/2026-09-12-publishing-access.md`. Local browser testing uses isolated
+fixtures and an S3 emulator alongside the real app, worker and transcoder.
+Authenticated staging smoke and the remaining visual matrix are outstanding;
+this work has not been deployed. Production is unchanged.
+
+
 #### the player’s clipped “g” exposed a track-identity collision (#2026–#2028, September 5)
 
 **why**: nate first spotted the bottom of the “g” missing from the player’s

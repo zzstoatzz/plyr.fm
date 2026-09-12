@@ -3,6 +3,7 @@ import { getCachedAudioUrl } from '$lib/storage';
 import { canPlayFormat, hasPlayableLossless } from '$lib/audio-support';
 import { isOptimizing } from '$lib/utils/track-audio';
 import type { Track } from '$lib/types';
+import type { PublishingDefaults } from '$lib/publishing';
 
 /**
  * Structured outcome of resolving a track's audio source.
@@ -25,6 +26,7 @@ export type ResolvedSource =
 			kind: 'gated-denied';
 			trackId: number;
 			requiresAuth: boolean;
+			listening: PublishingDefaults['access']['listening'] | undefined;
 			artistDid: string;
 			artistHandle: string;
 	  }
@@ -41,6 +43,7 @@ export interface GatedError {
 	artistDid: string;
 	artistHandle: string;
 	requiresAuth: boolean;
+	listening: PublishingDefaults['access']['listening'] | undefined;
 }
 
 /**
@@ -50,6 +53,8 @@ export interface GatedError {
  * and the prefetcher (next track) so the cache key agrees.
  */
 export function pickFileIdForTrack(track: Track): string {
+	if (track.audio_storage === 'r2_private' || track.support_gate || track.publishing?.access.visibility === 'private')
+		return track.file_id;
 	if (track.original_file_id && hasPlayableLossless(track.original_file_type)) {
 		return track.original_file_id;
 	}
@@ -117,7 +122,7 @@ export async function resolveAudioSource(
 	// Adult-labeled audio must always pass through the backend's current
 	// preference check. A blob cached before the label was applied must not
 	// become a permanent authorization bypass.
-	if (!hasAdultLabel) {
+	if (!hasAdultLabel && track.audio_storage !== 'r2_private' && !track.support_gate && track.publishing?.access.visibility !== 'private') {
 		try {
 			const cachedUrl = await getCachedAudioUrl(fileIdUsed);
 			if (cachedUrl) {
@@ -146,16 +151,18 @@ export async function resolveAudioSource(
 					trackId: track.id,
 					requiresAuth: true,
 					artistDid: track.artist_did ?? '',
-					artistHandle: track.artist_handle
+					artistHandle: track.artist_handle,
+					listening: track.publishing?.access.listening
 				};
 			}
-			if (response.status === 402) {
+			if (response.status === 402 || response.status === 403 || response.status === 404) {
 				return {
 					kind: 'gated-denied',
 					trackId: track.id,
 					requiresAuth: false,
 					artistDid: track.artist_did ?? '',
-					artistHandle: track.artist_handle
+					artistHandle: track.artist_handle,
+					listening: track.publishing?.access.listening
 				};
 			}
 		} catch (err) {
@@ -179,6 +186,7 @@ export function gatedErrorFromResolution(
 		type: 'gated',
 		artistDid: resolved.artistDid,
 		artistHandle: resolved.artistHandle,
-		requiresAuth: resolved.requiresAuth
+		requiresAuth: resolved.requiresAuth,
+		listening: resolved.listening
 	};
 }

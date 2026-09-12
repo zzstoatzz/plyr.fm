@@ -6,13 +6,14 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.models import Album, Artist, Track
+from backend.utilities.publishing import PublishingDefaults
 from backend.utilities.redis import get_async_redis_client
 
 from .schemas import AlbumListItem, AlbumMetadata, ArtistAlbumListItem
 
 logger = logging.getLogger(__name__)
 
-ALBUM_CACHE_PREFIX = "plyr:album:v2:"
+ALBUM_CACHE_PREFIX = "plyr:album:v3:"
 ALBUM_CACHE_TTL_SECONDS = 300  # 5 minutes
 
 
@@ -92,6 +93,9 @@ async def _artist_album_summary(
 ) -> ArtistAlbumListItem:
     image_url = await _album_image_url(album, artist)
     return ArtistAlbumListItem(
+        publishing_defaults=PublishingDefaults.model_validate(album.publishing_defaults)
+        if album.publishing_defaults is not None
+        else None,
         id=album.id,
         title=album.title,
         slug=album.slug,
@@ -109,6 +113,9 @@ async def _album_metadata(
 ) -> AlbumMetadata:
     image_url = await _album_image_url(album, artist)
     return AlbumMetadata(
+        publishing_defaults=PublishingDefaults.model_validate(album.publishing_defaults)
+        if album.publishing_defaults is not None
+        else None,
         id=album.id,
         title=album.title,
         slug=album.slug,

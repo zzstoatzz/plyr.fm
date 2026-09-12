@@ -1,29 +1,15 @@
 """helpers for user-facing file downloads."""
 
 import re
-from collections.abc import Iterable, Mapping
-from typing import Any, Literal, TypeAlias
+from collections.abc import Iterable
+from typing import Literal, TypeAlias
 
 from backend._internal.content_labels import has_copyright_label
 from backend.storage.keys import AudioKey, InvalidMediaExtension
 
 DownloadRefusal: TypeAlias = Literal[
-    "private", "gated", "copyright", "artist_opt_out", "supporters_only"
+    "private", "copyright", "artist_opt_out", "supporters_only"
 ]
-
-DOWNLOAD_POLICIES = ("open", "ask", "supporters", "off")
-
-
-def effective_download_policy(policy: str | None, support_url: str | None) -> str:
-    """resolve the stored policy; NULL means auto.
-
-    auto = ask when the artist has a support link, open when not — artists
-    who set up a support link presumably want listeners pointed at it.
-    """
-    if policy:
-        return policy
-    return "ask" if support_url else "open"
-
 
 # a file_id minted by our upload path: sha256 truncated to 16 hex chars.
 # anything else (e.g. a record rkey) came from the firehose and names nothing
@@ -65,7 +51,6 @@ def download_key(
 def download_refusal(
     *,
     is_private: bool,
-    support_gate: Mapping[str, Any] | None,
     labels: Iterable[str],
     moderation_override: str | None,
     download_policy: str | None,
@@ -80,20 +65,17 @@ def download_refusal(
     and streaming already filter on — never raw scan flags, which mark a
     pending review, not a finding.
 
-    `download_policy` is the resolved track or artist tier (callers resolve NULL
-    via effective_download_policy first). "ask" never refuses
+    `download_policy` is the saved per-work choice. "ask" never refuses
     — it is a request the UI makes, not a lock. how a viewer came to count
     as a supporter is the caller's verifier concern (#1841), never this
     function's.
     """
     if is_private:
         return "private"
-    if support_gate is not None and not viewer_is_artist:
-        return "gated"
     if has_copyright_label(labels) and moderation_override != "allow":
         return "copyright"
-    policy = download_policy or "open"  # tolerate unresolved None as open
-    if policy == "off" and not viewer_is_artist:
+    policy = download_policy
+    if policy not in ("open", "ask", "supporters") and not viewer_is_artist:
         return "artist_opt_out"
     if policy == "supporters" and not (viewer_is_artist or viewer_is_supporter):
         return "supporters_only"

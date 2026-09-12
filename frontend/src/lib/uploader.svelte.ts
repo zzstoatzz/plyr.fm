@@ -1,3 +1,4 @@
+import type { PublishingDefaults } from './publishing';
 import { browser } from '$app/environment';
 import { goto } from '$app/navigation';
 import { auth } from './auth.svelte';
@@ -230,7 +231,7 @@ class UploaderState {
 		features: FeaturedArtist[],
 		image: File | null | undefined,
 		tags: string[],
-		visibility: string,
+		publishing: PublishingDefaults | null,
 		autoTag: boolean,
 		description: string,
 		onSuccess?: (_result?: UploadResult) => void,
@@ -238,8 +239,7 @@ class UploaderState {
 		label?: string,
 		albumId?: string,
 		copyright?: TrackRights | null,
-		selfLabels: string[] = [],
-		downloadPolicy = ''
+		selfLabels: string[] = []
 	): void {
 		if (!browser) return;
 		const staged = source instanceof StagedTransfer ? source : this.stage(source);
@@ -274,10 +274,7 @@ class UploaderState {
 		if (image) {
 			formData.append('image', image);
 		}
-		// visibility is the single source of truth (public | unlisted | supporters
-		// | private); copyright is orthogonal (rides on public/unlisted).
-		formData.append('visibility', visibility);
-		if (downloadPolicy) formData.append('download_policy', downloadPolicy);
+		if (publishing) formData.append('publishing', JSON.stringify(publishing));
 		if (copyright) {
 			formData.append('copyright', JSON.stringify(copyright));
 		}
@@ -326,7 +323,7 @@ class UploaderState {
 				const upload_id = await finishUploadSession(sessionId, formData);
 				task.upload_id = upload_id;
 				callbacks?.onSuccess?.(upload_id);
-				this.followProcessing(task, displayName, onSuccess);
+				this.followProcessing(task, displayName, onSuccess, callbacks?.onError);
 			} catch (error) {
 				const failure: UploadFailure = error instanceof Error ? error : new Error(String(error));
 				const message = describeUploadFailure(
@@ -349,7 +346,8 @@ class UploaderState {
 	private followProcessing(
 		task: UploadTask,
 		displayName: string,
-		onSuccess?: (_result?: UploadResult) => void
+		onSuccess?: (_result?: UploadResult) => void,
+		onError?: (_error: string) => void
 	): void {
 		const eventSource = new EventSource(`${API_URL}/tracks/uploads/${task.upload_id}/progress`);
 		task.eventSource = eventSource;
@@ -411,6 +409,7 @@ class UploaderState {
 				toast.dismiss(task.toastId);
 				this.activeUploads.delete(task.id);
 				toast.error(update.error || 'upload failed');
+				onError?.(update.error || 'upload failed — retry');
 			}
 		};
 
@@ -419,6 +418,7 @@ class UploaderState {
 			toast.dismiss(task.toastId);
 			this.activeUploads.delete(task.id);
 			toast.error('lost connection to server');
+			onError?.('connection lost — check Portal before retrying');
 		};
 	}
 

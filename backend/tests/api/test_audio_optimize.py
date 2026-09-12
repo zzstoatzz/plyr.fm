@@ -166,45 +166,52 @@ async def test_store_audio_publishes_lossless_raw_and_flags_optimization() -> No
     assert sr.needs_optimization is True
 
 
-async def test_store_audio_allows_gated_lossless_without_public_url() -> None:
-    """regression for #1408: gated lossless uploads should publish the staged
-    private object as the interim/original and queue optimization, without
-    requiring a public R2 URL."""
+@pytest.mark.parametrize("extension", ["aiff", "flac", "mp3"])
+@pytest.mark.parametrize("result_id", ["PLAYBACK", None, "MASTER"])
+async def test_protected_audio_never_publishes_the_master(
+    extension: str, result_id: str | None
+) -> None:
     ctx = UploadContext(
-        upload_id="job-gated",
+        upload_id="job-protected",
         auth_session=_MockSession(),
-        audio_file_id="GATEDAIFF",
-        filename="members-only.aiff",
+        audio_file_id="MASTER",
+        filename=f"track.{extension}",
         duration=300,
-        title="Members Only",
+        title="Protected",
         artist_did=OWNER_DID,
         album=None,
         album_id=None,
         features_json=None,
         tags=[],
-        support_gate={"type": "any"},
+        private_audio=True,
+        download_policy="off",
     )
-    audio_info = AudioInfo(format=AudioFormat.AIFF, duration=300, is_gated=True)
-
+    audio_format = AudioFormat.from_extension(f".{extension}")
+    assert audio_format is not None
+    info = AudioInfo(format=audio_format, duration=300, is_gated=True)
+    result = TranscodeInfo("MASTER", extension, result_id, "mp3") if result_id else None
     with (
         patch(
             "backend.api.tracks.uploads._transcode_audio",
             new_callable=AsyncMock,
-        ) as mock_transcode,
+            return_value=result,
+        ) as transcode,
         patch(
-            "backend.api.tracks.uploads.storage.get_url",
-            new_callable=AsyncMock,
-        ) as mock_get_url,
+            "backend.api.tracks.uploads.storage.get_url", new_callable=AsyncMock
+        ) as public_url,
     ):
-        sr = await _store_audio(ctx, audio_info)
-
-    mock_transcode.assert_not_awaited()
-    mock_get_url.assert_not_awaited()
-    assert sr.file_id == "GATEDAIFF"
-    assert sr.original_file_id == "GATEDAIFF"
-    assert sr.original_file_type == "aiff"
-    assert sr.r2_url is None
-    assert sr.needs_optimization is True
+        if result_id is None or result_id == "MASTER":
+            with pytest.raises(UploadPhaseError, match="playback rendition"):
+                await _store_audio(ctx, info)
+        else:
+            stored = await _store_audio(ctx, info)
+            assert stored.file_id == "PLAYBACK"
+            assert stored.original_file_id == "MASTER"
+            assert stored.original_file_type == extension
+            assert stored.r2_url is None
+            assert not stored.needs_optimization
+        transcode.assert_awaited_once()
+        public_url.assert_not_awaited()
 
 
 async def test_store_audio_web_playable_does_not_need_optimization() -> None:

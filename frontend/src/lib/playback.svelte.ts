@@ -7,16 +7,16 @@
 
 import { browser } from '$app/environment';
 import { queue } from './queue.svelte';
-import { toast } from './toast.svelte';
-import { API_URL, getAtprotofansSupportUrl } from './config';
-import { loginHref } from './utils/auth-redirect';
+import { showAccessDenied } from './access-denial';
+import type { PublishingDefaults } from './publishing';
+import { API_URL } from './config';
 import type { Track } from './types';
 
 interface GatedCheckResult {
 	allowed: boolean;
 	requiresAuth?: boolean;
 	artistDid?: string;
-	artistHandle?: string;
+	listening?: PublishingDefaults['access']['listening'];
 }
 
 /**
@@ -46,16 +46,16 @@ async function checkAccess(track: Track): Promise<GatedCheckResult> {
 				allowed: false,
 				requiresAuth: true,
 				artistDid: track.artist_did,
-				artistHandle: track.artist_handle
+				listening: track.publishing?.access.listening
 			};
 		}
 
-		if (response.status === 402) {
+		if (response.status === 402 || response.status === 403 || response.status === 404) {
 			return {
 				allowed: false,
 				requiresAuth: false,
 				artistDid: track.artist_did,
-				artistHandle: track.artist_handle
+				listening: track.publishing?.access.listening
 			};
 		}
 
@@ -71,38 +71,11 @@ async function checkAccess(track: Track): Promise<GatedCheckResult> {
  * show appropriate toast for denied access (from HEAD request).
  */
 function showDeniedToast(result: GatedCheckResult): void {
-	if (result.requiresAuth) {
-		toast.info('sign in to play supporter-only tracks', 5000, {
-			label: 'sign in',
-			href: loginHref()
-		});
-	} else if (result.artistDid) {
-		toast.info('this track is for supporters only', 5000, {
-			label: 'become a supporter',
-			href: getAtprotofansSupportUrl(result.artistDid)
-		});
-	} else {
-		toast.info('this track is for supporters only');
-	}
+	showAccessDenied(result.requiresAuth ?? false, result.artistDid, result.listening);
 }
 
-/**
- * show toast for gated track (using server-resolved status).
- */
 function showGatedToast(track: Track, isAuthenticated: boolean): void {
-	if (!isAuthenticated) {
-		toast.info('sign in to play supporter-only tracks', 5000, {
-			label: 'sign in',
-			href: loginHref()
-		});
-	} else if (track.artist_did) {
-		toast.info('this track is for supporters only', 5000, {
-			label: 'become a supporter',
-			href: getAtprotofansSupportUrl(track.artist_did)
-		});
-	} else {
-		toast.info('this track is for supporters only');
-	}
+	showAccessDenied(!isAuthenticated, track.artist_did, track.publishing?.access.listening);
 }
 
 /**

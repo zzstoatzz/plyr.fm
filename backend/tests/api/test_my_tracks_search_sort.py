@@ -248,6 +248,10 @@ async def test_pds_savable_count_semantics(
     gated = await _make_track(db_session, title="gated", file_id="sv_4")
     gated.support_gate = {"type": "any"}
 
+    protected = await _make_track(db_session, title="protected", file_id="sv_private")
+    protected.audio_storage = "r2_private"
+    protected.download_policy = "off"
+
     optimizing = await _make_track(db_session, title="optimizing", file_id="sv_5")
     optimizing.file_type = "wav"
     optimizing.original_file_id = "orig_5"

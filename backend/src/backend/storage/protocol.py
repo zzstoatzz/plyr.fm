@@ -147,6 +147,8 @@ class StorageProtocol(Protocol):
         """
         ...
 
+    async def copy_audio_to_private(self, file_id: str, extension: str) -> None: ...
+
     async def move_audio(
         self,
         file_id: str,

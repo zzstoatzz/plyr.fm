@@ -491,7 +491,8 @@ async def list_my_tracks(
         .select_from(Track)
         .where(
             Track.artist_did == auth_session.did,
-            Track.support_gate.is_(None),
+            ~Track.uses_private_audio,
+            ~Track.is_private,
             Track.pds_blob_cid.is_(None),
             Track.file_id.isnot(None),
             ~Track.is_optimizing,

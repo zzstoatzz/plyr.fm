@@ -3,6 +3,7 @@
 	import { expect, fn, waitFor } from 'storybook/test';
 	import EditTrackModal from './EditTrackModal.svelte';
 	import type { Track } from '$lib/types';
+	import { defaultPublishing } from '$lib/publishing';
 
 	const track = {
 		id: 0,
@@ -12,6 +13,8 @@
 		artist_did: 'did:plc:artist',
 		file_id: 'test',
 		file_type: 'mp3',
+		publishing: defaultPublishing(),
+		policy_origin: 'portal',
 		play_count: 0,
 		atproto_record_uri: 'at://did:plc:artist/fm.plyr.track/test'
 	} satisfies Track;

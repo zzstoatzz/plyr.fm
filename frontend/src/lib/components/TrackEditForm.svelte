@@ -10,6 +10,9 @@
 	import type { TrackRights } from '$lib/components/CopyrightRightsPanel.svelte';
 	import type { Track, FeaturedArtist, AlbumSummary } from '$lib/types';
 	import { API_URL } from '$lib/config';
+	import { preferences } from '$lib/preferences.svelte';
+	import { parsePublishing, defaultPublishing, type PublishingDefaults } from '$lib/publishing';
+	import { changePublishing } from '$lib/publishing-jobs';
 	import { toast } from '$lib/toast.svelte';
 
 	interface Props {
@@ -22,16 +25,8 @@
 		onBusyChange?: (busy: boolean) => void;
 		onDirtyChange?: (dirty: boolean) => void;
 	}
-	let {
-		track,
-		albums,
-		atprotofansEligible,
-		onClose,
-		onSaved,
-		onTrackChanged,
-		onBusyChange,
-		onDirtyChange
-	}: Props = $props();
+	let { track, albums, onClose, onSaved, onTrackChanged, onBusyChange, onDirtyChange }: Props =
+		$props();
 	let saveError = $state<string | null>(null);
 	let replaceCopyrightRights = $state(false);
 	let initialDraft = $state('');
@@ -42,15 +37,14 @@
 			editAlbum,
 			editFeaturedArtists,
 			editTags,
-			editSupportGate,
-			editUnlisted,
+			publishingOverride,
 			editSelfLabels,
-			editCopyrightEnabled,
 			editCopyrightRights,
 			replaceCopyrightRights
 		]);
 	}
 	onMount(() => {
+		void preferences.fetch();
 		startEditTrack(track);
 		initialDraft = draftSnapshot();
 	});
@@ -81,11 +75,15 @@
 
 	let audioPending = $state(false);
 	let audioDirty = $state(false);
-	let editSupportGate = $state(false);
-	let editUnlisted = $state(false);
+	let publishingOverride = $state<PublishingDefaults | null>(null);
+	let initialPublishing = $state(defaultPublishing());
+	const selectedAlbum = $derived(albums.find((album) => album.title === editAlbum));
+	const publishingDefaults = $derived(
+		selectedAlbum?.publishing_defaults ?? preferences.publishingDefaults
+	);
+	const editCopyrightEnabled = $derived((publishingOverride ?? publishingDefaults).attach_rights);
 	let editSelfLabels = $state<string[]>([]);
 
-	let editCopyrightEnabled = $state(false);
 	let editCopyrightRights = $state<TrackRights>({});
 
 	let editCopyrightWasEnabled = $state(false);
@@ -103,15 +101,11 @@
 		editAlbum = track.album?.title || '';
 		editFeaturedArtists = track.features || [];
 		editTags = track.tags || [];
-		editSupportGate =
-			track.support_gate !== null &&
-			track.support_gate !== undefined &&
-			track.support_gate.type === 'any';
-		editUnlisted = track.unlisted ?? false;
+		initialPublishing = parsePublishing(JSON.stringify(track.publishing));
+		publishingOverride = initialPublishing;
 		editSelfLabels = [...(track.self_labels ?? [])];
 
-		editCopyrightEnabled = Boolean(track.copyright_song_uri);
-		editCopyrightWasEnabled = editCopyrightEnabled;
+		editCopyrightWasEnabled = initialPublishing.attach_rights;
 		editCopyrightRights = {};
 		fetchRecommendedTags(track.id);
 	}
@@ -153,7 +147,7 @@
 		const formData = new FormData();
 		formData.append('title', editTitle);
 		formData.append('description', editDescription);
-		formData.append('album', editAlbum);
+		if (editAlbum !== (track.album?.title ?? '')) formData.append('album', editAlbum);
 		if (editFeaturedArtists.length > 0) {
 			const handles = editFeaturedArtists.map((a) => a.handle);
 			formData.append('features', JSON.stringify(handles));
@@ -163,14 +157,6 @@
 
 		formData.append('tags', JSON.stringify(editTags));
 
-		if (!editCopyrightEnabled && !editCopyrightWasEnabled) {
-			if (editSupportGate) {
-				formData.append('support_gate', JSON.stringify({ type: 'any' }));
-			} else {
-				formData.append('support_gate', 'null');
-			}
-		}
-		formData.append('unlisted', editUnlisted ? 'true' : 'false');
 		formData.append('self_labels', JSON.stringify(editSelfLabels));
 
 		if (editRemoveImage) {
@@ -204,15 +190,13 @@
 					saveError = `details saved, but copyright failed: ${err.detail ?? rightsResp.statusText}`;
 					return;
 				}
-			} else if (!editCopyrightEnabled && editCopyrightWasEnabled) {
-				const dropResp = await fetch(`${API_URL}/tracks/${trackId}/copyright`, {
-					method: 'DELETE',
-					credentials: 'include'
-				});
-				if (!dropResp.ok) {
-					saveError = 'details saved, but copyright could not be cleared — try again';
-					return;
-				}
+			}
+
+			if (
+				publishingOverride === null ||
+				JSON.stringify(publishingOverride) !== JSON.stringify(initialPublishing)
+			) {
+				await changePublishing(`/tracks/${trackId}/publishing`, { settings: publishingOverride });
 			}
 
 			const fresh = await refreshTrack();
@@ -331,12 +315,16 @@
 		</div>
 
 		<TrackAccessFields
+			valueLabel={JSON.stringify(publishingOverride) === JSON.stringify(initialPublishing) &&
+			track.policy_origin !== 'track'
+				? `saved from ${track.policy_origin === 'album' ? 'album' : 'Portal'} defaults`
+				: undefined}
 			{track}
-			{atprotofansEligible}
-			bind:editSupportGate
-			bind:editUnlisted
+			bind:publishingOverride
+			{publishingDefaults}
+			publishingSource={selectedAlbum?.publishing_defaults ? 'album' : 'Portal'}
 			bind:editSelfLabels
-			bind:editCopyrightEnabled
+			{editCopyrightEnabled}
 			bind:editCopyrightRights
 			bind:replaceCopyrightRights
 			{editCopyrightWasEnabled}

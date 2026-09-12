@@ -22,6 +22,7 @@ from . import (
     mutations as _mutations,
 )  # POST /, /{id}/cover, /{id}/finalize, PATCH, DELETE
 from . import downloads as _downloads  # /{handle}/{slug}/download
+from . import publishing as _publishing
 
 __all__ = [
     "ALBUM_CACHE_PREFIX",

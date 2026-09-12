@@ -87,9 +87,31 @@ def _post(client: TestClient, *, filename: str = "t.wav", data: dict) -> httpx.R
 
 def test_private_without_grant_requests_upgrade(app_no_scope: FastAPI):
     with TestClient(app_no_scope) as client:
-        resp = _post(client, data={"visibility": "private"})
+        resp = _post(
+            client,
+            data={
+                "publishing": '{"access":{"listening":"space","downloads":"off","visibility":"private"}}'
+            },
+        )
     assert resp.status_code == 403
     assert resp.json()["detail"] == "permissioned_scope_required"
+
+
+@pytest.mark.parametrize("downloads", ["open", "ask", "supporters"])
+def test_private_rejects_unavailable_downloads(
+    app_no_scope: FastAPI, downloads: str
+) -> None:
+    with TestClient(app_no_scope) as client:
+        resp = _post(
+            client,
+            data={
+                "publishing": '{"access":{"listening":"space","downloads":"'
+                + downloads
+                + '","visibility":"private"}}'
+            },
+        )
+    assert resp.status_code == 400
+    assert resp.json()["detail"] == "direct downloads from Spaces are not available yet"
 
 
 def test_private_app_password_session_bypasses_oauth_scope_gate(
@@ -111,7 +133,12 @@ def test_private_app_password_session_bypasses_oauth_scope_gate(
         patch("backend.api.tracks.uploads.schedule_track_upload"),
         TestClient(app_no_scope) as client,
     ):
-        resp = _post(client, data={"visibility": "private"})
+        resp = _post(
+            client,
+            data={
+                "publishing": '{"access":{"listening":"space","downloads":"off","visibility":"private"}}'
+            },
+        )
 
     assert resp.status_code == 200, resp.text
 
@@ -123,7 +150,10 @@ def test_private_rejects_non_web_playable(app_with_scope: FastAPI):
         resp = client.post(
             "/tracks/",
             files={"file": ("t.aiff", _WAV, "audio/aiff")},
-            data={"title": "x", "visibility": "private"},
+            data={
+                "title": "x",
+                "publishing": '{"access":{"listening":"space","downloads":"off","visibility":"private"}}',
+            },
         )
     assert resp.status_code == 400
     assert "web-playable" in resp.json()["detail"]
@@ -134,7 +164,10 @@ def test_private_and_copyright_mutually_exclusive(app_with_scope: FastAPI):
     with TestClient(app_with_scope) as client:
         resp = _post(
             client,
-            data={"visibility": "private", "copyright": '{"iswc": "T-000.000.001-0"}'},
+            data={
+                "publishing": '{"access":{"listening":"space","downloads":"off","visibility":"private"}}',
+                "copyright": '{"iswc": "T-000.000.001-0"}',
+            },
         )
     assert resp.status_code == 400
     assert "copyright cannot combine" in resp.json()["detail"]
@@ -169,7 +202,12 @@ def test_private_upload_goes_to_pds_not_r2(app_with_scope: FastAPI):
         patch("backend.api.tracks.uploads.schedule_track_upload", _fake_schedule),
         TestClient(app_with_scope) as client,
     ):
-        resp = _post(client, data={"visibility": "private"})
+        resp = _post(
+            client,
+            data={
+                "publishing": '{"access":{"listening":"space","downloads":"off","visibility":"private"}}'
+            },
+        )
 
     assert resp.status_code == 200, resp.text
     ctx = captured["ctx"]
@@ -279,7 +317,12 @@ def test_private_upload_dead_session_returns_401_not_500(app_with_scope: FastAPI
         patch("backend.api.tracks.uploads.upload_blob", _dead_session),
         TestClient(app_with_scope) as client,
     ):
-        resp = _post(client, data={"visibility": "private"})
+        resp = _post(
+            client,
+            data={
+                "publishing": '{"access":{"listening":"space","downloads":"off","visibility":"private"}}'
+            },
+        )
 
     assert resp.status_code == 401, resp.text
     assert resp.json()["detail"] == "session_expired"

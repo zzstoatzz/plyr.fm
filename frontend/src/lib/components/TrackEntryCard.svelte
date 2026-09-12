@@ -1,4 +1,5 @@
 <script lang="ts" module>
+	import type { PublishingDefaults } from '$lib/publishing';
 	import type { FeaturedArtist, Artist } from '$lib/types';
 
 	export interface TrackEntry {
@@ -11,13 +12,16 @@
 		hasUnresolvedFeaturesInput: boolean;
 		autoTag: boolean;
 		sensitiveAudio: boolean;
-		supportGated: boolean;
+		publishing: PublishingDefaults | null;
 		status: 'pending' | 'uploading' | 'processing' | 'completed' | 'failed';
 		error: string | null;
 	}
 </script>
 
 <script lang="ts">
+	import PublishingSettings from '$lib/components/PublishingSettings.svelte';
+	import { auth } from '$lib/auth.svelte';
+	import { COPYRIGHT_PARADIGM_FLAG } from '$lib/config';
 	import TagInput from '$lib/components/TagInput.svelte';
 	import HandleSearch from '$lib/components/HandleSearch.svelte';
 	import InfoTooltip from '$lib/components/InfoTooltip.svelte';
@@ -27,6 +31,7 @@
 
 	interface Props {
 		entry: TrackEntry;
+		publishingDefaults: PublishingDefaults;
 		index: number;
 		expanded: boolean;
 		artistProfile: Artist | null;
@@ -39,9 +44,9 @@
 
 	let {
 		entry,
+		publishingDefaults,
 		index,
 		expanded,
-		artistProfile,
 		disabled = false,
 		onUpdate,
 		onRemove,
@@ -223,27 +228,8 @@
 				<p class="gating-note">hidden by default; listeners must opt in to sensitive audio.</p>
 			</div>
 
-			{#if artistProfile?.support_url}
-				<div class="form-group supporter-gating">
-					<label class="checkbox-label">
-						<input
-							type="checkbox"
-							checked={entry.supportGated}
-							onchange={(e) => onUpdate('supportGated', (e.target as HTMLInputElement).checked)}
-							{disabled}
-						/>
-						<span class="checkbox-text">
-							<svg class="heart-icon" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-								<path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
-							</svg>
-							supporters only
-						</span>
-					</label>
-					<p class="gating-note">
-						only users who support you via <a href={artistProfile.support_url} target="_blank" rel="noopener">atprotofans</a> can play this track
-					</p>
-				</div>
-			{/if}
+			<PublishingSettings bind:value={() => entry.publishing, (next) => onUpdate('publishing', next)} defaults={publishingDefaults} source="album"
+				showRights={auth.user?.enabled_flags?.includes(COPYRIGHT_PARADIGM_FLAG) ?? false} />
 
 			{#if entry.status === 'failed' && entry.error}
 				<div class="error-banner">{entry.error}</div>
@@ -521,22 +507,8 @@
 		color: var(--text-secondary);
 	}
 
-	.supporter-gating {
-		background: color-mix(in srgb, var(--accent) 8%, var(--bg-primary));
-		padding: 1rem;
-		border-radius: var(--radius-sm);
-		border: 1px solid color-mix(in srgb, var(--accent) 20%, var(--border-default));
-	}
 
-	.supporter-gating .checkbox-text {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.4rem;
-	}
 
-	.supporter-gating .heart-icon {
-		color: var(--accent);
-	}
 
 	.gating-note {
 		margin-top: 0.5rem;
@@ -546,16 +518,10 @@
 		line-height: 1.4;
 	}
 
-	.gating-note a {
-		color: var(--accent);
-		text-decoration: none;
-	}
 
-	.gating-note a:hover {
-		text-decoration: underline;
-	}
 
 	.remove-btn {
+		margin-top: 1rem;
 		align-self: flex-start;
 		padding: 0.5rem 1rem;
 		background: transparent;

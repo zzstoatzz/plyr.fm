@@ -18,7 +18,6 @@ from backend.utilities.downloads import (
     download_filename,
     download_key,
     download_refusal,
-    effective_download_policy,
 )
 
 # headers worth relaying from the upstream getBlob response so range/seek works
@@ -180,28 +179,16 @@ async def stream_audio(
 async def _check_gate_access(
     gate: dict, session: Session | None, artist_did: str
 ) -> None:
-    """raise HTTPException if `session` may not stream a track with this gate.
-
-    gate shape: `{"type": "any" | "copyright"}`.
-    - "any" (atprotofans supporter-gated): artist or validated supporter
-    - "copyright" (indiemusi paradigm): any authenticated listener
-    """
+    """Authorize the explicit listening audience independently of downloads."""
     if not session:
-        raise HTTPException(
-            status_code=401,
-            detail="authentication required to stream this track",
-        )
-
-    gate_type = gate.get("type")
-
-    if gate_type == "copyright":
-        # any authenticated listener is fine
-        return
-
-    # default: "any" / supporter-gated semantics
+        raise HTTPException(status_code=401, detail="sign in to listen to this track")
     if session.did == artist_did:
         return
-
+    gate_type = gate.get("type")
+    if gate_type == "signed_in":
+        return
+    if gate_type != "any":
+        raise HTTPException(status_code=403, detail="you do not have listening access")
     validation = await validate_supporter(
         supporter_did=session.did, artist_did=artist_did
     )
@@ -289,7 +276,7 @@ async def download_audio(
                 Track.moderation_override,
                 Track.artist_did,
                 Artist.display_name,
-                UserPreferences.download_policy,
+                Track.download_policy,
                 Track.extra,
                 UserPreferences.support_url,
             )
@@ -304,9 +291,7 @@ async def download_audio(
         if not row:
             raise HTTPException(status_code=404, detail="audio file not found")
 
-    policy = effective_download_policy(
-        (row.extra or {}).get("download_policy") or row.download_policy, row.support_url
-    )
+    policy = row.download_policy
     viewer_is_artist = session is not None and session.did == row.artist_did
     viewer_is_supporter = False
     if policy == "supporters" and session is not None and not viewer_is_artist:
@@ -317,7 +302,6 @@ async def download_audio(
 
     refusal = download_refusal(
         is_private=row.is_private,
-        support_gate=row.support_gate,
         labels=set(row.self_labels or []) | set(row.operator_labels or []),
         moderation_override=row.moderation_override,
         download_policy=policy,
@@ -328,10 +312,6 @@ async def download_audio(
         case "private":
             # same shape as a missing file, so private tracks don't leak
             raise HTTPException(status_code=404, detail="audio file not found")
-        case "gated":
-            raise HTTPException(
-                status_code=403, detail="gated tracks cannot be downloaded"
-            )
         case "copyright":
             raise HTTPException(
                 status_code=403, detail="this track is not available for download"
