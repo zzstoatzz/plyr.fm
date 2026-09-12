@@ -1,4 +1,5 @@
 import { parsePublishing, type PublishingDefaults } from './publishing';
+import type { TrackRights } from '$lib/components/CopyrightRightsPanel.svelte';
 // sessionStorage stash for the track upload form, used when an auth check
 // before submit detects an expired session. the page redirects to /login and
 // rehydrates the form on return so the user doesn't lose what they typed.
@@ -22,9 +23,9 @@ export interface TrackFormStash {
 	attestedRights: boolean;
 	autoTag: boolean;
 	sensitiveAudio?: boolean;
-	// single visibility value (public | unlisted | supporters | private) — the
-	// draft must survive a private-media scope-upgrade redirect with its choice intact.
+	// Freeze the effective policy across the consent redirect.
 	publishing: PublishingDefaults;
+	copyrightRights: TrackRights;
 }
 
 export function stashTrackForm(state: TrackFormStash): void {
@@ -46,6 +47,7 @@ function parseTrackFormStash(raw: string): TrackFormStash | null {
 		attestedRights: parsed.attestedRights ?? false,
 		autoTag: parsed.autoTag ?? false,
 		sensitiveAudio: parsed.sensitiveAudio,
+		copyrightRights: parsed.copyrightRights ?? {},
 		publishing: parsePublishing(JSON.stringify(parsed.publishing))
 	};
 }

@@ -133,6 +133,7 @@
 			autoTag = stashed.autoTag;
 			sensitiveAudio = stashed.sensitiveAudio ?? false;
 			publishingOverride = stashed.publishing;
+			copyrightRights = stashed.copyrightRights;
 			clearTrackFormStash();
 			const files = await takeUploadFiles();
 			if (files) {
@@ -204,6 +205,7 @@
 			autoTag,
 			sensitiveAudio,
 			publishing: publishing,
+			copyrightRights,
 		};
 	}
 
