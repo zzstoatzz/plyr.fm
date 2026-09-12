@@ -51,3 +51,16 @@ export function publishingSummary(settings: PublishingDefaults): string {
 	}[settings.access.downloads];
 	return `${listening} · ${downloads}`;
 }
+
+export function listeningLabel(
+	listening: PublishingDefaults['access']['listening'] | undefined
+): string {
+	if (listening === undefined) return 'restricted listening';
+	return {
+		public: 'anyone can listen',
+		signed_in: 'signed-in listeners',
+		supporters: 'supporters only',
+		owner: 'artist only',
+		space: 'Space members only'
+	}[listening];
+}

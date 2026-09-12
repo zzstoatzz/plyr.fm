@@ -365,3 +365,20 @@ recording opt out of inherited rights attachment without changing Portal.
 Desktop dark Portal controls also inspected at 1280px; the form, disclosure,
 save button and following section have distinct spacing. Recording preview
 still needs browser verification with a test microphone.
+
+### Listener-facing audience review
+
+The browser exposed old supporter-only labels on artist-only works. Track-page,
+card and list badges now name the saved listening audience. Playback guards and
+the player's preload denial share one message path: sign-in where required,
+payment links only for supporter policies, and an artist-only explanation for
+owner restrictions. A 403/404 refusal on gated audio no longer enters the queue
+as if playback were allowed.
+
+Four regressions exercise the real queue guard, playback entry point, source
+resolver and toast state; all four fail before the fix. The frontend suite passes
+252 tests in 46 files, with typecheck and lint passing. Local browser playback
+from a separately authenticated listener against a unique artist-only rendition
+shows “only the artist can play this track,” no payment action and no new player.
+The signed-out path offers sign-in. Test identities and audio are disposable;
+the terms timestamp was seeded as fixture data, not accepted for a real account.

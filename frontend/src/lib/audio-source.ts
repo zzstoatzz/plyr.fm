@@ -3,6 +3,7 @@ import { getCachedAudioUrl } from '$lib/storage';
 import { canPlayFormat, hasPlayableLossless } from '$lib/audio-support';
 import { isOptimizing } from '$lib/utils/track-audio';
 import type { Track } from '$lib/types';
+import type { PublishingDefaults } from '$lib/publishing';
 
 /**
  * Structured outcome of resolving a track's audio source.
@@ -25,6 +26,7 @@ export type ResolvedSource =
 			kind: 'gated-denied';
 			trackId: number;
 			requiresAuth: boolean;
+			listening: PublishingDefaults['access']['listening'] | undefined;
 			artistDid: string;
 			artistHandle: string;
 	  }
@@ -41,6 +43,7 @@ export interface GatedError {
 	artistDid: string;
 	artistHandle: string;
 	requiresAuth: boolean;
+	listening: PublishingDefaults['access']['listening'] | undefined;
 }
 
 /**
@@ -148,16 +151,18 @@ export async function resolveAudioSource(
 					trackId: track.id,
 					requiresAuth: true,
 					artistDid: track.artist_did ?? '',
-					artistHandle: track.artist_handle
+					artistHandle: track.artist_handle,
+					listening: track.publishing?.access.listening
 				};
 			}
-			if (response.status === 402) {
+			if (response.status === 402 || response.status === 403 || response.status === 404) {
 				return {
 					kind: 'gated-denied',
 					trackId: track.id,
 					requiresAuth: false,
 					artistDid: track.artist_did ?? '',
-					artistHandle: track.artist_handle
+					artistHandle: track.artist_handle,
+					listening: track.publishing?.access.listening
 				};
 			}
 		} catch (err) {
@@ -181,6 +186,7 @@ export function gatedErrorFromResolution(
 		type: 'gated',
 		artistDid: resolved.artistDid,
 		artistHandle: resolved.artistHandle,
-		requiresAuth: resolved.requiresAuth
+		requiresAuth: resolved.requiresAuth,
+		listening: resolved.listening
 	};
 }
