@@ -8,11 +8,12 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend._internal import Session, require_auth
+from backend._internal import Session, require_artist_profile, require_auth
 from backend.api.tracks.publishing import apply_publishing, run_publishing_change
 from backend.main import app
-from backend.models import Album, Artist, Track
+from backend.models import Album, Artist, Track, get_db
 from backend.models.track_revision import TrackRevision
+from backend.utilities.database import db_session as open_db_session
 from backend.utilities.publishing import PublishingDefaults, PublishingPolicy
 
 
@@ -265,3 +266,88 @@ async def test_rights_failure_invalidates_committed_access(
     await db_session.refresh(track)
     assert track.visibility == "unlisted"
     assert track.copyright_song_uri is None
+
+
+async def test_album_queue_failure_reports_saved_defaults(
+    db_session: AsyncSession, published: tuple[Track, Session]
+) -> None:
+    track, session = published
+    album = Album(artist_did=session.did, slug="queue-failure", title="Queue failure")
+    db_session.add(album)
+    await db_session.flush()
+    track.album_id = album.id
+    await db_session.commit()
+    requested = PublishingDefaults(access=PublishingPolicy(downloads="off"))
+
+    async def owner() -> Session:
+        return session
+
+    app.dependency_overrides[require_auth] = owner
+    try:
+        with patch(
+            "backend.api.tracks.publishing.queue_publishing_change",
+            new_callable=AsyncMock,
+            side_effect=ConnectionError("queue unavailable"),
+        ):
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as client:
+                response = await client.post(
+                    f"/albums/{album.id}/publishing",
+                    json={"settings": requested.model_dump()},
+                )
+        assert response.status_code == 503
+        assert "album defaults saved" in response.json()["detail"]
+        await db_session.refresh(album)
+        await db_session.refresh(track)
+        assert album.publishing_defaults == requested.model_dump()
+        assert track.download_policy == "open"
+    finally:
+        app.dependency_overrides.clear()
+
+
+async def test_concurrent_album_creation_does_not_accept_another_policy(
+    db_session: AsyncSession, published: tuple[Track, Session]
+) -> None:
+    _, session = published
+    original_flush = db_session.flush
+
+    async def concurrent_flush() -> None:
+        async with open_db_session() as competitor:
+            competitor.add(
+                Album(
+                    artist_did=session.did,
+                    slug="concurrent",
+                    title="Concurrent",
+                    publishing_defaults=PublishingDefaults().model_dump(),
+                )
+            )
+            await competitor.commit()
+        await original_flush()
+
+    async def owner() -> Session:
+        return session
+
+    async def request_db() -> AsyncSession:
+        return db_session
+
+    app.dependency_overrides[require_artist_profile] = owner
+    app.dependency_overrides[get_db] = request_db
+    try:
+        with patch.object(db_session, "flush", side_effect=concurrent_flush):
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as client:
+                response = await client.post(
+                    "/albums/",
+                    json={
+                        "title": "Concurrent",
+                        "publishing_defaults": PublishingDefaults(
+                            access=PublishingPolicy(downloads="off")
+                        ).model_dump(),
+                    },
+                )
+        assert response.status_code == 409
+        assert "retry" in response.json()["detail"]
+    finally:
+        app.dependency_overrides.clear()

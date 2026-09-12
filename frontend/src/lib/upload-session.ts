@@ -100,7 +100,7 @@ function detailOf(body: ErrorBody): string | null {
 	return body.detail == null || body.detail instanceof Object ? null : body.detail;
 }
 
-async function errorDetail(response: Response): Promise<string | null> {
+export async function errorDetail(response: Response): Promise<string | null> {
 	try {
 		const body: ErrorBody = await response.json();
 		return detailOf(body);

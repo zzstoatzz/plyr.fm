@@ -1,5 +1,6 @@
 """Album templates and explicit application to existing tracks."""
 
+import logging
 from typing import Annotated
 
 from fastapi import Depends, HTTPException
@@ -13,6 +14,8 @@ from backend.utilities.publishing import PublishingDefaults
 
 from .cache import invalidate_album_cache_by_id
 from .router import router
+
+logger = logging.getLogger(__name__)
 
 
 class AlbumPublishingChange(BaseModel):
@@ -58,9 +61,16 @@ async def change_album_publishing(
     album.publishing_defaults = body.settings.model_dump() if body.settings else None
     await db.commit()
     await invalidate_album_cache_by_id(db, album.id)
-    queued = await queue_publishing_change(
-        session, selected, settings, "album" if body.settings else "portal"
-    )
+    try:
+        queued = await queue_publishing_change(
+            session, selected, settings, "album" if body.settings else "portal"
+        )
+    except Exception as exc:
+        logger.exception("could not confirm album publishing job for %s", album.id)
+        raise HTTPException(
+            status_code=503,
+            detail="album defaults saved; track updates could not be confirmed. refresh before retrying.",
+        ) from exc
     return AlbumPublishingResponse(
         job_id=queued.job_id, selected_track_ids=selected, preserved_track_ids=preserved
     )

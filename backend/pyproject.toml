@@ -121,6 +121,9 @@ extend-select = [
     "UP",  # pyupgrade
 ]
 
+[tool.ruff.lint.isort]
+known-first-party = ["alembic"]
+
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401", "I001"]
 "tests/**/*.py" = ["S101"] # Allow assert in tests
@@ -128,10 +131,6 @@ extend-select = [
     "B008",
 ] # Allow Depends() and File() in FastAPI route defaults
 "src/backend/main.py" = ["E402"] # Need warnings filter before imports
-# the local alembic/ migrations dir makes ruff versions disagree on whether
-# `alembic` is first- or third-party, so import sorting here can never satisfy
-# both the pre-commit hook and the locked ruff
-"scripts/init_db.py" = ["I001"]
 
 [tool.coverage.run]
 source = ["src"]

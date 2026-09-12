@@ -1,4 +1,5 @@
 import { API_URL } from '$lib/config';
+import { errorDetail } from './upload-session';
 import type { PublishingDefaults } from '$lib/publishing';
 
 interface PublishingChange {
@@ -20,7 +21,9 @@ export async function changePublishing(path: string, change: PublishingChange): 
 		headers: { 'Content-Type': 'application/json' },
 		body: JSON.stringify(change)
 	});
-	if (!response.ok) throw new Error('could not start access change — retry');
+	if (!response.ok) {
+		throw new Error((await errorDetail(response)) ?? 'could not start access change — retry');
+	}
 	const queued: { job_id: string } = await response.json();
 	for (let attempt = 0; attempt < 450; attempt++) {
 		const progress = await fetch(`${API_URL}/tracks/publishing-jobs/${queued.job_id}`, {

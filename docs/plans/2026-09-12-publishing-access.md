@@ -382,3 +382,41 @@ from a separately authenticated listener against a unique artist-only rendition
 shows “only the artist can play this track,” no payment action and no new player.
 The signed-out path offers sign-in. Test identities and audio are disposable;
 the terms timestamp was seeded as fixture data, not accepted for a real account.
+
+### Album failure and concurrency review
+
+An album template is saved before its existing-track job is submitted. If job
+submission fails, the endpoint now reports that the template was saved but track
+updates could not be confirmed; the browser preserves that explanation instead
+of replacing it with a generic failure. It does not promise rollback across the
+database and queue. Artists refresh before retrying.
+
+Concurrent album creation now returns 409 rather than accepting a competing
+request's template. The regression inserts a competing album in a separate real
+database transaction between the request's lookup and flush. Normal existing-
+album reuse remains unchanged. The request can be retried against the winning
+row with its intended settings.
+
+Validation checkpoint: the complete backend suite passes 1,723 tests with 25
+pre-existing skips; backend lint passes. The frontend suite passes 254 tests in
+47 files; typecheck and lint pass. No staging deployment has occurred.
+
+### Remaining completion evidence
+
+| Requirement | Current evidence | Still needed |
+| --- | --- | --- |
+| Portal defaults and per-work exceptions | Local browser saves, album/track edits, persisted-policy tests | Remaining UI states and staging repeat |
+| Independent listening, downloads and rights | Storage selection, protected rendition, rights isolation and refusal tests; distinct-listener browser denial | Real staging upload/download and rights lifecycle |
+| Preserve native Space boundaries | Boundary refusal tests and live backend Space integration in CI | Browser consent/upload/playback/delete with real OAuth |
+| Protect originals | Local transcoder and S3-emulator smoke; endpoint refusal tests | Staging object permissions and owner recovery |
+| Understand blast radius | Read-only catalog inventory, migration test, explicit removed write fields | Confirm deployed migration and affected staging fixtures |
+| Review and stage the PR | PR #2049 plus review fixes; normal code checks pass | Companion approval/merge, resolve the PDS browser check, finish review, merge |
+| No production deployment | No release performed | Keep production unchanged |
+
+Existing-track jobs operate on the selected track IDs at submission. Per-track
+access writes are serialized; a later explicit edit may supersede an earlier operation.
+Protected copies and source revisions are retained because content can be shared;
+this is not a promise to erase previously public bytes or migrate into Spaces.
+
+Both album regressions fail against the previous source and pass after the fix.
+The frontend partial-save regression also fails before the response-detail fix.

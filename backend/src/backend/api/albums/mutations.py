@@ -114,14 +114,11 @@ async def create_album(
     try:
         await db.flush()
     except IntegrityError:
-        # concurrent create raced us — return the winning row
         await db.rollback()
-        retry_result = await db.execute(
-            select(Album).where(Album.artist_did == artist.did, Album.slug == slug)
-        )
-        album = retry_result.scalar_one()
-        track_count, total_plays = await _album_stats(db, album.id)
-        return await _album_metadata(album, artist, track_count, total_plays)
+        raise HTTPException(
+            status_code=409,
+            detail="album changed during creation; refresh and retry your settings",
+        ) from None
 
     await db.commit()
     await db.refresh(album)
