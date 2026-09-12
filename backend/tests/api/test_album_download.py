@@ -100,14 +100,16 @@ async def test_album_download_redirects_when_cached(
 
     mock_storage = MagicMock()
     mock_storage.object_exists = AsyncMock(return_value=True)
-    mock_storage.public_audio_bucket_url = "https://audio.example.com"
+    mock_storage.generate_download_url = AsyncMock(
+        return_value="https://private.example.com/signed-album"
+    )
     with patch("backend.api.albums.downloads.storage", mock_storage):
         response = await _download(test_app)
 
     assert response.status_code == 307
-    assert response.headers["location"].startswith(
-        "https://audio.example.com/exports/albums/"
-    )
+    assert response.headers["location"] == "https://private.example.com/signed-album"
+    assert mock_storage.generate_download_url.call_args.kwargs["private"] is True
+    assert mock_storage.object_exists.call_args.kwargs["private"] is True
 
 
 async def test_album_download_refuses_if_any_track_gated(
@@ -145,3 +147,18 @@ async def test_album_download_404_unknown_album(
 ):
     response = await _download(test_app, handle="nobody.bsky.social")
     assert response.status_code == 404
+
+
+async def test_cached_album_rechecks_track_policy(
+    test_app: FastAPI, db_session: AsyncSession
+) -> None:
+    _, tracks = await _make_album(db_session)
+    tracks[0].extra = {"download_policy": "off"}
+    await db_session.commit()
+    with patch(
+        "backend.api.albums.downloads.storage.object_exists",
+        AsyncMock(return_value=True),
+    ) as cached:
+        response = await _download(test_app)
+    assert response.status_code == 403
+    cached.assert_not_awaited()

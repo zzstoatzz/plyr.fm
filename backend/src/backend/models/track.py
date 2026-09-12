@@ -107,7 +107,7 @@ class Track(Base):
     # PDS blob storage (for audio stored on user's PDS)
     audio_storage: Mapped[str] = mapped_column(
         String, nullable=False, default="r2", server_default="r2"
-    )  # "r2" | "pds" | "both"
+    )  # "r2" | "r2_private" | "pds" | "both"
     pds_blob_cid: Mapped[str | None] = mapped_column(String, nullable=True)
     pds_blob_size: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
@@ -170,7 +170,7 @@ class Track(Base):
 
     @hybrid_property
     def is_private(self) -> bool:
-        """private (permissioned-space) media — owner-only, PDS-native."""
+        """private media — the Space authority admits readers."""
         return self.visibility == "private"
 
     @is_private.inplace.expression
@@ -208,6 +208,29 @@ class Track(Base):
             (cls.file_type != AudioFormat.MP3.value)
             & cls.original_file_id.isnot(None)
             & cls.original_file_type.isnot(None)
+        )
+
+    @hybrid_property
+    def uses_private_audio(self) -> bool:
+        """R2 location, including legacy gated rows."""
+        return self.audio_storage == "r2_private" or self.support_gate is not None
+
+    @uses_private_audio.inplace.expression
+    @classmethod
+    def _uses_private_audio_expr(cls) -> ColumnElement[bool]:
+        return (cls.audio_storage == "r2_private") | cls.support_gate.isnot(None)
+
+    @property
+    def download_policy(self) -> str | None:
+        return (self.extra or {}).get("download_policy")
+
+    @property
+    def needs_supporter_check(self) -> bool:
+        policy = self.download_policy or (
+            self.artist.preferences.download_policy if self.artist.preferences else None
+        )
+        return policy == "supporters" or bool(
+            self.support_gate and self.support_gate.get("type") != "copyright"
         )
 
     @property

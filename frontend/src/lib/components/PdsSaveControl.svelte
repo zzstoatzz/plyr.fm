@@ -29,7 +29,7 @@
 	let savableTrackCount = $derived(
 		tracks.filter(
 			(track) =>
-				!track.support_gate &&
+				!track.support_gate && track.audio_storage !== 'r2_private' &&
 				(track.audio_storage ?? 'r2') !== 'both' &&
 				!isOptimizing(track)
 		).length
@@ -37,7 +37,7 @@
 	let savedTrackCount = $derived(
 		tracks.filter((track) => ['both', 'pds'].includes(track.audio_storage ?? 'r2')).length
 	);
-	let gatedTrackCount = $derived(tracks.filter((track) => track.support_gate).length);
+	let gatedTrackCount = $derived(tracks.filter((track) => track.support_gate || track.audio_storage === 'r2_private').length);
 
 	onMount(() => {
 		if ($page.url.searchParams.get(DEEP_LINK_PARAM) !== DEEP_LINK_VALUE) return;
@@ -176,7 +176,7 @@
 					? 'your track'
 					: `all ${savedTrackCount} tracks`} live on your personal data server, with the CDN as fallback{gatedTrackCount >
 				0
-					? ` (${gatedTrackCount} gated ${gatedTrackCount === 1 ? 'track streams' : 'tracks stream'} through plyr.fm and ${gatedTrackCount === 1 ? "isn't" : "aren't"} mirrored)`
+					? ` (${gatedTrackCount} protected ${gatedTrackCount === 1 ? 'track streams' : 'tracks stream'} through plyr.fm and ${gatedTrackCount === 1 ? "isn't" : "aren't"} mirrored)`
 					: ''}
 			</p>
 		</div>

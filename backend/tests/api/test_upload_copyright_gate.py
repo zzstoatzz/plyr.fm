@@ -41,10 +41,10 @@ def _ctx(
     )
 
 
-@pytest.mark.parametrize("gate_type", ["copyright", "stream"])
+@pytest.mark.parametrize("gate_type", ["copyright", None])
 async def test_copyright_gate_does_not_require_atprotofans(
     db_session: AsyncSession,
-    gate_type: str,
+    gate_type: str | None,
 ) -> None:
     """the original bug: copyright-typed gate must pass validation without
     the user having atprotofans configured.
@@ -54,7 +54,8 @@ async def test_copyright_gate_does_not_require_atprotofans(
     await db_session.commit()
     # no UserPreferences row at all — definitely no atprotofans setup
 
-    ctx = _ctx(did, support_gate={"type": gate_type})
+    ctx = _ctx(did, support_gate={"type": gate_type} if gate_type else None)
+    ctx.private_audio = gate_type is None
     info = await _validate_audio(ctx)
     # validation must pass; the upload would continue into _store_audio
     assert info.is_gated is True

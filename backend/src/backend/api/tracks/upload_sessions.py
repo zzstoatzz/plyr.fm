@@ -239,7 +239,7 @@ async def finish_upload_session(
     features: Annotated[str | None, Form()] = None,
     tags: Annotated[str | None, Form()] = None,
     visibility: Annotated[str, Form()] = "public",
-    allow_downloads: Annotated[bool, Form()] = True,
+    download_policy: Annotated[str | None, Form()] = None,
     copyright: Annotated[str | None, Form()] = None,
     description: Annotated[str | None, Form()] = None,
     self_labels: Annotated[str | None, Form()] = None,
@@ -253,7 +253,7 @@ async def finish_upload_session(
     once nothing else can refuse the upload.
     """
     _, transfer = await _open_transfer(upload_id, auth_session.did)
-    meta = parse_upload_metadata(
+    meta = await parse_upload_metadata(
         auth_session,
         filename=transfer.filename,
         title=title,
@@ -266,7 +266,7 @@ async def finish_upload_session(
         description=description,
         self_labels=self_labels,
         auto_tag=auto_tag,
-        allow_downloads=allow_downloads,
+        download_policy=download_policy,
     )
     staged = _staged(upload_id, transfer)
 
@@ -317,6 +317,8 @@ async def finish_upload_session(
             image_url=image_url,
             thumbnail_url=thumbnail_url,
             support_gate=meta.support_gate,
+            private_audio=meta.private_audio,
+            download_policy=meta.download_policy,
             copyright_rights=meta.copyright_rights,
             auto_tag=meta.auto_tag,
             visibility=meta.visibility,

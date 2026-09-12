@@ -11,11 +11,13 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from backend._internal import get_optional_session
 from backend.main import app
 from backend.models import Artist, CopyrightScan, Track, UserPreferences
 from backend.schemas import TrackResponse
 from backend.storage.r2 import content_disposition
 from backend.utilities.downloads import download_filename
+from tests.api.track_audio_replace._helpers import MockSession
 
 
 @pytest.fixture
@@ -68,7 +70,9 @@ async def test_download_public_track_redirects_with_filename(
     assert response.status_code == 307
     assert response.headers["location"] == "https://r2.example.com/signed"
     mock_storage.generate_download_url.assert_awaited_once_with(
-        key="audio/aabbccddeeff0011.mp3", filename="Download Artist - My Song.mp3"
+        key="audio/aabbccddeeff0011.mp3",
+        filename="Download Artist - My Song.mp3",
+        private=False,
     )
 
 
@@ -89,11 +93,13 @@ async def test_download_prefers_lossless_original(
 
     assert response.status_code == 307
     mock_storage.generate_download_url.assert_awaited_once_with(
-        key="audio/ccddeeff00112233.flac", filename="Download Artist - My Song.flac"
+        key="audio/ccddeeff00112233.flac",
+        filename="Download Artist - My Song.flac",
+        private=False,
     )
 
 
-@pytest.mark.parametrize("gate_type", ["any", "copyright", "stream"])
+@pytest.mark.parametrize("gate_type", ["any", "copyright"])
 async def test_download_refuses_gated_track(
     test_app: FastAPI, db_session: AsyncSession, gate_type: str
 ) -> None:
@@ -327,8 +333,124 @@ async def test_no_support_link_defaults_policy_to_open(
 async def test_stream_track_is_playable_but_not_downloadable(
     test_app: FastAPI, db_session: AsyncSession
 ) -> None:
-    track = await _make_track(db_session, support_gate={"type": "stream"})
+    track = await _make_track(
+        db_session, audio_storage="r2_private", extra={"download_policy": "off"}
+    )
     response = await _response_for(db_session, track.id)
     assert response.visibility == "public"
     assert response.gated is False
     assert response.downloadable is False
+
+
+@pytest.mark.parametrize("path", ["", "/url", "/download"])
+async def test_protected_master_is_not_public_playback(
+    test_app: FastAPI, db_session: AsyncSession, path: str
+) -> None:
+    track = await _make_track(
+        db_session,
+        audio_storage="r2_private",
+        extra={"download_policy": "off"},
+        original_file_id="ccddeeff00112233",
+        original_file_type="flac",
+    )
+    with (
+        patch(
+            "backend.api.audio.storage.get_url",
+            AsyncMock(return_value="https://public.test/master"),
+        ),
+        patch(
+            "backend.api.audio.storage.generate_download_url",
+            AsyncMock(return_value="https://private.test/master"),
+        ),
+    ):
+        async with AsyncClient(
+            transport=ASGITransport(app=test_app), base_url="http://test"
+        ) as client:
+            response = await client.get(f"/audio/{track.original_file_id}{path}")
+    assert response.status_code == 403
+
+
+async def test_artist_recovers_protected_original(
+    test_app: FastAPI, db_session: AsyncSession
+) -> None:
+    track = await _make_track(
+        db_session,
+        audio_storage="r2_private",
+        extra={"download_policy": "off"},
+        original_file_id="ccddeeff00112233",
+        original_file_type="flac",
+    )
+    test_app.dependency_overrides[get_optional_session] = lambda: MockSession(
+        track.artist_did
+    )
+    try:
+        with patch(
+            "backend.api.audio.storage.generate_download_url",
+            AsyncMock(return_value="https://private.test/original"),
+        ) as sign:
+            response = await _download(test_app, track.file_id)
+        assert response.status_code == 307
+        sign.assert_awaited_once_with(
+            key="audio/ccddeeff00112233.flac",
+            filename="Download Artist - My Song.flac",
+            private=True,
+        )
+    finally:
+        test_app.dependency_overrides.pop(get_optional_session, None)
+
+
+@pytest.mark.parametrize(
+    "override,artist_policy,allowed",
+    [(None, "off", False), ("open", "off", True), ("off", "open", False)],
+)
+async def test_track_download_policy_overrides_artist_default(
+    test_app: FastAPI,
+    db_session: AsyncSession,
+    override: str | None,
+    artist_policy: str,
+    allowed: bool,
+) -> None:
+    track = await _make_track(
+        db_session, audio_storage="r2_private", extra={"download_policy": override}
+    )
+    db_session.add(UserPreferences(did=track.artist_did, download_policy=artist_policy))
+    await db_session.commit()
+    with patch(
+        "backend.api.audio.storage.generate_download_url",
+        AsyncMock(return_value="https://private.test/audio"),
+    ):
+        response = await _download(test_app, track.file_id)
+    metadata = await _response_for(db_session, track.id)
+    assert (response.status_code == 307) is allowed
+    assert metadata.downloadable is allowed
+    assert metadata.gated is False
+
+
+@pytest.mark.parametrize("is_supporter", [False, True])
+async def test_protected_supporter_download_uses_existing_verifier(
+    test_app: FastAPI, db_session: AsyncSession, is_supporter: bool
+) -> None:
+    track = await _make_track(
+        db_session, audio_storage="r2_private", extra={"download_policy": "supporters"}
+    )
+    test_app.dependency_overrides[get_optional_session] = lambda: MockSession(
+        "did:plc:listener"
+    )
+    try:
+        with (
+            patch(
+                "backend.api.audio.validate_supporter",
+                AsyncMock(return_value=MagicMock(valid=is_supporter)),
+            ),
+            patch(
+                "backend.api.audio.storage.generate_download_url",
+                AsyncMock(return_value="https://private.test/audio"),
+            ) as sign,
+        ):
+            response = await _download(test_app, track.file_id)
+        assert response.status_code == (307 if is_supporter else 403)
+        assert sign.await_count == int(is_supporter)
+        if is_supporter:
+            assert sign.call_args.kwargs["private"] is True
+    finally:
+        test_app.dependency_overrides.pop(get_optional_session, None)

@@ -16,7 +16,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 import backend.storage
 from backend._internal import Session, require_artist_profile
 from backend._internal.jobs import job_service
-from backend.api.tracks.uploads import UploadContext, _settle_staged_audio
+from backend.api.tracks.uploads import (
+    UploadContext,
+    _settle_staged_audio,
+    parse_upload_metadata,
+)
+from backend.models import Artist, UserPreferences
 from backend.models.job import JobStatus, JobType
 from backend.storage.keys import StagedUploadKey
 
@@ -83,9 +88,9 @@ def _send_parts(
 
 
 @pytest.mark.parametrize("visibility", ["public", "unlisted"])
-@pytest.mark.parametrize("allow_downloads", [True, False])
+@pytest.mark.parametrize("download_policy", ["open", "off"])
 def test_session_round_trip_enqueues_a_staged_upload(
-    artist_app: FastAPI, visibility: str, allow_downloads: bool
+    artist_app: FastAPI, visibility: str, download_policy: str
 ) -> None:
     with (
         TestClient(artist_app) as client,
@@ -109,7 +114,7 @@ def test_session_round_trip_enqueues_a_staged_upload(
             data={
                 "title": "song",
                 "visibility": visibility,
-                "allow_downloads": str(allow_downloads).lower(),
+                "download_policy": download_policy,
                 "tags": '["a"]',
             },
         )
@@ -120,7 +125,9 @@ def test_session_round_trip_enqueues_a_staged_upload(
     assert schedule.await_args is not None
     ctx: UploadContext = schedule.await_args.args[0]
     assert ctx.visibility == visibility
-    assert ctx.support_gate == (None if allow_downloads else {"type": "stream"})
+    assert ctx.support_gate is None
+    assert ctx.private_audio is (download_policy == "off")
+    assert ctx.download_policy == download_policy
     assert ctx.copyright_rights is None
     assert ctx.staged is True
     assert ctx.audio_file_id == ""
@@ -259,15 +266,18 @@ async def test_settle_promotes_staged_bytes_to_their_content_hash(
     assert staged.key not in storage.staged_objects
 
 
-@pytest.mark.parametrize("gate_type", ["any", "copyright", "stream"])
+@pytest.mark.parametrize("gate_type", ["any", "copyright", None])
 async def test_settle_gated_upload_lands_in_the_private_bucket(
     db_session: AsyncSession,
-    gate_type: str,
+    gate_type: str | None,
 ) -> None:
     storage = _mock_storage()
     staged = StagedUploadKey(upload_id="u-gated", extension="wav")
     storage.staged_objects[staged.key] = _AUDIO
-    ctx = _staged_ctx("u-gated", support_gate={"type": gate_type})
+    ctx = _staged_ctx(
+        "u-gated", support_gate={"type": gate_type} if gate_type else None
+    )
+    ctx.private_audio = gate_type is None
 
     await _settle_staged_audio(ctx)
 
@@ -341,3 +351,37 @@ def _staged_ctx(
         visibility=visibility,
         staged=True,
     )
+
+
+@pytest.mark.parametrize(
+    "override,expected_private", [(None, True), ("open", False), ("off", True)]
+)
+async def test_upload_storage_resolves_artist_download_default(
+    db_session: AsyncSession, override: str | None, expected_private: bool
+) -> None:
+    session = _ArtistSession("did:test:inherit-downloads")
+    db_session.add(
+        Artist(did=session.did, handle=session.handle, display_name="Artist")
+    )
+    await db_session.flush()
+    db_session.add(UserPreferences(did=session.did, download_policy="off"))
+    await db_session.commit()
+    meta = await parse_upload_metadata(
+        session,
+        filename="song.mp3",
+        title="Song",
+        album=None,
+        album_id=None,
+        features=None,
+        tags=None,
+        visibility="public",
+        copyright=None,
+        description=None,
+        self_labels=None,
+        auto_tag=None,
+        download_policy=override,
+    )
+    assert meta.private_audio is expected_private
+    assert meta.support_gate is None
+    assert meta.download_policy == override
+    assert meta.visibility == "public"

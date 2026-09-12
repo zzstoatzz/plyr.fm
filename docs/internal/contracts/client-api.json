@@ -5510,10 +5510,16 @@
             "title": "Visibility",
             "default": "public"
           },
-          "allow_downloads": {
-            "type": "boolean",
-            "title": "Allow Downloads",
-            "default": true
+          "download_policy": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Download Policy"
           },
           "copyright": {
             "anyOf": [
@@ -5826,10 +5832,16 @@
             "description": "one of: public | unlisted | supporters | private. supporters = atprotofans-gated; private = PDS permissioned space (requires a PDS supporting com.atproto.space.*).",
             "default": "public"
           },
-          "allow_downloads": {
-            "type": "boolean",
-            "title": "Allow Downloads",
-            "default": true
+          "download_policy": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Download Policy"
           },
           "copyright": {
             "anyOf": [

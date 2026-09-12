@@ -90,6 +90,7 @@ class _AudioState:
     interim_file_type: str
     created_at: datetime
     is_gated: bool
+    audio_storage: str = "r2"
 
 
 @dataclass
@@ -155,7 +156,8 @@ async def _load_audio_state(track_id: int) -> _AudioState | None:
             interim_file_id=track.file_id,
             interim_file_type=track.file_type,
             created_at=track.created_at,
-            is_gated=track.support_gate is not None,
+            is_gated=track.uses_private_audio,
+            audio_storage=track.audio_storage,
         )
 
 
@@ -252,7 +254,9 @@ async def _commit_optimize_swap(
                 file_id=sr.file_id,
                 file_type=OPTIMIZE_TARGET_FORMAT,
                 r2_url=sr.r2_url,
-                audio_storage="both" if has_pds_blob else "r2",
+                audio_storage="r2_private"
+                if state.audio_storage == "r2_private"
+                else ("both" if has_pds_blob else "r2"),
                 pds_blob_cid=pds_result.cid if pds_result else None,
                 pds_blob_size=pds_result.size if pds_result else None,
                 atproto_record_cid=new_record_cid,

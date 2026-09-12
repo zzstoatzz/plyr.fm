@@ -51,7 +51,8 @@ async def save_audio_to_pds(
         select(Track.id)
         .where(
             Track.artist_did == session.did,
-            Track.support_gate.is_(None),
+            ~Track.uses_private_audio,
+            ~Track.is_private,
             Track.pds_blob_cid.is_(None),
             Track.file_id.isnot(None),
         )

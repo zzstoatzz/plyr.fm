@@ -13,9 +13,13 @@ from pathlib import Path
 import aioboto3
 import aiofiles
 import logfire
+from atproto_oauth.security import get_hardened_async_client
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
+from backend._internal import get_session
+from backend._internal.atproto.client import pds_blob_url
+from backend._internal.atproto.spaces.client import open_space_blob
 from backend._internal.background import get_docket
 from backend._internal.jobs import job_service
 from backend.config import settings
@@ -32,7 +36,9 @@ from backend.utilities.progress import R2ProgressTracker
 logger = logging.getLogger(__name__)
 
 
-async def process_export(export_id: str, artist_did: str) -> None:
+async def process_export(
+    export_id: str, artist_did: str, session_id: str | None = None
+) -> None:
     """process a media export in the background.
 
     downloads all tracks for the given artist concurrently, zips them,
@@ -51,6 +57,7 @@ async def process_export(export_id: str, artist_did: str) -> None:
         async with db_session() as db:
             stmt = (
                 select(Track)
+                .options(selectinload(Track.artist))
                 .where(Track.artist_did == artist_did)
                 .order_by(Track.created_at)
             )
@@ -163,15 +170,60 @@ async def process_export(export_id: str, artist_did: str) -> None:
                 async with semaphore:
                     track = info["track"]
                     try:
-                        response = await s3_client.get_object(
-                            Bucket=storage.audio_bucket_name,
-                            Key=info["key"],
-                        )
-
-                        # stream to disk in chunks
-                        async with aiofiles.open(info["temp_path"], "wb") as f:
-                            async for chunk in response["Body"].iter_chunks():
-                                await f.write(chunk)
+                        if track.audio_storage == "pds" and not track.original_file_id:
+                            if not track.pds_blob_cid:
+                                raise RuntimeError("PDS audio has no blob")
+                            if track.is_private:
+                                owner_session = (
+                                    await get_session(session_id)
+                                    if session_id
+                                    else None
+                                )
+                                if (
+                                    owner_session is None
+                                    or owner_session.did != artist_did
+                                    or not track.space_uri
+                                ):
+                                    raise RuntimeError(
+                                        "sign in again to export Space audio"
+                                    )
+                                async with (
+                                    open_space_blob(
+                                        owner_session,
+                                        space=track.space_uri,
+                                        repo=artist_did,
+                                        cid=track.pds_blob_cid,
+                                    ) as response,
+                                    aiofiles.open(info["temp_path"], "wb") as f,
+                                ):
+                                    async for chunk in response.aiter_bytes():
+                                        await f.write(chunk)
+                            else:
+                                if not track.artist.pds_url:
+                                    raise RuntimeError("PDS host unavailable")
+                                url = pds_blob_url(
+                                    track.artist.pds_url, artist_did, track.pds_blob_cid
+                                )
+                                async with (
+                                    get_hardened_async_client() as client,
+                                    client.stream("GET", url) as response,
+                                ):
+                                    response.raise_for_status()
+                                    async with aiofiles.open(
+                                        info["temp_path"], "wb"
+                                    ) as f:
+                                        async for chunk in response.aiter_bytes():
+                                            await f.write(chunk)
+                        else:
+                            response = await s3_client.get_object(
+                                Bucket=storage.private_audio_bucket_name
+                                if track.uses_private_audio
+                                else storage.audio_bucket_name,
+                                Key=info["key"],
+                            )
+                            async with aiofiles.open(info["temp_path"], "wb") as f:
+                                async for chunk in response["Body"].iter_chunks():
+                                    await f.write(chunk)
 
                         # update progress
                         async with download_lock:
@@ -227,6 +279,10 @@ async def process_export(export_id: str, artist_did: str) -> None:
 
             # filter out failed downloads
             successful_downloads = [r for r in results if r is not None]
+            if len(successful_downloads) != len(tracks):
+                raise RuntimeError(
+                    "some originals could not be retrieved; retry the export"
+                )
 
             # create zip file from downloaded tracks (sequential - zipfile not thread-safe)
             await job_service.update_progress(
@@ -281,7 +337,7 @@ async def process_export(export_id: str, artist_did: str) -> None:
                     with open(zip_path, "rb") as zip_file_obj:
                         await upload_client.upload_fileobj(
                             zip_file_obj,
-                            storage.audio_bucket_name,
+                            storage.private_audio_bucket_name,
                             r2_key,
                             ExtraArgs={
                                 "ContentType": "application/zip",
@@ -304,7 +360,10 @@ async def process_export(export_id: str, artist_did: str) -> None:
                 raise
 
             # get download URL
-            download_url = f"{storage.public_audio_bucket_url}/{r2_key}"
+            download_url = (
+                settings.atproto.redirect_uri.rsplit("/", 2)[0]
+                + f"/exports/{export_id}/download"
+            )
 
             # mark as completed
             await job_service.update_progress(
@@ -315,6 +374,8 @@ async def process_export(export_id: str, artist_did: str) -> None:
                     "processed_count": processed,
                     "total_count": len(tracks),
                     "download_url": download_url,
+                    "r2_key": r2_key,
+                    "filename": download_filename,
                 },
             )
 
@@ -332,16 +393,20 @@ async def process_export(export_id: str, artist_did: str) -> None:
 
 
 async def process_album_download(
-    job_id: str, track_ids: list[int], r2_key: str, zip_filename: str
+    job_id: str,
+    track_ids: list[int],
+    r2_key: str,
+    zip_filename: str,
+    download_path: str | None = None,
 ) -> None:
-    """build a public album zip and cache it in R2 under a content-digest key.
+    """build a private album zip and cache it under a content-digest key.
 
     sibling of `process_export` with two deliberate differences: entries are
     ZIP_STORED (audio is already compressed — deflate burns worker CPU for
     nothing), and the destination key encodes a digest of the member tracks,
     so an edited album naturally builds a fresh object while the old one is
     swept below. eligibility (no gated/labeled/opted-out tracks) is enforced
-    by the API endpoint before this job is ever enqueued.
+    by the API endpoint both before enqueueing and when releasing the ZIP.
     """
     try:
         await job_service.update_progress(
@@ -407,7 +472,10 @@ async def process_album_download(
                 async with semaphore:
                     try:
                         response = await s3_client.get_object(
-                            Bucket=storage.audio_bucket_name, Key=info["key"]
+                            Bucket=storage.private_audio_bucket_name
+                            if info["track"].uses_private_audio
+                            else storage.audio_bucket_name,
+                            Key=info["key"],
                         )
                         async with aiofiles.open(info["temp_path"], "wb") as f:
                             async for chunk in response["Body"].iter_chunks():
@@ -468,7 +536,7 @@ async def process_album_download(
                 with open(zip_path, "rb") as zip_file_obj:
                     await upload_client.upload_fileobj(
                         zip_file_obj,
-                        storage.audio_bucket_name,
+                        storage.private_audio_bucket_name,
                         r2_key,
                         ExtraArgs={
                             "ContentType": "application/zip",
@@ -481,16 +549,16 @@ async def process_album_download(
                 # sweep stale digests for this album so edits don't accrete zips
                 prefix = r2_key.rsplit("-", 1)[0] + "-"
                 listing = await upload_client.list_objects_v2(
-                    Bucket=storage.audio_bucket_name, Prefix=prefix
+                    Bucket=storage.private_audio_bucket_name, Prefix=prefix
                 )
                 for obj in listing.get("Contents", []):
                     if obj["Key"] != r2_key:
                         await upload_client.delete_object(
-                            Bucket=storage.audio_bucket_name, Key=obj["Key"]
+                            Bucket=storage.private_audio_bucket_name, Key=obj["Key"]
                         )
                         logfire.info("swept stale album zip", key=obj["Key"])
 
-        download_url = f"{storage.public_audio_bucket_url}/{r2_key}"
+        download_url = download_path
         await job_service.update_progress(
             job_id,
             JobStatus.COMPLETED,
@@ -509,16 +577,24 @@ async def process_album_download(
 
 
 async def schedule_album_download(
-    job_id: str, track_ids: list[int], r2_key: str, zip_filename: str
+    job_id: str,
+    track_ids: list[int],
+    r2_key: str,
+    zip_filename: str,
+    download_path: str | None = None,
 ) -> None:
     """schedule an album zip build via docket."""
     docket = get_docket()
-    await docket.add(process_album_download)(job_id, track_ids, r2_key, zip_filename)
+    await docket.add(process_album_download)(
+        job_id, track_ids, r2_key, zip_filename, download_path=download_path
+    )
     logfire.info("scheduled album download", job_id=job_id, r2_key=r2_key)
 
 
-async def schedule_export(export_id: str, artist_did: str) -> None:
+async def schedule_export(
+    export_id: str, artist_did: str, session_id: str | None = None
+) -> None:
     """schedule an export via docket."""
     docket = get_docket()
-    await docket.add(process_export)(export_id, artist_did)
+    await docket.add(process_export)(export_id, artist_did, session_id=session_id)
     logfire.info("scheduled export", export_id=export_id)

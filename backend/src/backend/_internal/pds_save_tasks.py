@@ -158,7 +158,7 @@ async def save_tracks_to_pds(
                         skipped_count += 1
                         return
 
-                    if track.support_gate is not None:
+                    if track.is_private or track.uses_private_audio:
                         skipped_count += 1
                         return
 

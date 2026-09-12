@@ -85,7 +85,7 @@
 	const VISIBILITIES = ['public', 'unlisted', 'supporters', 'private'] as const;
 	type Visibility = (typeof VISIBILITIES)[number];
 	let visibility = $state<Visibility>('public');
-	let allowDownloads = $state(true);
+	let downloadPolicy = $state('');
 
 	function parseVisibility(raw: string | undefined): Visibility {
 		return VISIBILITIES.find((option) => option === raw) ?? 'public';
@@ -274,7 +274,7 @@
 			autoTag = false;
 			sensitiveAudio = false;
 			visibility = 'public';
-			allowDownloads = true;
+			downloadPolicy = '';
 			copyrightEnabled = false;
 			copyrightRights = {};
 
@@ -332,7 +332,7 @@
 			undefined, // albumId
 			copyrightToSend,
 			uploadSelfLabels,
-			(uploadVisibility === 'public' || uploadVisibility === 'unlisted') && !copyrightEnabled ? allowDownloads : true,
+			(uploadVisibility === 'public' || uploadVisibility === 'unlisted') && !copyrightEnabled ? downloadPolicy : '',
 		);
 	}
 
@@ -564,7 +564,7 @@
 
 			<VisibilityPicker
 				bind:visibility
-				bind:allowDownloads
+				bind:downloadPolicy
 				supportUrl={artistProfile?.support_url}
 				showPrivate={permissionedSupported}
 				restrictedToPublic={copyrightEnabled}

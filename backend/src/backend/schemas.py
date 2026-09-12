@@ -257,7 +257,7 @@ class TrackResponse(BaseModel):
             if gate_type == "copyright":
                 # copyright tracks just need any authenticated listener
                 gated = not viewer_did
-            elif gate_type != "stream":
+            else:
                 is_owner = viewer_did and viewer_did == track.artist_did
                 is_supporter = (
                     supported_artist_dids and track.artist_did in supported_artist_dids
@@ -292,7 +292,8 @@ class TrackResponse(BaseModel):
         # selectin-loads prefs)
         artist_prefs = track.artist.preferences
         download_policy = effective_download_policy(
-            artist_prefs.download_policy if artist_prefs else None,
+            track.download_policy
+            or (artist_prefs.download_policy if artist_prefs else None),
             artist_prefs.support_url if artist_prefs else None,
         )
         downloadable = (

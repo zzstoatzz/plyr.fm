@@ -886,10 +886,12 @@ class TestAudioPdsRedirect:
         assert f"cid={gated_pds_track.pds_blob_cid}" in location
 
 
-async def test_stream_gate_allows_anonymous_playback(
+async def test_private_r2_allows_anonymous_playback(
     test_app: FastAPI, gated_track: Track, db_session: AsyncSession
 ) -> None:
-    gated_track.support_gate = {"type": "stream"}
+    gated_track.support_gate = None
+    gated_track.audio_storage = "r2_private"
+    gated_track.extra = {"download_policy": "off"}
     await db_session.commit()
     signed_url = "https://private.example/audio.mp3?signature=test"
     with patch(

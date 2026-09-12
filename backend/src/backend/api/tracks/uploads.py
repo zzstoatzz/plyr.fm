@@ -75,6 +75,7 @@ from backend.storage.keys import AudioKey, StagedUploadKey
 from backend.utilities.audio import extract_duration, is_alac
 from backend.utilities.audio_formats import AudioFormat
 from backend.utilities.database import db_session
+from backend.utilities.downloads import DOWNLOAD_POLICIES
 from backend.utilities.hashing import CHUNK_SIZE, hash_file_chunked
 from backend.utilities.progress import R2ProgressTracker
 from backend.utilities.rate_limit import limiter
@@ -136,6 +137,8 @@ class UploadContext:
 
     # supporter-gated content (e.g., {"type": "any"} or {"type": "copyright"})
     support_gate: dict | None = None
+    download_policy: str | None = None
+    private_audio: bool = False
 
     # indiemusi rights metadata, written as song + recording records after PDS
     # publish. when set, the upload is treated as copyright-gated (audio lives
@@ -686,7 +689,7 @@ async def _settle_staged_audio(ctx: UploadContext) -> None:
                 ctx.audio_file_id = file_id
                 await storage.delete_staged(staged)
             else:
-                is_gated = ctx.support_gate is not None
+                is_gated = ctx.private_audio or ctx.support_gate is not None
                 await storage.promote_staged(
                     staged,
                     AudioKey.for_file(file_id, ctx.audio_extension),
@@ -718,7 +721,7 @@ async def _validate_audio(ctx: UploadContext) -> AudioInfo:
     if not audio_format:
         raise UploadPhaseError(f"unsupported file type: .{ctx.audio_extension}")
 
-    is_gated = ctx.support_gate is not None
+    is_gated = ctx.private_audio or ctx.support_gate is not None
     # the atprotofans requirement applies ONLY to supporter-gated tracks
     # (support_gate.type == "any"). copyright-typed gates use the same
     # private-storage pipeline but have a different access policy (any
@@ -1013,7 +1016,11 @@ async def _create_records(
             extra["album"] = ctx.album
 
         has_pds_blob = pds_result and pds_result.cid is not None
-        audio_storage = "both" if has_pds_blob else "r2"
+        audio_storage = (
+            "r2_private" if ctx.private_audio else ("both" if has_pds_blob else "r2")
+        )
+        if ctx.download_policy is not None:
+            extra["download_policy"] = ctx.download_policy
 
         artist_display_name = artist.display_name
 
@@ -1285,7 +1292,7 @@ async def _cleanup_staged_media_pre_db(
     if ctx.private:
         return
 
-    is_gated = ctx.support_gate is not None
+    is_gated = ctx.private_audio or ctx.support_gate is not None
 
     if sr is not None and sr.transcode_info is not None:
         # transcode produced a new sibling. both sibling and staged source
@@ -1465,6 +1472,8 @@ async def run_track_upload(
     visibility: str = "public",
     needs_transcode: bool = False,
     staged: bool = False,
+    download_policy: str | None = None,
+    private_audio: bool = False,
     concurrency: ConcurrencyLimit = ConcurrencyLimit("artist_did", max_concurrent=3),
 ) -> None:
     """docket task entry point for track uploads.
@@ -1511,7 +1520,7 @@ async def run_track_upload(
             await _delete_staged_audio(
                 audio_file_id,
                 Path(filename).suffix.lower().lstrip(".") or None,
-                gated=support_gate is not None,
+                gated=private_audio or support_gate is not None,
             )
         if image_id:
             with contextlib.suppress(Exception):
@@ -1542,6 +1551,8 @@ async def run_track_upload(
         image_url=image_url,
         thumbnail_url=thumbnail_url,
         support_gate=support_gate,
+        private_audio=private_audio,
+        download_policy=download_policy,
         copyright_rights=copyright_rights,
         auto_tag=auto_tag,
         visibility=visibility,
@@ -1585,6 +1596,8 @@ async def schedule_track_upload(ctx: UploadContext) -> None:
         image_url=ctx.image_url,
         thumbnail_url=ctx.thumbnail_url,
         support_gate=ctx.support_gate,
+        private_audio=ctx.private_audio,
+        download_policy=ctx.download_policy,
         copyright_rights=ctx.copyright_rights,
         auto_tag=ctx.auto_tag,
         visibility=ctx.visibility,
@@ -1619,6 +1632,8 @@ class UploadMetadata:
     support_gate: dict | None
     copyright_rights: dict | None
     auto_tag: bool
+    download_policy: str | None = None
+    private_audio: bool = False
 
     @property
     def is_private(self) -> bool:
@@ -1626,10 +1641,10 @@ class UploadMetadata:
 
     @property
     def is_gated(self) -> bool:
-        return self.support_gate is not None
+        return self.private_audio or self.support_gate is not None
 
 
-def parse_upload_metadata(
+async def parse_upload_metadata(
     auth_session: AuthSession,
     *,
     filename: str | None,
@@ -1643,7 +1658,7 @@ def parse_upload_metadata(
     description: str | None,
     self_labels: str | None,
     auto_tag: str | None,
-    allow_downloads: bool = True,
+    download_policy: str | None = None,
 ) -> UploadMetadata:
     """validate upload form fields; raises HTTPException with the user-facing detail."""
     if album and album_id:
@@ -1711,13 +1726,22 @@ def parse_upload_metadata(
                 ),
             )
 
-    if not allow_downloads:
+    if download_policy is not None:
+        if download_policy not in DOWNLOAD_POLICIES:
+            raise HTTPException(status_code=400, detail="invalid download policy")
         if visibility not in ("public", "unlisted") or copyright:
             raise HTTPException(
                 status_code=400,
-                detail="allow_downloads applies to public or unlisted tracks without copyright metadata",
+                detail="download policy applies to public or unlisted tracks without copyright metadata",
             )
-        support_gate = {"type": "stream"}
+    async with db_session() as db:
+        prefs = await db.get(UserPreferences, auth_session.did)
+        policy = download_policy or (prefs.download_policy if prefs else None)
+        if policy == "supporters" and (not prefs or prefs.support_url != "atprotofans"):
+            raise HTTPException(
+                status_code=400, detail="supporter downloads require atprotofans"
+            )
+    private_audio = policy in ("off", "supporters") and not is_private
 
     return UploadMetadata(
         title=title,
@@ -1733,6 +1757,8 @@ def parse_upload_metadata(
         support_gate=support_gate,
         copyright_rights=copyright_rights,
         auto_tag=auto_tag == "true",
+        download_policy=download_policy,
+        private_audio=private_audio,
     )
 
 
@@ -1782,7 +1808,7 @@ async def upload_track(
             "(requires a PDS supporting com.atproto.space.*)."
         ),
     ] = "public",
-    allow_downloads: Annotated[bool, Form()] = True,
+    download_policy: Annotated[str | None, Form()] = None,
     copyright: Annotated[
         str | None,
         Form(
@@ -1826,7 +1852,7 @@ async def upload_track(
     if not file.filename:
         raise HTTPException(status_code=400, detail="no filename provided")
     filename = file.filename
-    meta = parse_upload_metadata(
+    meta = await parse_upload_metadata(
         auth_session,
         filename=filename,
         title=title,
@@ -1839,7 +1865,7 @@ async def upload_track(
         description=description,
         self_labels=self_labels,
         auto_tag=auto_tag,
-        allow_downloads=allow_downloads,
+        download_policy=download_policy,
     )
     visibility = meta.visibility
     audio_format = meta.audio_format
@@ -1863,7 +1889,7 @@ async def upload_track(
     upload_id = await job_service.create_job(
         JobType.UPLOAD, auth_session.did, "upload queued for processing"
     )
-    is_gated = parsed_support_gate is not None
+    is_gated = meta.is_gated
     audio_extension = ext.lstrip(".") or None
 
     file_path: str | None = None
@@ -1980,6 +2006,8 @@ async def upload_track(
             image_url=image_url,
             thumbnail_url=thumbnail_url,
             support_gate=parsed_support_gate,
+            private_audio=meta.private_audio,
+            download_policy=meta.download_policy,
             copyright_rights=parsed_copyright,
             auto_tag=auto_tag == "true",
             visibility=visibility,

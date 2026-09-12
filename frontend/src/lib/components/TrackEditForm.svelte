@@ -163,7 +163,7 @@
 
 		formData.append('tags', JSON.stringify(editTags));
 
-		if (!editCopyrightEnabled && !editCopyrightWasEnabled && track.support_gate?.type !== 'stream') {
+		if (!editCopyrightEnabled && !editCopyrightWasEnabled) {
 			if (editSupportGate) {
 				formData.append('support_gate', JSON.stringify({ type: 'any' }));
 			} else {

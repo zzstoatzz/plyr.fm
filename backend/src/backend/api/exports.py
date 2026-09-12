@@ -16,6 +16,7 @@ from backend._internal.export_tasks import schedule_export
 from backend._internal.jobs import job_service
 from backend.models import Track, get_db
 from backend.models.job import JobStatus, JobType
+from backend.storage import storage
 
 router = APIRouter(prefix="/exports", tags=["exports"])
 logger = logging.getLogger(__name__)
@@ -53,7 +54,7 @@ async def export_media(
     )
 
     # schedule background processing via docket (or asyncio fallback)
-    await schedule_export(export_id, session.did)
+    await schedule_export(export_id, session.did, session_id=session.session_id)
 
     return ExportStartResponse(
         export_id=export_id,
@@ -133,4 +134,10 @@ async def download_export(
     if not job.result or "download_url" not in job.result:
         raise HTTPException(status_code=500, detail="export url not found")
 
+    if "r2_key" in job.result:
+        return RedirectResponse(
+            url=await storage.generate_download_url(
+                key=job.result["r2_key"], filename=job.result["filename"], private=True
+            )
+        )
     return RedirectResponse(url=job.result["download_url"])

@@ -13,7 +13,9 @@ async def test_schedule_export_uses_docket() -> None:
     """schedule_export should add task to docket."""
     calls: list[tuple[str, str]] = []
 
-    async def mock_schedule(export_id: str, artist_did: str) -> None:
+    async def mock_schedule(
+        export_id: str, artist_did: str, session_id: str | None = None
+    ) -> None:
         calls.append((export_id, artist_did))
 
     mock_docket = MagicMock()

@@ -9,6 +9,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, patch
 
+import pytest
 from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -189,12 +190,15 @@ class TestReplaceOrchestration:
         # second positional arg is album_id (after session_id)
         assert mocks["schedule_album_sync"].call_args.args[1] == album_id
 
+    @pytest.mark.parametrize("private_source", [False, True])
     async def test_gated_track_record_uses_backend_audio_url(
-        self, db_session: AsyncSession, owner: Artist
+        self, db_session: AsyncSession, owner: Artist, private_source: bool
     ) -> None:
         """gated tracks must not write a public R2 URL into the ATProto record;
         they need the auth-protected `/audio/{file_id}` redirect endpoint."""
-        track = make_track(support_gate={"type": "any"})
+        track = make_track(support_gate=None if private_source else {"type": "any"})
+        track.audio_storage = "r2_private" if private_source else "r2"
+        track.extra = {"download_policy": "off"} if private_source else {}
         db_session.add(track)
         await db_session.commit()
         await db_session.refresh(track)
@@ -211,15 +215,19 @@ class TestReplaceOrchestration:
         with patched_replace_pipeline(
             validate=audio_info(is_gated=True),
             store=storage_result(file_id="NEW", r2_url=None),  # gated → r2_url=None
-            pds=None,  # gated tracks skip PDS upload
+            pds=pds_result(cid=None, size=None),
             update_record_side_effect=fake_update_record,
         ):
             await _process_replace_background(replace_ctx(track_id=track_id))
 
         # the recorded audioUrl points at /audio/{file_id}, not at R2
         assert captured_record["audioUrl"].endswith("/audio/NEW")
-        assert "supportGate" in captured_record
-        assert captured_record["supportGate"] == {"type": "any"}
+        assert captured_record.get("supportGate") == (
+            None if private_source else {"type": "any"}
+        )
+        await db_session.refresh(track)
+        assert track.audio_storage == ("r2_private" if private_source else "r2")
+        assert track.download_policy == ("off" if private_source else None)
 
     async def test_pds_record_preserves_original_created_at(
         self, db_session: AsyncSession, owner: Artist

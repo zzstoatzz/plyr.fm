@@ -14,6 +14,7 @@ if TYPE_CHECKING:
 class StorageProtocol(Protocol):
     """interface for media storage backends."""
 
+    private_audio_bucket_name: str
     audio_bucket_name: str
     image_bucket_name: str
     public_audio_bucket_url: str
@@ -126,7 +127,7 @@ class StorageProtocol(Protocol):
         expires_in: int | None = None,
     ) -> str: ...
 
-    async def object_exists(self, key: str) -> bool:
+    async def object_exists(self, key: str, *, private: bool = False) -> bool:
         """whether an audio-bucket object exists at this raw key."""
         ...
 
@@ -135,6 +136,7 @@ class StorageProtocol(Protocol):
         *,
         key: str,
         filename: str,
+        private: bool = False,
         expires_in: int | None = None,
     ) -> str:
         """presigned public-bucket URL that downloads as ``filename``.

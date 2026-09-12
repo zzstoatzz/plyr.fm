@@ -127,9 +127,16 @@ async def stream_audio(
     serving_original = file_id == original_file_id and original_file_type is not None
     serve_file_id = file_id if serving_original else track_file_id
     serve_file_type = original_file_type if serving_original else file_type
+    if (
+        serving_original
+        and file_id != track_file_id
+        and (audio_storage == "r2_private" or support_gate is not None)
+    ):
+        authorized_download = await download_audio(file_id=file_id, session=session)
+        return Response(status_code=200) if is_head_request else authorized_download
 
     # check if track is gated
-    if support_gate is not None:
+    if support_gate is not None or audio_storage == "r2_private":
         return await _handle_gated_audio(
             file_id=serve_file_id,
             file_type=serve_file_type,
@@ -175,14 +182,10 @@ async def _check_gate_access(
 ) -> None:
     """raise HTTPException if `session` may not stream a track with this gate.
 
-    gate shape: `{"type": "any" | "copyright" | "stream"}`.
+    gate shape: `{"type": "any" | "copyright"}`.
     - "any" (atprotofans supporter-gated): artist or validated supporter
     - "copyright" (indiemusi paradigm): any authenticated listener
-    - "stream": any listener; files stay in private storage
     """
-    if gate.get("type") == "stream":
-        return
-
     if not session:
         raise HTTPException(
             status_code=401,
@@ -215,7 +218,7 @@ async def _handle_gated_audio(
     file_type: str,
     artist_did: str,
     session: Session | None,
-    support_gate: dict,
+    support_gate: dict | None,
     is_head_request: bool = False,
     audio_storage: str = "r2",
     pds_blob_cid: str | None = None,
@@ -228,13 +231,14 @@ async def _handle_gated_audio(
     for HEAD requests (used for pre-flight auth checks), returns 200 status
     without redirecting to avoid CORS issues with cross-origin redirects.
     """
-    await _check_gate_access(support_gate, session, artist_did)
+    if support_gate is not None:
+        await _check_gate_access(support_gate, session, artist_did)
 
     if is_head_request:
         return Response(status_code=200)
 
     # artist always sees their own track; otherwise we already validated above
-    if session is not None and session.did != artist_did:
+    if support_gate is not None and session is not None and session.did != artist_did:
         logfire.info(
             "serving gated content",
             file_id=file_id,
@@ -288,6 +292,7 @@ async def download_audio(
                 Track.artist_did,
                 Artist.display_name,
                 UserPreferences.download_policy,
+                Track.extra,
                 UserPreferences.support_url,
             )
             .join(Artist, Artist.did == Track.artist_did)
@@ -301,7 +306,9 @@ async def download_audio(
         if not row:
             raise HTTPException(status_code=404, detail="audio file not found")
 
-    policy = effective_download_policy(row.download_policy, row.support_url)
+    policy = effective_download_policy(
+        (row.extra or {}).get("download_policy") or row.download_policy, row.support_url
+    )
     viewer_is_artist = session is not None and session.did == row.artist_did
     viewer_is_supporter = False
     if policy == "supporters" and session is not None and not viewer_is_artist:
@@ -360,7 +367,11 @@ async def download_audio(
         raise HTTPException(status_code=404, detail="no downloadable file")
 
     filename = download_filename(row.display_name, row.title, key.extension)
-    url = await storage.generate_download_url(key=key.key, filename=filename)
+    url = await storage.generate_download_url(
+        key=key.key,
+        filename=filename,
+        private=row.audio_storage == "r2_private" or row.support_gate is not None,
+    )
     return RedirectResponse(url=url)
 
 
@@ -432,10 +443,22 @@ async def get_audio_url(
     serving_original = file_id == original_file_id and original_file_type is not None
     serve_file_id = file_id if serving_original else track_file_id
     serve_file_type = original_file_type if serving_original else file_type
+    if (
+        serving_original
+        and file_id != track_file_id
+        and (audio_storage == "r2_private" or support_gate is not None)
+    ):
+        authorized_download = await download_audio(file_id=file_id, session=session)
+        return AudioUrlResponse(
+            url=authorized_download.headers["location"],
+            file_id=file_id,
+            file_type=serve_file_type,
+        )
 
     # check if track is gated
-    if support_gate is not None:
-        await _check_gate_access(support_gate, session, artist_did)
+    if support_gate is not None or audio_storage == "r2_private":
+        if support_gate is not None:
+            await _check_gate_access(support_gate, session, artist_did)
 
         # PDS-backed gated tracks: return PDS blob URL
         if audio_storage == "pds" and pds_blob_cid:

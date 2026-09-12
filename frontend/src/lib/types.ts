@@ -68,7 +68,7 @@ export interface Track {
 	original_file_id?: string | null; // original file hash if transcoded
 	original_file_type?: string | null; // original format if transcoded (e.g., aiff, flac)
 	description?: string | null; // track description (liner notes, show notes)
-	audio_storage?: 'r2' | 'pds' | 'both'; // where audio is stored
+	audio_storage?: 'r2' | 'r2_private' | 'pds' | 'both'; // where audio is stored
 	pds_blob_cid?: string | null; // CID if stored on user's PDS
 	is_optimizing?: boolean; // deferred mp3 optimize still pending (server-computed)
 	unlisted?: boolean; // excluded from discovery feeds

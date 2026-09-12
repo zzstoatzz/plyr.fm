@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, patch
 
+import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
@@ -298,18 +299,30 @@ class TestListRevisionsEndpoint:
 class TestRestoreEndpoint:
     """POST /tracks/{id}/revisions/{revision_id}/restore"""
 
+    @pytest.mark.parametrize("private_source", [False, True])
     async def test_restore_swaps_audio_and_publishes_record(
         self,
         test_app_owner: FastAPI,
         db_session: AsyncSession,
         owner: Artist,
+        private_source: bool,
     ) -> None:
         track = make_track(file_id="CURRENT", duration=200)
+        track.audio_storage = "r2_private" if private_source else "r2"
+        if private_source:
+            track.r2_url = None
+            track.extra = {"duration": 200, "download_policy": "off"}
         db_session.add(track)
         await db_session.commit()
         await db_session.refresh(track)
 
-        revision = _add_revision(track.id, file_id="OLD", duration=120)
+        revision = _add_revision(
+            track.id,
+            file_id="OLD",
+            duration=120,
+            was_gated=private_source,
+            audio_storage="r2_private" if private_source else "r2",
+        )
         db_session.add(revision)
         await db_session.commit()
         await db_session.refresh(revision)
@@ -335,6 +348,11 @@ class TestRestoreEndpoint:
         assert track.file_id == "OLD"
         assert track.atproto_record_cid == "bafyRESTORED"
         assert track.extra["duration"] == 120
+        assert track.audio_storage == ("r2_private" if private_source else "r2")
+        if private_source:
+            assert track.download_policy == "off"
+            assert track.r2_url is None
+            assert track.support_gate is None
 
         # the chosen revision row was deleted (its content is now current).
         # expire the session so the SELECT goes to the DB rather than the

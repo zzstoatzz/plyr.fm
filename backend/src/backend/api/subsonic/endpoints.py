@@ -10,7 +10,7 @@ from collections.abc import Awaitable, Callable, Mapping
 from typing import Any
 
 from atproto_oauth.scopes import ScopesSet
-from fastapi import Request, Response
+from fastapi import HTTPException, Request, Response
 from fastapi.responses import RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -23,6 +23,7 @@ from backend._internal.content_labels import (
 )
 from backend._internal.tasks import schedule_teal_scrobble
 from backend._internal.track_visibility import visible_filter
+from backend.api.audio import download_audio
 from backend.api.lists.playlists import _can_view, _read_playlist_items
 from backend.api.subsonic.auth import authenticate
 from backend.api.subsonic.responses import (
@@ -286,6 +287,19 @@ async def get_song(request: Request) -> Response:
 
 
 @_rest("download")
+async def download(request: Request) -> Response:
+    async def impl(session: Session, params: Params) -> Response:
+        track = await _track_by_id(params, session)
+        try:
+            response = await download_audio(file_id=track.file_id, session=session)
+        except HTTPException as exc:
+            raise SubsonicError(ERROR_NOT_AUTHORIZED, str(exc.detail)) from exc
+        response.status_code = 302
+        return response
+
+    return await _run(request, impl)
+
+
 @_rest("stream")
 async def stream(request: Request) -> Response:
     async def impl(session: Session, params: Params) -> Response:

@@ -88,12 +88,12 @@ def download_refusal(
     """
     if is_private:
         return "private"
-    if support_gate is not None:
+    if support_gate is not None and not viewer_is_artist:
         return "gated"
     if has_copyright_label(labels) and moderation_override != "allow":
         return "copyright"
     policy = download_policy or "open"  # tolerate unresolved None as open
-    if policy == "off":
+    if policy == "off" and not viewer_is_artist:
         return "artist_opt_out"
     if policy == "supporters" and not (viewer_is_artist or viewer_is_supporter):
         return "supporters_only"

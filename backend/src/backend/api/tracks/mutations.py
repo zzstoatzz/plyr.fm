@@ -243,7 +243,11 @@ async def update_track_metadata(
         was_gated = track.support_gate is not None
         if support_gate.lower() == "null" or support_gate == "":
             # removing gating - need to move file back to public if it was gated
-            if was_gated and track.r2_url is None:
+            if (
+                was_gated
+                and track.r2_url is None
+                and track.audio_storage != "r2_private"
+            ):
                 move_to_private = False
             track.support_gate = None
             # keep visibility consistent: dropping the supporter gate returns the
@@ -373,7 +377,7 @@ async def update_track_metadata(
             updated_tags.add(tag_name)
 
     # always update ATProto record if any metadata changed
-    support_gate_changed = move_to_private is not None
+    support_gate_changed = support_gate is not None
     metadata_changed = (
         title_changed
         or description_changed

@@ -39,7 +39,7 @@ max_lines = 850
 
 [[rules]]
 path = "backend/src/backend/api/tracks/uploads.py"
-max_lines = 2090
+max_lines = 2118
 
 [[rules]]
 path = "backend/src/backend/config.py"
@@ -47,11 +47,11 @@ max_lines = 1266
 
 [[rules]]
 path = "backend/src/backend/storage/r2.py"
-max_lines = 1184
+max_lines = 1187
 
 [[rules]]
 path = "backend/tests/api/test_audio.py"
-max_lines = 912
+max_lines = 914
 
 [[rules]]
 path = "backend/tests/api/test_albums.py"
@@ -255,7 +255,7 @@ max_lines = 1086
 
 [[rules]]
 path = "backend/src/backend/api/tracks/audio_replace.py"
-max_lines = 840
+max_lines = 852
 
 [[rules]]
 path = "backend/tests/conftest.py"
@@ -263,11 +263,11 @@ max_lines = 666
 
 [[rules]]
 path = "backend/tests/api/track_audio_replace/test_pipeline.py"
-max_lines = 612
+max_lines = 620
 
 [[rules]]
 path = "backend/tests/api/track_audio_replace/test_revisions.py"
-max_lines = 705
+max_lines = 723
 
 [[rules]]
 path = "frontend/src/routes/embed/track/[[]id[]]/+page.svelte"
@@ -303,11 +303,11 @@ max_lines = 649
 
 [[rules]]
 path = "backend/tests/test_post_create_hooks.py"
-max_lines = 523
+max_lines = 542
 
 [[rules]]
 path = "backend/tests/api/test_audio_optimize.py"
-max_lines = 923
+max_lines = 927
 
 [[rules]]
 path = "frontend/src/lib/components/portal/TracksSection.svelte"
@@ -371,11 +371,11 @@ max_lines = 1182
 
 [[rules]]
 path = "backend/src/backend/api/audio.py"
-max_lines = 552
+max_lines = 568
 
 [[rules]]
 path = "backend/src/backend/_internal/export_tasks.py"
-max_lines = 524
+max_lines = 600
 
 [[rules]]
 path = "frontend/src/lib/components/TrackComments.svelte"
@@ -399,7 +399,7 @@ max_lines = 527
 
 [[rules]]
 path = "docs/internal/contracts/client-api.json"
-max_lines = 8290
+max_lines = 8302
 
 [[rules]]
 path = "frontend/src/lib/components/TrackEditForm.svelte"
