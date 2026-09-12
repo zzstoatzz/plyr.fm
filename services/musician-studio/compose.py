@@ -20,6 +20,7 @@ from pydantic import BaseModel, Field
 
 from studio.context import history_context, musical_identity
 from studio.identity import Inspiration, Musician, Taste
+from studio.render_process import RenderError, run_renderer
 from studio.state import Store
 
 ROOT = Path(__file__).parent
@@ -293,13 +294,10 @@ def render(code: str, output: Path) -> dict:
             "plyr-musician-python:local",
         ]
         try:
-            subprocess.run(
-                command,
-                timeout=30,
-                check=True,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-            )
+            run_renderer(command)
+        except RenderError as error:
+            (output / "render-error.txt").write_text(str(error))
+            raise
         finally:
             subprocess.run(
                 ["docker", "rm", "-f", container],
