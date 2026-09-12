@@ -359,7 +359,7 @@ def _staged_ctx(
     "override,expected_private", [(None, True), ("open", False), ("off", True)]
 )
 @pytest.mark.parametrize("rights", [None, "{}"])
-@pytest.mark.parametrize("source", ["portal", "album"])
+@pytest.mark.parametrize("source", ["portal", "album", "album_name"])
 async def test_upload_storage_resolves_artist_download_default(
     db_session: AsyncSession,
     override: str | None,
@@ -379,7 +379,7 @@ async def test_upload_storage_resolves_artist_download_default(
     )
     await db_session.commit()
     album = None
-    if source == "album":
+    if source in ("album", "album_name"):
         album = Album(
             artist_did=session.did,
             title="Album",
@@ -392,8 +392,8 @@ async def test_upload_storage_resolves_artist_download_default(
         session,
         filename="song.mp3",
         title="Song",
-        album=None,
-        album_id=album.id if album else None,
+        album=album.title if album and source == "album_name" else None,
+        album_id=album.id if album and source == "album" else None,
         features=None,
         tags=None,
         publishing=json.dumps({"access": {"downloads": override}})
@@ -407,5 +407,7 @@ async def test_upload_storage_resolves_artist_download_default(
     assert meta.private_audio is expected_private
     assert meta.support_gate is None
     assert meta.download_policy == (override or ("supporters" if album else "off"))
-    assert meta.policy_origin == ("track" if override else source)
+    assert meta.policy_origin == (
+        "track" if override else "album" if album else "portal"
+    )
     assert meta.visibility == "public"

@@ -79,6 +79,7 @@ from backend.utilities.hashing import CHUNK_SIZE, hash_file_chunked
 from backend.utilities.progress import R2ProgressTracker
 from backend.utilities.publishing import PublishingDefaults, resolve_publishing
 from backend.utilities.rate_limit import limiter
+from backend.utilities.slugs import slugify
 from backend.utilities.tags import add_tags_to_track, parse_tags_json
 
 from .router import router
@@ -1689,6 +1690,13 @@ async def parse_upload_metadata(
                 prefs.publishing_defaults if prefs else {}
             )
             album_row = await db.get(Album, album_id) if album_id else None
+            if album and album_row is None:
+                album_row = await db.scalar(
+                    select(Album).where(
+                        Album.artist_did == auth_session.did,
+                        Album.slug == slugify(album),
+                    )
+                )
             if album_id and (
                 album_row is None or album_row.artist_did != auth_session.did
             ):
