@@ -420,3 +420,31 @@ this is not a promise to erase previously public bytes or migrate into Spaces.
 
 Both album regressions fail against the previous source and pass after the fix.
 The frontend partial-save regression also fails before the response-detail fix.
+
+### Local browser matrix and audience lifecycle checkpoint
+
+The populated track editor was inspected at 390px and 1280px in both light and
+dark themes, with the access disclosure open and discovery controls expanded.
+Its card aligns with the surrounding album/featured-artist fields and has space
+before content notice and audio history. Controls scroll above the save bar.
+The “use album defaults” action saved policy origin `album`, cleared the owner
+listening gate and kept downloads off with `r2_private` storage. Reopening the
+editor showed “saved from album defaults.”
+
+The populated album editor and saved-result state were inspected at the same
+widths and themes. Controls, exception checkbox, apply button, result and tracks
+heading have separate spacing. Applying signed-in listening with an explicit
+owner-only track exception preserved that exception and updated the other
+track. Checking “also replace 1 track override” then updated both tracks; the
+result reported two updates and the database confirmed both album origins.
+A separate local listener loaded the protected MP3 (readyState 4, duration two
+seconds, no media error).
+
+Finally, the owner applied public listening with downloads off to both fixtures.
+After confirmed browser sign-out, anonymous playback of the unique rendition
+`ac9eb7089cde4452` reached readyState 4 with no media error. Anonymous requests
+for its original `9f4f915dd71755bb` returned 403 for both playback and download;
+the rendition's download endpoint also returned 403. Both fixture rows retain
+`r2_private` storage. These are local fixture checks against the S3 emulator,
+not real R2, PDS publication or staging evidence. Recording preview, upload
+matrix cells and deployed checks remain outstanding.
