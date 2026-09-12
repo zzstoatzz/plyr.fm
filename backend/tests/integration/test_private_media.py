@@ -104,7 +104,15 @@ async def test_private_track_upload_playback_and_delete_live_zds(
                     headers=headers,
                     data={
                         "title": title,
-                        "visibility": "private",
+                        "publishing": json.dumps(
+                            {
+                                "access": {
+                                    "listening": "space",
+                                    "downloads": "off",
+                                    "visibility": "private",
+                                }
+                            }
+                        ),
                         "tags": json.dumps(["integration-test", "private-media"]),
                     },
                     files={"file": (drone_a4.name, audio, "audio/wav")},

@@ -332,3 +332,15 @@ Removed the unused `previously_public` extra flag; source revisions retain histo
 The client update is prepared locally with 51 passing interface tests; separate
 permission to publish/merge it has been requested. No redesign PR or deployment
 has occurred yet, and authenticated staging verification remains outstanding.
+
+### Signed-out playback regression
+
+The local browser selected a protected FLAC original because the shared player
+preferred browser-playable lossless sources. This returned 403 for anonymous
+listeners even though the work allowed public listening. Protected tracks now
+select the playback rendition and bypass previously cached file URLs so current
+server authorization runs. The regression fails without the rendition-selection
+fix. Retest after signing out: browser requested the MP3 rendition (307), decoded
+the two-second audio with readyState 4 and no media error, and recorded a listen
+(200). Anonymous original and download requests remained 403. Local telemetry
+proxy 500s reflect the deliberately disabled Logfire setup, not playback failures.

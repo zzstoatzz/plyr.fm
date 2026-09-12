@@ -50,6 +50,8 @@ export interface GatedError {
  * and the prefetcher (next track) so the cache key agrees.
  */
 export function pickFileIdForTrack(track: Track): string {
+	if (track.audio_storage === 'r2_private' || track.support_gate || track.publishing?.access.visibility === 'private')
+		return track.file_id;
 	if (track.original_file_id && hasPlayableLossless(track.original_file_type)) {
 		return track.original_file_id;
 	}
@@ -117,7 +119,7 @@ export async function resolveAudioSource(
 	// Adult-labeled audio must always pass through the backend's current
 	// preference check. A blob cached before the label was applied must not
 	// become a permanent authorization bypass.
-	if (!hasAdultLabel) {
+	if (!hasAdultLabel && track.audio_storage !== 'r2_private' && !track.support_gate && track.publishing?.access.visibility !== 'private') {
 		try {
 			const cachedUrl = await getCachedAudioUrl(fileIdUsed);
 			if (cachedUrl) {
