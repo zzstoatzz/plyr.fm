@@ -344,3 +344,17 @@ fix. Retest after signing out: browser requested the MP3 rendition (307), decode
 the two-second audio with readyState 4 and no media error, and recorded a listen
 (200). Anonymous original and download requests remained 403. Local telemetry
 proxy 500s reflect the deliberately disabled Logfire setup, not playback failures.
+
+### Portal load failure review
+
+Profile saving now requires both the artist profile and publishing defaults to
+load successfully. A failed preferences read previously left the initial public
+policy available to save; the form now disables saving and offers a retry. The
+component regression fails against the previous source and passes with the guard.
+Frontend validation: 248 tests across 45 files; typecheck and lint pass.
+
+Local browser checks also saved public listening with downloads off and inspected
+the Portal controls at 390px in dark and light themes and 1280px in light theme.
+The expanded discovery controls, save button and following share-links section
+have distinct spacing and align with their parent form. These remain local
+checks, not evidence of staging deployment or real R2 permissions.

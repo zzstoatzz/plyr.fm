@@ -21,44 +21,49 @@
 	let publishingDefaults = $state(defaultPublishing());
 	let customSupportUrl = $state('');
 	let savingProfile = $state(false);
+	let settingsLoaded = $state(false);
+	let loadError = $state(false);
 
 	async function loadArtistProfile() {
+		settingsLoaded = false;
+		loadError = false;
 		try {
 			const [artistRes, prefsRes] = await Promise.all([
 				fetch(`${API_URL}/artists/me`, { credentials: 'include' }),
 				fetch(`${API_URL}/preferences/`, { credentials: 'include' })
 			]);
 
-			if (artistRes.ok) {
-				const artist = await artistRes.json();
-				displayName = artist.display_name;
-				bio = artist.bio || '';
-				avatarUrl = artist.avatar_url || '';
-			}
+			if (!artistRes.ok || !prefsRes.ok) throw new Error('profile settings unavailable');
 
-			if (prefsRes.ok) {
-				const prefs = await prefsRes.json();
-				publishingDefaults = parsePublishing(JSON.stringify(prefs.publishing_defaults));
-				// parse support_url into mode + custom URL
-				const url = prefs.support_url || '';
-				if (!url) {
-					supportLinkMode = 'none';
-					customSupportUrl = '';
-				} else if (url === 'atprotofans') {
-					supportLinkMode = 'atprotofans';
-					customSupportUrl = '';
-				} else {
-					supportLinkMode = 'custom';
-					customSupportUrl = url;
-				}
+			const artist = await artistRes.json();
+			displayName = artist.display_name;
+			bio = artist.bio || '';
+			avatarUrl = artist.avatar_url || '';
+
+			const prefs = await prefsRes.json();
+			publishingDefaults = parsePublishing(JSON.stringify(prefs.publishing_defaults));
+			// parse support_url into mode + custom URL
+			const url = prefs.support_url || '';
+			if (!url) {
+				supportLinkMode = 'none';
+				customSupportUrl = '';
+			} else if (url === 'atprotofans') {
+				supportLinkMode = 'atprotofans';
+				customSupportUrl = '';
+			} else {
+				supportLinkMode = 'custom';
+				customSupportUrl = url;
 			}
+			settingsLoaded = true;
 		} catch (_e) {
+			loadError = true;
 			console.error('failed to load artist profile:', _e);
 		}
 	}
 
 	async function saveProfile(e: SubmitEvent) {
 		e.preventDefault();
+		if (!settingsLoaded) return;
 		savingProfile = true;
 
 		try {
@@ -253,11 +258,15 @@
 				bind:value={publishingDefaults}
 				showSpace={auth.user?.permissioned_spaces?.supported ?? false}
 				showRights={auth.user?.enabled_flags?.includes(COPYRIGHT_PARADIGM_FLAG) ?? false}
-				disabled={savingProfile}
+				disabled={savingProfile || !settingsLoaded}
 			/>
 		</div>
 
-		<button type="submit" disabled={savingProfile || !displayName}>
+		{#if loadError}
+			<p role="alert">could not load your saved settings. retry before saving.</p>
+			<button type="button" onclick={() => void loadArtistProfile()}>retry loading settings</button>
+		{/if}
+		<button type="submit" disabled={savingProfile || !settingsLoaded || !displayName}>
 			{savingProfile ? 'saving...' : 'save profile'}
 		</button>
 	</form>
