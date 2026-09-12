@@ -93,10 +93,11 @@ async def test_download_prefers_lossless_original(
     )
 
 
+@pytest.mark.parametrize("gate_type", ["any", "copyright", "stream"])
 async def test_download_refuses_gated_track(
-    test_app: FastAPI, db_session: AsyncSession
-):
-    track = await _make_track(db_session, support_gate={"type": "any"})
+    test_app: FastAPI, db_session: AsyncSession, gate_type: str
+) -> None:
+    track = await _make_track(db_session, support_gate={"type": gate_type})
     response = await _download(test_app, track.file_id)
     assert response.status_code == 403
 
@@ -321,3 +322,13 @@ async def test_no_support_link_defaults_policy_to_open(
     resp = await _response_for(db_session, track.id)
     assert resp.downloadable is True
     assert resp.download_policy == "open"
+
+
+async def test_stream_track_is_playable_but_not_downloadable(
+    test_app: FastAPI, db_session: AsyncSession
+) -> None:
+    track = await _make_track(db_session, support_gate={"type": "stream"})
+    response = await _response_for(db_session, track.id)
+    assert response.visibility == "public"
+    assert response.gated is False
+    assert response.downloadable is False

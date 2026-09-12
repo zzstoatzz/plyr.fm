@@ -106,7 +106,7 @@
 		editSupportGate =
 			track.support_gate !== null &&
 			track.support_gate !== undefined &&
-			track.support_gate.type !== 'copyright';
+			track.support_gate.type === 'any';
 		editUnlisted = track.unlisted ?? false;
 		editSelfLabels = [...(track.self_labels ?? [])];
 
@@ -163,7 +163,7 @@
 
 		formData.append('tags', JSON.stringify(editTags));
 
-		if (!editCopyrightEnabled && !editCopyrightWasEnabled) {
+		if (!editCopyrightEnabled && !editCopyrightWasEnabled && track.support_gate?.type !== 'stream') {
 			if (editSupportGate) {
 				formData.append('support_gate', JSON.stringify({ type: 'any' }));
 			} else {

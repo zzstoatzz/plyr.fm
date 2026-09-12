@@ -82,7 +82,10 @@ def _send_parts(
         assert resp.json()["part_number"] == n
 
 
-def test_session_round_trip_enqueues_a_staged_upload(artist_app: FastAPI) -> None:
+@pytest.mark.parametrize("visibility", ["public", "stream"])
+def test_session_round_trip_enqueues_a_staged_upload(
+    artist_app: FastAPI, visibility: str
+) -> None:
     with (
         TestClient(artist_app) as client,
         patch(
@@ -102,7 +105,7 @@ def test_session_round_trip_enqueues_a_staged_upload(artist_app: FastAPI) -> Non
         _send_parts(client, upload_id)
         resp = client.post(
             f"/tracks/uploads/{upload_id}/finish",
-            data={"title": "song", "visibility": "public", "tags": '["a"]'},
+            data={"title": "song", "visibility": visibility, "tags": '["a"]'},
         )
         assert resp.status_code == 200, resp.text
         assert resp.json()["upload_id"] == upload_id
@@ -110,6 +113,9 @@ def test_session_round_trip_enqueues_a_staged_upload(artist_app: FastAPI) -> Non
     schedule.assert_awaited_once()
     assert schedule.await_args is not None
     ctx: UploadContext = schedule.await_args.args[0]
+    assert ctx.visibility == "public"
+    assert ctx.support_gate == ({"type": "stream"} if visibility == "stream" else None)
+    assert ctx.copyright_rights is None
     assert ctx.staged is True
     assert ctx.audio_file_id == ""
     assert ctx.filename == "song.wav"
@@ -247,13 +253,15 @@ async def test_settle_promotes_staged_bytes_to_their_content_hash(
     assert staged.key not in storage.staged_objects
 
 
+@pytest.mark.parametrize("gate_type", ["any", "copyright", "stream"])
 async def test_settle_gated_upload_lands_in_the_private_bucket(
     db_session: AsyncSession,
+    gate_type: str,
 ) -> None:
     storage = _mock_storage()
     staged = StagedUploadKey(upload_id="u-gated", extension="wav")
     storage.staged_objects[staged.key] = _AUDIO
-    ctx = _staged_ctx("u-gated", support_gate={"type": "any"})
+    ctx = _staged_ctx("u-gated", support_gate={"type": gate_type})
 
     await _settle_staged_audio(ctx)
 

@@ -1594,7 +1594,7 @@ async def schedule_track_upload(ctx: UploadContext) -> None:
     )
 
 
-_VISIBILITIES = frozenset({"public", "unlisted", "supporters", "private"})
+_VISIBILITIES = frozenset({"public", "unlisted", "supporters", "private", "stream"})
 
 
 @dataclass(frozen=True)
@@ -1671,7 +1671,7 @@ def parse_upload_metadata(
 
     copyright_rights: dict | None = None
     if copyright:
-        if visibility in ("supporters", "private"):
+        if visibility in ("supporters", "private", "stream"):
             raise HTTPException(
                 status_code=400,
                 detail=f"copyright cannot combine with {visibility} visibility",
@@ -1709,6 +1709,10 @@ def parse_upload_metadata(
                     f"({ext} needs transcoding); convert to mp3/wav/m4a/flac first"
                 ),
             )
+
+    if visibility == "stream":
+        visibility = "public"
+        support_gate = {"type": "stream"}
 
     return UploadMetadata(
         title=title,
@@ -1768,9 +1772,9 @@ async def upload_track(
     visibility: Annotated[
         str,
         Form(
-            description="one of: public | unlisted | supporters | private. "
+            description="one of: public | unlisted | supporters | private | stream. "
             "supporters = atprotofans-gated; private = PDS permissioned space "
-            "(requires a PDS supporting com.atproto.space.*)."
+            "(requires a PDS supporting com.atproto.space.*); stream = public listening, private files."
         ),
     ] = "public",
     copyright: Annotated[
@@ -1830,6 +1834,7 @@ async def upload_track(
         self_labels=self_labels,
         auto_tag=auto_tag,
     )
+    visibility = meta.visibility
     audio_format = meta.audio_format
     is_private = meta.is_private
     parsed_support_gate = meta.support_gate

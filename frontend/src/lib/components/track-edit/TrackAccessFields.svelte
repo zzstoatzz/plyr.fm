@@ -46,7 +46,9 @@
 <details class="advanced-section">
 	<summary>visibility &amp; access</summary>
 	<div class="advanced-content">
-		{#if atprotofansEligible || (track.support_gate && track.support_gate.type !== 'copyright')}
+		{#if track.support_gate?.type === 'stream'}
+			<p class="field-hint">public listening, private files — downloads are off.</p>
+		{:else if atprotofansEligible || track.support_gate?.type === 'any'}
 			<div class="edit-field-group access-field">
 				<span class="edit-label">supporter access</span>
 				<label class="toggle-row">
@@ -114,7 +116,7 @@
 		</div>
 	</div>
 </details>
-{#if auth.user?.enabled_flags?.includes(COPYRIGHT_PARADIGM_FLAG)}
+{#if track.support_gate?.type !== 'stream' && auth.user?.enabled_flags?.includes(COPYRIGHT_PARADIGM_FLAG)}
 	<details class="advanced-section">
 		<summary>rights &amp; licensing</summary>
 		<div class="advanced-content">

@@ -175,10 +175,14 @@ async def _check_gate_access(
 ) -> None:
     """raise HTTPException if `session` may not stream a track with this gate.
 
-    gate shape: `{"type": "any" | "copyright"}`.
+    gate shape: `{"type": "any" | "copyright" | "stream"}`.
     - "any" (atprotofans supporter-gated): artist or validated supporter
     - "copyright" (indiemusi paradigm): any authenticated listener
+    - "stream": any listener; files stay in private storage
     """
+    if gate.get("type") == "stream":
+        return
+
     if not session:
         raise HTTPException(
             status_code=401,

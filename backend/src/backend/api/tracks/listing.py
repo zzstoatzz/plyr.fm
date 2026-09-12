@@ -229,7 +229,7 @@ async def list_tracks(
             and t.artist_did != viewer_did
             and (
                 not isinstance(t.support_gate, dict)
-                or t.support_gate.get("type") != "copyright"
+                or t.support_gate.get("type") not in ("copyright", "stream")
             )
         }
         if gated_artist_dids:
@@ -442,7 +442,7 @@ async def list_top_tracks(
             and t.artist_did != viewer_did
             and (
                 not isinstance(t.support_gate, dict)
-                or t.support_gate.get("type") != "copyright"
+                or t.support_gate.get("type") not in ("copyright", "stream")
             )
         }
         if gated_artist_dids:

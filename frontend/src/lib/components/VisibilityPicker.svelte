@@ -3,7 +3,7 @@
 	 * The one "visibility & access" choice, shared by /upload and /record so
 	 * both surfaces describe the same options in the same words.
 	 */
-	export type Visibility = 'public' | 'unlisted' | 'supporters' | 'private';
+	export type Visibility = 'public' | 'unlisted' | 'supporters' | 'private' | 'stream';
 
 	interface Props {
 		/** the selected visibility. */
@@ -101,6 +101,14 @@
 					private
 				</span>
 				<span class="access-note">{privateNote ?? defaultPrivateNote}</span>
+			</span>
+		</label>
+	{:else}
+		<label class="access-row" class:unavailable={restrictedToPublic}>
+			<input type="radio" bind:group={visibility} value="stream" disabled={restrictedToPublic} />
+			<span class="access-body">
+				<span class="access-title">public listening, private files</span>
+				<span class="access-note">appears in feeds; anyone can listen. downloads are off and your audio stays with plyr.fm.</span>
 			</span>
 		</label>
 	{/if}

@@ -82,7 +82,7 @@
 	// visibility/access — one mutually-exclusive choice:
 	//   public | unlisted | supporters | private
 	// "private" is only offered when the PDS supports com.atproto.space.* (/auth/me).
-	const VISIBILITIES = ['public', 'unlisted', 'supporters', 'private'] as const;
+	const VISIBILITIES = ['public', 'unlisted', 'supporters', 'private', 'stream'] as const;
 	type Visibility = (typeof VISIBILITIES)[number];
 	let visibility = $state<Visibility>('public');
 

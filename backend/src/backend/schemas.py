@@ -257,7 +257,7 @@ class TrackResponse(BaseModel):
             if gate_type == "copyright":
                 # copyright tracks just need any authenticated listener
                 gated = not viewer_did
-            else:
+            elif gate_type != "stream":
                 is_owner = viewer_did and viewer_did == track.artist_did
                 is_supporter = (
                     supported_artist_dids and track.artist_did in supported_artist_dids
