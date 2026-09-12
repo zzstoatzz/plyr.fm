@@ -17,6 +17,8 @@
 		const canvas = within(canvasElement);
 		const downloads = canvas.getByRole('combobox', { name: 'downloads' });
 		await expect(downloads).toHaveValue('');
+			await userEvent.selectOptions(downloads, 'supporters');
+			await expect(downloads).toHaveValue('supporters');
 		await userEvent.selectOptions(downloads, 'off');
 		await expect(downloads).toHaveValue('off');
 		await expect(canvas.getByRole('radio', { name: /^public / })).toBeChecked();

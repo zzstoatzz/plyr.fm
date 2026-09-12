@@ -115,9 +115,7 @@
 			<option value="">use artist settings</option>
 			<option value="open">allow downloads</option>
 			<option value="ask">ask for support</option>
-			{#if supportUrl === 'atprotofans'}
-				<option value="supporters">supporters can download</option>
-			{/if}
+			<option value="supporters">supporters can download</option>
 			<option value="off">downloads off</option>
 		</select>
 		<span class="access-note">downloads off keeps audio with plyr.fm while anyone can listen. use artist settings follows your download preference.</span>

@@ -105,9 +105,7 @@ async def _maybe_delete_blob(
     """delete blobs owned by us if no live row still references them.
 
     PDS-only audio (audio_storage="pds") lives on the user's PDS — we never
-    delete those. for "r2" or "both" audio, the playable file is in our
-    storage and we own it. transcode originals always live in the public
-    bucket regardless of gating (gated tracks can't be lossless yet).
+    delete those. R2 renditions and originals use the snapshot's bucket.
     """
     if revision.audio_storage == "pds":
         return  # not ours to delete
@@ -132,13 +130,15 @@ async def _maybe_delete_blob(
                 revision.was_gated,
             )
 
-    # transcode original: always public bucket
+    # Originals use the same bucket as their rendition.
     if (
         revision.original_file_id
         and revision.original_file_id not in in_use_original_file_ids
     ):
         try:
-            await storage.delete(revision.original_file_id, revision.original_file_type)
+            await (storage.delete_gated if revision.was_gated else storage.delete)(
+                revision.original_file_id, revision.original_file_type
+            )
         except Exception:
             logger.exception(
                 "failed to delete pruned revision original (file_id=%s)",

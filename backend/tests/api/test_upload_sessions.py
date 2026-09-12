@@ -88,7 +88,7 @@ def _send_parts(
 
 
 @pytest.mark.parametrize("visibility", ["public", "unlisted"])
-@pytest.mark.parametrize("download_policy", ["open", "off"])
+@pytest.mark.parametrize("download_policy", ["open", "off", "supporters"])
 def test_session_round_trip_enqueues_a_staged_upload(
     artist_app: FastAPI, visibility: str, download_policy: str
 ) -> None:
@@ -126,7 +126,7 @@ def test_session_round_trip_enqueues_a_staged_upload(
     ctx: UploadContext = schedule.await_args.args[0]
     assert ctx.visibility == visibility
     assert ctx.support_gate is None
-    assert ctx.private_audio is (download_policy == "off")
+    assert ctx.private_audio is (download_policy in ("off", "supporters"))
     assert ctx.download_policy == download_policy
     assert ctx.copyright_rights is None
     assert ctx.staged is True

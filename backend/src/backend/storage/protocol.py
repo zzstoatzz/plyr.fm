@@ -139,7 +139,7 @@ class StorageProtocol(Protocol):
         private: bool = False,
         expires_in: int | None = None,
     ) -> str:
-        """presigned public-bucket URL that downloads as ``filename``.
+        """presigned URL from the selected bucket that downloads as ``filename``.
 
         the attachment disposition is carried by the signed
         ``response-content-disposition`` param, so the object itself and its

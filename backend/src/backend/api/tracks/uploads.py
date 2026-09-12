@@ -1737,10 +1737,6 @@ async def parse_upload_metadata(
     async with db_session() as db:
         prefs = await db.get(UserPreferences, auth_session.did)
         policy = download_policy or (prefs.download_policy if prefs else None)
-        if policy == "supporters" and (not prefs or prefs.support_url != "atprotofans"):
-            raise HTTPException(
-                status_code=400, detail="supporter downloads require atprotofans"
-            )
     private_audio = policy in ("off", "supporters") and not is_private
 
     return UploadMetadata(

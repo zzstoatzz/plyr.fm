@@ -223,7 +223,7 @@ max_lines = 715
 
 [[rules]]
 path = "backend/tests/api/test_track_deletion.py"
-max_lines = 585
+max_lines = 599
 
 [[rules]]
 path = "backend/tests/api/test_top_tracks.py"
@@ -267,7 +267,7 @@ max_lines = 620
 
 [[rules]]
 path = "backend/tests/api/track_audio_replace/test_revisions.py"
-max_lines = 723
+max_lines = 736
 
 [[rules]]
 path = "frontend/src/routes/embed/track/[[]id[]]/+page.svelte"

@@ -116,8 +116,9 @@ class TestPruneRevisions:
         assert len(revisions) == 3
         mock_delete.assert_not_called()
 
+    @pytest.mark.parametrize("private_source", [False, True])
     async def test_over_cap_drops_oldest_and_deletes_blob(
-        self, db_session: AsyncSession, owner: Artist
+        self, db_session: AsyncSession, owner: Artist, private_source: bool
     ) -> None:
         from datetime import UTC, datetime, timedelta
 
@@ -130,14 +131,23 @@ class TestPruneRevisions:
         base = datetime(2026, 1, 1, tzinfo=UTC)
         for i in range(MAX_REVISIONS_PER_TRACK + 2):
             r = _add_revision(track.id, file_id=f"REV-{i:02d}")
+            r.was_gated = private_source
+            r.original_file_id = f"ORIG-{i:02d}"
+            r.original_file_type = "flac"
             r.created_at = base + timedelta(hours=i)
             db_session.add(r)
         await db_session.commit()
 
-        with patch(
-            "backend._internal.track_revisions.storage.delete",
-            AsyncMock(return_value=True),
-        ) as mock_delete:
+        with (
+            patch(
+                "backend._internal.track_revisions.storage.delete",
+                AsyncMock(return_value=True),
+            ) as public_delete,
+            patch(
+                "backend._internal.track_revisions.storage.delete_gated",
+                AsyncMock(return_value=True),
+            ) as private_delete,
+        ):
             await prune_revisions(track.id)
 
         # exactly MAX remain; the two oldest are gone
@@ -158,9 +168,12 @@ class TestPruneRevisions:
         assert "REV-02" in remaining
 
         # blobs for the two pruned revisions were deleted
+        mock_delete = private_delete if private_source else public_delete
+        (public_delete if private_source else private_delete).assert_not_awaited()
         deleted_keys = {call.args[0] for call in mock_delete.call_args_list}
         assert "REV-00" in deleted_keys
         assert "REV-01" in deleted_keys
+        assert {"ORIG-00", "ORIG-01"} <= deleted_keys
 
     async def test_does_not_delete_blob_still_referenced_by_track(
         self, db_session: AsyncSession, owner: Artist

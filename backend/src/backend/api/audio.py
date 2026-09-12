@@ -267,11 +267,9 @@ async def download_audio(
 ) -> RedirectResponse:
     """download a track's audio as an attachment named `artist - title.ext`.
 
-    downloads are offered only where the bytes are already publicly
-    reachable (the artist's PDS serves them to anyone): public and unlisted
-    tracks that are not supporter-gated, not copyright-flagged, and whose
-    artist has not switched downloads off. prefers the preserved lossless
-    original over the streaming rendition.
+    resolves the track override before the artist policy and signs the source
+    bucket only after authorization. prefers the preserved original; artists
+    can recover protected R2 audio. Space audio uses the owner export path.
     """
     async with db_session() as db:
         result = await db.execute(

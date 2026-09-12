@@ -117,7 +117,9 @@ async def delete_track(
                 file_type=track.file_type,
                 r2_url=track.r2_url,
             )
-            await storage.delete(delete_key.file_id, delete_key.extension)
+            await (
+                storage.delete_gated if track.uses_private_audio else storage.delete
+            )(delete_key.file_id, delete_key.extension)
         except Exception as e:
             # log but don't fail - maybe file was already deleted
             logger.warning(f"failed to delete file {track.file_id}: {e}", exc_info=True)
@@ -677,11 +679,11 @@ async def migrate_track_to_pds(
             message="track already has PDS blob",
         )
 
-    # gated tracks can't be migrated (they need auth-protected access)
-    if track.support_gate:
+    # Public PDS blobs cannot preserve protected source access.
+    if track.is_private or track.uses_private_audio:
         raise HTTPException(
             status_code=400,
-            detail="supporter-gated tracks cannot be migrated to PDS",
+            detail="protected audio cannot be saved to a public PDS blob",
         )
 
     # `file_id` addresses storage only for uploads that came through us — an
