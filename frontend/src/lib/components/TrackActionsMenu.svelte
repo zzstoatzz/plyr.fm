@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { likes } from '$lib/likes.svelte';
-	import { likeTrack, unlikeTrack } from '$lib/tracks.svelte';
 	import { toast } from '$lib/toast.svelte';
 	import { API_URL } from '$lib/config';
 	import type { Playlist } from '$lib/types';
@@ -126,30 +125,17 @@
 
 		loading = true;
 		const previousState = liked;
-		liked = !liked;
-
 		try {
-			const success = liked
-				? await likeTrack(trackId, fileId, gated)
-				: await unlikeTrack(trackId);
-
-			if (!success) {
-				liked = previousState;
-				toast.error('failed to update like');
-			} else {
-				likes.record(trackId, liked);
-				if (liked) {
-					toast.success(`liked ${trackTitle}`);
-				} else {
-					toast.info(`unliked ${trackTitle}`);
-				}
-			}
-			closeMenu();
-		} catch {
-			liked = previousState;
-			toast.error('failed to update like');
+			liked = await likes.toggle({
+				id: trackId,
+				title: trackTitle,
+				file_id: fileId,
+				gated,
+				is_liked: previousState
+			});
 		} finally {
 			loading = false;
+			closeMenu();
 		}
 	}
 
