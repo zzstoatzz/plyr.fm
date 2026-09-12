@@ -9,6 +9,7 @@
 	import { APP_NAME, APP_CANONICAL_URL } from '$lib/branding';
 	import { API_URL } from '$lib/config';
 	import Header from '$lib/components/Header.svelte';
+	import ErrorPage from '$lib/components/ErrorPage.svelte';
 	import AddToMenu from '$lib/components/AddToMenu.svelte';
 	import TrackComments from '$lib/components/TrackComments.svelte';
 	import TagEffects from '$lib/components/TagEffects.svelte';
@@ -397,7 +398,9 @@
 </svelte:head>
 
 <div class="page-container">
-	{#if !track}
+	{#if notFound}
+		<ErrorPage status={404} />
+	{:else if !track}
 		<Header user={auth.user} isAuthenticated={auth.isAuthenticated} onLogout={handleLogout} />
 		<main>
 			<div class="track-detail">
@@ -414,11 +417,7 @@
 						{/if}
 					</div>
 				{/if}
-				{#if notFound}
-					<p class="track-missing">track not found</p>
-				{:else}
-					<p class="track-missing">loading…</p>
-				{/if}
+				<p class="track-missing">loading…</p>
 			</div>
 		</main>
 	{:else}
