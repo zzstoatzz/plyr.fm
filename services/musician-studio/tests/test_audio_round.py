@@ -7,7 +7,7 @@ import pytest
 
 import audio_round
 from compose import Composition
-from studio import audio_model
+from studio import audio_model, render_repair
 from studio.state import Store
 
 
@@ -87,7 +87,7 @@ def test_round_reviews_draft_and_revision_and_obtains_peer_feedback(
         lambda **kwargs: client(transport=httpx.MockTransport(handle), **kwargs),
     )
     monkeypatch.setattr(audio_round, "compose", compose)
-    monkeypatch.setattr(audio_round, "render", render)
+    monkeypatch.setattr(render_repair, "render", render)
     final = audio_round.prepare_release(tmp_path, session, "moss", draft)
     assert final.read_bytes() == b"revised recording"
     assert len(heard) == 3

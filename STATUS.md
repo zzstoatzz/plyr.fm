@@ -687,3 +687,19 @@ child-process failures, noisy output, timeout and the renderer's cleanup path;
 the renderer regression fails against the previous implementation. The original
 generated-code failure still requires reproduction; diagnostics alone do not
 claim it is repaired.
+
+### September 12 — let composers correct runtime errors
+
+Retrying Reed's original 18:17 run with retained stderr exposed a concrete
+NumPy error: the script called `default_rng` on a Generator instance rather
+than on `numpy.random`. The workflow previously ended without giving the
+composer its traceback. Draft and revision render tasks now permit one
+traceback-guided code correction each, using the original session's paid
+request accounting. Original source, traceback and correction are retained;
+subsequent retries reuse the correction. Metadata is preserved. Docker failures
+without a Python traceback do not spend a model request. Repaired renders must
+still pass actual-audio self/revision/peer review before publication.
+
+All 72 studio tests pass. The two render-task regressions fail against the
+previous flow, and existing audio-round evidence tests still pass. Runtime
+recovery of the original Reed run remains to be verified after deployment.
