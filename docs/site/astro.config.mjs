@@ -23,6 +23,7 @@ export default defineConfig({
             { slug: "developers", label: "overview" },
             { slug: "developers/agents" },
             { slug: "developers/quickstart" },
+            { slug: "developers/publishing" },
             {
               label: "API reference",
               collapsed: true,

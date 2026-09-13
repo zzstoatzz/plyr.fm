@@ -12,12 +12,12 @@ you _don't_ have an account? head to [plyr.fm/login](https://plyr.fm/login) to c
 on plyr.fm, you can share **music**, **podcasts**, **sound art**, **ASMR**, and anything else that makes noise — no distribution fees, no gatekeepers.
 
 when you upload a track:
-- it's stored in [a place you control](https://at-me.zzstoatzz.io/view/?handle=zzstoatzz.io), tied to your identity
-- share your track with anyone, even if they don't have an account
+- its record is tied to your atmosphere identity; audio storage depends on your access choices and host
+- choose who can listen and download, including public listening without an account
 - you can [embed a player](#embeds) on your website or blog
 - you can [gate tracks](#supporter-gated-tracks) behind supporter status
 
-your catalog isn't trapped here — other apps can access your tracks without plyr.fm's permission, and you can export everything as a ZIP from the [portal](https://plyr.fm/portal) at any time.
+public records can be read by other compatible apps. protected audio remains subject to its access rules; private Spaces require their host's authorization. you can export your catalog from the [portal](https://plyr.fm/portal).
 
 ## your first upload
 
@@ -37,8 +37,48 @@ your catalog isn't trapped here — other apps can access your tracks without pl
 
    <span id="auto-tagging"></span>when you add tags, you can opt in to **auto-tag with recommended genres** — plyr.fm runs [ML genre classification](https://github.com/zzstoatzz/plyr.fm/blob/main/docs/internal/backend/genre-classification.md) on the audio using the [effnet-discogs](https://replicate.com/mtg/effnet-discogs) model and suggests tags automatically. you can accept, remove, or add your own. auto-suggested tags typically appear within a few seconds of upload.
 
-5. **see it live** — your track is playable immediately and indexed for discovery — search, radio, and the [catalog map](https://plyr.fm/atlas)
+5. **publish it** — check the access summary, then upload. once processing completes, playback and discovery follow the choices you saved
 6. **embed it** — copy the embed code to put a player on your website or blog (see [embeds](#embeds) below)
+
+## music access
+
+set your defaults in [Portal](https://plyr.fm/portal) under **music access**.
+new accounts start with anyone able to listen and download. existing artists'
+saved download choices are preserved.
+
+uploads show a short summary and use your defaults. expand the controls to
+change a specific track. album uploads share settings across their tracks;
+individual tracks can override them. when editing an album, applying settings
+preserves track exceptions unless you explicitly choose to replace them.
+
+Portal defaults affect **future uploads**. changing them does not rewrite your
+existing catalog. use the track or album controls to change published works.
+
+listening, downloads, discovery, and rights information are separate:
+
+- **listening** controls who can play the track. turning off public listening
+  reveals the available audience choices.
+- **downloads** controls who can obtain the original file. public listening
+  with downloads off lets people hear your work without offering the master.
+- **show in feeds** controls public discovery. an unlisted track can still
+  appear on your artist page and in search; unlisted is not private.
+- **attach rights information** adds your chosen rights metadata. adding or
+  removing it does not change listening or download permissions.
+
+restricted listening with open downloads still allows people to download the
+original. choose both settings deliberately. a support prompt is optional;
+it does not enforce a payment or subscription.
+
+### protected audio
+
+restricted originals and listening use plyr.fm-managed protected storage when
+native Spaces are not being used. public listening uses a separate playback
+rendition when the original must remain protected.
+
+downloads off does not prevent recording or saving playback. restricting an
+existing track also cannot recall files that were already public or downloaded.
+a compatible PDS becoming available does not automatically migrate your audio
+into Spaces.
 
 ## adult audio and content notices
 
@@ -48,7 +88,7 @@ audio** when uploading it. You can change the notice later in the track editor.
 the notice is stored with your track in your ATProto repository. On plyr.fm,
 noticed tracks are hidden from discovery feeds, search, and radio unless a
 signed-in listener has enabled sensitive audio in their settings. **Your own
-artist page still lists them, and a direct link still plays for anyone** — the
+artist page still lists them, and a direct link still follows your listening permissions** — the
 notice changes where your track surfaces, not whether someone you send it to
 can hear it, and not how your catalogue looks to someone who came to find you.
 You always see your own noticed tracks, whatever your own settings say. See
@@ -163,17 +203,17 @@ this feature is early and has limitations — see below.
 
 plyr.fm integrates with [ATProtoFans](https://atprotofans.com) to let artists gate tracks behind supporter status. when a listener tries to play a gated track, plyr.fm checks whether they support the artist — if they do, they get access; if not, the track is locked.
 
-today this is a **binary check**: a listener either supports you or they don't. there are no tiers, amounts, or expiration windows — any active support relationship grants access to all your gated tracks.
+today this is a **binary check**: a listener either supports you or they don't. there are no tiers, amounts, or expiration windows. listening and download permissions each use the audience you selected.
 
 ### how it works
 
-1. upload a track and toggle **supporter-gated** in the track editor
+1. configure your support integration, then choose supporters as the listening audience in the track or Portal music access controls
 2. when a listener hits play, plyr.fm checks their support status via ATProtoFans
 3. supporters get access; everyone else sees a lock
 
 ### how gated audio is stored
 
-gated audio lives in a **private bucket** on plyr.fm's infrastructure — not publicly accessible. when a supporter plays a gated track, plyr.fm validates their support status and generates a time-limited presigned URL. the audio is never exposed without authentication.
+gated audio lives in a **private bucket** on plyr.fm's infrastructure — not publicly accessible. when a supporter plays a gated track, plyr.fm validates their support status and generates a time-limited presigned URL. downloads follow their separate policy; choosing open downloads makes the original available even when listening is restricted.
 
 supporter gating is separate from the experimental permissioned-data path described below.
 It has a shared audience, so it remains on plyr.fm's authenticated storage until the
@@ -198,7 +238,7 @@ The first time you choose private media, plyr.fm may ask you to approve an addit
 permission. Playback is proxied through plyr.fm because browsers do not hold the short-lived
 space credential needed to fetch the blob directly.
 
-This is not the same as **unlisted** (anyone who finds an unlisted track can play it) or
+This is not the same as **unlisted** (metadata remains discoverable and listening follows its own policy) or
 **supporters only** (active supporters can play it). Broader permissioned sharing and
 third-party catalog interoperability are still being designed against
 [ATProto Proposal 0016](https://github.com/bluesky-social/proposals/tree/main/0016-permissioned-data).
@@ -231,7 +271,7 @@ if you believe a match is a false positive, or you hold the rights to the matche
 plyr.fm uses the global AT Protocol labels `sexual` and `porn` for adult audio.
 They are content warnings, not takedowns: the track and its ATProto record remain
 in place. plyr.fm hides the track from discovery by default, while artist pages,
-collections, and direct links still show it and allow playback. Shared radio and
+collections, and direct links still follow the work’s visibility and listening permissions. Shared radio and
 jams exclude adult-labeled audio. The creator can always manage it in the portal.
 
 enable **contains adult or sexual audio** during upload, or change the content
@@ -242,9 +282,15 @@ See [sensitive content](/sensitive-content/) for the listener behavior.
 
 ## downloads
 
-listeners can download your public audio — single tracks, and whole albums as a zip — with files named after you and your titles, preferring lossless originals. this is **on by default**: the same bytes are already publicly served by your PDS to anyone, so the toggle is a courtesy, not an access control. switch it off any time in [settings](https://plyr.fm/settings) under *downloads*.
+listeners can download a track when its saved download policy permits it.
+album ZIPs require permission for every included track; they do not bypass a
+track's restrictions. files are named after you and your titles, preferring the
+lossless original when available.
 
-supporter-gated tracks, tracks under a copyright notice, and private tracks are never downloadable, and an album containing any of them doesn't offer a zip.
+downloads can be open, off, supporter-only, or accompanied by an optional support
+prompt. rights metadata does not itself forbid downloads. native private Space
+tracks currently support playback, not a separate listener download.
+
 
 ## your data
 
@@ -252,7 +298,7 @@ supporter-gated tracks, tracks under a copyright notice, and private tracks are 
 
 every track you upload is tied to [your account](https://at-me.zzstoatzz.io/view/?handle=zzstoatzz.io) — you can inspect your records in a [PDS viewer](https://pdsls.dev), and they travel with you if you move to a different host.
 
-if your host has a size limit that prevents storing the audio file directly (common on shared hosting), plyr.fm stores the audio in its own CDN instead. the metadata always stays with your account either way.
+public audio may be stored as a PDS blob or on plyr.fm when the host cannot accept it. protected managed audio stays in private plyr.fm storage. native private works use their PDS Space. moving your account does not by itself move these managed audio files into a Space.
 
 the [portal](https://plyr.fm/portal) offers a **bulk export** — it packages your tracks as a ZIP (using lossless originals when available) that you can download directly.
 

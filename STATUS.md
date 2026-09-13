@@ -66,7 +66,12 @@ and health checks passed. Nineteen app-password uploads exercised the access
 matrix against real PDS and R2 storage. Artist/anonymous detail, playback,
 downloads, latest feeds, artist listing and all five radio stations matched
 the tested policies. Evidence and remaining signed-in non-owner checks are in
-`docs/plans/2026-09-12-staging-publishing-smoke.md`. Production is unchanged.
+`docs/plans/2026-09-12-staging-publishing-smoke.md`. Production promote is approved. The matching SDK/CLI is merged in
+plyr-python-client#42; public guides now explain independent permissions and
+snapshot defaults. Staging fixes #2053 and #2054 cover the standard private-track
+404 and signed-out like CTA; #2048 defaults top tracks to the past month.
+Release scope, migration verification and production smoke are recorded in
+`docs/plans/2026-09-13-publishing-release.md`.
 
 
 #### the player’s clipped “g” exposed a track-identity collision (#2026–#2028, September 5)

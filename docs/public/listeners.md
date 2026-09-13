@@ -49,7 +49,7 @@ even today, other apps (like [aetheros.computer](https://aetheros.computer)) alr
 
    ![a track card showing title, artist, tags, and play count](/screenshots/feed-track-card.png)
 
-4. **like it** — click the heart on a track or in the player, then choose "add to liked"
+4. **like it** — click the heart on a track or in the player, then choose "add to liked". if you are signed out, follow the sign-in link; it keeps your current page as the return destination
 5. **build a playlist** — choose "add to playlist" from that same heart menu, then pick or create a playlist
 
    playlists can be **public** (published to your atmosphere account, readable by any compatible app) or **private** (stays in plyr.fm). private playlists are visible only to you and stay in plyr.fm’s database.
@@ -78,7 +78,7 @@ your likes, public playlists, and comments are stored on your [PDS](/glossary/#p
 
 most public audio can be downloaded — look for the download icon next to share on track and album pages. files come named (`artist - title.ext`) and prefer the lossless original when one exists; albums arrive as a numbered zip in the artist's track order. the first album download takes a minute to prepare — it's safe to leave, it stays ready once built.
 
-if there's no download icon, the artist has switched downloads off, or the audio is supporter-gated or under a copyright notice.
+listening and downloads have separate permissions. a track may play publicly while downloads are off, or offer downloads only to supporters. rights information alone does not determine access. album ZIPs require download permission for every included track. private Space tracks currently offer playback without a separate listener download.
 
 ## the player and queue
 

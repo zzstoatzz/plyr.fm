@@ -33,11 +33,11 @@
 - Radio: default rotation contains exactly the four public/public-listening fixtures. All five station responses exclude every unlisted and gated fixture.
 - Top tracks: none of the new fixtures rank because they have no likes. Positive ranking was not tested.
 - Nine off/supporter-download originals reject anonymous stream/URL requests and return 404 at the public bucket URL.
-- Browser: public/downloads-off playback reached readyState 4 with no media error; artist-only play showed its correct refusal; Space detail showed “track not found”; latest and radio displayed the expected fixtures.
+- Browser: public/downloads-off playback reached readyState 4 with no media error; artist-only play showed its correct refusal; Space detail refused access; #2053 subsequently aligned it with the standard 404; latest and radio displayed the expected fixtures.
 
 ## Limitations and follow-up
 
-- Signed-in non-owner and positively entitled supporter/Space-member checks need a separate account; the saved listener token is expired.
+- Nate verified the separate-account access cases and approved them; the private-track 404 presentation was corrected in #2053. Positive supporter/Space-member browser checks remain limited.
 - Restricted streaming with open downloads intentionally still permits downloading the original. These independent settings do not protect those bytes.
-- Fixtures are retained for the pending listener checks.
+- Fixtures are retained as smoke evidence.
 - This run omitted the integration-test tag and triggered staging upload DMs. The harness and project smoke workflow now require that existing suppression tag before further test uploads. Global notifications were not disabled.
