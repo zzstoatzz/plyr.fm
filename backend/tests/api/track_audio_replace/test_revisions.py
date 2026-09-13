@@ -528,7 +528,7 @@ class TestRestoreEndpoint:
                 "backend.api.tracks.revisions.storage.head_file",
                 head_file_mock,
             ),
-            patch("backend.api.tracks.revisions.upload_blob", upload_blob_mock),
+            patch("backend._internal.pds_audio.upload_blob", upload_blob_mock),
         ):
             async with AsyncClient(
                 transport=ASGITransport(app=test_app_owner), base_url="http://test"
@@ -623,7 +623,7 @@ class TestRestoreEndpoint:
                 "backend.api.tracks.revisions.storage.get_file_data",
                 get_file_data_mock,
             ),
-            patch("backend.api.tracks.revisions.upload_blob", upload_blob_mock),
+            patch("backend._internal.pds_audio.upload_blob", upload_blob_mock),
         ):
             async with AsyncClient(
                 transport=ASGITransport(app=test_app_owner), base_url="http://test"

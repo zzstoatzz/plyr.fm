@@ -5,17 +5,17 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections import Counter
-from collections.abc import AsyncIterable
 
 import logfire
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
-from backend._internal.atproto import PayloadTooLargeError, upload_blob
+from backend._internal.atproto import PayloadTooLargeError
 from backend._internal.atproto.records import build_track_record, update_record
 from backend._internal.auth import get_session
 from backend._internal.background import get_docket
 from backend._internal.jobs import job_service
+from backend._internal.pds_audio import upload_stored_audio
 from backend.config import settings
 from backend.models import Track
 from backend.models.job import JobStatus
@@ -233,18 +233,8 @@ async def save_tracks_to_pds(
                     )
                     return
 
-                stream_key = audio_key
-
-                def body_factory() -> AsyncIterable[bytes]:
-                    return storage.stream_file_data(
-                        stream_key.file_id, stream_key.extension
-                    )
-
-                blob_ref = await upload_blob(
-                    auth_session,
-                    body_factory=body_factory,
-                    content_length=content_length,
-                    content_type=audio_key.format.media_type,
+                blob_ref = await upload_stored_audio(
+                    auth_session, audio_key, content_length
                 )
                 blob_cid = blob_ref.get("ref", {}).get("$link")
                 blob_size = blob_ref.get("size")

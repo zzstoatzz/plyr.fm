@@ -2,7 +2,6 @@
 
 import contextlib
 import logging
-from collections.abc import AsyncIterable
 from typing import Annotated
 
 import logfire
@@ -17,7 +16,6 @@ from backend._internal import require_auth
 from backend._internal.atproto import (
     PayloadTooLargeError,
     delete_record_by_uri,
-    upload_blob,
 )
 from backend._internal.atproto.client import make_pds_request
 from backend._internal.atproto.handles import (
@@ -33,6 +31,7 @@ from backend._internal.atproto.self_labels import parse_self_label_values_json
 from backend._internal.atproto.spaces.client import delete_space_record
 from backend._internal.atproto.tid import datetime_to_tid
 from backend._internal.image_uploads import process_image_upload
+from backend._internal.pds_audio import upload_stored_audio
 from backend._internal.tasks import (
     schedule_album_list_sync,
 )
@@ -652,7 +651,6 @@ async def migrate_track_to_pds(
             status_code=400,
             detail=f"unsupported audio format: {track.file_type}",
         ) from e
-    content_type = audio_key.format.media_type
 
     # confirm the audio object exists and capture its size for Content-Length;
     # the body itself is streamed from R2 to the PDS, never buffered here.
@@ -670,19 +668,9 @@ async def migrate_track_to_pds(
             detail="audio file not found in storage",
         )
 
-    stream_key = audio_key
-
-    def body_factory() -> AsyncIterable[bytes]:
-        return storage.stream_file_data(stream_key.file_id, stream_key.extension)
-
     # upload blob to PDS
     try:
-        blob_ref = await upload_blob(
-            auth_session,
-            body_factory=body_factory,
-            content_length=content_length,
-            content_type=content_type,
-        )
+        blob_ref = await upload_stored_audio(auth_session, audio_key, content_length)
         blob_cid = blob_ref.get("ref", {}).get("$link")
         blob_size = blob_ref.get("size")
 
