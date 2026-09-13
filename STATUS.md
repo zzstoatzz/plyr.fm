@@ -47,6 +47,14 @@ plyr.fm should become:
 
 ### September 2026
 
+#### Space checks only for Space audio
+
+Streaming, HEAD preflight, and offline URL resolution now ask the Space
+authority only for native private tracks, after releasing the database session.
+Ordinary public and R2-protected playback retain their existing audience gates
+without unnecessary cross-PDS requests. Regression coverage exercises all three
+paths and verifies native Space denial remains enforced.
+
 #### restoring PDS audio after access restrictions
 
 The publishing round trip exposed a missing transition: removing restrictions
