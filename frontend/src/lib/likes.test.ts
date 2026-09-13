@@ -58,7 +58,10 @@ describe('likes', () => {
 		const t = track(9);
 		expect(await likes.toggle(t)).toBe(false);
 		expect(requests).toEqual([]);
-		expect(toast.toasts.at(-1)?.message).toBe('sign in to like tracks');
+		expect(toast.toasts.at(-1)?.action).toEqual({
+			label: 'sign in to like tracks',
+			href: '/login?return_to=%2F'
+		});
 	});
 
 	it('learns the viewer\'s liked ids once and answers from them over the object', async () => {
