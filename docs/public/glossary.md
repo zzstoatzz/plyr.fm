@@ -47,7 +47,7 @@ plyr.fm's namespaces are environment-aware: `fm.plyr` (production), `fm.plyr.stg
 
 ### PDS
 
-**Personal Data Server**. the server that stores your ATProto data repo — your records, blobs (files), and identity information. public track metadata is stored on your PDS. plyr.fm also mirrors public audio there when the host accepts it; files that exceed the host’s limits remain on plyr.fm’s CDN. experimental private tracks use permissioned storage on a compatible PDS. you can self-host a PDS or use a provider like `bsky.social`.
+**Personal Data Server**. the server that stores your ATProto data repo — your records, blobs (files), and identity information. public track metadata is stored on your PDS. plyr.fm can mirror public audio there when the host accepts it; files that exceed the host’s limits remain on plyr.fm’s CDN. restricted managed audio uses private plyr.fm storage. experimental private tracks use permissioned storage on a compatible PDS. you can self-host a PDS or use a provider like `bsky.social`.
 
 see: [atproto.com/guides/self-hosting](https://atproto.com/guides/self-hosting)
 

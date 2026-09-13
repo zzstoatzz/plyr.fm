@@ -55,3 +55,7 @@ unknown; don't invent a value or describe the sound from its title alone.
 - [Troubleshooting](https://docs.plyr.fm/troubleshooting/): authentication, playback, and indexing.
 - [App source](https://github.com/zzstoatzz/plyr.fm)
 - [SDK, CLI, and MCP source](https://github.com/zzstoatzz/plyr-python-client)
+
+## publishing access
+
+Portal defaults apply to future uploads; track and album overrides save explicit policies. Listening, original downloads, discovery, and rights metadata are separate. Protected managed audio uses private storage; native Spaces retain their authority boundary. Downloads off does not prevent recording playback or revoke previous copies. See https://docs.plyr.fm/developers/publishing/ for the current contract and client migration.

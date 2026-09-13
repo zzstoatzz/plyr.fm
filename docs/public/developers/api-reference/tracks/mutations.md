@@ -23,11 +23,13 @@ Delete a track (only by owner).
 ### `update_track_metadata` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/tracks/mutations.py#L151)
 
 ```python
-update_track_metadata(track_id: int, db: Annotated[AsyncSession, Depends(get_db)], auth_session: AuthSession = Depends(require_auth), title: Annotated[str | None, Form()] = None, album: Annotated[str | None, Form()] = None, features: Annotated[str | None, Form()] = None, tags: Annotated[str | None, Form(description='JSON array of tag names')] = None, description: Annotated[str | None, Form(description='Track description (liner notes, show notes), or empty string to remove')] = None, support_gate: Annotated[str | None, Form(description="JSON object for supporter gating, or 'null' to remove")] = None, image: UploadFile | None = File(None), remove_image: Annotated[str | None, Form(description="Set to 'true' to remove artwork")] = None) -> TrackResponse
+update_track_metadata(track_id: int, db: Annotated[AsyncSession, Depends(get_db)], auth_session: AuthSession = Depends(require_auth), title: Annotated[str | None, Form()] = None, album: Annotated[str | None, Form()] = None, features: Annotated[str | None, Form()] = None, tags: Annotated[str | None, Form(description='JSON array of tag names')] = None, description: Annotated[str | None, Form(description='Track description (liner notes, show notes), or empty string to remove')] = None, image: UploadFile | None = File(None), remove_image: Annotated[str | None, Form(description="Set to 'true' to remove artwork")] = None) -> TrackResponse
 ```
 
 
-Update track metadata (only by owner).
+Update track metadata (only by owner). Access changes use the separate
+[publishing endpoints](/developers/publishing/); metadata PATCH does not change
+listening, downloads, or visibility.
 
 
 ### `restore_track_record` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/tracks/mutations.py#L492)

@@ -47,7 +47,7 @@ plyr.fm should become:
 
 ### September 2026
 
-#### publishing defaults and independent audio access (in review)
+#### publishing defaults and independent audio access (staging, #2049)
 
 Portal defaults now supply listening, downloads, discovery and optional rights
 settings to uploads. Tracks save a concrete policy; album application preserves
@@ -61,8 +61,17 @@ contract rather than maintaining compatibility aliases. Inventory, source-histor
 review, migration implications and smoke evidence live in
 `docs/plans/2026-09-12-publishing-access.md`. Local browser testing uses isolated
 fixtures and an S3 emulator alongside the real app, worker and transcoder.
-Authenticated staging smoke and the remaining visual matrix are outstanding;
-this work has not been deployed. Production is unchanged.
+The redesign deployed to staging at `78a40af1`; migration `311b4f106c90` applied
+and health checks passed. Nineteen app-password uploads exercised the access
+matrix against real PDS and R2 storage. Artist/anonymous detail, playback,
+downloads, latest feeds, artist listing and all five radio stations matched
+the tested policies. Evidence and remaining signed-in non-owner checks are in
+`docs/plans/2026-09-12-staging-publishing-smoke.md`. Production promote is approved. The matching SDK/CLI is merged in
+plyr-python-client#42; public guides now explain independent permissions and
+snapshot defaults. Staging fixes #2053 and #2054 cover the standard private-track
+404 and signed-out like CTA; #2048 defaults top tracks to the past month.
+Release scope, migration verification and production smoke are recorded in
+`docs/plans/2026-09-13-publishing-release.md`.
 
 
 #### the player’s clipped “g” exposed a track-identity collision (#2026–#2028, September 5)

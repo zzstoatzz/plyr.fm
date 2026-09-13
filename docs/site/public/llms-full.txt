@@ -342,3 +342,7 @@ At least one of `audioUrl` or `audioBlob` must be present.
 - **AppView**: application service that indexes records from the network
 - **developer token**: API auth token from plyr.fm/settings#developer
 - **jam**: shared listening room with real-time sync
+
+## publishing access
+
+Portal defaults apply to future uploads; track and album overrides save explicit policies. Listening, original downloads, discovery, and rights metadata are separate. Protected managed audio uses private storage; native Spaces retain their authority boundary. Downloads off does not prevent recording playback or revoke previous copies. See https://docs.plyr.fm/developers/publishing/ for the current contract and client migration.
