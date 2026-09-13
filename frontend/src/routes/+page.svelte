@@ -68,9 +68,9 @@
 	} satisfies Record<Period, string>;
 
 	function readSavedPeriod(): Period {
-		if (!browser) return 'all_time';
+		if (!browser) return 'month';
 		const saved = safeLocalStorage.getItem('topTracksPeriod');
-		return PERIODS.find((period) => period === saved) ?? 'all_time';
+		return PERIODS.find((period) => period === saved) ?? 'month';
 	}
 
 	let topTracksPeriod = $state<Period>(readSavedPeriod());
