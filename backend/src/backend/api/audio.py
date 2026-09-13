@@ -107,11 +107,11 @@ async def stream_audio(
             is_private,
             space_uri,
         ) = track_data
-        can_read_private = await can_access(session, artist_did)
 
     # private media lives in a permissioned space — proxy the bytes through the
     # reader's space credential (can't redirect: the browser has no credential).
     if is_private:
+        can_read_private = await can_access(session, artist_did)
         return await _handle_private_audio(
             session=session,
             allowed=can_read_private,
@@ -402,13 +402,12 @@ async def get_audio_url(
             is_private,
             _space_uri,
         ) = track_data
-        can_read_private = await can_access(session, artist_did)
 
     # private media is proxied through the permissioned-space credential path,
     # so the cacheable "url" is this backend's own stream endpoint (which holds
     # the credential), not a presigned/CDN URL the client could fetch directly.
     if is_private:
-        if not can_read_private:
+        if not await can_access(session, artist_did):
             raise HTTPException(status_code=404, detail="audio file not found")
         backend_url = settings.atproto.redirect_uri.rsplit("/", 2)[0]
         return AudioUrlResponse(
