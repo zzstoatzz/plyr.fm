@@ -32,6 +32,7 @@ from backend.storage import storage
 from backend.utilities.database import db_session
 from backend.utilities.publishing import PublishingDefaults, resolve_publishing
 
+from .publishing_public import prepare_public
 from .router import router
 from .uploads import _transcode_audio
 
@@ -148,6 +149,8 @@ async def apply_publishing(
             raise ValueError("configure rights information in Portal first")
         if settings.access.requires_protected_audio:
             await _prepare_protected(db, track, session)
+        elif track.uses_private_audio:
+            await prepare_public(db, track, session)
         track.visibility = settings.access.visibility
         track.support_gate = (
             {

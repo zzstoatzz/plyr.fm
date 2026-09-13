@@ -16,7 +16,6 @@ ungate, restore, then re-gate manually if needed.
 """
 
 import logging
-from collections.abc import AsyncIterable
 from datetime import datetime
 from typing import Annotated
 from urllib.parse import urljoin
@@ -29,8 +28,9 @@ from sqlalchemy.orm import selectinload
 
 from backend._internal import Session as AuthSession
 from backend._internal import require_auth
-from backend._internal.atproto import PayloadTooLargeError, upload_blob
+from backend._internal.atproto import PayloadTooLargeError
 from backend._internal.atproto.records import build_track_record, update_record
+from backend._internal.pds_audio import upload_stored_audio
 from backend._internal.track_revisions import prune_revisions
 from backend.api.albums import invalidate_album_cache_by_id
 from backend.config import settings
@@ -269,17 +269,8 @@ async def restore_track_revision(
                     revision_key.file_id, revision_key.extension
                 )
                 if content_length is not None:
-
-                    def body_factory() -> AsyncIterable[bytes]:
-                        return storage.stream_file_data(
-                            revision_key.file_id, revision_key.extension
-                        )
-
-                    reupload_blob_ref = await upload_blob(
-                        auth_session,
-                        body_factory=body_factory,
-                        content_length=content_length,
-                        content_type=content_type,
+                    reupload_blob_ref = await upload_stored_audio(
+                        auth_session, revision_key, content_length
                     )
             except PayloadTooLargeError:
                 logfire.info(

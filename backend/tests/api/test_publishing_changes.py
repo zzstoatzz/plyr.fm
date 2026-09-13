@@ -86,29 +86,6 @@ async def test_restriction_requires_separate_rendition(
         assert track.audio_storage == "r2"
 
 
-async def test_public_policy_keeps_protected_source(
-    db_session: AsyncSession, published: tuple[Track, Session]
-) -> None:
-    track, session = published
-    track.audio_storage = "r2_private"
-    track.r2_url = None
-    track.support_gate = {"type": "owner"}
-    track.original_file_id = "original"
-    track.original_file_type = "wav"
-    await db_session.commit()
-    with patch(
-        "backend.api.tracks.publishing.storage.copy_audio_to_private",
-        new_callable=AsyncMock,
-    ) as copy:
-        await apply_publishing(track.id, PublishingDefaults(), "album", session)
-        copy.assert_not_awaited()
-    await db_session.refresh(track)
-    assert track.audio_storage == "r2_private"
-    assert track.support_gate is None
-    assert track.download_policy == "open"
-    assert track.policy_origin == "album"
-
-
 async def test_space_boundary_is_not_rewritten(
     db_session: AsyncSession, published: tuple[Track, Session]
 ) -> None:

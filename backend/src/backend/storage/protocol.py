@@ -61,6 +61,8 @@ class StorageProtocol(Protocol):
         self,
         file_id: str,
         file_type: str,
+        *,
+        private: bool = False,
     ) -> int | None:
         """return the byte size of the stored object, or None if missing.
 
@@ -148,6 +150,8 @@ class StorageProtocol(Protocol):
         ...
 
     async def copy_audio_to_private(self, file_id: str, extension: str) -> None: ...
+
+    async def copy_audio_to_public(self, file_id: str, extension: str) -> str: ...
 
     async def move_audio(
         self,

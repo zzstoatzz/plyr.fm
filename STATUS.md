@@ -47,6 +47,24 @@ plyr.fm should become:
 
 ### September 2026
 
+#### restoring PDS audio after access restrictions
+
+The publishing round trip exposed a missing transition: removing restrictions
+left the track in private R2 with no PDS blob. Public-policy preparation now
+streams the playback audio back to the PDS, publishes CDN copies of playback
+and original audio, and rewrites the record before committing the new policy.
+The PDS-upload opt-out remains effective; native Space boundaries remain separate.
+Private copies are retained because tracks and revisions can share their keys.
+The stored-audio upload operation is shared with Portal saves, per-track PDS
+migration and revision restoration, preserving AudioKey resolution and streaming.
+
+Regression coverage drives the publishing HTTP endpoint and job through downloads
+on/off/on for public and unlisted works, including ask-to-download. It also covers
+PDS opt-out, continued listening restrictions, upload/record failure and retention
+of private copies. The four round trips fail on the old implementation.
+No database migration or automatic catalog-wide republishing is introduced.
+
+
 #### publishing defaults and independent audio access (production, #2049)
 
 Portal defaults now supply listening, downloads, discovery and optional rights

@@ -469,6 +469,8 @@ class R2Storage:
         self,
         file_id: str,
         file_type: str,
+        *,
+        private: bool = False,
     ) -> int | None:
         """return the byte size of an audio object via HEAD, or None if missing."""
         try:
@@ -478,7 +480,8 @@ class R2Storage:
         async with self._s3_client() as client:
             try:
                 response = await client.head_object(
-                    Bucket=self.audio_bucket_name, Key=key
+                    Bucket=self._staged_bucket() if private else self.audio_bucket_name,
+                    Key=key,
                 )
             except client.exceptions.NoSuchKey:
                 return None
@@ -1122,6 +1125,17 @@ class R2Storage:
                 Bucket=self.private_audio_bucket_name,
                 Key=key,
             )
+
+    async def copy_audio_to_public(self, file_id: str, extension: str) -> str:
+        """Publish a copy while retaining private copies used by other references."""
+        key = AudioKey.for_file(file_id, extension).key
+        async with self._s3_client() as client:
+            await client.copy_object(
+                CopySource={"Bucket": self._staged_bucket(), "Key": key},
+                Bucket=self.audio_bucket_name,
+                Key=key,
+            )
+        return f"{self.public_audio_bucket_url}/{key}"
 
     async def move_audio(
         self,

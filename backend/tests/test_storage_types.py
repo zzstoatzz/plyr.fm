@@ -263,3 +263,20 @@ class TestImageSaveReadRoundtrip:
         assert url.endswith(expected_key), (
             f"url {url!r} doesn't end with save key {expected_key!r}"
         )
+
+
+async def test_public_copy_keeps_private_source_and_heads_correct_bucket() -> None:
+    storage, client = _mock_r2_storage()
+    client.head_object.return_value = {"ContentLength": 7}
+    assert await storage.head_file("abc123def4567890", "mp3", private=True) == 7
+    client.head_object.assert_awaited_once_with(
+        Bucket="test-private", Key="audio/abc123def4567890.mp3"
+    )
+    url = await storage.copy_audio_to_public("abc123def4567890", "mp3")
+    assert url == "https://audio.test.dev/audio/abc123def4567890.mp3"
+    client.copy_object.assert_awaited_once_with(
+        CopySource={"Bucket": "test-private", "Key": "audio/abc123def4567890.mp3"},
+        Bucket="test-audio",
+        Key="audio/abc123def4567890.mp3",
+    )
+    client.delete_object.assert_not_awaited()
