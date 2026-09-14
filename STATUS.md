@@ -47,15 +47,28 @@ plyr.fm should become:
 
 ### September 2026
 
-#### Space checks only for Space audio
+#### Space checks follow the track's listening audience (#2057, September 14 UTC)
 
-Streaming, HEAD preflight, and offline URL resolution now ask the Space
-authority only for native private tracks, after releasing the database session.
-Ordinary public and R2-protected playback retain their existing audience gates
-without unnecessary cross-PDS requests. Regression coverage exercises all three
-paths and verifies native Space denial remains enforced.
+**why**: ordinary signed-in playback asked for Space credentials even when the
+artist's PDS did not support Spaces. Those requests returned 400s, added latency,
+and logged warnings before playback succeeded.
 
-#### restoring PDS audio after access restrictions
+**what shipped**: streaming, HEAD preflight and offline URL resolution ask the
+Space authority only for tracks set to “my Space members,” after releasing the
+database session. Public listening and the signed-in, owner and supporter gates
+keep their existing behavior. This follows the work's policy, not whether its
+artist has a Spaces-enabled PDS or its audio lives in private R2 storage.
+
+**verified**: production release `2026.0914.040530` contains this fix. All 54
+staging API checks passed, including actual protected-Space blob reads and
+non-member denial; browser playback, sign-in CTA and the standard private-track
+404 passed. Production playback/download bytes, discovery exclusions and access
+gates passed. All nine authenticated production smoke traces had zero
+unnecessary Space-authority calls. The backend suite passed 1,752 tests with
+25 existing skips in 21.42 seconds. The separate browser-upload sign-in failure
+remains documented under known issues.
+
+#### restoring PDS audio after access restrictions (#2056, September 13 UTC)
 
 The publishing round trip exposed a missing transition: removing restrictions
 left the track in private R2 with no PDS blob. Public-policy preparation now
@@ -72,8 +85,25 @@ PDS opt-out, continued listening restrictions, upload/record failure and retenti
 of private copies. The four round trips fail on the old implementation.
 No database migration or automatic catalog-wide republishing is introduced.
 
+**released**: `2026.0913.160459`. Staging exercised the downloads on/off/on
+round trip against actual PDS records and blobs. The affected production track
+1303 was repaired through the normal publishing API/job; fetching its full PDS
+blob and comparing its hash verified the bytes, not just the database storage
+label. The original source ID and requested access policy were preserved.
+A standalone diagnostic process coincided with an unresponsive production app
+instance; restarting recovered it. Use the normal HTTP/job path for such repairs,
+not a second application import on a production app VM.
+
+
 
 #### publishing defaults and independent audio access (production, #2049)
+
+The motivating artist request was free public listening without offering file
+downloads. Making copyright metadata choose storage or exposing overlapping
+upload controls obscured that intent. The
+[September 13 announcement](https://bsky.app/profile/plyr.fm/post/3mvgek4emnc2e)
+describes the shipped choices: who listens, who downloads and whether the work
+appears in For You/radio.
 
 Portal defaults now supply listening, downloads, discovery and optional rights
 settings to uploads. Tracks save a concrete policy; album application preserves
@@ -394,6 +424,14 @@ still live from them is in known issues.
 
 ### current focus
 
+**publishing permissions are independent of storage** (#2049, #2056, #2057):
+Portal defaults, album application and per-track exceptions are in production.
+Listening audience, downloads, discovery and rights metadata are separate choices.
+Today “my Space members” also means private metadata; private R2 audio alone does
+not hide a work. Future Space-backed storage must preserve those audience choices,
+rather than turn every protected work into members-only content. Moving existing
+works across Space boundaries remains a separate migration decision.
+
 **the player is spotify's footer now, for everyone** (#1987–#2004, September 2–3 — GA in prod `2026.0902.232901`, the phone follow-ups as frontend-only promotes on September 3): one layout — art, title, heart | shuffle, previous, ±skip, play, ±skip, next, repeat over a full-width scrubber | queue, volume — and on phones the compact bar plus a scrubber row that ends with the queue button; the floating queue button and the `skip-buttons` flag are gone. the heart is the add menu (like, or add to a playlist), reading through the like owner; the phone sheet rises from above the player. the passing-comment stack (#1968–#1980) and the drawn-icon rule (judge an icon as a drawing at the largest and the shipped size, in its row) stand. nate's standing instruction for this kind of iteration: promote to prod after the staging check without asking; design changes to the phone bar pause at staging for his eyes. **next**: the fungible `/now` page (the footer as its handle on phones, the queue moving there); whether skip handlers with `seekto` scrub on a real iPhone lock screen; the drawn-iconography idea (people draw plyr's icons, doodl-style, with published icon collections and an explore page) is parked as "soon, not now".
 
 **records are moving into the client's hands — parked until the sign-in design is redone** (plan `docs/plans/2026-08-31-client-side-writes.md`; #1948–#1950 shipped in prod `2026.0901.065150`, reverted September 1 in #1952): phase 0 made the frontend a second OAuth client and chained its consent after the cookie login, so every sign-in showed two authorization screens. the direction stands — the file an artist uploads goes in their PDS as-is, plyr indexes/mirrors/serves, and the backend stops authoring records on anyone's behalf — but the next attempt must fit inside the single existing login, with scope growing only when a feature that needs it is used. **next**: redesign how the browser gets a repo-write capability without a second flow, then phase 1 (likes).
@@ -409,6 +447,19 @@ still live from them is in known issues.
 **next**: remove the `/admin/*` machine-endpoint aliases now that prod calls `/internal/*` (#1691); re-enable `test_private_media.py` somewhere that has the local postgres/redis fixtures (it is excluded from the staging-facing workflow). which surfaces beyond albums/playlists count as queueable contexts (artist catalogs #1353, feeds/search). publish the five record lexicons (`fm.plyr.track`, `.like`, `.comment`, `.list`, `.actor.profile`) with a docs-quality pass on each (next phase after #1569); a production smoke-test harness for private media (file-types × visibilities, fully inert — no DM/listing/stats — per prod release); enable the `copyright-paradigm` flag for own DID and start dogfooding on prod; co-writer / publisher editing UI for `additionalInterestedParties` (backend plumbed end-to-end, frontend deferred); prefill ISWC/ISRC/masterOwner on the portal edit form (we only have the URIs locally, not field contents); fly worker tcp health check (running-but-stuck symptom detector); upstream `atproto_oauth.OAuthClient` body-factory support (lets us drop `_signed_streaming_post`); deploy-docs sanity check; `config.py` decomposition.
 
 ### known issues
+
+- **browser private-media e2e stops at PDS sign-in** (September 13): runs
+  [34767184692](https://github.com/zzstoatzz/plyr.fm/actions/runs/34767184692) and
+  [34785740209](https://github.com/zzstoatzz/plyr.fm/actions/runs/34785740209)
+  both timed out before upload or playback because the browser blocked the
+  `pds.zat.dev` authorization form under `form-action 'self'`. This predates
+  #2057. Authenticated API and actual Space blob smoke passed; they do not prove
+  that browser sign-in/upload works. The CSP cause remains unresolved.
+- **one artwork scan returned 400** (September 13, 18:33 UTC): track 1303's
+  artwork saved and its CDN read returned 200, but the background request to
+  the moderation service's `/scan-image` failed. The trace did not record the
+  rejection reason. Neither successful artwork storage nor a completed task
+  establishes that this image was scanned; diagnosis remains open.
 
 - **Cloudflare's JAX colo serves 100% 5xx for the R2 media domains** (observed August 27, ~17:00Z onward): users routed to Jacksonville get 500/502 on `audio.plyr.fm`/`images.plyr.fm` while every other colo is healthy — player shows `NaN:NaN`, artwork missing, page otherwise fine. Nothing to fix on our side; unacknowledged on cloudflarestatus.com. If it persists, escalate to Cloudflare support with a ray ID from an affected user (`a31cbef0bed07221-JAX`), the zone, and the colo-scoped analytics. Remove this entry once the 5xx count at JAX drains.
 - **a broker proof does not pin the payer record it signs** (#1939, observed August 26): across 7 sampled live attestations, the proof's inner `cid` matches no recomputable CID of the payer record's current content, with or without `signatures`. So verification pins the *proof* and trusts the broker's `verified` status, while mutable payer fields — including `subject`, the artist being supported — are taken on the payer's word. Forging supporter standing for an arbitrary artist still costs one real broker-verified payment to someone, which is why this shipped rather than blocked. Queued as a question for ATM; if the answer is "proofs aren't meant to pin content", the public `network.attested.payment.lookup` endpoint is the better branch anyway.
@@ -500,7 +551,7 @@ still live from them is in known issues.
 - ✅ lossless audio (AIFF/FLAC) — AIFF uploads publish instantly as a 16-bit WAV compatibility rendition; the MP3 streaming rendition + PDS blob are produced by a deferred background task without blocking the upload
 - ✅ PDS blob storage for audio (user data ownership)
 - ✅ play count tracking, likes, queue management
-- ✅ downloads — public ungated tracks (lossless originals preferred) and whole albums as cached zips, with a per-artist opt-out
+- ✅ independent listening and download permissions, inherited as snapshots from Portal/album defaults with per-track overrides; downloads prefer lossless originals, and whole albums use cached zips
 - ✅ repeat-one on the desktop player
 - ✅ experimental subsonic-compatible surface at `/rest` (developer token as password)
 - ✅ "keep playing" — opt-in continuous playback from the For You feed when the queue runs dry ("next from: for you")
@@ -587,7 +638,10 @@ see the [contributing guide](https://docs.plyr.fm/contributing/) for setup instr
 
 ---
 
-this is a living document. last updated 2026-09-05 (**player descenders and exact queue track identity**, #2026–#2028; backend release `2026.0905.202501`, then frontend promote). Earlier that day: (**the status-maintenance run knows where things landed, reads the atmosphere, and runs on fable 5.1**, #2008–#2020). the 2026-09-04 note: (status maintenance for the September 2–4 window: the September 1–2 player arcs — skip buttons #1958–#1966 and the passing-comment stack #1968–#1980 — moved to `.status_history/2026-09.md`, the August index and the `SELECT neondb` known issue compressed against `.status_history/2026-08.md`, and the footer arc's landing corrected — #2001–#2004 are in prod with `2026.0903.222140`, not a frontend promote. #2008, the window report that feeds this run, is merged and staging only.) the same day's earlier note recorded **the ingest-blackout alert fired on a sign-up** (#2006 — prod `2026.0903.222140`; the quiet-window host rotation is gone, #1796 narrowed), and September 2's recorded **the footer became spotify's and then the only footer**. earlier entries are preserved in `.status_history/`.
+this is a living document. last updated 2026-09-14: publishing access and PDS
+round-trip production releases (#2049, #2056, #2057), verified access semantics,
+and outstanding browser sign-in/artwork-scan failures. Earlier entries are
+preserved here and in `.status_history/`.
 
 ### September 6 — musician studio reset
 
