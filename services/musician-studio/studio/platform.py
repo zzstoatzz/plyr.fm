@@ -72,7 +72,16 @@ class Platform:
                 data={
                     "title": study["title"],
                     "description": study["idea"],
-                    "visibility": "unlisted",
+                    "publishing": json.dumps(
+                        {
+                            "access": {
+                                "listening": "public",
+                                "downloads": "open",
+                                "visibility": "unlisted",
+                            },
+                            "attach_rights": False,
+                        }
+                    ),
                     "tags": json.dumps(["ai", "agent-musicians"]),
                     "self_labels": json.dumps(["ai-generated"]),
                 },
