@@ -47,378 +47,218 @@ plyr.fm should become:
 
 ### September 2026
 
-#### Space checks follow the track's listening audience (#2057, September 14 UTC)
+#### publishing permissions are independent of storage (#2047, #2049, #2052–#2058, September 12–14 — prod `2026.0913.023332` → `2026.0914.040530`)
 
-**why**: ordinary signed-in playback asked for Space credentials even when the
-artist's PDS did not support Spaces. Those requests returned 400s, added latency,
-and logged warnings before playback succeeded.
+**why**: an artist wanted the ordinary case — anyone listens for free, no
+file download offered — and the model could not say it. rights metadata chose
+storage (`write_track_rights` moved audio to private R2 and added a support
+gate), the upload form mixed discovery, audience and downloads in one picker
+and hid the download choice when copyright was set, and the August dial
+(#1842: open / ask / supporters / off) was artist-wide. #2047 was a first cut
+(a per-track override in `extra`, an `r2_private` marker); #2049 replaced its
+semantics the same day. announced September 13.
 
-**what shipped**: streaming, HEAD preflight and offline URL resolution ask the
-Space authority only for tracks set to “my Space members,” after releasing the
-database session. Public listening and the signed-in, owner and supporter gates
-keep their existing behavior. This follows the work's policy, not whether its
-artist has a Spaces-enabled PDS or its audio lives in private R2 storage.
+**the shape**: `utilities/publishing.py` — `PublishingPolicy` is three
+independent axes, *listening* (public / signed-in / supporters / owner /
+space), *downloads* (open / ask / supporters / off) and *visibility* (public /
+unlisted / private), with `attach_rights` a fourth choice that no longer
+touches storage. protected audio is derived: anything but public listening
+with open-or-ask downloads lives in private R2. defaults flow by **snapshot**:
+`resolve_publishing(portal, album, track)` picks track override, then album
+template, then Portal defaults, and the upload persists the policy plus a
+`policy_origin`. album application is an explicit batch that keeps per-track
+exceptions unless the artist ticks "replace". migration `311b4f106c90`
+snapshots each track's effective policy in SQL, tags gated rows
+`r2_private`, drops the old preference column, and has no downgrade; it moves
+no bytes. 1,064 prod tracks, four supporter-gated, three native-private. the
+SDK/CLI shipped as `0.0.1a25`; legacy upload fields are rejected outright.
 
-**verified**: production release `2026.0914.040530` contains this fix. All 54
-staging API checks passed, including actual protected-Space blob reads and
-non-member denial; browser playback, sign-in CTA and the standard private-track
-404 passed. Production playback/download bytes, discovery exclusions and access
-gates passed. All nine authenticated production smoke traces had zero
-unnecessary Space-authority calls. The backend suite passed 1,752 tests with
-25 existing skips in 21.42 seconds. The separate browser-upload sign-in failure
-remains documented under known issues.
+**the round trip**: restricting an existing work (`_prepare_protected`)
+records a revision, fetches the PDS blob and checks its CID, copies master and
+a separate MP3 rendition to the gated bucket, then nulls `r2_url` and
+`pds_blob_cid` and rebuilds the record before the policy commits. the reverse
+did not exist: turning downloads back on left a track in private R2 with no
+PDS blob. #2056 (`prepare_public`) streams the playback file back to the PDS
+through the shared `upload_stored_audio`, republishes CDN copies, and keeps
+the private copies because revisions can share keys; four on/off/on
+regressions fail on the old code. production track 1303 was repaired through
+the normal job and its 24 MB PDS blob hashed against the playback file. an
+earlier repair attempt — a second application import on a prod VM — coincided
+with an instance going unresponsive; use the HTTP/job path.
 
-#### restoring PDS audio after access restrictions (#2056, September 13 UTC)
+**#2057**: `stream_audio` and `get_audio_url` asked `can_access` for every
+signed-in non-owner, inside the open DB session; a PDS without Spaces answers
+400, which `private_access.py` deliberately does not cache, so every play
+re-asked. a ten-line diff moves the call under the space-audience branch after
+the session closes. 18-case parametrized test; 54 staging API checks and nine
+production traces with zero authority calls; suite 1,752 passed.
 
-The publishing round trip exposed a missing transition: removing restrictions
-left the track in private R2 with no PDS blob. Public-policy preparation now
-streams the playback audio back to the PDS, publishes CDN copies of playback
-and original audio, and rewrites the record before committing the new policy.
-The PDS-upload opt-out remains effective; native Space boundaries remain separate.
-Private copies are retained because tracks and revisions can share their keys.
-The stored-audio upload operation is shared with Portal saves, per-track PDS
-migration and revision restoration, preserving AudioKey resolution and streaming.
+**what cannot be undone**: previously public originals, PDS blobs, CDN caches
+and old zips. "downloads off" is distribution control, not DRM — playback
+still delivers bytes — and listening is still persisted in the legacy
+`support_gate` column. the two loose ends (browser e2e blocked at PDS sign-in;
+one artwork scan 400) are in known issues. plans:
+`docs/plans/2026-09-12-publishing-access.md`, `…-staging-publishing-smoke.md`,
+`…-13-publishing-release.md`; full write-ups in `.status_history/2026-09.md`.
 
-Regression coverage drives the publishing HTTP endpoint and job through downloads
-on/off/on for public and unlisted works, including ask-to-download. It also covers
-PDS opt-out, continued listening restrictions, upload/record failure and retention
-of private copies. The four round trips fail on the old implementation.
-No database migration or automatic catalog-wide republishing is introduced.
+#### three musicians who must listen before they publish (#2031–#2033, #2037–#2042, #2046, #2050, #2051, September 6–12 — prod `2026.0907.200622` → `2026.0913.023332`)
 
-**released**: `2026.0913.160459`. Staging exercised the downloads on/off/on
-round trip against actual PDS records and blobs. The affected production track
-1303 was repaired through the normal publishing API/job; fetching its full PDS
-blob and comparing its hash verified the bytes, not just the database storage
-label. The original source ID and requested access policy were preserved.
-A standalone diagnostic process coincided with an unresponsive production app
-instance; restarting recovered it. Use the normal HTTP/job path for such repairs,
-not a second application import on a production app VM.
+**what it is**: `services/musician-studio/` runs Moss, Kite and Reed — three
+persistent agent accounts, each a JSON profile with an ethos, a seven-axis
+taste vector, a curiosity scalar and four named inspirations. Every six hours
+(Prefect, on the home worker, one musician per run) the composer model writes
+a `MusicalPlan` and then a numpy script that must emit exactly ten seconds of
+stereo audio; the script runs in a Docker container with no network, a
+read-only root and a 30 s deadline, against a read-only instrument library
+(#2037). Metadata and any *taste revision* are module-level constants the
+host parses — a musician changes its mind by rewriting a dict literal about
+itself. Peers are chosen by taste distance blended with curiosity; a kept peer
+track lands in a plyr playlist named after the listener. Uploads are unlisted,
+tagged `ai`, self-labeled `ai-generated`, from accounts carrying a
+self-applied `bot` label (see below). Budget: $0.10 reserved per session,
+$10/day, $10/month, one upload attempt per musician per day; the first full
+run cost about a cent.
 
+**the listening gate** (#2032, #2033): nate — "reading code is not
+listening." No upload without a native-audio self-review of the draft, a
+rendered revision, a review of that exact hash, and a peer review of it, all
+through Gemini with the WAV inline and the audio-token count recorded as the
+receipt. Live run `ee1b967d` did the whole cycle and Moss withheld the piece;
+that is a completed study, not a failure. No track has yet been released
+under the full gate.
 
+**what the controls said** (#2039, #2041): blind calibration clips the host
+knows the answer to — silence, pulses, sequential vs stacked notes, then bass
+entrances crossed with melody changes. Earlier probes had a model describe
+"distinct, melodic, resonant tones" in silence; the current listener passes
+the isolated controls and gives questionable bass-entry answers on a mix. A
+token receipt proves ingestion, not perception.
 
-#### publishing defaults and independent audio access (production, #2049)
+**forensics and plumbing**: Moss's published bootstrap track 1284 scheduled
+chords, bass and melody in *seconds* into a mixer indexing by *samples*, so
+the harmony played in the first 200 microseconds and both reviewers passed
+it (#2038; peers now get plan, memory and the recording, never code). The
+renderer had been discarding stderr, so weeks of failures read as "Docker
+exit 1" (#2050); with the traceback kept, Reed's run turned out to be
+`default_rng` called on a Generator, and draft/revision renders now get one
+traceback-guided correction each (#2051; #2040 did the same for syntax). The
+studio was on Gemini's free tier — `…PerDayPerProjectPerModel-FreeTier=20` —
+and Google's 429 suggested retrying in five seconds on a daily quota; daily
+exhaustion now stops retries (#2046). Every paid call is its own Prefect task
+with cached results, so a same-day retry never pays twice (#2042). Day-by-day
+log in `.status_history/2026-09.md`.
 
-The motivating artist request was free public listening without offering file
-downloads. Making copyright metadata choose storage or exposing overlapping
-upload controls obscured that intent. The
-[September 13 announcement](https://bsky.app/profile/plyr.fm/post/3mvgek4emnc2e)
-describes the shipped choices: who listens, who downloads and whether the work
-appears in For You/radio.
+#### agents on both sides of the API, and a bot label that is the account's own word (#2022–#2025, #2036, September 5–8 — prod `2026.0905.202501`, frontend promotes September 5 and 8)
 
-Portal defaults now supply listening, downloads, discovery and optional rights
-settings to uploads. Tracks save a concrete policy; album application preserves
-explicit track exceptions unless the artist elects to replace them. Restricting
-an existing work prepares protected audio before updating its published source.
-Previously public copies cannot be recalled. Native Space boundaries remain
-explicit and are not rewritten by this operation.
+- **coding agents** (#2022): the 19 project skills moved to
+  `.agents/skills/<name>/SKILL.md` with `.claude/skills` as symlinks, shared
+  instructions to `.agents/AGENTS.md` with root `AGENTS.md`/`CLAUDE.md`
+  resolving to it, scoped `AGENTS.md` files beside the code they govern, and
+  `just setup` verifying the links. one source, two agent runtimes.
+- **agents using plyr as a service** (#2024, #2025): `plyr.fm/llms.txt` is
+  the canonical guide — pick a surface (HTTP, SDK, CLI, read-only MCP),
+  search-inspect-then-act, "a metadata response is not proof audio played" —
+  and the docs site embeds it raw instead of two copy-pasted prompts. parity
+  is enforced: a client-facing OpenAPI snapshot is diffed by
+  `scripts/check_client_contract.py` in pre-commit, and `interface-contracts.yml`
+  runs plyr-python-client's contract and doc-example checks against this repo.
+- **the bot label** (#2031, #2036): a profile shows the robot only for a
+  *self-applied* ATProto `bot` label — `src` is the account's own DID, on its
+  own `app.bsky.actor.profile/self`. third-party labels and name heuristics
+  are ignored. the boxed "bot" badge became a small inline glyph beside the
+  display name with an "Automated account" title. this is the disclosed side
+  of the voluntary-label trade-off Astral's spring write-up described.
 
-The migration snapshots existing download behavior and removes the old write
-contract rather than maintaining compatibility aliases. Inventory, source-history
-review, migration implications and smoke evidence live in
-`docs/plans/2026-09-12-publishing-access.md`. Local browser testing uses isolated
-fixtures and an S3 emulator alongside the real app, worker and transcoder.
-The redesign deployed to staging at `78a40af1`; migration `311b4f106c90` applied
-and health checks passed. Nineteen app-password uploads exercised the access
-matrix against real PDS and R2 storage. Artist/anonymous detail, playback,
-downloads, latest feeds, artist listing and all five radio stations matched
-the tested policies. Evidence and remaining signed-in non-owner checks are in
-`docs/plans/2026-09-12-staging-publishing-smoke.md`. Production release
-`2026.0913.023332` passed the documented smoke. The matching SDK/CLI is published
-as `0.0.1a25` from plyr-python-client#42; public guides now explain independent permissions and
-snapshot defaults. Staging fixes #2053 and #2054 cover the standard private-track
-404 and signed-out like CTA; #2048 defaults top tracks to the past month.
-Release scope, migration verification and production smoke are recorded in
-`docs/plans/2026-09-13-publishing-release.md`.
+#### smaller things that reached production, September 5–13
 
+- **edit a track where you see it** (#2030, prod `2026.0907.200622`): a pencil
+  on the track page and in the portal opens one shared `TrackEditForm` in a
+  native `<dialog>`; queue, footer and cache update in place, a `mutationEpoch`
+  guards against stale sync responses. #2045 (frontend promote September 9)
+  gave the form its scroll owner — on a 390×640 phone it grew to 1,093 px
+  inside a dialog that hid overflow — and linked the record on pds.ls.
+- **suggested tags for PDS-hosted audio** (#2034, #2035, prod
+  `2026.0907.200622`): classification only ran when `r2_url` was set, so
+  PDS-hosted tracks silently had none; the endpoint now resolves the audio URL
+  the way the upload hook does (R2, presigned private R2, or `getBlob` after
+  `is_safe_url`), and the editor shows unavailable/failed states with a retry.
+- **interrupted PDS uploads close their streams** (#2043, prod
+  `2026.0909.055649`): track 1288's Blacksky mirroring failures showed the R2
+  source iterator, sometimes under the heartbeat wrapper, left open after a
+  failed `uploadBlob`; an `_upload_body` context manager owns both. twelve
+  transport regressions. the Blacksky failure itself is unexplained.
+- **embeds caught up with the player** (#2044, prod `2026.0909.055649`): all
+  five embeds on neutral surfaces, native range seek, collection lists
+  scrolling above a fixed transport. URLs and station params unchanged.
+- **top tracks default to the past month** (#2048, prod `2026.0913.023332`);
+  an explicit saved choice still wins.
 
-#### the player’s clipped “g” exposed a track-identity collision (#2026–#2028, September 5)
+#### September 1–5 (archived)
 
-**why**: nate first spotted the bottom of the “g” missing from the player’s
-“single” label, then reported hearing “ft sando (live on logan)” while the
-footer showed bufo.uk’s “test”. Both uploads share audio file
-`b3d77f40b53a7e57`: track 1249 is nate’s original, 1261 is the other upload.
-The queue persisted audio file IDs, and both server hydration and frontend
-restoration collapsed that file to one track. The audio was right; the title,
-artist, artwork, and track-page link could all belong to the other upload.
-
-**what shipped**: #2026 raises metadata line height from 1.15 to 1.4, leaving
-room for handwritten-font descenders. It reached production first as a
-frontend-only promote. #2027 teaches server hydration to use database track
-IDs; #2028 saves those IDs for queue order, original shuffle order, and the
-current track, then restores metadata by that identity. Repeated occurrences
-remain separate, and a missing record is omitted instead of substituted with
-another upload of the same audio. Backend support reached production in
-`2026.0905.202501` before the frontend promote enabled the new fields.
-
-**compatibility**: queue state is JSONB, so this needed no migration. The
-legacy file-ID fields remain for older clients. Old snapshots cannot tell us
-which upload was selected; they resolve deterministically to the lowest track
-ID. Selecting the intended track again in the updated frontend saves its exact
-identity. Audio identity is useful for caching bytes; it cannot stand in for
-a published track’s identity. Design: `docs/internal/frontend/queue.md`.
-
-**verified**: regression tests reproduced the substitution before the fix;
-1,626 backend and 216 frontend tests passed (25 existing backend skips).
-The “single” label was inspected at 1280px and 390px in dark and light themes
-on staging and production. Staging hydration preserved shared-audio uploads
-and repeated entries. The production frontend’s intercepted queue round trip
-reproduced the original swap before deployment and retained the selected track
-after save and reload with the fix, without modifying a listener’s queue.
-
-
-The staging integration suite passed all 22 tests on rerun. Its first run
-hit a 120-second album-upload HTTP timeout during a staging slowdown that
-coincided with an extra diagnostic process; the other 21 tests passed. The
-rerun ran without that probe. No application change was needed for the retry.
-
-A second Python process used for a production hydration probe coincided with
-one 1 GB app instance becoming unresponsive. The public API remained available
-through the other instance; the affected instance was restarted and recovered.
-The probe returned no result. Avoid importing the application in an extra
-process on production app VMs; use staging and HTTP-level verification.
-
-#### the footer became spotify's, then became the only footer (#1987–#2004, September 2–3 — GA in prod `2026.0902.232901`; the phone follow-ups #2001–#2004 reached prod as frontend-only promotes on September 3, 00:13Z and 00:54Z)
-
-**why**: nate: "standardize the player by shamelessly copying Spotify and
-cease all experimentation with the player component." the pitch named the
-one thing the old footer never managed — a like control — and a fungible
-now-playing page as the follow-on. the whole thing rode the `skip-buttons`
-flag for half a day of staging review, then "open it up for everyone".
-
-**what shipped**: three regions on desktop — art, title and heart on the
-left; shuffle, previous, ±skip, play, ±skip, next, repeat on one row with
-the scrubber beneath spanning the centre column; queue button and volume on
-the right. on phones the compact bar is art, title, heart, play, next, and
-the second row is skip-back, times and scrubber, skip-forward, queue. the
-polish pass (#1992) came from a checklist across spotify, apple music,
-youtube music, tidal, soundcloud, vidstack and material 3: transport idle
-secondary → primary on hover, active toggles carry a 4 px dot, a 4 px
-scrubber with a thumb hidden until hover and a 20 px hit area, click-to-mute
-volume, a 2 px focus ring.
-the classic footer, the `stacked`/`stage` props and the flag are deleted
-(#2000) — one layout, one style block. the floating queue button is gone
-(#2001, #2002): it "confused people" and duplicated the footer's own.
-
-**the heart is the add menu, not a toggle** (#1993–#1998): nate: "when I
-click the Like button, it should do what the Like button does on pretty
-much every other page" — like, or add to a playlist. so the footer mounts
-`AddToMenu` with a `plain` (borderless) trigger and `align="start"`, so the
-menu opens upward from the heart's left edge into the footer's empty middle
-rather than leftwards over the toast stack. every heart reads through the
-like owner in `lib/likes.svelte.ts`, which loads the viewer's liked ids
-once because the queue's server sync hands back tracks without `is_liked`
-(#1988; dropping that load made the footer heart start unliked, #1994). the
-phone sheet is portaled to `body` (#1996) because the footer's
-backdrop-filter made itself the containing block of a `position: fixed`
-sheet, and it rises from above the player strip rather than dropping from
-the top of the screen (#1999). the portal brought two bugs, and the second
-is the lesson: a stronger desktop selector squashed the phone sheet to its
-borders (#1997), and with the sheet outside the app root svelte dispatches
-its clicks from `document`, so `closest()` on an already-swapped target
-found nothing and closed the menu on taps *inside* it — judge
-inside/outside by `composedPath()`, not the target's ancestors (#1998).
-
-**the phone scrubber row shared the bar's grid columns** (#2003): the range
-input sat at its intrinsic 129 px at every width and, once the queue button
-joined the row, collided with skip-forward at 320 px. the second row is now
-its own flex row spanning the grid, with the skips and the queue button as
-snippets rendered once per breakpoint. #2004 fixed radio on phones, where GA
-had put the ∞ marker and play in the same column.
-
-**what the GA changed for everyone**: `seekbackward`/`seekforward` are
-registered for all now, so iOS shows ±skip in place of ⏮/⏭ on the lock
-screen — the trade the flag existed to try, accepted. previous, repeat and
-shuffle are not on the phone bar. the queue can shuffle upcoming tracks,
-but it has no previous-track or repeat control; those remain a gap for the
-now-playing page. with nothing playing there is no footer and so no
-queue button (Q still opens the panel).
-
-**next**: the fungible `/now` page reading `player.currentTrack`, with the
-footer as its handle on phones — that is where the queue moves.
-
-#### the ingest-blackout alert fired on a sign-up, and the quiet-window host rotation is gone (#2006, September 3 — prod `2026.0903.222140`)
-
-**why**: the `jetstream ingest blackout` alert (writes happened, zero
-dispatches) fired for ten hours on September 3. replaying two public
-jetstream hosts with the `fm.plyr.*` filter showed both writes on the
-network: one sign-up — the profile record, whose `create` was never in the
-dispatch table, and a like twenty seconds after the artist row, dropped as
-an unknown DID because the consumer's known set refreshes every five
-minutes. no data was lost (the API writes the database before the PDS);
-the echo signal itself had two permanent holes, and every future sign-up
-on a quiet night would have tripped it.
-
-**what shipped**: a commit in plyr's own namespace from an unknown DID
-forces a known-DID refresh (at most one per ten seconds) before the drop;
-bluesky profile commits never do. `.actor.profile` create dispatches to
-the same ingest as update. and the blind-host timer is deleted: nate —
-"we need to stop randomly rotating just because its quiet." the old
-`_is_blind` rotated whenever `fm.plyr.*` was silent while bluesky traffic
-flowed, which on a healthy host is every quiet night. rotation now needs
-evidence: the write site stamps redis with the time of plyr's latest
-own-namespace write, and the consumer rotates when that write is older
-than `echo_grace_seconds` (120) with no own event since (compared on
-firehose `time_us`, 30 s of skew tolerated), once per write, rewinding the
-cursor to before the write so the next host replays it. a second host
-missing the same record means the network lacks it, which is the alert's
-job. `_load_cursor` no longer moves the cursor forward past memory — the
-reload before every reconnect had been erasing the rewind, so the
-existing 10 s rotation rewind was a no-op.
-
-**verified**: staging's e2e run wrote seventeen records and each `pds record
-write` was followed by a `jetstream dispatched` within a second, with no
-rotation. prod held one connection through the night with zero own writes, so
-the prod echo path waits on the first real write. `fly logs` from these
-machines ships in batches an hour or more behind, so liveness was read from
-redis (cursor age) and Logfire. design:
-`docs/internal/architecture/jetstream-ingest.md`, "hosts: rotate on evidence,
-never on quiet".
-
-#### the status-maintenance run knows where things landed, reads the atmosphere, and runs on fable 5.1 (#2008–#2020, September 4–5 — the workflow itself)
-
-**why**: nate, on the weekly transcript: it "is often not picking up on
-where things actually landed in terms of production releases. it should
-know about releases and posts on bsky"; then: "a lot of times changes in
-this app are precipitated by changes on Bluesky that appear in long-form
-writing", so the agent in CI should read the pub-search index; and "we
-should know what model we're using."
-
-**what shipped**: `scripts/status_window.py` (#2008, #2010, #2011) writes
-a window report the run starts from — per merged PR, where it landed
-(`prod via release <tag>`, `prod via frontend promote <time>`, `staging
-only`, `docs only`), the releases and the Cloudflare Pages `production-fe`
-promotes in the window, the plyr.fm account's public posts, and the arcs
-already archived. a frontend-only release is a bare branch push with no
-GitHub workflow, so Pages is its only record; the Pages API caps
-`per_page` at 25 and answers 400 above it, which is why the first live run
-had no promotes and re-dated #2001–#2004 to the later backend release
-(#2012 corrected STATUS.md). the run also reads the atmosphere (#2013,
-#2016, #2018): a research step with the pub-search MCP server seeds 3–6
-topics from the window and current focus, searches each with the window
-start as `since`, reads the top hits, and writes `ecosystem_context.md` —
-only writing that bears on a specific change in the window, grouped by that
-change, with nothing about discarded hits or empty topics, because nate:
-"mentioning that things are irrelevant is also not good, 'don't think about
-elephants'". the writer uses it one clause at a time and never as a
-segment. every run publishes its report, context, transcript and both
-Claude execution files to the job summary and a `status-run-outputs-<run
-id>` artifact (#2014, #2015), with `window_since`, `research_only` and
-`model` dispatch inputs for evaluating the process against a past window.
-the model is named once (`STATUS_MODEL`) and printed in every maintenance
-PR body; a research-only trial on the September 2–4 window put
-`claude-fable-5-1` at $2.20 against opus 5's $1.86 with three on-target
-documents opus had missed, so the run moved to fable (#2019, #2020). the
-whole run costs about $5 a week.
-
-**two things the runs taught**: the research began as a Task subagent
-inside the writer's run; the agent ran in the background, the writer ended
-its turn "waiting on the research subagent", and the session closed with
-nothing written (run 33936254221) — a separate step that finishes first is
-the fix. and a parallel burst of searches made pub-search answer 502 on a
-quarter of calls, so the step searches one call at a time with a retry.
-docs: `docs/internal/tools/status-maintenance.md`.
-
-**still open**: the writer has not yet run on fable; the next scheduled run
-(Mondays 14:00 UTC) is the first full run of the whole process. #2017, a
-forced-window evaluation PR from the September 4 runs, was closed as
-superseded by this entry. `.status_history/2026-07.md` carries duplicated
-arc entries from earlier maintenance runs, which the report's project-scope
-section surfaces and nothing yet fixes.
-
-#### September 1–2 (archived)
-
-See `.status_history/2026-09.md` for detailed history:
-
-- **skip buttons, drawn until they were right** (#1958–#1966, September 1–2)
-  — ±5/10/15 s buttons behind the `skip-buttons` flag, the step following
-  track length through one ladder in `lib/skip-step.ts`, and four passes on
-  the glyph (a chevron tip reads as a hook at 24 px; an svg inherits its font
-  from the `<button>`, and georgia's old-style figures need `lining-nums`).
-  the flag died with #2000; the rule survives — judge an icon as a drawing,
-  at the largest size and the shipped size, in the row it lives in.
-- **passing comments became a stack that reads the page** (#1968–#1980,
-  September 2) — bubbles stack toast-style instead of replacing each other,
-  placement measures the free bands above and below the trigger's row from
-  the DOM and caps the stack to what fits, docking at the player is the last
-  resort, and the motion settled at one breath after "really corny and heavy
-  handed". ten PRs, five of them corrections to the one before, each found by
-  replaying a five-comment burst on staging after the merge.
-- **the upload form shows what it knows about the file** (#1954, prod
-  `2026.0901.203801`) — choosing a file mounts an `AudioPreview` card: name,
-  `m4a · 88 MB · 1:02:14`, a waveform, play/pause with seek, all read locally.
-  the waveform has a measured cap because chromium spends ~100 MB of transient
-  memory per audio minute in `decodeAudioData`. as first shipped it began the
-  transfer on selection; #1957 moved it back to submit — plyr holds nothing
-  until you say so.
-- **the notification bot survives a revoked Bluesky session** (#1953, prod
-  `2026.0901.203801`) — session errors are classified by exception type now,
-  with one re-login and retry; the old string match on `"auth"`/`"401"` never
-  saw `ExpiredToken: Token has been revoked`. transient failures still have no
-  retry path (known issues).
-- **a passing comment no longer hides under the player** (#1962, prod
-  `2026.0902.045540`) — superseded within a day by the measured-band stack.
+See `.status_history/2026-09.md` for the full write-ups:
+- **the player's clipped "g" exposed a track-identity collision**
+  (#2026–#2028, September 5 — frontend promotes September 5, backend in prod
+  `2026.0905.202501`): two uploads shared audio file `b3d77f40b53a7e57`, the
+  queue persisted file IDs, and hydration collapsed them to one track — right
+  audio, wrong title and artwork. the queue now saves database track IDs
+  beside the legacy file IDs; a missing record is omitted, never swapped for
+  a same-audio sibling. audio identity caches bytes; it is not a track's
+  identity. design: `docs/internal/frontend/queue.md`.
+- **the footer became spotify's, then became the only footer** (#1987–#2004,
+  September 2–3 — GA in prod `2026.0902.232901`, phone follow-ups as
+  frontend-only promotes September 3): one layout, the heart is the add menu,
+  the classic footer and the `skip-buttons` flag deleted.
+- **the ingest-blackout alert fired on a sign-up; quiet-window host rotation is
+  gone** (#2006, September 3 — prod `2026.0903.222140`): rotation now needs
+  evidence (plyr's own unechoed write), and `_load_cursor` stopped erasing the
+  rewind.
+- **the status-maintenance run knows where things landed, reads the atmosphere,
+  and runs on fable 5.1** (#2008–#2021, September 4–5 — the workflow itself):
+  `scripts/status_window.py` writes the window report, a pub-search research
+  step writes `ecosystem_context.md`, and the model is named in every PR. this
+  September 14 run is the first full run of that process; #2017 closed as
+  superseded.
+- **September 1–2**: skip buttons drawn until they were right (#1958–#1966)
+  and the passing-comment stack (#1968–#1980), both superseded within days;
+  the upload form's local file preview (#1954, #1957) and the notification bot
+  surviving a revoked session (#1953), prod `2026.0901.203801`.
 
 ### August 2026
 
 See `.status_history/2026-08.md` for detailed history:
 
 - **client-side writes, phase 0 — shipped August 31, reverted September 1**
-  (#1948–#1950, #1952) — the frontend became a second OAuth client and chained
-  its consent after the cookie login, so every sign-in showed two authorization
-  screens for a scope nothing used yet. the plan
-  (`docs/plans/2026-08-31-client-side-writes.md`) stays as the direction; its
-  sign-in section must be redesigned before any phase ships.
-- **uploads became resumable sessions, and "slow" stopped meaning "dead"**
-  (#1947, August 29 — prod `2026.0901.065150`) — an R2 multipart session with
-  10 MiB parts, stall timeouts and retries, and a worker phase that settles the
-  staged bytes; woody's 391–579s uploads had been called failures by a fixed
-  300s client timeout. docs: `docs/internal/backend/resumable-uploads.md`. the
-  field reports around it (#1943) were an upload failing before it sent, a
-  transfer window read as a failure, and Cloudflare's JAX colo 5xx-ing the R2
-  media domains.
-- **supporter gating learns attested.network payments** (#1936, #1938, #1939)
-  — a neutral `validate_supporter` choke point verifying attested.network payer
-  records against trusted-broker proofs ahead of the atprotofans branch. ATM's
-  checkout owns the payer OAuth; plyr reads and never holds a payments-write
-  credential.
-- **plyr never stores membership — access is the space credential** (#1930,
-  August 23) — the `private_media_members` mirror depended on the artist
-  opening their member list, so `_internal/private_access.py` now asks the
-  artist's space host with the reader's own session and caches only that
-  answer; table, model, mirror and reconcile deleted in `a81c2d9e4f07`. the
-  contract catch-up that got there is #1876–#1905, design in
+  (#1948–#1950, #1952): a second OAuth client meant two consent screens per
+  sign-in. plan `docs/plans/2026-08-31-client-side-writes.md` stays as the
+  direction; its sign-in section must be redesigned first.
+- **uploads became resumable sessions** (#1947 — prod `2026.0901.065150`):
+  R2 multipart with stall timeouts and retries; "slow" stopped meaning "dead".
+  docs: `docs/internal/backend/resumable-uploads.md`.
+- **supporter gating learns attested.network payments** (#1936, #1938, #1939):
+  a neutral `validate_supporter` choke point; plyr reads and never holds a
+  payments-write credential.
+- **plyr never stores membership — access is the space credential** (#1930):
+  `_internal/private_access.py` asks the artist's space host with the reader's
+  own session; the mirror table was deleted. design:
   `docs/internal/architecture/private-media-access-list.md`.
-- **the queue became a direct-manipulation surface** (#1904, #1907–#1924,
-  August 22–23) — swipe-to-like / swipe-to-remove, the anti-slop oxlint sweep
-  across 91 files, keyboard actions on rows, two sync races found in staging
-  spans, and the unified mouse/touch reorder engine that deleted native HTML5
-  drag. Also **editing a track deleted its audio from the PDS** (#1904), whose
-  66-track blast radius stays in known issues.
-- **August 3–24** — a processing track looks processing before you press play
-  (#1934); comment timestamps seek on the first click (#1873); the iOS
-  lock-screen scrub unwind, reverted byte-for-byte (#1860–#1869, open as
-  #1870); teal scrobbles on the production lexicons (#1823); the non-modal
-  docked comments panel and the track page's redesign (#1843–#1855); downloads
-  from a flag into a per-artist policy, albums as cached zips (#1824–#1842);
-  the album batch that wedged the app VM on an aioboto3 default (#1831,
-  #1832); the media hosts' missing CORS policy (#1821), which is also why the
-  artwork accent wash was inert (#1753); `file_id` is not a storage key
-  (#1805–#1811); the credential chain closed one step at a time (#1778–#1790);
-  exclude as curation (#1797, #1799); search ranking lexical intent above
-  trigram fuzz (#1801); `/atlas`, the 2D semantic map of the catalog
-  (#1766–#1768); the redis password (#1786) and the blip that took the API down
-  (#1787); three player bugs with one disease (#1757–#1762).
+- **the queue became a direct-manipulation surface** (#1904, #1907–#1924):
+  swipe actions, keyboard rows, one reorder engine for mouse and touch. also
+  **editing a track deleted its audio from the PDS** (#1904), whose 66-track
+  blast radius stays in known issues.
+- **August 3–24**: downloads as a per-artist policy and albums as cached zips
+  (#1824–#1842); the non-modal comments panel and track-page redesign
+  (#1843–#1855); the credential chain closed one step at a time
+  (#1778–#1790); `file_id` is not a storage key (#1805–#1811); `/atlas`
+  (#1766–#1768); the redis password and the blip that took the API down
+  (#1786, #1787); the iOS lock-screen scrub unwind (#1860–#1870).
 
 ### November 2025 – July 2026
 
-See `.status_history/` for detailed history, one file per month, `2025-11.md`
-through `2026-07.md`. The arcs that used to sit under current focus — radio's
-live source (#1741–#1750), firehose ordering (#1732–#1740), moderation's
-recorded decisions (#1691–#1718), identity and discovery (#1620–#1730),
-`/atlas` (#1766–#1768), the player-architecture note (#1757–#1762), downloads
-as a relationship dial (#1824–#1858), and the queue as a direct-manipulation
-surface (#1907–#1924) — are in `2026-09.md` with their open threads; anything
-still live from them is in known issues.
+See `.status_history/`, one file per month, `2025-11.md` through `2026-07.md`.
+The arcs that used to sit under current focus (radio's live source, firehose
+ordering, moderation's recorded decisions, identity and discovery, `/atlas`,
+the player-architecture note, downloads as a dial, the queue as a surface) are
+in `2026-09.md` with their open threads; anything still live is in known issues.
 
 ## priorities
 
@@ -431,6 +271,16 @@ Today “my Space members” also means private metadata; private R2 audio alone
 not hide a work. Future Space-backed storage must preserve those audience choices,
 rather than turn every protected work into members-only content. Moving existing
 works across Space boundaries remains a separate migration decision.
+
+**three musicians, gated on listening** (#2031–#2051, September 6–12): Moss,
+Kite and Reed compose every six hours on the home worker and may not upload
+until a native-audio self-review, a revision, and a peer review of the exact
+rendered hash exist. No track has passed the full gate yet; the calibration
+controls say the listener hears isolated events and wobbles on a mix. **next**:
+a live calibration run in the evaluation window, a human ear on anything that
+does get released, and whether the app-level `bot` label should point at a
+machine-readable disclosure record like the one proposed on WhiteWind in
+January.
 
 **the player is spotify's footer now, for everyone** (#1987–#2004, September 2–3 — GA in prod `2026.0902.232901`, the phone follow-ups as frontend-only promotes on September 3): one layout — art, title, heart | shuffle, previous, ±skip, play, ±skip, next, repeat over a full-width scrubber | queue, volume — and on phones the compact bar plus a scrubber row that ends with the queue button; the floating queue button and the `skip-buttons` flag are gone. the heart is the add menu (like, or add to a playlist), reading through the like owner; the phone sheet rises from above the player. the passing-comment stack (#1968–#1980) and the drawn-icon rule (judge an icon as a drawing at the largest and the shipped size, in its row) stand. nate's standing instruction for this kind of iteration: promote to prod after the staging check without asking; design changes to the phone bar pause at staging for his eyes. **next**: the fungible `/now` page (the footer as its handle on phones, the queue moving there); whether skip handlers with `seekto` scrub on a real iPhone lock screen; the drawn-iconography idea (people draw plyr's icons, doodl-style, with published icon collections and an explore page) is parked as "soon, not now".
 
@@ -638,176 +488,7 @@ see the [contributing guide](https://docs.plyr.fm/contributing/) for setup instr
 
 ---
 
-this is a living document. last updated 2026-09-14: publishing access and PDS
-round-trip production releases (#2049, #2056, #2057), verified access semantics,
-and outstanding browser sign-in/artwork-scan failures. Earlier entries are
-preserved here and in `.status_history/`.
-
-### September 6 — musician studio reset
-
-The rejected score-entry experiment's seven tracks, three study playlists, and
-local/worker compositions were deleted. Accounts, encrypted credentials, and
-historical cost reservations remain. `services/musician-studio` replaces the
-single-instrument schema with isolated generated Python, named inspirations,
-persisted previous work, weighted peer selection, and optional taste revisions.
-Bot's influence-choice and self-authored personality work informed the setup.
-
-The replacement auto-scheduled Prefect run `77c97743-2d28-45e0-8bfe-85198e7b8a83`
-completed: three ten-second unlisted AI-labeled uploads (1283–1285), with Reed
-adding Kite's piece to a listening playlist. Estimated model usage for the run
-was $0.01225. The normal cadence is six-hourly, with one upload attempt per
-musician/day and $0.05/session, $0.20/day, $5/month reservation limits. The six-hour schedule and daily cost/credential monitor are active; the next run
-is September 7 at 06:17 UTC. Deployed source and runs are recorded in Prefect; the retired deployment
-must stay disabled. Model understanding of audio and title quality remain
-unproven; generated names are still formulaic. Current public display names have
-not been overwritten by the local account-name defaults.
-
-### September 7 — require listening before publication
-
-Nate clarified that every musical review must interpret actual audio, including
-self-review, a rendered revision and second listen, and peer feedback with the
-author's known inspirations. The old schedule and heartbeat were paused and all
-three queued runs cancelled. Native Gemini audio review and host-recorded release
-evidence now enforce this requirement locally; Luna is only the Python helper.
-The full live revision cycle is pending. Controls found real perception errors;
-model support for audio is not proof of accurate musical judgment. Diagnostic
-costs are retained in the same worker ledger, and caps are unchanged.
-
-### September 7 — audio cycle verified and resumed
-
-Nate authorized a $10 budget. Daily and monthly ceilings are now $10, with
-$0.10 reserved per session. Run `ee1b967d-7424-4864-8f0f-5441b876c635` completed
-the live cycle: Moss heard its draft, revised it, heard the revision, received
-Reed's audio feedback, and heard a published peer. Four native requests each
-recorded 250 audio tokens; the reviewed revision hash matched the ten-second
-stereo WAV on disk. Moss withheld the piece, so no upload occurred. Six model
-requests cost an estimated $0.037656. The six-hour schedule and quiet daily
-monitor are active again. This verifies the listening path, not musical quality.
-
-### September 8 — musical plans and instruments
-
-The studio now plans a ten-second phrase before generating Python, with tempo,
-meter, pitch relationships, motif, instrument roles and development persisted
-for later work. Optional pitched voices, percussion, timing and mixing helpers
-run inside the existing isolated container. Evaluation-only sessions share the
-normal budget ledger and cannot publish or curate. Live run `856e3252-7b2f-4710-9d61-21256c647005`
-completed for $0.040811, with no upload. It exposed plan-primed reviews and reuse
-of old synthesis: the final prompts hide plans from listeners and old code from
-new-piece generation. Musical quality remains for human assessment.
-
-### September 8 — peer code still carried a broken timing implementation
-
-Auditing Moss's published bootstrap track 1284 found a seconds/sample mismatch:
-`tone` forwards its start argument directly to a sample-index mixer, but chords,
-bass and melody supply seconds. Events intended for 0–9 seconds collapse into
-the first 0–9 samples; the pulse and percussion paths use sample units correctly.
-An isolated original render reproduced the saved peak/RMS; a two-line units
-correction restored the intended scheduling. This is a forensic correction, not
-evidence that a musician learned to fix it. Existing reviews missed the defect.
-
-The peer context still included entire old synthesizers after own-history code
-was removed. Peer selection now supplies metadata, plans and feedback without
-source code; the selected recording is still heard later. The regression test
-checks that boundary. No published audio or musician state was replaced.
-
-### September 8 — factual listener calibration
-
-The timing audit motivates a separate calibration mode: six anonymous audio
-controls with host-known silence, pulse, sequential-note and stacked-note
-answers. It uses the same audio client and existing evaluation reservation;
-wrong answers and audio receipts are retained. Normal music runs and publication
-rules are unchanged. Offline tests verify actual event timing and that repeated
-calibration reads saved receipts without spending again. Live calibration is
-pending the next evaluation window; no accuracy claim is made yet.
-
-### September 8 — native Prefect audio recovery
-
-Each paid audio interpretation and composition request now has its own Prefect
-task and durable result under the worker's studio directory. Audio requests
-retry transient provider/transport failures up to three times; invalid responses,
-auth errors and budget exhaustion fail immediately. Inputs include audio bytes,
-review context, schema, model and session. Cached results do not charge the ledger.
-A flow ID owns its original budget reservation across same-day reruns, keeping
-musician rotation stable; cross-day recovery cannot spend an old reservation.
-Musician history, release evidence and upload idempotency remain application data.
-
-An isolated SDK test and a mocked-provider run against the actual Prefect server
-both verified task retry, flow retry reusing a completed audio result, and cache
-invalidation after audio/context changes. This proves orchestration behavior;
-it does not establish that the upstream audio provider has recovered.
-
-### September 9 — close interrupted PDS upload streams
-
-Track 1288's Blacksky mirroring failures exposed unclosed source sessions.
-A transport-level regression reproduced an audio iterator remaining open after
-an interrupted POST, including through the progress-heartbeat wrapper. Upload
-attempts now explicitly own and close both the wrapper and source iterator for
-OAuth and app-password sessions, including cancellation and early rejection.
-The twelve regression cases fail on the previous implementation and pass with
-the fix. This repairs cleanup; it does not identify or resolve the original
-Blacksky transport failure, and no user track was retried or rewritten.
-
-### September 9 — refresh the embeds from the player work
-
-Radio, track, album, playlist and artist embeds now use consistent typography,
-neutral surfaces, intact artwork and prominent transport controls. The review
-started with their last edits (August 23's lint sweep), the January–March
-track/collection layouts and May–June radio layout, then followed the later
-player history: readable metadata, generous seek targets and unobscured covers.
-Track and collection seeking now uses a keyboard-accessible native range input.
-Collection lists scroll within the space above the transport; the iframe layout
-owns its viewport height so long lists cannot push controls out of view.
-Existing station/autoplay URLs, media-session behavior and moderation remain.
-
-### September 9 — restore scrolling in the mobile track editor
-
-The in-place editor locked body scrolling and clipped its dialog, but its form
-had no scroll owner. On a 390×640 viewport the form grew to 1,093px and lower
-fields could not be reached. The modal now constrains the form with min-height
-zero and overflow-y auto; its header stays visible and the existing sticky
-save/cancel row remains reachable. A real-browser Storybook regression fails
-without the scroll rules and passes with them. The header also links the
-published track record to pds.ls when an AT URI is available.
-
-### September 9 — diagnose the studio's Gemini daily quota
-
-A budgeted native-audio request reproduced HTTP 429 with quota
-`GenerateRequestsPerDayPerProjectPerModel-FreeTier=20` for Gemini 3.5 Flash.
-The provider also suggested a five-second retry, despite identifying a daily
-limit. Audio errors now retain structured quota IDs and limits in Prefect while
-omitting raw provider messages. Daily quota exhaustion stops task retries;
-minute limits, unknown 429s and transient service failures remain retryable.
-The diagnostic cost was zero. Billing/quota configuration remains an external
-blocker; this change does not claim restored listening or musical progress.
-
-The full studio check passes 65 tests. The two HTTP-boundary quota regression
-cases fail against the previous audio client. Existing retry/cache integration
-coverage still passes. Schedule, publication policy and spending caps are unchanged.
-
-### September 12 — retain isolated renderer failures
-
-Repeated musician runs ended in Docker exit code 1 with no Python traceback,
-because the renderer discarded stderr. Rendering now drains stderr while
-retaining its last 8 KB, reports that tail in the Prefect exception, and writes
-`render-error.txt` beside the intended audio output. The 30-second deadline,
-container isolation and forced container cleanup remain. Tests cover actual
-child-process failures, noisy output, timeout and the renderer's cleanup path;
-the renderer regression fails against the previous implementation. The original
-generated-code failure still requires reproduction; diagnostics alone do not
-claim it is repaired.
-
-### September 12 — let composers correct runtime errors
-
-Retrying Reed's original 18:17 run with retained stderr exposed a concrete
-NumPy error: the script called `default_rng` on a Generator instance rather
-than on `numpy.random`. The workflow previously ended without giving the
-composer its traceback. Draft and revision render tasks now permit one
-traceback-guided code correction each, using the original session's paid
-request accounting. Original source, traceback and correction are retained;
-subsequent retries reuse the correction. Metadata is preserved. Docker failures
-without a Python traceback do not spend a model request. Repaired renders must
-still pass actual-audio self/revision/peer review before publication.
-
-All 72 studio tests pass. The two render-task regressions fail against the
-previous flow, and existing audio-round evidence tests still pass. Runtime
-recovery of the original Reed run remains to be verified after deployment.
+this is a living document. last updated 2026-09-14 (status maintenance, window
+September 4–14): the publishing-access arc consolidated (#2047–#2058), the
+musician studio's September 6–12 log and the September 2–5 arcs moved to
+`.status_history/2026-09.md`, agent discovery and the smaller fixes recorded.
