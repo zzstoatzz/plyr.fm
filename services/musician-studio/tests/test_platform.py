@@ -1,4 +1,7 @@
+import json
 from concurrent.futures import ThreadPoolExecutor
+from email.parser import BytesParser
+from email.policy import default
 from pathlib import Path
 
 import httpx
@@ -57,6 +60,27 @@ def test_upload_is_unlisted_labeled_and_recovery_does_not_post_twice(
     def handle(request: httpx.Request) -> httpx.Response:
         if request.method == "POST":
             body = request.read()
+            multipart = BytesParser(policy=default).parsebytes(
+                b"Content-Type: "
+                + request.headers["content-type"].encode()
+                + b"\r\n\r\n"
+                + body
+            )
+            fields = {
+                part.get_param("name", header="content-disposition"): part.get_payload(
+                    decode=True
+                )
+                for part in multipart.iter_parts()
+            }
+            assert "visibility" not in fields
+            assert json.loads(fields["publishing"]) == {
+                "access": {
+                    "listening": "public",
+                    "downloads": "open",
+                    "visibility": "unlisted",
+                },
+                "attach_rights": False,
+            }
             assert (
                 b"unlisted" in body
                 and b"ai-generated" in body

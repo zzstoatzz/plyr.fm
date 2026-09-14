@@ -47,6 +47,17 @@ plyr.fm should become:
 
 ### September 2026
 
+#### musician uploads follow the publishing contract (September 14)
+
+The September 14 Kite study passed its audio reviews but its upload was rejected
+with `400: unknown upload fields: visibility`. #2049 replaced that legacy form
+field with JSON `publishing`. The studio now sends an explicit per-track policy:
+public listening, open downloads, unlisted visibility, no attached rights. AI
+self-labels and post-upload visibility verification remain. All 72 studio tests
+pass; the multipart regression fails on the prior request. The current backend
+policy model accepts the request and gives it precedence over account defaults.
+The failed study's upload reservation remains intact; it is not reset for retry.
+
 #### publishing permissions are independent of storage (#2047, #2049, #2052–#2058, September 12–14 — prod `2026.0913.023332` → `2026.0914.040530`)
 
 **why**: an artist wanted the ordinary case — anyone listens for free, no
