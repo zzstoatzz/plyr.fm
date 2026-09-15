@@ -2,6 +2,9 @@
 
 import asyncio
 import contextlib
+import json
+import logging
+from collections import Counter
 from unittest import mock
 
 import asyncpg
@@ -92,3 +95,110 @@ async def test_notify_handles_none_connection_gracefully(queue_service: QueueSer
 
     # should not raise
     await queue_service._notify_change("did:plc:test")
+
+
+@pytest.fixture
+async def real_conn(test_database_url: str):
+    """a real asyncpg connection, the way `_connect` builds one."""
+    url = test_database_url.replace("postgresql+asyncpg://", "postgresql://")
+    conn = await asyncpg.connect(url)
+    try:
+        yield conn
+    finally:
+        await conn.close()
+
+
+async def test_concurrent_notifies_share_one_connection(
+    queue_service: QueueService, real_conn: asyncpg.Connection, caplog
+):
+    """two overlapping queue updates NOTIFY on the same raw connection.
+
+    regression for the production `InterfaceError: another operation is in
+    progress` bursts from `_notify_change`: asyncpg connections are not safe
+    for concurrent use, and every request handler shares `self.conn`.
+    """
+    queue_service.conn = real_conn
+
+    with caplog.at_level("ERROR", logger="backend._internal.queue"):
+        await asyncio.gather(
+            *(queue_service._notify_change(f"did:plc:user{i}") for i in range(5))
+        )
+
+    assert not [r for r in caplog.records if "error sending queue change" in r.message]
+
+
+async def test_notify_during_heartbeat_shares_one_connection(
+    real_conn: asyncpg.Connection, caplog
+):
+    """queue updates that land while the heartbeat `SELECT 1` is in flight."""
+    service = QueueService(heartbeat_interval=0.0, heartbeat_timeout=5.0)
+    service.conn = real_conn
+    heartbeat = asyncio.create_task(service._heartbeat_loop())
+
+    try:
+        with caplog.at_level("ERROR", logger="backend._internal.queue"):
+            for _ in range(20):
+                await asyncio.sleep(0)
+                await service._notify_change("did:plc:user")
+    finally:
+        heartbeat.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await heartbeat
+
+    assert not [r for r in caplog.records if "error sending queue change" in r.message]
+
+
+async def test_many_users_updating_under_heartbeat_pressure(
+    test_database_url: str,
+    db_session,
+    real_conn: asyncpg.Connection,
+    caplog,
+):
+    """hundreds of overlapping queue updates from many users, with the
+    heartbeat hammering the shared connection the whole time, must all
+    persist and all reach a listener on another connection."""
+    users = 100
+    updates_per_user = 5
+
+    service = QueueService(heartbeat_interval=0.0, heartbeat_timeout=5.0)
+    service.conn = real_conn
+    heartbeat = asyncio.create_task(service._heartbeat_loop())
+
+    received: list[str] = []
+    listener = await asyncpg.connect(
+        test_database_url.replace("postgresql+asyncpg://", "postgresql://")
+    )
+
+    def on_notify(conn, pid, channel, payload) -> None:
+        received.append(json.loads(payload)["did"])
+
+    await listener.add_listener("queue_changes", on_notify)
+
+    dids = [f"did:plc:load{i}" for i in range(users)]
+    try:
+        for did in dids:
+            assert await service.update_queue(did, {"track_ids": []})
+        await asyncio.sleep(0.2)
+        received.clear()
+        with caplog.at_level("WARNING", logger="backend._internal.queue"):
+            results = await asyncio.gather(
+                *(
+                    service.update_queue(did, {"track_ids": [], "current_index": n})
+                    for did in dids
+                    for n in range(updates_per_user)
+                )
+            )
+        await asyncio.sleep(0.5)
+    finally:
+        heartbeat.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await heartbeat
+        await listener.close()
+
+    assert not [r for r in caplog.records if r.levelno >= logging.WARNING], [
+        r.message for r in caplog.records
+    ]
+    assert all(results)
+    assert {r[1] for r in results if r} <= set(range(2, updates_per_user + 2))
+    assert Counter(received) == dict.fromkeys(dids, updates_per_user)
+    assert service.conn is real_conn and not real_conn.is_closed()
