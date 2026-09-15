@@ -39,6 +39,7 @@ class QueueService:
         # TTLCache provides both LRU eviction and TTL expiration
         self.cache: TTLCache = TTLCache(maxsize=100, ttl=300)
         self.conn: asyncpg.Connection | None = None
+        self.conn_lock = asyncio.Lock()
         self.listener_task: asyncio.Task | None = None
         self.heartbeat_task: asyncio.Task | None = None
         self.reconnect_delay = reconnect_delay
@@ -125,11 +126,12 @@ class QueueService:
         """proactively test connection health to detect zombie connections."""
         while True:
             try:
-                if self.conn and not self.conn.is_closed():
-                    # ping the connection with a short timeout
-                    await asyncio.wait_for(
-                        self.conn.execute("SELECT 1"), timeout=self.heartbeat_timeout
-                    )
+                async with self.conn_lock:
+                    if self.conn and not self.conn.is_closed():
+                        await asyncio.wait_for(
+                            self.conn.execute("SELECT 1"),
+                            timeout=self.heartbeat_timeout,
+                        )
                 await asyncio.sleep(self.heartbeat_interval)
             except TimeoutError:
                 logger.warning("heartbeat timeout, marking connection as dead")
@@ -281,17 +283,16 @@ class QueueService:
 
     async def _notify_change(self, did: str) -> None:
         """send NOTIFY to inform other instances of queue change."""
-        if not self.conn or self.conn.is_closed():
-            logger.warning("cannot send notification: no connection")
-            return
-
+        payload = json.dumps({"did": did})
         try:
-            payload = json.dumps({"did": did})
-            # add timeout to prevent hanging on zombie connections
-            await asyncio.wait_for(
-                self.conn.execute(f"NOTIFY queue_changes, '{payload}'"),
-                timeout=1.0,
-            )
+            async with self.conn_lock:
+                if not self.conn or self.conn.is_closed():
+                    logger.warning("cannot send notification: no connection")
+                    return
+                await asyncio.wait_for(
+                    self.conn.execute(f"NOTIFY queue_changes, '{payload}'"),
+                    timeout=1.0,
+                )
         except TimeoutError:
             logger.warning(
                 f"queue notification timed out for {did}, marking connection as dead"

@@ -291,7 +291,8 @@ async def test_ensure_personal_space_uses_simplespace_shape(
         payload={
             "type": "fm.plyr.privateMedia",
             "skey": "self",
-            "policy": {"$type": "com.atproto.simplespace.defs#memberListPolicy"},
+            "readPolicy": {"$type": "com.atproto.simplespace.defs#memberListPolicy"},
+            "writePolicy": {"$type": "com.atproto.simplespace.defs#memberListPolicy"},
             "appAccess": {"$type": "com.atproto.simplespace.defs#open"},
         },
     )
@@ -299,6 +300,7 @@ async def test_ensure_personal_space_uses_simplespace_shape(
     payload = request.await_args.kwargs["payload"]
     assert "did" not in payload
     assert "config" not in payload
+    assert "policy" not in payload
 
 
 def _owner_session() -> Session:

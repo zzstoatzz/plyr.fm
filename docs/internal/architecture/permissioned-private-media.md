@@ -100,13 +100,14 @@ base login.
 ## space creation and policy
 
 `com.atproto.simplespace.createSpace` receives the alpha body. The space is anchored on
-the authenticated DID (no `did` field), and `policy` / `appAccess` are `$type` unions:
+the authenticated DID (no `did` field), and `readPolicy`, `writePolicy` and `appAccess` are `$type` unions:
 
 ```json
 {
   "type": "fm.plyr.privateMedia",
   "skey": "self",
-  "policy": {"$type": "com.atproto.simplespace.defs#memberListPolicy"},
+  "readPolicy": {"$type": "com.atproto.simplespace.defs#memberListPolicy"},
+  "writePolicy": {"$type": "com.atproto.simplespace.defs#memberListPolicy"},
   "appAccess": {"$type": "com.atproto.simplespace.defs#open"}
 }
 ```

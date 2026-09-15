@@ -130,6 +130,8 @@ async def _space_token_request(
 
 # --- space lifecycle + record writes (owner/author, DPoP OAuth) ---------------
 
+MEMBER_LIST_POLICY = {"$type": "com.atproto.simplespace.defs#memberListPolicy"}
+
 
 async def ensure_personal_space(
     auth_session: AuthSession,
@@ -138,10 +140,9 @@ async def ensure_personal_space(
 ) -> str:
     """create (or find) the caller's artist-owned personal space; return its URI.
 
-    The space is anchored on the authenticated DID. The ``simplespace``
-    management layer uses ``memberListPolicy`` for this owner-only MVP; the
-    authority is authorized on its own member-list space without an explicit
-    ``addMember``. App access stays open so local/public OAuth clients can
+    The space is anchored on the authenticated DID. Reads and writes are both
+    governed by the space's member list; the authority is authorized on its
+    own member-list space without an explicit ``addMember``. App access stays open so local/public OAuth clients can
     exercise the experimental feature without a confidential-client key.
     """
     space_type = settings.atproto.private_media_space_type
@@ -154,7 +155,8 @@ async def ensure_personal_space(
             payload={
                 "type": space_type,
                 "skey": skey,
-                "policy": {"$type": "com.atproto.simplespace.defs#memberListPolicy"},
+                "readPolicy": MEMBER_LIST_POLICY,
+                "writePolicy": MEMBER_LIST_POLICY,
                 "appAccess": {"$type": "com.atproto.simplespace.defs#open"},
             },
         )
