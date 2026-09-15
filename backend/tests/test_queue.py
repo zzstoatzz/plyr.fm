@@ -158,9 +158,10 @@ async def test_many_users_updating_under_heartbeat_pressure(
     real_conn: asyncpg.Connection,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    """hundreds of overlapping queue updates from many users, with the
-    heartbeat hammering the shared connection the whole time, must all
-    persist and all reach a listener on another connection."""
+    """hundreds of overlapping queue updates from many users who have never
+    had a queue before, with the heartbeat hammering the shared connection the
+    whole time: every update is counted in the revision and every NOTIFY
+    reaches a listener on another connection."""
     users = 100
     updates_per_user = 5
 
@@ -182,10 +183,6 @@ async def test_many_users_updating_under_heartbeat_pressure(
 
     dids = [f"did:plc:load{i}" for i in range(users)]
     try:
-        for did in dids:
-            assert await service.update_queue(did, {"track_ids": []})
-        await asyncio.sleep(0.2)
-        received.clear()
         with caplog.at_level("WARNING", logger="backend._internal.queue"):
             results = await asyncio.gather(
                 *(
@@ -205,5 +202,41 @@ async def test_many_users_updating_under_heartbeat_pressure(
         r.message for r in caplog.records
     ]
     assert all(results)
+    final_revision: dict[str, int] = {}
+    for did, result in zip(
+        [did for did in dids for _ in range(updates_per_user)], results, strict=True
+    ):
+        assert result is not None
+        final_revision[did] = max(final_revision.get(did, 0), result[1])
+    assert final_revision == dict.fromkeys(dids, updates_per_user)
     assert Counter(received) == dict.fromkeys(dids, updates_per_user)
     assert service.conn is real_conn and not real_conn.is_closed()
+
+
+async def test_expected_revision_is_checked_atomically(
+    db_session: AsyncSession, real_conn: asyncpg.Connection
+) -> None:
+    """the write contract: one winner among clients holding the same revision,
+    a stale revision is refused, the current one is accepted."""
+    service = QueueService()
+    service.conn = real_conn
+    did = "did:plc:optimistic"
+    created = await service.update_queue(did, {"track_ids": []})
+    assert created is not None and created[1] == 1
+
+    results = await asyncio.gather(
+        *(
+            service.update_queue(
+                did, {"track_ids": [], "client": n}, expected_revision=1
+            )
+            for n in range(10)
+        )
+    )
+    winners = [r for r in results if r is not None]
+    assert len(winners) == 1
+    assert winners[0][1] == 2
+
+    stale = await service.update_queue(did, {"track_ids": []}, expected_revision=1)
+    assert stale is None
+    current = await service.update_queue(did, {"track_ids": []}, expected_revision=2)
+    assert current is not None and current[1] == 3
