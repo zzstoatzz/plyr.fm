@@ -10,7 +10,7 @@ from typing import Any
 import asyncpg
 from cachetools import TTLCache
 from sqlalchemy import select
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -214,72 +214,59 @@ class QueueService:
             expected_revision: expected current revision (for conflict detection)
 
         returns:
-            (new_state, new_revision) on success, None on conflict
+            (new_state, new_revision, tracks) on success, None on conflict.
+            a missing row is created at revision 1 whatever was expected.
         """
+        now = datetime.now(UTC)
+        upsert = (
+            insert(QueueState)
+            .values(did=did, state=state, revision=1, updated_at=now)
+            .on_conflict_do_update(
+                index_elements=[QueueState.did],
+                set_={
+                    "state": state,
+                    "revision": QueueState.revision + 1,
+                    "updated_at": now,
+                },
+                where=(
+                    QueueState.revision == expected_revision
+                    if expected_revision is not None
+                    else None
+                ),
+            )
+            .returning(QueueState.state, QueueState.revision)
+        )
         async with db_session() as db:
-            # fetch current state
-            stmt = select(QueueState).where(QueueState.did == did)
-            result = await db.execute(stmt)
-            existing = result.scalar_one_or_none()
-
-            if existing:
-                # check for conflicts
-                if (
-                    expected_revision is not None
-                    and existing.revision != expected_revision
-                ):
-                    logger.warning(
-                        f"queue update conflict for {did}: "
-                        f"expected {expected_revision}, got {existing.revision}"
-                    )
-                    return None
-
-                # update existing
-                existing.state = state
-                existing.revision += 1
-                existing.updated_at = datetime.now(UTC)
-
-            else:
-                # create new
-                existing = QueueState(
-                    did=did,
-                    state=state,
-                    revision=1,
-                    updated_at=datetime.now(UTC),
-                )
-                db.add(existing)
-
-            try:
-                await db.commit()
-                await db.refresh(existing)
-
-                # fetch auto_advance from user_preferences
-                prefs_stmt = select(UserPreferences).where(UserPreferences.did == did)
-                prefs_result = await db.execute(prefs_stmt)
-                prefs = prefs_result.scalar_one_or_none()
-                auto_advance = prefs.auto_advance if prefs else True
-
-                tracks = await self._hydrate_tracks(
-                    db,
-                    existing.state.get("track_ids", []),
-                    did,
-                    record_ids=existing.state.get("track_record_ids"),
-                )
-
-                # notify other instances
-                await self._notify_change(did)
-
-                # update cache - include auto_advance in state
-                state_with_prefs = {**existing.state, "auto_advance": auto_advance}
-                result_data = (state_with_prefs, existing.revision, tracks)
-                self.cache[did] = result_data
-
-                return result_data
-
-            except IntegrityError:
+            row = (await db.execute(upsert)).one_or_none()
+            if row is None:
                 await db.rollback()
-                logger.exception(f"integrity error updating queue for {did}")
+                logger.warning(
+                    f"queue update conflict for {did}: expected {expected_revision}"
+                )
                 return None
+            new_state, revision = row
+            await db.commit()
+
+            prefs_stmt = select(UserPreferences).where(UserPreferences.did == did)
+            prefs = (await db.execute(prefs_stmt)).scalar_one_or_none()
+            auto_advance = prefs.auto_advance if prefs else True
+
+            tracks = await self._hydrate_tracks(
+                db,
+                new_state.get("track_ids", []),
+                did,
+                record_ids=new_state.get("track_record_ids"),
+            )
+
+            await self._notify_change(did)
+
+            result_data = (
+                {**new_state, "auto_advance": auto_advance},
+                revision,
+                tracks,
+            )
+            self.cache[did] = result_data
+            return result_data
 
     async def _notify_change(self, did: str) -> None:
         """send NOTIFY to inform other instances of queue change."""
