@@ -75,6 +75,8 @@
 	// the file's transfer into staging; nothing leaves the browser until submit
 	let staged = $state<StagedTransfer | null>(null);
 	let uploadError = $state<string | null>(null);
+	let submitting = $state(false);
+	const uploadInFlight = $derived(submitting || staged !== null);
 	let imageFile = $state<File | null>(null);
 	let featuredArtists = $state<FeaturedArtist[]>([]);
 	let uploadTags = $state<string[]>([]);
@@ -215,6 +217,16 @@
 	}
 
 	async function submitUpload() {
+		if (uploadInFlight) return;
+		submitting = true;
+		try {
+			await startUpload();
+		} finally {
+			submitting = false;
+		}
+	}
+
+	async function startUpload() {
 		if (!preferences.data) return;
 		if (!file) return;
 
@@ -600,6 +612,7 @@
 			<button
 				type="submit"
 				disabled={!preferences.data || !file ||
+					uploadInFlight ||
 					hasUnresolvedFeaturesInput ||
 					!attestedRights}
 				class="upload-btn"
