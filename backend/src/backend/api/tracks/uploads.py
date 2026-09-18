@@ -27,7 +27,7 @@ from fastapi import (
 )
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ValidationError
-from sqlalchemy import delete, or_, select, update
+from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.datastructures import UploadFile as StarletteUploadFile
@@ -797,19 +797,46 @@ async def _check_duplicate(ctx: UploadContext, sr: StorageResult) -> None:
     lossless source hash (the staged id) is.
     """
     async with db_session() as db:
-        result = await db.execute(
-            select(Track).where(
-                Track.artist_did == ctx.artist_did,
-                or_(
-                    Track.file_id == sr.file_id,
-                    Track.original_file_id == ctx.audio_file_id,
-                ),
-            )
-        )
-        if existing := result.scalar_one_or_none():
+        if existing := await _find_duplicate(db, ctx, sr):
             raise UploadPhaseError(
                 f"duplicate upload: track already exists (id: {existing.id})"
             )
+
+
+async def _find_duplicate(
+    db: AsyncSession, ctx: UploadContext, sr: StorageResult
+) -> Track | None:
+    result = await db.execute(
+        select(Track)
+        .where(
+            Track.artist_did == ctx.artist_did,
+            or_(
+                Track.file_id == sr.file_id,
+                Track.original_file_id == ctx.audio_file_id,
+            ),
+        )
+        .limit(1)
+    )
+    return result.scalars().first()
+
+
+async def _discard_unowned_media(
+    ctx: UploadContext,
+    sr: StorageResult,
+    playable_file_type: str,
+    image_id: str | None,
+) -> None:
+    # private audio is a PDS blob; its file_id can collide with a public R2 key
+    if ctx.private:
+        return
+    with contextlib.suppress(Exception):
+        await storage.discard_staged(sr.file_id, playable_file_type)
+    if sr.original_file_id and sr.original_file_type:
+        with contextlib.suppress(Exception):
+            await storage.discard_staged(sr.original_file_id, sr.original_file_type)
+    if image_id:
+        with contextlib.suppress(Exception):
+            await storage.discard_staged(image_id)
 
 
 async def _upload_to_pds(
@@ -1002,6 +1029,22 @@ async def _create_records(
 
         artist_display_name = artist.display_name
 
+        # serialize this artist's reservations so check + insert is atomic
+        await db.execute(
+            select(
+                func.pg_advisory_xact_lock(
+                    func.hashtextextended(f"track-upload:{ctx.artist_did}", 0)
+                )
+            )
+        )
+        if existing := await _find_duplicate(db, ctx, sr):
+            existing_id = existing.id
+            await db.rollback()
+            await _discard_unowned_media(ctx, sr, playable_file_type, image_id)
+            raise UploadPhaseError(
+                f"duplicate upload: track already exists (id: {existing_id})"
+            )
+
         # album creation deferred to after PDS success to avoid orphan albums
         # (legacy path only — new path uses album_row set above)
         track = Track(
@@ -1126,21 +1169,8 @@ async def _create_records(
                 await db.commit()
                 deleted_pending = result.rowcount == 1  # type: ignore[union-attr]
 
-        if deleted_pending and not ctx.private:
-            # row was still pending — safe to clean up media. private media has no
-            # R2 object (its audio is a PDS blob and its file_id is a content hash
-            # that could collide with a public track's R2 key), so skip it; the
-            # orphaned PDS blob is GC'd by the PDS.
-            with contextlib.suppress(Exception):
-                await storage.discard_staged(sr.file_id, playable_file_type)
-            if sr.original_file_id and sr.original_file_type:
-                with contextlib.suppress(Exception):
-                    await storage.discard_staged(
-                        sr.original_file_id, sr.original_file_type
-                    )
-            if image_id:
-                with contextlib.suppress(Exception):
-                    await storage.discard_staged(image_id)
+        if deleted_pending:
+            await _discard_unowned_media(ctx, sr, playable_file_type, image_id)
         # else: Jetstream finalized the row — media belongs to the published track
 
         raise UploadPhaseError(f"failed to sync track to ATProto: {err_detail}") from e
