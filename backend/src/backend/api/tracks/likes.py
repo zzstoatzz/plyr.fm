@@ -17,6 +17,7 @@ from backend._internal.tasks import (
     schedule_pds_create_like,
     schedule_pds_delete_like,
 )
+from backend._internal.tasks.pds import mark_like_uri_cancelled
 from backend._internal.track_visibility import (
     ensure_track_visible,
     visible_filter,
@@ -178,6 +179,10 @@ async def unlike_track(
 
     # capture the ATProto URI before deleting the DB record
     like_uri = like.atproto_like_uri
+
+    # a late Jetstream echo of this like's create must not re-insert the row
+    if like_uri:
+        await mark_like_uri_cancelled(like_uri)
 
     # delete database record immediately (optimistic)
     await db.delete(like)

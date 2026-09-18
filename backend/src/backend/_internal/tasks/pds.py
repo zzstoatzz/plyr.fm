@@ -59,7 +59,7 @@ async def mark_like_uri_cancelled(like_uri: str) -> None:
 
 
 async def is_like_uri_cancelled(like_uri: str) -> bool:
-    """check whether a like URI has been tombstoned by `pds_create_like`.
+    """check whether a like URI has been tombstoned by an unlike.
 
     suppressed on Redis errors — returning False on Redis trouble means
     the ingest path falls through to its normal behavior; the
