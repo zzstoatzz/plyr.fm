@@ -12,6 +12,7 @@ const PAGES_CHECK = 'Cloudflare Pages: plyr-fm-stg';
 const DEPLOY_WORKFLOW = 'deploy-staging.yml';
 const DEADLINE = Date.now() + 12 * 60_000;
 const POLL_MS = 10_000;
+const STABLE_SAMPLES = 6;
 
 if (!REPO || !TOKEN) {
 	console.error('GITHUB_REPOSITORY and GITHUB_TOKEN are required');
@@ -29,16 +30,33 @@ async function github(path) {
 	return response.json();
 }
 
-async function servedVersion(origin) {
+async function get(url) {
 	try {
-		const response = await fetch(`${origin}/_app/version.json`, {
-			cache: 'no-store',
-			signal: AbortSignal.timeout(10_000)
-		});
-		return response.ok ? (await response.json()).version : null;
+		return await fetch(url, { cache: 'no-store', signal: AbortSignal.timeout(10_000) });
 	} catch {
 		return null;
 	}
+}
+
+/** what a browser needs from `origin`: the build version, and every hashed asset its html points at */
+async function frontendBuild(origin) {
+	const [versionResponse, htmlResponse] = await Promise.all([
+		get(`${origin}/_app/version.json`),
+		get(`${origin}/`)
+	]);
+	if (!versionResponse?.ok || !htmlResponse?.ok) return null;
+	const { version } = await versionResponse.json();
+	const html = await htmlResponse.text();
+	const assets = [...new Set(html.match(/_app\/immutable\/[\w./-]+\.(?:js|css)/g) ?? [])].sort();
+	if (assets.length === 0) return null;
+	const statuses = await Promise.all(
+		assets.map(async (asset) => (await get(`${origin}/${asset}`))?.status ?? 0)
+	);
+	return {
+		version,
+		assets: assets.join(','),
+		missing: assets.filter((_, i) => statuses[i] !== 200)
+	};
 }
 
 /** the unique Pages URL for `sha`, null while the build runs; throws if it failed */
@@ -66,36 +84,46 @@ async function backendSettled(sha) {
 }
 
 async function healthy() {
-	try {
-		const response = await fetch(`${API}/health`, { signal: AbortSignal.timeout(10_000) });
-		return response.ok;
-	} catch {
-		return false;
-	}
+	return (await get(`${API}/health`))?.ok === true;
 }
 
 let announced = null;
+let stable = 0;
 while (Date.now() < DEADLINE) {
 	const { sha } = await github('/commits/main');
 	if (sha !== announced) {
 		log(`head of main is ${sha.slice(0, 8)}`);
 		announced = sha;
+		stable = 0;
 	}
 
 	const deployment = await pagesDeployment(sha);
 	if (!deployment) {
+		stable = 0;
 		log('pages build still running');
 	} else {
-		const [built, served] = await Promise.all([servedVersion(deployment), servedVersion(APP)]);
-		if (!built || built !== served) {
-			log(`frontend not propagated: built=${built} served=${served}`);
+		const [built, served] = await Promise.all([frontendBuild(deployment), frontendBuild(APP)]);
+		const propagated =
+			built !== null &&
+			served !== null &&
+			served.version === built.version &&
+			served.assets === built.assets &&
+			served.missing.length === 0;
+		if (!propagated) {
+			stable = 0;
+			log(
+				`frontend not propagated: built=${built?.version} served=${served?.version} missing=${JSON.stringify(served?.missing)}`
+			);
 		} else if (!(await backendSettled(sha))) {
+			stable = 0;
 			log('backend deploy still running');
 		} else if (!(await healthy())) {
+			stable = 0;
 			log('backend not healthy yet');
 		} else {
-			log(`staging serves ${sha.slice(0, 8)}: frontend ${served}, backend settled`);
-			process.exit(0);
+			stable += 1;
+			log(`staging serves ${sha.slice(0, 8)} (${stable}/${STABLE_SAMPLES} consecutive samples)`);
+			if (stable >= STABLE_SAMPLES) process.exit(0);
 		}
 	}
 	await sleep(POLL_MS);
