@@ -197,3 +197,68 @@ class TestSessionReloadAfterPdsUpload:
             session_passed_to_create_records.oauth_session["access_token"]
             == "old-token"
         ), "session should remain unchanged when PDS upload is skipped"
+
+
+class TestOptimizationWhenJetstreamFinalizes:
+    """staging 2026-09-18, track 9395: the Jetstream echo finalized the pending
+    row before the upload task did, and the ogg never became an mp3."""
+
+    async def test_optimization_is_scheduled_when_ingest_won_the_publish(
+        self,
+    ) -> None:
+        ctx = UploadContext(
+            upload_id="upload-ogg",
+            auth_session=_make_session(),
+            audio_file_id="ogg-source",
+            filename="memo.ogg",
+            duration=60,
+            title="memo",
+            artist_did="did:plc:test",
+            album=None,
+            album_id=None,
+            features_json=None,
+            tags=[],
+        )
+        storage_result = StorageResult(
+            file_id="ogg-source",
+            original_file_id="ogg-source",
+            original_file_type="ogg",
+            playable_format=AudioFormat.OGG,
+            r2_url="https://cdn.example.com/ogg-source.ogg",
+            transcode_info=None,
+            needs_optimization=True,
+        )
+        schedule_optimize = AsyncMock()
+
+        with (
+            patch("backend.api.tracks.uploads.job_service", AsyncMock()),
+            patch(
+                "backend.api.tracks.uploads._validate_audio",
+                return_value=AudioInfo(
+                    format=AudioFormat.OGG, duration=60, is_gated=False
+                ),
+            ),
+            patch(
+                "backend.api.tracks.uploads._store_audio", return_value=storage_result
+            ),
+            patch("backend.api.tracks.uploads._check_duplicate", return_value=None),
+            patch("backend.api.tracks.uploads._upload_to_pds", return_value=None),
+            patch(
+                "backend.api.tracks.uploads._store_image",
+                return_value=(None, None, None),
+            ),
+            patch(
+                "backend.api.tracks.uploads._create_records",
+                return_value=(_FakeTrack(), False),
+            ),
+            patch(
+                "backend.api.tracks.uploads._schedule_post_upload", return_value=None
+            ),
+            patch(
+                "backend.api.tracks.audio_optimize.schedule_optimize_track_audio",
+                schedule_optimize,
+            ),
+        ):
+            await _process_upload_background(ctx)
+
+        schedule_optimize.assert_awaited_once_with("track-1", "sess-1")
