@@ -211,11 +211,11 @@ max_lines = 545
 
 [[rules]]
 path = "backend/src/backend/_internal/tasks/ingest.py"
-max_lines = 1102
+max_lines = 1111
 
 [[rules]]
 path = "backend/tests/test_jetstream.py"
-max_lines = 2970
+max_lines = 3006
 
 [[rules]]
 path = "frontend/src/lib/components/embed/CollectionEmbed.svelte"

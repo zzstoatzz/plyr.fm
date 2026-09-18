@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 
 import logfire
 from redis.exceptions import RedisError
-from sqlalchemy import select
+from sqlalchemy import delete, select
 
 from backend._internal.atproto.records import (
     create_comment_record,
@@ -123,6 +123,11 @@ async def pds_create_like(
                 # ingest path can recognize and drop the create event.
                 logger.warning(f"pds_create_like: like {like_id} no longer exists")
                 await mark_like_uri_cancelled(like_uri)
+                # the create echo may already have re-inserted the row under this uri
+                await session.execute(
+                    delete(TrackLike).where(TrackLike.atproto_like_uri == like_uri)
+                )
+                await session.commit()
                 await delete_record_by_uri(auth_session, like_uri)
 
     except Exception as e:

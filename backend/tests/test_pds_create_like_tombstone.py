@@ -20,6 +20,7 @@ import uuid
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend._internal.tasks.pds import (
@@ -27,7 +28,7 @@ from backend._internal.tasks.pds import (
     LIKE_CANCELLED_TOMBSTONE_TTL_SECONDS,
     pds_create_like,
 )
-from backend.models import Artist, Track
+from backend.models import Artist, Track, TrackLike
 
 
 @pytest.fixture
@@ -185,3 +186,44 @@ class TestPdsCreateLikeTombstones:
             "(would suppress the user's own Jetstream create event)"
         )
         mock_delete.assert_not_called()
+
+    async def test_removes_row_the_create_echo_already_resurrected(
+        self, db_session: AsyncSession, artist: Artist, track: Track
+    ) -> None:
+        """the echo can re-insert the like before this task learns its own
+        row is gone; the cancel path must take that row with it."""
+        created_uri = f"at://{artist.did}/fm.plyr.like/resurrected"
+        db_session.add(
+            TrackLike(
+                track_id=track.id, user_did=artist.did, atproto_like_uri=created_uri
+            )
+        )
+        await db_session.commit()
+
+        mock_redis, _ = _mock_redis()
+        with (
+            patch(
+                "backend._internal.tasks.pds.get_session",
+                return_value=AsyncMock(did=artist.did),
+            ),
+            patch(
+                "backend._internal.tasks.pds.create_like_record",
+                return_value=created_uri,
+            ),
+            patch("backend._internal.tasks.pds.delete_record_by_uri", AsyncMock()),
+            patch(
+                "backend._internal.tasks.pds.get_async_redis_client",
+                return_value=mock_redis,
+            ),
+        ):
+            await pds_create_like(
+                session_id="any-session",
+                like_id=99999998,
+                subject_uri=track.atproto_record_uri or "",
+                subject_cid=track.atproto_record_cid or "",
+            )
+
+        result = await db_session.execute(
+            select(TrackLike).where(TrackLike.atproto_like_uri == created_uri)
+        )
+        assert result.scalar_one_or_none() is None
