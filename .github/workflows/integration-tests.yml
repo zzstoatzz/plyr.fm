@@ -88,7 +88,8 @@ jobs:
           set -euo pipefail
           mint() {
             local handle="$1" apppw="$2" var="$3" resp token
-            resp=$(curl -sf -X POST "$API/auth/dev-token/app-password" \
+            resp=$(curl -sf --retry 3 --retry-delay 5 --retry-all-errors --max-time 45 \
+              -X POST "$API/auth/dev-token/app-password" \
               -H "content-type: application/json" \
               -H "x-admin-token: $MINT_SECRET" \
               -d "{\"identifier\":\"$handle\",\"app_password\":\"$apppw\"}")
