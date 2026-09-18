@@ -30,6 +30,7 @@ from backend._internal.tasks.ingest import (
     ingest_track_delete,
     ingest_track_update,
 )
+from backend._internal.tasks.pds import LIKE_CANCELLED_TOMBSTONE_PREFIX
 from backend.config import settings
 from backend.models import Artist, Playlist, Track, TrackComment, TrackLike
 from backend.models.session import UserSession
@@ -1404,8 +1405,6 @@ class TestIngestLikeCreate:
         arrives. without the tombstone check this re-inserts the row
         the user already cancelled; with it, the event is dropped.
         """
-        from backend._internal.tasks.pds import LIKE_CANCELLED_TOMBSTONE_PREFIX
-
         cancelled_uri = "at://did:plc:jetstream_test/fm.plyr.like/cancelled"
         store: dict[str, str] = {
             f"{LIKE_CANCELLED_TOMBSTONE_PREFIX}{cancelled_uri}": "1"
@@ -1443,6 +1442,42 @@ class TestIngestLikeCreate:
             "tombstoned by pds_create_like's orphan-cleanup path; otherwise "
             "the unlike-while-pending race resurrects the row."
         )
+
+    async def test_removes_like_cancelled_between_check_and_insert(
+        self, db_session: AsyncSession, artist: Artist, track: Track
+    ) -> None:
+        """staging 2026-09-18 18:02Z, track 9385: the echo passed the tombstone
+        check, the unlike landed, and the insert followed 1.5s later."""
+        uri = "at://did:plc:jetstream_test/fm.plyr.like/midflight"
+        key = f"{LIKE_CANCELLED_TOMBSTONE_PREFIX}{uri}"
+        answers = iter([0, 1])
+
+        async def exists_flips_after_first_check(asked: str) -> int:
+            assert asked == key
+            return next(answers)
+
+        mock_redis = AsyncMock()
+        mock_redis.exists = AsyncMock(side_effect=exists_flips_after_first_check)
+
+        record = {
+            "subject": {
+                "uri": track.atproto_record_uri,
+                "cid": track.atproto_record_cid,
+            },
+            "createdAt": _recent_ts(),
+        }
+        with patch(
+            "backend._internal.tasks.pds.get_async_redis_client",
+            return_value=mock_redis,
+        ):
+            await ingest_like_create(
+                did=artist.did, rkey="midflight", record=record, uri=uri
+            )
+
+        result = await db_session.execute(
+            select(TrackLike).where(TrackLike.atproto_like_uri == uri)
+        )
+        assert result.scalar_one_or_none() is None
 
 
 class TestIngestLikeDelete:

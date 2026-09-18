@@ -595,6 +595,15 @@ async def ingest_like_create(
         )
         db.add(like)
         await db.commit()
+
+        # the unlike may have landed between the check above and this insert
+        if await is_like_uri_cancelled(uri):
+            await db.execute(delete(TrackLike).where(TrackLike.atproto_like_uri == uri))
+            await db.commit()
+            logfire.info(
+                "ingest: removed like cancelled during create", uri=uri, user_did=did
+            )
+            return
         logfire.info("ingest: like created", uri=uri, user_did=did, track_id=track_id)
 
 
