@@ -69,7 +69,7 @@ try {
 			.setInputFiles({ name: 'e2e.wav', mimeType: 'audio/wav', buffer: wavBuffer() });
 		await page.getByText('change for this track', { exact: true }).click();
 		await page.getByRole('checkbox', { name: 'anyone can listen', exact: true }).uncheck();
-		await page.getByLabel('who can listen?', { exact: true }).selectOption('space');
+		await page.getByLabel('who can listen?').selectOption('space');
 		const attest = page.locator('.attestation input[type="checkbox"]').first();
 		if (!(await attest.isChecked())) await attest.check();
 	};
