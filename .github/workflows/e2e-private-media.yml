@@ -6,8 +6,8 @@ name: e2e private media
 # session. this is the test that would have caught the capability and consent
 # regressions unit suites are structurally blind to (the app-password bypass).
 #
-# runs after a merge lands; staging deploys are racing us, so a run exercises
-# whatever staging serves at that moment — re-runnable via workflow_dispatch.
+# runs after a merge lands, once staging serves the head of main on both halves
+# (e2e/wait-for-staging.mjs). pull request runs exercise whatever staging serves.
 
 on:
   push:
@@ -24,6 +24,11 @@ on:
       - "frontend/e2e/**"
   workflow_dispatch:
 
+permissions:
+  contents: read
+  checks: read
+  actions: read
+
 concurrency:
   group: e2e-private-media
   cancel-in-progress: false
@@ -32,7 +37,7 @@ jobs:
   e2e:
     name: private upload end to end
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
@@ -46,15 +51,12 @@ jobs:
         working-directory: frontend
         run: bunx playwright install --with-deps chromium
 
-      - name: wait for staging to serve the merged backend
-        run: |
-          for i in $(seq 1 30); do
-            status=$(curl -s -o /dev/null -w "%{http_code}" -m 10 https://api-stg.plyr.fm/health || true)
-            if [ "$status" = "200" ]; then exit 0; fi
-            sleep 10
-          done
-          echo "staging never became healthy" >&2
-          exit 1
+      - name: wait for staging to serve the head of main
+        if: github.event_name != 'pull_request'
+        working-directory: frontend
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node e2e/wait-for-staging.mjs
 
       - name: private upload
         working-directory: frontend
