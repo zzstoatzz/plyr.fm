@@ -1409,7 +1409,7 @@ async def _process_upload_background(ctx: UploadContext) -> None:
             # writes the single canonical PDS blob off the critical path.
             # (lazy import: audio_optimize imports the phase helpers from this
             # module, so a top-level import would be circular.)
-            if published_by_us and sr.needs_optimization:
+            if sr.needs_optimization:
                 from backend.api.tracks.audio_optimize import (
                     schedule_optimize_track_audio,
                 )
