@@ -37,7 +37,7 @@ async function choosePrivateAndSave(page, granted) {
 	await page.locator('#record-title').fill(title);
 	await page.getByText('change for this track', { exact: true }).click();
 	await page.getByRole('checkbox', { name: 'anyone can listen', exact: true }).uncheck();
-	await page.getByLabel('who can listen?', { exact: true }).selectOption('space');
+	await page.getByLabel('who can listen?').selectOption('space');
 	const expected = granted ? 'save privately' : 'approve private media';
 	const save = page.getByRole('button', { name: expected });
 	if (!(await save.count())) fail(`choosing private did not relabel the button "${expected}"`);
