@@ -10,6 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend._internal import Session, require_auth
+from backend._internal.tasks.ingest import ingest_like_create
 from backend.main import app
 from backend.models import Artist, Track, TrackLike
 
@@ -297,3 +298,45 @@ async def test_like_nonexistent_track(test_app: FastAPI):
 
     assert response.status_code == 404
     assert response.json()["detail"] == "track not found"
+
+
+async def test_late_create_echo_after_unlike_does_not_resurrect_like(
+    test_app: FastAPI, db_session: AsyncSession, test_track: Track
+):
+    """regression: integration `test_cross_user_like` failed 2026-09-18 when the
+    Jetstream echo of a like's create arrived 0.3s after the user unliked."""
+    like_uri = "at://did:test:user123/fm.plyr.like/lateecho"
+    db_session.add(
+        TrackLike(
+            track_id=test_track.id,
+            user_did="did:test:user123",
+            atproto_like_uri=like_uri,
+        )
+    )
+    await db_session.commit()
+
+    with patch("backend.api.tracks.likes.schedule_pds_delete_like"):
+        async with AsyncClient(
+            transport=ASGITransport(app=test_app), base_url="http://test"
+        ) as client:
+            response = await client.delete(f"/tracks/{test_track.id}/like")
+    assert response.status_code == 200
+
+    await ingest_like_create(
+        did="did:test:user123",
+        rkey="lateecho",
+        record={
+            "$type": "fm.plyr.like",
+            "subject": {
+                "uri": test_track.atproto_record_uri,
+                "cid": test_track.atproto_record_cid,
+            },
+            "createdAt": "2026-09-18T16:59:17Z",
+        },
+        uri=like_uri,
+    )
+
+    result = await db_session.execute(
+        select(TrackLike).where(TrackLike.track_id == test_track.id)
+    )
+    assert result.scalars().all() == []
