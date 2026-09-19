@@ -11,6 +11,10 @@ DAILY_BUDGET = 10.0
 MONTHLY_BUDGET = 10.0
 
 
+class BudgetExhausted(RuntimeError):
+    pass
+
+
 class Store:
     def __init__(self, directory: Path) -> None:
         directory.mkdir(parents=True, exist_ok=True)
@@ -125,7 +129,15 @@ class Store:
                 (session, SESSION_BUDGET),
             ).rowcount
             if not changed:
-                raise RuntimeError("Session request or estimated-spend cap reached")
+                row = db.execute(
+                    "SELECT status,calls,spent FROM sessions WHERE id=?", (session,)
+                ).fetchone()
+                if row is None or row[0] != "running":
+                    raise RuntimeError("Session is missing or not running")
+                raise BudgetExhausted(
+                    f"Session budget exhausted: {row[1]}/12 requests; "
+                    f"${row[2]:.6f}/${SESSION_BUDGET:.2f} estimated spend"
+                )
 
     def charge(self, session: str, cost: float) -> None:
         if not math.isfinite(cost) or cost < 0:

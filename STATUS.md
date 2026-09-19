@@ -47,6 +47,17 @@ plyr.fm should become:
 
 ### September 2026
 
+#### studio failure diagnosis (September 19)
+
+The September 19 18:17 study used its 12-request allowance after multiple audio
+503 retries and a timeout. This was request exhaustion, not a new quota error.
+The studio now reports `BudgetPaused` with actual request/spend totals, preserves
+the reservation and progress artifact, and stops before publication if mandatory
+reviews are unfinished. Closed or missing sessions still fail. Incomplete Gemini
+responses retain finish/block reasons and output/thinking token counts without
+logging response text. No retry, model, or budget limits were increased.
+
+
 #### the PDS DPoP nonce was thrown away after every request (#2072, #2073, September 18–19 — prod `2026.0919.060731`; #2073 on staging)
 
 **why**: light777.selfhosted.social could not get a track's audio onto their

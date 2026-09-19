@@ -14,7 +14,7 @@ from prefect.context import FlowRunContext
 from prefect.states import State
 from pydantic import BaseModel, Field
 
-from studio.audio_errors import AudioProviderError
+from studio.audio_errors import AudioProviderError, review_candidate
 from studio.context import musical_identity
 from studio.identity import Musician
 from studio.listening import ListeningReview, inspiration_digest, record_review
@@ -159,11 +159,11 @@ def audio_request[Response: BaseModel](
     if response.status_code != 200:
         raise AudioProviderError.from_response(response)
     result = response.json()
-    usage = result["usageMetadata"]
+    usage = result.get("usageMetadata", {})
     store.charge(
         session,
         (
-            usage["promptTokenCount"] * 1.5
+            usage.get("promptTokenCount", 0) * 1.5
             + (
                 usage.get("candidatesTokenCount", 0)
                 + usage.get("thoughtsTokenCount", 0)
@@ -177,9 +177,7 @@ def audio_request[Response: BaseModel](
         for v in usage.get("promptTokensDetails", [])
         if v["modality"] == "AUDIO"
     )
-    candidate = result["candidates"][0]
-    if candidate.get("finishReason") != "STOP":
-        raise ValueError("Audio review was incomplete")
+    candidate = review_candidate(result)
     parsed = schema.model_validate_json(
         "".join(
             p.get("text", "")
