@@ -160,10 +160,13 @@ def audio_request[Response: BaseModel](
         raise AudioProviderError.from_response(response)
     result = response.json()
     usage = result.get("usageMetadata", {})
+    if "promptTokenCount" not in usage:
+        review_candidate(result)
+        raise ValueError("Audio review missing provider usage")
     store.charge(
         session,
         (
-            usage.get("promptTokenCount", 0) * 1.5
+            usage["promptTokenCount"] * 1.5
             + (
                 usage.get("candidatesTokenCount", 0)
                 + usage.get("thoughtsTokenCount", 0)
