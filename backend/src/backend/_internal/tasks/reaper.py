@@ -45,6 +45,7 @@ import logfire
 from docket import Perpetual
 from sqlalchemy import select, update
 
+from backend._internal.jobs import TERMINAL_STATUSES
 from backend._internal.notifications import notification_service
 from backend.models import Artist
 from backend.models.job import Job, JobStatus, JobType
@@ -241,13 +242,21 @@ async def _sweep_abandoned_media(job: Job) -> None:
         return
 
     try:
-        deleted = await storage.discard_staged(
-            job.file_id, job.file_type, gated=bool(job.is_gated)
-        )
         if transfer := (job.result or {}).get("transfer"):
             await storage.delete_staged(
                 StagedUploadKey(upload_id=job.id, extension=str(transfer["extension"]))
             )
+        if claimant := await _live_claimant(job):
+            logfire.info(
+                "keeping abandoned upload media, a live upload claims it",
+                job_id=job.id,
+                file_id=job.file_id,
+                claimed_by=claimant,
+            )
+            return
+        deleted = await storage.discard_staged(
+            job.file_id, job.file_type, gated=bool(job.is_gated)
+        )
         logfire.info(
             "abandoned upload media swept",
             job_id=job.id,
@@ -260,6 +269,25 @@ async def _sweep_abandoned_media(job: Job) -> None:
             job_id=job.id,
             file_id=job.file_id,
             error=str(e),
+        )
+
+
+async def _live_claimant(job: Job) -> str | None:
+    """the id of a pending or processing job whose hints name the same key.
+
+    a re-upload of the file that just timed out hashes to the same content
+    key, and it writes its hints before its bytes, so an unfinished job with
+    these hints means the bytes now belong to that upload.
+    """
+    async with db_session() as db:
+        return await db.scalar(
+            select(Job.id)
+            .where(
+                Job.file_id == job.file_id,
+                Job.id != job.id,
+                Job.status.not_in(TERMINAL_STATUSES),
+            )
+            .limit(1)
         )
 
 

@@ -99,6 +99,11 @@ one place that decides whether an upload is still alive (September 2026,
   already issued can land afterwards, and R2 can be down when the reaper
   runs. every delete goes through `discard_staged`, so bytes any live row
   references (a committed track, another artist's identical upload) survive.
+- **a live upload's claim beats a dead one's tombstone.** a re-upload of the
+  file that just timed out hashes to the same key, and it has no track row
+  until it publishes, so the refcount guard cannot see it. the sweep skips a
+  key that any `pending`/`processing` job names in its hints; hints before
+  bytes is what makes that check sufficient.
 
 what this does not do: it does not make a track that published while the
 worker stalled in its post-upload hooks look successful — the job stays

@@ -47,7 +47,7 @@ max_lines = 1266
 
 [[rules]]
 path = "backend/src/backend/storage/r2.py"
-max_lines = 1211
+max_lines = 1221
 
 [[rules]]
 path = "backend/tests/api/test_audio.py"
@@ -411,4 +411,4 @@ max_lines = 555
 
 [[rules]]
 path = "backend/tests/_internal/test_stuck_upload_reaper.py"
-max_lines = 582
+max_lines = 639

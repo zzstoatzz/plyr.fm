@@ -578,3 +578,62 @@ async def test_abandoned_transfer_is_closed_and_its_multipart_aborted(
     assert stale.status == JobStatus.FAILED.value
     assert "expired" in (stale.error or "")
     assert fresh.status == JobStatus.PENDING.value
+
+
+async def test_sweep_keeps_bytes_a_live_upload_claims(
+    db_session: AsyncSession,
+) -> None:
+    """a re-upload of the file that timed out hashes to the same key and
+    writes its hints before its bytes. until its track row exists nothing
+    else references the key, so the refcount guard alone would let the
+    old job's sweep delete the new upload's audio."""
+    await _seed_failed_job(db_session, completed_ago=timedelta(minutes=5))
+    await _seed_upload_job(
+        db_session,
+        owner_did="did:plc:sweep",
+        updated_at=datetime.now(UTC),
+        file_id="abandoned1",
+        file_type="wav",
+    )
+
+    with patch(
+        "backend._internal.tasks.reaper.storage.discard_staged",
+        new_callable=AsyncMock,
+    ) as mock_discard:
+        await sweep_abandoned_uploads()
+
+    mock_discard.assert_not_awaited()
+
+
+async def test_reaper_keeps_bytes_a_live_upload_claims(
+    db_session: AsyncSession,
+) -> None:
+    """two submissions of one file: the stalled one is reaped while its twin
+    is still processing. the twin's hints name the same key."""
+    await _seed_artist(db_session, did="did:plc:twin", handle="twin.test")
+    stalled = await _seed_upload_job(
+        db_session,
+        owner_did="did:plc:twin",
+        updated_at=_stuck_in_past(_minutes_past_threshold()),
+    )
+    live = await _seed_upload_job(
+        db_session, owner_did="did:plc:twin", updated_at=datetime.now(UTC)
+    )
+
+    with (
+        patch(
+            "backend._internal.tasks.reaper.storage.discard_staged",
+            new_callable=AsyncMock,
+        ) as mock_discard,
+        patch(
+            "backend._internal.tasks.reaper.notification_service.send_reaper_notification",
+            new_callable=AsyncMock,
+        ),
+    ):
+        await reap_stuck_uploads()
+
+    mock_discard.assert_not_awaited()
+    await db_session.refresh(stalled)
+    await db_session.refresh(live)
+    assert stalled.status == JobStatus.FAILED.value
+    assert live.status == JobStatus.PROCESSING.value
