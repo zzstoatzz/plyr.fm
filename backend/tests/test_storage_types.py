@@ -4,6 +4,7 @@ from io import BytesIO
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from botocore.exceptions import ClientError
 
 from backend.storage.protocol import StorageProtocol
 from backend.storage.r2 import R2Storage
@@ -280,3 +281,33 @@ async def test_public_copy_keeps_private_source_and_heads_correct_bucket() -> No
         Key="audio/abc123def4567890.mp3",
     )
     client.delete_object.assert_not_awaited()
+
+
+@pytest.mark.parametrize("gated", [False, True])
+async def test_delete_of_a_missing_key_is_quiet(gated: bool) -> None:
+    """the abandoned-media sweep deletes the same key every 30 minutes for a
+    week; once the object is gone that is the expected outcome, not an error."""
+    s, mock_client = _mock_r2_storage()
+    mock_client.exceptions.ClientError = ClientError
+    mock_client.head_object.side_effect = ClientError(
+        {"Error": {"Code": "404", "Message": "Not Found"}}, "HeadObject"
+    )
+    mock_db = AsyncMock()
+    mock_result = MagicMock()
+    mock_result.scalar_one.return_value = 0
+    mock_db.execute = AsyncMock(return_value=mock_result)
+    mock_db_cm = AsyncMock()
+    mock_db_cm.__aenter__ = AsyncMock(return_value=mock_db)
+    mock_db_cm.__aexit__ = AsyncMock(return_value=None)
+
+    with (
+        patch("backend.storage.r2.db_session", return_value=mock_db_cm),
+        patch("backend.storage.r2.logfire.error") as error,
+        patch("backend.storage.r2.logfire.warning") as warning,
+    ):
+        delete = s.delete_gated if gated else s.delete
+        assert await delete("abc123def4567890", "mp3") is False
+
+    mock_client.delete_object.assert_not_awaited()
+    error.assert_not_called()
+    assert all("delete failed" not in str(c.args[0]) for c in warning.call_args_list)

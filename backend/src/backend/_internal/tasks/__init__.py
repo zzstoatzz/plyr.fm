@@ -34,7 +34,11 @@ from backend._internal.tasks.moderation import (
     scan_image_moderation,
     schedule_image_moderation_scan,
 )
-from backend._internal.tasks.reaper import reap_abandoned_transfers, reap_stuck_uploads
+from backend._internal.tasks.reaper import (
+    reap_abandoned_transfers,
+    reap_stuck_uploads,
+    sweep_abandoned_uploads,
+)
 from backend._internal.tasks.ingest import (
     SubjectNotFoundError,
     ingest_account_reactivated,
@@ -146,6 +150,7 @@ def _build_background_tasks() -> list:
         optimize_track_audio,
         reap_stuck_uploads,
         reap_abandoned_transfers,
+        sweep_abandoned_uploads,
     ]
 
 
@@ -214,6 +219,7 @@ __all__ = [
     "schedule_pds_update_comment",
     "schedule_teal_scrobble",
     "scrobble_to_teal",
+    "sweep_abandoned_uploads",
     "sync_album_list",
     "sync_atproto",
     "sync_copyright_resolutions",

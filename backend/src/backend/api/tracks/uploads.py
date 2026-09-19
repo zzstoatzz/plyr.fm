@@ -261,6 +261,13 @@ async def stage_audio_to_storage(
         phase="upload",
         progress_pct=0.0,
     )
+    if extension := Path(filename).suffix.lstrip(".").lower():
+        await job_service.set_cleanup_hints(
+            upload_id,
+            file_id=(await anyio.to_thread.run_sync(hash_file_chunked, file))[:16],
+            file_type=extension,
+            is_gated=gated,
+        )
     async with R2ProgressTracker(
         job_id=upload_id,
         message=message,
@@ -688,18 +695,18 @@ async def _settle_staged_audio(ctx: UploadContext) -> None:
                 await storage.delete_staged(staged)
             else:
                 is_gated = ctx.private_audio or ctx.support_gate is not None
-                await storage.promote_staged(
-                    staged,
-                    AudioKey.for_file(file_id, ctx.audio_extension),
-                    gated=is_gated,
-                )
-                ctx.audio_file_id = file_id
                 await job_service.set_cleanup_hints(
                     ctx.upload_id,
                     file_id=file_id,
                     file_type=ctx.audio_extension,
                     is_gated=is_gated,
                 )
+                await storage.promote_staged(
+                    staged,
+                    AudioKey.for_file(file_id, ctx.audio_extension),
+                    gated=is_gated,
+                )
+                ctx.audio_file_id = file_id
         except Exception:
             with contextlib.suppress(Exception):
                 await storage.delete_staged(staged)
@@ -1028,6 +1035,13 @@ async def _create_records(
         )
 
         artist_display_name = artist.display_name
+
+        if not await job_service.lock_for_publication(db, ctx.upload_id):
+            await db.rollback()
+            await _discard_unowned_media(ctx, sr, playable_file_type, image_id)
+            raise UploadPhaseError(
+                "upload abandoned: it timed out before the track was saved"
+            )
 
         # serialize this artist's reservations so check + insert is atomic
         await db.execute(
@@ -2021,13 +2035,6 @@ async def upload_track(
             with open(file_path, "rb") as f:
                 audio_file_id = await stage_audio_to_storage(
                     upload_id, f, filename, gated=is_gated
-                )
-            if audio_extension:
-                await job_service.set_cleanup_hints(
-                    upload_id,
-                    file_id=audio_file_id,
-                    file_type=audio_extension,
-                    is_gated=is_gated,
                 )
 
         # stage image bytes to shared storage (best-effort; missing or

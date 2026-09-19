@@ -70,6 +70,45 @@ browser                                api                              R2 / wor
   their multipart upload; R2 aborts incomplete multipart uploads itself after
   7 days regardless.
 
+## abandoned jobs
+
+the object store and the database fail independently, so the job row is the
+one place that decides whether an upload is still alive (September 2026,
+`_internal/tasks/reaper.py`, `_internal/jobs.py`):
+
+- **hints before bytes.** the job's cleanup hints (`file_id`, `file_type`,
+  `is_gated`) are written before `promote_staged` copies the bytes to their
+  content-hash key, and before `storage.save` on the single-request path. a
+  crash between the two leaves a key the sweep can still find, never an
+  object nobody knows about.
+- **abandon, commit, then delete.** `reap_stuck_uploads` fails a job that has
+  not heartbeated for 10 minutes with `FOR UPDATE SKIP LOCKED`, commits, and
+  only then discards the bytes.
+- **publication competes on the same row.** `_create_records` (and the
+  audio-replace swap) take the job row `FOR UPDATE` inside the reservation
+  transaction and refuse if the job is already failed. whichever transaction
+  locks the row first wins: a reaped job cannot publish a track whose bytes
+  are gone, and a job mid-publication is skipped by the reaper, whose next
+  run sees the committed track row and keeps the audio.
+- **terminal states are terminal.** `update_progress` and `heartbeat` never
+  move a `completed` or `failed` job; a worker that wakes up late cannot
+  revive it.
+- **tombstones.** a failed upload job keeps its hints, and
+  `sweep_abandoned_uploads` discards its media again every 30 minutes for 7
+  days. one successful delete proves nothing: a copy the stalled worker had
+  already issued can land afterwards, and R2 can be down when the reaper
+  runs. every delete goes through `discard_staged`, so bytes any live row
+  references (a committed track, another artist's identical upload) survive.
+- **a live upload's claim beats a dead one's tombstone.** a re-upload of the
+  file that just timed out hashes to the same key, and it has no track row
+  until it publishes, so the refcount guard cannot see it. the sweep skips a
+  key that any `pending`/`processing` job names in its hints; hints before
+  bytes is what makes that check sufficient.
+
+what this does not do: it does not make a track that published while the
+worker stalled in its post-upload hooks look successful — the job stays
+`failed`, the track exists, and a re-upload is rejected as a duplicate.
+
 ## client
 
 `frontend/src/lib/upload-session.ts` is the transport: `startUploadSession`,

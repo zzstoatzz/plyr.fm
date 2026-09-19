@@ -21,12 +21,18 @@ design
   shouldn't produce today, but could under future multi-worker setups
   or split-brain edge cases) get empty RETURNING sets — no double-DM,
   no double-cleanup.
-- **ownership-guarded R2 cleanup**: before deleting the staged blob,
-  the reaper queries `tracks` for any row referencing the same
-  `file_id` as `Track.file_id` OR `Track.original_file_id`. if a track
-  row owns the blob (worker hung AFTER `_create_records` committed,
-  e.g. during a slow `_schedule_post_upload`), we skip the delete.
-  this is the load-bearing protection against deleting live audio.
+- **ownership-guarded R2 cleanup**: `storage.discard_staged` refuses to
+  delete bytes any live row references (a track that committed before
+  the worker hung, or another upload of the same content hash). this is
+  the load-bearing protection against deleting live audio.
+- **abandon before delete**: the failed status commits before any byte
+  is deleted, and `_create_records` locks the same row before it
+  publishes, so a paused worker that wakes up after the reaper cannot
+  publish a track whose bytes are gone.
+- **tombstones**: a failed upload job keeps its cleanup hints, and
+  `sweep_abandoned_uploads` re-sweeps recent ones. one successful
+  delete proves nothing — a copy the worker issued before it stalled
+  can land afterwards, and R2 can be down when the reaper runs.
 - **notification**: one batched bsky DM per reaper run summarizing
   affected users, not one per stuck job — avoids DM spam in a system-
   wide outage like 2026-05-06 (which would have fired 9 separate DMs).
@@ -37,10 +43,11 @@ from datetime import UTC, datetime, timedelta
 
 import logfire
 from docket import Perpetual
-from sqlalchemy import or_, select, update
+from sqlalchemy import select, update
 
+from backend._internal.jobs import TERMINAL_STATUSES
 from backend._internal.notifications import notification_service
-from backend.models import Artist, Track
+from backend.models import Artist
 from backend.models.job import Job, JobStatus, JobType
 from backend.storage import storage
 from backend.storage.keys import StagedUploadKey
@@ -112,7 +119,7 @@ async def reap_stuck_uploads(
             )
 
             for job in reaped:
-                await _maybe_cleanup_staged_blob(db, job)
+                await _sweep_abandoned_media(job)
 
             owner_dids = {job.owner_did for job in reaped}
             handles = await _resolve_owner_handles(db, owner_dids)
@@ -184,18 +191,48 @@ async def reap_abandoned_transfers(
         logfire.info("reaped abandoned upload sessions", count=len(abandoned))
 
 
-async def _maybe_cleanup_staged_blob(db, job: Job) -> None:
-    """delete the staged R2 blob ONLY if no track row references it.
+ABANDONED_MEDIA_RETENTION = timedelta(days=7)
 
-    a job can stall in `processing` after `_create_records` has already
-    committed a `Track` row but before `_schedule_post_upload` finishes.
-    in that window, `job.file_id` is the live track audio (web-playable
-    uploads) or the lossless original (transcoded uploads, where it's
-    `Track.original_file_id`). deleting it would 404 playback for a
-    track that the user successfully published.
 
-    we check both columns because the staged blob can end up as either,
-    depending on whether the upload was web-playable or lossless.
+async def sweep_abandoned_uploads(
+    perpetual: Perpetual = Perpetual(every=timedelta(minutes=30), automatic=True),  # noqa: B008
+) -> None:
+    """re-sweep the media of recently failed upload jobs.
+
+    the reaper's own delete is one attempt. this keeps the abandoned key
+    discoverable for `ABANDONED_MEDIA_RETENTION` and deletes again on every
+    run, so a delete that failed, or a promotion the stalled worker had
+    already issued, still ends with the bytes gone.
+    """
+    cutoff = datetime.now(UTC) - ABANDONED_MEDIA_RETENTION
+    async with db_session() as db:
+        abandoned = (
+            (
+                await db.execute(
+                    select(Job).where(
+                        Job.type == JobType.UPLOAD.value,
+                        Job.status == JobStatus.FAILED.value,
+                        Job.file_id.is_not(None),
+                        Job.completed_at > cutoff,
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+    for job in abandoned:
+        await _sweep_abandoned_media(job)
+    if abandoned:
+        logfire.info("swept abandoned upload media", count=len(abandoned))
+
+
+async def _sweep_abandoned_media(job: Job) -> None:
+    """delete an abandoned upload's bytes unless a live row references them.
+
+    `discard_staged` is the guard: a job can stall in `processing` after
+    `_create_records` committed a `Track` row, and the same content hash
+    can be another artist's published audio. a resumable session's staged
+    object is deleted too, in case the job was abandoned before promotion.
     """
     if not job.file_id or not job.file_type:
         logfire.info(
@@ -204,36 +241,53 @@ async def _maybe_cleanup_staged_blob(db, job: Job) -> None:
         )
         return
 
-    # ownership check — is the staged blob now part of a live track?
-    owner = await db.execute(
-        select(Track.id)
-        .where(
-            or_(
-                Track.file_id == job.file_id,
-                Track.original_file_id == job.file_id,
+    try:
+        if transfer := (job.result or {}).get("transfer"):
+            await storage.delete_staged(
+                StagedUploadKey(upload_id=job.id, extension=str(transfer["extension"]))
             )
+        if claimant := await _live_claimant(job):
+            logfire.info(
+                "keeping abandoned upload media, a live upload claims it",
+                job_id=job.id,
+                file_id=job.file_id,
+                claimed_by=claimant,
+            )
+            return
+        deleted = await storage.discard_staged(
+            job.file_id, job.file_type, gated=bool(job.is_gated)
         )
-        .limit(1)
-    )
-    if owner.scalar_one_or_none() is not None:
         logfire.info(
-            "skipping R2 cleanup for stuck job (blob is live track audio)",
+            "abandoned upload media swept",
             job_id=job.id,
             file_id=job.file_id,
+            deleted=deleted,
         )
-        return
-
-    try:
-        if job.is_gated:
-            await storage.delete_gated(job.file_id, job.file_type)
-        else:
-            await storage.delete(job.file_id, job.file_type)
     except Exception as e:
         logfire.warning(
-            "R2 cleanup failed for stuck job (job already marked failed)",
+            "R2 cleanup failed for abandoned job; it will be swept again",
             job_id=job.id,
             file_id=job.file_id,
             error=str(e),
+        )
+
+
+async def _live_claimant(job: Job) -> str | None:
+    """the id of a pending or processing job whose hints name the same key.
+
+    a re-upload of the file that just timed out hashes to the same content
+    key, and it writes its hints before its bytes, so an unfinished job with
+    these hints means the bytes now belong to that upload.
+    """
+    async with db_session() as db:
+        return await db.scalar(
+            select(Job.id)
+            .where(
+                Job.file_id == job.file_id,
+                Job.id != job.id,
+                Job.status.not_in(TERMINAL_STATUSES),
+            )
+            .limit(1)
         )
 
 

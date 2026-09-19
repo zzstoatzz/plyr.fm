@@ -749,6 +749,11 @@ class R2Storage:
                         )
                         return True
                     except client.exceptions.ClientError as e:
+                        if e.response.get("Error", {}).get("Code") == "404":
+                            logfire.info(
+                                "R2 file already gone", file_id=file_id, key=key
+                            )
+                            return False
                         logfire.error(
                             "R2 delete failed for known file_type",
                             file_id=file_id,
@@ -966,6 +971,11 @@ class R2Storage:
                         )
                         return True
                     except client.exceptions.ClientError as e:
+                        if e.response.get("Error", {}).get("Code") == "404":
+                            logfire.info(
+                                "R2 gated file already gone", file_id=file_id, key=key
+                            )
+                            return False
                         logfire.warning(
                             "R2 gated delete failed for known file_type",
                             file_id=file_id,
