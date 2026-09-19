@@ -47,6 +47,67 @@ plyr.fm should become:
 
 ### September 2026
 
+#### an upload job row is now the one place that decides whether an upload is alive (#2075, September 19 — prod `2026.0919.214851`)
+
+**why**: garrison (@garrison.corporate.fm) posed an interview question on
+September 18 — a database and an object store, uploads that can succeed
+without answering; keep every reference valid and leave no bytes dangling —
+and then published "Two writes, one promise", an essay that reviewed this
+pipeline at `6bae695` and named four windows in it. All four were real at
+head of main: cleanup hints were saved *after* `promote_staged`, so a crash
+between the two left a content-hash object nothing could find; a worker that
+paused past the reaper's 10-minute threshold could wake up, publish a track
+and a PDS record pointing at bytes the reaper had just deleted, and then mark
+the job completed; `update_progress` and `heartbeat` would write a `failed`
+job back to life; and a failed R2 delete was logged once and never retried.
+
+**what shipped**:
+- publication and abandonment compete on the job row.
+  `job_service.lock_for_publication` takes the row `FOR UPDATE` inside the
+  reservation transaction (`_create_records`, and the audio-replace swap) and
+  refuses a `failed`/`completed` job; the reaper already claims with `FOR
+  UPDATE SKIP LOCKED` and commits before deleting, so whichever locks first
+  decides.
+- `completed`/`failed` are terminal for `update_progress` and `heartbeat`.
+- hints before bytes: `_settle_staged_audio` writes them before
+  `promote_staged`; `stage_audio_to_storage` hashes the file to know the key
+  before `storage.save`.
+- the failed job row *is* the tombstone: `sweep_abandoned_uploads` (every 30
+  min) re-discards every failed upload's media for 7 days through
+  `discard_staged` (refcount over every media column), also deleting a
+  resumable session's `staged/<id>.<ext>`. A key that any `pending`/
+  `processing` job names in its hints is skipped — the user is told to
+  re-upload after a timeout, that re-upload hashes to the same key, and it has
+  no track row until it publishes.
+- R2 `delete` on a key that is already gone is `info`, not an error row every
+  30 minutes.
+- 7 real-path tests (`tests/api/test_upload_job_fence.py`: real orchestrator,
+  job service and database; R2, PDS and sibling phases stubbed) plus reaper
+  and storage tests; all fail on main. Full suite 1779 in 23s.
+- smoked on staging by hand: a seeded stale job reaped, `R2 file already
+  gone` at info, re-swept on every run since; an 80 MB browser upload flipped
+  to `failed` mid-`settle` → `refusing to publish an abandoned job`, promoted
+  bytes discarded, no track. On prod: the first sweep found a real failed job
+  whose key a live track references and kept it (refcount 1); a tagged upload
+  as `nate.selfhosted.social` published through the fence and was deleted.
+
+**technical notes**:
+- no schema change; the 7-day window is the retention argument the essay asks
+  for, not a proof — a copy the worker issued before it stalled lands within
+  minutes.
+- intentional non-behavior: a track that publishes while its worker stalls in
+  the post-upload hooks is real but its job stays `failed` ("timed out —
+  please re-upload"), and the re-upload is rejected as a duplicate.
+- next, from the same essay and from garrison's XB (a public-domain
+  copy-on-write B+ tree whose commit is one superblock write and whose page
+  checksums live with the *pointer*, not the page): verify the promoted object
+  (HEAD, expected size) inside the publication step so a track row cannot
+  commit against bytes that vanished by any path; a read-only inventory of
+  `audio/` against every media column; sweep on `result.transfer` so a
+  resumable job reaped before settle wrote hints still loses its staged
+  object; and a generation on the job row if docket ever re-delivers
+  `run_track_upload`. Notes: `systems/publish-then-free.md`.
+
 #### studio failure diagnosis (September 19)
 
 The September 19 18:17 study used its 12-request allowance after multiple audio
@@ -58,7 +119,7 @@ responses retain finish/block reasons and output/thinking token counts without
 logging response text. No retry, model, or budget limits were increased.
 
 
-#### the PDS DPoP nonce was thrown away after every request (#2072, #2073, September 18–19 — prod `2026.0919.060731`; #2073 on staging)
+#### the PDS DPoP nonce was thrown away after every request (#2072, #2073, September 18–19 — prod `2026.0919.060731`, `2026.0919.214851`)
 
 **why**: light777.selfhosted.social could not get a track's audio onto their
 PDS: every "save audio to PDS" failed with `blob upload failed after 4
@@ -85,7 +146,7 @@ every retry repeated it.
 - streamed uploads ask the PDS for its current nonce with a bodyless signed
   `GET com.atproto.server.getSession` before each attempt (#2072).
 - every signed response's `DPoP-Nonce` is kept, in both request paths, so
-  the cache fills without a 401 first (#2073, staging).
+  the cache fills without a 401 first (#2073).
 - prod smoke with `nate.selfhosted.social`, public tagged wav: prime 200 →
   `uploadBlob` 200 on the first attempt → `audio_storage=both`. On staging
   with #2073, `createRecord`/`putRecord`/`deleteRecord` all go straight to 200.
@@ -613,7 +674,7 @@ see the [contributing guide](https://docs.plyr.fm/contributing/) for setup instr
 
 ---
 
-this is a living document. last updated 2026-09-19: the DPoP nonce fix
+this is a living document. last updated 2026-09-19: the upload job fence + abandoned-media sweep (#2075, prod `2026.0919.214851`, which also promoted #2073); the DPoP nonce fix
 (#2072, #2073), the double-submit upload and the two red staging suites
 (#2063–#2070), and the queue atomicity fixes (#2061, #2062) recorded; the
 #1812 unlike known issue closed by #2069.
