@@ -39,7 +39,7 @@ max_lines = 850
 
 [[rules]]
 path = "backend/src/backend/api/tracks/uploads.py"
-max_lines = 2170
+max_lines = 2177
 
 [[rules]]
 path = "backend/src/backend/config.py"
@@ -408,3 +408,7 @@ max_lines = 544
 [[rules]]
 path = "frontend/src/lib/components/track-edit/TrackAudioEditor.svelte"
 max_lines = 555
+
+[[rules]]
+path = "backend/tests/_internal/test_stuck_upload_reaper.py"
+max_lines = 582

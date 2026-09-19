@@ -282,6 +282,7 @@ async def _publish_record_update(
 
 
 async def _commit_db_swap(
+    job_id: str,
     state: TrackAudioState,
     audio_info: AudioInfo,
     sr: StorageResult,
@@ -307,6 +308,11 @@ async def _commit_db_swap(
     has_pds_blob = bool(pds_result and pds_result.cid)
 
     async with db_session() as db:
+        if not await job_service.lock_for_publication(db, job_id):
+            await db.rollback()
+            raise UploadPhaseError(
+                "audio replace abandoned: it timed out before the swap was saved"
+            )
         track = await db.get(Track, state.track_id)
         if not track:
             # extremely unlikely race: track deleted between authorize and commit
@@ -450,7 +456,9 @@ async def _process_replace_background(ctx: ReplaceContext) -> None:
                 ctx, state, audio_info, sr, pds_result
             )
 
-            track = await _commit_db_swap(state, audio_info, sr, pds_result, new_cid)
+            track = await _commit_db_swap(
+                ctx.job_id, state, audio_info, sr, pds_result, new_cid
+            )
             replaced_needs_optimization = sr.needs_optimization
 
         except UploadPhaseError as e:
@@ -802,16 +810,6 @@ async def replace_track_audio(
         with open(file_path, "rb") as f:
             audio_file_id = await stage_audio_to_storage(
                 job_id, f, file.filename, gated=is_gated
-            )
-
-        # cleanup hints for the stuck-upload reaper (see uploads.py for the
-        # analogous block + rationale).
-        if audio_extension:
-            await job_service.set_cleanup_hints(
-                job_id,
-                file_id=audio_file_id,
-                file_type=audio_extension,
-                is_gated=is_gated,
             )
 
         await schedule_track_audio_replace(

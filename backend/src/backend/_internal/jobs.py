@@ -6,11 +6,14 @@ from typing import Any
 
 import logfire
 from sqlalchemy import select, update
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.models.job import Job, JobStatus, JobType
 from backend.utilities.database import db_session
 
 logger = logging.getLogger(__name__)
+
+TERMINAL_STATUSES = (JobStatus.COMPLETED.value, JobStatus.FAILED.value)
 
 
 class JobService:
@@ -58,16 +61,30 @@ class JobService:
         phase: str | None = None,
         result: dict[str, Any] | None = None,
         error: str | None = None,
-    ) -> None:
-        """Update job progress."""
+    ) -> bool:
+        """Update job progress.
+
+        returns False when the job is already completed or failed: terminal
+        states are terminal, so a worker that wakes up after the reaper
+        abandoned its job cannot write it back to life.
+        """
         async with db_session() as db:
-            stmt = select(Job).where(Job.id == job_id)
+            stmt = select(Job).where(Job.id == job_id).with_for_update()
             result_db = await db.execute(stmt)
             job = result_db.scalar_one_or_none()
 
             if not job:
                 logger.warning(f"attempted to update unknown job: {job_id}")
-                return
+                return False
+
+            if job.status in TERMINAL_STATUSES:
+                logfire.warning(
+                    "ignoring progress update on a finished job",
+                    job_id=job_id,
+                    current_status=job.status,
+                    attempted_status=status.value,
+                )
+                return False
 
             job.status = status.value
             job.message = message
@@ -95,6 +112,31 @@ class JobService:
                     status=status.value,
                     progress=progress_pct,
                 )
+            return True
+
+    async def lock_for_publication(self, db: AsyncSession, job_id: str) -> bool:
+        """hold the job row for the rest of ``db``'s transaction and report
+        whether the job is still ours to finish.
+
+        the stuck-upload reaper abandons a job with ``FOR UPDATE SKIP LOCKED``
+        and commits before it deletes any bytes, so whichever of the two
+        transactions takes this lock first decides: a reaped job cannot publish,
+        and a job that is publishing cannot be reaped underneath it.
+        """
+        job = (
+            await db.execute(select(Job).where(Job.id == job_id).with_for_update())
+        ).scalar_one_or_none()
+        if job is None:
+            logger.warning(f"publishing without a job row: {job_id}")
+            return True
+        if job.status in TERMINAL_STATUSES:
+            logfire.warning(
+                "refusing to publish an abandoned job",
+                job_id=job_id,
+                current_status=job.status,
+            )
+            return False
+        return True
 
     async def set_cleanup_hints(
         self,
@@ -139,7 +181,9 @@ class JobService:
         """
         async with db_session() as db:
             await db.execute(
-                update(Job).where(Job.id == job_id).values(updated_at=datetime.now(UTC))
+                update(Job)
+                .where(Job.id == job_id, Job.status.not_in(TERMINAL_STATUSES))
+                .values(updated_at=datetime.now(UTC))
             )
             await db.commit()
 

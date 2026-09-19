@@ -19,11 +19,15 @@ from unittest.mock import AsyncMock, patch
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend._internal.tasks.reaper import (
+    ABANDONED_MEDIA_RETENTION,
     STUCK_UPLOAD_THRESHOLD,
+    reap_abandoned_transfers,
     reap_stuck_uploads,
+    sweep_abandoned_uploads,
 )
 from backend.models import Artist, Track
 from backend.models.job import Job, JobStatus, JobType
+from backend.storage.keys import StagedUploadKey
 
 
 def _stuck_in_past(minutes_ago: int) -> datetime:
@@ -60,7 +64,6 @@ async def _seed_upload_job(
         file_id=file_id,
         file_type=file_type,
         is_gated=is_gated,
-        created_at=updated_at,
         updated_at=updated_at,
     )
     db.add(job)
@@ -107,9 +110,9 @@ async def test_reaper_fails_stuck_upload_and_deletes_orphan_blob(
 
     with (
         patch(
-            "backend._internal.tasks.reaper.storage.delete",
+            "backend._internal.tasks.reaper.storage.discard_staged",
             new_callable=AsyncMock,
-        ) as mock_delete,
+        ) as mock_discard,
         patch(
             "backend._internal.tasks.reaper.notification_service.send_reaper_notification",
             new_callable=AsyncMock,
@@ -117,7 +120,7 @@ async def test_reaper_fails_stuck_upload_and_deletes_orphan_blob(
     ):
         await reap_stuck_uploads()
 
-    mock_delete.assert_awaited_once_with("abc123", "mp3")
+    mock_discard.assert_awaited_once_with("abc123", "mp3", gated=False)
     mock_notify.assert_awaited_once()
     notify_kwargs = mock_notify.await_args.kwargs
     assert notify_kwargs["reaped_count"] == 1
@@ -254,7 +257,7 @@ async def test_reaper_skips_r2_delete_when_blob_is_lossless_original(
     assert stuck.status == JobStatus.FAILED.value
 
 
-async def test_reaper_uses_delete_gated_for_gated_uploads(
+async def test_reaper_discards_gated_uploads_from_the_private_bucket(
     db_session: AsyncSession,
 ) -> None:
     """gated tracks live in a separate R2 bucket; cleanup must route correctly."""
@@ -268,13 +271,9 @@ async def test_reaper_uses_delete_gated_for_gated_uploads(
 
     with (
         patch(
-            "backend._internal.tasks.reaper.storage.delete",
+            "backend._internal.tasks.reaper.storage.discard_staged",
             new_callable=AsyncMock,
-        ) as mock_delete,
-        patch(
-            "backend._internal.tasks.reaper.storage.delete_gated",
-            new_callable=AsyncMock,
-        ) as mock_delete_gated,
+        ) as mock_discard,
         patch(
             "backend._internal.tasks.reaper.notification_service.send_reaper_notification",
             new_callable=AsyncMock,
@@ -282,8 +281,7 @@ async def test_reaper_uses_delete_gated_for_gated_uploads(
     ):
         await reap_stuck_uploads()
 
-    mock_delete.assert_not_awaited()
-    mock_delete_gated.assert_awaited_once_with("abc123", "mp3")
+    mock_discard.assert_awaited_once_with("abc123", "mp3", gated=True)
     await db_session.refresh(gated)
     assert gated.status == JobStatus.FAILED.value
 
@@ -305,13 +303,9 @@ async def test_reaper_handles_job_without_cleanup_hints(
 
     with (
         patch(
-            "backend._internal.tasks.reaper.storage.delete",
+            "backend._internal.tasks.reaper.storage.discard_staged",
             new_callable=AsyncMock,
-        ) as mock_delete,
-        patch(
-            "backend._internal.tasks.reaper.storage.delete_gated",
-            new_callable=AsyncMock,
-        ) as mock_delete_gated,
+        ) as mock_discard,
         patch(
             "backend._internal.tasks.reaper.notification_service.send_reaper_notification",
             new_callable=AsyncMock,
@@ -319,8 +313,7 @@ async def test_reaper_handles_job_without_cleanup_hints(
     ):
         await reap_stuck_uploads()
 
-    mock_delete.assert_not_awaited()
-    mock_delete_gated.assert_not_awaited()
+    mock_discard.assert_not_awaited()
     mock_notify.assert_awaited_once()
     await db_session.refresh(legacy)
     assert legacy.status == JobStatus.FAILED.value
@@ -347,7 +340,7 @@ async def test_reaper_sends_one_batched_dm_for_multiple_stuck_jobs(
 
     with (
         patch(
-            "backend._internal.tasks.reaper.storage.delete",
+            "backend._internal.tasks.reaper.storage.discard_staged",
             new_callable=AsyncMock,
         ),
         patch(
@@ -380,7 +373,7 @@ async def test_reaper_marks_failed_even_when_r2_delete_throws(
 
     with (
         patch(
-            "backend._internal.tasks.reaper.storage.delete",
+            "backend._internal.tasks.reaper.storage.discard_staged",
             new_callable=AsyncMock,
             side_effect=RuntimeError("R2 temporarily unavailable"),
         ),
@@ -411,7 +404,7 @@ async def test_reaper_second_run_does_not_reclaim_already_failed_jobs(
 
     with (
         patch(
-            "backend._internal.tasks.reaper.storage.delete",
+            "backend._internal.tasks.reaper.storage.discard_staged",
             new_callable=AsyncMock,
         ),
         patch(
@@ -429,12 +422,119 @@ async def test_reaper_second_run_does_not_reclaim_already_failed_jobs(
     assert job.status == JobStatus.FAILED.value
 
 
+async def _seed_failed_job(
+    db: AsyncSession,
+    *,
+    completed_ago: timedelta,
+    file_id: str | None = "abandoned1",
+    result: dict | None = None,
+) -> Job:
+    done = datetime.now(UTC) - completed_ago
+    job = Job(
+        type=JobType.UPLOAD.value,
+        status=JobStatus.FAILED.value,
+        owner_did="did:plc:sweep",
+        message="upload failed",
+        file_id=file_id,
+        file_type="wav" if file_id else None,
+        is_gated=False,
+        result=result,
+        updated_at=done,
+        completed_at=done,
+    )
+    db.add(job)
+    await db.commit()
+    await db.refresh(job)
+    return job
+
+
+async def test_sweep_revisits_recently_failed_uploads_only(
+    db_session: AsyncSession,
+) -> None:
+    """a failed job with cleanup hints is the tombstone. it is swept again on
+    every run inside the retention window — one successful delete is not
+    proof, a copy the stalled worker issued can still land — and left alone
+    once the window has passed."""
+    recent = await _seed_failed_job(db_session, completed_ago=timedelta(hours=1))
+    await _seed_failed_job(
+        db_session, completed_ago=ABANDONED_MEDIA_RETENTION + timedelta(hours=1)
+    )
+    await _seed_failed_job(db_session, completed_ago=timedelta(hours=1), file_id=None)
+    completed = Job(
+        type=JobType.UPLOAD.value,
+        status=JobStatus.COMPLETED.value,
+        owner_did="did:plc:sweep",
+        file_id="published1",
+        file_type="wav",
+        completed_at=datetime.now(UTC),
+    )
+    db_session.add(completed)
+    await db_session.commit()
+
+    with patch(
+        "backend._internal.tasks.reaper.storage.discard_staged",
+        new_callable=AsyncMock,
+    ) as mock_discard:
+        await sweep_abandoned_uploads()
+        await sweep_abandoned_uploads()
+
+    assert mock_discard.await_args_list == [
+        (("abandoned1", "wav"), {"gated": False}),
+        (("abandoned1", "wav"), {"gated": False}),
+    ]
+    await db_session.refresh(recent)
+    assert recent.status == JobStatus.FAILED.value
+
+
+async def test_sweep_retries_a_delete_that_failed(
+    db_session: AsyncSession,
+) -> None:
+    """T9: R2 was unavailable when the reaper ran. the job stays failed and
+    the next sweep deletes the bytes."""
+    await _seed_failed_job(db_session, completed_ago=timedelta(minutes=5))
+
+    with patch(
+        "backend._internal.tasks.reaper.storage.discard_staged",
+        new_callable=AsyncMock,
+        side_effect=[RuntimeError("R2 temporarily unavailable"), True],
+    ) as mock_discard:
+        await sweep_abandoned_uploads()
+        await sweep_abandoned_uploads()
+
+    assert mock_discard.await_count == 2
+
+
+async def test_sweep_deletes_a_resumable_sessions_staged_object_too(
+    db_session: AsyncSession,
+) -> None:
+    """hints are written before promotion, so an abandoned resumable upload
+    may still hold its bytes under `staged/<upload_id>.<ext>`."""
+    job = await _seed_failed_job(
+        db_session,
+        completed_ago=timedelta(minutes=5),
+        result={"transfer": {"multipart_id": "mp-1", "extension": "wav"}},
+    )
+
+    with (
+        patch(
+            "backend._internal.tasks.reaper.storage.discard_staged",
+            new_callable=AsyncMock,
+        ),
+        patch(
+            "backend._internal.tasks.reaper.storage.delete_staged",
+            new_callable=AsyncMock,
+        ) as mock_delete_staged,
+    ):
+        await sweep_abandoned_uploads()
+
+    mock_delete_staged.assert_awaited_once_with(
+        StagedUploadKey(upload_id=job.id, extension="wav")
+    )
+
+
 async def test_abandoned_transfer_is_closed_and_its_multipart_aborted(
     db_session: AsyncSession,
 ) -> None:
-    from backend._internal.tasks.reaper import reap_abandoned_transfers
-    from backend.storage.keys import StagedUploadKey
-
     transfer = {
         "multipart_id": "mp-1",
         "filename": "song.wav",
