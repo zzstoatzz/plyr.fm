@@ -24,6 +24,7 @@ from backend._internal.auth import (
     get_refresh_token_lifetime_days,
 )
 from backend.config import settings
+from backend.utilities.pds_nonce import hydrate_pds_nonce, set_pds_nonce
 from backend.utilities.redis import get_async_redis_client
 
 # factory that produces a fresh async iterator over the request body. used
@@ -218,7 +219,7 @@ async def _session_refresh_lock(session_id: str) -> AsyncIterator[None]:
         yield
 
 
-def reconstruct_oauth_session(oauth_data: dict[str, Any]) -> OAuthSession:
+async def reconstruct_oauth_session(oauth_data: dict[str, Any]) -> OAuthSession:
     """reconstruct OAuthSession from serialized data."""
     from cryptography.hazmat.backends import default_backend
     from cryptography.hazmat.primitives import serialization
@@ -238,7 +239,7 @@ def reconstruct_oauth_session(oauth_data: dict[str, Any]) -> OAuthSession:
         raise ValueError("DPoP private key must be an elliptic curve key")
     dpop_private_key: EllipticCurvePrivateKey = private_key
 
-    return OAuthSession(
+    session = OAuthSession(
         did=oauth_data["did"],
         handle=oauth_data["handle"],
         pds_url=oauth_data["pds_url"],
@@ -250,6 +251,7 @@ def reconstruct_oauth_session(oauth_data: dict[str, Any]) -> OAuthSession:
         dpop_pds_nonce=oauth_data.get("dpop_pds_nonce", ""),
         scope=oauth_data["scope"],
     )
+    return await hydrate_pds_nonce(session)
 
 
 async def _refresh_session_tokens(
@@ -276,7 +278,7 @@ async def _refresh_session_tokens(
         if not updated_oauth_data or "access_token" not in updated_oauth_data:
             raise ValueError(f"OAuth session data missing for {auth_session.did}")
 
-        current_oauth_session = reconstruct_oauth_session(updated_oauth_data)
+        current_oauth_session = await reconstruct_oauth_session(updated_oauth_data)
 
         # if tokens are different from what we had, another coroutine already refreshed
         if current_oauth_session.access_token != oauth_session.access_token:
@@ -342,7 +344,7 @@ async def _refresh_session_tokens(
             await asyncio.sleep(0.1)  # brief pause
             retry_session = await get_session(session_id)
             if retry_session and retry_session.oauth_session:
-                retry_oauth_session = reconstruct_oauth_session(
+                retry_oauth_session = await reconstruct_oauth_session(
                     retry_session.oauth_session
                 )
                 if retry_oauth_session.access_token != oauth_session.access_token:
@@ -622,7 +624,7 @@ async def make_pds_request(
         await _log_own_record_write(endpoint, payload)
         return result
 
-    oauth_session = reconstruct_oauth_session(oauth_data)
+    oauth_session = await reconstruct_oauth_session(oauth_data)
     url = f"{oauth_data['pds_url']}/xrpc/{endpoint}"
     response = None  # defensive: bind before the loop so error paths can read it
     has_refreshed = False
@@ -745,6 +747,7 @@ async def _signed_streaming_post(
     dpop = client_obj._dpop
     response: httpx.Response | None = None
     for attempt in range(2):
+        await _prime_pds_nonce(oauth_session, dpop)
         proof = dpop.create_proof(
             method="POST",
             url=url,
@@ -769,6 +772,52 @@ async def _signed_streaming_post(
         return response
     assert response is not None
     return response
+
+
+_PRIME_TIMEOUT = httpx.Timeout(15.0)
+
+
+async def _prime_pds_nonce(oauth_session: OAuthSession, dpop: Any) -> None:
+    """learn the PDS's current nonce with a bodyless signed request.
+
+    A streamed upload cannot afford the usual nonce retry: a PDS that rejects
+    the stale nonce before reading the body closes the connection mid-stream,
+    the client sees ReadError instead of the 401, and the fresh nonce is never
+    read (selfhosted.social, blacksky.app, 2026-09-18). Any signed response
+    carries the nonce, so ask for it with a request that has no body.
+    """
+    url = f"{oauth_session.pds_url}/xrpc/com.atproto.server.getSession"
+    proof = dpop.create_proof(
+        method="GET",
+        url=url,
+        private_key=oauth_session.dpop_private_key,
+        nonce=oauth_session.dpop_pds_nonce,
+        access_token=oauth_session.access_token,
+    )
+    try:
+        async with httpx.AsyncClient(timeout=_PRIME_TIMEOUT) as http:
+            response = await http.get(
+                url,
+                headers={
+                    "Authorization": f"DPoP {oauth_session.access_token}",
+                    "DPoP": proof,
+                },
+            )
+    except httpx.HTTPError as e:
+        logger.warning(
+            "pds nonce priming failed for %s: %s", oauth_session.did, _describe_exc(e)
+        )
+        return
+    if (nonce := dpop.extract_nonce_from_response(response)) and (
+        nonce != oauth_session.dpop_pds_nonce
+    ):
+        oauth_session.dpop_pds_nonce = nonce
+        await set_pds_nonce(oauth_session.pds_url, nonce)
+        logfire.info(
+            "pds nonce primed",
+            pds_url=oauth_session.pds_url,
+            status=response.status_code,
+        )
 
 
 async def upload_blob(
@@ -826,7 +875,7 @@ async def upload_blob(
             heartbeat=heartbeat,
         )
 
-    oauth_session = reconstruct_oauth_session(oauth_data)
+    oauth_session = await reconstruct_oauth_session(oauth_data)
     url = f"{oauth_data['pds_url']}/xrpc/com.atproto.repo.uploadBlob"
 
     # buffered branch: existing small-blob callers pass `data`; we keep the

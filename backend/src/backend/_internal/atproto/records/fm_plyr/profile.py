@@ -73,7 +73,7 @@ async def upsert_profile_record(
         # try to get existing record
         oauth_data = auth_session.oauth_session
         if oauth_data and "pds_url" in oauth_data:
-            oauth_session = reconstruct_oauth_session(oauth_data)
+            oauth_session = await reconstruct_oauth_session(oauth_data)
             url = f"{oauth_data['pds_url']}/xrpc/com.atproto.repo.getRecord"
             params = {
                 "repo": auth_session.did,

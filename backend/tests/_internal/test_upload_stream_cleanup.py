@@ -39,6 +39,8 @@ async def test_upload_closes_partial_source(
 
     class Transport(httpx.AsyncBaseTransport):
         async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
+            if request.method == "GET":
+                return httpx.Response(200, headers={"DPoP-Nonce": "primed"})
             assert isinstance(request.stream, httpx.AsyncByteStream)
             async for _chunk in request.stream:
                 if outcome == "network":
@@ -65,7 +67,11 @@ async def test_upload_closes_partial_source(
         scope="atproto",
         dpop_authserver_nonce="nonce",
     )
-    monkeypatch.setattr(c, "reconstruct_oauth_session", lambda _data: oauth)
+
+    async def fake_reconstruct(_data):
+        return oauth
+
+    monkeypatch.setattr(c, "reconstruct_oauth_session", fake_reconstruct)
     monkeypatch.setattr(
         c,
         "get_oauth_client",
@@ -73,6 +79,7 @@ async def test_upload_closes_partial_source(
             _dpop=SimpleNamespace(
                 create_proof=lambda **kw: "proof",
                 is_dpop_nonce_error=lambda _response: False,
+                extract_nonce_from_response=lambda r: r.headers.get("DPoP-Nonce"),
             )
         ),
     )

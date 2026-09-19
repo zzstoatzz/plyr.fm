@@ -127,7 +127,7 @@ async def _snapshot_pds_items(
     if not oauth_data or "access_token" not in oauth_data:
         raise HTTPException(status_code=401, detail="invalid session")
 
-    oauth_session = _reconstruct_oauth_session(oauth_data)
+    oauth_session = await _reconstruct_oauth_session(oauth_data)
     repo, collection, rkey = parse_at_uri(atproto_record_uri)
     url = f"{oauth_data['pds_url']}/xrpc/com.atproto.repo.getRecord"
     response = await get_oauth_client().make_authenticated_request(
@@ -497,7 +497,7 @@ async def add_track_to_playlist(
         if not oauth_data or "access_token" not in oauth_data:
             raise HTTPException(status_code=401, detail="invalid session")
 
-        oauth_session = _reconstruct_oauth_session(oauth_data)
+        oauth_session = await _reconstruct_oauth_session(oauth_data)
 
         repo, collection, rkey = parse_at_uri(playlist.atproto_record_uri)
 
@@ -603,7 +603,7 @@ async def remove_track_from_playlist(
         if not oauth_data or "access_token" not in oauth_data:
             raise HTTPException(status_code=401, detail="invalid session")
 
-        oauth_session = _reconstruct_oauth_session(oauth_data)
+        oauth_session = await _reconstruct_oauth_session(oauth_data)
 
         repo, collection, rkey = parse_at_uri(playlist.atproto_record_uri)
 
@@ -844,7 +844,7 @@ async def update_playlist(
             try:
                 oauth_data = session.oauth_session
                 if oauth_data and "access_token" in oauth_data:
-                    oauth_session = _reconstruct_oauth_session(oauth_data)
+                    oauth_session = await _reconstruct_oauth_session(oauth_data)
 
                     repo, collection, rkey = parse_at_uri(playlist.atproto_record_uri)
 

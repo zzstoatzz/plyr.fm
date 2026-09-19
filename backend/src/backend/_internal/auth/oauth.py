@@ -16,7 +16,6 @@ from atproto_oauth.client import (
 from atproto_oauth.dpop import DPoPManager
 from atproto_oauth.pkce import PKCEManager
 from atproto_oauth.scopes import ScopesSet
-from atproto_oauth.stores.memory import MemorySessionStore
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives.asymmetric.ec import EllipticCurvePrivateKey
 from cryptography.hazmat.primitives.serialization import load_pem_private_key
@@ -36,14 +35,16 @@ from backend._internal.oauth_stores import PostgresStateStore
 from backend.config import settings
 from backend.models import Artist
 from backend.utilities.database import db_session
+from backend.utilities.pds_nonce import PdsNonceSessionStore
 
 logger = logging.getLogger(__name__)
 
 # OAuth stores
 # state store: postgres-backed for multi-instance resilience
-# session store: in-memory (not used, we use UserSession table instead)
+# session store: sessions live in the UserSession table; this store only
+# forwards the DPoP nonce a PDS hands back so the next request can reuse it
 _state_store = PostgresStateStore()
-_session_store = MemorySessionStore()
+_session_store = PdsNonceSessionStore()
 
 # confidential client key (loaded lazily)
 _client_secret_key: EllipticCurvePrivateKey | None = None

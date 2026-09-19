@@ -65,9 +65,11 @@ async def test_upload_blob_recovers_from_repeated_401(monkeypatch):
 
     monkeypatch.setattr(c, "_signed_streaming_post", fake_streaming_post)
     monkeypatch.setattr(c, "_refresh_session_tokens", fake_refresh)
-    monkeypatch.setattr(
-        c, "reconstruct_oauth_session", lambda data: SimpleNamespace(access_token="t")
-    )
+
+    async def fake_reconstruct(data):
+        return SimpleNamespace(access_token="t")
+
+    monkeypatch.setattr(c, "reconstruct_oauth_session", fake_reconstruct)
 
     blob = await c.upload_blob(
         _session(),
