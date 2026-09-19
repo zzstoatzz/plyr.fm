@@ -47,6 +47,105 @@ plyr.fm should become:
 
 ### September 2026
 
+#### the PDS DPoP nonce was thrown away after every request (#2072, #2073, September 18–19 — prod `2026.0919.060731`; #2073 on staging)
+
+**why**: light777.selfhosted.social could not get a track's audio onto their
+PDS: every "save audio to PDS" failed with `blob upload failed after 4
+attempts: ReadError('')`, and the same signature hit a blacksky.app user on
+September 9. Reproduced on staging with nate's own `nate.selfhosted.social`
+account and a 1.7 MB wav, so it was never about file size (the PDS accepts a
+declared 100 MB and 413s at 200 MB). The cause was plyr's: the DPoP nonce a
+PDS hands back was written into the session only at sign-in and token
+refresh, every request rebuilt the session from that row, and the nonce the
+OAuth client learned on a 401 retry went to a process-local memory store that
+nothing read. Prod Logfire showed roughly one `401` per `200` on every
+`com.atproto.repo.*` write, bsky.network hosts included. Buffered requests paid
+a wasted round trip; streamed audio was sent twice on most PDSes; and a PDS
+that rejects a stale nonce before reading the body closed the connection
+mid-stream, so httpx raised `ReadError`, the fresh nonce was never read, and
+every retry repeated it.
+
+**what shipped**:
+- `backend/utilities/pds_nonce.py`: the latest nonce per PDS host in Redis
+  (10 minute TTL). A nonce is issued per server, not per session, so the API
+  and the worker share what either learns. `reconstruct_oauth_session` is
+  async and prefers the cached value; the OAuth client's session store
+  forwards nonces it learns (#2072).
+- streamed uploads ask the PDS for its current nonce with a bodyless signed
+  `GET com.atproto.server.getSession` before each attempt (#2072).
+- every signed response's `DPoP-Nonce` is kept, in both request paths, so
+  the cache fills without a 401 first (#2073, staging).
+- prod smoke with `nate.selfhosted.social`, public tagged wav: prime 200 →
+  `uploadBlob` 200 on the first attempt → `audio_storage=both`. On staging
+  with #2073, `createRecord`/`putRecord`/`deleteRecord` all go straight to 200.
+
+**technical notes**:
+- the nonce is not written to the session row: that would re-encrypt the row
+  and invalidate the session cache on every request.
+- what this did not explain, and was ruled out by probing the PDS directly:
+  a body-size cap, and an early reply to bad credentials (it waits for the
+  body). The priming request is what makes early-rejecting PDSes work; the
+  cache is what removes the wasted round trip everywhere else.
+- blacksky.app is unverified; there is no test account there.
+
+#### a double-clicked upload, and what the red test suites were hiding (#2063–#2070, September 18 — prod `2026.0918.172630`, `2026.0918.214637`)
+
+**why**: light777.selfhosted.social clicked "upload track" twice 570 ms apart
+and got two tracks and two PDS records for one 79 MB file. Two gaps lined up:
+the form stayed live through the auth preflight and prep, and the duplicate
+check was a bare SELECT several phases before the insert, so both workers saw
+no existing track. Fixing it meant looking at CI, and both staging suites
+turned out to be failing for reasons nobody had read.
+
+**what shipped**:
+- `_create_records` takes an artist-scoped advisory lock and re-runs the
+  duplicate query in the transaction that inserts the pending row; `/upload`
+  ignores submits while one is in flight (#2063). The duplicate query no
+  longer raises `MultipleResultsFound` for an artist who already has twins.
+- `e2e private media` had been red on every push since #2049 (September 12,
+  ten runs): `getByLabel('who can listen?', { exact: true })` cannot match a
+  label that wraps its `<select>` (#2064). It then raced the deploys, so
+  `frontend/e2e/wait-for-staging.mjs` blocks until the head of main is served:
+  the `Cloudflare Pages: plyr-fm-stg` check run names the build's unique URL,
+  every `_app/immutable` asset it references must return 200 from
+  `stg.plyr.fm`, staging backend deploys must drain, and all of it must hold
+  for six consecutive samples (#2065, #2067). One `version.json` match was not
+  enough: the html flips before the assets do.
+- the integration suite then surfaced two real races in one property — the
+  Jetstream echo of plyr's own PDS write beating the task that made it:
+  unliking shortly after liking resurrected the like for about half a second
+  (#2066 covered one ordering, the next run found another; #2069 makes every
+  ordering converge: ingest re-checks the tombstone after its insert, and the
+  cancel path removes any row re-inserted under the URI); and when the echo
+  finalized a pending upload first, the mp3 optimization was never scheduled,
+  so ogg/aiff/wav stayed on the interim rendition (#2070). Neither database
+  had a stuck track. The suite's token mint gets three retries after one
+  upstream timeout failed the September 15 run before any test ran (#2068).
+
+**technical notes**:
+- `published_by_us` should gate only run-once side effects (hooks, rights
+  records), not work that the row state already makes idempotent.
+- light777's duplicate was left alone: they removed one copy from their
+  album themselves within an hour, and the other copy has the play.
+
+#### the queue's shared connection and revision are atomic (#2061, #2062, September 15–16 — prod `2026.0916.001323`)
+
+**why**: `QueueService` ran every request's NOTIFY and the 5 s heartbeat on
+one raw asyncpg connection with nothing serializing them; asyncpg refuses a
+second query while one is in flight, so overlapping queue PUTs lost their
+NOTIFY (the PUT still returned 200) and other instances kept a stale queue
+for up to the 300 s TTL — about once a day in prod, six times in eight
+minutes for one active user on September 14. The load test written for that
+found `update_queue` reading the revision and bumping it in Python, so two
+concurrent updates both wrote N+1 and two concurrent first writes raced the
+primary key into a 409.
+
+**what shipped**: a service-owned lock around every execute on that
+connection (#2061); one `INSERT … ON CONFLICT DO UPDATE` that creates at
+revision 1, increments otherwise, and carries the caller's expected revision
+in the conflict WHERE so a mismatch updates nothing (#2062). The load test
+asserts every user's final revision equals the number of updates.
+
 #### musician uploads follow the publishing contract (September 14)
 
 The September 14 Kite study passed its audio reviews but its upload was rejected
@@ -309,6 +408,11 @@ January.
 
 ### known issues
 
+- **post-create hooks may run twice when the Jetstream echo and the upload task both finalize a track** (staging track 9392, September 18, unreproduced): `ingest_track_create` finalizes a pending row with a plain ORM write, not a compare-and-set, and the upload task's own `post-create hooks completed` landed 14 s after `ingest: finalized pending track` for the same row. The hooks send the notification DM and start the copyright scan. Written up in #2070.
+- **nothing alerts when a workflow on main is red**: `e2e private media` failed on ten consecutive pushes (September 12–18) before anyone looked. `gh run list --workflow "e2e private media"` is the check until there is one.
+- **the cross-account member leg of the private-media e2e still skips**: `ALPHA_TEST_HANDLE`/`ALPHA_TEST_PASSWORD` are not set, so the flow that adds a second account to a Space and plays the track never runs in CI.
+- **light777.selfhosted.social's duplicate track (1323/1324) is theirs to remove**: same `file_id`, one R2 object; the refcount guard keeps the audio when either row is deleted. `test_refcount_prevents_r2_deletion` covers it.
+- **staging has two artist rows for `nate.selfhosted.social`**: `GET /artists/by-handle/…` and `GET /albums/…` 500 with `MultipleResultsFound` on staging; prod has one row.
 - **browser private-media e2e stops at PDS sign-in** (September 13): runs
   [34767184692](https://github.com/zzstoatzz/plyr.fm/actions/runs/34767184692) and
   [34785740209](https://github.com/zzstoatzz/plyr.fm/actions/runs/34785740209)
@@ -330,7 +434,6 @@ January.
 - **the revised private-media permission set is a re-consent event** (#1898): the `authority: "*"` reader permission only takes effect for sessions that consented after it was published, so a member added before their next sign-in cannot mint a credential yet. Credentials also live two hours by protocol with no revocation, so removal from a member list is eventual.
 - **Logfire retention is shorter than time-to-report** ([#1813](https://github.com/zzstoatzz/plyr.fm/issues/1813)): on August 9 the project's earliest record was the same morning. A July 6 PDS-blob failure was therefore undiagnosable a month later — the DB row recorded *that* it failed, never why. Both the new mirroring alert and #1811's failure reasons are only worth as much as the window they survive in. Cheap mitigation for anything we may be asked about later: persist the reason next to the row, which outlives any retention setting.
 - **the PDS picker offers tracks this deployment can't read** ([#1814](https://github.com/zzstoatzz/plyr.fm/issues/1814)): `pds_savable_count` checks ungated + no blob + not optimizing, none of which establishes that the bytes are reachable from here. After #1811 the failure is at least legible instead of a bare count, but the honest behavior is not to offer them. Both candidate fixes have an objection — a per-track HEAD is request-time I/O for a metadata endpoint, and an `r2_url`-origin heuristic reintroduces origin-sniffing right after #1805 removed it from the write path — so it wants a deliberate call. A third framing: if the record carries an `audioBlob`, mirror it in (#1778) rather than hide the track.
-- **unlike may leave the track in the liked list** ([#1812](https://github.com/zzstoatzz/plyr.fm/issues/1812)): `test_cross_user_like` failed once against staging on August 9 and has passed since. Filed rather than dismissed as flaky, because the assertion describes a read-your-own-write guarantee. Ruled out: stale cache (the liked list is a direct DB query) and a failed delete (it commits before returning). Untested hypothesis: `unlike_track` deletes the row and backgrounds the PDS deletion, so a replayed like-create event could resurrect it — the #1736 family. Track deletes write a tombstone for exactly this reason; likes may have no equivalent.
 - **`just backend test` runs serially, CI runs `-n auto`** ([#1815](https://github.com/zzstoatzz/plyr.fm/issues/1815)): the two take different paths through `conftest.py` — serial uses `_setup_database_direct` with no template database, no advisory lock, and no per-worker redis db. The entire parallel bootstrap only ever executed in CI, which is why #1809's bugs were invisible locally despite failing 5/5 once run CI's way. Distinct from the shared-compose-project issue below, which is about *concurrent* sessions rather than parallel workers.
 - **pre-#1811 deletes orphaned R2 objects** ([#1367](https://github.com/zzstoatzz/plyr.fm/issues/1367)): track delete and account deletion keyed off `file_id`, so for firehose-ingested rows the delete was a silent no-op and the real object stayed in the bucket with nothing referencing it. Fixed going forward; anything already orphaned is still there. Production has only 5 ingested rows today so the historical blast radius is small, and the sweep that would confirm it is the audit #1367 already asks for.
 - **a blind jetstream host permanently discards our events** ([#1796](https://github.com/zzstoatzz/plyr.fm/issues/1796)): rotation's fixed 10s cursor rewind cannot cover a blind window in which bsky traffic kept advancing the cursor (verified in production August 8 — see recent work). Silent loss for third-party-client writes, which the write-echo alert cannot see. Narrowed by #2006 (September 3): a rotation triggered by plyr's own unechoed write rewinds the cursor to before that write, so plyr's own records are replayed; foreign-client writes have no stamp, so a blind host still loses them and nothing rotates for them.
@@ -499,7 +602,7 @@ see the [contributing guide](https://docs.plyr.fm/contributing/) for setup instr
 
 ---
 
-this is a living document. last updated 2026-09-14 (status maintenance, window
-September 4–14): the publishing-access arc consolidated (#2047–#2058), the
-musician studio's September 6–12 log and the September 2–5 arcs moved to
-`.status_history/2026-09.md`, agent discovery and the smaller fixes recorded.
+this is a living document. last updated 2026-09-19: the DPoP nonce fix
+(#2072, #2073), the double-submit upload and the two red staging suites
+(#2063–#2070), and the queue atomicity fixes (#2061, #2062) recorded; the
+#1812 unlike known issue closed by #2069.
