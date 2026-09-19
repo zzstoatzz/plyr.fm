@@ -20,7 +20,7 @@ from studio.identity import Musician
 from studio.listening import NotReady
 from studio.platform import Platform, credentials
 from studio.render_repair import render_with_repair
-from studio.state import DAILY_BUDGET, MONTHLY_BUDGET, Store
+from studio.state import DAILY_BUDGET, MONTHLY_BUDGET, BudgetExhausted, Store
 
 ROOT = Path(__file__).parent
 
@@ -176,6 +176,11 @@ def report(store: Store, session: str | None, errors: list[str]) -> None:
                 f"## {name}: {study.get('title', 'unfinished')}\n\n{study.get('idea', '')}\n\n"
                 f"Memory: {study.get('memory', '')}\n\n"
                 + (
+                    f"Budget paused: {study['budget_pause']}\n\n"
+                    if study.get("budget_pause")
+                    else ""
+                )
+                + (
                     "Musical plan: " + json.dumps(study["musical_plan"]) + "\n\n"
                     if study.get("musical_plan")
                     else ""
@@ -280,6 +285,11 @@ def community(
                     else:
                         publish_piece(directory, session, name, audio)
                         curate_peer(directory, session, name)
+                except BudgetExhausted as exc:
+                    store.save_study(session, name, {"budget_pause": str(exc)})
+                    store.finish(session, "budget-paused")
+                    logger.warning("%s: %s", name, exc)
+                    return Completed(name="BudgetPaused", message=f"{name}: {exc}")
                 except NotReady as exc:
                     store.save_study(session, name, {"withheld": True})
                     logger.info("%s: %s", name, exc)

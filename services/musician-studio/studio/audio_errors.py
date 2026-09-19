@@ -49,3 +49,32 @@ class AudioProviderError(RuntimeError):
                     )
                     quotas.append(quota + limit)
         return cls(response.status_code, tuple(quotas))
+
+
+def review_candidate(result: dict) -> dict:
+    candidates = result.get("candidates") or []
+    candidate = candidates[0] if candidates else {}
+    if candidate.get("finishReason") == "STOP":
+        return candidate
+    usage = result.get("usageMetadata", {})
+    feedback = result.get("promptFeedback", {})
+    reason = candidate.get("finishReason", "MISSING")
+    blocked = feedback.get("blockReason", "NONE")
+    reason = (
+        reason
+        if isinstance(reason, str) and re.fullmatch(r"[A-Z_]{1,64}", reason)
+        else "UNKNOWN"
+    )
+    blocked = (
+        blocked
+        if isinstance(blocked, str) and re.fullmatch(r"[A-Z_]{1,64}", blocked)
+        else "UNKNOWN"
+    )
+    output = usage.get("candidatesTokenCount", 0)
+    thinking = usage.get("thoughtsTokenCount", 0)
+    output = output if isinstance(output, int) else 0
+    thinking = thinking if isinstance(thinking, int) else 0
+    raise ValueError(
+        f"Audio review incomplete: finish_reason={reason}; block_reason={blocked}; "
+        f"output_tokens={output}; thinking_tokens={thinking}"
+    )
