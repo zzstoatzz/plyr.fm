@@ -4,6 +4,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
 import pytest
+from atproto_oauth.models import OAuthSession
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ec
@@ -42,10 +43,11 @@ def mock_auth_session() -> AuthSession:
 
 
 def _mock_response(status_code: int = 200, json_data: dict | None = None) -> MagicMock:
-    resp = MagicMock()
+    resp = MagicMock(spec=httpx.Response)
     resp.status_code = status_code
     resp.json.return_value = json_data or {}
     resp.text = "ok"
+    resp.headers = {}
     return resp
 
 
@@ -258,7 +260,7 @@ class TestMakePdsRequestAuthRefresh:
         ):
             # _refresh_session_tokens returns the oauth_session-equivalent,
             # so spoof it with something reconstruct_oauth_session-compatible
-            mock_refresh.return_value = MagicMock()
+            mock_refresh.return_value = MagicMock(spec=OAuthSession)
             result = await make_pds_request(
                 mock_auth_session,
                 "POST",
@@ -294,7 +296,7 @@ class TestMakePdsRequestAuthRefresh:
                 new_callable=AsyncMock,
             ) as mock_refresh,
         ):
-            mock_refresh.return_value = MagicMock()
+            mock_refresh.return_value = MagicMock(spec=OAuthSession)
             result = await make_pds_request(
                 mock_auth_session,
                 "POST",

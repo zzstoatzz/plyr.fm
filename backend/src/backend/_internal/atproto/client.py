@@ -24,7 +24,7 @@ from backend._internal.auth import (
     get_refresh_token_lifetime_days,
 )
 from backend.config import settings
-from backend.utilities.pds_nonce import hydrate_pds_nonce, set_pds_nonce
+from backend.utilities.pds_nonce import hydrate_pds_nonce, remember_pds_nonce
 from backend.utilities.redis import get_async_redis_client
 
 # factory that produces a fresh async iterator over the request body. used
@@ -657,6 +657,8 @@ async def make_pds_request(
                 f"PDS request failed after {_PDS_MAX_ATTEMPTS} attempts: {_describe_exc(e)}"
             ) from e
 
+        await remember_pds_nonce(oauth_session, response)
+
         if response.status_code in success_codes:
             await _log_own_record_write(endpoint, payload)
             if response.status_code == 204 or not parse_response:
@@ -769,6 +771,7 @@ async def _signed_streaming_post(
                 oauth_session.dpop_pds_nonce = new_nonce
                 await client_obj.session_store.save_session(oauth_session)
                 continue
+        await remember_pds_nonce(oauth_session, response)
         return response
     assert response is not None
     return response
@@ -808,11 +811,7 @@ async def _prime_pds_nonce(oauth_session: OAuthSession, dpop: Any) -> None:
             "pds nonce priming failed for %s: %s", oauth_session.did, _describe_exc(e)
         )
         return
-    if (nonce := dpop.extract_nonce_from_response(response)) and (
-        nonce != oauth_session.dpop_pds_nonce
-    ):
-        oauth_session.dpop_pds_nonce = nonce
-        await set_pds_nonce(oauth_session.pds_url, nonce)
+    if await remember_pds_nonce(oauth_session, response):
         logfire.info(
             "pds nonce primed",
             pds_url=oauth_session.pds_url,
