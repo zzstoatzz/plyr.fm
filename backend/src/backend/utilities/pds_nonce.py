@@ -10,6 +10,8 @@ without this cache every PDS write pays a 401 round trip first.
 import logging
 from urllib.parse import urlsplit
 
+import httpx
+from atproto_oauth.dpop import DPoPManager
 from atproto_oauth.models import OAuthSession
 from atproto_oauth.stores.memory import MemorySessionStore
 from redis.exceptions import RedisError
@@ -61,3 +63,13 @@ class PdsNonceSessionStore(MemorySessionStore):
     async def save_session(self, session: OAuthSession) -> None:
         await super().save_session(session)
         await set_pds_nonce(session.pds_url, session.dpop_pds_nonce or "")
+
+
+async def remember_pds_nonce(session: OAuthSession, response: httpx.Response) -> bool:
+    """keep the nonce a PDS response carries; every signed response has one."""
+    nonce = DPoPManager.extract_nonce_from_response(response)
+    if not nonce or nonce == session.dpop_pds_nonce:
+        return False
+    session.dpop_pds_nonce = nonce
+    await set_pds_nonce(session.pds_url, nonce)
+    return True

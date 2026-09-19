@@ -22,6 +22,7 @@ from atproto_oauth.models import OAuthSession
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 
+from backend._internal import Session
 from backend._internal.atproto import client as c
 from backend.utilities.pds_nonce import (
     PdsNonceSessionStore,
@@ -146,3 +147,29 @@ def _proof_payload(proof: str) -> str:
     payload = proof.split(".")[1]
     payload += "=" * (-len(payload) % 4)
     return json.dumps(json.loads(base64.urlsafe_b64decode(payload)))
+
+
+async def test_buffered_request_remembers_the_nonce_from_a_200(
+    pds_url: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """the cache must fill from ordinary successful responses, not only from
+    a 401 retry — the worker's first write after sign-in was still 401ing."""
+    auth = Session.__new__(Session)
+    auth.did = "did:plc:nonce"
+    auth.handle = "nonce.test"
+    auth.session_id = "sess-nonce"
+    auth.oauth_session = _oauth_data(pds_url, _key())
+
+    async def fake_request(**kwargs: Any) -> httpx.Response:
+        return httpx.Response(
+            200, json={"uri": "at://x"}, headers={"DPoP-Nonce": "from-a-200"}
+        )
+
+    monkeypatch.setattr(
+        c,
+        "get_oauth_client",
+        lambda: SimpleNamespace(make_authenticated_request=fake_request),
+    )
+    result = await c.make_pds_request(auth, "POST", "com.atproto.repo.putRecord")
+    assert result == {"uri": "at://x"}
+    assert await get_pds_nonce(pds_url) == "from-a-200"
