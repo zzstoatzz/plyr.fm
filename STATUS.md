@@ -47,7 +47,16 @@ plyr.fm should become:
 
 ### September 2026
 
-#### bounded studio review truncation recovery (September 20)
+#### the status podcast turned a host name into a category (track 1334, September 20)
+
+the `status maintenance` run (#2080) voiced "users on self-hosted personal
+data servers could never get audio onto their PDS". Its source says
+`light777.selfhosted.social` — a provider, not a category — hit the DPoP
+`ReadError`, one blacksky.app user matched, and every other PDS worked after
+a wasted 401. Track 1334's description (the transcript) is corrected; the
+audio is not. A maintenance PR's transcript is now read before merging.
+
+#### bounded studio review truncation recovery (#2081, September 20)
 
 The scheduled review retried two HTTP 503s, then stopped on `MAX_TOKENS` because
 incomplete responses were all non-retryable. Audio tasks now distinguish explicit
@@ -56,7 +65,6 @@ truncation: the first request retains 1,600 tokens, and Prefect retries allow
 spend checks remain in force; paid truncated responses are charged. Diagnostics
 include the requested limit. A Prefect regression verifies recovery, usage
 accounting and reuse of the completed result without another paid request.
-
 
 #### the upload pipeline as two writes and one promise (#2075, September 19 — prod `2026.0919.214851`)
 
@@ -89,8 +97,7 @@ hooks is real but its job stays `failed`, and the re-upload is rejected as a
 duplicate; the 7-day window is an argument, not a proof. Next, from the same
 essay and from garrison's XB: verify the promoted object (HEAD, expected size)
 inside the publication step, a read-only inventory of `audio/`, a sweep on
-`result.transfer`, and a generation on the job row. Full write-up in
-`.status_history/2026-09.md`.
+`result.transfer`, and a generation on the job row. Full write-up in `.status_history/2026-09.md`.
 
 #### studio failure diagnosis (#2076, September 19 — prod `2026.0919.214851`)
 
@@ -347,6 +354,8 @@ the August arcs that sat here until September 20 — the spotify footer, support
 ### backlog
 - drawn iconography: let people draw plyr's own icons doodl-style — slottable icon components, published icon collections, an explore page for them (nate, September 1: "soon, not exactly now"; the sibling repo `doodl` is the reference: `tech.waow.doodl.iconset` maps UI slots to drawing strongRefs)
 - Jetstream audit trail / activity feed integration — persistent log of firehose events, toggle for visibility
+- radio: a listener-side skip, and stations composed on the fly instead of prebaked lineups (#2077, from a `!skip` in stream chat, September 19)
+- landing: headline totals from `/stats` and a "playing right now" strip of covers with relative timestamps, bandcamp-style (#2078)
 - share to bluesky (#334)
 - lyrics and annotations (#373)
 - configurable rules engine for moderation (#958)
@@ -486,10 +495,5 @@ see the [contributing guide](https://docs.plyr.fm/contributing/) for setup instr
 
 ---
 
-this is a living document. last updated 2026-09-20 (status maintenance): the
-September 14–19 window — the upload job fence (#2075), the DPoP nonce fix
-(#2072, #2073), the double-submit upload and the red staging suites
-(#2063–#2070), the queue atomicity fixes (#2061, #2062), the studio's
-publishing contract and budget reporting (#2060, #2076) — kept in short form
-here with the full write-ups moved to `.status_history/2026-09.md`, alongside
-the September 5–14 arcs.
+this is a living document. last updated 2026-09-20: podcast correction (track 1334), #2081,
+#2077/#2078; the September 14–19 write-ups (#2060–#2076) are in `.status_history/2026-09.md`.
