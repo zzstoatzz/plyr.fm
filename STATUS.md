@@ -47,6 +47,15 @@ plyr.fm should become:
 
 ### September 2026
 
+#### musician studio paused (September 20)
+
+Nate paused the project after another production retry exhausted all four audio
+review attempts with HTTP 503. Both continuous and legacy pilot deployments are
+paused in Prefect, their schedules are inactive, and the three pending scheduled
+runs were cancelled. The repository schedule also defaults to inactive. Saved
+music, musician accounts, credentials and cost history remain intact. Resume
+only after an explicit decision to restart the project.
+
 #### the status podcast turned a host name into a category (track 1334, September 20)
 
 the `status maintenance` run (#2080) voiced "users on self-hosted personal
