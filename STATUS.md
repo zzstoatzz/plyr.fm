@@ -47,6 +47,17 @@ plyr.fm should become:
 
 ### September 2026
 
+#### bounded studio review truncation recovery (September 20)
+
+The scheduled review retried two HTTP 503s, then stopped on `MAX_TOKENS` because
+incomplete responses were all non-retryable. Audio tasks now distinguish explicit
+truncation: the first request retains 1,600 tokens, and Prefect retries allow
+4,096. Truncation at the larger limit still stops. Existing retry, request and
+spend checks remain in force; paid truncated responses are charged. Diagnostics
+include the requested limit. A Prefect regression verifies recovery, usage
+accounting and reuse of the completed result without another paid request.
+
+
 #### the upload pipeline as two writes and one promise (#2075, September 19 — prod `2026.0919.214851`)
 
 **why**: garrison (@garrison.corporate.fm) posed an interview question on

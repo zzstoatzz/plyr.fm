@@ -10,17 +10,22 @@ from pathlib import Path
 import httpx
 from prefect import task
 from prefect.cache_policies import INPUTS, TASK_SOURCE
-from prefect.context import FlowRunContext
+from prefect.context import FlowRunContext, TaskRunContext
 from prefect.states import State
 from pydantic import BaseModel, Field
 
-from studio.audio_errors import AudioProviderError, review_candidate
+from studio.audio_errors import (
+    AudioProviderError,
+    AudioReviewTruncated,
+    review_candidate,
+)
 from studio.context import musical_identity
 from studio.identity import Musician
 from studio.listening import ListeningReview, inspiration_digest, record_review
 from studio.state import Store
 
 MODEL = "gemini-3.5-flash"
+RETRY_OUTPUT_LIMIT = 4096
 
 
 class Feedback(BaseModel):
@@ -86,6 +91,10 @@ class AudioReceipt(BaseModel):
 
 def retry_audio(task: object, task_run: object, state: State) -> bool:
     error = state.result(raise_on_failure=False)
+    if isinstance(error, AudioReviewTruncated):
+        return (
+            error.output_limit is not None and error.output_limit < RETRY_OUTPUT_LIMIT
+        )
     if isinstance(error, AudioProviderError):
         return not error.daily_quota_exhausted and error.status in {
             408,
@@ -130,6 +139,10 @@ def audio_request[Response: BaseModel](
     if not data or len(data) > 4_000_000:
         raise ValueError("Missing or oversized review audio")
     store.call(session)
+    context = TaskRunContext.get()
+    output_limit = (
+        RETRY_OUTPUT_LIMIT if context and context.task_run.run_count > 1 else 1600
+    )
     with httpx.Client(timeout=90) as client:
         response = client.post(
             f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
@@ -149,7 +162,7 @@ def audio_request[Response: BaseModel](
                     }
                 ],
                 "generationConfig": {
-                    "maxOutputTokens": 1600,
+                    "maxOutputTokens": output_limit,
                     "thinkingConfig": {"thinkingLevel": "LOW"},
                     "responseMimeType": "application/json",
                     "responseJsonSchema": schema.model_json_schema(),
@@ -161,7 +174,10 @@ def audio_request[Response: BaseModel](
     result = response.json()
     usage = result.get("usageMetadata", {})
     if "promptTokenCount" not in usage:
-        review_candidate(result)
+        try:
+            review_candidate(result, output_limit=output_limit)
+        except AudioReviewTruncated as error:
+            raise ValueError(f"{error}; provider usage missing") from error
         raise ValueError("Audio review missing provider usage")
     store.charge(
         session,
@@ -180,7 +196,7 @@ def audio_request[Response: BaseModel](
         for v in usage.get("promptTokensDetails", [])
         if v["modality"] == "AUDIO"
     )
-    candidate = review_candidate(result)
+    candidate = review_candidate(result, output_limit=output_limit)
     parsed = schema.model_validate_json(
         "".join(
             p.get("text", "")

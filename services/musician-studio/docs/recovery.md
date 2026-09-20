@@ -6,6 +6,14 @@ and 120 seconds plus jitter. Every actual attempt consumes the existing request
 allowance. Malformed audio responses, missing audio tokens, authorization errors
 and exhausted budgets are not retryable. There is no text-only listening fallback.
 
+A provider response explicitly marked `MAX_TOKENS` is retryable at the initial
+1,600-token limit. Prefect retries use 4,096 tokens for thoughts plus output;
+another truncation at that limit stops immediately. This shares the existing
+three retries, twelve-call allowance and session spend check with transient
+failures. Both truncated and completed responses are charged before validation.
+Safety blocks and malformed completed JSON remain non-retryable. Errors retain
+the requested limit alongside returned output and thinking counts.
+
 Successful composition and audio responses are persisted in
 `$STUDIO_STATE_DIR/prefect-results`. Keep that directory on the persistent worker
 volume with `studio.sqlite3` and the audio files. Cache identity includes the
