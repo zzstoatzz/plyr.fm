@@ -2,8 +2,10 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
+from prefect.states import Failed
 
 from studio.audio_errors import review_candidate
+from studio.audio_model import retry_audio
 from studio.state import BudgetExhausted, Store
 
 
@@ -65,3 +67,15 @@ def test_spend_cap_does_not_issue_another_request(tmp_path: Path) -> None:
         store.call(session)
     assert store.usage(now)["day"]["calls"] == 1
     assert store.usage(now)["day"]["estimated_cost"] == 0.10
+
+
+def test_truncation_retains_requested_limit_and_stops_at_recovery_limit() -> None:
+    body = {
+        "candidates": [{"finishReason": "MAX_TOKENS"}],
+        "usageMetadata": {"candidatesTokenCount": 186, "thoughtsTokenCount": 613},
+    }
+    for limit, retry in [(1600, True), (4096, False)]:
+        with pytest.raises(ValueError) as raised:
+            review_candidate(body, output_limit=limit)
+        assert f"requested_output_limit={limit}" in str(raised.value)
+        assert retry_audio(None, None, Failed(data=raised.value)) is retry

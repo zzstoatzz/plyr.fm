@@ -146,3 +146,27 @@ def test_unstructured_provider_error_keeps_http_status(body: object) -> None:
     error = AudioProviderError.from_response(httpx.Response(503, json=body))
     assert error.status == 503
     assert not error.quotas
+
+
+def test_unaccounted_truncation_is_not_retried(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    store = Store(tmp_path)
+    session = store.reserve(datetime.now(UTC))
+    client = httpx.Client
+    transport = httpx.MockTransport(
+        lambda request: httpx.Response(
+            200,
+            json={"candidates": [{"finishReason": "MAX_TOKENS"}]},
+        )
+    )
+    monkeypatch.setattr(audio_model, "key", lambda: "fake")
+    monkeypatch.setattr(
+        audio_model.httpx, "Client", lambda **kw: client(transport=transport, **kw)
+    )
+    with pytest.raises(ValueError, match="provider usage missing") as raised:
+        audio_model.audio_request.fn(
+            tmp_path, session, b"audio", "review", Feedback, "test"
+        )
+    assert not retry_audio(None, None, Failed(data=raised.value))
+    assert store.usage(datetime.now(UTC))["day"]["calls"] == 1

@@ -130,3 +130,90 @@ def test_native_retry_and_audio_cache(
     assert store.usage(datetime.now(UTC))["day"]["estimated_cost"] == pytest.approx(
         3 * 0.00165
     )
+
+
+def test_truncated_audio_recovers_with_more_room_and_caches(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    store = Store(tmp_path)
+    session = store.reserve(datetime.now(UTC))
+    limits = []
+    client = httpx.Client
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content)
+        limits.append(body["generationConfig"]["maxOutputTokens"])
+        truncated = len(limits) == 1
+        return httpx.Response(
+            200,
+            json={
+                "modelVersion": "test-audio",
+                "usageMetadata": {
+                    "promptTokenCount": 500,
+                    "candidatesTokenCount": 186 if truncated else 100,
+                    "thoughtsTokenCount": 613 if truncated else 50,
+                    "promptTokensDetails": [{"modality": "AUDIO", "tokenCount": 250}],
+                },
+                "candidates": [
+                    {
+                        "finishReason": "MAX_TOKENS" if truncated else "STOP",
+                        "content": {
+                            "parts": [
+                                {
+                                    "text": '{"observations":'
+                                    if truncated
+                                    else json.dumps(
+                                        {
+                                            "observations": "The bass obscures the upper notes.",
+                                            "changes": "Lower the bass by three decibels.",
+                                            "ready": True,
+                                        }
+                                    )
+                                }
+                            ]
+                        },
+                    }
+                ],
+            },
+        )
+
+    monkeypatch.setattr(audio_model, "key", lambda: "fake")
+    monkeypatch.setattr(
+        audio_model,
+        "httpx",
+        SimpleNamespace(
+            Client=lambda **kwargs: client(
+                transport=httpx.MockTransport(handle), **kwargs
+            ),
+            TransportError=httpx.TransportError,
+        ),
+    )
+    monkeypatch.setattr(
+        audio_model,
+        "audio_request",
+        audio_model.audio_request.with_options(
+            retry_delay_seconds=0,
+            result_storage=tmp_path / "results",
+        ),
+    )
+    audio = tmp_path / "recording.wav"
+    audio.write_bytes(b"identical audio throughout recovery")
+
+    @flow
+    def pipeline() -> None:
+        feedback, receipt = audio_model.request_audio(
+            store, session, audio, "review", Feedback
+        )
+        assert feedback.ready
+        assert receipt.audio_tokens == 250
+
+    with (
+        temporary_settings({"PREFECT_SERVER_ANALYTICS_ENABLED": False}),
+        prefect_test_harness(),
+    ):
+        pipeline()
+        pipeline()
+    assert limits == [1600, 4096]
+    usage = store.usage(datetime.now(UTC))["day"]
+    assert usage["calls"] == 2
+    assert usage["estimated_cost"] == pytest.approx(0.007941 + 0.0021)

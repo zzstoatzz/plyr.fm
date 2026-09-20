@@ -5,6 +5,16 @@ import re
 import httpx
 
 
+class AudioReviewTruncated(ValueError):
+    def __init__(self, output_limit: int | None, detail: str) -> None:
+        self.output_limit = output_limit
+        self.detail = detail
+        super().__init__(output_limit, detail)
+
+    def __str__(self) -> str:
+        return self.detail
+
+
 class AudioProviderError(RuntimeError):
     def __init__(self, status: int, quotas: tuple[str, ...] = ()) -> None:
         self.status = status
@@ -51,7 +61,7 @@ class AudioProviderError(RuntimeError):
         return cls(response.status_code, tuple(quotas))
 
 
-def review_candidate(result: dict) -> dict:
+def review_candidate(result: dict, *, output_limit: int | None = None) -> dict:
     candidates = result.get("candidates") or []
     candidate = candidates[0] if candidates else {}
     if candidate.get("finishReason") == "STOP":
@@ -74,7 +84,11 @@ def review_candidate(result: dict) -> dict:
     thinking = usage.get("thoughtsTokenCount", 0)
     output = output if isinstance(output, int) else 0
     thinking = thinking if isinstance(thinking, int) else 0
-    raise ValueError(
+    detail = (
         f"Audio review incomplete: finish_reason={reason}; block_reason={blocked}; "
-        f"output_tokens={output}; thinking_tokens={thinking}"
+        f"output_tokens={output}; thinking_tokens={thinking}; "
+        f"requested_output_limit={output_limit}"
     )
+    if reason == "MAX_TOKENS":
+        raise AudioReviewTruncated(output_limit, detail)
+    raise ValueError(detail)
