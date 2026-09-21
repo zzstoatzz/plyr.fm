@@ -21,6 +21,19 @@ from backend.models import Track
 
 logger = logging.getLogger(__name__)
 
+REAPER_RUNBOOK_URL = (
+    "https://github.com/zzstoatzz/plyr.fm/blob/main/"
+    "docs/internal/runbooks/upload-stall-alert.md"
+)
+DmMessage = str | client_utils.TextBuilder
+
+
+def _frontend_link(path: str) -> str | None:
+    base_url = settings.frontend.url.rstrip("/")
+    if not base_url or "localhost" in base_url:
+        return None
+    return f"{base_url}/{path.lstrip('/')}"
+
 
 def _origin() -> str:
     """the app name, qualified by environment everywhere but production.
@@ -151,22 +164,22 @@ class NotificationService:
         return self.recipient_did
 
     async def _send_dm_to_did(
-        self, recipient_did: str, message_text: str
+        self, recipient_did: str, message: DmMessage
     ) -> NotificationResult:
         """send a DM to a specific DID, re-authenticating once if the session is dead.
 
         returns NotificationResult with success status and error details.
         """
-        result = await self._send_dm_once(recipient_did, message_text)
+        result = await self._send_dm_once(recipient_did, message)
         if result.error_type != "session":
             return result
         self._discard_session()
         if await self.ensure_ready() is None:
             return result
-        return await self._send_dm_once(recipient_did, message_text)
+        return await self._send_dm_once(recipient_did, message)
 
     async def _send_dm_once(
-        self, recipient_did: str, message_text: str
+        self, recipient_did: str, message: DmMessage
     ) -> NotificationResult:
         if not self.dm_client:
             return NotificationResult(
@@ -175,6 +188,13 @@ class NotificationService:
                 error="dm client not authenticated",
                 error_type="auth",
             )
+
+        if isinstance(message, client_utils.TextBuilder):
+            message_text = message.build_text()
+            message_facets = message.build_facets()
+        else:
+            message_text = message
+            message_facets = None
 
         with logfire.span(
             "send_dm",
@@ -203,7 +223,8 @@ class NotificationService:
                     models.ChatBskyConvoSendMessage.Data(
                         convo_id=convo_response.convo.id,
                         message=models.ChatBskyConvoDefs.MessageInput(
-                            text=message_text
+                            text=message_text,
+                            facets=message_facets,
                         ),
                     )
                 )
@@ -302,23 +323,23 @@ class NotificationService:
                 f"{m.get('title', 'Unknown')} by {m.get('artist', 'Unknown')}"
             )
 
-        track_url = None
-        frontend_url = settings.frontend.url
-        if frontend_url and "localhost" not in frontend_url:
-            track_url = f"{frontend_url}/track/{track_id}"
+        track_url = _frontend_link(f"track/{track_id}")
+        artist_url = _frontend_link(f"u/{artist_handle}")
 
-        message_text = (
-            f"copyright flag on {_origin()}\n\n"
-            f"track: '{track_title}'\n"
-            f"artist: @{artist_handle}\n"
-            f"matches: {len(matches)}\n"
+        message = client_utils.TextBuilder().text(
+            f"copyright flag on {_origin()}\n\ntrack: '{track_title}'\nartist: "
         )
+        if artist_url:
+            message.link(f"@{artist_handle}", artist_url)
+        else:
+            message.text(f"@{artist_handle}")
+        message.text(f"\nmatches: {len(matches)}\n")
         if primary_match:
-            message_text += f"primary: {primary_match}\n"
+            message.text(f"primary: {primary_match}\n")
         if track_url:
-            message_text += f"\n{track_url}"
+            message.text("\n").link("open track", track_url)
 
-        result = await self._send_dm_to_did(recipient_did, message_text)
+        result = await self._send_dm_to_did(recipient_did, message)
         if result.success:
             logger.info(f"sent copyright flag notification for track {track_id}")
         return result
@@ -380,23 +401,30 @@ class NotificationService:
         reporter_display = f"@{reporter_handle}" if reporter_handle else "anonymous"
 
         # build URL if available
-        target_link = ""
-        frontend_url = settings.frontend.url
-        if target_url and frontend_url and "localhost" not in frontend_url:
-            target_link = f"\n{frontend_url}{target_url}"
-
-        message_text = (
-            f"📋 new user report on {_origin()}\n\n"
-            f"from: {reporter_display}\n"
-            f"target: {target_display}{target_link}\n"
-            f"reason: {reason}\n"
+        target_link = _frontend_link(target_url) if target_url else None
+        reporter_link = (
+            _frontend_link(f"u/{reporter_handle}") if reporter_handle else None
         )
+
+        message = client_utils.TextBuilder().text(
+            f"📋 new user report on {_origin()}\n\nfrom: "
+        )
+        if reporter_link:
+            message.link(reporter_display, reporter_link)
+        else:
+            message.text(reporter_display)
+        message.text("\ntarget: ")
+        if target_link:
+            message.link(target_display, target_link)
+        else:
+            message.text(target_display)
+        message.text(f"\nreason: {reason}\n")
         if description:
             # truncate long descriptions
             desc = description[:200] + "..." if len(description) > 200 else description
-            message_text += f'\n"{desc}"'
+            message.text(f'\n"{desc}"')
 
-        result = await self._send_dm_to_did(recipient_did, message_text)
+        result = await self._send_dm_to_did(recipient_did, message)
         if result.success:
             logger.info(f"sent user report notification for report {report_id}")
         return result
@@ -411,27 +439,31 @@ class NotificationService:
         artist_handle = track.artist.handle
 
         # only include link if we have a non-localhost frontend URL
-        track_url = None
-        frontend_url = settings.frontend.url
-        if frontend_url and "localhost" not in frontend_url:
-            track_url = f"{frontend_url}/track/{track.id}"
+        track_url = _frontend_link(f"track/{track.id}")
+        artist_url = _frontend_link(f"u/{artist_handle}")
 
         if track_url:
-            message_text = (
-                f"🎵 new track on {_origin()}!\n\n"
-                f"'{track.title}' by @{artist_handle}\n\n"
-                f"listen: {track_url}\n"
-                f"uploaded: {track.created_at.strftime('%b %d at %H:%M UTC')}"
+            builder = client_utils.TextBuilder().text(
+                f"🎵 new track on {_origin()}\n\n'{track.title}' by "
+            )
+            if artist_url:
+                builder.link(f"@{artist_handle}", artist_url)
+            else:
+                builder.text(f"@{artist_handle}")
+            message: DmMessage = (
+                builder.text("\n\n")
+                .link("listen on plyr.fm", track_url)
+                .text(f"\nuploaded {track.created_at.strftime('%b %d at %H:%M UTC')}")
             )
         else:
             # dev environment - no link
-            message_text = (
-                f"🎵 new track on {_origin()}!\n\n"
+            message = (
+                f"🎵 new track on {_origin()}\n\n"
                 f"'{track.title}' by @{artist_handle}\n"
-                f"uploaded: {track.created_at.strftime('%b %d at %H:%M UTC')}"
+                f"uploaded {track.created_at.strftime('%b %d at %H:%M UTC')}"
             )
 
-        result = await self._send_dm_to_did(recipient_did, message_text)
+        result = await self._send_dm_to_did(recipient_did, message)
         if result.success:
             logger.info(f"sent notification for track {track.id}")
         return result
@@ -455,11 +487,6 @@ class NotificationService:
             logger.warning("recipient not set, skipping reaper notification")
             return None
 
-        handles_str = (
-            ", ".join(f"@{h}" for h in sorted(affected_handles))
-            if affected_handles
-            else "(unresolved)"
-        )
         # show at most 3 job ids inline; the rest live in logfire under the
         # reap_stuck_uploads span. truncation keeps the DM short.
         if len(job_ids) <= 3:
@@ -467,16 +494,29 @@ class NotificationService:
         else:
             ids_str = ", ".join(job_ids[:3]) + f" (+{len(job_ids) - 3} more)"
 
-        message_text = (
-            f"⚠️ stuck-upload reaper fired on {_origin()}\n\n"
-            f"reaped {reaped_count} upload job"
-            f"{'s' if reaped_count != 1 else ''} stuck >{threshold_minutes} min\n"
-            f"affected: {handles_str}\n"
-            f"job ids: {ids_str}\n\n"
-            f"runbook: docs/internal/retrospectives/2026-05-10-worker-oom-loop-streaming.md"
+        message = client_utils.TextBuilder().text(
+            f"⚠️ upload jobs stalled • {_origin()}\n\n"
+            f"the reaper failed {reaped_count} job"
+            f"{'s' if reaped_count != 1 else ''} after >{threshold_minutes} min "
+            "without progress.\n\n"
         )
+        message.text("accounts: ")
+        if affected_handles:
+            for index, handle in enumerate(sorted(affected_handles)):
+                if index:
+                    message.text(", ")
+                profile_url = _frontend_link(f"u/{handle}")
+                if profile_url:
+                    message.link(f"@{handle}", profile_url)
+                else:
+                    message.text(f"@{handle}")
+        else:
+            message.text("unresolved")
+        message.text(f"\njob IDs: {ids_str}\n\n")
+        message.link("upload health", f"{settings.atproto.base_url}/health/freshness")
+        message.text(" · ").link("triage runbook", REAPER_RUNBOOK_URL)
 
-        result = await self._send_dm_to_did(recipient_did, message_text)
+        result = await self._send_dm_to_did(recipient_did, message)
         if result.success:
             logger.info(
                 "sent reaper notification (reaped=%d, affected=%d)",
