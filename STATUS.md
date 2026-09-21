@@ -47,6 +47,34 @@ plyr.fm should become:
 
 ### September 2026
 
+#### evergreen found four upload jobs the reaper could not see (#2084, #2085, #2087, September 21 — prod `2026.0921.055515`)
+
+The new read-only `/health/freshness` probe reported four `pending`, phase-less
+upload jobs stalled for 65–144 days. This was stale state, not a current ingest
+outage: 20 uploads completed in the preceding week, one failed, and the newest
+track published September 20. The database and optimization queues were healthy.
+
+The probe checks database reachability plus upload and optimization progress and
+returns 503 without mutating state. The upload reaper now claims stale `pending`
+jobs that never entered transfer as well as stale `processing` jobs; it leaves
+`pending/transfer` sessions to the separate 24-hour abandoned-transfer policy.
+The first production run failed all four orphaned jobs, skipped R2 cleanup because
+none had cleanup hints, and notified the two affected accounts. Freshness returned
+200 afterward. Post-release spans had no 5xx or database errors; the label stream
+closed during deployment, resumed from cursor 746, and reconnected 17 seconds
+later.
+
+The first operator DMs exposed a second problem: plain text made a repository
+path look like a runbook link, raw URLs occupied whole lines, and "pipeline
+stalled" would overstate what one abandoned job proves. Chat messages now carry
+ATProto rich-text facets. Reaper alerts say that specific jobs stalled, identify
+the environment, link affected accounts and live upload health, and lead to a
+dedicated triage runbook while retaining full job IDs for search. Track,
+copyright and user-report DMs use labeled track, artist and target links through
+the same transport. There is deliberately no synthetic alert sent through the
+shared moderation account and no job-detail link until such an operator surface
+exists.
+
 #### musician studio paused (September 20)
 
 Nate paused the project after another production retry exhausted all four audio
