@@ -1,9 +1,8 @@
 """stuck-upload reaper.
 
-a periodic docket task that closes the loop on upload jobs which sit in
-`status = 'processing'` past a wall-clock budget. without it, a worker
-that dies between staging an R2 blob and finalizing a track row leaves
-the user's frontend spinning on "uploading to storage… 100%" forever.
+a periodic docket task that closes the loop on upload jobs which stop before
+or during worker processing. without it, a request or worker that dies after
+creating the job can leave the user's frontend spinning forever.
 
 see docs/internal/retrospectives/2026-05-10-worker-oom-loop-streaming.md
 for the incident that motivated this task.
@@ -43,7 +42,7 @@ from datetime import UTC, datetime, timedelta
 
 import logfire
 from docket import Perpetual
-from sqlalchemy import select, update
+from sqlalchemy import and_, or_, select, update
 
 from backend._internal.jobs import TERMINAL_STATUSES
 from backend._internal.notifications import notification_service
@@ -55,7 +54,8 @@ from backend.utilities.database import db_session
 
 logger = logging.getLogger(__name__)
 
-# how long a job can sit in `processing` before we call it stuck. with the
+# how long a job can stop before or during worker processing before we call it
+# stuck. with the
 # heartbeat tickers inside `_signed_streaming_post` and the transcoder client,
 # a live task updates `updated_at` every ~5s — so 10 minutes of staleness
 # is a 120x signal-to-noise ratio over the heartbeat cadence.
@@ -65,7 +65,7 @@ STUCK_UPLOAD_THRESHOLD = timedelta(minutes=10)
 async def reap_stuck_uploads(
     perpetual: Perpetual = Perpetual(every=timedelta(seconds=60), automatic=True),  # noqa: B008
 ) -> None:
-    """find upload jobs stuck in `processing` and fail them.
+    """find upload jobs stuck before or during worker processing and fail them.
 
     runs automatically every 60 seconds via docket's Perpetual scheduler.
     """
@@ -85,7 +85,13 @@ async def reap_stuck_uploads(
             select(Job.id)
             .where(
                 Job.type == JobType.UPLOAD.value,
-                Job.status == JobStatus.PROCESSING.value,
+                or_(
+                    Job.status == JobStatus.PROCESSING.value,
+                    and_(
+                        Job.status == JobStatus.PENDING.value,
+                        or_(Job.phase.is_(None), Job.phase != "transfer"),
+                    ),
+                ),
                 Job.updated_at < cutoff,
             )
             .with_for_update(skip_locked=True)

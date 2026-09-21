@@ -32,12 +32,17 @@ end-to-end publishing remains covered by the staging integration suite.
 ## initial baseline
 
 On September 21, 2026 (UTC), a read-only query against `plyr-prd` found four
-upload jobs still pending with no phase, last updated April 30–July 18. One
-upload completed within the preceding day. The freshness check intentionally
-reports those four rows as stalled rather than excluding historical failures
-to get a green result. Reconciliation of those rows is a separate operation;
-the check never changes their state. Ordinary `/health` and playback remain
-independent of that backlog verdict.
+upload jobs still pending with no phase, last updated April 30–July 18. Twenty
+uploads completed in the preceding seven days and the latest track was published
+September 20, so the rows were historical orphaned jobs rather than evidence of
+a current pipeline outage. The freshness check intentionally reports them as
+stalled rather than excluding historical failures to get a green result.
+
+The upload reaper reconciles both stalled `processing` jobs and stalled
+pre-worker `pending` jobs. Pending `transfer` sessions remain excluded because
+their separate 24-hour reaper owns browser-abandoned multipart uploads. The
+freshness check itself never changes state. Ordinary `/health` and playback
+remain independent of the backlog verdict.
 
 The regression suite uses real local Postgres: stale and progressing jobs,
 quiet periods, browser transfers, optimization budgets, terminal outcome
