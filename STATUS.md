@@ -47,14 +47,58 @@ plyr.fm should become:
 
 ### September 2026
 
-#### musician studio paused (September 20)
+#### the upload pipeline got an outside verdict, and the reaper learned to see pre-worker stalls (#2084, #2085, September 21 — prod `2026.0921.025041`, `2026.0921.055515`)
+
+**why**: the stuck-upload reaper (from the May 10 worker OOM) only ever
+claimed jobs stuck in `processing`, and nothing outside the app could ask
+whether uploads were progressing at all — `/health` is process liveness. Four
+prod upload rows from April 30 and July 18 had sat `pending` with no phase and
+zero progress ever since; 20 uploads completed in the seven days before, so
+they were stale bookkeeping, not an outage. The failure shape to avoid is the
+one astra.pizza wrote up in February and March: jobs silently dead for a week
+while the health check that should have noticed was itself passing.
+
+**what shipped**: `GET /health/freshness` (#2084) reads the jobs table under a
+three-second deadline and returns 503 when the database is unreachable or an
+upload/optimize job has stopped updating past its budget — ten minutes for
+uploads, the transcoder's optimize timeout plus ten for the deferred encode.
+Pending `transfer` sessions are counted, not judged (the browser owns them);
+completed/failed counts over 24 h are diagnostic and never flip the verdict; a
+quiet pipeline is healthy; the body carries no IDs, filenames or upstream
+errors; `Cache-Control: no-store`. 13 tests on real Postgres, including a
+table lock that outlives the deadline. On prod it returned 503 for exactly
+those four rows, by design. #2085 then widened the reaper's `SKIP LOCKED`
+claim to stalled pre-worker `pending` jobs on the same ten-minute budget, with
+no R2 delete when a job has no cleanup hints, and left `pending/transfer` to
+its own 24-hour policy. The first prod reaper run failed the four rows; at
+14:26Z on September 21 prod returns 200 with `failed_last_24h: 4`. Contract:
+`docs/internal/backend/health.md`.
+
+**open**: the endpoint exists for Evergreen to poll; whether it is wired
+there yet is not recorded in either PR. The probe cannot see a task lost
+before a job row exists, media playability, or Jetstream freshness.
+
+#### operator alerts carry links (#2087, September 21 — merged, on staging)
+
+Operator DMs from the notification account carried raw URLs, and the reaper
+alert's "runbook" was a repository path. `TextBuilder` facets now travel
+through the shared DM transport (`chat.bsky.convo.sendMessage` takes `facets`
+with UTF-8 byte ranges, asserted in a focused test), so artists, tracks,
+`/health/freshness` and the new `docs/internal/runbooks/upload-stall-alert.md`
+render as links in the new-track, copyright, user-report and stall messages;
+the stall alert leads with environment and outcome and keeps full job IDs
+searchable. Plain strings still work for callers without rich content. No
+test DM was sent to the shared account. Not yet in production.
+
+#### musician studio paused (#2083, September 20 — prod `2026.0921.025041`)
 
 Nate paused the project after another production retry exhausted all four audio
 review attempts with HTTP 503. Both continuous and legacy pilot deployments are
 paused in Prefect, their schedules are inactive, and the three pending scheduled
-runs were cancelled. The repository schedule also defaults to inactive. Saved
-music, musician accounts, credentials and cost history remain intact. Resume
-only after an explicit decision to restart the project.
+runs were cancelled. The repository schedule (`prefect.yaml`) now defaults to
+inactive, so a redeploy does not restart scheduled work. Saved music, musician
+accounts, credentials and cost history remain intact. Resume only after an
+explicit decision to restart the project.
 
 #### the status podcast turned a host name into a category (track 1334, September 20)
 
@@ -65,7 +109,7 @@ data servers could never get audio onto their PDS". Its source says
 a wasted 401. Track 1334's description (the transcript) is corrected; the
 audio is not. A maintenance PR's transcript is now read before merging.
 
-#### bounded studio review truncation recovery (#2081, September 20)
+#### bounded studio review truncation recovery (#2081, September 20 — prod `2026.0921.025041`, after the pause)
 
 The scheduled review retried two HTTP 503s, then stopped on `MAX_TOKENS` because
 incomplete responses were all non-retryable. Audio tasks now distinguish explicit
@@ -75,127 +119,34 @@ spend checks remain in force; paid truncated responses are charged. Diagnostics
 include the requested limit. A Prefect regression verifies recovery, usage
 accounting and reuse of the completed result without another paid request.
 
-#### the upload pipeline as two writes and one promise (#2075, September 19 — prod `2026.0919.214851`)
+#### September 14–19 (archived)
 
-**why**: garrison (@garrison.corporate.fm) posed an interview question on
-September 18 — a database, an object store, uploads that can succeed without
-answering; keep every reference valid, leave no bytes dangling — and then
-published "Two writes, one promise", which reviewed this pipeline at `6bae695`
-and named four windows. All four were real at head of main: cleanup hints
-were saved *after* `promote_staged`; a worker paused past the reaper's
-10-minute threshold could wake, publish a track and a PDS record against
-bytes the reaper had just deleted, and mark the job completed;
-`update_progress` and `heartbeat` wrote a `failed` job back to life; a failed
-R2 delete was logged once and never retried.
-
-**what shipped**: publication and abandonment compete on the job row.
-`lock_for_publication` takes it `FOR UPDATE` inside the reservation
-transaction and refuses a terminal job; the reaper claims with `SKIP LOCKED`
-and commits before deleting, so whichever locks first decides. `completed`
-and `failed` are terminal for progress and heartbeat writes. Hints are
-written before bytes, so the failed job row *is* the tombstone:
-`sweep_abandoned_uploads` (every 30 min) re-discards each failed upload's
-media for 7 days through the refcounted `discard_staged`, skipping any key a
-live job names in its hints. R2 delete on a missing key is `info`. Seven
-real-path tests in `tests/api/test_upload_job_fence.py` fail on main. Smoked
-on staging by hand; on prod the first sweep kept a key a live track still
-references (refcount 1) and a tagged upload published through the fence.
-
-**open**: a track that publishes while its worker stalls in the post-upload
-hooks is real but its job stays `failed`, and the re-upload is rejected as a
-duplicate; the 7-day window is an argument, not a proof. Next, from the same
-essay and from garrison's XB: verify the promoted object (HEAD, expected size)
-inside the publication step, a read-only inventory of `audio/`, a sweep on
-`result.transfer`, and a generation on the job row. Full write-up in `.status_history/2026-09.md`.
-
-#### studio failure diagnosis (#2076, September 19 — prod `2026.0919.214851`)
-
-The September 19 18:17 study used its 12-request allowance after multiple audio
-503 retries and a timeout. This was request exhaustion, not a new quota error.
-The studio now reports `BudgetPaused` with actual request/spend totals, preserves
-the reservation and progress artifact, and stops before publication if mandatory
-reviews are unfinished. Closed or missing sessions still fail. Incomplete Gemini
-responses retain finish/block reasons and output/thinking token counts without
-logging response text. No retry, model, or budget limits were increased.
-
-#### the PDS DPoP nonce was thrown away after every request (#2072, #2073, September 18–19 — prod `2026.0919.060731`, `2026.0919.214851`)
-
-**why**: light777.selfhosted.social could not save a track's audio to their
-PDS — `blob upload failed after 4 attempts: ReadError('')`, the signature a
-blacksky.app user hit on September 9 — and a 1.7 MB wav reproduced it on
-staging, so size was never the story. A PDS issues its DPoP nonce per server
-and rotates it; plyr wrote the nonce into the session only at sign-in and
-refresh, rebuilt the session from that row on every request, and the nonce
-learned on a 401 retry went to a process-local store nothing read. Prod
-Logfire showed roughly one 401 per 200 on every `com.atproto.repo.*` write.
-Buffered writes paid a round trip; streamed audio was sent twice; a PDS that
-rejects a stale nonce before reading the body closed the connection
-mid-stream, so the fresh nonce was never read and every retry repeated it.
-
-**what shipped**: `utilities/pds_nonce.py` keeps the latest nonce per PDS host
-in Redis (10 min TTL), shared by API and worker; `reconstruct_oauth_session`
-is async and prefers it; streamed uploads prime the nonce with a bodyless
-signed `GET com.atproto.server.getSession` before each attempt (#2072); every
-signed response's `DPoP-Nonce` is kept in both request paths, so the cache
-fills without a 401 first (#2073). Prod smoke with `nate.selfhosted.social`:
-prime 200 → `uploadBlob` 200 on the first attempt → `audio_storage=both`. The
-nonce is deliberately not written to the session row — that would re-encrypt
-it and invalidate the session cache on every request. blacksky.app is
-unverified; there is no test account there.
-
-#### a double-clicked upload, and what the red test suites were hiding (#2063–#2070, September 18 — prod `2026.0918.172630`, `2026.0918.214637`)
-
-**why**: light777 clicked "upload track" twice 570 ms apart and got two
-tracks and two PDS records for one 79 MB file: the form stayed live through
-the preflight, and the duplicate check was a bare SELECT several phases
-before the insert. Fixing it meant looking at CI, where both staging suites
-had been failing for reasons nobody had read.
-
-**what shipped**:
-- `_create_records` takes an artist-scoped advisory lock and re-runs the
-  duplicate query in the transaction that inserts the pending row; `/upload`
-  ignores submits while one is in flight (#2063).
-- `e2e private media` had been red on every push since #2049 (September 12,
-  ten runs): a `getByLabel(…, { exact: true })` that cannot match a label
-  wrapping its `<select>` (#2064), then a race with the deploys —
-  `wait-for-staging.mjs` now blocks until the head of main's build is served,
-  every `_app/immutable` asset it references returns 200, backend deploys
-  have drained, and all of it holds for six consecutive samples (#2065,
-  #2067). The html flips before the assets do.
-- the integration suite surfaced two real races of one shape — the Jetstream
-  echo of plyr's own PDS write beating the task that made it: unlike shortly
-  after like resurrected the like for half a second (#2066 covered one
-  ordering, #2069 makes every ordering converge by having both observers
-  clean up); and when the echo finalized a pending upload first, mp3
-  optimization was never scheduled, so ogg/aiff/wav stayed on the interim
-  rendition (#2070). `published_by_us` now gates only run-once side effects.
-  The suite's token mint retries three times (#2068).
-
-light777's duplicate was left alone: they removed one copy from their album
-within the hour, and the other has the play.
-
-#### the queue's shared connection and revision are atomic (#2061, #2062, September 15–16 — prod `2026.0915.222459`, `2026.0916.001323`)
-
-`QueueService` ran every request's NOTIFY and the 5 s heartbeat on one raw
-asyncpg connection with nothing serializing them; asyncpg refuses a second
-in-flight query, so overlapping queue PUTs lost their NOTIFY and other
-instances served a stale queue for up to the 300 s TTL — six times in eight
-minutes for one user on September 14. A service-owned lock now wraps every
-execute (#2061). The load test written for it found `update_queue` bumping
-the revision in Python (15 of 100 users lost an increment) and two first
-writes racing the primary key; one `INSERT … ON CONFLICT DO UPDATE` with the
-expected revision in the conflict WHERE does both (#2062).
-
-#### musician uploads follow the publishing contract (#2060, September 14 — prod `2026.0915.222459`)
-
-The September 14 Kite study passed its audio reviews but its upload was rejected
-with `400: unknown upload fields: visibility`. #2049 replaced that legacy form
-field with JSON `publishing`. The studio now sends an explicit per-track policy:
-public listening, open downloads, unlisted visibility, no attached rights. AI
-self-labels and post-upload visibility verification remain. All 72 studio tests
-pass; the multipart regression fails on the prior request. The current backend
-policy model accepts the request and gives it precedence over account defaults.
-The failed study's upload reservation remains intact; it is not reset for retry.
+See `.status_history/2026-09.md` for the full write-ups:
+- **an upload is two writes and one promise** (#2075, September 19 — prod
+  `2026.0919.214851`): after garrison's essay named four windows in the
+  pipeline, publication and abandonment now compete on the job row —
+  `lock_for_publication` takes it `FOR UPDATE`, the reaper claims with
+  `SKIP LOCKED`, terminal states refuse progress writes, hints precede bytes,
+  and `sweep_abandoned_uploads` re-discards a failed upload's media for 7 days.
+- **the PDS DPoP nonce was thrown away after every request** (#2072, #2073,
+  September 18–19 — prod `2026.0919.060731`, `2026.0919.214851`): the nonce
+  lives in Redis per PDS host, streamed uploads prime it with a bodyless
+  signed GET, and every signed response's `DPoP-Nonce` is kept. Cleared
+  light777.selfhosted.social's `ReadError('')`; blacksky.app unverified.
+- **a double-clicked upload, and what the red test suites were hiding**
+  (#2063–#2070, September 18 — prod `2026.0918.172630`, `2026.0918.214637`):
+  an artist-scoped advisory lock around the duplicate check and insert; the
+  private-media e2e had been red for ten pushes; two Jetstream-echo races
+  (unlike resurrecting a like, mp3 optimization never scheduled) converge.
+- **the queue's shared connection and revision are atomic** (#2061, #2062,
+  September 15–16 — prod `2026.0916.001323`): a lock around every execute on
+  the shared asyncpg connection; one `INSERT … ON CONFLICT` owns the revision.
+- **studio failure diagnosis** (#2076, September 19 — prod `2026.0919.214851`):
+  request exhaustion reports `BudgetPaused` with real totals instead of
+  crashing; no limits were raised.
+- **musician uploads follow the publishing contract** (#2060, September 14 —
+  prod `2026.0915.222459`): the studio sends an explicit `publishing` policy
+  instead of the legacy `visibility` field #2049 removed.
 
 #### September 5–14 (archived)
 
@@ -268,12 +219,16 @@ in `2026-09.md` with their open threads; anything still live is in known issues.
 whether an upload is alive, hints precede bytes, and a failed job's media is
 re-swept for seven days. The same window closed three races of one shape —
 the Jetstream echo of plyr's own PDS write beating the task that made it
-(#2066, #2069, #2070) — and the double-submitted form (#2063). **next**, from
-garrison's essay: verify the promoted object inside the publication step; a
-read-only inventory of `audio/` against every media column; a sweep on
+(#2066, #2069, #2070) — and the double-submitted form (#2063). September 21
+added the outside view: `/health/freshness` (#2084) says whether upload work
+is progressing, the reaper now claims pre-worker `pending` stalls too (#2085),
+and the four historical stale rows are failed. **next**, from garrison's
+essay: verify the promoted object inside the publication step; a read-only
+inventory of `audio/` against every media column; a sweep on
 `result.transfer`; a compare-and-set finalize in `ingest_track_create` so the
-post-create hooks cannot run twice (known issues); and, once a PDS nonce
-problem is not the first suspect, a test account on blacksky.app.
+post-create hooks cannot run twice (known issues); wire Evergreen to the
+freshness endpoint and promote the linked operator alerts (#2087); and, once
+a PDS nonce problem is not the first suspect, a test account on blacksky.app.
 
 **publishing permissions are independent of storage** (#2049, #2056, #2057):
 Portal defaults, album application and per-track exceptions are in production.
@@ -283,17 +238,19 @@ not hide a work. Future Space-backed storage must preserve those audience choice
 rather than turn every protected work into members-only content. Moving existing
 works across Space boundaries remains a separate migration decision.
 
-**three musicians, gated on listening** (#2031–#2051, September 6–12): Moss,
-Kite and Reed compose every six hours on the home worker and may not upload
-until a native-audio self-review, a revision, and a peer review of the exact
-rendered hash exist. No track has passed the full gate yet: Kite's September 14
-study passed its reviews and was refused by the publishing API (#2060, fixed);
-the September 19 study exhausted its request allowance on audio 503 retries
-and now reports `BudgetPaused` instead of a crash (#2076). The calibration
-controls say the listener hears isolated events and wobbles on a mix. **next**:
-a live calibration run in the evaluation window, a human ear on anything that
-does get released, and whether the app-level `bot` label should point at a
-machine-readable disclosure record like the one proposed on WhiteWind in
+**three musicians, gated on listening — paused September 20** (#2031–#2051,
+#2081, #2083): Moss, Kite and Reed composed every six hours on the home worker
+and could not upload until a native-audio self-review, a revision, and a peer
+review of the exact rendered hash existed. No track passed the full gate:
+Kite's September 14 study passed its reviews and was refused by the publishing
+API (#2060, fixed); the September 19 study exhausted its request allowance on
+audio 503 retries (#2076); the September 20 retry burned all four review
+attempts on 503s, and Nate paused every schedule (#2083). #2081's truncation
+recovery landed in prod after the pause. The calibration controls say the
+listener hears isolated events and wobbles on a mix. **next**, only after an
+explicit decision to resume: a live calibration run, a human ear on anything
+that does get released, and whether the app-level `bot` label should point at
+a machine-readable disclosure record like the one proposed on WhiteWind in
 January.
 
 **records are moving into the client's hands — parked until the sign-in design is redone** (plan `docs/plans/2026-08-31-client-side-writes.md`; #1948–#1950 shipped in prod `2026.0901.065150`, reverted September 1 in #1952): phase 0 made the frontend a second OAuth client and chained its consent after the cookie login, so every sign-in showed two authorization screens. the direction stands — the file an artist uploads goes in their PDS as-is, plyr indexes/mirrors/serves, and the backend stops authoring records on anyone's behalf — but the next attempt must fit inside the single existing login, with scope growing only when a feature that needs it is used. **next**: redesign how the browser gets a repo-write capability without a second flow, then phase 1 (likes).
@@ -504,5 +461,6 @@ see the [contributing guide](https://docs.plyr.fm/contributing/) for setup instr
 
 ---
 
-this is a living document. last updated 2026-09-20: podcast correction (track 1334), #2081,
-#2077/#2078; the September 14–19 write-ups (#2060–#2076) are in `.status_history/2026-09.md`.
+this is a living document. last updated 2026-09-21: the freshness check and
+reaper widening (#2084, #2085), linked operator alerts (#2087, staging), the
+studio pause (#2083); the September 14–19 entries moved to `.status_history/2026-09.md`.
