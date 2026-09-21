@@ -1,9 +1,8 @@
 """tests for the stuck-upload reaper.
 
 regression coverage for 2026-05-10 — without a reaper, an upload job
-left stuck in `status = processing` (e.g. worker died mid-task) sits
-there forever, the user's frontend spins, and we have no way to
-notice short of the user reporting it.
+left stuck before or during worker processing sits there forever, the user's
+frontend spins, and we have no way to notice short of the user reporting it.
 
 ownership-guard tests (see test_reaper_skips_r2_delete_if_*) are the
 load-bearing protection against deleting media that a successfully-
@@ -50,6 +49,7 @@ async def _seed_upload_job(
     *,
     owner_did: str,
     status: JobStatus = JobStatus.PROCESSING,
+    phase: str | None = None,
     updated_at: datetime,
     file_id: str | None = "abc123",
     file_type: str | None = "mp3",
@@ -58,6 +58,7 @@ async def _seed_upload_job(
     job = Job(
         type=JobType.UPLOAD.value,
         status=status.value,
+        phase=phase,
         owner_did=owner_did,
         message="uploading to storage...",
         progress_pct=100.0,
@@ -162,6 +163,50 @@ async def test_reaper_leaves_recent_processing_jobs_alone(
 
     await db_session.refresh(fresh)
     assert fresh.status == JobStatus.PROCESSING.value
+
+
+async def test_reaper_fails_stale_pending_job_without_phase(
+    db_session: AsyncSession,
+) -> None:
+    await _seed_artist(db_session, did="did:plc:pending", handle="pending.test")
+    pending = await _seed_upload_job(
+        db_session,
+        owner_did="did:plc:pending",
+        status=JobStatus.PENDING,
+        updated_at=_stuck_in_past(_minutes_past_threshold()),
+        file_id=None,
+        file_type=None,
+        is_gated=None,
+    )
+    transfer = await _seed_upload_job(
+        db_session,
+        owner_did="did:plc:pending",
+        status=JobStatus.PENDING,
+        phase="transfer",
+        updated_at=_stuck_in_past(_minutes_past_threshold()),
+        file_id=None,
+        file_type=None,
+        is_gated=None,
+    )
+
+    with (
+        patch(
+            "backend._internal.tasks.reaper.storage.discard_staged",
+            new_callable=AsyncMock,
+        ) as mock_discard,
+        patch(
+            "backend._internal.tasks.reaper.notification_service.send_reaper_notification",
+            new_callable=AsyncMock,
+        ) as mock_notify,
+    ):
+        await reap_stuck_uploads()
+
+    mock_discard.assert_not_awaited()
+    mock_notify.assert_awaited_once()
+    await db_session.refresh(pending)
+    await db_session.refresh(transfer)
+    assert pending.status == JobStatus.FAILED.value
+    assert transfer.status == JobStatus.PENDING.value
 
 
 async def test_reaper_skips_r2_delete_when_blob_is_live_track_audio(
@@ -391,7 +436,7 @@ async def test_reaper_marks_failed_even_when_r2_delete_throws(
 async def test_reaper_second_run_does_not_reclaim_already_failed_jobs(
     db_session: AsyncSession,
 ) -> None:
-    """the atomic UPDATE ... WHERE status='processing' RETURNING ... shape
+    """the atomic UPDATE ... WHERE status IN active statuses RETURNING ... shape
     means once a row is failed, subsequent reaper runs do not see it again.
     proves the claim is idempotent even if two reapers race (the second one
     gets an empty RETURNING set)."""
@@ -413,7 +458,7 @@ async def test_reaper_second_run_does_not_reclaim_already_failed_jobs(
         ) as mock_notify,
     ):
         await reap_stuck_uploads()
-        # second run: no rows should match status='processing' anymore
+        # second run: no rows should match an active status anymore
         await reap_stuck_uploads()
 
     # only one DM total — the second run found nothing to reap.
