@@ -9,10 +9,12 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend._internal.auth import get_public_jwks, is_confidential_client
+from backend.api.health import router as health_router
 from backend.config import settings
 from backend.models import Album, Artist, Track, get_db
 
 router = APIRouter(tags=["meta"])
+router.include_router(health_router)
 
 
 @router.get("/")
