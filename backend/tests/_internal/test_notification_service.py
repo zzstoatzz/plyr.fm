@@ -13,11 +13,17 @@ import time
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from atproto import client_utils
 from atproto_client.exceptions import BadRequestError, InvokeTimeoutError
 from atproto_client.models.common import XrpcError
 from atproto_client.request import Response
 
-from backend._internal.notifications import NotificationService, _origin
+from backend._internal.notifications import (
+    REAPER_RUNBOOK_URL,
+    NotificationResult,
+    NotificationService,
+    _origin,
+)
 
 NOTIF_SETTINGS = "backend._internal.notifications.settings"
 
@@ -197,3 +203,68 @@ class TestSessionRecovery:
         assert result.error_type == "network"
         mock_setup.assert_not_called()
         assert service.recipient_did == "did:plc:recipient"
+
+
+class TestRichDm:
+    async def test_transport_preserves_link_facets_and_utf8_offsets(self) -> None:
+        service = NotificationService()
+        dm_client = TestSessionRecovery._dm_client(None)
+        service.dm_client = dm_client
+        message = (
+            client_utils.TextBuilder()
+            .text("⚠️ inspect ")
+            .link("upload health", "https://api.plyr.fm/health/freshness")
+        )
+
+        result = await service._send_dm_to_did("did:plc:recipient", message)
+
+        assert result.success
+        request = dm_client.chat.bsky.convo.send_message.await_args.args[0]
+        assert request.message.text == "⚠️ inspect upload health"
+        facet = request.message.facets[0]
+        assert facet.index.byte_start == len("⚠️ inspect ".encode())
+        assert facet.index.byte_end == len(request.message.text.encode())
+        assert facet.features[0].uri == "https://api.plyr.fm/health/freshness"
+
+    async def test_reaper_alert_has_actionable_links_and_clear_copy(self) -> None:
+        service = NotificationService()
+        result = NotificationResult(success=True, recipient_did="did:plc:recipient")
+
+        with (
+            patch.object(service, "ensure_ready", new_callable=AsyncMock) as mock_ready,
+            patch.object(
+                service, "_send_dm_to_did", new_callable=AsyncMock
+            ) as mock_send,
+            patch(NOTIF_SETTINGS) as mock_settings,
+        ):
+            mock_ready.return_value = "did:plc:recipient"
+            mock_send.return_value = result
+            mock_settings.app.name = "plyr.fm"
+            mock_settings.observability.environment = "staging"
+            mock_settings.frontend.url = "https://stg.plyr.fm"
+            mock_settings.atproto.base_url = "https://stg-api.plyr.fm"
+
+            await service.send_reaper_notification(
+                reaped_count=2,
+                affected_handles=["z.test", "a.test"],
+                threshold_minutes=10,
+                job_ids=["job-one", "job-two"],
+            )
+
+        assert mock_send.await_args is not None
+        message = mock_send.await_args.args[1]
+        assert isinstance(message, client_utils.TextBuilder)
+        assert message.build_text() == (
+            "⚠️ upload jobs stalled • plyr.fm [staging]\n\n"
+            "the reaper failed 2 jobs after >10 min without progress.\n\n"
+            "accounts: @a.test, @z.test\n"
+            "job IDs: job-one, job-two\n\n"
+            "upload health · triage runbook"
+        )
+        uris = [facet.features[0].uri for facet in message.build_facets()]
+        assert uris == [
+            "https://stg.plyr.fm/u/a.test",
+            "https://stg.plyr.fm/u/z.test",
+            "https://stg-api.plyr.fm/health/freshness",
+            REAPER_RUNBOOK_URL,
+        ]

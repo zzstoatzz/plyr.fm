@@ -412,3 +412,7 @@ max_lines = 555
 [[rules]]
 path = "backend/tests/_internal/test_stuck_upload_reaper.py"
 max_lines = 684
+
+[[rules]]
+path = "backend/src/backend/_internal/notifications.py"
+max_lines = 534
