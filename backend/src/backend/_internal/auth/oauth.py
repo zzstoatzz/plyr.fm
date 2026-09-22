@@ -23,6 +23,7 @@ from fastapi import HTTPException
 from jose import jwk
 from sqlalchemy import select
 
+from backend._internal.auth.oauth_compat import BlackskyCompatibleOAuthClient
 from backend._internal.auth.session import (
     _check_copyright_paradigm,
     _check_teal_preference,
@@ -152,7 +153,7 @@ def get_oauth_client(
     # load confidential client key if configured
     client_secret_key, client_secret_kid = _load_client_secret()
 
-    return OAuthClient(
+    return BlackskyCompatibleOAuthClient(
         client_id=settings.atproto.client_id,
         redirect_uri=settings.atproto.redirect_uri,
         scope=scope,
