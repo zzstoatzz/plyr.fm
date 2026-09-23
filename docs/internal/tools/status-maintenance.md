@@ -97,12 +97,18 @@ transcripts of the writer and the research step: every tool call and result),
 to an artifact `status-run-outputs-<run id>`, so a run that judged "no maintenance
 needed" can still be read: `gh run download <run id> --name status-run-outputs-<run id>`.
 
-## model
+## models
 
-the model is set once, as the workflow-level `STATUS_MODEL` env
+the writing model is set once, as the workflow-level `STATUS_MODEL` env
 (`claude-fable-5-1` since September 5, 2026; `claude-opus-5` before), resolved with the optional `model` dispatch input
 into `MODEL`, passed to `--model` for both Claude steps, and printed into the
 PR body ("written by …") so every maintenance PR says which model wrote it.
+
+the audio model is set independently as `STATUS_TTS_MODEL`
+(`gemini-3.8-flash-tts` since September 23, 2026), resolved with the optional
+`tts_model` dispatch input into `TTS_MODEL`, and passed explicitly to
+`scripts/generate_tts.py`. Gemini 3.8 receives each `Host:` and `Cohost:` turn
+as verbatim text with structured speaker metadata and returns a complete WAV.
 
 ### what the prompt does with it
 
@@ -172,6 +178,7 @@ dry, matter-of-fact, slightly sardonic. avoid:
 | `window_since` | string | "" | override the window start (ISO time) for reruns and for evaluating the process against a past window; the prompt then covers that window even if STATUS.md already documents it |
 | `research_only` | boolean | false | stop after the ecosystem research — no writer, no PR; read `ecosystem_context.md` from the job summary or the run artifact |
 | `model` | string | "" | model for this run only; empty means `STATUS_MODEL` from the workflow env |
+| `tts_model` | string | "" | TTS model for this run only; empty means `STATUS_TTS_MODEL` from the workflow env |
 
 ## secrets required
 

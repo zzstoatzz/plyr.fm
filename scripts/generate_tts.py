@@ -1,95 +1,121 @@
 #!/usr/bin/env python3
-"""generate audio from a podcast script using gemini TTS.
-
-usage:
-    uv run scripts/generate_tts.py podcast_script.txt output.wav
-
-requires GOOGLE_API_KEY environment variable.
-"""
+"""Generate podcast audio from a labeled script using Gemini TTS."""
 # /// script
 # requires-python = ">=3.11"
 # dependencies = ["google-genai"]
 # ///
 
-import io
+import argparse
+import base64
 import os
-import sys
-import wave
+import re
 from pathlib import Path
+from typing import Any
 
 from google import genai
-from google.genai import types
+
+SPEAKERS = {
+    "Host": {
+        "voice": "Kore",
+        "style": "dry, matter-of-fact, slightly sardonic, with natural conversational pacing",
+    },
+    "Cohost": {
+        "voice": "Puck",
+        "style": "dry, curious, slightly sardonic, with natural conversational pacing",
+    },
+}
+SPEAKER_LINE = re.compile(r"^(Host|Cohost):\s*(.*)$")
 
 
-def pcm_to_wav(
-    pcm_data: bytes, sample_rate: int = 24000, channels: int = 1, sample_width: int = 2
-) -> bytes:
-    """wrap raw PCM data in a WAV header."""
-    buffer = io.BytesIO()
-    with wave.open(buffer, "wb") as wav:
-        wav.setnchannels(channels)
-        wav.setsampwidth(sample_width)
-        wav.setframerate(sample_rate)
-        wav.writeframes(pcm_data)
-    return buffer.getvalue()
+def parse_script(script: str) -> list[dict[str, Any]]:
+    turns: list[tuple[str, list[str]]] = []
+
+    for line_number, line in enumerate(script.splitlines(), start=1):
+        match = SPEAKER_LINE.match(line)
+        if match:
+            speaker, text = match.groups()
+            turns.append((speaker, [text]))
+        elif turns:
+            turns[-1][1].append(line)
+        elif line.strip():
+            raise ValueError(f"line {line_number} must start with Host: or Cohost:")
+
+    if not turns:
+        raise ValueError("script must contain at least one Host: or Cohost: turn")
+
+    content: list[dict[str, Any]] = []
+    for speaker, lines in turns:
+        text = "\n".join(lines).strip()
+        if not text:
+            raise ValueError(f"{speaker} turn must not be empty")
+        content.append(
+            {
+                "type": "text",
+                "text": text,
+                "annotations": [
+                    {
+                        "type": "speech_metadata",
+                        "speaker": speaker,
+                        "style": SPEAKERS[speaker]["style"],
+                    }
+                ],
+            }
+        )
+
+    return content
+
+
+def decode_wav(audio_data: str) -> bytes:
+    wav_data = base64.b64decode(audio_data, validate=True)
+    if len(wav_data) < 12 or wav_data[:4] != b"RIFF" or wav_data[8:12] != b"WAVE":
+        raise ValueError("Gemini returned audio that is not a WAV file")
+    return wav_data
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--model", required=True)
+    parser.add_argument("script_file", type=Path)
+    parser.add_argument("output_file", type=Path)
+    return parser.parse_args()
 
 
 def main() -> None:
-    if len(sys.argv) != 3:
-        print("usage: generate_tts.py <script_file> <output_file>")
-        sys.exit(1)
-
-    script_path = Path(sys.argv[1])
-    output_path = Path(sys.argv[2])
-
-    if not script_path.exists():
-        print(f"error: {script_path} not found")
-        sys.exit(1)
+    args = parse_args()
+    if not args.script_file.exists():
+        raise SystemExit(f"error: {args.script_file} not found")
 
     api_key = os.environ.get("GOOGLE_API_KEY")
     if not api_key:
-        print("error: GOOGLE_API_KEY not set")
-        sys.exit(1)
+        raise SystemExit("error: GOOGLE_API_KEY not set")
 
-    script = script_path.read_text()
-    print(f"generating audio from {script_path} ({len(script)} chars)")
-
-    client = genai.Client(api_key=api_key)
-    response = client.models.generate_content(
-        model="gemini-2.5-pro-preview-tts",
-        contents=script,
-        config=types.GenerateContentConfig(
-            response_modalities=["AUDIO"],
-            speech_config=types.SpeechConfig(
-                multi_speaker_voice_config=types.MultiSpeakerVoiceConfig(
-                    speaker_voice_configs=[
-                        types.SpeakerVoiceConfig(
-                            speaker="Host",
-                            voice_config=types.VoiceConfig(
-                                prebuilt_voice_config=types.PrebuiltVoiceConfig(
-                                    voice_name="Kore"
-                                )
-                            ),
-                        ),
-                        types.SpeakerVoiceConfig(
-                            speaker="Cohost",
-                            voice_config=types.VoiceConfig(
-                                prebuilt_voice_config=types.PrebuiltVoiceConfig(
-                                    voice_name="Puck"
-                                )
-                            ),
-                        ),
-                    ]
-                )
-            ),
-        ),
+    content = parse_script(args.script_file.read_text())
+    print(
+        f"generating audio from {args.script_file} "
+        f"({len(content)} turns, model {args.model})"
     )
 
-    # gemini returns raw PCM (audio/L16;codec=pcm;rate=24000), wrap in WAV header
-    pcm_data = response.candidates[0].content.parts[0].inline_data.data
-    wav_data = pcm_to_wav(pcm_data)
-    output_path.write_bytes(wav_data)
-    print(f"saved audio to {output_path} ({len(wav_data)} bytes)")
+    client = genai.Client(api_key=api_key)
+    interaction = client.interactions.create(
+        model=args.model,
+        input=[{"type": "user_input", "content": content}],
+        response_format={"type": "audio"},
+        generation_config={
+            "speech_config": {
+                "mode": "conversational",
+                "speakers": [
+                    {"speaker": speaker, "voice": config["voice"]}
+                    for speaker, config in SPEAKERS.items()
+                ],
+            }
+        },
+    )
+
+    if interaction.output_audio is None or interaction.output_audio.data is None:
+        raise RuntimeError("Gemini returned no audio")
+    wav_data = decode_wav(interaction.output_audio.data)
+    args.output_file.write_bytes(wav_data)
+    print(f"saved audio to {args.output_file} ({len(wav_data)} bytes)")
 
 
 if __name__ == "__main__":
