@@ -14,6 +14,7 @@ name: status maintenance
 # the model is named once here so the PR body can say which one wrote the run
 env:
   STATUS_MODEL: claude-fable-5-1
+  STATUS_TTS_MODEL: gemini-3.8-flash-tts
 
 on:
   schedule:
@@ -41,6 +42,10 @@ on:
         description: "model for this run only (default: STATUS_MODEL from the workflow env)"
         type: string
         default: ""
+      tts_model:
+        description: "TTS model for this run only (default: STATUS_TTS_MODEL from the workflow env)"
+        type: string
+        default: ""
   pull_request:
     types: [closed]
     branches: [main]
@@ -62,9 +67,11 @@ jobs:
 
       - uses: astral-sh/setup-uv@v7
 
-      # one resolved model for both Claude steps and the PR body line
-      - name: Resolve the model
-        run: echo "MODEL=${{ inputs.model || env.STATUS_MODEL }}" >> "$GITHUB_ENV"
+      # resolved models can be overridden per run
+      - name: Resolve the models
+        run: |
+          echo "MODEL=${{ inputs.model || env.STATUS_MODEL }}" >> "$GITHUB_ENV"
+          echo "TTS_MODEL=${{ inputs.tts_model || env.STATUS_TTS_MODEL }}" >> "$GITHUB_ENV"
 
       # the report is deterministic, so it is built here where its output is
       # in the job log and the Cloudflare secrets never enter the Claude step
@@ -331,7 +338,7 @@ jobs:
 
             ### generate audio
 
-            run: uv run scripts/generate_tts.py podcast_script.txt update.wav
+            run: uv run scripts/generate_tts.py --model "$TTS_MODEL" podcast_script.txt update.wav
 
             keep podcast_script.txt, window_report.md and ecosystem_context.md
             in place — do NOT delete them. a later workflow step posts the
@@ -426,7 +433,7 @@ jobs:
             exit 0
           fi
           {
-            printf '%s\n\nwritten by `%s` (claude-code-action).\n' "$BODY" "$MODEL"
+            printf '%s\n\nwritten by `%s` (claude-code-action); voiced by `%s`.\n' "$BODY" "$MODEL" "$TTS_MODEL"
             if [ -f window_report.md ]; then
               printf '\n<details>\n<summary>window report — what landed where, what was posted</summary>\n\n'
               cat window_report.md
