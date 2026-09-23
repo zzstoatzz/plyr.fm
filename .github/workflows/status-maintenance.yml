@@ -212,7 +212,7 @@ jobs:
 
             VERIFY: run `wc -l STATUS.md` after archiving. target 300-450 lines, must be under 500.
 
-            ## task 3: generate audio overview (if skip_audio is false)
+            ## task 3: write the audio overview (if skip_audio is false)
 
             skip_audio input: ${{ inputs.skip_audio }}
 
@@ -336,17 +336,13 @@ jobs:
 
             target length: 2-3 minutes spoken (~300-400 words) (it should be 4-5 if its the first episode)
 
-            ### generate audio
-
-            run: uv run scripts/generate_tts.py --model "$TTS_MODEL" podcast_script.txt update.wav
-
             keep podcast_script.txt, window_report.md and ecosystem_context.md
-            in place — do NOT delete them. a later workflow step posts the
-            report, the ecosystem context and the transcript into the PR body
-            and uploads update.wav and podcast_script.txt as a build artifact
-            so the phase-2 upload job can attach the transcript as the track
-            description. none of these files is committed to the repo (all
-            are gitignored).
+            in place — do NOT delete them. after this agent exits, a dedicated
+            workflow step renders the script without exposing the TTS credential
+            to agent tools. later steps post the report, ecosystem context and
+            transcript into the PR body and carry the audio and transcript to
+            phase 2. none of these files is committed to the repo (all are
+            gitignored).
 
             ## task 4: open PR
 
@@ -367,8 +363,11 @@ jobs:
             add a label like "ai-generated" to the PR (create the label if it doesn't exist)
             if nothing changed, report that no maintenance was needed.
 
+      - name: Generate podcast audio
+        if: ${{ !inputs.report_only && !inputs.research_only && !inputs.skip_audio }}
         env:
           GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+        run: uv run scripts/generate_tts.py --model "$TTS_MODEL" podcast_script.txt update.wav
 
       # carry the generated audio + transcript to phase 2 (the merge run is a
       # separate run with a fresh checkout, so it can't see these files

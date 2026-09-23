@@ -109,6 +109,9 @@ the audio model is set independently as `STATUS_TTS_MODEL`
 `tts_model` dispatch input into `TTS_MODEL`, and passed explicitly to
 `scripts/generate_tts.py`. Gemini 3.8 receives each `Host:` and `Cohost:` turn
 as verbatim text with structured speaker metadata and returns a complete WAV.
+The writer produces only `podcast_script.txt`; a separate workflow step owns
+`GOOGLE_API_KEY` and renders it after the agent exits. The credential is never
+present in an agent tool environment or execution transcript.
 
 ### what the prompt does with it
 
