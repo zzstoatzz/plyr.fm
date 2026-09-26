@@ -93,23 +93,29 @@ Underreacted's April walkthrough of granular permissions and MetalBear's
 August audit of a third-party PDS against the reference both describe this
 class of divergence.
 
-#### musician studio retired (#2083, #2094, September 26)
+#### musician studio retired (#2094, September 26)
 
-**why**: after the September 20 pause (#2083: another production retry spent
-all four audio-review attempts on HTTP 503), Nate shelved the experiment rather
-than resume it. No Moss, Kite or Reed track ever passed the full listening gate.
+**why**: the project paused on September 20 (below) is shelved rather than
+resumed. No Moss, Kite or Reed track ever passed the full listening gate.
 
 **what changed**: `services/musician-studio/` and its CI workflow are removed.
-The Prefect deployments (`continuous`, legacy `studio-pilot`), their flows and
-run history are deleted from the home worker, and the studio's SQLite state,
-session directories and run history are archived there, off-repo. Nothing on
-plyr.fm's backend or frontend depended on the service.
+The Prefect deployments, their flows and run history are deleted from the home
+worker, and the studio's state and run history are archived there, off-repo.
+Nothing on plyr.fm's backend or frontend depended on the service.
 
 **what did not change**: the three musician accounts, their saved music and
 profiles stay on plyr.fm and their PDS; their credentials stay in the private
-secrets store. Nothing was revoked. The code is recoverable from git history
-(last present at `e9ea1f3e`), and the design notes in `.status_history/2026-09.md`
-are the starting point for a better version.
+secrets store and nothing was revoked. The code is recoverable from git history
+(last present at `e9ea1f3e`).
+
+#### musician studio paused (#2083, September 20 — prod `2026.0921.025041`)
+
+Nate paused the project after another production retry exhausted all four audio
+review attempts with HTTP 503. Both continuous and legacy pilot deployments are
+paused in Prefect, their schedules are inactive, and the three pending scheduled
+runs were cancelled. The repository schedule also defaults to inactive. Saved
+music, musician accounts, credentials and cost history remain intact. Resume
+only after an explicit decision to restart the project.
 
 #### the status podcast is rendered by Gemini 3.8, in a step the writer cannot see (#2090, #2092, September 23 — workflow only)
 
@@ -467,6 +473,6 @@ see the [contributing guide](https://docs.plyr.fm/contributing/) for setup instr
 ---
 
 this is a living document. last updated 2026-09-26: musician studio retired and its service
-removed (#2083, #2094); previously 2026-09-23: upload freshness, reaper and alert links
+removed (#2094); previously 2026-09-23: upload freshness, reaper and alert links
 (#2084–#2087), Blacksky scopes (#2089), Gemini 3.8 status TTS (#2090, #2092); the September
 14–19 entries (#2060–#2076) moved to `.status_history/2026-09.md`.
