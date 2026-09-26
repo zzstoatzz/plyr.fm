@@ -93,7 +93,7 @@ Underreacted's April walkthrough of granular permissions and MetalBear's
 August audit of a third-party PDS against the reference both describe this
 class of divergence.
 
-#### musician studio retired (#2083, this PR, September 26)
+#### musician studio retired (#2083, #2094, September 26)
 
 **why**: after the September 20 pause (#2083: another production retry spent
 all four audio-review attempts on HTTP 503), Nate shelved the experiment rather
@@ -467,6 +467,6 @@ see the [contributing guide](https://docs.plyr.fm/contributing/) for setup instr
 ---
 
 this is a living document. last updated 2026-09-26: musician studio retired and its service
-removed (#2083); previously 2026-09-23: upload freshness, reaper and alert links
+removed (#2083, #2094); previously 2026-09-23: upload freshness, reaper and alert links
 (#2084–#2087), Blacksky scopes (#2089), Gemini 3.8 status TTS (#2090, #2092); the September
 14–19 entries (#2060–#2076) moved to `.status_history/2026-09.md`.
