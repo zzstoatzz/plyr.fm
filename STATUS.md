@@ -93,14 +93,23 @@ Underreacted's April walkthrough of granular permissions and MetalBear's
 August audit of a third-party PDS against the reference both describe this
 class of divergence.
 
-#### musician studio paused (#2083, September 20 — prod `2026.0921.025041`)
+#### musician studio retired (#2083, #2094, September 26)
 
-Nate paused the project after another production retry exhausted all four audio
-review attempts with HTTP 503. Both continuous and legacy pilot deployments are
-paused in Prefect, their schedules are inactive, and the three pending scheduled
-runs were cancelled. The repository schedule also defaults to inactive. Saved
-music, musician accounts, credentials and cost history remain intact. Resume
-only after an explicit decision to restart the project.
+**why**: after the September 20 pause (#2083: another production retry spent
+all four audio-review attempts on HTTP 503), Nate shelved the experiment rather
+than resume it. No Moss, Kite or Reed track ever passed the full listening gate.
+
+**what changed**: `services/musician-studio/` and its CI workflow are removed.
+The Prefect deployments (`continuous`, legacy `studio-pilot`), their flows and
+run history are deleted from the home worker, and the studio's SQLite state,
+session directories and run history are archived there, off-repo. Nothing on
+plyr.fm's backend or frontend depended on the service.
+
+**what did not change**: the three musician accounts, their saved music and
+profiles stay on plyr.fm and their PDS; their credentials stay in the private
+secrets store. Nothing was revoked. The code is recoverable from git history
+(last present at `e9ea1f3e`), and the design notes in `.status_history/2026-09.md`
+are the starting point for a better version.
 
 #### the status podcast is rendered by Gemini 3.8, in a step the writer cannot see (#2090, #2092, September 23 — workflow only)
 
@@ -247,19 +256,6 @@ Today “my Space members” also means private metadata; private R2 audio alone
 not hide a work. Future Space-backed storage must preserve those audience choices,
 rather than turn every protected work into members-only content. Moving existing
 works across Space boundaries remains a separate migration decision.
-
-**three musicians, gated on listening** (#2031–#2051, September 6–12): Moss,
-Kite and Reed compose every six hours on the home worker and may not upload
-until a native-audio self-review, a revision, and a peer review of the exact
-rendered hash exist. No track has passed the full gate yet: Kite's September 14
-study passed its reviews and was refused by the publishing API (#2060, fixed);
-the September 19 study exhausted its request allowance on audio 503 retries
-and now reports `BudgetPaused` instead of a crash (#2076). The calibration
-controls say the listener hears isolated events and wobbles on a mix. **next**:
-a live calibration run in the evaluation window, a human ear on anything that
-does get released, and whether the app-level `bot` label should point at a
-machine-readable disclosure record like the one proposed on WhiteWind in
-January.
 
 **records are moving into the client's hands — parked until the sign-in design is redone** (plan `docs/plans/2026-08-31-client-side-writes.md`; #1948–#1950 shipped in prod `2026.0901.065150`, reverted September 1 in #1952): phase 0 made the frontend a second OAuth client and chained its consent after the cookie login, so every sign-in showed two authorization screens. the direction stands — the file an artist uploads goes in their PDS as-is, plyr indexes/mirrors/serves, and the backend stops authoring records on anyone's behalf — but the next attempt must fit inside the single existing login, with scope growing only when a feature that needs it is used. **next**: redesign how the browser gets a repo-write capability without a second flow, then phase 1 (likes).
 
@@ -470,6 +466,7 @@ see the [contributing guide](https://docs.plyr.fm/contributing/) for setup instr
 
 ---
 
-this is a living document. last updated 2026-09-23: upload freshness, reaper and alert links
+this is a living document. last updated 2026-09-26: musician studio retired and its service
+removed (#2083, #2094); previously 2026-09-23: upload freshness, reaper and alert links
 (#2084–#2087), Blacksky scopes (#2089), Gemini 3.8 status TTS (#2090, #2092); the September
 14–19 entries (#2060–#2076) moved to `.status_history/2026-09.md`.
