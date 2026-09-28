@@ -224,6 +224,15 @@
 		};
 	});
 
+	let volumeWritable = true;
+	$effect(() => {
+		const element = player.audioElement;
+		if (!element) return;
+		element.volume = player.volume;
+		volumeWritable = element.volume === player.volume;
+		element.muted = player.volume === 0;
+	});
+
 	// save volume to localStorage when it changes
 	$effect(() => {
 		localStorage.setItem('player_volume', player.volume.toString());
@@ -887,7 +896,9 @@
 	bind:this={player.audioElement}
 	bind:currentTime={player.currentTime}
 	bind:duration={player.duration}
-	bind:volume={player.volume}
+	onvolumechange={(event) => {
+		if (volumeWritable && !event.currentTarget.muted) player.volume = event.currentTarget.volume;
+	}}
 	onplay={syncPlaybackState}
 	onpause={syncPlaybackState}
 	onended={() => (player.radio ? radio.onEnded() : handleTrackEnded())}

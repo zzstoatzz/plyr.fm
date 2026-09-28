@@ -178,6 +178,35 @@ describe('radio source transitions through the mounted player', () => {
 	});
 });
 
+describe('radio mute through the shared audio element', () => {
+	it('keeps native desktop volume changes synchronized', () => {
+		player.volume = 0.7;
+		flushSync();
+		audio.volume = 0.3;
+		audio.dispatchEvent(new Event('volumechange'));
+		flushSync();
+		expect(player.volume).toBe(0.3);
+		expect(audio.muted).toBe(false);
+	});
+	it('mutes and restores audio when the browser ignores volume assignments', async () => {
+		player.volume = 0.7;
+		Object.defineProperty(audio, 'volume', { configurable: true, get: () => 1, set: () => {} });
+		player.volume = 0;
+		flushSync();
+		audio.dispatchEvent(new Event('volumechange'));
+		flushSync();
+		expect(player.volume).toBe(0);
+		expect(audio.volume).toBe(1);
+		expect(audio.muted).toBe(true);
+		player.volume = 0.7;
+		flushSync();
+		audio.dispatchEvent(new Event('volumechange'));
+		flushSync();
+		expect(player.volume).toBe(0.7);
+		expect(audio.muted).toBe(false);
+	});
+});
+
 describe('Eli’s full-page OBS autoplay contract (#1592)', () => {
 	it.each(['', '?autoplay=0'])('does not autoplay with %s', async (search) => {
 		radio.stop();

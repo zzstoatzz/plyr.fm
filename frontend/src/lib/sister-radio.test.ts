@@ -111,6 +111,11 @@ describe('the actual sister-radio host', () => {
 		expect(input.likeTrack).toHaveBeenCalledOnce();
 		mounted.update(radioIntegration({ ...input, liked: false }));
 		expect(button('like this track').getAttribute('aria-pressed')).toBe('false');
+		root.querySelector<HTMLButtonElement>('.volume-mute-btn')!.click();
+		expect(input.setVolume).toHaveBeenLastCalledWith(0);
+		mounted.update(radioIntegration({ ...input, volume: 0 }));
+		root.querySelector<HTMLButtonElement>('.volume-mute-btn')!.click();
+		expect(input.setVolume).toHaveBeenLastCalledWith(0.5);
 		button('tune in to fresh').click();
 		expect(input.selectStation).toHaveBeenCalledWith('fresh');
 		mounted.update(

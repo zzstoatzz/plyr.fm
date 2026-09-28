@@ -109,3 +109,11 @@ The native host hides the fork's five-second CRT cover reveal mask; loaded
 artwork is visible immediately while the scanline styling remains. The heart
 reads plyr's shared liked-state store and exposes its current pressed state,
 including existing account likes and optimistic changes from other surfaces.
+
+### Native mute
+
+The shared player sets `HTMLMediaElement.muted` when volume reaches zero.
+iOS Safari ignores programmatic volume assignments, so the volume value alone
+cannot mute playback. Native `volumechange` events only update player volume
+when the element accepts volume assignments and is unmuted; otherwise the
+muting event would overwrite the requested zero with Safari’s fixed volume.
