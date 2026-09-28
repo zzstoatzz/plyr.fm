@@ -67,13 +67,7 @@
 		day: 'past day'
 	} satisfies Record<Period, string>;
 
-	function readSavedPeriod(): Period {
-		if (!browser) return 'month';
-		const saved = safeLocalStorage.getItem('topTracksPeriod');
-		return PERIODS.find((period) => period === saved) ?? 'month';
-	}
-
-	let topTracksPeriod = $state<Period>(readSavedPeriod());
+	let topTracksPeriod = $state<Period>('month');
 	let periodLabel = $derived(PERIOD_LABELS[topTracksPeriod]);
 
 	async function cyclePeriod() {
@@ -91,7 +85,6 @@
 			}
 		}
 
-		safeLocalStorage.setItem('topTracksPeriod', topTracksPeriod);
 		loadingTopTracks = false;
 	}
 
@@ -124,22 +117,7 @@
 	onMount(async () => {
 		const [topResult] = await Promise.all([fetchTopTracks(10, topTracksPeriod), tracksCache.fetch()]);
 
-		// if saved period is empty, find the first non-empty one
-		if (topResult.length === 0) {
-			const startIdx = PERIODS.indexOf(topTracksPeriod);
-			for (let i = 1; i < PERIODS.length; i++) {
-				const candidate = PERIODS[(startIdx + i) % PERIODS.length];
-				const result = await fetchTopTracks(10, candidate);
-				if (result.length > 0) {
-					topTracksPeriod = candidate;
-					topTracks = result;
-					safeLocalStorage.setItem('topTracksPeriod', topTracksPeriod);
-					break;
-				}
-			}
-		} else {
-			topTracks = topResult;
-		}
+		topTracks = topResult;
 
 		loadingTopTracks = false;
 		initialLoad = false;

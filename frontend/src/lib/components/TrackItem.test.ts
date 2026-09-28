@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { mount, unmount, flushSync } from 'svelte';
 import TrackItem from '$lib/components/TrackItem.svelte';
+import TrackInfo from '$lib/components/player/TrackInfo.svelte';
 import TrackCard from '$lib/components/TrackCard.svelte';
 import type { Track } from '$lib/types';
 
@@ -59,7 +60,11 @@ describe('TrackItem processing state', () => {
 
 	it('plays normally once the mp3 rendition has landed', () => {
 		const onPlay = vi.fn();
-		const ready = track({ original_file_id: 'o1', original_file_type: 'aiff', is_optimizing: false });
+		const ready = track({
+			original_file_id: 'o1',
+			original_file_type: 'aiff',
+			is_optimizing: false
+		});
 		component = mount(TrackItem, { target: document.body, props: { track: ready, onPlay } });
 		flushSync();
 
@@ -85,4 +90,17 @@ describe('TrackCard processing state', () => {
 		card.click();
 		expect(onPlay).not.toHaveBeenCalled();
 	});
+});
+
+it('uses artist artwork in the player when the track has no cover', () => {
+	const avatar = 'https://example.com/avatar.jpg';
+	component = mount(TrackInfo, {
+		target: document.body,
+		props: {
+			track: track({ artist_avatar_url: avatar }),
+			isOnTrackDetailPage: true
+		}
+	});
+	flushSync();
+	expect(document.querySelector('.player-artwork img')?.getAttribute('src')).toBe(avatar);
 });

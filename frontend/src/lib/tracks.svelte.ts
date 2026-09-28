@@ -230,7 +230,7 @@ export async function unlikeTrack(trackId: number): Promise<boolean> {
 	}
 }
 
-export async function fetchTopTracks(limit = 10, period = 'all_time'): Promise<Track[]> {
+export async function fetchTopTracks(limit = 10, period = 'month'): Promise<Track[]> {
 	try {
 		const url = new URL(`${API_URL}/tracks/top`);
 		url.searchParams.set('limit', String(limit));

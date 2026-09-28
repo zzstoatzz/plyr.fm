@@ -55,11 +55,6 @@
 			(auth.user?.did != null && auth.user.did === track?.artist_did)
 	);
 
-	// the visible cover and the og:image cascade share the same root rule
-	// (track art → album art); the og:image then fans out to the artist
-	// avatar and brand logo so social scrapers always get *something* and
-	// don't fall back to their own heuristics (favicon, first visible
-	// image, stale client cache).
 	const OG_FALLBACK_IMAGE = `${APP_CANONICAL_URL}/icons/icon-512.png`;
 	const coverUrl = $derived.by(() => {
 		const url = track ? trackCoverUrl(track) : undefined;
@@ -72,7 +67,9 @@
 		}
 		return OG_FALLBACK_IMAGE;
 	});
-	const previewIsTrackArt = $derived(coverUrl !== undefined);
+	const previewIsTrackArt = $derived(
+		coverUrl !== undefined && coverUrl === (track?.image_url ?? track?.album?.image_url)
+	);
 
 	// reactive check if this track is currently playing
 	let isCurrentlyPlaying = $derived(
@@ -428,7 +425,7 @@
 
 		<main>
 			<div class="track-detail">
-				<!-- cover art (inherits from album when no per-track image is set) -->
+				<!-- cover art -->
 				<SensitiveImage src={coverUrl} tooltipPosition="center">
 					<div class="cover-art-container">
 						{#if coverUrl}

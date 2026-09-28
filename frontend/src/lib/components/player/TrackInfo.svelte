@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
+	import { trackCoverUrl } from '$lib/track-cover';
 	import type { Track } from '$lib/types';
 	import { onMount } from 'svelte';
 	import { browser } from '$app/environment';
@@ -22,7 +23,8 @@
 	let titleOverflows = $state(false);
 	let artistOverflows = $state(false);
 	let albumOverflows = $state(false);
-	let imageError = $state(false);
+	const coverUrl = $derived(trackCoverUrl(track));
+	let failedImageUrl = $state<string>();
 
 	function checkOverflows() {
 		if (!browser) return;
@@ -72,13 +74,13 @@
 			</div>
 		</div>
 	{:else}
-	<SensitiveImage src={track.image_url || track.album?.image_url}>
+	<SensitiveImage src={coverUrl}>
 		<a href="/track/{track.id}" class="player-artwork" aria-label={`view ${track.title}`}>
-			{#if (track.image_url || track.album?.image_url) && !imageError}
+			{#if coverUrl && coverUrl !== failedImageUrl}
 				<img
-					src={resizedImageUrl(track.image_url || track.album?.image_url, IMAGE_WIDTHS.thumb)}
+					src={resizedImageUrl(coverUrl, IMAGE_WIDTHS.thumb)}
 					alt="{track.title} artwork"
-					onerror={() => imageError = true}
+					onerror={() => failedImageUrl = coverUrl}
 				/>
 			{:else}
 				<div class="player-artwork-placeholder">

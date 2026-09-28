@@ -1,4 +1,4 @@
-import { afterEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { flushSync, mount, unmount } from 'svelte';
 import TrackPage from './+page.svelte';
 
@@ -11,7 +11,7 @@ afterEach(async () => {
 	vi.unstubAllGlobals();
 });
 
-it('shows the standard 404 after the authenticated track request is refused', async () => {
+beforeEach(() => {
 	vi.stubGlobal(
 		'ResizeObserver',
 		class {
@@ -30,6 +30,9 @@ it('shows the standard 404 after the authenticated track request is refused', as
 		removeEventListener: vi.fn(),
 		dispatchEvent: vi.fn()
 	}));
+});
+
+it('shows the standard 404 after the authenticated track request is refused', async () => {
 	const fetch = vi
 		.spyOn(globalThis, 'fetch')
 		.mockResolvedValue(new Response('{}', { status: 404 }));
@@ -42,4 +45,33 @@ it('shows the standard 404 after the authenticated track request is refused', as
 	expect(fetch).toHaveBeenCalledWith(expect.stringContaining('/tracks/'), {
 		credentials: 'include'
 	});
+});
+
+it('renders the artist avatar as the cover without declaring it 1200px track art', async () => {
+	vi.spyOn(globalThis, 'fetch').mockImplementation(async () => Response.json({ comments: [] }));
+	const avatar = 'https://example.com/avatar.jpg';
+	const component = mount(TrackPage, {
+		target: document.body,
+		props: {
+			data: {
+				track: {
+					id: 1,
+					title: 'Crystal cathedral',
+					artist: 'santi.codes',
+					artist_handle: 'santi.codes',
+					file_id: 'audio',
+					file_type: 'mp3',
+					play_count: 0,
+					artist_avatar_url: avatar
+				}
+			}
+		}
+	});
+	cleanup = () => unmount(component);
+	flushSync();
+	expect(document.querySelector('img.cover-art')?.getAttribute('src')).toBe(avatar);
+	expect(document.head.querySelector('meta[property="og:image"]')?.getAttribute('content')).toBe(
+		avatar
+	);
+	expect(document.head.querySelector('meta[property="og:image:width"]')).toBeNull();
 });
