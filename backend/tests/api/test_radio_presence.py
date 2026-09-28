@@ -130,3 +130,14 @@ async def test_revoked_session_loses_presence(db_session: AsyncSession) -> None:
                 ws.receive_json()
             assert exc.value.code == 4001
         assert client.get("/radio/loved/listeners").json()["count"] == 0
+
+
+def test_invalid_cookie_closes_after_accept() -> None:
+    with TestClient(app) as client:
+        client.cookies.set("session_id", "expired-radio-session")
+        with client.websocket_connect(
+            "/radio/loved/listen", headers={"origin": settings.frontend.url}
+        ) as ws:
+            with pytest.raises(WebSocketDisconnect) as exc:
+                ws.receive_json()
+            assert exc.value.code == 4001

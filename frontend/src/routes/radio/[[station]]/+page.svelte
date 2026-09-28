@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount, untrack } from 'svelte';
+	import { horizontalSwipe } from '$lib/horizontal-swipe';
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import Header from '$lib/components/Header.svelte';
@@ -88,7 +89,11 @@
 		<p>same station, same moment</p>
 	</header>
 	<div class="radio-layout">
-		<section class="now-playing" aria-label="now playing">
+		<section
+			class="now-playing"
+			aria-label="now playing"
+			{@attach horizontalSwipe((dir) => flip(dir === 'left' ? 'next' : 'prev'))}
+		>
 			{#if radio.loading && !radio.state}
 				<WaveLoading size="lg" message="tuning in..." />
 			{:else if radio.error}
@@ -209,10 +214,8 @@
 		</aside>
 	</div>
 	<footer>
-		a sister radio, adapted from <a
-			href="https://tangled.org/okami.mom/sister-radio"
-			target="_blank"
-			rel="noopener">Ana’s radio</a
+		inspired by <a href="https://tangled.org/okami.mom/sister-radio" target="_blank" rel="noopener"
+			>Ana’s radio</a
 		>
 		· <a href="https://github.com/zzstoatzz/plyr.fm" target="_blank" rel="noopener">source</a>
 	</footer>

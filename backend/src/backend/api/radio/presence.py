@@ -120,6 +120,7 @@ async def listen(ws: WebSocket, station: str) -> None:
     session_id = ws.cookies.get("session_id")
     session = await get_session(session_id) if session_id else None
     if session_id and not session:
+        await ws.accept()
         await ws.close(code=4001)
         return
     did = session.did if session else None

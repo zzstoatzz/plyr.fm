@@ -134,7 +134,7 @@ STATIONS: tuple[Station, ...] = (
     Station(
         slug="firehose",
         name="firehose",
-        description="the atproto firehose, sonified live",
+        description="the atproto firehose, sonified",
         source_url="https://relay-eval.waow.tech/sonify",
         # off-air, the station plays the archived segments of the same signal,
         # so it stays about the firehose either way rather than becoming a
