@@ -118,3 +118,13 @@ concern. The existing fork adapter already proves them; it can remain behind the
 scenes initially, but its presence view must use the same source as plyr.fm rather
 than maintaining a second count. Moving that protocol into FastAPI is optional
 and should not be conflated with styling or session integration.
+
+## source integration correction
+
+The user requested the actual fork, not a Svelte reinterpretation. The native
+redesign in #2097 missed that requirement. The follow-up vendors our fork's real
+SolidJS page and CSS, with an optional host contract for native playback, catalog
+state, listener profiles, and appearance. Its standalone networking and audio
+ownership are disabled in host mode. The signed PDS/directory bridge remains a
+separate prototype; source reuse does not imply shared sister-network presence.
+See [radio architecture](../internal/frontend/radio.md) for the current boundary.

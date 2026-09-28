@@ -48,13 +48,23 @@
 		"svelte-check": "^4.3.2",
 		"typescript": "^5.9.2",
 		"vite": "^7.1.7",
+		"vite-plugin-solid": "2.11.12",
 		"vitest": "^4.1.8"
 	},
 	"dependencies": {
+		"@atcute/atproto": "4.0.2",
+		"@atcute/client": "5.1.0",
+		"@atcute/identity": "2.0.0",
+		"@atcute/identity-resolver": "2.0.0",
+		"@atcute/lexicons": "2.0.1",
+		"@atcute/oauth-browser-client": "4.0.0",
+		"@atcute/oauth-types": "1.0.0",
 		"@atproto/api": "^0.18.7",
 		"@opentelemetry/auto-instrumentations-web": "^0.59.0",
 		"@pydantic/logfire-browser": "^0.14.0",
 		"hls.js": "^1.6.16",
+		"lucide-solid": "1.14.0",
+		"solid-js": "1.9.12",
 		"svelte-portal": "^2.2.1"
 	}
 }

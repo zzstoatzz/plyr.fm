@@ -1,0 +1,49 @@
+:host {
+	color-scheme: inherit;
+	display: block;
+	color: var(--text-primary);
+	background: transparent;
+	height: auto;
+	min-height: 0;
+	width: 100%;
+	overflow: visible;
+	--accent: inherit;
+	--accent-rgb: inherit;
+	--bg: var(--bg-primary);
+	--surface: var(--bg-secondary);
+	--surface-soft: var(--bg-tertiary);
+	--surface-fade: transparent;
+	--text: var(--text-primary);
+	--muted: var(--text-secondary);
+	--line: var(--border-default);
+	--hairline: var(--border-subtle, var(--border-default));
+	--accent-line: color-mix(in srgb, var(--accent) 46%, transparent);
+	--accent-art: color-mix(in srgb, var(--accent) 22%, transparent);
+	--art-bg-a: var(--bg-secondary);
+	--art-bg-b: var(--bg-tertiary);
+	--sans: var(--font-family);
+	--mono: var(--font-family);
+	font-family: var(--font-family);
+}
+.radio-page {
+	--crt-font: var(--font-family);
+}
+.nowplaying-action,
+.listen-icon-button,
+button,
+input {
+	font-family: inherit;
+}
+@media (prefers-reduced-motion: reduce) {
+	.art-crt-scanload,
+	.art-crt-sweep::before {
+		animation: none;
+	}
+	.art-crt-scanload {
+		display: none;
+	}
+}
+.radio-panel {
+  --text: var(--text-primary);
+  --muted: var(--text-secondary);
+}

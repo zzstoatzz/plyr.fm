@@ -416,3 +416,31 @@ max_lines = 684
 [[rules]]
 path = "backend/src/backend/_internal/notifications.py"
 max_lines = 534
+
+[[rules]]
+path = "frontend/vendor/sister-radio/frontend/src/features/equalizer/EqualizerPanel.tsx"
+max_lines = 725
+
+[[rules]]
+path = "frontend/vendor/sister-radio/frontend/src/pages/radio/RadioPage.tsx"
+max_lines = 1922
+
+[[rules]]
+path = "frontend/vendor/sister-radio/frontend/src/pages/radio/radio-panels.css"
+max_lines = 1003
+
+[[rules]]
+path = "frontend/vendor/sister-radio/frontend/src/pages/radio/radio-shell.css"
+max_lines = 1172
+
+[[rules]]
+path = "frontend/vendor/sister-radio/frontend/src/shared/lib/radio.ts"
+max_lines = 733
+
+[[rules]]
+path = "frontend/vendor/sister-radio/frontend/src/shared/lib/radioXrpc.ts"
+max_lines = 1044
+
+[[rules]]
+path = "frontend/vendor/sister-radio/frontend/src/styles/global.css"
+max_lines = 628

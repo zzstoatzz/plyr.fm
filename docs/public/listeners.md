@@ -105,6 +105,10 @@ take up to a minute to disappear. signed-out listeners contribute an anonymous
 count. opening the radio page without playing does not add you. multiple tabs
 for the same signed-in account count once per station.
 
+The radio interface uses our fork of [Ana’s sister-radio](https://tangled.org/okami.mom/sister-radio),
+with plyr.fm's fonts, accent color, and existing player. Only plyr.fm stations and
+catalog tracks are available; the radio has no file or URL upload controls.
+
 ## keyboard shortcuts
 
 | key | action |

@@ -1,0 +1,1172 @@
+.radio-page {
+  display: grid;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1.1fr) minmax(30rem, 0.9fr);
+  gap: 1.5rem;
+  align-items: start;
+  --crt-font: "AnalogMonoPlus", var(--mono);
+  font-family: var(--crt-font);
+}
+
+.bottom-radio-tools {
+  grid-column: 1;
+  grid-row: 2;
+  display: grid;
+  min-width: 0;
+  max-width: 100%;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1rem;
+}
+
+.admin-page {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.admin-page > p,
+.admin-page > .error-copy {
+  grid-column: 1 / -1;
+}
+
+.now-playing-card,
+.glass-card {
+  border: 0;
+  background: transparent;
+}
+
+.now-playing-card {
+  --nowplaying-avatar-size: 2.05rem;
+  --nowplaying-control-size: 2.85rem;
+  --nowplaying-row-height: 2.75rem;
+  grid-column: 1;
+  grid-row: 1;
+  display: grid;
+  min-width: 0;
+  max-width: 100%;
+  grid-template-rows: auto auto;
+  padding: 0.5rem 1rem;
+  background: transparent;
+  isolation: isolate;
+}
+
+.art-shell {
+  position: relative;
+  width: min(100%, 28rem, calc(100vh - 29rem));
+  aspect-ratio: 1;
+  justify-self: center;
+  margin-top: calc(env(safe-area-inset-top, 0) + 1.5rem);
+  margin-bottom: 0.6rem;
+  border: 1px solid color-mix(in srgb, var(--accent) 32%, var(--line));
+  border-radius: 0.65rem;
+  background:
+    radial-gradient(circle at 50% 50%, transparent 0 26%, var(--accent-line) 26.2% 26.8%, transparent 27%),
+    conic-gradient(from 12deg at 50% 50%, transparent 0 19deg, var(--accent-art) 20deg 22deg, transparent 23deg 72deg),
+    linear-gradient(135deg, transparent 0 49%, var(--accent-art) 49% 51%, transparent 51%),
+    linear-gradient(45deg, var(--art-bg-a), var(--art-bg-b));
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 14%), inset 0 0 4rem rgb(var(--accent-rgb) / 9%);
+  overflow: hidden;
+}
+
+.album-cover {
+  position: relative;
+  z-index: 1;
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  object-fit: cover;
+  filter: saturate(0.78) contrast(1.14) brightness(0.94) sepia(0.1);
+}
+
+.art-crt-scanlines {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  background-image: repeating-linear-gradient(
+    0deg,
+    rgb(0 0 0 / 28%) 0,
+    rgb(0 0 0 / 28%) 1px,
+    rgb(0 0 0 / 0%) 1px,
+    rgb(0 0 0 / 0%) 3px
+  );
+  mix-blend-mode: multiply;
+  opacity: 0.9;
+}
+
+.art-crt-vignette {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse at center, transparent 55%, rgb(0 0 0 / 28%) 92%, rgb(0 0 0 / 52%) 100%),
+    linear-gradient(180deg, rgb(255 255 255 / 4%) 0%, rgb(0 0 0 / 0%) 12%, rgb(0 0 0 / 0%) 88%, rgb(0 0 0 / 14%) 100%);
+  mix-blend-mode: multiply;
+}
+
+.art-crt-scanload {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  background:
+    linear-gradient(180deg, rgb(8 8 8 / 96%) 0, rgb(8 8 8 / 96%) calc(100% - 3px), rgb(var(--accent-rgb) / 90%) calc(100% - 2px), rgb(var(--accent-rgb) / 0%) 100%);
+  transform-origin: top;
+  animation: crt-scanload 5s cubic-bezier(0.35, 0.05, 0.45, 1) 1 forwards;
+}
+
+@keyframes crt-scanload {
+  0% { clip-path: inset(0 0 0 0); }
+  100% { clip-path: inset(100% 0 0 0); }
+}
+
+.art-crt-sweep {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  overflow: hidden;
+  opacity: 0.12;
+  mix-blend-mode: screen;
+}
+
+.art-crt-sweep::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -40%;
+  width: 20%;
+  background: linear-gradient(90deg,
+    rgb(255 255 255 / 0%) 0%,
+    rgb(255 255 255 / 30%) 45%,
+    rgb(255 255 255 / 55%) 50%,
+    rgb(255 255 255 / 30%) 55%,
+    rgb(255 255 255 / 0%) 100%);
+  filter: blur(3px);
+  animation: crt-sweep 7s linear infinite;
+}
+
+@keyframes crt-sweep {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(700%); }
+}
+
+.art-crt-volume {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 1.4rem;
+  z-index: 4;
+  pointer-events: none;
+  display: grid;
+  justify-items: center;
+  gap: 0.2rem;
+  font-family: var(--crt-font);
+  color: var(--accent);
+  text-shadow: 0 0 0.6rem rgb(var(--accent-rgb) / 70%), 0 0 1.4rem rgb(var(--accent-rgb) / 35%);
+  animation: crt-volume-pop 180ms ease-out;
+}
+
+.art-crt-volume-label {
+  font-size: 0.7rem;
+  letter-spacing: 0.16em;
+  text-transform: lowercase;
+  opacity: 0.78;
+}
+
+.art-crt-volume-bar {
+  font-size: 1.4rem;
+  letter-spacing: 0.05em;
+  line-height: 1;
+}
+
+@keyframes crt-volume-pop {
+  0% { opacity: 0; transform: translateY(4px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+.art-shell::before,
+.art-shell::after {
+  content: "";
+  position: absolute;
+  border: 1px solid var(--accent-line);
+}
+
+.art-shell::before {
+  width: 46%;
+  aspect-ratio: 1;
+  left: 27%;
+  top: 22%;
+  border-radius: 999px;
+}
+
+.art-shell::after {
+  inset: 18%;
+  transform: rotate(45deg);
+}
+
+.art-glow {
+  display: none;
+}
+
+.station-id-card {
+  position: absolute;
+  right: 0.75rem;
+  bottom: 0.75rem;
+  z-index: 3;
+  padding: 0.35rem 0.55rem;
+  font-family: var(--crt-font);
+  color: var(--accent);
+  font-size: 0.66rem;
+  letter-spacing: 0.08em;
+  text-transform: lowercase;
+  text-shadow: 0 0 0.45rem rgb(var(--accent-rgb) / 60%), 0 1px 1rem var(--bg);
+  animation: crt-flicker 4s ease-in-out infinite;
+}
+
+.station-id-card::before {
+  content: '';
+}
+
+.station-id-card small {
+  color: var(--accent);
+}
+
+.eyebrow,
+.listen-button {
+  font-family: var(--crt-font);
+}
+
+@keyframes crt-flicker {
+  0%, 88%, 92%, 96%, 100% { opacity: 0.88; }
+  90% { opacity: 0.72; }
+  94% { opacity: 0.78; }
+}
+
+.radio-footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.35rem 0.6rem;
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 4;
+  width: 100%;
+  margin: 0;
+  padding: 0.7rem 1.2rem 0.85rem;
+  border-top: 1px solid color-mix(in srgb, var(--accent) 18%, var(--hairline));
+  background: linear-gradient(180deg, rgb(0 0 0 / 0%) 0%, color-mix(in srgb, var(--surface) 58%, transparent) 100%);
+  backdrop-filter: blur(8px);
+  text-align: center;
+  font-family: var(--crt-font);
+  font-size: 0.62rem;
+  color: var(--muted);
+  opacity: 0.75;
+  letter-spacing: 0.06em;
+  line-height: 1.6;
+  text-transform: lowercase;
+}
+
+.radio-footer a {
+  color: color-mix(in srgb, var(--text) 72%, var(--muted));
+  text-decoration: none;
+  box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--accent) 45%, transparent);
+  transition: color 160ms ease, box-shadow 160ms ease;
+}
+
+.radio-footer a:hover {
+  color: var(--accent);
+  box-shadow: inset 0 -1px 0 var(--accent);
+}
+
+.nowplaying-waveform {
+  display: block;
+  width: min(100%, 34rem, calc(100vh - 22rem));
+  height: 3.6rem;
+  justify-self: center;
+  margin: 0;
+  padding: 0.4rem 0;
+  border: 0;
+  background: transparent;
+}
+
+.eyebrow {
+  margin: 0 0 0.35rem;
+  color: var(--accent);
+  font-family: var(--mono);
+  font-size: 0.82rem;
+  font-weight: 400;
+  letter-spacing: 0.08em;
+  text-transform: lowercase;
+}
+
+.now-playing-card h1 {
+  min-width: 0;
+  /* Always constrained: overflow detection compares scrollWidth to
+     clientWidth, which only works when the heading can't grow past its
+     container. Unconstrained, a long nowrap title bleeds over neighbors. */
+  max-width: 100%;
+  margin: 0.45rem 0 0 -0.05em;
+  padding-bottom: 0.08em;
+  overflow: hidden;
+  white-space: nowrap;
+  font-size: clamp(1.45rem, 2.2vw, 2.2rem);
+  font-weight: 700;
+  letter-spacing: 0;
+  line-height: 1.1;
+  text-shadow: 0 0 40px rgba(var(--accent-rgb), 0.22);
+}
+
+
+.marquee-track {
+  display: inline-flex;
+  width: max-content;
+}
+
+h1.marquee .marquee-track {
+  animation: title-marquee var(--marquee-duration, 14s) linear infinite;
+  /* Inside the masked heading the slide was repainted every frame; its own
+     layer lets the compositor move it without painting. */
+  will-change: transform;
+}
+
+h1.marquee {
+  /* Masking makes Safari composite the clip box itself, which pins the
+     animated track inside it; the edge fade also reads softer than a hard
+     cut against the card. */
+  -webkit-mask-image: linear-gradient(to right, transparent, black 1.25rem, black calc(100% - 1.25rem), transparent);
+  mask-image: linear-gradient(to right, transparent, black 1.25rem, black calc(100% - 1.25rem), transparent);
+}
+
+/* The phone styles ellipsize the heading, but the ellipsized line is laid out
+   from the untransformed track — iOS paints that static copy beneath the
+   animated one, doubling the title. Scoped above the mobile rule's
+   specificity so it wins inside the media query too. */
+.now-playing-card h1.marquee {
+  text-overflow: clip;
+}
+
+.marquee-track span {
+  flex: 0 0 auto;
+}
+
+/* Classic <marquee>: slide in from the container's right edge (px start set
+   from the measured heading width) and travel until the text's own tail
+   (-100% of the track) clears the left edge. Values are fixed before the
+   animation starts — never retargeted mid-flight, which is what iOS Safari
+   answered with stale offset copies of the text. */
+@keyframes title-marquee {
+  from {
+    transform: translate3d(var(--marquee-start, 100%), 0, 0);
+  }
+  to {
+    transform: translate3d(-100%, 0, 0);
+  }
+}
+
+.subtitle {
+  margin: 0.25rem 0 0;
+  color: var(--muted);
+  font-size: clamp(1rem, 1.55vw, 1.35rem);
+  font-weight: 400;
+}
+
+.nowplaying-details {
+  display: grid;
+  gap: 0;
+  width: 100%;
+  min-width: 0;
+  margin-top: 0;
+}
+
+.nowplaying-title-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 0.6rem;
+  min-width: 0;
+}
+
+/* Heart and share: quieter than the listen button beside them. */
+.nowplaying-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+}
+
+.nowplaying-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.3rem;
+  height: 2.3rem;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition: color 140ms ease, background-color 140ms ease, transform 120ms ease-out;
+}
+
+.nowplaying-action:active {
+  transform: scale(0.9);
+}
+
+.nowplaying-action:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .nowplaying-action:hover {
+    color: var(--accent);
+    background: rgb(var(--accent-rgb) / 10%);
+  }
+}
+
+/* Armed share: the button grows into a small "post?" pill for the confirm tap. */
+.nowplaying-share {
+  gap: 0.3rem;
+  width: auto;
+  min-width: 2.3rem;
+}
+
+.nowplaying-share[data-state='armed'] {
+  padding: 0 0.7rem;
+  color: var(--accent);
+  background: rgb(var(--accent-rgb) / 14%);
+}
+
+.nowplaying-share[data-state='posting'] {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.nowplaying-share[data-state='done'] {
+  color: var(--accent);
+}
+
+.nowplaying-share-hint {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  line-height: 1;
+}
+
+/* Hearts rise from the lower right of the cover and fade out. */
+.heart-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.floating-heart {
+  position: absolute;
+  right: 12%;
+  bottom: 0.5rem;
+  color: var(--accent);
+  filter: drop-shadow(0 0 0.5rem rgb(var(--accent-rgb) / 55%));
+  animation: heart-rise 1800ms cubic-bezier(0.2, 0.7, 0.3, 1) forwards;
+}
+
+@keyframes heart-rise {
+  0% {
+    opacity: 0;
+    transform: translate(0, 0) scale(0.5);
+  }
+  12% {
+    opacity: 1;
+    transform: translate(calc(var(--drift) * 0.2), -1.5rem) scale(1.1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(var(--drift), -14rem) scale(0.85);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .floating-heart {
+    animation: heart-fade 1200ms ease forwards;
+  }
+
+  @keyframes heart-fade {
+    0% { opacity: 0; }
+    20% { opacity: 1; }
+    100% { opacity: 0; }
+  }
+}
+
+.nowplaying-title-row h1 {
+  margin-top: 0;
+}
+
+.nowplaying-artist-time-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.listen-icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--nowplaying-control-size, 2.85rem);
+  height: var(--nowplaying-control-size, 2.85rem);
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--accent) 70%, transparent);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--accent);
+  font-family: var(--mono);
+  font-size: 1.3rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: color 160ms ease, border-color 160ms ease, background-color 160ms ease, transform 120ms ease-out;
+}
+
+.listen-icon-button:focus-visible {
+  border-color: color-mix(in srgb, var(--text) 82%, var(--accent));
+  background: rgb(var(--accent-rgb) / 8%);
+  color: color-mix(in srgb, var(--text) 82%, var(--accent));
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .listen-icon-button:hover {
+    border-color: color-mix(in srgb, var(--text) 82%, var(--accent));
+    background: rgb(var(--accent-rgb) / 8%);
+    color: color-mix(in srgb, var(--text) 82%, var(--accent));
+  }
+}
+
+.listen-icon-button:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 75%, white);
+  outline-offset: 3px;
+}
+
+.listen-icon-button:active {
+  transform: scale(0.94);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .art-crt-scanload,
+  .art-crt-sweep::before,
+  .station-id-card,
+  .marquee-track {
+    animation: none;
+  }
+
+  /* Static presentation: no edge fade, back to a plain ellipsized title. */
+  h1.marquee {
+    -webkit-mask-image: none;
+    mask-image: none;
+  }
+
+  .now-playing-card h1.marquee {
+    text-overflow: ellipsis;
+  }
+
+  .art-crt-scanload {
+    display: none;
+  }
+
+  .listen-icon-button {
+    transition: color 120ms ease, border-color 120ms ease, background-color 120ms ease;
+  }
+
+  .listen-icon-button:active {
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .radio-footer {
+    background: var(--bg);
+    backdrop-filter: none;
+  }
+}
+
+.nowplaying-artist-album {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: min(100%, 42rem);
+  margin-top: 0.12rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nowplaying-time-simple {
+  flex: 0 0 auto;
+  margin: 0;
+  color: var(--accent);
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.nowplaying-meta-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, auto);
+  align-items: center;
+  gap: 1rem;
+  min-height: var(--nowplaying-row-height, 2.35rem);
+  min-width: 0;
+  margin-top: 0.9rem;
+}
+
+.compact-viewer-counter {
+  min-height: var(--nowplaying-row-height, 2.35rem);
+}
+
+.nowplaying-meta-row .track-attribution {
+  max-width: min(100%, 27rem);
+  min-height: var(--nowplaying-row-height, 2.35rem);
+  font-size: 0.9rem;
+}
+
+.nowplaying-meta-row .track-attribution-avatar.profile-avatar,
+.listener-avatar.profile-avatar {
+  width: var(--nowplaying-avatar-size, 1.65rem);
+  height: var(--nowplaying-avatar-size, 1.65rem);
+}
+
+.track-attribution {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  flex: 0 1 auto;
+  min-width: 0;
+  color: var(--muted);
+  text-align: right;
+  text-decoration: none;
+  font-size: 0.92rem;
+  font-weight: 300;
+}
+
+.track-attribution span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.track-attribution strong {
+  color: var(--accent);
+  font-weight: 400;
+}
+
+.track-attribution:hover strong {
+  text-decoration: underline;
+}
+
+.track-attribution-avatar.profile-avatar {
+  width: var(--nowplaying-avatar-size, 1.65rem);
+  height: var(--nowplaying-avatar-size, 1.65rem);
+  border: 2px solid var(--surface, var(--background, #fff));
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 12%);
+  background: var(--surface, var(--background, #fff));
+}
+
+.nowplaying-details .local-volume {
+  width: 100%;
+  margin-top: 0.5rem;
+}
+
+.listen-attribution-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  /* Reserve the button row's height so showing/hiding the listen button as
+     backend playback state changes doesn't shift the layout below. */
+  min-height: 2.1rem;
+}
+
+.radio-audio {
+  display: none;
+}
+
+.listener-controls {
+  display: grid;
+  gap: 0.5rem;
+  margin-top: 0.6rem;
+}
+
+.live-viewer-counter {
+  display: inline-flex;
+  align-items: center;
+  justify-self: start;
+  gap: 0.45rem;
+  min-height: 1.75rem;
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 0.86rem;
+  font-weight: 300;
+  text-transform: lowercase;
+}
+
+.live-viewer-counter svg {
+  color: var(--accent);
+}
+
+.listener-avatars {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0 0 0 0.55rem;
+  padding: 0;
+  list-style: none;
+  position: relative;
+}
+
+.listener-avatars li {
+  margin: 0;
+  position: relative;
+}
+
+.listener-avatars a,
+.listener-avatars button {
+  display: block;
+  line-height: 0;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  position: relative;
+}
+
+.listener-avatars > li > a::after,
+.listener-avatars > li > button::after {
+  content: attr(data-handle);
+  position: absolute;
+  bottom: calc(100% + 0.5rem);
+  left: 50%;
+  transform: translate(-50%, 4px);
+  padding: 0.4rem 0.65rem;
+  font-family: var(--mono);
+  font-size: 0.95rem;
+  font-weight: 500;
+  white-space: nowrap;
+  color: #fff;
+  background: rgb(0 0 0 / 88%);
+  border-radius: 0.45rem;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s ease, transform 0.12s ease;
+  z-index: 6;
+}
+
+.listener-avatars > li > a:hover::after,
+.listener-avatars > li > a:focus-visible::after,
+.listener-avatars > li > button:hover::after,
+.listener-avatars > li > button:focus-visible::after {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+.listener-avatar.profile-avatar {
+  width: var(--nowplaying-avatar-size, 1.65rem);
+  height: var(--nowplaying-avatar-size, 1.65rem);
+  border: 2px solid var(--surface, var(--background, #fff));
+  border-radius: 999px;
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 12%);
+  background: var(--surface, var(--background, #fff));
+}
+
+.listener-avatar-more {
+  width: var(--nowplaying-avatar-size, 1.65rem);
+  height: var(--nowplaying-avatar-size, 1.65rem);
+  border: 2px solid var(--surface, var(--background, #fff));
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--surface, #fff);
+  font-family: var(--mono);
+  font-size: 0.62rem;
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+.listener-avatars-overflow {
+  position: absolute;
+  top: calc(100% + 0.4rem);
+  right: 0;
+  z-index: 5;
+  display: grid;
+  gap: 0.35rem;
+  padding: 0.6rem 0.7rem;
+  min-width: 12rem;
+  max-height: 14rem;
+  overflow-y: auto;
+  background: var(--surface, #fff);
+  border: 1px solid rgb(0 0 0 / 10%);
+  border-radius: 0.6rem;
+  box-shadow: 0 14px 28px rgb(0 0 0 / 18%);
+  list-style: none;
+  margin: 0;
+}
+
+.listener-avatars-overflow li {
+  margin: 0;
+}
+
+.listener-avatars-overflow a {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  color: var(--text, inherit);
+  text-decoration: none;
+  line-height: 1.2;
+}
+
+.listener-avatars-overflow .listener-avatar {
+  width: 1.4rem;
+  height: 1.4rem;
+}
+
+.volume-control {
+  display: grid;
+  grid-template-columns: var(--nowplaying-row-height, 2.35rem) minmax(0, 1fr);
+  align-items: center;
+  gap: 0.8rem;
+  color: var(--accent);
+}
+
+.volume-control svg {
+  justify-self: center;
+  width: 1.25rem;
+  height: 1.25rem;
+}
+
+.volume-mute-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.volume-mute-btn:hover {
+  opacity: 0.8;
+}
+
+.volume-mute-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.volume-control input {
+  width: 100%;
+  accent-color: var(--accent);
+}
+
+/* Same track anatomy as the progress bar above it, so position and volume
+   read as two rows of one instrument. The input itself is 28px tall — a
+   finger-sized touch target — while the visible 6px bar is drawn on the
+   track pseudo-element inside it. */
+.volume-control input[type='range'] {
+  appearance: none;
+  -webkit-appearance: none;
+  height: 28px;
+  margin: 0;
+  border: 0;
+  background: transparent;
+}
+
+.volume-control input[type='range']::-webkit-slider-runnable-track {
+  height: 6px;
+  border: 1px solid var(--hairline);
+  border-radius: 3px;
+  background: linear-gradient(
+    to right,
+    var(--accent) 0 var(--volume-progress, 80%),
+    var(--surface-soft) var(--volume-progress, 80%) 100%
+  );
+}
+
+.volume-control input[type='range']::-webkit-slider-thumb {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 0.95rem;
+  height: 0.95rem;
+  margin-top: calc((6px - 0.95rem) / 2 - 1px);
+  border: 0;
+  border-radius: 999px;
+  background: var(--accent);
+  box-shadow: 0 0 0.5rem rgb(var(--accent-rgb) / 45%);
+}
+
+.volume-control input[type='range']::-moz-range-thumb {
+  width: 0.95rem;
+  height: 0.95rem;
+  border: 0;
+  border-radius: 999px;
+  background: var(--accent);
+  box-shadow: 0 0 0.5rem rgb(var(--accent-rgb) / 45%);
+}
+
+.volume-control input[type='range']::-moz-range-track {
+  height: 6px;
+  border: 1px solid var(--hairline);
+  border-radius: 3px;
+  background: var(--surface-soft);
+}
+
+.volume-control input[type='range']::-moz-range-progress {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--accent);
+}
+
+.volume-mute-btn {
+  width: 2.25rem;
+  height: 2.25rem;
+}
+
+.listen-button {
+  justify-self: start;
+  border: 1px solid var(--accent-line);
+  border-radius: 0;
+  color: var(--accent);
+  background: rgb(var(--accent-rgb) / 12%);
+  padding: 0.3rem 0.65rem;
+  /* Reserve width for the longer "listening live" label so toggling between
+     the two states doesn't shift surrounding content. */
+  min-width: 6.5rem;
+  text-align: center;
+  font-family: var(--mono);
+  font-size: 0.82rem;
+  letter-spacing: 0.04em;
+  text-transform: lowercase;
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 4%);
+}
+
+@media (max-width: 860px) {
+  .radio-page {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    overflow-x: clip;
+  }
+
+  .bottom-radio-tools,
+  .now-playing-card,
+  .radio-panel {
+    grid-column: auto;
+    grid-row: auto;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  .now-playing-card {
+    padding-inline: clamp(0.85rem, 4vw, 1rem);
+    overflow-x: hidden;
+  }
+
+  /* A touch smaller than full width so the art reads as an object on the
+     page rather than a wall-to-wall block. */
+  .art-shell {
+    width: min(86%, calc(100vw - 2rem), 24rem, calc(100dvh - 24rem));
+  }
+
+  /* The visualizer needs the Web Audio graph, which mobile never attaches:
+     routing through MediaElementSource makes the OS suspend audio on lock
+     screen / backgrounding, so the EQ panel is desktop-only. The bars would
+     sit flatlined here. Drop them. */
+  .nowplaying-waveform {
+    display: none;
+  }
+
+  .now-playing-card h1,
+  .subtitle,
+  .now-playing-card .muted {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .nowplaying-details,
+  .nowplaying-title-row,
+  .nowplaying-meta-row,
+  .listener-controls,
+  .live-viewer-counter,
+  .listen-attribution-row,
+  .volume-control {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .nowplaying-details,
+  .listener-controls,
+  .listen-attribution-row,
+  .volume-control {
+    width: 100%;
+  }
+
+  .listen-icon-button {
+    width: 2.75rem;
+    height: 2.75rem;
+    font-size: 1.25rem;
+  }
+
+  .nowplaying-meta-row,
+  .live-viewer-counter,
+  .listen-attribution-row {
+    flex-wrap: wrap;
+  }
+
+  /* Viewers and uploader share one line, as on desktop; the uploader
+     truncates rather than wrapping onto a second row. */
+  .nowplaying-meta-row {
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 0.75rem;
+  }
+
+  .nowplaying-meta-row .track-attribution {
+    max-width: 100%;
+    justify-self: end;
+    justify-content: flex-end;
+    font-size: 0.82rem;
+  }
+
+  .nowplaying-meta-row .track-attribution > span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .listener-avatars {
+    flex-wrap: wrap;
+    min-width: 0;
+    margin-left: 0;
+  }
+
+  .track-attribution {
+    flex: 1 1 12rem;
+    min-width: 0;
+  }
+
+  .volume-control input {
+    min-width: 0;
+  }
+}
+
+/* Queue-banner anatomy for the listener page: eyebrow, heavy title, meta
+   line, slim progress. Same voice on both pages. */
+.nowplaying-eyebrow {
+  margin: 0.9rem 0 0;
+  color: var(--muted);
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  text-transform: lowercase;
+}
+
+@media (max-width: 520px) {
+  /* Match the queue page's phone gutter so both pages share one edge. */
+  .now-playing-card {
+    padding-inline: 0.75rem;
+  }
+}
+
+/* Song position, shown in place of the volume slider on phones. */
+.nowplaying-progress {
+  display: none;
+  height: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 10%);
+}
+
+/* The fill scales rather than resizing: a width transition relaid it out on
+   every frame, forever, while a scale runs on the compositor. */
+.nowplaying-progress span {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: var(--accent);
+  transform-origin: left center;
+  transition: transform 1s linear;
+}
+
+@media (max-width: 860px) {
+  .volume-control input[type='range'] {
+    display: none;
+  }
+
+  .nowplaying-progress {
+    display: block;
+  }
+
+  /* The nav above already clears the status bar; adding the inset again
+     here pushed the one-screen layout under Safari's address pill. */
+  .art-shell {
+    margin-top: 0.5rem;
+  }
+
+  /* One-screen phone layout: the tuner shrinks to its readout row (station
+     name + stepper) directly under now playing. */
+  .now-playing-card .tune-in-card .section-heading,
+  .now-playing-card .station-tuner-dial {
+    display: none;
+  }
+
+  .mobile-next-up {
+    display: flex;
+    align-items: baseline;
+    gap: 0.6rem;
+    min-width: 0;
+    margin: 0.7rem 0 0;
+    padding-top: 0.6rem;
+    border-top: 1px solid var(--hairline);
+    font-size: 0.85rem;
+    color: var(--muted);
+  }
+
+  .mobile-next-up-label {
+    flex: none;
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    color: var(--accent);
+    letter-spacing: 0.08em;
+  }
+
+  .mobile-next-up-track {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nowplaying-progress span {
+    transition: none;
+  }
+}
+

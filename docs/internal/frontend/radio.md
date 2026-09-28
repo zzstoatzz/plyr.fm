@@ -4,21 +4,44 @@ title: "radio and listener presence"
 
 # native radio
 
-`/radio/[[station]]` adapts Ana’s sister-radio presentation into Svelte and uses
-plyr.fm’s persistent player, cookie session, and existing appearance tokens.
-The five station slugs and sampling policies stay in `api/radio/stations.py`.
-No database migration, new Fly service, separate login, or radio upload path is
-needed. The client requests `/radio/state?catalog_only=true` so the external
-firehose broadcast is excluded. The default public state API retains its
-existing live-stream behavior for older clients.
+`/radio/[[station]]` mounts the actual SolidJS listener page from our
+[plyr-radio fork](https://tangled.org/zzstoatzz.io/plyr-radio), including its CRT
+artwork, controls, tuner, queue, and responsive layout. The source is vendored
+under `frontend/vendor/sister-radio`; `UPSTREAM.md` records its exact revision.
+This replaces the Svelte approximation initially shipped in #2097.
 
-The standalone [plyr-radio fork](https://tangled.org/zzstoatzz.io/plyr-radio)
-is a separate interoperability prototype. Its signed station identity and PDS
-remain there; the native page does not embed that app, discover other radios,
-or announce itself to a directory. Its viewer count is separate from native
-playback presence. Sharing presence with the sister protocol requires an adapter;
-this change does not deploy that bridge. See the
+`SisterRadio.svelte` connects the page to plyr.fm's persistent player, catalog
+schedule, cookie-authenticated listener snapshots, and existing likes action.
+The Solid host uses a shadow root to contain upstream CSS; host variables inherit
+the account's font, accent, and light/dark appearance. It creates no audio element,
+second session, upload path, or outside station directory request. Sensitive
+artwork remains hidden unless allowed by the existing preference.
+
+The five station slugs and sampling policies stay in `api/radio/stations.py`.
+The client requests `/radio/state?catalog_only=true`, excluding the external
+firehose broadcast. The default public state API retains its existing live-stream
+behavior for older clients. No database migration or new Fly service is needed.
+
+The standalone fork retains the signed station identity and PDS prototype. This
+hosted UI does not announce itself to a sister directory or share presence with
+other radios. Deploying that bridge remains separate work. Only our stations are
+listed. Upstream chat, equalizer, waveform, and stream-overlay controls are hidden
+because this host does not supply those features; the heart uses plyr's existing
+like action, and the pop-out opens the existing native radio embed. See the
 [research](../../research/2026-09-27-ana-radio-integration.md) for protocol findings.
+
+## updating the fork
+
+Keep reusable integration changes in the fork's `RadioPage.tsx`,
+`SongCoverThumb.tsx`, and `shared/lib/integration.ts`. Host mode is optional, so
+standalone playback remains supported. Build the fork, pin its commit, and copy
+the listener page's dependency closure into the vendor directory. The host entry,
+CSS token mapping, and native state adapter belong to plyr.fm. Preserve upstream
+formatting and use `just loq-relax` for vendored source limits.
+
+Run the real mounted Solid component tests in `src/lib/sister-radio.test.ts`
+after updates. They exercise playback delegation, station selection, avatar and
+cover rendering, and the absence of standalone network requests/audio elements.
 
 ## presence contract
 
@@ -53,6 +76,7 @@ play/pause counts, navigation with continuing audio, font/accent settings, mobil
 layout, and an empty firehose station. Authenticated avatar display also requires
 a real staging login; backend tests exercise real cookie sessions and profiles.
 
-Squash merge the UI, presence endpoints, and docs together. Reverting that one
-commit restores the previous page. No persistent data needs reversal: old leases
+The correction is a follow-up squash commit because #2097 already merged.
+Revert the correction to restore that Svelte page; revert #2097 as well to remove
+the presence endpoints and restore the original radio. No persistent data needs reversal: old leases
 expire within a minute and no deployment configuration changes are required.

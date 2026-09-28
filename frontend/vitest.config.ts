@@ -1,16 +1,23 @@
 import { svelte } from '@sveltejs/vite-plugin-svelte';
 import { defineConfig } from 'vitest/config';
 import path from 'node:path';
+import solid from 'vite-plugin-solid';
 
 export default defineConfig({
-	plugins: [svelte()],
+	plugins: [
+		solid({ include: [/vendor\/sister-radio\/.*\.tsx$/, /lucide-solid\/.*\.jsx$/] }),
+		svelte()
+	],
 	resolve: {
 		alias: {
 			$lib: path.resolve(import.meta.dirname, 'src/lib'),
 			'$app/environment': path.resolve(import.meta.dirname, 'src/tests/stubs/app-environment.ts'),
 			'$app/navigation': path.resolve(import.meta.dirname, 'src/tests/stubs/app-navigation.ts'),
 			'$app/stores': path.resolve(import.meta.dirname, 'src/tests/stubs/app-stores.ts'),
-			'$env/static/public': path.resolve(import.meta.dirname, 'src/tests/stubs/env-static-public.ts')
+			'$env/static/public': path.resolve(
+				import.meta.dirname,
+				'src/tests/stubs/env-static-public.ts'
+			)
 		},
 		// resolve svelte's client runtime (not SSR) so mount() works under jsdom
 		conditions: ['browser']

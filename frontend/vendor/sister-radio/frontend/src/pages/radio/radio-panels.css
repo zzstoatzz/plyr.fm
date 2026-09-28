@@ -1,0 +1,1003 @@
+
+.muted {
+  color: var(--muted);
+}
+
+.chat-preview .muted,
+.up-next-card .muted {
+  color: var(--text);
+}
+
+.radio-panel {
+  grid-column: 2;
+  grid-row: 1 / 3;
+  display: grid;
+  min-width: 0;
+  max-width: 100%;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.4rem;
+  --text: #ffffff;
+  --muted: #ffffff;
+}
+
+.radio-panel-backdrop {
+  display: none;
+}
+
+.glass-card {
+  min-width: 0;
+  max-width: 100%;
+  padding: 0;
+}
+
+.chat-preview {
+  min-height: 0;
+  padding: 0.6rem 1rem 0.7rem;
+  background: transparent;
+}
+
+.chat-preview > .eyebrow {
+  margin-bottom: 0.15rem;
+}
+
+.section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  min-height: 2rem;
+  padding: 0 1rem;
+  border-bottom: 1px solid var(--hairline);
+  font-family: var(--mono);
+}
+
+.section-heading .eyebrow,
+.chat-preview > .eyebrow {
+  margin: 0;
+  color: var(--muted);
+}
+
+.section-heading span {
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-weight: 300;
+}
+
+.queue-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.up-next-card {
+  background: transparent;
+}
+
+.up-next-card .section-heading,
+.up-next-card .queue-list,
+.up-next-card .pagination-row,
+.up-next-card .queue-progress {
+  background: transparent;
+}
+
+.queue-list li {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: 1.4rem 2.1rem minmax(0, 1fr) 2rem;
+  gap: 0.75rem;
+  align-items: center;
+  min-height: 2.5rem;
+  padding: 0.45rem 1rem;
+  border-bottom: 1px solid var(--hairline);
+  background: transparent;
+}
+
+.queue-list li:hover {
+  background: rgb(var(--accent-rgb) / 5%);
+}
+
+/* The empty-queue rotation preview is a single line of text, not the usual
+   number/thumb/copy/avatar row — let it span the whole row instead of
+   getting squeezed into the first 1.4rem column. Specificity has to beat
+   the type+class ".queue-list li" base rule above, hence the repeated
+   selector. */
+.queue-list li.up-next-rotation-peek {
+  display: block;
+}
+
+.queue-list li:last-child {
+  border-bottom: 0;
+}
+
+.queue-current {
+  background: rgb(var(--accent-rgb) / 7%);
+}
+
+.queue-number {
+  color: var(--muted);
+  text-align: right;
+}
+
+.queue-list span,
+.queue-list small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.queue-list small {
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-weight: 300;
+}
+
+.up-next-copy {
+  display: grid;
+  min-width: 0;
+}
+
+.up-next-title {
+  font-weight: 400;
+}
+
+.up-next-artist {
+  margin-top: 0.12rem;
+}
+
+.song-cover-thumb {
+  display: inline-grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  overflow: hidden;
+  border: 0;
+  border-radius: 0.5rem;
+  color: var(--muted);
+  background: var(--surface-soft);
+  font-size: 0.68rem;
+  text-transform: lowercase;
+}
+
+.song-cover-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.up-next-profile-avatar {
+  justify-self: end;
+}
+
+.queue-progress {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.7rem 1rem;
+  border-bottom: 1px solid var(--hairline);
+  color: var(--muted);
+}
+
+.queue-progress span,
+.queue-progress small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.song-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.song-list li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) minmax(10rem, auto) auto;
+  gap: 0.75rem;
+  align-items: center;
+  min-height: 3.35rem;
+  padding: 0.65rem 1rem;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.song-list li:last-child {
+  border-bottom: 0;
+}
+
+.song-copy {
+  display: grid;
+  min-width: 0;
+}
+
+.song-copy span,
+.song-copy small,
+.profile-handle {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.song-copy small,
+.profile-handle,
+.list-empty {
+  color: var(--muted);
+}
+
+.list-empty {
+  display: block;
+  padding: 0.85rem 1rem;
+}
+
+.admin-inline-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.5rem;
+  padding: 1rem;
+  border-bottom: 1px solid var(--hairline);
+}
+
+
+.admin-card {
+  align-self: start;
+}
+
+.admin-song-list li {
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+}
+
+.album-builder {
+  display: grid;
+  gap: 0.75rem;
+  padding: 1rem;
+  border-bottom: 1px solid var(--hairline);
+}
+
+
+.album-file-picker {
+  padding: 0;
+}
+
+.album-song-picker {
+  display: grid;
+  gap: 0.35rem;
+  max-height: 12rem;
+  overflow: auto;
+}
+
+.album-song-picker label,
+.tiny-check {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: var(--muted);
+}
+
+.mass-add-row,
+.pagination-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 1rem;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.pagination-row {
+  align-items: center;
+  justify-content: space-between;
+  border-top: 1px solid var(--hairline);
+  border-bottom: 0;
+  color: var(--muted);
+}
+
+.pagination-row.compact {
+  padding: 0.4rem 1rem;
+}
+
+.pill-button.subtle {
+  width: auto;
+  border: 1px solid var(--line);
+  padding: 0.55rem 0.75rem;
+}
+
+.pagination-row .pill-button.subtle {
+  display: inline-grid;
+  place-items: center;
+  min-width: 2.85rem;
+  border: 0;
+  padding: 0.55rem;
+}
+
+
+.cover-thumb {
+  display: inline-grid;
+  place-items: center;
+  width: 2.4rem;
+  height: 2.4rem;
+  border: 1px solid var(--line);
+  background: var(--surface-soft);
+  object-fit: cover;
+}
+
+.cover-upload input {
+  display: none;
+}
+
+.upload-options-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0 1rem 1rem;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.inline-file {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  min-width: 0;
+  padding: 0;
+  color: var(--muted);
+}
+
+.inline-file input {
+  display: none;
+}
+
+.inline-file span,
+.inline-file small {
+  flex: 0 0 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.inline-file small {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.file-button {
+  justify-self: start;
+  border: 1px solid var(--line);
+  color: var(--accent);
+  background: var(--surface);
+  padding: 0.55rem 0.75rem;
+}
+
+.cover-picker small {
+  color: var(--muted);
+}
+
+.profile-avatar {
+  display: inline-grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--accent);
+  background: var(--surface-soft);
+  font-size: 0.8rem;
+}
+
+.profile-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.admin-controls {
+  background: var(--surface-soft);
+}
+
+.admin-visibility-toggle {
+  justify-self: end;
+  align-self: end;
+  margin-top: 0.5rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  border: 0;
+  color: var(--accent);
+  background: transparent;
+  padding: 0.4rem 0;
+  font-weight: 300;
+}
+
+.transport-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.icon-button,
+.pill-button {
+  border: 0;
+  color: var(--accent);
+  background: transparent;
+  transition: opacity 120ms ease;
+}
+
+.icon-button:hover,
+.pill-button:hover {
+  opacity: 0.62;
+}
+
+.icon-button {
+  display: inline-grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+}
+
+.icon-button.primary {
+  color: var(--accent);
+  background: transparent;
+}
+
+.tune-in-card {
+  display: grid;
+  min-width: 0;
+  background: transparent;
+}
+
+.station-tuner-readout {
+  display: grid;
+  grid-template-columns: 2rem minmax(0, 1fr) auto;
+  gap: 0.75rem;
+  align-items: center;
+  min-width: 0;
+  padding: 0.3rem 1rem 0.2rem;
+  font-family: var(--mono);
+}
+
+.station-tuner-signal {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  color: var(--accent);
+}
+
+.station-tuner-signal-bars {
+  display: inline-flex;
+  align-items: end;
+  gap: 2px;
+  height: 0.75rem;
+}
+
+.station-tuner-signal-bars i {
+  display: block;
+  width: 2px;
+  height: 0.3rem;
+  background: currentColor;
+}
+
+.station-tuner-signal-bars i:nth-child(2) {
+  height: 0.5rem;
+}
+
+.station-tuner-signal-bars i:nth-child(3) {
+  height: 0.72rem;
+}
+
+.station-tuner-copy {
+  display: grid;
+  min-width: 0;
+  gap: 0.18rem;
+}
+
+.station-tuner-label {
+  color: var(--accent);
+  font-size: 0.66rem;
+  letter-spacing: 0;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.station-tuner-copy strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 0.92rem;
+  font-weight: 500;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.station-tuner-copy small {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 0.74rem;
+  font-weight: 300;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.station-tuner-stepper {
+  display: grid;
+  grid-template-columns: 2rem auto 2rem;
+  align-items: center;
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 0.72rem;
+}
+
+.station-tuner-stepper button {
+  display: inline-grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  border: 0;
+  color: var(--accent);
+  background: transparent;
+  cursor: pointer;
+  transition: color 140ms ease, transform 120ms ease-out;
+}
+
+.station-tuner-stepper button:disabled {
+  opacity: 0.25;
+  cursor: default;
+}
+
+.station-tuner-stepper button:focus-visible,
+.station-tuner-preset:focus-visible {
+  outline: 1px dotted var(--accent);
+  outline-offset: -2px;
+}
+
+.station-tuner-stepper button:active:not(:disabled) {
+  transform: scale(0.96);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .station-tuner-stepper button:hover:not(:disabled) {
+    color: var(--text);
+  }
+}
+
+.station-tuner-dial {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 0.55rem;
+  align-items: center;
+  padding: 0.1rem 1rem 0.2rem;
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 0.62rem;
+  line-height: 1;
+}
+
+.station-tuner-links {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.9rem;
+  padding: 0.35rem 1rem 0.1rem;
+  font-family: var(--mono);
+  font-size: 0.66rem;
+}
+
+.station-tuner-links a {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  color: var(--muted);
+  text-decoration: none;
+  transition: color 160ms ease;
+}
+
+.station-tuner-links a:hover,
+.station-tuner-links a:focus-visible {
+  color: var(--accent);
+}
+
+.station-tuner-track {
+  position: relative;
+  display: block;
+  height: 1rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--accent) 46%, var(--hairline));
+  background: repeating-linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--muted) 45%, transparent) 0 1px,
+    transparent 1px 5%
+  ) bottom / 100% 0.45rem no-repeat;
+}
+
+.station-tuner-track i {
+  position: absolute;
+  bottom: -0.18rem;
+  left: var(--station-needle);
+  width: 2px;
+  height: 1.2rem;
+  background: var(--accent);
+  box-shadow: 0 0 0.55rem rgb(var(--accent-rgb) / 65%);
+  transform: translateX(-50%);
+  transition: left 220ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+/* Presets live directly on the frequency track as their own ticks, rather
+   than a second row underneath — the name only surfaces in a tooltip on
+   hover/focus, same pattern as the listener avatars below. */
+.station-tuner-preset {
+  position: absolute;
+  bottom: 0;
+  width: 0.9rem;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  transform: translateX(-50%);
+  transition: color 140ms ease;
+}
+
+.station-tuner-preset::before {
+  content: '';
+  position: absolute;
+  bottom: -0.18rem;
+  left: 50%;
+  width: 2.5px;
+  height: 1.35rem;
+  background: currentColor;
+  opacity: 0.8;
+  border-radius: 1px;
+  transform: translateX(-50%);
+  transition: background-color 140ms ease, height 140ms ease, opacity 140ms ease;
+}
+
+.station-tuner-preset[aria-checked='true'] {
+  color: var(--accent);
+}
+
+.station-tuner-preset[aria-checked='true']::before {
+  height: 1.5rem;
+  opacity: 1;
+  background: var(--accent);
+  box-shadow: 0 0 0.5rem rgb(var(--accent-rgb) / 55%);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .station-tuner-preset:hover::before {
+    opacity: 0.9;
+  }
+}
+
+.station-tuner-preset::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: calc(100% + 0.5rem);
+  left: 50%;
+  transform: translate(-50%, 4px);
+  padding: 0.4rem 0.65rem;
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  font-weight: 500;
+  white-space: nowrap;
+  color: #fff;
+  background: rgb(0 0 0 / 88%);
+  border-radius: 0.45rem;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s ease, transform 0.12s ease;
+  z-index: 6;
+}
+
+.station-tuner-preset:hover::after,
+.station-tuner-preset:focus-visible::after {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+.chat-card {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  max-width: 100%;
+  min-height: 0;
+  max-height: 19rem;
+  overflow-x: clip;
+  background: transparent;
+}
+
+/* Inline placement under the mobile volume slider — give it air so it
+   doesn't look glued to the controls row, and drop the inner gutters since
+   the parent .now-playing-card already supplies 1rem of horizontal padding. */
+.now-playing-card > .chat-card {
+  margin-top: 0.8rem;
+  padding-top: 0.4rem;
+  border-top: 1px solid var(--hairline);
+}
+
+.now-playing-card > .tune-in-card {
+  margin-top: 0.8rem;
+  padding-top: 0.4rem;
+  border-top: 1px solid var(--hairline);
+}
+
+.now-playing-card > .tune-in-card > .section-heading,
+.now-playing-card > .chat-card > .section-heading {
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.now-playing-card > .tune-in-card > .station-tuner-readout,
+.now-playing-card > .tune-in-card > .station-tuner-dial {
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.now-playing-card > .chat-card > .chat-log {
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.now-playing-card > .chat-card > .chat-composer {
+  padding-left: 0;
+  padding-right: 0;
+}
+
+/* The up-next and equalizer cards join the mobile stack inside the
+   now-playing card; like tune-in and chat above, they drop their inner
+   gutters so everything shares the page's single edge-to-edge gutter. */
+.now-playing-card > .up-next-card,
+.now-playing-card > .equalizer-card {
+  margin-top: 0.8rem;
+  padding-top: 0.4rem;
+  border-top: 1px solid var(--hairline);
+}
+
+.now-playing-card > .up-next-card > .section-heading,
+.now-playing-card > .up-next-card .queue-list li,
+.now-playing-card > .up-next-card .queue-progress,
+.now-playing-card > .up-next-card .pagination-row,
+.now-playing-card > .up-next-card .list-empty {
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.now-playing-card > .equalizer-card .equalizer-header,
+.now-playing-card > .equalizer-card .equalizer-presets,
+.now-playing-card > .equalizer-card .equalizer-graph {
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.now-playing-card > .equalizer-card .equalizer-reset {
+  padding-inline: 0;
+  text-align: left;
+}
+
+.chat-log {
+  flex: 1;
+  min-width: 0;
+  max-width: 100%;
+  overflow-y: auto;
+  overflow-x: clip;
+  padding: 0.4rem 1rem;
+  scrollbar-width: thin;
+}
+
+.chat-empty {
+  margin: 0.6rem 0;
+  font-size: 0.85rem;
+}
+
+.chat-message-list {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  max-width: 100%;
+  gap: 0.55rem;
+  list-style: none;
+  margin: 0;
+  padding: 0.2rem 0;
+}
+
+.chat-message {
+  display: grid;
+  min-width: 0;
+  max-width: 100%;
+  grid-template-columns: 1.8rem minmax(0, 1fr);
+  gap: 0.55rem;
+  align-items: start;
+}
+
+.chat-message-avatar {
+  display: inline-grid;
+  place-items: center;
+  width: 1.8rem;
+  height: 1.8rem;
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.chat-avatar {
+  width: 100%;
+  height: 100%;
+}
+
+.chat-message-body {
+  display: grid;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.chat-message-meta {
+  display: flex;
+  align-items: baseline;
+  gap: 0.45rem;
+  min-width: 0;
+  max-width: 100%;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.chat-message-handle {
+  /* Flex items default to min-width: auto, which on a nowrap span equals the
+     intrinsic text width — a long handle pushes the row past the viewport.
+     Explicit min-width: 0 lets the ellipsis actually kick in. */
+  min-width: 0;
+  font-weight: 500;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-message-time {
+  flex: 0 0 auto;
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  opacity: 0.7;
+}
+
+.chat-message-text {
+  min-width: 0;
+  max-width: 100%;
+  margin: 0.1rem 0 0;
+  font-size: 0.92rem;
+  line-height: 1.3;
+  word-break: break-word;
+  word-wrap: break-word;
+  overflow-wrap: anywhere;
+}
+
+/* Track changes read as a quiet play log between messages: muted, one line,
+   no borders, so a real chat message is the brightest thing in the list. */
+.chat-now-playing {
+  display: flex;
+  align-items: baseline;
+  gap: 0.45rem;
+  min-width: 0;
+  max-width: 100%;
+  padding: 0.1rem;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.chat-now-playing-label {
+  flex: none;
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  color: var(--accent);
+  opacity: 0.7;
+}
+
+.chat-now-playing-body {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  opacity: 0.8;
+}
+
+.chat-composer {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  max-width: 100%;
+  gap: 0.45rem;
+  padding: 0.5rem 1rem 0.7rem;
+  border-top: 1px solid var(--hairline);
+}
+
+.chat-input {
+  flex: 1;
+  border-color: var(--hairline);
+  border-radius: 0.5rem;
+  background: rgb(255 255 255 / 6%);
+}
+
+.chat-input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.chat-send {
+  display: inline-grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  border: 0;
+  border-radius: 0.5rem;
+  background: rgb(var(--accent-rgb) / 22%);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.chat-send:hover:not(:disabled) {
+  background: rgb(var(--accent-rgb) / 35%);
+}
+
+.chat-send:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+@media (max-width: 520px) {
+  .station-tuner-readout {
+    grid-template-columns: 1.5rem minmax(0, 1fr) auto;
+    gap: 0.5rem;
+  }
+
+  .station-tuner-signal-bars {
+    display: none;
+  }
+
+  .station-tuner-stepper {
+    grid-template-columns: 1.75rem auto 1.75rem;
+  }
+
+  .station-tuner-stepper button {
+    width: 1.75rem;
+    height: 1.75rem;
+  }
+
+  /* The metadata column's 10rem floor is reserved even on rows that don't fill
+     it, which leaves the title almost no room on a phone. Let it collapse. */
+  .song-list li {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 0.5rem;
+    padding-inline: 0.75rem;
+  }
+
+  .song-list li > :nth-child(3):last-child {
+    justify-self: end;
+  }
+
+  .queue-list li {
+    gap: 0.5rem;
+    padding-inline: 0.75rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .station-tuner-stepper button,
+  .station-tuner-preset {
+    transition: color 120ms ease;
+  }
+
+  .station-tuner-stepper button:active:not(:disabled) {
+    transform: none;
+  }
+
+  .station-tuner-track i {
+    transition: none;
+  }
+}
+
+.chat-share-status {
+  margin: 0.4rem 0 0;
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  color: var(--muted);
+}

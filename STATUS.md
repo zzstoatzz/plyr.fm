@@ -49,13 +49,16 @@ plyr.fm should become:
 
 #### native radio with authenticated listeners (staging)
 
-The radio page adopts Ana’s cover/queue/listener layout using the existing global
-player and appearance settings. All five plyr.fm station links remain. Native
+The radio page now mounts the actual SolidJS interface from our sister-radio
+fork, replacing the Svelte approximation in #2097. It retains the CRT artwork,
+tuner, queue, and mobile layout while using the existing global player and
+appearance settings. All five plyr.fm station links remain. Native
 playback requests catalog-only state, so firehose has no external live relay.
 Redis presence derives avatars from the existing cookie session, follows player
 state across navigation, deduplicates accounts, and expires stale sockets.
 The standalone sister-protocol fork remains a separate prototype with separate
-presence. UI, API, and docs ship in one revertible PR with no migration or new
+presence. The source-integration correction and docs ship in a follow-up PR;
+#2097 contains the native presence endpoints. Neither requires a migration or new
 service. See [radio architecture](docs/internal/frontend/radio.md).
 
 

@@ -1,9 +1,12 @@
+import solid from 'vite-plugin-solid';
 import { sveltekit } from '@sveltejs/kit/vite';
 import { defineConfig } from 'vite';
 import { SvelteKitPWA } from '@vite-pwa/sveltekit';
 
 export default defineConfig({
+	server: { fs: { allow: ['./vendor'] } },
 	plugins: [
+		solid({ include: [/vendor\/sister-radio\/.*\.tsx$/, /lucide-solid\/.*\.jsx$/] }),
 		sveltekit(),
 		SvelteKitPWA({
 			strategies: 'generateSW',

@@ -62,6 +62,7 @@ export default [
 				history: 'readonly',
 				crypto: 'readonly',
 				Image: 'readonly',
+				createImageBitmap: 'readonly',
 				MutationObserver: 'readonly',
 				requestAnimationFrame: 'readonly',
 				cancelAnimationFrame: 'readonly',
