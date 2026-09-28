@@ -584,6 +584,7 @@ export default function RadioPage(props: RadioPageProps) {
     setFloatingHearts((hearts) => [...hearts.slice(-23), { id, drift }])
     window.setTimeout(() => setFloatingHearts((hearts) => hearts.filter((heart) => heart.id !== id)), 1800)
   }
+  const heartLabel = () => props.integration ? (props.integration.liked ? 'unlike this track' : 'like this track') : 'send a heart'
   const sendHeart = () => {
     if (props.integration) return props.integration.likeTrack()
     if (liveRadioSocket?.readyState === WebSocket.OPEN) sendRadioHeart(liveRadioSocket)
@@ -1632,8 +1633,8 @@ export default function RadioPage(props: RadioPageProps) {
             </span>
             <Show when={!props.overlay}>
               <div class="embed-actions">
-                <button type="button" class="nowplaying-action" aria-label={props.integration ? 'like this track' : 'send a heart'} title={props.integration ? 'like this track' : 'send a heart'} onClick={sendHeart}>
-                  <Heart size={18} strokeWidth={1.8} />
+                <button type="button" class="nowplaying-action" classList={{ 'is-liked': props.integration?.liked }} aria-pressed={props.integration ? props.integration.liked : undefined} aria-label={heartLabel()} title={heartLabel()} onClick={sendHeart}>
+                  <Heart size={18} strokeWidth={1.8} fill={props.integration?.liked ? 'currentColor' : 'none'} />
                 </button>
                 <Show
                   when={isAudioPlaying()}
@@ -1712,8 +1713,8 @@ export default function RadioPage(props: RadioPageProps) {
             </h1>
             <Show when={currentSong()}>
               <div class="nowplaying-actions">
-                <button type="button" class="nowplaying-action" aria-label={props.integration ? 'like this track' : 'send a heart'} title={props.integration ? 'like this track' : 'send a heart'} onClick={sendHeart}>
-                  <Heart size={18} strokeWidth={1.8} />
+                <button type="button" class="nowplaying-action" classList={{ 'is-liked': props.integration?.liked }} aria-pressed={props.integration ? props.integration.liked : undefined} aria-label={heartLabel()} title={heartLabel()} onClick={sendHeart}>
+                  <Heart size={18} strokeWidth={1.8} fill={props.integration?.liked ? 'currentColor' : 'none'} />
                 </button>
                 <Show when={shareTrack()}>
                   {(track) => (

@@ -7,6 +7,7 @@ export interface RadioIntegration {
   stations: TuneInStation[]
   selectedStationUrl: string
   playing: boolean
+  liked: boolean
   position: number
   volume: number
   loading: boolean

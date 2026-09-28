@@ -36,6 +36,9 @@
 			stations: radio.stations,
 			selected,
 			playing: radio.active && !player.paused,
+			liked: radio.current
+				? likes.isLiked({ id: radio.current.id, is_liked: radio.current.liked })
+				: false,
 			position,
 			volume: player.volume,
 			loading: radio.loading,

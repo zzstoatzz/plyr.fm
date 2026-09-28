@@ -104,3 +104,8 @@ pause cancels it. The full page uses catalog-only state; the embed and public
 `/radio/state` and `/radio/state.json` contracts remain unchanged. Tests mount the
 real page/global player and compact widget, covering both autoplay values and
 track changes.
+
+The native host hides the fork's five-second CRT cover reveal mask; loaded
+artwork is visible immediately while the scanline styling remains. The heart
+reads plyr's shared liked-state store and exposes its current pressed state,
+including existing account likes and optimistic changes from other surfaces.

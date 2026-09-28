@@ -34,16 +34,20 @@ button,
 input {
 	font-family: inherit;
 }
+.art-crt-scanload {
+	display: none;
+	animation: none;
+}
 @media (prefers-reduced-motion: reduce) {
-	.art-crt-scanload,
 	.art-crt-sweep::before {
 		animation: none;
-	}
-	.art-crt-scanload {
-		display: none;
 	}
 }
 .radio-panel {
   --text: var(--text-primary);
   --muted: var(--text-secondary);
+}
+
+.nowplaying-action.is-liked {
+	color: var(--accent);
 }

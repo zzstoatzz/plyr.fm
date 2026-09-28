@@ -423,7 +423,7 @@ max_lines = 725
 
 [[rules]]
 path = "frontend/vendor/sister-radio/frontend/src/pages/radio/RadioPage.tsx"
-max_lines = 1922
+max_lines = 1923
 
 [[rules]]
 path = "frontend/vendor/sister-radio/frontend/src/pages/radio/radio-panels.css"

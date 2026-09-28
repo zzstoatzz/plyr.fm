@@ -10,6 +10,7 @@ export function radioIntegration(input: {
 	stations: RadioStation[];
 	selected: string;
 	playing: boolean;
+	liked: boolean;
 	position: number;
 	volume: number;
 	loading: boolean;

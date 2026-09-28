@@ -46,6 +46,7 @@ function fixture() {
 		})),
 		selected: 'loved',
 		playing: false,
+		liked: false,
 		position: 30,
 		volume: 0.5,
 		loading: false,
@@ -101,6 +102,15 @@ describe('the actual sister-radio host', () => {
 		mounted.update(radioIntegration({ ...input, playing: true }));
 		button('pause').click();
 		expect(input.pause).toHaveBeenCalledOnce();
+		mounted.update(radioIntegration({ ...input, liked: true }));
+		expect(button('unlike this track').getAttribute('aria-pressed')).toBe('true');
+		expect(button('unlike this track').querySelector('svg')?.getAttribute('fill')).toBe(
+			'currentColor'
+		);
+		button('unlike this track').click();
+		expect(input.likeTrack).toHaveBeenCalledOnce();
+		mounted.update(radioIntegration({ ...input, liked: false }));
+		expect(button('like this track').getAttribute('aria-pressed')).toBe('false');
 		button('tune in to fresh').click();
 		expect(input.selectStation).toHaveBeenCalledWith('fresh');
 		mounted.update(
