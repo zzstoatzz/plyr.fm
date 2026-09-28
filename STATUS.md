@@ -47,6 +47,14 @@ plyr.fm should become:
 
 ### September 2026
 
+#### radio transition state and OBS compatibility
+
+The shared player now ignores stale source events and aborted play promises,
+keeping radio play/pause and Media Session state stable across track changes.
+The compact embed retains listening intent while loading the next source.
+Regression tests cover Eli's full-page `?autoplay=1` OBS contract from #1592,
+explicit `autoplay=0`, compact embed autoplay, and explicit user pauses.
+
 #### native radio with authenticated listeners (staging)
 
 The radio page now mounts the actual SolidJS interface from our sister-radio

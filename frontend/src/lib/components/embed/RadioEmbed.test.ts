@@ -8,7 +8,7 @@ import type { RadioState, RadioStation } from '$lib/radio.svelte';
 
 // jsdom doesn't implement media playback
 const playSpy = vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue(undefined);
-vi.spyOn(HTMLMediaElement.prototype, 'load').mockImplementation(() => {});
+const loadSpy = vi.spyOn(HTMLMediaElement.prototype, 'load').mockImplementation(() => {});
 
 const SENSITIVE_ART = 'https://images.test/images/sens123.webp';
 const SAFE_ART = 'https://images.test/images/safe456.webp';
@@ -108,6 +108,7 @@ afterEach(() => {
 	setEmbedUrl('');
 	trackNum = 1;
 	playSpy.mockClear();
+	loadSpy.mockImplementation(() => {});
 });
 
 describe('RadioEmbed sensitive artwork', () => {
@@ -132,7 +133,8 @@ describe('RadioEmbed autoplay', () => {
 		await vi.waitFor(() => expect(playSpy).toHaveBeenCalled());
 	});
 
-	it('stays paused without the param', async () => {
+	it.each(['', '?autoplay=0'])('stays paused with %s', async (search) => {
+		setEmbedUrl(search);
 		artworkUrl = SAFE_ART;
 		await mountRadioEmbed();
 		expect(playSpy).not.toHaveBeenCalled();
@@ -161,6 +163,18 @@ describe('RadioEmbed auto-advance', () => {
 		audio.dispatchEvent(new Event('pause')); // browsers fire pause first…
 		audio.dispatchEvent(new Event('ended')); // …then ended
 		endedSpy.mockRestore();
+		await vi.waitFor(() => expect(audio.src).toBe('https://audio.test/2.mp3'));
+		audio.dispatchEvent(new Event('loadedmetadata'));
+		await vi.waitFor(() => expect(playSpy).toHaveBeenCalled());
+	});
+
+	it('preserves listening intent through the new source load pause', async () => {
+		const audio = await tuneIn();
+		loadSpy.mockImplementation(function (this: HTMLMediaElement) {
+			this.dispatchEvent(new Event('pause'));
+		});
+		trackNum = 2;
+		audio.dispatchEvent(new Event('ended'));
 		await vi.waitFor(() => expect(audio.src).toBe('https://audio.test/2.mp3'));
 		audio.dispatchEvent(new Event('loadedmetadata'));
 		await vi.waitFor(() => expect(playSpy).toHaveBeenCalled());

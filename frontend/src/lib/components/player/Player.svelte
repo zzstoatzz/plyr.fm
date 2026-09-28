@@ -134,7 +134,9 @@
 	});
 
 	// track play count when threshold is reached
-	$effect(() => { player.incrementPlayCount(); });
+	$effect(() => {
+		player.incrementPlayCount();
+	});
 
 	onMount(() => {
 		// set up media session handlers for system controls (CarPlay, lock screen, etc.)
@@ -255,11 +257,15 @@
 		const skips = !player.radio;
 		navigator.mediaSession.setActionHandler(
 			'seekbackward',
-			skips ? (details) => queue.seekBy(-(details.seekOffset ?? skipStepSeconds(player.duration))) : null
+			skips
+				? (details) => queue.seekBy(-(details.seekOffset ?? skipStepSeconds(player.duration)))
+				: null
 		);
 		navigator.mediaSession.setActionHandler(
 			'seekforward',
-			skips ? (details) => queue.seekBy(details.seekOffset ?? skipStepSeconds(player.duration)) : null
+			skips
+				? (details) => queue.seekBy(details.seekOffset ?? skipStepSeconds(player.duration))
+				: null
 		);
 	});
 
@@ -375,8 +381,7 @@
 				// the queue may have advanced or jam toggled while we awaited.
 				// if so, this resolution is for a track we no longer care
 				// about; throw away any blob it owns rather than caching it.
-				const stillWanted =
-					queue.autoAdvanceTrack?.id === next.id && !jam.active;
+				const stillWanted = queue.autoAdvanceTrack?.id === next.id && !jam.active;
 				if (!stillWanted) {
 					if (resolved.kind === 'ready' && resolved.ownsBlob) {
 						URL.revokeObjectURL(resolved.src);
@@ -419,12 +424,7 @@
 				// progress persistence stays paused until this flips true.
 				const pendingSeek =
 					player.pendingSeek?.trackId === resolved.trackId ? player.pendingSeek : null;
-				if (
-					!pendingSeek &&
-					!positionRestored &&
-					queue.progressMs > 0 &&
-					player.audioElement
-				) {
+				if (!pendingSeek && !positionRestored && queue.progressMs > 0 && player.audioElement) {
 					const positionSec = queue.progressMs / 1000;
 					// don't restore if near the end (within 5s of duration)
 					if (player.duration === 0 || positionSec < player.duration - 5) {
@@ -514,10 +514,7 @@
 		// track+file to the audio element. when it has, the loader's job
 		// is just to rebase its bookkeeping — re-running the async fetch
 		// would trample the in-flight playback.
-		if (
-			attachedTrackId === trackToLoad.id &&
-			attachedFileId === trackToLoad.file_id
-		) {
+		if (attachedTrackId === trackToLoad.id && attachedFileId === trackToLoad.file_id) {
 			previousTrackId = trackToLoad.id;
 			previousFileId = trackToLoad.file_id;
 			return;
@@ -613,13 +610,25 @@
 
 		if (player.paused) {
 			player.audioElement.pause();
-		} else {
-			player.audioElement.play().catch((err: Error) => {
+		} else if (player.audioElement.paused) {
+			const element = player.audioElement;
+			const source = element.src;
+			const assignedRadio = untrack(() => player.radio);
+			element.play().catch((err: Error) => {
+				if (err.name === 'AbortError' || element.src !== source || player.radio !== assignedRadio)
+					return;
 				console.error('[player] playback failed:', err?.name, err?.message);
 				player.paused = true;
 			});
 		}
 	});
+
+	function syncPlaybackState(event: Event & { currentTarget: HTMLAudioElement }): void {
+		if (jam.active) return;
+		const element = event.currentTarget;
+		if (player.radio && element.ended) return;
+		player.paused = element.paused;
+	}
 
 	// sync queue.currentTrack with player
 	let previousQueueIndex = $state<number>(-1);
@@ -872,7 +881,6 @@
 		player.currentTrack = next;
 		queue.next();
 	}
-
 </script>
 
 <audio
@@ -880,8 +888,8 @@
 	bind:currentTime={player.currentTime}
 	bind:duration={player.duration}
 	bind:volume={player.volume}
-	onplay={() => { if (!jam.active) player.paused = false; }}
-	onpause={() => { if (!jam.active) player.paused = true; }}
+	onplay={syncPlaybackState}
+	onpause={syncPlaybackState}
 	onended={() => (player.radio ? radio.onEnded() : handleTrackEnded())}
 	onerror={() => {
 		// a src that resolved `ready` but failed at decode/playback time (dead url
@@ -897,7 +905,17 @@
 	<div class="player" class:jam-active={jam.active} class:is-playing={!player.paused}>
 		{#if jam.active && !player.radio}
 			<div class="jam-stripe-label">
-				<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>{#if jam.isOutputDevice}<path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>{/if}</svg>
+				<svg
+					width="10"
+					height="10"
+					viewBox="0 0 24 24"
+					fill="none"
+					stroke="currentColor"
+					stroke-width="2.5"
+					><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"
+					></polygon>{#if jam.isOutputDevice}<path d="M15.54 8.46a5 5 0 0 1 0 7.07"
+						></path>{/if}</svg
+				>
 				{#if jam.outputMode === 'everyone'}
 					<span class="muted">everyone plays</span>
 				{:else if jam.isOutputDevice}
@@ -932,7 +950,10 @@
 					{/if}
 				{/snippet}
 			</TrackInfo>
-			<PlaybackControls radioMode={Boolean(player.radio)} trailing={onToggleQueue ? queueButton : undefined} />
+			<PlaybackControls
+				radioMode={Boolean(player.radio)}
+				trailing={onToggleQueue ? queueButton : undefined}
+			/>
 			<div class="player-right">
 				{#if onToggleQueue}
 					{@render queueButton()}
@@ -952,7 +973,15 @@
 		aria-label="toggle queue (Q)"
 		title={queueOpen ? 'hide queue (Q)' : 'show queue (Q)'}
 	>
-		<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+		<svg
+			width="18"
+			height="18"
+			viewBox="0 0 24 24"
+			fill="none"
+			stroke="currentColor"
+			stroke-width="2"
+			stroke-linecap="round"
+		>
 			<line x1="3" y1="6" x2="21" y2="6"></line>
 			<line x1="3" y1="12" x2="21" y2="12"></line>
 			<line x1="3" y1="18" x2="21" y2="18"></line>
@@ -979,8 +1008,31 @@
 		--top-bar-color: var(--accent);
 	}
 
-	.player::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px; background: var(--top-bar-color); opacity: 0.32; filter: saturate(0.9) brightness(0.75); box-shadow: 0 0 0 transparent; transition: opacity 0.15s ease-out, filter 0.15s ease-out, box-shadow 0.2s ease-out; pointer-events: none; z-index: 2; }
-	.player.is-playing::before { opacity: 0.95; filter: saturate(1.25) brightness(1.28); box-shadow: 0 0 6px color-mix(in srgb, var(--accent) 65%, transparent), 0 0 14px color-mix(in srgb, var(--accent) 45%, transparent); }
+	.player::before {
+		content: '';
+		position: absolute;
+		top: 0;
+		left: 0;
+		right: 0;
+		height: 1px;
+		background: var(--top-bar-color);
+		opacity: 0.32;
+		filter: saturate(0.9) brightness(0.75);
+		box-shadow: 0 0 0 transparent;
+		transition:
+			opacity 0.15s ease-out,
+			filter 0.15s ease-out,
+			box-shadow 0.2s ease-out;
+		pointer-events: none;
+		z-index: 2;
+	}
+	.player.is-playing::before {
+		opacity: 0.95;
+		filter: saturate(1.25) brightness(1.28);
+		box-shadow:
+			0 0 6px color-mix(in srgb, var(--accent) 65%, transparent),
+			0 0 14px color-mix(in srgb, var(--accent) 45%, transparent);
+	}
 
 	/* track on the left, transport + scrubber centred, queue and volume on the right */
 	.player-content {
@@ -1038,7 +1090,9 @@
 		outline-offset: 2px;
 	}
 
-	.player.jam-active { --top-bar-color: linear-gradient(90deg, #ff6b6b, #ffd93d, #6bcb77, #4d96ff, #9b59b6, #ff6b6b); }
+	.player.jam-active {
+		--top-bar-color: linear-gradient(90deg, #ff6b6b, #ffd93d, #6bcb77, #4d96ff, #9b59b6, #ff6b6b);
+	}
 
 	.jam-stripe-label {
 		position: absolute;

@@ -309,7 +309,7 @@ class Radio {
 	onEnded(): void {
 		const next = this.state?.up_next[0];
 		if (next && player.radio && this.state) {
-			player.playRadio(this.toNowPlaying(next, 0));
+			player.playRadio(this.toNowPlaying(next, 0), { autoplay: !player.paused });
 			// optimistically advance the displayed state so the artwork + title swap
 			// to the new track immediately, instead of lagging on the background fetch
 			this.state = { ...this.state, current: next, up_next: this.state.up_next.slice(1) };

@@ -80,3 +80,27 @@ The correction is a follow-up squash commit because #2097 already merged.
 Revert the correction to restore that Svelte page; revert #2097 as well to remove
 the presence endpoints and restore the original radio. No persistent data needs reversal: old leases
 expire within a minute and no deployment configuration changes are required.
+
+## playback transitions and OBS compatibility
+
+Browser audio events are queued: a `pause` from the previous source can arrive
+after the successor has started. The global player reads the element's current
+paused state and ignores the natural end pause in radio mode. Rejected `play()`
+promises from aborted or superseded sources cannot pause the new source. This
+keeps the UI, listener presence, and Media Session playback state consistent at
+track boundaries. A user pause and a genuine current-source failure still pause.
+
+Eli Mallon's [#1592](https://github.com/zzstoatzz/plyr.fm/pull/1592) added the full
+`/radio?autoplay=1` page for an OBS browser-source overlay. Preserve the deferred,
+one-shot attempt; executing it synchronously inside the reactive effect previously
+caused a play/pause loop. Missing autoplay or `autoplay=0` stays paused. A blocked
+autoplay attempt never retries itself, and a later user pause must stay paused.
+Station paths compose with the parameter (`/radio/fresh?autoplay=1`).
+
+[#1593](https://github.com/zzstoatzz/plyr.fm/pull/1593) separately added the same
+parameter to `/embed/radio?station=fresh&autoplay=1`. That iframe still owns its
+local player; source-load pauses preserve its listening intent, while explicit
+pause cancels it. The full page uses catalog-only state; the embed and public
+`/radio/state` and `/radio/state.json` contracts remain unchanged. Tests mount the
+real page/global player and compact widget, covering both autoplay values and
+track changes.

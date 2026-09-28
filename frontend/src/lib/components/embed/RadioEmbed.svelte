@@ -24,6 +24,7 @@
 	let station = $state<string | null>(null);
 	let switching = $state(false);
 	let pollTimer: number | null = null;
+	let loadingSource: string | null = null;
 
 	let current: RadioTrack | null = $derived(radioState?.current ?? null);
 	let activeSlug = $derived(radioState?.station_slug ?? station);
@@ -34,6 +35,22 @@
 		return Math.min(fetched.current?.duration ?? 0, fetched.progress_seconds + drift);
 	}
 
+	function playAudio(el: HTMLAudioElement): void {
+		const source = el.src;
+		void el
+			.play()
+			.then(() => {
+				if (el.src === source && tunedIn) {
+					loadingSource = null;
+					playing = !el.paused;
+				}
+			})
+			.catch((error: Error) => {
+				if (error.name === 'AbortError' || el.src !== source || !tunedIn) return;
+				playing = tunedIn = false;
+			});
+	}
+
 	function syncAudio(fetched: RadioState) {
 		const el = audioElement;
 		if (!el || !fetched.current) return;
@@ -41,12 +58,14 @@
 		const changed = el.src !== fetched.current.stream_url;
 		if (changed) {
 			el.src = fetched.current.stream_url;
+			loadingSource = el.src;
 			el.load();
 		}
 		const seek = () => {
-			if (!el || !fetched.current) return;
+			if (!fetched.current || el.src !== fetched.current.stream_url) return;
+			loadingSource = null;
 			if (Number.isFinite(target)) el.currentTime = Math.min(target, fetched.current.duration);
-			if (tunedIn) el.play().catch(() => (playing = tunedIn = false));
+			if (tunedIn) playAudio(el);
 		};
 		if (el.readyState >= 1 && !changed) {
 			if (Math.abs(el.currentTime - target) > 5) seek();
@@ -103,16 +122,15 @@
 	function toggle() {
 		const el = audioElement;
 		if (!el || !current) return;
-		if (playing) {
+		if (tunedIn) {
 			tunedIn = false;
+			playing = false;
 			el.pause();
 		} else {
 			// user gesture — safe to start audio
 			tunedIn = true;
 			syncAudio(radioState!);
-			el.play()
-				.then(() => (playing = true))
-				.catch(() => (playing = tunedIn = false));
+			playAudio(el);
 		}
 	}
 
@@ -149,12 +167,11 @@
 	bind:this={audioElement}
 	preload="metadata"
 	onended={(e) => advance(e.currentTarget.src)}
-	onplay={() => (playing = true)}
+	onplay={(e) => (playing = !e.currentTarget.paused)}
 	onpause={(e) => {
-		playing = false;
-		// pause fired by reaching the end of a track keeps the listener tuned
-		// in; only an explicit pause (media keys, OS controls) drops intent
-		if (!e.currentTarget.ended) tunedIn = false;
+		const el = e.currentTarget;
+		if (!el.paused || el.ended || loadingSource === el.src) return;
+		playing = tunedIn = false;
 	}}
 ></audio>
 
