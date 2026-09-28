@@ -1,0 +1,7 @@
+# Deploy the reviewed main-branch configuration through GitHub Actions.
+deploy:
+    gh workflow run deploy-radio.yml --ref main -R zzstoatzz/plyr.fm
+
+status:
+    fly status -a plyr-radio
+    gh run list --workflow deploy-radio.yml -R zzstoatzz/plyr.fm --limit 3

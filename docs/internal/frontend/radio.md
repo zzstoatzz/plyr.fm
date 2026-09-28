@@ -20,12 +20,16 @@ artwork remains hidden unless allowed by the existing preference.
 The five station slugs and sampling policies stay in `api/radio/stations.py`.
 The client requests `/radio/state?catalog_only=true`, excluding the external
 firehose broadcast. The default public state API retains its existing live-stream
-behavior for older clients. No database migration or new Fly service is needed.
+behavior for older clients. The native UI needs no database migration or extra
+service; outbound syndication uses the separate adapter described below.
 
-The standalone fork retains the signed station identity and PDS prototype. This
-hosted UI does not announce itself to a sister directory or share presence with
-other radios. Deploying that bridge remains separate work. Only our stations are
-listed. Upstream chat, equalizer, waveform, and stream-overlay controls are hidden
+The fork also runs as a separate outbound syndication adapter: four station
+identities are advertised to the sister-radio directory, with schedules and
+authenticated listener avatars supplied by plyr. Audio redirects to the existing
+CDN. Remote listeners count anonymously; client-supplied DIDs are ignored. Only
+our stations are listed in the native tuner. See the
+[syndication runbook](../../../services/radio/README.md) for deployment,
+verification, restrictions, and rollback. Upstream chat, equalizer, waveform, and stream-overlay controls are hidden
 because this host does not supply those features; the heart uses plyr's existing
 like action, and the pop-out opens the existing native radio embed. See the
 [research](../../research/2026-09-27-ana-radio-integration.md) for protocol findings.
