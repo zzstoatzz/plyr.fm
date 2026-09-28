@@ -226,7 +226,7 @@ class Radio {
 
 	async loadState(): Promise<void> {
 		try {
-			const query = `?catalog_only=true${this.station ? `&station=${encodeURIComponent(this.station)}` : ''}`;
+			const query = `?catalog_only=${this.station !== 'firehose'}${this.station ? `&station=${encodeURIComponent(this.station)}` : ''}`;
 			// send the session cookie so the server can flag `liked` per track for
 			// signed-in listeners (anonymous requests are unaffected).
 			const response = await fetch(`${API_URL}/radio/state${query}`, {

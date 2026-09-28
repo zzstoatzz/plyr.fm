@@ -111,6 +111,34 @@ describe('the actual sister-radio host', () => {
 		expect(input.likeTrack).toHaveBeenCalledOnce();
 		mounted.update(radioIntegration({ ...input, liked: false }));
 		expect(button('like this track').getAttribute('aria-pressed')).toBe('false');
+
+		mounted.update(
+			radioIntegration({
+				...input,
+				selected: 'firehose',
+				state: {
+					...state,
+					station: 'firehose',
+					station_slug: 'firehose',
+					current: null,
+					rotation: [],
+					up_next: [],
+					live: {
+						stream_url: 'https://relay.test/live.m3u8',
+						kind: 'hls',
+						started_at: null,
+						artwork_url: 'https://relay.test/cover.png'
+					}
+				}
+			})
+		);
+		expect(root.querySelector('[aria-label="like this track"]')).toBeNull();
+		expect(root.querySelector('.nowplaying-time-simple')?.textContent).toBe('live');
+		expect(button('listen live')).not.toBeNull();
+		button('listen live').click();
+		expect(input.play).toHaveBeenCalledTimes(2);
+		expect(root.textContent).not.toContain('off air');
+		mounted.update(radioIntegration(input));
 		button('tune in to fresh').click();
 		expect(input.selectStation).toHaveBeenCalledWith('fresh');
 		mounted.update(

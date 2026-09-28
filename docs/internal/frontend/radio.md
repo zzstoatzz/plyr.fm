@@ -18,8 +18,8 @@ second session, upload path, or outside station directory request. Sensitive
 artwork remains hidden unless allowed by the existing preference.
 
 The five station slugs and sampling policies stay in `api/radio/stations.py`.
-The client requests `/radio/state?catalog_only=true`, excluding the external
-firehose broadcast. The default public state API retains its existing live-stream
+The client requests `/radio/state?catalog_only=true` except for the explicit
+`firehose` station, which allows its existing curated HLS broadcast. The default public state API retains its existing live-stream
 behavior for older clients. The native UI needs no database migration or extra
 service; outbound syndication uses the separate adapter described below.
 
@@ -77,7 +77,7 @@ written by this presence service.
 Run `just backend test` for real Redis/session/WebSocket tests and the existing
 station policy tests. Run frontend check, lint, and tests. On staging, verify
 play/pause counts, navigation with continuing audio, font/accent settings, mobile
-layout, and an empty firehose station. Authenticated avatar display also requires
+layout, and Firehose live playback plus its off-air state. Authenticated avatar display also requires
 a real staging login; backend tests exercise real cookie sessions and profiles.
 
 The correction is a follow-up squash commit because #2097 already merged.
@@ -113,7 +113,7 @@ Station paths compose with the parameter (`/radio/fresh?autoplay=1`).
 [#1593](https://github.com/zzstoatzz/plyr.fm/pull/1593) separately added the same
 parameter to `/embed/radio?station=fresh&autoplay=1`. That iframe still owns its
 local player; source-load pauses preserve its listening intent, while explicit
-pause cancels it. The full page uses catalog-only state; the embed and public
+pause cancels it. The full page uses catalog-only state except for Firehose; the embed and public
 `/radio/state` and `/radio/state.json` contracts remain unchanged. Tests mount the
 real page/global player and compact widget, covering both autoplay values and
 track changes.
@@ -142,3 +142,16 @@ the audio element; station synchronization still sets its own playback position.
 The compact radio embed owns a separate audio element and currently does not
 configure Media Session. Its browser-default controls are not covered by the
 main player's capability policy.
+
+### Firehose live exception
+
+Firehose is a continuous HLS broadcast from the existing server-curated source,
+not a catalog track. The native host supplies a display-only live song, broadcast
+artwork, and a live indicator; it hides track likes, uploader attribution, and
+the track-duration display. The shared player retains its existing HLS transport.
+Other native stations remain catalog-only, and no arbitrary source URL input is
+added. The outbound sister-radio adapter still advertises only the four catalog
+stations; this exception does not change its track-based protocol.
+
+Firehose's pop-out opens its native page, which supports HLS. The older compact
+radio embed only handles catalog tracks and is unchanged.

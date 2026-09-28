@@ -53,6 +53,22 @@ export function radioIntegration(input: {
 		addedByDid: track.artist_did,
 		createdAt: Date.parse(track.created_at) / 1000
 	});
+	const broadcast = input.state?.live;
+	const liveSong: Song | null = broadcast
+		? {
+				id: `live:${input.selected}`,
+				title: input.state?.station ?? input.selected,
+				artist:
+					input.stations.find((station) => station.slug === input.selected)?.description ??
+					'live broadcast',
+				durationSeconds: null,
+				hasCover: Boolean(broadcast.artwork_url),
+				addedByDid: '',
+				createdAt: broadcast.started_at ? Date.parse(broadcast.started_at) / 1000 : 0
+			}
+		: null;
+	if (liveSong) covers[liveSong.id] = broadcast?.artwork_url ?? '';
+	const currentSong = liveSong ?? (input.state?.current ? song(input.state.current) : null);
 	const stations = input.stations.map((station) => ({
 		did: '',
 		apiBase: '',
@@ -63,15 +79,16 @@ export function radioIntegration(input: {
 	}));
 	return {
 		...input,
+		live: Boolean(broadcast),
 		snapshot: input.state
 			? {
 					state: {
-						currentSongId: input.state.current ? String(input.state.current.id) : null,
-						status: input.state.current ? 'playing' : 'stopped',
+						currentSongId: currentSong?.id ?? null,
+						status: currentSong ? 'playing' : 'stopped',
 						positionSeconds: input.position
 					},
-					currentSong: input.state.current ? song(input.state.current) : null,
-					queue: input.state.up_next.map((track, index) => ({
+					currentSong,
+					queue: (broadcast ? [] : input.state.up_next).map((track, index) => ({
 						id: `${index}:${track.id}`,
 						position: index,
 						queuedByDid: track.artist_did,
@@ -90,7 +107,9 @@ export function radioIntegration(input: {
 		listenerDids: input.listeners?.listeners.map((listener) => listener.did) ?? [],
 		profiles,
 		covers,
-		embedUrl: `${input.origin}/embed/radio?station=${encodeURIComponent(input.selected)}`,
+		embedUrl: broadcast
+			? `${input.origin}/radio/${encodeURIComponent(input.selected)}`
+			: `${input.origin}/embed/radio?station=${encodeURIComponent(input.selected)}`,
 		selectStation: (url) => {
 			const index = stations.findIndex((station) => station.url === url);
 			if (index >= 0) input.selectStation(input.stations[index].slug);

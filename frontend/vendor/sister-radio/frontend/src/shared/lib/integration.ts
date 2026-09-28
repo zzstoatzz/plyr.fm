@@ -8,6 +8,7 @@ export interface RadioIntegration {
   selectedStationUrl: string
   playing: boolean
   liked: boolean
+  live?: boolean
   position: number
   volume: number
   loading: boolean

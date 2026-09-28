@@ -141,3 +141,22 @@ describe('switching away from a playing station', () => {
 		radio.stop();
 	});
 });
+
+it('requests the live broadcast only for the explicit firehose exception', async () => {
+	const fetchState = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+		const url = new URL(String(input));
+		return new Response(
+			JSON.stringify({
+				...liveStateWithNoRotation(),
+				station_slug: url.searchParams.get('station'),
+				live: null
+			})
+		);
+	});
+	for (const station of ['firehose', 'loved', 'fresh', 'deep-cuts', 'slop']) {
+		radio.station = station;
+		await radio.loadState();
+		const url = new URL(String(fetchState.mock.calls.at(-1)?.[0]));
+		expect(url.searchParams.get('catalog_only')).toBe(station === 'firehose' ? 'false' : 'true');
+	}
+});

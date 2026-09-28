@@ -2,7 +2,7 @@
 
 Source: https://tangled.org/zzstoatzz.io/plyr-radio
 Forked from https://tangled.org/okami.mom/sister-radio.
-Pinned fork revision: 545d38e0e9538eafb924b015c390d5708b0bf20f.
+Pinned fork revision: 7007e0d8a90d8d245e4da125bd124e419eb44440.
 
 The SolidJS radio page and its CSS are retained here. The host integration supplies
 plyr.fm playback, station schedules, session-authenticated presence, and appearance

@@ -1350,7 +1350,7 @@ export default function RadioPage(props: RadioPageProps) {
             each={upNextPaging.paged()}
             fallback={
               <li class="muted up-next-rotation-peek">
-                <Show when={rotationInfo()?.upNext} fallback={<>queue is empty</>}>
+                <Show when={rotationInfo()?.upNext} fallback={<>{props.integration?.live ? 'continuous live broadcast' : 'queue is empty'}</>}>
                   {(next) => <>next from rotation: {next().title} — {next().artist}</>}
                 </Show>
               </li>
@@ -1633,9 +1633,11 @@ export default function RadioPage(props: RadioPageProps) {
             </span>
             <Show when={!props.overlay}>
               <div class="embed-actions">
+                <Show when={!props.integration?.live}>
                 <button type="button" class="nowplaying-action" classList={{ 'is-liked': props.integration?.liked }} aria-pressed={props.integration ? props.integration.liked : undefined} aria-label={heartLabel()} title={heartLabel()} onClick={sendHeart}>
                   <Heart size={18} strokeWidth={1.8} fill={props.integration?.liked ? 'currentColor' : 'none'} />
                 </button>
+                </Show>
                 <Show
                   when={isAudioPlaying()}
                   fallback={
@@ -1713,9 +1715,11 @@ export default function RadioPage(props: RadioPageProps) {
             </h1>
             <Show when={currentSong()}>
               <div class="nowplaying-actions">
+                <Show when={!props.integration?.live}>
                 <button type="button" class="nowplaying-action" classList={{ 'is-liked': props.integration?.liked }} aria-pressed={props.integration ? props.integration.liked : undefined} aria-label={heartLabel()} title={heartLabel()} onClick={sendHeart}>
                   <Heart size={18} strokeWidth={1.8} fill={props.integration?.liked ? 'currentColor' : 'none'} />
                 </button>
+                </Show>
                 <Show when={shareTrack()}>
                   {(track) => (
                     <Show
@@ -1772,7 +1776,10 @@ export default function RadioPage(props: RadioPageProps) {
           </div>
           <div class="nowplaying-artist-time-row">
             <p class="subtitle nowplaying-artist-album" title={artistAlbumLine()}>{artistAlbumLine()}</p>
-            <Show when={currentSong()?.durationSeconds}>
+            <Show when={props.integration?.live}>
+              <p class="nowplaying-time-simple">live</p>
+            </Show>
+            <Show when={!props.integration?.live && currentSong()?.durationSeconds}>
               <p class="nowplaying-time-simple">
                 {formatClock(liveDisplayPosition())} / {formatClock(currentSong()?.durationSeconds)}
               </p>
@@ -1877,7 +1884,7 @@ export default function RadioPage(props: RadioPageProps) {
                 </ul>
               </Show>
             </div>
-            <Show when={currentSong()}>
+            <Show when={!props.integration?.live && currentSong()}>
               {(song) => {
                 const profile = () => profileFor(song().addedByDid)
                 return (
