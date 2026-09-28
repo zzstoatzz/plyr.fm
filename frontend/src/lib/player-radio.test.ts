@@ -77,9 +77,7 @@ describe('playRadio under autoplay policy', () => {
 	// the radio on-air ("stop" shown) but silent (firehose → deep-cuts, 2026-08-04)
 	it('ignores a superseded load play() rejection during a station flip', async () => {
 		let rejectFirst: (err: DOMException) => void = () => {};
-		playSpy.mockImplementationOnce(
-			() => new Promise((_, reject) => (rejectFirst = reject))
-		);
+		playSpy.mockImplementationOnce(() => new Promise((_, reject) => (rejectFirst = reject)));
 		player.playRadio(nowPlaying(1));
 
 		playSpy.mockResolvedValueOnce(undefined);
@@ -160,9 +158,7 @@ describe('station-position seek lifecycle', () => {
 // used to get armed — so radio listening never called /play and therefore never
 // counted plays or dispatched teal scrobbles for signed-in listeners.
 describe('play counting in radio mode', () => {
-	const fetchSpy = vi.fn((..._args: Parameters<typeof fetch>) =>
-		Promise.resolve(new Response())
-	);
+	const fetchSpy = vi.fn((..._args: Parameters<typeof fetch>) => Promise.resolve(new Response()));
 
 	beforeEach(() => {
 		fetchSpy.mockClear();
@@ -190,6 +186,13 @@ describe('play counting in radio mode', () => {
 		player.playRadio(nowPlaying(42));
 		player.duration = 180;
 		listen(10);
+		expect(fetchSpy).not.toHaveBeenCalled();
+	});
+
+	it.each([0, 42])('does not count or scrobble a live broadcast using display track %i', (id) => {
+		player.playRadio({ ...nowPlaying(id), live: true });
+		player.duration = Infinity;
+		listen(40);
 		expect(fetchSpy).not.toHaveBeenCalled();
 	});
 

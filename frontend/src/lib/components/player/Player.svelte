@@ -308,10 +308,15 @@
 
 	// report now-playing state for external integrations (teal.fm/Piper)
 	$effect(() => {
-		if (!player.currentTrack || !player.duration) return;
+		if (player.radio?.live) {
+			void nowPlaying.clear();
+			return;
+		}
+		const track = player.radio?.track ?? player.currentTrack;
+		if (!track || !player.duration || !Number.isFinite(player.duration)) return;
 
 		nowPlaying.report(
-			player.currentTrack,
+			track,
 			!player.paused,
 			player.currentTime * 1000, // convert to ms
 			player.duration * 1000

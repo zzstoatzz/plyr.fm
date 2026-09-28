@@ -155,3 +155,14 @@ stations; this exception does not change its track-based protocol.
 
 Firehose's pop-out opens its native page, which supports HLS. The older compact
 radio embed only handles catalog tracks and is unchanged.
+
+### Listening reports
+
+Catalog radio uses the shared player's listened-time threshold and authenticated
+track-play endpoint, preserving play counts and opt-in Teal scrobbles. Each new
+on-air track re-arms that threshold. The native player also reports the radio
+track and pause state to the now-playing feed used by Piper.
+
+Continuous live broadcasts have no catalog track to count or scrobble. Entering
+Firehose clears the previous now-playing report and skips track-play requests,
+including when a catalog track is retained only as broadcast display metadata.

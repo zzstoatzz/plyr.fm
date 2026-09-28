@@ -289,7 +289,7 @@ class PlayerState {
 	}
 
 	incrementPlayCount() {
-		if (this._playCountLocked) return;
+		if (this._playCountLocked || this.radio?.live) return;
 		// radio plays through the same element — count the on-air track so radio
 		// listening feeds play counts and teal scrobbles like queue playback does
 		const track = this.radio?.track ?? this.currentTrack;

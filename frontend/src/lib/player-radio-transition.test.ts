@@ -6,6 +6,8 @@ import { page } from '$app/stores';
 import { get } from 'svelte/store';
 import { player } from './player.svelte';
 import { queue } from './queue.svelte';
+import { auth } from './auth.svelte';
+import { nowPlaying } from './now-playing.svelte';
 import { radio, type RadioTrack, type RadioState } from './radio.svelte';
 
 const track = (id: number): RadioTrack => ({
@@ -376,5 +378,57 @@ describe('radio media-session capabilities', () => {
 		expect(audio.currentTime).toBe(3);
 		queue.seekBy(5);
 		expect(audio.currentTime).toBe(3);
+	});
+});
+
+describe('radio listening integrations', () => {
+	afterEach(async () => {
+		await nowPlaying.clear();
+		auth.isAuthenticated = false;
+		vi.useRealTimers();
+	});
+
+	it('reports catalog radio to external now-playing integrations and clears it for live broadcasts', async () => {
+		vi.useFakeTimers();
+		vi.mocked(fetch).mockClear();
+		vi.mocked(fetch).mockImplementation(
+			async (url) =>
+				new Response(JSON.stringify(String(url).includes('/likes') ? { tracks: [] } : state()))
+		);
+		auth.isAuthenticated = true;
+		player.duration = 10;
+		player.currentTime = 2;
+		flushSync();
+		await vi.advanceTimersByTimeAsync(11000);
+		const posts = () =>
+			vi
+				.mocked(fetch)
+				.mock.calls.filter(
+					([url, options]) => String(url).endsWith('/now-playing/') && options?.method === 'POST'
+				);
+		expect(posts().length).toBeGreaterThan(0);
+		expect(JSON.parse(String(posts().at(-1)?.[1]?.body))).toMatchObject({
+			track_id: 1,
+			is_playing: true
+		});
+		player.paused = true;
+		flushSync();
+		await vi.advanceTimersByTimeAsync(1100);
+		expect(JSON.parse(String(posts().at(-1)?.[1]?.body))).toMatchObject({
+			track_id: 1,
+			is_playing: false
+		});
+		const postCount = posts().length;
+		player.radio = { ...player.radio!, live: true };
+		flushSync();
+		await vi.advanceTimersByTimeAsync(11000);
+		expect(posts()).toHaveLength(postCount);
+		expect(
+			vi
+				.mocked(fetch)
+				.mock.calls.some(
+					([url, options]) => String(url).endsWith('/now-playing/') && options?.method === 'DELETE'
+				)
+		).toBe(true);
 	});
 });
