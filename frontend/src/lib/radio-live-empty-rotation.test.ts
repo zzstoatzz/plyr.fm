@@ -84,7 +84,12 @@ describe('an empty remembered station must not strand bare /radio', () => {
 				JSON.stringify(
 					empty
 						? { ...liveStateWithNoRotation(), live: null }
-						: { ...liveStateWithNoRotation(), live: null, station_slug: 'loved', current: { id: 1 } }
+						: {
+								...liveStateWithNoRotation(),
+								live: null,
+								station_slug: 'loved',
+								current: { id: 1 }
+							}
 				),
 				{ status: 200, headers: { 'content-type': 'application/json' } }
 			);
@@ -112,5 +117,27 @@ describe('an empty remembered station must not strand bare /radio', () => {
 		// being told a station is off air beats being silently shown a different one
 		expect(radio.station).toBe('firehose');
 		expect(localStorage.getItem('plyr_radio_station')).toBe('firehose');
+	});
+});
+
+describe('switching away from a playing station', () => {
+	it('stops the old audio when the next catalog station is empty', async () => {
+		player.audioElement = document.createElement('audio');
+		radio.state = liveStateWithNoRotation();
+		radio.tuneIn();
+		expect(player.radio).not.toBeNull();
+		const fetchState = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+			new Response(
+				JSON.stringify({ ...liveStateWithNoRotation(), station_slug: 'fresh', live: null }),
+				{
+					status: 200,
+					headers: { 'content-type': 'application/json' }
+				}
+			)
+		);
+		await radio.show('fresh');
+		expect(player.radio).toBeNull();
+		expect(fetchState.mock.calls.at(-1)?.[0]).toContain('catalog_only=true');
+		radio.stop();
 	});
 });

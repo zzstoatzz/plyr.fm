@@ -2,6 +2,7 @@
 	import favicon from '$lib/assets/favicon.png';
 	import { APP_NAME, APP_TAGLINE, APP_CANONICAL_URL } from '$lib/branding';
 	import Player from '$lib/components/Player.svelte';
+	import PresenceController from '$lib/components/radio/PresenceController.svelte';
 	import Toast from '$lib/components/Toast.svelte';
 	import Queue from '$lib/components/Queue.svelte';
 	import SearchModal from '$lib/components/SearchModal.svelte';
@@ -447,6 +448,8 @@
 		safeLocalStorage.setItem('showQueue', showQueue.toString());
 	}
 </script>
+
+<PresenceController />
 
 <svelte:head>
 	<link rel="icon" href={favicon} />

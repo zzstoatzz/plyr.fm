@@ -6,6 +6,7 @@ import { API_URL } from './config';
 // strip renders `track` (the on-air track) with a radioMode flag. no second
 // audio element, no second strip.
 export interface RadioNowPlaying {
+	stationSlug?: string;
 	/** the on-air track, rendered in the normal player strip (TrackInfo) */
 	track: Track;
 	stream_url: string;

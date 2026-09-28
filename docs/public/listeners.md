@@ -86,6 +86,25 @@ the player stays at the bottom while you browse. use its heart to like the curre
 
 open the queue to reorder upcoming tracks or shuffle them. enable **keep playing** in [settings](https://plyr.fm/settings) to continue with picks from your For You feed when your queue ends.
 
+## radio
+
+[radio](https://plyr.fm/radio) plays a shared schedule: everyone on the same
+station hears the same point in the track. choose loved, fresh, deep-cuts, slop,
+or firehose, then press play. playback continues while you browse plyr.fm.
+
+the updated radio is available first at [stg.plyr.fm/radio](https://stg.plyr.fm/radio).
+it uses your existing font, theme, and accent settings. its tuner includes only
+plyr.fm stations, playing eligible tracks from the catalog. there is no separate
+radio upload or arbitrary stream URL input. firehose keeps its station link but
+is off air when it has no eligible archived tracks; this version does not relay
+its external live stream.
+
+while playing, signed-in listeners appear with their public profile and avatar.
+pausing or leaving playback removes you from the station; a lost connection can
+take up to a minute to disappear. signed-out listeners contribute an anonymous
+count. opening the radio page without playing does not add you. multiple tabs
+for the same signed-in account count once per station.
+
 ## keyboard shortcuts
 
 | key | action |

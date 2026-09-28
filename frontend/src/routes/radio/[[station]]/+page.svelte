@@ -3,1151 +3,503 @@
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import Header from '$lib/components/Header.svelte';
-	import { API_URL } from '$lib/config';
 	import { APP_NAME, APP_CANONICAL_URL } from '$lib/branding';
 	import { auth } from '$lib/auth.svelte';
+	import { player } from '$lib/player.svelte';
 	import { radio } from '$lib/radio.svelte';
-	import { horizontalSwipe } from '$lib/horizontal-swipe';
 	import TunerDial from '$lib/components/radio/TunerDial.svelte';
-	import AccentWash from '$lib/components/radio/AccentWash.svelte';
+	import Listeners from '$lib/components/radio/Listeners.svelte';
 	import ScrollingText from '$lib/components/ScrollingText.svelte';
-	import { extractArtworkAccent, type ArtworkAccent } from '$lib/utils/artwork-accent';
-	import WaveLoading from '$lib/components/WaveLoading.svelte';
 	import SensitiveImage from '$lib/components/SensitiveImage.svelte';
-	import { IMAGE_WIDTHS, resizedImageUrl } from '$lib/utils/display-image';
+	import WaveLoading from '$lib/components/WaveLoading.svelte';
 	import AddToMenu from '$lib/components/AddToMenu.svelte';
+	import { IMAGE_WIDTHS, resizedImageUrl } from '$lib/utils/display-image';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
-
-	const endpoint = `${API_URL}/radio/state`;
-	// the cover's own aspect ratio, read on load. drives the frame so a square
-	// cover reads square and a widescreen one reads wide — see `.art-link`.
-	let coverRatio = $state(1);
-
-	function readCoverRatio(event: Event) {
-		const img = event.currentTarget;
-		if (img instanceof HTMLImageElement && img.naturalHeight > 0) {
-			coverRatio = img.naturalWidth / img.naturalHeight;
-		}
-	}
-
-	// ambient accent from the on-air artwork. loads a thumbnail with CORS and
-	// samples it; any failure (host without ACAO, tainted canvas, no artwork)
-	// means no accent — the page keeps its neutral look.
-	let accent = $state<ArtworkAccent | null>(null);
-	let onAirArtworkUrl = $derived(
-		radio.current?.artwork_url ?? radio.state?.live?.artwork_url ?? null
-	);
-	$effect(() => {
-		const src = onAirArtworkUrl && resizedImageUrl(onAirArtworkUrl, IMAGE_WIDTHS.thumb);
-		if (!src) {
-			accent = null;
-			return;
-		}
-		let cancelled = false;
-		const image = new window.Image();
-		image.crossOrigin = 'anonymous';
-		image.src = src;
-		image.onload = () => {
-			if (cancelled) return;
-			try {
-				accent = extractArtworkAccent(image);
-			} catch {
-				accent = null;
-			}
-		};
-		image.onerror = () => {
-			if (!cancelled) accent = null;
-		};
-		return () => {
-			cancelled = true;
-			image.onload = null;
-			image.onerror = null;
-		};
-	});
-
-	// the URL path is the source of truth for the selected station (bookmarkable).
-	// `/radio` (no slug) shows the remembered/default station; `/radio/<slug>` pins it.
 	let stationParam = $derived($page.params.station ?? null);
-	let activeSlug = $derived(radio.state?.station_slug ?? radio.station);
+	let activeSlug = $derived(radio.state?.station_slug ?? radio.station ?? 'loved');
+	let listening = $derived(radio.active && !player.paused);
+	let title = $derived(
+		data.station ? `${data.station.name} · ${APP_NAME} radio` : `${APP_NAME} radio`
+	);
+	let description = $derived(data.station?.description ?? 'listen together to music from plyr.fm');
+	let progress = $derived(
+		radio.current?.duration
+			? Math.min(100, (radio.positionSeconds / radio.current.duration) * 100)
+			: 0
+	);
+	let autoplayRequested = $derived($page.url.searchParams.get('autoplay') === '1');
+	let autoTuned = false;
 
-	// react ONLY to the URL param. untrack so reads of radio.state inside show()
-	// don't subscribe this effect (that would re-fire on every state reload).
 	$effect(() => {
 		const slug = stationParam;
 		untrack(() => radio.show(slug));
 	});
-
-	// `?autoplay=1` tunes in automatically once the station's on-air track loads
-	// (same convention as the track embed). built for embeds like an OBS browser
-	// overlay where there's no chance to click "tune in". in a normal browser
-	// without a prior gesture the play() is blocked by autoplay policy and
-	// playRadio's catch quietly leaves it paused — no error, just no sound.
-	let autoplayRequested = $derived($page.url.searchParams.get('autoplay') === '1');
-	// fire once: tune in the moment a current track exists and we're not already on air.
-	let autoTuned = false;
 	$effect(() => {
-		if (!autoplayRequested || autoTuned) return;
-		if (!radio.hasSomethingOnAir || radio.active) return;
-		autoTuned = true;
-		// play/pause button infinite loops without setTimeout
-		setTimeout(() => radio.tuneIn(), 0);
+		if (autoplayRequested && !autoTuned && radio.hasSomethingOnAir && !radio.active) {
+			autoTuned = true;
+			setTimeout(() => radio.tuneIn(), 0);
+		}
 	});
 
-	/** select a station by navigating, so the URL (and bookmarks/back) stay in sync */
-	function tuneToStation(slug: string) {
-		goto(`/radio/${slug}`, { keepFocus: true, noScroll: true });
+	function selectStation(slug: string): void {
+		void goto(`/radio/${slug}`, { keepFocus: true, noScroll: true });
 	}
-
-	function flip(direction: 'next' | 'prev') {
-		const next = radio.nextStationSlug(direction);
-		if (next) tuneToStation(next);
+	function flip(direction: 'next' | 'prev'): void {
+		const slug = radio.nextStationSlug(direction);
+		if (slug) selectStation(slug);
 	}
-
-	function onKeydown(event: KeyboardEvent) {
-		if (event.metaKey || event.ctrlKey || event.altKey) return;
-		const target = event.target;
-		if (
-			target instanceof HTMLElement &&
-			(target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)
-		)
-			return;
-		if (event.key === 'ArrowRight') flip('next');
-		else if (event.key === 'ArrowLeft') flip('prev');
+	function togglePlayback(): void {
+		if (listening) player.audioElement?.pause();
+		else radio.tuneIn();
 	}
-
-	// link preview — a stable station identity, not a per-moment "now playing"
-	// (the on-air track changes constantly and scrapers cache the snapshot).
-	// per-station when the path names one (data.station, resolved server-side),
-	// else a concise generic radio card.
-	const RADIO_OG_IMAGE = `${APP_CANONICAL_URL}/icons/icon-512.png`;
-	let ogTitle = $derived(
-		data.station ? `${data.station.name} · ${APP_NAME} radio` : `${APP_NAME} radio`
-	);
-	let ogDescription = $derived(
-		data.station ? data.station.description : 'live radio from across plyr.fm'
-	);
-	let ogUrl = $derived(
-		data.station ? `${APP_CANONICAL_URL}/radio/${data.station.slug}` : `${APP_CANONICAL_URL}/radio`
-	);
-
-	async function handleLogout() {
+	function formatTime(seconds: number): string {
+		const value = Math.max(0, Math.floor(seconds));
+		return `${Math.floor(value / 60)}:${(value % 60).toString().padStart(2, '0')}`;
+	}
+	async function handleLogout(): Promise<void> {
 		await auth.logout();
 		window.location.href = '/';
 	}
-
-	let progressPercent = $derived(
-		radio.current && radio.current.duration > 0
-			? Math.min(100, (radio.positionSeconds / radio.current.duration) * 100)
-			: 0
-	);
-
-	function formatTime(seconds: number): string {
-		const t = Math.max(0, Math.floor(seconds));
-		return `${Math.floor(t / 60)}:${(t % 60).toString().padStart(2, '0')}`;
-	}
-
 	onMount(() => {
-		// lineup for the pills; the $effect above loads the selected station's state
-		if (radio.stations.length === 0) radio.loadStations();
+		if (!radio.stations.length) void radio.loadStations();
 	});
 </script>
 
 <svelte:head>
-	<title>{ogTitle}</title>
-	<meta name="description" content={ogDescription} />
-
-	<!-- Open Graph / Facebook -->
+	<title>{title}</title>
+	<meta name="description" content={description} />
+	<meta property="og:title" content={title} />
+	<meta property="og:description" content={description} />
 	<meta property="og:type" content="website" />
-	<meta property="og:title" content={ogTitle} />
-	<meta property="og:description" content={ogDescription} />
-	<meta property="og:url" content={ogUrl} />
-	<meta property="og:site_name" content={APP_NAME} />
-	<meta property="og:image" content={RADIO_OG_IMAGE} />
-	<meta property="og:image:secure_url" content={RADIO_OG_IMAGE} />
-	<meta property="og:image:width" content="512" />
-	<meta property="og:image:height" content="512" />
-	<meta property="og:image:alt" content="{APP_NAME} radio" />
-
-	<!-- Twitter -->
-	<meta name="twitter:card" content="summary" />
-	<meta name="twitter:title" content={ogTitle} />
-	<meta name="twitter:description" content={ogDescription} />
-	<meta name="twitter:image" content={RADIO_OG_IMAGE} />
+	<meta property="og:image" content={`${APP_CANONICAL_URL}/icons/icon-512.png`} />
+	<meta property="og:url" content={`${APP_CANONICAL_URL}/radio/${activeSlug}`} />
 </svelte:head>
-
-<svelte:window onkeydown={onKeydown} />
 
 <Header user={auth.user} isAuthenticated={auth.isAuthenticated} onLogout={handleLogout} />
 
-<AccentWash {accent} />
-
 <main class="radio-page">
-	<div class="tuner">
-	<section class="station">
-		{#if radio.loading && !radio.state}
-			<div class="status"><WaveLoading size="lg" message="tuning..." /></div>
-		{:else if radio.error}
-			<div class="status error">{radio.error}</div>
-		{:else if radio.hasSomethingOnAir}
-			<div class="radio-player" {@attach horizontalSwipe((dir) => flip(dir === 'left' ? 'next' : 'prev'))}>
-				<div class="station-title">
-					<div class="station-title-main">
-						<span class="live">live radio</span>
-						<span class="radio-mark" aria-hidden="true">
-							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-								<circle cx="12" cy="12" r="2" />
-								<path d="M16.24 7.76a6 6 0 0 1 0 8.49M7.76 16.24a6 6 0 0 1 0-8.49M19.07 4.93a10 10 0 0 1 0 14.14M4.93 19.07a10 10 0 0 1 0-14.14" />
-							</svg>
-						</span>
-					</div>
-					<div class="station-title-meta">
-						<span class="credit">inspired by <a href="https://radio.wisp.place" target="_blank" rel="noopener">radio.wisp.place</a></span>
-						<span class="title-sep" aria-hidden="true"></span>
-						<details class="integration">
-							<summary>integration</summary>
-						<div class="integration-panel">
-							<p>poll <code>{endpoint}</code> for the shared station state.</p>
-							<p>play <code>current.stream_url</code>, seek to <code>progress_seconds</code>.</p>
-							<p>refresh when <code>current_ends_at</code> passes, or poll every 30s.</p>
-							<p>embedding this page? add <code>?autoplay=1</code> to start playback automatically.</p>
-								<p>or use the compact widget: <code>/embed/radio</code> takes <code>?station=</code> and <code>?autoplay=1</code> too.</p>
-							</div>
-						</details>
-					</div>
-				</div>
-				<TunerDial
-					stations={radio.stations}
-					{activeSlug}
-					onSelect={tuneToStation}
-				/>
-				<div class="now-block" class:tuning={radio.switching}>
-				<div class="art-stage" style={`--cover-ratio: ${coverRatio}`}>
-					{#if radio.current}
+	<header class="page-heading">
+		<div>
+			<span class="eyebrow">plyr.fm</span>
+			<h1>radio</h1>
+		</div>
+		<p>same station, same moment</p>
+	</header>
+	<div class="radio-layout">
+		<section class="now-playing" aria-label="now playing">
+			{#if radio.loading && !radio.state}
+				<WaveLoading size="lg" message="tuning in..." />
+			{:else if radio.error}
+				<p role="alert">{radio.error}</p>
+				<button class="retry" onclick={() => radio.loadState()}>try again</button>
+			{:else if radio.current}
+				<SensitiveImage src={radio.current.artwork_url} tooltipPosition="center">
+					<a
+						class="cover"
+						href={`/track/${radio.current.id}`}
+						aria-label={`view ${radio.current.title}`}
+					>
 						{#if radio.current.artwork_url}
-							<img class="art-bg" src={resizedImageUrl(radio.current.artwork_url, IMAGE_WIDTHS.tile)} alt="" aria-hidden="true" />
-						{/if}
-						<SensitiveImage src={radio.current.artwork_url} tooltipPosition="center">
-							<a class="art-link" href={`/track/${radio.current.id}`} aria-label={`view ${radio.current.title}`}>
-								{#if radio.current.artwork_url}
-									<img
-									src={resizedImageUrl(radio.current.artwork_url, IMAGE_WIDTHS.hero)}
-									alt=""
-									class="art"
-									onload={readCoverRatio}
-								/>
-								{:else}
-									<div class="art fallback"></div>
-								{/if}
-							</a>
-						</SensitiveImage>
-					{:else if radio.state?.live?.artwork_url}
-						<img class="art-bg" src={radio.state.live.artwork_url} alt="" aria-hidden="true" />
-						<div class="art-link">
-							<img
-								src={radio.state.live.artwork_url}
-								alt=""
-								class="art"
-								onload={readCoverRatio}
-							/>
-						</div>
-					{:else}
-						<!-- no cover published for this broadcast: a placeholder sized like
-						     one, rather than a rectangle stretched over the whole stage. -->
-						<div class="art-link art-tile-live" aria-hidden="true">
-							<div class="art fallback live-art">
-								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round">
-									<circle cx="12" cy="12" r="2" />
-									<path d="M16.24 7.76a6 6 0 0 1 0 8.49M7.76 16.24a6 6 0 0 1 0-8.49M19.07 4.93a10 10 0 0 1 0 14.14M4.93 19.07a10 10 0 0 1 0-14.14" />
-								</svg>
-							</div>
-						</div>
-					{/if}
-				</div>
-				<div class="now-meta">
-					<p class="label">
-						{#if radio.isLive}live{:else if radio.active}on air{:else}what's on{/if}
-					</p>
-					{#if radio.current}
+							<img src={resizedImageUrl(radio.current.artwork_url, IMAGE_WIDTHS.hero)} alt="" />
+						{:else}<span class="cover-placeholder">plyr.fm</span>{/if}
+					</a>
+				</SensitiveImage>
+				<div class="track-heading">
+					<div class="track-copy">
+						<p class="eyebrow">now playing</p>
 						<h2>
-							<a href={`/track/${radio.current.id}`}><ScrollingText text={radio.current.title} trigger="always" /></a>
+							<a href={`/track/${radio.current.id}`}
+								><ScrollingText text={radio.current.title} trigger="always" /></a
+							>
 						</h2>
 						<a class="artist" href={`/u/${radio.current.artist_handle}`}>{radio.current.artist}</a>
-					{:else}
-						<!-- a broadcast has no track page or uploader to link to, but it
-						     does have a source, and crediting it is the point -->
-						<h2>{radio.state?.station ?? 'live'}</h2>
-						{#if radio.activeStation?.source_url}
-							<a
-								class="artist"
-								href={radio.activeStation.source_url}
-								target="_blank"
-								rel="noopener"
-							>{radio.activeStation.description}</a>
-						{:else}
-							<span class="artist">{radio.activeStation?.description ?? ''}</span>
-						{/if}
-					{/if}
+					</div>
+					<button
+						class="play"
+						onclick={togglePlayback}
+						aria-label={listening ? 'pause radio' : 'listen to radio'}
+					>
+						{#if listening}<svg viewBox="0 0 24 24" aria-hidden="true"
+								><path d="M7 5h4v14H7zM14 5h4v14h-4z" /></svg
+							>
+						{:else}<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 4 13 8-13 8z" /></svg
+							>{/if}
+					</button>
 				</div>
+				<div
+					class="progress"
+					role="progressbar"
+					aria-label="track progress"
+					aria-valuenow={Math.round(progress)}
+					aria-valuemin="0"
+					aria-valuemax="100"
+				>
+					<span style={`width: ${progress}%`}></span>
 				</div>
-				<div class="controls">
-					{#if radio.active}
-						<button class="tune-btn stop" onclick={() => radio.stop()} aria-label="stop listening to radio">stop</button>
-					{:else}
-						<button class="tune-btn" onclick={() => radio.tuneIn()} aria-label="tune in to radio">
-							<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-								<polygon points="6 4 20 12 6 20 6 4"></polygon>
-							</svg>
-							tune in
-						</button>
-					{/if}
-					{#if auth.isAuthenticated && radio.current}
-						{#key radio.current.id}
-							<AddToMenu
+				<div class="time">
+					<span>{formatTime(radio.positionSeconds)}</span><span
+						>{formatTime(radio.current.duration)}</span
+					>
+				</div>
+				<div class="track-actions">
+					<a href={`/track/${radio.current.id}`}>view track</a>
+					{#if auth.isAuthenticated}
+						{#key radio.current.id}<AddToMenu
 								trackId={radio.current.id}
 								trackTitle={radio.current.title}
 								trackUri={radio.current.atproto_record_uri ?? undefined}
 								trackCid={radio.current.atproto_record_cid ?? undefined}
 								initialLiked={radio.current.liked}
-							/>
-						{/key}
+							/>{/key}
 					{/if}
 				</div>
-				{#if radio.current && !radio.isLive}
-				<div class="progress-wrap">
-					<div class="progress" aria-label="track progress">
-						<div class="progress-fill" style={`width: ${progressPercent}%`}></div>
-					</div>
-					<div class="progress-times">
-						<span>{formatTime(radio.positionSeconds)}</span>
-						<span>{formatTime(radio.current.duration)}</span>
-					</div>
+			{:else}
+				<div class="off-air">
+					<span class="eyebrow">{radio.activeStation?.name ?? 'radio'}</span>
+					<h2>off air</h2>
+					<p>no tracks on this station right now. try another station.</p>
 				</div>
-				{/if}
-			</div>
-		{:else}
-			<!-- a station can be legitimately empty: its broadcaster is off air and it
-			     has no recorded rotation behind it. the tuner comes along so this is
-			     never a dead end — the station choice persists, so landing here on a
-			     later visit must still offer a way out. -->
-			<div class="off-air">
-				<TunerDial stations={radio.stations} {activeSlug} onSelect={tuneToStation} />
-				<p class="off-air-label">off air</p>
-				<p class="off-air-detail">
-					nothing is on air on {radio.activeStation?.name ?? 'this station'} right now.
-					pick another above.
-				</p>
-			</div>
-		{/if}
-	</section>
-
-	{#if radio.state}
-		<section class="station-board" aria-label="station">
-			<div class="rotation-card">
-				<div class="rotation-artworks" aria-label="tracks in rotation">
-					{#each radio.state.rotation.slice(0, 10) as track (track.id)}
-						<a
-							class="rotation-artwork"
-							href={`/track/${track.id}`}
-							aria-label={`view ${track.title} by ${track.artist}`}
-							title={`${track.title} by ${track.artist}`}
-						>
-							<SensitiveImage src={track.thumbnail_url ?? track.artwork_url} compact>
-								{#if track.thumbnail_url || track.artwork_url}
-									<img src={track.thumbnail_url ?? resizedImageUrl(track.artwork_url, IMAGE_WIDTHS.thumb) ?? ''} alt="" />
-								{:else}
-									<div class="rotation-fallback"></div>
-								{/if}
-							</SensitiveImage>
-							<span class="rotation-tooltip" aria-hidden="true">
-								<strong>{track.title}</strong>
-								<span>{track.artist}</span>
-							</span>
-						</a>
-					{/each}
-				</div>
-			</div>
+			{/if}
 		</section>
-	{/if}
+		<aside>
+			<section class="station" aria-label="station tuner">
+				<div class="section-heading">
+					<h2>station</h2>
+					<Listeners station={activeSlug} />
+				</div>
+				<div class="station-heading">
+					<button aria-label="previous station" onclick={() => flip('prev')}>←</button>
+					<div>
+						<strong>{radio.activeStation?.name ?? activeSlug}</strong>
+						<p>{radio.activeStation?.description ?? 'music from plyr.fm'}</p>
+					</div>
+					<button aria-label="next station" onclick={() => flip('next')}>→</button>
+				</div>
+				<TunerDial stations={radio.stations} {activeSlug} onSelect={selectStation} />
+			</section>
+			<section class="up-next" aria-label="up next">
+				<div class="section-heading">
+					<h2>up next</h2>
+					<span>{radio.state?.up_next.length ?? 0} tracks</span>
+				</div>
+				<ol>
+					{#each radio.state?.up_next ?? [] as track, index (`${index}:${track.id}`)}
+						<li>
+							<span class="number">{index + 1}</span><SensitiveImage src={track.artwork_url}
+								><a href={`/track/${track.id}`} tabindex="-1" aria-hidden="true" class="queue-art"
+									>{#if track.artwork_url}<img
+											src={resizedImageUrl(track.artwork_url, IMAGE_WIDTHS.thumb)}
+											alt=""
+										/>{/if}</a
+								></SensitiveImage
+							>
+							<div class="queued-track">
+								<a href={`/track/${track.id}`}>{track.title}</a><a
+									class="artist"
+									href={`/u/${track.artist_handle}`}>{track.artist}</a
+								>
+							</div>
+							<span class="duration">{formatTime(track.duration)}</span>
+						</li>
+					{:else}<li class="empty">nothing queued yet</li>{/each}
+				</ol>
+			</section>
+		</aside>
 	</div>
+	<footer>
+		a sister radio, adapted from <a
+			href="https://tangled.org/okami.mom/sister-radio"
+			target="_blank"
+			rel="noopener">Ana’s radio</a
+		>
+		· <a href="https://github.com/zzstoatzz/plyr.fm" target="_blank" rel="noopener">source</a>
+	</footer>
 </main>
 
 <style>
 	.radio-page {
-		position: relative;
-		/* sit above the fixed ambient wash */
-		z-index: 1;
-		max-width: 980px;
-		/* the global header has a 2rem margin-bottom; cancel most of it so the tuner
-		   sits just under the header (a small breathing gap, not a dead band) */
-		margin: -1.25rem auto 0;
-		height: calc(100vh - var(--header-height, 0px) - var(--player-height, 0px) - 2rem - env(safe-area-inset-bottom, 0px));
-		padding: 0 1rem 0.75rem;
+		max-width: 74rem;
+		margin: 0 auto;
+		padding: 1.5rem 2rem calc(var(--player-height, 5rem) + 2rem);
+	}
+	.page-heading {
 		display: flex;
-		flex-direction: column;
-		align-items: stretch;
-		overflow-y: auto;
-		overflow-x: hidden;
+		align-items: baseline;
+		justify-content: space-between;
+		margin-bottom: 2rem;
+		gap: 1rem;
 	}
-
-	/* the tuner (pills + artwork + now-playing + controls + deck) grows to fill
-	   all space above the footer and centers itself as one block. centering a
-	   single group keeps the spacing balanced whether or not the docked player is
-	   eating height — no lopsided top gap, no giant gaps between pieces. */
-	.tuner {
-		flex: 1 1 auto;
-		min-height: 0;
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		/* anchor to the top: centering left a dead band between the header and
-		   "live radio". with flex-start the content starts right under the header
-		   and any slack falls below (un-cramping the bottom), never above. */
-		justify-content: flex-start;
-		gap: clamp(0.9rem, 3vh, 2rem);
+	h1 {
+		font-size: var(--text-3xl);
+		margin: 0.15rem 0 0;
+		font-weight: 500;
 	}
-
-	@supports (height: 100dvh) {
-		.radio-page {
-			height: calc(100dvh - var(--header-height, 0px) - var(--player-height, 0px) - 2rem - env(safe-area-inset-bottom, 0px));
-		}
-	}
-
-	.integration {
-		position: relative;
-		font-size: var(--text-sm);
+	.page-heading p,
+	.eyebrow {
 		color: var(--text-tertiary);
+		font-size: var(--text-sm);
 	}
-
-	.integration summary {
-		cursor: pointer;
-		color: var(--text-secondary);
-		text-decoration: underline;
-		text-underline-offset: 2px;
-		list-style: none;
-	}
-
-	.integration summary::-webkit-details-marker {
-		display: none;
-	}
-
-	.integration summary:hover {
-		color: var(--text-primary);
-	}
-
-	.integration[open] summary {
-		color: var(--text-primary);
-	}
-
-	/* anchored popover: opens below the summary, right-aligned so it grows leftward
-	   and never runs off the right edge on narrow screens */
-	.integration-panel {
-		position: absolute;
-		top: calc(100% + 0.6rem);
-		right: 0;
-		z-index: 30;
-		width: min(86vw, 30rem);
-		padding: 0.9rem 1.1rem;
-		border: 1px solid var(--border-subtle);
-		border-radius: var(--radius-md);
-		background: color-mix(in srgb, var(--bg-secondary) 88%, transparent);
-		-webkit-backdrop-filter: blur(16px);
-		backdrop-filter: blur(16px);
-		box-shadow: 0 0.75rem 2.25rem rgba(0, 0, 0, 0.4);
-		text-align: left;
-		text-transform: none;
-	}
-
-	.integration-panel p {
-		margin: 0.4rem 0;
-		line-height: 1.55;
-		color: var(--text-secondary);
-	}
-
-	.integration-panel p:first-child {
-		margin-top: 0;
-	}
-
-	.integration-panel p:last-child {
-		margin-bottom: 0;
-	}
-
-	code {
-		font-size: 0.85em;
-		color: var(--text-primary);
-		word-break: break-all;
-	}
-
-	.station {
-		/* content-sized, and never compressed: growing here absorbed all viewport
-		   slack, pinning the rotation deck to the container's bottom edge with a
-		   dead band between; shrinking let a short viewport (docked player)
-		   squeeze the station so the progress bar spilled out underneath the
-		   deck. hold intrinsic height — the page scrolls when it must. */
-		flex: 0 0 auto;
-		/* fixed-width column so the dial + controls never resize with the
-		   (height-driven) artwork — the artwork is capped to this width too */
-		width: min(100%, 30rem);
-		align-self: center;
-		display: flex;
-		flex-direction: column;
-		padding-top: 0;
-	}
-
-	/* two deliberate centered rows — the heading, then the meta links — instead
-	   of one wrapping row that orphaned "integration" with a dangling separator
-	   at narrow column widths */
-	.station-title {
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		gap: 0.4rem;
+	.eyebrow {
 		margin: 0;
-		color: var(--text-secondary);
-		line-height: 1;
-		text-transform: lowercase;
+		letter-spacing: 0.08em;
 	}
-
-	.station-title-main,
-	.station-title-meta {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		gap: 0.7rem;
+	.radio-layout {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+		gap: 3rem;
+		align-items: start;
 	}
-
-	.station-title-meta {
-		gap: 0.6rem;
+	.now-playing,
+	aside,
+	.track-copy,
+	.queued-track {
+		min-width: 0;
 	}
-
-	.station-title .live {
-		font-size: var(--text-lg);
-	}
-
-	.station-title .credit,
-	.station-title .integration {
-		font-size: var(--text-sm);
-		color: var(--text-tertiary);
-	}
-
-	/* thin divider between the title and the meta links */
-	.title-sep {
-		width: 1px;
-		height: 0.9rem;
-		background: var(--border-default);
-	}
-
-	/* the swappable station content — artwork + title — fades while tuning */
-	.now-block {
-		/* content-sized. it used to grow and centre, which was invisible while the
-		   artwork stretched to fill the leftover space — once covers were sized to
-		   their own ratio, that growth became a dead band under the title. slack
-		   belongs below the controls, per `.tuner`'s flex-start. */
-		flex: 0 0 auto;
-		min-height: 0;
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		justify-content: center;
-		gap: clamp(0.5rem, 1.35vh, 0.85rem);
+	.cover {
+		display: grid;
+		place-items: center;
+		aspect-ratio: 1;
+		max-height: 28rem;
 		width: 100%;
-		transition:
-			opacity 0.22s ease,
-			filter 0.22s ease;
+		background: var(--bg-secondary);
+		border-radius: var(--radius-lg);
+		overflow: hidden;
 	}
-
-	.now-block.tuning {
-		opacity: 0.35;
-		filter: blur(2px);
-	}
-
-	@media (prefers-reduced-motion: reduce) {
-		.now-block {
-			transition: none;
-		}
-
-		.now-block.tuning {
-			opacity: 0.6;
-			filter: none;
-		}
-	}
-
-	.label {
-		margin: 0;
-		color: var(--text-tertiary);
-		font-size: var(--text-xs);
-		text-transform: uppercase;
-	}
-
-	.label {
-		margin-bottom: 0.35rem;
-	}
-
-	.radio-mark {
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		width: 1.4rem;
-		height: 1.4rem;
-		color: var(--text-tertiary);
-	}
-
-	.radio-mark svg {
+	.cover img {
 		width: 100%;
 		height: 100%;
+		object-fit: contain;
 	}
-
-	.radio-player {
-		flex: 1 1 auto;
-		min-height: 0;
-		width: 100%;
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		gap: clamp(0.5rem, 1.35vh, 0.85rem);
-		text-align: center;
+	.cover-placeholder {
+		color: var(--text-tertiary);
+		font-size: var(--text-3xl);
 	}
-
-	/* the artwork "stage" fills the leftover space; a blurred copy of the cover is
-	   the ambient backdrop so wide/tall leftovers look intentional instead of
-	   cropping the square cover into a weird slice */
-	.off-air {
+	.track-heading {
 		display: flex;
-		flex-direction: column;
 		align-items: center;
 		gap: 1rem;
-		padding-bottom: clamp(2rem, 8vh, 5rem);
+		margin: 1.5rem 0 1rem;
 	}
-
-	.off-air-label {
-		font-size: 0.75rem;
-		letter-spacing: 0.16em;
-		text-transform: uppercase;
-		color: var(--text-secondary);
-		margin: 1rem 0 0;
+	.track-copy {
+		flex: 1;
 	}
-
-	.off-air-detail {
-		margin: 0;
-		color: var(--text-secondary);
-		text-align: center;
-		max-width: 26rem;
+	h2 {
+		font-size: var(--text-2xl);
+		font-weight: 500;
+		margin: 0.4rem 0;
 	}
-
-	.art-stage {
-		/* the artwork is the page's one flexible element: it gets whatever height
-		   remains after the fixed chrome (header, docked player, title, dial,
-		   meta, controls, progress, rotation deck ≈ the rem constant below), so
-		   the whole tuner fits the viewport with no vertical scroll. floor keeps
-		   the cover recognizable on extreme windows; cap keeps it tasteful on
-		   huge ones. */
-		--cover-max-height: clamp(
-			4.5rem,
-			calc(100dvh - var(--header-height, 0px) - var(--player-height, 0px) - 31rem),
-			26rem
-		);
-		/* hug the cover exactly: don't grow (that left a dead band between the
-		   artwork and the title once covers stopped being stretched to fit) and
-		   don't shrink below it (that let a wide cover overlap the title). */
-		flex: 0 0 auto;
-		min-height: 0;
-		width: 100%;
-		position: relative;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		overflow: hidden;
-		border-radius: var(--radius-md);
-	}
-
-	.art-bg {
-		position: absolute;
-		inset: 0;
-		width: 100%;
-		height: 100%;
-		object-fit: cover;
-		filter: blur(64px) saturate(1.4);
-		opacity: 0.16;
-		transform: scale(1.4);
-		/* soft radial falloff so it reads as a faint ambient glow behind the cover,
-		   not a hard-edged blurred strip */
-		-webkit-mask-image: radial-gradient(closest-side, #000 28%, transparent 72%);
-		mask-image: radial-gradient(closest-side, #000 28%, transparent 72%);
-		z-index: 0;
-		pointer-events: none;
-	}
-
-	/* foreground cover: fits inside the stage at its own aspect ratio, never
-	   cropped. sizing is driven by the image rather than a fixed square box —
-	   `height: 100%` used to resolve against the stage and beat `aspect-ratio`,
-	   so a square cover came out as a tall slice on a tall viewport. shrink-
-	   wrapping the image means a square cover reads square, a widescreen one
-	   reads wide, and neither loses edges. */
-	.art-link {
-		position: relative;
-		z-index: 1;
-		flex: 0 0 auto;
-		display: block;
-		/* sized from the column width and a viewport cap, at the cover's own
-		   ratio — so a square cover reads square and a widescreen one reads wide,
-		   neither cropped. driven by width rather than the stage's height,
-		   because the stage now hugs this box instead of the other way round. */
-		width: min(100%, calc(var(--cover-max-height) * var(--cover-ratio, 1)));
-		aspect-ratio: var(--cover-ratio, 1);
-		height: auto;
-		text-decoration: none;
-		border-radius: var(--radius-md);
-		overflow: hidden;
-		box-shadow: 0 1rem 3rem rgba(0, 0, 0, 0.45);
-		border: 1px solid rgba(255, 255, 255, 0.08);
-	}
-
-	.controls {
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		gap: clamp(0.4rem, 1.2vh, 0.7rem);
-	}
-
-	.art {
-		display: block;
-		width: 100%;
-		height: 100%;
-		/* `contain` is belt-and-braces: the box already matches the image's ratio,
-		   so there is nothing to crop or letterbox. */
-		object-fit: contain;
-		border-radius: var(--radius-md);
-		box-shadow: 0 0.75rem 2.5rem rgba(0, 0, 0, 0.34);
-		transition:
-			box-shadow 0.15s ease,
-			transform 0.15s ease;
-	}
-
-	.art-link:hover .art {
-		box-shadow: 0 1rem 3rem rgba(0, 0, 0, 0.42);
-		transform: translateY(-1px);
-	}
-
-.now-meta {
-		width: min(100%, 48rem);
-		min-width: 0;
-	}
-
-	.now-meta h2 {
-		margin: 0;
-		font-size: clamp(1.5rem, 4.6vw, 2.65rem);
-		line-height: 1.1;
-		/* long titles must not blow up the fixed-height layout: track titles
-		   stay on one line and marquee (ScrollingText); the broadcast fallback
-		   below has no marquee, so it still wraps */
-		overflow-wrap: anywhere;
-		overflow: hidden;
-	}
-
-	.now-meta h2 a {
-		display: block;
-		max-width: 100%;
-	}
-
-	.now-meta h2 a {
+	a {
 		color: inherit;
 		text-decoration: none;
 	}
-
-	.now-meta h2 a:hover {
-		color: var(--text-primary);
-		text-decoration: underline;
-		text-decoration-thickness: 0.06em;
-		text-underline-offset: 0.08em;
+	a:hover {
+		color: var(--accent);
 	}
-
 	.artist {
 		display: block;
-		max-width: 100%;
-		margin-top: 0.35rem;
 		color: var(--text-secondary);
-		text-decoration: none;
 		font-size: var(--text-base);
+		margin-top: 0.25rem;
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
-
-	.artist:hover {
-		color: var(--text-primary);
-	}
-
-	.tune-btn {
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		gap: 0.5rem;
-		min-width: 8.5rem;
-		padding: 0.7rem 1.4rem;
-		border: none;
-		border-radius: var(--radius-full);
-		background: var(--accent);
-		color: var(--bg-primary);
+	button {
 		font-family: inherit;
-		font-size: var(--text-base);
-		font-weight: 600;
 		cursor: pointer;
-		transition: all 0.15s;
 	}
-
-	.tune-btn:hover {
-		background: var(--accent-hover);
-		transform: translateY(-1px);
+	.play {
+		width: 3.4rem;
+		height: 3.4rem;
+		border-radius: var(--radius-full);
+		border: 1px solid var(--accent);
+		background: var(--bg-primary);
+		color: var(--accent);
+		flex-shrink: 0;
+		display: grid;
+		place-items: center;
 	}
-
-	.tune-btn.stop {
-		background: transparent;
-		border: 1px solid var(--border-default);
-		color: var(--text-secondary);
+	.play:hover {
+		background: color-mix(in srgb, var(--accent) 12%, var(--bg-primary));
 	}
-
-	.tune-btn.stop:hover {
-		background: transparent;
-		border-color: var(--text-secondary);
-		color: var(--text-primary);
-		transform: none;
+	.play svg {
+		width: 1.5rem;
+		height: 1.5rem;
+		fill: currentColor;
 	}
-
-	.progress-wrap {
-		width: min(100%, 54rem);
-		margin-top: 0.1rem;
-	}
-
 	.progress {
-		margin: 0;
-		height: 4px;
-		border-radius: 999px;
-		background: var(--bg-secondary);
+		background: var(--bg-tertiary);
+		height: 3px;
+		border-radius: var(--radius-full);
 		overflow: hidden;
 	}
-
-	.progress-fill {
+	.progress span {
+		display: block;
 		height: 100%;
-		border-radius: inherit;
 		background: var(--accent);
-		transition: width 0.25s linear;
 	}
-
-	.progress-times {
+	.time {
 		display: flex;
 		justify-content: space-between;
-		margin-top: 0.35rem;
 		color: var(--text-tertiary);
-		font-size: var(--text-sm);
+		font-size: var(--text-xs);
+		margin-top: 0.5rem;
 		font-variant-numeric: tabular-nums;
 	}
-
-	.status {
-		padding: 3rem 0;
-		color: var(--text-secondary);
-	}
-
-	.status.error {
-		color: var(--error);
-	}
-
-	.station-board {
-		margin-top: 0;
-	}
-
-	.rotation-card {
-		min-width: 0;
-		text-align: center;
-	}
-
-	.rotation-artworks {
+	.track-actions {
 		display: flex;
 		align-items: center;
-		justify-content: center;
-		width: min(100%, 34rem);
-		margin: 0 auto;
-		padding: 0.45rem 0.85rem;
-		overflow: visible;
+		justify-content: space-between;
+		margin-top: 1rem;
+		color: var(--text-secondary);
+		font-size: var(--text-sm);
 	}
-
-	.rotation-artwork {
-		position: relative;
+	.section-heading {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		gap: 1rem;
+		border-bottom: 1px solid var(--border-default);
+		padding-bottom: 0.75rem;
+	}
+	.section-heading h2,
+	.section-heading > span {
+		font-size: var(--text-sm);
+		color: var(--text-secondary);
+		margin: 0;
+	}
+	.station-heading {
+		display: flex;
+		gap: 1rem;
+		align-items: center;
+		margin: 1rem 0;
+	}
+	.station-heading div {
+		flex: 1;
+		text-align: center;
+		min-width: 0;
+	}
+	.station-heading strong {
+		font-size: var(--text-xl);
+		font-weight: 500;
+	}
+	.station-heading p {
+		font-size: var(--text-sm);
+		color: var(--text-secondary);
+		line-height: 1.5;
+		margin: 0.4rem 0;
+	}
+	.station-heading button {
+		border: 0;
+		padding: 0.5rem;
+		background: transparent;
+		color: var(--accent);
+		font-size: var(--text-xl);
+	}
+	.station :global(.dial) {
+		width: 100%;
+	}
+	.up-next {
+		margin-top: 2rem;
+	}
+	ol {
+		list-style: none;
+		padding: 0;
+		margin: 0;
+	}
+	li {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+		padding: 0.85rem 0;
+		border-bottom: 1px solid var(--border-subtle);
+	}
+	.number,
+	.duration {
+		color: var(--text-tertiary);
+		font-size: var(--text-xs);
+		font-variant-numeric: tabular-nums;
+	}
+	.number {
+		width: 1rem;
+	}
+	.queue-art {
 		display: block;
-		flex: 0 0 auto;
-		width: 3.35rem;
-		height: 3.35rem;
-		margin: 0 -0.28rem;
+		width: 2.75rem;
+		height: 2.75rem;
+		background: var(--bg-secondary);
 		border-radius: var(--radius-sm);
-		color: inherit;
-		text-decoration: none;
-		transform: rotate(var(--tilt, 0deg)) translateY(var(--lift, 0));
-		transition:
-			transform 0.16s ease,
-			z-index 0.16s ease;
-		z-index: var(--z, 1);
-		-webkit-tap-highlight-color: transparent;
+		overflow: hidden;
 	}
-
-	.rotation-artwork:nth-child(1) {
-		--tilt: -5deg;
-		--lift: 0.25rem;
-		--z: 1;
-	}
-
-	.rotation-artwork:nth-child(2) {
-		--tilt: 3deg;
-		--lift: -0.15rem;
-		--z: 2;
-	}
-
-	.rotation-artwork:nth-child(3) {
-		--tilt: -2deg;
-		--lift: 0.1rem;
-		--z: 3;
-	}
-
-	.rotation-artwork:nth-child(4) {
-		--tilt: 4deg;
-		--lift: -0.25rem;
-		--z: 4;
-	}
-
-	.rotation-artwork:nth-child(5) {
-		--tilt: -4deg;
-		--lift: 0.05rem;
-		--z: 5;
-	}
-
-	.rotation-artwork:nth-child(6) {
-		--tilt: 2deg;
-		--lift: -0.1rem;
-		--z: 6;
-	}
-
-	.rotation-artwork:nth-child(7) {
-		--tilt: -3deg;
-		--lift: 0.22rem;
-		--z: 7;
-	}
-
-	.rotation-artwork:nth-child(8) {
-		--tilt: 5deg;
-		--lift: -0.18rem;
-		--z: 8;
-	}
-
-	.rotation-artwork:nth-child(9) {
-		--tilt: -1deg;
-		--lift: 0.08rem;
-		--z: 9;
-	}
-
-	.rotation-artwork:nth-child(10) {
-		--tilt: 3deg;
-		--lift: -0.05rem;
-		--z: 10;
-	}
-
-	.rotation-artwork img,
-	.rotation-fallback {
-		display: block;
+	.queue-art img {
 		width: 100%;
 		height: 100%;
 		object-fit: cover;
-		border: 1px solid var(--border-default);
-		border-radius: inherit;
-		background:
-			linear-gradient(135deg, rgba(255, 255, 255, 0.08), transparent 45%),
-			var(--bg-secondary);
-		box-shadow:
-			0 0 0 2px var(--bg-primary),
-			0 0.45rem 1.2rem rgba(0, 0, 0, 0.24);
-		transition:
-			border-color 0.16s ease,
-			box-shadow 0.16s ease,
-			filter 0.16s ease;
 	}
-
-	.rotation-artwork:hover,
-	.rotation-artwork:focus-visible {
-		transform: rotate(0deg) translateY(-0.45rem) scale(1.12);
-		z-index: 20;
-		outline: none;
+	.queued-track {
+		flex: 1;
 	}
-
-	.rotation-artwork:hover img,
-	.rotation-artwork:hover .rotation-fallback,
-	.rotation-artwork:focus-visible img,
-	.rotation-artwork:focus-visible .rotation-fallback {
-		border-color: var(--text-secondary);
-		box-shadow:
-			0 0 0 2px var(--bg-primary),
-			0 0 0 4px color-mix(in srgb, var(--accent) 45%, transparent),
-			0 0.8rem 1.8rem rgba(0, 0, 0, 0.34);
-		filter: saturate(1.08);
-	}
-
-	.rotation-artwork:active {
-		transform: rotate(0deg) translateY(-0.2rem) scale(1.04);
-	}
-
-	.rotation-tooltip {
-		position: absolute;
-		left: 50%;
-		bottom: calc(100% + 0.6rem);
-		width: max-content;
-		max-width: min(16rem, 72vw);
-		padding: 0.45rem 0.55rem;
-		border: 1px solid var(--border-subtle);
-		border-radius: var(--radius-sm);
-		background: var(--bg-secondary);
-		color: var(--text-secondary);
-		box-shadow: 0 0.5rem 1.5rem rgba(0, 0, 0, 0.28);
-		font-size: var(--text-xs);
-		line-height: 1.25;
-		text-align: left;
-		opacity: 0;
-		pointer-events: none;
-		transform: translate(-50%, 0.35rem);
-		transition:
-			opacity 0.14s ease,
-			transform 0.14s ease;
-	}
-
-	.rotation-tooltip strong,
-	.rotation-tooltip span {
+	.queued-track > a:first-child {
 		display: block;
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
+		font-size: var(--text-base);
 	}
-
-	.rotation-tooltip strong {
-		color: var(--text-primary);
-		font-weight: 600;
-	}
-
-	.rotation-tooltip span {
-		margin-top: 0.15rem;
-		color: var(--text-tertiary);
-	}
-
-	.rotation-artwork:hover .rotation-tooltip,
-	.rotation-artwork:focus-visible .rotation-tooltip {
-		opacity: 1;
-		transform: translate(-50%, 0);
-	}
-
-	.credit {
-		margin: 0;
+	.empty {
 		color: var(--text-tertiary);
 		font-size: var(--text-sm);
 	}
-
-	.credit a {
+	.off-air {
+		display: grid;
+		align-content: center;
+		min-height: 20rem;
+		padding: 2rem;
+		background: var(--bg-secondary);
+		border-radius: var(--radius-lg);
+	}
+	.off-air p {
 		color: var(--text-secondary);
+		line-height: 1.6;
+	}
+	.retry {
+		color: var(--accent);
+		background: transparent;
+		border: 1px solid var(--border-default);
+		padding: 0.5rem 1rem;
+		border-radius: var(--radius-base);
+	}
+	footer {
+		margin-top: 2.5rem;
+		text-align: center;
+		color: var(--text-tertiary);
+		font-size: var(--text-xs);
+	}
+	footer a {
 		text-decoration: underline;
-		text-underline-offset: 2px;
+		text-underline-offset: 3px;
 	}
-
-	.credit a:hover {
-		color: var(--text-primary);
-	}
-
 	@media (max-width: 720px) {
 		.radio-page {
-			height: calc(100vh - var(--header-height, 0px) - var(--player-height, 0px) - 1rem - env(safe-area-inset-bottom, 0px));
-			padding-top: 0;
+			padding-inline: 1rem;
 		}
-
-		@supports (height: 100dvh) {
-			.radio-page {
-				height: calc(100dvh - var(--header-height, 0px) - var(--player-height, 0px) - 1rem - env(safe-area-inset-bottom, 0px));
-			}
+		.radio-layout {
+			grid-template-columns: 1fr;
+			gap: 1.5rem;
 		}
-	}
-
-	@media (max-width: 520px) {
-		/* fit the whole tuner between "live radio" and the footer without scroll */
-		.tuner {
-			gap: 0.9rem;
+		.page-heading {
+			margin-bottom: 1rem;
 		}
-
-		.radio-player {
-			gap: 0.4rem;
+		.page-heading p {
+			font-size: var(--text-xs);
 		}
-
-		.now-block {
-			gap: 0.4rem;
+		.cover {
+			max-height: 24rem;
 		}
-
-		.station-title {
-			font-size: var(--text-base);
-		}
-
-		.now-meta h2 {
-			font-size: 1.35rem;
-		}
-
-		/* hug the label, not the screen — the stop button was eating the layout */
-		.tune-btn {
-			width: auto;
-			min-width: 0;
-			padding: 0.45rem 1.2rem;
-			font-size: var(--text-sm);
-		}
-
-		.progress-wrap {
-			margin-top: 0;
-		}
-
-		.station-board {
-			margin-top: 0;
-		}
-
-		.rotation-artworks {
-			width: 100%;
-			padding-block: 0.25rem;
-			padding-inline: 0.25rem;
-		}
-
-		.rotation-artwork {
-			width: 2.6rem;
-			height: 2.6rem;
-			margin-inline: -0.22rem;
-		}
-	}
-
-	/* short viewports (landscape phones, small windows) — width breakpoints miss
-	   these, so shrink by HEIGHT; scroll is the fallback below the smallest case */
-	/* short viewports: the art already shrinks via the available-height calc;
-	   compress the fixed chrome too so the art keeps as much of the budget as
-	   possible. tighter chrome = smaller constant in the calc. */
-	@media (max-height: 740px) {
-		.tuner { gap: 0.6rem; }
-		.radio-player { gap: 0.4rem; }
-		.now-block { gap: 0.35rem; }
-		.now-meta h2 { font-size: clamp(1.35rem, 4.2vh, 2rem); }
-		.art-stage {
-			--cover-max-height: clamp(
-				4.5rem,
-				calc(100dvh - var(--header-height, 0px) - var(--player-height, 0px) - 26rem),
-				26rem
-			);
-		}
-	}
-
-	@media (max-height: 560px) {
-		.now-meta h2 { font-size: 1.2rem; }
-		/* no room for the deck on a very short screen */
-		.station-board { display: none; }
-		.art-stage {
-			--cover-max-height: clamp(
-				4.5rem,
-				calc(100dvh - var(--header-height, 0px) - var(--player-height, 0px) - 20rem),
-				26rem
-			);
+		.up-next {
+			margin-top: 1.5rem;
 		}
 	}
 </style>

@@ -154,7 +154,10 @@ class Radio {
 			this.switching = false;
 		}
 		const np = this.nowPlaying();
-		if (np && player.radio) player.playRadio(np, { autoplay: !player.paused });
+		if (player.radio) {
+			if (np) player.playRadio(np, { autoplay: !player.paused });
+			else this.stop();
+		}
 	}
 
 	/** whether radio is the active player source (single source of truth) */
@@ -201,6 +204,7 @@ class Radio {
 		const broadcast = this.state?.live;
 		if (broadcast) {
 			return {
+				stationSlug: this.state?.station_slug,
 				track: { ...track, title: this.state?.station ?? track.title },
 				stream_url: broadcast.stream_url,
 				start_at: 0, // live has no position to resume
@@ -210,6 +214,7 @@ class Radio {
 		}
 		return {
 			track,
+			stationSlug: this.state?.station_slug,
 			stream_url: c.stream_url,
 			start_at: startAt ?? (this.state ? this.stateProgress(this.state) : 0)
 		};
@@ -217,7 +222,7 @@ class Radio {
 
 	async loadState(): Promise<void> {
 		try {
-			const query = this.station ? `?station=${encodeURIComponent(this.station)}` : '';
+			const query = `?catalog_only=true${this.station ? `&station=${encodeURIComponent(this.station)}` : ''}`;
 			// send the session cookie so the server can flag `liked` per track for
 			// signed-in listeners (anonymous requests are unaffected).
 			const response = await fetch(`${API_URL}/radio/state${query}`, {
@@ -262,6 +267,7 @@ class Radio {
 		const broadcast = this.state?.live;
 		if (!broadcast) return null;
 		return {
+			stationSlug: this.state?.station_slug,
 			track: this.broadcastTrack(),
 			stream_url: broadcast.stream_url,
 			start_at: 0,

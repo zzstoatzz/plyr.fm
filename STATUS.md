@@ -47,6 +47,18 @@ plyr.fm should become:
 
 ### September 2026
 
+#### native radio with authenticated listeners (staging)
+
+The radio page adopts Ana’s cover/queue/listener layout using the existing global
+player and appearance settings. All five plyr.fm station links remain. Native
+playback requests catalog-only state, so firehose has no external live relay.
+Redis presence derives avatars from the existing cookie session, follows player
+state across navigation, deduplicates accounts, and expires stale sockets.
+The standalone sister-protocol fork remains a separate prototype with separate
+presence. UI, API, and docs ship in one revertible PR with no migration or new
+service. See [radio architecture](docs/internal/frontend/radio.md).
+
+
 #### the upload pipeline got a pulse, and the first reading was red (#2084, #2085, #2087, September 21 — prod `2026.0921.025041`, `2026.0921.055515`, `2026.0923.005928`)
 
 **why**: after #2075 the job row decides whether an upload is alive, but

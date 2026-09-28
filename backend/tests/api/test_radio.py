@@ -1422,3 +1422,19 @@ async def test_cold_cache_boundary_anchors_at_period_start(
     index, progress, _, _ = radio_state._live_window(now, rotation, anchor)
     assert index is not None
     assert (rotation[index].id, progress) == (3, 30)
+
+
+async def test_catalog_only_state_excludes_live_broadcast(
+    radio_app: FastAPI, db_session: AsyncSession
+) -> None:
+    with patch.object(
+        radio_live, "_probe", side_effect=AssertionError("external stream probed")
+    ):
+        async with AsyncClient(
+            transport=ASGITransport(app=radio_app), base_url="https://radio.plyr.fm"
+        ) as client:
+            response = await client.get(
+                "/radio/state", params={"station": "firehose", "catalog_only": "true"}
+            )
+    assert response.status_code == 200
+    assert response.json()["live"] is None

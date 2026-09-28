@@ -372,6 +372,7 @@ async def radio_state(
     limit: int = Query(DEFAULT_ROTATION_SIZE, ge=1, le=MAX_ROTATION_SIZE),
     station: str | None = Query(None, description="station slug; omit for default"),
     session: AuthSession | None = Depends(get_optional_session),
+    catalog_only: bool = Query(False, description="exclude external live broadcasts"),
 ) -> RadioStateResponse:
     """Return the live public radio state for a station.
 
@@ -392,7 +393,7 @@ async def radio_state(
     # the rotation is still computed and still described even while a broadcast
     # preempts it — the loop is the clock, and it keeps running so that whatever
     # resumes afterwards lands where wall-clock time says it should.
-    broadcast = await get_live_broadcast(resolved.live)
+    broadcast = None if catalog_only else await get_live_broadcast(resolved.live)
 
     return RadioStateResponse(
         station=resolved.name,

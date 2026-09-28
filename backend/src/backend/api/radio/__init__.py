@@ -9,5 +9,6 @@ from backend.api.radio.router import router
 
 # Import route module to register handlers on the shared router.
 from backend.api.radio import state as _state
+from backend.api.radio import presence as _presence
 
 __all__ = ["router"]
