@@ -6,6 +6,28 @@ rate-limit counters, and the discovery cache.
 two apps, one per environment — `plyr-redis` (prod, used by `relay-api`) and
 `plyr-redis-stg` (staging, used by `relay-api-staging`). they are not shared.
 
+## Zig rewrite Redis retired September 28, 2026
+
+The separate `plyr-redis-next` machine (`891ed09f404d98`) was stopped and
+deleted while the Zig rewrite is parked, removing approximately $2.02/month
+of running compute. Production and staging Redis were unchanged. The empty
+Fly app and its existing secrets were retained for a future restart.
+
+The `codex/zig-backend` branch documents this instance as an ephemeral cache
+of expiring play-deduplication keys, with no queues, sessions, volume or AOF.
+Fly confirmed no attached volumes; the dependent `plyr-api-zig-canary`
+machine was stopped at the time of retirement. Redis INFO probes required
+authentication, so active client and key counts were not established. No cache
+contents were archived.
+
+Before reviving the rewrite, provision Redis again from
+`infrastructure/redis/fly.next.toml` on `codex/zig-backend`, following the
+project deployment workflow. Verify the retained `REDIS_PASSWORD` matches the
+canary's `DOCKET_URL`, test authenticated connectivity and play deduplication,
+and only then resume the canary. That config uses Redis 7 Alpine, 256 MB in
+IAD, a 32 MB allkeys-lru cache, and disabled persistence. The deployment source
+is retained; this cleanup does not abandon the rewrite.
+
 ## deployment
 
 ```bash
