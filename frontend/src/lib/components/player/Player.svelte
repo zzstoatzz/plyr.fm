@@ -84,14 +84,6 @@
 		navigator.mediaSession.setActionHandler('pause', () => {
 			queue.pause();
 		});
-
-		navigator.mediaSession.setActionHandler('seekto', (details) => {
-			if (details.seekTime !== undefined) {
-				queue.seek(details.seekTime * 1000);
-			}
-		});
-
-		// seekbackward/seekforward are registered reactively below
 	}
 
 	// check if we're on the current track's detail page
@@ -265,6 +257,14 @@
 		if (!('mediaSession' in navigator)) return;
 		const skips = !player.radio;
 		navigator.mediaSession.setActionHandler(
+			'seekto',
+			skips
+				? (details) => {
+						if (details.seekTime !== undefined) queue.seek(details.seekTime * 1000);
+					}
+				: null
+		);
+		navigator.mediaSession.setActionHandler(
 			'seekbackward',
 			skips
 				? (details) => queue.seekBy(-(details.seekOffset ?? skipStepSeconds(player.duration)))
@@ -286,10 +286,15 @@
 
 	// update media session position state when time/duration changes
 	$effect(() => {
-		// Infinity/NaN durations (streams, sources mid-swap) make
-		// setPositionState throw, which leaves iOS with no scrubber
-		if (!('mediaSession' in navigator) || !Number.isFinite(player.duration) || player.duration <= 0)
+		if (!('mediaSession' in navigator)) return;
+		if (player.radio || !Number.isFinite(player.duration) || player.duration <= 0) {
+			try {
+				navigator.mediaSession.setPositionState();
+			} catch {
+				// Some browsers do not support position state.
+			}
 			return;
+		}
 		try {
 			navigator.mediaSession.setPositionState({
 				duration: player.duration,

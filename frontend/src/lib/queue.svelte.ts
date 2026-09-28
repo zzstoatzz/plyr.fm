@@ -568,6 +568,7 @@ class Queue {
 	}
 
 	seek(ms: number): void {
+		if (player.radio) return;
 		if (this.jamBridge) {
 			this.jamBridge.seek(ms);
 		} else if (player.audioElement) {

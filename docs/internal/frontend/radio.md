@@ -130,3 +130,15 @@ iOS Safari ignores programmatic volume assignments, so the volume value alone
 cannot mute playback. Native `volumechange` events only update player volume
 when the element accepts volume assignments and is unmuted; otherwise the
 muting event would overwrite the requested zero with Safari’s fixed volume.
+
+### System media controls
+
+Radio unregisters seek-to, relative seek, and previous/next actions and clears
+Media Session position state. Track metadata and play/pause remain available.
+Returning to ordinary playback restores seeking and its position timeline.
+The shared queue seek entry point also rejects user seeks while radio owns
+the audio element; station synchronization still sets its own playback position.
+
+The compact radio embed owns a separate audio element and currently does not
+configure Media Session. Its browser-default controls are not covered by the
+main player's capability policy.

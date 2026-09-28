@@ -123,11 +123,11 @@ max_lines = 622
 
 [[rules]]
 path = "frontend/src/lib/components/player/Player.svelte"
-max_lines = 1168
+max_lines = 1173
 
 [[rules]]
 path = "frontend/src/lib/queue.svelte.ts"
-max_lines = 1023
+max_lines = 1024
 
 [[rules]]
 path = "frontend/src/routes/+layout.svelte"

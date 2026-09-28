@@ -52,11 +52,15 @@ vi.stubGlobal(
 	vi.fn(async () => new Response(JSON.stringify(state())))
 );
 const playbackStates: MediaSessionPlaybackState[] = [];
+const handlers = new Map<MediaSessionAction, MediaSessionActionHandler | null>();
+const setPositionState = vi.fn();
 Object.defineProperty(navigator, 'mediaSession', {
 	configurable: true,
 	value: {
-		setActionHandler() {},
-		setPositionState() {},
+		setActionHandler(action: MediaSessionAction, handler: MediaSessionActionHandler | null) {
+			handlers.set(action, handler);
+		},
+		setPositionState,
 		metadata: null,
 		set playbackState(value: MediaSessionPlaybackState) {
 			playbackStates.push(value);
@@ -331,5 +335,46 @@ describe('Eli’s full-page OBS autoplay contract (#1592)', () => {
 		await new Promise((resolve) => setTimeout(resolve, 25));
 		expect(player.paused).toBe(true);
 		expect(play.mock.calls.length).toBe(calls);
+	});
+});
+
+describe('radio media-session capabilities', () => {
+	it('clears seeking and position while tuned in, and restores them for ordinary playback', () => {
+		player.duration = 10;
+		player.currentTime = 3;
+		flushSync();
+		expect(handlers.get('seekto')).toBeNull();
+		expect(handlers.get('seekbackward')).toBeNull();
+		expect(handlers.get('seekforward')).toBeNull();
+		expect(handlers.get('previoustrack')).toBeNull();
+		expect(handlers.get('nexttrack')).toBeNull();
+		expect(setPositionState).toHaveBeenLastCalledWith();
+
+		player.radio = null;
+		flushSync();
+		expect(handlers.get('seekto')).toBeTypeOf('function');
+		expect(handlers.get('seekbackward')).toBeTypeOf('function');
+		expect(setPositionState).toHaveBeenLastCalledWith({
+			duration: 10,
+			position: 3,
+			playbackRate: 1
+		});
+		handlers.get('seekto')?.({ action: 'seekto', seekTime: 6 });
+		expect(audio.currentTime).toBe(6);
+
+		radio.tuneIn();
+		flushSync();
+		expect(handlers.get('seekto')).toBeNull();
+		expect(setPositionState).toHaveBeenLastCalledWith();
+	});
+
+	it('rejects user seeks at the transport boundary while radio owns the audio', () => {
+		audio.currentTime = 3;
+		player.currentTime = 3;
+		player.duration = 10;
+		queue.seek(8000);
+		expect(audio.currentTime).toBe(3);
+		queue.seekBy(5);
+		expect(audio.currentTime).toBe(3);
 	});
 });
