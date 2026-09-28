@@ -132,6 +132,7 @@ async def _to_radio_tracks(
             artist=track.artist.display_name,
             artist_handle=track.artist.handle,
             artist_did=track.artist_did,
+            artist_avatar_url=track.artist.avatar_url,
             stream_url=_stream_url(track),
             file_type=track.file_type,
             duration=_duration_seconds(track),

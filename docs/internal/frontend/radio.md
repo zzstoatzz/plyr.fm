@@ -23,6 +23,10 @@ The client requests `/radio/state?catalog_only=true` except for the explicit
 behavior for older clients. The native UI needs no database migration or extra
 service; outbound syndication uses the separate adapter described below.
 
+Radio tracks include the optional `artist_avatar_url` separately from track
+artwork. The native adapter passes it to the fork's uploader and upcoming-track
+profiles; older responses or artists without avatars retain the initial fallback.
+
 The fork also runs as a separate outbound syndication adapter: four station
 identities are advertised to the sister-radio directory, with schedules and
 authenticated listener avatars supplied by plyr. Audio redirects to the existing

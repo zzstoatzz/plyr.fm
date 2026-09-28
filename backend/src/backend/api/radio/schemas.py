@@ -16,6 +16,7 @@ class RadioTrack(BaseModel):
     artist: str
     artist_handle: str
     artist_did: str
+    artist_avatar_url: str | None = None
     stream_url: str
     file_type: str
     duration: int

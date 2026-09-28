@@ -240,6 +240,8 @@ async def test_default_station_returns_public_tracks_only(
     )
     assert data["current"]["duration"] == 123
     assert data["current"]["artwork_url"] == "https://images.example/cover.jpg"
+    assert data["current"]["artist_avatar_url"] == radio_artist.avatar_url
+    assert data["rotation"][0]["artist_avatar_url"] == radio_artist.avatar_url
     assert [track["title"] for track in data["rotation"]] == ["Visible"]
 
 

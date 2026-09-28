@@ -9,6 +9,7 @@ const track: RadioTrack = {
 	artist: 'Artist',
 	artist_handle: 'artist.test',
 	artist_did: 'did:plc:artist',
+	artist_avatar_url: '/artist-avatar.jpg',
 	stream_url: '/tracks/12/stream',
 	file_type: 'mp3',
 	duration: 180,
@@ -96,6 +97,12 @@ describe('the actual sister-radio host', () => {
 			root.querySelector<HTMLButtonElement>(`[aria-label="${label}"]`)!;
 		expect(root.querySelector('.radio-page')).not.toBeNull();
 		expect(root.textContent).toContain(track.title);
+		expect(root.querySelector('.track-attribution-avatar img')?.getAttribute('src')).toBe(
+			'/artist-avatar.jpg'
+		);
+		expect(root.querySelector('.up-next-profile-avatar img')?.getAttribute('src')).toBe(
+			'/artist-avatar.jpg'
+		);
 		expect(root.querySelector('audio')).toBeNull();
 		button('listen live').click();
 		expect(input.play).toHaveBeenCalledOnce();

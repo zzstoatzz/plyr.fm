@@ -14,6 +14,7 @@ export interface RadioTrack {
 	artist: string;
 	artist_handle: string;
 	artist_did: string;
+	artist_avatar_url?: string | null;
 	stream_url: string;
 	file_type: string;
 	duration: number;
@@ -191,6 +192,7 @@ class Radio {
 			artist: c.artist,
 			artist_handle: c.artist_handle,
 			artist_did: c.artist_did,
+			artist_avatar_url: c.artist_avatar_url ?? undefined,
 			file_id: '',
 			file_type: c.file_type,
 			play_count: c.play_count,

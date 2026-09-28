@@ -32,7 +32,8 @@ export function radioIntegration(input: {
 		profiles[track.artist_did] = {
 			did: track.artist_did,
 			handle: track.artist_handle,
-			displayName: track.artist
+			displayName: track.artist,
+			avatar: track.artist_avatar_url ?? undefined
 		};
 		covers[String(track.id)] = input.cover(track);
 	}
