@@ -25,13 +25,13 @@
 	let switching = $state(false);
 	let pollTimer: number | null = null;
 	let loadingSource: string | null = null;
+	let receivedAt = 0;
 
 	let current: RadioTrack | null = $derived(radioState?.current ?? null);
 	let activeSlug = $derived(radioState?.station_slug ?? station);
 
 	function stateProgress(fetched: RadioState): number {
-		const generatedAt = Date.parse(fetched.generated_at);
-		const drift = Number.isFinite(generatedAt) ? Math.max(0, (Date.now() - generatedAt) / 1000) : 0;
+		const drift = Math.max(0, (performance.now() - receivedAt) / 1000);
 		return Math.min(fetched.current?.duration ?? 0, fetched.progress_seconds + drift);
 	}
 
@@ -96,6 +96,7 @@
 			}
 			if (!res.ok) throw new Error(`radio ${res.status}`);
 			radioState = await res.json();
+			receivedAt = performance.now();
 			error = null;
 			if (sync && radioState) syncAudio(radioState);
 		} catch (e) {

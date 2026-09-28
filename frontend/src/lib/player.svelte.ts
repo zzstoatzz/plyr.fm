@@ -130,6 +130,17 @@ class PlayerState {
 		const el = this.audioElement;
 		if (!el) return;
 		this.clearRadioSeek(el);
+		if (!np.live) {
+			const seek = () => {
+				this.radioSeek = null;
+				if (this.radio !== assigned) return;
+				if (Number.isFinite(el.duration)) {
+					el.currentTime = Math.min(Math.max(0, np.start_at), el.duration);
+				}
+			};
+			this.radioSeek = seek;
+			el.addEventListener('loadedmetadata', seek, { once: true });
+		}
 		void this.attachRadioSource(el, np, assigned, autoplay);
 		if (autoplay) {
 			// play immediately (preserve the gesture), then align to station position
@@ -154,22 +165,6 @@ class PlayerState {
 			});
 		} else {
 			el.pause();
-		}
-		// a broadcast has no position to resume — it is wherever it is.
-		if (np.live) return;
-		const seek = () => {
-			this.radioSeek = null;
-			// tuned away or stopped while metadata loaded — this seek belongs to a
-			// source the element no longer plays.
-			if (this.radio !== assigned) return;
-			if (np.start_at > 0 && Number.isFinite(el.duration)) {
-				el.currentTime = Math.min(np.start_at, el.duration);
-			}
-		};
-		if (el.readyState >= 1) seek();
-		else {
-			this.radioSeek = seek;
-			el.addEventListener('loadedmetadata', seek, { once: true });
 		}
 	}
 
@@ -335,7 +330,7 @@ class PlayerState {
 				credentials: 'include',
 				headers: refForTrack ? { 'Content-Type': 'application/json' } : undefined,
 				body: refForTrack ? JSON.stringify({ ref: refForTrack }) : undefined
-			}).catch(err => {
+			}).catch((err) => {
 				console.error('failed to increment play count:', err);
 			});
 		}

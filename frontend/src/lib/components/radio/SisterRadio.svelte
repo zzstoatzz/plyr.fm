@@ -16,17 +16,9 @@
 	let mounted = $state<ReturnType<typeof mountRadio> | null>(null);
 	let origin = $state('');
 	let failed = $state(false);
-	let clock = $state(Date.now());
+	let clock = $state(performance.now());
 	const position = $derived(
-		radio.active && !player.paused
-			? player.currentTime
-			: radio.state
-				? Math.min(
-						radio.current?.duration ?? 0,
-						radio.state.progress_seconds +
-							Math.max(0, (clock - Date.parse(radio.state.generated_at)) / 1000)
-					)
-				: 0
+		radio.active && !player.paused ? player.currentTime : radio.stationPositionSeconds(clock)
 	);
 	let listeners = $state<RadioListeners | null>(null);
 	const selected = $derived(radio.state?.station_slug ?? radio.station ?? 'loved');
@@ -93,7 +85,7 @@
 	onMount(() => {
 		origin = window.location.origin;
 		const tick = window.setInterval(() => {
-			clock = Date.now();
+			clock = performance.now();
 		}, 1000);
 		const poll = window.setInterval(() => {
 			if (!radio.active) void radio.loadState();

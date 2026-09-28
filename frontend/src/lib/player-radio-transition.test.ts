@@ -112,6 +112,85 @@ afterEach(async () => {
 	document.body.replaceChildren();
 });
 describe('radio source transitions through the mounted player', () => {
+	it.each([-12, 12])(
+		'uses station progress when the device clock differs by %i hours',
+		async (hours) => {
+			const snapshot = state();
+			snapshot.generated_at = new Date(Date.now() - hours * 3600000).toISOString();
+			snapshot.progress_seconds = 4;
+			radio.state = null;
+			vi.mocked(fetch).mockResolvedValueOnce(new Response(JSON.stringify(snapshot)));
+			await radio.loadState();
+			radio.tuneIn();
+			Object.defineProperty(audio, 'duration', { configurable: true, value: 10 });
+			audio.dispatchEvent(new Event('loadedmetadata'));
+			expect(audio.currentTime).toBeGreaterThanOrEqual(4);
+			expect(audio.currentTime).toBeLessThan(5);
+		}
+	);
+	it('counts elapsed time after receipt without following wall-clock changes', async () => {
+		const snapshot = state();
+		snapshot.progress_seconds = 4;
+		radio.state = null;
+		vi.mocked(fetch).mockResolvedValueOnce(new Response(JSON.stringify(snapshot)));
+		const monotonic = vi.spyOn(performance, 'now').mockReturnValue(1000);
+		await radio.loadState();
+		monotonic.mockReturnValue(3000);
+		const wallClock = vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 43200000);
+		try {
+			radio.tuneIn();
+			expect(player.radio?.start_at).toBe(6);
+		} finally {
+			monotonic.mockRestore();
+			wallClock.mockRestore();
+		}
+	});
+	it('resets the successor to zero after a long track ends', () => {
+		audio.currentTime = 4800;
+		radio.onEnded();
+		Object.defineProperty(audio, 'duration', { configurable: true, value: 10 });
+		audio.dispatchEvent(new Event('loadedmetadata'));
+		expect(audio.currentTime).toBe(0);
+	});
+
+	it('waits for the new source metadata instead of seeking with the previous duration', () => {
+		Object.defineProperty(audio, 'readyState', { configurable: true, value: 1 });
+		Object.defineProperty(audio, 'duration', { configurable: true, value: 1 });
+		audio.currentTime = 0;
+		player.playRadio({ ...player.radio!, start_at: 4 });
+		expect(audio.currentTime).toBe(0);
+		Object.defineProperty(audio, 'duration', { configurable: true, value: 10 });
+		audio.dispatchEvent(new Event('loadedmetadata'));
+		expect(audio.currentTime).toBe(4);
+	});
+
+	it('does not roll back to the ended track while the station catches up', async () => {
+		const snapshot = state();
+		const boundary = Date.parse(snapshot.generated_at) + 1000;
+		snapshot.progress_seconds = 9;
+		snapshot.current_started_at = new Date(boundary - 10000).toISOString();
+		snapshot.current_ends_at = new Date(boundary).toISOString();
+		radio.state = snapshot;
+		vi.mocked(fetch)
+			.mockResolvedValueOnce(new Response(JSON.stringify(snapshot)))
+			.mockResolvedValueOnce(new Response(JSON.stringify(snapshot)));
+		radio.onEnded();
+		expect(radio.state?.progress_seconds).toBe(0);
+		await radio.loadState();
+		expect(radio.current?.id).toBe(2);
+		expect(player.radio?.track.id).toBe(2);
+		const successor = {
+			...snapshot,
+			generated_at: new Date(boundary + 1000).toISOString(),
+			current_started_at: new Date(boundary).toISOString(),
+			current: track(2),
+			progress_seconds: 1
+		};
+		vi.mocked(fetch).mockResolvedValueOnce(new Response(JSON.stringify(successor)));
+		await radio.loadState();
+		expect(radio.state?.progress_seconds).toBe(1);
+	});
+
 	it('ignores the natural end pause and delayed pause from the old source', () => {
 		elementPaused = true;
 		elementEnded = true;

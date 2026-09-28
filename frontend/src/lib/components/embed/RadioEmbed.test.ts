@@ -15,6 +15,7 @@ const SAFE_ART = 'https://images.test/images/safe456.webp';
 
 let artworkUrl = SENSITIVE_ART;
 let trackNum = 1;
+let serverClockOffset = 0;
 
 type StationsPayload = { stations: RadioStation[] };
 
@@ -29,7 +30,7 @@ function radioState(): RadioState {
 	return {
 		station: 'loved',
 		station_slug: 'loved',
-		generated_at: new Date().toISOString(),
+		generated_at: new Date(Date.now() + serverClockOffset).toISOString(),
 		loop_duration_seconds: 100,
 		current_index: 0,
 		current_started_at: null,
@@ -108,6 +109,7 @@ afterEach(() => {
 	setEmbedUrl('');
 	trackNum = 1;
 	playSpy.mockClear();
+	serverClockOffset = 0;
 	loadSpy.mockImplementation(() => {});
 });
 
@@ -126,6 +128,16 @@ describe('RadioEmbed sensitive artwork', () => {
 });
 
 describe('RadioEmbed autoplay', () => {
+	it.each([-12, 12])('ignores a %i-hour clock difference during autoplay', async (hours) => {
+		serverClockOffset = hours * 3600000;
+		setEmbedUrl('?autoplay=1');
+		await mountRadioEmbed();
+		const audio = document.querySelector('audio')!;
+		audio.dispatchEvent(new Event('loadedmetadata'));
+		expect(audio.currentTime).toBeGreaterThanOrEqual(10);
+		expect(audio.currentTime).toBeLessThan(11);
+	});
+
 	it('tunes in automatically with ?autoplay=1', async () => {
 		artworkUrl = SAFE_ART;
 		setEmbedUrl('?autoplay=1');

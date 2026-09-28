@@ -94,6 +94,15 @@ promises from aborted or superseded sources cannot pause the new source. This
 keeps the UI, listener presence, and Media Session playback state consistent at
 track boundaries. A user pause and a genuine current-source failure still pause.
 
+Source changes wait for the new audio's metadata before seeking, including an
+explicit seek to zero on auto-advance. Optimistic transitions reset the station
+clock, and older snapshots cannot roll them back to the ended track.
+
+Radio positions use the server's `progress_seconds` plus monotonic elapsed time
+since the response arrived. Neither the native page nor the compact embed compares
+the device's wall clock with `generated_at`: clock skew can otherwise seek directly
+to the end of every track. The idle page's progress display uses the same clock.
+
 Eli Mallon's [#1592](https://github.com/zzstoatzz/plyr.fm/pull/1592) added the full
 `/radio?autoplay=1` page for an OBS browser-source overlay. Preserve the deferred,
 one-shot attempt; executing it synchronously inside the reactive effect previously

@@ -74,6 +74,7 @@ class Radio {
 	/** brief flag while a station flip is in flight, for the tuning transition */
 	switching = $state(false);
 	private pollTimer: number | null = null;
+	private receivedAt = $state<number | null>(null);
 
 	get current(): RadioTrack | null {
 		return this.state?.current ?? null;
@@ -172,10 +173,13 @@ class Radio {
 		return this.state ? this.stateProgress(this.state) : 0;
 	}
 
-	private stateProgress(fetched: RadioState): number {
-		const generatedAt = Date.parse(fetched.generated_at);
-		const drift = Number.isFinite(generatedAt) ? Math.max(0, (Date.now() - generatedAt) / 1000) : 0;
+	private stateProgress(fetched: RadioState, now = performance.now()): number {
+		const drift = this.receivedAt === null ? 0 : Math.max(0, (now - this.receivedAt) / 1000);
 		return Math.min(fetched.current?.duration ?? 0, fetched.progress_seconds + drift);
+	}
+
+	stationPositionSeconds(now = performance.now()): number {
+		return this.state ? this.stateProgress(this.state, now) : 0;
 	}
 
 	private toNowPlaying(c: RadioTrack, startAt?: number): RadioNowPlaying {
@@ -236,7 +240,14 @@ class Radio {
 				return this.loadState();
 			}
 			if (!response.ok) throw new Error(`radio returned ${response.status}`);
-			this.state = await response.json();
+			const fetched: RadioState = await response.json();
+			if (
+				this.state?.station_slug === fetched.station_slug &&
+				Date.parse(fetched.generated_at) < Date.parse(this.state.generated_at)
+			)
+				return;
+			this.state = fetched;
+			this.receivedAt = performance.now();
 			this.station = this.state?.station_slug ?? this.station;
 			this.error = null;
 			// warm hls.js now so tuning in can attach inside the tap itself —
@@ -312,7 +323,23 @@ class Radio {
 			player.playRadio(this.toNowPlaying(next, 0), { autoplay: !player.paused });
 			// optimistically advance the displayed state so the artwork + title swap
 			// to the new track immediately, instead of lagging on the background fetch
-			this.state = { ...this.state, current: next, up_next: this.state.up_next.slice(1) };
+			const startedAt = this.state.current_ends_at;
+			this.state = {
+				...this.state,
+				current: next,
+				up_next: this.state.up_next.slice(1),
+				progress_seconds: 0,
+				generated_at: startedAt ?? this.state.generated_at,
+				current_started_at: startedAt,
+				current_ends_at: startedAt
+					? new Date(Date.parse(startedAt) + next.duration * 1000).toISOString()
+					: null,
+				current_index:
+					this.state.current_index !== null && this.state.rotation.length
+						? (this.state.current_index + 1) % this.state.rotation.length
+						: null
+			};
+			this.receivedAt = performance.now();
 		}
 		// refresh rotation / up_next in the background for the next boundary
 		void this.loadState();
