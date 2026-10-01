@@ -2,6 +2,7 @@
 # /// script
 # requires-python = ">=3.12"
 # dependencies = [
+#     "httpx",
 #     "pydantic-settings",
 # ]
 # ///
@@ -28,8 +29,11 @@ import os
 import sys
 from typing import Literal
 
+import httpx
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from _moderation import DEFAULT_SERVICE_URL
 
 Environment = Literal["dev", "staging", "prod"]
 
@@ -44,6 +48,12 @@ class RescoreSettings(BaseSettings):
         default="", validation_alias="STAGING_DATABASE_URL"
     )
     prod_database_url: str = Field(default="", validation_alias="PROD_DATABASE_URL")
+    moderation_service_url: str = Field(
+        default=DEFAULT_SERVICE_URL, validation_alias="MODERATION_SERVICE_URL"
+    )
+    moderation_auth_token: str = Field(
+        default="", validation_alias="MODERATION_AUTH_TOKEN"
+    )
 
     def database_url(self, env: Environment) -> str:
         url = {
@@ -59,10 +69,14 @@ class RescoreSettings(BaseSettings):
 
 
 async def main(env: Environment, dry_run: bool) -> int:
-    os.environ["DATABASE_URL"] = RescoreSettings().database_url(env)
+    settings = RescoreSettings()
+    if not settings.moderation_auth_token:
+        print("MODERATION_AUTH_TOKEN is required")
+        return 1
 
-    from backend._internal.clients.moderation import get_moderation_client
-    from backend._internal.copyright_evidence import is_self_match, song_evidence
+    os.environ["DATABASE_URL"] = settings.database_url(env)
+
+    from backend.utilities.copyright_evidence import is_self_match, song_evidence
     from backend.models import CopyrightScan, Track
     from backend.utilities.database import db_session
     from sqlalchemy import select
@@ -83,7 +97,14 @@ async def main(env: Environment, dry_run: bool) -> int:
         )
 
         uris = [t.atproto_record_uri for _, t in rows if t.atproto_record_uri]
-        dismissed = await get_moderation_client().get_negated_labels(uris)
+        async with httpx.AsyncClient(
+            base_url=settings.moderation_service_url,
+            headers={"X-Moderation-Key": settings.moderation_auth_token},
+            timeout=30.0,
+        ) as client:
+            r = await client.post("/internal/negated-labels", json={"uris": uris})
+            r.raise_for_status()
+            dismissed = set(r.json().get("negated_uris", []))
 
         raised = lowered = 0
         for scan, track in rows:

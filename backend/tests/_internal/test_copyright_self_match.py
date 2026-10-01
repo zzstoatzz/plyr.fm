@@ -21,9 +21,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend._internal.clients.moderation import ScanResult
-from backend._internal.copyright_evidence import is_self_match as _is_self_match
 from backend._internal.moderation import _store_scan_result
 from backend.models import Artist, CopyrightScan, Track
+from backend.utilities.copyright_evidence import is_self_match as _is_self_match
 from tests._internal.test_copyright_evidence import played_through
 
 # --- unit: _is_self_match ---

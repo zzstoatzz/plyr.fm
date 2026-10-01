@@ -178,7 +178,7 @@ async def run_scan(
     from sqlalchemy import select
     from sqlalchemy.orm import joinedload
 
-    from backend._internal.copyright_evidence import is_self_match, song_evidence
+    from backend.utilities.copyright_evidence import is_self_match, song_evidence
     from backend.models import CopyrightScan, Track
     from backend.utilities.database import db_session
 

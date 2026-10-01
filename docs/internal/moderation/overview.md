@@ -57,7 +57,7 @@ track upload completes
 
 | component | location | what it does |
 |-----------|----------|--------------|
-| **plyr backend** | `backend/src/backend/_internal/moderation.py`, `copyright_evidence.py` | triggers scans on upload, decides what the matches are evidence of, stores results, DMs admin if flagged |
+| **plyr backend** | `backend/src/backend/_internal/moderation.py`, `utilities/copyright_evidence.py` | triggers scans on upload, decides what the matches are evidence of, stores results, DMs admin if flagged |
 | **moderation service** | `services/moderation/` (Rust, Fly.io) | AuDD fingerprinting, ATProto label signing/emission, admin dashboard |
 | **admin dashboard** | `services/moderation/src/admin.rs` | htmx UI for reviewing flags, resolving false positives |
 | **label cache** | `backend/_internal/clients/moderation.py` | backend caches active labels to check track visibility |

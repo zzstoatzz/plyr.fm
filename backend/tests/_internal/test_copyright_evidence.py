@@ -6,7 +6,7 @@ docs/internal/moderation/copyright-detection.md.
 
 from typing import Any
 
-from backend._internal.copyright_evidence import song_evidence
+from backend.utilities.copyright_evidence import song_evidence
 
 
 def _timecode(seconds: int) -> str:

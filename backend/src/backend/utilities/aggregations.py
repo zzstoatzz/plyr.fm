@@ -10,8 +10,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import func
 
-from backend._internal.copyright_evidence import song_evidence
 from backend.models import CopyrightScan, Tag, Track, TrackComment, TrackLike, TrackTag
+from backend.utilities.copyright_evidence import song_evidence
 
 logger = logging.getLogger(__name__)
 

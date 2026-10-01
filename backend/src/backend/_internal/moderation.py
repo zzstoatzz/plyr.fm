@@ -7,14 +7,14 @@ from sqlalchemy import select
 from sqlalchemy.orm import joinedload
 
 from backend._internal.clients.moderation import ScanResult, get_moderation_client
-from backend._internal.copyright_evidence import (
+from backend._internal.notifications import notification_service
+from backend.config import settings
+from backend.models import CopyrightScan, Track
+from backend.utilities.copyright_evidence import (
     SongEvidence,
     is_self_match,
     song_evidence,
 )
-from backend._internal.notifications import notification_service
-from backend.config import settings
-from backend.models import CopyrightScan, Track
 from backend.utilities.database import db_session
 
 logger = logging.getLogger(__name__)

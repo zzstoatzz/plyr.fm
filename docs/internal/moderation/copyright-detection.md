@@ -27,7 +27,7 @@ upload completes
 3. the task calls the moderation service `POST /scan` with the R2 URL
 4. the service calls AuDD with `accurate_offsets=1` and returns the matches
 5. the backend derives **evidence** from the matches
-   (`_internal/copyright_evidence.py`) and drops recordings that are the
+   (`utilities/copyright_evidence.py`) and drops recordings that are the
    uploader's own
 6. the scan is stored; `is_flagged` is true when evidence of someone else's
    recording remains
@@ -268,7 +268,7 @@ ORDER BY t.created_at DESC;
 | what | where |
 |------|-------|
 | scan task + retry | `backend/src/backend/_internal/tasks/copyright.py` |
-| evidence + self-match | `backend/src/backend/_internal/copyright_evidence.py` |
+| evidence + self-match | `backend/src/backend/utilities/copyright_evidence.py` |
 | result storage, review item, DM | `backend/src/backend/_internal/moderation.py` |
 | moderation client (httpx wrapper) | `backend/src/backend/_internal/clients/moderation.py` |
 | DM text | `backend/src/backend/_internal/notifications.py` |
