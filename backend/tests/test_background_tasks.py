@@ -4,6 +4,9 @@ import asyncio
 import contextlib
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
+from docket import ExponentialRetry
+
 import backend._internal.export_tasks as export_tasks
 import backend._internal.tasks.copyright as copyright_tasks
 import backend._internal.tasks.sync as sync_tasks
@@ -51,6 +54,23 @@ async def test_schedule_copyright_scan_uses_docket() -> None:
 
         mock_docket.add.assert_called_once()
         assert calls == [(123, "https://example.com/audio.mp3")]
+
+
+@pytest.mark.parametrize(("attempt", "final"), [(1, False), (4, True)])
+async def test_scan_copyright_records_failure_only_on_last_attempt(
+    attempt: int, final: bool
+) -> None:
+    """earlier attempts must raise so docket retries the scan."""
+    retry = ExponentialRetry(attempts=4)
+    retry.attempt = attempt
+
+    with patch(
+        "backend._internal.moderation.scan_track_for_copyright",
+        new_callable=AsyncMock,
+    ) as scan:
+        await copyright_tasks.scan_copyright(1, "https://example.com/a.mp3", retry)
+
+    scan.assert_awaited_once_with(1, "https://example.com/a.mp3", final_attempt=final)
 
 
 async def test_schedule_atproto_sync_uses_docket() -> None:

@@ -23,22 +23,15 @@ from backend._internal.moderation import (
 )
 from backend.main import app
 from backend.models import Artist, CopyrightScan, Track
+from tests._internal.test_copyright_evidence import played_through
 
 
 @pytest.fixture
 def mock_scan_result() -> ScanResult:
     """typical scan result from moderation client."""
     return ScanResult(
-        is_flagged=True,
         highest_score=85,
-        matches=[
-            {
-                "artist": "Test Artist",
-                "title": "Test Song",
-                "score": 85,
-                "isrc": "USRC12345678",
-            }
-        ],
+        matches=played_through("Test Artist", "Test Song", 10),
         raw_response={"status": "success", "result": []},
     )
 
@@ -47,7 +40,6 @@ def mock_scan_result() -> ScanResult:
 def mock_clear_result() -> ScanResult:
     """scan result when no copyright matches found."""
     return ScanResult(
-        is_flagged=False,
         highest_score=0,
         matches=[],
         raw_response={"status": "success", "result": None},
@@ -79,7 +71,6 @@ async def test_moderation_client_scan_success() -> None:
 
         result = await client.scan("https://example.com/audio.mp3")
 
-    assert result.is_flagged is True
     assert result.highest_score == 85
     assert len(result.matches) == 1
     mock_post.assert_called_once()
@@ -147,8 +138,8 @@ async def test_scan_track_stores_flagged_result(
 
     assert scan.is_flagged is True
     assert scan.highest_score == 85
-    assert len(scan.matches) == 1
-    assert scan.matches[0]["artist"] == "Test Artist"
+    assert len(scan.matches) == 10
+    assert scan.raw_response["evidence"][0]["artist"] == "Test Artist"
 
 
 async def test_scan_track_stores_clear_result(
@@ -227,10 +218,7 @@ async def test_scan_track_no_auth_token() -> None:
             mock_get_client.assert_not_called()
 
 
-async def test_scan_track_service_error_stores_as_clear(
-    db_session: AsyncSession,
-) -> None:
-    """test that service errors are stored as clear results."""
+async def _track_for_failed_scan(db_session: AsyncSession) -> Track:
     artist = Artist(
         did="did:plc:errortest",
         handle="errortest.bsky.social",
@@ -248,24 +236,64 @@ async def test_scan_track_service_error_stores_as_clear(
     )
     db_session.add(track)
     await db_session.commit()
+    return track
 
-    with patch("backend._internal.moderation.settings") as mock_settings:
+
+def _failing_client() -> AsyncMock:
+    client = AsyncMock()
+    client.scan.side_effect = httpx.HTTPStatusError(
+        "502 error",
+        request=AsyncMock(),
+        response=AsyncMock(status_code=502),
+    )
+    return client
+
+
+async def test_failed_scan_is_raised_for_retry_and_stores_nothing(
+    db_session: AsyncSession,
+) -> None:
+    """a 502 used to be written as a clear scan and never retried."""
+    track = await _track_for_failed_scan(db_session)
+
+    with (
+        patch("backend._internal.moderation.settings") as mock_settings,
+        patch(
+            "backend._internal.moderation.get_moderation_client",
+            return_value=_failing_client(),
+        ),
+    ):
         mock_settings.moderation.enabled = True
         mock_settings.moderation.auth_token = "test-token"
 
-        with patch(
-            "backend._internal.moderation.get_moderation_client"
-        ) as mock_get_client:
-            mock_client = AsyncMock()
-            mock_client.scan.side_effect = httpx.HTTPStatusError(
-                "502 error",
-                request=AsyncMock(),
-                response=AsyncMock(status_code=502),
+        with pytest.raises(httpx.HTTPStatusError):
+            await scan_track_for_copyright(
+                track.id, "https://example.com/short.mp3", final_attempt=False
             )
-            mock_get_client.return_value = mock_client
 
-            # should not raise - stores error as clear
-            await scan_track_for_copyright(track.id, "https://example.com/short.mp3")
+    result = await db_session.execute(
+        select(CopyrightScan).where(CopyrightScan.track_id == track.id)
+    )
+    assert result.scalar_one_or_none() is None
+
+
+async def test_scan_failing_on_final_attempt_is_recorded_as_failed(
+    db_session: AsyncSession,
+) -> None:
+    track = await _track_for_failed_scan(db_session)
+
+    with (
+        patch("backend._internal.moderation.settings") as mock_settings,
+        patch(
+            "backend._internal.moderation.get_moderation_client",
+            return_value=_failing_client(),
+        ),
+    ):
+        mock_settings.moderation.enabled = True
+        mock_settings.moderation.auth_token = "test-token"
+
+        await scan_track_for_copyright(
+            track.id, "https://example.com/short.mp3", final_attempt=True
+        )
 
     result = await db_session.execute(
         select(CopyrightScan).where(CopyrightScan.track_id == track.id)
@@ -273,9 +301,7 @@ async def test_scan_track_service_error_stores_as_clear(
     scan = result.scalar_one()
 
     assert scan.is_flagged is False
-    assert scan.highest_score == 0
     assert scan.matches == []
-    assert "error" in scan.raw_response
     assert scan.raw_response["status"] == "scan_failed"
 
 

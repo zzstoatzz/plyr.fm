@@ -4,7 +4,7 @@ import logging
 from datetime import timedelta
 
 import logfire
-from docket import Perpetual
+from docket import ExponentialRetry, Perpetual
 from sqlalchemy import select
 
 from backend._internal.background import get_docket
@@ -14,7 +14,18 @@ from backend.utilities.database import db_session
 logger = logging.getLogger(__name__)
 
 
-async def scan_copyright(track_id: int, audio_url: str) -> None:
+_SCAN_RETRY = ExponentialRetry(
+    attempts=4,
+    minimum_delay=timedelta(seconds=30),
+    maximum_delay=timedelta(minutes=10),
+)
+
+
+async def scan_copyright(
+    track_id: int,
+    audio_url: str,
+    retry: ExponentialRetry = _SCAN_RETRY,
+) -> None:
     """scan a track for potential copyright matches.
 
     args:
@@ -23,7 +34,11 @@ async def scan_copyright(track_id: int, audio_url: str) -> None:
     """
     from backend._internal.moderation import scan_track_for_copyright
 
-    await scan_track_for_copyright(track_id, audio_url)
+    await scan_track_for_copyright(
+        track_id,
+        audio_url,
+        final_attempt=retry.attempts is not None and retry.attempt >= retry.attempts,
+    )
 
 
 async def schedule_copyright_scan(track_id: int, audio_url: str) -> None:

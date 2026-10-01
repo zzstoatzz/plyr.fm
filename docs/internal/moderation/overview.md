@@ -34,9 +34,9 @@ track upload completes
         │                       │
         ▼                       ▼
 ┌─────────────────┐     ┌───────────────────┐
-│ copyright_scans │     │ is_flagged?       │
-│ (Neon postgres) │     │ (dominant_match   │
-└─────────────────┘     │  >= threshold)    │
+│ copyright_scans │     │ returns matches;  │
+│ (Neon postgres) │     │ backend decides   │
+└─────────────────┘     │ is_flagged        │
         │               └───────────────────┘
         │                       │ yes
         ▼                       ▼
@@ -57,8 +57,8 @@ track upload completes
 
 | component | location | what it does |
 |-----------|----------|--------------|
-| **plyr backend** | `backend/src/backend/_internal/moderation.py` | triggers scans on upload, stores results, DMs admin if flagged |
-| **moderation service** | `services/moderation/` (Rust, Fly.io) | AuDD scanning, ATProto label signing/emission, admin dashboard |
+| **plyr backend** | `backend/src/backend/_internal/moderation.py`, `utilities/copyright_evidence.py` | triggers scans on upload, decides what the matches are evidence of, stores results, DMs admin if flagged |
+| **moderation service** | `services/moderation/` (Rust, Fly.io) | AuDD fingerprinting, ATProto label signing/emission, admin dashboard |
 | **admin dashboard** | `services/moderation/src/admin.rs` | htmx UI for reviewing flags, resolving false positives |
 | **label cache** | `backend/_internal/clients/moderation.py` | backend caches active labels to check track visibility |
 | **content policy** | `backend/_internal/content_labels.py` | maps interoperable label values to viewer discovery and playback behavior |
@@ -126,22 +126,21 @@ families differ.
 
 ### AuDD and accurate_offsets
 
-we use AuDD's enterprise API with `accurate_offsets=1`, which scans audio in segments and returns groups of matches per offset. this mode does **not** return per-match confidence scores — `highest_score` is always 0.
+we use AuDD's enterprise API with `accurate_offsets=1`, which samples the audio
+every 12 seconds and returns the reference recordings each sample resembles,
+with the position inside each one. This mode returns **no** per-match
+confidence score — `highest_score` is always 0. The position is the signal.
 
-the meaningful signal is **dominant match percentage**: what fraction of audio segments match the same song. if 85% of segments match "Song X", that's a strong signal. if segments match 10 different songs at 10% each, that's noise.
+### what gets flagged
 
-### flagging threshold
+a scan is flagged when someone else's recording **plays through** the upload:
+at least 4 consecutive-in-time samples (about 48 seconds) that advance in step
+with one reference recording. The backend decides this from the matches the
+service returns; there is no threshold to configure. A DJ mix needs no separate
+rule — every recording in it plays through.
 
-the Rust service flags a track when `dominant_match_pct >= MODERATION_COPYRIGHT_SCORE_THRESHOLD` (default: 30%).
-
-the env var name mismatch that once made this silently 30% is fixed —
-`fly.toml` and `config.rs` both use `MODERATION_COPYRIGHT_SCORE_THRESHOLD`, so
-production runs at the intended 70%.
-
-a mix of several copyrighted songs trips a separate check
-(`MODERATION_COPYRIGHT_MIX_SONG_THRESHOLD`, #1689): no single song dominates a
-DJ mix, so the per-song percentage stays low while the count of sustained
-distinct songs is the signal.
+see [copyright detection](copyright-detection.md#what-counts-as-evidence) for
+the measurements behind the bar and what the previous rule got wrong.
 
 ### the review queue
 

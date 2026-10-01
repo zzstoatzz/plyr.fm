@@ -15,32 +15,16 @@ handle/display_name. demote is_flagged to false at write time so the UI
 flag and the DM never fire.
 """
 
-from dataclasses import dataclass
-from typing import Any
 from unittest.mock import AsyncMock, patch
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend._internal.moderation import (
-    _dominant_match_artist,
-    _is_self_match,
-    _store_scan_result,
-)
+from backend._internal.clients.moderation import ScanResult
+from backend._internal.moderation import _store_scan_result
 from backend.models import Artist, CopyrightScan, Track
-
-
-@dataclass
-class _FakeScanResult:
-    is_flagged: bool
-    highest_score: int
-    matches: list[dict[str, Any]]
-    raw_response: dict[str, Any]
-
-
-def _matches(*pairs: tuple[str, str]) -> list[dict[str, Any]]:
-    return [{"artist": a, "title": t, "score": 0} for a, t in pairs]
-
+from backend.utilities.copyright_evidence import is_self_match as _is_self_match
+from tests._internal.test_copyright_evidence import played_through
 
 # --- unit: _is_self_match ---
 
@@ -75,26 +59,6 @@ class TestIsSelfMatch:
         assert _is_self_match("", "flo.by", "flo.by") is False
 
 
-# --- unit: _dominant_match_artist ---
-
-
-class TestDominantMatchArtist:
-    def test_picks_most_frequent(self) -> None:
-        ms = _matches(
-            ("Floby IV", "Summer Heat"),
-            ("Floby IV", "Summer Heat"),
-            ("Other", "song"),
-        )
-        assert _dominant_match_artist(ms) == "Floby IV"
-
-    def test_empty_returns_none(self) -> None:
-        assert _dominant_match_artist([]) is None
-
-    def test_skips_blank_artists(self) -> None:
-        ms = [{"artist": "", "title": "x"}, {"artist": "Real", "title": "y"}]
-        assert _dominant_match_artist(ms) == "Real"
-
-
 # --- integration: _store_scan_result demotes self-matches ---
 
 
@@ -126,14 +90,9 @@ async def test_store_scan_result_suppresses_self_match(
     db_session: AsyncSession,
 ) -> None:
     track = await _make_artist_and_track(db_session)
-    scan_result = _FakeScanResult(
-        is_flagged=True,
+    scan_result = ScanResult(
         highest_score=0,
-        matches=_matches(
-            ("Floby IV", "Summer Heat"),
-            ("Floby IV", "Summer Heat"),
-            ("Floby IV", "Summer Heat"),
-        ),
+        matches=played_through("Floby IV", "Summer Heat", 18),
         raw_response={},
     )
 
@@ -169,14 +128,9 @@ async def test_store_scan_result_real_violation_still_flags(
         did="did:plc:test-j4ck",
         title="acoustic guitar cover of vodka cranberry",
     )
-    scan_result = _FakeScanResult(
-        is_flagged=True,
+    scan_result = ScanResult(
         highest_score=0,
-        matches=_matches(
-            ("Conan Gray", "Vodka Cranberry"),
-            ("Conan Gray", "Vodka Cranberry"),
-            ("Conan Gray", "Vodka Cranberry"),
-        ),
+        matches=played_through("Conan Gray", "Vodka Cranberry", 19),
         raw_response={},
     )
 
@@ -199,18 +153,72 @@ async def test_store_scan_result_real_violation_still_flags(
     # genuine non-self-match: flag stays true and admin gets DM
     assert rows[0].is_flagged is True
     mock_dm.assert_awaited_once()
+    assert mock_dm.await_args.kwargs["recordings"] == [
+        "Conan Gray - Vodka Cranberry (0:00-3:48)"
+    ]
+
+
+async def test_own_recording_inside_a_mix_does_not_hide_the_others(
+    db_session: AsyncSession,
+) -> None:
+    track = await _make_artist_and_track(db_session, did="did:plc:test-mix")
+    scan_result = ScanResult(
+        highest_score=0,
+        matches=played_through("Floby IV", "Summer Heat", 18)
+        + played_through("Someone Else", "Their Song", 6, upload_start=300),
+        raw_response={},
+    )
+
+    with patch(
+        "backend._internal.moderation.notification_service.send_copyright_flag_notification",
+        new_callable=AsyncMock,
+    ) as mock_dm:
+        await _store_scan_result(track.id, scan_result)
+
+    scan = (
+        await db_session.execute(
+            select(CopyrightScan).where(CopyrightScan.track_id == track.id)
+        )
+    ).scalar_one()
+    assert scan.is_flagged is True
+    assert mock_dm.await_args.kwargs["recordings"] == [
+        "Someone Else - Their Song (5:00-6:12)"
+    ]
+    assert len(scan.raw_response["evidence"]) == 2
+
+
+async def test_scattered_matches_do_not_flag(db_session: AsyncSession) -> None:
+    # 3 matches, 3 songs, one position: flagged by the dominant-share rule
+    track = await _make_artist_and_track(db_session, did="did:plc:test-noise")
+    scan_result = ScanResult(
+        highest_score=0,
+        matches=[
+            {"artist": f"Artist {i}", "title": "T", "offset_ms": 0, "timecode": "00:30"}
+            for i in range(3)
+        ],
+        raw_response={},
+    )
+
+    with patch(
+        "backend._internal.moderation.notification_service.send_copyright_flag_notification",
+        new_callable=AsyncMock,
+    ) as mock_dm:
+        await _store_scan_result(track.id, scan_result)
+
+    scan = (
+        await db_session.execute(
+            select(CopyrightScan).where(CopyrightScan.track_id == track.id)
+        )
+    ).scalar_one()
+    assert scan.is_flagged is False
+    mock_dm.assert_not_called()
 
 
 async def test_store_scan_result_clear_path_unchanged(
     db_session: AsyncSession,
 ) -> None:
     track = await _make_artist_and_track(db_session, did="did:plc:test-clear")
-    scan_result = _FakeScanResult(
-        is_flagged=False,
-        highest_score=0,
-        matches=[],
-        raw_response={},
-    )
+    scan_result = ScanResult(highest_score=0, matches=[], raw_response={})
 
     with patch(
         "backend._internal.moderation.notification_service.send_copyright_flag_notification",

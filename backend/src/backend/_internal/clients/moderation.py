@@ -22,7 +22,6 @@ logger = logging.getLogger(__name__)
 class ScanResult:
     """result from a copyright scan."""
 
-    is_flagged: bool
     highest_score: int
     matches: list[dict[str, Any]]
     raw_response: dict[str, Any]
@@ -130,7 +129,6 @@ class ModerationClient:
             data = response.json()
 
             return ScanResult(
-                is_flagged=data.get("is_flagged", False),
                 highest_score=data.get("highest_score", 0),
                 matches=data.get("matches", []),
                 raw_response=data.get("raw_response", {}),
