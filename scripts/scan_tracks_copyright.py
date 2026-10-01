@@ -1,26 +1,26 @@
-#!/usr/bin/env -S uv run --script --quiet
+#!/usr/bin/env -S uv run --script --quiet --with-editable=backend
 # /// script
 # requires-python = ">=3.12"
 # dependencies = [
 #     "httpx",
 #     "pydantic-settings",
-#     "sqlalchemy[asyncio]",
-#     "asyncpg",
-#     "logfire[sqlalchemy]",
 # ]
 # ///
 """scan all tracks for copyright using the moderation service.
 
 usage:
-    uv run scripts/scan_tracks_copyright.py --env staging
-    uv run scripts/scan_tracks_copyright.py --env prod --dry-run
-    uv run scripts/scan_tracks_copyright.py --env staging --limit 10
-    uv run scripts/scan_tracks_copyright.py --env prod --max-duration 5
+    ./scripts/scan_tracks_copyright.py --env staging
+    ./scripts/scan_tracks_copyright.py --env prod --dry-run
+    ./scripts/scan_tracks_copyright.py --env staging --limit 10
+    ./scripts/scan_tracks_copyright.py --env prod --max-duration 5
+    ./scripts/scan_tracks_copyright.py --env prod --track-id 1273
 
 this will:
 - fetch all tracks that haven't been scanned yet
 - call the moderation service for each track
-- store results in copyright_scans table
+- store results in copyright_scans table; a track named with --track-id has
+  its stored scan replaced, which is how a failed scan gets retried
+- open no review item and notify nobody: run backfill_moderation_queue.py after
 
 environment variables (set in .env or export):
     # database URLs per environment
@@ -35,17 +35,14 @@ environment variables (set in .env or export):
 
 import asyncio
 import os
+import re
 import sys
 from datetime import UTC, datetime
-from pathlib import Path
 from typing import Literal
 
 import httpx
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
-
-# add src to path
-sys.path.insert(0, str(Path(__file__).parent.parent / "backend" / "src"))
 
 
 Environment = Literal["dev", "staging", "prod"]
@@ -84,7 +81,7 @@ class ScanSettings(BaseSettings):
         url = urls.get(env, "")
         if not url:
             raise ValueError(f"no database URL configured for {env}")
-        return url
+        return re.sub(r"^postgres(ql)?(\+\w+)?://", "postgresql+psycopg://", url)
 
 
 def setup_env(settings: ScanSettings, env: Environment) -> None:
@@ -282,19 +279,23 @@ async def run_scan(
                         )
                     ]
 
-                    # create scan record
-                    scan = CopyrightScan(
-                        track_id=track.id,
-                        scanned_at=datetime.now(UTC),
-                        is_flagged=bool(others),
-                        highest_score=result["highest_score"],
-                        matches=result["matches"],
-                        raw_response={
-                            **result["raw_response"],
-                            "evidence": [e.as_dict() for e in evidence],
-                        },
+                    scan = await db.scalar(
+                        select(CopyrightScan)
+                        .where(CopyrightScan.track_id == track.id)
+                        .order_by(CopyrightScan.scanned_at.desc())
+                        .limit(1)
                     )
-                    db.add(scan)
+                    if scan is None:
+                        scan = CopyrightScan(track_id=track.id)
+                        db.add(scan)
+                    scan.scanned_at = datetime.now(UTC)
+                    scan.is_flagged = bool(others)
+                    scan.highest_score = result["highest_score"]
+                    scan.matches = result["matches"]
+                    scan.raw_response = {
+                        **result["raw_response"],
+                        "evidence": [e.as_dict() for e in evidence],
+                    }
                     await db.commit()
 
                     scanned += 1
