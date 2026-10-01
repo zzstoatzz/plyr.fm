@@ -84,8 +84,6 @@ async fn main() -> anyhow::Result<()> {
         signer: signer.map(Arc::new),
         label_tx,
         claude: claude_client.map(Arc::new),
-        copyright_score_threshold: config.copyright_score_threshold,
-        copyright_mix_song_threshold: config.copyright_mix_song_threshold,
     };
 
     let app = build_router(state, auth_token);
@@ -219,8 +217,6 @@ mod tests {
             signer: None,
             label_tx: None,
             claude: None,
-            copyright_score_threshold: 50,
-            copyright_mix_song_threshold: 3,
         }
     }
 

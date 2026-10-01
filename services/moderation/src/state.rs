@@ -24,10 +24,6 @@ pub struct AppState {
     pub label_tx: Option<broadcast::Sender<(i64, Label)>>,
     /// Claude client for image moderation (if configured)
     pub claude: Option<Arc<ClaudeClient>>,
-    /// Minimum percentage of matches that must belong to a single song to flag
-    pub copyright_score_threshold: i32,
-    /// Minimum count of distinct sustained songs to flag as a mix
-    pub copyright_mix_song_threshold: usize,
 }
 
 /// Application error type.
