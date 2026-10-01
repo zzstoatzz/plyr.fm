@@ -135,12 +135,16 @@ jobs:
           display_report: "true"
           claude_args: |
             --model ${{ env.MODEL }}
-            --allowedTools "Read,Write,Edit,Bash,Fetch,Task"
+            --allowedTools "Read,Write,Edit,Bash,Fetch"
+            --disallowedTools "Task,Agent"
           prompt: |
             you are maintaining the plyr.fm (pronounced "player FM") project status file.
 
             ## critical rules
 
+            0. do every step yourself, in this turn. this run is headless: it ends the
+               moment your turn ends, so there is nothing to wait for and nobody to
+               hand back to. never end your turn before `podcast_script.txt` exists.
             1. STATUS.md MUST be kept under 500 lines. this is non-negotiable.
             2. archive content MUST be moved to .status_history/, not deleted
             3. podcast tone MUST be dry, matter-of-fact, slightly sardonic - NOT enthusiastic or complimentary
@@ -221,7 +225,7 @@ jobs:
             ### deep investigation phase
 
             before writing anything, you need to deeply understand what happened in the time window.
-            use subagents liberally to investigate in parallel:
+            investigate it yourself, batching independent reads into one tool call:
 
             1. **start from the PR table in window_report.md** — it lists every PR merged in the window and where each landed. read bodies with `gh pr view {number} --json body` for the ones that matter:
 

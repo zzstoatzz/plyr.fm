@@ -88,6 +88,12 @@ in the background, the writer ended its turn "waiting" for it, and the
 session closed with nothing written (run 33936254221). the separate step is
 the fix.
 
+the writer then did the same thing to itself (run 36900364635, October 1): its
+prompt still said "use subagents liberally", it started two investigators, and
+ended its turn waiting on them, so no script was written and the audio step
+failed. the writer's step no longer has `Task` in its allowed tools, and its
+first rule says the run ends when its turn does.
+
 ## run outputs
 
 every run (not just one that opens a PR) writes `window_report.md`,
