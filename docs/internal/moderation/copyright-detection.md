@@ -12,26 +12,30 @@ upload completes
        ▼
 ┌──────────────┐     ┌─────────────────┐     ┌──────────────┐
 │   backend    │────▶│   moderation    │────▶│  AuDD API    │
-│ (docket bg   │     │   service       │     │ (enterprise, │
-│  task)       │     │   (Rust)        │     │  accurate    │
-│              │◀────│                 │◀────│  offsets)    │
-└──────────────┘     └─────────────────┘     └──────────────┘
-       │
-       ├──store in copyright_scans table
-       ├──if flagged: DM admin via ATProto notifications
-       └──publish to Redis stream (for Osprey, when deployed)
+│ (docket task,│     │   service       │     │ (enterprise, │
+│  retried)    │◀────│   (Rust)        │◀────│  accurate    │
+└──────────────┘     └─────────────────┘     │  offsets)    │
+       │                                     └──────────────┘
+       ├──decide what the matches are evidence of
+       ├──store in copyright_scans
+       └──if someone else's recording is present:
+            open a review item + DM the operator
 ```
 
 1. track upload completes, file stored in R2
-2. backend fires docket background task calling `scan_track_for_copyright`
-3. backend calls moderation service `POST /scan` with R2 URL
-4. moderation service calls AuDD enterprise API with `accurate_offsets=1`
-5. moderation service computes `dominant_match_pct` and `is_flagged`
-6. results returned to backend, stored in `copyright_scans` table
-7. if flagged, backend DMs admin with track details and matches
-8. backend publishes event to `moderation:actions` Redis stream (for Osprey)
+2. backend schedules `scan_copyright` (docket, up to 4 attempts)
+3. the task calls the moderation service `POST /scan` with the R2 URL
+4. the service calls AuDD with `accurate_offsets=1` and returns the matches
+5. the backend derives **evidence** from the matches
+   (`_internal/copyright_evidence.py`) and drops recordings that are the
+   uploader's own
+6. the scan is stored; `is_flagged` is true when evidence of someone else's
+   recording remains
+7. if flagged, the backend opens a `flagged_by_scan` review item and DMs the
+   operator with the recordings found and where in the upload they sit
 
-labels are **not** automatically emitted. that happens manually from the admin dashboard, or will happen via Osprey rules once deployed.
+the service fingerprints; the backend decides. Labels are never emitted
+automatically — see [overview](overview.md).
 
 ## AuDD API
 
@@ -78,57 +82,92 @@ with `accurate_offsets=1`, AuDD scans the audio in segments and returns groups o
 
 **`accurate_offsets=1` does NOT return per-match confidence scores.** the `score` field is absent or unreliable. `highest_score` in our scan response is always 0.
 
-### what we compute from the response
-
-the Rust service (`audd.rs`) extracts:
-
-- **matches**: all individual song matches across segments
-- **dominant_match_pct**: what % of segments match the same song (by artist + title)
-- **dominant_match**: the song that appears most frequently ("Artist - Title")
-- **match_count**: total number of segment matches
-
-example: if 3 out of 4 segments match "Taylor Swift - Love Story", `dominant_match_pct = 75`.
-
 ### pricing
 
-- enterprise API, $2 per 1000 requests
-- 1 request = 12 seconds of audio
-- 5-minute track ~ 25 requests ~ $0.05
+see `COSTS.md` and `scripts/costs/export_costs.py` for the plan constants; one
+request is 12 seconds of audio.
 
-## interpreting results
+## what counts as evidence
 
-### dominant match percentage
+AuDD samples the upload every 12 seconds and reports, for each sample, the
+reference recordings it resembles and the position inside each one
+(`timecode`). It returns no confidence score. A match is cheap: 665 of the
+1,092 scans in production on 2026-10-01 carried at least one, and most of
+those are original work.
 
-this is the only meaningful threshold signal. it answers: "what fraction of the audio consistently matches the same song?"
+what separates a recording that is present from a coincidence is whether it
+**plays through**. When a recording is in the upload, successive samples land
+at successive positions in the same reference — the upload offset and the
+reference timecode advance together. A coincidental match does not advance: it
+is a different song at every sample, or the same reference loop matched at
+unrelated positions.
 
-| dominant_match_pct | interpretation |
-|-------------------|----------------|
-| 85-100% | very high confidence — most of the audio is the same song |
-| 50-84% | moderate confidence — significant overlap, but not conclusive |
-| 30-49% | low confidence — some matches, could be samples or similar progressions |
-| < 30% | noise — scattered matches across different songs, likely false positive |
+`song_evidence()` counts, per reference recording, the largest set of samples
+that stay in step (offset minus timecode within 8 seconds). Measured over
+those 665 scans:
 
-### is_flagged
+| best in-step run | scans |
+|---|---|
+| 1 sample | 522 |
+| 2 | 18 |
+| 3 | 7 |
+| 4 | 2 |
+| 5 | 5 |
+| 6 or more | 106 |
 
-`is_flagged = dominant_match_pct >= MODERATION_COPYRIGHT_SCORE_THRESHOLD`
+the distribution has two humps and almost nothing between them, so the bar is
+**4 samples in step** — about 48 seconds of one recording playing through.
 
-the threshold is configured via env var on the Rust service. default: 30%.
+one case needs a second rule. A short clip on repeat matches at every sample
+but its timecode keeps resetting, so nothing stays in step for long. A
+recording matched at 6 or more samples that are at least 80% of all matched
+samples is also evidence. Two scans met only this rule on 2026-10-01; it is
+tuned on far less data than the in-step rule.
 
-**known issue (march 2026)**: `fly.toml` sets `MODERATION_SCORE_THRESHOLD=70` but the Rust code reads `MODERATION_COPYRIGHT_SCORE_THRESHOLD`. since the actual env var is never set, the threshold falls through to the default of 30%. the effective threshold has been 30% since deployment.
+### what the previous rule did
 
-### false positives
+until October 2026 the Rust service flagged when one song was at least N% of
+the *matches* (`dominant_match_pct`), or when three songs each matched at
+three positions. The denominator was the match count, not the audio, so one
+stray match was 1 of 1 = 100%. Of 27 flagged scans, 18 had no recording
+playing through at all — several were ten-second test uploads — while 61
+tracks that did have one were not flagged.
 
-common causes:
-- generic beats/samples reused across many songs
-- covers or remixes (legal gray area)
-- similar chord progressions or drum patterns
-- audio artifacts matching by coincidence
+two other things were wrong at the same time, and are why the numbers above
+looked the way they did:
 
-this is why we flag but don't auto-enforce. human review in the admin dashboard is needed.
+- the deployed threshold was 30%, not the intended 70%. `fly.toml` was
+  corrected to `MODERATION_COPYRIGHT_SCORE_THRESHOLD` but the service was not
+  redeployed afterwards, so production still carried the old, unread name.
+- every flag raised before 2026-06-29 was cleared within five minutes by the
+  resolution sync (#1602). Only the 13 listed in the July worklist were
+  restored. `scripts/rescore_copyright_scans.py` re-derives `is_flagged` from
+  stored matches.
 
-### ISRC codes
+### self-matches
 
-[International Standard Recording Code](https://en.wikipedia.org/wiki/International_Standard_Recording_Code) — unique identifier for recordings. when present in a match, this is strong evidence of a specific recording match (not just similar audio).
+an artist's own distributed catalogue matches itself. `is_self_match()`
+compares the reference artist with the uploader's handle and display name
+(lowercased, alphanumerics only, substring either way, 4+ characters). It is
+applied per recording, so one of the uploader's own tracks inside a mix does
+not hide the others.
+
+it misses a stage name that shares nothing with the handle or display name.
+Those arrive in the queue and are acknowledged by hand.
+
+### what evidence is not
+
+a recording being present is not a finding. Covers, remixes, DJ mixes, and
+public-domain readings all play through a reference. The flag puts a track in
+front of a person; [label policy](label-policy.md) covers what happens next.
+
+### failed scans
+
+a scan that errors is retried by docket (4 attempts, 30 seconds to 10
+minutes). If the last attempt fails, a row is stored with
+`raw_response.status = "scan_failed"` and a `copyright scan failed` error is
+logged. Previously a failure was stored as a clear scan on the first error and
+never retried.
 
 ## database schema
 
@@ -142,7 +181,7 @@ CREATE TABLE copyright_scans (
     is_flagged BOOLEAN NOT NULL DEFAULT FALSE,
     highest_score INTEGER NOT NULL DEFAULT 0,  -- always 0 with accurate_offsets
     matches JSONB NOT NULL DEFAULT '[]',       -- [{artist, title, isrc, ...}]
-    raw_response JSONB NOT NULL DEFAULT '{}',  -- full AuDD response + dominant_match_pct
+    raw_response JSONB NOT NULL DEFAULT '{}',  -- full AuDD response + evidence
 
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
@@ -154,11 +193,13 @@ CREATE TABLE copyright_scans (
 
 | is_flagged | raw_response contains | meaning |
 |------------|----------------------|---------|
-| `false` | `dominant_match_pct: 0` | no matches found |
-| `false` | `error: "..."` | scan failed, stored as clear |
-| `true` | `dominant_match_pct: >= threshold` | matches found, admin notified via DM |
+| `false` | `evidence: []` | no recording plays through |
+| `false` | `evidence: [...]` | the only recordings found are the uploader's own |
+| `false` | `status: "scan_failed"` | every attempt failed; the track is unscanned |
+| `true` | `evidence: [...]` | someone else's recording is present; review opened |
 
-note: `highest_score` is always 0 and should be ignored. the meaningful data is in `raw_response.dominant_match_pct`.
+scans stored before October 2026 have no `evidence` key until rescored.
+`highest_score` is always 0 and should be ignored.
 
 ## configuration
 
@@ -178,9 +219,6 @@ MODERATION_ENABLED=true
 MODERATION_AUDD_API_TOKEN=your_audd_token
 MODERATION_AUDD_API_URL=https://enterprise.audd.io/  # default
 
-# flagging threshold (% of segments matching same song)
-MODERATION_COPYRIGHT_SCORE_THRESHOLD=30  # default; fly.toml sets wrong var name
-
 # auth
 MODERATION_AUTH_TOKEN=shared_secret_token
 
@@ -195,14 +233,14 @@ MODERATION_CLAUDE_MODEL=claude-sonnet-4-5-20250929  # default
 
 ```sql
 SELECT t.id, t.title, a.handle,
-       cs.raw_response->>'dominant_match_pct' as dominant_pct,
-       cs.raw_response->>'dominant_match' as dominant_song,
-       jsonb_array_length(cs.matches) as match_count
+       cs.raw_response->'evidence'->0->>'artist' as artist,
+       cs.raw_response->'evidence'->0->>'title' as recording,
+       cs.raw_response->'evidence'->0->>'in_step_segments' as in_step
 FROM copyright_scans cs
 JOIN tracks t ON t.id = cs.track_id
 JOIN artists a ON a.did = t.artist_did
 WHERE cs.is_flagged = true
-ORDER BY (cs.raw_response->>'dominant_match_pct')::int DESC;
+ORDER BY cs.scanned_at DESC;
 ```
 
 ### scan statistics
@@ -229,14 +267,14 @@ ORDER BY t.created_at DESC;
 
 | what | where |
 |------|-------|
-| scan trigger + result storage | `backend/src/backend/_internal/moderation.py` |
+| scan task + retry | `backend/src/backend/_internal/tasks/copyright.py` |
+| evidence + self-match | `backend/src/backend/_internal/copyright_evidence.py` |
+| result storage, review item, DM | `backend/src/backend/_internal/moderation.py` |
 | moderation client (httpx wrapper) | `backend/src/backend/_internal/clients/moderation.py` |
-| DM notification on flag | `backend/src/backend/_internal/notifications.py` |
-| Redis stream publish | `backend/src/backend/_internal/moderation.py:_publish_moderation_event` |
-| AuDD scanning + dominant match calc | `services/moderation/src/audd.rs` |
-| is_flagged threshold check | `services/moderation/src/audd.rs:123` |
-| config with env var names | `services/moderation/src/config.rs` |
-| tests | `backend/tests/moderation/` (6 files) |
+| DM text | `backend/src/backend/_internal/notifications.py` |
+| AuDD call | `services/moderation/src/audd.rs` |
+| rescore stored scans | `scripts/rescore_copyright_scans.py` |
+| tests | `backend/tests/_internal/test_copyright_evidence.py`, `test_copyright_self_match.py`, `backend/tests/test_moderation.py` |
 
 ## related documentation
 

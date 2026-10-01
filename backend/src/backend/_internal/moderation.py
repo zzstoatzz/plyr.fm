@@ -1,14 +1,17 @@
 """moderation service integration for copyright scanning."""
 
 import logging
-from collections import Counter
-from typing import Any
 
 import logfire
 from sqlalchemy import select
 from sqlalchemy.orm import joinedload
 
-from backend._internal.clients.moderation import get_moderation_client
+from backend._internal.clients.moderation import ScanResult, get_moderation_client
+from backend._internal.copyright_evidence import (
+    SongEvidence,
+    is_self_match,
+    song_evidence,
+)
 from backend._internal.notifications import notification_service
 from backend.config import settings
 from backend.models import CopyrightScan, Track
@@ -16,67 +19,32 @@ from backend.utilities.database import db_session
 
 logger = logging.getLogger(__name__)
 
-_SELF_MATCH_MIN_SLUG_LEN = 4
+
+def _format_span(seconds: int) -> str:
+    return f"{seconds // 60}:{seconds % 60:02d}"
 
 
-def _slugify_artist(name: str) -> str:
-    """lowercase, alphanumeric-only — for fuzzy artist-name comparison."""
-    return "".join(c for c in name.lower() if c.isalnum())
+def describe_evidence(evidence: list[SongEvidence], limit: int = 3) -> list[str]:
+    """one line per recording found: who, what, and where in the upload."""
+    return [
+        f"{e.artist} - {e.title} "
+        f"({_format_span(e.start_seconds)}-{_format_span(e.end_seconds)})"
+        for e in evidence[:limit]
+    ]
 
 
-def _is_self_match(
-    match_artist: str, uploader_handle: str, uploader_display: str
-) -> bool:
-    """detect when a copyright match's artist is the uploader themselves.
-
-    AuDD frequently identifies an artist's own catalog uploads as
-    "violations" of their own published works elsewhere (e.g. dominant
-    match "Floby IV" on a track uploaded by handle "flo.by"). this is
-    a false positive — flagging it spams admin DMs and shows a red
-    badge to the artist on their own portal.
-
-    we compare slugified forms (lowercase, alphanumeric only) of the
-    match artist against the uploader's handle and display name. a
-    bidirectional substring check catches stage-name variants in
-    either direction (e.g. "flo.by" → "floby" is contained in
-    "Floby IV" → "flobyiv"). minimum length avoids accidental
-    matches on very short slugs.
-    """
-    m = _slugify_artist(match_artist)
-    if len(m) < _SELF_MATCH_MIN_SLUG_LEN:
-        return False
-    for candidate in (uploader_handle, uploader_display):
-        if not candidate:
-            continue
-        c = _slugify_artist(candidate)
-        if len(c) >= _SELF_MATCH_MIN_SLUG_LEN and (c in m or m in c):
-            return True
-    return False
-
-
-def _dominant_match_artist(matches: list[dict[str, Any]]) -> str | None:
-    """return the most frequent artist in scan matches, or None if empty."""
-    counts = Counter(
-        (m.get("artist") or "").strip() for m in matches if m.get("artist")
-    )
-    if not counts:
-        return None
-    artist, _ = counts.most_common(1)[0]
-    return artist or None
-
-
-async def scan_track_for_copyright(track_id: int, audio_url: str) -> None:
+async def scan_track_for_copyright(
+    track_id: int, audio_url: str, *, final_attempt: bool = True
+) -> None:
     """scan a track for potential copyright matches.
 
-    this runs as a fire-and-forget background task. failures are logged
-    but do not affect the upload flow.
-
-    if the scan fails (e.g., audio too short, unreadable format), we store
-    a "clear" result with the error info so the track isn't stuck unscanned.
+    a scan that fails is raised so the task retries; only the final attempt
+    records the failure, and a failed scan is never recorded as clear.
 
     args:
         track_id: database ID of the track to scan
         audio_url: public URL of the audio file (R2)
+        final_attempt: whether a failure here should be recorded, not raised
     """
     if not settings.moderation.enabled:
         logger.debug("moderation disabled, skipping copyright scan")
@@ -92,123 +60,96 @@ async def scan_track_for_copyright(track_id: int, audio_url: str) -> None:
         audio_url=audio_url,
     ):
         try:
-            client = get_moderation_client()
-            result = await client.scan(audio_url)
-            await _store_scan_result(track_id, result)
+            result = await get_moderation_client().scan(audio_url)
         except Exception as e:
-            logger.warning(
-                "copyright scan failed for track %d: %s - storing as clear",
-                track_id,
-                e,
-            )
-            await _store_scan_error(track_id, str(e))
+            if not final_attempt:
+                raise
+            await _store_scan_failure(track_id, str(e))
+            return
+        await _store_scan_result(track_id, result)
 
 
-async def _store_scan_result(track_id: int, result: Any) -> None:
-    """store scan result in the database.
+async def _store_scan_result(track_id: int, result: ScanResult) -> None:
+    """store a scan and, when it shows someone else's recording, open a review."""
+    evidence = song_evidence(result.matches)
 
-    args:
-        track_id: database ID of the track
-        result: ScanResult from moderation client
-    """
     async with db_session() as db:
-        # decide effective is_flagged BEFORE the row is written so the
-        # transient flag never reaches the UI / DM path. self-matches
-        # (uploader is the dominant match artist) get demoted to clear.
-        is_flagged = result.is_flagged
-        suppressed_self_match: str | None = None
+        track = await db.scalar(
+            select(Track).options(joinedload(Track.artist)).where(Track.id == track_id)
+        )
+        if track is None:
+            logfire.info("copyright scan for a deleted track", track_id=track_id)
+            return
 
-        if is_flagged:
-            track = await db.scalar(
-                select(Track)
-                .options(joinedload(Track.artist))
-                .where(Track.id == track_id)
-            )
-            dominant = _dominant_match_artist(result.matches)
-            if (
-                track
-                and track.artist
-                and dominant
-                and _is_self_match(
-                    dominant, track.artist.handle, track.artist.display_name or ""
-                )
-            ):
-                is_flagged = False
-                suppressed_self_match = dominant
-        else:
-            track = None
+        handle = track.artist.handle if track.artist else ""
+        display_name = (track.artist.display_name or "") if track.artist else ""
+        others = [
+            e for e in evidence if not is_self_match(e.artist, handle, display_name)
+        ]
 
         scan = CopyrightScan(
             track_id=track_id,
-            is_flagged=is_flagged,
+            is_flagged=bool(others),
             highest_score=result.highest_score,
             matches=result.matches,
-            raw_response=result.raw_response,
+            raw_response={
+                **result.raw_response,
+                "evidence": [e.as_dict() for e in evidence],
+            },
         )
         db.add(scan)
         await db.commit()
-
-        if suppressed_self_match:
-            logfire.info(
-                "copyright self-match suppressed",
-                track_id=track_id,
-                dominant_artist=suppressed_self_match,
-                uploader_handle=track.artist.handle if track and track.artist else None,
-            )
-            return
 
         logfire.info(
             "copyright scan stored",
             track_id=track_id,
             is_flagged=scan.is_flagged,
-            highest_score=scan.highest_score,
             match_count=len(scan.matches),
+            recordings_found=len(evidence),
+            own_recordings=len(evidence) - len(others),
         )
 
-        # open a review item so the flag is visible to a moderator. before the
-        # event log existed this state lived only in copyright_scans, which the
-        # moderation dashboard cannot read — flags were raised into a queue
-        # nobody could see (#1678).
-        if is_flagged and track and track.atproto_record_uri:
+        if not others:
+            return
+
+        if track.atproto_record_uri:
             await get_moderation_client().record_event(
                 subject_uri=track.atproto_record_uri,
                 subject_track_id=track_id,
                 action="flagged_by_scan",
                 actor="service:copyright-scan",
                 reason="fingerprint_match",
-                notes=(
-                    f"{len(scan.matches)} matches, highest score {scan.highest_score}"
-                ),
+                notes="; ".join(describe_evidence(others)),
             )
 
         # notify admin only — never DM the artist
-        if is_flagged and track and track.artist:
+        if track.artist:
             await notification_service.send_copyright_flag_notification(
                 track_id=track_id,
                 track_title=track.title,
-                artist_handle=track.artist.handle,
-                matches=scan.matches,
+                artist_handle=handle,
+                recordings=describe_evidence(others),
+                recordings_found=len(others),
             )
 
 
-async def _store_scan_error(track_id: int, error: str) -> None:
-    """store a scan error as a clear result."""
+async def _store_scan_failure(track_id: int, error: str) -> None:
+    """record that a track could not be scanned."""
     async with db_session() as db:
-        scan = CopyrightScan(
-            track_id=track_id,
-            is_flagged=False,
-            highest_score=0,
-            matches=[],
-            raw_response={"error": error, "status": "scan_failed"},
+        if await db.scalar(select(Track.id).where(Track.id == track_id)) is None:
+            return
+        db.add(
+            CopyrightScan(
+                track_id=track_id,
+                is_flagged=False,
+                highest_score=0,
+                matches=[],
+                raw_response={"error": error, "status": "scan_failed"},
+            )
         )
-        db.add(scan)
         await db.commit()
 
-        logfire.info(
-            "copyright scan error stored as clear",
-            track_id=track_id,
-            error=error,
-        )
+    logfire.error("copyright scan failed", track_id=track_id, error=error)
 
 
 # re-export for backwards compatibility

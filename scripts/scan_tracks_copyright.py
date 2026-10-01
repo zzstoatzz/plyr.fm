@@ -178,6 +178,7 @@ async def run_scan(
     from sqlalchemy import select
     from sqlalchemy.orm import joinedload
 
+    from backend._internal.copyright_evidence import is_self_match, song_evidence
     from backend.models import CopyrightScan, Track
     from backend.utilities.database import db_session
 
@@ -270,28 +271,43 @@ async def run_scan(
                 try:
                     result = await scan_track(client, settings, track.r2_url)
 
+                    evidence = song_evidence(result["matches"])
+                    others = [
+                        e
+                        for e in evidence
+                        if not is_self_match(
+                            e.artist,
+                            track.artist.handle,
+                            track.artist.display_name or "",
+                        )
+                    ]
+
                     # create scan record
                     scan = CopyrightScan(
                         track_id=track.id,
                         scanned_at=datetime.now(UTC),
-                        is_flagged=result["is_flagged"],
+                        is_flagged=bool(others),
                         highest_score=result["highest_score"],
                         matches=result["matches"],
-                        raw_response=result["raw_response"],
+                        raw_response={
+                            **result["raw_response"],
+                            "evidence": [e.as_dict() for e in evidence],
+                        },
                     )
                     db.add(scan)
                     await db.commit()
 
                     scanned += 1
-                    if result["is_flagged"]:
+                    if others:
                         flagged += 1
-                        print(f"  ⚠️  FLAGGED (score: {result['highest_score']})")
-                        for match in result["matches"][:3]:
+                        print(f"  ⚠️  FLAGGED ({len(others)} recording(s) found)")
+                        for e in others[:3]:
                             print(
-                                f"     - {match['artist']} - {match['title']} ({match['score']})"
+                                f"     - {e.artist} - {e.title} "
+                                f"({e.in_step_segments} segments in step)"
                             )
                     else:
-                        print(f"  ✓ clear (score: {result['highest_score']})")
+                        print("  ✓ clear")
 
                 except httpx.HTTPStatusError as e:
                     failed += 1

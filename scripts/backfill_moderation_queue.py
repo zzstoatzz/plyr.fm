@@ -77,7 +77,6 @@ async def main(env: Environment, dry_run: bool) -> int:
     os.environ["DATABASE_URL"] = settings.database_url(env)
 
     from sqlalchemy import select
-    from sqlalchemy.orm import joinedload
 
     from backend.models import CopyrightScan, Track
     from backend.utilities.database import db_session
@@ -88,7 +87,6 @@ async def main(env: Environment, dry_run: bool) -> int:
                 await db.execute(
                     select(CopyrightScan, Track)
                     .join(Track, CopyrightScan.track_id == Track.id)
-                    .options(joinedload(CopyrightScan.track))
                     .where(
                         CopyrightScan.is_flagged == True,  # noqa: E712
                         Track.atproto_record_uri.isnot(None),

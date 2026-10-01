@@ -10,6 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import func
 
+from backend._internal.copyright_evidence import song_evidence
 from backend.models import CopyrightScan, Tag, Track, TrackComment, TrackLike, TrackTag
 
 logger = logging.getLogger(__name__)
@@ -132,6 +133,9 @@ def _extract_primary_match(matches: list[dict[str, Any]]) -> str | None:
     """
     if not matches:
         return None
+
+    if evidence := song_evidence(matches):
+        return f"{evidence[0].title} by {evidence[0].artist}"
 
     # count occurrences of each (title, artist) pair
     match_counts: Counter[tuple[str, str]] = Counter()

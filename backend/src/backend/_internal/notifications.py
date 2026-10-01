@@ -308,20 +308,14 @@ class NotificationService:
         track_id: int,
         track_title: str,
         artist_handle: str,
-        matches: list[dict],
+        recordings: list[str],
+        recordings_found: int,
     ) -> NotificationResult | None:
         """send admin-only notification about a copyright flag."""
         recipient_did = await self.ensure_ready()
         if recipient_did is None:
             logger.warning("recipient not set, skipping notification")
             return None
-
-        primary_match = None
-        if matches:
-            m = matches[0]
-            primary_match = (
-                f"{m.get('title', 'Unknown')} by {m.get('artist', 'Unknown')}"
-            )
 
         track_url = _frontend_link(f"track/{track_id}")
         artist_url = _frontend_link(f"u/{artist_handle}")
@@ -333,9 +327,9 @@ class NotificationService:
             message.link(f"@{artist_handle}", artist_url)
         else:
             message.text(f"@{artist_handle}")
-        message.text(f"\nmatches: {len(matches)}\n")
-        if primary_match:
-            message.text(f"primary: {primary_match}\n")
+        message.text(f"\nrecordings found: {recordings_found}\n")
+        for recording in recordings:
+            message.text(f"- {recording}\n")
         if track_url:
             message.text("\n").link("open track", track_url)
 
