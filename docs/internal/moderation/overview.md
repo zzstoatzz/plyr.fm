@@ -76,24 +76,11 @@ creator self-labels are indexed directly from the canonical PDS record and stay
 separate from signed labeler assertions. The policy layer evaluates their union;
 it does not promote creator values into operator-signed labels.
 
-### Osprey rules engine (PR #958, not yet merged)
-
-[Osprey](https://github.com/roostorg/osprey) is a declarative rules engine that would add automatic label emission for high-confidence matches:
-
-```
-backend (scan completes) → Redis stream → Osprey worker → POST /emit-label
-```
-
-Osprey reads from the existing Redis instance (same one used for docket), evaluates SML rules against scan data, and calls the Rust service's `/emit-label` endpoint. the existing DM + admin dashboard flow remains unchanged.
-
-see PR #958 for current status.
-
 ## label values
 
 | val | meaning | who emits it |
 |-----|---------|-------------|
-| `copyright-violation` | high-confidence copyright match | admin (manual) or Osprey (future) |
-| `copyright-review` | moderate-confidence, needs review | Osprey (future) |
+| `copyright-violation` | a moderator decided the track infringes | admin (manual) |
 | `sexual` | adult audio with sexual discussion, sounds, or themes | creator and/or operator |
 | `porn` | audio whose primary purpose is pornographic content | creator and/or operator |
 

@@ -27,7 +27,7 @@ from [Bluesky's labeling architecture](https://docs.bsky.app/docs/advanced-guide
 this enables **stackable moderation**: multiple labelers can label the same content, and clients can choose which labelers to trust and how to handle different label values.
 
 for plyr.fm, this means:
-- we produce `copyright-violation` labels when admin confirms a match (or Osprey auto-emits)
+- we produce `copyright-violation` labels when an admin confirms a match
 - we use global ATProto content labels such as `sexual` and `porn` for audio as
   well as images; the media type does not change the label vocabulary
 - other ATProto apps can query our labels and apply their own policies
@@ -40,8 +40,8 @@ the moderation service exposes these label-related endpoints:
 
 ### POST /emit-label
 
-creates a signed ATProto label. called by the copyright admin dashboard, a
-generic operator request, or a future rules-engine output sink. See the
+creates a signed ATProto label. called by the copyright admin dashboard or a
+generic operator request. See the
 [sensitive-audio runbook](../runbooks/moderating-sensitive-audio.md) before using
 it for an adult-audio action.
 
@@ -181,8 +181,7 @@ the original overview discussed three options. we went with **option B** — the
 
 | val | meaning | emitted by |
 |-----|---------|------------|
-| `copyright-violation` | confirmed copyright match | admin dashboard (now), Osprey high-confidence rule (future) |
-| `copyright-review` | needs manual review | Osprey moderate-confidence rule (future) |
+| `copyright-violation` | confirmed copyright match | admin dashboard |
 | `sexual` | sexually suggestive or explicit content; global ATProto value | creator PDS record and/or operator labeler |
 | `porn` | pornographic content; global ATProto value | creator PDS record and/or operator labeler |
 

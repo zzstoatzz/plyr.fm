@@ -19,13 +19,16 @@ newly flagged tracks in front of a moderator. A scan whose flag a moderator
 already dismissed (a negated label) is left alone.
 
 usage:
-    uv run scripts/rescore_copyright_scans.py --env prod --dry-run
-    uv run scripts/rescore_copyright_scans.py --env prod
+    ./scripts/rescore_copyright_scans.py --env prod --dry-run
+    ./scripts/rescore_copyright_scans.py --env prod
+
+in CI the logs are public, so the workflow passes --quiet: counts only.
 """
 
 import argparse
 import asyncio
 import os
+import re
 import sys
 from typing import Literal
 
@@ -63,12 +66,10 @@ class RescoreSettings(BaseSettings):
         }.get(env, "")
         if not url:
             raise ValueError(f"no database URL configured for {env}")
-        if url.startswith("postgresql://"):
-            url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
-        return url.replace("sslmode=require", "ssl=require")
+        return re.sub(r"^postgres(ql)?(\+\w+)?://", "postgresql+psycopg://", url)
 
 
-async def main(env: Environment, dry_run: bool) -> int:
+async def main(env: Environment, dry_run: bool, quiet: bool) -> int:
     settings = RescoreSettings()
     if not settings.moderation_auth_token:
         print("MODERATION_AUTH_TOKEN is required")
@@ -126,10 +127,11 @@ async def main(env: Environment, dry_run: bool) -> int:
                     if others
                     else "nothing plays in step"
                 )
-                print(
-                    f"  [{'flag' if flagged else 'clear'}] track {track.id} "
-                    f"@{track.artist.handle}: {track.title[:40]!r} ({found})"
-                )
+                if not quiet:
+                    print(
+                        f"  [{'flag' if flagged else 'clear'}] track {track.id} "
+                        f"@{track.artist.handle}: {track.title[:40]!r} ({found})"
+                    )
             if dry_run:
                 continue
             scan.is_flagged = flagged
@@ -150,5 +152,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--env", default="prod", choices=["dev", "staging", "prod"])
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument(
+        "--quiet", action="store_true", help="print counts only (public CI logs)"
+    )
     args = parser.parse_args()
-    sys.exit(asyncio.run(main(args.env, args.dry_run)))
+    sys.exit(asyncio.run(main(args.env, args.dry_run, args.quiet)))

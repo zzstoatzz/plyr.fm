@@ -1,0 +1,43 @@
+# re-derive copyright_scans.is_flagged from stored matches, then put newly
+# flagged tracks in the review queue. notifies nobody.
+#
+# logs here are public: both scripts run with --quiet and print counts only.
+#
+# required secrets:
+#   NEON_DATABASE_URL_PRD - production database
+#   MODERATION_SERVICE_URL - moderation service base URL
+#   MODERATION_AUTH_TOKEN - X-Moderation-Key header value
+
+name: rescore copyright scans
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "dry run (report counts, write nothing)"
+        type: boolean
+        default: true
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    concurrency: rescore-copyright-scans
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v7
+
+      - name: rescore stored scans
+        run: ./scripts/rescore_copyright_scans.py --env prod --quiet ${{ inputs.dry_run && '--dry-run' || '' }}
+        env:
+          PROD_DATABASE_URL: ${{ secrets.NEON_DATABASE_URL_PRD }}
+          MODERATION_SERVICE_URL: ${{ secrets.MODERATION_SERVICE_URL }}
+          MODERATION_AUTH_TOKEN: ${{ secrets.MODERATION_AUTH_TOKEN }}
+
+      - name: open review items for flagged tracks
+        run: ./scripts/backfill_moderation_queue.py --env prod --quiet ${{ inputs.dry_run && '--dry-run' || '' }}
+        env:
+          PROD_DATABASE_URL: ${{ secrets.NEON_DATABASE_URL_PRD }}
+          MODERATION_SERVICE_URL: ${{ secrets.MODERATION_SERVICE_URL }}
+          MODERATION_AUTH_TOKEN: ${{ secrets.MODERATION_AUTH_TOKEN }}
