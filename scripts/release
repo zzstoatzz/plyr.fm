@@ -19,17 +19,17 @@ from datetime import UTC, datetime
 
 def main() -> int:
     """create release with timestamp version."""
-    # ensure we're on main branch
-    result = subprocess.run(
-        ["git", "branch", "--show-current"],
-        capture_output=True,
-        text=True,
-        check=True,
+    # HEAD must be origin/main; the local `main` branch is never required
+    subprocess.run(["git", "fetch", "origin"], capture_output=True, check=True)
+    head, remote_main = (
+        subprocess.run(
+            ["git", "rev-parse", ref], capture_output=True, text=True, check=True
+        ).stdout.strip()
+        for ref in ("HEAD", "origin/main")
     )
-    current_branch = result.stdout.strip()
-
-    if current_branch != "main":
-        print(f"❌ must be on main branch (currently on {current_branch})")
+    if head != remote_main:
+        print(f"❌ HEAD ({head[:8]}) is not origin/main ({remote_main[:8]})")
+        print("   run: git switch --detach origin/main")
         return 1
 
     # ensure working directory is clean
@@ -41,18 +41,6 @@ def main() -> int:
     )
     if result.stdout.strip():
         print("❌ working directory has uncommitted changes")
-        return 1
-
-    # ensure we're up to date with remote
-    subprocess.run(["git", "fetch"], capture_output=True, check=True)
-    result = subprocess.run(
-        ["git", "rev-list", "HEAD..@{u}"],
-        capture_output=True,
-        text=True,
-        check=True,
-    )
-    if result.stdout.strip():
-        print("❌ local branch is behind remote - please pull first")
         return 1
 
     # check if there are backend changes since last release
@@ -110,6 +98,8 @@ def main() -> int:
             "--title",
             version,
             "--generate-notes",
+            "--target",
+            remote_main,
         ],
         check=True,
     )
@@ -120,12 +110,17 @@ def main() -> int:
     # fast-forward production-fe to main to trigger frontend deployment.
     # a plain push refuses a non-fast-forward, so no local branch is needed.
     print("\n🔄 updating production-fe branch...")
-    subprocess.run(["git", "push", "origin", "main:production-fe"], check=True)
+    subprocess.run(
+        ["git", "push", "origin", f"{remote_main}:refs/heads/production-fe"], check=True
+    )
 
     print("✓ production frontend deployment starting...")
 
     # mirror to tangled
-    subprocess.run(["git", "push", "tangled", "main", "--tags"], check=True)
+    subprocess.run(
+        ["git", "push", "tangled", f"{remote_main}:refs/heads/main", "--tags"],
+        check=True,
+    )
     print("✓ mirrored to tangled")
 
     return 0
