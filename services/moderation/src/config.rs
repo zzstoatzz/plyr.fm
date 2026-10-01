@@ -17,12 +17,6 @@ pub struct Config {
     pub claude_api_key: Option<String>,
     /// Claude model to use (default: claude-sonnet-4-5-20250929)
     pub claude_model: String,
-    /// Minimum percentage of matches that must belong to a single song to flag (default: 30)
-    /// AudD doesn't return confidence scores, so we use match frequency as a proxy.
-    pub copyright_score_threshold: i32,
-    /// Minimum count of distinct songs each sustained across multiple segments
-    /// to flag as a mix of copyrighted material (default: 3)
-    pub copyright_mix_song_threshold: usize,
 }
 
 impl Config {
@@ -45,14 +39,6 @@ impl Config {
             claude_api_key: env::var("ANTHROPIC_API_KEY").ok(),
             claude_model: env::var("MODERATION_CLAUDE_MODEL")
                 .unwrap_or_else(|_| "claude-sonnet-4-5-20250929".to_string()),
-            copyright_score_threshold: env::var("MODERATION_COPYRIGHT_SCORE_THRESHOLD")
-                .ok()
-                .and_then(|v| v.parse().ok())
-                .unwrap_or(30),
-            copyright_mix_song_threshold: env::var("MODERATION_COPYRIGHT_MIX_SONG_THRESHOLD")
-                .ok()
-                .and_then(|v| v.parse().ok())
-                .unwrap_or(3),
         })
     }
 
