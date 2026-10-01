@@ -18,13 +18,14 @@ because a queue was built today would be a bug, not a feature. The notification
 path lives in the backend's scan handler and is not reachable from here.
 
 usage:
-    uv run scripts/backfill_moderation_queue.py --env prod --dry-run
-    uv run scripts/backfill_moderation_queue.py --env prod
+    ./scripts/backfill_moderation_queue.py --env prod --dry-run
+    ./scripts/backfill_moderation_queue.py --env prod
 """
 
 import argparse
 import asyncio
 import os
+import re
 import sys
 from typing import Literal
 
@@ -63,12 +64,10 @@ class BackfillSettings(BaseSettings):
         }.get(env, "")
         if not url:
             raise ValueError(f"no database URL configured for {env}")
-        if url.startswith("postgresql://"):
-            url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
-        return url.replace("sslmode=require", "ssl=require")
+        return re.sub(r"^postgres(ql)?(\+\w+)?://", "postgresql+psycopg://", url)
 
 
-async def main(env: Environment, dry_run: bool) -> int:
+async def main(env: Environment, dry_run: bool, quiet: bool) -> int:
     settings = BackfillSettings()
     if not settings.moderation_auth_token:
         print("MODERATION_AUTH_TOKEN is required")
@@ -112,14 +111,16 @@ async def main(env: Environment, dry_run: bool) -> int:
         queue.raise_for_status()
         existing = {item["subject_uri"] for item in queue.json().get("items", [])}
 
-        opened = 0
+        opened = would_open = 0
         for scan, track in rows:
             uri = track.atproto_record_uri
             marker = "skip (already open)" if uri in existing else "open"
-            print(
-                f"  [{marker}] track {track.id}: {track.title[:48]!r} "
-                f"({len(scan.matches or [])} matches, {scan.scanned_at:%Y-%m-%d})"
-            )
+            would_open += uri not in existing
+            if not quiet:
+                print(
+                    f"  [{marker}] track {track.id}: {track.title[:48]!r} "
+                    f"({len(scan.matches or [])} matches, {scan.scanned_at:%Y-%m-%d})"
+                )
             if uri in existing or dry_run:
                 continue
             r = await client.post(
@@ -140,7 +141,7 @@ async def main(env: Environment, dry_run: bool) -> int:
             opened += 1
 
     if dry_run:
-        print("\ndry run — no events written")
+        print(f"\ndry run — would open {would_open}; no events written")
     else:
         print(f"\nopened {opened} review item(s); notified nobody")
     return 0
@@ -150,5 +151,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--env", default="prod", choices=["dev", "staging", "prod"])
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument(
+        "--quiet", action="store_true", help="print counts only (public CI logs)"
+    )
     args = parser.parse_args()
-    sys.exit(asyncio.run(main(args.env, args.dry_run)))
+    sys.exit(asyncio.run(main(args.env, args.dry_run, args.quiet)))

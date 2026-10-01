@@ -358,7 +358,6 @@ the August arcs that sat here until September 20 — the spotify footer, support
 - landing: headline totals from `/stats` and a "playing right now" strip of covers with relative timestamps, bandcamp-style (#2078)
 - share to bluesky (#334)
 - lyrics and annotations (#373)
-- configurable rules engine for moderation (#958)
 - infrastructure consolidation — audit and migrate from Fly.io sprawl to Helm/K8s pattern (#907, reference: `../relay`)
 - time-release gating (#642)
 - UX for text-forward audio — declare a track as a reading/audiobook/podcast, link the source text, transcript as accessibility (user request, August 27; tags + description cover it functionally today)
