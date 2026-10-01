@@ -12,9 +12,8 @@ deploy to production with preflight checks.
 run these checks and report any issues before proceeding:
 
 1. **clean working tree** - `git status` should show nothing to commit
-2. **on main branch** - `git branch --show-current` should be `main`
-3. **up to date with origin** - `git fetch origin && git status` should not be behind
-4. **no open PRs from your branch** - check for any unmerged work
+2. **HEAD is `origin/main`** - `git fetch origin`, then `git rev-parse HEAD origin/main` should print the same commit twice. In a worktree, get there with `git switch --detach origin/main`; never check out the `main` branch in a worktree, because git then refuses `main` to every other checkout
+3. **no open PRs from your branch** - check for any unmerged work
 
 ## analyze changes and deploy
 
@@ -34,9 +33,8 @@ Report the change summary and which release command you've determined, then **as
 
 ## execute deployment
 
-1. run the appropriate release command
-2. push to tangled remote: `git push tangled main --tags`
-3. report the release tag and deployment status
+1. run the appropriate release command (`just release` also mirrors to tangled)
+2. report the release tag and deployment status
 
 ## post-deployment
 
