@@ -40,7 +40,7 @@ the moderation service exposes these label-related endpoints:
 
 ### POST /emit-label
 
-creates a signed ATProto label. called by the copyright admin dashboard, a
+creates a signed ATProto label. called by the copyright admin dashboard or a
 generic operator request. See the
 [sensitive-audio runbook](../runbooks/moderating-sensitive-audio.md) before using
 it for an adult-audio action.
