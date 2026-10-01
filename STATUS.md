@@ -45,6 +45,61 @@ plyr.fm should become:
 
 ## recent work
 
+### October 2026
+
+#### a copyright flag now means a recording plays through the upload (#2112–#2117, October 1 — prod `2026.1001.062017`, moderation service v77)
+
+The fingerprint scanner flagged a track when one song was a large share of its
+*matches*. AuDD returns no confidence score, and the denominator was the match
+count rather than the audio, so a single stray match was 1 of 1 = 100%. Of the
+27 scans flagged in production, 18 had nothing behind them — several were
+ten-second test uploads — while 61 tracks carrying a real recording were not
+flagged. Two older faults had hidden how bad it was: the service was running
+the 30% default because the corrected threshold name in `fly.toml` was never
+deployed, and every flag raised before June 29 had been wiped by the
+resolution sync (#1602) with only 13 restored.
+
+AuDD samples an upload every 12 seconds and reports, per sample, which
+reference recording it resembles and *where in that recording*. A recording
+that is present advances in step: upload offset and reference position move
+together. A coincidence does not. Counting the longest in-step run across the
+665 production scans that have any match gives two humps and almost nothing
+between — 522 scans at one sample, 18 at two, 14 at three to five, 106 at six
+or more —
+so the bar is four samples, about 48 seconds. A second rule catches a short
+clip on repeat, which matches everywhere but keeps resetting; it rests on two
+examples.
+
+what shipped:
+
+- the backend decides the flag (`backend/utilities/copyright_evidence.py`),
+  and applies the uploader's-own-catalogue check per recording, so an artist's
+  own track inside a mix no longer hides the others. The moderation service
+  only fingerprints; its flag logic and threshold settings are gone (#2114)
+- a scan that fails is tried up to four times and, if it never succeeds, stored as
+  `scan_failed` with an error log. It used to be stored as a clean scan on the
+  first error and never retried
+- the operator DM and the review item list the recordings found and where in
+  the upload they sit, replacing "first match in the list" and "highest score 0"
+- stored scans were re-derived from their saved matches, without calling AuDD
+  again: 37 newly flagged, 17 cleared, 47 flagged in total. Review items were
+  opened for the 37 and the 17 cleared ones were acknowledged. Nobody was
+  notified. The job is the `rescore copyright scans` workflow (#2116), which
+  prints counts only because this repository's Actions logs are public
+- Osprey is out of the docs and the backlog; it is not planned for now
+
+a present recording is still not a finding — a cover, a remix, a DJ mix and a
+public-domain reading all play through a reference. The flag puts a track in
+front of a person. See
+[copyright detection](docs/internal/moderation/copyright-detection.md).
+
+two things broke on the way and are fixed. `scripts/release` demanded a local
+`main` checkout, so agents releasing from a git worktree checked `main` out
+there and locked it away from the primary checkout; it now requires
+`HEAD == origin/main` and tags that commit explicitly (#2112). The moderation
+deploy workflow passed a config path doubled against its working directory
+and failed before building (#2115).
+
 ### September 2026
 
 #### radio transition state and OBS compatibility
@@ -342,7 +397,11 @@ the August arcs that sat here until September 20 — the spotify footer, support
 - **`_reference_count` cannot see `r2_url`** (#1735/#1736): the refcount that guards deletion matches `file_id`-shaped columns, so it cannot protect a row whose `r2_url` and `file_id` name different objects. `prune_revisions` now compensates locally; the general fix belongs in `_MEDIA_REFERENCES`.
 - **seven tracks are still dead, and `audit_media_integrity.py` is not scheduled** (#1735/#1737): of the 20 broken by staged-cleanup deletion, 13 were recovered; the remaining 7 have no object in any of our buckets and no PDS blob, because they predate PDS mirroring. Not recoverable by us — the artists almost certainly still hold their source files, so the remedy is asking them to re-upload. The audit script exists and exits 1 on a missing object, but nothing runs it on a schedule yet.
 - **the account-status reconciliation script has not been run against prod** (#1729): a dry run reports 5 artists whose `account_status` reason is `NULL` and would be filled in, with zero flags changed. Until it runs, those rows say an artist is hidden without saying why.
-- **18 subjects await triage in the review queue** (recounted August 9; the copyright scanner keeps opening new fingerprint flags), still including track 64 (user report #5 from @vicwalker.dev.br). They are visible and playable in the dashboard; nobody has made a call on any of them. A fingerprint match is not a finding — several read as covers or remixes the uploader performed.
+- **64 subjects await triage in the review queue** (recounted October 1, after the rescore): 47 are flagged tracks with a recording that plays through the upload, 8 are tracks whose public label was retracted in July, and 9 are stale — 5 for tracks since deleted and 4 with no evidence under the new rule. Nobody has made a call on any of them, including track 64 (user report #5 from @vicwalker.dev.br). A present recording is not a finding — many read as DJ mixes, covers or remixes.
+- **uploaders of 17 wrongly flagged tracks were never told** (October 1): the old rule showed them a copyright badge on their own track in the portal, some for two months. The flags are cleared; no notice was sent, by decision that day. One uploader replaced the audio four times while flagged.
+- **one track cannot be scanned** (track 123): AuDD cannot extract audio from the 19 KB file, so its scan stays `scan_failed`.
+- **`deploy-redis.yml` has the doubled config path that broke the moderation deploy** (#2115): its last two runs failed. Fixing the file triggers a deploy of both Redis apps, so it waits for a deliberate change.
+- **copyright spend is not on the live cost feed**: AuDD is computed from hardcoded plan constants and Claude image moderation is tracked nowhere. The five-minute labeler poll (`sync_copyright_resolutions`) also likely keeps the moderation database from scaling to zero; the Neon side is unconfirmed.
 - **no per-actor authentication**: the moderation service trusts one shared `MODERATION_AUTH_TOKEN`, so the event log's `actor` is a claim rather than a verified identity. This is the gate on letting an agent *act* rather than propose, and on review genuinely not always being one person.
 - **the DMCA surface is incomplete** ([#1715](https://github.com/zzstoatzz/plyr.fm/issues/1715)): the agent is registered and reachable at `dmca@plyr.fm`, but the site does not publish the notice requirements or a counter-notice procedure, and there is no repeat-infringer counter — takedowns are recorded per track in `moderation_events`, never aggregated per uploader. The published-agent half is additionally blocked on a non-residential address.
 - `/costs` shows Cloudflare at $0 — upstream gap: CF line items aren't yet tagged `project=="plyr.fm"` in my-prefect-server, so the live feed can't attribute them (#1599).
@@ -494,7 +553,8 @@ see the [contributing guide](https://docs.plyr.fm/contributing/) for setup instr
 
 ---
 
-this is a living document. last updated 2026-09-26: musician studio retired and its service
-removed (#2094); previously 2026-09-23: upload freshness, reaper and alert links
+this is a living document. last updated 2026-10-01: copyright flags rest on in-step
+evidence, stored scans rescored (#2112–#2117); previously 2026-09-26: musician studio retired
+and its service removed (#2094); previously 2026-09-23: upload freshness, reaper and alert links
 (#2084–#2087), Blacksky scopes (#2089), Gemini 3.8 status TTS (#2090, #2092); the September
 14–19 entries (#2060–#2076) moved to `.status_history/2026-09.md`.
