@@ -55,8 +55,7 @@ def test_recording_played_through_is_evidence() -> None:
 
 
 def test_shared_loop_matching_many_positions_is_not_evidence() -> None:
-    # an original built on a sample pack: the same reference loop matches at
-    # many upload positions, but its timecode never advances with them
+    # an original on a sample pack: many positions, timecode never advances
     matches = [
         {"artist": "A", "title": "Loop", "offset_ms": 12000 * i, "timecode": "00:10"}
         for i in (0, 2, 3, 5)
@@ -80,7 +79,7 @@ def test_mix_reports_each_recording_strongest_first() -> None:
 
 
 def test_recording_looped_for_the_whole_upload_is_evidence() -> None:
-    # a short clip on repeat: every sample matches, the timecode keeps resetting
+    # a short clip on repeat: every sample matches, timecode keeps resetting
     matches = [
         {
             "artist": "Bag Raiders",

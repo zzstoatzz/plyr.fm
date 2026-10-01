@@ -329,7 +329,7 @@ class NotificationService:
             message.text(f"@{artist_handle}")
         message.text(f"\nrecordings found: {recordings_found}\n")
         for recording in recordings:
-            message.text(f"- {recording}\n")
+            message.text(f"- {recording[:120]}\n")
         if track_url:
             message.text("\n").link("open track", track_url)
 
