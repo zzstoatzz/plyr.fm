@@ -48,7 +48,7 @@ export function observe(page, label) {
 	});
 	page.on('pageerror', (e) => seen.push(`pageerror: ${String(e).slice(0, 200)}`));
 	return async () => {
-		console.error(`--- ${label}: url=${page.url()}`);
+		console.error(`--- ${label}: url=${new URL(page.url()).origin}${new URL(page.url()).pathname}`);
 		console.error(`--- ${label}: requests\n${seen.map((l) => '    ' + l).join('\n')}`);
 		const text = await page
 			.locator('body')
@@ -98,14 +98,23 @@ export async function authorizeOnPds(page, who = HANDLE, secret = PASSWORD) {
 }
 
 export async function signIn(page, who = HANDLE, secret = PASSWORD) {
-	await page.goto(`${APP}/login`, { waitUntil: 'networkidle' });
+	await page.goto(`${APP}/login`, { waitUntil: 'domcontentloaded' });
 	const handle = page.getByPlaceholder('you.example.com');
 	await handle.waitFor({ timeout: 15000 });
 	await handle.fill(who);
 	await handle.press('Enter');
 	await page.waitForURL(/oauth\/authorize/, { timeout: 30000 });
 	await authorizeOnPds(page, who, secret);
-	await page.waitForTimeout(2500);
+	let signedIn = false;
+	for (let attempt = 0; attempt < 60; attempt++) {
+		const user = await me(page).catch(() => null);
+		if (user?.did) {
+			signedIn = true;
+			break;
+		}
+		await page.waitForTimeout(500);
+	}
+	if (!signedIn) fail('OAuth callback did not establish an authenticated session');
 	const terms = page.locator('.terms-overlay');
 	if (await terms.count()) {
 		await terms.getByRole('button', { name: /accept/i }).click();
@@ -145,16 +154,10 @@ export async function waitForTrack(page, title, attempts = 30) {
 
 /** leave the fixture account the way we found it. */
 export async function deleteTrack(context, id) {
-	const cleanup = await context.newPage();
-	const deleted = await cleanup
-		.goto(`${APP}/portal`, { waitUntil: 'domcontentloaded' })
-		.then(() =>
-			cleanup.evaluate(
-				async ([api, trackId]) =>
-					(await fetch(`${api}/tracks/${trackId}`, { method: 'DELETE', credentials: 'include' })).status,
-				[API, id]
-			)
-		)
-		.catch((e) => `cleanup error: ${e}`);
-	console.log(`[cleanup] DELETE /tracks/${id} -> ${deleted}`);
+	const response = await context.request.delete(`${API}/tracks/${id}`);
+	console.log(`[cleanup] DELETE /tracks/${id} -> ${response.status()}`);
+	if (response.status() !== 200) {
+		console.error(`could not delete test track ${id}`);
+		process.exitCode = 1;
+	}
 }

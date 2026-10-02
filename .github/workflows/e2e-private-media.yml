@@ -23,6 +23,12 @@ on:
       - ".github/workflows/e2e-private-media.yml"
       - "frontend/e2e/**"
   workflow_dispatch:
+    inputs:
+      target:
+        description: Environment to exercise
+        type: choice
+        options: [staging, production]
+        default: staging
 
 permissions:
   contents: read
@@ -38,6 +44,9 @@ jobs:
     name: private upload end to end
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      PLYR_APP_URL: ${{ inputs.target == 'production' && 'https://plyr.fm' || 'https://stg.plyr.fm' }}
+      PLYR_API_URL: ${{ inputs.target == 'production' && 'https://api.plyr.fm' || 'https://api-stg.plyr.fm' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -52,7 +61,7 @@ jobs:
         run: bunx playwright install --with-deps chromium
 
       - name: wait for staging to serve the head of main
-        if: github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request' && inputs.target != 'production'
         working-directory: frontend
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -65,7 +74,10 @@ jobs:
           ZAT_TEST_PASSWORD: ${{ secrets.ZAT_TEST_PASSWORD }}
           ALPHA_TEST_HANDLE: ${{ secrets.ALPHA_TEST_HANDLE }}
           ALPHA_TEST_PASSWORD: ${{ secrets.ALPHA_TEST_PASSWORD }}
-        run: node e2e/private-media.mjs
+        run: |
+          test -n "$ALPHA_TEST_HANDLE"
+          test -n "$ALPHA_TEST_PASSWORD"
+          node e2e/private-media.mjs
 
       - name: private voice memo from /record
         if: success() || failure()
