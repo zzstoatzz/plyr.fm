@@ -33,7 +33,7 @@ that. Two consequences that shape everything below:
 
 1. Access is by DID, always. A link is just `at://…`; a third party's app fails
    at mint time and plyr answers 404, as for any stranger. Credentials are not
-   re-shareable either (DPoP-bound).
+   re-shareable either (bound to their HTTP-signature key).
 2. **A reader must be on a spaces-capable PDS.** The delegation token comes from
    the reader's PDS. A listener on bsky.social cannot be a member of anything
    until bsky.social implements spaces. Bulletin states the same constraint.
@@ -58,8 +58,9 @@ media space" a second source for one existing fact.
 ## what the access list is
 
 `simplespace` already has it: `memberListPolicy` (what plyr creates today, with
-nobody added) plus `addMember(space, did)`, `removeMember`, `listMembers`. The
-list is **host-internal state consulted at credential-mint time** — not synced,
+nobody added) plus `putMember(space, did, read=true, write=false)`,
+`removeMember`, and `listMembers`. The list is **host-internal state consulted
+at credential-mint time** — not synced,
 not enumerated to the network, readable only by the authority's OAuth session.
 It lives on the artist's PDS, so it is portable and survives plyr.fm.
 
@@ -165,10 +166,10 @@ page or a link, and feeds follow once a credential is held.
   PDS-save eligibility, subsonic direct URLs) are untouched: private tracks are
   already excluded by `is_private`, and members do not change that.
 - **Revocation is eventual, and plyr does not pretend otherwise.**
-  `removeMember` only stops *future* mints; a space credential is verifiable
-  offline against the authority's key and has no revocation list (proposal
-  §Space credential: "short-lived (default 2 hours)" — a default, not a bound;
-  zds uses `exp = iat + 7200`). A removal through plyr drops what plyr holds
+  A removal stops future mints. Hosts can also receive explicit credential
+  revocations; plyr does not send those notifications itself. The October 1
+  alpha defaults to ten-minute credentials (zds uses `exp = iat + 600`), but
+  each token's `exp` is authoritative. A removal through plyr drops what it holds
   for that reader, so their next request asks the authority and is refused;
   a removal from another client is honored when the held credential lapses.
   A refusal at read time (the host says no mid-stream) is the same 404 as a
@@ -205,7 +206,7 @@ Keep them separate, and keep the direction of authority clear:
 - Supporter access is **a verifier's answer** about a payment, re-evaluated per
   request, expiring naturally. plyr is a verifier, never a broker.
 
-Do **not** derive membership from payments (auto-`addMember` on a verified
+Do **not** derive membership from payments (auto-`putMember` on a verified
 event). It would make plyr an effectful actor on the artist's PDS driven by
 broker webhooks, turn every missed `subscription.canceled` into an over-grant
 nothing corrects, and collapse two freshness models into the worse one. If a

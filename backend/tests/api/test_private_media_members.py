@@ -65,10 +65,15 @@ def _resolves():
     )
 
 
-async def test_add_writes_pds_and_forgets_what_plyr_held(artist: Artist, as_owner):
+async def test_add_writes_pds_and_forgets_what_plyr_held(
+    artist: Artist, as_owner: None
+) -> None:
     with (
         _space(),
-        patch("backend.api.artists.add_space_member", AsyncMock()) as add,
+        patch(
+            "backend._internal.atproto.spaces.client.make_pds_request",
+            AsyncMock(return_value={}),
+        ) as add,
         patch("backend.api.artists.forget_access", AsyncMock()) as forget,
         patch(
             "backend.api.artists.resolve_handle",
@@ -84,7 +89,18 @@ async def test_add_writes_pds_and_forgets_what_plyr_held(artist: Artist, as_owne
             )
     assert r.status_code == 201, r.text
     assert r.json()["did"] == "did:test:friend"
-    add.assert_awaited_once_with(ANY, space=_SPACE, did="did:test:friend")
+    add.assert_awaited_once_with(
+        ANY,
+        "POST",
+        "com.atproto.simplespace.putMember",
+        payload={
+            "space": _SPACE,
+            "did": "did:test:friend",
+            "read": True,
+            "write": False,
+        },
+        parse_response=False,
+    )
     forget.assert_awaited_once_with("did:test:friend", _ARTIST)
 
 
