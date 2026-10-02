@@ -12,7 +12,7 @@ from unittest.mock import patch
 
 import pytest
 import redis.asyncio as async_redis
-from atproto_oauth.dpop import DPoPManager
+from cryptography.hazmat.primitives.asymmetric import ec
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -44,7 +44,7 @@ def authority_admits_member():
         if session.did == _MEMBER:
             return SpaceCredential(
                 token="t",
-                dpop_key=DPoPManager.generate_keypair(),
+                key=ec.generate_private_key(ec.SECP256R1()),
                 expires_at=time.monotonic() + 600,
             )
         raise SpaceAccessError("UserNotAuthorized")
@@ -301,7 +301,7 @@ async def test_membership_changes_at_the_authority_take_effect_without_plyr(
         if session.did == "did:test:later":
             return SpaceCredential(
                 token="t",
-                dpop_key=DPoPManager.generate_keypair(),
+                key=ec.generate_private_key(ec.SECP256R1()),
                 expires_at=time.monotonic() + 600,
             )
         raise SpaceAccessError("UserNotAuthorized")
