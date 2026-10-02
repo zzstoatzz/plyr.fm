@@ -105,14 +105,16 @@ export async function signIn(page, who = HANDLE, secret = PASSWORD) {
 	await handle.press('Enter');
 	await page.waitForURL(/oauth\/authorize/, { timeout: 30000 });
 	await authorizeOnPds(page, who, secret);
-	await page.waitForFunction(async (api) => {
-		try {
-			const response = await fetch(`${api}/auth/me`, { credentials: 'include' });
-			return response.ok && Boolean((await response.json()).did);
-		} catch {
-			return false;
+	let signedIn = false;
+	for (let attempt = 0; attempt < 60; attempt++) {
+		const user = await me(page).catch(() => null);
+		if (user?.did) {
+			signedIn = true;
+			break;
 		}
-	}, API, { timeout: 60000 });
+		await page.waitForTimeout(500);
+	}
+	if (!signedIn) fail('OAuth callback did not establish an authenticated session');
 	const terms = page.locator('.terms-overlay');
 	if (await terms.count()) {
 		await terms.getByRole('button', { name: /accept/i }).click();
