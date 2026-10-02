@@ -59,7 +59,8 @@ media space" a second source for one existing fact.
 
 `simplespace` already has it: `memberListPolicy` (what plyr creates today, with
 nobody added) plus `putMember(space, did, read=true, write=false)`,
-`removeMember`, and `listMembers`. The list is **host-internal state consulted at credential-mint time** — not synced,
+`removeMember`, and `listMembers`. The list is **host-internal state consulted
+at credential-mint time** — not synced,
 not enumerated to the network, readable only by the authority's OAuth session.
 It lives on the artist's PDS, so it is portable and survives plyr.fm.
 

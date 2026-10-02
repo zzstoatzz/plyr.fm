@@ -116,8 +116,8 @@ The `simplespace` management layer has a member list even though the core sync p
 does not enumerate readers. The authority is authorized on its own member-list space
 without an explicit member grant; plyr.fm's portal access list adds and removes further
 members through `simplespace.putMember` (read-only)/`removeMember` (see private-media-access-list.md).
-`getSpace` returns `{uri, policy, appAccess}` with the same unions; `updateSpace` takes
-`{space, policy?, appAccess?}`.
+`getSpace` returns `{uri, readPolicy, writePolicy, appAccess}` with the same unions;
+`updateSpace` takes `{space, readPolicy?, writePolicy?, appAccess?}`.
 
 App access is open for this personal experiment so local/public OAuth clients can use it
 without a confidential-client signing key. This is separate from user eligibility. A
