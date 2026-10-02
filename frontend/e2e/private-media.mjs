@@ -146,7 +146,7 @@ try {
 		await search.waitFor({ timeout: 15000 });
 		await search.fill(MEMBER_HANDLE);
 		const added = page.waitForResponse((response) => response.url() === `${API}/artists/me/private-media/members` && response.request().method() === 'POST');
-		await page.locator('.private-media-section .search-result-item').first().click({ timeout: 20000 });
+		await page.locator('.private-media-section .search-result-item').filter({ has: page.getByText(`@${MEMBER_HANDLE}`, { exact: true }) }).click({ timeout: 20000 });
 		const addedResponse = await added;
 		if (addedResponse.status() !== 201) fail(`adding listener returned ${addedResponse.status()}`);
 		const addedMember = await addedResponse.json();
