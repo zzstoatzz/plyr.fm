@@ -3,12 +3,14 @@ import { flushSync, mount, unmount } from 'svelte';
 import Player from './components/player/Player.svelte';
 import RadioPage from '../routes/radio/[[station]]/+page.svelte';
 import { page } from '$app/stores';
+import { goto } from '$app/navigation';
 import { get } from 'svelte/store';
 import { player } from './player.svelte';
 import { queue } from './queue.svelte';
 import { auth } from './auth.svelte';
 import { nowPlaying } from './now-playing.svelte';
 import { radio, type RadioTrack, type RadioState } from './radio.svelte';
+import '../../vendor/sister-radio/host';
 
 const track = (id: number): RadioTrack => ({
 	id,
@@ -79,6 +81,12 @@ let pageComponent: ReturnType<typeof mount> | undefined;
 let component: ReturnType<typeof mount>;
 let audio: HTMLAudioElement;
 beforeEach(() => {
+	vi.mocked(fetch).mockImplementation(
+		async (url) =>
+			new Response(
+				JSON.stringify(String(url).endsWith('/listeners') ? { count: 0, listeners: [] } : state())
+			)
+	);
 	vi.stubGlobal(
 		'ResizeObserver',
 		class {
@@ -94,6 +102,7 @@ beforeEach(() => {
 	}));
 	radio.stations = [{ slug: 'loved', name: 'loved', description: '', is_default: true }];
 	get(page).url.search = '';
+	get(page).params = {};
 	queue.tracks = [];
 	queue.currentIndex = -1;
 	player.radio = null;
@@ -111,6 +120,7 @@ beforeEach(() => {
 	playbackStates.length = 0;
 });
 afterEach(async () => {
+	vi.useRealTimers();
 	if (pageComponent) await unmount(pageComponent);
 	pageComponent = undefined;
 	radio.stop();
@@ -293,6 +303,64 @@ describe('radio mute through the shared audio element', () => {
 });
 
 describe('Eli’s full-page OBS autoplay contract (#1592)', () => {
+	it.each([
+		['', false],
+		['?autoplay=0', false],
+		['?autoplay=1', true]
+	] as const)(
+		'preserves autoplay after a station switch and reload with %s',
+		async (search, autoplay) => {
+			radio.stop();
+			flushSync();
+			radio.stations = [
+				{ slug: 'loved', name: 'loved', description: '', is_default: true },
+				{ slug: 'deep-cuts', name: 'deep cuts', description: '', is_default: false }
+			];
+			get(page).url.pathname = '/radio/loved';
+			get(page).url.search = search;
+			pageComponent = mount(RadioPage, {
+				target: document.body,
+				props: { data: { station: null } }
+			});
+			flushSync();
+			let stationButton: HTMLButtonElement | null | undefined;
+			await vi.waitFor(() => {
+				stationButton = document
+					.querySelector('.sister-radio-host')
+					?.shadowRoot?.querySelector<HTMLButtonElement>('[aria-label="tune in to deep cuts"]');
+				expect(stationButton).toBeTruthy();
+			});
+			vi.mocked(goto).mockClear();
+			stationButton!.click();
+			await vi.waitFor(() => expect(goto).toHaveBeenCalledOnce());
+			const destination = new URL(String(vi.mocked(goto).mock.calls[0][0]), get(page).url);
+			expect(destination.pathname).toBe('/radio/deep-cuts');
+			await unmount(pageComponent);
+			pageComponent = undefined;
+			radio.stop();
+			flushSync();
+			radio.state = { ...state(), station: 'deep cuts', station_slug: 'deep-cuts' };
+			get(page).url.pathname = '/radio/deep-cuts';
+			get(page).url.search = destination.search;
+			get(page).params = { station: 'deep-cuts' };
+			vi.useFakeTimers();
+			play.mockClear();
+			pageComponent = mount(RadioPage, {
+				target: document.body,
+				props: { data: { station: null } }
+			});
+			flushSync();
+			await vi.advanceTimersByTimeAsync(0);
+			flushSync();
+			if (autoplay) {
+				expect(player.radio?.stationSlug).toBe('deep-cuts');
+				expect(player.paused).toBe(false);
+			} else {
+				expect(play).not.toHaveBeenCalled();
+				expect(player.paused).toBe(true);
+			}
+		}
+	);
 	it.each(['', '?autoplay=0'])('does not autoplay with %s', async (search) => {
 		radio.stop();
 		flushSync();

@@ -444,3 +444,7 @@ max_lines = 1044
 [[rules]]
 path = "frontend/vendor/sister-radio/frontend/src/styles/global.css"
 max_lines = 628
+
+[[rules]]
+path = "frontend/src/lib/player-radio-transition.test.ts"
+max_lines = 502
