@@ -47,6 +47,29 @@ plyr.fm should become:
 
 ### October 2026
 
+#### private media broke against current hosts, and tracks from other clients were never processed (#2121, #2122, October 2 — prod `2026.1002.021006`)
+
+zds follows the tip of atproto's permissioned-data branch, which changed twice
+between September 28 and October 1: `createSpace` and `listSpaces` take
+`spaceType` where they took `type`, and a space credential is bound to its key
+by an HTTP message signature (`atproto-space`) instead of DPoP. Private uploads
+answered `400 Missing spaceType` and playback `401 BadSpaceSignature`. Both are
+ported from the upstream verifier and Bulletin's client; there is no fallback
+to DPoP. The live test against zds and the browser e2e run pass. The alpha PDS
+and a second member's read were not exercised.
+
+two ingest gaps left tracks written by other ATProto clients without plyr's
+copy of their audio, and so without a scan, embedding or genre tags. A new
+artist's first records could arrive before their PDS address was resolved, and
+nothing retried. And any edit through such a client reset `r2_url`, discarding
+the verified copy even when the blob had not changed. Eleven production tracks
+were affected; all are mirrored and scanned now.
+
+the same change retired "PDS-hosted", "PDS-only" and "PDS-backed" from comments
+and docs. Every track's audio belongs on the artist's PDS; what varies is
+whether plyr holds a copy. A track with none is **unmirrored**; a track whose
+PDS refused the upload, or that predates blob uploads, has **no PDS blob**.
+
 #### a copyright flag now means a recording plays through the upload (#2112–#2117, October 1 — prod `2026.1001.062017`, moderation service v77)
 
 The fingerprint scanner flagged a track when one song was a large share of its
@@ -275,9 +298,9 @@ the August arcs that sat here until September 20 — the spotify footer, support
 - **`_reference_count` cannot see `r2_url`** (#1735/#1736): the refcount that guards deletion matches `file_id`-shaped columns, so it cannot protect a row whose `r2_url` and `file_id` name different objects. `prune_revisions` now compensates locally; the general fix belongs in `_MEDIA_REFERENCES`.
 - **seven tracks are still dead, and `audit_media_integrity.py` is not scheduled** (#1735/#1737): of the 20 broken by staged-cleanup deletion, 13 were recovered; the remaining 7 have no object in any of our buckets and no PDS blob, because they predate PDS mirroring. Not recoverable by us — the artists almost certainly still hold their source files, so the remedy is asking them to re-upload. The audit script exists and exits 1 on a missing object, but nothing runs it on a schedule yet.
 - **the account-status reconciliation script has not been run against prod** (#1729): a dry run reports 5 artists whose `account_status` reason is `NULL` and would be filled in, with zero flags changed. Until it runs, those rows say an artist is hidden without saying why.
-- **64 subjects await triage in the review queue** (recounted October 1, after the rescore): 47 are flagged tracks with a recording that plays through the upload, 8 are tracks whose public label was retracted in July, and 9 are stale — 5 for tracks since deleted and 4 with no evidence under the new rule. Nobody has made a call on any of them, including track 64 (user report #5 from @vicwalker.dev.br). A present recording is not a finding — many read as DJ mixes, covers or remixes.
+- **76 subjects await triage in the review queue** (recounted October 2): 59 are flagged tracks with a recording that plays through the upload, 8 are tracks whose public label was retracted in July, and 9 are stale — 5 for tracks since deleted and 4 with no evidence under the new rule. Nobody has made a call on any of them, including track 64 (user report #5 from @vicwalker.dev.br). A present recording is not a finding — many read as DJ mixes, covers or remixes.
 - **uploaders of 17 wrongly flagged tracks were never told** (October 1): the old rule showed them a copyright badge on their own track in the portal, some for two months. The flags are cleared; no notice was sent, by decision that day. One uploader replaced the audio four times while flagged.
-- **one track cannot be scanned** (track 123): AuDD cannot extract audio from the 19 KB file, so its scan stays `scan_failed`.
+- **two tracks cannot be scanned**: AuDD cannot extract audio from track 123's 19 KB file, and track 930 has sat in `pending` since April with an `r2_url` that returns 404. Three private tracks are unscanned by design.
 - **`deploy-redis.yml` has the doubled config path that broke the moderation deploy** (#2115): its last two runs failed. Fixing the file triggers a deploy of both Redis apps, so it waits for a deliberate change.
 - **copyright spend is not on the live cost feed**: AuDD is computed from hardcoded plan constants and Claude image moderation is tracked nowhere. The five-minute labeler poll (`sync_copyright_resolutions`) also likely keeps the moderation database from scaling to zero; the Neon side is unconfirmed.
 - **no per-actor authentication**: the moderation service trusts one shared `MODERATION_AUTH_TOKEN`, so the event log's `actor` is a claim rather than a verified identity. This is the gate on letting an agent *act* rather than propose, and on review genuinely not always being one person.
@@ -431,7 +454,9 @@ see the [contributing guide](https://docs.plyr.fm/contributing/) for setup instr
 
 ---
 
-this is a living document. last updated 2026-10-01 (status maintenance): the
+this is a living document. last updated 2026-10-02: spaces credentials signed per
+the current permissioned-data branch, unmirrored-track ingest fixed (#2121, #2122);
+before that, 2026-10-01 (status maintenance): the
 September 26–28 radio window written up (#2097–#2108) and every September
 section moved to `.status_history/2026-09.md`; the radio entries that said
 "staging" corrected to the September 28 releases; #2114's deploy path noted.
