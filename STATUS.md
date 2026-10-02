@@ -47,6 +47,29 @@ plyr.fm should become:
 
 ### October 2026
 
+#### private media broke against current hosts, and tracks from other clients were never processed (#2121, #2122, October 2 — prod `2026.1002.021006`)
+
+zds follows the tip of atproto's permissioned-data branch, which changed twice
+between September 28 and October 1: `createSpace` and `listSpaces` take
+`spaceType` where they took `type`, and a space credential is bound to its key
+by an HTTP message signature (`atproto-space`) instead of DPoP. Private uploads
+answered `400 Missing spaceType` and playback `401 BadSpaceSignature`. Both are
+ported from the upstream verifier and Bulletin's client; there is no fallback
+to DPoP. The live test against zds and the browser e2e run pass. The alpha PDS
+and a second member's read were not exercised.
+
+two ingest gaps left tracks written by other ATProto clients without plyr's
+copy of their audio, and so without a scan, embedding or genre tags. A new
+artist's first records could arrive before their PDS address was resolved, and
+nothing retried. And any edit through such a client reset `r2_url`, discarding
+the verified copy even when the blob had not changed. Eleven production tracks
+were affected; all are mirrored and scanned now.
+
+the same change retired "PDS-hosted", "PDS-only" and "PDS-backed" from comments
+and docs. Every track's audio belongs on the artist's PDS; what varies is
+whether plyr holds a copy. A track with none is **unmirrored**; a track whose
+PDS refused the upload, or that predates blob uploads, has **no PDS blob**.
+
 #### a copyright flag now means a recording plays through the upload (#2112–#2117, October 1 — prod `2026.1001.062017`, moderation service v77)
 
 The fingerprint scanner flagged a track when one song was a large share of its
@@ -75,7 +98,10 @@ what shipped:
 - the backend decides the flag (`backend/utilities/copyright_evidence.py`),
   and applies the uploader's-own-catalogue check per recording, so an artist's
   own track inside a mix no longer hides the others. The moderation service
-  only fingerprints; its flag logic and threshold settings are gone (#2114)
+  only fingerprints; its flag logic and threshold settings are gone (#2114,
+  deployed October 1 06:33Z by the service's own workflow once #2115 fixed
+  its path — the first deploy of that service since July 25; one instance
+  serves staging and prod, so a backend release is not what carries it)
 - a scan that fails is tried up to four times and, if it never succeeds, stored as
   `scan_failed` with an error log. It used to be stored as a clean scan on the
   first error and never retried
@@ -102,200 +128,61 @@ and failed before building (#2115).
 
 ### September 2026
 
-#### radio transition state and OBS compatibility
+See `.status_history/2026-09.md` for the full write-ups.
 
-The shared player now ignores stale source events and aborted play promises,
-keeping radio play/pause and Media Session state stable across track changes.
-The compact embed retains listening intent while loading the next source.
-Regression tests cover Eli's full-page `?autoplay=1` OBS contract from #1592,
-explicit `autoplay=0`, compact embed autoplay, and explicit user pauses.
+#### September 26–28
 
-#### native radio with authenticated listeners (staging)
+- **the radio page is the sister-radio fork, and four stations are on the
+  sister network** (#2097–#2107, September 28 — prod `2026.0928.035150`,
+  `2026.0928.140223`, seven frontend promotes; `plyr-radio` Fly app): the
+  SolidJS listener page from our fork of Ana's sister-radio is vendored and
+  mounted in a shadow root over plyr's global player, catalog-only, with
+  Redis listener presence whose identity is the HttpOnly session cookie and
+  nothing else. The same fork runs as a Rust adapter advertising `loved`,
+  `fresh`, `deep-cuts` and `slop` as `did:web` stations with signed
+  `pet.nkp.radio.station` records and `requestCrawl`; Ana's tuner lists
+  them. Seven fixes the same day: queued pause events at track boundaries
+  and the OBS autoplay contract (#2099), iOS mute (#2101), clock-skew seeks
+  (#2104), Firehose restored as the one live HLS exception and radio seeking
+  removed from Media Session (#2105), now-playing reports without counting
+  the broadcast (#2106), uploader avatars (#2107). **open**: #2102 folds the
+  adapter into the backend; nothing has been checked on a physical iPhone.
+- **smaller**: artist-avatar artwork fallback and Top Tracks opening on the
+  past month (#2108, announced September 28); the Zig-rewrite Redis machine
+  deleted (#2110); the musician studio's service removed (#2094, September 26)
+  after the September 20 pause — no Moss, Kite or Reed track ever passed the
+  listening gate.
 
-The radio page now mounts the actual SolidJS interface from our sister-radio
-fork, replacing the Svelte approximation in #2097. It retains the CRT artwork,
-tuner, queue, and mobile layout while using the existing global player and
-appearance settings. All five plyr.fm station links remain. Native
-playback requests catalog-only state, so firehose has no external live relay.
-Redis presence derives avatars from the existing cookie session, follows player
-state across navigation, deduplicates accounts, and expires stale sockets.
-The standalone sister-protocol fork remains a separate prototype with separate
-presence. The source-integration correction and docs ship in a follow-up PR;
-#2097 contains the native presence endpoints. Neither requires a migration or new
-service. See [radio architecture](docs/internal/frontend/radio.md).
+#### September 20–23
 
+- **the upload pipeline got a pulse, and the first reading was red**
+  (#2084, #2085, #2087, September 21 — prod `2026.0921.025041` →
+  `2026.0923.005928`): `GET /health/freshness` for an external monitor; four
+  phase-less `pending` rows from April and July that the reaper had never
+  swept; operator DMs with rich-text links.
+- **Blacksky spells `repo?` with a colon** (#2089, September 22 — prod
+  `2026.0923.005928`): a sign-in fix scoped to the exact issuer; blob upload
+  there is still unverified.
+- **the status podcast is rendered by Gemini 3.8 in a step the writer cannot
+  see** (#2090, #2092, September 23); the September 20 episode had turned a
+  host name into a category, and transcripts are now read before merge.
+- **musician studio paused** (#2083, September 20) and **bounded truncation
+  recovery** (#2081, September 20 — prod `2026.0921.025041`).
 
-#### the upload pipeline got a pulse, and the first reading was red (#2084, #2085, #2087, September 21 — prod `2026.0921.025041`, `2026.0921.055515`, `2026.0923.005928`)
+#### September 1–19
 
-**why**: after #2075 the job row decides whether an upload is alive, but
-nothing outside the app could ask. `GET /health/freshness` (#2084) is a
-read-only verdict for an external monitor: 503 when the database probe
-misses a 3 s deadline or any `pending`/`processing` upload job (browser
-`transfer` phases excluded) has gone 10 min without a heartbeat; deferred
-optimization gets its timeout plus 10 min. Quiet is healthy; the 24 h
-completed/failed counts are diagnostics and never flip the verdict. No IDs,
-filenames or upstream errors in the body.
-
-**what shipped**: on prod the first reading was 503 — four `pending`,
-phase-less, zero-progress rows from April 30 and July 18 that had died before
-a worker ever claimed them. The reaper only ever swept `processing`, so they
-were invisible until something measured the same set. #2085 has it claim
-stalled pre-worker `pending` rows too (`phase IS NULL` spelled out — `phase !=
-'transfer'` is never true for NULL), in one `UPDATE … WHERE id IN (SELECT …
-FOR UPDATE SKIP LOCKED) RETURNING`, no R2 delete when a row has no media
-hints. Prod freshness read 200 on September 23. #2087 makes the operator DMs
-carry rich-text facets (UTF-8 byte offsets, tested with a leading `⚠️`), so
-account, track, health and runbook references are links; the stall alert
-leads with environment and outcome and points at
-`docs/internal/runbooks/upload-stall-alert.md` instead of the May
-retrospective. **open**: the alert still lists three job IDs plus "(+N more)"
-while the runbook says to use the full IDs; the monitor's wiring is not in
-this repo.
-
-#### Blacksky spells `repo?` with a colon, and every sign-in bounced (#2089, September 22 — prod `2026.0923.005928`)
-
-A blacksky.app user's upload finished chunking and finalization, then the
-PDS rejected the expired refresh token with `invalid_grant`, and every
-re-login after that exchanged its code successfully and failed locally with
-`Scope mismatch`, landing signed out on the homepage. plyr asks for
-`include:fm.plyr.authFullApp include:fm.plyr.privateMediaAccess`; the PDS
-expands those permission sets at consent. Blacksky serializes the expansion
-as `repo:?collection=…&action=…` — an empty positional before the query —
-where the grammar has `repo?collection=…`, and the (strict, correct) parser
-in plyr's `atproto_oauth` fork refuses it. `BlackskyCompatibleOAuthClient`
-rewrites `repo:?` → `repo?` after the token exchange and before the upstream
-semantic scope check, for the exact issuer `https://blacksky.app` only;
-validation is not loosened and the dead refresh token is not revived. This is
-a sign-in fix — blob upload to blacksky.app stays unverified (known issues).
-Underreacted's April walkthrough of granular permissions and MetalBear's
-August audit of a third-party PDS against the reference both describe this
-class of divergence.
-
-#### musician studio retired (#2094, September 26)
-
-**why**: the project paused on September 20 (below) is shelved rather than
-resumed. No Moss, Kite or Reed track ever passed the full listening gate.
-
-**what changed**: `services/musician-studio/` and its CI workflow are removed.
-The Prefect deployments, their flows and run history are deleted from the home
-worker, and the studio's state and run history are archived there, off-repo.
-Nothing on plyr.fm's backend or frontend depended on the service.
-
-**what did not change**: the three musician accounts, their saved music and
-profiles stay on plyr.fm and their PDS; their credentials stay in the private
-secrets store and nothing was revoked. The code is recoverable from git history
-(last present at `e9ea1f3e`).
-
-#### musician studio paused (#2083, September 20 — prod `2026.0921.025041`)
-
-Nate paused the project after another production retry exhausted all four audio
-review attempts with HTTP 503. Both continuous and legacy pilot deployments are
-paused in Prefect, their schedules are inactive, and the three pending scheduled
-runs were cancelled. The repository schedule also defaults to inactive. Saved
-music, musician accounts, credentials and cost history remain intact. Resume
-only after an explicit decision to restart the project.
-
-#### the status podcast is rendered by Gemini 3.8, in a step the writer cannot see (#2090, #2092, September 23 — workflow only)
-
-`scripts/generate_tts.py` parses `Host:`/`Cohost:` turns into Gemini's
-two-speaker conversational mode (Kore and Puck, `speech_metadata` per turn)
-and writes the returned WAV as-is; the model is `STATUS_TTS_MODEL`
-(`gemini-3.8-flash-tts`) with a per-dispatch override, beside the writer
-model. #2092 moves rendering to its own workflow step after the writer exits,
-and a test asserts `GOOGLE_API_KEY` appears exactly once, scoped to that
-step. This run is the first through it; the writer model is unchanged.
-
-#### the status podcast turned a host name into a category (track 1334, September 20)
-
-the `status maintenance` run (#2080) voiced "users on self-hosted personal
-data servers could never get audio onto their PDS". Its source says
-`light777.selfhosted.social` — a provider, not a category — hit the DPoP
-`ReadError`, one blacksky.app user matched, and every other PDS worked after
-a wasted 401. Track 1334's description (the transcript) is corrected; the
-audio is not. A maintenance PR's transcript is now read before merging.
-
-#### bounded studio review truncation recovery (#2081, September 20 — prod `2026.0921.025041`)
-
-The scheduled review retried two HTTP 503s, then stopped on `MAX_TOKENS` because
-incomplete responses were all non-retryable. Audio tasks now distinguish explicit
-truncation: the first request retains 1,600 tokens, and Prefect retries allow
-4,096. Truncation at the larger limit still stops. Existing retry, request and
-spend checks remain in force; paid truncated responses are charged. Diagnostics
-include the requested limit. A Prefect regression verifies recovery, usage
-accounting and reuse of the completed result without another paid request.
-
-#### September 14–19 (archived)
-
-See `.status_history/2026-09.md` for the full write-ups:
 - **an upload is two writes and one promise** (#2075, September 19 — prod
-  `2026.0919.214851`): after garrison's "Two writes, one promise" reviewed the
-  pipeline and named four windows, publication and abandonment now compete on
-  the job row (`FOR UPDATE` vs `SKIP LOCKED`), `completed`/`failed` are
-  terminal, hints precede bytes, and a failed job's media is re-swept for
-  seven days. #2076 (same release) made the studio report `BudgetPaused`
-  instead of crashing when audio 503 retries exhaust its request allowance.
-- **the PDS DPoP nonce was thrown away after every request** (#2072, #2073,
-  September 18–19 — prod `2026.0919.060731`, `2026.0919.214851`): the nonce
-  now lives in Redis per PDS host, streamed uploads prime it, and every signed
-  response refreshes it. light777.selfhosted.social's `ReadError('')` cleared
-  in prod; roughly one 401 per 200 PDS writes went away with it.
-- **a double-clicked upload, and what the red test suites were hiding**
-  (#2063–#2070, September 18 — prod `2026.0918.172630`, `2026.0918.214637`):
-  an artist-scoped advisory lock around the duplicate check; `e2e private
-  media` had been red for ten pushes; three races of one shape — the Jetstream
-  echo of plyr's own write beating the task that made it (likes, mp3
-  optimization).
-- **the queue's shared connection and revision are atomic** (#2061, #2062,
-  September 15–16 — prod `2026.0915.222459`, `2026.0916.001323`).
-- **musician uploads follow the publishing contract** (#2060, September 14 —
-  prod `2026.0915.222459`): the studio sends an explicit per-track
-  `publishing` policy instead of the legacy `visibility` field.
-
-
-#### September 5–14 (archived)
-
-See `.status_history/2026-09.md` for the full write-ups:
-- **publishing permissions are independent of storage** (#2047, #2049,
-  #2052–#2058, September 12–14 — prod `2026.0913.023332` → `2026.0914.040530`,
-  announced September 13): `PublishingPolicy` is three axes — listening,
-  downloads, visibility — plus rights that no longer touch storage; defaults
-  flow by snapshot from Portal → album → track; migration `311b4f106c90`
-  snapshots 1,064 prod tracks and moves no bytes. #2056 streams private audio
-  back to the PDS when restrictions lift; #2057 stops asking a Space for
-  authority on every play of a non-Space track. "downloads off" is
-  distribution control, not DRM.
-- **three musicians who must listen before they publish** (#2031–#2051,
-  September 6–12 — prod `2026.0907.200622` → `2026.0913.023332`): Moss, Kite
-  and Reed compose every six hours in a sandboxed container; no upload without
-  a native-audio self-review, a revision and a peer review of the exact
-  rendered hash. No track has passed the full gate. Blind controls say the
-  listener hears isolated events and wobbles on a mix.
-- **agents on both sides of the API** (#2022–#2025, #2036, September 5–8):
-  skills in `.agents/`, `plyr.fm/llms.txt` as the canonical guide with a
-  contract check in pre-commit, and the robot glyph shown only for a
-  self-applied `bot` label.
-- **smaller things** (September 5–13): in-place track editing (#2030, #2045);
-  suggested tags for unmirrored tracks (#2034, #2035); interrupted PDS uploads
-  close their streams (#2043); embeds caught up with the player (#2044); top
-  tracks default to the past month (#2048).
-
-#### September 1–5 (archived)
-
-See `.status_history/2026-09.md` for the full write-ups:
+  `2026.0919.214851`); **the PDS DPoP nonce was thrown away after every
+  request** (#2072, #2073); **a double-clicked upload, and what the red test
+  suites were hiding** (#2063–#2070, September 18); **the queue's shared
+  connection and revision are atomic** (#2061, #2062).
+- **publishing permissions are independent of storage** (#2047–#2058,
+  September 12–14 — prod `2026.0913.023332` → `2026.0914.040530`); **three
+  musicians who must listen before they publish** (#2031–#2051); **agents on
+  both sides of the API** (#2022–#2025, #2036).
 - **the player's clipped "g" exposed a track-identity collision**
-  (#2026–#2028, September 5): the queue now saves database track IDs beside
-  the legacy file IDs; audio identity caches bytes, it is not a track's
-  identity. design: `docs/internal/frontend/queue.md`.
-- **the footer became spotify's, then became the only footer** (#1987–#2004,
-  September 2–3 — GA in prod `2026.0902.232901`).
-- **the ingest-blackout alert fired on a sign-up; quiet-window host rotation
-  is gone** (#2006, September 3 — prod `2026.0903.222140`).
-- **the status-maintenance run knows where things landed, reads the
-  atmosphere, and runs on fable 5.1** (#2008–#2021, September 4–5); the
-  September 14 run was the first full run of that process.
-- **September 1–2**: skip buttons and the passing-comment stack, both
-  superseded within days; the upload form's file preview (#1954, #1957) and
-  the notification bot surviving a revoked session (#1953).
+  (#2026–#2028, September 5); **the footer became spotify's** (#1987–#2004);
+  **the status-maintenance run knows where things landed** (#2008–#2021).
 
 ### August 2026
 
@@ -317,6 +204,18 @@ in `2026-09.md` with their open threads; anything still live is in known issues.
 ## priorities
 
 ### current focus
+
+**the radio page is the sister-radio fork, and the catalog is on the sister
+network** (#2097–#2107, September 28 — prod `2026.0928.035150`,
+`2026.0928.140223`; `plyr-radio` Fly app): the vendored SolidJS page from our
+fork of Ana's sister-radio drives plyr's one audio element; presence is a
+Redis lease per socket, identity from the session cookie only; four stations
+are `did:web` identities with signed `pet.nkp.radio.station` records that
+Ana's tuner discovers. Firehose is the single live HLS exception. **next**:
+#2102 moves the protocol surface into the backend and retires the one-machine
+adapter (its signing key lives on a volume — losing it changes the station's
+public key); verify mute, HLS and the reported track-boundary loop on a
+physical iPhone; decide whether the compact embed gets a Media Session policy.
 
 **an upload is two writes and one promise** (#2063, #2070, #2075, September
 18–19 — prod `2026.0918.172630` → `2026.0919.214851`): the job row now decides
@@ -351,6 +250,8 @@ the August arcs that sat here until September 20 — the spotify footer, support
 
 ### known issues
 
+- **native radio has not been checked on a physical iPhone** (#2101, #2104, #2105, September 28): the mute fix targets a Safari behavior (`volume = 0` ignored) verified only with a stubbed element; a reported iPhone loop at a track boundary was not reproduced on desktop; HLS Firehose and the lock-screen presentation are unverified on a device. The same gap as the live-radio item below, now for the whole page.
+- **sister-radio syndication is one Fly machine with no redundancy** (#2103 → #2102): the `plyr-radio` adapter advertises four stations from a 512 MB machine in Chicago; if it is down, native `/radio` keeps playing but Ana's directory drops the stations after health checks. Consolidation into the backend is the fix.
 - **post-create hooks may run twice when the Jetstream echo and the upload task both finalize a track** (staging track 9392, September 18, unreproduced): `ingest_track_create` finalizes a pending row with a plain ORM write, not a compare-and-set, and the upload task's own `post-create hooks completed` landed 14 s after `ingest: finalized pending track` for the same row. The hooks send the notification DM and start the copyright scan. Written up in #2070.
 - **a track that publishes while its worker stalls keeps a `failed` job** (#2075, intentional for now): the user is told "timed out — please re-upload" and the re-upload is rejected as a duplicate. Teaching the reaper to recognize the committed track row and complete the job is deferred.
 - **PDS blob upload to blacksky.app is unverified after the nonce fix** (#2072): the September 9 failure there had the same `ReadError('')` signature as selfhosted.social, which the fix cleared in prod, but there is no test account on blacksky. #2089 (September 22) fixed a separate Blacksky problem — sign-in dying on its `repo:?` scope serialization — and does not settle this one.
@@ -397,9 +298,9 @@ the August arcs that sat here until September 20 — the spotify footer, support
 - **`_reference_count` cannot see `r2_url`** (#1735/#1736): the refcount that guards deletion matches `file_id`-shaped columns, so it cannot protect a row whose `r2_url` and `file_id` name different objects. `prune_revisions` now compensates locally; the general fix belongs in `_MEDIA_REFERENCES`.
 - **seven tracks are still dead, and `audit_media_integrity.py` is not scheduled** (#1735/#1737): of the 20 broken by staged-cleanup deletion, 13 were recovered; the remaining 7 have no object in any of our buckets and no PDS blob, because they predate PDS mirroring. Not recoverable by us — the artists almost certainly still hold their source files, so the remedy is asking them to re-upload. The audit script exists and exits 1 on a missing object, but nothing runs it on a schedule yet.
 - **the account-status reconciliation script has not been run against prod** (#1729): a dry run reports 5 artists whose `account_status` reason is `NULL` and would be filled in, with zero flags changed. Until it runs, those rows say an artist is hidden without saying why.
-- **64 subjects await triage in the review queue** (recounted October 1, after the rescore): 47 are flagged tracks with a recording that plays through the upload, 8 are tracks whose public label was retracted in July, and 9 are stale — 5 for tracks since deleted and 4 with no evidence under the new rule. Nobody has made a call on any of them, including track 64 (user report #5 from @vicwalker.dev.br). A present recording is not a finding — many read as DJ mixes, covers or remixes.
+- **76 subjects await triage in the review queue** (recounted October 2): 59 are flagged tracks with a recording that plays through the upload, 8 are tracks whose public label was retracted in July, and 9 are stale — 5 for tracks since deleted and 4 with no evidence under the new rule. Nobody has made a call on any of them, including track 64 (user report #5 from @vicwalker.dev.br). A present recording is not a finding — many read as DJ mixes, covers or remixes.
 - **uploaders of 17 wrongly flagged tracks were never told** (October 1): the old rule showed them a copyright badge on their own track in the portal, some for two months. The flags are cleared; no notice was sent, by decision that day. One uploader replaced the audio four times while flagged.
-- **one track cannot be scanned** (track 123): AuDD cannot extract audio from the 19 KB file, so its scan stays `scan_failed`.
+- **two tracks cannot be scanned**: AuDD cannot extract audio from track 123's 19 KB file, and track 930 has sat in `pending` since April with an `r2_url` that returns 404. Three private tracks are unscanned by design.
 - **`deploy-redis.yml` has the doubled config path that broke the moderation deploy** (#2115): its last two runs failed. Fixing the file triggers a deploy of both Redis apps, so it waits for a deliberate change.
 - **copyright spend is not on the live cost feed**: AuDD is computed from hardcoded plan constants and Claude image moderation is tracked nowhere. The five-minute labeler poll (`sync_copyright_resolutions`) also likely keeps the moderation database from scaling to zero; the Neon side is unconfirmed.
 - **no per-actor authentication**: the moderation service trusts one shared `MODERATION_AUTH_TOKEN`, so the event log's `actor` is a claim rather than a verified identity. This is the gate on letting an agent *act* rather than propose, and on review genuinely not always being one person.
@@ -553,8 +454,11 @@ see the [contributing guide](https://docs.plyr.fm/contributing/) for setup instr
 
 ---
 
-this is a living document. last updated 2026-10-01: copyright flags rest on in-step
-evidence, stored scans rescored (#2112–#2117); previously 2026-09-26: musician studio retired
-and its service removed (#2094); previously 2026-09-23: upload freshness, reaper and alert links
-(#2084–#2087), Blacksky scopes (#2089), Gemini 3.8 status TTS (#2090, #2092); the September
-14–19 entries (#2060–#2076) moved to `.status_history/2026-09.md`.
+this is a living document. last updated 2026-10-02: spaces credentials signed per
+the current permissioned-data branch, unmirrored-track ingest fixed (#2121, #2122);
+before that, 2026-10-01 (status maintenance): the
+September 26–28 radio window written up (#2097–#2108) and every September
+section moved to `.status_history/2026-09.md`; the radio entries that said
+"staging" corrected to the September 28 releases; #2114's deploy path noted.
+earlier the same day: copyright flags rest on in-step evidence, stored scans
+rescored (#2112–#2117); previously 2026-09-26: musician studio retired (#2094).
