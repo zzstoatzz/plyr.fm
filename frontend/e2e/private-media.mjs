@@ -145,9 +145,14 @@ try {
 		const search = page.locator('.private-media-section input.search-input');
 		await search.waitFor({ timeout: 15000 });
 		await search.fill(MEMBER_HANDLE);
+		const added = page.waitForResponse((response) => response.url() === `${API}/artists/me/private-media/members` && response.request().method() === 'POST');
 		await page.locator('.private-media-section .search-result-item').first().click({ timeout: 20000 });
+		const addedResponse = await added;
+		if (addedResponse.status() !== 201) fail(`adding listener returned ${addedResponse.status()}`);
+		const addedMember = await addedResponse.json();
+		grantedMemberDid = addedMember.did;
+		if (addedMember.did !== memberMe.did) fail('the portal added a different listener');
 		await page.getByText(`@${MEMBER_HANDLE} can hear your private tracks`).waitFor({ timeout: 15000 });
-		grantedMemberDid = memberMe.did;
 		step('member-added', `owner added ${MEMBER_HANDLE} in the portal`);
 
 		if ((await probe(member)) !== 200) fail('the member still cannot read the private track');
@@ -167,7 +172,7 @@ try {
 		}
 		step('member-plays', `audio ${memberPlayback} via the member's own delegation token`);
 
-		await page.locator('.private-media-section .selected-artist-chip').filter({ hasText: MEMBER_HANDLE }).getByRole('button').click();
+		await page.locator('.private-media-section .selected-artist-chip').filter({ has: page.getByText(addedMember.display_name, { exact: true }) }).last().getByRole('button').click();
 		await page.getByText(/removed @/).waitFor({ timeout: 15000 });
 		if ((await probe(member)) !== 404) fail('a removed member can still read the private track');
 		grantedMemberDid = null;
