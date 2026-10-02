@@ -98,11 +98,13 @@ export async function authorizeOnPds(page, who = HANDLE, secret = PASSWORD) {
 }
 
 export async function signIn(page, who = HANDLE, secret = PASSWORD) {
+	const ready = page.waitForResponse((response) => response.url() === `${API}/auth/pds-options`);
 	await page.goto(`${APP}/login`, { waitUntil: 'domcontentloaded' });
+	await ready;
 	const handle = page.getByPlaceholder('you.example.com');
 	await handle.waitFor({ timeout: 15000 });
 	await handle.fill(who);
-	await handle.press('Enter');
+	await page.locator('form button[type="submit"]').click();
 	await page.waitForURL(/oauth\/authorize/, { timeout: 30000 });
 	await authorizeOnPds(page, who, secret);
 	let signedIn = false;
