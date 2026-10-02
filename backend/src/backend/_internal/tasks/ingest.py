@@ -31,8 +31,16 @@ from backend._internal.tasks.origin_trust import (
     is_trusted_image_origin,
 )
 from backend._internal.tasks.pds import is_like_uri_cancelled
+from backend._internal.tasks.pds_mirror import schedule_pds_blob_mirror
 from backend.config import settings
-from backend.models import Artist, Playlist, Track, TrackComment, TrackLike
+from backend.models import (
+    Artist,
+    CopyrightScan,
+    Playlist,
+    Track,
+    TrackComment,
+    TrackLike,
+)
 from backend.models.session import UserSession
 from backend.storage import storage
 from backend.storage.keys import InvalidMediaExtension
@@ -354,6 +362,13 @@ async def ingest_track_create(
             return
 
         resolved_audio_url = track.r2_url
+        if not resolved_audio_url and pds_blob_cid and not artist.pds_url:
+            from backend._internal.slingshot import resolve_mini_doc_safe
+
+            # a new artist's first records can arrive before their PDS is known
+            if mini_doc := await resolve_mini_doc_safe(did):
+                artist.pds_url = mini_doc["pds"]
+                await db.commit()
         if (
             not resolved_audio_url
             and pds_blob_cid
@@ -437,6 +452,7 @@ async def ingest_track_update(
         # the creator assertion instead of preserving stale indexed values.
         track.self_labels = self_label_values_from_record(record.get("labels"))
 
+        pds_audio_replaced = False
         if track.audio_storage != "r2_private" and not track.is_private:
             # audio storage fields
             audio_blob = record.get("audioBlob")
@@ -470,9 +486,13 @@ async def ingest_track_update(
                 track.pds_blob_cid = audio_blob.get("ref", {}).get("$link")
                 track.r2_url = audio_url
             elif audio_blob and isinstance(audio_blob, dict):
-                track.audio_storage = "pds"
-                track.pds_blob_cid = audio_blob.get("ref", {}).get("$link")
-                track.r2_url = None
+                blob_cid = audio_blob.get("ref", {}).get("$link")
+                # the same blob we already hold a verified copy of stays mirrored
+                if blob_cid != track.pds_blob_cid or not track.r2_url:
+                    pds_audio_replaced = blob_cid != track.pds_blob_cid
+                    track.audio_storage = "pds"
+                    track.pds_blob_cid = blob_cid
+                    track.r2_url = None
             elif audio_url:
                 track.audio_storage = "r2"
                 track.r2_url = audio_url
@@ -499,8 +519,16 @@ async def ingest_track_update(
         if extra_changed:
             track.extra = extra
 
+        if pds_audio_replaced:
+            await db.execute(
+                delete(CopyrightScan).where(CopyrightScan.track_id == track.id)
+            )
+        track_id = track.id
         await db.commit()
         logfire.info("ingest: track updated", uri=uri, artist_did=did)
+
+    if pds_audio_replaced:
+        await schedule_pds_blob_mirror(track_id)
 
 
 async def ingest_track_delete(

@@ -28,7 +28,7 @@ def download_key(
 ) -> AudioKey | None:
     """the R2 key a download would serve, or None if we hold none.
 
-    None for PDS-only rows (the R2 copy is gone or never existed — a PDS
+    None for unmirrored rows (the R2 copy is gone or never existed — a PDS
     getBlob URL can't carry a filename disposition) and for firehose-ingested
     rows that were never mirrored (their `file_id` is an author-supplied rkey
     and their `r2_url` names someone else's origin). presigning without this
