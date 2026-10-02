@@ -17,7 +17,7 @@ was removed the next day — see §3 for why plyr never stores membership.
 | space host | the service that answers for the space: mints credentials, enumerates writers, routes notifications | the artist's PDS (`#atproto_space_host`, fallback `#atproto_pds`) |
 | repo host | stores one writer's permissioned repo and blobs | the artist's PDS |
 | managing app | optional service the host asks at mint time (`checkUserAccess`) | none |
-| space credential | token the authority issues that grants read access, DPoP-bound to the app it was issued to | minted by plyr for the owner's own session |
+| space credential | token the authority issues that grants read access, bound to a key the app holds and signs each request with | minted by plyr for the owner's own session |
 | delegation token | token a user's PDS issues that an app exchanges for a space credential | from the owner's PDS |
 
 "Space owner" is not a protocol term; it means the authority. The authority
@@ -28,7 +28,7 @@ today and need not.
 
 A reader never holds a URL that works. The reader's *app* asks the reader's
 *own PDS* for a delegation token naming the space, exchanges it at the space
-host for a credential bound to the app's DPoP key, and fetches `getBlob` with
+host for a credential bound to a key the app holds, and fetches `getBlob` with
 that. Two consequences that shape everything below:
 
 1. Access is by DID, always. A link is just `at://…`; a third party's app fails
