@@ -247,7 +247,7 @@ async def test_track_response_not_downloadable_when_gated_or_labeled(
 async def test_download_refuses_when_no_object_is_ours_to_serve(
     test_app: FastAPI, db_session: AsyncSession
 ):
-    """pds-only rows and unmirrored ingested rows must 404, not 307 to a
+    """unmirrored rows, uploaded or ingested, must 404, not 307 to a
     presigned URL for a key that names nothing (NoSuchKey error body)."""
     pds_only = await _make_track(
         db_session,

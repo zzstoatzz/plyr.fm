@@ -713,13 +713,13 @@ async def test_get_audio_url_by_original_file_id(
 
 
 class TestAudioPdsRedirect:
-    """tests for PDS-backed audio streaming."""
+    """tests for streaming an unmirrored track from its PDS blob."""
 
     PDS_ARTIST_DID = "did:plc:pdsartist"
     PDS_URL = "https://pds.example.com"
 
     async def test_pds_redirect(self, db_session: AsyncSession, client: object) -> None:
-        """PDS-only track redirects to getBlob endpoint."""
+        """unmirrored track redirects to getBlob endpoint."""
         from fastapi.testclient import TestClient
 
         assert isinstance(client, TestClient)
@@ -734,7 +734,7 @@ class TestAudioPdsRedirect:
         await db_session.flush()
 
         pds_track = Track(
-            title="PDS Only",
+            title="Unmirrored",
             file_id="pds_file_001",
             file_type="mp3",
             artist_did=artist.did,
@@ -836,7 +836,7 @@ class TestAudioPdsRedirect:
         client: object,
         fastapi_app: object,
     ) -> None:
-        """gated PDS-only track redirects to getBlob (not private R2 bucket)."""
+        """gated unmirrored track redirects to getBlob (not private R2 bucket)."""
         from fastapi.testclient import TestClient
 
         assert isinstance(client, TestClient)

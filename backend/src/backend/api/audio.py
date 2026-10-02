@@ -151,7 +151,7 @@ async def stream_audio(
     if not serving_original and r2_url and r2_url.startswith("http"):
         return RedirectResponse(url=r2_url)
 
-    # PDS-only tracks: redirect to PDS getBlob endpoint
+    # unmirrored tracks: redirect to PDS getBlob endpoint
     if audio_storage == "pds" and pds_blob_cid and not r2_url:
         if artist_pds_url := await _resolve_pds_url(artist_did):
             return RedirectResponse(
@@ -234,7 +234,7 @@ async def _handle_gated_audio(
             artist_did=artist_did,
         )
 
-    # PDS-backed gated tracks: redirect to PDS blob (only applies to supporter
+    # unmirrored gated tracks: redirect to PDS blob (only applies to supporter
     # gating; copyright tracks never get uploaded to PDS as a blob)
     if audio_storage == "pds" and pds_blob_cid:
         if artist_pds_url := await _resolve_pds_url(artist_did):
@@ -341,7 +341,7 @@ async def download_audio(
         audio_storage=row.audio_storage,
     )
     if key is None:
-        # we hold no object to serve as a file (PDS-only or unmirrored ingest)
+        # we hold no object to serve as a file (the track is unmirrored)
         raise HTTPException(status_code=404, detail="no downloadable file")
 
     filename = download_filename(row.display_name, row.title, key.extension)
@@ -437,7 +437,7 @@ async def get_audio_url(
         if support_gate is not None:
             await _check_gate_access(support_gate, session, artist_did)
 
-        # PDS-backed gated tracks: return PDS blob URL
+        # unmirrored gated tracks: return PDS blob URL
         if audio_storage == "pds" and pds_blob_cid:
             if artist_pds_url := await _resolve_pds_url(artist_did):
                 return AudioUrlResponse(
@@ -460,7 +460,7 @@ async def get_audio_url(
             url=r2_url, file_id=serve_file_id, file_type=serve_file_type
         )
 
-    # PDS-only tracks: return PDS getBlob URL
+    # unmirrored tracks: return PDS getBlob URL
     if audio_storage == "pds" and pds_blob_cid and not r2_url:
         if artist_pds_url := await _resolve_pds_url(artist_did):
             return AudioUrlResponse(

@@ -144,7 +144,7 @@ class TestOriginValidationOnCreate:
     async def test_untrusted_audio_url_with_blob_stripped(
         self, db_session: AsyncSession, artist: Artist
     ) -> None:
-        """untrusted audioUrl + audioBlob -> audioUrl stripped, stored as pds-only."""
+        """untrusted audioUrl + audioBlob -> audioUrl stripped, stored unmirrored."""
         record = {
             "title": "Untrusted With Blob",
             "artist": "Test",

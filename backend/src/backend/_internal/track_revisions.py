@@ -104,8 +104,8 @@ async def _maybe_delete_blob(
 ) -> None:
     """delete blobs owned by us if no live row still references them.
 
-    PDS-only audio (audio_storage="pds") lives on the user's PDS — we never
-    delete those. R2 renditions and originals use the snapshot's bucket.
+    an unmirrored revision (audio_storage="pds") has no object of ours, and
+    the blob on the user's PDS is theirs — we never delete those. R2 renditions and originals use the snapshot's bucket.
     """
     if revision.audio_storage == "pds":
         return  # not ours to delete

@@ -220,7 +220,7 @@ class TestPruneRevisions:
         await db_session.refresh(track)
 
         base = datetime(2026, 1, 1, tzinfo=UTC)
-        r0 = _add_revision(track.id, file_id="PDS-ONLY", audio_storage="pds")
+        r0 = _add_revision(track.id, file_id="UNMIRRORED", audio_storage="pds")
         r0.created_at = base
         db_session.add(r0)
         for i in range(1, MAX_REVISIONS_PER_TRACK + 1):
@@ -235,9 +235,9 @@ class TestPruneRevisions:
         ) as mock_delete:
             await prune_revisions(track.id)
 
-        # PDS-only revision was pruned (row gone) but no blob deletion attempted
+        # unmirrored revision was pruned (row gone) but no blob deletion attempted
         for call in mock_delete.call_args_list:
-            assert call.args[0] != "PDS-ONLY"
+            assert call.args[0] != "UNMIRRORED"
 
 
 class TestListRevisionsEndpoint:
@@ -443,7 +443,7 @@ class TestRestoreEndpoint:
 
         # the PDS record MUST have been rebuilt with the original blob ref —
         # dropping it silently would desync PDS from DB and lose the user's
-        # PDS-hosted copy of the audio.
+        # PDS blob.
         assert mock_update.call_count == 1
         published_record = mock_update.call_args.kwargs["record"]
         assert published_record.get("audioBlob") is not None, (
@@ -574,8 +574,8 @@ class TestRestoreEndpoint:
     ) -> None:
         """if the PDS GC'd the blob AND re-upload also fails (R2 miss,
         PDS oversize, transient error), restore still completes by
-        dropping the blob ref and downgrading the track to r2-only.
-        playback keeps working via audio_url; only the PDS-hosted copy
+        dropping the blob ref, leaving the track with no PDS blob.
+        playback keeps working via audio_url; only the user's blob
         is genuinely gone."""
         track = make_track(file_id="CURRENT-NEW", duration=200)
         track.audio_storage = "both"

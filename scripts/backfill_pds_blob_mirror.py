@@ -1,10 +1,10 @@
 #!/usr/bin/env -S uv run --script --quiet
-"""backfill verified R2 copies for tracks whose audio lives only on a PDS.
+"""backfill verified R2 copies for unmirrored tracks.
 
 ## Context
 
-Tracks ingested from the firehose can have no audio object of ours: the bytes
-are a blob on the artist's PDS, and `resolve_audio_url` built a `getBlob` URL
+A track's audio belongs on the artist's PDS; an unmirrored track is one plyr
+holds no copy of. Tracks ingested from the firehose start that way, and `resolve_audio_url` built a `getBlob` URL
 that we handed to AudD, Modal, and Replicate. A PDS serves its blobs fresh on
 every request, so scanning that URL scanned whatever the operator felt like
 returning at that moment (#1778).
@@ -107,7 +107,7 @@ async def main() -> None:
     args = parser.parse_args()
 
     candidates = await _candidates(args.limit)
-    logger.info("found %d track(s) with PDS-only audio", len(candidates))
+    logger.info("found %d unmirrored track(s)", len(candidates))
     if not candidates:
         return
 

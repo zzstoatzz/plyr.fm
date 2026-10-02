@@ -1,8 +1,9 @@
-"""mirror PDS-hosted audio into R2 after verifying it against its CID.
+"""take plyr's own verified copy of an unmirrored track's audio.
 
-a track ingested from the firehose may have no R2 object of our own: the
-audio lives as a blob on the artist's PDS and `resolve_audio_url` builds a
-`com.atproto.sync.getBlob` URL for it. handing that URL to AudD, Modal, and
+a track's audio belongs on the artist's PDS; what varies is whether plyr
+holds a copy. a track ingested from the firehose is unmirrored — there is no
+R2 object of ours — so `resolve_audio_url` builds a
+`com.atproto.sync.getBlob` URL for the blob. handing that URL to AudD, Modal, and
 Replicate treats an endpoint the uploader operates as if it were our own
 immutable storage — the bytes are served fresh on every request, so the
 copyright scanner can be shown one thing and listeners another, and the

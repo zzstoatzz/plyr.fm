@@ -57,8 +57,8 @@ From the record's `audioBlob` / `audioUrl`, ingest derives `audio_storage`:
 | record has | `audio_storage` | `r2_url` | `pds_blob_cid` |
 |------------|-----------------|----------|----------------|
 | blob + url | `both` | the url | blob ref |
-| blob only | `pds` | `None` | blob ref |
-| url only | `r2` | the url | `None` |
+| blob only | `pds` (unmirrored) | `None` | blob ref |
+| url only | `r2` (no PDS blob) | the url | `None` |
 | neither | (rejected — nothing playable) | | |
 
 `pds_blob_size` is **not** set on this path (only the upload path records it).
