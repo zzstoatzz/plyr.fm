@@ -47,6 +47,35 @@ plyr.fm should become:
 
 ### October 2026
 
+#### the review queue got its first decisions (October 2 — no code)
+
+The queue had 76 open items and no human call on any of them. A read-only
+pass proposed a call for each one from the scan evidence, the track's own
+metadata and public pages — nobody listened to anything, and nothing was
+written until the operator answered. The useful result was that most of the
+queue is not a per-track question: 48 of the 76 turned on policies that had
+never been set. Two of those were set, and 43 items closed on them:
+
+- **a DJ mix of other artists' recordings** is marked internally and left
+  alone unless someone complains (25 tracks)
+- **a fan-taped live recording of a band that permits taping** is fine to
+  host (9 tracks)
+- 9 were stale: the track is gone, or its scan shows nothing under the
+  current rule
+
+"marked internally" is an `acknowledged` event with a reason code
+(`dj_mix`, `fan_taped_live_recording`). The event log has no action that
+annotates a subject without closing its review, so the mark and the close are
+one event; a later report re-opens the item. Nothing was labeled, de-listed,
+published or sent. No proposal to label survived review — in each case the
+match was solid and the claim that the uploader had no right to it was an
+inference from a profile.
+
+the eighteen tracks that had never been scanned were also worked through:
+eight needed plyr's copy first (the entry below), five long mixes and one
+more were scanned, one has an audio URL that returns 404, and three are
+private and unscanned by design.
+
 #### private media broke against current hosts, and tracks from other clients were never processed (#2121, #2122, October 2 — prod `2026.1002.021006`)
 
 zds follows the tip of atproto's permissioned-data branch, which changed twice
@@ -298,10 +327,12 @@ the August arcs that sat here until September 20 — the spotify footer, support
 - **`_reference_count` cannot see `r2_url`** (#1735/#1736): the refcount that guards deletion matches `file_id`-shaped columns, so it cannot protect a row whose `r2_url` and `file_id` name different objects. `prune_revisions` now compensates locally; the general fix belongs in `_MEDIA_REFERENCES`.
 - **seven tracks are still dead, and `audit_media_integrity.py` is not scheduled** (#1735/#1737): of the 20 broken by staged-cleanup deletion, 13 were recovered; the remaining 7 have no object in any of our buckets and no PDS blob, because they predate PDS mirroring. Not recoverable by us — the artists almost certainly still hold their source files, so the remedy is asking them to re-upload. The audit script exists and exits 1 on a missing object, but nothing runs it on a schedule yet.
 - **the account-status reconciliation script has not been run against prod** (#1729): a dry run reports 5 artists whose `account_status` reason is `NULL` and would be filled in, with zero flags changed. Until it runs, those rows say an artist is hidden without saying why.
-- **76 subjects await triage in the review queue** (recounted October 2): 59 are flagged tracks with a recording that plays through the upload, 8 are tracks whose public label was retracted in July, and 9 are stale — 5 for tracks since deleted and 4 with no evidence under the new rule. Nobody has made a call on any of them, including track 64 (user report #5 from @vicwalker.dev.br). A present recording is not a finding — many read as DJ mixes, covers or remixes.
+- **33 subjects await a call in the review queue** (recounted October 2, after the first decisions): 11 leaked or unreleased recordings of another artist from one account, where de-listing is undecided; about 16 that need someone to listen, mostly claimed covers; 3 unofficial remixes, waiting on a policy; and track 64, which reads as a mix but carries user report #5 from @vicwalker.dev.br. Still unset: how unofficial remixes are treated, and whether a whole-track match from an unrelated account is enough to label without listening.
 - **uploaders of 17 wrongly flagged tracks were never told** (October 1): the old rule showed them a copyright badge on their own track in the portal, some for two months. The flags are cleared; no notice was sent, by decision that day. One uploader replaced the audio four times while flagged.
 - **two tracks cannot be scanned**: AuDD cannot extract audio from track 123's 19 KB file, and track 930 has sat in `pending` since April with an `r2_url` that returns 404. Three private tracks are unscanned by design.
 - **`deploy-redis.yml` has the doubled config path that broke the moderation deploy** (#2115): its last two runs failed. Fixing the file triggers a deploy of both Redis apps, so it waits for a deliberate change.
+- **the status podcast cannot be rendered** ([#2123](https://github.com/zzstoatzz/plyr.fm/issues/2123)): Google answers every generation call on the podcast's project with `403 project has been denied access`, though the key still lists models. The September 23 → October 2 window has no episode.
+- **a review item cannot be annotated without closing it**: an internal mark is an `acknowledged` event with a reason, so undecided items carry no note. A fan-taping mark published through the labeler has been raised as an idea and is not built.
 - **copyright spend is not on the live cost feed**: AuDD is computed from hardcoded plan constants and Claude image moderation is tracked nowhere. The five-minute labeler poll (`sync_copyright_resolutions`) also likely keeps the moderation database from scaling to zero; the Neon side is unconfirmed.
 - **no per-actor authentication**: the moderation service trusts one shared `MODERATION_AUTH_TOKEN`, so the event log's `actor` is a claim rather than a verified identity. This is the gate on letting an agent *act* rather than propose, and on review genuinely not always being one person.
 - **the DMCA surface is incomplete** ([#1715](https://github.com/zzstoatzz/plyr.fm/issues/1715)): the agent is registered and reachable at `dmca@plyr.fm`, but the site does not publish the notice requirements or a counter-notice procedure, and there is no repeat-infringer counter — takedowns are recorded per track in `moderation_events`, never aggregated per uploader. The published-agent half is additionally blocked on a non-residential address.
@@ -454,7 +485,9 @@ see the [contributing guide](https://docs.plyr.fm/contributing/) for setup instr
 
 ---
 
-this is a living document. last updated 2026-10-02: spaces credentials signed per
+this is a living document. last updated 2026-10-02: the review queue's first
+decisions (76 → 33 open), the never-scanned tracks worked through, #2123 filed;
+earlier the same day: spaces credentials signed per
 the current permissioned-data branch, unmirrored-track ingest fixed (#2121, #2122);
 before that, 2026-10-01 (status maintenance): the
 September 26–28 radio window written up (#2097–#2108) and every September
