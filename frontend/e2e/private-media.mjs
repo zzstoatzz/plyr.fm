@@ -37,6 +37,7 @@ let ownerContext = null;
 let dumpOwner = null;
 let dumpFresh = null;
 let dumpMember = null;
+let grantedMemberDid = null;
 
 try {
 	// --- session 1: sign in, upload privately through the consent round trip
@@ -58,11 +59,10 @@ try {
 	}
 	step('capability', 'supported=true granted=true reader=true straight from sign-in');
 
-	await page.goto(`${APP}/upload`, { waitUntil: 'networkidle' });
+	await page.goto(`${APP}/upload`, { waitUntil: 'domcontentloaded' });
 	await page.waitForTimeout(1500);
 
 	const fillForm = async () => {
-		await page.locator('input[type="text"]').first().fill(title);
 		await page
 			.locator('input[type="file"]')
 			.first()
@@ -70,8 +70,12 @@ try {
 		await page.getByText('change for this track', { exact: true }).click();
 		await page.getByRole('checkbox', { name: 'anyone can listen', exact: true }).uncheck();
 		await page.getByLabel('who can listen?').selectOption('space');
+		const tags = page.getByPlaceholder('type to search tags...');
+		await tags.fill('integration-test');
+		await tags.press('Enter');
 		const attest = page.locator('.attestation input[type="checkbox"]').first();
 		if (!(await attest.isChecked())) await attest.check();
+		await page.getByLabel('track title', { exact: true }).fill(title);
 	};
 	step('upload-form', title);
 	await fillForm();
@@ -95,7 +99,7 @@ try {
 	step('created', `track ${createdTrackId}`);
 
 	// --- the artist page: listed for the owner, absent for everyone else
-	await page.goto(`${APP}/u/${before.handle}`, { waitUntil: 'networkidle' });
+	await page.goto(`${APP}/u/${before.handle}`, { waitUntil: 'domcontentloaded' });
 	await page.getByText(title, { exact: true }).first().waitFor({ timeout: 15000 });
 	const ownerCount = await page.evaluate(
 		async ([api, did]) => (await (await fetch(`${api}/artists/${did}/analytics`, { credentials: 'include' })).json()).total_items,
@@ -103,7 +107,7 @@ try {
 	);
 	step('artist-page', `owner sees "${title}" listed; analytics total_items=${ownerCount}`);
 	const stranger = await (await browser.newContext()).newPage();
-	await stranger.goto(`${APP}/u/${before.handle}`, { waitUntil: 'networkidle' });
+	await stranger.goto(`${APP}/u/${before.handle}`, { waitUntil: 'domcontentloaded' });
 	await stranger.waitForTimeout(2000);
 	const strangerSees = await stranger.getByText(title, { exact: true }).count();
 	const strangerCount = await stranger.evaluate(
@@ -137,12 +141,13 @@ try {
 		if ((await probe(member)) !== 404) fail('a non-member could read the private track');
 		step('member-before', 'not a member yet → 404');
 
-		await page.goto(`${APP}/portal/manage`, { waitUntil: 'networkidle' });
+		await page.goto(`${APP}/portal/manage`, { waitUntil: 'domcontentloaded' });
 		const search = page.locator('.private-media-section input.search-input');
 		await search.waitFor({ timeout: 15000 });
 		await search.fill(MEMBER_HANDLE);
 		await page.locator('.private-media-section .search-result-item').first().click({ timeout: 20000 });
 		await page.getByText(`@${MEMBER_HANDLE} can hear your private tracks`).waitFor({ timeout: 15000 });
+		grantedMemberDid = memberMe.did;
 		step('member-added', `owner added ${MEMBER_HANDLE} in the portal`);
 
 		if ((await probe(member)) !== 200) fail('the member still cannot read the private track');
@@ -162,9 +167,10 @@ try {
 		}
 		step('member-plays', `audio ${memberPlayback} via the member's own delegation token`);
 
-		await page.locator('.private-media-section .selected-artist-chip button').first().click();
+		await page.locator('.private-media-section .selected-artist-chip').filter({ hasText: MEMBER_HANDLE }).getByRole('button').click();
 		await page.getByText(/removed @/).waitFor({ timeout: 15000 });
 		if ((await probe(member)) !== 404) fail('a removed member can still read the private track');
+		grantedMemberDid = null;
 		step('member-removed', 'removed → 404 again');
 		await memberContext.close();
 	} else {
@@ -210,6 +216,11 @@ try {
 	if (dumpFresh) await dumpFresh();
 	if (dumpOwner) await dumpOwner();
 } finally {
+	if (grantedMemberDid && ownerContext) {
+		const response = await ownerContext.request.delete(`${API}/artists/me/private-media/members/${encodeURIComponent(grantedMemberDid)}`);
+		console.log(`[cleanup] remove listener -> ${response.status()}`);
+		if (response.status() !== 204) process.exitCode = 1;
+	}
 	if (createdTrackId && ownerContext) await deleteTrack(ownerContext, createdTrackId);
 	await browser.close();
 }
