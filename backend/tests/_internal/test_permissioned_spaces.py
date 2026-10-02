@@ -324,8 +324,9 @@ async def test_add_and_remove_member_use_simplespace_shapes(
     request.assert_awaited_with(
         session,
         "POST",
-        "com.atproto.simplespace.addMember",
-        payload={"space": space, "did": "did:plc:friend"},
+        "com.atproto.simplespace.putMember",
+        payload={"space": space, "did": "did:plc:friend", "read": True, "write": False},
+        parse_response=False,
     )
 
     space_client._credential_cache[("did:plc:friend", space)] = (
@@ -339,6 +340,7 @@ async def test_add_and_remove_member_use_simplespace_shapes(
         "POST",
         "com.atproto.simplespace.removeMember",
         payload={"space": space, "did": "did:plc:friend"},
+        parse_response=False,
     )
     # plyr forgets the credential it minted for the removed member
     assert ("did:plc:friend", space) not in space_client._credential_cache

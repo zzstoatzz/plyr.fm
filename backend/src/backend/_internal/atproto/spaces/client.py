@@ -176,7 +176,7 @@ async def ensure_personal_space(
 
     The space is anchored on the authenticated DID. Reads and writes are both
     governed by the space's member list; the authority is authorized on its
-    own member-list space without an explicit ``addMember``. App access stays open so local/public OAuth clients can
+    own member-list space without an explicit member grant. App access stays open so local/public OAuth clients can
     exercise the experimental feature without a confidential-client key.
     """
     space_type = settings.atproto.private_media_space_type
@@ -201,12 +201,13 @@ async def ensure_personal_space(
 
 
 async def add_space_member(auth_session: AuthSession, *, space: str, did: str) -> None:
-    """put ``did`` on the space's member list. Authority-only on the space host."""
+    """grant ``did`` read-only access to the artist's private tracks."""
     await make_pds_request(
         auth_session,
         "POST",
-        "com.atproto.simplespace.addMember",
-        payload={"space": space, "did": did},
+        "com.atproto.simplespace.putMember",
+        payload={"space": space, "did": did, "read": True, "write": False},
+        parse_response=False,
     )
 
 
@@ -216,12 +217,13 @@ async def remove_space_member(
     """take ``did`` off the member list and forget the credential this process
     minted for it. The PDS stops issuing new credentials at once; one already
     issued lasts until its host's lifetime runs out (the protocol's default is
-    two hours)."""
+    ten minutes)."""
     await make_pds_request(
         auth_session,
         "POST",
         "com.atproto.simplespace.removeMember",
         payload={"space": space, "did": did},
+        parse_response=False,
     )
     forget_credential(did, space)
 
