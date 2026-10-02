@@ -299,7 +299,7 @@ async def update_record(
 
 
 def audio_blob_ref(track: Track) -> BlobRef | None:
-    """the record's ``audioBlob`` for a track whose audio lives on the PDS.
+    """the record's ``audioBlob``, or None for a track with no PDS blob.
 
     a rebuilt record must keep referencing the blob: a PDS garbage-collects a
     blob the moment no record references it, so dropping the field here is

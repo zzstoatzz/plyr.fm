@@ -105,7 +105,8 @@ class Track(Base):
     # negating a label, which claims the assertion itself was wrong.
     moderation_override: Mapped[str | None] = mapped_column(String, nullable=True)
 
-    # PDS blob storage (for audio stored on user's PDS)
+    # where the audio is: the PDS blob is the default home, r2 is plyr's copy.
+    # "both" is the normal case; "pds" = unmirrored; "r2" = no PDS blob
     audio_storage: Mapped[str] = mapped_column(
         String, nullable=False, default="r2", server_default="r2"
     )  # "r2" | "r2_private" | "pds" | "both"

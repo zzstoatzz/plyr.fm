@@ -289,7 +289,7 @@ async def test_ensure_personal_space_uses_simplespace_shape(
         "POST",
         "com.atproto.simplespace.createSpace",
         payload={
-            "type": "fm.plyr.privateMedia",
+            "spaceType": "fm.plyr.privateMedia",
             "skey": "self",
             "readPolicy": {"$type": "com.atproto.simplespace.defs#memberListPolicy"},
             "writePolicy": {"$type": "com.atproto.simplespace.defs#memberListPolicy"},
@@ -330,7 +330,7 @@ async def test_add_and_remove_member_use_simplespace_shapes(
 
     space_client._credential_cache[("did:plc:friend", space)] = (
         space_client.SpaceCredential(
-            token="t", dpop_key=ec.generate_private_key(ec.SECP256R1()), expires_at=1e12
+            token="t", key=ec.generate_private_key(ec.SECP256R1()), expires_at=1e12
         )
     )
     await space_client.remove_space_member(session, space=space, did="did:plc:friend")
@@ -409,7 +409,6 @@ async def test_mint_credential_uses_delegation_token_flow(
         "com.atproto.space.getSpaceCredential",
         "delegation-token",
         ANY,
-        issuance=True,
         json={"space": space},
     )
 
@@ -452,7 +451,6 @@ async def test_mint_credential_sends_separate_client_attestation(
         "com.atproto.space.getSpaceCredential",
         "delegation-token",
         ANY,
-        issuance=True,
         json={
             "space": space,
             "clientAttestation": (
@@ -718,7 +716,7 @@ async def test_list_spaces_routes_through_authenticated_pds(
         params={
             "did": "did:plc:user",
             "limit": 25,
-            "type": "fm.example.catalog",
+            "spaceType": "fm.example.catalog",
         },
     )
 
@@ -745,6 +743,7 @@ async def test_list_space_repos_routes_to_authority_host(
     read.assert_awaited_once_with(
         session,
         host_url="https://authority-space.example",
+        audience="did:plc:authority",
         endpoint="com.atproto.space.listRepos",
         space=space,
         params={"space": space, "limit": 20},
@@ -801,6 +800,7 @@ async def test_list_space_records_routes_to_writer_repo_host(
     read.assert_awaited_once_with(
         session,
         host_url="https://writer-pds.example",
+        audience="did:plc:writer",
         endpoint="com.atproto.space.listRecords",
         space=space,
         params={
@@ -841,6 +841,7 @@ async def test_list_space_repo_ops_routes_to_writer_repo_host(
     read.assert_awaited_once_with(
         session,
         host_url="https://writer-pds.example",
+        audience="did:plc:writer",
         endpoint="com.atproto.space.listRepoOps",
         space=space,
         params={
@@ -929,7 +930,7 @@ async def test_concurrent_mints_for_one_pair_spend_one_delegation_token(
         await asyncio.sleep(0.05)
         return space_client.SpaceCredential(
             token=f"t{minted}",
-            dpop_key=ec.generate_private_key(ec.SECP256R1()),
+            key=ec.generate_private_key(ec.SECP256R1()),
             expires_at=time.monotonic() + 600,
         )
 

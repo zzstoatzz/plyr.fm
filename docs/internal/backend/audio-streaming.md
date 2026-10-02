@@ -7,8 +7,10 @@ endpoint lives in `backend/src/backend/api/audio.py`.
 
 the load-bearing thing to internalize: **dispatch is driven by `Track.visibility`
 and `Track.support_gate`, not by `audio_storage`.** `audio_storage` (`r2` / `pds`
-/ `both`) only answers the secondary question "where do the bytes physically
-live" *within* a branch. getting this backwards is what made the 2026-06-30 dead-
+/ `both`) only answers the secondary question "which copies exist" *within* a
+branch: the PDS blob is the audio's home and R2 is plyr's copy, so `both` is
+the normal case, `pds` is an unmirrored track, and `r2` is a track with no PDS
+blob. getting this backwards is what made the 2026-06-30 dead-
 audioUrl incident confusing (see the retrospective).
 
 ## the four track types
@@ -19,7 +21,7 @@ is orthogonal — it rides on `public`/`unlisted` via `support_gate`.
 
 | type | `visibility` | `support_gate` | who can play | where audio lives |
 |------|-------------|----------------|--------------|-------------------|
-| public | `public` | `None` | anyone | R2 / CDN (or PDS blob if pds-only) |
+| public | `public` | `None` | anyone | plyr's R2 copy via the CDN (or the PDS blob if unmirrored) |
 | unlisted | `unlisted` | `None` | anyone with the link | R2 / CDN |
 | copyright-gated | `public`/`unlisted` | `{"type":"copyright"}` | any **authenticated** listener | R2 (copyright tracks never get a PDS blob) |
 | supporter-gated | `supporters` | `{"type":"any"}` | artist or validated atprotofans supporter | R2 **private** bucket (presigned) — or PDS blob if pds-stored |
@@ -73,7 +75,7 @@ avoids CORS issues with cross-origin redirects).
 2. else if `r2_url` is set (`audio_storage` `r2` or `both`) → `307` redirect to
    it (the CDN). **this is where R2 "wins" over the PDS blob for `both` tracks —
    there is no automatic fallback to the blob if the R2 object is missing.**
-3. else if pds-only (`audio_storage=="pds"`, `pds_blob_cid`, no `r2_url`) →
+3. else if unmirrored (`audio_storage=="pds"`, `pds_blob_cid`, no `r2_url`) →
    redirect to the PDS `getBlob` URL.
 4. else resolve via `storage.get_url`; `404` if nothing resolves.
 

@@ -11,8 +11,8 @@
 exercises the exact com.atproto.space.* request/response shapes the plyr.fm space
 client uses, proving private records + blobs actually store and read back through the
 permissioned-space access path. Uses a plain createSession bearer for resident
-operations, then exercises the proposal's separate ephemeral DPoP key for space
-credential issuance and credential-gated reads.
+operations, then exercises the separate ephemeral P-256 key that signs space
+credential issuance and credential-gated reads (HTTP message signatures).
 
 run: uv run scripts/permissioned_smoke.py
 optional membership leg: ZAT_MEMBER_PDS / ZAT_MEMBER_HANDLE / ZAT_MEMBER_PASSWORD — a
@@ -23,11 +23,16 @@ needs ZAT_TEST_HANDLE / ZAT_TEST_PASSWORD / ZAT_TEST_PDS in .env (a test account
 ZDS_PERMISSIONED_DATA=true instance).
 """
 
+import base64
 import os
 import sys
 
 import httpx
-from atproto_oauth.dpop import DPoPManager
+from atproto_crypto.consts import P256_CURVE_ORDER, P256_JWT_ALG
+from atproto_crypto.did import format_did_key
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.hazmat.primitives.asymmetric.utils import decode_dss_signature
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -43,6 +48,38 @@ MEMBER_PASSWORD = os.environ.get("ZAT_MEMBER_PASSWORD", "")
 SPACE_TYPE = "fm.plyr.dev.privateMedia"
 COLLECTION = "fm.plyr.dev.track"
 SKEY = "self"
+
+
+def signed(
+    token: str, key: ec.EllipticCurvePrivateKey, audience: str | None = None
+) -> dict[str, str]:
+    """headers for a space request: issuance without audience, a read with one."""
+    if audience is None:
+        public = key.public_key().public_bytes(
+            serialization.Encoding.X962, serialization.PublicFormat.CompressedPoint
+        )
+        authorization = f"Bearer {token}"
+        params = f'("authorization");keyid="{format_did_key(P256_JWT_ALG, public)}"'
+        covered = [f'"authorization": {authorization}']
+    else:
+        authorization = f"Atproto-Space {token}"
+        params = '("authorization" "atproto-space-audience")'
+        covered = [
+            f'"authorization": {authorization}',
+            f'"atproto-space-audience": {audience}',
+        ]
+    base = "\n".join([*covered, f'"@signature-params": {params}'])
+    r, sig_s = decode_dss_signature(key.sign(base.encode(), ec.ECDSA(hashes.SHA256())))
+    sig_s = min(sig_s, P256_CURVE_ORDER - sig_s)
+    signature = base64.b64encode(r.to_bytes(32, "big") + sig_s.to_bytes(32, "big"))
+    headers = {
+        "authorization": authorization,
+        "signature-input": f"atproto-space={params}",
+        "signature": f"atproto-space=:{signature.decode()}:",
+    }
+    if audience is not None:
+        headers["atproto-space-audience"] = audience
+    return headers
 
 
 def xrpc(
@@ -67,15 +104,10 @@ def member_reads(
     if delegation.status_code != 200:
         return delegation.status_code
     credential_url = f"{PDS}/xrpc/com.atproto.space.getSpaceCredential"
-    key = DPoPManager.generate_keypair()
+    key = ec.generate_private_key(ec.SECP256R1())
     cred = c.post(
         credential_url,
-        headers={
-            "authorization": f"Bearer {delegation.json()['token']}",
-            "dpop": DPoPManager.create_proof(
-                method="POST", url=credential_url, private_key=key
-            ),
-        },
+        headers=signed(delegation.json()["token"], key),
         json={"space": space_uri},
     )
     if cred.status_code != 200:
@@ -84,13 +116,7 @@ def member_reads(
     got = c.get(
         blob_url,
         headers={
-            "authorization": f"DPoP {cred.json()['credential']}",
-            "dpop": DPoPManager.create_proof(
-                method="GET",
-                url=blob_url,
-                private_key=key,
-                access_token=cred.json()["credential"],
-            ),
+            **signed(cred.json()["credential"], key, audience=owner_did),
             "range": "bytes=0-3",
         },
         params={"space": space_uri, "repo": owner_did, "cid": blob_cid},
@@ -180,7 +206,7 @@ def main() -> int:
         "GET",
         "com.atproto.space.listSpaces",
         token=token,
-        params={"did": did, "type": SPACE_TYPE},
+        params={"did": did, "spaceType": SPACE_TYPE},
     )
     assert probe.status_code == 200, (
         f"capability probe failed: {probe.status_code} {probe.text}"
@@ -206,9 +232,10 @@ def main() -> int:
         "com.atproto.simplespace.createSpace",
         token=token,
         json={
-            "type": SPACE_TYPE,
+            "spaceType": SPACE_TYPE,
             "skey": SKEY,
-            "policy": {"$type": "com.atproto.simplespace.defs#memberListPolicy"},
+            "readPolicy": {"$type": "com.atproto.simplespace.defs#memberListPolicy"},
+            "writePolicy": {"$type": "com.atproto.simplespace.defs#memberListPolicy"},
             "appAccess": {"$type": "com.atproto.simplespace.defs#open"},
         },
     )
@@ -241,10 +268,13 @@ def main() -> int:
             "record": record,
         },
     )
-    rec.raise_for_status()
-    rec_uri = rec.json()["uri"]
-    assert rec_uri == f"{space_uri}/{did}/{COLLECTION}/smoke-one", rec.text
-    print(f"✓ createRecord  uri={rec_uri}")
+    rec_uri = f"{space_uri}/{did}/{COLLECTION}/smoke-one"
+    if rec.status_code == 400 and "RecordAlreadyExists" in rec.text:
+        print("✓ createRecord → already exists (left by an interrupted run)")
+    else:
+        assert rec.status_code == 200, rec.text
+        assert rec.json()["uri"] == rec_uri, rec.text
+        print(f"✓ createRecord  uri={rec_uri}")
 
     got = xrpc(
         c,
@@ -285,18 +315,10 @@ def main() -> int:
     print("✓ getDelegationToken")
 
     credential_url = f"{PDS}/xrpc/com.atproto.space.getSpaceCredential"
-    credential_key = DPoPManager.generate_keypair()
-    issuance_proof = DPoPManager.create_proof(
-        method="POST",
-        url=credential_url,
-        private_key=credential_key,
-    )
+    credential_key = ec.generate_private_key(ec.SECP256R1())
     cred_resp = c.post(
         credential_url,
-        headers={
-            "authorization": f"Bearer {delegation_token}",
-            "dpop": issuance_proof,
-        },
+        headers=signed(delegation_token, credential_key),
         json={"space": space_uri},
     )
     cred_resp.raise_for_status()
@@ -305,17 +327,10 @@ def main() -> int:
 
     # read the blob THROUGH the permissioned path using the space credential + Range
     blob_url = f"{PDS}/xrpc/com.atproto.space.getBlob"
-    read_proof = DPoPManager.create_proof(
-        method="GET",
-        url=blob_url,
-        private_key=credential_key,
-        access_token=credential,
-    )
     blob_get = c.get(
         blob_url,
         headers={
-            "authorization": f"DPoP {credential}",
-            "dpop": read_proof,
+            **signed(credential, credential_key, audience=did),
             "range": "bytes=0-3",
         },
         params={"space": space_uri, "repo": did, "cid": blob_cid},

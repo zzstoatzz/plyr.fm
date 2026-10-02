@@ -82,7 +82,7 @@ async def resolve_audio_url(track_id: int) -> str | None:
 
 
 async def _has_own_audio_object(track_id: int) -> bool:
-    """whether the track's audio is stored by us rather than only on a PDS."""
+    """whether plyr holds its own copy of the track's audio (it is mirrored)."""
     async with db_session() as db:
         return bool(
             await db.scalar(
@@ -127,8 +127,8 @@ async def run_post_track_create_hooks(
     else:
         await _send_track_notification(track_id)
 
-    # 1b. audio that lives only on the artist's PDS is mirrored and verified
-    # against its CID before any vendor sees it — a PDS serves its blobs fresh
+    # 1b. an unmirrored track's blob is copied and verified against its CID
+    # before any vendor sees it — a PDS serves its blobs fresh
     # per request, so scanning that URL scans whatever it feels like returning
     # at that moment (#1778). the mirror re-enters here once we hold a copy.
     if audio_url and not await _has_own_audio_object(track_id):

@@ -104,7 +104,7 @@ the authenticated DID (no `did` field), and `readPolicy`, `writePolicy` and `app
 
 ```json
 {
-  "type": "fm.plyr.privateMedia",
+  "spaceType": "fm.plyr.privateMedia",
   "skey": "self",
   "readPolicy": {"$type": "com.atproto.simplespace.defs#memberListPolicy"},
   "writePolicy": {"$type": "com.atproto.simplespace.defs#memberListPolicy"},
@@ -133,10 +133,18 @@ The read path is:
 3. A confidential plyr.fm deployment creates a fresh, single-use ES256 client attestation
    with `typ=atproto-client-attestation+jwt`, its published OAuth client ID, and audience
    `{authorityDid}#atproto_space_host`. Public-client deployments omit it.
-4. plyr.fm presents the delegation token and optional attestation to
-   `getSpaceCredential` on the space host.
+4. plyr.fm generates a fresh P-256 key and presents the delegation token and optional
+   attestation to `getSpaceCredential` on the space host. The request carries an HTTP
+   message signature labelled `atproto-space` over the `authorization` header, with the
+   key's `did:key` as `keyid`; the credential is bound to that key.
 5. The resulting short-lived credential reads any repo in the space from that repo's own
-   host.
+   host. Each read sends `Authorization: Atproto-Space <credential>`, an
+   `atproto-space-audience` header naming the DID whose host is being asked, and a
+   signature over both made with the same key.
+
+Until 2026-09-29 the binding was DPoP (a `dpop` proof per request and a `DPoP`
+authorization scheme). Upstream replaced it with these signatures; a host on the newer
+branch answers the old form with `401 BadSpaceSignature`.
 
 The delegation token proves user-to-app delegation only; it does not identify the app.
 App identity comes exclusively from the separate attestation. Credentials are cached for
@@ -247,7 +255,7 @@ scope composition, attestation inclusion, host routing, credential renewal, and 
 record URL boundary.
 
 The smoke script authenticates resident operations with an app password, then proves the
-DPoP-bound credential exchange and ranged read path using a separate ephemeral key. It
+signed credential exchange and ranged read path using a separate ephemeral key. It
 does not prove the browser OAuth scope-upgrade or confidential-client attestation path.
 That browser-level interoperability proof remains in #1684.
 

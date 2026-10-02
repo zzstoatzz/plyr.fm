@@ -32,7 +32,14 @@ from backend._internal.tasks.ingest import (
 )
 from backend._internal.tasks.pds import LIKE_CANCELLED_TOMBSTONE_PREFIX
 from backend.config import settings
-from backend.models import Artist, Playlist, Track, TrackComment, TrackLike
+from backend.models import (
+    Artist,
+    CopyrightScan,
+    Playlist,
+    Track,
+    TrackComment,
+    TrackLike,
+)
 from backend.models.session import UserSession
 
 
@@ -58,6 +65,16 @@ def _mock_post_create_hooks():
         new_callable=AsyncMock,
     ):
         yield
+
+
+@pytest.fixture(autouse=True)
+def _mock_pds_blob_mirror():
+    """prevent ingest_track_update from reaching docket/redis during tests."""
+    with patch(
+        "backend._internal.tasks.ingest.schedule_pds_blob_mirror",
+        new_callable=AsyncMock,
+    ) as m:
+        yield m
 
 
 @pytest.fixture(autouse=True)
@@ -635,7 +652,7 @@ class TestIngestTrackCreate:
     ) -> None:
         """track with audioBlob only (no audioUrl) gets audio_storage='pds'."""
         record = {
-            "title": "PDS Only Track",
+            "title": "Unmirrored Track",
             "artist": "Test Artist",
             "fileId": "pds_only_001",
             "fileType": "mp3",
@@ -655,6 +672,64 @@ class TestIngestTrackCreate:
         assert track.audio_storage == "pds"
         assert track.pds_blob_cid == "bafypdsonly"
         assert track.r2_url is None
+
+    async def test_unmirrored_track_resolves_a_missing_pds_before_the_hooks(
+        self, db_session: AsyncSession
+    ) -> None:
+        """a new artist's first tracks arrived before their PDS was known.
+
+        the hooks then had no audio URL, so nothing mirrored, scanned or
+        embedded the track, and nothing ever retried (prod tracks 1304-1311).
+        """
+        from backend._internal.slingshot import MiniDoc
+
+        did = f"did:plc:jetstream_{uuid.uuid4().hex[:12]}"
+        db_session.add(Artist(did=did, handle="new.example.com", display_name="New"))
+        await db_session.commit()
+
+        record = {
+            "title": "First Track",
+            "artist": "New",
+            "fileId": "first_001",
+            "fileType": "mp3",
+            "audioBlob": {"ref": {"$link": "bafyfirst"}, "mimeType": "audio/mpeg"},
+            "createdAt": _recent_ts(),
+        }
+        mini_doc = MiniDoc(
+            did=did,
+            handle="new.example.com",
+            pds="https://pds.example.com",
+            signing_key="zkey",
+        )
+
+        with (
+            patch(
+                "backend._internal.slingshot.resolve_mini_doc_safe",
+                new_callable=AsyncMock,
+                return_value=mini_doc,
+            ),
+            patch(
+                "backend._internal.tasks.ingest.run_post_track_create_hooks",
+                new_callable=AsyncMock,
+            ) as mock_hooks,
+        ):
+            await ingest_track_create(
+                did=did,
+                rkey="first1",
+                record=record,
+                uri=f"at://{did}/fm.plyr.track/first1",
+                cid="bafyrec",
+            )
+
+        audio_url = mock_hooks.call_args[1]["audio_url"]
+        assert audio_url is not None
+        assert audio_url.startswith("https://pds.example.com/")
+        assert "bafyfirst" in audio_url
+
+        db_session.expire_all()
+        artist = await db_session.get(Artist, did)
+        assert artist is not None
+        assert artist.pds_url == "https://pds.example.com"
 
     async def test_neither_audio_field_skipped(
         self, db_session: AsyncSession, artist: Artist
@@ -1273,6 +1348,103 @@ class TestIngestTrackUpdate:
         assert updated.audio_storage == "pds"
         assert updated.pds_blob_cid == "bafynewblob"
         assert updated.r2_url is None
+
+    async def test_blob_only_update_keeps_the_verified_mirror(
+        self,
+        db_session: AsyncSession,
+        artist: Artist,
+        track: Track,
+        _mock_pds_blob_mirror: AsyncMock,
+    ) -> None:
+        """an edit that does not change the audio blob must not unlink our copy.
+
+        a third-party client's record carries only `audioBlob`. every edit
+        through one reset `r2_url` to null, discarding the mirrored and
+        verified R2 object (prod tracks 1312-1314).
+        """
+        assert track.atproto_record_uri is not None
+        uri = track.atproto_record_uri
+        track_id = track.id
+        mirrored_url = "https://audio.example.com/audio/mirrored.mp3"
+        track.audio_storage = "both"
+        track.r2_url = mirrored_url
+        track.pds_blob_cid = "bafysameblob"
+        db_session.add(CopyrightScan(track_id=track_id, is_flagged=False))
+        await db_session.commit()
+
+        await ingest_track_update(
+            did=artist.did,
+            rkey="existing",
+            record={
+                "title": "Retitled",
+                "audioBlob": {
+                    "ref": {"$link": "bafysameblob"},
+                    "mimeType": "audio/mpeg",
+                },
+            },
+            uri=uri,
+            cid="bafyedit",
+        )
+
+        db_session.expire_all()
+        updated = (
+            await db_session.execute(select(Track).where(Track.id == track_id))
+        ).scalar_one()
+        assert updated.title == "Retitled"
+        assert updated.audio_storage == "both"
+        assert updated.r2_url == mirrored_url
+        scans = (
+            await db_session.execute(
+                select(CopyrightScan).where(CopyrightScan.track_id == track_id)
+            )
+        ).scalars()
+        assert len(list(scans)) == 1
+        _mock_pds_blob_mirror.assert_not_awaited()
+
+    async def test_replaced_blob_is_mirrored_and_rescanned(
+        self,
+        db_session: AsyncSession,
+        artist: Artist,
+        track: Track,
+        _mock_pds_blob_mirror: AsyncMock,
+    ) -> None:
+        """new audio from a third-party client drops the old scan and re-mirrors."""
+        assert track.atproto_record_uri is not None
+        uri = track.atproto_record_uri
+        track_id = track.id
+        track.audio_storage = "both"
+        track.r2_url = "https://audio.example.com/audio/old.mp3"
+        track.pds_blob_cid = "bafyoldblob"
+        db_session.add(CopyrightScan(track_id=track_id, is_flagged=False))
+        await db_session.commit()
+
+        await ingest_track_update(
+            did=artist.did,
+            rkey="existing",
+            record={
+                "audioBlob": {
+                    "ref": {"$link": "bafynewaudio"},
+                    "mimeType": "audio/mpeg",
+                },
+            },
+            uri=uri,
+            cid="bafyedit2",
+        )
+
+        db_session.expire_all()
+        updated = (
+            await db_session.execute(select(Track).where(Track.id == track_id))
+        ).scalar_one()
+        assert updated.audio_storage == "pds"
+        assert updated.pds_blob_cid == "bafynewaudio"
+        assert updated.r2_url is None
+        remaining = (
+            await db_session.execute(
+                select(CopyrightScan).where(CopyrightScan.track_id == track_id)
+            )
+        ).scalars()
+        assert list(remaining) == []
+        _mock_pds_blob_mirror.assert_awaited_once_with(track_id)
 
     async def test_updates_audio_storage_to_both(
         self, db_session: AsyncSession, artist: Artist, track: Track

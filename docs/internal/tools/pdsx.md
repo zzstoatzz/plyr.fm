@@ -155,9 +155,9 @@ class Settings(BaseSettings):
     password: str = Field(validation_alias="ATPROTO_PASSWORD")
 ```
 
-## creating a track with PDS blob storage
+## creating an unmirrored track
 
-this walkthrough creates a track record whose audio lives entirely on the user's PDS (no R2 CDN). this is how third-party ATProto clients would publish tracks.
+this walkthrough creates a track record the way a third-party ATProto client would: the audio is a blob on the user's PDS, and plyr holds no copy until it mirrors one.
 
 ### 1. authenticate
 
@@ -214,9 +214,9 @@ the track should appear with `audio_storage: "pds"` and `r2_url: null`.
 
 | field | `audio_storage` | use case |
 |-------|----------------|----------|
-| `audioBlob` only | `pds` | third-party client, audio lives on user's PDS |
-| `audioUrl` only | `r2` | external link or CDN-hosted audio |
-| both | `both` | plyr.fm upload path (R2 for streaming, PDS for data sovereignty) |
+| `audioBlob` only | `pds` | unmirrored: a third-party client wrote it; plyr holds no copy yet |
+| `audioUrl` only | `r2` | no PDS blob: the PDS refused the upload, or the track predates blob uploads |
+| both | `both` | the normal case: the audio is on the user's PDS, and plyr keeps a copy for streaming |
 | neither | rejected | ingest guard rejects — must have at least one |
 
 ### cleanup

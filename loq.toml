@@ -211,11 +211,11 @@ max_lines = 545
 
 [[rules]]
 path = "backend/src/backend/_internal/tasks/ingest.py"
-max_lines = 1111
+max_lines = 1139
 
 [[rules]]
 path = "backend/tests/test_jetstream.py"
-max_lines = 3006
+max_lines = 3177
 
 [[rules]]
 path = "frontend/src/lib/components/embed/CollectionEmbed.svelte"
@@ -355,7 +355,7 @@ max_lines = 689
 
 [[rules]]
 path = "backend/tests/_internal/test_permissioned_spaces.py"
-max_lines = 974
+max_lines = 975
 
 [[rules]]
 path = "frontend/src/routes/u/[[]handle[]]/+page.svelte"
@@ -387,7 +387,7 @@ max_lines = 599
 
 [[rules]]
 path = "backend/src/backend/_internal/atproto/spaces/client.py"
-max_lines = 570
+max_lines = 611
 
 [[rules]]
 path = "frontend/tools/oxlint/anti-slop/shared/dictionary-types.ts"

@@ -9,7 +9,7 @@ from unittest.mock import ANY, AsyncMock, patch
 
 import pytest
 import redis.asyncio as async_redis
-from atproto_oauth.dpop import DPoPManager
+from cryptography.hazmat.primitives.asymmetric import ec
 
 from backend._internal import Session
 from backend._internal.atproto.spaces.client import SpaceAccessError, SpaceCredential
@@ -38,7 +38,7 @@ def _session(did: str) -> Session:
 def _credential(ttl: float = 600.0) -> SpaceCredential:
     return SpaceCredential(
         token="t",
-        dpop_key=DPoPManager.generate_keypair(),
+        key=ec.generate_private_key(ec.SECP256R1()),
         expires_at=time.monotonic() + ttl,
     )
 

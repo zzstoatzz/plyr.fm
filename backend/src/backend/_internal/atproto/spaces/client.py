@@ -2,14 +2,16 @@
 
 Owner/author writes go through the DPoP-protected OAuth path
 ([make_pds_request][backend._internal.atproto.client.make_pds_request]). Space
-credentials use a separate ephemeral DPoP key generated during credential
-exchange and retained with the credential for subsequent reads.
+credentials are bound to a separate ephemeral P-256 key generated during
+credential exchange and retained with the credential; every request carrying
+the delegation token or the credential is signed with it (an HTTP message
+signature labelled ``atproto-space``).
 
 Read path:
 
     user OAuth -> getDelegationToken (requester PDS, DPoP) -> getSpaceCredential
-    (space authority, delegation token + DPoP proof + optional client
-    attestation) -> reads (DPoP-bound space credential)
+    (space authority, delegation token + signature naming the key + optional
+    client attestation) -> reads (credential + audience DID + signature)
 """
 
 import asyncio
@@ -24,10 +26,14 @@ from dataclasses import dataclass
 from typing import Any
 
 import httpx
+from atproto_crypto.consts import P256_CURVE_ORDER, P256_JWT_ALG
+from atproto_crypto.did import format_did_key
 from atproto_identity.did.resolver import AsyncDidResolver
-from atproto_oauth.dpop import DPoPManager
 from atproto_oauth.security import is_safe_url
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives.asymmetric.ec import EllipticCurvePrivateKey
+from cryptography.hazmat.primitives.asymmetric.utils import decode_dss_signature
 
 from backend._internal import Session as AuthSession
 from backend._internal.atproto.client import make_pds_request
@@ -81,25 +87,53 @@ async def _repo_host_url(repo: str) -> str:
     return await _resolve_did_service(repo, "#atproto_pds")
 
 
-def _space_dpop_headers(
-    method: str,
-    url: str,
-    token: str,
-    dpop_key: EllipticCurvePrivateKey,
-    *,
-    issuance: bool = False,
-) -> dict[str, str]:
-    proof = DPoPManager.create_proof(
-        method=method,
-        url=url,
-        private_key=dpop_key,
-        access_token=None if issuance else token,
+_SIGNATURE_LABEL = "atproto-space"
+
+
+def _did_key(key: EllipticCurvePrivateKey) -> str:
+    compressed = key.public_key().public_bytes(
+        serialization.Encoding.X962, serialization.PublicFormat.CompressedPoint
     )
-    scheme = "Bearer" if issuance else "DPoP"
-    return {
-        "authorization": f"{scheme} {token}",
-        "dpop": proof,
+    return format_did_key(P256_JWT_ALG, compressed)
+
+
+def _space_signature_headers(
+    token: str,
+    key: EllipticCurvePrivateKey,
+    *,
+    audience: str | None = None,
+) -> dict[str, str]:
+    """sign a space request the way ``@atproto/space`` verifies it.
+
+    without ``audience`` this is credential issuance: the delegation token is
+    the bearer and the signature names the key the credential will be bound
+    to. with it, the credential is presented to the host for that DID.
+    """
+    if audience is None:
+        authorization = f"Bearer {token}"
+        signature_input = f'("authorization");keyid="{_did_key(key)}"'
+        covered = [f'"authorization": {authorization}']
+    else:
+        authorization = f"Atproto-Space {token}"
+        signature_input = '("authorization" "atproto-space-audience")'
+        covered = [
+            f'"authorization": {authorization}',
+            f'"atproto-space-audience": {audience}',
+        ]
+    base = "\n".join([*covered, f'"@signature-params": {signature_input}'])
+    r, sig_s = decode_dss_signature(key.sign(base.encode(), ec.ECDSA(hashes.SHA256())))
+    # compact r||s with low-S, as @atproto/crypto produces it
+    sig_s = min(sig_s, P256_CURVE_ORDER - sig_s)
+    signature = base64.b64encode(r.to_bytes(32, "big") + sig_s.to_bytes(32, "big"))
+
+    headers = {
+        "authorization": authorization,
+        "signature-input": f"{_SIGNATURE_LABEL}={signature_input}",
+        "signature": f"{_SIGNATURE_LABEL}=:{signature.decode()}:",
     }
+    if audience is not None:
+        headers["atproto-space-audience"] = audience
+    return headers
 
 
 async def _space_token_request(
@@ -107,17 +141,17 @@ async def _space_token_request(
     method: str,
     endpoint: str,
     token: str,
-    dpop_key: EllipticCurvePrivateKey,
+    key: EllipticCurvePrivateKey,
     *,
-    issuance: bool = False,
+    audience: str | None = None,
     json: dict[str, Any] | None = None,
     params: dict[str, Any] | None = None,
 ) -> httpx.Response:
-    """Call a permissioned XRPC with its operation-specific DPoP proof."""
+    """Call a permissioned XRPC, signed with the credential's key."""
     url = f"{service_url}/xrpc/{endpoint}"
     if not is_safe_url(url):
         raise ValueError(f"unsafe service URL: {url}")
-    headers = _space_dpop_headers(method, url, token, dpop_key, issuance=issuance)
+    headers = _space_signature_headers(token, key, audience=audience)
     async with httpx.AsyncClient(timeout=30) as http:
         return await http.request(
             method,
@@ -153,7 +187,7 @@ async def ensure_personal_space(
             "POST",
             "com.atproto.simplespace.createSpace",
             payload={
-                "type": space_type,
+                "spaceType": space_type,
                 "skey": skey,
                 "readPolicy": MEMBER_LIST_POLICY,
                 "writePolicy": MEMBER_LIST_POLICY,
@@ -262,11 +296,11 @@ async def delete_space_record(auth_session: AuthSession, record_uri: str) -> Non
 @dataclass(frozen=True)
 class SpaceCredential:
     token: str
-    dpop_key: EllipticCurvePrivateKey
+    key: EllipticCurvePrivateKey
     expires_at: float
 
 
-# Per-process cache. Keep the proof key and credential together: neither is
+# Per-process cache. Keep the signing key and credential together: neither is
 # useful without the other. Include the requesting user so an authorization
 # decision made for one account is never reused for another.
 _credential_cache: dict[tuple[str, str], SpaceCredential] = {}
@@ -327,14 +361,13 @@ async def _mint_credential(auth_session: AuthSession, space: str) -> SpaceCreden
 
     # Credential issuance happens on the resolved space host, which may differ
     # from both the user's PDS and each writer's repo host.
-    dpop_key = DPoPManager.generate_keypair()
+    key = ec.generate_private_key(ec.SECP256R1())
     cred_resp = await _space_token_request(
         await _space_host_url(space),
         "POST",
         "com.atproto.space.getSpaceCredential",
         delegation_token,
-        dpop_key,
-        issuance=True,
+        key,
         json=payload,
     )
     if cred_resp.status_code != 200:
@@ -355,7 +388,7 @@ async def _mint_credential(auth_session: AuthSession, space: str) -> SpaceCreden
         raise Exception(f"getSpaceCredential failed: {cred_resp.status_code} {body}")
     token = cred_resp.json()["credential"]
     return SpaceCredential(
-        token=token, dpop_key=dpop_key, expires_at=_credential_expires_at(token)
+        token=token, key=key, expires_at=_credential_expires_at(token)
     )
 
 
@@ -425,8 +458,8 @@ async def open_space_blob(
             credential = await get_space_credential(
                 auth_session, space, force_refresh=attempt > 0
             )
-            headers = _space_dpop_headers(
-                "GET", url, credential.token, credential.dpop_key
+            headers = _space_signature_headers(
+                credential.token, credential.key, audience=repo
             )
             if range_header:
                 headers["range"] = range_header
@@ -451,7 +484,7 @@ async def list_spaces(
     """List permissioned spaces materialized for the authenticated user."""
     params: dict[str, Any] = {"did": auth_session.did, "limit": limit}
     if space_type:
-        params["type"] = space_type
+        params["spaceType"] = space_type
     return await make_pds_request(
         auth_session,
         "GET",
@@ -464,11 +497,15 @@ async def _credential_read(
     auth_session: AuthSession,
     *,
     host_url: str,
+    audience: str,
     endpoint: str,
     space: str,
     params: dict[str, Any],
 ) -> dict[str, Any]:
-    """Perform a JSON space read, renewing once when the credential is stale."""
+    """Perform a JSON space read, renewing once when the credential is stale.
+
+    ``audience`` is the DID whose host is being asked.
+    """
     for attempt in range(2):
         credential = await get_space_credential(
             auth_session, space, force_refresh=attempt > 0
@@ -478,7 +515,8 @@ async def _credential_read(
             "GET",
             endpoint,
             credential.token,
-            credential.dpop_key,
+            credential.key,
+            audience=audience,
             params=params,
         )
         if response.status_code == 401 and attempt == 0:
@@ -508,6 +546,7 @@ async def list_space_repos(
     return await _credential_read(
         auth_session,
         host_url=await _space_host_url(space),
+        audience=parse_space_uri(space).owner_did,
         endpoint="com.atproto.space.listRepos",
         space=space,
         params=params,
@@ -535,6 +574,7 @@ async def list_space_records(
     return await _credential_read(
         auth_session,
         host_url=await _repo_host_url(repo),
+        audience=repo,
         endpoint="com.atproto.space.listRecords",
         space=space,
         params=params,
@@ -564,6 +604,7 @@ async def list_space_repo_ops(
     return await _credential_read(
         auth_session,
         host_url=await _repo_host_url(repo),
+        audience=repo,
         endpoint="com.atproto.space.listRepoOps",
         space=space,
         params=params,
