@@ -236,8 +236,8 @@
 						<img
 							src={coverThumbUrl ?? coverFullUrl}
 							alt="{track.title} artwork"
-							width="80"
-							height="80"
+							width="48"
+							height="48"
 							loading={imageLoading}
 							fetchpriority={imageFetchPriority}
 							onerror={() => trackImageError = true}
@@ -253,8 +253,8 @@
 						<img
 							src={artistAvatarUrl}
 							alt={track.artist}
-							width="80"
-							height="80"
+							width="48"
+							height="48"
 							loading={imageLoading}
 							fetchpriority={imageFetchPriority}
 							onerror={handleAvatarError}
@@ -579,8 +579,8 @@
 	.track-image-wrapper {
 		position: relative;
 		flex-shrink: 0;
-		width: 80px;
-		height: 80px;
+		width: 48px;
+		height: 48px;
 	}
 
 	.track-image-wrapper.gated::after {
@@ -626,8 +626,8 @@
 	.track-image,
 	.track-image-placeholder {
 		flex-shrink: 0;
-		width: 80px;
-		height: 80px;
+		width: 48px;
+		height: 48px;
 		display: flex;
 		align-items: center;
 		justify-content: center;
@@ -639,8 +639,8 @@
 
 	.track-avatar {
 		flex-shrink: 0;
-		width: 80px;
-		height: 80px;
+		width: 48px;
+		height: 48px;
 		display: block;
 	}
 
