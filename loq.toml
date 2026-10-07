@@ -51,7 +51,7 @@ max_lines = 1221
 
 [[rules]]
 path = "backend/tests/api/test_audio.py"
-max_lines = 914
+max_lines = 1034
 
 [[rules]]
 path = "backend/tests/api/test_albums.py"
@@ -123,7 +123,7 @@ max_lines = 622
 
 [[rules]]
 path = "frontend/src/lib/components/player/Player.svelte"
-max_lines = 1178
+max_lines = 1188
 
 [[rules]]
 path = "frontend/src/lib/queue.svelte.ts"
@@ -371,7 +371,7 @@ max_lines = 1182
 
 [[rules]]
 path = "backend/src/backend/api/audio.py"
-max_lines = 568
+max_lines = 595
 
 [[rules]]
 path = "backend/src/backend/_internal/export_tasks.py"
@@ -444,3 +444,7 @@ max_lines = 1044
 [[rules]]
 path = "frontend/vendor/sister-radio/frontend/src/styles/global.css"
 max_lines = 628
+
+[[rules]]
+path = "frontend/src/lib/components/player/EqPanel.svelte"
+max_lines = 566

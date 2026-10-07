@@ -1,5 +1,6 @@
 import type { Track } from './types';
 import { API_URL } from './config';
+import { eq } from './eq.svelte';
 
 // radio is a distinct *source* on the same player: when set, the one <audio>
 // element plays this stream instead of a queue track, and the normal player
@@ -216,7 +217,7 @@ class PlayerState {
 	): void {
 		this.detachHls();
 		const playNative = () => {
-			el.src = np.stream_url;
+			el.src = eq.prepareSource(el, np.stream_url, false);
 			el.load();
 		};
 

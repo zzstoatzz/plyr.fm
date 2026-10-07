@@ -5,6 +5,7 @@ export const TYPEAHEAD_URL = 'https://typeahead.waow.tech';
 
 export const VIBE_SEARCH_FLAG = 'vibe-search';
 export const COPYRIGHT_PARADIGM_FLAG = 'copyright-paradigm';
+export const EQ_FLAG = 'eq';
 
 /**
  * generate atprotofans support URL for an artist.

@@ -21,6 +21,7 @@
 	import { page } from '$app/stores';
 	import { showAccessDenied } from '$lib/access-denial';
 	import { skipStepSeconds } from '$lib/skip-step';
+	import { eq } from '$lib/eq.svelte';
 
 	interface Props {
 		queueOpen?: boolean;
@@ -36,6 +37,8 @@
 	import TrackInfo from './TrackInfo.svelte';
 	import PlaybackControls from './PlaybackControls.svelte';
 	import VolumeControl from './VolumeControl.svelte';
+	import EqButton from './EqButton.svelte';
+	import { EQ_FLAG } from '$lib/config';
 	import AddToMenu from '$lib/components/AddToMenu.svelte';
 	import { likes } from '$lib/likes.svelte';
 	import type { Track } from '$lib/types';
@@ -93,6 +96,7 @@
 	// what the strip shows: the radio on-air track when in radio mode, else the
 	// queue track. radio renders through the SAME strip (TrackInfo + controls).
 	let nowPlayingTrack = $derived(player.radio?.track ?? player.currentTrack);
+	let eqAvailable = $derived(eq.supported && Boolean(auth.user?.enabled_flags?.includes(EQ_FLAG)));
 	let trackInfoRef = $state<{ recalcOverflow: () => void } | null>(null);
 
 	$effect(() => {
@@ -463,7 +467,7 @@
 			{ once: true }
 		);
 
-		audio.src = resolved.src;
+		audio.src = eq.prepareSource(audio, resolved.src, resolved.credentialed);
 		audio.load();
 	}
 
@@ -909,7 +913,10 @@
 	onvolumechange={(event) => {
 		if (volumeWritable && !event.currentTarget.muted) player.volume = event.currentTarget.volume;
 	}}
-	onplay={syncPlaybackState}
+	onplay={(event) => {
+		eq.onPlay(event.currentTarget);
+		syncPlaybackState(event);
+	}}
 	onpause={syncPlaybackState}
 	onended={() => (player.radio ? radio.onEnded() : handleTrackEnded())}
 	onerror={() => {
@@ -978,6 +985,9 @@
 			<div class="player-right">
 				{#if onToggleQueue}
 					{@render queueButton()}
+				{/if}
+				{#if eqAvailable}
+					<EqButton />
 				{/if}
 				<VolumeControl />
 			</div>

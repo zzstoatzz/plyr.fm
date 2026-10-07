@@ -1,7 +1,9 @@
 """tests for audio streaming endpoint."""
 
+from collections.abc import Callable
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import httpx
 import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
@@ -912,3 +914,121 @@ async def test_private_r2_allows_anonymous_playback(
             resolved = await client.get(f"/audio/{gated_track.file_id}/url")
             assert resolved.status_code == 200
             assert resolved.json()["url"] == signed_url
+
+
+def _upstream_client(
+    handler: Callable[[httpx.Request], httpx.Response],
+) -> Callable[..., httpx.AsyncClient]:
+    real = httpx.AsyncClient
+
+    def factory(**kwargs: object) -> httpx.AsyncClient:
+        return real(transport=httpx.MockTransport(handler), **kwargs)  # type: ignore[arg-type]
+
+    return factory
+
+
+async def test_gated_stream_with_cors_proxies_bytes(
+    test_app: FastAPI, gated_track: Track, owner_session: Session
+) -> None:
+    """the eq loads gated audio CORS-readable: bytes come back, not a redirect."""
+    from backend._internal import get_optional_session
+
+    signed_url = "https://presigned.example.com/audio/gated.mp3?sig=1"
+    seen: list[httpx.Request] = []
+
+    def upstream(req: httpx.Request) -> httpx.Response:
+        seen.append(req)
+        return httpx.Response(
+            206,
+            content=b"ID3abc",
+            headers={
+                "content-type": "audio/mpeg",
+                "content-range": "bytes 0-5/100",
+                "accept-ranges": "bytes",
+                "x-amz-request-id": "drop-me",
+            },
+        )
+
+    test_app.dependency_overrides[get_optional_session] = lambda: owner_session
+    try:
+        with (
+            patch(
+                "backend.api.audio.storage.generate_presigned_url",
+                new=AsyncMock(return_value=signed_url),
+            ),
+            patch("backend.api.audio.httpx.AsyncClient", _upstream_client(upstream)),
+        ):
+            async with AsyncClient(
+                transport=ASGITransport(app=test_app), base_url="http://test"
+            ) as client:
+                response = await client.get(
+                    f"/audio/{gated_track.file_id}?cors=1",
+                    headers={"range": "bytes=0-5"},
+                    follow_redirects=False,
+                )
+    finally:
+        test_app.dependency_overrides.pop(get_optional_session, None)
+
+    assert response.status_code == 206
+    assert response.content == b"ID3abc"
+    assert response.headers["content-range"] == "bytes 0-5/100"
+    assert "x-amz-request-id" not in response.headers
+    assert str(seen[0].url) == signed_url
+    assert seen[0].headers["range"] == "bytes=0-5"
+
+
+async def test_gated_stream_with_cors_still_checks_access(
+    test_app: FastAPI, gated_track: Track
+) -> None:
+    """cors=1 changes how bytes are delivered, never who gets them."""
+    test_app.dependency_overrides.pop(require_auth, None)
+    async with AsyncClient(
+        transport=ASGITransport(app=test_app), base_url="http://test"
+    ) as client:
+        response = await client.get(
+            f"/audio/{gated_track.file_id}?cors=1", follow_redirects=False
+        )
+    assert response.status_code == 401
+
+
+async def test_gated_stream_with_cors_upstream_failure_is_502(
+    test_app: FastAPI, gated_track: Track, owner_session: Session
+) -> None:
+    from backend._internal import get_optional_session
+
+    test_app.dependency_overrides[get_optional_session] = lambda: owner_session
+    try:
+        with (
+            patch(
+                "backend.api.audio.storage.generate_presigned_url",
+                new=AsyncMock(return_value="https://presigned.example.com/x.mp3"),
+            ),
+            patch(
+                "backend.api.audio.httpx.AsyncClient",
+                _upstream_client(lambda _req: httpx.Response(403)),
+            ),
+        ):
+            async with AsyncClient(
+                transport=ASGITransport(app=test_app), base_url="http://test"
+            ) as client:
+                response = await client.get(
+                    f"/audio/{gated_track.file_id}?cors=1", follow_redirects=False
+                )
+    finally:
+        test_app.dependency_overrides.pop(get_optional_session, None)
+
+    assert response.status_code == 502
+
+
+async def test_public_stream_with_cors_still_redirects_to_cdn(
+    test_app: FastAPI, test_track_with_r2_url: Track
+) -> None:
+    """public audio already carries CORS on the CDN, so cors=1 keeps the redirect."""
+    async with AsyncClient(
+        transport=ASGITransport(app=test_app), base_url="http://test"
+    ) as client:
+        response = await client.get(
+            f"/audio/{test_track_with_r2_url.file_id}?cors=1", follow_redirects=False
+        )
+    assert response.status_code == 307
+    assert response.headers["location"] == test_track_with_r2_url.r2_url
