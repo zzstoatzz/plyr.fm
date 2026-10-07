@@ -527,7 +527,7 @@
 
 	.hint {
 		font-size: var(--text-xs);
-		color: var(--text-muted);
+		color: var(--text-tertiary);
 	}
 
 	.reset {
