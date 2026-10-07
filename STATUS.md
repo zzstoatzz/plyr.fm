@@ -47,6 +47,22 @@ plyr.fm should become:
 
 ### October 2026
 
+#### an iOS app started in the repo (October 7)
+
+`mobile/` is an Expo 57 / React Native iOS client, built the way Agents,
+birds.place, Simmer and tuner are: expo-router native tabs, TanStack Query, EAS.
+The first milestone is a thin player on the public API (top tracks, the latest
+feed, search, a player sheet, background audio, lock screen controls through
+`react-native-audio-api`). No sign-in yet; the native auth start it needs is
+written up in `mobile/README.md`.
+
+`shared/` (`plyr-shared`) holds the decisions both clients make: the API
+contract checked against the contract baseline, the queue, playback rules,
+artwork fallbacks and the top-tracks periods. The web app does not import it
+yet; each rule the web also has is tested against the web's own module so the
+two can't drift. A root `package.json` makes `shared/` + `mobile/` one bun
+workspace; `frontend/` keeps its own lockfile and install.
+
 #### the review queue got its first decisions (October 2 — no code)
 
 The queue had 76 open items and no human call on any of them. A read-only

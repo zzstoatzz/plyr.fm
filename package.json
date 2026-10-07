@@ -1,0 +1,8 @@
+{
+  "name": "plyr-fm",
+  "private": true,
+  "workspaces": [
+    "shared",
+    "mobile"
+  ]
+}

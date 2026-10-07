@@ -1,0 +1,44 @@
+{
+  "name": "plyr-mobile",
+  "private": true,
+  "version": "0.1.0",
+  "main": "expo-router/entry",
+  "scripts": {
+    "start": "expo start",
+    "ios": "expo run:ios",
+    "check": "tsc --noEmit && expo lint",
+    "lint": "expo lint",
+    "build:ios": "bunx eas-cli build --platform ios --profile production",
+    "ship:ios": "bun run check && bunx eas-cli build --platform ios --profile production --auto-submit --non-interactive --no-wait"
+  },
+  "dependencies": {
+    "@expo/ui": "~57.0.21",
+    "@react-native-community/netinfo": "12.0.1",
+    "@tanstack/react-query": "^5.104.0",
+    "expo": "~57.0.21",
+    "expo-constants": "~57.0.20",
+    "expo-dev-client": "~57.0.19",
+    "expo-haptics": "~57.0.3",
+    "expo-image": "~57.0.4",
+    "expo-linking": "~57.0.11",
+    "expo-router": "~57.0.24",
+    "expo-splash-screen": "~57.0.9",
+    "expo-sqlite": "~57.0.3",
+    "expo-status-bar": "~57.0.1",
+    "expo-symbols": "~57.0.3",
+    "expo-system-ui": "~57.0.4",
+    "plyr-shared": "workspace:*",
+    "react": "19.2.3",
+    "react-native": "0.86.3",
+    "react-native-audio-api": "0.13.5",
+    "react-native-safe-area-context": "~5.7.0",
+    "react-native-screens": "~4.26.0",
+    "react-native-svg": "15.15.4"
+  },
+  "devDependencies": {
+    "@types/react": "~19.2.4",
+    "eslint": "^9.25.0",
+    "eslint-config-expo": "~57.0.2",
+    "typescript": "~6.0.3"
+  }
+}
