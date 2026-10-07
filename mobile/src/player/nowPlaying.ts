@@ -1,6 +1,6 @@
 import type { Track } from "plyr-shared/contract";
 import { IMAGE_WIDTHS, resizedImageUrl, trackCoverUrl } from "plyr-shared/images";
-import { useEffect, useEffectEvent, type RefObject } from "react";
+import { useEffect, useEffectEvent, useRef, type RefObject } from "react";
 import { PlaybackNotificationManager, type AudioTagHandle } from "react-native-audio-api";
 import type { Controls, Progress } from "./PlayerProvider";
 
@@ -46,11 +46,16 @@ export function useNowPlaying({ controls, progress, seeks, audio }: Args) {
     }),
   );
 
+  // hide() rejects when the native side has never registered a notification, which is every launch
+  const shown = useRef(false);
+
   useEffect(() => {
     if (!track) {
-      void PlaybackNotificationManager.hide();
+      if (shown.current) void PlaybackNotificationManager.hide();
+      shown.current = false;
       return;
     }
+    shown.current = true;
     void PlaybackNotificationManager.enableControl("previousTrack", true);
     void PlaybackNotificationManager.enableControl("seekTo", true);
     void publish(track);
