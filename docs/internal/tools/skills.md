@@ -34,7 +34,7 @@ Use the skill picker or mention a skill explicitly (`$onboard` in Codex CLI, `/o
 | `check-spans` | investigating Logfire traces |
 | `traffic-overview` | reporting traffic and performance across time windows |
 
-Discovery is not authorization: publishing, moderation writes, and production promotion still require the user's authorization under the project instructions. Some workflows use Claude-specific tools or session memory; use available equivalents where appropriate and report unavailable dependencies.
+Discovery is not authorization: moderation writes and production promotion still require the user's authorization under the project instructions. Some workflows use Claude-specific tools or session memory; use available equivalents where appropriate and report unavailable dependencies.
 
 ## adding a skill
 
