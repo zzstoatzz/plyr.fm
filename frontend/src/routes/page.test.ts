@@ -67,6 +67,11 @@ it.each([false, true])(
 		await new Promise((resolve) => setTimeout(resolve, 20));
 		flushSync();
 		expect(periods).toEqual(['month']);
-		if (!empty) expect(document.querySelector('.period-toggle')?.textContent).toBe('past month');
+		expect(document.querySelector('.period-toggle')?.textContent).toBe('past month');
+		if (empty) {
+			expect(document.querySelector('.top-tracks-empty')?.textContent?.trim()).toBe(
+				'nothing liked in the past month'
+			);
+		}
 	}
 );
