@@ -57,6 +57,27 @@ the web also has is tested against the web's own module (`*.test.ts` import
 web onto `plyr-shared` is a module-at-a-time change: point the import at the
 package and delete the frontend copy.
 
+## TestFlight release
+
+EAS project: `@zzstoatzz.io/plyr-fm`
+(`680fd924-087f-4ae5-8813-2fee71cb66f8`). Bundle identifier: `fm.plyr`.
+
+```sh
+just mobile check
+cd mobile
+bunx eas-cli credentials:configure-build --platform ios --profile production
+bun run ship:ios
+```
+
+Signing uses the existing Nathan Nowack Apple team (`65M396B5CL`). Initial
+registration on October 8 was blocked by Apple's updated Developer Program
+License Agreement, which the Account Holder must accept. No App Store Connect
+app or distribution build has been created yet. Apple also reported a trader
+status notice for EU distribution.
+
+After Apple registration, set `submit.production.ios.ascAppId` in `eas.json`
+to the assigned App Store Connect app ID. EAS manages signing and submission.
+
 ## not yet
 
 - **sign-in**: the backend already accepts `Authorization: Bearer <session>`.
@@ -67,7 +88,6 @@ package and delete the frontend copy.
   callback URL. Likes, the For You feed, gated tracks and scrobbling follow.
 - universal links (`applinks:plyr.fm`) need an `apple-app-site-association`
   file on the web origin.
-- an EAS project and App Store Connect record: `bunx eas-cli init` from
-  `mobile/` writes the project id into `app.json`.
+- the App Store Connect record and first TestFlight build (see above).
 - Android: the config plugin already asks for a media-playback foreground
   service; nothing has been built or run there.
