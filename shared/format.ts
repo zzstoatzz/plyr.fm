@@ -7,3 +7,8 @@ export function formatTime(seconds: number): string {
   return h > 0 ? `${h}:${String(m).padStart(2, "0")}:${s}` : `${m}:${s}`;
 }
 
+
+/** "1 track", "3 tracks", as the web counts things. */
+export function count(n: number, word: string): string {
+  return `${n} ${word}${n === 1 ? "" : "s"}`;
+}

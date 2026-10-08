@@ -21,6 +21,7 @@ const track = (id: number, extra: Partial<Track> = {}): Track => ({
   created_at: "",
   image_url: null,
   album: null,
+  tags: [],
   gated: false,
   ...extra,
 });

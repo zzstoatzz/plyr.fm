@@ -4,6 +4,7 @@ import { useState } from "react";
 import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import { useQueryClient } from "@tanstack/react-query";
 import { topTracks, useTopTracks } from "@/data";
+import { useOpen } from "@/nav";
 import { canPlay, usePlayer } from "@/player/PlayerProvider";
 import { color, inset, radius } from "@/theme";
 import { type } from "@/type";
@@ -17,6 +18,7 @@ export function TopTracks() {
   const client = useQueryClient();
   const { data, isPending } = useTopTracks(period);
   const player = usePlayer();
+  const open = useOpen();
 
   // like the web toggle: step to the next period that has any tracks
   const cycle = async () => {
@@ -70,9 +72,19 @@ export function TopTracks() {
               <Text style={[type.secondary, styles.title, { color: active ? color.accent : color.ink }]} numberOfLines={1}>
                 {item.title}
               </Text>
-              <Text style={[type.meta, { color: color.muted }]} numberOfLines={1}>
-                {item.artist}
-              </Text>
+              <Pressable
+                onPress={() => open({ artist: item.artist_handle })}
+                hitSlop={{ top: 4, bottom: 10 }}
+                accessibilityRole="link"
+                accessibilityLabel={item.artist}
+                accessibilityHint="opens the artist"
+              >
+                {({ pressed }) => (
+                  <Text style={[type.meta, { color: pressed ? color.accent : color.muted }]} numberOfLines={1}>
+                    {item.artist}
+                  </Text>
+                )}
+              </Pressable>
             </Pressable>
           );
         }}

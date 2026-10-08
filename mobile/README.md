@@ -1,9 +1,9 @@
 # plyr.fm, on a phone
 
 A native iOS client for plyr.fm, from the same repository as the web app. The
-first milestone is a thin player on the existing public API: top tracks and the
-latest feed, track search, a player sheet, background audio, and lock screen
-controls. No sign-in yet, so supporter-gated tracks show who can listen and
+app reads the existing public API: top tracks and the latest feed filtered by
+tag, search across tracks, artists, albums, tags and playlists, artist, tag and
+playlist pages, a player sheet, background audio, and lock screen controls. No sign-in yet, so supporter-gated tracks show who can listen and
 stay locked.
 
 Nothing here reaches the web app or the backend. Deploys are unaffected by
@@ -87,6 +87,8 @@ successfully on October 8, 2026; Apple processing is checked separately with
   `fm.plyr://auth`, then `POST /auth/exchange` with the verifier. That mirrors
   Agents' `/app/login` → `/app/session`, and avoids putting a session in the
   callback URL. Likes, the For You feed, gated tracks and scrobbling follow.
+- album pages: album search hits open the artist for now, because the album
+  endpoints are not in `docs/internal/contracts/client-api.json` yet.
 - universal links (`applinks:plyr.fm`) need an `apple-app-site-association`
   file on the web origin.
 - Android: the config plugin already asks for a media-playback foreground

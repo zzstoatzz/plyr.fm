@@ -1,5 +1,18 @@
 import { queryOptions, useInfiniteQuery, useQuery, type QueryClient } from "@tanstack/react-query";
-import { parseAudioUrl, parseTrack, parseTrackList, parseTrackPage, parseTrackSearch, type Track } from "plyr-shared/contract";
+import {
+  parseArtist,
+  parseAudioUrl,
+  parsePlaylist,
+  parseSearch,
+  parseTagTracks,
+  parseTags,
+  parseTrack,
+  parseTrackList,
+  parseTrackPage,
+  type Track,
+} from "plyr-shared/contract";
+import { SEARCH_MIN_LENGTH } from "plyr-shared/search";
+import { TAG_FILTER_LIMIT } from "plyr-shared/tags";
 import { topTracksQuery, type TopPeriod } from "plyr-shared/top";
 import { getJSON } from "./api";
 
@@ -15,27 +28,70 @@ export function useTopTracks(period: TopPeriod) {
   return useQuery(topTracks(period));
 }
 
-export function useLatestTracks() {
+function tracksPath(params: { tags?: readonly string[]; artistDid?: string; cursor: string | null }): string {
+  const pairs: [string, string][] = (params.tags ?? []).map((tag) => ["tags", tag]);
+  if (params.artistDid) pairs.push(["artist_did", params.artistDid]);
+  if (params.cursor) pairs.push(["cursor", params.cursor]);
+  const qs = pairs.map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join("&");
+  return qs ? `/tracks/?${qs}` : "/tracks/";
+}
+
+/** The discovery feed, newest first; `tags` narrows it to tracks carrying all of them. */
+export function useLatestTracks(tags: readonly string[] = []) {
   return useInfiniteQuery({
-    queryKey: ["latest"],
+    queryKey: ["latest", [...tags].sort()],
     initialPageParam: null as string | null,
-    queryFn: ({ pageParam, signal }) =>
-      getJSON(
-        pageParam ? `/tracks/?cursor=${encodeURIComponent(pageParam)}` : "/tracks/",
-        (b) => parseTrackPage(b, report("track")),
-        signal,
-      ),
+    queryFn: ({ pageParam, signal }) => getJSON(tracksPath({ tags, cursor: pageParam }), (b) => parseTrackPage(b, report("track")), signal),
     getNextPageParam: (page) => (page.hasMore ? page.nextCursor : null),
   });
 }
 
-export function useTrackSearch(query: string) {
+export function useArtistTracks(did: string | undefined) {
+  return useInfiniteQuery({
+    queryKey: ["artist-tracks", did],
+    enabled: !!did,
+    initialPageParam: null as string | null,
+    queryFn: ({ pageParam, signal }) =>
+      getJSON(tracksPath({ artistDid: did, cursor: pageParam }), (b) => parseTrackPage(b, report("track")), signal),
+    getNextPageParam: (page) => (page.hasMore ? page.nextCursor : null),
+  });
+}
+
+export function usePopularTags() {
+  return useQuery({
+    queryKey: ["tags"],
+    queryFn: ({ signal }) => getJSON(`/tracks/tags?limit=${TAG_FILTER_LIMIT}`, (b) => parseTags(b, report("tag")), signal),
+    staleTime: 10 * 60_000,
+  });
+}
+
+export function useArtist(handle: string) {
+  return useQuery({
+    queryKey: ["artist", handle],
+    queryFn: ({ signal }) => getJSON(`/artists/by-handle/${encodeURIComponent(handle)}`, parseArtist, signal),
+  });
+}
+
+export function useTagTracks(name: string) {
+  return useQuery({
+    queryKey: ["tag", name],
+    queryFn: ({ signal }) => getJSON(`/tracks/tags/${encodeURIComponent(name)}`, (b) => parseTagTracks(b, report("track")), signal),
+  });
+}
+
+export function usePlaylist(id: string) {
+  return useQuery({
+    queryKey: ["playlist", id],
+    queryFn: ({ signal }) => getJSON(`/lists/playlists/${encodeURIComponent(id)}`, (b) => parsePlaylist(b, report("track")), signal),
+  });
+}
+
+export function useSearch(query: string) {
   const q = query.trim();
   return useQuery({
     queryKey: ["search", q],
-    enabled: q.length >= 2,
-    queryFn: ({ signal }) =>
-      getJSON(`/search/?type=tracks&limit=30&q=${encodeURIComponent(q)}`, (b) => parseTrackSearch(b, report("search result")), signal),
+    enabled: q.length >= SEARCH_MIN_LENGTH,
+    queryFn: ({ signal }) => getJSON(`/search/?limit=10&q=${encodeURIComponent(q)}`, (b) => parseSearch(b, report("search result")), signal),
     placeholderData: (previous) => previous,
   });
 }

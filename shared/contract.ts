@@ -35,6 +35,7 @@ export const Track = z.object({
   image_url: nullableString,
   thumbnail_url: nullableString.optional(),
   album: AlbumSummary.nullable(),
+  tags: z.array(z.string()).default([]),
   gated: z.boolean().default(false),
   publishing: z.object({ access: z.object({ listening: z.string() }) }).optional(),
   original_file_id: nullableString.optional(),
@@ -59,6 +60,77 @@ export const TrackSearchResult = z.object({
   image_url: nullableString,
 });
 export type TrackSearchResult = z.infer<typeof TrackSearchResult>;
+
+export const ArtistSearchResult = z.object({
+  type: z.literal("artist"),
+  did: z.string(),
+  handle: z.string(),
+  display_name: z.string(),
+  avatar_url: nullableString,
+});
+
+export const AlbumSearchResult = z.object({
+  type: z.literal("album"),
+  id: z.string(),
+  title: z.string(),
+  slug: z.string(),
+  artist_handle: z.string(),
+  artist_display_name: z.string(),
+  image_url: nullableString,
+});
+
+export const TagSearchResult = z.object({
+  type: z.literal("tag"),
+  id: z.number().int(),
+  name: z.string(),
+  track_count: z.number().int(),
+});
+
+export const PlaylistSearchResult = z.object({
+  type: z.literal("playlist"),
+  id: z.string(),
+  name: z.string(),
+  owner_handle: z.string(),
+  owner_display_name: z.string(),
+  image_url: nullableString,
+  track_count: z.number().int(),
+});
+
+export const SearchResult = z.discriminatedUnion("type", [
+  TrackSearchResult,
+  ArtistSearchResult,
+  AlbumSearchResult,
+  TagSearchResult,
+  PlaylistSearchResult,
+]);
+export type SearchResult = z.infer<typeof SearchResult>;
+
+export const Artist = z.object({
+  did: z.string(),
+  handle: z.string(),
+  display_name: z.string(),
+  bio: nullableString,
+  avatar_url: nullableString,
+});
+export type Artist = z.infer<typeof Artist>;
+
+export const TagWithCount = z.object({
+  name: z.string(),
+  track_count: z.number().int(),
+  total_plays: z.number().int(),
+});
+export type TagWithCount = z.infer<typeof TagWithCount>;
+
+export const TagDetail = z.object({ name: z.string(), track_count: z.number().int() });
+
+export const Playlist = z.object({
+  id: z.string(),
+  name: z.string(),
+  owner_handle: z.string(),
+  track_count: z.number().int(),
+  image_url: nullableString,
+});
+export type Playlist = z.infer<typeof Playlist>;
 
 /** A JSON body as decoded off the wire, before a schema accepts it. */
 export type Body = unknown;
@@ -113,4 +185,39 @@ export function parseTrackSearch(body: Body, onReject?: (error: z.ZodError) => v
   const { results } = z.object({ results: z.array(z.unknown()) }).parse(body);
   const tracks = results.filter((r) => typeof r === "object" && r !== null && "type" in r && r.type === "track");
   return acceptEach(TrackSearchResult, tracks, onReject);
+}
+
+/** `GET /search/` — every kind of result; a kind this client does not know is skipped. */
+export function parseSearch(body: Body, onReject?: (error: z.ZodError) => void): SearchResult[] {
+  const { results } = z.object({ results: z.array(z.unknown()) }).parse(body);
+  const known = new Set(SearchResult.options.map((o) => o.shape.type.value));
+  const kinds = results.filter((r) => typeof r === "object" && r !== null && "type" in r && known.has(r.type as never));
+  return acceptEach(SearchResult, kinds, onReject);
+}
+
+/** `GET /artists/by-handle/{handle}`. */
+export function parseArtist(body: Body): Artist {
+  return Artist.parse(body);
+}
+
+/** `GET /tracks/tags` — a bare list. */
+export function parseTags(body: Body, onReject?: (error: z.ZodError) => void): TagWithCount[] {
+  return acceptEach(TagWithCount, body, onReject);
+}
+
+export type TagTracks = { tag: z.infer<typeof TagDetail>; tracks: Track[] };
+
+/** `GET /tracks/tags/{name}`. */
+export function parseTagTracks(body: Body, onReject?: (error: z.ZodError) => void): TagTracks {
+  const page = z.object({ tag: TagDetail, tracks: z.array(z.unknown()) }).parse(body);
+  return { tag: page.tag, tracks: acceptEach(Track, page.tracks, onReject) };
+}
+
+export type PlaylistWithTracks = { playlist: Playlist; tracks: Track[] };
+
+/** `GET /lists/playlists/{id}`. */
+export function parsePlaylist(body: Body, onReject?: (error: z.ZodError) => void): PlaylistWithTracks {
+  const playlist = Playlist.parse(body);
+  const { tracks } = z.object({ tracks: z.array(z.unknown()) }).parse(body);
+  return { playlist, tracks: acceptEach(Track, tracks, onReject) };
 }

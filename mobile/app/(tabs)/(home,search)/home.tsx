@@ -1,24 +1,28 @@
-import { Stack } from "expo-router";
-import { trackThumbnailUrl } from "plyr-shared/images";
-import { listeningLabel } from "plyr-shared/playback";
-import { useMemo } from "react";
-import { ActivityIndicator, FlatList, RefreshControl, StyleSheet, Text, View } from "react-native";
 import { useQueryClient } from "@tanstack/react-query";
+import { Stack } from "expo-router";
+import { orderTags } from "plyr-shared/tags";
+import { useMemo, useState } from "react";
+import { ActivityIndicator, FlatList, RefreshControl, StyleSheet, Text, View } from "react-native";
+import { TagChips } from "@/components/TagChips";
 import { TopTracks } from "@/components/TopTracks";
-import { TrackRow } from "@/components/TrackRow";
-import { useLatestTracks } from "@/data";
-import { usePlayer } from "@/player/PlayerProvider";
+import { TrackItem } from "@/components/TrackItem";
+import { useLatestTracks, usePopularTags } from "@/data";
 import { color, inset } from "@/theme";
 import { type } from "@/type";
 
 export default function Home() {
-  const latest = useLatestTracks();
+  const [tags, setTags] = useState<string[]>([]);
+  const latest = useLatestTracks(tags);
+  const popular = usePopularTags();
   const client = useQueryClient();
-  const player = usePlayer();
   const tracks = useMemo(() => latest.data?.pages.flatMap((p) => p.tracks) ?? [], [latest.data]);
+  const chips = useMemo(() => orderTags(popular.data ?? [], tags), [popular.data, tags]);
+
+  const toggle = (name: string) => setTags((now) => (now.includes(name) ? now.filter((t) => t !== name) : [...now, name]));
 
   const refresh = () => {
     void client.invalidateQueries({ queryKey: ["top"] });
+    void client.invalidateQueries({ queryKey: ["tags"] });
     void latest.refetch();
   };
 
@@ -38,25 +42,21 @@ export default function Home() {
             <Text style={[type.section, styles.heading]} accessibilityRole="header">
               tracks
             </Text>
+            {chips.length > 0 ? (
+              <View style={styles.chips}>
+                <TagChips tags={chips} selected={tags} onPress={toggle} onClear={() => setTags([])} />
+              </View>
+            ) : null}
           </>
         }
-        renderItem={({ item, index }) => (
-          <TrackRow
-            title={item.title}
-            artist={item.artist}
-            artwork={trackThumbnailUrl(item)}
-            active={player.track?.id === item.id}
-            locked={item.gated ? listeningLabel(item.publishing?.access.listening) : null}
-            onPress={() => player.playList(tracks, index)}
-          />
-        )}
+        renderItem={({ index }) => <TrackItem tracks={tracks} index={index} />}
         ListEmptyComponent={
           latest.isPending ? (
             <ActivityIndicator style={styles.state} color={color.muted} />
           ) : (
             <View style={styles.state}>
               <Text style={[type.body, { color: color.muted, textAlign: "center" }]}>
-                {latest.isError ? "couldn’t reach plyr.fm. pull to try again." : "no tracks yet."}
+                {latest.isError ? "couldn’t reach plyr.fm. pull to try again." : tags.length ? "no tracks with all of those tags." : "no tracks yet."}
               </Text>
             </View>
           )
@@ -69,6 +69,7 @@ export default function Home() {
 
 const styles = StyleSheet.create({
   heading: { color: color.ink, paddingHorizontal: inset, paddingTop: 8, paddingBottom: 4 },
+  chips: { paddingBottom: 6 },
   state: { padding: 40 },
   more: { padding: 20 },
 });

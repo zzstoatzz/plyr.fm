@@ -1,7 +1,24 @@
 import { describe, expect, test } from "bun:test";
 import type { z } from "zod";
 import baseline from "../docs/internal/contracts/client-api.json";
-import { AlbumSummary, AudioUrl, FeaturedArtist, Track, TrackSearchResult, parseTrackPage, parseTrackSearch } from "./contract";
+import {
+  AlbumSearchResult,
+  AlbumSummary,
+  Artist,
+  ArtistSearchResult,
+  AudioUrl,
+  FeaturedArtist,
+  Playlist,
+  PlaylistSearchResult,
+  TagDetail,
+  TagSearchResult,
+  TagWithCount,
+  Track,
+  TrackSearchResult,
+  parseSearch,
+  parseTrackPage,
+  parseTrackSearch,
+} from "./contract";
 
 type Schema = { properties: Record<string, unknown>; required?: string[] };
 const schemas = baseline.components.schemas as Record<string, Schema>;
@@ -12,6 +29,14 @@ const cases: [string, z.ZodObject][] = [
   ["FeaturedArtist", FeaturedArtist],
   ["AudioUrlResponse", AudioUrl],
   ["TrackSearchResult", TrackSearchResult],
+  ["ArtistSearchResult", ArtistSearchResult],
+  ["AlbumSearchResult", AlbumSearchResult],
+  ["TagSearchResult", TagSearchResult],
+  ["PlaylistSearchResult", PlaylistSearchResult],
+  ["ArtistResponse", Artist],
+  ["TagWithCount", TagWithCount],
+  ["TagDetail", TagDetail],
+  ["PlaylistWithTracksResponse", Playlist],
 ];
 
 describe("contract", () => {
@@ -63,5 +88,19 @@ describe("contract", () => {
       counts: {},
     });
     expect(results.map((r) => r.id)).toEqual([7]);
+  });
+
+  test("search keeps every known kind and skips unknown ones", () => {
+    const results = parseSearch({
+      results: [
+        { type: "artist", did: "did:plc:a", handle: "a", display_name: "A", avatar_url: null, relevance: 1 },
+        { type: "track", id: 7, title: "t", artist_handle: "a", artist_display_name: "A", image_url: null, relevance: 1 },
+        { type: "tag", id: 3, name: "ambient", track_count: 4, relevance: 1 },
+        { type: "station", id: 1 },
+        { type: "album", id: "x" },
+      ],
+      counts: {},
+    });
+    expect(results.map((r) => r.type)).toEqual(["artist", "track", "tag"]);
   });
 });
