@@ -75,8 +75,9 @@ The internal TestFlight group is **Team (Expo)**.
 
 The first production build is version `0.1.0` (1), EAS build
 `5d9b0311-9865-4d5a-b706-5c6a220975a5`, with automatic submission
-`d0628311-c4c7-49db-a424-d4aa25dbac80`. Build and Apple processing must finish
-before it is available to testers.
+`d0628311-c4c7-49db-a424-d4aa25dbac80`. Both EAS build and submission finished
+successfully on October 8, 2026; Apple processing is checked separately with
+`bunx eas-cli submit:status --platform ios --non-interactive`.
 
 ## not yet
 
