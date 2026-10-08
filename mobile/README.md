@@ -69,14 +69,14 @@ bunx eas-cli credentials:configure-build --platform ios --profile production
 bun run ship:ios
 ```
 
-Signing uses the existing Nathan Nowack Apple team (`65M396B5CL`). Initial
-registration on October 8 was blocked by Apple's updated Developer Program
-License Agreement, which the Account Holder must accept. No App Store Connect
-app or distribution build has been created yet. Apple also reported a trader
-status notice for EU distribution.
+Signing uses the existing Nathan Nowack Apple team (`65M396B5CL`). EAS manages
+signing and submission. App Store Connect: `6820399998`, **plyr.fm**.
+The internal TestFlight group is **Team (Expo)**.
 
-After Apple registration, set `submit.production.ios.ascAppId` in `eas.json`
-to the assigned App Store Connect app ID. EAS manages signing and submission.
+The first production build is version `0.1.0` (1), EAS build
+`5d9b0311-9865-4d5a-b706-5c6a220975a5`, with automatic submission
+`d0628311-c4c7-49db-a424-d4aa25dbac80`. Build and Apple processing must finish
+before it is available to testers.
 
 ## not yet
 
@@ -88,6 +88,5 @@ to the assigned App Store Connect app ID. EAS manages signing and submission.
   callback URL. Likes, the For You feed, gated tracks and scrobbling follow.
 - universal links (`applinks:plyr.fm`) need an `apple-app-site-association`
   file on the web origin.
-- the App Store Connect record and first TestFlight build (see above).
 - Android: the config plugin already asks for a media-playback foreground
   service; nothing has been built or run there.
