@@ -26,6 +26,7 @@
         "react-native-audio-api",
         {
           "iosBackgroundMode": true,
+          "iosMicrophonePermission": "plyr.fm plays music and does not record audio. Its audio engine includes microphone support that this app never turns on.",
           "androidForegroundService": true,
           "androidFSTypes": ["mediaPlayback"],
           "androidPermissions": [
