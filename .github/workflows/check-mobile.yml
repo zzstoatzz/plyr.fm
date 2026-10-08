@@ -15,6 +15,9 @@ on:
       - "frontend/src/lib/publishing.ts"
       - "frontend/src/lib/track-cover.ts"
       - "frontend/src/lib/utils/display-image.ts"
+      - "frontend/src/lib/components/SearchModal.svelte"
+      - "frontend/src/lib/components/TagFilter.svelte"
+      - "backend/src/backend/utilities/tags.py"
       - ".github/workflows/check-mobile.yml"
   workflow_dispatch:
 
