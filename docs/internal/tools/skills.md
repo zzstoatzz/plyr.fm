@@ -6,7 +6,7 @@ title: "agent skills"
 
 Project skills live in `.agents/skills/<name>/SKILL.md`. Codex discovers that directory automatically; `.claude/skills/<name>` links to the same folder for Claude Code. Edit the canonical `.agents` file once. The per-skill symlinks follow the [FastMCP migration pattern](https://github.com/PrefectHQ/fastmcp/pull/5013).
 
-Root `AGENTS.md` points to `.agents/AGENTS.md`, and root `CLAUDE.md` points to `AGENTS.md`. Scoped `AGENTS.md` files stay beside the code they govern, with sibling `CLAUDE.md` symlinks. Git tracks these links, so a clone needs no installation step. `just setup` checks the root entrypoints and skill links.
+Root `AGENTS.md` holds the shared project instructions. Scoped `AGENTS.md` files stay beside the code they govern. Git tracks the skill links, so a clone needs no installation step. `just setup` checks the root entrypoint and skill links.
 
 Use the skill picker or mention a skill explicitly (`$onboard` in Codex CLI, `/onboard` in Claude Code). Automatic selection uses the skill's description. See [OpenAI's skill documentation](https://learn.chatgpt.com/docs/build-skills) and [Claude Code's skill documentation](https://code.claude.com/docs/en/skills) for host-specific behavior. If a Codex skill update does not appear, restart the session.
 
