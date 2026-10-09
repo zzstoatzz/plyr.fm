@@ -5,6 +5,7 @@ export const font = { regular: "ComicNeue-Regular", bold: "ComicNeue-Bold" } as 
 
 // each weight is named by its own file: asking the family for a weight does not find the bold face
 export const type = StyleSheet.create({
+  display: { fontFamily: font.bold, fontSize: 34 },
   title: { fontFamily: font.bold, fontSize: 24 },
   section: { fontFamily: font.bold, fontSize: 21 },
   row: { fontFamily: font.bold, fontSize: 17 },

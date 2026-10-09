@@ -26,7 +26,10 @@ export default function TabStack({ segment }: { segment: string }) {
         headerBackButtonDisplayMode: "minimal",
       }}
     >
-      <Stack.Screen name={root} options={{ headerLargeTitle: true, headerLargeTitleShadowVisible: false }} />
+      <Stack.Screen
+        name={root}
+        options={root === "home" ? { headerShown: false } : { headerLargeTitle: true, headerLargeTitleShadowVisible: false }}
+      />
     </Stack>
   );
 }

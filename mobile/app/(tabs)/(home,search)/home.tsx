@@ -1,8 +1,8 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { Stack } from "expo-router";
 import { orderTags } from "plyr-shared/tags";
 import { useMemo, useState } from "react";
 import { ActivityIndicator, FlatList, RefreshControl, StyleSheet, Text, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { TagChips } from "@/components/TagChips";
 import { TopTracks } from "@/components/TopTracks";
 import { TrackItem } from "@/components/TrackItem";
@@ -15,6 +15,7 @@ export default function Home() {
   const latest = useLatestTracks(tags);
   const popular = usePopularTags();
   const client = useQueryClient();
+  const { top } = useSafeAreaInsets();
   const tracks = useMemo(() => latest.data?.pages.flatMap((p) => p.tracks) ?? [], [latest.data]);
   const chips = useMemo(() => orderTags(popular.data ?? [], tags), [popular.data, tags]);
 
@@ -27,8 +28,7 @@ export default function Home() {
   };
 
   return (
-    <>
-      <Stack.Screen options={{ title: "plyr.fm" }} />
+    <View style={[styles.screen, { paddingTop: top }]}>
       <FlatList
         contentInsetAdjustmentBehavior="automatic"
         data={tracks}
@@ -38,6 +38,9 @@ export default function Home() {
         onEndReachedThreshold={0.6}
         ListHeaderComponent={
           <>
+            <Text style={[type.display, styles.title]} accessibilityRole="header">
+              plyr.fm
+            </Text>
             <TopTracks />
             <Text style={[type.section, styles.heading]} accessibilityRole="header">
               tracks
@@ -63,11 +66,13 @@ export default function Home() {
         }
         ListFooterComponent={latest.isFetchingNextPage ? <ActivityIndicator style={styles.more} color={color.muted} /> : null}
       />
-    </>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  screen: { flex: 1 },
+  title: { color: color.ink, paddingHorizontal: inset, paddingTop: 4, paddingBottom: 8 },
   heading: { color: color.ink, paddingHorizontal: inset, paddingTop: 8, paddingBottom: 4 },
   chips: { paddingBottom: 6 },
   state: { padding: 40 },

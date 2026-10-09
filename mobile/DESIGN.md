@@ -54,6 +54,11 @@ letters are narrower and lighter than San Francisco's.
 
 ## structure
 
+- **Home has no navigation bar.** A large-title bar keeps an empty row above
+  the title; home draws "plyr.fm" (34 pt bold) as the first thing in its list,
+  directly under the status bar, and the list is clipped at the status bar.
+  Search keeps the system bar because it hosts the search field; pushed screens
+  keep theirs for the back button.
 - **Rows**: 48 pt artwork at the 20 pt inset, a 12 pt gap, then title (17 pt
   bold) and artist (14 pt muted). Text starts at `column` in `theme.ts`.
 - **Playing** is the accent title plus a waveform glyph, never color alone.
