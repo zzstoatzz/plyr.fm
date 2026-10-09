@@ -448,3 +448,7 @@ max_lines = 628
 [[rules]]
 path = "frontend/src/lib/components/player/EqPanel.svelte"
 max_lines = 566
+
+[[rules]]
+path = "frontend/src/lib/player-radio-transition.test.ts"
+max_lines = 502

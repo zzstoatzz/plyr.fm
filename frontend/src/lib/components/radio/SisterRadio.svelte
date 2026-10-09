@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
+	import { page } from '$app/stores';
 	import { API_URL } from '$lib/config';
 	import { radio } from '$lib/radio.svelte';
 	import { player } from '$lib/player.svelte';
@@ -47,7 +48,10 @@
 				player.volume = value;
 			},
 			selectStation: (slug) => {
-				void goto(`/radio/${slug}`, { keepFocus: true, noScroll: true });
+				const url = new URL(`/radio/${slug}`, $page.url);
+				const autoplay = $page.url.searchParams.get('autoplay');
+				if (autoplay !== null) url.searchParams.set('autoplay', autoplay);
+				void goto(url, { keepFocus: true, noScroll: true });
 			},
 			likeTrack: () => {
 				const track = radio.current;

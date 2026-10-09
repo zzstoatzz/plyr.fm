@@ -19,7 +19,7 @@ artwork remains hidden unless allowed by the existing preference.
 
 The five station slugs and sampling policies stay in `api/radio/stations.py`.
 The client requests `/radio/state?catalog_only=true` except for the explicit
-`firehose` station, which allows its existing curated HLS broadcast. The default public state API retains its existing live-stream
+`firehose` station, which allows its existing curated HLS broadcast. The standalone radio embed (`/embed/radio`) follows the same rule and airs the broadcast through hls.js, falling back to the rotation when it drops. The default public state API retains its existing live-stream
 behavior for older clients. The native UI needs no database migration or extra
 service; outbound syndication uses the separate adapter described below.
 
@@ -112,15 +112,19 @@ Eli Mallon's [#1592](https://github.com/zzstoatzz/plyr.fm/pull/1592) added the f
 one-shot attempt; executing it synchronously inside the reactive effect previously
 caused a play/pause loop. Missing autoplay or `autoplay=0` stays paused. A blocked
 autoplay attempt never retries itself, and a later user pause must stay paused.
-Station paths compose with the parameter (`/radio/fresh?autoplay=1`).
+Station paths compose with the parameter (`/radio/fresh?autoplay=1`). Station
+selection and previous/next navigation preserve an explicit autoplay value, so
+reloading a switched station in OBS still tunes in with `autoplay=1`. An explicit
+`autoplay=0` remains disabled; switching without the parameter does not add it.
+The parameter requests playback on page load, not after an in-session user pause.
 
 [#1593](https://github.com/zzstoatzz/plyr.fm/pull/1593) separately added the same
 parameter to `/embed/radio?station=fresh&autoplay=1`. That iframe still owns its
 local player; source-load pauses preserve its listening intent, while explicit
 pause cancels it. The full page uses catalog-only state except for Firehose; the embed and public
 `/radio/state` and `/radio/state.json` contracts remain unchanged. Tests mount the
-real page/global player and compact widget, covering both autoplay values and
-track changes.
+real page/global player and compact widget, covering both autoplay values,
+station-selection/reload behavior, and track changes.
 
 The native host hides the fork's five-second CRT cover reveal mask; loaded
 artwork is visible immediately while the scanline styling remains. The heart
