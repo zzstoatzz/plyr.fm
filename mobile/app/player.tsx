@@ -6,8 +6,8 @@ import { useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Artwork } from "@/components/Artwork";
-import { RainbowStrip } from "@/components/RainbowStrip";
 import { Scrubber } from "@/components/Scrubber";
+import { TopEdge } from "@/components/TopEdge";
 import { PlayPause, TransportButton } from "@/components/Transport";
 import { useOpen, type Target } from "@/nav";
 import { usePlayer, useProgress } from "@/player/PlayerProvider";
@@ -119,7 +119,7 @@ export default function Player() {
           </View>
         </SheetGuard>
       </ScrollView>
-      <RainbowStrip lit={playing} style={styles.rainbow} />
+      <TopEdge lit={playing} radius={radius.sheet} />
     </SafeAreaView>
   );
 }
@@ -128,7 +128,6 @@ const styles = StyleSheet.create({
   fill: { flex: 1 },
   screen: { paddingHorizontal: inset, paddingTop: 48, paddingBottom: 24, gap: 24 },
   guarded: { gap: 24 },
-  rainbow: { position: "absolute", top: 0, left: 0, right: 0 },
   art: { alignItems: "center" },
   meta: { gap: 4 },
   link: { alignSelf: "flex-start", maxWidth: "100%", minHeight: 28, justifyContent: "center" },

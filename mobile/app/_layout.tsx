@@ -7,7 +7,7 @@ import { useColorScheme } from "react-native";
 import { palette } from "@/palette";
 import { PlayerProvider } from "@/player/PlayerProvider";
 import { QueryProvider } from "@/query";
-import { color } from "@/theme";
+import { color, radius } from "@/theme";
 import { font } from "@/type";
 
 void SplashScreen.preventAutoHideAsync();
@@ -48,7 +48,7 @@ export default function RootLayout() {
                 presentation: "formSheet",
                 sheetAllowedDetents: [1],
                 sheetGrabberVisible: true,
-                sheetCornerRadius: 24,
+                sheetCornerRadius: radius.sheet,
                 contentStyle: { backgroundColor: color.canvas },
               }}
             />
@@ -61,7 +61,7 @@ export default function RootLayout() {
                 headerTitleStyle: { color: color.ink, fontFamily: font.bold },
                 sheetAllowedDetents: [0.5, 1],
                 sheetGrabberVisible: true,
-                sheetCornerRadius: 24,
+                sheetCornerRadius: radius.sheet,
                 contentStyle: { backgroundColor: color.canvas },
               }}
             />
@@ -74,7 +74,7 @@ export default function RootLayout() {
                 headerTitleStyle: { color: color.ink, fontFamily: font.bold },
                 sheetAllowedDetents: [1],
                 sheetGrabberVisible: true,
-                sheetCornerRadius: 24,
+                sheetCornerRadius: radius.sheet,
                 contentStyle: { backgroundColor: color.canvas },
               }}
             />

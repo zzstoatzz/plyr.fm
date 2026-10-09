@@ -1,3 +1,5 @@
+import { filtered, TOP_BAR } from "plyr-shared/topBar";
+
 export type Mode = "light" | "dark" | "highContrastLight" | "highContrastDark";
 export type Variants = Record<Mode, string>;
 
@@ -34,13 +36,21 @@ export function mix(over: string, under: string, amount: number): string {
   return `#${[16, 8, 0].map((shift) => blend(shift).toString(16).padStart(2, "0")).join("")}`.toUpperCase();
 }
 
-const tinted = (amount: number): Variants => {
-  const [light, dark, highContrastLight, highContrastDark] = MODES.map((mode) => mix(palette.accent[mode], palette.surface[mode], amount));
+const accented = (change: (hex: string, mode: Mode) => string): Variants => {
+  const [light, dark, highContrastLight, highContrastDark] = MODES.map((mode) => change(palette.accent[mode], mode));
   return { light, dark, highContrastLight, highContrastDark };
 };
 
+const tinted = (amount: number): Variants => accented((hex, mode) => mix(hex, palette.surface[mode], amount));
+
 // the web's support button: accent at 15% for the fill and 40% for the edge, over the profile card
 export const tint = { fill: tinted(0.15), border: tinted(0.4) } satisfies Record<string, Variants>;
+
+// the web player's top edge line: the accent through its resting and playing filters
+export const edge = {
+  resting: accented((hex) => filtered(hex, TOP_BAR.resting)),
+  playing: accented((hex) => filtered(hex, TOP_BAR.playing)),
+} satisfies Record<string, Variants>;
 
 const channel = (value: number) => {
   const c = value / 255;
