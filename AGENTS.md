@@ -76,7 +76,3 @@ Project skills live in `.agents/skills/<name>/SKILL.md`. Codex discovers them
 automatically; `.claude/skills/<name>` symlinks expose the same sources to Claude.
 Start with `onboard`; use `change` for project work and `contribute` for the
 external-contributor setup. See `docs/internal/tools/skills.md` for the catalog.
-
-Skill workflows do not grant permission to publish. Keep issues, PRs, comments,
-merges, and releases local until Nate explicitly authorizes that action in this
-project; existing authorization remains valid.

@@ -298,6 +298,17 @@
 					{/each}
 				</div>
 			</section>
+		{:else}
+			<section class="top-tracks" transition:fade={{ duration: 200 }}>
+				<h2 class="section-title">
+					top tracks <button class="period-toggle" onclick={cyclePeriod}>{periodLabel}</button>
+				</h2>
+				<p class="empty top-tracks-empty">
+					{topTracksPeriod === 'all_time'
+						? 'nothing liked yet'
+						: `nothing liked in the ${periodLabel}`}
+				</p>
+			</section>
 		{/if}
 	{/key}
 
@@ -593,6 +604,11 @@
 		color: var(--text-tertiary);
 		padding: 2rem;
 		text-align: center;
+	}
+
+	.top-tracks-empty {
+		padding: 1rem 0;
+		text-align: left;
 	}
 
 	.track-list {
