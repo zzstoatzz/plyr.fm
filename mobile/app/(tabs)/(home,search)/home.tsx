@@ -8,6 +8,7 @@ import { TagChips } from "@/components/TagChips";
 import { TopTracks } from "@/components/TopTracks";
 import { TrackItem } from "@/components/TrackItem";
 import { useLatestTracks, usePopularTags } from "@/data";
+import { tabBarScroll } from "@/tabBar";
 import { color, inset } from "@/theme";
 import { type } from "@/type";
 
@@ -17,6 +18,7 @@ export default function Home() {
   const popular = usePopularTags();
   const client = useQueryClient();
   const { top } = useSafeAreaInsets();
+  const [onScroll] = useState(tabBarScroll);
   const tracks = useMemo(() => latest.data?.pages.flatMap((p) => p.tracks) ?? [], [latest.data]);
   const chips = useMemo(() => orderTags(popular.data ?? [], tags), [popular.data, tags]);
 
@@ -33,6 +35,8 @@ export default function Home() {
       <FlatList
         contentInsetAdjustmentBehavior="automatic"
         data={tracks}
+        onScroll={onScroll}
+        scrollEventThrottle={32}
         keyExtractor={(t) => String(t.id)}
         refreshControl={<RefreshControl refreshing={latest.isRefetching && !latest.isFetchingNextPage} onRefresh={refresh} />}
         onEndReached={() => loadMore(latest)}

@@ -14,6 +14,7 @@ import { TrackItem } from "@/components/TrackItem";
 import { fetchTrack, useCharts, usePopularTags, useSearch } from "@/data";
 import { useOpen } from "@/nav";
 import { usePlayer } from "@/player/PlayerProvider";
+import { tabBarScroll } from "@/tabBar";
 import { color, inset } from "@/theme";
 import { type } from "@/type";
 
@@ -33,6 +34,7 @@ export default function Search() {
   const limit = grown.query === query ? grown.limit : SEARCH_LIMITS[0];
   const search = useSearch(query, limit);
   const { top } = useSafeAreaInsets();
+  const [onScroll] = useState(tabBarScroll);
   const client = useQueryClient();
   const player = usePlayer();
   const open = useOpen();
@@ -74,6 +76,8 @@ export default function Search() {
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={styles.results}
           data={short ? [] : results}
+          onScroll={onScroll}
+          scrollEventThrottle={32}
           onEndReached={() => more && setGrown({ query, limit: more })}
           onEndReachedThreshold={END_THRESHOLD}
           ListFooterComponent={
@@ -108,6 +112,7 @@ export default function Search() {
 function Suggestions() {
   const tags = usePopularTags();
   const [depth, setDepth] = useState(1);
+  const [onScroll] = useState(tabBarScroll);
   const charts = useCharts(depth);
   const open = useOpen();
   const chips = useMemo(() => orderTags(tags.data ?? [], []), [tags.data]);
@@ -121,6 +126,8 @@ function Suggestions() {
       keyboardDismissMode="on-drag"
       keyboardShouldPersistTaps="handled"
       stickySectionHeadersEnabled={false}
+      onScroll={onScroll}
+      scrollEventThrottle={32}
       sections={sections.map(({ title, tracks }) => ({ title, data: tracks }))}
       keyExtractor={(t) => String(t.id)}
       renderItem={({ index, section }) => <TrackItem tracks={section.data} index={index} label={section.title} />}

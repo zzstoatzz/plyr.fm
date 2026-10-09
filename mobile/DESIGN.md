@@ -19,9 +19,11 @@ A phone user and a web user are looking at the same plyr.fm.
 - **Where the platform has a convention, the platform wins**: the player is a
   sheet, the mini player is the tab bar's bottom accessory, and tapping the
   tab you are on scrolls it to the top (or pops to its root).
-- **The tab bar does not minimize on scroll.** Minimized, it left a lone
-  button whose first tap only brought the bar back, and squeezed the mini
-  player beside it.
+- **Scrolling down puts the whole tab bar away** and the mini player takes
+  the bottom at full width; scrolling up, reaching the top or opening another
+  screen brings it back (`src/tabBar.ts`). The system's own minimize is not
+  used: it leaves a lone button for the selected tab, whose first tap only
+  brings the bar back, and squeezes the mini player beside it.
 
 ## color
 

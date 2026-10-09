@@ -1,7 +1,8 @@
 import { Stack } from "expo-router";
 import type { Track } from "plyr-shared/contract";
-import type { ReactElement } from "react";
+import { useState, type ReactElement } from "react";
 import { ActivityIndicator, FlatList, RefreshControl, StyleSheet, Text, View } from "react-native";
+import { tabBarScroll } from "@/tabBar";
 import { color } from "@/theme";
 import { type } from "@/type";
 import { END_THRESHOLD, loadMore, MoreFooter, type Paged } from "./MoreFooter";
@@ -24,12 +25,15 @@ type Props = {
 
 /** A detail screen that is mostly a track list: artist, album, tag, playlist. */
 export function TrackListScreen({ title, header, tracks, pending, error, empty, refreshing = false, onRefresh, pages, line, label }: Props) {
+  const [onScroll] = useState(tabBarScroll);
   return (
     <>
       <Stack.Screen options={{ title }} />
       <FlatList
         contentInsetAdjustmentBehavior="automatic"
         data={tracks}
+        onScroll={onScroll}
+        scrollEventThrottle={32}
         keyExtractor={(t) => String(t.id)}
         refreshControl={onRefresh ? <RefreshControl refreshing={refreshing} onRefresh={onRefresh} /> : undefined}
         onEndReached={pages ? () => loadMore(pages) : undefined}
