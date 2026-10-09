@@ -24,6 +24,9 @@ A phone user and a web user are looking at the same plyr.fm.
   screen brings it back (`src/tabBar.ts`). The system's own minimize is not
   used: it leaves a lone button for the selected tab, whose first tap only
   brings the bar back, and squeezes the mini player beside it.
+  The hide is the system's own animation, which react-native-screens turns
+  off; `patches/react-native-screens@4.26.2.patch` turns it on. The mini
+  player has one layout wherever the bar puts it, so it only moves.
 
 ## color
 
