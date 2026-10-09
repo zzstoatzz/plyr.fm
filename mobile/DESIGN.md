@@ -1,7 +1,7 @@
 # plyr.fm for iOS: design rules
 
 Native structure, distinctive content: the same principle as Agents, Simmer and
-tuner. Navigation, tabs, sheets, search, sliders and the lock screen are system
+tuner. Navigation, tabs, sheets, search, lists and the lock screen are system
 components. The app's identity comes from the artwork and from the web app's
 tokens and voice.
 
@@ -61,6 +61,13 @@ letters are narrower and lighter than San Francisco's.
   and carry a lock glyph; VoiceOver hears the same words.
 - **Artwork** is always requested at its slot's size through the image CDN
   (`plyr-shared/images`), as the web does.
+
+## scrubber
+
+The one control that is not the system's. The iOS 26 slider's glass thumb is
+large for a player and ignores control size, so `src/components/Scrubber.tsx`
+draws a 4 pt track with a 12 pt thumb (18 pt while held) in the accent. The
+whole 44 pt strip takes the touch; VoiceOver gets an adjustable that steps 15 s.
 
 ## queue
 

@@ -1,5 +1,3 @@
-import { Host, Slider } from "@expo/ui/swift-ui";
-import { accessibilityLabel, accessibilityValue } from "@expo/ui/swift-ui/modifiers";
 import { credits, formatTime } from "plyr-shared/format";
 import { IMAGE_WIDTHS, trackCoverUrl } from "plyr-shared/images";
 import { upNext } from "plyr-shared/queue";
@@ -9,6 +7,7 @@ import { useState } from "react";
 import { Linking, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Artwork } from "@/components/Artwork";
+import { Scrubber } from "@/components/Scrubber";
 import { PlayPause, TransportButton } from "@/components/Transport";
 import { useOpen, type Target } from "@/nav";
 import { usePlayer, useProgress } from "@/player/PlayerProvider";
@@ -74,21 +73,17 @@ export default function Player() {
           ) : null}
         </View>
         <View>
-          <Host matchContents={{ vertical: true }} seedColor={color.accent} style={styles.slider}>
-            <Slider
-              value={duration > 0 ? shown : 0}
-              min={0}
-              max={Math.max(duration, 1)}
-              modifiers={[accessibilityLabel("position"), accessibilityValue(`${formatTime(shown)} of ${formatTime(duration)}`)]}
-              onValueChange={setScrub}
-              onEditingChanged={(editing) => {
-                if (!editing && scrub !== null) {
-                  seek(scrub);
-                  setScrub(null);
-                }
-              }}
-            />
-          </Host>
+          <Scrubber
+            value={duration > 0 ? shown : 0}
+            max={duration}
+            label="position"
+            valueText={`${formatTime(shown)} of ${formatTime(duration)}`}
+            onChange={setScrub}
+            onCommit={(seconds) => {
+              seek(seconds);
+              setScrub(null);
+            }}
+          />
           <View style={styles.times}>
             <Text style={[type.meta, type.numeric, { color: color.muted }]}>{formatTime(shown)}</Text>
             <Text style={[type.meta, { color: status === "failed" ? color.danger : color.muted }]}>
@@ -157,8 +152,7 @@ const styles = StyleSheet.create({
   art: { alignItems: "center" },
   meta: { gap: 4 },
   link: { alignSelf: "flex-start", maxWidth: "100%", minHeight: 28, justifyContent: "center" },
-  slider: { height: 32 },
   route: { width: 44, height: 44 },
-  times: { flexDirection: "row", justifyContent: "space-between" },
+  times: { flexDirection: "row", justifyContent: "space-between", marginTop: -10 },
   controls: { flexDirection: "row", alignItems: "center", justifyContent: "space-evenly" },
 });
