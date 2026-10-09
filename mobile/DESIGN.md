@@ -130,6 +130,9 @@ key-value store) and comes back on launch, paused, at the saved position.
   to album, through the router's native link menu.
 - The queue is a sheet over the player: a system list, so reordering is a drag,
   removing is a swipe, and VoiceOver gets the list's own move and delete actions.
+- Rows are the app's track row: 48 pt artwork at the 20 pt inset, no rules
+  between them. "now playing", "up next" and "next from: …" are section-size
+  headings with their counts set quietly beside or under them.
 - Queue rows carry no menu of their own. Wrapping a row (a context menu, swipe
   actions) makes `@expo/ui`'s `List.ForEach` report every row as index 0.
 - Shuffle is an action over up next, as on the web; repeat is one track or off.

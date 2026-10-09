@@ -11,9 +11,13 @@ import {
   foregroundStyle,
   lineLimit,
   listRowBackground,
+  listRowInsets,
+  listRowSeparator,
+  listSectionSpacing,
   listStyle,
   moveDisabled,
   onTapGesture,
+  padding,
   scrollContentBackground,
   shapes,
   tint,
@@ -27,16 +31,17 @@ import { Pressable, StyleSheet, Text as PlainText, View } from "react-native";
 import { Artwork } from "@/components/Artwork";
 import { haptic } from "@/haptics";
 import { canPlay, usePlayer } from "@/player/PlayerProvider";
-import { color, radius } from "@/theme";
+import { color, inset, radius, thumb } from "@/theme";
 import { font as face, type } from "@/type";
 
-const ART = 44;
+// a row as the rest of the app draws one: artwork at the inset, no rule between rows
+const plain = [listRowBackground(color.canvas), listRowSeparator("hidden"), listRowInsets({ top: 8, bottom: 8, leading: inset, trailing: inset })];
 
 // the app's type roles for SwiftUI text: Comic Neue at the role's size, scaling with Dynamic Type
 const role = {
   row: font({ family: face.bold, size: 17, textStyle: "body" }),
   meta: font({ family: face.regular, size: 14, textStyle: "footnote" }),
-  heading: font({ family: face.bold, size: 15, textStyle: "subheadline" }),
+  heading: font({ family: face.bold, size: 21, textStyle: "title3" }),
   note: font({ family: face.regular, size: 15, textStyle: "subheadline" }),
 };
 
@@ -64,13 +69,13 @@ export default function Queue() {
       />
       {track ? (
         <Host style={styles.fill} seedColor={color.accent}>
-          <List modifiers={[listStyle("plain"), scrollContentBackground("hidden"), tint(color.accent)]}>
+          <List modifiers={[listStyle("plain"), listSectionSpacing(12), scrollContentBackground("hidden"), tint(color.accent)]}>
             <Section header={<Heading title="now playing" />}>
               <Row track={track} current modifiers={[moveDisabled(), deleteDisabled()]} />
             </Section>
             <Section
               header={
-                <Heading title={picks.length ? `up next · ${picks.length}` : "up next"}>
+                <Heading title="up next" detail={picks.length ? String(picks.length) : undefined}>
                   <Button
                     label="shuffle"
                     systemImage="shuffle"
@@ -103,12 +108,22 @@ export default function Queue() {
                   <Row key={`${t.id}:${index}`} track={t} onPress={() => player.jumpTo(index)} />
                 ))}
                 {divider === -1 ? null : (
-                  <Text
+                  <VStack
                     key="divider"
-                    modifiers={[role.heading, foregroundStyle(color.muted), accessibilityAddTraits(["isHeader"]), listRowBackground(color.canvas), moveDisabled(), deleteDisabled()]}
+                    alignment="leading"
+                    spacing={2}
+                    modifiers={[
+                      accessibilityElement("combine"),
+                      accessibilityAddTraits(["isHeader"]),
+                      ...plain,
+                      listRowInsets({ top: 24, bottom: 6, leading: inset, trailing: inset }),
+                      moveDisabled(),
+                      deleteDisabled(),
+                    ]}
                   >
-                    {`${queue.tailLabel ? `next from: ${queue.tailLabel}` : "next"} · ${count(rest.length, "track")}`}
-                  </Text>
+                    <Text modifiers={[role.heading, foregroundStyle(color.ink), lineLimit(1)]}>{queue.tailLabel ? `next from: ${queue.tailLabel}` : "next"}</Text>
+                    <Text modifiers={[role.meta, foregroundStyle(color.muted)]}>{count(rest.length, "track")}</Text>
+                  </VStack>
                 )}
                 {rest.map(({ track: t, index }) => (
                   <Row key={`${t.id}:${index}`} track={t} onPress={() => player.jumpTo(index)} />
@@ -127,10 +142,11 @@ export default function Queue() {
   );
 }
 
-function Heading({ title, children }: { title: string; children?: React.ReactNode }) {
+function Heading({ title, detail, children }: { title: string; detail?: string; children?: React.ReactNode }) {
   return (
-    <HStack spacing={16}>
-      <Text modifiers={[role.heading, foregroundStyle(color.muted), accessibilityAddTraits(["isHeader"])]}>{title}</Text>
+    <HStack spacing={16} alignment="firstTextBaseline" modifiers={[padding({ top: 8, bottom: 4, leading: inset - 16, trailing: inset - 16 })]}>
+      <Text modifiers={[role.heading, foregroundStyle(color.ink), accessibilityAddTraits(["isHeader"])]}>{title}</Text>
+      {detail ? <Text modifiers={[role.note, foregroundStyle(color.muted)]}>{detail}</Text> : null}
       <Spacer />
       {children}
     </HStack>
@@ -138,7 +154,7 @@ function Heading({ title, children }: { title: string; children?: React.ReactNod
 }
 
 function Note({ children }: { children: string }) {
-  return <Text modifiers={[role.note, foregroundStyle(color.muted), listRowBackground(color.canvas), moveDisabled(), deleteDisabled()]}>{children}</Text>;
+  return <Text modifiers={[role.note, foregroundStyle(color.muted), ...plain, moveDisabled(), deleteDisabled()]}>{children}</Text>;
 }
 
 type RowProps = { track: Track; current?: boolean; onPress?: () => void; modifiers?: React.ComponentProps<typeof HStack>["modifiers"] };
@@ -157,12 +173,12 @@ function Row({ track, current = false, onPress, modifiers = [] }: RowProps) {
         accessibilityElement("ignore"),
         accessibilityLabel(`${track.title}, by ${by}${state}`),
         ...(onPress && playable ? [accessibilityAddTraits(["isButton"]), accessibilityHint("plays this track")] : []),
-        listRowBackground(color.canvas),
+        ...plain,
         ...modifiers,
       ]}
     >
       <RNHostView matchContents>
-        <Artwork url={trackThumbnailUrl(track)} size={ART} width={IMAGE_WIDTHS.thumb} radius={radius.art} />
+        <Artwork url={trackThumbnailUrl(track)} size={thumb} width={IMAGE_WIDTHS.thumb} radius={radius.art} />
       </RNHostView>
       <VStack alignment="leading" spacing={2}>
         <Text modifiers={[role.row, foregroundStyle(current ? color.accent : playable ? color.ink : color.muted), lineLimit(1)]}>{track.title}</Text>
