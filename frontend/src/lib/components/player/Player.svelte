@@ -38,7 +38,6 @@
 	import PlaybackControls from './PlaybackControls.svelte';
 	import VolumeControl from './VolumeControl.svelte';
 	import EqButton from './EqButton.svelte';
-	import { EQ_FLAG } from '$lib/config';
 	import AddToMenu from '$lib/components/AddToMenu.svelte';
 	import { likes } from '$lib/likes.svelte';
 	import type { Track } from '$lib/types';
@@ -96,7 +95,7 @@
 	// what the strip shows: the radio on-air track when in radio mode, else the
 	// queue track. radio renders through the SAME strip (TrackInfo + controls).
 	let nowPlayingTrack = $derived(player.radio?.track ?? player.currentTrack);
-	let eqAvailable = $derived(eq.supported && Boolean(auth.user?.enabled_flags?.includes(EQ_FLAG)));
+	let eqAvailable = $derived(eq.supported && eq.offered);
 	let trackInfoRef = $state<{ recalcOverflow: () => void } | null>(null);
 
 	$effect(() => {

@@ -13,6 +13,7 @@ import {
 } from '$lib/eq/bands';
 
 const STORAGE_KEY = 'player_eq';
+const OFFERED_KEY = 'player_eq_offered';
 // short enough to feel instant, long enough to avoid zipper noise while dragging
 const RAMP_SECONDS = 0.015;
 
@@ -57,6 +58,8 @@ interface Graph {
 
 class EqState {
 	enabled = $state(false);
+	/** the listener opted into the experimental eq in settings, so the player shows its button */
+	offered = $state(false);
 	gains = $state<number[]>([...FLAT_GAINS]);
 	/** the browser can route the player through web audio without breaking background play */
 	supported = $state(false);
@@ -107,6 +110,16 @@ class EqState {
 		this.#persist();
 		if (enabled && element && !this.#graph) this.#routeLoaded(element);
 		this.#apply();
+	}
+
+	setOffered(offered: boolean, element: HTMLAudioElement | undefined) {
+		this.offered = offered;
+		try {
+			localStorage.setItem(OFFERED_KEY, offered ? '1' : '0');
+		} catch {
+			// storage blocked: the choice lasts this session
+		}
+		if (!offered && this.enabled) this.setEnabled(false, element);
 	}
 
 	setGain(index: number, db: number) {
@@ -193,10 +206,11 @@ class EqState {
 
 	#restore() {
 		try {
+			this.offered = localStorage.getItem(OFFERED_KEY) === '1';
 			const raw = localStorage.getItem(STORAGE_KEY);
 			if (!raw) return;
 			const stored: Partial<StoredEq> | null = JSON.parse(raw);
-			this.enabled = stored?.enabled === true && this.supported;
+			this.enabled = stored?.enabled === true && this.supported && this.offered;
 			const gains = stored?.gains;
 			if (Array.isArray(gains)) {
 				this.gains = BANDS.map((_, i) => clampGain(Number(gains[i] ?? 0)));
