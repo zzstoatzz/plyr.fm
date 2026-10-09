@@ -53,6 +53,19 @@ export default function RootLayout() {
               }}
             />
             <Stack.Screen
+              name="about"
+              options={{
+                presentation: "formSheet",
+                headerShown: true,
+                headerTransparent: true,
+                headerTitleStyle: { color: color.ink, fontFamily: font.bold },
+                sheetAllowedDetents: [0.5, 1],
+                sheetGrabberVisible: true,
+                sheetCornerRadius: 24,
+                contentStyle: { backgroundColor: color.canvas },
+              }}
+            />
+            <Stack.Screen
               name="queue"
               options={{
                 presentation: "formSheet",

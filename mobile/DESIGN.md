@@ -80,6 +80,12 @@ the sheet. VoiceOver gets the slider's adjustable, stepping 15 s.
 - A drag that starts on the controls (scrubber, transport, the action row) does
   not move the sheet: `modules/sheet-guard` takes the pan there. The sheet is
   dismissed from the artwork, the title or the grabber.
+- **The action row** under the transport is evenly spaced and grows by adding
+  to it: repeat, output, queue, and the info button when the track has a
+  description. Actions that need an account (like, add to playlist) join this
+  row once the app can sign in.
+- **The description** is not shown inline. The info button opens it in its own
+  sheet (`app/about.tsx`), and is absent when there is nothing to read.
 
 ## the rainbow strip
 

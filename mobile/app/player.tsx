@@ -35,6 +35,7 @@ export default function Player() {
   const art = Math.min(width - inset * 2, 360);
   const album = track.album;
 
+  const described = !!track.description?.trim();
   const playing = status === "playing" || status === "buffering";
   const queued = upNext(queue).length;
 
@@ -114,7 +115,8 @@ export default function Player() {
               tint={color.muted}
               onPress={() => router.push("/queue")}
             />
-            </View>
+            {described ? <TransportButton symbol="info.circle" label="about this track" size={20} tint={color.muted} onPress={() => router.push("/about")} /> : null}
+          </View>
         </SheetGuard>
       </ScrollView>
       <RainbowStrip lit={playing} style={styles.rainbow} />
