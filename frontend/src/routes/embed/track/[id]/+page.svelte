@@ -245,7 +245,7 @@
 	}
 	.art-container {
 		flex: 0 0 auto;
-		width: min(28vw, 200px, calc(100vh - 2 * var(--embed-space)));
+		width: min(40vw, calc(100vh - 2 * var(--embed-space)));
 		aspect-ratio: 1;
 		align-self: center;
 		position: relative;
@@ -422,7 +422,7 @@
 			display: none;
 		}
 	}
-	@media (min-height: 300px) and (max-aspect-ratio: 1/1) {
+	@media (min-height: 300px) and (max-aspect-ratio: 6/5) {
 		.embed-container {
 			flex-direction: column;
 		}
