@@ -21,15 +21,11 @@ export default function TabStack({ segment }: { segment: string }) {
         headerShadowVisible: false,
         headerTintColor: color.accent,
         headerTitleStyle: { color: color.ink, fontFamily: font.bold },
-        headerLargeTitleStyle: { fontFamily: font.bold },
         contentStyle: { backgroundColor: color.canvas },
         headerBackButtonDisplayMode: "minimal",
       }}
     >
-      <Stack.Screen
-        name={root}
-        options={root === "home" ? { headerShown: false } : { headerLargeTitle: true, headerLargeTitleShadowVisible: false }}
-      />
+      <Stack.Screen name={root} options={{ headerShown: false }} />
     </Stack>
   );
 }

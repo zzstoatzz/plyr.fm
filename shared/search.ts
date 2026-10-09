@@ -6,6 +6,20 @@ import { count } from "./format";
 export const SEARCH_MIN_LENGTH = 2;
 export const SEARCH_MAX_LENGTH = 100;
 
+/**
+ * `GET /search/` takes a limit per kind (50 at most) and no offset, so more results are asked for by asking again
+ * with a larger limit. The first step is the web's.
+ */
+export const SEARCH_LIMITS = [10, 25, 50] as const;
+
+/** The limit to ask for next, or null when no kind filled the current one or there is no larger one. */
+export function nextSearchLimit(results: readonly SearchResult[], limit: number): number | null {
+  const perKind = new Map<SearchResult["type"], number>();
+  for (const result of results) perKind.set(result.type, (perKind.get(result.type) ?? 0) + 1);
+  if (![...perKind.values()].some((n) => n >= limit)) return null;
+  return SEARCH_LIMITS.find((step) => step > limit) ?? null;
+}
+
 export function resultTitle(result: SearchResult): string {
   switch (result.type) {
     case "track":

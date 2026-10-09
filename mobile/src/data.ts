@@ -114,12 +114,12 @@ export function usePlaylist(id: string) {
   });
 }
 
-export function useSearch(query: string) {
+export function useSearch(query: string, limit: number) {
   const q = query.trim();
   return useQuery({
-    queryKey: ["search", q],
+    queryKey: ["search", q, limit],
     enabled: q.length >= SEARCH_MIN_LENGTH,
-    queryFn: ({ signal }) => getJSON(`/search/?limit=10&q=${encodeURIComponent(q)}`, (b) => parseSearch(b, report("search result")), signal),
+    queryFn: ({ signal }) => getJSON(`/search/?limit=${limit}&q=${encodeURIComponent(q)}`, (b) => parseSearch(b, report("search result")), signal),
     placeholderData: (previous) => previous,
   });
 }

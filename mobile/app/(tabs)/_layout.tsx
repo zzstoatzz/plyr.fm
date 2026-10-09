@@ -9,7 +9,7 @@ export const unstable_settings = { initialRouteName: "(home)" };
 export default function TabsLayout() {
   const { track } = usePlayer();
   return (
-    <NativeTabs tintColor={color.accent} minimizeBehavior="onScrollDown" labelStyle={{ fontFamily: font.bold }}>
+    <NativeTabs tintColor={color.accent} labelStyle={{ fontFamily: font.bold }}>
       <NativeTabs.Trigger name="(home)">
         <NativeTabs.Trigger.Icon sf={{ default: "house", selected: "house.fill" }} />
         <NativeTabs.Trigger.Label>home</NativeTabs.Trigger.Label>

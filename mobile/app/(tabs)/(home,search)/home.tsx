@@ -3,6 +3,7 @@ import { orderTags } from "plyr-shared/tags";
 import { useMemo, useState } from "react";
 import { ActivityIndicator, FlatList, RefreshControl, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { END_THRESHOLD, loadMore, MoreFooter } from "@/components/MoreFooter";
 import { TagChips } from "@/components/TagChips";
 import { TopTracks } from "@/components/TopTracks";
 import { TrackItem } from "@/components/TrackItem";
@@ -34,8 +35,8 @@ export default function Home() {
         data={tracks}
         keyExtractor={(t) => String(t.id)}
         refreshControl={<RefreshControl refreshing={latest.isRefetching && !latest.isFetchingNextPage} onRefresh={refresh} />}
-        onEndReached={() => latest.hasNextPage && !latest.isFetchingNextPage && void latest.fetchNextPage()}
-        onEndReachedThreshold={0.6}
+        onEndReached={() => loadMore(latest)}
+        onEndReachedThreshold={END_THRESHOLD}
         ListHeaderComponent={
           <>
             <Text style={[type.display, styles.title]} accessibilityRole="header">
@@ -64,7 +65,7 @@ export default function Home() {
             </View>
           )
         }
-        ListFooterComponent={latest.isFetchingNextPage ? <ActivityIndicator style={styles.more} color={color.muted} /> : null}
+        ListFooterComponent={<MoreFooter pages={latest} />}
       />
     </View>
   );
@@ -76,5 +77,4 @@ const styles = StyleSheet.create({
   heading: { color: color.ink, paddingHorizontal: inset, paddingTop: 8, paddingBottom: 4 },
   chips: { paddingBottom: 6 },
   state: { padding: 40 },
-  more: { padding: 20 },
 });

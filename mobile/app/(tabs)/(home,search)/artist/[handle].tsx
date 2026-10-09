@@ -109,8 +109,7 @@ export default function ArtistScreen() {
         void albums.refetch();
         void playlists.refetch();
       }}
-      onEndReached={() => pages.hasNextPage && !pages.isFetchingNextPage && void pages.fetchNextPage()}
-      loadingMore={pages.isFetchingNextPage}
+      pages={pages}
     />
   );
 }

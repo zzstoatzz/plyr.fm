@@ -4,6 +4,7 @@ import type { ReactElement } from "react";
 import { ActivityIndicator, FlatList, RefreshControl, StyleSheet, Text, View } from "react-native";
 import { color } from "@/theme";
 import { type } from "@/type";
+import { END_THRESHOLD, loadMore, MoreFooter, type Paged } from "./MoreFooter";
 import { TrackItem, type TrackLine } from "./TrackItem";
 
 type Props = {
@@ -15,15 +16,14 @@ type Props = {
   empty: string;
   refreshing?: boolean;
   onRefresh?: () => void;
-  onEndReached?: () => void;
-  loadingMore?: boolean;
+  pages?: Paged;
   line?: TrackLine;
   /** What a track tapped here continues as: "next from: label". */
   label?: string | null;
 };
 
 /** A detail screen that is mostly a track list: artist, album, tag, playlist. */
-export function TrackListScreen({ title, header, tracks, pending, error, empty, refreshing = false, onRefresh, onEndReached, loadingMore, line, label }: Props) {
+export function TrackListScreen({ title, header, tracks, pending, error, empty, refreshing = false, onRefresh, pages, line, label }: Props) {
   return (
     <>
       <Stack.Screen options={{ title }} />
@@ -32,8 +32,8 @@ export function TrackListScreen({ title, header, tracks, pending, error, empty, 
         data={tracks}
         keyExtractor={(t) => String(t.id)}
         refreshControl={onRefresh ? <RefreshControl refreshing={refreshing} onRefresh={onRefresh} /> : undefined}
-        onEndReached={onEndReached}
-        onEndReachedThreshold={0.6}
+        onEndReached={pages ? () => loadMore(pages) : undefined}
+        onEndReachedThreshold={END_THRESHOLD}
         ListHeaderComponent={header}
         renderItem={({ index }) => <TrackItem tracks={tracks} index={index} line={line} label={label} />}
         ListEmptyComponent={
@@ -45,7 +45,7 @@ export function TrackListScreen({ title, header, tracks, pending, error, empty, 
             </View>
           )
         }
-        ListFooterComponent={loadingMore ? <ActivityIndicator style={styles.more} color={color.muted} /> : null}
+        ListFooterComponent={pages ? <MoreFooter pages={pages} /> : null}
       />
     </>
   );
@@ -53,5 +53,4 @@ export function TrackListScreen({ title, header, tracks, pending, error, empty, 
 
 const styles = StyleSheet.create({
   state: { padding: 40 },
-  more: { padding: 20 },
 });

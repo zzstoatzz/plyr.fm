@@ -17,8 +17,11 @@ A phone user and a web user are looking at the same plyr.fm.
   period toggle skips empty periods. These live in `shared/` and are tested
   against the web's modules.
 - **Where the platform has a convention, the platform wins**: the player is a
-  sheet, the mini player is the tab bar's bottom accessory, the tab bar
-  minimizes on scroll as in Music, and search sits in the navigation bar.
+  sheet, the mini player is the tab bar's bottom accessory, and tapping the
+  tab you are on scrolls it to the top (or pops to its root).
+- **The tab bar does not minimize on scroll.** Minimized, it left a lone
+  button whose first tap only brought the bar back, and squeezed the mini
+  player beside it.
 
 ## color
 
@@ -49,16 +52,23 @@ letters are narrower and lighter than San Francisco's.
 - Text scales with Dynamic Type.
 - Times and durations use the system face with tabular figures: Comic Neue has
   none, and a scrubber whose digits change width jitters.
-- Navigation titles and tab labels take the family too; the search field stays
-  the system's.
+- Navigation titles, tab labels and the search field take the family too.
 
 ## structure
 
-- **Home has no navigation bar.** A large-title bar keeps an empty row above
-  the title; home draws "plyr.fm" (34 pt bold) as the first thing in its list,
-  directly under the status bar, and the list is clipped at the status bar.
-  Search keeps the system bar because it hosts the search field; pushed screens
-  keep theirs for the back button.
+- **Home and search have no navigation bar.** A large-title bar keeps an empty
+  row above the title. Home draws "plyr.fm" (34 pt bold) as the first thing in
+  its list, directly under the status bar, and the list is clipped at the
+  status bar. Search draws "search" the same way with its field (`SearchField`,
+  in the system field's shape) fixed under it. Pushed screens keep their bar
+  for the back button.
+- **Paged lists** ask for the next page two screens before the end
+  (`MoreFooter`). Their last row is a spinner while more exists; a page that
+  fails to load becomes "couldn’t load more. tap to try again." instead of a
+  silent end.
+- **Search results** grow as you scroll: the API has a per-kind limit and no
+  offset, so the same query is asked again at 10, 25, then 50 per kind
+  (`shared/search.ts`).
 - **Rows**: 48 pt artwork at the 20 pt inset, a 12 pt gap, then title (17 pt
   bold) and artist (14 pt muted). Text starts at `column` in `theme.ts`.
 - **Playing** is the accent title plus a waveform glyph, never color alone.
