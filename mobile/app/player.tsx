@@ -14,6 +14,7 @@ import { useOpen, type Target } from "@/nav";
 import { usePlayer, useProgress } from "@/player/PlayerProvider";
 import { color, inset, radius } from "@/theme";
 import { type } from "@/type";
+import { RoutePicker } from "../modules/route-picker";
 
 export default function Player() {
   const { track, queue, repeat, status, canNext, next, previous, seek, toggleRepeat } = usePlayer();
@@ -110,6 +111,7 @@ export default function Player() {
             selected={repeat === "one"}
             onPress={toggleRepeat}
           />
+          <RoutePicker tint={color.muted} activeTint={color.accent} style={styles.route} />
           <TransportButton
             symbol="list.bullet"
             label={queued ? `queue, ${queued} up next` : "queue"}
@@ -156,6 +158,7 @@ const styles = StyleSheet.create({
   meta: { gap: 4 },
   link: { alignSelf: "flex-start", maxWidth: "100%", minHeight: 28, justifyContent: "center" },
   slider: { height: 32 },
+  route: { width: 44, height: 44 },
   times: { flexDirection: "row", justifyContent: "space-between" },
   controls: { flexDirection: "row", alignItems: "center", justifyContent: "space-evenly" },
 });

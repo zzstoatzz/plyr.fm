@@ -130,6 +130,18 @@ of its own (`expo-widgets`; `src/player/upNextActivity.tsx` draws it,
 - Later candidates: upload progress after sign-in, jams as a push-updated
   activity, a sleep timer.
 
+## AirPlay and other outputs
+
+The audio session is `playback`, so the system can already send it to AirPlay,
+Bluetooth and CarPlay from Control Center. The player also carries the system's
+own route button between repeat and queue (`modules/route-picker`, a local Expo
+module around `AVRoutePickerView`): tapping it opens the system output sheet,
+and the glyph turns accent while audio is going somewhere other than the phone.
+
+- The button and its sheet are the system's; nothing about them is drawn here.
+- The simulator has no AirPlay receivers. Routing to a speaker or TV is checked
+  on a phone.
+
 ## accessibility
 
 - Every control has a label; rows read "title, by artist" with a hint.
