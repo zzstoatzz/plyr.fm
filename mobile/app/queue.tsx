@@ -1,10 +1,12 @@
 import { Button, Host, HStack, Image, List, RNHostView, Section, Spacer, Text, VStack } from "@expo/ui/swift-ui";
 import {
   accessibilityAddTraits,
+  accessibilityElement,
   accessibilityHint,
   accessibilityLabel,
   contentShape,
   deleteDisabled,
+  disabled,
   font,
   foregroundStyle,
   lineLimit,
@@ -18,17 +20,25 @@ import {
 } from "@expo/ui/swift-ui/modifiers";
 import { Stack, useRouter } from "expo-router";
 import type { Track } from "plyr-shared/contract";
-import { credits } from "plyr-shared/format";
+import { count, credits } from "plyr-shared/format";
 import { IMAGE_WIDTHS, trackThumbnailUrl } from "plyr-shared/images";
-import { tail, upNext, type Entry } from "plyr-shared/queue";
-import { StyleSheet, Text as PlainText, View } from "react-native";
+import { tail, upNext } from "plyr-shared/queue";
+import { Pressable, StyleSheet, Text as PlainText, View } from "react-native";
 import { Artwork } from "@/components/Artwork";
 import { haptic } from "@/haptics";
-import { usePlayer } from "@/player/PlayerProvider";
+import { canPlay, usePlayer } from "@/player/PlayerProvider";
 import { color, radius } from "@/theme";
 import { font as face, type } from "@/type";
 
 const ART = 44;
+
+// the app's type roles for SwiftUI text: Comic Neue at the role's size, scaling with Dynamic Type
+const role = {
+  row: font({ family: face.bold, size: 17, textStyle: "body" }),
+  meta: font({ family: face.regular, size: 14, textStyle: "footnote" }),
+  heading: font({ family: face.bold, size: 15, textStyle: "subheadline" }),
+  note: font({ family: face.regular, size: 15, textStyle: "subheadline" }),
+};
 
 export default function Queue() {
   const player = usePlayer();
@@ -36,22 +46,9 @@ export default function Queue() {
   const { queue, track } = player;
   const picks = upNext(queue);
   const rest = tail(queue);
-
-  // a section's rows are numbered from zero by the list; the queue numbers them from the section's first entry
-  const within = (entries: readonly Entry[]) => ({
-    onMove: (sources: number[], destination: number) => {
-      const from = sources[0];
-      if (from === undefined) return;
-      const to = destination > from ? destination - 1 : destination;
-      if (!entries[from] || !entries[to] || from === to) return;
-      player.move(entries[from].index, entries[to].index);
-      haptic.selection();
-    },
-    onDelete: (indices: number[]) => {
-      const entry = entries[indices[0] ?? -1];
-      if (entry) player.remove(entry.index);
-    },
-  });
+  // one list holds the picks, a divider, then the tail, so a drag can cross from one to the other
+  const divider = rest.length > 0 ? picks.length : -1;
+  const entryAt = (row: number) => (row < picks.length ? picks[row] : rest[row - picks.length - 1]);
 
   return (
     <>
@@ -59,9 +56,9 @@ export default function Queue() {
         options={{
           title: "queue",
           headerRight: () => (
-            <PlainText onPress={() => router.dismiss()} accessibilityRole="button" style={[type.body, type.strong, { color: color.accent }]}>
-              done
-            </PlainText>
+            <Pressable onPress={() => router.dismiss()} accessibilityRole="button" hitSlop={12}>
+              <PlainText style={[type.body, type.strong, { color: color.accent }]}>done</PlainText>
+            </Pressable>
           ),
         }}
       />
@@ -73,33 +70,57 @@ export default function Queue() {
             </Section>
             <Section
               header={
-                <Heading title="up next">
-                  {picks.length > 1 ? <Button label="shuffle" systemImage="shuffle" onPress={player.shuffleUpNext} modifiers={[font({ family: face.regular, size: 15 })]} /> : null}
-                  {picks.length > 0 ? <Button label="clear" onPress={player.clearUpNext} modifiers={[font({ family: face.regular, size: 15 })]} /> : null}
+                <Heading title={picks.length ? `up next · ${picks.length}` : "up next"}>
+                  <Button
+                    label="shuffle"
+                    systemImage="shuffle"
+                    onPress={player.shuffleUpNext}
+                    modifiers={[role.note, disabled(picks.length < 2), accessibilityLabel(picks.length < 2 ? "nothing to shuffle" : "shuffle up next")]}
+                  />
+                  <Button
+                    label="clear"
+                    role="destructive"
+                    onPress={player.clearUpNext}
+                    modifiers={[role.note, disabled(picks.length === 0), accessibilityLabel("clear your queued tracks")]}
+                  />
                 </Heading>
               }
             >
-              {picks.length === 0 ? <Note>{rest.length ? "nothing queued. hold a track anywhere to play it next." : "nothing else in the queue"}</Note> : null}
-              <List.ForEach {...within(picks)}>
+              {picks.length === 0 ? <Note>{rest.length ? "drag a track here to play it next" : "nothing else in the queue"}</Note> : null}
+              <List.ForEach
+                onMove={(sources, destination) => {
+                  const from = sources[0];
+                  if (from === undefined) return;
+                  player.dragTo(from, destination > from ? destination - 1 : destination);
+                  haptic.selection();
+                }}
+                onDelete={(rows) => {
+                  const entry = entryAt(rows[0] ?? -1);
+                  if (entry) player.remove(entry.index);
+                }}
+              >
                 {picks.map(({ track: t, index }) => (
+                  <Row key={`${t.id}:${index}`} track={t} onPress={() => player.jumpTo(index)} />
+                ))}
+                {divider === -1 ? null : (
+                  <Text
+                    key="divider"
+                    modifiers={[role.heading, foregroundStyle(color.muted), accessibilityAddTraits(["isHeader"]), listRowBackground(color.canvas), moveDisabled(), deleteDisabled()]}
+                  >
+                    {`${queue.tailLabel ? `next from: ${queue.tailLabel}` : "next"} · ${count(rest.length, "track")}`}
+                  </Text>
+                )}
+                {rest.map(({ track: t, index }) => (
                   <Row key={`${t.id}:${index}`} track={t} onPress={() => player.jumpTo(index)} />
                 ))}
               </List.ForEach>
             </Section>
-            {rest.length > 0 ? (
-              <Section header={<Heading title={queue.tailLabel ? `next from: ${queue.tailLabel}` : "next"} />}>
-                <List.ForEach {...within(rest)}>
-                  {rest.map(({ track: t, index }) => (
-                    <Row key={`${t.id}:${index}`} track={t} onPress={() => player.jumpTo(index)} />
-                  ))}
-                </List.ForEach>
-              </Section>
-            ) : null}
           </List>
         </Host>
       ) : (
         <View style={styles.empty}>
-          <PlainText style={[type.body, { color: color.muted }]}>queue is empty</PlainText>
+          <PlainText style={[type.body, { color: color.ink }]}>queue is empty</PlainText>
+          <PlainText style={[type.secondary, { color: color.muted }]}>add tracks to get started</PlainText>
         </View>
       )}
     </>
@@ -109,7 +130,7 @@ export default function Queue() {
 function Heading({ title, children }: { title: string; children?: React.ReactNode }) {
   return (
     <HStack spacing={16}>
-      <Text modifiers={[font({ family: face.bold, size: 15 }), foregroundStyle(color.muted), accessibilityAddTraits(["isHeader"])]}>{title}</Text>
+      <Text modifiers={[role.heading, foregroundStyle(color.muted), accessibilityAddTraits(["isHeader"])]}>{title}</Text>
       <Spacer />
       {children}
     </HStack>
@@ -117,21 +138,25 @@ function Heading({ title, children }: { title: string; children?: React.ReactNod
 }
 
 function Note({ children }: { children: string }) {
-  return <Text modifiers={[font({ family: face.regular, size: 15 }), foregroundStyle(color.muted), listRowBackground(color.canvas), moveDisabled(), deleteDisabled()]}>{children}</Text>;
+  return <Text modifiers={[role.note, foregroundStyle(color.muted), listRowBackground(color.canvas), moveDisabled(), deleteDisabled()]}>{children}</Text>;
 }
 
 type RowProps = { track: Track; current?: boolean; onPress?: () => void; modifiers?: React.ComponentProps<typeof HStack>["modifiers"] };
 
 function Row({ track, current = false, onPress, modifiers = [] }: RowProps) {
   const by = credits(track);
+  const playable = canPlay(track);
+  const state = current ? ", now playing" : playable ? "" : ", can’t play here";
   // a wrapper around the row (a context menu, swipe actions) makes the list report every row as its first
   return (
     <HStack
       spacing={12}
       modifiers={[
         contentShape(shapes.rectangle()),
-        ...(onPress ? [onTapGesture(onPress), accessibilityAddTraits(["isButton"]), accessibilityHint("plays this track")] : []),
-        accessibilityLabel(`${track.title}, by ${by}${current ? ", now playing" : ""}`),
+        ...(onPress && playable ? [onTapGesture(onPress)] : []),
+        accessibilityElement("ignore"),
+        accessibilityLabel(`${track.title}, by ${by}${state}`),
+        ...(onPress && playable ? [accessibilityAddTraits(["isButton"]), accessibilityHint("plays this track")] : []),
         listRowBackground(color.canvas),
         ...modifiers,
       ]}
@@ -140,16 +165,16 @@ function Row({ track, current = false, onPress, modifiers = [] }: RowProps) {
         <Artwork url={trackThumbnailUrl(track)} size={ART} width={IMAGE_WIDTHS.thumb} radius={radius.art} />
       </RNHostView>
       <VStack alignment="leading" spacing={2}>
-        <Text modifiers={[font({ family: face.bold, size: 17 }), foregroundStyle(current ? color.accent : color.ink), lineLimit(1)]}>{track.title}</Text>
-        <Text modifiers={[font({ family: face.regular, size: 14 }), foregroundStyle(color.muted), lineLimit(1)]}>{by}</Text>
+        <Text modifiers={[role.row, foregroundStyle(current ? color.accent : playable ? color.ink : color.muted), lineLimit(1)]}>{track.title}</Text>
+        <Text modifiers={[role.meta, foregroundStyle(color.muted), lineLimit(1)]}>{by}</Text>
       </VStack>
       <Spacer />
-      {current ? <Image systemName="waveform" size={18} color={color.accent} /> : null}
+      {current ? <Image systemName="waveform" size={18} color={color.accent} /> : playable ? null : <Image systemName="lock.fill" size={14} color={color.muted} />}
     </HStack>
   );
 }
 
 const styles = StyleSheet.create({
   fill: { flex: 1 },
-  empty: { flex: 1, alignItems: "center", justifyContent: "center" },
+  empty: { flex: 1, alignItems: "center", justifyContent: "center", gap: 4 },
 });

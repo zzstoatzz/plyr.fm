@@ -29,6 +29,8 @@ export function TrackRow({ title, artist, artwork, active = false, locked = null
       accessibilityLabel={`${title}, by ${artist}`}
       accessibilityHint={locked ?? (active ? "now playing" : "plays this track")}
       accessibilityState={{ disabled: locked !== null, selected: active }}
+      accessibilityActions={onArtist ? [{ name: "artist", label: "open artist" }] : undefined}
+      onAccessibilityAction={(event) => event.nativeEvent.actionName === "artist" && onArtist?.()}
       style={({ pressed }) => [styles.row, pressed && { backgroundColor: color.fill }]}
     >
       <View style={locked ? styles.quiet : null}>

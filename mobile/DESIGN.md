@@ -76,8 +76,11 @@ key-value store) and comes back on launch, paused, at the saved position.
 - Queue rows carry no menu of their own. Wrapping a row (a context menu, swipe
   actions) makes `@expo/ui`'s `List.ForEach` report every row as index 0.
 - Shuffle is an action over up next, as on the web; repeat is one track or off.
-- A track cannot be dragged between "up next" and "next from"; each section
-  reorders within itself.
+- Up next and "next from: …" are one list with a divider row, so a drag can
+  cross it: a tail track dropped above the divider becomes a pick; a pick
+  dropped below it stays the last pick. With nothing in up next, dropping a
+  track at the top of the list makes it the first pick: the system list will
+  not open a slot above a divider that is its first row.
 
 ## lock screen and Dynamic Island
 

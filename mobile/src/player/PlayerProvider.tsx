@@ -24,7 +24,8 @@ export type Controls = {
   playNext: (track: Track) => void;
   addToQueue: (track: Track) => void;
   jumpTo: (index: number) => void;
-  move: (from: number, to: number) => void;
+  /** A drag in the queue list: rows are the picks, a divider, then the tail. */
+  dragTo: (from: number, to: number) => void;
   remove: (index: number) => void;
   clearUpNext: () => void;
   shuffleUpNext: () => void;
@@ -67,6 +68,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   // where a restored track picks up once it is first played; cleared when anything else starts
   const resume = useRef(saved && Q.current(saved.queue) ? { trackId: Q.current(saved.queue)?.id ?? -1, position: saved.position } : null);
   const stopAtEnd = useRef(false);
+  const started = useRef(false);
+  const [attempt, setAttempt] = useState(0);
 
   const track = Q.current(queue);
   const id = track?.id ?? -1;
@@ -99,13 +102,14 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       () => {
         if (cancelled) return;
         setLoaded({ trackId: track.id, uri: null });
-        setQueue((q) => (Q.current(q)?.id === track.id ? (Q.next(q, canPlay) ?? q) : q));
+        // a queue restored with no network stays where it was; only playback already under way skips ahead
+        if (started.current) setQueue((q) => (Q.current(q)?.id === track.id ? (Q.next(q, canPlay) ?? q) : q));
       },
     );
     return () => {
       cancelled = true;
     };
-  }, [client, track]);
+  }, [client, track, attempt]);
 
   // the position is saved in ten-second steps and whenever the queue or play state changes
   const step = Math.floor(progress.position / 10);
@@ -119,6 +123,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
 
   // the session is claimed on the first play, not at launch, so opening the app never stops other audio
   const begin = useCallback(() => {
+    started.current = true;
     setContext((existing) => existing ?? new AudioContext());
     void AudioManager.setAudioSessionActivity(true).catch(() => {});
   }, []);
@@ -134,25 +139,26 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
 
   const queued = useCallback(
     (added: Track, place: (q: Q.Queue, added: Track) => Q.Queue) => {
-      if (!canPlay(added)) return;
-      if (!track) begin();
-      setQueue((q) => place(q, added));
+      if (canPlay(added)) setQueue((q) => place(q, added));
     },
-    [track, begin],
+    [],
   );
   const playNext = useCallback((added: Track) => queued(added, Q.playNext), [queued]);
   const addToQueue = useCallback((added: Track) => queued(added, (q, t) => Q.addToQueue(q, [t])), [queued]);
 
   const jumpTo = useCallback(
     (index: number) => {
+      const target = queue.tracks[index];
+      if (!target || !canPlay(target)) return;
       begin();
       resume.current = null;
+      if (target.id === id) audio.current?.seekToTime(0);
       setQueue((q) => Q.jumpTo(q, index));
     },
-    [begin],
+    [begin, queue, id],
   );
 
-  const move = useCallback((from: number, to: number) => setQueue((q) => Q.move(q, from, to)), []);
+  const dragTo = useCallback((from: number, to: number) => setQueue((q) => Q.dragTo(q, from, to)), []);
   const remove = useCallback((index: number) => setQueue((q) => Q.remove(q, index)), []);
   const clearUpNext = useCallback(() => setQueue(Q.clearUpNext), []);
   const shuffleUpNext = useCallback(() => setQueue((q) => Q.shuffleUpNext(q)), []);
@@ -160,12 +166,17 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
 
   const next = useCallback(() => setQueue((q) => Q.next(q, canPlay) ?? q), []);
 
-  const seek = useCallback((seconds: number) => {
-    if (resume.current) resume.current.position = seconds;
-    audio.current?.seekToTime(seconds);
-    listened.current.last = seconds;
-    setSeeks((n) => n + 1);
-  }, []);
+  const seek = useCallback(
+    (seconds: number) => {
+      // before anything has played there is no audio to move: the scrubber moves and playback starts from there
+      if (!started.current) resume.current = { trackId: id, position: seconds };
+      audio.current?.seekToTime(seconds);
+      listened.current.last = seconds;
+      setProgress((p) => ({ trackId: id, value: { duration: p?.trackId === id ? p.value.duration : 0, position: seconds } }));
+      setSeeks((n) => n + 1);
+    },
+    [id],
+  );
 
   const previous = useCallback(() => {
     const step = Q.previous(queue, progress.position, canPlay);
@@ -174,6 +185,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   }, [queue, progress.position, seek]);
 
   const toggle = useCallback(() => {
+    if (status === "failed") setAttempt((n) => n + 1);
     if (!context) begin();
     else if (status === "playing" || status === "buffering") audio.current?.pause();
     else audio.current?.play();
@@ -193,9 +205,10 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const onEnded = useCallback(() => {
     if (repeat === "one") return;
     const after = Q.next(queue, canPlay);
-    if (after) setQueue(after);
-    else stopAtEnd.current = true;
-  }, [queue, repeat]);
+    if (after) return setQueue(after);
+    stopAtEnd.current = true;
+    setProgress((p) => (p?.trackId === id ? { trackId: id, value: { ...p.value, position: 0 } } : p));
+  }, [queue, repeat, id]);
 
   const onPlay = useCallback(() => {
     if (stopAtEnd.current) {
@@ -207,6 +220,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   }, [setStatus]);
 
   const onLoad = useCallback(() => {
+    // every start of the file is its own listen: repeat-one and a second copy in the queue count again
+    listened.current = { trackId: id, seconds: 0, last: 0, counted: false };
     const from = resume.current;
     resume.current = null;
     if (from && from.trackId === id && from.position > 0) seek(from.position);
@@ -244,7 +259,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       playNext,
       addToQueue,
       jumpTo,
-      move,
+      dragTo,
       remove,
       clearUpNext,
       shuffleUpNext,
@@ -254,7 +269,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       previous,
       seek,
     }),
-    [queue, track, status, canNext, repeat, playList, playNext, addToQueue, jumpTo, move, remove, clearUpNext, shuffleUpNext, toggleRepeat, toggle, next, previous, seek],
+    [queue, track, status, canNext, repeat, playList, playNext, addToQueue, jumpTo, dragTo, remove, clearUpNext, shuffleUpNext, toggleRepeat, toggle, next, previous, seek],
   );
 
   useNowPlaying({ controls, progress, seeks, audio });

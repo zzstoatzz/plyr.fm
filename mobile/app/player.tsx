@@ -1,4 +1,5 @@
 import { Host, Slider } from "@expo/ui/swift-ui";
+import { accessibilityLabel, accessibilityValue } from "@expo/ui/swift-ui/modifiers";
 import { credits, formatTime } from "plyr-shared/format";
 import { IMAGE_WIDTHS, trackCoverUrl } from "plyr-shared/images";
 import { upNext } from "plyr-shared/queue";
@@ -20,6 +21,7 @@ export default function Player() {
   const { width } = useWindowDimensions();
   const [scrub, setScrub] = useState<number | null>(null);
   const [more, setMore] = useState(false);
+  const [clipped, setClipped] = useState(false);
   const router = useRouter();
   const open = useOpen();
   if (!track) return null;
@@ -76,6 +78,7 @@ export default function Player() {
               value={duration > 0 ? shown : 0}
               min={0}
               max={Math.max(duration, 1)}
+              modifiers={[accessibilityLabel("position"), accessibilityValue(`${formatTime(shown)} of ${formatTime(duration)}`)]}
               onValueChange={setScrub}
               onEditingChanged={(editing) => {
                 if (!editing && scrub !== null) {
@@ -101,7 +104,7 @@ export default function Player() {
         <View style={styles.controls}>
           <TransportButton
             symbol={repeat === "one" ? "repeat.1" : "repeat"}
-            label="repeat this track"
+            label={repeat === "one" ? "stop repeating" : "repeat this track"}
             size={20}
             tint={repeat === "one" ? color.accent : color.muted}
             selected={repeat === "one"}
@@ -116,7 +119,7 @@ export default function Player() {
           />
         </View>
         {about ? (
-          <Pressable onPress={() => setMore((open) => !open)} accessibilityRole="button" accessibilityHint={more ? "shows less" : "shows all of it"} style={styles.about}>
+          <View style={styles.about}>
             <Text style={[type.secondary, { color: color.muted }]} numberOfLines={more ? undefined : 3}>
               {richText(about).map((part, i) =>
                 part.type === "link" ? (
@@ -128,7 +131,15 @@ export default function Player() {
                 ),
               )}
             </Text>
-          </Pressable>
+            {clipped || more ? (
+              <Pressable onPress={() => setMore((open) => !open)} accessibilityRole="button" accessibilityState={{ expanded: more }} hitSlop={12} style={styles.link}>
+                <Text style={[type.secondary, type.strong, { color: color.accent }]}>{more ? "less" : "more"}</Text>
+              </Pressable>
+            ) : null}
+            <Text style={[type.secondary, styles.measure]} onTextLayout={(event) => setClipped(event.nativeEvent.lines.length > 3)} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+              {about}
+            </Text>
+          </View>
         ) : null}
       </ScrollView>
     </SafeAreaView>
@@ -138,10 +149,12 @@ export default function Player() {
 const styles = StyleSheet.create({
   fill: { flex: 1 },
   screen: { paddingHorizontal: inset, paddingTop: 48, paddingBottom: 24, gap: 24 },
-  about: { paddingTop: 4 },
+  about: { paddingTop: 4, gap: 6 },
+  // laid out unseen at full length, to learn whether three lines cut the description short
+  measure: { position: "absolute", left: 0, right: 0, opacity: 0 },
   art: { alignItems: "center" },
   meta: { gap: 4 },
-  link: { alignSelf: "flex-start", maxWidth: "100%" },
+  link: { alignSelf: "flex-start", maxWidth: "100%", minHeight: 28, justifyContent: "center" },
   slider: { height: 32 },
   times: { flexDirection: "row", justifyContent: "space-between" },
   controls: { flexDirection: "row", alignItems: "center", justifyContent: "space-evenly" },

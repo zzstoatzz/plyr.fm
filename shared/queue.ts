@@ -121,6 +121,15 @@ export function move(queue: Queue, from: number, to: number): Queue {
   return make(tracks, index, fromTail && target < boundary ? boundary + 1 : boundary, queue.tailLabel);
 }
 
+/** Make a tail track the last hand-queued pick (frontend promoteToUpNext). */
+export function promote(queue: Queue, from: number): Queue {
+  if (from < queue.tailFrom || from >= queue.tracks.length || from <= queue.index) return queue;
+  const tracks = [...queue.tracks];
+  const [moved] = tracks.splice(from, 1);
+  tracks.splice(upNextEnd(queue), 0, moved);
+  return make(tracks, queue.index, upNextEnd(queue) + 1, queue.tailLabel);
+}
+
 /** Drop an entry (frontend removeTrack). The current track is not removable; skip it instead. */
 export function remove(queue: Queue, index: number): Queue {
   if (index < 0 || index >= queue.tracks.length || index === queue.index) return queue;
@@ -235,4 +244,17 @@ export function restore(text: string | null): Saved | null {
   const survived = index !== -1;
   const queue = make(kept, survived ? index : 0, Math.max(tailFrom, 0), saved.data.tailLabel);
   return { queue, position: survived ? saved.data.position : 0, repeat: saved.data.repeat };
+}
+
+/** A drag between rows of a list showing the picks, one divider row, then the tail; `to` is where the row rests. */
+export function dragTo(queue: Queue, from: number, to: number): Queue {
+  const first = queue.index + 1;
+  const picks = upNextEnd(queue) - first;
+  const rows = queue.tracks.length - first + 1;
+  if (from === picks || from < 0 || from >= rows || to < 0 || to >= rows || from === to) return queue;
+  const source = first + (from > picks ? from - 1 : from);
+  if (from < picks) return move(queue, source, first + Math.min(to, picks - 1));
+  // a list will not open a slot above a divider that is its first row, so with no picks the slot under it promotes too
+  if (to === picks || (picks === 0 && to === 1)) return promote(queue, source);
+  return move(queue, source, first + (to > picks ? to - 1 : to));
 }

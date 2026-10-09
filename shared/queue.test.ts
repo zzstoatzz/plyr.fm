@@ -6,6 +6,7 @@ import {
   addToQueue,
   clearUpNext,
   current,
+  dragTo,
   hasNext,
   jumpTo,
   move,
@@ -13,6 +14,7 @@ import {
   playContext,
   playNext,
   playNow,
+  promote,
   previous,
   remove,
   restore,
@@ -215,6 +217,46 @@ describe("move and remove", () => {
   test("removing one of two identical entries leaves the other", () => {
     const twice = addToQueue(playNow(EMPTY_QUEUE, track(1)), [track(7), track(7)]);
     expect(ids(remove(twice, 1))).toEqual([1, 7]);
+  });
+});
+
+describe("dragging in the queue list", () => {
+  // current 1; rows: 7, 8, [divider], 2, 3
+  const q = addToQueue(context(EMPTY_QUEUE, list([1, 2, 3]), 0), list([7, 8]));
+  const shape = (queue: Queue) => [upNext(queue).map((e) => e.track.id), tail(queue).map((e) => e.track.id)];
+
+  test("picks and tail tracks reorder within their own part", () => {
+    expect(shape(dragTo(q, 0, 1))).toEqual([[8, 7], [2, 3]]);
+    expect(shape(dragTo(q, 3, 4))).toEqual([[7, 8], [3, 2]]);
+  });
+
+  test("a tail track dropped above the divider becomes a pick where it lands", () => {
+    expect(shape(dragTo(q, 4, 0))).toEqual([[3, 7, 8], [2]]);
+    expect(shape(dragTo(q, 3, 1))).toEqual([[7, 2, 8], [3]]);
+    expect(shape(dragTo(q, 3, 2))).toEqual([[7, 8, 2], [3]]);
+  });
+
+  test("a pick dropped below the divider stays the last pick", () => {
+    expect(shape(dragTo(q, 0, 4))).toEqual([[8, 7], [2, 3]]);
+  });
+
+  test("with no picks, a tail track dropped on or just under the divider becomes the first pick", () => {
+    const bare = context(EMPTY_QUEUE, list([1, 2, 3]), 0);
+    expect(shape(dragTo(bare, 2, 0))).toEqual([[3], [2]]);
+    expect(shape(dragTo(bare, 2, 1))).toEqual([[3], [2]]);
+  });
+
+  test("the divider does not move and nothing leaves the list", () => {
+    expect(dragTo(q, 2, 0)).toBe(q);
+    expect(dragTo(q, 0, 9)).toBe(q);
+    expect(dragTo(q, 1, 1)).toBe(q);
+  });
+
+  test("promote is the web's promoteToUpNext", () => {
+    expect(shape(promote(q, 4))).toEqual([[7, 8, 3], [2]]);
+    expect(promote(q, 1)).toBe(q);
+    const source = readFileSync(new URL("../frontend/src/lib/queue.svelte.ts", import.meta.url), "utf8");
+    expect(source).toContain("this.continuationFromIndex = Math.min(this.continuationFromIndex + 1, updated.length);");
   });
 });
 
