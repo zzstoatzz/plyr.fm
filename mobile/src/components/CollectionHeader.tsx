@@ -37,7 +37,7 @@ export function CollectionHeader({ cover, title, owner, meta, description, track
       {description ? <Text style={[type.secondary, styles.description]}>{description}</Text> : null}
       {tracks.some(canPlay) ? (
         <View style={styles.actions}>
-          <Button label="play" symbol="play.fill" onPress={() => player.playList(tracks, 0)} />
+          <Button label="play" symbol="play.fill" onPress={() => player.playList(tracks, 0, title)} />
         </View>
       ) : null}
     </View>

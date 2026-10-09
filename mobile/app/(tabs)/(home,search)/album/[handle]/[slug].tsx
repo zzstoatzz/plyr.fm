@@ -26,6 +26,7 @@ export default function AlbumScreen() {
       }
       tracks={tracks}
       line="plays"
+      label={meta?.title}
       pending={album.isPending}
       error={album.isError}
       empty="this album is empty."

@@ -41,6 +41,7 @@ export const Track = z.object({
   original_file_id: nullableString.optional(),
   original_file_type: nullableString.optional(),
   is_optimizing: z.boolean().optional(),
+  description: nullableString.optional(),
 });
 export type Track = z.infer<typeof Track>;
 

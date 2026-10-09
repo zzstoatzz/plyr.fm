@@ -48,7 +48,7 @@ export default function ArtistScreen() {
         {artist.data.bio ? <Text style={[type.secondary, styles.bio]}>{artist.data.bio}</Text> : null}
         {playable || support ? (
           <View style={styles.actions}>
-            {playable ? <Button label="play" symbol="play.fill" onPress={() => player.playList(tracks, 0)} /> : null}
+            {playable ? <Button label="play" symbol="play.fill" onPress={() => player.playList(tracks, 0, artist.data?.display_name)} /> : null}
             {support ? (
               <Button
                 label="support"
@@ -98,6 +98,7 @@ export default function ArtistScreen() {
       header={header}
       tracks={tracks}
       line="album"
+      label={artist.data?.display_name}
       pending={artist.isPending || (!!artist.data && pages.isPending)}
       error={artist.isError || pages.isError}
       empty={artist.isError ? "" : "no tracks yet."}

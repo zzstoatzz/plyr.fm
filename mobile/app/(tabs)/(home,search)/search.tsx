@@ -119,7 +119,7 @@ function Suggestions() {
             top this week
           </Text>
           {tracks.map((t, i) => (
-            <TrackItem key={t.id} tracks={tracks} index={i} />
+            <TrackItem key={t.id} tracks={tracks} index={i} label="top this week" />
           ))}
         </View>
       ) : null}

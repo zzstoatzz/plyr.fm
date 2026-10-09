@@ -61,7 +61,7 @@ export function TopTracks() {
           const active = player.track?.id === item.id;
           return (
             <Pressable
-              onPress={() => player.playList(data ?? [], index)}
+              onPress={() => player.playList(data ?? [], index, "top tracks")}
               disabled={!canPlay(item)}
               accessibilityRole="button"
               accessibilityLabel={`${item.title}, by ${item.artist}`}

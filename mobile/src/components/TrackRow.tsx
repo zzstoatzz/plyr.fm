@@ -1,6 +1,6 @@
 import { SymbolView } from "expo-symbols";
 import { IMAGE_WIDTHS } from "plyr-shared/images";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View, type PressableProps } from "react-native";
 import { color, inset, radius, thumb } from "@/theme";
 import { type } from "@/type";
 import { Artwork } from "./Artwork";
@@ -12,16 +12,18 @@ type Props = {
   active?: boolean;
   /** Why it cannot play here, e.g. "supporters only"; the row stays readable but quiet. */
   locked?: string | null;
-  onPress: () => void;
+  onPlay: () => void;
   /** Opens the artist; the artist line becomes its own target. */
   onArtist?: () => void;
 };
 
-export function TrackRow({ title, artist, artwork, active = false, locked = null, onPress, onArtist }: Props) {
+/** Extra props come from the link that carries the row's menu; its press is dropped, so a tap only plays. */
+export function TrackRow({ title, artist, artwork, active = false, locked = null, onPlay, onArtist, ...link }: Props & Omit<PressableProps, keyof Props | "children" | "style">) {
   const byline = locked ? `${artist} · ${locked}` : artist;
   return (
     <Pressable
-      onPress={onPress}
+      {...link}
+      onPress={onPlay}
       disabled={locked !== null}
       accessibilityRole="button"
       accessibilityLabel={`${title}, by ${artist}`}

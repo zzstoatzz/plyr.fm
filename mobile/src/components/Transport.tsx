@@ -1,22 +1,22 @@
 import { SymbolView, type SFSymbol } from "expo-symbols";
-import { ActivityIndicator, Pressable, StyleSheet } from "react-native";
+import { ActivityIndicator, Pressable, StyleSheet, type ColorValue } from "react-native";
 import { usePlayer } from "@/player/PlayerProvider";
 import { color } from "@/theme";
 
-type ButtonProps = { symbol: SFSymbol; label: string; size: number; disabled?: boolean; onPress: () => void };
+type ButtonProps = { symbol: SFSymbol; label: string; size: number; disabled?: boolean; selected?: boolean; tint?: ColorValue; onPress: () => void };
 
-export function TransportButton({ symbol, label, size, disabled = false, onPress }: ButtonProps) {
+export function TransportButton({ symbol, label, size, disabled = false, selected, tint = color.ink, onPress }: ButtonProps) {
   return (
     <Pressable
       onPress={onPress}
       disabled={disabled}
       accessibilityRole="button"
       accessibilityLabel={label}
-      accessibilityState={{ disabled }}
+      accessibilityState={{ disabled, selected }}
       hitSlop={10}
       style={({ pressed }) => [styles.button, { minWidth: Math.max(44, size), minHeight: Math.max(44, size) }, (pressed || disabled) && { opacity: disabled ? 0.35 : 0.6 }]}
     >
-      <SymbolView name={symbol} size={size} tintColor={color.ink} />
+      <SymbolView name={symbol} size={size} tintColor={tint} />
     </Pressable>
   );
 }

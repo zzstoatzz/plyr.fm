@@ -14,6 +14,7 @@ export default function TagScreen() {
       title={`#${name}`}
       header={tag.data ? <Text style={[type.secondary, styles.count]}>{count(tag.data.tag.track_count, "track")}</Text> : null}
       tracks={tag.data?.tracks ?? []}
+      label={`#${name}`}
       pending={tag.isPending}
       error={tag.isError}
       empty="no tracks with this tag."

@@ -49,7 +49,7 @@ export default function Home() {
             ) : null}
           </>
         }
-        renderItem={({ index }) => <TrackItem tracks={tracks} index={index} />}
+        renderItem={({ index }) => <TrackItem tracks={tracks} index={index} label={tags.length ? tags.map((t) => `#${t}`).join(" ") : "latest tracks"} />}
         ListEmptyComponent={
           latest.isPending ? (
             <ActivityIndicator style={styles.state} color={color.muted} />

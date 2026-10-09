@@ -54,10 +54,13 @@ export function nextPlayableIndex(queue: Pick<Queue, "tracks">, from: number, ca
 /**
  * Play a track tapped inside a list: it becomes the queue's head, hand-queued picks stay ahead,
  * and the rest of the list follows as the "next from: label" tail (frontend playContext).
- * A tap on something that cannot play starts at the next thing that can; null when nothing can.
+ * Unlike the web, which checks access before it queues, a tap on something that cannot play
+ * starts at the next thing that can; null when nothing can.
  */
 export function playContext(queue: Queue, tracks: readonly Track[], startIndex: number, label: string | null, canPlay: CanPlay): Queue | null {
-  const start = nextPlayableIndex({ tracks }, startIndex - 1, canPlay);
+  if (tracks.length === 0) return null;
+  const tappedAt = Math.max(0, Math.min(startIndex, tracks.length - 1));
+  const start = nextPlayableIndex({ tracks }, tappedAt - 1, canPlay);
   if (start === -1) return null;
   const tapped = tracks[start];
   const picks = upNext(queue).map((entry) => entry.track);
@@ -190,8 +193,8 @@ export type Saved = { queue: Queue; position: number; repeat: Repeat };
 const SavedQueue = z.object({
   tracks: z.array(z.unknown()),
   index: z.number().int(),
-  tailFrom: z.number().int(),
-  tailLabel: z.string().nullable(),
+  tailFrom: z.number().int().optional(),
+  tailLabel: z.string().nullable().catch(null),
   position: z.number().nonnegative().catch(0),
   repeat: z.enum(["none", "one"]).catch("none"),
 });
@@ -220,11 +223,12 @@ export function restore(text: string | null): Saved | null {
   const kept: Track[] = [];
   let index = -1;
   let tailFrom = 0;
+  const boundary = saved.data.tailFrom ?? saved.data.tracks.length;
   saved.data.tracks.forEach((raw, i) => {
     const track = Track.safeParse(raw);
     if (!track.success) return;
     if (i === saved.data.index) index = kept.length;
-    if (i < saved.data.tailFrom) tailFrom = kept.length + 1;
+    if (i < boundary) tailFrom = kept.length + 1;
     kept.push(track.data);
   });
   if (kept.length === 0) return null;

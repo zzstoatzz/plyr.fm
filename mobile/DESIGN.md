@@ -62,6 +62,23 @@ letters are narrower and lighter than San Francisco's.
 - **Artwork** is always requested at its slot's size through the image CDN
   (`plyr-shared/images`), as the web does.
 
+## queue
+
+The rules are the web queue's, as pure functions in `shared/queue.ts`: what you
+queued by hand is "up next"; the rest of the album, playlist or list a track was
+tapped in follows as "next from: …". The queue lives on the device (expo-sqlite
+key-value store) and comes back on launch, paused, at the saved position.
+
+- Holding a track anywhere offers play next, add to queue, go to artist and go
+  to album, through the router's native link menu.
+- The queue is a sheet over the player: a system list, so reordering is a drag,
+  removing is a swipe, and VoiceOver gets the list's own move and delete actions.
+- Queue rows carry no menu of their own. Wrapping a row (a context menu, swipe
+  actions) makes `@expo/ui`'s `List.ForEach` report every row as index 0.
+- Shuffle is an action over up next, as on the web; repeat is one track or off.
+- A track cannot be dragged between "up next" and "next from"; each section
+  reorders within itself.
+
 ## accessibility
 
 - Every control has a label; rows read "title, by artist" with a hint.

@@ -18,10 +18,12 @@ type Props = {
   onEndReached?: () => void;
   loadingMore?: boolean;
   line?: TrackLine;
+  /** What a track tapped here continues as: "next from: label". */
+  label?: string | null;
 };
 
 /** A detail screen that is mostly a track list: artist, album, tag, playlist. */
-export function TrackListScreen({ title, header, tracks, pending, error, empty, refreshing = false, onRefresh, onEndReached, loadingMore, line }: Props) {
+export function TrackListScreen({ title, header, tracks, pending, error, empty, refreshing = false, onRefresh, onEndReached, loadingMore, line, label }: Props) {
   return (
     <>
       <Stack.Screen options={{ title }} />
@@ -33,7 +35,7 @@ export function TrackListScreen({ title, header, tracks, pending, error, empty, 
         onEndReached={onEndReached}
         onEndReachedThreshold={0.6}
         ListHeaderComponent={header}
-        renderItem={({ index }) => <TrackItem tracks={tracks} index={index} line={line} />}
+        renderItem={({ index }) => <TrackItem tracks={tracks} index={index} line={line} label={label} />}
         ListEmptyComponent={
           pending ? (
             <ActivityIndicator style={styles.state} color={color.muted} />

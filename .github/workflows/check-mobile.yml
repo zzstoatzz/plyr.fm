@@ -20,6 +20,8 @@ on:
       - "backend/src/backend/utilities/tags.py"
       - "backend/src/backend/api/albums/schemas.py"
       - "frontend/src/lib/config.ts"
+      - "frontend/src/lib/queue.svelte.ts"
+      - "frontend/src/lib/components/RichText.svelte"
       - "frontend/src/routes/u/[[]handle]/+page.svelte"
       - ".github/workflows/check-mobile.yml"
   workflow_dispatch:

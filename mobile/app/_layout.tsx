@@ -8,6 +8,7 @@ import { palette } from "@/palette";
 import { PlayerProvider } from "@/player/PlayerProvider";
 import { QueryProvider } from "@/query";
 import { color } from "@/theme";
+import { font } from "@/type";
 
 void SplashScreen.preventAutoHideAsync();
 
@@ -45,6 +46,19 @@ export default function RootLayout() {
               name="player"
               options={{
                 presentation: "formSheet",
+                sheetAllowedDetents: [1],
+                sheetGrabberVisible: true,
+                sheetCornerRadius: 24,
+                contentStyle: { backgroundColor: color.canvas },
+              }}
+            />
+            <Stack.Screen
+              name="queue"
+              options={{
+                presentation: "formSheet",
+                headerShown: true,
+                headerTransparent: true,
+                headerTitleStyle: { color: color.ink, fontFamily: font.bold },
                 sheetAllowedDetents: [1],
                 sheetGrabberVisible: true,
                 sheetCornerRadius: 24,

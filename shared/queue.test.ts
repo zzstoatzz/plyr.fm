@@ -92,6 +92,12 @@ describe("playContext", () => {
     expect(playContext(EMPTY_QUEUE, [track(9, { gated: true })], 0, null, canPlay)).toBeNull();
   });
 
+  test("a start index outside the list is clamped into it, as the web clamps", () => {
+    expect(current(context(EMPTY_QUEUE, list([1, 2, 3]), -5))?.id).toBe(1);
+    expect(current(context(EMPTY_QUEUE, list([1, 2, 3]), 7))?.id).toBe(3);
+    expect(playContext(EMPTY_QUEUE, [], 0, null, canPlay)).toBeNull();
+  });
+
   test("the web's playContext has the same shape", () => {
     const source = readFileSync(new URL("../frontend/src/lib/queue.svelte.ts", import.meta.url), "utf8");
     expect(source).toContain("this.tracks = [tapped, ...upNext, ...contextTail];");
@@ -271,6 +277,16 @@ describe("saved queue", () => {
   test("nothing saved, or something unreadable, restores nothing", () => {
     for (const text of [null, "", "{", "[]", JSON.stringify({ tracks: [], index: 0, tailFrom: 0, tailLabel: null, position: 0, repeat: "none" })])
       expect(restore(text)).toBeNull();
+  });
+
+  test("a saved queue without a tail boundary restores with no tail", () => {
+    const raw = JSON.parse(save({ queue: q, position: 3, repeat: "none" }));
+    delete raw.tailFrom;
+    delete raw.tailLabel;
+    const back = restore(JSON.stringify(raw));
+    expect(back && ids(back.queue)).toEqual(ids(q));
+    expect(back?.queue.tailFrom).toBe(q.tracks.length);
+    expect(back?.queue.tailLabel).toBeNull();
   });
 
   test("a stored track that no longer parses is dropped and the rest keep their places", () => {
