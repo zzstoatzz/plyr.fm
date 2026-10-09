@@ -12,6 +12,7 @@ import { useNowPlaying } from "./nowPlaying";
 import { forget, recall, remember } from "./saved";
 import { tap } from "./levels";
 import { timeline } from "./timeline";
+import { SleepContext, useSleepTimer } from "./useSleepTimer";
 
 export type Status = "idle" | "loading" | "playing" | "paused" | "buffering" | "failed";
 type TagStatus = Exclude<Status, "idle" | "loading">;
@@ -277,6 +278,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     else go("previous", step.queue);
   }, [progress.position, seek, go]);
 
+  const { controls: sleeping, takeTrackEnd } = useSleepTimer(audio);
+
   const toggle = useCallback(() => {
     if (status === "failed") setAttempt((n) => n + 1);
     if (!context) begin();
@@ -323,7 +326,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         if (!current) return;
         again.current = repeat === "one";
         if (again.current) return;
-        const after = Q.next(latest.current, canPlay);
+        const after = takeTrackEnd() ? null : Q.next(latest.current, canPlay);
         if (after) go("ended", after);
         else setProgress((p) => (p?.trackId === trackId ? { trackId, value: { ...p.value, position: 0 } } : p));
         return;
@@ -406,7 +409,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   return (
     <ControlsContext.Provider value={controls}>
       <ProgressContext.Provider value={progress}>
-        {children}
+        <SleepContext.Provider value={sleeping}>{children}</SleepContext.Provider>
         {context ? decks.map((deck) => <Deck key={deck.trackId} trackId={deck.trackId} uri={deck.uri} context={context} on={on} />) : null}
       </ProgressContext.Provider>
     </ControlsContext.Provider>

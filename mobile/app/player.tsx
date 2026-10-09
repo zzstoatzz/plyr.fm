@@ -8,6 +8,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Artwork } from "@/components/Artwork";
 import { Scrubber } from "@/components/Scrubber";
 import { TopEdge } from "@/components/TopEdge";
+import { SleepButton } from "@/components/SleepButton";
 import { PlayPause, TransportButton } from "@/components/Transport";
 import { useOpen, type Target } from "@/nav";
 import { usePlayer, useProgress } from "@/player/PlayerProvider";
@@ -115,6 +116,7 @@ export default function Player() {
               tint={color.muted}
               onPress={() => router.push("/queue")}
             />
+            <SleepButton />
             {described ? <TransportButton symbol="info.circle" label="about this track" size={20} tint={color.muted} onPress={() => router.push("/about")} /> : null}
           </View>
         </SheetGuard>

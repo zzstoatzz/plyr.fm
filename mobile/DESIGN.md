@@ -105,9 +105,14 @@ the sheet. VoiceOver gets the slider's adjustable, stepping 15 s.
   not move the sheet: `modules/sheet-guard` takes the pan there. The sheet is
   dismissed from the artwork, the title or the grabber.
 - **The action row** under the transport is evenly spaced and grows by adding
-  to it: repeat, output, queue, and the info button when the track has a
-  description. Actions that need an account (like, add to playlist) join this
+  to it: repeat, output, queue, sleep timer, and the info button when the track
+  has a description. Actions that need an account (like, add to playlist) join this
   row once the app can sign in.
+- **The sleep timer** is the moon in the action row: a system menu with 15,
+  30, 45 minutes, 1 hour and "end of this track". A timed sleep fades the
+  music out over its last ten seconds and pauses; the moon is filled and
+  accent while one runs, and the menu then offers ten more minutes and "turn
+  off". Rules in `src/player/sleep.ts`.
 - **The description** is not shown inline. The info button opens it in its own
   sheet (`app/about.tsx`), and is absent when there is nothing to read.
 
