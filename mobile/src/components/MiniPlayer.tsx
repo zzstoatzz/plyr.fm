@@ -7,17 +7,19 @@ import { usePlayer } from "@/player/PlayerProvider";
 import { color } from "@/theme";
 import { type } from "@/type";
 import { Artwork } from "./Artwork";
+import { RainbowStrip } from "./RainbowStrip";
 import { PlayPause, TransportButton } from "./Transport";
 
 /** The tab bar's bottom accessory: what is playing, with play/pause; tapping opens the player. */
 export function MiniPlayer() {
   const placement = NativeTabs.BottomAccessory.usePlacement();
   const router = useRouter();
-  const { track, canNext, next } = usePlayer();
+  const { track, status, canNext, next } = usePlayer();
   if (!track) return null;
   const inline = placement === "inline";
   return (
     <View style={styles.bar}>
+      <RainbowStrip lit={status === "playing" || status === "buffering"} compact style={styles.rainbow} />
       <Pressable
         style={styles.open}
         onPress={() => router.push("/player")}
@@ -47,4 +49,5 @@ const styles = StyleSheet.create({
   bar: { flex: 1, flexDirection: "row", alignItems: "center", paddingLeft: 12, paddingRight: 8, gap: 4 },
   open: { flex: 1, flexDirection: "row", alignItems: "center", gap: 10, minHeight: 44 },
   text: { flex: 1 },
+  rainbow: { position: "absolute", top: 0, left: 28, right: 28 },
 });

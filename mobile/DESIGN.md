@@ -81,6 +81,14 @@ the sheet. VoiceOver gets the slider's adjustable, stepping 15 s.
   not move the sheet: `modules/sheet-guard` takes the pan there. The sheet is
   dismissed from the artwork, the title or the grabber.
 
+## the rainbow strip
+
+The web player's top bar (`shared/rainbow.ts` holds its five colors, with a
+parity test). It runs along the top edge of the player sheet and of the mini
+player. While a track plays it drifts sideways and glows, breathing slowly;
+paused, it stops where it is and dims to the web's resting opacity. With Reduce
+Motion on it is lit but still. It is the app's one piece of decorative motion.
+
 ## queue
 
 The rules are the web queue's, as pure functions in `shared/queue.ts`: what you
@@ -166,4 +174,4 @@ and the glyph turns accent while audio is going somewhere other than the phone.
 - Every control has a label; rows read "title, by artist" with a hint.
 - Body text never capped, tabular figures for times.
 - Targets are at least 44 pt (or a hit slop out to 44 pt).
-- No decorative motion.
+- No decorative motion beyond the rainbow strip, which Reduce Motion stills.

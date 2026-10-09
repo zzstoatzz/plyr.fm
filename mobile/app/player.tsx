@@ -6,6 +6,7 @@ import { useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Artwork } from "@/components/Artwork";
+import { RainbowStrip } from "@/components/RainbowStrip";
 import { Scrubber } from "@/components/Scrubber";
 import { PlayPause, TransportButton } from "@/components/Transport";
 import { useOpen, type Target } from "@/nav";
@@ -34,6 +35,7 @@ export default function Player() {
   const art = Math.min(width - inset * 2, 360);
   const album = track.album;
 
+  const playing = status === "playing" || status === "buffering";
   const queued = upNext(queue).length;
 
   return (
@@ -115,6 +117,7 @@ export default function Player() {
             </View>
         </SheetGuard>
       </ScrollView>
+      <RainbowStrip lit={playing} style={styles.rainbow} />
     </SafeAreaView>
   );
 }
@@ -123,6 +126,7 @@ const styles = StyleSheet.create({
   fill: { flex: 1 },
   screen: { paddingHorizontal: inset, paddingTop: 48, paddingBottom: 24, gap: 24 },
   guarded: { gap: 24 },
+  rainbow: { position: "absolute", top: 0, left: 0, right: 0 },
   art: { alignItems: "center" },
   meta: { gap: 4 },
   link: { alignSelf: "flex-start", maxWidth: "100%", minHeight: 28, justifyContent: "center" },
