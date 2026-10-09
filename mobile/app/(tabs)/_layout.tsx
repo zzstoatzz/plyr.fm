@@ -2,6 +2,7 @@ import { usePathname } from "expo-router";
 import { NativeTabs } from "expo-router/unstable-native-tabs";
 import { useEffect } from "react";
 import { MiniPlayer } from "@/components/MiniPlayer";
+import { useShownTab } from "@/nav";
 import { usePlayer } from "@/player/PlayerProvider";
 import { showTabBar, useTabBarHidden } from "@/tabBar";
 import { color } from "@/theme";
@@ -13,6 +14,7 @@ export default function TabsLayout() {
   const { track } = usePlayer();
   const hidden = useTabBarHidden();
   const pathname = usePathname();
+  useShownTab();
   useEffect(showTabBar, [pathname]);
   return (
     <NativeTabs tintColor={color.accent} hidden={hidden} labelStyle={{ fontFamily: font.bold }}>
