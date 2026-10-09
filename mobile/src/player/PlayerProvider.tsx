@@ -17,8 +17,8 @@ export type Controls = {
   track: Track | null;
   status: Status;
   canNext: boolean;
-  /** Play `tracks` from `index`, queuing the rest of the list after it. */
-  playList: (tracks: readonly Track[], index: number) => void;
+  /** Play `tracks` from `index`; the rest follows as "next from: label". */
+  playList: (tracks: readonly Track[], index: number, label?: string | null) => void;
   toggle: () => void;
   next: () => void;
   previous: () => void;
@@ -88,11 +88,11 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
 
   const setStatus = useCallback((value: TagStatus) => setTag({ trackId: id, value }), [id]);
 
-  const playList = useCallback((tracks: readonly Track[], index: number) => {
+  const playList = useCallback((tracks: readonly Track[], index: number, label: string | null = null) => {
     // the session is claimed on the first play, not at launch, so opening the app never stops other audio
     setContext((existing) => existing ?? new AudioContext());
     void AudioManager.setAudioSessionActivity(true).catch(() => {});
-    setQueue(Q.start(tracks, index, canPlay));
+    setQueue((q) => Q.playContext(q, tracks, index, label, canPlay) ?? q);
   }, []);
 
   const next = useCallback(() => setQueue((q) => Q.next(q, canPlay) ?? q), []);

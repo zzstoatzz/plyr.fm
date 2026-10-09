@@ -1,11 +1,13 @@
 import { Host, Slider } from "@expo/ui/swift-ui";
 import { credits, formatTime } from "plyr-shared/format";
 import { IMAGE_WIDTHS, trackCoverUrl } from "plyr-shared/images";
+import { useRouter } from "expo-router";
 import { useState } from "react";
-import { StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import { Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Artwork } from "@/components/Artwork";
 import { PlayPause, TransportButton } from "@/components/Transport";
+import { useOpen, type Target } from "@/nav";
 import { usePlayer, useProgress } from "@/player/PlayerProvider";
 import { color, inset, radius } from "@/theme";
 import { type } from "@/type";
@@ -15,10 +17,19 @@ export default function Player() {
   const { position, duration } = useProgress();
   const { width } = useWindowDimensions();
   const [scrub, setScrub] = useState<number | null>(null);
+  const router = useRouter();
+  const open = useOpen();
   if (!track) return null;
+
+  // the sheet sits over the tabs, so it steps aside before the tab underneath pushes the page
+  const leaveFor = (target: Target) => {
+    router.dismiss();
+    requestAnimationFrame(() => open(target));
+  };
 
   const shown = scrub ?? position;
   const art = Math.min(width - inset * 2, 360);
+  const album = track.album;
 
   return (
     <SafeAreaView style={styles.screen} edges={["bottom"]}>
@@ -29,13 +40,27 @@ export default function Player() {
         <Text style={[type.title, { color: color.ink }]} numberOfLines={2} accessibilityRole="header">
           {track.title}
         </Text>
-        <Text style={[type.body, { color: color.muted }]} numberOfLines={1}>
-          {credits(track)}
-        </Text>
-        {track.album ? (
-          <Text style={[type.meta, { color: color.muted }]} numberOfLines={1}>
-            {track.album.title}
-          </Text>
+        <Pressable onPress={() => leaveFor({ artist: track.artist_handle })} accessibilityRole="link" accessibilityHint="opens the artist" hitSlop={8} style={styles.link}>
+          {({ pressed }) => (
+            <Text style={[type.body, { color: color.accent, opacity: pressed ? 0.6 : 1 }]} numberOfLines={1}>
+              {credits(track)}
+            </Text>
+          )}
+        </Pressable>
+        {album ? (
+          <Pressable
+            onPress={() => leaveFor({ album: { handle: track.artist_handle, slug: album.slug } })}
+            accessibilityRole="link"
+            accessibilityHint="opens the album"
+            hitSlop={8}
+            style={styles.link}
+          >
+            {({ pressed }) => (
+              <Text style={[type.meta, { color: color.accent, opacity: pressed ? 0.6 : 1 }]} numberOfLines={1}>
+                {album.title}
+              </Text>
+            )}
+          </Pressable>
         ) : null}
       </View>
       <View>
@@ -74,6 +99,7 @@ const styles = StyleSheet.create({
   screen: { flex: 1, paddingHorizontal: inset, paddingTop: 48, gap: 24 },
   art: { alignItems: "center" },
   meta: { gap: 4 },
+  link: { alignSelf: "flex-start", maxWidth: "100%" },
   slider: { height: 32 },
   times: { flexDirection: "row", justifyContent: "space-between" },
   controls: { flexDirection: "row", alignItems: "center", justifyContent: "space-evenly" },

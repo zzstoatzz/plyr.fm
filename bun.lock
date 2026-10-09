@@ -9,12 +9,14 @@
       "name": "plyr-mobile",
       "version": "0.1.0",
       "dependencies": {
+        "@expo-google-fonts/comic-neue": "^0.4.1",
         "@expo/ui": "~57.0.21",
         "@react-native-community/netinfo": "12.0.1",
         "@tanstack/react-query": "^5.104.0",
         "expo": "~57.0.21",
         "expo-constants": "~57.0.20",
         "expo-dev-client": "~57.0.19",
+        "expo-font": "~57.0.4",
         "expo-haptics": "~57.0.3",
         "expo-image": "~57.0.4",
         "expo-linking": "~57.0.11",
@@ -221,6 +223,8 @@
     "@eslint/object-schema": ["@eslint/object-schema@2.1.7", "", {}, "sha512-VtAOaymWVfZcmZbp6E2mympDIHvyjXs/12LqWYjVw6qjrfF+VK+fyG33kChz3nnK+SU5/NeHOqrTEHS8sXO3OA=="],
 
     "@eslint/plugin-kit": ["@eslint/plugin-kit@0.4.1", "", { "dependencies": { "@eslint/core": "^0.17.0", "levn": "^0.4.1" } }, "sha512-43/qtrDUokr7LJqoF2c3+RInu/t4zfrpYdoSDfYyhg52rwLV6TnOvdG4fXm7IkSB3wErkcmJS9iEhjVtOSEjjA=="],
+
+    "@expo-google-fonts/comic-neue": ["@expo-google-fonts/comic-neue@0.4.1", "", {}, "sha512-1kYFjZeSQnGFeMnwk/B7M3p+og5eW6QZLxjMeMiZ/7TnP2IEAdYo0Gjy3XH2TpoiBHS9PAwEHaETVthVPsF09Q=="],
 
     "@expo-google-fonts/material-symbols": ["@expo-google-fonts/material-symbols@0.4.49", "", {}, "sha512-HtoaXYCk7A9kOjwoxrjq6i0iDtAoQnOPm31zUn+TgmKlHVUU+yyqvQDxN830MvGmBQV8eINv/SK7JRtWhB2xcg=="],
 

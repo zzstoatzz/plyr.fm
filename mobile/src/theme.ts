@@ -1,5 +1,5 @@
 import { DynamicColorIOS } from "react-native";
-import { palette } from "./palette";
+import { palette, tint } from "./palette";
 
 const dynamic = DynamicColorIOS;
 
@@ -15,6 +15,8 @@ export const color = {
   onAccent: dynamic(palette.onAccent),
   danger: dynamic(palette.danger),
 } satisfies Record<keyof typeof palette, ReturnType<typeof DynamicColorIOS>>;
+
+export const accentTint = { fill: dynamic(tint.fill), border: dynamic(tint.border) };
 
 export const inset = 20;
 export const thumb = 48;

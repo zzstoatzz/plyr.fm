@@ -4,7 +4,7 @@ import type { ReactElement } from "react";
 import { ActivityIndicator, FlatList, RefreshControl, StyleSheet, Text, View } from "react-native";
 import { color } from "@/theme";
 import { type } from "@/type";
-import { TrackItem } from "./TrackItem";
+import { TrackItem, type TrackLine } from "./TrackItem";
 
 type Props = {
   title: string;
@@ -17,11 +17,11 @@ type Props = {
   onRefresh?: () => void;
   onEndReached?: () => void;
   loadingMore?: boolean;
-  showArtist?: boolean;
+  line?: TrackLine;
 };
 
-/** A detail screen that is mostly a track list: artist, tag, playlist. */
-export function TrackListScreen({ title, header, tracks, pending, error, empty, refreshing = false, onRefresh, onEndReached, loadingMore, showArtist }: Props) {
+/** A detail screen that is mostly a track list: artist, album, tag, playlist. */
+export function TrackListScreen({ title, header, tracks, pending, error, empty, refreshing = false, onRefresh, onEndReached, loadingMore, line }: Props) {
   return (
     <>
       <Stack.Screen options={{ title }} />
@@ -33,7 +33,7 @@ export function TrackListScreen({ title, header, tracks, pending, error, empty, 
         onEndReached={onEndReached}
         onEndReachedThreshold={0.6}
         ListHeaderComponent={header}
-        renderItem={({ index }) => <TrackItem tracks={tracks} index={index} showArtist={showArtist} />}
+        renderItem={({ index }) => <TrackItem tracks={tracks} index={index} line={line} />}
         ListEmptyComponent={
           pending ? (
             <ActivityIndicator style={styles.state} color={color.muted} />

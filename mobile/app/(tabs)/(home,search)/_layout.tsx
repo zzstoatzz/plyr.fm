@@ -1,5 +1,6 @@
 import { Stack } from "expo-router";
 import { color } from "@/theme";
+import { font } from "@/type";
 
 const roots = { "(home)": "home", "(search)": "search" } as const;
 
@@ -19,7 +20,8 @@ export default function TabStack({ segment }: { segment: string }) {
         headerTransparent: true,
         headerShadowVisible: false,
         headerTintColor: color.accent,
-        headerTitleStyle: { color: color.ink },
+        headerTitleStyle: { color: color.ink, fontFamily: font.bold },
+        headerLargeTitleStyle: { fontFamily: font.bold },
         contentStyle: { backgroundColor: color.canvas },
         headerBackButtonDisplayMode: "minimal",
       }}

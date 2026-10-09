@@ -1,20 +1,26 @@
 import { describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
 import type { z } from "zod";
 import baseline from "../docs/internal/contracts/client-api.json";
 import {
+  AlbumMetadata,
   AlbumSearchResult,
   AlbumSummary,
   Artist,
+  ArtistAlbum,
   ArtistSearchResult,
   AudioUrl,
   FeaturedArtist,
   Playlist,
   PlaylistSearchResult,
+  PlaylistSummary,
   TagDetail,
   TagSearchResult,
   TagWithCount,
   Track,
   TrackSearchResult,
+  parseAlbum,
+  parseArtistAlbums,
   parseSearch,
   parseTrackPage,
   parseTrackSearch,
@@ -37,6 +43,7 @@ const cases: [string, z.ZodObject][] = [
   ["TagWithCount", TagWithCount],
   ["TagDetail", TagDetail],
   ["PlaylistWithTracksResponse", Playlist],
+  ["PlaylistResponse", PlaylistSummary],
 ];
 
 describe("contract", () => {
@@ -77,6 +84,21 @@ describe("contract", () => {
     expect(page.tracks[0].gated).toBe(false);
     expect(page.nextCursor).toBe("c");
     expect(rejected).toHaveLength(1);
+  });
+
+  test("albums read the fields the backend's album schemas serve", () => {
+    const source = readFileSync(new URL("../backend/src/backend/api/albums/schemas.py", import.meta.url), "utf8");
+    const fields = (model: string) => source.split(`class ${model}(BaseModel):`)[1].split("\nclass ")[0];
+    for (const field of Object.keys(ArtistAlbum.shape)) expect(fields("ArtistAlbumListItem")).toContain(`    ${field}: `);
+    for (const field of Object.keys(AlbumMetadata.shape)) expect(fields("AlbumMetadata")).toContain(`    ${field}: `);
+  });
+
+  test("an album page keeps its metadata and drops a malformed track", () => {
+    const album = { id: "a", title: "covers", slug: "covers", track_count: 2, total_plays: 9, image_url: null };
+    expect(parseArtistAlbums({ albums: [album, { id: 1 }] })).toEqual([album]);
+    const page = parseAlbum({ metadata: { ...album, artist: "nate", artist_handle: "n.test", artist_did: "did:plc:n" }, tracks: [{ id: "nope" }] });
+    expect(page.album.artist_handle).toBe("n.test");
+    expect(page.tracks).toEqual([]);
   });
 
   test("search keeps tracks and ignores other kinds", () => {

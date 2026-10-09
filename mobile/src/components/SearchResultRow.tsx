@@ -47,7 +47,7 @@ export function SearchResultRow({ result, active = false, onPress }: Props) {
           {subtitle}
         </Text>
       </View>
-      <Text style={[styles.kind, { color: color.muted, borderColor: color.border }]}>{result.type}</Text>
+      <Text style={[type.badge, styles.kind, { color: color.muted, borderColor: color.border }]}>{result.type}</Text>
     </Pressable>
   );
 }
@@ -57,5 +57,5 @@ const styles = StyleSheet.create({
   art: { backgroundColor: color.fill },
   empty: { alignItems: "center", justifyContent: "center" },
   text: { flex: 1, gap: 2 },
-  kind: { fontSize: 11, fontWeight: "600", borderWidth: StyleSheet.hairlineWidth, borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1, overflow: "hidden" },
+  kind: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1, overflow: "hidden" },
 });

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { contrast, palette, type Mode, type Role } from "./palette";
+import { contrast, mix, palette, tint, type Mode, type Role } from "./palette";
 
 const modes: Mode[] = ["light", "dark", "highContrastLight", "highContrastDark"];
 const grounds: Role[] = ["canvas", "surface", "raised"];
@@ -17,6 +17,20 @@ describe("palette", () => {
     }
     test(`${mode}: label on accent reads at 4.5:1`, () => {
       expect(contrast(palette.onAccent[mode], palette.accent[mode])).toBeGreaterThanOrEqual(4.5);
+    });
+  }
+});
+
+describe("accent tint", () => {
+  test("mixes like the web's color-mix over an opaque ground", () => {
+    expect(mix("#000000", "#FFFFFF", 0.5)).toBe("#808080");
+    expect(mix("#6A9FFF", "#141414", 0)).toBe("#141414");
+  });
+
+  for (const mode of modes) {
+    test(`accent text reads on the tinted fill in ${mode}`, () => {
+      const floor = mode.startsWith("highContrast") ? 7 : 4.5;
+      expect(contrast(palette.accent[mode], tint.fill[mode])).toBeGreaterThanOrEqual(floor);
     });
   }
 });

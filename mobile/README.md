@@ -2,8 +2,9 @@
 
 A native iOS client for plyr.fm, from the same repository as the web app. The
 app reads the existing public API: top tracks and the latest feed filtered by
-tag, search across tracks, artists, albums, tags and playlists, artist, tag and
-playlist pages, a player sheet, background audio, and lock screen controls. No sign-in yet, so supporter-gated tracks show who can listen and
+tag, search across tracks, artists, albums, tags and playlists, artist pages with
+their albums, playlists and support link, album, tag and playlist pages, a
+player sheet, background audio, and lock screen controls. No sign-in yet, so supporter-gated tracks show who can listen and
 stay locked.
 
 Nothing here reaches the web app or the backend. Deploys are unaffected by

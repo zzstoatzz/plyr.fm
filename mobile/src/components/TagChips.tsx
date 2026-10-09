@@ -32,7 +32,7 @@ export function TagChips({ tags, selected = [], onPress, onClear, wrap = false }
           pressed && { opacity: 0.6 },
         ]}
       >
-        <Text style={[type.secondary, { color: on ? color.ink : color.muted, fontWeight: on ? "600" : "400" }]}>{name}</Text>
+        <Text style={[type.secondary, on && type.strong, { color: on ? color.ink : color.muted }]}>{name}</Text>
       </Pressable>
     );
   });

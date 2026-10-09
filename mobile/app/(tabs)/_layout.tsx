@@ -2,13 +2,14 @@ import { NativeTabs } from "expo-router/unstable-native-tabs";
 import { MiniPlayer } from "@/components/MiniPlayer";
 import { usePlayer } from "@/player/PlayerProvider";
 import { color } from "@/theme";
+import { font } from "@/type";
 
 export const unstable_settings = { initialRouteName: "(home)" };
 
 export default function TabsLayout() {
   const { track } = usePlayer();
   return (
-    <NativeTabs tintColor={color.accent} minimizeBehavior="onScrollDown">
+    <NativeTabs tintColor={color.accent} minimizeBehavior="onScrollDown" labelStyle={{ fontFamily: font.bold }}>
       <NativeTabs.Trigger name="(home)">
         <NativeTabs.Trigger.Icon sf={{ default: "house", selected: "house.fill" }} />
         <NativeTabs.Trigger.Label>home</NativeTabs.Trigger.Label>

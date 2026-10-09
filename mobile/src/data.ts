@@ -1,8 +1,11 @@
 import { queryOptions, useInfiniteQuery, useQuery, type QueryClient } from "@tanstack/react-query";
 import {
+  parseAlbum,
   parseArtist,
+  parseArtistAlbums,
   parseAudioUrl,
   parsePlaylist,
+  parsePlaylists,
   parseSearch,
   parseTagTracks,
   parseTags,
@@ -69,6 +72,31 @@ export function useArtist(handle: string) {
   return useQuery({
     queryKey: ["artist", handle],
     queryFn: ({ signal }) => getJSON(`/artists/by-handle/${encodeURIComponent(handle)}`, parseArtist, signal),
+  });
+}
+
+export function useArtistAlbums(handle: string) {
+  return useQuery({
+    queryKey: ["artist-albums", handle],
+    queryFn: ({ signal }) => getJSON(`/albums/${encodeURIComponent(handle)}`, (b) => parseArtistAlbums(b, report("album")), signal),
+  });
+}
+
+/** The playlists an artist shows on their profile. */
+export function useArtistPlaylists(did: string | undefined) {
+  return useQuery({
+    queryKey: ["artist-playlists", did],
+    enabled: !!did,
+    queryFn: ({ signal }) =>
+      getJSON(`/lists/playlists/by-artist/${encodeURIComponent(did ?? "")}`, (b) => parsePlaylists(b, report("playlist")), signal),
+  });
+}
+
+export function useAlbum(handle: string, slug: string) {
+  return useQuery({
+    queryKey: ["album", handle, slug],
+    queryFn: ({ signal }) =>
+      getJSON(`/albums/${encodeURIComponent(handle)}/${encodeURIComponent(slug)}`, (b) => parseAlbum(b, report("track")), signal),
   });
 }
 

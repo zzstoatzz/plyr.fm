@@ -69,7 +69,7 @@ export function TopTracks() {
               style={({ pressed }) => [styles.card, pressed && { opacity: 0.7 }]}
             >
               <Artwork url={trackCoverUrl(item)} size={CARD} width={IMAGE_WIDTHS.tile} radius={radius.card} />
-              <Text style={[type.secondary, styles.title, { color: active ? color.accent : color.ink }]} numberOfLines={1}>
+              <Text style={[type.secondary, type.strong, styles.title, { color: active ? color.accent : color.ink }]} numberOfLines={1}>
                 {item.title}
               </Text>
               <Pressable
@@ -98,5 +98,5 @@ const styles = StyleSheet.create({
   heading: { flexDirection: "row", alignItems: "baseline", gap: 10, paddingHorizontal: inset },
   cards: { paddingHorizontal: inset, gap: 12 },
   card: { width: CARD, gap: 4 },
-  title: { fontWeight: "600", marginTop: 4 },
+  title: { marginTop: 4 },
 });

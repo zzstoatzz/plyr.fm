@@ -45,6 +45,15 @@
           "image": "./assets/splash.png",
           "imageWidth": 120
         }
+      ],
+      [
+        "expo-font",
+        {
+          "fonts": [
+            "node_modules/@expo-google-fonts/comic-neue/400Regular/ComicNeue_400Regular.ttf",
+            "node_modules/@expo-google-fonts/comic-neue/700Bold/ComicNeue_700Bold.ttf"
+          ]
+        }
       ]
     ],
     "experiments": {

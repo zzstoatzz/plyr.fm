@@ -18,6 +18,9 @@ on:
       - "frontend/src/lib/components/SearchModal.svelte"
       - "frontend/src/lib/components/TagFilter.svelte"
       - "backend/src/backend/utilities/tags.py"
+      - "backend/src/backend/api/albums/schemas.py"
+      - "frontend/src/lib/config.ts"
+      - "frontend/src/routes/u/[[]handle]/+page.svelte"
       - ".github/workflows/check-mobile.yml"
   workflow_dispatch:
 

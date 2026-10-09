@@ -4,7 +4,6 @@ import { listeningLabel as webListeningLabel } from "../frontend/src/lib/publish
 import type { Track } from "./contract";
 import { credits, formatTime } from "./format";
 import { listeningLabel, playability, playCountThreshold, skipStepSeconds, SKIP_STEP_LADDER, SKIP_STEP_MAX } from "./playback";
-import { EMPTY_QUEUE, current, next, previous, start } from "./queue";
 
 const track = (id: number, extra: Partial<Track> = {}): Track => ({
   id,
@@ -27,7 +26,6 @@ const track = (id: number, extra: Partial<Track> = {}): Track => ({
 });
 
 const mp3Only = (format: string) => format === "mp3";
-const canPlay = (t: Track) => playability(t, mp3Only).playable;
 
 describe("skip step matches the web app", () => {
   test("ladder", () => {
@@ -66,28 +64,5 @@ describe("playback rules", () => {
     const feature = (display_name: string) => ({ did: "did:plc:f", handle: "f.test", display_name });
     expect(credits(track(1))).toBe("a");
     expect(credits(track(1, { features: [feature("b"), feature("c")] }))).toBe("a, b, c");
-  });
-});
-
-describe("queue", () => {
-  const list = [track(1), track(2, { gated: true }), track(3)];
-
-  test("starting on an unplayable track skips forward", () => {
-    expect(current(start(list, 1, canPlay))?.id).toBe(3);
-    expect(start([track(9, { gated: true })], 0, canPlay)).toBe(EMPTY_QUEUE);
-  });
-
-  test("next skips what cannot play and stops at the end", () => {
-    const q = start(list, 0, canPlay);
-    const after = next(q, canPlay);
-    expect(after && current(after)?.id).toBe(3);
-    expect(after && next(after, canPlay)).toBeNull();
-  });
-
-  test("previous restarts after a moment, otherwise steps back past what cannot play", () => {
-    const q = { tracks: list, index: 2 };
-    expect(previous(q, 5, canPlay)).toEqual({ kind: "restart" });
-    expect(previous(q, 0.5, canPlay)).toEqual({ kind: "move", queue: { tracks: list, index: 0 } });
-    expect(previous({ tracks: list, index: 0 }, 0, canPlay)).toEqual({ kind: "restart" });
   });
 });

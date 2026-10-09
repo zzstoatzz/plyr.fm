@@ -27,7 +27,7 @@ export function MiniPlayer() {
       >
         <Artwork url={trackThumbnailUrl(track)} size={inline ? 28 : 36} width={IMAGE_WIDTHS.thumb} radius={6} />
         <View style={styles.text}>
-          <Text style={[type.secondary, { color: color.ink, fontWeight: "600" }]} numberOfLines={1}>
+          <Text style={[type.secondary, type.strong, { color: color.ink }]} numberOfLines={1}>
             {track.title}
           </Text>
           {inline ? null : (

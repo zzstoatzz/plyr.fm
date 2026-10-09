@@ -37,10 +37,25 @@ text role at 4.5:1 (7:1 in increased contrast) on every ground.
 The accent is the web's default `#6a9fff` in dark mode. The web lets listeners
 pick their own accent; the app will follow that preference once it can sign in.
 
+## type
+
+Comic Neue, regular and bold, bundled through the `expo-font` config plugin and
+applied by every style in `src/type.ts`. The web offers comic sans as a font
+choice; Comic Neue is the same voice drawn to stay readable at small sizes, and
+iOS ships no Comic Sans. Sizes run a point above the system defaults because its
+letters are narrower and lighter than San Francisco's.
+
+- Bold is the real bold file, named by its PostScript name, never a synthesized one.
+- Text scales with Dynamic Type.
+- Times and durations use the system face with tabular figures: Comic Neue has
+  none, and a scrubber whose digits change width jitters.
+- Navigation titles and tab labels take the family too; the search field stays
+  the system's.
+
 ## structure
 
-- **Rows**: 48 pt artwork at the 20 pt inset, a 12 pt gap, then title (16 pt
-  semibold) and artist (13 pt muted). Text starts at `column` in `theme.ts`.
+- **Rows**: 48 pt artwork at the 20 pt inset, a 12 pt gap, then title (17 pt
+  bold) and artist (14 pt muted). Text starts at `column` in `theme.ts`.
 - **Playing** is the accent title plus a waveform glyph, never color alone.
 - **Locked** (gated) rows stay readable at reduced opacity, say who can listen,
   and carry a lock glyph; VoiceOver hears the same words.
@@ -50,6 +65,6 @@ pick their own accent; the app will follow that preference once it can sign in.
 ## accessibility
 
 - Every control has a label; rows read "title, by artist" with a hint.
-- System font only, body text never capped, tabular figures for times.
+- Body text never capped, tabular figures for times.
 - Targets are at least 44 pt (or a hit slop out to 44 pt).
 - No decorative motion.

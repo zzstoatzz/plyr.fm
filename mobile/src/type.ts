@@ -1,11 +1,18 @@
 import { StyleSheet } from "react-native";
 
+/** Comic Neue, bundled through the expo-font plugin: the web's comic sans choice, in a face drawn to stay readable. */
+export const font = { regular: "ComicNeue-Regular", bold: "ComicNeue-Bold" } as const;
+
+// each weight is named by its own file: asking the family for a weight does not find the bold face
 export const type = StyleSheet.create({
-  title: { fontSize: 22, fontWeight: "700", letterSpacing: -0.3 },
-  section: { fontSize: 20, fontWeight: "600", letterSpacing: -0.2 },
-  row: { fontSize: 16, fontWeight: "600" },
-  body: { fontSize: 16 },
-  secondary: { fontSize: 14 },
-  meta: { fontSize: 13 },
-  numeric: { fontVariant: ["tabular-nums"] },
+  title: { fontFamily: font.bold, fontSize: 24 },
+  section: { fontFamily: font.bold, fontSize: 21 },
+  row: { fontFamily: font.bold, fontSize: 17 },
+  body: { fontFamily: font.regular, fontSize: 17 },
+  secondary: { fontFamily: font.regular, fontSize: 15 },
+  meta: { fontFamily: font.regular, fontSize: 14 },
+  badge: { fontFamily: font.bold, fontSize: 12 },
+  strong: { fontFamily: font.bold },
+  // Comic Neue has no tabular figures, so times stay in the system face, where digits hold their width
+  numeric: { fontFamily: "System", fontVariant: ["tabular-nums"] },
 });

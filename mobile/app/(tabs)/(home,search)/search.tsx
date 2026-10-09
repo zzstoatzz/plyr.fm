@@ -45,7 +45,7 @@ export default function Search() {
       case "artist":
         return open({ artist: result.handle });
       case "album":
-        return open({ artist: result.artist_handle });
+        return open({ album: { handle: result.artist_handle, slug: result.slug } });
       case "tag":
         return open({ tag: result.name });
       case "playlist":

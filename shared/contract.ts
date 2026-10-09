@@ -111,6 +111,7 @@ export const Artist = z.object({
   display_name: z.string(),
   bio: nullableString,
   avatar_url: nullableString,
+  support_url: nullableString.optional(),
 });
 export type Artist = z.infer<typeof Artist>;
 
@@ -131,6 +132,35 @@ export const Playlist = z.object({
   image_url: nullableString,
 });
 export type Playlist = z.infer<typeof Playlist>;
+
+/** A playlist as lists show it; `GET /lists/playlists/by-artist/{did}` serves these. */
+export const PlaylistSummary = z.object({
+  id: z.string(),
+  name: z.string(),
+  owner_handle: z.string(),
+  track_count: z.number().int(),
+  image_url: nullableString.optional(),
+});
+export type PlaylistSummary = z.infer<typeof PlaylistSummary>;
+
+// the album routes are not in client-api.json, so nothing checks these two against a baseline;
+// they follow backend/src/backend/api/albums/schemas.py (ArtistAlbumListItem, AlbumMetadata)
+export const ArtistAlbum = z.object({
+  id: z.string(),
+  title: z.string(),
+  slug: z.string(),
+  track_count: z.number().int(),
+  total_plays: z.number().int(),
+  image_url: nullableString,
+});
+export type ArtistAlbum = z.infer<typeof ArtistAlbum>;
+
+export const AlbumMetadata = ArtistAlbum.extend({
+  description: nullableString.optional(),
+  artist: z.string(),
+  artist_handle: z.string(),
+});
+export type AlbumMetadata = z.infer<typeof AlbumMetadata>;
 
 /** A JSON body as decoded off the wire, before a schema accepts it. */
 export type Body = unknown;
@@ -220,4 +250,23 @@ export function parsePlaylist(body: Body, onReject?: (error: z.ZodError) => void
   const playlist = Playlist.parse(body);
   const { tracks } = z.object({ tracks: z.array(z.unknown()) }).parse(body);
   return { playlist, tracks: acceptEach(Track, tracks, onReject) };
+}
+
+/** `GET /lists/playlists/by-artist/{did}` — a bare list of the playlists an artist shows on their profile. */
+export function parsePlaylists(body: Body, onReject?: (error: z.ZodError) => void): PlaylistSummary[] {
+  return acceptEach(PlaylistSummary, body, onReject);
+}
+
+/** `GET /albums/{handle}`. */
+export function parseArtistAlbums(body: Body, onReject?: (error: z.ZodError) => void): ArtistAlbum[] {
+  const { albums } = z.object({ albums: z.array(z.unknown()) }).parse(body);
+  return acceptEach(ArtistAlbum, albums, onReject);
+}
+
+export type AlbumWithTracks = { album: AlbumMetadata; tracks: Track[] };
+
+/** `GET /albums/{handle}/{slug}`. */
+export function parseAlbum(body: Body, onReject?: (error: z.ZodError) => void): AlbumWithTracks {
+  const page = z.object({ metadata: AlbumMetadata, tracks: z.array(z.unknown()) }).parse(body);
+  return { album: page.metadata, tracks: acceptEach(Track, page.tracks, onReject) };
 }
