@@ -95,9 +95,9 @@ export default function Player() {
             </View>
           </View>
           <View style={styles.controls}>
-            <TransportButton symbol="backward.fill" label="previous track" size={30} onPress={previous} />
+            <TransportButton symbol="backward.fill" label="previous track" size={30} feedback="tap" onPress={previous} />
             <PlayPause size={44} />
-            <TransportButton symbol="forward.fill" label="next track" size={30} disabled={!canNext} onPress={next} />
+            <TransportButton symbol="forward.fill" label="next track" size={30} disabled={!canNext} feedback="tap" onPress={next} />
           </View>
           <View style={styles.controls}>
             <TransportButton
@@ -106,6 +106,7 @@ export default function Player() {
               size={20}
               tint={repeat === "one" ? color.accent : color.muted}
               selected={repeat === "one"}
+              feedback="selection"
               onPress={toggleRepeat}
             />
             <RoutePicker tint={color.muted} activeTint={color.accent} style={styles.route} />

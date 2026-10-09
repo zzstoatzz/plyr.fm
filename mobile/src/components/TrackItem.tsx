@@ -6,6 +6,7 @@ import { listeningLabel } from "plyr-shared/playback";
 import { haptic } from "@/haptics";
 import { useOpen } from "@/nav";
 import { canPlay, usePlayer } from "@/player/PlayerProvider";
+import { showQueueBanner } from "@/queueBanner";
 import { TrackRow } from "./TrackRow";
 
 /** What sits under the title: who made it, or, where the screen already says who, its album or its plays. */
@@ -41,6 +42,7 @@ export function TrackItem({ tracks, index, line = "artist", label = null }: Prop
             onPress={() => {
               player.playNext(track);
               haptic.success();
+              showQueueBanner(`queued ${track.title}`, "text.line.first.and.arrowtriangle.forward");
             }}
           />
         ) : null}
@@ -51,6 +53,7 @@ export function TrackItem({ tracks, index, line = "artist", label = null }: Prop
             onPress={() => {
               player.addToQueue(track);
               haptic.success();
+              showQueueBanner(`queued ${track.title}`, "text.line.last.and.arrowtriangle.forward");
             }}
           />
         ) : null}

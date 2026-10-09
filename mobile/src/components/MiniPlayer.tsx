@@ -35,7 +35,7 @@ export function MiniPlayer() {
         </View>
       </Pressable>
       <PlayPause size={20} />
-      <TransportButton symbol="forward.fill" label="next track" size={20} disabled={!canNext} onPress={next} />
+      <TransportButton symbol="forward.fill" label="next track" size={20} disabled={!canNext} feedback="tap" onPress={next} />
     </View>
   );
 }

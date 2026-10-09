@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useEffectEvent, useMemo, useRef, useState, type RefObject } from "react";
 import type { AudioTagHandle } from "react-native-audio-api";
+import { haptic } from "@/haptics";
 import { useSleepActivity } from "./useSleepActivity";
 import { extended, FADE_MS, SLEEP_EXTENSION_MINUTES, sleepIn, sleepVolume, type Sleep } from "./sleep";
 
@@ -63,8 +64,14 @@ export function useSleepTimer(audio: RefObject<AudioTagHandle | null>, trackLeft
   }, [sleep, audio]);
 
   const [actions] = useState(() => ({
-    sleepAfter: (minutes: number) => setSleep(sleepIn(minutes, Date.now())),
-    sleepAtTrackEnd: () => setSleep({ kind: "track" }),
+    sleepAfter: (minutes: number) => {
+      haptic.success();
+      setSleep(sleepIn(minutes, Date.now()));
+    },
+    sleepAtTrackEnd: () => {
+      haptic.success();
+      setSleep({ kind: "track" });
+    },
     extendSleep: () => setSleep((running) => (running ? extended(running, SLEEP_EXTENSION_MINUTES, Date.now()) : running)),
     cancelSleep: () => setSleep(null),
   }));

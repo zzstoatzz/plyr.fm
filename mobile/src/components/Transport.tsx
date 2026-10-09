@@ -1,14 +1,28 @@
 import { SymbolView, type SFSymbol } from "expo-symbols";
 import { ActivityIndicator, Pressable, StyleSheet, type ColorValue } from "react-native";
+import { haptic, type Feedback } from "@/haptics";
 import { usePlayer } from "@/player/PlayerProvider";
 import { color } from "@/theme";
 
-type ButtonProps = { symbol: SFSymbol; label: string; size: number; disabled?: boolean; selected?: boolean; tint?: ColorValue; onPress: () => void };
+type ButtonProps = {
+  symbol: SFSymbol;
+  label: string;
+  size: number;
+  disabled?: boolean;
+  selected?: boolean;
+  tint?: ColorValue;
+  /** Felt as the press lands, for a control whose effect is heard or elsewhere on screen. */
+  feedback?: Feedback;
+  onPress: () => void;
+};
 
-export function TransportButton({ symbol, label, size, disabled = false, selected, tint = color.ink, onPress }: ButtonProps) {
+export function TransportButton({ symbol, label, size, disabled = false, selected, tint = color.ink, feedback, onPress }: ButtonProps) {
   return (
     <Pressable
-      onPress={onPress}
+      onPress={() => {
+        if (feedback) haptic[feedback]();
+        onPress();
+      }}
       disabled={disabled}
       accessibilityRole="button"
       accessibilityLabel={label}
@@ -26,7 +40,7 @@ export function PlayPause({ size }: { size: number }) {
   const { status, toggle } = usePlayer();
   if (status === "loading") return <ActivityIndicator color={color.ink} style={{ minWidth: 44, minHeight: Math.max(44, size) }} accessibilityLabel="loading" />;
   const playing = status === "playing" || status === "buffering";
-  return <TransportButton symbol={playing ? "pause.fill" : "play.fill"} label={playing ? "pause" : "play"} size={size} onPress={toggle} />;
+  return <TransportButton symbol={playing ? "pause.fill" : "play.fill"} label={playing ? "pause" : "play"} size={size} feedback="tap" onPress={toggle} />;
 }
 
 const styles = StyleSheet.create({

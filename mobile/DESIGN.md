@@ -145,6 +145,11 @@ key-value store) and comes back on launch, paused, at the saved position.
 
 - Holding a track anywhere offers play next, add to queue, go to artist and go
   to album, through the router's native link menu.
+- Queueing a track shows the **queue banner** (`QueueBanner`): a glass pill
+  just above the mini player reading "queued <title>", the web's wording, with
+  the glyph of the action taken. iOS has no system toast; this is ours, drawn
+  with the system's glass. One at a time, gone after 1.8 s, and tapping it
+  opens the queue. VoiceOver hears it; with Reduce Motion it fades.
 - The queue is a sheet over the player: a system list, so reordering is a drag,
   removing is a swipe, and VoiceOver gets the list's own move and delete actions.
 - Rows are the app's track row: 48 pt artwork at the 20 pt inset, no rules
@@ -215,6 +220,20 @@ and the glyph turns accent while audio is going somewhere other than the phone.
 - The button and its sheet are the system's; nothing about them is drawn here.
 - The simulator has no AirPlay receivers. Routing to a speaker or TV is checked
   on a phone.
+
+## haptics
+
+By what happened, in `src/haptics.ts`, and only where a control of ours does
+something the finger cannot see. Light and sparing.
+
+| feedback | when |
+|---|---|
+| tap (light impact) | play, pause, next, previous |
+| selection | repeat toggled, a tag filter toggled, a queue row dropped |
+| success | a track queued (once, with the banner), a sleep timer set |
+
+Nothing is added to system controls: the tab bar, the scrubber, pull to
+refresh and menus keep whatever iOS gives them.
 
 ## accessibility
 

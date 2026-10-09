@@ -4,6 +4,7 @@ import { StatusBar } from "expo-status-bar";
 import * as SystemUI from "expo-system-ui";
 import { useEffect, type ReactNode } from "react";
 import { useColorScheme } from "react-native";
+import { QueueBanner } from "@/components/QueueBanner";
 import { palette } from "@/palette";
 import { PlayerProvider } from "@/player/PlayerProvider";
 import { QueryProvider } from "@/query";
@@ -79,6 +80,7 @@ export default function RootLayout() {
               }}
             />
           </Stack>
+          <QueueBanner />
         </PlayerProvider>
       </QueryProvider>
     </NavigationTheme>

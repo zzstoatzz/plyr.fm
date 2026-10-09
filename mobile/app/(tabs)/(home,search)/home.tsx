@@ -8,6 +8,7 @@ import { TagChips } from "@/components/TagChips";
 import { TopTracks } from "@/components/TopTracks";
 import { TrackItem } from "@/components/TrackItem";
 import { useLatestTracks, usePopularTags } from "@/data";
+import { haptic } from "@/haptics";
 import { tabBarScroll } from "@/tabBar";
 import { color, inset } from "@/theme";
 import { type } from "@/type";
@@ -22,7 +23,10 @@ export default function Home() {
   const tracks = useMemo(() => latest.data?.pages.flatMap((p) => p.tracks) ?? [], [latest.data]);
   const chips = useMemo(() => orderTags(popular.data ?? [], tags), [popular.data, tags]);
 
-  const toggle = (name: string) => setTags((now) => (now.includes(name) ? now.filter((t) => t !== name) : [...now, name]));
+  const toggle = (name: string) => {
+    haptic.selection();
+    setTags((now) => (now.includes(name) ? now.filter((t) => t !== name) : [...now, name]));
+  };
 
   const refresh = () => {
     void client.invalidateQueries({ queryKey: ["top"] });
