@@ -47,6 +47,56 @@ plyr.fm should become:
 
 ### October 2026
 
+#### an iOS app, still an experiment (draft #2133, October 7–9 — TestFlight 0.1.0 (5))
+
+a native client in `mobile/` (Expo, React Native) with the pure-TS API
+contract, queue and playback rules in `shared/` so the web and the app can be
+tested against the same logic. it is read-only: no sign-in yet, so gated
+tracks show as locked. it lives on the draft PR, not `main`, and nothing about
+it is committed to — but early use on a real phone has been encouraging.
+
+what is on TestFlight in build 5 (October 9): home with top tracks and tag
+filters, multi-entity search, artist, album, tag and playlist pages, mp3/m4a
+and wav/flac playback (lossless downloads fully before it plays), background
+audio and lock-screen controls, a local queue that never touches the server,
+an up-next Live Activity in the Dynamic Island and on the lock screen, and
+AirPlay. the AirPlay route and the island were only judgeable on a phone.
+
+pushed to the PR since build 5, with builds 6–8 still going through EAS:
+song switching went from 2.5–3.4 s to about 20 ms by preloading the next
+queued track (mixes over 40 MB excepted), and a cold tap from 0.8–2.5 s to
+450–750 ms; the rest of a cold tap is server-side (the audio URL call, and
+mp3s without a header costing 3–4 range requests per open). also a glass
+scrubber the player sheet can't steal, the description behind an info
+button, the web's playing line on the player's edge, and a lock-screen
+update crash fix. **next**: infinite scroll on home and search, then sign-in
+(OAuth the way birds.place does it).
+
+#### in-browser EQ, the embeds, and top tracks (#2132, #2134, #2136, #2137, October 7–9 — frontend on prod)
+
+- **EQ** (#2134): a 10-band graphic equalizer on Web Audio biquads, chained
+  off the existing player element, with a draggable response curve, six
+  presets and auto headroom. it is opt-in under settings → experimental, kept
+  per browser, and disabled on iPhone and iPad because WebKit stops a routed
+  element when the screen locks. routing is lazy, so nothing changes for
+  anyone who never turns it on; once on, every source must load
+  CORS-readable. public audio already is; gated audio can't follow a redirect
+  with cookies, so the player asks for `?cors=1` and the backend proxies
+  those bytes. that backend half ships with the next backend release —
+  until then the EQ on prod covers public audio only
+- **firehose in the radio embed** (#2136): the embed never read `state.live`,
+  so on firehose it played the archived rotation or showed "no tracks in
+  rotation yet". it now attaches the live HLS stream via hls.js like the app
+  does, and falls back to the rotation when the broadcast drops
+- **track embed in near-square frames** (#2137): a phone-width ~1:1 iframe
+  missed the stacked breakpoint and rendered a small row in empty space. it
+  stacks up to 6:5 like the radio embed, and row artwork grows with the frame
+- **top tracks on an empty month** (#2132): #2108 pinned the period to month
+  and dropped the fallback, so an environment with no likes in 30 days (stg)
+  lost the section and its toggle. it now renders with an empty list so the
+  period can still be cycled. the same PR dropped the agent rule that held PRs
+  local until authorized
+
 #### the review queue got its first decisions (October 2 — no code)
 
 The queue had 76 open items and no human call on any of them. A read-only
@@ -485,7 +535,9 @@ see the [contributing guide](https://docs.plyr.fm/contributing/) for setup instr
 
 ---
 
-this is a living document. last updated 2026-10-02: the review queue's first
+this is a living document. last updated 2026-10-09: the iOS app written up as
+an experiment (draft #2133, TestFlight build 5); the EQ, radio and track
+embed and top-tracks fixes (#2132–#2137). previously 2026-10-02: the review queue's first
 decisions (76 → 33 open), the never-scanned tracks worked through, #2123 filed;
 earlier the same day: spaces credentials signed per
 the current permissioned-data branch, unmirrored-track ingest fixed (#2121, #2122);
