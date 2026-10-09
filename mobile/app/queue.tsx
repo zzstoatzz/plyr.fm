@@ -34,6 +34,7 @@ import { haptic } from "@/haptics";
 import { canPlay, usePlayer } from "@/player/PlayerProvider";
 import { color, inset, radius, thumb } from "@/theme";
 import { font as face, type } from "@/type";
+import { useAccent } from "@/settings";
 
 // a row as the rest of the app draws one: artwork at the inset, no rule between rows
 const plain = [listRowBackground(color.canvas), listRowSeparator("hidden"), listRowInsets({ top: 8, bottom: 8, leading: inset, trailing: inset })];
@@ -47,6 +48,7 @@ const role = {
 };
 
 export default function Queue() {
+  const { accent } = useAccent();
   const player = usePlayer();
   const router = useRouter();
   const { queue, track } = player;
@@ -63,14 +65,14 @@ export default function Queue() {
           title: "queue",
           headerRight: () => (
             <Pressable onPress={() => router.dismiss()} accessibilityRole="button" hitSlop={12}>
-              <PlainText style={[type.body, type.strong, { color: color.accent }]}>done</PlainText>
+              <PlainText style={[type.body, type.strong, { color: accent }]}>done</PlainText>
             </Pressable>
           ),
         }}
       />
       {track ? (
-        <Host style={styles.fill} seedColor={color.accent}>
-          <List modifiers={[listStyle("plain"), listSectionSpacing(12), scrollContentBackground("hidden"), tint(color.accent)]}>
+        <Host style={styles.fill} seedColor={accent}>
+          <List modifiers={[listStyle("plain"), listSectionSpacing(12), scrollContentBackground("hidden"), tint(accent)]}>
             <Section header={<Heading title="now playing" />}>
               <Row track={track} current modifiers={[moveDisabled(), deleteDisabled()]} />
             </Section>
@@ -161,6 +163,7 @@ function Note({ children }: { children: string }) {
 type RowProps = { track: Track; current?: boolean; onPress?: () => void; modifiers?: React.ComponentProps<typeof HStack>["modifiers"] };
 
 function Row({ track, current = false, onPress, modifiers = [] }: RowProps) {
+  const { accent } = useAccent();
   const by = credits(track);
   const playable = canPlay(track);
   const state = current ? ", now playing" : playable ? "" : ", can’t play here";
@@ -182,7 +185,7 @@ function Row({ track, current = false, onPress, modifiers = [] }: RowProps) {
         <Artwork url={trackThumbnailUrl(track)} size={thumb} width={IMAGE_WIDTHS.thumb} radius={radius.art} />
       </RNHostView>
       <VStack alignment="leading" spacing={2}>
-        <Text modifiers={[role.row, foregroundStyle(current ? color.accent : playable ? color.ink : color.muted), lineLimit(1)]}>{track.title}</Text>
+        <Text modifiers={[role.row, foregroundStyle(current ? accent : playable ? color.ink : color.muted), lineLimit(1)]}>{track.title}</Text>
         <Text modifiers={[role.meta, foregroundStyle(color.muted), lineLimit(1)]}>{by}</Text>
       </VStack>
       <Spacer />

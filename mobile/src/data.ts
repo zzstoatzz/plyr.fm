@@ -15,6 +15,7 @@ import {
   type Track,
 } from "plyr-shared/contract";
 import { SEARCH_MIN_LENGTH } from "plyr-shared/search";
+import { hidesDefaultTags, isHidden, type Settings } from "plyr-shared/settings";
 import { TAG_FILTER_LIMIT } from "plyr-shared/tags";
 import { CHART_PERIODS, TOP_CHART_LIMIT, TOP_TRACKS_LIMIT, topTracksQuery, type TopPeriod } from "plyr-shared/top";
 import { getJSON } from "./api";
@@ -36,20 +37,28 @@ export function useCharts(depth: number) {
   return useQueries({ queries: CHART_PERIODS.map((period, i) => ({ ...topTracks(period, TOP_CHART_LIMIT), enabled: i < depth })) });
 }
 
-function tracksPath(params: { tags?: readonly string[]; artistDid?: string; cursor: string | null }): string {
+function tracksPath(params: { tags?: readonly string[]; artistDid?: string; cursor: string | null; unfiltered?: boolean }): string {
   const pairs: [string, string][] = (params.tags ?? []).map((tag) => ["tags", tag]);
   if (params.artistDid) pairs.push(["artist_did", params.artistDid]);
+  if (params.unfiltered) pairs.push(["filter_hidden_tags", "false"]);
   if (params.cursor) pairs.push(["cursor", params.cursor]);
   const qs = pairs.map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join("&");
   return qs ? `/tracks/?${qs}` : "/tracks/";
 }
 
-/** The discovery feed, newest first; `tags` narrows it to tracks carrying any of them. */
-export function useLatestTracks(tags: readonly string[] = []) {
+/**
+ * The discovery feed, newest first; `tags` narrows it to tracks carrying any of them. Signed out, the server hides
+ * its default tags; a listener with a list of their own gets the feed unfiltered and it is filtered here.
+ */
+export function useLatestTracks(tags: readonly string[], settings: Settings) {
+  const own = !hidesDefaultTags(settings);
   return useInfiniteQuery({
-    queryKey: ["latest", [...tags].sort()],
+    queryKey: ["latest", [...tags].sort(), own ? [...settings.hidden_tags].sort() : null],
     initialPageParam: null as string | null,
-    queryFn: ({ pageParam, signal }) => getJSON(tracksPath({ tags, cursor: pageParam }), (b) => parseTrackPage(b, report("track")), signal),
+    queryFn: async ({ pageParam, signal }) => {
+      const page = await getJSON(tracksPath({ tags, cursor: pageParam, unfiltered: own }), (b) => parseTrackPage(b, report("track")), signal);
+      return own ? { ...page, tracks: page.tracks.filter((track) => !isHidden(settings, track.tags)) } : page;
+    },
     getNextPageParam: (page) => (page.hasMore ? page.nextCursor : null),
   });
 }

@@ -36,18 +36,46 @@ export function mix(over: string, under: string, amount: number): string {
   return `#${[16, 8, 0].map((shift) => blend(shift).toString(16).padStart(2, "0")).join("")}`.toUpperCase();
 }
 
-const accented = (change: (hex: string, mode: Mode) => string): Variants => {
-  const [light, dark, highContrastLight, highContrastDark] = MODES.map((mode) => change(palette.accent[mode], mode));
+const each = (pick: (mode: Mode) => string): Variants => {
+  const [light, dark, highContrastLight, highContrastDark] = MODES.map(pick);
   return { light, dark, highContrastLight, highContrastDark };
 };
 
-const tinted = (amount: number): Variants => accented((hex, mode) => mix(hex, palette.surface[mode], amount));
+/** Everything drawn in the accent, per mode: the color itself, the web's 15% and 40% tints over a card, and the playing edge line. */
+export type Accent = { accent: Variants; tintFill: Variants; tintBorder: Variants; edge: Variants };
 
-// the web's support button: accent at 15% for the fill and 40% for the edge, over the profile card
-export const tint = { fill: tinted(0.15), border: tinted(0.4) } satisfies Record<string, Variants>;
+function around(accent: Variants): Accent {
+  return {
+    accent,
+    // the web's support button: accent at 15% for the fill and 40% for the edge, over the profile card
+    tintFill: each((mode) => mix(accent[mode], palette.surface[mode], 0.15)),
+    tintBorder: each((mode) => mix(accent[mode], palette.surface[mode], 0.4)),
+    // the web player's top edge line while playing: the accent through its filter
+    edge: each((mode) => filtered(accent[mode], TOP_BAR.playing)),
+  };
+}
 
-// the web player's top edge line while playing: the accent through its filter
-export const edge = accented((hex) => filtered(hex, TOP_BAR.playing));
+const GROUNDS = ["canvas", "surface", "raised"] as const satisfies readonly Role[];
+const STEP = 0.04;
+
+/** `hex` moved toward the mode's ink until it reads as text on every ground and on its own tinted fill. */
+function legible(hex: string, mode: Mode): string {
+  const floor = mode.startsWith("highContrast") ? 7 : 4.5;
+  const reads = (candidate: string) =>
+    [...GROUNDS.map((ground) => palette[ground][mode]), mix(candidate, palette.surface[mode], 0.15)].every((ground) => contrast(candidate, ground) >= floor);
+  let candidate = hex.toUpperCase();
+  for (let toward = STEP; !reads(candidate) && toward <= 1; toward += STEP) candidate = mix(palette.ink[mode], hex, toward);
+  return candidate;
+}
+
+const DEFAULT_ACCENT = around(palette.accent);
+
+/** The accent a listener chose (one of the web's presets, which are picked for dark grounds), made readable in every mode; `null` is the app's own. */
+export function accentFor(chosen: string | null): Accent {
+  return chosen ? around(each((mode) => legible(chosen, mode))) : DEFAULT_ACCENT;
+}
+
+export const tint = { fill: DEFAULT_ACCENT.tintFill, border: DEFAULT_ACCENT.tintBorder } satisfies Record<string, Variants>;
 
 const channel = (value: number) => {
   const c = value / 255;

@@ -18,13 +18,15 @@ type Props = {
   refreshing?: boolean;
   onRefresh?: () => void;
   pages?: Paged;
+  /** An album or a playlist, where "play through collections" applies. */
+  collection?: boolean;
   line?: TrackLine;
   /** What a track tapped here continues as: "next from: label". */
   label?: string | null;
 };
 
 /** A detail screen that is mostly a track list: artist, album, tag, playlist. */
-export function TrackListScreen({ title, header, tracks, pending, error, empty, refreshing = false, onRefresh, pages, line, label }: Props) {
+export function TrackListScreen({ title, header, tracks, pending, error, empty, refreshing = false, onRefresh, pages, collection, line, label }: Props) {
   const [onScroll] = useState(tabBarScroll);
   return (
     <>
@@ -39,7 +41,7 @@ export function TrackListScreen({ title, header, tracks, pending, error, empty, 
         onEndReached={pages ? () => loadMore(pages) : undefined}
         onEndReachedThreshold={END_THRESHOLD}
         ListHeaderComponent={header}
-        renderItem={({ index }) => <TrackItem tracks={tracks} index={index} line={line} label={label} />}
+        renderItem={({ index }) => <TrackItem tracks={tracks} index={index} line={line} label={label} collection={collection} />}
         ListEmptyComponent={
           pending ? (
             <ActivityIndicator style={styles.state} color={color.muted} />

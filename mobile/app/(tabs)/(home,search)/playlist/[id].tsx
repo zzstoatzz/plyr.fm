@@ -25,6 +25,7 @@ export default function PlaylistScreen() {
       }
       tracks={tracks}
       label={meta?.name}
+      collection
       pending={playlist.isPending}
       error={playlist.isError}
       empty="this playlist is empty."

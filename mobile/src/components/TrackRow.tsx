@@ -5,6 +5,7 @@ import { color, inset, radius, thumb } from "@/theme";
 import { type } from "@/type";
 import { Artwork } from "./Artwork";
 import { Levels } from "./Levels";
+import { useAccent } from "@/settings";
 
 type Props = {
   title: string;
@@ -20,6 +21,7 @@ type Props = {
 
 /** Extra props come from the link that carries the row's menu; its press is dropped, so a tap only plays. */
 export function TrackRow({ title, artist, artwork, active = false, locked = null, onPlay, onArtist, ...link }: Props & Omit<PressableProps, keyof Props | "children" | "style">) {
+  const { accent } = useAccent();
   const byline = locked ? `${artist} · ${locked}` : artist;
   return (
     <Pressable
@@ -38,7 +40,7 @@ export function TrackRow({ title, artist, artwork, active = false, locked = null
         <Artwork url={artwork} size={thumb} width={IMAGE_WIDTHS.thumb} radius={radius.art} />
       </View>
       <View style={[styles.text, locked ? styles.quiet : null]}>
-        <Text style={[type.row, { color: active ? color.accent : color.ink }]} numberOfLines={1}>
+        <Text style={[type.row, { color: active ? accent : color.ink }]} numberOfLines={1}>
           {title}
         </Text>
         {onArtist ? (
@@ -51,7 +53,7 @@ export function TrackRow({ title, artist, artwork, active = false, locked = null
             style={styles.artist}
           >
             {({ pressed }) => (
-              <Text style={[type.meta, { color: pressed ? color.accent : color.muted }]} numberOfLines={1}>
+              <Text style={[type.meta, { color: pressed ? accent : color.muted }]} numberOfLines={1}>
                 {byline}
               </Text>
             )}

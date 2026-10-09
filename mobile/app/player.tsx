@@ -16,8 +16,10 @@ import { color, inset, radius } from "@/theme";
 import { type } from "@/type";
 import { RoutePicker } from "../modules/route-picker";
 import { SheetGuard } from "../modules/sheet-guard";
+import { useAccent } from "@/settings";
 
 export default function Player() {
+  const { accent } = useAccent();
   const { track, queue, repeat, status, canNext, next, previous, seek, toggleRepeat } = usePlayer();
   const { position, duration } = useProgress();
   const { width } = useWindowDimensions();
@@ -52,7 +54,7 @@ export default function Player() {
           </Text>
           <Pressable onPress={() => leaveFor({ artist: track.artist_handle })} accessibilityRole="link" accessibilityHint="opens the artist" hitSlop={8} style={styles.link}>
             {({ pressed }) => (
-              <Text style={[type.body, { color: color.accent, opacity: pressed ? 0.6 : 1 }]} numberOfLines={1}>
+              <Text style={[type.body, { color: accent, opacity: pressed ? 0.6 : 1 }]} numberOfLines={1}>
                 {credits(track)}
               </Text>
             )}
@@ -66,7 +68,7 @@ export default function Player() {
               style={styles.link}
             >
               {({ pressed }) => (
-                <Text style={[type.meta, { color: color.accent, opacity: pressed ? 0.6 : 1 }]} numberOfLines={1}>
+                <Text style={[type.meta, { color: accent, opacity: pressed ? 0.6 : 1 }]} numberOfLines={1}>
                   {album.title}
                 </Text>
               )}
@@ -104,12 +106,12 @@ export default function Player() {
               symbol={repeat === "one" ? "repeat.1" : "repeat"}
               label={repeat === "one" ? "stop repeating" : "repeat this track"}
               size={20}
-              tint={repeat === "one" ? color.accent : color.muted}
+              tint={repeat === "one" ? accent : color.muted}
               selected={repeat === "one"}
               feedback="selection"
               onPress={toggleRepeat}
             />
-            <RoutePicker tint={color.muted} activeTint={color.accent} style={styles.route} />
+            <RoutePicker tint={color.muted} activeTint={accent} style={styles.route} />
             <TransportButton
               symbol="list.bullet"
               label={queued ? `queue, ${queued} up next` : "queue"}

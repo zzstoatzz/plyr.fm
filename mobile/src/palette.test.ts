@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { contrast, mix, palette, tint, type Mode, type Role } from "./palette";
+import { ACCENT_PRESETS } from "plyr-shared/settings";
+import { accentFor, contrast, mix, palette, tint, type Mode, type Role } from "./palette";
 
 const modes: Mode[] = ["light", "dark", "highContrastLight", "highContrastDark"];
 const grounds: Role[] = ["canvas", "surface", "raised"];
@@ -33,4 +34,30 @@ describe("accent tint", () => {
       expect(contrast(palette.accent[mode], tint.fill[mode])).toBeGreaterThanOrEqual(floor);
     });
   }
+});
+
+describe("a chosen accent", () => {
+  test("no choice is the app's own accent", () => {
+    expect(accentFor(null).accent).toEqual(palette.accent);
+  });
+
+  for (const preset of ACCENT_PRESETS) {
+    const chosen = accentFor(preset.value);
+    for (const mode of modes) {
+      const floor = mode.startsWith("highContrast") ? 7 : 4.5;
+      test(`${preset.name} reads as text in ${mode}`, () => {
+        for (const bg of grounds) expect(contrast(chosen.accent[mode], palette[bg][mode])).toBeGreaterThanOrEqual(floor);
+        expect(contrast(chosen.accent[mode], chosen.tintFill[mode])).toBeGreaterThanOrEqual(floor);
+      });
+      test(`a label reads on ${preset.name} in ${mode}`, () => {
+        expect(contrast(palette.onAccent[mode], chosen.accent[mode])).toBeGreaterThanOrEqual(4.5);
+      });
+    }
+  }
+
+  test("presets that already read on dark grounds are kept exactly; red is lifted just enough", () => {
+    const kept = ACCENT_PRESETS.filter((preset) => accentFor(preset.value).accent.dark === preset.value.toUpperCase()).map((preset) => preset.name);
+    expect(kept).toEqual(["blue", "purple", "pink", "green", "orange"]);
+    expect(accentFor("#ef4444").accent.dark).toBe("#EE5858");
+  });
 });

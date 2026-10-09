@@ -9,6 +9,7 @@ import { useTabBarHidden } from "@/tabBar";
 import { color } from "@/theme";
 import { dismissQueueBanner, useQueueBanner } from "@/queueBanner";
 import { font as face } from "@/type";
+import { useAccent } from "@/settings";
 
 // what sits under the banner, from the home indicator up: the tab bar, then the mini player
 const TAB_BAR = 62;
@@ -19,6 +20,7 @@ const label = font({ family: face.bold, size: 15, textStyle: "subheadline" });
 
 /** "queued …": a glass pill just above the mini player, or above whatever is left when that is gone. Tapping it opens the queue. Rendered once, over the tabs. */
 export function QueueBanner() {
+  const { accent } = useAccent();
   const banner = useQueueBanner();
   const router = useRouter();
   const { bottom } = useSafeAreaInsets();
@@ -31,7 +33,7 @@ export function QueueBanner() {
       <Animated.View key={banner.id} entering={FadeInDown.duration(220)} exiting={FadeOut.duration(250)}>
         <Host matchContents>
           <HStack spacing={8} modifiers={[padding({ horizontal: 16, vertical: 11 }), glassEffect({ glass: { variant: "regular" }, shape: "capsule" })]}>
-            <Image systemName={banner.symbol} size={15} color={color.accent} />
+            <Image systemName={banner.symbol} size={15} color={accent} />
             <Text modifiers={[label, foregroundStyle(color.ink), lineLimit(1)]}>{banner.message}</Text>
           </HStack>
         </Host>

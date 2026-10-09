@@ -1,5 +1,5 @@
 import { DynamicColorIOS } from "react-native";
-import { edge, palette, tint } from "./palette";
+import { accentFor, palette, type Accent } from "./palette";
 
 const dynamic = DynamicColorIOS;
 
@@ -11,14 +11,21 @@ export const color = {
   ink: dynamic(palette.ink),
   muted: dynamic(palette.muted),
   border: dynamic(palette.border),
-  accent: dynamic(palette.accent),
   onAccent: dynamic(palette.onAccent),
   danger: dynamic(palette.danger),
-} satisfies Record<keyof typeof palette, ReturnType<typeof DynamicColorIOS>>;
+} satisfies Record<Exclude<keyof typeof palette, "accent">, ReturnType<typeof DynamicColorIOS>>;
 
-export const accentTint = { fill: dynamic(tint.fill), border: dynamic(tint.border) };
+const accents = new Map<string | null, Record<keyof Accent, ReturnType<typeof DynamicColorIOS>>>();
 
-export const edgeLine = dynamic(edge);
+/** The accent colors for a listener's choice, as system colors that follow light, dark and increased contrast. Read through `useAccent`. */
+export function accentColors(chosen: string | null) {
+  const known = accents.get(chosen);
+  if (known) return known;
+  const { accent, tintFill, tintBorder, edge } = accentFor(chosen);
+  const made = { accent: dynamic(accent), tintFill: dynamic(tintFill), tintBorder: dynamic(tintBorder), edge: dynamic(edge) };
+  accents.set(chosen, made);
+  return made;
+}
 
 export const inset = 20;
 export const thumb = 48;

@@ -9,10 +9,12 @@ import { canPlay, usePlayer } from "@/player/PlayerProvider";
 import { color, inset, radius } from "@/theme";
 import { type } from "@/type";
 import { Artwork } from "./Artwork";
+import { useAccent } from "@/settings";
 
 const CARD = 148;
 
 export function TopTracks() {
+  const { accent } = useAccent();
   const [period, setPeriod] = useState<TopPeriod>(DEFAULT_TOP_PERIOD);
   const [cycling, setCycling] = useState(false);
   const client = useQueryClient();
@@ -48,7 +50,7 @@ export function TopTracks() {
           accessibilityHint="shows the next period"
           hitSlop={12}
         >
-          <Text style={[type.secondary, { color: color.accent }]}>{TOP_PERIOD_LABELS[period]}</Text>
+          <Text style={[type.secondary, { color: accent }]}>{TOP_PERIOD_LABELS[period]}</Text>
         </Pressable>
       </View>
       <FlatList
@@ -69,7 +71,7 @@ export function TopTracks() {
               style={({ pressed }) => [styles.card, pressed && { opacity: 0.7 }]}
             >
               <Artwork url={trackCoverUrl(item)} size={CARD} width={IMAGE_WIDTHS.tile} radius={radius.card} />
-              <Text style={[type.secondary, type.strong, styles.title, { color: active ? color.accent : color.ink }]} numberOfLines={1}>
+              <Text style={[type.secondary, type.strong, styles.title, { color: active ? accent : color.ink }]} numberOfLines={1}>
                 {item.title}
               </Text>
               <Pressable
@@ -80,7 +82,7 @@ export function TopTracks() {
                 accessibilityHint="opens the artist"
               >
                 {({ pressed }) => (
-                  <Text style={[type.meta, { color: pressed ? color.accent : color.muted }]} numberOfLines={1}>
+                  <Text style={[type.meta, { color: pressed ? accent : color.muted }]} numberOfLines={1}>
                     {item.artist}
                   </Text>
                 )}

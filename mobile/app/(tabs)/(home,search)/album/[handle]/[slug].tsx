@@ -25,6 +25,7 @@ export default function AlbumScreen() {
         ) : null
       }
       tracks={tracks}
+      collection
       line="plays"
       label={meta?.title}
       pending={album.isPending}

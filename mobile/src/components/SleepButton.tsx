@@ -4,11 +4,13 @@ import { useEffect, useState } from "react";
 import { SLEEP_EXTENSION_MINUTES, SLEEP_MINUTES, sleepChoice, sleepRemaining } from "@/player/sleep";
 import { useSleep } from "@/player/useSleepTimer";
 import { color } from "@/theme";
+import { useAccent } from "@/settings";
 
 const REFRESH_MS = 20_000;
 
 /** The player's sleep timer: a moon that opens a system menu, filled and accent while a timer runs. */
 export function SleepButton() {
+  const { accent } = useAccent();
   const { sleep, sleepAfter, sleepAtTrackEnd, extendSleep, cancelSleep, activityProblem } = useSleep();
   const [now, setNow] = useState(() => Date.now());
 
@@ -24,13 +26,13 @@ export function SleepButton() {
   }, [sleep]);
 
   return (
-    <Host matchContents seedColor={color.accent}>
+    <Host matchContents seedColor={accent}>
       <Menu
         label={
           <Image
             systemName={sleep ? "moon.fill" : "moon"}
             size={20}
-            color={sleep ? color.accent : color.muted}
+            color={sleep ? accent : color.muted}
             modifiers={[frame({ width: 44, height: 44 }), contentShape(shapes.rectangle()), accessibilityLabel(sleep ? "sleep timer, on" : "sleep timer")]}
           />
         }

@@ -1,11 +1,12 @@
 import { Image } from "expo-image";
 import { useLocalSearchParams } from "expo-router";
 import { SymbolView } from "expo-symbols";
+import { resolveClient } from "plyr-shared/atclients";
 import { count } from "plyr-shared/format";
 import { resizedImageUrl } from "plyr-shared/images";
 import { supportUrl } from "plyr-shared/support";
 import { useMemo } from "react";
-import { Linking, StyleSheet, Text, View } from "react-native";
+import { Linking, Pressable, StyleSheet, Text, View } from "react-native";
 import { AlbumShelf } from "@/components/AlbumShelf";
 import { Button } from "@/components/Button";
 import { CollectionRow } from "@/components/CollectionRow";
@@ -13,6 +14,7 @@ import { TrackListScreen } from "@/components/TrackListScreen";
 import { useArtist, useArtistAlbums, useArtistPlaylists, useArtistTracks } from "@/data";
 import { useOpen } from "@/nav";
 import { canPlay, usePlayer } from "@/player/PlayerProvider";
+import { useSettings } from "@/settings";
 import { color, inset, radius } from "@/theme";
 import { type } from "@/type";
 
@@ -26,6 +28,7 @@ export default function ArtistScreen() {
   const playlists = useArtistPlaylists(artist.data?.did);
   const player = usePlayer();
   const open = useOpen();
+  const client = resolveClient(useSettings().ui_settings.atproto_client);
   const tracks = useMemo(() => pages.data?.pages.flatMap((p) => p.tracks) ?? [], [pages.data]);
   const avatar = resizedImageUrl(artist.data?.avatar_url ?? null, AVATAR * 3);
   const support = artist.data ? supportUrl(artist.data) : null;
@@ -44,7 +47,15 @@ export default function ArtistScreen() {
         <Text style={[type.title, { color: color.ink, textAlign: "center" }]} accessibilityRole="header">
           {artist.data.display_name}
         </Text>
-        <Text style={[type.secondary, { color: color.muted }]}>@{artist.data.handle}</Text>
+        <Pressable
+          onPress={() => void Linking.openURL(client.profileUrl(artist.data.handle))}
+          accessibilityRole="link"
+          accessibilityLabel={`@${artist.data.handle}`}
+          accessibilityHint={`opens their profile in ${client.label}`}
+          hitSlop={8}
+        >
+          {({ pressed }) => <Text style={[type.secondary, { color: color.muted, opacity: pressed ? 0.6 : 1 }]}>@{artist.data.handle}</Text>}
+        </Pressable>
         {artist.data.bio ? <Text style={[type.secondary, styles.bio]}>{artist.data.bio}</Text> : null}
         {playable || support ? (
           <View style={styles.actions}>

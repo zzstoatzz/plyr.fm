@@ -1,6 +1,6 @@
 import { StyleSheet } from "react-native";
-import { color } from "@/theme";
 import { NativeScrubber } from "../../modules/scrubber";
+import { useAccent } from "@/settings";
 
 const STEP_SECONDS = 15;
 
@@ -16,13 +16,14 @@ type Props = {
 
 /** The system slider in a strip tall enough to grab without aiming; a touch anywhere on it brings the thumb over. */
 export function Scrubber({ value, max, label, valueText, onChange, onCommit }: Props) {
+  const { accent } = useAccent();
   return (
     <NativeScrubber
       style={styles.strip}
       value={value}
       max={max}
       step={STEP_SECONDS}
-      tint={color.accent}
+      tint={accent}
       label={label}
       valueText={valueText}
       onScrub={(event) => onChange(event.nativeEvent.value)}

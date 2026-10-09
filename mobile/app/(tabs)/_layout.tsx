@@ -5,19 +5,20 @@ import { MiniPlayer } from "@/components/MiniPlayer";
 import { useShownTab } from "@/nav";
 import { usePlayer } from "@/player/PlayerProvider";
 import { showTabBar, useTabBarHidden } from "@/tabBar";
-import { color } from "@/theme";
 import { font } from "@/type";
+import { useAccent } from "@/settings";
 
 export const unstable_settings = { initialRouteName: "(home)" };
 
 export default function TabsLayout() {
+  const { accent } = useAccent();
   const { track } = usePlayer();
   const hidden = useTabBarHidden();
   const pathname = usePathname();
   useShownTab();
   useEffect(showTabBar, [pathname]);
   return (
-    <NativeTabs tintColor={color.accent} hidden={hidden} labelStyle={{ fontFamily: font.bold }}>
+    <NativeTabs tintColor={accent} hidden={hidden} labelStyle={{ fontFamily: font.bold }}>
       <NativeTabs.Trigger name="(home)">
         <NativeTabs.Trigger.Icon sf={{ default: "house", selected: "house.fill" }} />
         <NativeTabs.Trigger.Label>home</NativeTabs.Trigger.Label>

@@ -9,6 +9,7 @@ import { color, inset, radius } from "@/theme";
 import { type } from "@/type";
 import { Artwork } from "./Artwork";
 import { Button } from "./Button";
+import { useAccent } from "@/settings";
 
 const COVER = 180;
 
@@ -24,6 +25,7 @@ type Props = {
 
 /** The top of an album or a playlist: cover, name, whose it is, play, and add to queue as the web offers it. */
 export function CollectionHeader({ cover, title, owner, meta, description, tracks }: Props) {
+  const { accent } = useAccent();
   const open = useOpen();
   const player = usePlayer();
   return (
@@ -33,7 +35,7 @@ export function CollectionHeader({ cover, title, owner, meta, description, track
         {title}
       </Text>
       <Pressable onPress={() => open({ artist: owner.handle })} accessibilityRole="link" accessibilityHint="opens their page" hitSlop={8}>
-        <Text style={[type.secondary, { color: color.accent }]}>{owner.label}</Text>
+        <Text style={[type.secondary, { color: accent }]}>{owner.label}</Text>
       </Pressable>
       <Text style={[type.meta, { color: color.muted }]}>{meta}</Text>
       {description ? <Text style={[type.secondary, styles.description]}>{description}</Text> : null}

@@ -42,8 +42,13 @@ text role at 4.5:1 (7:1 in increased contrast) on every ground.
 | accent (blue) | you can act on this, or it is playing |
 | danger | failed |
 
-The accent is the web's default `#6a9fff` in dark mode. The web lets listeners
-pick their own accent; the app will follow that preference once it can sign in.
+The accent is the web's default `#6a9fff` in dark mode, or one of the web's
+six presets chosen in settings. The presets are picked for dark grounds, so
+`accentFor` in `palette.ts` moves a chosen one toward the ink until it reads as
+text in each mode (light, dark, increased contrast); the contrast test covers
+every preset. Components read the accent through `useAccent()`, never from a
+constant, so a change shows at once. The sleep timer's Live Activity keeps the
+default blue: the widget extension cannot read the setting.
 
 ## type
 
@@ -135,6 +140,26 @@ brightest in the middle and gone before the corners begin.
   to still.
 - The rainbow is the web's jam variant of the same line (`TopEdge`'s `jam`).
   Nothing sets it until the app has jams.
+
+## settings
+
+A gear at the top right of home opens a sheet (`app/settings.tsx`). Kept on the
+device only (expo-sqlite key-value, `src/settings.ts`) under the web's
+preference field names, so they can become the account's once the app signs
+in. The schema, defaults and the client list live in `shared/` with parity
+tests against the web. The screen is plain React Native views and the system
+switch, nothing iOS-only, so it can run on Android unchanged.
+
+- **accent color**: the web's six presets; blue is the default.
+- **play through collections**: off, a tap in an album or playlist plays that
+  track alone, as on the web.
+- **open links in**: the web's client list. An artist's handle opens their
+  profile there; bluesky until chosen.
+- **hidden tags**: the web's defaults (ai, ai-slop, suno). The server already
+  hides those from a signed-out feed; with a list of your own the app asks for
+  the feed unfiltered and filters it itself, and hidden tags leave the chip row.
+- Not here yet: keep playing (it continues from the for-you feed, which needs
+  an account), theme (follows the system), and everything account-bound.
 
 ## queue
 

@@ -1,7 +1,9 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { orderTags } from "plyr-shared/tags";
 import { useMemo, useState } from "react";
-import { ActivityIndicator, FlatList, RefreshControl, StyleSheet, Text, View } from "react-native";
+import { useRouter } from "expo-router";
+import { SymbolView } from "expo-symbols";
+import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { END_THRESHOLD, loadMore, MoreFooter } from "@/components/MoreFooter";
 import { TagChips } from "@/components/TagChips";
@@ -9,19 +11,22 @@ import { TopTracks } from "@/components/TopTracks";
 import { TrackItem } from "@/components/TrackItem";
 import { useLatestTracks, usePopularTags } from "@/data";
 import { haptic } from "@/haptics";
+import { useSettings } from "@/settings";
 import { tabBarScroll } from "@/tabBar";
 import { color, inset } from "@/theme";
 import { type } from "@/type";
 
 export default function Home() {
   const [tags, setTags] = useState<string[]>([]);
-  const latest = useLatestTracks(tags);
+  const settings = useSettings();
+  const latest = useLatestTracks(tags, settings);
   const popular = usePopularTags();
   const client = useQueryClient();
+  const router = useRouter();
   const { top } = useSafeAreaInsets();
   const [onScroll] = useState(tabBarScroll);
   const tracks = useMemo(() => latest.data?.pages.flatMap((p) => p.tracks) ?? [], [latest.data]);
-  const chips = useMemo(() => orderTags(popular.data ?? [], tags), [popular.data, tags]);
+  const chips = useMemo(() => orderTags((popular.data ?? []).filter((tag) => !settings.hidden_tags.includes(tag.name)), tags), [popular.data, tags, settings.hidden_tags]);
 
   const toggle = (name: string) => {
     haptic.selection();
@@ -47,9 +52,14 @@ export default function Home() {
         onEndReachedThreshold={END_THRESHOLD}
         ListHeaderComponent={
           <>
-            <Text style={[type.display, styles.title]} accessibilityRole="header">
-              plyr.fm
-            </Text>
+            <View style={styles.top}>
+              <Text style={[type.display, styles.title]} accessibilityRole="header">
+                plyr.fm
+              </Text>
+              <Pressable onPress={() => router.push("/settings")} accessibilityRole="button" accessibilityLabel="settings" hitSlop={10} style={styles.gear}>
+                <SymbolView name="gearshape" size={22} tintColor={color.muted} />
+              </Pressable>
+            </View>
             <TopTracks />
             <Text style={[type.section, styles.heading]} accessibilityRole="header">
               tracks
@@ -81,6 +91,8 @@ export default function Home() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1 },
+  top: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingRight: inset },
+  gear: { minWidth: 44, minHeight: 44, alignItems: "flex-end", justifyContent: "center" },
   title: { color: color.ink, paddingHorizontal: inset, paddingTop: 4, paddingBottom: 8 },
   heading: { color: color.ink, paddingHorizontal: inset, paddingTop: 8, paddingBottom: 4 },
   chips: { paddingBottom: 6 },

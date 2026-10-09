@@ -2,7 +2,7 @@ import { RAINBOW, TOP_BAR } from "plyr-shared/topBar";
 import { useEffect, useState } from "react";
 import { Animated, Easing, StyleSheet, View, type ColorValue } from "react-native";
 import Svg, { Defs, LinearGradient, Mask, Path, Rect, Stop } from "react-native-svg";
-import { edgeLine } from "@/theme";
+import { useAccent } from "@/settings";
 
 const LINE = TOP_BAR.height;
 // quieter than the web's bar: brightest at the middle, gone before the corners, no glow
@@ -48,6 +48,7 @@ function Arc({ width, radius, stroke }: { width: number; radius: number; stroke:
  * The change is a fade, so Reduce Motion has nothing to still.
  */
 export function TopEdge({ lit, radius, jam = false }: { lit: boolean; radius?: number; jam?: boolean }) {
+  const { edge } = useAccent();
   const [size, setSize] = useState({ width: 0, height: 0 });
   const [shown] = useState(() => new Animated.Value(lit ? 1 : 0));
 
@@ -68,7 +69,7 @@ export function TopEdge({ lit, radius, jam = false }: { lit: boolean; radius?: n
     >
       {corner > 0 ? (
         <Animated.View style={[styles.layer, { opacity: Animated.multiply(shown, OPACITY) }]}>
-          <Arc width={size.width} radius={corner} stroke={jam ? null : edgeLine} />
+          <Arc width={size.width} radius={corner} stroke={jam ? null : edge} />
         </Animated.View>
       ) : null}
     </View>

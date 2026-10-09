@@ -6,6 +6,7 @@ import { resultImage, resultSubtitle, resultTitle } from "plyr-shared/search";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { color, inset, radius, thumb } from "@/theme";
 import { type } from "@/type";
+import { useAccent } from "@/settings";
 
 const GLYPH: Record<SearchResult["type"], SymbolViewProps["name"]> = {
   track: "music.note",
@@ -19,6 +20,7 @@ type Props = { result: SearchResult; active?: boolean; onPress: () => void };
 
 /** One search hit of any kind, labeled with its kind as the web labels it. */
 export function SearchResultRow({ result, active = false, onPress }: Props) {
+  const { accent } = useAccent();
   const title = resultTitle(result);
   const subtitle = resultSubtitle(result);
   const source = resizedImageUrl(resultImage(result), IMAGE_WIDTHS.thumb);
@@ -40,7 +42,7 @@ export function SearchResultRow({ result, active = false, onPress }: Props) {
         </View>
       )}
       <View style={styles.text}>
-        <Text style={[type.row, { color: active ? color.accent : color.ink }]} numberOfLines={1}>
+        <Text style={[type.row, { color: active ? accent : color.ink }]} numberOfLines={1}>
           {title}
         </Text>
         <Text style={[type.meta, { color: color.muted }]} numberOfLines={1}>

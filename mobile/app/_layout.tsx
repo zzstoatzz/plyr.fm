@@ -5,9 +5,10 @@ import * as SystemUI from "expo-system-ui";
 import { useEffect, type ReactNode } from "react";
 import { useColorScheme } from "react-native";
 import { QueueBanner } from "@/components/QueueBanner";
-import { palette } from "@/palette";
+import { accentFor, palette } from "@/palette";
 import { PlayerProvider } from "@/player/PlayerProvider";
 import { QueryProvider } from "@/query";
+import { useSettings } from "@/settings";
 import { color, radius } from "@/theme";
 import { font } from "@/type";
 
@@ -16,6 +17,7 @@ void SplashScreen.preventAutoHideAsync();
 /** The navigation theme decides the native header's light/dark traits, search field included. */
 function NavigationTheme({ children }: { children: ReactNode }) {
   const dark = useColorScheme() !== "light";
+  const chosen = useSettings().accent_color;
   const mode = dark ? "dark" : "light";
   const base = dark ? DarkTheme : DefaultTheme;
   const colors = {
@@ -24,7 +26,7 @@ function NavigationTheme({ children }: { children: ReactNode }) {
     card: palette.surface[mode],
     text: palette.ink[mode],
     border: palette.border[mode],
-    primary: palette.accent[mode],
+    primary: accentFor(chosen).accent[mode],
   };
   useEffect(() => {
     void SystemUI.setBackgroundColorAsync(palette.canvas[mode]);
@@ -61,6 +63,20 @@ export default function RootLayout() {
                 headerTransparent: true,
                 headerTitleStyle: { color: color.ink, fontFamily: font.bold },
                 sheetAllowedDetents: [0.5, 1],
+                sheetGrabberVisible: true,
+                sheetCornerRadius: radius.sheet,
+                contentStyle: { backgroundColor: color.canvas },
+              }}
+            />
+            <Stack.Screen
+              name="settings"
+              options={{
+                presentation: "formSheet",
+                headerShown: true,
+                title: "settings",
+                headerTransparent: true,
+                headerTitleStyle: { color: color.ink, fontFamily: font.bold },
+                sheetAllowedDetents: [1],
                 sheetGrabberVisible: true,
                 sheetCornerRadius: radius.sheet,
                 contentStyle: { backgroundColor: color.canvas },

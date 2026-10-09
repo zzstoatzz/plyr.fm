@@ -1,6 +1,7 @@
 import { ActivityIndicator, Pressable, StyleSheet, Text } from "react-native";
 import { color } from "@/theme";
 import { type } from "@/type";
+import { useAccent } from "@/settings";
 
 /** The paging half of an infinite query. */
 export type Paged = { hasNextPage: boolean; isFetchingNextPage: boolean; isFetchNextPageError: boolean; fetchNextPage: () => unknown };
@@ -15,12 +16,13 @@ export function loadMore(pages: Paged) {
 
 /** The end of a paged list: a spinner while more exists, or a way to retry when the next page did not arrive. */
 export function MoreFooter({ pages }: { pages: Paged }) {
+  const { accent } = useAccent();
   if (!pages.hasNextPage) return null;
   if (pages.isFetchNextPageError && !pages.isFetchingNextPage) {
     return (
       <Pressable onPress={() => void pages.fetchNextPage()} accessibilityRole="button" style={styles.more}>
         {({ pressed }) => (
-          <Text style={[type.secondary, { color: color.accent, textAlign: "center", opacity: pressed ? 0.6 : 1 }]}>couldn’t load more. tap to try again.</Text>
+          <Text style={[type.secondary, { color: accent, textAlign: "center", opacity: pressed ? 0.6 : 1 }]}>couldn’t load more. tap to try again.</Text>
         )}
       </Pressable>
     );
