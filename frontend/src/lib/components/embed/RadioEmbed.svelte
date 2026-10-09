@@ -4,8 +4,25 @@
 	import TunerDial from '$lib/components/radio/TunerDial.svelte';
 	import SensitiveImage from '$lib/components/SensitiveImage.svelte';
 	import { IMAGE_WIDTHS, resizedImageUrl } from '$lib/utils/display-image';
-	import type Hls from 'hls.js';
 	import type { LiveBroadcast, RadioState, RadioStation, RadioTrack } from '$lib/radio.svelte';
+
+	/** the slice of hls.js the embed uses */
+	type HlsModule = {
+		isSupported(): boolean;
+		new (config: { enableWorker: boolean }): {
+			loadSource(url: string): void;
+			attachMedia(el: HTMLMediaElement): void;
+			destroy(): void;
+		};
+	};
+	type HlsInstance = InstanceType<HlsModule>;
+
+	interface Props {
+		/** loads hls.js; tests pass a stand-in since hls.js needs MediaSource */
+		importHls?: () => Promise<{ default: HlsModule }>;
+	}
+
+	let { importHls = () => import('hls.js') }: Props = $props();
 
 	// standalone embed player: this is its own iframe context (not the main app),
 	// so it owns a local <audio> and its own station polling.
@@ -29,9 +46,9 @@
 	let receivedAt = 0;
 	/** stream url of the broadcast attached to the element, while one airs */
 	let liveSource: string | null = null;
-	let hls: Hls | null = null;
-	let hlsModule: typeof Hls | null = null;
-	let hlsLoad: Promise<typeof Hls | null> | null = null;
+	let hls: HlsInstance | null = null;
+	let hlsModule: HlsModule | null = null;
+	let hlsLoad: Promise<HlsModule | null> | null = null;
 
 	let current: RadioTrack | null = $derived(radioState?.current ?? null);
 	let live: LiveBroadcast | null = $derived(radioState?.live ?? null);
@@ -80,8 +97,8 @@
 			});
 	}
 
-	function preloadHls(): Promise<typeof Hls | null> {
-		hlsLoad ??= import('hls.js')
+	function preloadHls(): Promise<HlsModule | null> {
+		hlsLoad ??= importHls()
 			.then(({ default: module }) => (hlsModule = module))
 			.catch((e) => {
 				console.error('radio embed: failed to load hls.js', e);
@@ -108,7 +125,7 @@
 		detachLive();
 		liveSource = broadcast.stream_url;
 		el.onloadedmetadata = null;
-		const attach = (module: typeof Hls | null) => {
+		const attach = (module: HlsModule | null) => {
 			if (liveSource !== broadcast.stream_url) return;
 			if (broadcast.kind === 'hls' && module?.isSupported()) {
 				el.disableRemotePlayback = true;

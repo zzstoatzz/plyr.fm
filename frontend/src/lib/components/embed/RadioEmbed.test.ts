@@ -7,20 +7,19 @@ import { moderation, type SensitiveImagesData } from '$lib/moderation.svelte';
 import type { LiveBroadcast, RadioState, RadioStation } from '$lib/radio.svelte';
 
 // hls.js needs MediaSource, which jsdom lacks
-const hlsAttached = vi.hoisted(() => [] as { url: string; el: HTMLMediaElement }[]);
-vi.mock('hls.js', () => ({
-	default: class {
-		static isSupported = () => true;
-		private url = '';
-		loadSource(url: string) {
-			this.url = url;
-		}
-		attachMedia(el: HTMLMediaElement) {
-			hlsAttached.push({ url: this.url, el });
-		}
-		destroy() {}
+const hlsAttached: { url: string; el: HTMLMediaElement }[] = [];
+class FakeHls {
+	static isSupported = () => true;
+	private url = '';
+	loadSource(url: string) {
+		this.url = url;
 	}
-}));
+	attachMedia(el: HTMLMediaElement) {
+		hlsAttached.push({ url: this.url, el });
+	}
+	destroy() {}
+}
+const importHls = () => Promise.resolve({ default: FakeHls });
 
 // jsdom doesn't implement media playback
 const playSpy = vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue(undefined);
@@ -91,7 +90,7 @@ function setEmbedUrl(search: string): void {
 }
 
 async function mountRadioEmbed(): Promise<HTMLImageElement> {
-	const component = mount(RadioEmbed, { target: document.body });
+	const component = mount(RadioEmbed, { target: document.body, props: { importHls } });
 	cleanup = () => unmount(component);
 	let img: HTMLImageElement | null = null;
 	await vi.waitFor(() => {
@@ -238,7 +237,7 @@ describe('RadioEmbed live broadcast', () => {
 
 	it('asks for the broadcast only on firehose', async () => {
 		setEmbedUrl('?station=firehose');
-		const component = mount(RadioEmbed, { target: document.body });
+		const component = mount(RadioEmbed, { target: document.body, props: { importHls } });
 		cleanup = () => unmount(component);
 		await vi.waitFor(() => expect(stateUrls.length).toBeGreaterThan(0));
 		expect(new URL(stateUrls[0]).searchParams.get('catalog_only')).toBe('false');
@@ -254,7 +253,7 @@ describe('RadioEmbed live broadcast', () => {
 		liveBroadcast = { stream_url: BROADCAST, kind: 'hls', started_at: null };
 		withRotation = false;
 		setEmbedUrl('?station=firehose&autoplay=1');
-		const component = mount(RadioEmbed, { target: document.body });
+		const component = mount(RadioEmbed, { target: document.body, props: { importHls } });
 		cleanup = () => unmount(component);
 		await vi.waitFor(() => expect(hlsAttached).toHaveLength(1));
 		expect(hlsAttached[0].url).toBe(BROADCAST);
