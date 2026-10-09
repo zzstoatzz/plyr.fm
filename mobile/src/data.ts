@@ -36,7 +36,7 @@ function tracksPath(params: { tags?: readonly string[]; artistDid?: string; curs
   return qs ? `/tracks/?${qs}` : "/tracks/";
 }
 
-/** The discovery feed, newest first; `tags` narrows it to tracks carrying all of them. */
+/** The discovery feed, newest first; `tags` narrows it to tracks carrying any of them. */
 export function useLatestTracks(tags: readonly string[] = []) {
   return useInfiniteQuery({
     queryKey: ["latest", [...tags].sort()],

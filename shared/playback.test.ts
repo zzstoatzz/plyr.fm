@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import * as web from "../frontend/src/lib/skip-step";
 import { listeningLabel as webListeningLabel } from "../frontend/src/lib/publishing";
 import type { Track } from "./contract";
-import { formatTime } from "./format";
+import { credits, formatTime } from "./format";
 import { listeningLabel, playability, playCountThreshold, skipStepSeconds, SKIP_STEP_LADDER, SKIP_STEP_MAX } from "./playback";
 import { EMPTY_QUEUE, current, next, previous, start } from "./queue";
 
@@ -60,6 +60,12 @@ describe("playback rules", () => {
 
   test("time", () => {
     expect([formatTime(7), formatTime(201), formatTime(3729), formatTime(Number.NaN)]).toEqual(["0:07", "3:21", "1:02:09", "0:00"]);
+  });
+
+  test("credits name the artist, then anyone featured", () => {
+    const feature = (display_name: string) => ({ did: "did:plc:f", handle: "f.test", display_name });
+    expect(credits(track(1))).toBe("a");
+    expect(credits(track(1, { features: [feature("b"), feature("c")] }))).toBe("a, b, c");
   });
 });
 

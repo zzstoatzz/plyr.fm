@@ -12,3 +12,8 @@ export function formatTime(seconds: number): string {
 export function count(n: number, word: string): string {
   return `${n} ${word}${n === 1 ? "" : "s"}`;
 }
+
+/** Who made a track: the artist, then anyone featured. */
+export function credits(track: { artist: string; features: readonly { display_name: string }[] }): string {
+  return [track.artist, ...track.features.map((f) => f.display_name)].join(", ");
+}

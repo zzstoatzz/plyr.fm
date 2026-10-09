@@ -1,5 +1,5 @@
 import type { Track } from "plyr-shared/contract";
-import { count } from "plyr-shared/format";
+import { count, credits } from "plyr-shared/format";
 import { trackThumbnailUrl } from "plyr-shared/images";
 import { listeningLabel } from "plyr-shared/playback";
 import { useOpen } from "@/nav";
@@ -11,11 +11,10 @@ export function TrackItem({ tracks, index, showArtist = true }: { tracks: readon
   const player = usePlayer();
   const open = useOpen();
   const track = tracks[index];
-  const credits = [track.artist, ...track.features.map((f) => f.display_name)].join(", ");
   return (
     <TrackRow
       title={track.title}
-      artist={showArtist ? credits : track.album?.title ?? count(track.play_count, "play")}
+      artist={showArtist ? credits(track) : track.album?.title ?? count(track.play_count, "play")}
       artwork={trackThumbnailUrl(track)}
       active={player.track?.id === track.id}
       locked={track.gated ? listeningLabel(track.publishing?.access.listening) : null}

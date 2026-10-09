@@ -1,5 +1,5 @@
 import { Host, Slider } from "@expo/ui/swift-ui";
-import { formatTime } from "plyr-shared/format";
+import { credits, formatTime } from "plyr-shared/format";
 import { IMAGE_WIDTHS, trackCoverUrl } from "plyr-shared/images";
 import { useState } from "react";
 import { StyleSheet, Text, useWindowDimensions, View } from "react-native";
@@ -19,7 +19,6 @@ export default function Player() {
 
   const shown = scrub ?? position;
   const art = Math.min(width - inset * 2, 360);
-  const credits = [track.artist, ...track.features.map((f) => f.display_name)].join(", ");
 
   return (
     <SafeAreaView style={styles.screen} edges={["bottom"]}>
@@ -31,7 +30,7 @@ export default function Player() {
           {track.title}
         </Text>
         <Text style={[type.body, { color: color.muted }]} numberOfLines={1}>
-          {credits}
+          {credits(track)}
         </Text>
         {track.album ? (
           <Text style={[type.meta, { color: color.muted }]} numberOfLines={1}>

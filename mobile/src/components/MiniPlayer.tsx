@@ -1,5 +1,6 @@
 import { useRouter } from "expo-router";
 import { NativeTabs } from "expo-router/unstable-native-tabs";
+import { credits } from "plyr-shared/format";
 import { IMAGE_WIDTHS, trackThumbnailUrl } from "plyr-shared/images";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { usePlayer } from "@/player/PlayerProvider";
@@ -21,7 +22,7 @@ export function MiniPlayer() {
         style={styles.open}
         onPress={() => router.push("/player")}
         accessibilityRole="button"
-        accessibilityLabel={`now playing: ${track.title}, by ${track.artist}`}
+        accessibilityLabel={`now playing: ${track.title}, by ${credits(track)}`}
         accessibilityHint="opens the player"
       >
         <Artwork url={trackThumbnailUrl(track)} size={inline ? 28 : 36} width={IMAGE_WIDTHS.thumb} radius={6} />
@@ -31,7 +32,7 @@ export function MiniPlayer() {
           </Text>
           {inline ? null : (
             <Text style={[type.meta, { color: color.muted }]} numberOfLines={1}>
-              {track.artist}
+              {credits(track)}
             </Text>
           )}
         </View>

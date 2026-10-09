@@ -56,7 +56,7 @@ export default function Home() {
           ) : (
             <View style={styles.state}>
               <Text style={[type.body, { color: color.muted, textAlign: "center" }]}>
-                {latest.isError ? "couldn’t reach plyr.fm. pull to try again." : tags.length ? "no tracks with all of those tags." : "no tracks yet."}
+                {latest.isError ? "couldn’t reach plyr.fm. pull to try again." : tags.length ? "no tracks match these tags." : "no tracks yet."}
               </Text>
             </View>
           )

@@ -6,7 +6,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { Audio, AudioContext, AudioManager, useAudioTagContext, type AudioTagHandle } from "react-native-audio-api";
 import { post } from "@/api";
 import { fetchAudioUrl } from "@/data";
-import { decodes } from "./formats";
+import { decodes, streams } from "./formats";
 import { useNowPlaying } from "./nowPlaying";
 
 export type Status = "idle" | "loading" | "playing" | "paused" | "buffering" | "failed";
@@ -166,6 +166,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
             source={source}
             context={context}
             autoPlay
+            forceDownload={!streams(track.file_type)}
             onPlay={() => setStatus("playing")}
             onPause={() => setStatus("paused")}
             onWaiting={() => setStatus("buffering")}
