@@ -29,6 +29,7 @@ import { IMAGE_WIDTHS, trackThumbnailUrl } from "plyr-shared/images";
 import { tail, upNext } from "plyr-shared/queue";
 import { Pressable, StyleSheet, Text as PlainText, View } from "react-native";
 import { Artwork } from "@/components/Artwork";
+import { Levels } from "@/components/Levels";
 import { haptic } from "@/haptics";
 import { canPlay, usePlayer } from "@/player/PlayerProvider";
 import { color, inset, radius, thumb } from "@/theme";
@@ -185,7 +186,11 @@ function Row({ track, current = false, onPress, modifiers = [] }: RowProps) {
         <Text modifiers={[role.meta, foregroundStyle(color.muted), lineLimit(1)]}>{by}</Text>
       </VStack>
       <Spacer />
-      {current ? <Image systemName="waveform" size={18} color={color.accent} /> : playable ? null : <Image systemName="lock.fill" size={14} color={color.muted} />}
+      {current ? (
+        <RNHostView matchContents>
+          <Levels />
+        </RNHostView>
+      ) : playable ? null : <Image systemName="lock.fill" size={14} color={color.muted} />}
     </HStack>
   );
 }

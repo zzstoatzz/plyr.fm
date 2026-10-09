@@ -10,6 +10,7 @@ import { decodes } from "./formats";
 import { discard, fetchAhead, locate } from "./media";
 import { useNowPlaying } from "./nowPlaying";
 import { forget, recall, remember } from "./saved";
+import { tap } from "./levels";
 import { timeline } from "./timeline";
 
 export type Status = "idle" | "loading" | "playing" | "paused" | "buffering" | "failed";
@@ -303,6 +304,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         if (current) setProgress((p) => ({ trackId, value: { position: p?.trackId === trackId ? p.value.position : 0, duration: event.seconds } }));
         return;
       case "ready": {
+        if (context && slot.handle) tap(context, slot.handle);
         const respawned = slot.respawned;
         slot.respawned = false;
         slot.ready = true;

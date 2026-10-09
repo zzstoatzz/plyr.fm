@@ -76,7 +76,14 @@ letters are narrower and lighter than San Francisco's.
   (`shared/search.ts`).
 - **Rows**: 48 pt artwork at the 20 pt inset, a 12 pt gap, then title (17 pt
   bold) and artist (14 pt muted). Text starts at `column` in `theme.ts`.
-- **Playing** is the accent title plus a waveform glyph, never color alone.
+- **Playing** is the accent title plus four bars that follow the audio
+  (`Levels`), never color alone. The audio passes through an analyser on its
+  way out (`src/player/levels.ts`); each bar is one band measured against its
+  own recent peak (`spectrum.ts`), since music is far louder in the bass than
+  the treble. Sampled about 30 times a second, only while a bar is on screen,
+  the track is playing and the app is in front. Paused, the bars hold where
+  they were. Reduce Motion gets the still waveform glyph. Six taps with the
+  analyser in the path and six without started audio in the same time.
 - **Locked** (gated) rows stay readable at reduced opacity, say who can listen,
   and carry a lock glyph; VoiceOver hears the same words.
 - **Artwork** is always requested at its slot's size through the image CDN
@@ -185,4 +192,4 @@ and the glyph turns accent while audio is going somewhere other than the phone.
 - Every control has a label; rows read "title, by artist" with a hint.
 - Body text never capped, tabular figures for times.
 - Targets are at least 44 pt (or a hit slop out to 44 pt).
-- No decorative motion.
+- No decorative motion; the now-playing bars carry state and Reduce Motion stills them.

@@ -4,6 +4,7 @@ import { Pressable, StyleSheet, Text, View, type PressableProps } from "react-na
 import { color, inset, radius, thumb } from "@/theme";
 import { type } from "@/type";
 import { Artwork } from "./Artwork";
+import { Levels } from "./Levels";
 
 type Props = {
   title: string;
@@ -61,7 +62,7 @@ export function TrackRow({ title, artist, artwork, active = false, locked = null
           </Text>
         )}
       </View>
-      {active ? <SymbolView name="waveform" size={18} tintColor={color.accent} /> : null}
+      {active ? <Levels /> : null}
       {locked ? <SymbolView name="lock.fill" size={14} tintColor={color.muted} /> : null}
     </Pressable>
   );
