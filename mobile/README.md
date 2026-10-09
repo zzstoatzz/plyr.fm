@@ -42,6 +42,15 @@ BiquadFilter chain here, fed through `createMediaElementSource`. Playback lives
 in `src/player/` behind `usePlayer()`, so swapping engines is one file if
 streaming misbehaves on a device.
 
+Changing tracks is built to be immediate. A second into a track, the next one
+is downloaded whole into the cache directory (`src/player/media.ts`; mixes too
+long to fetch unasked are skipped) and opened in a second, silent `Deck`, so
+next, a jump in the queue and the end of a track start audio with no network.
+A cold tap streams mp3 and m4a straight from the URL; wav, flac and ogg cannot
+stream in this engine and are downloaded to the same cache first. The library
+is patched (`patches/`) to skip its byte-range probe, one or two round trips
+per track that the audio host does not need.
+
 ## what is shared with the web app
 
 `shared/` is a workspace package, `plyr-shared`, imported here by name. It holds

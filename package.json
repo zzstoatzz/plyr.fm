@@ -4,5 +4,8 @@
   "workspaces": [
     "shared",
     "mobile"
-  ]
+  ],
+  "patchedDependencies": {
+    "react-native-audio-api@0.13.5": "patches/react-native-audio-api@0.13.5.patch"
+  }
 }

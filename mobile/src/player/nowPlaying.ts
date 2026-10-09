@@ -3,6 +3,7 @@ import { useEffect, useEffectEvent, useRef, type RefObject } from "react";
 import { PlaybackNotificationManager, type AudioTagHandle } from "react-native-audio-api";
 import { nowPlayingInfo } from "./nowPlayingInfo";
 import type { Controls, Progress } from "./PlayerProvider";
+import { timeline } from "./timeline";
 
 type Args = { controls: Controls; progress: Progress; seeks: number; audio: RefObject<AudioTagHandle | null> };
 
@@ -50,6 +51,7 @@ export function useNowPlaying({ controls, progress, seeks, audio }: Args) {
     shown.current = true;
     void PlaybackNotificationManager.enableControl("previousTrack", true);
     void PlaybackNotificationManager.enableControl("seekTo", true);
+    timeline.mark("nowplaying", status);
     void publish(track);
   }, [track, status, playing, progress.duration, seeks]);
 }

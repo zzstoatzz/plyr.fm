@@ -14,7 +14,13 @@ shared) and `DESIGN.md` (rules) before changing a screen.
 - `bun install` runs at the repo root, not here.
 - `just mobile check` must pass before a PR. It cannot prove playback; say what
   was run on a device or simulator and what was not.
-- Audio: one `<Audio>` tag, keyed by track, rendered by `PlayerProvider`. The
+- Audio: one `Deck` (an `<Audio>` tag) per track, rendered by `PlayerProvider`:
+  the current track and, once it has played a second, the next one, fetched to
+  the cache directory and opened but not started. A deck never starts itself;
+  the provider plays the current one at the tap, before the render. Keep a
+  deck's props stable: a changed `source`, `loop` or `autoPlay` reloads it. The
   `AudioContext` is created on the first play so launching the app never stops
-  other audio. Lock screen state is published on state changes and seeks, not
+  other audio.
+- `src/player/timeline.ts` logs `[switch]` stage timings in development; read
+  them before and after touching the track-change path. Lock screen state is published on state changes and seeks, not
   every position tick.

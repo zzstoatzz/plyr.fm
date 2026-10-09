@@ -3,6 +3,7 @@ import { addUserInteractionListener, widgetsDirectory, type LiveActivity } from 
 import type { Track } from "plyr-shared/contract";
 import type { Queue } from "plyr-shared/queue";
 import { useEffect, useEffectEvent, useRef, useState } from "react";
+import { timeline } from "./timeline";
 import { upNextRows, upNextTarget } from "./upNext";
 import { upNextActivity, type UpNextActivityProps } from "./upNextActivity";
 
@@ -89,6 +90,7 @@ export function useUpNextActivity(queue: Queue, state: UpNextState, canPlay: (tr
     const drawn = next.rows.map(async ({ image, ...row }) => ({ ...row, art: await cached(image) }));
     void Promise.all(drawn).then((rows) => {
       if (stale || dismissed.current) return;
+      timeline.mark("activity");
       const props = { rows, more: next.more };
       try {
         if (activity.current) {

@@ -3,12 +3,14 @@ import type { Track } from "plyr-shared/contract";
 import { playability, playCountThreshold } from "plyr-shared/playback";
 import * as Q from "plyr-shared/queue";
 import { createContext, useCallback, useContext, useEffect, useEffectEvent, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
-import { Audio, AudioContext, AudioManager, useAudioTagContext, type AudioTagHandle } from "react-native-audio-api";
+import { AudioContext, AudioManager, type AudioTagHandle } from "react-native-audio-api";
 import { post } from "@/api";
-import { fetchAudioUrl } from "@/data";
-import { decodes, streams } from "./formats";
+import { Deck, type DeckEvent } from "./Deck";
+import { decodes } from "./formats";
+import { discard, fetchAhead, locate } from "./media";
 import { useNowPlaying } from "./nowPlaying";
 import { forget, recall, remember } from "./saved";
+import { timeline } from "./timeline";
 import { useUpNextActivity } from "./useUpNextActivity";
 
 export type Status = "idle" | "loading" | "playing" | "paused" | "buffering" | "failed";
@@ -47,9 +49,15 @@ export const canPlay = (track: Track) => playability(track, decodes).playable;
 /** Largest forward step still counted as listening; anything bigger was a seek. */
 const LISTEN_STEP_SECONDS = 2;
 
+/** Seconds of a track heard before the one after it is fetched. */
+const AHEAD_AFTER_SECONDS = 1;
+
 // per-track state is tagged with its track id, so a new track reads as fresh without resetting in an effect
 type Loaded = { trackId: number; uri: string | null };
 type Tagged<T> = { trackId: number; value: T };
+
+/** What the provider knows of a mounted deck; `respawned` marks the reload the tag does by itself when a file ends. */
+type Slot = { handle: AudioTagHandle | null; ready: boolean; begun: boolean; respawned: boolean; duration: number };
 
 export function PlayerProvider({ children }: { children: ReactNode }) {
   const client = useQueryClient();
@@ -57,6 +65,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const [queue, setQueue] = useState<Q.Queue>(saved?.queue ?? Q.EMPTY_QUEUE);
   const [repeat, setRepeat] = useState<Q.Repeat>(saved?.repeat ?? "none");
   const [loaded, setLoaded] = useState<Loaded | null>(null);
+  const [ahead, setAhead] = useState<Loaded | null>(null);
+  const [armed, setArmed] = useState(-1);
   const [tag, setTag] = useState<Tagged<TagStatus> | null>(null);
   const [tagged, setProgress] = useState<Tagged<Progress> | null>(() => {
     const restored = saved && Q.current(saved.queue);
@@ -65,21 +75,25 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const [seeks, setSeeks] = useState(0);
   const [context, setContext] = useState<AudioContext | null>(null);
   const audio = useRef<AudioTagHandle>(null);
+  const slots = useRef(new Map<number, Slot>());
+  // the queue and current track as of the last tap, ahead of the render that shows them
+  const latest = useRef(queue);
+  const active = useRef(Q.current(queue)?.id ?? -1);
   const listened = useRef({ trackId: -1, seconds: 0, last: 0, counted: false });
   // where a restored track picks up once it is first played; cleared when anything else starts
   const resume = useRef(saved && Q.current(saved.queue) ? { trackId: Q.current(saved.queue)?.id ?? -1, position: saved.position } : null);
-  const stopAtEnd = useRef(false);
+  const again = useRef(false);
   const started = useRef(false);
   const [attempt, setAttempt] = useState(0);
 
   const track = Q.current(queue);
   const id = track?.id ?? -1;
-  const uri = loaded?.trackId === id ? loaded.uri : null;
+  const uri = loaded?.trackId === id ? loaded.uri : ahead?.trackId === id ? ahead.uri : undefined;
   const progress = tagged?.trackId === id ? tagged.value : { position: 0, duration: 0 };
   // no audio context means nothing has been played since launch: a restored queue waits, paused
   const status: Status = !track
     ? "idle"
-    : loaded?.trackId !== id
+    : uri === undefined
       ? "loading"
       : uri === null
         ? "failed"
@@ -89,28 +103,109 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
             ? "loading"
             : "paused";
   const canNext = Q.hasNext(queue, canPlay);
+  const following = Q.next(queue, canPlay);
+  const upcoming = following ? Q.current(following) : null;
+  const fetchable = armed === id && upcoming && upcoming.id !== id ? upcoming : null;
+  const opened = ahead && upcoming && ahead.trackId === upcoming.id && ahead.trackId !== id ? ahead.uri : null;
+  // one keyed list, so the deck opened ahead is the same instance once its track is current
+  const decks = [...(uri ? [{ trackId: id, uri }] : []), ...(opened && upcoming ? [{ trackId: upcoming.id, uri: opened }] : [])];
 
   useEffect(() => {
     AudioManager.setAudioSessionOptions({ iosCategory: "playback", iosMode: "default", iosOptions: [] });
   }, []);
 
+  const edit = useCallback((change: (queue: Q.Queue) => Q.Queue) => {
+    latest.current = change(latest.current);
+    setQueue(latest.current);
+  }, []);
+
+  const start = useCallback((trackId: number) => {
+    const slot = slots.current.get(trackId);
+    if (!slot?.handle || !slot.ready || slot.begun) return;
+    slot.begun = true;
+    // every start of the file is its own listen: repeat-one and a second copy in the queue count again
+    listened.current = { trackId, seconds: 0, last: 0, counted: false };
+    const from = resume.current;
+    resume.current = null;
+    const position = from && from.trackId === trackId ? from.position : 0;
+    if (position > 0) slot.handle.seekToTime(position);
+    setProgress({ trackId, value: { position, duration: slot.duration } });
+    slot.handle.play();
+  }, []);
+
+  // called at the tap, not after the render: an opened deck is audible before the screen catches up
+  const activate = useCallback(
+    (trackId: number) => {
+      if (active.current !== trackId) {
+        const old = slots.current.get(active.current);
+        active.current = trackId;
+        audio.current = slots.current.get(trackId)?.handle ?? null;
+        if (old) {
+          old.begun = false;
+          old.handle?.pause();
+          old.handle?.seekToTime(0);
+        }
+      }
+      start(trackId);
+    },
+    [start],
+  );
+
+  useEffect(() => {
+    activate(id);
+  }, [activate, id]);
+
+  const go = useCallback(
+    (cause: string, to: Q.Queue | null) => {
+      const target = to && Q.current(to);
+      if (!to || !target) return;
+      timeline.start(cause);
+      const replayed = target.id === active.current;
+      latest.current = to;
+      activate(target.id);
+      const slot = slots.current.get(target.id);
+      if (replayed && slot?.begun) {
+        slot.handle?.seekToTime(0);
+        slot.handle?.play();
+      }
+      if (!slot?.ready) void locate(client, target).catch(() => {});
+      setQueue(to);
+    },
+    [activate, client],
+  );
+
   useEffect(() => {
     if (!track) return;
     let cancelled = false;
-    listened.current = { trackId: track.id, seconds: 0, last: 0, counted: false };
-    fetchAudioUrl(client, track.file_id).then(
-      (url) => !cancelled && setLoaded({ trackId: track.id, uri: url }),
+    timeline.mark("locate:ask");
+    locate(client, track).then(
+      (found) => {
+        timeline.mark("locate:got", `${track.file_type} ${found.startsWith("file:") ? "file" : "url"}`);
+        if (!cancelled) setLoaded({ trackId: track.id, uri: found });
+      },
       () => {
         if (cancelled) return;
         setLoaded({ trackId: track.id, uri: null });
         // a queue restored with no network stays where it was; only playback already under way skips ahead
-        if (started.current) setQueue((q) => (Q.current(q)?.id === track.id ? (Q.next(q, canPlay) ?? q) : q));
+        if (started.current) edit((q) => (Q.current(q)?.id === track.id ? (Q.next(q, canPlay) ?? q) : q));
       },
     );
     return () => {
       cancelled = true;
     };
-  }, [client, track, attempt]);
+  }, [client, track, attempt, edit]);
+
+  useEffect(() => {
+    if (!fetchable) return;
+    let cancelled = false;
+    fetchAhead(client, fetchable).then(
+      (found) => !cancelled && found && setAhead({ trackId: fetchable.id, uri: found }),
+      () => {},
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [client, fetchable]);
 
   // the position is saved in ten-second steps and whenever the queue or play state changes
   const step = Math.floor(progress.position / 10);
@@ -119,8 +214,6 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     persist();
   }, [queue, repeat, step, playing]);
-
-  const setStatus = useCallback((value: TagStatus) => setTag({ trackId: id, value }), [id]);
 
   // the session is claimed on the first play, not at launch, so opening the app never stops other audio
   const begin = useCallback(() => {
@@ -133,39 +226,38 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     (tracks: readonly Track[], index: number, label: string | null = null) => {
       begin();
       resume.current = null;
-      setQueue((q) => Q.playContext(q, tracks, index, label, canPlay) ?? q);
+      go("tap", Q.playContext(latest.current, tracks, index, label, canPlay));
     },
-    [begin],
+    [begin, go],
   );
 
   const queued = useCallback(
     (added: Track, place: (q: Q.Queue, added: Track) => Q.Queue) => {
-      if (canPlay(added)) setQueue((q) => place(q, added));
+      if (canPlay(added)) edit((q) => place(q, added));
     },
-    [],
+    [edit],
   );
   const playNext = useCallback((added: Track) => queued(added, Q.playNext), [queued]);
   const addToQueue = useCallback((added: Track) => queued(added, (q, t) => Q.addToQueue(q, [t])), [queued]);
 
   const jumpTo = useCallback(
     (index: number) => {
-      const target = queue.tracks[index];
+      const target = latest.current.tracks[index];
       if (!target || !canPlay(target)) return;
       begin();
       resume.current = null;
-      if (target.id === id) audio.current?.seekToTime(0);
-      setQueue((q) => Q.jumpTo(q, index));
+      go("jump", Q.jumpTo(latest.current, index));
     },
-    [begin, queue, id],
+    [begin, go],
   );
 
-  const dragTo = useCallback((from: number, to: number) => setQueue((q) => Q.dragTo(q, from, to)), []);
-  const remove = useCallback((index: number) => setQueue((q) => Q.remove(q, index)), []);
-  const clearUpNext = useCallback(() => setQueue(Q.clearUpNext), []);
-  const shuffleUpNext = useCallback(() => setQueue((q) => Q.shuffleUpNext(q)), []);
+  const dragTo = useCallback((from: number, to: number) => edit((q) => Q.dragTo(q, from, to)), [edit]);
+  const remove = useCallback((index: number) => edit((q) => Q.remove(q, index)), [edit]);
+  const clearUpNext = useCallback(() => edit(Q.clearUpNext), [edit]);
+  const shuffleUpNext = useCallback(() => edit((q) => Q.shuffleUpNext(q)), [edit]);
   const toggleRepeat = useCallback(() => setRepeat(Q.toggleRepeat), []);
 
-  const next = useCallback(() => setQueue((q) => Q.next(q, canPlay) ?? q), []);
+  const next = useCallback(() => go("next", Q.next(latest.current, canPlay)), [go]);
 
   const seek = useCallback(
     (seconds: number) => {
@@ -180,10 +272,10 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   );
 
   const previous = useCallback(() => {
-    const step = Q.previous(queue, progress.position, canPlay);
+    const step = Q.previous(latest.current, progress.position, canPlay);
     if (step.kind === "restart") seek(0);
-    else setQueue(step.queue);
-  }, [queue, progress.position, seek]);
+    else go("previous", step.queue);
+  }, [progress.position, seek, go]);
 
   const toggle = useCallback(() => {
     if (status === "failed") setAttempt((n) => n + 1);
@@ -192,62 +284,96 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     else audio.current?.play();
   }, [context, status, begin]);
 
-  // a track that breaks moves on rather than dead-airing, as the web player does
-  const advanceOr = useCallback(
-    (otherwise: TagStatus) => {
-      const after = Q.next(queue, canPlay);
-      if (after) setQueue(after);
-      else setStatus(otherwise);
-    },
-    [queue, setStatus],
-  );
-
-  // the tag starts itself over when a file ends: that is repeat-one, and at the end of the queue it is stopped as it restarts
-  const onEnded = useCallback(() => {
-    if (repeat === "one") return;
-    const after = Q.next(queue, canPlay);
-    if (after) return setQueue(after);
-    stopAtEnd.current = true;
-    setProgress((p) => (p?.trackId === id ? { trackId: id, value: { ...p.value, position: 0 } } : p));
-  }, [queue, repeat, id]);
-
-  const onPlay = useCallback(() => {
-    if (stopAtEnd.current) {
-      stopAtEnd.current = false;
-      audio.current?.pause();
+  const onDeck = (event: DeckEvent) => {
+    const { trackId } = event;
+    const current = trackId === active.current;
+    if (event.kind === "gone") {
+      slots.current.delete(trackId);
+      if (current) audio.current = null;
       return;
     }
-    setStatus("playing");
-  }, [setStatus]);
-
-  const onLoad = useCallback(() => {
-    // every start of the file is its own listen: repeat-one and a second copy in the queue count again
-    listened.current = { trackId: id, seconds: 0, last: 0, counted: false };
-    const from = resume.current;
-    resume.current = null;
-    if (from && from.trackId === id && from.position > 0) seek(from.position);
-  }, [id, seek]);
-
-  const onPosition = useCallback(
-    (position: number) => {
-      setProgress((p) => ({ trackId: id, value: { duration: p?.trackId === id ? p.value.duration : 0, position } }));
-      const l = listened.current;
-      const step = position - l.last;
-      l.last = position;
-      if (l.trackId !== id || l.counted || step <= 0 || step > LISTEN_STEP_SECONDS) return;
-      l.seconds += step;
-      if (progress.duration > 0 && l.seconds >= playCountThreshold(progress.duration)) {
-        l.counted = true;
-        void post(`/tracks/${id}/play`);
+    const slot = slots.current.get(trackId) ?? { handle: null, ready: false, begun: false, respawned: false, duration: 0 };
+    slots.current.set(trackId, slot);
+    switch (event.kind) {
+      case "handle":
+        slot.handle = event.handle;
+        if (current) audio.current = event.handle;
+        return;
+      case "duration":
+        slot.duration = event.seconds;
+        if (current) setProgress((p) => ({ trackId, value: { position: p?.trackId === trackId ? p.value.position : 0, duration: event.seconds } }));
+        return;
+      case "ready": {
+        const respawned = slot.respawned;
+        slot.respawned = false;
+        slot.ready = true;
+        if (!respawned) timeline.mark("opened", current ? "" : "ahead");
+        if (!current) return;
+        if (!respawned) return start(trackId);
+        slot.begun = false;
+        // started a tick later: in the same batch the tag would still be reporting the old source's position
+        if (again.current) setTimeout(() => active.current === trackId && start(trackId), 0);
+        else setTag({ trackId, value: "paused" });
+        again.current = false;
+        return;
       }
-    },
-    [id, progress.duration],
-  );
-
-  const onDuration = useCallback(
-    (duration: number) => setProgress((p) => ({ trackId: id, value: { position: p?.trackId === id ? p.value.position : 0, duration } })),
-    [id],
-  );
+      case "ended": {
+        slot.respawned = true;
+        if (!current) return;
+        again.current = repeat === "one";
+        if (again.current) return;
+        const after = Q.next(latest.current, canPlay);
+        if (after) go("ended", after);
+        else setProgress((p) => (p?.trackId === trackId ? { trackId, value: { ...p.value, position: 0 } } : p));
+        return;
+      }
+      case "error": {
+        if (track?.id === trackId) discard(track);
+        if (!current) return setAhead((a) => (a?.trackId === trackId ? null : a));
+        // a track that breaks moves on rather than dead-airing, as the web player does
+        const after = Q.next(latest.current, canPlay);
+        if (after) go("error", after);
+        else setTag({ trackId, value: "failed" });
+        return;
+      }
+      case "play":
+        if (current) timeline.mark("play");
+        if (current) setTag({ trackId, value: "playing" });
+        return;
+      case "pause":
+        if (current) setTag({ trackId, value: "paused" });
+        return;
+      case "waiting":
+        if (current) setTag({ trackId, value: "buffering" });
+        return;
+      case "playing":
+        if (current) setTag({ trackId, value: "playing" });
+        return;
+      case "position": {
+        if (!current) return;
+        const position = event.seconds;
+        timeline.position(position);
+        if (position >= AHEAD_AFTER_SECONDS) setArmed(trackId);
+        setProgress((p) => ({ trackId, value: { duration: p?.trackId === trackId ? p.value.duration : slot.duration, position } }));
+        const l = listened.current;
+        const step = position - l.last;
+        l.last = position;
+        if (l.trackId !== trackId || l.counted || step <= 0 || step > LISTEN_STEP_SECONDS) return;
+        l.seconds += step;
+        if (slot.duration > 0 && l.seconds >= playCountThreshold(slot.duration)) {
+          l.counted = true;
+          void post(`/tracks/${trackId}/play`);
+        }
+        return;
+      }
+    }
+  };
+  // decks hold one stable callback, so a preloaded deck is not re-rendered or reloaded while it waits
+  const deliver = useRef(onDeck);
+  useEffect(() => {
+    deliver.current = onDeck;
+  });
+  const on = useCallback((event: DeckEvent) => deliver.current(event), []);
 
   const controls = useMemo<Controls>(
     () => ({
@@ -277,44 +403,14 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   useInterruptions(audio, playing);
   useUpNextActivity(queue, !context || status === "idle" || status === "failed" ? "off" : status === "paused" ? "paused" : "playing", canPlay, jumpTo);
 
-  const source = useMemo(() => (uri ? { uri } : null), [uri]);
-
   return (
     <ControlsContext.Provider value={controls}>
       <ProgressContext.Provider value={progress}>
         {children}
-        {source && context && track ? (
-          <Audio
-            key={track.id}
-            ref={audio}
-            source={source}
-            context={context}
-            autoPlay
-            forceDownload={!streams(track.file_type)}
-            onLoad={onLoad}
-            onPlay={onPlay}
-            onPause={() => setStatus("paused")}
-            onWaiting={() => setStatus("buffering")}
-            onPlaying={() => setStatus("playing")}
-            onEnded={onEnded}
-            onError={() => advanceOr("failed")}
-            onPositionChange={onPosition}
-          >
-            <DurationProbe onDuration={onDuration} />
-          </Audio>
-        ) : null}
+        {context ? decks.map((deck) => <Deck key={deck.trackId} trackId={deck.trackId} uri={deck.uri} context={context} on={on} />) : null}
       </ProgressContext.Provider>
     </ControlsContext.Provider>
   );
-}
-
-/** The tag only exposes duration through its context, so a child reads it out. */
-function DurationProbe({ onDuration }: { onDuration: (seconds: number) => void }) {
-  const { duration } = useAudioTagContext();
-  useEffect(() => {
-    if (duration > 0) onDuration(duration);
-  }, [duration, onDuration]);
-  return null;
 }
 
 /** Pause for calls and Siri, resume when iOS says to, and pause when headphones are pulled. */
