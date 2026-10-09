@@ -1,4 +1,4 @@
-import { queryOptions, useInfiniteQuery, useQuery, type QueryClient } from "@tanstack/react-query";
+import { queryOptions, useInfiniteQuery, useQueries, useQuery, type QueryClient } from "@tanstack/react-query";
 import {
   parseAlbum,
   parseArtist,
@@ -16,19 +16,24 @@ import {
 } from "plyr-shared/contract";
 import { SEARCH_MIN_LENGTH } from "plyr-shared/search";
 import { TAG_FILTER_LIMIT } from "plyr-shared/tags";
-import { topTracksQuery, type TopPeriod } from "plyr-shared/top";
+import { CHART_PERIODS, TOP_CHART_LIMIT, TOP_TRACKS_LIMIT, topTracksQuery, type TopPeriod } from "plyr-shared/top";
 import { getJSON } from "./api";
 
 const report = (what: string) => (error: unknown) => console.warn(`dropped a malformed ${what}`, error);
 
-export const topTracks = (period: TopPeriod) =>
+export const topTracks = (period: TopPeriod, limit: number = TOP_TRACKS_LIMIT) =>
   queryOptions({
-    queryKey: ["top", period],
-    queryFn: ({ signal }) => getJSON(`/tracks/top?${topTracksQuery(period)}`, (b) => parseTrackList(b, report("top track")), signal),
+    queryKey: ["top", period, limit],
+    queryFn: ({ signal }) => getJSON(`/tracks/top?${topTracksQuery(period, limit)}`, (b) => parseTrackList(b, report("top track")), signal),
   });
 
 export function useTopTracks(period: TopPeriod) {
   return useQuery(topTracks(period));
+}
+
+/** The search tab's charts at full length; one past `depth` is not fetched. */
+export function useCharts(depth: number) {
+  return useQueries({ queries: CHART_PERIODS.map((period, i) => ({ ...topTracks(period, TOP_CHART_LIMIT), enabled: i < depth })) });
 }
 
 function tracksPath(params: { tags?: readonly string[]; artistDid?: string; cursor: string | null }): string {

@@ -14,7 +14,6 @@ const number = (css: string, pattern: RegExp) => Number(pattern.exec(css)?.[1]);
 
 function look(css: string) {
   return {
-    opacity: number(css, /opacity: ([\d.]+);/),
     saturate: number(css, /saturate\(([\d.]+)\)/),
     brightness: number(css, /brightness\(([\d.]+)\)/),
   };
@@ -30,8 +29,6 @@ test("the line has the web top bar's height, color and fade", () => {
 test("the line is the web player's top bar while playing", () => {
   const css = rule(".player.is-playing::before");
   expect(look(css)).toEqual(TOP_BAR.playing);
-  const glow = [...css.matchAll(/0 0 (\d+)px color-mix\(in srgb, var\(--accent\) (\d+)%, transparent\)/g)];
-  expect(glow.map(([, blur, percent]) => ({ blur: Number(blur), alpha: Number(percent) / 100 }))).toEqual([...TOP_BAR.glow]);
 });
 
 test("the rainbow is the web player's jam gradient", () => {

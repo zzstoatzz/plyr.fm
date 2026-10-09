@@ -12,6 +12,30 @@ export const TOP_PERIOD_LABELS = {
 export const DEFAULT_TOP_PERIOD: TopPeriod = "month";
 export const TOP_TRACKS_LIMIT = 10;
 
+/** The most `GET /tracks/top` returns; it has no offset, so a chart is at most this long. */
+export const TOP_CHART_LIMIT = 50;
+
+/** The search tab's charts, shortest window first: each continues the one before it. */
+export const CHART_PERIODS = ["week", "month", "all_time"] as const satisfies readonly TopPeriod[];
+
+export const CHART_TITLES = {
+  week: "top this week",
+  month: "top this month",
+  all_time: "top of all time",
+} as const satisfies Record<(typeof CHART_PERIODS)[number], string>;
+
+/** Each chart without the tracks an earlier one already listed; a chart left empty is dropped. */
+export function chartSections<T extends { id: number }>(charts: readonly { title: string; tracks: readonly T[] }[]): { title: string; tracks: T[] }[] {
+  const seen = new Set<number>();
+  return charts
+    .map(({ title, tracks }) => {
+      const fresh = tracks.filter((track) => !seen.has(track.id));
+      for (const track of fresh) seen.add(track.id);
+      return { title, tracks: fresh };
+    })
+    .filter((chart) => chart.tracks.length > 0);
+}
+
 /** The periods to try after `period`, in toggle order; the toggle skips any that come back empty. */
 export function periodsAfter(period: TopPeriod): TopPeriod[] {
   const start = TOP_PERIODS.indexOf(period);

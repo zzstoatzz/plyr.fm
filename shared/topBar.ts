@@ -1,15 +1,12 @@
 /**
- * The web player's top edge line while playing (Player.svelte `.player.is-playing::before`): accent, bright, with a glow.
- * One intended difference: at rest the web keeps the line at 32% opacity, and the app hides it.
+ * The web player's top edge line while playing (Player.svelte `.player.is-playing::before`): the accent, brightened.
+ * Intended differences in the app: the web keeps the line at 32% at rest and the app hides it; the web's line runs
+ * edge to edge at 95% with a glow, and the app's is a fainter one with no glow (see TopEdge).
  */
 export const TOP_BAR = {
   height: 1,
   fadeMs: 150,
-  playing: { opacity: 0.95, saturate: 1.25, brightness: 1.28 },
-  glow: [
-    { blur: 6, alpha: 0.65 },
-    { blur: 14, alpha: 0.45 },
-  ],
+  playing: { saturate: 1.25, brightness: 1.28 },
 } as const;
 
 /** What the line turns into while a jam is active; the gradient closes on its first color. */

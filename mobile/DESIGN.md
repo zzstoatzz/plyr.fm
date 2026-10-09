@@ -66,6 +66,11 @@ letters are narrower and lighter than San Francisco's.
   (`MoreFooter`). Their last row is a spinner while more exists; a page that
   fails to load becomes "couldn’t load more. tap to try again." instead of a
   silent end.
+- **The search tab's charts** run on: "top this week", then "top this month",
+  then "top of all time", each leaving out what an earlier one listed
+  (`shared/top.ts`). A chart counts likes in its window and is often short (the
+  week's had four tracks when this was written), and the API returns 50 at
+  most with no offset, so a longer window is the only way to keep going.
 - **Search results** grow as you scroll: the API has a per-kind limit and no
   offset, so the same query is asked again at 10, 25, then 50 per kind
   (`shared/search.ts`).
@@ -101,12 +106,14 @@ the sheet. VoiceOver gets the slider's adjustable, stepping 15 s.
 
 The web player's top bar (`shared/topBar.ts` holds its numbers, with a parity
 test against `Player.svelte`), drawn by `TopEdge` as part of the edge of what it
-sits on: round the capsule of the mini player, and round the top corners of the
-player sheet, fading out down the sides. It never runs past the shape.
+sits on: the top of the mini player's capsule and of the player sheet. It is
+brightest in the middle and gone before the corners begin.
 
-- An accent hairline, 1 pt, bright and glowing in the accent while a track
-  plays. Paused there is no line: the web keeps a dim one at rest, and the app
-  shows it only for playback.
+- An accent hairline, 1 pt at 45%, with no glow, while a track plays. The
+  web's is edge to edge at 95% with a glow; on the phone that read as a loud
+  colored bar.
+- Paused there is no line: the web keeps a dim one at rest, and the app shows
+  it only for playback.
 - The change is a 150 ms fade and nothing moves, so Reduce Motion has nothing
   to still.
 - The rainbow is the web's jam variant of the same line (`TopEdge`'s `jam`).

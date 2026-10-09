@@ -22,6 +22,7 @@ on:
       - "frontend/src/lib/config.ts"
       - "frontend/src/lib/search.svelte.ts"
       - "backend/src/backend/api/search.py"
+      - "backend/src/backend/api/tracks/listing.py"
       - "frontend/src/lib/queue.svelte.ts"
       - "frontend/src/lib/components/RichText.svelte"
       - "frontend/src/routes/u/*/*page.svelte"
