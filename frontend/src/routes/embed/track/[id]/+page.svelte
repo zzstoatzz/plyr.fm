@@ -9,12 +9,14 @@
 		setMediaSessionPlaybackState,
 		setMediaSessionPositionState
 	} from '$lib/media-session';
-	import { trackCoverUrl } from '$lib/track-cover';
+	import { trackCoverCandidates } from '$lib/track-cover';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
 	let track = $derived(data.track);
-	let coverUrl = $derived(trackCoverUrl(track));
+	let coverCandidates = $derived(trackCoverCandidates(track));
+	let failedCovers = $state(0);
+	let coverUrl = $derived(coverCandidates[failedCovers]);
 	let isAdultLabeled = $derived(
 		track.labels?.some((label) => label === 'sexual' || label === 'porn') ?? false
 	);
@@ -142,7 +144,7 @@
 	<div class="art-container">
 		{#if coverUrl}
 			<SensitiveImage src={coverUrl} respectPreference={false}>
-				<img src={coverUrl} alt={track.title} class="art" />
+				<img src={coverUrl} alt={track.title} class="art" onerror={() => failedCovers++} />
 			</SensitiveImage>
 		{:else}
 			<div class="art-placeholder">♪</div>
