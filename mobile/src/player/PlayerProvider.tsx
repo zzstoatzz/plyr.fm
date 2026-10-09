@@ -278,7 +278,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     else go("previous", step.queue);
   }, [progress.position, seek, go]);
 
-  const { controls: sleeping, takeTrackEnd } = useSleepTimer(audio);
+  const { controls: sleeping, takeTrackEnd } = useSleepTimer(audio, Math.max(0, Math.round(progress.duration - progress.position)));
 
   const toggle = useCallback(() => {
     if (status === "failed") setAttempt((n) => n + 1);

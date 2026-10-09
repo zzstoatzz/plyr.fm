@@ -9,7 +9,7 @@ const REFRESH_MS = 20_000;
 
 /** The player's sleep timer: a moon that opens a system menu, filled and accent while a timer runs. */
 export function SleepButton() {
-  const { sleep, sleepAfter, sleepAtTrackEnd, extendSleep, cancelSleep } = useSleep();
+  const { sleep, sleepAfter, sleepAtTrackEnd, extendSleep, cancelSleep, activityProblem } = useSleep();
   const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
@@ -42,6 +42,7 @@ export function SleepButton() {
           ))}
           <Button label="end of this track" onPress={sleepAtTrackEnd} />
         </Section>
+        {sleep && activityProblem ? <Section title={`not in the island: ${activityProblem}`}>{null}</Section> : null}
         {sleep ? <Button label="turn off" role="destructive" systemImage="moon.zzz" onPress={cancelSleep} /> : null}
       </Menu>
     </Host>

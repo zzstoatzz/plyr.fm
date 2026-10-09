@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useEffectEvent, useMemo, useRef, useState, type RefObject } from "react";
 import type { AudioTagHandle } from "react-native-audio-api";
+import { useSleepActivity } from "./useSleepActivity";
 import { extended, FADE_MS, SLEEP_EXTENSION_MINUTES, sleepIn, sleepVolume, type Sleep } from "./sleep";
 
 const FADE_STEP_MS = 250;
@@ -10,6 +11,8 @@ export type SleepControls = {
   sleepAtTrackEnd: () => void;
   extendSleep: () => void;
   cancelSleep: () => void;
+  /** Why the timer's Live Activity is not showing, when it is not. */
+  activityProblem: string | null;
 };
 
 export const SleepContext = createContext<SleepControls | null>(null);
@@ -24,7 +27,7 @@ export function useSleep(): SleepControls {
  * Runs the sleep timer against the current deck: fades it out and pauses at the end of a timed sleep.
  * `takeTrackEnd` is for the deck's ended event: true once, when the timer was waiting for that.
  */
-export function useSleepTimer(audio: RefObject<AudioTagHandle | null>) {
+export function useSleepTimer(audio: RefObject<AudioTagHandle | null>, trackLeft: number) {
   const [sleep, setSleep] = useState<Sleep | null>(null);
   const current = useRef(sleep);
   useEffect(() => {
@@ -59,16 +62,14 @@ export function useSleepTimer(audio: RefObject<AudioTagHandle | null>) {
     };
   }, [sleep, audio]);
 
-  const controls = useMemo<SleepControls>(
-    () => ({
-      sleep,
-      sleepAfter: (minutes) => setSleep(sleepIn(minutes, Date.now())),
-      sleepAtTrackEnd: () => setSleep({ kind: "track" }),
-      extendSleep: () => setSleep((running) => (running ? extended(running, SLEEP_EXTENSION_MINUTES, Date.now()) : running)),
-      cancelSleep: () => setSleep(null),
-    }),
-    [sleep],
-  );
+  const [actions] = useState(() => ({
+    sleepAfter: (minutes: number) => setSleep(sleepIn(minutes, Date.now())),
+    sleepAtTrackEnd: () => setSleep({ kind: "track" }),
+    extendSleep: () => setSleep((running) => (running ? extended(running, SLEEP_EXTENSION_MINUTES, Date.now()) : running)),
+    cancelSleep: () => setSleep(null),
+  }));
+  const activityProblem = useSleepActivity({ sleep, trackLeft, onExtend: actions.extendSleep, onCancel: actions.cancelSleep });
+  const controls = useMemo<SleepControls>(() => ({ sleep, ...actions, activityProblem }), [sleep, actions, activityProblem]);
 
   const takeTrackEnd = () => {
     if (current.current?.kind !== "track") return false;

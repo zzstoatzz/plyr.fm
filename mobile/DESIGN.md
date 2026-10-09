@@ -172,15 +172,34 @@ sent.
 - Known gap in the library: artwork loads in the background with no check that
   the track is still current, so a slow image can land on the next track.
 
-### up next, in the island: tried and dropped
+### our own Live Activity
 
-A Live Activity of our own (`expo-widgets`) listed the next three tracks in the
-island and on the lock screen, with rows that jumped to a track. Nate dropped
-it after using it on a phone: it did not work there, and it felt wrong even as
-an idea. Why it failed on the device was not diagnosed. The simulator draws
-only our pill, never the system's Now Playing beside it, so it could not show
-what the phone would. The code is kept on the branch
-`claude/ios-island-queue-v1`. Nothing replaces it yet.
+The system's Now Playing covers playback. The app adds one Live Activity of
+its own only while something else is happening, and nothing otherwise. Today
+that is the sleep timer (`expo-widgets`; `src/player/sleepActivity.tsx` draws
+it, `useSleepActivity.ts` drives it). Uploads and jams can join once the app
+can sign in.
+
+- **Compact**: a moon and the countdown. **Expanded and lock screen**: the
+  countdown, a bar filling toward the end, "+10 min" and "cancel", which act
+  without opening the app. "end of this track" counts down the track's
+  remaining time.
+- The countdown and bar are the system's timer views, so they tick without
+  the app sending updates.
+- It ends when the timer ends or is turned off, and any left over from a
+  killed app are ended at launch.
+- **The layout function runs in the widget extension as source text.** Only
+  its own body, its props and the `@expo/ui` components exist there. A
+  reference to anything else in the file, even a constant, fails silently and
+  leaves an empty black island.
+- If the activity cannot start or update, the sleep menu says why ("not in
+  the island: …"); the timer itself never depends on it.
+- Text is the system face: the extension does not carry Comic Neue.
+
+An earlier activity listed the next three tracks. Nate dropped it after using
+it on a phone: it did not work there, and it felt wrong even as an idea. Why
+it failed on the device was not diagnosed. It is kept on the branch
+`claude/ios-island-queue-v1`.
 
 ## AirPlay and other outputs
 

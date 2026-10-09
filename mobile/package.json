@@ -30,6 +30,7 @@
     "expo-status-bar": "~57.0.1",
     "expo-symbols": "~57.0.3",
     "expo-system-ui": "~57.0.4",
+    "expo-widgets": "~57.0.23",
     "plyr-shared": "workspace:*",
     "react": "19.2.3",
     "react-native": "0.86.3",
