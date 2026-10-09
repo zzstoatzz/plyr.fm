@@ -1,9 +1,13 @@
 import type { Track } from "plyr-shared/contract";
 import { useEffect, useEffectEvent, useRef, type RefObject } from "react";
 import { PlaybackNotificationManager, type AudioTagHandle } from "react-native-audio-api";
+import { latestOnly } from "./latestOnly";
 import { nowPlayingInfo } from "./nowPlayingInfo";
 import type { Controls, Progress } from "./PlayerProvider";
 import { timeline } from "./timeline";
+
+// the library shows a notification on a concurrent queue and mutates shared state there: two at once crash it
+const show = latestOnly((info: ReturnType<typeof nowPlayingInfo>) => PlaybackNotificationManager.show(info));
 
 type Args = { controls: Controls; progress: Progress; seeks: number; audio: RefObject<AudioTagHandle | null> };
 
@@ -34,7 +38,7 @@ export function useNowPlaying({ controls, progress, seeks, audio }: Args) {
   }, [canNext]);
 
   // iOS extrapolates the scrubber from elapsed time and speed, so this follows state changes and seeks, not every tick
-  const publish = useEffectEvent((current: Track) => PlaybackNotificationManager.show(nowPlayingInfo(current, { status, ...progress })));
+  const publish = useEffectEvent((current: Track) => show(nowPlayingInfo(current, { status, ...progress })));
 
   // hide() rejects when the native side has never registered a notification, which is every launch
   const shown = useRef(false);
@@ -52,6 +56,6 @@ export function useNowPlaying({ controls, progress, seeks, audio }: Args) {
     void PlaybackNotificationManager.enableControl("previousTrack", true);
     void PlaybackNotificationManager.enableControl("seekTo", true);
     timeline.mark("nowplaying", status);
-    void publish(track);
+    publish(track);
   }, [track, status, playing, progress.duration, seeks]);
 }
