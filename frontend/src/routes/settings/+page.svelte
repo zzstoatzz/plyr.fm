@@ -11,6 +11,8 @@ import WaveLoading from '$lib/components/WaveLoading.svelte';
 	import { AT_CLIENTS, DEFAULT_AT_CLIENT } from '$lib/atclients';
 	import ClientLogo from '$lib/components/ClientLogo.svelte';
 	import { ambient } from '$lib/ambient.svelte';
+	import { eq } from '$lib/eq.svelte';
+	import { player } from '$lib/player.svelte';
 	import { getReturnUrl, clearReturnUrl } from '$lib/utils/return-url';
 	import { redirectToLogin } from '$lib/utils/auth-redirect';
 
@@ -938,6 +940,29 @@ import WaveLoading from '$lib/components/WaveLoading.svelte';
 					</div>
 					<label class="toggle-switch">
 						<input type="checkbox" checked={autoDownloadLiked} onchange={(e) => handleAutoDownloadToggle((e.target as HTMLInputElement).checked)} />
+						<span class="toggle-slider"></span>
+					</label>
+				</div>
+
+				<div class="setting-row">
+					<div class="setting-info">
+						<h3>equalizer</h3>
+						<p>
+							{#if eq.supported}
+								adds a 10-band eq next to the volume slider in the player
+							{:else}
+								not available in this browser yet (iPhone and iPad stop routed audio when the screen locks)
+							{/if}
+						</p>
+					</div>
+					<label class="toggle-switch">
+						<input
+							type="checkbox"
+							aria-label="equalizer"
+							disabled={!eq.supported}
+							checked={eq.supported && eq.offered}
+							onchange={(e) => eq.setOffered(e.currentTarget.checked, player.audioElement)}
+						/>
 						<span class="toggle-slider"></span>
 					</label>
 				</div>

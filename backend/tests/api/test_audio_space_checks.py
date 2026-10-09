@@ -78,7 +78,9 @@ async def test_space_authority_only_for_space_audio(
                 else:
                     await stream_audio(
                         track.file_id,
-                        Request({"type": "http", "method": endpoint}),
+                        Request(
+                            {"type": "http", "method": endpoint, "query_string": b""}
+                        ),
                         session,
                     )
             assert (
@@ -90,7 +92,9 @@ async def test_space_authority_only_for_space_audio(
             assert response.url.startswith("https://cdn.example.com/")
         else:
             response = await stream_audio(
-                track.file_id, Request({"type": "http", "method": endpoint}), session
+                track.file_id,
+                Request({"type": "http", "method": endpoint, "query_string": b""}),
+                session,
             )
             assert response.status_code == (
                 200 if endpoint == "HEAD" and audience != "public" else 307
