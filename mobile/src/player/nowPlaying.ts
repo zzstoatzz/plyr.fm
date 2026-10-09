@@ -1,7 +1,7 @@
 import type { Track } from "plyr-shared/contract";
-import { IMAGE_WIDTHS, resizedImageUrl, trackCoverUrl } from "plyr-shared/images";
 import { useEffect, useEffectEvent, useRef, type RefObject } from "react";
 import { PlaybackNotificationManager, type AudioTagHandle } from "react-native-audio-api";
+import { nowPlayingInfo } from "./nowPlayingInfo";
 import type { Controls, Progress } from "./PlayerProvider";
 
 type Args = { controls: Controls; progress: Progress; seeks: number; audio: RefObject<AudioTagHandle | null> };
@@ -33,24 +33,16 @@ export function useNowPlaying({ controls, progress, seeks, audio }: Args) {
   }, [canNext]);
 
   // iOS extrapolates the scrubber from elapsed time and speed, so this follows state changes and seeks, not every tick
-  const publish = useEffectEvent((current: Track) =>
-    PlaybackNotificationManager.show({
-      title: current.title,
-      artist: current.artist,
-      album: current.album?.title,
-      artwork: resizedImageUrl(trackCoverUrl(current), IMAGE_WIDTHS.hero) ?? undefined,
-      duration: progress.duration || undefined,
-      elapsedTime: progress.position,
-      speed: playing ? 1 : 0,
-      state: playing ? "playing" : "paused",
-    }),
-  );
+  const publish = useEffectEvent((current: Track) => PlaybackNotificationManager.show(nowPlayingInfo(current, { status, ...progress })));
 
   // hide() rejects when the native side has never registered a notification, which is every launch
   const shown = useRef(false);
+  // a queue restored at launch is not announced until it is played, so opening the app never takes over the lock screen
+  const begun = useRef(false);
 
   useEffect(() => {
-    if (!track) {
+    if (playing) begun.current = true;
+    if (!track || !begun.current) {
       if (shown.current) void PlaybackNotificationManager.hide();
       shown.current = false;
       return;
@@ -59,5 +51,5 @@ export function useNowPlaying({ controls, progress, seeks, audio }: Args) {
     void PlaybackNotificationManager.enableControl("previousTrack", true);
     void PlaybackNotificationManager.enableControl("seekTo", true);
     void publish(track);
-  }, [track, playing, progress.duration, seeks]);
+  }, [track, status, playing, progress.duration, seeks]);
 }

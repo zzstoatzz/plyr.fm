@@ -79,6 +79,32 @@ key-value store) and comes back on launch, paused, at the saved position.
 - A track cannot be dragged between "up next" and "next from"; each section
   reorders within itself.
 
+## lock screen and Dynamic Island
+
+While audio plays, the island, the lock screen and Control Center are the
+system's Now Playing surface. The app feeds it through
+`MPNowPlayingInfoCenter` (react-native-audio-api's
+`PlaybackNotificationManager`); `src/player/nowPlayingInfo.ts` decides what is
+sent.
+
+- Every field is sent on every update. The system keeps whatever an update
+  leaves out, so a track with no album would otherwise show the last one's.
+- The clock runs only while audio moves: buffering reports rate 0.
+- A queue restored at launch is not announced until it is played.
+- The iOS Simulator renders none of these surfaces. They are checked on a phone.
+- Known gap in the library: artwork loads in the background with no check that
+  the track is still current, so a slow image can land on the next track.
+
+A Live Activity of our own is not built. An ongoing one during playback would
+sit beside the system's and split the island in two. The fit is a transient
+activity (`ActivityStyle.transient`): a brief expanded island confirming "playing
+next" or "added to queue" with an undo, and "next from: …" when a context
+starts. It needs a widget extension target, `NSSupportsLiveActivities`, and an
+App Group shared with the app for artwork (the extension has no network; static
+plus dynamic data must stay under 4 KB), which changes signing for every build.
+Later candidates once they exist: upload progress after sign-in, jams as a
+push-updated activity, a sleep timer.
+
 ## accessibility
 
 - Every control has a label; rows read "title, by artist" with a hint.
