@@ -19,7 +19,7 @@ artwork remains hidden unless allowed by the existing preference.
 
 The five station slugs and sampling policies stay in `api/radio/stations.py`.
 The client requests `/radio/state?catalog_only=true` except for the explicit
-`firehose` station, which allows its existing curated HLS broadcast. The default public state API retains its existing live-stream
+`firehose` station, which allows its existing curated HLS broadcast. The standalone radio embed (`/embed/radio`) follows the same rule and airs the broadcast through hls.js, falling back to the rotation when it drops. The default public state API retains its existing live-stream
 behavior for older clients. The native UI needs no database migration or extra
 service; outbound syndication uses the separate adapter described below.
 

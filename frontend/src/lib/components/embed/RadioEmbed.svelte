@@ -4,7 +4,8 @@
 	import TunerDial from '$lib/components/radio/TunerDial.svelte';
 	import SensitiveImage from '$lib/components/SensitiveImage.svelte';
 	import { IMAGE_WIDTHS, resizedImageUrl } from '$lib/utils/display-image';
-	import type { RadioState, RadioStation, RadioTrack } from '$lib/radio.svelte';
+	import type Hls from 'hls.js';
+	import type { LiveBroadcast, RadioState, RadioStation, RadioTrack } from '$lib/radio.svelte';
 
 	// standalone embed player: this is its own iframe context (not the main app),
 	// so it owns a local <audio> and its own station polling.
@@ -26,9 +27,36 @@
 	let pollTimer: number | null = null;
 	let loadingSource: string | null = null;
 	let receivedAt = 0;
+	/** stream url of the broadcast attached to the element, while one airs */
+	let liveSource: string | null = null;
+	let hls: Hls | null = null;
+	let hlsModule: typeof Hls | null = null;
+	let hlsLoad: Promise<typeof Hls | null> | null = null;
 
 	let current: RadioTrack | null = $derived(radioState?.current ?? null);
+	let live: LiveBroadcast | null = $derived(radioState?.live ?? null);
 	let activeSlug = $derived(radioState?.station_slug ?? station);
+	let activeStation = $derived(stations.find((s) => s.slug === activeSlug) ?? null);
+	let display = $derived.by(() => {
+		if (live && radioState) {
+			const radioUrl = `https://plyr.fm/radio/${radioState.station_slug}`;
+			return {
+				title: radioState.station,
+				artist: activeStation?.description || 'live broadcast',
+				artwork: live.artwork_url ?? current?.artwork_url ?? null,
+				titleHref: radioUrl,
+				artistHref: activeStation?.source_url ?? radioUrl
+			};
+		}
+		if (!current) return null;
+		return {
+			title: current.title,
+			artist: current.artist,
+			artwork: current.artwork_url,
+			titleHref: `https://plyr.fm/track/${current.id}`,
+			artistHref: `https://plyr.fm/u/${current.artist_handle}`
+		};
+	});
 
 	function stateProgress(fetched: RadioState): number {
 		const drift = Math.max(0, (performance.now() - receivedAt) / 1000);
@@ -36,24 +64,74 @@
 	}
 
 	function playAudio(el: HTMLAudioElement): void {
-		const source = el.src;
+		const source = liveSource ?? el.src;
+		const stillCurrent = () => (liveSource ?? el.src) === source;
 		void el
 			.play()
 			.then(() => {
-				if (el.src === source && tunedIn) {
+				if (stillCurrent() && tunedIn) {
 					loadingSource = null;
 					playing = !el.paused;
 				}
 			})
 			.catch((error: Error) => {
-				if (error.name === 'AbortError' || el.src !== source || !tunedIn) return;
+				if (error.name === 'AbortError' || !stillCurrent() || !tunedIn) return;
 				playing = tunedIn = false;
 			});
 	}
 
+	function preloadHls(): Promise<typeof Hls | null> {
+		hlsLoad ??= import('hls.js')
+			.then(({ default: module }) => (hlsModule = module))
+			.catch((e) => {
+				console.error('radio embed: failed to load hls.js', e);
+				hlsLoad = null;
+				return null;
+			});
+		return hlsLoad;
+	}
+
+	function detachLive(): void {
+		liveSource = null;
+		if (!hls) return;
+		hls.destroy();
+		hls = null;
+	}
+
+	/** air a broadcast. synchronous once hls.js is warm, so a tap's autoplay
+	 * permission survives; a cold module attaches (and plays) when it lands. */
+	function syncLive(el: HTMLAudioElement, broadcast: LiveBroadcast): void {
+		if (liveSource === broadcast.stream_url) {
+			if (tunedIn && el.paused) playAudio(el);
+			return;
+		}
+		detachLive();
+		liveSource = broadcast.stream_url;
+		el.onloadedmetadata = null;
+		const attach = (module: typeof Hls | null) => {
+			if (liveSource !== broadcast.stream_url) return;
+			if (broadcast.kind === 'hls' && module?.isSupported()) {
+				el.disableRemotePlayback = true;
+				hls = new module({ enableWorker: true });
+				hls.loadSource(broadcast.stream_url);
+				hls.attachMedia(el);
+			} else {
+				el.src = broadcast.stream_url;
+				el.load();
+			}
+			loadingSource = el.src;
+			if (tunedIn) playAudio(el);
+		};
+		if (broadcast.kind !== 'hls' || hlsModule) attach(hlsModule);
+		else void preloadHls().then(attach);
+	}
+
 	function syncAudio(fetched: RadioState) {
 		const el = audioElement;
-		if (!el || !fetched.current) return;
+		if (!el) return;
+		if (fetched.live) return syncLive(el, fetched.live);
+		if (liveSource) detachLive();
+		if (!fetched.current) return;
 		const target = stateProgress(fetched);
 		const changed = el.src !== fetched.current.stream_url;
 		if (changed) {
@@ -86,7 +164,8 @@
 
 	async function loadState(sync = false): Promise<void> {
 		try {
-			const query = station ? `?station=${encodeURIComponent(station)}` : '';
+			// same rule as the app: only firehose airs its external broadcast
+			const query = `?catalog_only=${station !== 'firehose'}${station ? `&station=${encodeURIComponent(station)}` : ''}`;
 			const res = await fetch(`${API_URL}/radio/state${query}`);
 			if (res.status === 404 && station) {
 				// unknown station slug (bad embed param or a renamed station) —
@@ -98,6 +177,7 @@
 			radioState = await res.json();
 			receivedAt = performance.now();
 			error = null;
+			if (radioState?.live?.kind === 'hls') void preloadHls();
 			if (sync && radioState) syncAudio(radioState);
 		} catch (e) {
 			console.error('radio embed: failed to load state', e);
@@ -122,7 +202,7 @@
 
 	function toggle() {
 		const el = audioElement;
-		if (!el || !current) return;
+		if (!el || !radioState || !display) return;
 		if (tunedIn) {
 			tunedIn = false;
 			playing = false;
@@ -130,8 +210,8 @@
 		} else {
 			// user gesture — safe to start audio
 			tunedIn = true;
-			syncAudio(radioState!);
-			playAudio(el);
+			syncAudio(radioState);
+			if (!radioState.live) playAudio(el);
 		}
 	}
 
@@ -160,6 +240,7 @@
 		pollTimer = window.setInterval(() => loadState(tunedIn), 30000);
 		return () => {
 			if (pollTimer) window.clearInterval(pollTimer);
+			detachLive();
 		};
 	});
 </script>
@@ -210,29 +291,26 @@
 		<div class="status">tuning…</div>
 	{:else if error}
 		<div class="status error">{error}</div>
-	{:else if current}
+	{:else if display}
 		<div class="now" class:tuning={switching}>
-			{#if current.artwork_url}
-				<SensitiveImage src={current.artwork_url} compact respectPreference={false}>
-					<img class="art" src={resizedImageUrl(current.artwork_url, IMAGE_WIDTHS.tile)} alt="" />
+			{#if display.artwork}
+				<SensitiveImage src={display.artwork} compact respectPreference={false}>
+					<img class="art" src={resizedImageUrl(display.artwork, IMAGE_WIDTHS.tile)} alt="" />
 				</SensitiveImage>
 			{:else}
 				<div class="art fallback"></div>
 			{/if}
 			<div class="meta">
-				<span class="label">{playing ? 'listening now' : 'on air'}</span>
+				<span class="label">{playing ? 'listening now' : live ? 'live' : 'on air'}</span>
 				<a
 					class="title"
-					href={`https://plyr.fm/track/${current.id}`}
+					href={display.titleHref}
 					target="_blank"
 					rel="noopener"
-					title={current.title}>{current.title}</a
+					title={display.title}>{display.title}</a
 				>
-				<a
-					class="artist"
-					href={`https://plyr.fm/u/${current.artist_handle}`}
-					target="_blank"
-					rel="noopener">{current.artist}</a
+				<a class="artist" href={display.artistHref} target="_blank" rel="noopener"
+					>{display.artist}</a
 				>
 			</div>
 			<button class="play" onclick={toggle} aria-label={playing ? 'pause radio' : 'play radio'}>
