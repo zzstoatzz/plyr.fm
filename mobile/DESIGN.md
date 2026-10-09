@@ -148,37 +148,15 @@ sent.
 - Known gap in the library: artwork loads in the background with no check that
   the track is still current, so a slow image can land on the next track.
 
-### up next, in the island
+### up next, in the island: tried and dropped
 
-While something plays and something follows it, the app runs one Live Activity
-of its own (`expo-widgets`; `src/player/upNextActivity.tsx` draws it,
-`useUpNextActivity.ts` drives it, `upNext.ts` decides what is in it).
-
-- **Expanded island and lock screen**: the next three playable tracks (artwork,
-  title, artist) and "+N more". A row is a button: tapping it jumps to that
-  track without opening the app. Tapping anywhere else opens the queue.
-- **Compact and minimal**: the next track's artwork, and "+N" for how many are
-  ahead.
-- It updates on every queue and track change, and ends when nothing playable is
-  left ahead, when a track fails, or ten minutes into a pause. A single track
-  never starts it, and neither does a queue restored at launch. Swiped away, it
-  stays away until the queue next runs out.
-- iOS only lets a foreground app start a Live Activity. That is why it is kept
-  through track changes and pauses instead of being ended and restarted: both
-  usually happen with the phone locked. One that timed out during a pause comes
-  back the next time the queue changes with the app open.
-- Nothing pops up when a track is queued: the island already lists it.
-- The widget extension has no network. Thumbnails are downloaded into the App
-  Group (`group.fm.plyr`) and passed by file path; only hosts known to serve a
-  small rendition are used, because an activity cannot draw an image larger
-  than itself. The props stay well under ActivityKit's 4 KB.
-- Text is the system face: the extension does not carry Comic Neue.
-- **To judge on a real phone**: during playback the island holds two pills, the
-  system's Now Playing and ours. The simulator draws only ours. Whether the
-  pair reads as one thing or as clutter is not something the simulator can
-  answer.
-- Later candidates: upload progress after sign-in, jams as a push-updated
-  activity, a sleep timer.
+A Live Activity of our own (`expo-widgets`) listed the next three tracks in the
+island and on the lock screen, with rows that jumped to a track. Nate dropped
+it after using it on a phone: it did not work there, and it felt wrong even as
+an idea. Why it failed on the device was not diagnosed. The simulator draws
+only our pill, never the system's Now Playing beside it, so it could not show
+what the phone would. The code is kept on the branch
+`claude/ios-island-queue-v1`. Nothing replaces it yet.
 
 ## AirPlay and other outputs
 

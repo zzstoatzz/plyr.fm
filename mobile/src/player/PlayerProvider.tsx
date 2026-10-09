@@ -11,7 +11,6 @@ import { discard, fetchAhead, locate } from "./media";
 import { useNowPlaying } from "./nowPlaying";
 import { forget, recall, remember } from "./saved";
 import { timeline } from "./timeline";
-import { useUpNextActivity } from "./useUpNextActivity";
 
 export type Status = "idle" | "loading" | "playing" | "paused" | "buffering" | "failed";
 type TagStatus = Exclude<Status, "idle" | "loading">;
@@ -401,7 +400,6 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
 
   useNowPlaying({ controls, progress, seeks, audio });
   useInterruptions(audio, playing);
-  useUpNextActivity(queue, !context || status === "idle" || status === "failed" ? "off" : status === "paused" ? "paused" : "playing", canPlay, jumpTo);
 
   return (
     <ControlsContext.Provider value={controls}>
