@@ -22,7 +22,8 @@ on:
       - "frontend/src/lib/config.ts"
       - "frontend/src/lib/queue.svelte.ts"
       - "frontend/src/lib/components/RichText.svelte"
-      - "frontend/src/routes/u/[[]handle]/+page.svelte"
+      - "frontend/src/routes/u/*/*page.svelte"
+      - "frontend/src/lib/components/player/Player.svelte"
       - ".github/workflows/check-mobile.yml"
   workflow_dispatch:
 
