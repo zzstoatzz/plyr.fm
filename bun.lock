@@ -16,6 +16,7 @@
         "expo": "~57.0.21",
         "expo-constants": "~57.0.20",
         "expo-dev-client": "~57.0.19",
+        "expo-file-system": "~57.0.7",
         "expo-font": "~57.0.4",
         "expo-haptics": "~57.0.3",
         "expo-image": "~57.0.4",
@@ -26,6 +27,7 @@
         "expo-status-bar": "~57.0.1",
         "expo-symbols": "~57.0.3",
         "expo-system-ui": "~57.0.4",
+        "expo-widgets": "~57.0.23",
         "plyr-shared": "workspace:*",
         "react": "19.2.3",
         "react-native": "0.86.3",
@@ -829,6 +831,8 @@
     "expo-system-ui": ["expo-system-ui@57.0.4", "", { "dependencies": { "@react-native/normalize-colors": "0.86.3", "debug": "^4.3.2" }, "peerDependencies": { "expo": "*", "react-native": "*", "react-native-web": "*" }, "optionalPeers": ["react-native-web"] }, "sha512-z//rxQJzhTNA1PcKrUtWmrd21jAS3nEDu1b0n8B/7LTTR933OcsZYP1HnbaZifuo2ZH/h7nce2Ow61WZ1Ig2bg=="],
 
     "expo-updates-interface": ["expo-updates-interface@57.0.2", "", { "peerDependencies": { "expo": "*" } }, "sha512-x3SA5toiHZEkW+5oeNdUM1Rvt6M3ExegQsSwS3Z1+S9gn9utGYTGBkb8MBQivhjIZiRlQYDIhauxA8kySQEWtQ=="],
+
+    "expo-widgets": ["expo-widgets@57.0.23", "", { "dependencies": { "@expo/plist": "^0.8.1", "@expo/ui": "~57.0.22" }, "peerDependencies": { "expo": "*", "react": "*", "react-native": "*" } }, "sha512-Xw6Rf/Aa4WK9jrHCRcMALxqK5xItpPFHswO1I4mkQ8GkQQhNBBJ2KBMtvictDaXcKI4BaxQbSyYYkOEooeGUig=="],
 
     "exponential-backoff": ["exponential-backoff@3.1.3", "", {}, "sha512-ZgEeZXj30q+I0EN+CbSSpIyPaJ5HVQD18Z1m+u1FXbAeT94mr1zw50q4q6jiiC447Nl/YTcIYSAftiGqetwXCA=="],
 

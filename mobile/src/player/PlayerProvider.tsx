@@ -9,6 +9,7 @@ import { fetchAudioUrl } from "@/data";
 import { decodes, streams } from "./formats";
 import { useNowPlaying } from "./nowPlaying";
 import { forget, recall, remember } from "./saved";
+import { useUpNextActivity } from "./useUpNextActivity";
 
 export type Status = "idle" | "loading" | "playing" | "paused" | "buffering" | "failed";
 type TagStatus = Exclude<Status, "idle" | "loading">;
@@ -274,6 +275,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
 
   useNowPlaying({ controls, progress, seeks, audio });
   useInterruptions(audio, playing);
+  useUpNextActivity(queue, !context || status === "idle" || status === "failed" ? "off" : status === "paused" ? "paused" : "playing", canPlay, jumpTo);
 
   const source = useMemo(() => (uri ? { uri } : null), [uri]);
 

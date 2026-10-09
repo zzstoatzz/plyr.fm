@@ -84,7 +84,7 @@ key-value store) and comes back on launch, paused, at the saved position.
 
 ## lock screen and Dynamic Island
 
-While audio plays, the island, the lock screen and Control Center are the
+While audio plays, the island, the lock screen and Control Center carry the
 system's Now Playing surface. The app feeds it through
 `MPNowPlayingInfoCenter` (react-native-audio-api's
 `PlaybackNotificationManager`); `src/player/nowPlayingInfo.ts` decides what is
@@ -98,15 +98,37 @@ sent.
 - Known gap in the library: artwork loads in the background with no check that
   the track is still current, so a slow image can land on the next track.
 
-A Live Activity of our own is not built. An ongoing one during playback would
-sit beside the system's and split the island in two. The fit is a transient
-activity (`ActivityStyle.transient`): a brief expanded island confirming "playing
-next" or "added to queue" with an undo, and "next from: …" when a context
-starts. It needs a widget extension target, `NSSupportsLiveActivities`, and an
-App Group shared with the app for artwork (the extension has no network; static
-plus dynamic data must stay under 4 KB), which changes signing for every build.
-Later candidates once they exist: upload progress after sign-in, jams as a
-push-updated activity, a sleep timer.
+### up next, in the island
+
+While something plays and something follows it, the app runs one Live Activity
+of its own (`expo-widgets`; `src/player/upNextActivity.tsx` draws it,
+`useUpNextActivity.ts` drives it, `upNext.ts` decides what is in it).
+
+- **Expanded island and lock screen**: the next three playable tracks (artwork,
+  title, artist) and "+N more". A row is a button: tapping it jumps to that
+  track without opening the app. Tapping anywhere else opens the queue.
+- **Compact and minimal**: the next track's artwork, and "+N" for how many are
+  ahead.
+- It updates on every queue and track change, and ends when nothing playable is
+  left ahead, when a track fails, or ten minutes into a pause. A single track
+  never starts it, and neither does a queue restored at launch. Swiped away, it
+  stays away until the queue next runs out.
+- iOS only lets a foreground app start a Live Activity. That is why it is kept
+  through track changes and pauses instead of being ended and restarted: both
+  usually happen with the phone locked. One that timed out during a pause comes
+  back the next time the queue changes with the app open.
+- Nothing pops up when a track is queued: the island already lists it.
+- The widget extension has no network. Thumbnails are downloaded into the App
+  Group (`group.fm.plyr`) and passed by file path; only hosts known to serve a
+  small rendition are used, because an activity cannot draw an image larger
+  than itself. The props stay well under ActivityKit's 4 KB.
+- Text is the system face: the extension does not carry Comic Neue.
+- **To judge on a real phone**: during playback the island holds two pills, the
+  system's Now Playing and ours. The simulator draws only ours. Whether the
+  pair reads as one thing or as clutter is not something the simulator can
+  answer.
+- Later candidates: upload progress after sign-in, jams as a push-updated
+  activity, a sleep timer.
 
 ## accessibility
 

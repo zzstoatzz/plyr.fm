@@ -47,6 +47,13 @@
         }
       ],
       [
+        "expo-widgets",
+        {
+          "groupIdentifier": "group.fm.plyr",
+          "bundleIdentifier": "fm.plyr.widgets"
+        }
+      ],
+      [
         "expo-font",
         {
           "fonts": [
