@@ -46,11 +46,8 @@ const tinted = (amount: number): Variants => accented((hex, mode) => mix(hex, pa
 // the web's support button: accent at 15% for the fill and 40% for the edge, over the profile card
 export const tint = { fill: tinted(0.15), border: tinted(0.4) } satisfies Record<string, Variants>;
 
-// the web player's top edge line: the accent through its resting and playing filters
-export const edge = {
-  resting: accented((hex) => filtered(hex, TOP_BAR.resting)),
-  playing: accented((hex) => filtered(hex, TOP_BAR.playing)),
-} satisfies Record<string, Variants>;
+// the web player's top edge line while playing: the accent through its filter
+export const edge = accented((hex) => filtered(hex, TOP_BAR.playing));
 
 const channel = (value: number) => {
   const c = value / 255;

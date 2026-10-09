@@ -1,8 +1,10 @@
-/** The web player's top edge line (Player.svelte `.player::before`): accent, dim at rest, bright with a glow while playing. */
+/**
+ * The web player's top edge line while playing (Player.svelte `.player.is-playing::before`): accent, bright, with a glow.
+ * One intended difference: at rest the web keeps the line at 32% opacity, and the app hides it.
+ */
 export const TOP_BAR = {
   height: 1,
   fadeMs: 150,
-  resting: { opacity: 0.32, saturate: 0.9, brightness: 0.75 },
   playing: { opacity: 0.95, saturate: 1.25, brightness: 1.28 },
   glow: [
     { blur: 6, alpha: 0.65 },

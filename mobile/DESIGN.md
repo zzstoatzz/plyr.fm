@@ -94,8 +94,9 @@ test against `Player.svelte`), drawn by `TopEdge` as part of the edge of what it
 sits on: round the capsule of the mini player, and round the top corners of the
 player sheet, fading out down the sides. It never runs past the shape.
 
-- An accent hairline, 1 pt. Paused it is dim; while a track plays it is bright
-  and glows in the accent.
+- An accent hairline, 1 pt, bright and glowing in the accent while a track
+  plays. Paused there is no line: the web keeps a dim one at rest, and the app
+  shows it only for playback.
 - The change is a 150 ms fade and nothing moves, so Reduce Motion has nothing
   to still.
 - The rainbow is the web's jam variant of the same line (`TopEdge`'s `jam`).

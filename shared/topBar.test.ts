@@ -20,10 +20,9 @@ function look(css: string) {
   };
 }
 
-test("the line is the web player's top bar at rest", () => {
+test("the line has the web top bar's height, color and fade", () => {
   const css = rule(".player::before");
   expect(number(css, /height: (\d+)px/)).toBe(TOP_BAR.height);
-  expect(look(css)).toEqual(TOP_BAR.resting);
   expect(number(css, /opacity ([\d.]+)s/) * 1000).toBe(TOP_BAR.fadeMs);
   expect(source).toContain("--top-bar-color: var(--accent);");
 });

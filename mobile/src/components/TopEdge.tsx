@@ -43,8 +43,8 @@ function Arc({ width, radius, stroke }: { width: number; radius: number; stroke:
 }
 
 /**
- * The web player's top bar, drawn on the edge of whatever it fills: an accent hairline, dim at rest, bright and
- * glowing while a track plays. `radius` is the container's corner radius; without one it is a capsule.
+ * The web player's top bar, drawn on the edge of whatever it fills: an accent hairline, bright and glowing
+ * while a track plays and gone at rest. `radius` is the container's corner radius; without one it is a capsule.
  * The change is a fade, so Reduce Motion has nothing to still.
  */
 export function TopEdge({ lit, radius, jam = false }: { lit: boolean; radius?: number; jam?: boolean }) {
@@ -67,16 +67,11 @@ export function TopEdge({ lit, radius, jam = false }: { lit: boolean; radius?: n
       importantForAccessibility="no-hide-descendants"
     >
       {corner > 0 ? (
-        <>
-          <Animated.View style={[styles.layer, { opacity: glow.interpolate({ inputRange: [0, 1], outputRange: [TOP_BAR.resting.opacity, 0] }) }]}>
-            <Arc width={size.width} radius={corner} stroke={jam ? null : edgeLine.resting} />
-          </Animated.View>
-          <Animated.View style={[styles.layer, styles.far, { opacity: glow.interpolate({ inputRange: [0, 1], outputRange: [0, TOP_BAR.playing.opacity] }) }]}>
-            <View style={styles.near}>
-              <Arc width={size.width} radius={corner} stroke={jam ? null : edgeLine.playing} />
-            </View>
-          </Animated.View>
-        </>
+        <Animated.View style={[styles.layer, styles.far, { opacity: glow.interpolate({ inputRange: [0, 1], outputRange: [0, TOP_BAR.playing.opacity] }) }]}>
+          <View style={styles.near}>
+            <Arc width={size.width} radius={corner} stroke={jam ? null : edgeLine} />
+          </View>
+        </Animated.View>
       ) : null}
     </View>
   );

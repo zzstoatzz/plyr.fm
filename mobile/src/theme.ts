@@ -18,7 +18,7 @@ export const color = {
 
 export const accentTint = { fill: dynamic(tint.fill), border: dynamic(tint.border) };
 
-export const edgeLine = { resting: dynamic(edge.resting), playing: dynamic(edge.playing) };
+export const edgeLine = dynamic(edge);
 
 export const inset = 20;
 export const thumb = 48;
