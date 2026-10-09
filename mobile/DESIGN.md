@@ -145,6 +145,9 @@ key-value store) and comes back on launch, paused, at the saved position.
 
 - Holding a track anywhere offers play next, add to queue, go to artist and go
   to album, through the router's native link menu.
+- Album and playlist pages have "add to queue" beside play, as the web does:
+  every playable track goes after your picks, and the banner reads
+  "added <name> to queue".
 - Queueing a track shows the **queue banner** (`QueueBanner`): a glass pill
   just above the mini player reading "queued <title>", the web's wording, with
   the glyph of the action taken. iOS has no system toast; this is ours, drawn

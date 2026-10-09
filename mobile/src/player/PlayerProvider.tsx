@@ -27,6 +27,8 @@ export type Controls = {
   playList: (tracks: readonly Track[], index: number, label?: string | null) => void;
   playNext: (track: Track) => void;
   addToQueue: (track: Track) => void;
+  /** Queue every playable track of a collection, in order; says how many went in. */
+  queueAll: (tracks: readonly Track[]) => number;
   jumpTo: (index: number) => void;
   /** A drag in the queue list: rows are the picks, a divider, then the tail. */
   dragTo: (from: number, to: number) => void;
@@ -240,6 +242,14 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   );
   const playNext = useCallback((added: Track) => queued(added, Q.playNext), [queued]);
   const addToQueue = useCallback((added: Track) => queued(added, (q, t) => Q.addToQueue(q, [t])), [queued]);
+  const queueAll = useCallback(
+    (tracks: readonly Track[]) => {
+      const playable = tracks.filter(canPlay);
+      edit((q) => Q.addToQueue(q, playable));
+      return playable.length;
+    },
+    [edit],
+  );
 
   const jumpTo = useCallback(
     (index: number) => {
@@ -389,6 +399,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       playList,
       playNext,
       addToQueue,
+      queueAll,
       jumpTo,
       dragTo,
       remove,
@@ -400,7 +411,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       previous,
       seek,
     }),
-    [queue, track, status, canNext, repeat, playList, playNext, addToQueue, jumpTo, dragTo, remove, clearUpNext, shuffleUpNext, toggleRepeat, toggle, next, previous, seek],
+    [queue, track, status, canNext, repeat, playList, playNext, addToQueue, queueAll, jumpTo, dragTo, remove, clearUpNext, shuffleUpNext, toggleRepeat, toggle, next, previous, seek],
   );
 
   useNowPlaying({ controls, progress, seeks, audio });
