@@ -69,10 +69,17 @@ letters are narrower and lighter than San Francisco's.
 
 ## scrubber
 
-The one control that is not the system's. The iOS 26 slider's glass thumb is
-large for a player and ignores control size, so `src/components/Scrubber.tsx`
-draws a 4 pt track with a 12 pt thumb (18 pt while held) in the accent. The
-whole 44 pt strip takes the touch; VoiceOver gets an adjustable that steps 15 s.
+The system slider, so the thumb is the system's glass and lifts under the
+finger. `modules/scrubber` wraps `UISlider` in a 56 pt strip: a touch anywhere
+on the strip brings the thumb to the finger, so there is nothing to aim at, and
+because the touch lands on a control, a drag that drifts up or down never pulls
+the sheet. VoiceOver gets the slider's adjustable, stepping 15 s.
+
+## the player sheet
+
+- A drag that starts on the controls (scrubber, transport, the action row) does
+  not move the sheet: `modules/sheet-guard` takes the pan there. The sheet is
+  dismissed from the artwork, the title or the grabber.
 
 ## queue
 

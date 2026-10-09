@@ -1,10 +1,9 @@
 import { credits, formatTime } from "plyr-shared/format";
 import { IMAGE_WIDTHS, trackCoverUrl } from "plyr-shared/images";
 import { upNext } from "plyr-shared/queue";
-import { richText } from "plyr-shared/richtext";
 import { useRouter } from "expo-router";
 import { useState } from "react";
-import { Linking, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Artwork } from "@/components/Artwork";
 import { Scrubber } from "@/components/Scrubber";
@@ -14,14 +13,13 @@ import { usePlayer, useProgress } from "@/player/PlayerProvider";
 import { color, inset, radius } from "@/theme";
 import { type } from "@/type";
 import { RoutePicker } from "../modules/route-picker";
+import { SheetGuard } from "../modules/sheet-guard";
 
 export default function Player() {
   const { track, queue, repeat, status, canNext, next, previous, seek, toggleRepeat } = usePlayer();
   const { position, duration } = useProgress();
   const { width } = useWindowDimensions();
   const [scrub, setScrub] = useState<number | null>(null);
-  const [more, setMore] = useState(false);
-  const [clipped, setClipped] = useState(false);
   const router = useRouter();
   const open = useOpen();
   if (!track) return null;
@@ -36,7 +34,6 @@ export default function Player() {
   const art = Math.min(width - inset * 2, 360);
   const album = track.album;
 
-  const about = track.description?.trim();
   const queued = upNext(queue).length;
 
   return (
@@ -72,72 +69,51 @@ export default function Player() {
             </Pressable>
           ) : null}
         </View>
-        <View>
-          <Scrubber
-            value={duration > 0 ? shown : 0}
-            max={duration}
-            label="position"
-            valueText={`${formatTime(shown)} of ${formatTime(duration)}`}
-            onChange={setScrub}
-            onCommit={(seconds) => {
-              seek(seconds);
-              setScrub(null);
-            }}
-          />
-          <View style={styles.times}>
-            <Text style={[type.meta, type.numeric, { color: color.muted }]}>{formatTime(shown)}</Text>
-            <Text style={[type.meta, { color: status === "failed" ? color.danger : color.muted }]}>
-              {status === "failed" ? "couldn’t play this track" : status === "buffering" ? "buffering" : ""}
-            </Text>
-            <Text style={[type.meta, type.numeric, { color: color.muted }]}>-{formatTime(Math.max(duration - shown, 0))}</Text>
+        <SheetGuard style={styles.guarded}>
+          <View>
+            <Scrubber
+              value={duration > 0 ? shown : 0}
+              max={duration}
+              label="position"
+              valueText={`${formatTime(shown)} of ${formatTime(duration)}`}
+              onChange={setScrub}
+              onCommit={(seconds) => {
+                seek(seconds);
+                setScrub(null);
+              }}
+            />
+            <View style={styles.times}>
+              <Text style={[type.meta, type.numeric, { color: color.muted }]}>{formatTime(shown)}</Text>
+              <Text style={[type.meta, { color: status === "failed" ? color.danger : color.muted }]}>
+                {status === "failed" ? "couldn’t play this track" : status === "buffering" ? "buffering" : ""}
+              </Text>
+              <Text style={[type.meta, type.numeric, { color: color.muted }]}>-{formatTime(Math.max(duration - shown, 0))}</Text>
+            </View>
           </View>
-        </View>
-        <View style={styles.controls}>
-          <TransportButton symbol="backward.fill" label="previous track" size={30} onPress={previous} />
-          <PlayPause size={44} />
-          <TransportButton symbol="forward.fill" label="next track" size={30} disabled={!canNext} onPress={next} />
-        </View>
-        <View style={styles.controls}>
-          <TransportButton
-            symbol={repeat === "one" ? "repeat.1" : "repeat"}
-            label={repeat === "one" ? "stop repeating" : "repeat this track"}
-            size={20}
-            tint={repeat === "one" ? color.accent : color.muted}
-            selected={repeat === "one"}
-            onPress={toggleRepeat}
-          />
-          <RoutePicker tint={color.muted} activeTint={color.accent} style={styles.route} />
-          <TransportButton
-            symbol="list.bullet"
-            label={queued ? `queue, ${queued} up next` : "queue"}
-            size={20}
-            tint={color.muted}
-            onPress={() => router.push("/queue")}
-          />
-        </View>
-        {about ? (
-          <View style={styles.about}>
-            <Text style={[type.secondary, { color: color.muted }]} numberOfLines={more ? undefined : 3}>
-              {richText(about).map((part, i) =>
-                part.type === "link" ? (
-                  <Text key={i} style={{ color: color.accent }} accessibilityRole="link" onPress={() => void Linking.openURL(part.href)}>
-                    {part.content}
-                  </Text>
-                ) : (
-                  part.content
-                ),
-              )}
-            </Text>
-            {clipped || more ? (
-              <Pressable onPress={() => setMore((open) => !open)} accessibilityRole="button" accessibilityState={{ expanded: more }} hitSlop={12} style={styles.link}>
-                <Text style={[type.secondary, type.strong, { color: color.accent }]}>{more ? "less" : "more"}</Text>
-              </Pressable>
-            ) : null}
-            <Text style={[type.secondary, styles.measure]} onTextLayout={(event) => setClipped(event.nativeEvent.lines.length > 3)} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-              {about}
-            </Text>
+          <View style={styles.controls}>
+            <TransportButton symbol="backward.fill" label="previous track" size={30} onPress={previous} />
+            <PlayPause size={44} />
+            <TransportButton symbol="forward.fill" label="next track" size={30} disabled={!canNext} onPress={next} />
           </View>
-        ) : null}
+          <View style={styles.controls}>
+            <TransportButton
+              symbol={repeat === "one" ? "repeat.1" : "repeat"}
+              label={repeat === "one" ? "stop repeating" : "repeat this track"}
+              size={20}
+              tint={repeat === "one" ? color.accent : color.muted}
+              selected={repeat === "one"}
+              onPress={toggleRepeat}
+            />
+            <RoutePicker tint={color.muted} activeTint={color.accent} style={styles.route} />
+            <TransportButton
+              symbol="list.bullet"
+              label={queued ? `queue, ${queued} up next` : "queue"}
+              size={20}
+              tint={color.muted}
+              onPress={() => router.push("/queue")}
+            />
+            </View>
+        </SheetGuard>
       </ScrollView>
     </SafeAreaView>
   );
@@ -146,13 +122,11 @@ export default function Player() {
 const styles = StyleSheet.create({
   fill: { flex: 1 },
   screen: { paddingHorizontal: inset, paddingTop: 48, paddingBottom: 24, gap: 24 },
-  about: { paddingTop: 4, gap: 6 },
-  // laid out unseen at full length, to learn whether three lines cut the description short
-  measure: { position: "absolute", left: 0, right: 0, opacity: 0 },
+  guarded: { gap: 24 },
   art: { alignItems: "center" },
   meta: { gap: 4 },
   link: { alignSelf: "flex-start", maxWidth: "100%", minHeight: 28, justifyContent: "center" },
   route: { width: 44, height: 44 },
-  times: { flexDirection: "row", justifyContent: "space-between", marginTop: -10 },
+  times: { flexDirection: "row", justifyContent: "space-between", marginTop: -8 },
   controls: { flexDirection: "row", alignItems: "center", justifyContent: "space-evenly" },
 });
