@@ -150,19 +150,13 @@ archival means MOVING content, not summarizing. the detailed write-ups are prese
 
 ## when Gemini refuses
 
-The Gemini step is allowed to fail. If it does, the next step voices the same
-script with Kokoro (`scripts/generate_tts_local.py`, `kokoro-82m`) on the
-runner: no key, no account, model files downloaded from the kokoro-onnx
-release and checked against pinned sha256 hashes. The run carries a warning,
-and the PR body says which voice was used ("voiced by `kokoro-82m (fallback:
-… refused)`"). Added after #2123: from October 1, 2026 Google answered every
-generation call from the repo's key with 403 "Your project has been denied
-access", and three status PRs went out with no episode.
-
-Kokoro reads each turn in one voice per speaker (`af_kore`, `am_puck`) with a
-short gap between turns; it has no conversational mode, so it is flatter than
-Gemini. It is the floor, not the target: restore Gemini by putting a working
-key in `GOOGLE_API_KEY` and the next run uses it again with no other change.
+The run fails at the audio step and there is no episode. That is deliberate:
+a fallback voice (Kokoro on the runner) was built on October 10, 2026 and
+rejected as below the bar for something published under the project's name.
+Fix the credential and re-run with `window_since` set to the start of the gap.
+#2123 is the worked example: Google denied the old key's project for ten days,
+and a key on a different project restored it. `google-genai` is pinned in
+`scripts/generate_tts.py` so an SDK release is never the suspect.
 
 ## audio generation
 
