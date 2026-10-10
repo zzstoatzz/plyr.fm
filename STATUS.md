@@ -47,6 +47,36 @@ plyr.fm should become:
 
 ### October 2026
 
+#### sharing a private track was still calling a removed method, and the e2e that would have caught it was skipping (#2124–#2127, October 2 — prod `2026.1002.054138`)
+
+#2122 moved credential signing to the new alpha but left the access list on
+`simplespace.addMember`, which the same alpha removed. Adding a listener in the
+portal got `404 UnknownMethod` from zds. The grant is now
+`simplespace.putMember` with `read: true, write: false`, and the membership
+procedures no longer expect a JSON body, which is what made sharing also work
+against the reference alpha PDS. Verified by hand against both hosts with the
+roles swapped: refused before the grant, played after, refused again after
+removal. Credentials under this alpha last ten minutes, not two hours, and a
+host can be told of a revocation; plyr does not send that notice (same
+contract as HappyView's October 2 notes on the alpha release). No fallback to
+the old method, and no migration of existing grants.
+
+the private-media e2e had been green while skipping its sharing leg whenever
+the second account's secrets were absent, which they were. #2125 requires them
+and adds a `production` dispatch target so the workflow is part of calling a
+release verified. The first production dispatch failed on the test helper, not
+the app: the login page was submitted before its PDS-options request returned
+(#2126), and the removal selector assumed a listener's display name equals
+their handle, which the production account's custom name broke (#2127). From
+06:00Z October 2 the full flow — sign in, private upload, grant, member plays,
+remove, member refused — passes on staging and on production. The browser
+sign-in stall recorded September 13 did not reproduce in any of these runs.
+
+**smaller**: desktop track-list artwork went from 48 to 80 px (#2129, October
+3) and was reverted the next day because it did not look right (#2130); both
+staging only, so nothing changed in production. The podcast for the September
+23 → October 2 window was never rendered (#2123, still open).
+
 #### the review queue got its first decisions (October 2 — no code)
 
 The queue had 76 open items and no human call on any of them. A read-only
@@ -157,61 +187,7 @@ and failed before building (#2115).
 
 ### September 2026
 
-See `.status_history/2026-09.md` for the full write-ups.
-
-#### September 26–28
-
-- **the radio page is the sister-radio fork, and four stations are on the
-  sister network** (#2097–#2107, September 28 — prod `2026.0928.035150`,
-  `2026.0928.140223`, seven frontend promotes; `plyr-radio` Fly app): the
-  SolidJS listener page from our fork of Ana's sister-radio is vendored and
-  mounted in a shadow root over plyr's global player, catalog-only, with
-  Redis listener presence whose identity is the HttpOnly session cookie and
-  nothing else. The same fork runs as a Rust adapter advertising `loved`,
-  `fresh`, `deep-cuts` and `slop` as `did:web` stations with signed
-  `pet.nkp.radio.station` records and `requestCrawl`; Ana's tuner lists
-  them. Seven fixes the same day: queued pause events at track boundaries
-  and the OBS autoplay contract (#2099), iOS mute (#2101), clock-skew seeks
-  (#2104), Firehose restored as the one live HLS exception and radio seeking
-  removed from Media Session (#2105), now-playing reports without counting
-  the broadcast (#2106), uploader avatars (#2107). **open**: #2102 folds the
-  adapter into the backend; nothing has been checked on a physical iPhone.
-- **smaller**: artist-avatar artwork fallback and Top Tracks opening on the
-  past month (#2108, announced September 28); the Zig-rewrite Redis machine
-  deleted (#2110); the musician studio's service removed (#2094, September 26)
-  after the September 20 pause — no Moss, Kite or Reed track ever passed the
-  listening gate.
-
-#### September 20–23
-
-- **the upload pipeline got a pulse, and the first reading was red**
-  (#2084, #2085, #2087, September 21 — prod `2026.0921.025041` →
-  `2026.0923.005928`): `GET /health/freshness` for an external monitor; four
-  phase-less `pending` rows from April and July that the reaper had never
-  swept; operator DMs with rich-text links.
-- **Blacksky spells `repo?` with a colon** (#2089, September 22 — prod
-  `2026.0923.005928`): a sign-in fix scoped to the exact issuer; blob upload
-  there is still unverified.
-- **the status podcast is rendered by Gemini 3.8 in a step the writer cannot
-  see** (#2090, #2092, September 23); the September 20 episode had turned a
-  host name into a category, and transcripts are now read before merge.
-- **musician studio paused** (#2083, September 20) and **bounded truncation
-  recovery** (#2081, September 20 — prod `2026.0921.025041`).
-
-#### September 1–19
-
-- **an upload is two writes and one promise** (#2075, September 19 — prod
-  `2026.0919.214851`); **the PDS DPoP nonce was thrown away after every
-  request** (#2072, #2073); **a double-clicked upload, and what the red test
-  suites were hiding** (#2063–#2070, September 18); **the queue's shared
-  connection and revision are atomic** (#2061, #2062).
-- **publishing permissions are independent of storage** (#2047–#2058,
-  September 12–14 — prod `2026.0913.023332` → `2026.0914.040530`); **three
-  musicians who must listen before they publish** (#2031–#2051); **agents on
-  both sides of the API** (#2022–#2025, #2036).
-- **the player's clipped "g" exposed a track-identity collision**
-  (#2026–#2028, September 5); **the footer became spotify's** (#1987–#2004);
-  **the status-maintenance run knows where things landed** (#2008–#2021).
+See `.status_history/2026-09.md` for detailed history.
 
 ### August 2026
 
@@ -273,7 +249,7 @@ works across Space boundaries remains a separate migration decision.
 
 the August arcs that sat here until September 20 — the spotify footer, supporter standing via attested.network, the iOS lock-screen scrubber, the credential chain — are in `.status_history/2026-09.md` under "priorities archived 2026-09-20"; their open threads are in known issues.
 
-**still experimental — private media on permissioned spaces** (#1557→#1574, #1684, #1876–#1905, epic #1384): private audio in an artist-owned permissioned space (never R2), credential-gated playback, and since August 22 an artist-named member list rather than owner-only — the `simplespace` member list on the artist's PDS decides, and plyr never stores membership: it asks the space host for a credential with the reader's session and holds that answer for the credential's lifetime (a refusal for five minutes), so a change the artist makes from any client is honored without plyr in the loop (August 23). Every sign-in now requests the private-media permission set and a spaces PDS expands it into `space:` grants at consent, so the *grant* is the capability signal (advertised `scopes_supported` never listed the dynamic scopes and hid the feature from the official alpha PDS). **open**: the cross-account e2e leg needs its `ALPHA_TEST_*` secrets; membership and supporter standing stay separate facts by design; downloads of private tracks are still refused for everyone, owner included, until a private download byte path exists. Design: `docs/internal/architecture/private-media-access-list.md`. the wire contract is the spaces-alpha lexicons at the tip of atproto's `permissioned-data` branch, with Bulletin as the reference client; zds tracks that branch and has rejected stale bodies twice (#1656, #1876), so drift there shows up as a failed first private upload. The July Proposal-0016 alignment replaces the obsolete `ats://` draft addresses with canonical `at://{authority}/space/{type}/{skey}` addresses, separates the space-type lexicon from the OAuth permission set, resolves dedicated space hosts with PDS fallback, and sends a confidential-client attestation separately from the user's delegation token. The current owner-only policy remains intentionally narrow; interoperable catalog sharing needs a product policy and UX on top of the protocol primitives. See `docs/internal/architecture/permissioned-private-media.md`.
+**still experimental — private media on permissioned spaces** (#1557→#1574, #1684, #1876–#1905, epic #1384): private audio in an artist-owned permissioned space (never R2), credential-gated playback, and since August 22 an artist-named member list rather than owner-only — the `simplespace` member list on the artist's PDS decides, and plyr never stores membership: it asks the space host for a credential with the reader's session and holds that answer for the credential's lifetime (a refusal for five minutes), so a change the artist makes from any client is honored without plyr in the loop (August 23). Every sign-in now requests the private-media permission set and a spaces PDS expands it into `space:` grants at consent, so the *grant* is the capability signal (advertised `scopes_supported` never listed the dynamic scopes and hid the feature from the official alpha PDS). **open**: membership and supporter standing stay separate facts by design; downloads of private tracks are still refused for everyone, owner included, until a private download byte path exists. Design: `docs/internal/architecture/private-media-access-list.md`. the wire contract is the spaces-alpha lexicons at the tip of atproto's `permissioned-data` branch, with Bulletin as the reference client; zds tracks that branch and has rejected stale bodies twice (#1656, #1876), so drift there shows up as a failed first private upload. The July Proposal-0016 alignment replaces the obsolete `ats://` draft addresses with canonical `at://{authority}/space/{type}/{skey}` addresses, separates the space-type lexicon from the OAuth permission set, resolves dedicated space hosts with PDS fallback, and sends a confidential-client attestation separately from the user's delegation token. The current owner-only policy remains intentionally narrow; interoperable catalog sharing needs a product policy and UX on top of the protocol primitives. See `docs/internal/architecture/permissioned-private-media.md`.
 
 **next**: remove the `/admin/*` machine-endpoint aliases now that prod calls `/internal/*` (#1691); re-enable `test_private_media.py` somewhere that has the local postgres/redis fixtures (it is excluded from the staging-facing workflow). which surfaces beyond albums/playlists count as queueable contexts (artist catalogs #1353, feeds/search). publish the five record lexicons (`fm.plyr.track`, `.like`, `.comment`, `.list`, `.actor.profile`) with a docs-quality pass on each (next phase after #1569); a production smoke-test harness for private media (file-types × visibilities, fully inert — no DM/listing/stats — per prod release); enable the `copyright-paradigm` flag for own DID and start dogfooding on prod; co-writer / publisher editing UI for `additionalInterestedParties` (backend plumbed end-to-end, frontend deferred); prefill ISWC/ISRC/masterOwner on the portal edit form (we only have the URIs locally, not field contents); fly worker tcp health check (running-but-stuck symptom detector); upstream `atproto_oauth.OAuthClient` body-factory support (lets us drop `_signed_streaming_post`); deploy-docs sanity check; `config.py` decomposition.
 
@@ -286,16 +262,8 @@ the August arcs that sat here until September 20 — the spotify footer, support
 - **PDS blob upload to blacksky.app is unverified after the nonce fix** (#2072): the September 9 failure there had the same `ReadError('')` signature as selfhosted.social, which the fix cleared in prod, but there is no test account on blacksky. #2089 (September 22) fixed a separate Blacksky problem — sign-in dying on its `repo:?` scope serialization — and does not settle this one.
 - **the upload-stall alert shows three job IDs plus "(+N more)"** (#2087): the triage runbook's step 5 says to use the full IDs from the alert; the rest are in Logfire. The freshness monitor's wiring lives outside this repo.
 - **nothing alerts when a workflow on main is red**: `e2e private media` failed on ten consecutive pushes (September 12–18) before anyone looked. `gh run list --workflow "e2e private media"` is the check until there is one.
-- **the cross-account member leg of the private-media e2e still skips**: `ALPHA_TEST_HANDLE`/`ALPHA_TEST_PASSWORD` are not set, so the flow that adds a second account to a Space and plays the track never runs in CI.
 - **light777.selfhosted.social's duplicate track (1323/1324) is theirs to remove**: same `file_id`, one R2 object; the refcount guard keeps the audio when either row is deleted. `test_refcount_prevents_r2_deletion` covers it.
 - **staging has two artist rows for `nate.selfhosted.social`**: `GET /artists/by-handle/…` and `GET /albums/…` 500 with `MultipleResultsFound` on staging; prod has one row.
-- **browser private-media e2e stops at PDS sign-in** (September 13): runs
-  [34767184692](https://github.com/zzstoatzz/plyr.fm/actions/runs/34767184692) and
-  [34785740209](https://github.com/zzstoatzz/plyr.fm/actions/runs/34785740209)
-  both timed out before upload or playback because the browser blocked the
-  `pds.zat.dev` authorization form under `form-action 'self'`. This predates
-  #2057. Authenticated API and actual Space blob smoke passed; they do not prove
-  that browser sign-in/upload works. The CSP cause remains unresolved.
 - **one artwork scan returned 400** (September 13, 18:33 UTC): track 1303's
   artwork saved and its CDN read returned 200, but the background request to
   the moderation service's `/scan-image` failed. The trace did not record the
@@ -307,7 +275,7 @@ the August arcs that sat here until September 20 — the spotify footer, support
 - **66 production tracks lost their PDS blob to the edit bug** (#1904 fixed the bug, August 22): every metadata edit rebuilt the PDS record without `audioBlob`, so the PDS garbage-collected the blob and jetstream mirrored the blob-less record back. 21 artists affected since March 18; the audio still exists in R2. Repairing means re-uploading and rewriting records on other people's behalf, so it is **deliberately not done** — it waits on nate's call about consent (heads-up post or opt-in). affected rows: `audio_storage='r2' AND pds_blob_size IS NOT NULL AND pds_blob_cid IS NULL`.
 - **a DM that fails for a transient reason is never retried** (September 1): `_send_track_notification` correctly leaves `notification_sent` false when the send fails, but the only caller that would retry it is the Jetstream identity-update hook, which does not fire for an ordinary upload. track 1264's chat timeout on September 1 is a permanent miss; #1953 fixed the revoked-session case only. a scheduled sweep of un-notified tracks older than a few minutes is the missing piece.
 - **non-web-playable uploads wait ~5 minutes to become playable in Chrome/Firefox** ([#1932](https://github.com/zzstoatzz/plyr.fm/issues/1932), [#1933](https://github.com/zzstoatzz/plyr.fm/issues/1933)): the optimize task took 4m40s and 4m52s for two AIFF uploads on August 24, ~90s of which is streaming the source out of R2 before ffmpeg starts, and the "new track" DM goes out at +3s — so a listener following the notification lands on the greyed state #1934 added rather than a player. defer the DM for `is_optimizing` tracks until the swap lands, and profile the R2→disk stream.
-- **the revised private-media permission set is a re-consent event** (#1898): the `authority: "*"` reader permission only takes effect for sessions that consented after it was published, so a member added before their next sign-in cannot mint a credential yet. Credentials also live two hours by protocol with no revocation, so removal from a member list is eventual.
+- **the revised private-media permission set is a re-consent event** (#1898): the `authority: "*"` reader permission only takes effect for sessions that consented after it was published, so a member added before their next sign-in cannot mint a credential yet. A credential outlives removal from the member list until its `exp` (ten minutes under the October 1 alpha, per #2124), and plyr does not send the host's revocation notice, so removal is eventual.
 - **Logfire retention is shorter than time-to-report** ([#1813](https://github.com/zzstoatzz/plyr.fm/issues/1813)): on August 9 the project's earliest record was the same morning. A July 6 PDS-blob failure was therefore undiagnosable a month later — the DB row recorded *that* it failed, never why. Both the new mirroring alert and #1811's failure reasons are only worth as much as the window they survive in. Cheap mitigation for anything we may be asked about later: persist the reason next to the row, which outlives any retention setting.
 - **the PDS picker offers tracks this deployment can't read** ([#1814](https://github.com/zzstoatzz/plyr.fm/issues/1814)): `pds_savable_count` checks ungated + no blob + not optimizing, none of which establishes that the bytes are reachable from here. After #1811 the failure is at least legible instead of a bare count, but the honest behavior is not to offer them. Both candidate fixes have an objection — a per-track HEAD is request-time I/O for a metadata endpoint, and an `r2_url`-origin heuristic reintroduces origin-sniffing right after #1805 removed it from the write path — so it wants a deliberate call. A third framing: if the record carries an `audioBlob`, mirror it in (#1778) rather than hide the track.
 - **`just backend test` runs serially, CI runs `-n auto`** ([#1815](https://github.com/zzstoatzz/plyr.fm/issues/1815)): the two take different paths through `conftest.py` — serial uses `_setup_database_direct` with no template database, no advisory lock, and no per-worker redis db. The entire parallel bootstrap only ever executed in CI, which is why #1809's bugs were invisible locally despite failing 5/5 once run CI's way. Distinct from the shared-compose-project issue below, which is about *concurrent* sessions rather than parallel workers.
@@ -485,13 +453,13 @@ see the [contributing guide](https://docs.plyr.fm/contributing/) for setup instr
 
 ---
 
-this is a living document. last updated 2026-10-02: the review queue's first
-decisions (76 → 33 open), the never-scanned tracks worked through, #2123 filed;
-earlier the same day: spaces credentials signed per
-the current permissioned-data branch, unmirrored-track ingest fixed (#2121, #2122);
-before that, 2026-10-01 (status maintenance): the
-September 26–28 radio window written up (#2097–#2108) and every September
-section moved to `.status_history/2026-09.md`; the radio entries that said
-"staging" corrected to the September 28 releases; #2114's deploy path noted.
-earlier the same day: copyright flags rest on in-step evidence, stored scans
-rescored (#2112–#2117); previously 2026-09-26: musician studio retired (#2094).
+this is a living document. last updated 2026-10-05 (status maintenance):
+private-track sharing restored on current Spaces hosts and the e2e sharing leg
+made mandatory, on staging and production (#2124–#2127, prod
+`2026.1002.054138`); the September summary moved to
+`.status_history/2026-09.md`; two private-media e2e known issues closed by the
+October 2 runs; the credential-lifetime note corrected to the October 1 alpha.
+before that, 2026-10-02: the review queue's first decisions (76 → 33 open),
+#2123 filed; spaces credentials signed per the current permissioned-data
+branch, unmirrored-track ingest fixed (#2121, #2122); 2026-10-01: copyright
+flags rest on in-step evidence (#2112–#2117).
