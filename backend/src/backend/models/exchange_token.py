@@ -34,3 +34,6 @@ class ExchangeToken(Base):
     is_dev_token: Mapped[bool] = mapped_column(
         Boolean, default=False, nullable=False, server_default="false"
     )
+    # S256 PKCE challenge from a native app sign-in. when set, the exchange
+    # must present the matching verifier and never sets a cookie
+    code_challenge: Mapped[str | None] = mapped_column(String(64), nullable=True)

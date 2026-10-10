@@ -12,6 +12,7 @@ from backend.models.jam import Jam, JamParticipant
 from backend.models.job import Job
 from backend.models.oauth_state import OAuthStateModel
 from backend.models.pending_add_account import PendingAddAccount
+from backend.models.pending_app_login import PendingAppLogin
 from backend.models.pending_dev_token import PendingDevToken
 from backend.models.pending_scope_upgrade import PendingScopeUpgrade
 from backend.models.playlist import Playlist
@@ -41,6 +42,7 @@ __all__ = [
     "Job",
     "OAuthStateModel",
     "PendingAddAccount",
+    "PendingAppLogin",
     "PendingDevToken",
     "PendingScopeUpgrade",
     "Playlist",

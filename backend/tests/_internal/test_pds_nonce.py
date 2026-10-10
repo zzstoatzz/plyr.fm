@@ -56,7 +56,7 @@ def _oauth_data(pds_url: str, key: ec.EllipticCurvePrivateKey) -> dict:
         "dpop_private_key_pem": pem,
         "dpop_authserver_nonce": "",
         "dpop_pds_nonce": "from-sign-in",
-        "scope": "atproto",
+        "scope": "atproto repo:fm.plyr.track",
     }
 
 

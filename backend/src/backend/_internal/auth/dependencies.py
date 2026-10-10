@@ -6,6 +6,7 @@ from typing import Annotated
 from fastapi import Cookie, Header, HTTPException
 from opentelemetry import trace
 
+from backend._internal.auth.app_login import is_native_app_scope
 from backend._internal.auth.oauth import check_artist_profile_exists
 from backend._internal.auth.scopes import check_scope_coverage, get_missing_scopes
 from backend._internal.auth.session import Session, get_session
@@ -61,8 +62,16 @@ async def require_auth(
         _tag_span_with_user(session)
         return session
 
-    # check if session has all required scopes
     granted_scope = session.oauth_session.get("scope", "")
+
+    # a native app session starts from identity alone and is granted more as
+    # features need it, so the web baseline is not its floor. a write its grant
+    # does not cover is refused where the write happens (make_pds_request).
+    if is_native_app_scope(granted_scope):
+        _tag_span_with_user(session)
+        return session
+
+    # check if session has all required scopes
     required_scope = settings.atproto.resolved_scope
 
     if not check_scope_coverage(granted_scope, required_scope):
