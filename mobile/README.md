@@ -4,11 +4,11 @@ A native iOS client for plyr.fm, from the same repository as the web app. The
 app reads the existing public API: top tracks and the latest feed filtered by
 tag, search across tracks, artists, albums, tags and playlists, artist pages with
 their albums, playlists and support link, album, tag and playlist pages, a
-player sheet with the track's description, a queue kept on the device, background audio, and lock screen controls. No sign-in yet, so supporter-gated tracks show who can listen and
-stay locked.
+player sheet with the track's description, a queue kept on the device, background audio, and lock screen controls. Sign-in is identity only so far: the app knows who you are and
+sends that with every request, and does not yet write anything to your account.
 
-Nothing here reaches the web app or the backend. Deploys are unaffected by
-anything in `mobile/` or `shared/`.
+Nothing here reaches the web app. Sign-in needs the backend's native app
+routes (`POST /auth/app/start`, see `docs/internal/authentication.md`).
 
 ## run it
 
@@ -51,6 +51,18 @@ stream in this engine and are downloaded to the same cache first. The library
 is patched (`patches/`) to skip its byte-range probe, one or two round trips
 per track that the audio host does not need.
 
+## sign-in
+
+plyr.fm's backend is the OAuth client and keeps the atproto tokens; the phone
+keeps a session id in the keychain and sends it as a bearer token
+(`src/session/`). Signing in opens the account's own server in a system auth
+session, which returns to `fm.plyr://auth` with a one-time code. Only the PKCE
+verifier this app generated can redeem it, so the session never travels in a
+URL. Account creation is the same trip with a host instead of a handle.
+
+The grant is `atproto` alone: identity, no access to the listener's repo. Each
+scope is added when a feature that needs it ships.
+
 ## what is shared with the web app
 
 `shared/` is a workspace package, `plyr-shared`, imported here by name. It holds
@@ -91,12 +103,10 @@ successfully on October 8, 2026; Apple processing is checked separately with
 
 ## not yet
 
-- **sign-in**: the backend already accepts `Authorization: Bearer <session>`.
-  The missing piece is a native start: `/auth/start?platform=app&challenge=…`
-  returning a single-use exchange code (bound to that PKCE challenge) to
-  `fm.plyr://auth`, then `POST /auth/exchange` with the verifier. That mirrors
-  Agents' `/app/login` → `/app/session`, and avoids putting a session in the
-  callback URL. Likes, the For You feed, gated tracks and scrobbling follow.
+- **what an account unlocks**: likes, the For You feed and scrobbling. A like
+  writes a record to the listener's PDS, so it needs `repo:fm.plyr.like` added
+  to the app's grant (`native_app_scope` in the backend, and the published
+  client metadata) and one more trip through sign-in.
 - album pages: album search hits open the artist for now, because the album
   endpoints are not in `docs/internal/contracts/client-api.json` yet.
 - universal links (`applinks:plyr.fm`) need an `apple-app-site-association`
