@@ -22,6 +22,7 @@ from backend.api import (
     activity_router,
     artists_router,
     audio_router,
+    auth_app_router,
     auth_router,
     copyright_router,
     discover_router,
@@ -179,6 +180,7 @@ app.add_middleware(
 
 # routers
 app.include_router(auth_router)
+app.include_router(auth_app_router)
 app.include_router(account_router)
 app.include_router(activity_router)
 app.include_router(artists_router)

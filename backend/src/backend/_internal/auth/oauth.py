@@ -23,6 +23,7 @@ from fastapi import HTTPException
 from jose import jwk
 from sqlalchemy import select
 
+from backend._internal.auth.app_login import is_native_app_scope
 from backend._internal.auth.oauth_compat import BlackskyCompatibleOAuthClient
 from backend._internal.auth.session import (
     _check_copyright_paradigm,
@@ -135,13 +136,17 @@ def get_oauth_client(
     include_teal: bool = False,
     include_indiemusi: bool = False,
     include_permissioned: bool = False,
+    scope: str | None = None,
 ) -> OAuthClient:
     """create an OAuth client with the appropriate scopes.
 
     if OAUTH_JWK is configured, creates a confidential client with
     private_key_jwt authentication. otherwise creates a public client.
+
+    an explicit ``scope`` replaces the composed web scope outright; a native
+    app sign-in uses it to ask for less than the web client does.
     """
-    scope = settings.atproto.resolved_scope_with_extras(
+    scope = scope or settings.atproto.resolved_scope_with_extras(
         teal_play=settings.teal.play_collection if include_teal else None,
         teal_status=settings.teal.status_collection if include_teal else None,
         indiemusi_tokens=(
@@ -169,6 +174,9 @@ def get_oauth_client_for_scope(scope: str) -> OAuthClient:
 
     used during callback to match the scope that was used during authorization.
     """
+    if is_native_app_scope(scope):
+        return get_oauth_client(scope=scope)
+
     scopes = ScopesSet.from_string(scope)
     include_teal = scopes.matches(
         "repo", collection=settings.teal.play_collection, action="create"
@@ -320,6 +328,22 @@ async def start_oauth_flow(
         raise _oauth_start_failure(e, handle) from e
 
 
+async def start_native_app_oauth_flow(handle: str) -> tuple[str, str]:
+    """start a native app sign-in and return (auth_url, state).
+
+    asks for ``settings.atproto.native_app_scope`` and nothing else: no teal,
+    copyright or private-media extras, whatever the account has enabled on the
+    web. the app gains a scope when a feature that needs it ships.
+    """
+    try:
+        client = get_oauth_client(scope=settings.atproto.native_app_scope)
+        return await _start_authorization_with_retry(client, handle, None)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise _oauth_start_failure(e, handle) from e
+
+
 async def start_oauth_flow_with_scopes(
     handle: str,
     include_teal: bool = False,
@@ -347,10 +371,13 @@ async def start_oauth_flow_with_scopes(
         raise _oauth_start_failure(e, handle) from e
 
 
-async def start_oauth_flow_for_pds(pds_url: str) -> tuple[str, str]:
+async def start_oauth_flow_for_pds(
+    pds_url: str, scope: str | None = None
+) -> tuple[str, str]:
     """start OAuth flow for account creation on a PDS.
 
     discovers auth server from PDS URL and sends PAR with prompt=create.
+    ``scope`` narrows the request for a native app sign-in.
     """
     from urllib.parse import urlencode
 
@@ -365,7 +392,7 @@ async def start_oauth_flow_for_pds(pds_url: str) -> tuple[str, str]:
         authserver_meta = await fetch_authserver_metadata_async(authserver_url)
 
         # get OAuth client for scope/keys
-        client = get_oauth_client(include_teal=False)
+        client = get_oauth_client(include_teal=False, scope=scope)
 
         # generate PKCE and DPoP
         pkce = PKCEManager()

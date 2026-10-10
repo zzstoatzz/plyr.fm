@@ -410,6 +410,11 @@ class AtprotoSettings(AppSettingsSection):
         validation_alias="ATPROTO_SCOPE_OVERRIDE",
         description="Optional OAuth scope override",
     )
+    native_app_redirect_uri: str = Field(
+        default="fm.plyr://auth",
+        validation_alias="ATPROTO_NATIVE_APP_REDIRECT_URI",
+        description="Where a native app sign-in lands with its one-time code. Server-chosen: a client never supplies its own return address.",
+    )
     use_permission_sets: bool = Field(
         default=False,
         validation_alias="ATPROTO_USE_PERMISSION_SETS",
@@ -533,6 +538,17 @@ class AtprotoSettings(AppSettingsSection):
             scopes.append(f"repo:{self.old_track_collection}")
 
         return f"atproto {' '.join(scopes)}"
+
+    @computed_field
+    @property
+    def native_app_scope(self) -> str:
+        """every scope a native app sign-in may ask for.
+
+        the phone starts from identity alone and gains a scope when a feature
+        that writes to the PDS ships. each token here must also appear in the
+        published client metadata, which authservers match token for token.
+        """
+        return "atproto"
 
     def resolved_scope_with_teal(self, teal_play: str, teal_status: str) -> str:
         """OAuth scope including teal.fm scrobbling permissions.

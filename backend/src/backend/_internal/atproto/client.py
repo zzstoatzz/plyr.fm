@@ -23,6 +23,7 @@ from backend._internal.auth import (
     get_client_auth_method,
     get_refresh_token_lifetime_days,
 )
+from backend._internal.auth.app_login import refuse_write_outside_grant
 from backend.config import settings
 from backend.utilities.pds_nonce import hydrate_pds_nonce, remember_pds_nonce
 from backend.utilities.redis import get_async_redis_client
@@ -624,6 +625,8 @@ async def make_pds_request(
         await _log_own_record_write(endpoint, payload)
         return result
 
+    refuse_write_outside_grant(auth_session, endpoint, payload)
+
     oauth_session = await reconstruct_oauth_session(oauth_data)
     url = f"{oauth_data['pds_url']}/xrpc/{endpoint}"
     response = None  # defensive: bind before the loop so error paths can read it
@@ -873,6 +876,8 @@ async def upload_blob(
             content_type=content_type,
             heartbeat=heartbeat,
         )
+
+    refuse_write_outside_grant(auth_session, "com.atproto.repo.uploadBlob")
 
     oauth_session = await reconstruct_oauth_session(oauth_data)
     url = f"{oauth_data['pds_url']}/xrpc/com.atproto.repo.uploadBlob"

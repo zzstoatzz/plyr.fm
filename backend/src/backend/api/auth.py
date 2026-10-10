@@ -45,17 +45,23 @@ from backend._internal.atproto.spaces import (
     session_has_private_media_access,
 )
 from backend._internal.auth import get_refresh_token_lifetime_days
+from backend._internal.auth.app_login import (
+    delete_pending_app_login,
+    get_pending_app_login,
+)
 from backend._internal.auth.app_password import (
     AppPasswordAuthError,
     create_app_password_session,
     resolve_pds,
 )
+from backend._internal.auth.revoke import revoke_grant
 from backend._internal.auth.space_scope import (
     permissioned_scope_requested,
     private_media_grant_present,
 )
 from backend._internal.copyright import complete_indiemusi_setup
 from backend._internal.tasks import schedule_atproto_sync
+from backend.api.auth_app import app_redirect
 from backend.config import settings
 from backend.models import Artist, get_db
 from backend.utilities.rate_limit import limiter
@@ -223,8 +229,19 @@ async def oauth_callback(
     ``invalid_scope`` refusal of a private-media upgrade means the PDS does not
     do permissioned spaces: remember that for the account and keep the old
     session, which the upgrade never replaced.
+
+    a native app sign-in (see ``/auth/app/start``) ends at the app's own
+    redirect instead of the frontend, with ``code`` or ``error``.
     """
+    app_challenge = await get_pending_app_login(state)
+
     if error or not code or not iss:
+        if app_challenge:
+            await delete_pending_app_login(state)
+            logger.warning(
+                "app sign-in refused (error=%s): %s", error, error_description
+            )
+            return app_redirect(error=error or "failed")
         pending = await get_pending_scope_upgrade(state)
         if pending and error == "invalid_scope":
             await delete_pending_scope_upgrade(state)
@@ -245,6 +262,9 @@ async def oauth_callback(
     except HTTPException as e:
         error_code = _classify_auth_error(str(e.detail))
         logger.warning("OAuth callback failed (code=%s): %s", error_code, e.detail)
+        if app_challenge:
+            await delete_pending_app_login(state)
+            return app_redirect(error=error_code)
         return RedirectResponse(
             url=f"{settings.frontend.url}/?auth_error={error_code}",
             status_code=303,
@@ -254,6 +274,15 @@ async def oauth_callback(
     # this creates a minimal record if needed, so we can display handles in
     # share link stats, comments, track likers, etc.
     await ensure_artist_exists(did, handle)
+
+    if app_challenge:
+        # no ATProto sync here: it writes records, and this grant is identity only.
+        # a phone stays signed in for as long as the grant can be refreshed
+        session_id = await create_session(did, handle, oauth_session, expires_in_days=0)
+        await delete_pending_app_login(state)
+        return app_redirect(
+            code=await create_exchange_token(session_id, code_challenge=app_challenge)
+        )
 
     # check if this is a developer token OAuth flow
     pending_dev_token = await get_pending_dev_token(state)
@@ -391,6 +420,8 @@ class ExchangeTokenRequest(BaseModel):
     """request model for exchanging token for session_id."""
 
     exchange_token: str
+    # PKCE verifier, required when the token came from a native app sign-in
+    code_verifier: str | None = None
 
 
 class ExchangeTokenResponse(BaseModel):
@@ -414,8 +445,11 @@ async def exchange_token(
     for browser requests: sets HttpOnly cookie and still returns session_id in response
     for SDK/CLI clients: only returns session_id in response (no cookie)
     for dev token exchanges: returns session_id but does NOT set cookie
+    for native app sign-ins: requires ``code_verifier``, never sets a cookie
     """
-    result = await consume_exchange_token(exchange_request.exchange_token)
+    result = await consume_exchange_token(
+        exchange_request.exchange_token, exchange_request.code_verifier
+    )
 
     if not result:
         raise HTTPException(
@@ -423,11 +457,11 @@ async def exchange_token(
             detail="invalid, expired, or already used exchange token",
         )
 
-    session_id, is_dev_token = result
+    session_id, skip_cookie = result
 
     # don't set cookie for dev token exchanges - this prevents overwriting
     # the browser's session cookie when creating a dev token
-    if is_dev_token:
+    if skip_cookie:
         return ExchangeTokenResponse(session_id=session_id)
 
     user_agent = request.headers.get("user-agent", "").lower()
@@ -504,6 +538,7 @@ async def logout(
         return response
 
     # no switch_to - full logout
+    await revoke_grant(session)
     await delete_session(session.session_id)
     response = JSONResponse(content={"message": "logged out successfully"})
 
@@ -941,8 +976,11 @@ async def logout_all(
     # delete all sessions (or just this one if not in a group)
     if linked:
         for account in linked:
+            if linked_session := await get_session(account.session_id):
+                await revoke_grant(linked_session)
             await delete_session(account.session_id)
     else:
+        await revoke_grant(session)
         await delete_session(session.session_id)
 
     response = JSONResponse(content={"message": "all accounts logged out"})
