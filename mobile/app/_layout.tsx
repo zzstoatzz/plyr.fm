@@ -83,6 +83,16 @@ export default function RootLayout() {
               }}
             />
             <Stack.Screen
+              name="sign-in"
+              options={{
+                presentation: "formSheet",
+                sheetAllowedDetents: [1],
+                sheetGrabberVisible: true,
+                sheetCornerRadius: radius.sheet,
+                contentStyle: { backgroundColor: color.canvas },
+              }}
+            />
+            <Stack.Screen
               name="queue"
               options={{
                 presentation: "formSheet",

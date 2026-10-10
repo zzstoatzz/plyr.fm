@@ -2,6 +2,7 @@ import NetInfo from "@react-native-community/netinfo";
 import { focusManager, onlineManager, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useState, type ReactNode } from "react";
 import { AppState } from "react-native";
+import { SessionProvider } from "./session/SessionProvider";
 
 focusManager.setEventListener((handleFocus) => {
   const subscription = AppState.addEventListener("change", (status) => handleFocus(status === "active"));
@@ -24,5 +25,9 @@ const create = () =>
 
 export function QueryProvider({ children }: { children: ReactNode }) {
   const [client] = useState(create);
-  return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+  return (
+    <QueryClientProvider client={client}>
+      <SessionProvider>{children}</SessionProvider>
+    </QueryClientProvider>
+  );
 }

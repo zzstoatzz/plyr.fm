@@ -158,8 +158,34 @@ switch, nothing iOS-only, so it can run on Android unchanged.
 - **hidden tags**: the web's defaults (ai, ai-slop, suno). The server already
   hides those from a signed-out feed; with a list of your own the app asks for
   the feed unfiltered and filters it itself, and hidden tags leave the chip row.
-- Not here yet: keep playing (it continues from the for-you feed, which needs
-  an account), theme (follows the system), and everything account-bound.
+- Not here yet: keep playing (it continues from the for-you feed), theme
+  (follows the system), and preferences stored on the account.
+
+## sign-in
+
+Reached from the account section at the top of settings, as a sheet over it
+(`app/sign-in.tsx`). One field, one button, as on the web: the label is
+"atmosphere account", never OAuth or a provider's name.
+
+- **The field and its suggestions are one card** (`HandleField`). The field
+  stays put; the card grows downward as people matching what was typed arrive
+  from the typeahead the web uses, so nothing moves under the finger. The last
+  answer stays while the next loads, so the list never blinks empty.
+- **A suggestion** is a 40 pt avatar (a same-size placeholder when there is
+  none), the display name, and the handle with the typed part in ink and the
+  rest muted. Rows are 60 pt.
+- **Picking a suggestion starts sign-in**: the field keeps what was typed, so
+  the list holds still; that row shows the wait, the others
+  dim, and the account's own server opens in a system sheet. Typing a whole
+  handle and pressing go, or the button, does the same.
+- **A failure is one sentence** under the field, in the danger role, from
+  `SIGN_IN_MESSAGES` in `shared/account.ts`. Closing the system sheet yourself
+  says nothing.
+- **New accounts** use the host the backend recommends (`/auth/pds-options`),
+  the same one the web offers; the link is absent when there is none.
+- Signed in, the account section shows the avatar, name and handle, and
+  "sign out". Signing in or out refetches every list, since what a track says
+  (locked, liked) depends on who is asking.
 
 ## queue
 
