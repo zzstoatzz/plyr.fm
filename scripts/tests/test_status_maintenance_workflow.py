@@ -17,6 +17,20 @@ class StatusMaintenanceSecretBoundaryTests(unittest.TestCase):
         )
         self.assertIn("GOOGLE_API_KEY", workflow[audio_step:next_step])
 
+    def test_a_gemini_refusal_falls_back_to_keyless_audio(self) -> None:
+        workflow = WORKFLOW.read_text()
+        gemini = workflow.index("- name: Generate podcast audio\n")
+        fallback = workflow.index("- name: Generate podcast audio without Gemini\n")
+        next_step = workflow.index("\n      - ", fallback + 1)
+
+        self.assertIn("continue-on-error: true", workflow[gemini:fallback])
+        step = workflow[fallback:next_step]
+        self.assertIn("steps.gemini_audio.outcome == 'failure'", step)
+        self.assertIn(
+            "scripts/generate_tts_local.py podcast_script.txt update.wav", step
+        )
+        self.assertNotIn("secrets.", step)
+
 
 if __name__ == "__main__":
     unittest.main()

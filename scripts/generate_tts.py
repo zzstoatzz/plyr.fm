@@ -2,7 +2,7 @@
 """Generate podcast audio from a labeled script using Gemini TTS."""
 # /// script
 # requires-python = ">=3.11"
-# dependencies = ["google-genai"]
+# dependencies = ["google-genai==2.25.0"]
 # ///
 
 import argparse

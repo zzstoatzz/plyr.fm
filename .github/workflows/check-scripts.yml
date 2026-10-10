@@ -1,0 +1,51 @@
+name: check scripts
+
+# the status podcast's renderers and the workflow's secret boundary have unit
+# tests; nothing ran them.
+
+on:
+  pull_request:
+    paths:
+      - "scripts/generate_tts*.py"
+      - "scripts/tests/**"
+      - ".github/workflows/status-maintenance.yml"
+      - ".github/workflows/check-scripts.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: check-scripts-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: script tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v7
+
+      - name: unit tests
+        run: uv run --python 3.12 --with google-genai==2.25.0 --with numpy python -m unittest discover -s scripts/tests -v
+
+  keyless-audio:
+    name: keyless podcast audio renders on a runner
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v7
+
+      - name: render two turns with the fallback voice
+        run: |
+          printf 'Host: This is a check of the fallback voice.\n\nCohost: It runs on the runner, with no key.\n' > check_script.txt
+          uv run scripts/generate_tts_local.py check_script.txt check.wav
+          uv run --python 3.12 python - <<'PY'
+          import wave
+          with wave.open("check.wav") as audio:
+              seconds = audio.getnframes() / audio.getframerate()
+          print(f"{seconds:.1f}s of audio")
+          assert 3 < seconds < 30, seconds
+          PY

@@ -367,11 +367,23 @@ jobs:
             add a label like "ai-generated" to the PR (create the label if it doesn't exist)
             if nothing changed, report that no maintenance was needed.
 
+      # Gemini first; a refusal there (#2123) must not cost the episode, so the
+      # next step voices it on the runner with a model that needs no key.
       - name: Generate podcast audio
+        id: gemini_audio
         if: ${{ !inputs.report_only && !inputs.research_only && !inputs.skip_audio }}
+        continue-on-error: true
         env:
           GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
         run: uv run scripts/generate_tts.py --model "$TTS_MODEL" podcast_script.txt update.wav
+
+      - name: Generate podcast audio without Gemini
+        if: ${{ steps.gemini_audio.outcome == 'failure' }}
+        run: |
+          echo "::warning title=status podcast::Gemini ($TTS_MODEL) refused; voiced on the runner with kokoro-82m instead"
+          rm -f update.wav
+          uv run scripts/generate_tts_local.py podcast_script.txt update.wav
+          echo "TTS_MODEL=kokoro-82m (fallback: $TTS_MODEL refused)" >> "$GITHUB_ENV"
 
       # carry the generated audio + transcript to phase 2 (the merge run is a
       # separate run with a fresh checkout, so it can't see these files
