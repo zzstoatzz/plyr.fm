@@ -65,10 +65,15 @@ def main() -> None:
     args.out_dir.mkdir(parents=True, exist_ok=True)
     client = genai.Client(api_key=api_key)
 
+    failures: list[str] = []
     if spec.get("list_voices"):
-        voices = list_voices(client)
-        (args.out_dir / "voices.json").write_text(json.dumps(voices, indent=2))
-        print(f"listed {len(voices)} voices")
+        try:
+            voices = list_voices(client)
+        except Exception as error:  # noqa: BLE001
+            failures.append(f"voices: {error}")
+        else:
+            (args.out_dir / "voices.json").write_text(json.dumps(voices, indent=2))
+            print(f"listed {len(voices)} voices")
 
     for variant in spec.get("variants", []):
         script_path = args.spec.parent / variant["script"]
@@ -77,15 +82,23 @@ def main() -> None:
             f"rendering {variant['name']}: {script_path.name}, "
             f"voices {speakers['Host']['voice']}/{speakers['Cohost']['voice']}"
         )
-        wav = render(
-            client,
-            variant.get("model", spec["model"]),
-            script_path.read_text(),
-            speakers,
-            direction_for(variant),
-        )
+        try:
+            wav = render(
+                client,
+                variant.get("model", spec["model"]),
+                script_path.read_text(),
+                speakers,
+                direction_for(variant),
+            )
+        except Exception as error:  # noqa: BLE001
+            failures.append(f"{variant['name']}: {error}")
+            print(f"failed {variant['name']}: {error}")
+            continue
         (args.out_dir / f"{variant['name']}.wav").write_bytes(wav)
         (args.out_dir / f"{variant['name']}.txt").write_text(script_path.read_text())
+
+    if failures:
+        raise SystemExit("failed:\n" + "\n".join(failures))
 
 
 if __name__ == "__main__":

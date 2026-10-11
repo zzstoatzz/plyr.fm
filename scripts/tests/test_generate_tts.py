@@ -42,8 +42,17 @@ class ParseScriptTests(unittest.TestCase):
 
         self.assertEqual(content[0]["text"], "Really?")
         style = content[0]["annotations"][0]["style"]
-        self.assertTrue(style.startswith(generate_tts.SPEAKERS["Cohost"]["style"]))
+        self.assertTrue(style.startswith(generate_tts.DIRECTION))
+        self.assertIn(generate_tts.SPEAKERS["Cohost"]["style"], style)
         self.assertTrue(style.endswith("for this line: laughing"))
+
+    def test_no_direction_leaves_the_speaker_style_alone(self) -> None:
+        content = generate_tts.parse_script("Host: Hi.\n", direction=None)
+
+        self.assertEqual(
+            content[0]["annotations"][0]["style"],
+            generate_tts.SPEAKERS["Host"]["style"],
+        )
 
 
 class ChunkTurnsTests(unittest.TestCase):

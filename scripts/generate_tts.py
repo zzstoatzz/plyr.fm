@@ -37,7 +37,9 @@ MAX_CHUNK_WORDS = 700
 
 
 def parse_script(
-    script: str, speakers: dict[str, dict[str, str]] = SPEAKERS
+    script: str,
+    speakers: dict[str, dict[str, str]] = SPEAKERS,
+    direction: str | None = DIRECTION,
 ) -> list[dict[str, Any]]:
     turns: list[tuple[str, str | None, list[str]]] = []
 
@@ -60,6 +62,8 @@ def parse_script(
         if not text:
             raise ValueError(f"{speaker} turn must not be empty")
         style = speakers[speaker]["style"]
+        if direction:
+            style = f"{direction} This speaker: {style}"
         if note:
             style = f"{style}; for this line: {note.strip()}"
         content.append(
@@ -126,7 +130,7 @@ def render(
     direction: str | None = DIRECTION,
 ) -> bytes:
     parts: list[bytes] = []
-    for chunk in chunk_turns(parse_script(script, speakers)):
+    for chunk in chunk_turns(parse_script(script, speakers, direction)):
         request: dict[str, Any] = {
             "model": model,
             "input": [{"type": "user_input", "content": chunk}],
@@ -141,8 +145,6 @@ def render(
                 }
             },
         }
-        if direction:
-            request["system_instruction"] = direction
         interaction = client.interactions.create(**request)
         if interaction.output_audio is None or interaction.output_audio.data is None:
             raise RuntimeError("Gemini returned no audio")
