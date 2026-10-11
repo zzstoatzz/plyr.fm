@@ -11,6 +11,7 @@ on:
       - "scripts/podcast_lab/**"
       - "scripts/podcast_lab.py"
       - "scripts/generate_tts.py"
+      - ".github/workflows/podcast-lab.yml"
   workflow_dispatch:
     inputs:
       spec:
@@ -36,6 +37,7 @@ jobs:
 
       - name: Encode mp3s
         run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg >/dev/null
           for wav in lab-out/*.wav; do
             ffmpeg -loglevel error -y -i "$wav" -codec:a libmp3lame -q:a 2 "${wav%.wav}.mp3"
             printf '%s %ss\n' "$(basename "$wav")" "$(ffprobe -v error -show_entries format=duration -of csv=p=0 "$wav")"
