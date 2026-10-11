@@ -4,6 +4,10 @@
 name: podcast lab
 
 on:
+  # a push that changes a lab spec or script renders it, on any branch but main
+  push:
+    branches-ignore: [main]
+    paths: ["scripts/podcast_lab/**"]
   workflow_dispatch:
     inputs:
       spec:
@@ -24,7 +28,7 @@ jobs:
       - name: Render candidates
         env:
           GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
-          SPEC: ${{ inputs.spec }}
+          SPEC: ${{ inputs.spec || 'scripts/podcast_lab/spec.json' }}
         run: uv run scripts/podcast_lab.py "$SPEC" lab-out
 
       - name: Encode mp3s
