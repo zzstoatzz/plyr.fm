@@ -54,7 +54,6 @@ from backend._internal.auth.app_password import (
     create_app_password_session,
     resolve_pds,
 )
-from backend._internal.auth.revoke import revoke_grant
 from backend._internal.auth.space_scope import (
     permissioned_scope_requested,
     private_media_grant_present,
@@ -538,7 +537,6 @@ async def logout(
         return response
 
     # no switch_to - full logout
-    await revoke_grant(session)
     await delete_session(session.session_id)
     response = JSONResponse(content={"message": "logged out successfully"})
 
@@ -976,11 +974,8 @@ async def logout_all(
     # delete all sessions (or just this one if not in a group)
     if linked:
         for account in linked:
-            if linked_session := await get_session(account.session_id):
-                await revoke_grant(linked_session)
             await delete_session(account.session_id)
     else:
-        await revoke_grant(session)
         await delete_session(session.session_id)
 
     response = JSONResponse(content={"message": "all accounts logged out"})

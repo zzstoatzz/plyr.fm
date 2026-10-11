@@ -23,7 +23,10 @@ from backend._internal.auth import (
     get_client_auth_method,
     get_refresh_token_lifetime_days,
 )
-from backend._internal.auth.app_login import refuse_write_outside_grant
+from backend._internal.auth.app_login import (
+    is_native_app_scope,
+    refuse_write_outside_grant,
+)
 from backend.config import settings
 from backend.utilities.pds_nonce import hydrate_pds_nonce, remember_pds_nonce
 from backend.utilities.redis import get_async_redis_client
@@ -293,9 +296,16 @@ async def _refresh_session_tokens(
 
         try:
             # use OAuth client to refresh tokens
-            refreshed_session = await get_oauth_client().refresh_session(
-                current_oauth_session
+            # the SDK rejects a refreshed token narrower than its client's scope,
+            # so a native app session refreshes through a client no wider than
+            # its grant. every other session keeps the base client.
+            scope = current_oauth_session.scope
+            client = (
+                get_oauth_client(scope=scope)
+                if is_native_app_scope(scope)
+                else get_oauth_client()
             )
+            refreshed_session = await client.refresh_session(current_oauth_session)
 
             # serialize updated tokens back to database
             from cryptography.hazmat.primitives import serialization

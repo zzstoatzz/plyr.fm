@@ -4,11 +4,14 @@ from unittest.mock import AsyncMock, patch
 from urllib.parse import parse_qs, urlparse
 
 import pytest
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import ec
 from fastapi import HTTPException
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend._internal import Session, create_session, get_session, require_auth
+from backend._internal import Session, create_session, require_auth
+from backend._internal.atproto import client as pds_client
 from backend._internal.auth.app_login import (
     get_pending_app_login,
     is_native_app_scope,
@@ -337,26 +340,47 @@ def test_reads_and_web_sessions_pass_the_write_guard() -> None:
     )
 
 
-async def test_logout_revokes_the_grant_and_survives_an_unreachable_pds(
+@pytest.mark.parametrize(
+    ("scope", "asked_for"),
+    [("atproto", {"scope": "atproto"}), ("atproto repo:fm.plyr.track", {})],
+)
+async def test_refresh_uses_a_client_no_wider_than_an_app_grant(
     db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+    scope: str,
+    asked_for: dict[str, str],
 ) -> None:
-    session_id = await create_session(DID, HANDLE, _oauth_data("atproto"))
-    revoke = AsyncMock(side_effect=TimeoutError())
+    """the SDK refuses a refreshed token narrower than its client's scope."""
+    pem = (
+        ec.generate_private_key(ec.SECP256R1())
+        .private_bytes(
+            serialization.Encoding.PEM,
+            serialization.PrivateFormat.PKCS8,
+            serialization.NoEncryption(),
+        )
+        .decode()
+    )
+    data = {**_oauth_data(scope), "dpop_private_key_pem": pem}
+    session_id = await create_session(DID, HANDLE, data)
+    session = Session(session_id=session_id, did=DID, handle=HANDLE, oauth_session=data)
+    asked: list[dict[str, str]] = []
 
-    with (
-        patch(
-            "backend._internal.atproto.client.reconstruct_oauth_session",
-            new_callable=AsyncMock,
-            return_value="oauth-session",
-        ),
-        patch("backend._internal.auth.revoke.get_oauth_client") as get_client,
-    ):
-        get_client.return_value.revoke_session = revoke
-        async with _client() as client:
-            response = await client.post(
-                "/auth/logout", headers={"authorization": f"Bearer {session_id}"}
-            )
+    class Refused(Exception):
+        pass
 
-    assert response.status_code == 200
-    revoke.assert_awaited_once_with("oauth-session")
-    assert await get_session(session_id) is None
+    class Client:
+        async def refresh_session(self, oauth_session: object) -> None:
+            raise Refused
+
+    def get_client(**kwargs: str) -> Client:
+        asked.append(kwargs)
+        return Client()
+
+    monkeypatch.setattr(pds_client, "get_oauth_client", get_client)
+
+    with pytest.raises(ValueError, match="failed to refresh access token"):
+        await pds_client._refresh_session_tokens(
+            session, await pds_client.reconstruct_oauth_session(data)
+        )
+
+    assert asked == [asked_for]

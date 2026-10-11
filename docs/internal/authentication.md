@@ -494,6 +494,25 @@ AUTH_ALLOW_APP_PASSWORD_DEV_TOKENS=true just mint-dev-token --verify
 
 For **CI, prefer minting just-in-time** over storing a token: `POST /auth/dev-token/app-password` takes an app-password and returns a short-lived (1-day) token with no DB access on the caller. It's doubly gated — needs `AUTH_ALLOW_APP_PASSWORD_DEV_TOKENS=true` **and** a shared `AUTH_APP_PASSWORD_MINT_SECRET` (sent as the `x-admin-token` header); either unset → 404. The integration workflow mints per-run and revokes in teardown, so no long-lived token is ever stored (see [testing/integration-tests.md](testing/integration-tests.md#test-accounts)).
 
+## native app sign-in
+
+the iOS app signs in through this backend: the backend stays the OAuth client and holds the atproto tokens, and the phone holds a session id in its keychain and sends it as `Authorization: Bearer`. nothing about the client metadata changes, because the PDS still redirects to `/auth/callback`.
+
+1. the app makes a PKCE pair and calls `POST /auth/app/start` with `{handle | pds_url, code_challenge}` (S256). it gets back `{auth_url}`. an unknown handle is `404 handle_not_found`.
+2. the app opens `auth_url` in a system auth session (`ASWebAuthenticationSession`).
+3. `/auth/callback` finds the state in `pending_app_logins`, creates the session, and redirects to `ATPROTO_NATIVE_APP_REDIRECT_URI` (`fm.plyr://auth`) with `code=`, or `error=` when the user cancelled or the flow failed. the return address is server configuration; a client cannot supply one.
+4. the app calls `POST /auth/exchange` with `{exchange_token: code, code_verifier}` and receives `session_id`. the code is single use, lives 60 seconds, and is useless without the verifier, so another app that claims the URL scheme gains nothing. this path never sets a cookie.
+
+### scope
+
+a native app sign-in asks for `settings.atproto.native_app_scope` and nothing else. today that is `atproto`: identity only. the phone gets what the backend can decide from a DID (liked state, gated playback, the For You feed) and cannot write to the PDS.
+
+- authservers match each requested scope token against the published client metadata as an exact string, so a token added to `native_app_scope` must also be in `client_metadata()`. `repo:fm.plyr.like` is not covered by `include:fm.plyr.authFullApp` for this purpose.
+- `require_auth` recognizes an app session by its grant (`is_native_app_scope`) and does not hold it to the web baseline. a web session cannot hold that grant: the OAuth SDK rejects a callback whose granted scope is narrower than the one requested.
+- a repo write the grant does not cover is refused in `make_pds_request` / `upload_blob` with `403 scope_upgrade_required`, before any request reaches the PDS. the callback also skips the ATProto sync for these sessions, since the sync writes records.
+- token refresh for an app session uses a client asking for the same narrow scope (`_refresh_client`): the SDK also rejects a refreshed token narrower than its client's scope, so the web client cannot refresh an `atproto`-only grant.
+- to add a feature that writes: add its scope token to `native_app_scope` and to the published metadata, then have the app sign in again. each sign-in is its own grant, so web sessions are unaffected.
+
 ## OAuth client types: public vs confidential
 
 ATProto OAuth distinguishes between two types of clients based on their ability to authenticate themselves to the authorization server.
