@@ -8,8 +8,8 @@
     "ios": "expo run:ios",
     "check": "tsc --noEmit && expo lint",
     "lint": "expo lint",
-    "build:ios": "bunx eas-cli build --platform ios --profile production",
-    "ship:ios": "bun run check && bunx eas-cli build --platform ios --profile production --auto-submit --non-interactive --no-wait"
+    "build:ios": "eas build --platform ios --profile production",
+    "ship:ios": "bun run check && eas build --platform ios --profile production --auto-submit --non-interactive --no-wait"
   },
   "dependencies": {
     "@expo-google-fonts/comic-neue": "^0.4.1",
@@ -43,6 +43,7 @@
   },
   "devDependencies": {
     "@types/react": "~19.2.4",
+    "eas-cli": "24.12.1",
     "eslint": "^9.25.0",
     "eslint-config-expo": "~57.0.2",
     "typescript": "~6.0.3"
