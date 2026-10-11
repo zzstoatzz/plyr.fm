@@ -51,6 +51,24 @@ def direction_for(variant: dict[str, Any]) -> str | None:
     return direction
 
 
+def stage_episode(
+    out_dir: Path, spec_dir: Path, spec: dict[str, Any], publish: dict[str, str]
+) -> None:
+    """Stage one rendered variant in the layout status-maintenance uploads on merge."""
+    variant = next(v for v in spec["variants"] if v["name"] == publish["variant"])
+    episode = out_dir / "episode"
+    episode.mkdir(exist_ok=True)
+    (episode / "update.wav").write_bytes(
+        (out_dir / f"{variant['name']}.wav").read_bytes()
+    )
+    (episode / "podcast_script.txt").write_text(
+        (spec_dir / variant["script"]).read_text()
+    )
+    if title := publish.get("title"):
+        (episode / "title.txt").write_text(title)
+    print(f"staged {variant['name']} as the episode")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("spec", type=Path)
@@ -99,6 +117,9 @@ def main() -> None:
 
     if failures:
         raise SystemExit("failed:\n" + "\n".join(failures))
+
+    if publish := spec.get("publish"):
+        stage_episode(args.out_dir, args.spec.parent, spec, publish)
 
 
 if __name__ == "__main__":

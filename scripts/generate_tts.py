@@ -18,11 +18,11 @@ from google import genai
 
 SPEAKERS = {
     "Host": {
-        "voice": "Kore",
-        "style": "warm, clear and unhurried, like explaining something you know well to a friend; wry when something is funny",
+        "voice": "en-us-podcaster-2",
+        "style": "warm, clear and unhurried, like showing a friend something you love; openly delighted when something is cool, playful when something is funny",
     },
     "Cohost": {
-        "voice": "Puck",
+        "voice": "en-us-brio",
         "style": "curious and easygoing, quick to react; asks questions the way a listener would",
     },
 }

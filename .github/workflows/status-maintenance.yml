@@ -382,7 +382,7 @@ jobs:
 
   # phase 2: upload audio after PR merge
   upload-audio:
-    if: github.event.pull_request.merged == true && startsWith(github.event.pull_request.head.ref, 'status-maintenance-')
+    if: github.event.pull_request.merged == true && (startsWith(github.event.pull_request.head.ref, 'status-maintenance-') || contains(github.event.pull_request.labels.*.name, 'status-episode'))
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -400,8 +400,9 @@ jobs:
       - name: Fetch audio + transcript from phase-1 run
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          ARTIFACT: status-audio-${{ github.event.pull_request.head.ref }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
         run: |
+          ARTIFACT="status-audio-${HEAD_REF//\//-}"
           RUN_ID=$(gh api \
             "repos/${{ github.repository }}/actions/artifacts?per_page=100" \
             --jq "[.artifacts[] | select(.name==\"$ARTIFACT\" and .expired==false)] | sort_by(.created_at) | reverse | .[0].workflow_run.id")
@@ -431,7 +432,9 @@ jobs:
           TODAY_COUNT=$(echo "$EXISTING" | grep -c "plyr.fm update - $TODAY" || true)
           TODAY_COUNT=${TODAY_COUNT:-0}
 
-          if [ "$TODAY_COUNT" -gt 0 ]; then
+          if [ -s title.txt ]; then
+            TITLE=$(cat title.txt)
+          elif [ "$TODAY_COUNT" -gt 0 ]; then
             # already have one today, add episode number
             EPISODE=$((TODAY_COUNT + 1))
             TITLE="plyr.fm update - $TODAY (#$EPISODE)"

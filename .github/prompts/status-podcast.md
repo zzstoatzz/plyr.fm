@@ -16,11 +16,17 @@ for this person or cut it.
 
 ## what player FM is (say it, briefly, near the top of every episode)
 
-player FM is a music and audio app built on the AT Protocol, the open network
-behind Bluesky and a growing set of other apps. artists upload to player FM,
-but the record of what they published lives in their own account on that
-network, so it travels with them. one sentence of this is enough; vary the
-wording from episode to episode.
+player FM is a place to put your music and listen to other people's: upload a
+track, share it, build playlists, put on the radio, listen together with
+friends. lead with that, the experience. the open network underneath it, the
+AT Protocol, is an accelerator, not the pitch: one clause that your account and
+what you publish come with you, because it lives in your own account on that
+network. vary the wording from episode to episode.
+
+it started because nate, the person who builds it, loves making and listening
+to music and couldn't easily get his own raw audio files back out of
+SoundCloud. that is the spirit: a small, homemade thing for people who make
+stuff, not a platform making a moral argument.
 
 ## the two voices
 
@@ -30,16 +36,22 @@ wording from episode to episode.
   about to ask ("wait, what does that mean for me?", "why was that hard?"),
   react like a person, and sometimes connect a change to something familiar.
 
-they like each other and they like the project without selling it. the humor
-is warm and wry: it comes from the situation (software being stubborn,
-the internet being weird), never from sneering at the project, its users, or
-the people who built it. no hype words ("exciting", "amazing", "incredible",
-"game-changer"), and no closing zinger that undercuts the whole episode.
+they like each other and they like the project, and it's fine to sound like
+it. real delight is welcome when something is genuinely cool or funny ("wait,
+you can just do that now?"), the way a friend shows you a thing they made. the
+humor is playful and self-deprecating: it comes from the situation (software
+being stubborn, a design that looked like dopey submarines, the internet
+being weird), never from sneering at the project, its users, or the people
+who built it. what to avoid is ad copy, not enthusiasm: no marketing words
+("game-changer", "revolutionary", "seamless", "empower"), and no closing
+zinger that undercuts the whole episode.
 
 ## what makes a story
 
-pick **two or three stories** from the material and give each real room. for
-each one:
+pick **two or three stories** from the material and give each real room.
+favor stories about the people: artists who uploaded something, listeners who
+found a bug, someone who built a thing on top of player FM. the software is the
+backdrop; the community is the show. for each one:
 
 1. **what a person would notice.** start from the listener's side: what they
    can now do, what stopped breaking, what looks or sounds different.
@@ -61,9 +73,13 @@ them out: the release notes exist, and the episode is not a list.
   PR numbers, or version tags out loud.
 - **numbers.** at most one or two per story, rounded, and only when the number
   is the point ("about half of the flags were false alarms", not "18 of 27").
-- **names.** don't name people the listener can't place. "the developer of
-  sister radio" beats an unexplained first name. nate is the person who builds
-  player FM; say so the first time he comes up, if he does.
+- **names.** shout people out by name. artists, contributors, and listeners
+  who reported a bug or wrote something about player FM get named, each with a
+  clause that tells the listener who they are ("Ana, who makes a little radio
+  app called sister radio"). say a handle the way a person would say it out
+  loud, without the domain ending unless it's part of the name. nate is the
+  person who builds player FM; say so the first time he comes up. only name
+  people the source material names.
 - **say it like a person.** short sentences, contractions, plain verbs. one
   idea per sentence. no lists longer than three. no parentheses, slashes,
   arrows, markdown, or emoji: none of them can be read aloud.

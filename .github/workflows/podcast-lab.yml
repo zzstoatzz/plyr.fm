@@ -1,6 +1,7 @@
 # render status-podcast candidates from a spec on any branch, for listening
-# before a change reaches the status-maintenance pipeline. nothing is uploaded
-# to plyr.fm; the audio is a run artifact.
+# before a change reaches the status-maintenance pipeline. a spec with
+# "publish" also stages that variant as status-audio-<branch>, which
+# status-maintenance uploads to plyr.fm when a PR labeled status-episode merges.
 name: podcast lab
 
 on:
@@ -52,3 +53,17 @@ jobs:
             lab-out/voices.json
           if-no-files-found: error
           retention-days: 14
+
+      - name: Name the episode artifact
+        id: episode
+        if: hashFiles('lab-out/episode/update.wav') != ''
+        run: echo "name=status-audio-${GITHUB_REF_NAME//\//-}" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v4
+        if: steps.episode.outputs.name
+        with:
+          name: ${{ steps.episode.outputs.name }}
+          path: lab-out/episode/
+          if-no-files-found: error
+          overwrite: true
+          retention-days: 30
