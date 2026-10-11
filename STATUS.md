@@ -87,7 +87,8 @@ frontend promote, except where marked.
   its secrets, which hid a ZDS scope failure.
 
 nate posted a video of a native iOS client on October 9: read-only, OAuth and
-mutations next, "a long way from any sort of release". Not in this repository.
+mutations next, "a long way from any sort of release". It lives on draft #2133
+(`mobile/`, `shared/`), not on `main`.
 
 #### the review queue got its first decisions (October 2 — no code)
 
