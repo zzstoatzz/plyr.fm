@@ -2,9 +2,27 @@
   "model": "gemini-3.8-flash-tts",
   "list_voices": true,
   "variants": [
-    {"name": "1-old-script-new-direction", "script": "oct10-old.txt"},
-    {"name": "2-new-script-kore-puck", "script": "oct10-new.txt"},
-    {"name": "3-new-script-sulafat-achird", "script": "oct10-new.txt", "voices": {"Host": "Sulafat", "Cohost": "Achird"}},
-    {"name": "4-new-script-no-direction", "script": "oct10-new.txt", "direction": "none"}
-  ]
+    {
+      "name": "1-old-script-new-direction",
+      "script": "oct10-old.txt"
+    },
+    {
+      "name": "2-new-script-kore-puck",
+      "script": "oct10-new.txt"
+    },
+    {
+      "name": "3-new-script-sulafat-achird",
+      "script": "oct10-new.txt",
+      "voices": {
+        "Host": "Sulafat",
+        "Cohost": "Achird"
+      }
+    },
+    {
+      "name": "4-new-script-no-direction",
+      "script": "oct10-new.txt",
+      "direction": "none"
+    }
+  ],
+  "round": 1
 }
