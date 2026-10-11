@@ -1,0 +1,45 @@
+Host: Hey, welcome back to the player FM update. If you're new, player FM is a music app on the A T Protocol, the open network Bluesky runs on, so when an artist uploads a song, the record of it lives in their own account and goes wherever they go.
+
+Cohost: And this one covers late September to October tenth. Kind of a long stretch.
+
+Host: It is. The big story is copyright, then the radio got a new home, and then some smaller stuff you can actually see.
+
+Cohost: Okay, copyright. What changed?
+
+Host: So every upload gets checked against a big database of commercial music. The old rule for flagging a track was way too jumpy. If a single short snippet happened to resemble a song, that could be enough.
+
+Cohost [laughing]: So a ten second test upload could get flagged.
+
+Host: Some did. When we looked back, about two thirds of the flags were false alarms. And the opposite problem too. Tracks that really did contain someone else's recording slipped through.
+
+Cohost: So what does it look for now?
+
+Host: Whether the song is actually playing. Think of it like two people humming the same tune. One matching note is a coincidence. But if your track and a known recording stay in step for nearly a minute, that's not a coincidence anymore. That's the recording.
+
+Cohost: That feels fairer.
+
+Host [more serious]: That's the point. A few seconds of karaoke in the background of a long video shouldn't take the whole thing down.
+
+Cohost: Okay. The radio.
+
+Host: Player FM has always had a radio page, stations that just play from the catalog. Another developer built a lovely little radio app called sister radio, and the radio page is now built on it. Four player FM stations also show up in sister radio's own station directory now.
+
+Cohost: So the stations are visible outside player FM.
+
+Host: Right, that's the open network part. Honest caveat though, it all runs on one small server, and it hasn't been tested much on iPhones yet.
+
+Cohost: And private tracks broke at one point?
+
+Host: Yeah. Private sharing is built on a brand new, still experimental piece of the protocol, basically private rooms that only invited accounts can open. The rules for getting in changed upstream, and sharing was broken for a few days until player FM caught up.
+
+Cohost: A couple of smaller things?
+
+Host: Sure. The radio embed now plays the live broadcast when one is on. Track embeds look right in square frames. And there's an equalizer in the web player. It's off by default, under experimental settings, and part of it is still only on the test site.
+
+Cohost: And that iPhone app nate's been posting about?
+
+Host: Nate's the person who builds player FM. The app is real, but it's an experiment. You can browse and listen, you can't sign in yet, and it's a long way from release.
+
+Cohost: Good to know. That's it for this one.
+
+Host: Thanks for listening. See you next time.

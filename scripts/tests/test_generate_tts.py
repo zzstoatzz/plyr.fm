@@ -1,6 +1,8 @@
 import base64
 import importlib.util
+import io
 import unittest
+import wave
 from pathlib import Path
 
 SCRIPT_PATH = Path(__file__).parents[1] / "generate_tts.py"
@@ -35,6 +37,25 @@ class ParseScriptTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Host turn must not be empty"):
             generate_tts.parse_script("Host:\nCohost: Hello.")
 
+    def test_delivery_note_joins_the_speaker_style_and_is_not_spoken(self) -> None:
+        content = generate_tts.parse_script("Cohost [laughing]: Really?\n")
+
+        self.assertEqual(content[0]["text"], "Really?")
+        style = content[0]["annotations"][0]["style"]
+        self.assertTrue(style.startswith(generate_tts.SPEAKERS["Cohost"]["style"]))
+        self.assertTrue(style.endswith("for this line: laughing"))
+
+
+class ChunkTurnsTests(unittest.TestCase):
+    def test_splits_at_turn_boundaries_under_the_word_budget(self) -> None:
+        content = generate_tts.parse_script(
+            "Host: one two three\nCohost: four five\nHost: six seven eight\n"
+        )
+
+        chunks = generate_tts.chunk_turns(content, max_words=5)
+
+        self.assertEqual([len(chunk) for chunk in chunks], [2, 1])
+
 
 class DecodeWavTests(unittest.TestCase):
     def test_decodes_complete_wav_without_adding_another_header(self) -> None:
@@ -45,6 +66,25 @@ class DecodeWavTests(unittest.TestCase):
         encoded = base64.b64encode(b"raw pcm data").decode()
         with self.assertRaisesRegex(ValueError, "not a WAV"):
             generate_tts.decode_wav(encoded)
+
+
+class JoinWavsTests(unittest.TestCase):
+    def test_concatenates_frames_under_one_header(self) -> None:
+        def wav(frames: bytes) -> bytes:
+            out = io.BytesIO()
+            with wave.open(out, "wb") as writer:
+                writer.setnchannels(1)
+                writer.setsampwidth(2)
+                writer.setframerate(24000)
+                writer.writeframes(frames)
+            return out.getvalue()
+
+        joined = generate_tts.join_wavs([wav(b"\x01\x00"), wav(b"\x02\x00")])
+
+        with wave.open(io.BytesIO(joined)) as reader:
+            self.assertEqual(
+                reader.readframes(reader.getnframes()), b"\x01\x00\x02\x00"
+            )
 
 
 if __name__ == "__main__":
