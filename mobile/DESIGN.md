@@ -86,6 +86,13 @@ letters are narrower and lighter than San Francisco's.
   (`shared/search.ts`).
 - **Rows**: 48 pt artwork at the 20 pt inset, a 12 pt gap, then title (17 pt
   bold) and artist (14 pt muted). Text starts at `column` in `theme.ts`.
+- **A track is always a row**, wherever it shows: the same row, the same tap
+  (plays the list from there) and the same hold menu. Home's top tracks are
+  pages of four rows that swipe sideways, the next page's artwork peeking at
+  the edge, not cards: as cards they had no menu, no lock and no playing bars.
+- **Shelves** (horizontal lists) hold what you open, not what you play: albums
+  and playlists as 148 pt square cards, people as round avatars. When the app
+  signs in, "artists you know" is a shelf of avatars on home, under top tracks.
 - **Playing** is the accent title plus four bars that follow the audio
   (`Levels`), never color alone. The audio passes through an analyser on its
   way out (`src/player/levels.ts`); each bar is one band measured against its

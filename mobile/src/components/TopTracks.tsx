@@ -1,33 +1,35 @@
-import { IMAGE_WIDTHS, trackCoverUrl } from "plyr-shared/images";
 import { DEFAULT_TOP_PERIOD, periodsAfter, TOP_PERIOD_LABELS, type TopPeriod } from "plyr-shared/top";
-import { useState } from "react";
-import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
+import { useMemo, useState } from "react";
+import { FlatList, Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import { useQueryClient } from "@tanstack/react-query";
 import { topTracks, useTopTracks } from "@/data";
-import { useOpen } from "@/nav";
-import { canPlay, usePlayer } from "@/player/PlayerProvider";
-import { color, inset, radius } from "@/theme";
-import { type } from "@/type";
-import { Artwork } from "./Artwork";
 import { useAccent } from "@/settings";
+import { color, inset } from "@/theme";
+import { type } from "@/type";
+import { TrackItem } from "./TrackItem";
 
-const CARD = 148;
+const ROWS = 4;
+/** How much of the next column's artwork shows, so the shelf reads as one you can swipe. */
+const PEEK = 36;
 
+/** The chart as pages of track rows: the same row, tap and hold menu as every other track. */
 export function TopTracks() {
   const { accent } = useAccent();
+  const { width } = useWindowDimensions();
   const [period, setPeriod] = useState<TopPeriod>(DEFAULT_TOP_PERIOD);
   const [cycling, setCycling] = useState(false);
   const client = useQueryClient();
   const { data, isPending } = useTopTracks(period);
-  const player = usePlayer();
-  const open = useOpen();
+  const tracks = useMemo(() => data ?? [], [data]);
+  const columns = useMemo(() => Array.from({ length: Math.ceil(tracks.length / ROWS) }, (_, i) => i * ROWS), [tracks.length]);
+  const page = columns.length > 1 ? width - inset - PEEK : width;
 
   // like the web toggle: step to the next period that has any tracks
   const cycle = async () => {
     setCycling(true);
     for (const candidate of periodsAfter(period)) {
-      const tracks = await client.fetchQuery(topTracks(candidate)).catch(() => []);
-      if (tracks.length > 0 || candidate === period) {
+      const found = await client.fetchQuery(topTracks(candidate)).catch(() => []);
+      if (found.length > 0 || candidate === period) {
         setPeriod(candidate);
         break;
       }
@@ -35,7 +37,7 @@ export function TopTracks() {
     setCycling(false);
   };
 
-  if (!isPending && !data?.length) return null;
+  if (!isPending && !tracks.length) return null;
   return (
     <View style={styles.section}>
       <View style={styles.heading}>
@@ -55,50 +57,26 @@ export function TopTracks() {
       </View>
       <FlatList
         horizontal
-        data={data ?? []}
-        keyExtractor={(t) => String(t.id)}
+        data={columns}
+        keyExtractor={(start) => `${period}-${start}`}
         showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.cards}
-        renderItem={({ item, index }) => {
-          const active = player.track?.id === item.id;
-          return (
-            <Pressable
-              onPress={() => player.playList(data ?? [], index, "top tracks")}
-              disabled={!canPlay(item)}
-              accessibilityRole="button"
-              accessibilityLabel={`${item.title}, by ${item.artist}`}
-              accessibilityState={{ selected: active, disabled: !canPlay(item) }}
-              style={({ pressed }) => [styles.card, pressed && { opacity: 0.7 }]}
-            >
-              <Artwork url={trackCoverUrl(item)} size={CARD} width={IMAGE_WIDTHS.tile} radius={radius.card} />
-              <Text style={[type.secondary, type.strong, styles.title, { color: active ? accent : color.ink }]} numberOfLines={1}>
-                {item.title}
-              </Text>
-              <Pressable
-                onPress={() => open({ artist: item.artist_handle })}
-                hitSlop={{ top: 4, bottom: 10 }}
-                accessibilityRole="link"
-                accessibilityLabel={item.artist}
-                accessibilityHint="opens the artist"
-              >
-                {({ pressed }) => (
-                  <Text style={[type.meta, { color: pressed ? accent : color.muted }]} numberOfLines={1}>
-                    {item.artist}
-                  </Text>
-                )}
-              </Pressable>
-            </Pressable>
-          );
-        }}
+        snapToInterval={page}
+        decelerationRate="fast"
+        disableIntervalMomentum
+        contentContainerStyle={{ paddingRight: width - page }}
+        renderItem={({ item: start }) => (
+          <View style={{ width: page }}>
+            {tracks.slice(start, start + ROWS).map((track, i) => (
+              <TrackItem key={track.id} tracks={tracks} index={start + i} label="top tracks" />
+            ))}
+          </View>
+        )}
       />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  section: { paddingTop: 8, paddingBottom: 16, gap: 10 },
+  section: { paddingTop: 8, paddingBottom: 16, gap: 4 },
   heading: { flexDirection: "row", alignItems: "baseline", gap: 10, paddingHorizontal: inset },
-  cards: { paddingHorizontal: inset, gap: 12 },
-  card: { width: CARD, gap: 4 },
-  title: { marginTop: 4 },
 });

@@ -8,7 +8,7 @@ import { Artwork } from "./Artwork";
 
 const CARD = 148;
 
-/** An artist's albums, side by side; the cards are the home screen's top-track cards. */
+/** An artist's albums, side by side as cards: collections are cards, tracks are rows. */
 export function AlbumShelf({ albums, onOpen }: { albums: readonly ArtistAlbum[]; onOpen: (album: ArtistAlbum) => void }) {
   return (
     <FlatList
