@@ -1,28 +1,12 @@
 {
   "model": "gemini-3.8-flash-tts",
-  "list_voices": true,
+  "round": 2,
   "variants": [
+    { "name": "5-year-one-kore-puck", "script": "year-one.txt" },
     {
-      "name": "1-old-script-new-direction",
-      "script": "oct10-old.txt"
-    },
-    {
-      "name": "2-new-script-kore-puck",
-      "script": "oct10-new.txt"
-    },
-    {
-      "name": "3-new-script-sulafat-achird",
-      "script": "oct10-new.txt",
-      "voices": {
-        "Host": "Sulafat",
-        "Cohost": "Achird"
-      }
-    },
-    {
-      "name": "4-new-script-no-direction",
-      "script": "oct10-new.txt",
-      "direction": "none"
+      "name": "6-year-one-sulafat-achird",
+      "script": "year-one.txt",
+      "voices": { "Host": "Sulafat", "Cohost": "Achird" }
     }
-  ],
-  "round": 1
+  ]
 }
