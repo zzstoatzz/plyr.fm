@@ -1,0 +1,45 @@
+# render status-podcast candidates from a spec on any branch, for listening
+# before a change reaches the status-maintenance pipeline. nothing is uploaded
+# to plyr.fm; the audio is a run artifact.
+name: podcast lab
+
+on:
+  workflow_dispatch:
+    inputs:
+      spec:
+        description: "path to the lab spec JSON on the dispatched ref"
+        type: string
+        default: "scripts/podcast_lab/spec.json"
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v7
+
+      - name: Render candidates
+        env:
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+          SPEC: ${{ inputs.spec }}
+        run: uv run scripts/podcast_lab.py "$SPEC" lab-out
+
+      - name: Encode mp3s
+        run: |
+          for wav in lab-out/*.wav; do
+            ffmpeg -loglevel error -y -i "$wav" -codec:a libmp3lame -q:a 2 "${wav%.wav}.mp3"
+            printf '%s %ss\n' "$(basename "$wav")" "$(ffprobe -v error -show_entries format=duration -of csv=p=0 "$wav")"
+          done
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: podcast-lab-${{ github.run_id }}
+          path: |
+            lab-out/*.mp3
+            lab-out/*.txt
+            lab-out/voices.json
+          if-no-files-found: error
+          retention-days: 14
