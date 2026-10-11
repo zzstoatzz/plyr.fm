@@ -7,7 +7,10 @@ on:
   # a push that changes a lab spec or script renders it, on any branch but main
   push:
     branches-ignore: [main]
-    paths: ["scripts/podcast_lab/**"]
+    paths:
+      - "scripts/podcast_lab/**"
+      - "scripts/podcast_lab.py"
+      - "scripts/generate_tts.py"
   workflow_dispatch:
     inputs:
       spec:
