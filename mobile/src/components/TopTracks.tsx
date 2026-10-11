@@ -63,6 +63,7 @@ export function TopTracks() {
         snapToInterval={page}
         decelerationRate="fast"
         disableIntervalMomentum
+        contentContainerStyle={{ paddingRight: width - page }}
         renderItem={({ item: start }) => (
           <View style={{ width: page }}>
             {tracks.slice(start, start + ROWS).map((track, i) => (
