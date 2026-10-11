@@ -1,12 +1,16 @@
 {
   "model": "gemini-3.8-flash-tts",
-  "round": 2,
+  "round": 3,
   "variants": [
-    { "name": "5-year-one-kore-puck", "script": "year-one.txt" },
     {
-      "name": "6-year-one-sulafat-achird",
+      "name": "7-year-one-podcaster2-brio",
       "script": "year-one.txt",
-      "voices": { "Host": "Sulafat", "Cohost": "Achird" }
+      "voices": { "Host": "en-us-podcaster-2", "Cohost": "en-us-brio" }
+    },
+    {
+      "name": "8-year-one-jori-rami",
+      "script": "year-one.txt",
+      "voices": { "Host": "en-us-jori", "Cohost": "en-us-rami" }
     }
   ]
 }
