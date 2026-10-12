@@ -282,11 +282,16 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     [id],
   );
 
+  // read at the tap: a callback that depended on the position would change every tick and re-render every usePlayer() consumer
+  const position = useRef(progress.position);
+  useEffect(() => {
+    position.current = progress.position;
+  }, [progress.position]);
   const previous = useCallback(() => {
-    const step = Q.previous(latest.current, progress.position, canPlay);
+    const step = Q.previous(latest.current, position.current, canPlay);
     if (step.kind === "restart") seek(0);
     else go("previous", step.queue);
-  }, [progress.position, seek, go]);
+  }, [seek, go]);
 
   const { controls: sleeping, takeTrackEnd } = useSleepTimer(audio, Math.max(0, Math.round(progress.duration - progress.position)));
 
