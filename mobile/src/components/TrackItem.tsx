@@ -1,6 +1,6 @@
 import { Link } from "expo-router";
 import type { Track } from "plyr-shared/contract";
-import { count, credits } from "plyr-shared/format";
+import { count, credited, credits } from "plyr-shared/format";
 import { trackThumbnailUrl } from "plyr-shared/images";
 import { listeningLabel } from "plyr-shared/playback";
 import { playsThroughCollections } from "plyr-shared/settings";
@@ -32,6 +32,7 @@ export function TrackItem({ tracks, index, line = "artist", label = null, collec
   const track = tracks[index];
   const album = track.album;
   const playable = canPlay(track);
+  const people = credited(track);
   return (
     <Link href={{ pathname: "/artist/[handle]", params: { handle: track.artist_handle } }} asChild>
       <Link.Trigger>
@@ -42,7 +43,8 @@ export function TrackItem({ tracks, index, line = "artist", label = null, collec
           active={player.track?.id === track.id}
           locked={track.gated ? listeningLabel(track.publishing?.access.listening) : null}
           onPlay={() => (alone ? player.playList([track], 0) : player.playList(tracks, index, label))}
-          onArtist={line === "artist" ? () => open({ artist: track.artist_handle }) : undefined}
+          people={line === "artist" ? people : undefined}
+          onArtist={(handle) => open({ artist: handle })}
         />
       </Link.Trigger>
       <Link.Menu>
@@ -68,7 +70,14 @@ export function TrackItem({ tracks, index, line = "artist", label = null, collec
             }}
           />
         ) : null}
-        <Link.MenuAction title="go to artist" icon="person" onPress={() => open({ artist: track.artist_handle })} />
+        {people.map((person) => (
+          <Link.MenuAction
+            key={person.handle}
+            title={people.length > 1 ? `go to ${person.name}` : "go to artist"}
+            icon="person"
+            onPress={() => open({ artist: person.handle })}
+          />
+        ))}
         {album ? <Link.MenuAction title="go to album" icon="square.stack" onPress={() => open({ album: { handle: track.artist_handle, slug: album.slug } })} /> : null}
       </Link.Menu>
     </Link>

@@ -1,4 +1,4 @@
-import { credits, formatTime } from "plyr-shared/format";
+import { credited, formatTime } from "plyr-shared/format";
 import { IMAGE_WIDTHS, trackCoverUrl } from "plyr-shared/images";
 import { upNext } from "plyr-shared/queue";
 import { useRouter } from "expo-router";
@@ -6,6 +6,7 @@ import { useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Artwork } from "@/components/Artwork";
+import { Credits } from "@/components/Credits";
 import { Scrubber } from "@/components/Scrubber";
 import { TopEdge } from "@/components/TopEdge";
 import { SleepButton } from "@/components/SleepButton";
@@ -52,13 +53,9 @@ export default function Player() {
           <Text style={[type.title, { color: color.ink }]} numberOfLines={2} accessibilityRole="header">
             {track.title}
           </Text>
-          <Pressable onPress={() => leaveFor({ artist: track.artist_handle })} accessibilityRole="link" accessibilityHint="opens the artist" hitSlop={8} style={styles.link}>
-            {({ pressed }) => (
-              <Text style={[type.body, { color: accent, opacity: pressed ? 0.6 : 1 }]} numberOfLines={1}>
-                {credits(track)}
-              </Text>
-            )}
-          </Pressable>
+          <View style={styles.link}>
+            <Credits people={credited(track)} onOpen={(handle) => leaveFor({ artist: handle })} style={[type.body, { color: accent }]} />
+          </View>
           {album ? (
             <Pressable
               onPress={() => leaveFor({ album: { handle: track.artist_handle, slug: album.slug } })}

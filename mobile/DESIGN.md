@@ -93,6 +93,11 @@ letters are narrower and lighter than San Francisco's.
 - **Shelves** (horizontal lists) hold what you open, not what you play: albums
   and playlists as 148 pt square cards, people as round avatars. When the app
   signs in, "artists you know" is a shelf of avatars on home, under top tracks.
+- **Credits**: where a track names who made it (rows, the player), every
+  credited artist, primary or featured, is its own link to that artist
+  (`Credits`), with one accessibility label each; a row also offers each as an
+  accessibility action and in its hold menu. The mini player's line stays one
+  target that opens the player.
 - **Playing** is the accent title plus four bars that follow the audio
   (`Levels`), never color alone. The audio passes through an analyser on its
   way out (`src/player/levels.ts`); each bar is one band measured against its

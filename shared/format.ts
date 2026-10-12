@@ -13,6 +13,11 @@ export function count(n: number, word: string): string {
   return `${n} ${word}${n === 1 ? "" : "s"}`;
 }
 
+/** Everyone credited on a track, in the order they are named: the artist, then anyone featured. Each has a page of their own. */
+export function credited(track: { artist: string; artist_handle: string; features: readonly { display_name: string; handle: string }[] }): { name: string; handle: string }[] {
+  return [{ name: track.artist, handle: track.artist_handle }, ...track.features.map((f) => ({ name: f.display_name, handle: f.handle }))];
+}
+
 /** Who made a track: the artist, then anyone featured. */
 export function credits(track: { artist: string; features: readonly { display_name: string }[] }): string {
   return [track.artist, ...track.features.map((f) => f.display_name)].join(", ");
