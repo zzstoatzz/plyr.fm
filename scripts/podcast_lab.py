@@ -1,0 +1,126 @@
+#!/usr/bin/env python3
+"""Render status-podcast candidates from a spec, for side-by-side listening."""
+# /// script
+# requires-python = ">=3.11"
+# dependencies = ["google-genai"]
+# ///
+
+import argparse
+import json
+import os
+from pathlib import Path
+from typing import Any
+
+from generate_tts import DIRECTION, SPEAKERS, render
+from google import genai
+
+
+def list_voices(client: genai.Client) -> list[dict[str, Any]]:
+    voices: list[dict[str, Any]] = []
+    token: str | None = None
+    while True:
+        page = client.voices.list(
+            language_code=["en-US"], page_size=1000, page_token=token
+        )
+        for voice in page.voices or []:
+            voices.append(
+                voice.model_dump(
+                    exclude={"sample_audio", "usage"}, exclude_none=True, mode="json"
+                )
+            )
+        token = page.next_page_token
+        if not token:
+            return voices
+
+
+def speakers_for(variant: dict[str, Any]) -> dict[str, dict[str, str]]:
+    speakers = {name: dict(config) for name, config in SPEAKERS.items()}
+    for name, voice in variant.get("voices", {}).items():
+        speakers[name]["voice"] = voice
+    for name, style in variant.get("styles", {}).items():
+        speakers[name]["style"] = style
+    return speakers
+
+
+def direction_for(variant: dict[str, Any]) -> str | None:
+    direction = variant.get("direction", "default")
+    if direction == "default":
+        return DIRECTION
+    if direction == "none":
+        return None
+    return direction
+
+
+def stage_episode(
+    out_dir: Path, spec_dir: Path, spec: dict[str, Any], publish: dict[str, str]
+) -> None:
+    """Stage one rendered variant in the layout status-maintenance uploads on merge."""
+    variant = next(v for v in spec["variants"] if v["name"] == publish["variant"])
+    episode = out_dir / "episode"
+    episode.mkdir(exist_ok=True)
+    (episode / "update.wav").write_bytes(
+        (out_dir / f"{variant['name']}.wav").read_bytes()
+    )
+    (episode / "podcast_script.txt").write_text(
+        (spec_dir / variant["script"]).read_text()
+    )
+    if title := publish.get("title"):
+        (episode / "title.txt").write_text(title)
+    print(f"staged {variant['name']} as the episode")
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("spec", type=Path)
+    parser.add_argument("out_dir", type=Path)
+    args = parser.parse_args()
+
+    api_key = os.environ.get("GOOGLE_API_KEY")
+    if not api_key:
+        raise SystemExit("error: GOOGLE_API_KEY not set")
+
+    spec = json.loads(args.spec.read_text())
+    args.out_dir.mkdir(parents=True, exist_ok=True)
+    client = genai.Client(api_key=api_key)
+
+    failures: list[str] = []
+    if spec.get("list_voices"):
+        try:
+            voices = list_voices(client)
+        except Exception as error:  # noqa: BLE001
+            failures.append(f"voices: {error}")
+        else:
+            (args.out_dir / "voices.json").write_text(json.dumps(voices, indent=2))
+            print(f"listed {len(voices)} voices")
+
+    for variant in spec.get("variants", []):
+        script_path = args.spec.parent / variant["script"]
+        speakers = speakers_for(variant)
+        print(
+            f"rendering {variant['name']}: {script_path.name}, "
+            f"voices {speakers['Host']['voice']}/{speakers['Cohost']['voice']}"
+        )
+        try:
+            wav = render(
+                client,
+                variant.get("model", spec["model"]),
+                script_path.read_text(),
+                speakers,
+                direction_for(variant),
+            )
+        except Exception as error:  # noqa: BLE001
+            failures.append(f"{variant['name']}: {error}")
+            print(f"failed {variant['name']}: {error}")
+            continue
+        (args.out_dir / f"{variant['name']}.wav").write_bytes(wav)
+        (args.out_dir / f"{variant['name']}.txt").write_text(script_path.read_text())
+
+    if failures:
+        raise SystemExit("failed:\n" + "\n".join(failures))
+
+    if publish := spec.get("publish"):
+        stage_episode(args.out_dir, args.spec.parent, spec, publish)
+
+
+if __name__ == "__main__":
+    main()

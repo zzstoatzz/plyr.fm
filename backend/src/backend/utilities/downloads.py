@@ -13,7 +13,7 @@ DownloadRefusal: TypeAlias = Literal[
 
 # a file_id minted by our upload path: sha256 truncated to 16 hex chars.
 # anything else (e.g. a record rkey) came from the firehose and names nothing
-# in our bucket — see _internal/CLAUDE.md and #1811.
+# in our bucket — see _internal/AGENTS.md and #1811.
 _UPLOAD_FILE_ID = re.compile(r"[0-9a-f]{16}")
 
 

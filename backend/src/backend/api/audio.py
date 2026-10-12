@@ -1,5 +1,6 @@
 """audio streaming endpoint."""
 
+import httpx
 import logfire
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import RedirectResponse, StreamingResponse
@@ -64,6 +65,10 @@ async def stream_audio(
 
     HEAD requests are used for pre-flight auth checks - they return
     200/401/402 status without redirecting to avoid CORS issues.
+
+    `cors=1` asks for CORS-readable bytes (the web player's equalizer):
+    gated audio is proxied instead of redirected, since a credentialed
+    request can't follow a redirect to a presigned or PDS url.
 
     images are served directly via R2 URLs stored in the image_url field,
     not through this endpoint.
@@ -145,6 +150,7 @@ async def stream_audio(
             is_head_request=is_head_request,
             audio_storage=audio_storage,
             pds_blob_cid=pds_blob_cid,
+            proxy_request=request if _wants_cors(request) else None,
         )
 
     # public track - use cached r2_url only for transcoded version
@@ -209,6 +215,7 @@ async def _handle_gated_audio(
     is_head_request: bool = False,
     audio_storage: str = "r2",
     pds_blob_cid: str | None = None,
+    proxy_request: Request | None = None,
 ) -> RedirectResponse | Response:
     """handle streaming for access-gated content (supporter or copyright).
 
@@ -236,15 +243,53 @@ async def _handle_gated_audio(
 
     # unmirrored gated tracks: redirect to PDS blob (only applies to supporter
     # gating; copyright tracks never get uploaded to PDS as a blob)
+    url: str | None = None
     if audio_storage == "pds" and pds_blob_cid:
         if artist_pds_url := await _resolve_pds_url(artist_did):
-            return RedirectResponse(
-                url=pds_blob_url(artist_pds_url, artist_did, pds_blob_cid)
-            )
+            url = pds_blob_url(artist_pds_url, artist_did, pds_blob_cid)
 
     # R2-backed gated tracks: presigned URL for private bucket
-    url = await storage.generate_presigned_url(file_id=file_id, extension=file_type)
+    if url is None:
+        url = await storage.generate_presigned_url(file_id=file_id, extension=file_type)
+    if proxy_request is not None:
+        return await _proxy_audio(url, proxy_request)
     return RedirectResponse(url=url)
+
+
+async def _proxy_audio(url: str, request: Request) -> StreamingResponse:
+    """relay upstream audio bytes, passing Range through so seeking survives."""
+    client = httpx.AsyncClient(
+        timeout=httpx.Timeout(30.0, read=None), follow_redirects=True
+    )
+    upstream_headers = {}
+    if range_header := request.headers.get("range"):
+        upstream_headers["range"] = range_header
+    try:
+        resp = await client.send(
+            client.build_request("GET", url, headers=upstream_headers), stream=True
+        )
+    except httpx.HTTPError as exc:
+        await client.aclose()
+        logfire.warn("audio proxy: upstream unreachable", error=str(exc))
+        raise HTTPException(status_code=502, detail="audio upstream failed") from exc
+    if resp.status_code >= 400:
+        status = resp.status_code
+        await resp.aclose()
+        await client.aclose()
+        logfire.warn("audio proxy: upstream refused", status=status)
+        raise HTTPException(status_code=502, detail="audio upstream failed")
+
+    async def body():
+        try:
+            async for chunk in resp.aiter_bytes():
+                yield chunk
+        finally:
+            await resp.aclose()
+            await client.aclose()
+
+    return StreamingResponse(
+        body(), status_code=resp.status_code, headers=_relay_headers(resp)
+    )
 
 
 @router.get("/{file_id}/download")
@@ -486,6 +531,11 @@ async def get_audio_url(
         )
 
     raise HTTPException(status_code=404, detail="audio file not found")
+
+
+def _wants_cors(request: Request) -> bool:
+    """browser-only `cors=1` knob, read off the query so it stays out of the client contract."""
+    return request.query_params.get("cors") == "1"
 
 
 def _relay_headers(resp) -> dict[str, str]:

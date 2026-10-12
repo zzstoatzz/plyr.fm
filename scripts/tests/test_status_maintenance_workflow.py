@@ -18,5 +18,16 @@ class StatusMaintenanceSecretBoundaryTests(unittest.TestCase):
         self.assertIn("GOOGLE_API_KEY", workflow[audio_step:next_step])
 
 
+class StatusEpisodeUploadTests(unittest.TestCase):
+    def test_labeled_pr_uploads_its_branch_artifact(self) -> None:
+        workflow = WORKFLOW.read_text()
+        self.assertIn(
+            "contains(github.event.pull_request.labels.*.name, 'status-episode')",
+            workflow,
+        )
+        self.assertIn('ARTIFACT="status-audio-${HEAD_REF//\\//-}"', workflow)
+        self.assertIn("TITLE=$(cat title.txt)", workflow)
+
+
 if __name__ == "__main__":
     unittest.main()

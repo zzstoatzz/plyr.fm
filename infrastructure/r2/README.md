@@ -4,7 +4,9 @@
 browser JS on another origin can play a track through `<audio src>` but cannot
 read the bytes — so `fetch()` → `arrayBuffer()` → `decodeAudioData()` and
 `crossorigin="anonymous"` + `createMediaElementSource()` both fail. That rules
-out third-party decks, waveforms, and analysers.
+out third-party decks, waveforms, and analysers — and plyr.fm's own player
+equalizer, which loads public audio with `crossorigin="anonymous"` once it is
+on. A track whose cached copy lacks the header fails to load with the eq on.
 
 Apply it with:
 

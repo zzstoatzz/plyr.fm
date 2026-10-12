@@ -1,0 +1,81 @@
+Host: Hey, welcome to the player FM update. This one's different. Instead of the last two weeks, we're doing the whole year.
+
+Cohost: The whole thing? Okay. Start me at the beginning.
+
+Host: So player FM is a place to put your music and listen to other people's. You upload a track, share it, make playlists, put the radio on. And it started because nate, the guy who builds it, makes music, and he couldn't easily get his own audio files back out of SoundCloud.
+
+Cohost [laughing]: That's such a specific grudge.
+
+Host: It's a great grudge. So the first code went in at the end of October last year. And the one twist is, you sign in with an account on the A T Protocol, the open network Bluesky runs on, and what you publish lives in your account. If you leave, it comes with you.
+
+Cohost: Okay. So who actually showed up?
+
+Host: Artists, pretty fast. In the first couple of weeks, an artist named Stella tried to upload an eighty-five minute mix from a phone, and it crashed. The fix got checked by rerunning that exact upload.
+
+Cohost: I love that the first bug report was basically, here's a really long mix.
+
+Host: And it kept being that. In December one artist, pyxorium, uploaded a three hundred and seventy-nine track back catalog in one go. That was most of the music added that whole month.
+
+Cohost [amazed]: Three hundred and seventy-nine?
+
+Host: One person. Honestly, the catalog grew because artists like that decided to bring their whole archive.
+
+Cohost: Okay, what can I actually do on it, as a listener?
+
+Host: More than you'd think. You can leave a comment at a moment in a song, and clicking it jumps there. You can embed tracks and playlists in a blog post. If you use teal dot FM, which keeps a log of what you listen to, your plays show up there. And my favorite, in February, jams.
+
+Cohost: Jams?
+
+Host: You send friends a link and you're all on one queue. Anybody can add songs, skip, pause. You can play it on one speaker for a party, or everyone listens on their own phone in different cities.
+
+Cohost: Oh, that's genuinely fun. Long distance listening party.
+
+Host: That's literally how nate described it. Then the radio. In June it became stations, each with a personality. One for loved tracks, one for new stuff, one for deep cuts, and one called slop, for A I generated music.
+
+Cohost [laughing]: Giving the A I music its own little room. Respect.
+
+Host: And then somebody checked, and over a two week stretch, only about one in twelve songs in the catalog got played on the radio. So it got rebuilt to actually go around, and it went to over half.
+
+Cohost: That's a big deal if you're one of the artists nobody was hearing.
+
+Host: Exactly. And in September the radio page got rebuilt on sister radio, which is a little radio app made by Ana. Four player FM stations are in her directory now, so people find them from outside player FM too.
+
+Cohost: Okay, what went wrong? There's always stuff.
+
+Host [amused]: Oh, plenty. In March somebody posted that player FM didn't even listen to the network it's built on. Lol okay, was the review.
+
+Cohost: Ouch.
+
+Host: Fair, though! So it learned to. Now if you publish a track from a different app on the network, it shows up here. Then in May, uploads were broken for about four days, and nobody knew until cameron posted about it.
+
+Cohost: So the alarm system was a person named cameron.
+
+Host: Pretty much. A lot of the year after that was building the alarms that should have caught it. And people kept helping. aila sent in the first outside contribution in May, and later aila's repeat button got finished. In September an engineer named garrison wrote an essay about four real gaps in how uploads were saved, and all four got fixed.
+
+Cohost: That's kind of the dream, right? Strangers reading your code and writing you an essay about it.
+
+Host: It's very nice. Then there's the stuff that just didn't work. There were four tries at showing live activity on the homepage. One had these floating bubbles that, in the project's own notes, looked like dopey submarines.
+
+Cohost [laughing]: Is that a real quote?
+
+Host: Real quote. Rated three out of ten. All four got pulled. An artist leaderboard got pulled almost as soon as it went up, because the top artist was mostly listening to their own uploads. And there were three little A I musicians this fall who had to actually listen to their songs before publishing. None of them ever passed, so they were retired.
+
+Cohost: Kind of a sweet ending, honestly. They never got to play.
+
+Host: Copyright was the hard one all year. Every upload gets checked against a big library of commercial music, and the rules got rewritten a bunch. Where it landed this October, a song has to actually be playing in step for close to a minute to count. And D J mixes get noted and left alone unless someone complains.
+
+Cohost: Okay, how big is this thing now?
+
+Host: As of August, about a thousand tracks from about a hundred artists, and close to fifty jams. The player FM account passed five hundred followers without much promotion. It's still labeled alpha. It's a hobby project.
+
+Cohost: And what's next?
+
+Host: A few things that are real but early. Private tracks you share with only the people you pick. An equalizer in the web player. And nate has an iPhone app going. It plays music, you can't sign in yet, and he says it's a long way off.
+
+Cohost: And this show?
+
+Host: This show is starting over too. Shorter, about people, and hopefully for folks who've never looked at the code.
+
+Cohost: Then go upload something weird. Thanks for listening.
+
+Host: Thanks, everybody. See you next time.

@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { trackCoverUrl, trackThumbnailUrl } from './track-cover';
+import { trackCoverCandidates, trackCoverUrl, trackThumbnailUrl } from './track-cover';
 import type { Track } from './types';
 
 const track: Track = {
@@ -39,4 +39,25 @@ it('leaves the placeholder available when no image exists', () => {
 	const withoutAvatar = { ...track, artist_avatar_url: undefined };
 	expect(trackCoverUrl(withoutAvatar)).toBeUndefined();
 	expect(trackThumbnailUrl(withoutAvatar)).toBeUndefined();
+});
+
+it('lists fallbacks for a cover that fails to load, own artwork first', () => {
+	const album = {
+		id: 'album',
+		title: 'Album',
+		slug: 'album',
+		track_count: 1,
+		total_plays: 0,
+		image_url: 'album.jpg',
+		thumbnail_url: 'album-thumb.jpg'
+	};
+	const withArt = { ...track, album, image_url: 'track.jpg', thumbnail_url: 'track-thumb.jpg' };
+	expect(trackCoverCandidates(withArt)).toEqual([
+		'track.jpg',
+		'track-thumb.jpg',
+		'album.jpg',
+		'album-thumb.jpg',
+		track.artist_avatar_url
+	]);
+	expect(trackCoverCandidates({ ...track, artist_avatar_url: undefined })).toEqual([]);
 });

@@ -1,0 +1,20 @@
+{
+  "model": "gemini-3.8-flash-tts",
+  "round": 4,
+  "publish": {
+    "variant": "9-year-one-podcaster2-brio",
+    "title": "plyr.fm update - year one"
+  },
+  "variants": [
+    {
+      "name": "9-year-one-podcaster2-brio",
+      "script": "year-one.txt",
+      "voices": { "Host": "en-us-podcaster-2", "Cohost": "en-us-brio" }
+    },
+    {
+      "name": "10-year-one-jori-rami",
+      "script": "year-one.txt",
+      "voices": { "Host": "en-us-jori", "Cohost": "en-us-rami" }
+    }
+  ]
+}

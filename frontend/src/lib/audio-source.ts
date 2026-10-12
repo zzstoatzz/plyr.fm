@@ -21,6 +21,8 @@ export type ResolvedSource =
 			fileIdUsed: string;
 			src: string;
 			ownsBlob: boolean;
+			/** the source needs the session cookie (gated or private audio) */
+			credentialed: boolean;
 	  }
 	| {
 			kind: 'gated-denied';
@@ -52,9 +54,16 @@ export interface GatedError {
  * otherwise. Shared between the reactive loader (current track)
  * and the prefetcher (next track) so the cache key agrees.
  */
+export function needsCredentialedAudio(track: Track): boolean {
+	return (
+		track.audio_storage === 'r2_private' ||
+		Boolean(track.support_gate) ||
+		track.publishing?.access.visibility === 'private'
+	);
+}
+
 export function pickFileIdForTrack(track: Track): string {
-	if (track.audio_storage === 'r2_private' || track.support_gate || track.publishing?.access.visibility === 'private')
-		return track.file_id;
+	if (needsCredentialedAudio(track)) return track.file_id;
 	if (track.original_file_id && hasPlayableLossless(track.original_file_type)) {
 		return track.original_file_id;
 	}
@@ -122,7 +131,8 @@ export async function resolveAudioSource(
 	// Adult-labeled audio must always pass through the backend's current
 	// preference check. A blob cached before the label was applied must not
 	// become a permanent authorization bypass.
-	if (!hasAdultLabel && track.audio_storage !== 'r2_private' && !track.support_gate && track.publishing?.access.visibility !== 'private') {
+	const credentialed = needsCredentialedAudio(track);
+	if (!hasAdultLabel && !credentialed) {
 		try {
 			const cachedUrl = await getCachedAudioUrl(fileIdUsed);
 			if (cachedUrl) {
@@ -131,7 +141,8 @@ export async function resolveAudioSource(
 					trackId: track.id,
 					fileIdUsed,
 					src: cachedUrl,
-					ownsBlob: cachedUrl.startsWith('blob:')
+					ownsBlob: cachedUrl.startsWith('blob:'),
+					credentialed: false
 				};
 			}
 		} catch (err) {
@@ -175,7 +186,8 @@ export async function resolveAudioSource(
 		trackId: track.id,
 		fileIdUsed,
 		src: `${API_URL}/audio/${fileIdUsed}`,
-		ownsBlob: false
+		ownsBlob: false,
+		credentialed
 	};
 }
 

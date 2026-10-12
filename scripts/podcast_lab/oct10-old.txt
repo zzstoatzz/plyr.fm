@@ -1,0 +1,35 @@
+Host: This is the player FM status update for September 23rd through October 10th. A longer window than usual, because the October 1st run had no voice. Google decided the project behind the podcast's key was denied access, and said nothing else.
+
+Cohost: Fitting, for a window whose main story is a classifier that was confidently wrong.
+
+Host: The copyright scanner. On October 1st the flag rule changed. The old rule asked what share of the fingerprint vendor's matches belonged to one song. No confidence score, and the denominator was the match count, not the audio.
+
+Cohost: So one stray match is one of one. A hundred percent. Flagged.
+
+Host: Of 27 flagged scans in production, 18 had nothing behind them. Several were ten-second test uploads. Meanwhile 61 tracks that did carry someone else's recording were never flagged.
+
+Cohost: What's the new signal?
+
+Host: Position. The vendor samples every twelve seconds and reports which recording each sample resembles, and where in that recording. If it's really there, both clocks advance together. A coincidence doesn't do that.
+
+Cohost: And you count the longest in-step run.
+
+Host: Across 665 production scans with any match, the distribution has two humps. 522 top out at one sample, 106 at six or more, almost nothing between. So the bar is four samples, about 48 seconds of a recording playing through.
+
+Cohost: Techdirt wrote up a two-hour video taken down over a few seconds of karaoke the same week. That's the failure mode this rule is written against.
+
+Host: The decision also moved into the backend. The moderation service only fingerprints now. Stored scans were rescored without calling the vendor again: 37 newly flagged, 17 cleared, nobody told either way.
+
+Cohost: Before that, on September 28th, the radio page became the sister-radio fork, mounted in a shadow root over player FM's own player. Four catalog stations now exist on Ana's sister network as did-web identities with signed station records.
+
+Host: Seven fixes shipped that day, announced as an ongoing refresh. It's one Fly machine, and nobody has tried it on a physical iPhone.
+
+Cohost: Then October 2nd. The permissioned-data branch changed twice in four days. Space credentials went from D-pop binding to HTTP message signatures, and private uploads failed until it was ported. No fallback, since every host had moved. HappyView published the same breaking changes from the host side that day.
+
+Host: Rapid fire for October 3rd through 9th, all frontend promotes. The radio embed airs the live firehose broadcast instead of the archive. Station switching hopefully stops dying mid-play. The track embed fills square frames. Top tracks stays visible in an empty month. Track-list artwork got bigger and was reverted a day later.
+
+Cohost: And an in-browser equalizer merged October 9th, experimental, disabled on iOS. Its frontend half rode a promote to production, its backend half didn't, so with it on, a gated track would skip. It's off by default.
+
+Host: Ahead: folding the station adapter into the backend, a backend release for the equalizer, and 33 review-queue items still waiting on a human. Nate also posted a video of a native iOS client. Read-only, and in his words a long way from any release.
+
+Cohost: Which is roughly where this podcast is, too.
