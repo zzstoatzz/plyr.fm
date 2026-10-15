@@ -1,12 +1,16 @@
 import Constants from "expo-constants";
+import { useRouter } from "expo-router";
 import { SymbolView } from "expo-symbols";
 import { AT_CLIENTS, resolveClient } from "plyr-shared/atclients";
 import { ACCENT_PRESETS, hideTag, playsThroughCollections, showTag } from "plyr-shared/settings";
 import { useState, type ReactNode } from "react";
-import { Linking, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Linking, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from "react-native";
+import { Avatar } from "@/components/Avatar";
 import { WEB } from "@/config";
+import { useArtist } from "@/data";
 import { haptic } from "@/haptics";
 import { accentFor } from "@/palette";
+import { useSession } from "@/session/SessionProvider";
 import { changeSettings, useAccent, useSettings } from "@/settings";
 import { color, inset } from "@/theme";
 import { type } from "@/type";
@@ -35,6 +39,54 @@ function Row({ title, detail, children, last = false }: { title: string; detail?
   );
 }
 
+function SignedIn({ handle, onSignOut }: { handle: string; onSignOut: () => void }) {
+  const artist = useArtist(handle);
+  const name = artist.data?.display_name;
+  const named = name !== undefined && name !== handle;
+  return (
+    <>
+      <View style={[styles.row, styles.rule]}>
+        <Avatar url={artist.data?.avatar_url} size={40} />
+        <View style={styles.text}>
+          <Text style={[type.row, { color: color.ink }]} numberOfLines={1}>
+            {named ? name : `@${handle}`}
+          </Text>
+          {named ? (
+            <Text style={[type.meta, { color: color.muted }]} numberOfLines={1}>
+              @{handle}
+            </Text>
+          ) : null}
+        </View>
+      </View>
+      <Pressable onPress={onSignOut} accessibilityRole="button" accessibilityLabel="sign out">
+        <Row title="sign out" last />
+      </Pressable>
+    </>
+  );
+}
+
+/** Who is signed in, or the way in. Sign-in opens over settings and closes back onto it. */
+function Account() {
+  const router = useRouter();
+  const { viewer, isLoading, signOut } = useSession();
+  const { accent } = useAccent();
+  if (isLoading) {
+    return (
+      <Row title="account" last>
+        <ActivityIndicator />
+      </Row>
+    );
+  }
+  if (viewer) return <SignedIn handle={viewer.handle} onSignOut={() => void signOut()} />;
+  return (
+    <Pressable onPress={() => router.push("/sign-in")} accessibilityRole="button" accessibilityLabel="sign in">
+      <Row title="sign in" detail="with your atmosphere account" last>
+        <SymbolView name="chevron.right" size={14} tintColor={accent} />
+      </Row>
+    </Pressable>
+  );
+}
+
 /** Settings kept on this device, under the web's names for them. Plain views, so the screen is the same on any platform. */
 export default function Settings() {
   const settings = useSettings();
@@ -54,6 +106,10 @@ export default function Settings() {
 
   return (
     <ScrollView contentInsetAdjustmentBehavior="automatic" automaticallyAdjustKeyboardInsets keyboardShouldPersistTaps="handled" contentContainerStyle={styles.screen}>
+      <Section title="account">
+        <Account />
+      </Section>
+
       <Section title="appearance">
         <Row title="accent color" detail="links, buttons and what is playing" last>
           <View style={styles.swatches} accessibilityRole="radiogroup">

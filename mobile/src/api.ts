@@ -1,5 +1,6 @@
 import type { Body } from "plyr-shared/contract";
 import { API } from "./config";
+import { readToken } from "./session/token";
 
 export class HttpError extends Error {
   constructor(readonly status: number) {
@@ -15,10 +16,11 @@ async function send(path: string, init: RequestInit & { timeout?: number } = {})
   const timer = setTimeout(() => controller.abort(), init.timeout ?? 20000);
   init.signal?.addEventListener("abort", () => controller.abort());
   try {
+    const token = await readToken();
     return await fetch(API + path, {
       ...init,
       signal: controller.signal,
-      headers: { Accept: "application/json", ...init.headers },
+      headers: { Accept: "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}), ...init.headers },
     });
   } finally {
     clearTimeout(timer);
@@ -29,6 +31,17 @@ export async function getJSON<T>(path: string, parse: Parser<T>, signal?: AbortS
   const response = await send(path, { signal });
   if (!response.ok) throw new HttpError(response.status);
   return parse(await response.json());
+}
+
+/** A write whose answer matters: a refusal or a dead network is thrown, not swallowed. */
+export async function postJSON<T>(path: string, body: object | undefined, parse: Parser<T>): Promise<T> {
+  const response = await send(path, {
+    method: "POST",
+    headers: body ? { "Content-Type": "application/json" } : {},
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  if (!response.ok) throw new HttpError(response.status);
+  return parse(response.status === 204 ? null : await response.json());
 }
 
 /** Fire-and-forget write; a failure here never interrupts playback. */

@@ -53,6 +53,8 @@
           "bundleIdentifier": "fm.plyr.widgets"
         }
       ],
+      ["expo-secure-store", { "faceIDPermission": false }],
+      "expo-web-browser",
       [
         "expo-font",
         {
