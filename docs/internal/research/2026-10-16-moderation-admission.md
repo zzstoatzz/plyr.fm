@@ -170,9 +170,18 @@ changes first deploy staging. Treat those deployment boundaries separately.
   decisions and an authenticated, bounded batch query. Real Postgres/router
   tests cover the decision lifecycle, unrelated events, auth, invalid subjects,
   and review/label isolation. CI now runs the service tests against Postgres.
-- This policy API does not yet enforce admission. The 42-subject manifest is
-  not applied to the live service. Consumer wiring, drift checks, protocol
-  repairs, and version-aware projection remain work under the active goal.
+- The policy API and backend admission consumer are separate changes: deploy
+  and verify the service endpoint before merging the backend consumer to main.
+  The consumer checks create, pending finalization, and update before mutations
+  or post-create/mirror work. Missing credentials, incomplete snapshots, malformed
+  values, HTTP errors, and timeouts raise for the existing bounded task retry;
+  deletes and the unknown-artist gate are unchanged. Clearing an exclusion grants
+  no exception to the other checks. An outage beyond retry exhaustion still needs
+  reconciliation; this is not yet a durable admission backlog.
+- Neither admission enforcement nor the 42-subject manifest is live yet. Drift
+  checks, protocol repairs, and version-aware projection remain work under the
+  active goal. Policy snapshots cannot prevent a concurrent operator decision
+  after the read, so audits must also detect indexed-policy conflicts.
 
 ## Existing automation and code references
 

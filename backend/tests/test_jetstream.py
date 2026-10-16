@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend._internal.atproto.account_status import hides_content
 from backend._internal.atproto.profile import avatar_url_from_profile_record
+from backend._internal.clients.moderation import ModerationClient
 from backend._internal.jetstream import BSKY_PROFILE_COLLECTION, JetstreamConsumer
 from backend._internal.tasks.ingest import (
     SubjectNotFoundError,
@@ -52,6 +53,14 @@ def _recent_ts() -> str:
     and cause FK constraint errors.
     """
     return datetime.now(UTC).isoformat()
+
+
+@pytest.fixture(autouse=True)
+def _allow_indexing(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def decisions(self: ModerationClient, uris: list[str]) -> dict[str, None]:
+        return dict.fromkeys(uris)
+
+    monkeypatch.setattr(ModerationClient, "get_indexing_decisions", decisions)
 
 
 # --- fixtures ---
