@@ -29,7 +29,7 @@ It merged as `c9ab8ee0284831aedf9969711de4cbb0e369d415`; staging deployment
 run `38954596566` succeeded. Staging health returned OK; its deployed guard
 returned excluded for all 42 subjects, false for a distinct control URI, and
 raised on missing credentials in an isolated verification process. No records
-were created or media fetched. Production backend enforcement is not yet live.
+were created or media fetched. Production enforcement was subsequently verified as described below.
 
 The standard `just release` also includes unreleased equalizer audio-proxy code
 from #2134 and frontend embed-artwork fallback #2138. Nate explicitly approved this additional bundle and requested smoke testing
@@ -41,3 +41,34 @@ container selection. Production SSH worked. Policy verification and writes ran
 from the production app using its existing moderation credential; the credential
 was never exported or printed. The #2151 deployment replaced the unresponsive app machine; staging health and
 guard verification then passed before promotion.
+
+## Production release and verification
+
+Release `2026.1016.192720` deployed commit
+`c9ab8ee0284831aedf9969711de4cbb0e369d415` in production workflow
+`38955043062`. Cloudflare Pages production deployment
+`55900588-cf04-413f-9d8b-c486bbd5882c` also succeeded. App, worker, and
+Jetstream machines were verified against that image SHA.
+
+The deployed guard was exercised in an isolated process on the production
+worker: all 42 exact subjects returned excluded, a different record under the
+same DID returned false, and removing the credential in that isolated process
+raised rather than allowing admission. No ingestion call or media fetch was
+performed by this check. Independent Neon reads still show zero indexed
+subjects and exactly 42 private events, IDs 218–259.
+
+The label stream reconnected after deployment and operator-label reconciliation
+reported its projection in sync. Scan/embedding failures for track 1448 began
+before this release; they are not evidence of a release regression.
+
+Production smoke checks confirmed public playback, anonymous denial of the
+signed-in-only track (including `cors=1`), and embed 1227's thumbnail fallback
+at 390px and 1280px widths. A full private-media production browser run first
+failed during an API-machine stall; its test track 1450 was cleaned up.
+The retry and authenticated equalizer coverage are tracked in #2157.
+
+API machine `91859e9f9e1908` stopped answering health checks after deployment
+and did not recover promptly after restart. Replacement `8911135fed76d8`
+was cloned from healthy `80ee112a6274e8`, preserving the deployed image and
+configuration, and passed health checks before the stalled machine was stopped.
+The stopped machine is retained for diagnosis; the cause is not yet established.

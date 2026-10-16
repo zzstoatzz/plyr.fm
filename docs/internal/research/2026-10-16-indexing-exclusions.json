@@ -3,7 +3,7 @@
   "actor": "zzstoatzz.io",
   "reason": "operator requested these existing records remain unindexed",
   "scope": "exact record URIs only; future records and whole accounts are not excluded",
-  "enforcement_status": "42 private exclusions recorded and read back; production ingestion guard not yet deployed",
+  "enforcement_status": "42 private exclusions recorded and read back; production ingestion guard verified in release 2026.1016.192720",
   "subjects": [
     "at://did:plc:lw3xovv4fu42jcxe4vt7glsg/fm.plyr.track/3m4yupdrql72t",
     "at://did:plc:lw3xovv4fu42jcxe4vt7glsg/fm.plyr.track/3m4yupdzspy25",
