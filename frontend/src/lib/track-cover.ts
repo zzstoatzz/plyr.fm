@@ -13,13 +13,11 @@ export function trackThumbnailUrl(track: Track): string | undefined {
 	);
 }
 
-/** every artwork worth trying for a full-size cover, best first; lets an image that
- * fails to load fall through to the next one instead of showing alt text. */
 export function trackCoverCandidates(track: Track): string[] {
 	const candidates = [
 		track.image_url,
-		track.image_url ? track.thumbnail_url : undefined,
 		track.album?.image_url,
+		track.image_url ? track.thumbnail_url : undefined,
 		track.album?.thumbnail_url,
 		track.artist_avatar_url
 	];

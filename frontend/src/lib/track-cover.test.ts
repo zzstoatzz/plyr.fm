@@ -41,7 +41,7 @@ it('leaves the placeholder available when no image exists', () => {
 	expect(trackThumbnailUrl(withoutAvatar)).toBeUndefined();
 });
 
-it('lists fallbacks for a cover that fails to load, own artwork first', () => {
+it('tries full-size album artwork before enlarging a track thumbnail', () => {
 	const album = {
 		id: 'album',
 		title: 'Album',
@@ -54,8 +54,8 @@ it('lists fallbacks for a cover that fails to load, own artwork first', () => {
 	const withArt = { ...track, album, image_url: 'track.jpg', thumbnail_url: 'track-thumb.jpg' };
 	expect(trackCoverCandidates(withArt)).toEqual([
 		'track.jpg',
-		'track-thumb.jpg',
 		'album.jpg',
+		'track-thumb.jpg',
 		'album-thumb.jpg',
 		track.artist_avatar_url
 	]);
