@@ -137,6 +137,7 @@
 		e: KeyboardEvent & { currentTarget: HTMLElement },
 		index: number
 	) {
+		if (e.target !== e.currentTarget) return;
 		if (e.key === 'Enter') {
 			handleTrackClick(index);
 			return;
@@ -392,7 +393,7 @@
 				href="/u/{track.artist_handle}"
 				draggable="false"
 				title={track.artist}
-				onclick={(e) => e.stopPropagation()}
+				onclick={() => onNavigate?.()}
 			>
 				{track.artist}
 			</a>
@@ -438,7 +439,8 @@
 			ignore: '.drag-handle'
 		}}
 		onpointerdown={(e) => handleRowPointerDown(e, index)}
-		onclick={() => {
+		onclick={(e) => {
+			if ((e.target as Element).closest('a, button')) return;
 			if (swallowRowClick) {
 				swallowRowClick = false;
 				return;
