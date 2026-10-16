@@ -200,3 +200,26 @@ safety.
 - `services/moderation/src/xrpc.rs:99`: replay/live stream handoff.
 - `services/moderation/src/db.rs:774`: historical negation lookup.
 - `backend/src/backend/_internal/transparency.py:29`: explicit public-action allowlist.
+
+## Label stream delivery repair
+
+The delivery proposal pages through durable rows until caught up; broadcast
+messages only wake that reader, never provide its sequence or payload. A
+30-second catch-up poll handles absent notifications and other service
+instances. That adds two lightweight reads per minute per connected subscriber
+and may keep the moderation database active; account for this in cost monitoring.
+Slow socket sends time out after 15 seconds. Invalid negative/future cursors are
+rejected before upgrading the connection. Existing JSON framing is preserved
+until the consumer-first CBOR migration is ready.
+
+`store_label` now holds a transaction-level advisory lock before allocating the
+sequence until commit. All application label writers use that method. Direct SQL
+inserts that bypass it would violate the ordering contract and must not be used.
+The database remains the authority if optional context storage or broadcasts fail.
+
+Real Postgres/WebSocket tests cover 1,005-row replay, lagged/out-of-order/fake
+broadcast payloads, reconnect, a writer with no broadcast, new-subscriber head
+semantics, cursor rejection, and a held concurrent writer. All four new tests
+fail on the previous implementation; the repaired service passes all 25 tests.
+This repair is prepared for review, not deployed. CID applicability, historical
+negation semantics, and standard wire encoding remain separate work.

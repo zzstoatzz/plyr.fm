@@ -187,6 +187,8 @@ pub struct LabelRow {
     pub sig: Vec<u8>,
 }
 
+pub(crate) const LABEL_WRITE_LOCK: i64 = 0x706c79726c61626c;
+
 impl LabelDb {
     #[cfg(test)]
     pub fn from_test_pool(pool: PgPool) -> Self {
@@ -531,6 +533,11 @@ impl LabelDb {
         let cts: DateTime<Utc> = label.cts.parse().unwrap_or_else(|_| Utc::now());
         let exp: Option<DateTime<Utc>> = label.exp.as_ref().and_then(|e| e.parse().ok());
 
+        let mut transaction = self.pool.begin().await?;
+        sqlx::query("SELECT pg_advisory_xact_lock($1)")
+            .bind(LABEL_WRITE_LOCK)
+            .execute(&mut *transaction)
+            .await?;
         let row = sqlx::query_scalar::<_, i64>(
             r#"
             INSERT INTO labels (src, uri, cid, val, neg, cts, exp, sig)
@@ -546,9 +553,10 @@ impl LabelDb {
         .bind(cts)
         .bind(exp)
         .bind(sig)
-        .fetch_one(&self.pool)
+        .fetch_one(&mut *transaction)
         .await?;
 
+        transaction.commit().await?;
         Ok(row)
     }
 

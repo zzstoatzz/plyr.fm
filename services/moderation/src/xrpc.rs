@@ -1,6 +1,6 @@
 //! ATProto XRPC endpoints for the labeler protocol.
 
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 use axum::{
     extract::{
@@ -10,10 +10,9 @@ use axum::{
     response::Response,
     Json,
 };
-use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 use tokio::sync::broadcast;
-use tokio_stream::wrappers::BroadcastStream;
+use tokio::time::{interval, timeout, MissedTickBehavior};
 use tracing::error;
 
 use crate::db::LabelDb;
@@ -93,83 +92,97 @@ pub async fn subscribe_labels(
         .clone()
         .ok_or(AppError::LabelerNotConfigured)?;
 
-    Ok(ws.on_upgrade(move |socket| handle_subscribe(socket, db, label_tx, params.cursor)))
+    let head = db.get_latest_seq().await?;
+    let cursor = params.cursor.unwrap_or(head);
+    if cursor < 0 || cursor > head {
+        return Err(AppError::BadRequest(
+            "cursor is outside the available sequence range".into(),
+        ));
+    }
+    Ok(ws.on_upgrade(move |socket| handle_subscribe(socket, db, label_tx, cursor)))
+}
+
+const REPLAY_PAGE_SIZE: i64 = 1000;
+const CATCH_UP_INTERVAL: Duration = Duration::from_secs(30);
+const SEND_TIMEOUT: Duration = Duration::from_secs(15);
+
+async fn send_backlog(socket: &mut WebSocket, db: &LabelDb, cursor: &mut i64) -> bool {
+    loop {
+        let rows = match db.get_labels_since(*cursor, REPLAY_PAGE_SIZE).await {
+            Ok(rows) => rows,
+            Err(error) => {
+                error!(%error, "failed to read durable label stream");
+                return false;
+            }
+        };
+        let full_page = rows.len() == REPLAY_PAGE_SIZE as usize;
+        for row in rows {
+            let message = SubscribeLabelsMessage {
+                seq: row.seq,
+                labels: vec![row.to_label()],
+            };
+            let json = match serde_json::to_string(&message) {
+                Ok(json) => json,
+                Err(error) => {
+                    error!(%error, "failed to encode label stream event");
+                    return false;
+                }
+            };
+            if !matches!(
+                timeout(SEND_TIMEOUT, socket.send(Message::Text(json))).await,
+                Ok(Ok(()))
+            ) {
+                return false;
+            }
+            *cursor = row.seq;
+        }
+        if !full_page {
+            return true;
+        }
+    }
 }
 
 async fn handle_subscribe(
     mut socket: WebSocket,
     db: Arc<LabelDb>,
     label_tx: broadcast::Sender<(i64, Label)>,
-    cursor: Option<i64>,
+    mut cursor: i64,
 ) {
-    // If cursor provided, backfill from that point
-    let start_seq = if let Some(c) = cursor {
-        // Send historical labels first
-        match db.get_labels_since(c, 1000).await {
-            Ok(rows) => {
-                for row in &rows {
-                    let msg = SubscribeLabelsMessage {
-                        seq: row.seq,
-                        labels: vec![row.to_label()],
-                    };
-                    if let Ok(json) = serde_json::to_string(&msg) {
-                        if socket.send(Message::Text(json)).await.is_err() {
-                            return;
-                        }
-                    }
-                }
-                rows.last().map(|r| r.seq).unwrap_or(c)
-            }
-            Err(e) => {
-                error!(error = %e, "failed to backfill labels");
-                return;
-            }
-        }
-    } else {
-        // Start from current position
-        db.get_latest_seq().await.unwrap_or(0)
-    };
-
-    // Subscribe to live updates
-    let rx = label_tx.subscribe();
-    let mut stream = BroadcastStream::new(rx);
-
-    let mut last_seq = start_seq;
-
+    let mut wakeups = label_tx.subscribe();
+    drop(label_tx);
+    let mut poll = interval(CATCH_UP_INTERVAL);
+    poll.set_missed_tick_behavior(MissedTickBehavior::Skip);
+    poll.tick().await;
+    let mut channel_open = true;
+    if !send_backlog(&mut socket, &db, &mut cursor).await {
+        return;
+    }
     loop {
         tokio::select! {
-            // Receive from broadcast
-            Some(result) = stream.next() => {
-                match result {
-                    Ok((seq, label)) => {
-                        if seq > last_seq {
-                            let msg = SubscribeLabelsMessage {
-                                seq,
-                                labels: vec![label],
-                            };
-                            if let Ok(json) = serde_json::to_string(&msg) {
-                                if socket.send(Message::Text(json)).await.is_err() {
-                                    break;
-                                }
-                            }
-                            last_seq = seq;
-                        }
-                    }
-                    Err(_) => continue, // Lagged, skip
+            _ = poll.tick() => {}
+            wake = wakeups.recv(), if channel_open => {
+                if matches!(wake, Err(broadcast::error::RecvError::Closed)) {
+                    channel_open = false;
                 }
             }
-            // Check for client disconnect
-            msg = socket.recv() => {
-                match msg {
-                    Some(Ok(Message::Close(_))) | None => break,
+            message = socket.recv() => {
+                match message {
+                    Some(Ok(Message::Close(_))) | Some(Err(_)) | None => return,
                     Some(Ok(Message::Ping(data))) => {
-                        if socket.send(Message::Pong(data)).await.is_err() {
-                            break;
+                        if !matches!(timeout(SEND_TIMEOUT, socket.send(Message::Pong(data))).await, Ok(Ok(()))) {
+                            return;
                         }
                     }
                     _ => {}
                 }
+                continue;
             }
+        }
+        if !send_backlog(&mut socket, &db, &mut cursor).await {
+            return;
         }
     }
 }
+
+#[cfg(test)]
+mod tests;
