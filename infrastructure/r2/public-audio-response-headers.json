@@ -1,0 +1,1 @@
+[{"action":"rewrite","action_parameters":{"headers":{"access-control-allow-origin":{"operation":"set","value":"*"}}},"expression":"http.host eq \"audio.plyr.fm\"","description":"Always allow CORS reads of already-public audio, including cache hits","enabled":true,"ref":"public_audio_cors"}]
