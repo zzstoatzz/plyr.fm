@@ -1,0 +1,129 @@
+{
+  "started_at": "2026-10-16T18:46:03.675266+00:00",
+  "finished_at": "2026-10-16T18:46:32.886151+00:00",
+  "index_observed_at": "2026-10-16T18:45:12.290419+00:00",
+  "indexed_records_in_scope": 1186,
+  "out_of_scope_indexed_count": 3,
+  "stale_index_snapshot": false,
+  "collection": "fm.plyr.track",
+  "complete": false,
+  "deadline_exceeded": false,
+  "sources": {
+    "https://lightrail.microcosm.blue": {
+      "repositories": 111,
+      "complete": true,
+      "error": null
+    },
+    "https://bsky.network": {
+      "repositories": 129,
+      "complete": true,
+      "error": null
+    }
+  },
+  "limits": {
+    "repositories": 1000,
+    "pages_per_source": 10,
+    "pages_per_repo": 20,
+    "requests": 1500,
+    "response_bytes": 4194304,
+    "total_bytes": 134217728,
+    "concurrency": 4,
+    "seconds": 600
+  },
+  "usage": {
+    "requests": 377,
+    "bytes": 828626
+  },
+  "uninspected_dids": [],
+  "unknown_artist_dids": [],
+  "intentional_exclusions": [
+    "at://did:plc:lw3xovv4fu42jcxe4vt7glsg/fm.plyr.track/3m4yupdrql72t",
+    "at://did:plc:lw3xovv4fu42jcxe4vt7glsg/fm.plyr.track/3m4yupdzspy25",
+    "at://did:plc:lw3xovv4fu42jcxe4vt7glsg/fm.plyr.track/3m4yupebpe52z",
+    "at://did:plc:lw3xovv4fu42jcxe4vt7glsg/fm.plyr.track/3m4yupejrci2a",
+    "at://did:plc:lw3xovv4fu42jcxe4vt7glsg/fm.plyr.track/3m4yupero2p2t",
+    "at://did:plc:lw3xovv4fu42jcxe4vt7glsg/fm.plyr.track/3m4yupezp4427",
+    "at://did:plc:lw3xovv4fu42jcxe4vt7glsg/fm.plyr.track/3m4yupfbjkb2l",
+    "at://did:plc:lw3xovv4fu42jcxe4vt7glsg/fm.plyr.track/3m4yupfjgfc2a",
+    "at://did:plc:lw3xovv4fu42jcxe4vt7glsg/fm.plyr.track/3m4yupfrdq72t",
+    "at://did:plc:lw3xovv4fu42jcxe4vt7glsg/fm.plyr.track/3m4yupfz5372s",
+    "at://did:plc:lw3xovv4fu42jcxe4vt7glsg/fm.plyr.track/3m4yupgag5p2t",
+    "at://did:plc:lw3xovv4fu42jcxe4vt7glsg/fm.plyr.track/3m4yupgi2iu27",
+    "at://did:plc:lw3xovv4fu42jcxe4vt7glsg/fm.plyr.track/3m4yupgptxr2l",
+    "at://did:plc:lw3xovv4fu42jcxe4vt7glsg/fm.plyr.track/3m4yupgyqhx2q",
+    "at://did:plc:lw3xovv4fu42jcxe4vt7glsg/fm.plyr.track/3m4yuphb6b42k",
+    "at://did:plc:lw3xovv4fu42jcxe4vt7glsg/fm.plyr.track/3m4yuphj47n2e",
+    "at://did:plc:lw3xovv4fu42jcxe4vt7glsg/fm.plyr.track/3m4yuphqwcb27",
+    "at://did:plc:lw3xovv4fu42jcxe4vt7glsg/fm.plyr.track/3m4yuphynd626",
+    "at://did:plc:lw3xovv4fu42jcxe4vt7glsg/fm.plyr.track/3m4yupiah3w2o",
+    "at://did:plc:lw3xovv4fu42jcxe4vt7glsg/fm.plyr.track/3m4yupiih5f2e",
+    "at://did:plc:lw3xovv4fu42jcxe4vt7glsg/fm.plyr.track/3m4yupiqoqd2j",
+    "at://did:plc:lw3xovv4fu42jcxe4vt7glsg/fm.plyr.track/3m4yupiyjih2q",
+    "at://did:plc:lw3xovv4fu42jcxe4vt7glsg/fm.plyr.track/3m4yupjajji2a",
+    "at://did:plc:lw3xovv4fu42jcxe4vt7glsg/fm.plyr.track/3m4yupjj5qv2z",
+    "at://did:plc:lw3xovv4fu42jcxe4vt7glsg/fm.plyr.track/3m4yupjr3xi25",
+    "at://did:plc:lw3xovv4fu42jcxe4vt7glsg/fm.plyr.track/3m4yupjzawk2a",
+    "at://did:plc:lw3xovv4fu42jcxe4vt7glsg/fm.plyr.track/3m4yupkbiy52y",
+    "at://did:plc:lw3xovv4fu42jcxe4vt7glsg/fm.plyr.track/3m4yupkiybh2t",
+    "at://did:plc:lw3xovv4fu42jcxe4vt7glsg/fm.plyr.track/3m4yupkqtap2t",
+    "at://did:plc:lw3xovv4fu42jcxe4vt7glsg/fm.plyr.track/3m4yupkyuf52e",
+    "at://did:plc:lw3xovv4fu42jcxe4vt7glsg/fm.plyr.track/3m4yuplar6q2a",
+    "at://did:plc:lw3xovv4fu42jcxe4vt7glsg/fm.plyr.track/3m4yupliyeb2l",
+    "at://did:plc:lw3xovv4fu42jcxe4vt7glsg/fm.plyr.track/3m4yuplqwkn2y",
+    "at://did:plc:o53crari67ge7bvbv273lxln/fm.plyr.track/3m52dg25tdv27",
+    "at://did:plc:o53crari67ge7bvbv273lxln/fm.plyr.track/3m52dg25u3a2b",
+    "at://did:plc:o53crari67ge7bvbv273lxln/fm.plyr.track/3m52dg25uhz27",
+    "at://did:plc:o53crari67ge7bvbv273lxln/fm.plyr.track/3m57y7zos7d2q",
+    "at://did:plc:o53crari67ge7bvbv273lxln/fm.plyr.track/3m57z2ihtsw2f",
+    "at://did:plc:o53crari67ge7bvbv273lxln/fm.plyr.track/3m57zgph47z2w",
+    "at://did:plc:o53crari67ge7bvbv273lxln/fm.plyr.track/3m5as2winla2z",
+    "at://did:plc:o53crari67ge7bvbv273lxln/fm.plyr.track/3m5flteiqwy2t",
+    "at://did:plc:o53crari67ge7bvbv273lxln/fm.plyr.track/3m5nrcd24ht2m"
+  ],
+  "unexplained_unindexed": [
+    "at://did:plc:aurnkk6uy6axy66uqaq6dqy6/fm.plyr.track/3mfbekx3zl22v",
+    "at://did:plc:njqwgoba3zvwuexfmdbkl62v/fm.plyr.track/3m53p4kwmpa2l",
+    "at://did:plc:njqwgoba3zvwuexfmdbkl62v/fm.plyr.track/3m53p4kwssi2k",
+    "at://did:plc:siv7zbedip4vcet4v67piibr/fm.plyr.track/3mrttu6zg4k22",
+    "at://did:plc:vs3hnzq2daqbszxlysywzy54/fm.plyr.track/3mfu3svtjbc2w",
+    "at://did:plc:vvnpvyrbcq4qh2pzqsaspf6v/fm.plyr.track/3mik3cic63z22",
+    "at://did:plc:wmaxm4nu63spj76sfag3e3gb/fm.plyr.track/3m4z43zj3vo2u",
+    "at://did:plc:wmaxm4nu63spj76sfag3e3gb/fm.plyr.track/3m5fe2hg3pk2c",
+    "at://did:plc:zdnxohal6djqf6woe6xjnihq/fm.plyr.track/3m5hhsdahcb2l"
+  ],
+  "indexed_policy_conflicts": [],
+  "excluded_now_absent": [],
+  "excluded_presence_unknown": [],
+  "indexed_not_observed": [
+    "at://did:plc:lhsgcwmucs4xqlhbz72kv7pv/fm.plyr.track/3mkpncf7jqy22"
+  ],
+  "policy_enforcement_status": "instruction captured; not yet applied to admission enforcement",
+  "repositories_observed": 130,
+  "records_observed": 1225,
+  "incomplete_repositories": [
+    {
+      "did": "did:plc:524tuhdhh3m7li5gycdn6boe",
+      "error": "http_400"
+    },
+    {
+      "did": "did:plc:aokggmp5jzj4nc5jifhiplqc",
+      "error": "http_400"
+    },
+    {
+      "did": "did:plc:ciul6zkjqvao5uv4cpyoijdp",
+      "error": "http_400"
+    },
+    {
+      "did": "did:plc:dqmobzm2ntia652uhvrbo6w4",
+      "error": "http_400"
+    },
+    {
+      "did": "did:plc:qcnyz4einvy2snq6rjykmays",
+      "error": "ReadTimeout"
+    }
+  ],
+  "known_indexed_not_observed": {
+    "track_id": 930,
+    "state": "pending; missing media already documented in STATUS.md"
+  }
+}
