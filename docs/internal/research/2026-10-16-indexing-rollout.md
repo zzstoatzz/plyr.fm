@@ -70,5 +70,33 @@ The retry and authenticated equalizer coverage are tracked in #2157.
 API machine `91859e9f9e1908` stopped answering health checks after deployment
 and did not recover promptly after restart. Replacement `8911135fed76d8`
 was cloned from healthy `80ee112a6274e8`, preserving the deployed image and
-configuration, and passed health checks before the stalled machine was stopped.
+configuration, and passed health checks before the stalled machine was stopped and cordoned.
 The stopped machine is retained for diagnosis; the cause is not yet established.
+
+
+## Smoke-test findings and follow-ups
+
+The production private-media run `38957118611` passed private upload,
+cross-account admission/revocation, fresh-session playback, and private voice
+memo creation/playback, with test-record cleanup. Its equalizer step exposed
+missing CORS headers on an older cached public audio response at the CI
+runner's Cloudflare edge. This was a real playback failure when EQ was enabled,
+not an authentication failure.
+
+Cloudflare CLI verified that `audio-prod` already had the committed public CORS
+policy. A host-scoped purge for `audio.plyr.fm` in zone
+`2bfcb9ffe7847604e9febbb62d9649a3` succeeded; a fresh 206 response for the same
+object included `Access-Control-Allow-Origin: *`, including with `Origin: null`.
+The private buckets and media objects were not modified. Production verification
+run `38957545171` follows this cache repair.
+
+Nate noticed that the working embed fallback was visibly grainy: it expanded a
+96px thumbnail ahead of available 1024px album art. #2159 corrects that priority.
+Nate also reported queue artist links stopping playback; #2160 lets those clicks
+reach the client router without invoking row playback and protects focused links
+from row keyboard shortcuts. Local browser navigation preserved the current
+source and advanced from 0:57 to 1:09. These are frontend-only follow-ups.
+
+The separate repeated For You continuation report is tracked in #2158. Existing
+code already shuffles candidates, so its investigation must trace the actual
+queue/cache/restore path rather than assume shuffle is absent.
