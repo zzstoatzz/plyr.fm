@@ -89,3 +89,43 @@ describe('Queue keyboard', () => {
 	});
 
 });
+
+
+describe('Queue artist navigation', () => {
+	it('lets the router receive artist clicks without selecting the queue row', () => {
+		queue.tracks = [makeTrack(1), makeTrack(2)];
+		queue.currentIndex = 0;
+		const onNavigate = vi.fn();
+		component = mount(Queue, { target: document.body, props: { onNavigate } });
+		flushSync();
+		const artist = document.querySelector('.queue-track .track-artist a');
+		if (!(artist instanceof HTMLAnchorElement)) throw new Error('artist link not rendered');
+		let routed = false;
+		const router = (event: MouseEvent) => {
+			routed = true;
+			event.preventDefault();
+		};
+		window.addEventListener('click', router);
+		try {
+			artist.click();
+			expect(routed).toBe(true);
+			expect(queue.currentIndex).toBe(0);
+			expect(onNavigate).toHaveBeenCalledTimes(1);
+		} finally {
+			window.removeEventListener('click', router);
+		}
+	});
+
+	it('does not apply row keyboard actions to a focused artist link', () => {
+		queue.tracks = [makeTrack(1), makeTrack(2)];
+		queue.currentIndex = 0;
+		component = mount(Queue, { target: document.body, props: {} });
+		flushSync();
+		const artist = document.querySelector('.queue-track .track-artist a');
+		if (!(artist instanceof HTMLAnchorElement)) throw new Error('artist link not rendered');
+		press(artist, 'Delete');
+		expect(queue.tracks.map((track) => track.id)).toEqual([1, 2]);
+		press(artist, 'Enter');
+		expect(queue.currentIndex).toBe(0);
+	});
+});
