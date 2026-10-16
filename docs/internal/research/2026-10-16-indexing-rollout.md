@@ -71,7 +71,12 @@ API machine `91859e9f9e1908` stopped answering health checks after deployment
 and did not recover promptly after restart. Replacement `8911135fed76d8`
 was cloned from healthy `80ee112a6274e8`, preserving the deployed image and
 configuration, and passed health checks before the stalled machine was stopped and cordoned.
-The stopped machine is retained for diagnosis; the cause is not yet established.
+The stopped machine is retained for diagnosis. A subsequent staging stall was
+captured with py-spy: SlowAPI was blocked in synchronous Redis `evalsha` on the
+main event loop, with no socket timeout. The machine had available memory. #2161
+adds bounded Redis reads/connections and offloads default and decorated endpoint
+limit checks; this addresses a demonstrated mechanism capable of causing these
+API-wide stalls, rather than asserting the uncaptured production stack was identical.
 
 
 ## Smoke-test findings and follow-ups
@@ -88,7 +93,11 @@ policy. A host-scoped purge for `audio.plyr.fm` in zone
 `2bfcb9ffe7847604e9febbb62d9649a3` succeeded; a fresh 206 response for the same
 object included `Access-Control-Allow-Origin: *`, including with `Origin: null`.
 The private buckets and media objects were not modified. Production verification
-run `38957545171` follows this cache repair.
+run `38957545171` passed public EQ playback after this cache repair, but its
+gated-track check timed out. Both gated HEAD requests returned 200 in under
+30ms; the player instead returned to its previous public track. Run `38959167060`
+waits for queue restoration before the gated playback check to isolate EQ from
+that suspected queue race.
 
 Nate noticed that the working embed fallback was visibly grainy: it expanded a
 96px thumbnail ahead of available 1024px album art. #2159 corrects that priority.
@@ -100,3 +109,12 @@ source and advanced from 0:57 to 1:09. These are frontend-only follow-ups.
 The separate repeated For You continuation report is tracked in #2158. Existing
 code already shuffles candidates, so its investigation must trace the actual
 queue/cache/restore path rather than assume shuffle is absent.
+
+
+The replacement staging API `85e206b47e65e8` temporarily uses 2GB; this was a
+recovery experiment before the Redis stack capture, not evidence that more
+memory is required. Reconcile it to the committed deployment configuration.
+Staging Redis restarted at 19:54Z and Docket logged connection resets; staging
+run `38958122393` failed waiting for uploads to finish. Test record 10134 from
+an earlier failed run remains to be cleaned up through the application's deletion
+path. No broad database or PDS deletion is authorized.
