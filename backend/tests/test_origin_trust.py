@@ -8,6 +8,7 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend._internal.clients.moderation import ModerationClient
 from backend._internal.tasks.ingest import (
     ingest_track_create,
     ingest_track_update,
@@ -21,6 +22,14 @@ from backend.models import Artist, Track
 
 def _recent_ts() -> str:
     return datetime.now(UTC).isoformat()
+
+
+@pytest.fixture(autouse=True)
+def _allow_indexing(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def decisions(self: ModerationClient, uris: list[str]) -> dict[str, None]:
+        return dict.fromkeys(uris)
+
+    monkeypatch.setattr(ModerationClient, "get_indexing_decisions", decisions)
 
 
 # --- fixtures ---
