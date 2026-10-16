@@ -186,8 +186,8 @@ async def run_post_track_audio_replace_hooks(
         )
         await db.commit()
 
-    # 2. re-trigger copyright scan against the new audio bytes
-    if audio_url:
+    # staging replacements follow the same scan policy as staging ingestion
+    if audio_url and settings.observability.environment != "staging":
         await schedule_copyright_scan(track_id, audio_url)
 
     # 3. re-trigger CLAP embedding (turbopuffer upsert overwrites)
