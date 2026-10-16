@@ -68,6 +68,38 @@ jobs:
         if: matrix.changed != 'true'
         run: echo "skipping ${{ matrix.service }} - no changes"
 
+  moderation-tests:
+    name: moderation tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: changes
+    if: needs.changes.outputs.moderation == 'true'
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: relay_test
+          POSTGRES_PASSWORD: relay_test
+          POSTGRES_DB: relay_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 1s
+          --health-timeout 5s
+          --health-retries 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: services/moderation
+      - name: test against Postgres
+        working-directory: services/moderation
+        run: cargo test
+        env:
+          DATABASE_URL: postgresql://relay_test:relay_test@localhost:5432/relay_test
+
   docker-build:
     name: docker build
     runs-on: ubuntu-latest

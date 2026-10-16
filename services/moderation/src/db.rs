@@ -188,6 +188,11 @@ pub struct LabelRow {
 }
 
 impl LabelDb {
+    #[cfg(test)]
+    pub fn from_test_pool(pool: PgPool) -> Self {
+        Self { pool }
+    }
+
     /// Connect to the database.
     pub async fn connect(database_url: &str) -> Result<Self, sqlx::Error> {
         let pool = PgPoolOptions::new()

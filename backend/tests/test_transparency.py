@@ -40,7 +40,15 @@ def _event(action: str, **kwargs) -> dict:
 
 @pytest.mark.parametrize(
     "action",
-    ["flagged_by_scan", "reported", "acknowledged", "override_allow", "override_clear"],
+    [
+        "flagged_by_scan",
+        "reported",
+        "acknowledged",
+        "override_allow",
+        "override_clear",
+        "indexing_exclude",
+        "indexing_clear",
+    ],
 )
 def test_suspicions_and_non_actions_are_never_published(action: str) -> None:
     """A flag is not a finding, and a report is not a verdict.
