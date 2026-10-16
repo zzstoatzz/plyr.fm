@@ -155,7 +155,15 @@ changes first deploy staging. Treat those deployment boundaries separately.
 - Snapshot validation landed in #2149 (merged October 16); production backend
   promotion remains separate. Staging deployment failed before rollout because
   its database is stamped with `b6e2f4a1c9d3`, from unmerged native sign-in
-  PR #2142; main cannot resolve that migration. No database stamp was changed.
+  PR #2142. With Nate's explicit instruction to set aside the experiment, the
+  migration was downgraded using its own Alembic downgrade to `311b4f106c90`.
+  The retry succeeded: staging release v648 now serves main, including #2149;
+  its health check passes and `/auth/app/start` is absent from OpenAPI.
+  Production stayed at `311b4f106c90` and was not changed.
+  The code remains on `claude/native-app-signin`; a no-compute Neon snapshot
+  `archive-ios-experiment-2026-10-16` (`br-patient-band-af0k8vzz`) preserves the
+  staging database before rollback. The removed table held 13 expired login
+  attempts; no native exchange tokens were outstanding.
   Its full backend suite passed (1,831 tests;
   25 existing credential-gated skips), and all PR checks passed.
 - The service proposal adds exact-URI `indexing_exclude` / `indexing_clear`
