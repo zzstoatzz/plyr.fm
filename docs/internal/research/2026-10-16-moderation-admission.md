@@ -223,3 +223,27 @@ semantics, cursor rejection, and a held concurrent writer. All four new tests
 fail on the previous implementation; the repaired service passes all 25 tests.
 This repair is prepared for review, not deployed. CID applicability, historical
 negation semantics, and standard wire encoding remain separate work.
+
+## Consumer-first standard framing support
+
+The backend consumer now accepts binary header/body CBOR frames using the
+installed ATProto SDK's decoder, alongside the existing text JSON events.
+Both paths validate the notification envelope before invalidating any cache
+or advancing the cursor. Malformed frames and protocol error frames close the
+connection through the existing reconnect path. Unknown operations/types are
+ignored, and information frames are logged without advancing the cursor.
+
+This is an invalidation notification, not a new source of label authority:
+projection refresh still reads authenticated snapshots from the moderation
+service. It does not infer content safety or verify label signatures from the
+notification. The producer must retain JSON until this consumer is deployed to
+both staging and production. The subsequent producer change must also use
+protocol error frames for FutureCursor, rather than the intermediate HTTP 400.
+
+Real socket tests cover both encodings with Redis invalidation and Postgres
+projection updates, malformed/error frames with no cursor advance, and forward
+compatibility with unknown message types. Nine new cases fail on the previous
+consumer; the legacy JSON case passes on both versions.
+
+Protocol reference: https://atproto.com/specs/event-stream and
+https://github.com/bluesky-social/atproto/blob/main/lexicons/com/atproto/label/subscribeLabels.json.
