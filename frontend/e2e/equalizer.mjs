@@ -9,7 +9,8 @@ const dump = observe(page, 'equalizer');
 try {
 	await signIn(page);
 	await page.goto(`${APP}/settings`, { waitUntil: 'domcontentloaded' });
-	await page.getByRole('checkbox', { name: 'equalizer', exact: true }).check();
+	await page.locator('label.toggle-switch').filter({ has: page.getByRole('checkbox', { name: 'equalizer', exact: true }) }).click();
+	if (!(await page.getByRole('checkbox', { name: 'equalizer', exact: true }).isChecked())) fail('EQ offer did not enable');
 	await page.goto(`${APP}/track/1249`, { waitUntil: 'domcontentloaded' });
 	await page.getByRole('button', { name: 'play', exact: true }).click();
 	await page.waitForFunction(() => document.querySelector('audio')?.currentTime > 1);
@@ -40,7 +41,8 @@ try {
 	await page.getByRole('switch', { name: 'equalizer', exact: true }).uncheck();
 	await page.screenshot({ path: `${ARTIFACTS}/equalizer-gated.png` });
 	await page.goto(`${APP}/settings`, { waitUntil: 'domcontentloaded' });
-	await page.getByRole('checkbox', { name: 'equalizer', exact: true }).uncheck();
+	await page.locator('label.toggle-switch').filter({ has: page.getByRole('checkbox', { name: 'equalizer', exact: true }) }).click();
+	if (await page.getByRole('checkbox', { name: 'equalizer', exact: true }).isChecked()) fail('EQ offer did not disable');
 	console.log('PASS — public and gated equalizer playback');
 } catch (error) {
 	console.error(String(error).slice(0, 400));
