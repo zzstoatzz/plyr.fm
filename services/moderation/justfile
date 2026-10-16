@@ -1,6 +1,9 @@
 set shell := ["bash", "-eu", "-o", "pipefail", "-c"]
 default := "run"
 
+compose := "docker compose -p plyr-moderation-tests-" + replace_regex(sha256(justfile_directory()), '^(.{8}).*$', '$1') + " -f ../../backend/tests/docker-compose.yml"
+db_port := env('MODERATION_TEST_DB_PORT', '5434')
+
 alias r := run
 alias b := build
 
@@ -21,6 +24,11 @@ fmt:
 
 clippy:
     cargo clippy --all-targets --all-features
+
+test:
+    TEST_DB_PORT={{ db_port }} {{ compose }} up -d --wait test-db
+    DATABASE_URL=postgresql://relay_test:relay_test@localhost:{{ db_port }}/relay_test cargo test
+    TEST_DB_PORT={{ db_port }} {{ compose }} down
 
 image tag="plyr-moderation:local":
     docker build -t {{tag}} .
