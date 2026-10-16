@@ -25,11 +25,13 @@ import contextlib
 import logging
 import random
 import time
-from typing import Any
+from typing import Annotated, Any
 
 import logfire
 import orjson
 import websockets
+from atproto_core.cbor import decode_dag_multi
+from pydantic import BaseModel, ConfigDict, Field
 from websockets.asyncio.client import ClientConnection
 
 from backend._internal.clients.moderation import get_moderation_client
@@ -100,9 +102,8 @@ class LabelStreamConsumer:
                 async for raw in ws:
                     if self._shutdown_event.is_set():
                         return
-                    try:
-                        message = orjson.loads(raw)
-                    except (orjson.JSONDecodeError, TypeError):
+                    message = _decode_message(raw)
+                    if message is None:
                         continue
                     await self._process_message(message)
                     await self._maybe_flush_cursor()
@@ -203,3 +204,46 @@ def _ws_url(http_url: str) -> str:
     if http_url.startswith("http://"):
         return "ws://" + http_url[len("http://") :]
     return http_url
+
+
+class _LabelNotification(BaseModel):
+    model_config = ConfigDict(strict=True)
+
+    uri: Annotated[str, Field(min_length=1)]
+    val: str | None = None
+    neg: bool = False
+
+
+class _LabelEvent(BaseModel):
+    model_config = ConfigDict(strict=True)
+
+    seq: Annotated[int, Field(gt=0, lt=2**53)]
+    labels: list[_LabelNotification]
+
+
+def _decode_message(raw: str | bytes) -> dict[str, Any] | None:
+    if isinstance(raw, str):
+        body = orjson.loads(raw)
+    else:
+        parts = decode_dag_multi(raw)
+        if len(parts) != 2:
+            raise ValueError("label stream frame must contain a header and body")
+        header, body = parts
+        if not isinstance(header, dict) or not isinstance(body, dict):
+            raise ValueError("label stream header and body must be objects")
+        operation = header.get("op")
+        if type(operation) is not int:
+            raise ValueError("label stream operation must be an integer")
+        if operation == -1:
+            raise ValueError(f"label stream error: {body.get('error', 'unknown')}")
+        if operation != 1:
+            return None
+        message_type = header.get("t")
+        if not isinstance(message_type, str):
+            raise ValueError("label stream message type is required")
+        if message_type == "#info":
+            logger.warning("label stream info: %s", body.get("name"))
+            return None
+        if message_type != "#labels":
+            return None
+    return _LabelEvent.model_validate(body).model_dump()
