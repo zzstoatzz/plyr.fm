@@ -11,7 +11,7 @@ from typing import Any, Literal
 
 import httpx
 import logfire
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from backend.config import settings
 from backend.utilities.redis import get_async_redis_client
@@ -29,6 +29,19 @@ class _OverrideSnapshot(BaseModel):
     model_config = ConfigDict(strict=True)
 
     overrides: dict[str, Literal["allow", "exclude"]]
+
+
+class IndexingDecision(BaseModel):
+    model_config = ConfigDict(strict=True)
+
+    event_id: int = Field(gt=0)
+    excluded: bool
+
+
+class _IndexingSnapshot(BaseModel):
+    model_config = ConfigDict(strict=True)
+
+    decisions: dict[str, IndexingDecision | None]
 
 
 @dataclass
@@ -586,6 +599,27 @@ class ModerationClient:
             response.raise_for_status()
             snapshot = _OverrideSnapshot.model_validate(response.json())
             return dict(snapshot.overrides)
+
+    async def get_indexing_decisions(
+        self, uris: list[str]
+    ) -> dict[str, IndexingDecision | None]:
+        if not uris:
+            return {}
+        if len(uris) > 500:
+            raise ValueError("at most 500 indexing subjects per query")
+        if not self.auth_token.strip():
+            raise ValueError("MODERATION_AUTH_TOKEN is required for indexing decisions")
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            response = await client.post(
+                f"{self.labeler_url}/internal/indexing-decisions",
+                json={"uris": uris},
+                headers=self._headers(),
+            )
+            response.raise_for_status()
+            snapshot = _IndexingSnapshot.model_validate(response.json())
+        if set(snapshot.decisions) != set(uris):
+            raise ValueError("indexing snapshot does not cover the requested subjects")
+        return snapshot.decisions
 
     async def get_negated_labels(self, uris: list[str]) -> set[str]:
         """check which URIs have an explicit negation (dismissal) label.
