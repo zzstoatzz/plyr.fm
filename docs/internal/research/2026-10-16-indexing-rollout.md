@@ -26,17 +26,18 @@ No account-wide exclusion or public label was requested.
 
 #2151 was rebased onto the deployed service commit and reran CI successfully.
 It merged as `c9ab8ee0284831aedf9969711de4cbb0e369d415`; staging deployment
-run `38954596566` is pending verification. Production backend enforcement is
-not yet live.
+run `38954596566` succeeded. Staging health returned OK; its deployed guard
+returned excluded for all 42 subjects, false for a distinct control URI, and
+raised on missing credentials in an isolated verification process. No records
+were created or media fetched. Production backend enforcement is not yet live.
 
 The standard `just release` also includes unreleased equalizer audio-proxy code
-from #2134 and frontend embed-artwork fallback #2138. Those changes are outside
-the scoped approval. A separate question is pending about an isolated moderation
-release versus approving the existing main bundle. Do not interpret the initial
-approval as approval of that additional code.
+from #2134 and frontend embed-artwork fallback #2138. Nate explicitly approved this additional bundle and requested smoke testing
+and readiness to follow up immediately on any production regression.
 
 Staging's app machine became unresponsive during preflight, before #2151's
 deployment: its public health request timed out and Fly SSH panicked during
 container selection. Production SSH worked. Policy verification and writes ran
 from the production app using its existing moderation credential; the credential
-was never exported or printed. Staging must recover and validate before promotion.
+was never exported or printed. The #2151 deployment replaced the unresponsive app machine; staging health and
+guard verification then passed before promotion.
