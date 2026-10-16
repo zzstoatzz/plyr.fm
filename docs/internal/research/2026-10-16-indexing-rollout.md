@@ -115,6 +115,44 @@ The replacement staging API `85e206b47e65e8` temporarily uses 2GB; this was a
 recovery experiment before the Redis stack capture, not evidence that more
 memory is required. Reconcile it to the committed deployment configuration.
 Staging Redis restarted at 19:54Z and Docket logged connection resets; staging
-run `38958122393` failed waiting for uploads to finish. Test record 10134 from
-an earlier failed run remains to be cleaned up through the application's deletion
-path. No broad database or PDS deletion is authorized.
+run `38958122393` failed waiting for uploads to finish. Exact test record 10134 (`e2e private 1792180117370`) was cleaned up through
+the authenticated staging DELETE endpoint, which returned 200; no broad database
+or PDS deletion was used.
+
+
+## Final verification and outstanding infrastructure work
+
+Production browser run `38959791716` passed private upload, access/revocation,
+voice memo, public EQ, gated EQ and the exact 100-byte authenticated range check.
+Both test records (1462, 1463) were deleted successfully. A later staging private
+media run, `38959993366`, also passed with the new limiter on the serving machines.
+
+The first public cache purge was not durable: run `38959167060` reproduced the
+missing header. A Cloudflare response-header transform now sets wildcard ACAO
+only on `audio.plyr.fm`, including cache hits and requests without Origin.
+Ruleset `5b01868a48234413a3984f489720e2d1`, rule
+`a5afef9551124993b4cd42ce1d4e646b`, is recorded with rollback guidance in #2157.
+Cache HIT range requests with absent, app, and null Origins all returned 206,
+100 bytes and exactly one wildcard ACAO. Private buckets were not changed.
+
+Frontend-only promotion of `0c7c046cf129053da4189b5fb61d7da72c4a9b01` succeeded
+in Pages deployment `69aca364-60b8-40bc-b1b4-0741a43c761b`; the Tangled mirror was
+retried successfully after a concurrency-limit rejection. Production embed 1227
+loaded 1024x1024 album art. Clicking the upcoming queue row's artist opened
+`/u/zzstoatzz.io` while the same audio continued from 6 to 17 seconds. Playback
+was paused after verification. #2162 separately tracks a suspected late queue
+restoration overwriting a user's newer track selection.
+
+The production backend is still release `2026.1016.192720` at `c9ab8ee0`.
+#2161 is merged and running on staging's serving processes, but its complete
+staging deployment is blocked by Fly control-plane token-verification timeouts:
+first on a stopped standby, then on creating the release-command machine.
+Fly's status page reports platform-wide rolling host reboots. No production
+backend promote was attempted during that instability. Both staging API machines
+were reconciled to the committed 1GB configuration by the partial deployment.
+
+Next operational step: once Fly is stable, complete a green staging deployment,
+then run the already-authorized full fast-follow release of #2161 and smoke it.
+Reconcile the temporary/replaced API machines after that succeeds; do not delete
+healthy serving capacity during the incident. The remaining moderation replay,
+CBOR consumer and negation PR stack (#2152–#2155) remains unpromoted.
