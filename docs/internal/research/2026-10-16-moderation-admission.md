@@ -153,7 +153,10 @@ changes first deploy staging. Treat those deployment boundaries separately.
 ## Delivery status
 
 - Snapshot validation landed in #2149 (merged October 16); production backend
-  promotion remains separate. Its full backend suite passed (1,831 tests;
+  promotion remains separate. Staging deployment failed before rollout because
+  its database is stamped with `b6e2f4a1c9d3`, from unmerged native sign-in
+  PR #2142; main cannot resolve that migration. No database stamp was changed.
+  Its full backend suite passed (1,831 tests;
   25 existing credential-gated skips), and all PR checks passed.
 - The service proposal adds exact-URI `indexing_exclude` / `indexing_clear`
   decisions and an authenticated, bounded batch query. Real Postgres/router
@@ -162,3 +165,21 @@ changes first deploy staging. Treat those deployment boundaries separately.
 - This policy API does not yet enforce admission. The 42-subject manifest is
   not applied to the live service. Consumer wiring, drift checks, protocol
   repairs, and version-aware projection remain work under the active goal.
+
+## Existing automation and code references
+
+The old `run-moderation-loop.yml` is dispatch-only, defaults to dry-run, and its
+latest listed run is December 30, 2025. Its non-dry-run path auto-resolves LLM
+false-positive assessments and sends DMs; it is not a suitable read-only drift
+monitor. It was not run during this audit. The current five-minute backend
+reconciliation checks value projections, not discovery completeness or content
+safety.
+
+- `backend/src/backend/_internal/jetstream.py:226`: unknown-DID gate.
+- `backend/src/backend/_internal/tasks/ingest.py:170`: track admission and effects.
+- `backend/src/backend/_internal/tasks/labels.py:24`: projection reconciliation.
+- `backend/src/backend/_internal/clients/moderation.py:473`: label snapshot validation.
+- `backend/src/backend/_internal/clients/moderation.py:569`: override snapshot validation.
+- `services/moderation/src/xrpc.rs:99`: replay/live stream handoff.
+- `services/moderation/src/db.rs:774`: historical negation lookup.
+- `backend/src/backend/_internal/transparency.py:29`: explicit public-action allowlist.
