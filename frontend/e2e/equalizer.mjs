@@ -23,8 +23,10 @@ try {
 	await page.screenshot({ path: `${ARTIFACTS}/equalizer-public.png` });
 	step('equalizer-public', 'playback continues after enabling EQ mid-track');
 
+	const restoredQueue = page.waitForResponse((response) => response.url() === `${API}/queue/` && response.request().method() === 'GET');
 	await page.goto(`${APP}/track/1303`, { waitUntil: 'domcontentloaded' });
-	await page.getByRole('button', { name: 'play', exact: true }).click();
+	await restoredQueue;
+	await page.locator('button.btn-play').click();
 	await page.waitForFunction(() => {
 		const audio = document.querySelector('audio');
 		return audio?.crossOrigin === 'use-credentials' && audio.currentSrc.includes('cors=1') && !audio.paused && audio.currentTime > 1 && !audio.error;
@@ -46,6 +48,10 @@ try {
 	console.log('PASS — public and gated equalizer playback');
 } catch (error) {
 	console.error(String(error).slice(0, 400));
+	console.error('audio state', await page.locator('audio').evaluate((audio) => ({
+		src: audio.getAttribute('src'), crossOrigin: audio.crossOrigin, paused: audio.paused,
+		currentTime: audio.currentTime, error: audio.error?.code
+	})).catch(() => null));
 	process.exitCode = 1;
 	await dump();
 } finally {
