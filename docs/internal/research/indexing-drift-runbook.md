@@ -91,3 +91,32 @@ conflicts, five unreadable repositories, and one indexed-not-observed URI: track
 930 (@flo.by), already documented as pending with missing media. Production
 still has 1,186 indexed public-collection URIs; three permissioned-space URIs
 are outside this census. This inventory says nothing about whether audio is safe.
+
+## Moderation snapshot
+
+Run `moderation-drift-snapshot.sql` read-only against `plyr-moderation`
+(`rough-hall-37695610`), not the application database. It returns current label
+metadata, the queue derived from opening/closing events, historical-retraction
+conflicts, and current private-exclusion counts. Preserve the observation time.
+It follows deployed local sequence ordering and exposes CIDs rather than
+pretending URI-only applicability is sufficient.
+
+At 19:09 UTC on October 16, the verified values were 747 label events, three
+active sexual labels, zero active reassertions with older negations, 65 open
+review subjects (oldest July 25), and zero live indexing exclusions. The queue
+rose from 62 because production tracks 1445–1447 by
+`addline.selfhosted.social` received fingerprint-match events 215–217. These are
+review signals, not findings of infringement. Do not rewrite the earlier census
+baseline to conceal this change. The production context table already has
+`track_id`; #2155 repairs fresh-database bootstrap rather than a live missing
+column.
+
+Compare active label URI/value/CID sets with production track URI/CID and
+`operator_labels` in a separately timed `plyr-prd` read. Distinguish projection
+value mismatch from CID applicability mismatch. Neither authorizes automatic
+label retraction. Compare review subject sets as well as counts so opening and
+closing work cannot cancel each other invisibly. The SQL summary is a starting
+point; inspect event metadata for new subjects without fetching media.
+
+Use `moderation-rollout.md` for deployment order and the conditions required
+before admitting publishers who have never signed in.
