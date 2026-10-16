@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { tick, type Snippet } from 'svelte';
+	import SheetHandle from './SheetHandle.svelte';
 	import { swipeToDismiss } from '$lib/swipe-to-dismiss';
 
 	interface Props {
@@ -102,7 +103,7 @@
 		{@attach swipeToDismiss(onClose)}
 	>
 		<div class="sheet-handle-area" role="presentation">
-			<div class="sheet-handle"></div>
+			<SheetHandle {onClose} label={`close ${ariaLabel}`} />
 		</div>
 		{@render children()}
 	</div>
@@ -142,9 +143,6 @@
 		transform: translateY(100%);
 		transition: transform 0.2s ease-out;
 		padding-bottom: env(safe-area-inset-bottom, 0px);
-		/* let the browser scroll vertically by default; the gesture only takes
-		   over when our pointer handler explicitly applies a transform */
-		touch-action: pan-y;
 	}
 
 	.sheet-backdrop.open .sheet {
@@ -152,20 +150,6 @@
 	}
 
 	.sheet-handle-area {
-		display: flex;
-		justify-content: center;
-		align-items: center;
-		padding: 0.75rem 1rem 0.5rem;
-		flex-shrink: 0;
-		-webkit-user-select: none;
-		user-select: none;
-	}
-
-	.sheet-handle {
-		width: 36px;
-		height: 4px;
-		background: var(--border-default);
-		border-radius: 2px;
 		flex-shrink: 0;
 	}
 
