@@ -247,3 +247,32 @@ consumer; the legacy JSON case passes on both versions.
 
 Protocol reference: https://atproto.com/specs/event-stream and
 https://github.com/bluesky-social/atproto/blob/main/lexicons/com/atproto/label/subscribeLabels.json.
+
+## Historical retraction correction
+
+The copyright negation reader previously returned a URI whenever any historical
+negative label existed. A positive → negative → positive sequence therefore
+reported both active copyright infringement and a dismissal. The backend's
+five-minute reconciliation could clear the scan flag, while legacy flag and
+batch lists hid the reassertion under their resolved filter.
+
+The correction resolves the latest locally committed event per source/URI for
+copyright labels, using the same sequence ordering as the current active-label
+readers. A URI qualifies only when every source's latest event is an unexpired
+negation. Other values, another source's retraction, an expired retraction, or
+an older retraction cannot override a current assertion. All three readers use
+that same query. This does not emit or retract labels or restore scan flags
+already cleared in the past.
+
+This closes the historical-negation bug, not the broader approval problem.
+ATProto negation retracts an assertion; it does not certify safety. The legacy
+scan-resolution API still lacks scan timestamps and version-specific review
+identity, so an old dismissal must not become an admission signal for a new
+scan or changed record. Future admission should require an explicit private
+review decision tied to the assessed record/media version, retain a hold when
+that identity changes, and keep public label retraction separate.
+
+The real-database regression also found a bootstrap mismatch: `label_context`
+readers/writers require `track_id`, but `migrate()` never created it. The patch
+adds the nullable BIGINT column with `IF NOT EXISTS`, covering both fresh and
+existing installations without rewriting existing context.

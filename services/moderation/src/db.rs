@@ -266,6 +266,10 @@ impl LabelDb {
             .execute(&self.pool)
             .await?;
 
+        sqlx::query("ALTER TABLE label_context ADD COLUMN IF NOT EXISTS track_id BIGINT")
+            .execute(&self.pool)
+            .await?;
+
         // Add resolution columns (migration-safe: only adds if missing)
         sqlx::query("ALTER TABLE label_context ADD COLUMN IF NOT EXISTS resolution_reason TEXT")
             .execute(&self.pool)
@@ -774,11 +778,7 @@ impl LabelDb {
             .collect())
     }
 
-    /// Get URIs that have an explicit negation (dismissal) copyright label.
-    ///
-    /// A negation means a moderator reviewed the flag and dismissed it. This is
-    /// the only signal the backend uses to clear a flag — absence of an active
-    /// label is not a resolution, since flags no longer auto-emit a label.
+    /// Get URIs whose latest copyright labels are unexpired negations for every source.
     pub async fn get_negated_labels(&self, uris: &[String]) -> Result<Vec<String>, sqlx::Error> {
         if uris.is_empty() {
             return Ok(Vec::new());
@@ -786,9 +786,16 @@ impl LabelDb {
 
         sqlx::query_scalar::<_, String>(
             r#"
-            SELECT DISTINCT uri
-            FROM labels
-            WHERE val = 'copyright-violation' AND neg = true AND uri = ANY($1)
+            SELECT uri
+            FROM (
+                SELECT DISTINCT ON (src, uri) src, uri, neg, exp
+                FROM labels
+                WHERE val = 'copyright-violation' AND uri = ANY($1)
+                ORDER BY src, uri, seq DESC
+            ) current_labels
+            GROUP BY uri
+            HAVING bool_and(neg AND (exp IS NULL OR exp > NOW()))
+            ORDER BY uri
             "#,
         )
         .bind(uris)
@@ -798,7 +805,7 @@ impl LabelDb {
 
     /// Get all copyright-violation labels with their resolution status and context.
     ///
-    /// A label is resolved if there's a negation label for the same uri+val.
+    /// Resolution uses current copyright negations, not historical retractions.
     pub async fn get_pending_flags(&self) -> Result<Vec<FlaggedTrack>, sqlx::Error> {
         // Get all copyright-violation labels with context via LEFT JOIN
         let rows: Vec<FlaggedRow> = sqlx::query_as(
@@ -815,18 +822,9 @@ impl LabelDb {
         .fetch_all(&self.pool)
         .await?;
 
-        // Get all negation labels
-        let negated_uris: std::collections::HashSet<String> = sqlx::query_scalar::<_, String>(
-            r#"
-            SELECT DISTINCT uri
-            FROM labels
-            WHERE val = 'copyright-violation' AND neg = true
-            "#,
-        )
-        .fetch_all(&self.pool)
-        .await?
-        .into_iter()
-        .collect();
+        let uris: Vec<String> = rows.iter().map(|row| row.1.clone()).collect();
+        let negated_uris: std::collections::HashSet<String> =
+            self.get_negated_labels(&uris).await?.into_iter().collect();
 
         let tracks = rows
             .into_iter()
@@ -953,22 +951,11 @@ impl LabelDb {
         .await?;
 
         let batch_uris: Vec<String> = rows.iter().map(|r| r.1.clone()).collect();
-        let negated_uris: std::collections::HashSet<String> = if !batch_uris.is_empty() {
-            sqlx::query_scalar::<_, String>(
-                r#"
-                SELECT DISTINCT uri
-                FROM labels
-                WHERE val = 'copyright-violation' AND neg = true AND uri = ANY($1)
-                "#,
-            )
-            .bind(&batch_uris)
-            .fetch_all(&self.pool)
+        let negated_uris: std::collections::HashSet<String> = self
+            .get_negated_labels(&batch_uris)
             .await?
             .into_iter()
-            .collect()
-        } else {
-            std::collections::HashSet::new()
-        };
+            .collect();
 
         let tracks = rows
             .into_iter()
@@ -1354,3 +1341,6 @@ mod tests {
         assert!(ctx.resolution_notes.is_none());
     }
 }
+
+#[cfg(test)]
+mod negation_tests;
