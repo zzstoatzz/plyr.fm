@@ -39,19 +39,27 @@ and cover-image changes; anonymous browsing and playback of existing public
 tracks work without them. See the comments in `backend/.env.example` for the
 available storage and optional observability settings.
 
-## optional services
+## background tasks (optional)
 
-Redis is only needed when you want the separate background worker. Start it
-from the repository root with `just dev-services`, then run the worker from the
-backend directory:
+Browsing and API work that does not enqueue background tasks can run without
+Redis. Queued tasks need both Redis and the separate worker; the API process
+only enqueues them. Set `DOCKET_URL` in `backend/.env` so the API and worker use
+the same queue:
+
+```bash
+# backend/.env
+DOCKET_URL=redis://localhost:6379
+```
+
+Then start Redis with `just dev-services` and run `just backend run`. In a
+second terminal, start the worker from the backend directory:
 
 ```bash
 cd backend
-DOCKET_URL=redis://localhost:6379 uv run python -m backend.worker
+uv run python -m backend.worker
 ```
 
-the worker consumes queued tasks; ordinary local development can use the
-in-process fallback when `DOCKET_URL` is unset. See
+Without the worker, queued background tasks are not processed locally. See
 [background tasks](../backend/background-tasks.md) for details.
 
 for transcoder development, install Rust and `cargo-watch`, then run
