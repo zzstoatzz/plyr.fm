@@ -864,7 +864,7 @@
 
 	.tag-badge:hover {
 		background: color-mix(in srgb, var(--accent) 25%, transparent);
-		color: var(--accent);
+		color: var(--accent-text);
 	}
 
 	.tags-more {

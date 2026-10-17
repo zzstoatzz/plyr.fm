@@ -1,13 +1,10 @@
 import type { Preview } from '@storybook/sveltekit';
-import './plyr-tokens.css';
+import '../src/lib/styles/theme.css';
 
-// plyr.fm's components are theme-aware (dark by default, light under
-// :root.theme-light). the toolbar toggle sets the class on the preview root so
-// every story can be reviewed in both — half of what the components actually do.
 const THEMES = ['dark', 'light'] as const;
 
 const preview: Preview = {
-	initialGlobals: { theme: 'dark' },
+	initialGlobals: { theme: import.meta.env.VITE_STORYBOOK_THEME === 'light' ? 'light' : 'dark' },
 	globalTypes: {
 		theme: {
 			description: 'plyr.fm theme',
@@ -36,9 +33,6 @@ const preview: Preview = {
 		controls: {
 			matchers: { color: /(background|color)$/i, date: /Date$/i }
 		},
-		// accessibility is enforced: axe violations fail `bun run test-storybook`
-		// (and the CI gate). flip a specific story to 'todo' only with a documented
-		// reason if it has an accepted, intentional violation.
 		a11y: { test: 'error' },
 		options: {
 			storySort: {

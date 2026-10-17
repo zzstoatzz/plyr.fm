@@ -85,7 +85,7 @@
 	}
 
 	.toast-action {
-		color: var(--accent);
+		color: var(--accent-text);
 		text-decoration: underline;
 		pointer-events: auto;
 		margin-left: 0.5rem;
@@ -112,7 +112,7 @@
 	}
 
 	.toast-info .toast-icon {
-		color: var(--accent);
+		color: var(--accent-text);
 	}
 
 	.toast-info .toast-message {

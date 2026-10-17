@@ -387,7 +387,7 @@
 	}
 
 	.chip.active {
-		color: var(--accent);
+		color: var(--accent-text);
 		border-color: color-mix(in srgb, var(--accent) 60%, transparent);
 		background: color-mix(in srgb, var(--accent) 12%, transparent);
 	}
@@ -541,7 +541,7 @@
 	}
 
 	.reset:hover:not(:disabled) {
-		color: var(--accent);
+		color: var(--accent-text);
 	}
 
 	.reset:disabled {

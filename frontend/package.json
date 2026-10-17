@@ -11,7 +11,7 @@
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
 		"test": "vitest run",
-		"test-storybook": "vitest run --config vitest.storybook.config.ts",
+		"test-storybook": "VITE_STORYBOOK_THEME=dark vitest run --config vitest.storybook.config.ts && VITE_STORYBOOK_THEME=light vitest run --config vitest.storybook.config.ts",
 		"lint": "eslint . && oxlint src",
 		"format": "prettier --write .",
 		"format:check": "prettier --check .",

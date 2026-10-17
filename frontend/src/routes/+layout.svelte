@@ -1,4 +1,5 @@
 <script lang="ts">
+	import '$lib/styles/theme.css';
 	import favicon from '$lib/assets/favicon.png';
 	import { APP_NAME, APP_TAGLINE, APP_CANONICAL_URL } from '$lib/branding';
 	import Player from '$lib/components/Player.svelte';
@@ -576,139 +577,6 @@
 {/if}
 
 <style>
-	:global(*),
-	:global(*::before),
-	:global(*::after) {
-		box-sizing: border-box;
-	}
-
-	:global(:root) {
-		/* layout */
-		--queue-width: 0px;
-
-		/* accent colors - configurable */
-		--accent: #6a9fff;
-		--accent-hover: #8ab3ff;
-		--accent-muted: #4a7ddd;
-		--accent-rgb: 106, 159, 255;
-		/* readable text on a solid --accent fill; recomputed in JS per chosen accent */
-		--accent-contrast: #0a0a0a;
-
-		/* backgrounds */
-		--bg-primary: #0a0a0a;
-		--bg-secondary: #141414;
-		--bg-tertiary: #1a1a1a;
-		--bg-hover: #1f1f1f;
-
-		/* borders */
-		--border-subtle: #282828;
-		--border-default: #333333;
-		--border-emphasis: #444444;
-
-		/* text */
-		--text-primary: #e8e8e8;
-		--text-secondary: #b0b0b0;
-		--text-tertiary: #808080;
-		--text-muted: #666666;
-
-		/* typography scale */
-		--text-xs: 0.75rem;
-		--text-sm: 0.85rem;
-		--text-base: 0.9rem;
-		--text-lg: 1rem;
-		--text-xl: 1.1rem;
-		--text-2xl: 1.25rem;
-		--text-3xl: 1.5rem;
-
-		/* semantic typography (aliases) */
-		--text-page-heading: var(--text-3xl);
-		--text-section-heading: 1.2rem;
-		--text-body: var(--text-lg);
-		--text-small: var(--text-base);
-
-		/* border radius scale */
-		--motion-feedback: 140ms;
-		--motion-enter: 200ms;
-		--motion-exit: 140ms;
-		--ease-surface: cubic-bezier(0.2, 0, 0, 1);
-
-		--radius-sm: 4px;
-		--radius-base: 6px;
-		--radius-md: 8px;
-		--radius-lg: 12px;
-		--radius-xl: 16px;
-		--radius-2xl: 24px;
-		--radius-full: 9999px;
-
-		/* semantic */
-		--success: #4ade80;
-		--warning: #fbbf24;
-		--error: #ef4444;
-
-		/* glass effects (dark theme) */
-		--glass-bg: rgba(20, 20, 20, 0.75);
-		--glass-blur: blur(12px);
-		--glass-border: rgba(255, 255, 255, 0.06);
-
-		/* track item glass (no blur, just translucent) */
-		--track-bg: rgba(18, 18, 18, 0.88);
-		--track-bg-hover: rgba(24, 24, 24, 0.92);
-		--track-bg-playing: rgba(18, 18, 18, 0.88);
-		--track-border: rgba(255, 255, 255, 0.06);
-		--track-border-hover: rgba(255, 255, 255, 0.1);
-
-		/* subtle elevation shadow for section titles — makes headings appear to
-		   float above busy backgrounds (custom-background images, live ambient) */
-		--text-elevation: 0 1px 3px rgba(0, 0, 0, 0.45), 0 2px 6px rgba(0, 0, 0, 0.2);
-	}
-
-	/* light theme overrides */
-	:global(:root.theme-light) {
-		--bg-primary: #fafafa;
-		--bg-secondary: #ffffff;
-		--bg-tertiary: #f5f5f5;
-		--bg-hover: #ebebeb;
-
-		--border-subtle: #e5e5e5;
-		--border-default: #d4d4d4;
-		--border-emphasis: #a3a3a3;
-
-		--text-primary: #171717;
-		--text-secondary: #525252;
-		--text-tertiary: #737373;
-		--text-muted: #a3a3a3;
-
-		/* accent colors preserved from user preference */
-		/* accent-muted darkened for light bg readability */
-		--accent-muted: color-mix(in srgb, var(--accent) 70%, black);
-
-		/* semantic colors adjusted for light bg */
-		--success: #16a34a;
-		--warning: #d97706;
-		--error: #dc2626;
-
-		/* glass effects (light theme) */
-		--glass-bg: rgba(250, 250, 250, 0.75);
-		--glass-border: rgba(0, 0, 0, 0.06);
-
-		/* track item glass (light theme) */
-		--track-bg: rgba(255, 255, 255, 0.94);
-		--track-bg-hover: rgba(250, 250, 250, 0.96);
-		--track-bg-playing: rgba(255, 255, 255, 0.94);
-		--track-border: rgba(0, 0, 0, 0.08);
-		--track-border-hover: rgba(0, 0, 0, 0.12);
-
-		/* lighter elevation shadow for light theme — text is dark so the shadow
-		   needs to be much subtler to read as depth rather than blur */
-		--text-elevation: 0 1px 2px rgba(0, 0, 0, 0.08), 0 2px 6px rgba(0, 0, 0, 0.04);
-	}
-
-	/* light theme specific overrides for components */
-	:global(:root.theme-light) :global(.tag-badge) {
-		background: color-mix(in srgb, var(--accent) 12%, white);
-		color: var(--accent-muted);
-	}
-
 	/* shared utility class for section titles ("top tracks", "for you", etc.) —
 	   subtle elevation shadow that gives the heading a sense of floating above
 	   the page bg without any chrome. theme-aware via --text-elevation. */
@@ -729,15 +597,6 @@
 
 	:global(html) {
 		scrollbar-color: color-mix(in srgb, var(--text-tertiary) 55%, transparent) transparent;
-	}
-
-	:global(body) {
-		margin: 0;
-		padding: 0;
-		font-family: var(--font-family, 'Georgia', 'Times New Roman', serif);
-		background-color: var(--bg-primary);
-		color: var(--text-primary);
-		-webkit-font-smoothing: antialiased;
 	}
 
 	/* ambient weather gradient layer */

@@ -59,7 +59,7 @@
 	}
 	summary {
 		cursor: pointer;
-		color: var(--accent);
+		color: var(--accent-text);
 		padding-top: 0.75rem;
 		font-size: var(--text-sm);
 	}
@@ -72,7 +72,7 @@
 		justify-self: start;
 		background: none;
 		border: 0;
-		color: var(--accent);
+		color: var(--accent-text);
 		font: inherit;
 		cursor: pointer;
 		padding: 0;
