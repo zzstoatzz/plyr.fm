@@ -81,8 +81,18 @@
 
 	$effect(() => {
 		if (menuOpen) {
+			const closeOnEscape = (event: KeyboardEvent) => {
+				if (event.key !== 'Escape') return;
+				menuOpen = false;
+				showPlaylistPicker = false;
+				triggerRef?.focus();
+			};
 			document.addEventListener('click', handleClickOutside);
-			return () => document.removeEventListener('click', handleClickOutside);
+			document.addEventListener('keydown', closeOnEscape);
+			return () => {
+				document.removeEventListener('click', handleClickOutside);
+				document.removeEventListener('keydown', closeOnEscape);
+			};
 		}
 	});
 

@@ -9,7 +9,7 @@
 		ariaLabel: string;
 		/** css max-width override (default: '400px') */
 		maxWidth?: string;
-		/** css max-height override (default: '60vh') */
+		/** css max-height override (default: '60dvh') */
 		maxHeight?: string;
 		/** on desktop (>=600px), switch from bottom sheet to centered modal */
 		centerOnDesktop?: boolean;
@@ -21,7 +21,7 @@
 		onClose,
 		ariaLabel,
 		maxWidth = '400px',
-		maxHeight = '60vh',
+		maxHeight = '60dvh',
 		centerOnDesktop = false,
 		children
 	}: Props = $props();
@@ -49,9 +49,9 @@
 
 	function trapFocus(event: KeyboardEvent) {
 		if (!sheetEl) return;
-		const focusable = sheetEl.querySelectorAll<HTMLElement>(
+		const focusable = [...sheetEl.querySelectorAll<HTMLElement>(
 			'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
-		);
+		)].filter((element) => element.checkVisibility?.() ?? true);
 		if (focusable.length === 0) {
 			event.preventDefault();
 			sheetEl.focus();
@@ -61,10 +61,10 @@
 		const last = focusable[focusable.length - 1];
 		const active = document.activeElement;
 
-		if (event.shiftKey && active === first) {
+		if (event.shiftKey && (active === first || active === sheetEl || !sheetEl.contains(active))) {
 			event.preventDefault();
 			last.focus();
-		} else if (!event.shiftKey && active === last) {
+		} else if (!event.shiftKey && (active === last || !sheetEl.contains(active))) {
 			event.preventDefault();
 			first.focus();
 		}
@@ -110,6 +110,14 @@
 </div>
 
 <style>
+	:global(html:has(.sheet-backdrop.open)) {
+		overflow: hidden;
+	}
+
+	.sheet :global(.sheet-content) {
+		overscroll-behavior-y: contain;
+	}
+
 	.sheet-backdrop {
 		position: fixed;
 		inset: 0;
@@ -133,7 +141,7 @@
 	.sheet {
 		width: 100%;
 		max-width: var(--bottom-sheet-max-width, 400px);
-		max-height: var(--bottom-sheet-max-height, 60vh);
+		max-height: var(--bottom-sheet-max-height, 60dvh);
 		background: var(--bg-secondary);
 		border: 1px solid var(--border-subtle);
 		border-bottom: none;
