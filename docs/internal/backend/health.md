@@ -48,3 +48,22 @@ The regression suite uses real local Postgres: stale and progressing jobs,
 quiet periods, browser transfers, optimization budgets, terminal outcome
 counts, connection refusal, and a real table lock that exceeds the probe
 deadline. The timeout test also checks recovery after releasing the lock.
+
+
+## Worker forward progress
+
+`checks.worker` reads Redis independently of the consumer and its reaper.
+It reports overdue scheduled work and whether the stream contains unread work,
+with the oldest waiting age. A wait longer than 120 seconds makes freshness
+return 503, including when maintenance is blocked before any upload arrives.
+Empty queues and tasks scheduled in the future remain healthy. Active work
+alone does not imply a stall; existing upload/optimization progress checks
+cover those jobs. Redis probe failures return sanitized `unavailable` state.
+
+The read is bounded and does not deserialize task arguments, create consumers,
+acknowledge work, or mutate job state. It uses the pinned Docket queue schema.
+A degraded backlog may also mean saturation; it is not by itself permission to
+restart a machine. Consumer exceptions now propagate out of the worker process
+and use Fly's existing restart policy, while independent freshness monitoring
+covers failures where the consumer remains alive. After recovery, verify that
+waiting work drains and a fresh task and upload complete.

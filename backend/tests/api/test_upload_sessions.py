@@ -25,6 +25,7 @@ from backend.api.tracks.uploads import (
 from backend.models import Album, Artist, UserPreferences
 from backend.models.job import JobStatus, JobType
 from backend.storage.keys import StagedUploadKey
+from backend.upload_limits import MAX_FILE_BYTES
 
 PART = 8
 _AUDIO = bytes(range(20))  # 3 parts of 8, last is 4
@@ -224,6 +225,21 @@ def test_start_rejects_unsupported_and_oversized_files(artist_app: FastAPI) -> N
             json={"filename": "song.wav", "size_bytes": 2 * 1024**3},
         )
         assert resp.status_code == 413
+
+
+@pytest.mark.parametrize("extra,status", [(0, 200), (1, 413)])
+def test_admission_matches_transcoder_file_boundary(
+    artist_app: FastAPI, extra: int, status: int, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        "backend.api.tracks.upload_sessions.PART_SIZE_BYTES", 10 * 1024 * 1024
+    )
+    with TestClient(artist_app) as client:
+        response = client.post(
+            "/tracks/uploads",
+            json={"filename": "boundary.flac", "size_bytes": MAX_FILE_BYTES + extra},
+        )
+    assert response.status_code == status
 
 
 async def test_another_artist_cannot_touch_the_session(artist_app: FastAPI) -> None:

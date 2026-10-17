@@ -6,9 +6,11 @@ from typing import Any
 
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
+from redis.exceptions import RedisError
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.exc import SQLAlchemyError
 
+from backend._internal.worker_health import worker_progress
 from backend.config import settings
 from backend.models.job import Job, JobStatus, JobType
 from backend.utilities.database import db_session
@@ -88,6 +90,11 @@ async def freshness() -> JSONResponse:
             },
             headers={"Cache-Control": "no-store"},
         )
+    try:
+        async with asyncio.timeout(PROBE_TIMEOUT_SECONDS):
+            checks["worker"] = await worker_progress(now)
+    except (RedisError, OSError, TimeoutError):
+        checks["worker"] = {"status": "unavailable"}
     healthy = all(check["status"] == "ok" for check in checks.values())
     return JSONResponse(
         status_code=200 if healthy else 503,

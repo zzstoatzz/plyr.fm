@@ -5,6 +5,7 @@ on:
     paths:
       - "services/moderation/**"
       - "services/transcoder/**"
+      - "backend/src/backend/upload_contract.json"
       - ".github/workflows/check-rust.yml"
 
 permissions:
@@ -28,6 +29,7 @@ jobs:
               - '.github/workflows/check-rust.yml'
             transcoder:
               - 'services/transcoder/**'
+              - 'backend/src/backend/upload_contract.json'
               - '.github/workflows/check-rust.yml'
 
   check:

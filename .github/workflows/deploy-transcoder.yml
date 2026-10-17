@@ -1,0 +1,33 @@
+name: deploy transcoder
+
+on:
+  workflow_call:
+    inputs:
+      target:
+        type: string
+        required: true
+    secrets:
+      deploy_token:
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    concurrency: deploy-transcoder-${{ inputs.target }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - name: deploy transcoder
+        env:
+          TARGET: ${{ inputs.target }}
+          FLY_API_TOKEN: ${{ secrets.deploy_token }}
+        run: |
+          case "$TARGET" in
+            staging) config=services/transcoder/fly.staging.toml ;;
+            production) config=services/transcoder/fly.toml ;;
+            *) exit 1 ;;
+          esac
+          flyctl deploy --config "$config" --remote-only .
