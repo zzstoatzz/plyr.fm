@@ -74,6 +74,23 @@ try {
 		});
 	}
 	await openComments(2391);
+	for (const width of [1280, 390]) {
+		await page.setViewportSize({ width, height: 844 });
+		const layout = await page.locator('.comments-panel').evaluate(panel => {
+			const close = panel.querySelector('.comments-panel-close').getBoundingClientRect();
+			const title = panel.querySelector('.comments-title').getBoundingClientRect();
+			const content = panel.querySelector('.comment-form, .login-prompt').getBoundingClientRect();
+			return {
+				alignment: Math.abs(close.y + close.height / 2 - title.y - title.height / 2),
+				clearance: content.top - close.bottom,
+				size: Math.min(close.width, close.height)
+			};
+		});
+		assert(layout.alignment < 1, `close button must align with title at ${width}px`);
+		assert(layout.clearance >= 0, `close button overlaps composer at ${width}px`);
+		assert(layout.size >= 44, 'close button retains its touch target');
+	}
+
 	await drag(page.locator('.login-prompt'), 20, { hold: 200 });
 	assert.equal(await page.locator('.comments-panel').count(), 1);
 	await drag(page.locator('.login-prompt'), 90, { cancel: true });
