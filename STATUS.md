@@ -47,10 +47,35 @@ plyr.fm should become:
 
 ### October 2026
 
+#### the status podcast was rewritten for listeners, and a year-one episode went out (#2145, #2146, October 11 — no release; track 1394)
+
+Nothing changed in the app in this window. The episode's rules left the
+workflow for `.github/prompts/status-podcast.md`: written for someone who
+likes music and may use plyr, not someone who read the PRs — what you can do
+first, the protocol in one clause, two or three stories about named people,
+delight allowed, no PR numbers or tags spoken. The old rule was "dry,
+slightly sardonic", read by Kore; the October 10 episode said "D-pop binding"
+without saying what plyr is. Tuned against nate's leaflet and standard.site
+writing; the same shape as Thingelstad's September rework of the Weekly Thing
+audio edition. This run is the first scheduled one under the new rules.
+
+- **voices and rendering**: Host `en-us-podcaster-2`, Cohost `en-us-brio`; a
+  turn's `[note]` is folded into its style because 3.8 TTS refuses
+  `system_instruction`; past 700 words the script renders in turn-boundary
+  chunks and the WAVs are joined (`scripts/generate_tts.py`).
+- **the podcast lab** (#2145 put the dispatchable workflow on `main`; #2146
+  the script and specs): renders a spec's variants on any branch into a run
+  artifact, uploading nothing. Five runs on October 11; round 4 compared
+  podcaster-2 + brio against jori + rami on the year-one script.
+- **an episode publishes by merge**: `upload-audio` also fires for a merged PR
+  labeled `status-episode` and takes `title.txt` when present. Merging #2146
+  uploaded "plyr.fm update - year one" (track 1394, 16:54Z, ~1,000 words),
+  unannounced; the account's only post that day was an Instagram-reel repost.
+  The October 10 episode was re-rendered as a lab variant only.
+
 #### the embeds, the radio page's loose ends, and an equalizer (#2111, #2129–#2138, October 3–9 — frontend promotes October 8 23:30Z, October 9 04:25Z and 06:40Z; no backend release)
 
-Nothing reached the production backend after October 2; the rest arrived by
-frontend promote, except where marked.
+Nothing reached the production backend after October 2; the rest arrived by frontend promote, except where marked.
 
 - **the radio embed airs the firehose broadcast** (#2136, October 9 — promote
   04:25Z): `/embed/radio?station=firehose` never read `state.live`, so during
@@ -86,9 +111,7 @@ frontend promote, except where marked.
   (#2125–#2127, October 2) — the second-account leg had been skipping without
   its secrets, which hid a ZDS scope failure.
 
-nate posted a video of a native iOS client on October 9: read-only, OAuth and
-mutations next, "a long way from any sort of release". It lives on draft #2133
-(`mobile/`, `shared/`), not on `main`.
+nate posted a video of a native iOS client on October 9: read-only, OAuth and mutations next, "a long way from any sort of release". It lives on draft #2133 (`mobile/`, `shared/`), not on `main`.
 
 #### the review queue got its first decisions (October 2 — no code)
 
@@ -137,10 +160,7 @@ nothing retried. And any edit through such a client reset `r2_url`, discarding
 the verified copy even when the blob had not changed. Eleven production tracks
 were affected; all are mirrored and scanned now.
 
-the same change retired "PDS-hosted", "PDS-only" and "PDS-backed" from comments
-and docs. Every track's audio belongs on the artist's PDS; what varies is
-whether plyr holds a copy. A track with none is **unmirrored**; a track whose
-PDS refused the upload, or that predates blob uploads, has **no PDS blob**.
+the same change retired "PDS-hosted", "PDS-only" and "PDS-backed" from comments and docs. Every track's audio belongs on the artist's PDS; what varies is whether plyr holds a copy. A track with none is **unmirrored**; a track whose PDS refused the upload, or that predates blob uploads, has **no PDS blob**.
 
 the same day, adding a listener still called the removed `simplespace.addMember`
 and got `404 UnknownMethod` from zds; #2124 (prod `2026.1002.054138`) uses
@@ -166,10 +186,9 @@ that is present advances in step: upload offset and reference position move
 together. A coincidence does not. Counting the longest in-step run across the
 665 production scans that have any match gives two humps and almost nothing
 between — 522 scans at one sample, 18 at two, 14 at three to five, 106 at six
-or more —
-so the bar is four samples, about 48 seconds. A second rule catches a short
-clip on repeat, which matches everywhere but keeps resetting; it rests on two
-examples.
+or more — so the bar is four samples, about 48 seconds. A second rule catches
+a short clip on repeat, which matches everywhere but keeps resetting; it rests
+on two examples.
 
 what shipped:
 
@@ -204,32 +223,23 @@ its config path and failed before building (#2115).
 ### September 2026
 
 See `.status_history/2026-09.md` for detailed history. Headlines: the radio
-page became the sister-radio fork and four catalog stations joined Ana's
-sister network (#2097–#2107, September 28 — prod `2026.0928.035150`,
-`2026.0928.140223`, `plyr-radio` Fly app; open: #2102, physical-iPhone
-checks); Top Tracks opens on the past month (#2108, announced September 28);
-the musician studio was paused, then removed (#2083, #2094); the upload
-pipeline got `/health/freshness` and the reaper swept its null trap (#2084,
-#2085, #2087); Blacksky's `repo:?` sign-in fix (#2089); the status podcast
-moved to Gemini 3.8 in a step the writer cannot see (#2090, #2092); an upload
-is two writes and one promise (#2075); the DPoP nonce was thrown away after
-every request (#2072, #2073); publishing permissions are independent of
-storage (#2047–#2058); the track-identity collision (#2026–#2028); the
-spotify footer (#1987–#2004).
+page became the sister-radio fork and four stations joined Ana's network
+(#2097–#2107); the musician studio paused, then removed (#2083, #2094); the
+upload pipeline got a pulse (#2084–#2087); Blacksky's `repo:?` fix (#2089); an
+upload is two writes and one promise (#2075); the DPoP nonce (#2072, #2073);
+publishing permissions are independent of storage (#2047–#2058).
 
 ### August 2026
 
 See `.status_history/2026-08.md` for detailed history. Headlines: client-side
-writes phase 0 shipped August 31, reverted September 1 (#1948–#1952); resumable
-uploads (#1947); attested.network supporter gating (#1936–#1939); access is the
-space credential (#1930); the queue as a surface (#1907–#1924); editing a track
-deleted its PDS audio (#1904).
+writes phase 0, shipped and reverted (#1948–#1952); resumable uploads (#1947);
+supporter gating via attested.network (#1936–#1939); the queue as a surface
+(#1907–#1924); editing a track deleted its PDS audio (#1904).
 
 ### November 2025 – July 2026
 
-See `.status_history/`, one file per month, `2025-11.md` through `2026-07.md`.
-Arcs that used to sit under current focus are in `2026-09.md` with their open
-threads; anything still live is in known issues.
+See `.status_history/`, one file per month, `2025-11.md` through `2026-07.md`;
+arcs that left current focus are in `2026-09.md`, anything live in known issues.
 
 ## priorities
 
@@ -293,18 +303,8 @@ the August arcs that sat here until September 20 — the spotify footer, support
 - **the cross-account member leg of the private-media e2e still skips**: `ALPHA_TEST_HANDLE`/`ALPHA_TEST_PASSWORD` are not set, so the flow that adds a second account to a Space and plays the track never runs in CI.
 - **light777.selfhosted.social's duplicate track (1323/1324) is theirs to remove**: same `file_id`, one R2 object; the refcount guard keeps the audio when either row is deleted. `test_refcount_prevents_r2_deletion` covers it.
 - **staging has two artist rows for `nate.selfhosted.social`**: `GET /artists/by-handle/…` and `GET /albums/…` 500 with `MultipleResultsFound` on staging; prod has one row.
-- **browser private-media e2e stops at PDS sign-in** (September 13): runs
-  [34767184692](https://github.com/zzstoatzz/plyr.fm/actions/runs/34767184692) and
-  [34785740209](https://github.com/zzstoatzz/plyr.fm/actions/runs/34785740209)
-  both timed out before upload or playback because the browser blocked the
-  `pds.zat.dev` authorization form under `form-action 'self'`. This predates
-  #2057. Authenticated API and actual Space blob smoke passed; they do not prove
-  that browser sign-in/upload works. The CSP cause remains unresolved.
-- **one artwork scan returned 400** (September 13, 18:33 UTC): track 1303's
-  artwork saved and its CDN read returned 200, but the background request to
-  the moderation service's `/scan-image` failed. The trace did not record the
-  rejection reason. Neither successful artwork storage nor a completed task
-  establishes that this image was scanned; diagnosis remains open.
+- **browser private-media e2e stops at PDS sign-in** (September 13): runs [34767184692](https://github.com/zzstoatzz/plyr.fm/actions/runs/34767184692) and [34785740209](https://github.com/zzstoatzz/plyr.fm/actions/runs/34785740209) both timed out before upload or playback because the browser blocked the `pds.zat.dev` authorization form under `form-action 'self'`. This predates #2057. Authenticated API and actual Space blob smoke passed; they do not prove that browser sign-in/upload works. The CSP cause remains unresolved.
+- **one artwork scan returned 400** (September 13, 18:33 UTC): track 1303's artwork saved and its CDN read returned 200, but the background request to the moderation service's `/scan-image` failed. The trace did not record the rejection reason. Neither successful artwork storage nor a completed task establishes that this image was scanned; diagnosis remains open.
 
 - **Cloudflare's JAX colo serves 100% 5xx for the R2 media domains** (observed August 27, ~17:00Z onward): users routed to Jacksonville get 500/502 on `audio.plyr.fm`/`images.plyr.fm` while every other colo is healthy — player shows `NaN:NaN`, artwork missing, page otherwise fine. Nothing to fix on our side; unacknowledged on cloudflarestatus.com. If it persists, escalate to Cloudflare support with a ray ID from an affected user (`a31cbef0bed07221-JAX`), the zone, and the colo-scoped analytics. Remove this entry once the 5xx count at JAX drains.
 - **a broker proof does not pin the payer record it signs** (#1939, observed August 26): across 7 sampled live attestations, the proof's inner `cid` matches no recomputable CID of the payer record's current content, with or without `signatures`. So verification pins the *proof* and trusts the broker's `verified` status, while mutable payer fields — including `subject`, the artist being supported — are taken on the payer's word. Forging supporter standing for an arbitrary artist still costs one real broker-verified payment to someone, which is why this shipped rather than blocked. Queued as a question for ATM; if the answer is "proofs aren't meant to pin content", the public `network.attested.payment.lookup` endpoint is the better branch anyway.
@@ -335,7 +335,7 @@ the August arcs that sat here until September 20 — the spotify footer, support
 - **uploaders of 17 wrongly flagged tracks were never told** (October 1): the old rule showed them a copyright badge on their own track in the portal, some for two months. The flags are cleared; no notice was sent, by decision that day. One uploader replaced the audio four times while flagged.
 - **two tracks cannot be scanned**: AuDD cannot extract audio from track 123's 19 KB file, and track 930 has sat in `pending` since April with an `r2_url` that returns 404. Three private tracks are unscanned by design.
 - **`deploy-redis.yml` has the doubled config path that broke the moderation deploy** (#2115): its last two runs failed. Fixing the file triggers a deploy of both Redis apps, so it waits for a deliberate change.
-- **the status podcast renders again, on a new Gemini key** ([#2123](https://github.com/zzstoatzz/plyr.fm/issues/2123), October 10): from about October 1 Google answered every generation call on the old key's project with `403 project has been denied access`, though the key still listed models; why that project was denied was never learned. A key on a different project was set as `GOOGLE_API_KEY` on October 10 and the September 23 → October 10 episode rendered with `gemini-3.8-flash-tts`. The episodes for September 23 → October 2 and October 2 → 5 were never made; this one covers both windows. **If Gemini refuses, the run fails and there is no episode**: a fallback voice (Kokoro on the runner) was built and rejected the same day as below the bar for something published under the project's name. `google-genai` is still unpinned in `scripts/generate_tts.py`.
+- **the status podcast renders again, on a new Gemini key** ([#2123](https://github.com/zzstoatzz/plyr.fm/issues/2123), October 10): from about October 1 Google answered every generation call on the old key's project with `403 project has been denied access`, though the key still listed models; why that project was denied was never learned. A key on a different project was set as `GOOGLE_API_KEY` on October 10 and the September 23 → October 10 episode rendered with `gemini-3.8-flash-tts`; the five lab runs and the year-one render on October 11 all succeeded on it. The episodes for September 23 → October 2 and October 2 → 5 were never made. **If Gemini refuses, the run fails and there is no episode**: a fallback voice (Kokoro on the runner) was built and rejected the same day as below the bar for something published under the project's name (#2140, closed unmerged). `google-genai` is still unpinned in `scripts/generate_tts.py`.
 - **a review item cannot be annotated without closing it**: an internal mark is an `acknowledged` event with a reason, so undecided items carry no note. A fan-taping mark published through the labeler has been raised as an idea and is not built.
 - **copyright spend is not on the live cost feed**: AuDD is computed from hardcoded plan constants and Claude image moderation is tracked nowhere. The five-minute labeler poll (`sync_copyright_resolutions`) also likely keeps the moderation database from scaling to zero; the Neon side is unconfirmed.
 - **no per-actor authentication**: the moderation service trusts one shared `MODERATION_AUTH_TOKEN`, so the event log's `actor` is a claim rather than a verified identity. This is the gate on letting an agent *act* rather than propose, and on review genuinely not always being one person.
@@ -489,10 +489,7 @@ see the [contributing guide](https://docs.plyr.fm/contributing/) for setup instr
 
 ---
 
-this is a living document. last updated 2026-10-10 (status maintenance): the
-October 3–9 window written up (#2111, #2129–#2138); the equalizer's prod
-split and #2140 recorded; #2124 added to the October 2 entry; the copyright
-entry's release tags corrected; the September summary moved to
-`.status_history/2026-09.md`. before that, 2026-10-02: the review queue's
-first decisions (76 → 33 open), #2123 filed; spaces credentials signed per the
-current permissioned-data branch, unmirrored-track ingest fixed (#2121, #2122).
+this is a living document. last updated 2026-10-12 (status maintenance): the
+podcast rewrite and the year-one episode (#2145, #2146) written up; the
+September and August headline paragraphs shortened, long forms appended to
+their archives. before that, 2026-10-10: the October 3–9 window (#2111–#2138).
