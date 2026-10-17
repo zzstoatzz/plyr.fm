@@ -23,7 +23,7 @@
 		background: color-mix(in srgb, var(--accent) 15%, transparent);
 		border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
 		border-radius: var(--radius-sm);
-		color: var(--accent);
+		color: var(--accent-text);
 		font-size: var(--text-xs);
 		font-weight: 500;
 		text-transform: lowercase;

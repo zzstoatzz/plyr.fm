@@ -91,7 +91,7 @@
 
 <style>
 	.rich-text-link {
-		color: var(--accent);
+		color: var(--accent-text);
 		/* underline so links are distinguishable from body text by more than color
 		   (WCAG link-in-text-block) */
 		text-decoration: underline;

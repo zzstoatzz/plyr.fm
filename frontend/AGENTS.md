@@ -6,7 +6,7 @@ key patterns:
 - **state**: global managers in `lib/*.svelte.ts` using `$state` runes (player, queue, uploader, tracks cache; `staged-transfer.svelte.ts` is a per-upload state object the uploader hands out)
 - **components**: reusable ui in `lib/components/` (LikeButton, Toast, Player, etc)
 - **routes**: pages in `routes/` with `+page.svelte` and `+page.ts` for data loading
-- **design tokens**: use CSS variables from `+layout.svelte` - never hardcode colors, radii, or font sizes (see `docs/internal/frontend/design-tokens.md`)
+- **design tokens**: use CSS variables from `src/lib/styles/theme.css` - never hardcode colors, radii, or font sizes (see `docs/internal/frontend/design-tokens.md`)
 
 gotchas:
 - **svelte 5 runes mode**: component-local state MUST use `$state()` - plain `let` has no reactivity (see `docs/internal/frontend/state-management.md`)
