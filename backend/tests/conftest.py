@@ -576,12 +576,11 @@ async def _test_lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             await asyncio.wait_for(service.shutdown(), timeout=2.0)
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture
 def client(fastapi_app: FastAPI) -> Generator[TestClient, None, None]:
     """provides a TestClient for testing the FastAPI application.
 
-    session-scoped to avoid the overhead of starting the full lifespan
-    (database init, services) for each test.
+    function-scoped so each test owns the lifespan of singleton services.
     """
     with TestClient(fastapi_app) as tc:
         yield tc
