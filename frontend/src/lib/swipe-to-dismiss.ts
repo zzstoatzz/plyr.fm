@@ -23,12 +23,15 @@ export function swipeToDismiss(
 		let swallowClick = false;
 		let animation: Animation | null = null;
 		let disposed = false;
+		let dismissed = false;
+		sheet.style.translate = '';
+		sheet.style.transition = '';
 
 		function reset() {
 			id = null;
 			source = null;
 			dragging = false;
-			sheet.style.transform = '';
+			sheet.style.translate = '';
 			sheet.style.transition = '';
 		}
 
@@ -66,7 +69,7 @@ export function swipeToDismiss(
 			lastY = y;
 			lastTime = time;
 			delta = Math.max(0, dy);
-			sheet.style.transform = `translateY(${delta}px)`;
+			sheet.style.translate = `0 ${delta}px`;
 			return true;
 		}
 
@@ -80,22 +83,26 @@ export function swipeToDismiss(
 			const freshVelocity = time - lastTime < 100 ? velocity : 0;
 			const threshold = Math.min(100, Math.max(48, sheet.getBoundingClientRect().height * 0.25));
 			const dismiss = !cancelled && (delta >= threshold || (delta > 12 && freshVelocity > 0.5));
-			const destination = dismiss ? window.innerHeight - sheet.getBoundingClientRect().top + delta : 0;
+			const destination = dismiss
+				? Math.max(delta, window.innerHeight - sheet.getBoundingClientRect().top + delta)
+				: 0;
 			const duration = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 180;
 			animation = sheet.animate(
-				[{ transform: `translateY(${delta}px)` }, { transform: `translateY(${destination}px)` }],
+				[{ translate: `0 ${delta}px` }, { translate: `0 ${destination}px` }],
 				{ duration, easing: 'cubic-bezier(0.22, 1, 0.36, 1)', fill: 'forwards' }
 			);
 			void animation.finished
 				.then(() => {
 					if (disposed) return;
 					if (dismiss) {
-						sheet.style.visibility = 'hidden';
-						onDismiss();
+						dismissed = true;
+						sheet.style.translate = `0 ${destination}px`;
+					} else {
+						reset();
 					}
-					reset();
 					animation?.cancel();
 					animation = null;
+					if (dismiss) onDismiss();
 				})
 				.catch(() => {});
 		}
@@ -176,9 +183,8 @@ export function swipeToDismiss(
 		sheet.addEventListener('dragstart', dragStart);
 		return () => {
 			disposed = true;
-			sheet.style.visibility = '';
 			animation?.cancel();
-			reset();
+			if (!dismissed) reset();
 			sheet.removeEventListener('touchstart', touchStart);
 			sheet.removeEventListener('touchmove', touchMove);
 			sheet.removeEventListener('touchend', touchEnd);
