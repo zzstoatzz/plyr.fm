@@ -14,6 +14,8 @@ on:
       - "backend/fly.staging.toml"
       - "backend/alembic/**"
       - "backend/alembic.ini"
+      - "lexicons/**"
+      - "README.md"
       - ".github/workflows/deploy-staging.yml"
   workflow_dispatch:
 
