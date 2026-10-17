@@ -402,6 +402,14 @@
 		}
 	}
 
+	function drawerTransition(node: Element) {
+		return fly(node, {
+			x: isMobileViewport() ? 0 : 40,
+			y: isMobileViewport() ? window.innerHeight - node.getBoundingClientRect().top : 0,
+			duration: reduceMotionComments ? 0 : 220
+		});
+	}
+
 	function handleWindowKeydown(e: KeyboardEvent) {
 		if (e.key === 'Escape' && commentsOpen) commentsOpen = false;
 	}
@@ -466,8 +474,8 @@
 		<aside
 			class="comments-panel"
 			aria-label="comments"
-			transition:fly={{ x: isMobileViewport() ? 0 : 40, y: isMobileViewport() ? 120 : 0, duration: 220 }}
-			{@attach swipeToDismiss(() => (commentsOpen = false))}
+			transition:drawerTransition
+			{@attach swipeToDismiss(() => (commentsOpen = false), { scrollSelector: '.comments-container' })}
 		>
 			<div class="comments-panel-handle">
 				<SheetHandle onClose={() => (commentsOpen = false)} label="close comments" />
@@ -821,6 +829,8 @@
 	}
 
 	.comments-panel-close {
+		min-width: 44px;
+		min-height: 44px;
 		position: absolute;
 		top: 0.75rem;
 		right: 0.75rem;
@@ -980,27 +990,26 @@
 		display: flex;
 		flex-direction: column;
 		gap: 0.5rem;
-		max-height: 300px;
-		overflow-y: auto;
+
 		scrollbar-width: thin;
 		scrollbar-color: var(--border-default) var(--bg-primary);
 	}
 
-	.comments-list::-webkit-scrollbar {
+	.comments-container::-webkit-scrollbar {
 		width: 8px;
 	}
 
-	.comments-list::-webkit-scrollbar-track {
+	.comments-container::-webkit-scrollbar-track {
 		background: var(--bg-primary);
 		border-radius: var(--radius-sm);
 	}
 
-	.comments-list::-webkit-scrollbar-thumb {
+	.comments-container::-webkit-scrollbar-thumb {
 		background: var(--border-default);
 		border-radius: var(--radius-sm);
 	}
 
-	.comments-list::-webkit-scrollbar-thumb:hover {
+	.comments-container::-webkit-scrollbar-thumb:hover {
 		background: var(--border-emphasis);
 	}
 
@@ -1293,6 +1302,8 @@
 	}
 
 	.comments-panel-close {
+		min-width: 44px;
+		min-height: 44px;
 		position: absolute;
 		top: 0.75rem;
 		right: 0.75rem;
@@ -1344,10 +1355,6 @@
 	.comments-section {
 			margin-top: 1rem;
 			padding-top: 1rem;
-		}
-
-		.comments-list {
-			max-height: 200px;
 		}
 
 		.comment {

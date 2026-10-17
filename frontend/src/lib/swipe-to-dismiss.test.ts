@@ -1,38 +1,31 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { swipeToDismiss } from './swipe-to-dismiss';
 
-describe('sheet dismissal', () => {
+describe('drawer gesture ownership', () => {
 	let sheet: HTMLDivElement;
-	let handle: HTMLButtonElement;
 	let content: HTMLDivElement;
-	let dismiss: ReturnType<typeof vi.fn<() => void>>;
+	let row: HTMLAnchorElement;
 	let cleanup: void | (() => void);
 
-	function pointer(target: HTMLElement, type: string, y: number, extra: PointerEventInit = {}) {
-		target.dispatchEvent(
-			new PointerEvent(type, {
-				bubbles: true,
-				pointerId: 1,
-				pointerType: 'touch',
-				button: 0,
-				clientX: 50,
-				clientY: y,
-				...extra
-			})
-		);
+	function touch(type: string, x: number, y: number, target: HTMLElement = row): TouchEvent {
+		const event = new TouchEvent(type, { bubbles: true, cancelable: true });
+		const point = { identifier: 1, clientX: x, clientY: y };
+		Object.defineProperty(event, 'touches', { value: [point] });
+		Object.defineProperty(event, 'changedTouches', { value: [point] });
+		target.dispatchEvent(event);
+		return event;
 	}
 
 	beforeEach(() => {
 		sheet = document.createElement('div');
-		handle = document.createElement('button');
-		handle.dataset.sheetHandle = '';
 		content = document.createElement('div');
 		content.className = 'sheet-content';
-		sheet.append(handle, content);
+		row = document.createElement('a');
+		row.href = '/artist';
+		content.append(row);
+		sheet.append(content);
 		document.body.append(sheet);
-		dismiss = vi.fn<() => void>();
-		handle.onclick = dismiss;
-		cleanup = swipeToDismiss(dismiss)(sheet);
+		cleanup = swipeToDismiss(() => {})(sheet);
 	});
 
 	afterEach(() => {
@@ -40,75 +33,52 @@ describe('sheet dismissal', () => {
 		sheet.remove();
 	});
 
-	it.each(['mouse', 'touch', 'pen'])(
-		'drags the handle with %s even when content is scrolled',
-		(pointerType) => {
-			content.scrollTop = 200;
-			pointer(handle, 'pointerdown', 0, { pointerType });
-			pointer(sheet, 'pointermove', 100, { pointerType });
-			expect(sheet.style.transform).toBe('translateY(100px)');
-			pointer(sheet, 'pointerup', 100, { pointerType });
-			expect(dismiss).toHaveBeenCalledTimes(1);
-		}
-	);
+	it('claims downward movement from a list row before native scrolling starts', () => {
+		touch('touchstart', 100, 100);
+		expect(touch('touchmove', 100, 102).defaultPrevented).toBe(true);
+		expect(sheet.style.transform).toBe('translateY(2px)');
+		touch('touchmove', 105, 170);
+		expect(sheet.style.transform).toBe('translateY(70px)');
+	});
 
-	it('leaves content gestures to native scrolling', () => {
-		pointer(content, 'pointerdown', 0);
-		pointer(content, 'pointermove', 120);
-		pointer(content, 'pointerup', 120);
-		expect(dismiss).not.toHaveBeenCalled();
+	it('leaves upward scrolling native for the entire gesture', () => {
+		touch('touchstart', 100, 100);
+		expect(touch('touchmove', 100, 90).defaultPrevented).toBe(false);
+		expect(touch('touchmove', 100, 150).defaultPrevented).toBe(false);
 		expect(sheet.style.transform).toBe('');
 	});
 
-	it.each(['pointercancel', 'lostpointercapture'])(
-		'snaps back without dismissing on %s',
-		(event) => {
-			pointer(handle, 'pointerdown', 0);
-			pointer(sheet, 'pointermove', 120);
-			pointer(sheet, event, 120);
-			expect(dismiss).not.toHaveBeenCalled();
-			expect(sheet.style.transform).toBe('');
-		}
-	);
-
-	it('suppresses the click after a drag but preserves keyboard activation', () => {
-		pointer(handle, 'pointerdown', 0);
-		pointer(sheet, 'pointermove', 120);
-		pointer(sheet, 'pointerup', 120);
-		handle.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 }));
-		expect(dismiss).toHaveBeenCalledTimes(1);
-		handle.click();
-		expect(dismiss).toHaveBeenCalledTimes(2);
+	it('does not dismiss when scrolling a list back to the top', () => {
+		content.scrollTop = 120;
+		touch('touchstart', 100, 100);
+		expect(touch('touchmove', 100, 130).defaultPrevented).toBe(false);
+		content.scrollTop = 0;
+		expect(touch('touchmove', 100, 190).defaultPrevented).toBe(false);
+		expect(sheet.style.transform).toBe('');
 	});
 
-	it('does not use stale flick velocity after holding a short drag', () => {
-		pointer(handle, 'pointerdown', 0);
-		pointer(sheet, 'pointermove', 20);
-		const release = new PointerEvent('pointerup', { bubbles: true, pointerId: 1 });
-		Object.defineProperty(release, 'timeStamp', { value: performance.now() + 1000 });
-		sheet.dispatchEvent(release);
-		expect(dismiss).not.toHaveBeenCalled();
+	it('drags the header even when the list is scrolled', () => {
+		content.scrollTop = 120;
+		touch('touchstart', 100, 100, sheet);
+		expect(touch('touchmove', 100, 150, sheet).defaultPrevented).toBe(true);
+		expect(sheet.style.transform).toBe('translateY(50px)');
 	});
 
-	it('keeps dragging when capture transfers from the handle to the sheet', () => {
-		pointer(handle, 'pointerdown', 0);
-		pointer(sheet, 'pointermove', 20);
-		pointer(handle, 'lostpointercapture', 20);
-		pointer(sheet, 'pointermove', 100);
-		expect(sheet.style.transform).toBe('translateY(100px)');
-		pointer(sheet, 'pointerup', 100);
-		expect(dismiss).toHaveBeenCalledTimes(1);
+	it('leaves inputs and horizontal gestures alone', () => {
+		const input = document.createElement('input');
+		sheet.append(input);
+		touch('touchstart', 100, 100, input);
+		expect(touch('touchmove', 100, 150, input).defaultPrevented).toBe(false);
+		touch('touchstart', 100, 100);
+		expect(touch('touchmove', 150, 102).defaultPrevented).toBe(false);
+		expect(sheet.style.transform).toBe('');
 	});
 
-	it('ignores a second pointer and cleans up an interrupted drag', () => {
-		pointer(handle, 'pointerdown', 0);
-		pointer(handle, 'pointerdown', 300, { pointerId: 2 });
-		pointer(sheet, 'pointermove', 120);
-		expect(sheet.style.transform).toBe('translateY(120px)');
+	it('does not move a disabled drawer', () => {
 		cleanup?.();
-		cleanup = undefined;
+		cleanup = swipeToDismiss(() => {}, { enabled: false })(sheet);
+		touch('touchstart', 100, 100);
+		expect(touch('touchmove', 100, 200).defaultPrevented).toBe(false);
 		expect(sheet.style.transform).toBe('');
-		pointer(sheet, 'pointerup', 120);
-		expect(dismiss).not.toHaveBeenCalled();
 	});
 });
