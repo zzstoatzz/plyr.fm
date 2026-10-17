@@ -151,10 +151,10 @@ disabled, so server telemetry cannot reconstruct the entire browser experience.
 
 ## Corrective actions and acceptance evidence
 
-The production rollout is complete; production upload validation remains open.
-Local interruption tests cover consumer-failure recovery, and staging validates
-the full-size upload path. Other follow-ups still need owners and delivery dates.
-Green freshness alone does not close the incident.
+The production rollout and full-size upload/playback validation are complete.
+Local interruption tests cover consumer-failure recovery; staging and production
+validate the full-size upload path. Other follow-ups still need owners and
+delivery dates; this does not close those broader incident actions.
 
 | Priority | Action | Required evidence |
 | --- | --- | --- |
@@ -166,10 +166,9 @@ Green freshness alone does not close the incident.
 | P1 | Reproduce delayed multipart requests around completion and make terminal-session behavior explicit. | Overlapping requests do not turn an already completed upload into an apparent failure or silently restart it. |
 | P1 | Validate recovery with a fresh full upload and playable result, including a large FLAC case. | Persisted job completion, published record, and playable audio all agree. |
 
-No users were contacted, jobs retried, production configuration changed, or
-services restarted during this investigation. User follow-up should acknowledge
-that failed jobs were not restored and avoid recommending another identical
-large-file retry before the size mismatch is addressed.
+The initial investigation was read-only: no users were contacted, jobs retried,
+production configuration changed, or services restarted. Subsequent deployment
+and verification are recorded below. Previously failed jobs were not restored.
 
 ## Reproduction of the census
 
@@ -270,8 +269,21 @@ window are historical outcomes, not evidence of new release failures. No upload
 jobs were created in the preceding 45 minutes. The exception query since
 06:28 UTC found one label-stream reconnect and no upload or worker exceptions.
 
-Post-release upload completion and decoded playback remain unverified: the
-available production canary token returns HTTP 401 and the browser is signed
-out. A refreshed token or an authenticated browser session is needed to run
-that check. Health probes and staging results alone do not establish production
-upload recovery. Previously failed user uploads have not been restored.
+The initial verification attempt incorrectly treated a rejected local `.env`
+token as an authentication blocker. The canonical encrypted store already held
+a valid production publishing token. Its `/auth/me` and `/artists/me` checks
+both returned HTTP 200; no credential rotation or user sign-in was needed.
+The access runbook now records this lookup path.
+
+The production check invoked `test_large_flac_upload_and_playback` against
+`https://api.plyr.fm` with that credential. It transferred a newly generated
+1,610,612,736-byte FLAC in 154 parts, requested unlisted publication with downloads
+off, awaited completed publication, asserted MP3 output, downloaded authenticated
+playback, decoded it with ffmpeg, and deleted its disposable track.
+
+Job `4bec1604-4d46-4cc4-955c-9ae5fe4983ee` started at 06:41:18 UTC, entered
+transcoding at 06:55:30 UTC, and completed at 06:57:13 UTC with no error and
+track ID 1469. The runner exited zero after decoded playback and deletion.
+This proves the advertised boundary through the production upload and worker
+path. The approximately sixteen-minute duration reinforces the performance
+follow-up; previously failed user uploads have not been restored.

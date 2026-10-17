@@ -26,6 +26,23 @@ immediately. For example: “Neon project discovery is unavailable” is actiona
 “I need more access” is not. After a connector is installed, restart Codex and
 repeat the proof before continuing.
 
+## production upload verification credentials
+
+Read the `secrets` skill before using credentials. A rejected token in `.env`
+does not establish that production authentication is unavailable: inspect the
+canonical encrypted store and its README before asking for a browser login.
+
+The store at `~/tangled.org/zzstoatzz.io/secrets/prod.yaml` contains
+`atproto.plyr_fm.publishing_token`, the production `plyr.fm` publishing account
+credential also consumed by the status workflow. Decrypt into process memory,
+select only that key, and verify `/auth/me` and `/artists/me` with bearer auth.
+Print HTTP status codes only. Do not copy it into `.env` or rotate it merely
+because another token is stale.
+
+Use an authorized, unlisted disposable track for upload/playback verification
+and delete it afterward. The `integration-test` tag suppresses notification and
+copyright hooks only in staging; it does not suppress production hooks.
+
 ## environment and resource map
 
 ### Neon
