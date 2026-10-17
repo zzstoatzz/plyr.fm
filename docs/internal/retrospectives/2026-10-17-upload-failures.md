@@ -151,9 +151,10 @@ disabled, so server telemetry cannot reconstruct the entire browser experience.
 
 ## Corrective actions and acceptance evidence
 
-Production remediation remains open. The staging validation below covers the
-size contract and consumer-failure recovery; the other follow-ups still need
-owners and delivery dates. Green freshness alone does not close the incident.
+The production rollout is complete; production upload validation remains open.
+Local interruption tests cover consumer-failure recovery, and staging validates
+the full-size upload path. Other follow-ups still need owners and delivery dates.
+Green freshness alone does not close the incident.
 
 | Priority | Action | Required evidence |
 | --- | --- | --- |
@@ -254,6 +255,23 @@ overdue scheduled or unread queue work, and no upload failures in the preceding
 24 hours. Backend CI passed 1,878 tests with 26 credential-dependent skips;
 the separately configured live private-media test passed as well.
 
-Production deployment and post-release upload/playback verification remain
-pending Nate's explicit release approval. These staging results do not establish
-production recovery or restore any previously failed user upload.
+## Production deployment — October 17, 2026
+
+After Nate's explicit approval, release
+[2026.1017.062711](https://github.com/zzstoatzz/plyr.fm/releases/tag/2026.1017.062711)
+deployed commit `f117c4e1df0fdb35a76755e1b8dc41a952f9ec9a`. The
+[production workflow](https://github.com/zzstoatzz/plyr.fm/actions/runs/39009960304)
+completed successfully, deploying the transcoder before the backend.
+
+The production transcoder reports `max_file_bytes=1610612736`. At 06:30:34 UTC,
+API freshness reported a healthy database and worker queue, no overdue or unread
+work, and no active or stalled uploads. Its 27 failures in the trailing 24-hour
+window are historical outcomes, not evidence of new release failures. No upload
+jobs were created in the preceding 45 minutes. The exception query since
+06:28 UTC found one label-stream reconnect and no upload or worker exceptions.
+
+Post-release upload completion and decoded playback remain unverified: the
+available production canary token returns HTTP 401 and the browser is signed
+out. A refreshed token or an authenticated browser session is needed to run
+that check. Health probes and staging results alone do not establish production
+upload recovery. Previously failed user uploads have not been restored.
