@@ -27,7 +27,7 @@ signs you're testing implementation:
 
 ### keep tests fast
 
-slow tests don't get run. we use parallel execution (xdist) and template databases to keep the full suite under 30 seconds.
+parallel execution (xdist) and template databases keep the full suite practical to run during development.
 
 ## parallel execution with xdist
 
@@ -103,8 +103,8 @@ just backend test tests/api/test_tracks.py
 # run with coverage
 just backend test --cov
 
-# run single-threaded (debugging)
-just backend test -n 0
+# run one process while debugging
+just backend test-serial tests/api/test_tracks.py
 ```
 
 ## writing good tests
