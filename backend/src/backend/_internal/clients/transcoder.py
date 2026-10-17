@@ -144,7 +144,11 @@ class TranscoderClient:
                         headers=self._headers(),
                     ) as response,
                 ):
-                    response.raise_for_status()
+                    try:
+                        response.raise_for_status()
+                    except httpx.HTTPStatusError:
+                        await response.aread()
+                        raise
                     content_type = response.headers.get("content-type")
                     bytes_written = 0
                     last_beat_time = time.monotonic()
@@ -218,7 +222,7 @@ class TranscoderClient:
                 output_path=None,
                 output_size=None,
                 content_type=None,
-                error=f"unexpected error: {e}",
+                error=f"unexpected transcode error ({type(e).__name__})",
             )
 
 

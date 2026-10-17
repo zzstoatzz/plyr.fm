@@ -456,3 +456,7 @@ max_lines = 502
 [[rules]]
 path = "services/moderation/src/events.rs"
 max_lines = 506
+
+[[rules]]
+path = "docs/internal/backend/transcoder.md"
+max_lines = 508

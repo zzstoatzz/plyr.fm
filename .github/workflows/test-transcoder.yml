@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - "services/transcoder/**"
+      - "backend/src/backend/upload_contract.json"
       - "scripts/transcoder/**"
       - "scripts/generate_audio_sample.py"
       - ".github/workflows/test-transcoder.yml"
@@ -57,6 +58,9 @@ jobs:
 
       - name: run test matrix
         run: uv run scripts/transcoder/test-matrix.py -v
+
+      - name: verify real upload boundary
+        run: uv run scripts/transcoder/test-upload-boundary.py
 
       - name: stop transcoder
         if: always()

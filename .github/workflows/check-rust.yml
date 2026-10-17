@@ -5,6 +5,7 @@ on:
     paths:
       - "services/moderation/**"
       - "services/transcoder/**"
+      - "backend/src/backend/upload_contract.json"
       - ".github/workflows/check-rust.yml"
 
 permissions:
@@ -28,6 +29,7 @@ jobs:
               - '.github/workflows/check-rust.yml'
             transcoder:
               - 'services/transcoder/**'
+              - 'backend/src/backend/upload_contract.json'
               - '.github/workflows/check-rust.yml'
 
   check:
@@ -111,8 +113,10 @@ jobs:
       matrix:
         include:
           - service: services/moderation
+            context: services/moderation
             changed: ${{ needs.changes.outputs.moderation }}
           - service: services/transcoder
+            context: .
             changed: ${{ needs.changes.outputs.transcoder }}
 
     steps:
@@ -121,8 +125,7 @@ jobs:
 
       - name: build docker image
         if: matrix.changed == 'true'
-        working-directory: ${{ matrix.service }}
-        run: docker build -t ${{ matrix.service }}:ci-test .
+        run: docker build -f ${{ matrix.service }}/Dockerfile -t ${{ matrix.service }}:ci-test ${{ matrix.context }}
 
       - name: skip (no changes)
         if: matrix.changed != 'true'

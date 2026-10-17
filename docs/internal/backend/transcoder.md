@@ -61,7 +61,7 @@ source formats accepted on `file`: anything ffmpeg can decode (commonly aiff, fl
 - 200: transcoding successful, returns audio file
 - 400: invalid input (unsupported format, missing file, etc.)
 - 401: missing or invalid authentication token
-- 413: file too large (>1GB)
+- 413: file exceeds the shared 1.5 GiB file limit (multipart overhead is separate)
 - 500: transcoding failed (ffmpeg error, I/O error, etc.)
 
 ### GET /health
@@ -166,7 +166,6 @@ primary_region = "iad"
 [env]
   TRANSCODER_HOST = "0.0.0.0"
   TRANSCODER_PORT = "8080"
-  TRANSCODER_MAX_UPLOAD_BYTES = "1073741824"  # 1GB
 ```
 
 **key settings**:
@@ -178,8 +177,8 @@ primary_region = "iad"
 ### deployment commands
 
 ```bash
-# deploy from transcoder directory
-cd services/transcoder && fly deploy
+# after production approval, release through CI from the repository root
+just release
 
 # check status
 fly status -a plyr-transcoder
@@ -432,7 +431,8 @@ solution: increase timeout in backend client (`timeout=300.0`)
 ```
 error: 413 payload too large
 ```
-solution: increase `TRANSCODER_MAX_UPLOAD_BYTES` or reject large files earlier
+solution: compare the file size with `upload_contract.json` and the deployed
+`/health` capacity. Changing capacity requires a coordinated release.
 
 **VM not starting automatically**:
 ```
@@ -482,3 +482,27 @@ solution: check `auto_start_machines = true` in fly.toml
 - dockerfile: `services/transcoder/Dockerfile`
 - ffmpeg docs: https://ffmpeg.org/documentation.html
 - fly.io docs: https://fly.io/docs/
+
+
+## Upload contract and deployment
+
+`backend/src/backend/upload_contract.json` is the packaged API default and the
+Rust service's embedded file-size contract. The API may configure a smaller
+limit, but cannot advertise a larger one. The transcoder enforces the file size
+independently of the request-body limit, which includes 1 MiB for multipart
+framing. `/health` exposes `max_file_bytes` for deployment verification.
+
+Build the transcoder image from the repository root using
+`docker build --platform linux/amd64 -f services/transcoder/Dockerfile .`. `just transcoder image`
+uses that context. The reusable `deploy transcoder` workflow runs before the
+backend in staging and production deployment workflows. Production runs on an
+approved published release. A staging workflow dispatch targets
+`plyr-transcoder-staging`.
+The staging app needs its own auth secret matching the staging backend before
+it can be used. A production promotion must verify both the backend and the
+transcoder deployment; either one's green health alone is insufficient.
+
+Run `uv run scripts/transcoder/test-upload-boundary.py` against a local service
+for real FLAC boundary coverage. The harness streams the incident-size file,
+the maximum file, and a one-byte-oversized file; successful MP3 output must
+pass ffprobe. The CI transcoder matrix runs this harness too.

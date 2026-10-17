@@ -7,7 +7,7 @@ use std::{
 use anyhow::anyhow;
 use axum::{
     body::Body,
-    extract::{DefaultBodyLimit, Multipart, Query, Request},
+    extract::{multipart::MultipartError, DefaultBodyLimit, Multipart, Query, Request},
     http::{header, HeaderValue, StatusCode},
     middleware::{self, Next},
     response::{IntoResponse, Response},
@@ -28,7 +28,21 @@ struct TranscodeParams {
 
 #[derive(Debug, serde::Serialize)]
 struct HealthResponse {
+    max_file_bytes: usize,
     status: &'static str,
+}
+
+#[derive(Debug, Deserialize)]
+struct UploadLimits {
+    max_file_bytes: usize,
+    multipart_overhead_bytes: usize,
+}
+
+fn upload_limits() -> UploadLimits {
+    serde_json::from_str(include_str!(
+        "../../../backend/src/backend/upload_contract.json"
+    ))
+    .expect("valid embedded upload contract")
 }
 
 #[tokio::main]
@@ -38,10 +52,8 @@ async fn main() -> anyhow::Result<()> {
         .with_target(false)
         .init();
 
-    let max_upload_bytes: usize = env::var("TRANSCODER_MAX_UPLOAD_BYTES")
-        .ok()
-        .and_then(|v| v.parse().ok())
-        .unwrap_or(512 * 1024 * 1024); // 512MB default
+    let limits = upload_limits();
+    let max_upload_bytes = limits.max_file_bytes + limits.multipart_overhead_bytes;
 
     let auth_token = env::var("TRANSCODER_AUTH_TOKEN").ok();
 
@@ -104,7 +116,10 @@ async fn auth_middleware(
 }
 
 async fn health() -> Json<HealthResponse> {
-    Json(HealthResponse { status: "ok" })
+    Json(HealthResponse {
+        status: "ok",
+        max_file_bytes: upload_limits().max_file_bytes,
+    })
 }
 
 async fn transcode(
@@ -166,11 +181,7 @@ async fn write_upload_to_disk(
     let mut file_path: Option<PathBuf> = None;
     let mut original_name: Option<String> = None;
 
-    while let Some(mut field) = multipart
-        .next_field()
-        .await
-        .map_err(|e| AppError::BadRequest(format!("invalid multipart data: {e}")))?
-    {
+    while let Some(mut field) = multipart.next_field().await.map_err(AppError::multipart)? {
         if field.name() != Some("file") {
             continue;
         }
@@ -189,11 +200,13 @@ async fn write_upload_to_disk(
             .await
             .map_err(|e| AppError::Io(format!("failed to create temp file: {e}")))?;
 
-        while let Some(chunk) = field
-            .chunk()
-            .await
-            .map_err(|e| AppError::BadRequest(format!("failed to read upload chunk: {e}")))?
-        {
+        let mut bytes_written = 0;
+        let max_file_bytes = upload_limits().max_file_bytes;
+        while let Some(chunk) = field.chunk().await.map_err(AppError::multipart)? {
+            bytes_written += chunk.len();
+            if bytes_written > max_file_bytes {
+                return Err(AppError::TooLarge);
+            }
             file.write_all(&chunk)
                 .await
                 .map_err(|e| AppError::Io(format!("failed to write chunk: {e}")))?;
@@ -268,6 +281,8 @@ async fn run_ffmpeg(input: &Path, output: &Path, target_ext: &str) -> Result<(),
 
 #[derive(Debug, thiserror::Error)]
 enum AppError {
+    #[error("file exceeds upload limit")]
+    TooLarge,
     #[error("bad request: {0}")]
     BadRequest(String),
     #[error("io error: {0}")]
@@ -278,10 +293,21 @@ enum AppError {
     Ffmpeg(String),
 }
 
+impl AppError {
+    fn multipart(error: MultipartError) -> Self {
+        if error.status() == StatusCode::PAYLOAD_TOO_LARGE {
+            Self::TooLarge
+        } else {
+            Self::BadRequest(format!("invalid multipart data: {error}"))
+        }
+    }
+}
+
 impl IntoResponse for AppError {
     fn into_response(self) -> Response {
         tracing::error!(error = %self, "request failed");
         let status = match self {
+            AppError::TooLarge => StatusCode::PAYLOAD_TOO_LARGE,
             AppError::BadRequest(_) => StatusCode::BAD_REQUEST,
             AppError::Io(_) | AppError::Http(_) | AppError::Ffmpeg(_) => {
                 StatusCode::INTERNAL_SERVER_ERROR

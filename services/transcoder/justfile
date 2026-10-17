@@ -22,10 +22,10 @@ clippy:
     cargo clippy --all-targets --all-features
 
 image tag="plyr-transcoder:local":
-    docker build -t {{tag}} .
+    docker build --platform linux/amd64 -f Dockerfile -t {{tag}} ../..
 
 docker-run TAG="plyr-transcoder:local" PORT="8082":
     docker run --rm -p {{PORT}}:8080 {{TAG}}
 
 fly ARGS="":
-    fly deploy --config fly.toml {{ARGS}}
+    cd ../.. && fly deploy --config services/transcoder/fly.toml {{ARGS}}

@@ -18,6 +18,8 @@ from pydantic import (
 )
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from backend.upload_limits import MAX_FILE_BYTES
+
 BASE_DIR = Path(__file__).resolve().parents[2]
 
 T = TypeVar("T")
@@ -310,7 +312,9 @@ class StorageSettings(AppSettingsSection):
     """Asset storage configuration (R2 only)."""
 
     max_upload_size_mb: int = Field(
-        default=1536,  # 1.5GB - supports 2-hour WAV (worst case) with headroom
+        default=MAX_FILE_BYTES // (1024 * 1024),
+        gt=0,
+        le=MAX_FILE_BYTES // (1024 * 1024),
         validation_alias="MAX_UPLOAD_SIZE_MB",
         description="Maximum file upload size in megabytes",
     )
