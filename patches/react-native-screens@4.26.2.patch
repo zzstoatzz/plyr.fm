@@ -9,7 +9,7 @@ index 9b66012dc8db1e3af0cb5457f8dad86e7f2fe5e3..677dd77c04d23a7ae032894d6eb8d34b
 +- (void)prepareSheetImpactWithIntensity:(CGFloat)intensity
 +{
 +#if !TARGET_OS_TV
-+  if (self.screenView.stackPresentation != RNSStackPresentationFormSheet || self.transitionCoordinator == nil) {
++  if (self.screenView.stackPresentation != RNSScreenStackPresentationFormSheet || self.transitionCoordinator == nil) {
 +    return;
 +  }
 +  UIImpactFeedbackGenerator *feedback = [[UIImpactFeedbackGenerator alloc] initWithStyle:UIImpactFeedbackStyleSoft];
