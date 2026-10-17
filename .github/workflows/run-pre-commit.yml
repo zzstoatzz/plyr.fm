@@ -47,13 +47,13 @@ jobs:
         uses: actions/cache@v4
         with:
           path: frontend/node_modules
-          key: ${{ runner.os }}-bun-${{ hashFiles('frontend/bun.lockb') }}
+          key: ${{ runner.os }}-bun-${{ hashFiles('frontend/bun.lock') }}
           restore-keys: |
             ${{ runner.os }}-bun-
 
       - name: install backend dependencies
         if: steps.filter.outputs.backend == 'true'
-        run: cd backend && uv sync
+        run: cd backend && uv sync --locked
 
       - name: install frontend dependencies
         if: steps.filter.outputs.frontend == 'true'
@@ -62,17 +62,6 @@ jobs:
       - name: create frontend env file
         if: steps.filter.outputs.frontend == 'true'
         run: echo "PUBLIC_API_URL=http://localhost:8001" > frontend/.env
-
-      - name: check lockfile is up to date
-        if: steps.filter.outputs.backend == 'true'
-        run: |
-          cd backend
-          if ! uv lock --check; then
-            echo "❌ lockfile is out of date!"
-            echo "to update the lockfile, run 'uv lock'."
-            exit 1
-          fi
-          echo "✅ lockfile is up to date"
 
       - name: build skip list
         id: skip

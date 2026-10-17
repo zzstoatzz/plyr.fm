@@ -61,6 +61,7 @@ repos:
         language: system
         files: ^frontend/.*\.(ts|svelte)$
         pass_filenames: false
+        verbose: true
 
       - id: check-legal-dates
         name: check legal dates
