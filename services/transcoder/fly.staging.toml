@@ -2,7 +2,7 @@ app = "plyr-transcoder-staging"
 primary_region = "iad"
 
 [build]
-  dockerfile = "services/transcoder/Dockerfile"
+  dockerfile = "Dockerfile"
 
 [http_service]
   internal_port = 8080
