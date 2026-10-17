@@ -22,7 +22,7 @@ For repository work, use the repository’s [contribute skill](https://github.co
 - [uv](https://docs.astral.sh/uv/) (Python 3.12; pinned by `backend/.python-version`)
 - [bun](https://bun.sh/) (frontend)
 - [just](https://just.systems/) (task runner)
-- [docker](https://www.docker.com/) (for Redis and test databases)
+- [docker](https://www.docker.com/) (for test databases and optional local Redis)
 
 ## quickstart
 
@@ -53,7 +53,7 @@ just backend migrate-up
 ### running the stack
 
 ```bash
-# start redis (required for background tasks)
+# optional: start Redis when setting up the background worker
 just dev-services
 
 # terminal 1 — backend (port 8001, hot reloads)

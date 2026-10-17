@@ -41,7 +41,8 @@ the split landed in zzstoatzz/plyr.fm#1359 after the 2026-04-30 incident
 user's album upload OOM-killed uvicorn because Worker + uvicorn shared one
 process. the boundary now ensures worker memory pressure can't take down HTTP.
 
-in local development, both run in one process by default — see [local development](#local-development) below.
+in local development, start the API and worker separately when you need queued
+tasks to run — see [local development](#local-development) below.
 
 ## configuration
 
@@ -73,33 +74,27 @@ if you need to tune worker settings:
 2. verify ALL task types execute (not just perpetual tasks)
 3. check logfire for task execution spans
 
-when `DOCKET_URL` is not set, docket is disabled and tasks fall back to `asyncio.create_task()` (fire-and-forget).
+when `DOCKET_URL` is not set, the config defaults to Docket's in-memory backend.
+The API starts a Docket client but no Worker, so queued tasks are not processed.
+Set `DOCKET_URL` to Redis and start the worker to execute background tasks.
 
 ### local development
 
 ```bash
-# start redis + backend + frontend
-just dev
-
-# or manually:
-docker compose up -d  # starts redis on localhost:6379
-DOCKET_URL=redis://localhost:6379 just backend run
+# configure backend/.env with DOCKET_URL=redis://localhost:6379
+just dev-services
+just backend run
 ```
 
-`just backend run` starts uvicorn only — it opens a Docket *client* but
-does not run a Worker. for local dev this is usually fine: the API can
-enqueue tasks but they sit in Redis until consumed. options:
+`just backend run` starts the API client only. In a second terminal, run the
+worker from `backend/`; it reads the same `.env` and consumes queued tasks:
 
-- skip Redis entirely (omit `DOCKET_URL`) → tasks fall back to
-  `asyncio.create_task()` and run in-process (fire-and-forget, no retries).
-  this is the default when no Redis is configured — sufficient for most
-  feature work.
-- run a worker locally to mirror production:
-  ```bash
-  DOCKET_URL=redis://localhost:6379 uv run python -m backend.worker
-  ```
-  in a second terminal. this is the same entrypoint deployed to the
-  fly `worker` process group.
+```bash
+cd backend
+uv run python -m backend.worker
+```
+
+this is the same entrypoint deployed to the fly `worker` process group.
 
 ### production/staging
 
@@ -126,7 +121,7 @@ note: uses Fly internal networking (`.internal` domain), no TLS needed within pr
 from backend._internal.tasks import schedule_copyright_scan
 from backend._internal.tasks import schedule_genre_classification, schedule_embedding_generation
 
-# automatically uses docket if enabled, else asyncio.create_task
+# schedules through Docket; a worker must be running to process the task
 await schedule_copyright_scan(track_id, audio_url)
 await schedule_genre_classification(track_id)
 await schedule_embedding_generation(track_id, audio_url)
@@ -162,16 +157,8 @@ background_tasks = [
 3. create a scheduler helper in the same module:
 ```python
 async def schedule_my_task(arg1: str, arg2: int) -> None:
-    """schedule with docket if enabled, else asyncio."""
-    if is_docket_enabled():
-        try:
-            docket = get_docket()
-            await docket.add(my_new_task)(arg1, arg2)
-            return
-        except Exception:
-            pass  # fall through to asyncio
-
-    asyncio.create_task(my_new_task(arg1, arg2))
+    """schedule through Docket."""
+    await get_docket().add(my_new_task)(arg1, arg2)
 ```
 
 ## costs
@@ -182,18 +169,17 @@ async def schedule_my_task(arg1: str, arg2: int) -> None:
 
 this replaced Upstash pay-per-command pricing which was costing ~$75/month at scale (37M commands/month).
 
-## fallback behavior
+## local behavior without Redis
 
-when docket is disabled (`DOCKET_URL` not set):
-- `schedule_copyright_scan()` uses `asyncio.create_task()` instead
-- tasks are fire-and-forget (no retries, no durability)
-- suitable for local dev without Redis
+When `DOCKET_URL` is unset, settings use Docket's in-memory backend. The API
+still only starts a Docket client; without a Worker, queued tasks are not
+processed. Configure Redis and run the worker as described under
+[local development](#local-development) when testing background-task flows.
 
 ## monitoring
 
 background task execution is traced in Logfire:
 - span: `scheduled copyright scan via docket`
-- span: `docket scheduling failed, falling back to asyncio`
 
 query recent background task activity:
 ```sql
