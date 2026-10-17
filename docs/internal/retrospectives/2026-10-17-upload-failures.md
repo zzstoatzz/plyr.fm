@@ -151,8 +151,10 @@ disabled, so server telemetry cannot reconstruct the entire browser experience.
 
 ## Corrective actions and acceptance evidence
 
-These actions are proposed, not deployed. Owners and delivery dates need to be
-assigned; the incident should not be closed solely because freshness is green.
+The production rollout is complete; production upload validation remains open.
+Local interruption tests cover consumer-failure recovery, and staging validates
+the full-size upload path. Other follow-ups still need owners and delivery dates.
+Green freshness alone does not close the incident.
 
 | Priority | Action | Required evidence |
 | --- | --- | --- |
@@ -221,5 +223,55 @@ process exit, start a replacement, and verify queued and fresh work complete.
 The independent API freshness probe checks due scheduled and unread stream
 work, including maintenance, without consulting heartbeat freshness.
 
-These changes have not yet been deployed. The exact historical failure remains
-inferred from a matching reproduction rather than a recovered worker stack.
+The exact historical failure remains inferred from a matching reproduction
+rather than a recovered worker stack.
+
+## Staging validation — October 17, 2026
+
+[PR #2170](https://github.com/zzstoatzz/plyr.fm/pull/2170) implemented the shared
+capacity contract, supervised worker lifecycle, independent queue freshness,
+and coordinated service deployment. The initial staging rollout stopped before
+changing the backend because Fly resolved the Dockerfile path relative to its
+config directory. [PR #2171](https://github.com/zzstoatzz/plyr.fm/pull/2171)
+corrected both environment configs.
+
+The [staging deployment](https://github.com/zzstoatzz/plyr.fm/actions/runs/39008260286)
+succeeded at commit `1ecf8c2b`. The separate staging transcoder reported
+`max_file_bytes=1610612736` and rejected unauthenticated conversion with HTTP 401.
+The Linux deployment image also passed all 15 format conversions and the
+incident-size, exact-limit, and limit-plus-one boundary cases.
+
+The [live integration suite](https://github.com/zzstoatzz/plyr.fm/actions/runs/39008447197)
+passed all 23 selected tests; four tests outside its selection were deselected.
+The full-size regression transferred 1,610,612,736 bytes in 154 parts, converted
+protected FLAC to MP3, verified completed publication and decoded playback, and
+deleted its test track. Job `cd17f4d9-5d52-4008-8a45-bb4932912b05` started at
+06:08:01 UTC and completed at 06:22:08 UTC without an error. This validates
+capacity, not acceptable latency: the approximately fourteen-minute operation
+still warrants a separate performance follow-up.
+
+At 06:26:03 UTC, staging freshness reported no active or stalled uploads, no
+overdue scheduled or unread queue work, and no upload failures in the preceding
+24 hours. Backend CI passed 1,878 tests with 26 credential-dependent skips;
+the separately configured live private-media test passed as well.
+
+## Production deployment — October 17, 2026
+
+After Nate's explicit approval, release
+[2026.1017.062711](https://github.com/zzstoatzz/plyr.fm/releases/tag/2026.1017.062711)
+deployed commit `f117c4e1df0fdb35a76755e1b8dc41a952f9ec9a`. The
+[production workflow](https://github.com/zzstoatzz/plyr.fm/actions/runs/39009960304)
+completed successfully, deploying the transcoder before the backend.
+
+The production transcoder reports `max_file_bytes=1610612736`. At 06:30:34 UTC,
+API freshness reported a healthy database and worker queue, no overdue or unread
+work, and no active or stalled uploads. Its 27 failures in the trailing 24-hour
+window are historical outcomes, not evidence of new release failures. No upload
+jobs were created in the preceding 45 minutes. The exception query since
+06:28 UTC found one label-stream reconnect and no upload or worker exceptions.
+
+Post-release upload completion and decoded playback remain unverified: the
+available production canary token returns HTTP 401 and the browser is signed
+out. A refreshed token or an authenticated browser session is needed to run
+that check. Health probes and staging results alone do not establish production
+upload recovery. Previously failed user uploads have not been restored.
