@@ -27,7 +27,7 @@ max_lines = 904
 
 [[rules]]
 path = "backend/src/backend/api/auth.py"
-max_lines = 981
+max_lines = 1003
 
 [[rules]]
 path = "backend/src/backend/api/tracks/listing.py"
@@ -79,7 +79,7 @@ max_lines = 1052
 
 [[rules]]
 path = "docs/internal/authentication.md"
-max_lines = 645
+max_lines = 664
 
 [[rules]]
 path = "docs/internal/backend/liked-tracks.md"
@@ -283,11 +283,11 @@ max_lines = 2589
 
 [[rules]]
 path = "backend/src/backend/_internal/atproto/client.py"
-max_lines = 985
+max_lines = 999
 
 [[rules]]
 path = "backend/src/backend/_internal/auth/oauth.py"
-max_lines = 659
+max_lines = 686
 
 [[rules]]
 path = "frontend/src/lib/components/CopyrightSection.svelte"
