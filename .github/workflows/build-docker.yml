@@ -7,6 +7,9 @@ on:
       - "backend/Dockerfile"
       - "backend/pyproject.toml"
       - "backend/uv.lock"
+      - "backend/alembic/**"
+      - "backend/alembic.ini"
+      - "lexicons/**"
       - "README.md"
       - ".github/workflows/build-docker.yml"
 
