@@ -7,6 +7,7 @@
 import argparse
 import json
 import os
+import random
 import subprocess
 import tempfile
 from pathlib import Path
@@ -54,6 +55,7 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--url", default="http://127.0.0.1:8082")
     parser.add_argument("--max-file-bytes", type=int, default=MAX_FILE_BYTES)
+    parser.add_argument("--generate", type=Path)
     args = parser.parse_args()
     with tempfile.TemporaryDirectory() as directory:
         root = Path(directory)
@@ -66,11 +68,14 @@ def main() -> None:
                 "-f",
                 "lavfi",
                 "-i",
-                "sine=frequency=440:duration=0.1",
+                f"sine=frequency={random.uniform(220, 880)}:duration=0.1",
                 str(source),
             ],
             check=True,
         )
+        if args.generate:
+            padded_flac(source.read_bytes(), args.generate, args.max_file_bytes)
+            return
         headers = (
             {"X-Transcoder-Key": os.environ["TRANSCODER_AUTH_TOKEN"]}
             if os.environ.get("TRANSCODER_AUTH_TOKEN")
