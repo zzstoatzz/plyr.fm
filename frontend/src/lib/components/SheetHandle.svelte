@@ -18,7 +18,7 @@
 		border: none;
 		background: transparent;
 		border-radius: var(--radius-xl);
-		touch-action: none;
+		touch-action: auto;
 		user-select: none;
 		-webkit-user-select: none;
 		cursor: grab;

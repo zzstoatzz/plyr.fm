@@ -100,7 +100,7 @@
 		aria-label={ariaLabel}
 		tabindex="-1"
 		style="--bottom-sheet-max-width: {maxWidth}; --bottom-sheet-max-height: {maxHeight};"
-		{@attach swipeToDismiss(onClose)}
+		{@attach swipeToDismiss(onClose, { enabled: open })}
 	>
 		<div class="sheet-handle-area" role="presentation">
 			<SheetHandle {onClose} label={`close ${ariaLabel}`} />
@@ -112,6 +112,11 @@
 <style>
 	:global(html:has(.sheet-backdrop.open)) {
 		overflow: hidden;
+	}
+
+	.sheet :global(.sheet-close) {
+		min-width: 44px;
+		min-height: 44px;
 	}
 
 	.sheet :global(.sheet-content) {
