@@ -1,3 +1,49 @@
+diff --git a/ios/RNSScreen.mm b/ios/RNSScreen.mm
+index 9b66012dc8db1e3af0cb5457f8dad86e7f2fe5e3..677dd77c04d23a7ae032894d6eb8d34bf24cdd91 100644
+--- a/ios/RNSScreen.mm
++++ b/ios/RNSScreen.mm
+@@ -1433,10 +1433,31 @@ - (instancetype)initWithView:(UIView *)view
+   return self;
+ }
+ 
++- (void)prepareSheetImpactWithIntensity:(CGFloat)intensity
++{
++#if !TARGET_OS_TV
++  if (self.screenView.stackPresentation != RNSScreenStackPresentationFormSheet || self.transitionCoordinator == nil) {
++    return;
++  }
++  UIImpactFeedbackGenerator *feedback = [[UIImpactFeedbackGenerator alloc] initWithStyle:UIImpactFeedbackStyleSoft];
++  [feedback prepare];
++  [self.transitionCoordinator
++      animateAlongsideTransition:nil
++                      completion:^(id<UIViewControllerTransitionCoordinatorContext> context) {
++                        if (!context.isCancelled && UIApplication.sharedApplication.applicationState == UIApplicationStateActive) {
++                          [feedback impactOccurredWithIntensity:intensity];
++                        }
++                      }];
++#endif
++}
++
+ // TODO: Find out why this is executed when screen is going out
+ - (void)viewWillAppear:(BOOL)animated
+ {
+   [super viewWillAppear:animated];
++  if (self.isBeingPresented) {
++    [self prepareSheetImpactWithIntensity:0.8];
++  }
+   if (!_isSwiping) {
+     [self.screenView notifyWillAppear];
+     if (self.transitionCoordinator.isInteractive) {
+@@ -1464,6 +1485,9 @@ - (void)viewWillAppear:(BOOL)animated
+ - (void)viewWillDisappear:(BOOL)animated
+ {
+   [super viewWillDisappear:animated];
++  if (self.isBeingDismissed) {
++    [self prepareSheetImpactWithIntensity:0.65];
++  }
+   // self.navigationController might be null when we are dismissing a modal
+   if (!self.transitionCoordinator.isInteractive && self.navigationController != nil) {
+     // user might have long pressed ios 14 back button item,
 diff --git a/ios/tabs/host/RNSTabsHostComponentView.mm b/ios/tabs/host/RNSTabsHostComponentView.mm
 index 8b61f5b7d3800bf090ff4a7878ad44676b50bbaf..802807dfd43c26149df38da5814a567082c9145a 100644
 --- a/ios/tabs/host/RNSTabsHostComponentView.mm
