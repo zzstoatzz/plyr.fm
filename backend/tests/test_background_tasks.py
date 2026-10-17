@@ -1,7 +1,6 @@
 """tests for background task scheduling."""
 
 import asyncio
-import contextlib
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -137,16 +136,13 @@ async def test_process_export_downloads_concurrently() -> None:
     regression test: previously tracks were downloaded one at a time,
     making exports slow for users with many tracks or large files.
     """
-    download_times: list[float] = []
-    download_start_event = asyncio.Event()
+    downloaded_keys: list[str] = []
+    download_barrier = asyncio.Barrier(4)
 
     async def mock_get_object(Bucket: str, Key: str) -> dict:
-        """track when downloads start and simulate network delay."""
-        download_times.append(asyncio.get_event_loop().time())
-        # signal that at least one download has started
-        download_start_event.set()
-        # simulate network delay
-        await asyncio.sleep(0.1)
+        """Wait for all four downloads to start before returning."""
+        downloaded_keys.append(Key)
+        await download_barrier.wait()
         # return mock response with async body
         body = AsyncMock()
         body.iter_chunks = lambda: async_chunk_gen()
@@ -215,23 +211,10 @@ async def test_process_export_downloads_concurrently() -> None:
     ):
         mock_db_session.return_value.__aenter__.return_value = mock_db
 
-        # run process_export but cancel before upload phase
-        # (we only care about testing download concurrency)
-        with contextlib.suppress(TimeoutError):
-            await asyncio.wait_for(
-                export_tasks.process_export("export-123", "did:plc:testuser"),
-                timeout=2.0,
-            )
+        await asyncio.wait_for(
+            export_tasks.process_export("export-123", "did:plc:testuser"),
+            timeout=2.0,
+        )
 
-    # verify downloads started concurrently:
-    # if sequential, each download would start ~0.1s after the previous
-    # if concurrent, all 4 downloads should start within ~0.05s of each other
-    assert len(download_times) == 4, f"expected 4 downloads, got {len(download_times)}"
-
-    # check that all downloads started within a small time window (concurrent)
-    # not spread out over 0.4s (sequential)
-    time_spread = max(download_times) - min(download_times)
-    assert time_spread < 0.1, (
-        f"downloads should start concurrently (within 0.1s), "
-        f"but time spread was {time_spread:.3f}s - likely still sequential"
-    )
+    assert len(downloaded_keys) == 4
+    assert download_barrier.n_waiting == 0
