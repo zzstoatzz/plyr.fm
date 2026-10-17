@@ -267,7 +267,15 @@ something the finger cannot see. Light and sparing.
 | selection | repeat toggled, a tag filter toggled, a queue row dropped |
 | success | a track queued (once, with the banner), a sleep timer set |
 
-Nothing is added to system controls: the tab bar, the scrubber, pull to
+Sheets land with a soft UIKit impact: 0.8 intensity on presentation and 0.65
+on dismissal. The app's `react-native-screens` patch prepares the generator
+at the native transition's start and fires at completion, including swipe and
+button dismissal. Cancelled transitions and background apps stay quiet.
+Covering a sheet with another sheet does not count as dismissing it. Detent
+changes keep the system's feedback. This runs natively so removing the route
+from JavaScript cannot lose or delay the closing impact.
+
+Nothing is added to other system controls: the tab bar, the scrubber, pull to
 refresh and menus keep whatever iOS gives them.
 
 ## accessibility
