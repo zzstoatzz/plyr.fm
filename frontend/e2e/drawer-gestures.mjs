@@ -6,7 +6,7 @@ const browser = await chromium.launch({ headless: true });
 const page = await browser.newPage({ viewport: { width: 390, height: 844 }, hasTouch: true });
 const cdp = await page.context().newCDPSession(page);
 
-async function drag(locator, distance, { hold = 0, cancel = false } = {}) {
+async function drag(locator, distance, { hold = 0, cancel = false, dismiss = false } = {}) {
 	const box = await locator.boundingBox();
 	assert(box);
 	const x = box.x + Math.min(80, box.width / 2);
@@ -18,10 +18,32 @@ async function drag(locator, distance, { hold = 0, cancel = false } = {}) {
 		});
 	}
 	if (hold) await page.waitForTimeout(hold);
+	const motion = dismiss ? locator.evaluate(element => {
+		const sheet = element.closest('.sheet, .comments-panel');
+		const frames = [];
+		const start = globalThis.performance.now();
+		return new Promise(resolve => {
+			function sample() {
+				if (sheet.isConnected && globalThis.getComputedStyle(sheet).visibility !== 'hidden') {
+					frames.push(sheet.getBoundingClientRect().top);
+				}
+				if (globalThis.performance.now() - start < 650) globalThis.requestAnimationFrame(sample);
+				else resolve(frames);
+			}
+			globalThis.requestAnimationFrame(sample);
+		});
+	}) : null;
 	await cdp.send('Input.dispatchTouchEvent', {
 		type: cancel ? 'touchCancel' : 'touchEnd', touchPoints: []
 	});
 	await page.waitForTimeout(450);
+	if (motion) {
+		const frames = await motion;
+		assert(frames.length > 1, 'sampled dismissal frames');
+		for (let i = 1; i < frames.length; i++) {
+			assert(frames[i] >= frames[i - 1] - 1, `drawer reversed: ${frames[i - 1]} -> ${frames[i]}`);
+		}
+	}
 }
 
 async function openComments(trackId) {
@@ -56,14 +78,14 @@ try {
 	assert.equal(await page.locator('.comments-panel').count(), 1);
 	await drag(page.locator('.login-prompt'), 90, { cancel: true });
 	assert.equal(await page.locator('.comments-panel').count(), 1);
-	await drag(page.locator('.comment-text'), 48);
+	await drag(page.locator('.comment-text'), 300, { dismiss: true });
 	await page.locator('.comments-panel').waitFor({ state: 'detached' });
 
 	await page.locator('.likes').click();
 	const sheet = page.getByRole('dialog', { name: 'liked by' });
 	await sheet.locator('.liker-row').first().waitFor();
 	await page.waitForTimeout(250);
-	await drag(sheet.locator('.liker-row').first(), 48);
+	await drag(sheet.locator('.liker-row').first(), 300, { dismiss: true });
 	assert.equal(await page.locator('.sheet-backdrop.open').count(), 0);
 	assert.equal(new URL(page.url()).pathname, '/track/2391');
 
@@ -80,7 +102,7 @@ try {
 	await drag(scroller, 60);
 	assert.equal(await page.locator('.comments-panel').count(), 1);
 	await scroller.evaluate(el => { el.scrollTop = 0; });
-	await drag(page.locator('.comments-title'), 100);
+	await drag(page.locator('.comments-title'), 100, { dismiss: true });
 	await page.locator('.comments-panel').waitFor({ state: 'detached' });
 	console.log('Passed: content and header dismissal, native scrolling, snap-back, cancellation, link suppression, close button.');
 } finally {
