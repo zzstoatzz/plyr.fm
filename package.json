@@ -1,0 +1,12 @@
+{
+  "name": "plyr-fm",
+  "private": true,
+  "workspaces": [
+    "shared",
+    "mobile"
+  ],
+  "patchedDependencies": {
+    "react-native-audio-api@0.13.5": "patches/react-native-audio-api@0.13.5.patch",
+    "react-native-screens@4.26.2": "patches/react-native-screens@4.26.2.patch"
+  }
+}

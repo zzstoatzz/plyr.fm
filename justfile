@@ -4,6 +4,7 @@ mod backend
 mod transcoder 'services/transcoder'
 mod moderation 'services/moderation'
 mod docs 'docs/site'
+mod mobile
 
 
 # show available commands

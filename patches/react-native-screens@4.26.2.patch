@@ -1,0 +1,13 @@
+diff --git a/ios/tabs/host/RNSTabsHostComponentView.mm b/ios/tabs/host/RNSTabsHostComponentView.mm
+index 8b61f5b7d3800bf090ff4a7878ad44676b50bbaf..802807dfd43c26149df38da5814a567082c9145a 100644
+--- a/ios/tabs/host/RNSTabsHostComponentView.mm
++++ b/ios/tabs/host/RNSTabsHostComponentView.mm
+@@ -244,7 +244,7 @@ - (void)updateProps:(const facebook::react::Props::Shared &)props
+     _tabBarHidden = newComponentProps.tabBarHidden;
+ #if RNS_IPHONE_OS_VERSION_AVAILABLE(18_0)
+     if (@available(iOS 18.0, *)) {
+-      [_controller setTabBarHidden:_tabBarHidden animated:NO];
++      [_controller setTabBarHidden:_tabBarHidden animated:YES];
+     } else
+ #endif // RNS_IPHONE_OS_VERSION_AVAILABLE(18_0)
+     {
