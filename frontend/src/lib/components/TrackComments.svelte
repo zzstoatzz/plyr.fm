@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { browser } from '$app/environment';
 	import { auth } from '$lib/auth.svelte';
+	import SheetHandle from './SheetHandle.svelte';
 	import { swipeToDismiss } from '$lib/swipe-to-dismiss';
 	import { API_URL } from '$lib/config';
 	import { playTrack } from '$lib/playback.svelte';
@@ -466,9 +467,11 @@
 			class="comments-panel"
 			aria-label="comments"
 			transition:fly={{ x: isMobileViewport() ? 0 : 40, y: isMobileViewport() ? 120 : 0, duration: 220 }}
-			{@attach swipeToDismiss(() => (commentsOpen = false), { scrollSelector: '.comments-container' })}
+			{@attach swipeToDismiss(() => (commentsOpen = false))}
 		>
-			<div class="comments-panel-handle" aria-hidden="true"></div>
+			<div class="comments-panel-handle">
+				<SheetHandle onClose={() => (commentsOpen = false)} label="close comments" />
+			</div>
 			<button class="comments-panel-close" onclick={() => (commentsOpen = false)} aria-label="close comments">
 				<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
 					<line x1="18" y1="6" x2="6" y2="18"></line>
@@ -809,15 +812,12 @@
 		max-height: 60dvh;
 		border-radius: 16px 16px 0 0;
 		border-bottom: none;
+		transition: transform 0.2s ease-out;
 	}
 
 	.comments-panel-handle {
-		width: 36px;
-		height: 4px;
-		border-radius: var(--radius-full);
-		background: var(--border-emphasis);
-		margin: 0.5rem auto 0;
 		flex-shrink: 0;
+		margin: 0 3rem;
 	}
 
 	.comments-panel-close {
@@ -841,6 +841,7 @@
 	}
 
 	.comments-container {
+		overscroll-behavior-y: contain;
 		overflow-y: auto;
 		min-height: 0;
 	}
@@ -860,7 +861,7 @@
 			border-radius: var(--radius-lg);
 			border-bottom: 1px solid var(--glass-border, var(--border-default));
 			box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
-			transition: right 0.25s ease;
+			transition: right 0.25s ease, transform 0.2s ease-out;
 		}
 
 		.comments-panel-handle {
@@ -869,6 +870,7 @@
 	}
 
 	.comments-section {
+		min-height: 0;
 		display: flex;
 		flex-direction: column;
 		gap: 1rem;
@@ -1282,15 +1284,12 @@
 		max-height: 60dvh;
 		border-radius: 16px 16px 0 0;
 		border-bottom: none;
+		transition: transform 0.2s ease-out;
 	}
 
 	.comments-panel-handle {
-		width: 36px;
-		height: 4px;
-		border-radius: var(--radius-full);
-		background: var(--border-emphasis);
-		margin: 0.5rem auto 0;
 		flex-shrink: 0;
+		margin: 0 3rem;
 	}
 
 	.comments-panel-close {
@@ -1314,6 +1313,7 @@
 	}
 
 	.comments-container {
+		overscroll-behavior-y: contain;
 		overflow-y: auto;
 		min-height: 0;
 	}
@@ -1333,7 +1333,7 @@
 			border-radius: var(--radius-lg);
 			border-bottom: 1px solid var(--glass-border, var(--border-default));
 			box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
-			transition: right 0.25s ease;
+			transition: right 0.25s ease, transform 0.2s ease-out;
 		}
 
 		.comments-panel-handle {

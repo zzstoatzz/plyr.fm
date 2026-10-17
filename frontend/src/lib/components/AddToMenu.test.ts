@@ -76,3 +76,19 @@ it.each([200, 500])('signed-in menu preserves the request outcome (%s)', async (
 	if (status === 200) expect(onLikeChange).toHaveBeenCalledWith(true);
 	else expect(onLikeChange).not.toHaveBeenCalled();
 });
+
+it('closes the menu with escape and restores its trigger focus', () => {
+	vi.stubGlobal('matchMedia', (media: string) => ({ matches: false, media }));
+	const component = mount(AddToMenu, {
+		target: document.body,
+		props: { trackId: 7, trackTitle: 'fixture' }
+	});
+	cleanup = () => unmount(component);
+	flushSync();
+	clickButton('add to...');
+	expect(document.querySelector('[role="menu"]')).not.toBeNull();
+	document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+	flushSync();
+	expect(document.querySelector('[role="menu"]')).toBeNull();
+	expect(document.activeElement?.getAttribute('title')).toBe('add to...');
+});
