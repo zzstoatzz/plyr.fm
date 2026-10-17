@@ -7,6 +7,7 @@ from backend.api.discover import router as discover_router
 from backend.api.meta import router as meta_router
 from backend.api.audio import router as audio_router
 from backend.api.auth import router as auth_router
+from backend.api.auth_app import router as auth_app_router
 from backend.api.copyright import router as copyright_router
 from backend.api.exports import router as exports_router
 from backend.api.for_you import router as for_you_router
@@ -29,6 +30,7 @@ __all__ = [
     "activity_router",
     "artists_router",
     "audio_router",
+    "auth_app_router",
     "auth_router",
     "copyright_router",
     "discover_router",

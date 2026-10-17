@@ -38,7 +38,8 @@ async def test_app_password_session_bypasses_scope_gate() -> None:
 
 
 async def test_oauth_session_still_scope_gated() -> None:
-    sess = _session({"access_token": "a", "scope": "atproto"})  # no auth_type
+    # no auth_type, and wider than the identity-only grant a native app holds
+    sess = _session({"access_token": "a", "scope": "atproto repo:fm.plyr.like"})
     with (
         patch(
             "backend._internal.auth.dependencies.get_session",
