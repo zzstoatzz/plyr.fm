@@ -50,6 +50,10 @@ from backend._internal.auth.app_password import (
     create_app_password_session,
     resolve_pds,
 )
+from backend._internal.auth.sign_in_preview import (
+    SignInPreview,
+    resolve_sign_in_preview,
+)
 from backend._internal.auth.space_scope import (
     permissioned_scope_requested,
     private_media_grant_present,
@@ -157,6 +161,21 @@ async def get_pds_options() -> PdsOptionsResponse:
             for pds in settings.account_creation.recommended_pds
         ],
     )
+
+
+@router.get("/sign-in-preview")
+async def get_sign_in_preview(
+    handle: Annotated[str, Query(min_length=1, max_length=253)],
+) -> SignInPreview:
+    """resolve a handle or DID to its profile and the host its sign-in redirects to.
+
+    the login page shows this before redirecting, so people know they're about
+    to land on their account's authorization server (e.g. bsky.social).
+    """
+    preview = await resolve_sign_in_preview(handle)
+    if preview is None:
+        raise HTTPException(status_code=404, detail="account not found")
+    return preview
 
 
 @router.get("/start")
