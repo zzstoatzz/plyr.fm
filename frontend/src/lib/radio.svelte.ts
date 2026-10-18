@@ -76,6 +76,8 @@ class Radio {
 	switching = $state(false);
 	private pollTimer: number | null = null;
 	private receivedAt = $state<number | null>(null);
+	/** stream urls that failed to load this session; hidden from every snapshot */
+	private unplayable = new Set<string>();
 
 	get current(): RadioTrack | null {
 		return this.state?.current ?? null;
@@ -248,7 +250,7 @@ class Radio {
 				Date.parse(fetched.generated_at) < Date.parse(this.state.generated_at)
 			)
 				return;
-			this.state = fetched;
+			this.state = this.withoutUnplayable(fetched);
 			this.receivedAt = performance.now();
 			this.station = this.state?.station_slug ?? this.station;
 			this.error = null;
@@ -311,6 +313,7 @@ class Radio {
 		this.stopPolling();
 	}
 
+
 	/** the current stream ended — advance to the next track.
 	 *
 	 * MUST be synchronous: iOS only keeps autoplay alive across tracks if the
@@ -345,6 +348,46 @@ class Radio {
 		}
 		// refresh rotation / up_next in the background for the next boundary
 		void this.loadState();
+	}
+
+	/** the on-air source failed to load (missing object, undecodable body) —
+	 * remember it and air the next playable entry instead of dead air. */
+	onMediaError(failedSrc: string): void {
+		const failing = player.radio;
+		if (!failing || failing.live || !this.state || failedSrc !== failing.stream_url) return;
+		this.unplayable.add(failing.stream_url);
+		this.state = this.withoutUnplayable(this.state);
+		const next = this.state.current;
+		if (!next) return;
+		player.playRadio(this.toNowPlaying(next, 0), { autoplay: !player.paused });
+		this.receivedAt = performance.now();
+	}
+
+	/** tests only */
+	forgetUnplayable(): void {
+		this.unplayable.clear();
+	}
+
+	/** drop failed entries; a failed `current` hands over to the next playable one */
+	private withoutUnplayable(fetched: RadioState): RadioState {
+		if (!this.unplayable.size) return fetched;
+		const playable = (t: RadioTrack) => !this.unplayable.has(t.stream_url);
+		const upNext = fetched.up_next.filter(playable);
+		const rotation = fetched.rotation.filter(playable);
+		if (!fetched.current || playable(fetched.current)) {
+			return { ...fetched, up_next: upNext, rotation };
+		}
+		const [current = null, ...rest] = upNext;
+		return {
+			...fetched,
+			current,
+			up_next: rest,
+			rotation,
+			progress_seconds: 0,
+			current_index: null,
+			current_started_at: null,
+			current_ends_at: null
+		};
 	}
 
 	/** poll: follow the shared station when it rotates to a new track */
