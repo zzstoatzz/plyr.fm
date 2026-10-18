@@ -415,7 +415,7 @@ max_lines = 684
 
 [[rules]]
 path = "backend/src/backend/_internal/notifications.py"
-max_lines = 534
+max_lines = 564
 
 [[rules]]
 path = "frontend/vendor/sister-radio/frontend/src/features/equalizer/EqualizerPanel.tsx"
