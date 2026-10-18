@@ -139,6 +139,13 @@ class AppSettings(AppSettingsSection):
         validation_alias="BROWSER_OBSERVABILITY",
         description="Enable browser telemetry proxy (logfire-proxy endpoint). Disable to reduce backend load from browser trace forwarding.",
     )
+    upload_sponsor_threshold_hours: float = Field(
+        default=24,
+        ge=0,
+        allow_inf_nan=False,
+        validation_alias="UPLOAD_SPONSOR_THRESHOLD_HOURS",
+        description="Show the upload sponsor card above this many uploaded audio hours",
+    )
     broadcast_channel_prefix: str = Field(
         default="plyr",
         description="Prefix used for browser BroadcastChannel identifiers",
