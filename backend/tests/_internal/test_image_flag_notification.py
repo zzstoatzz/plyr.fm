@@ -172,3 +172,40 @@ async def test_flag_with_no_owner_yet_still_sends(
     assert "used by: nothing yet\n" in message.build_text()
     assert f"image_id: {IMAGE_ID}" in message.build_text()
     assert _links(message) == []
+
+
+async def test_flag_caps_the_owner_list(
+    db_session: AsyncSession, sent_dm: AsyncMock
+) -> None:
+    db_session.add(Artist(did="did:plc:a", handle="a.test", display_name="a.test"))
+    await db_session.flush()
+    db_session.add_all(
+        Track(
+            title=f"t{index}",
+            file_id=f"file-{index}",
+            file_type="mp3",
+            artist_did="did:plc:a",
+            image_id=IMAGE_ID,
+        )
+        for index in range(7)
+    )
+    await db_session.commit()
+
+    message = await _flag(sent_dm)
+
+    owner_lines = message.build_text().split("\n\n")[1].splitlines()
+    assert len(owner_lines) == 1 + 5 + 1
+    assert owner_lines[-1] == "- +2 more"
+
+
+async def test_flag_still_sends_when_the_owner_lookup_fails(
+    sent_dm: AsyncMock,
+) -> None:
+    with patch(
+        "backend._internal.tasks.moderation.db_session",
+        side_effect=ConnectionError("db unreachable"),
+    ):
+        message = await _flag(sent_dm)
+
+    assert "used by: unknown (lookup failed)\n" in message.build_text()
+    assert f"image_id: {IMAGE_ID}" in message.build_text()

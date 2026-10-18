@@ -86,8 +86,14 @@ async def scan_image_moderation(
         result = await client.scan_image(image_bytes, image_id, content_type)
 
         if not result.is_safe:
-            async with db_session() as db:
-                owners = await find_image_owners(db, image_id)
+            owners: list[ImageOwner] | None = None
+            try:
+                async with db_session() as db:
+                    owners = await find_image_owners(db, image_id)
+            except Exception:
+                logger.exception(
+                    "failed to resolve owners of flagged image %s", image_id
+                )
             await notification_service.send_image_flag_notification(
                 image_id=image_id,
                 severity=result.severity,

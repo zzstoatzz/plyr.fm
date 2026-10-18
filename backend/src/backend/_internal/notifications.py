@@ -357,7 +357,7 @@ class NotificationService:
         severity: str,
         categories: list[str],
         context: str,
-        owners: Sequence[ImageOwner],
+        owners: Sequence[ImageOwner] | None,
     ) -> NotificationResult | None:
         """send notification about a flagged image.
 
@@ -366,7 +366,8 @@ class NotificationService:
             severity: severity level (low, medium, high)
             categories: list of violated policy categories
             context: where the image was uploaded (e.g., "track cover", "album cover")
-            owners: every album, playlist and track currently using the image
+            owners: every album, playlist and track currently using the image,
+                or None when the lookup failed
         """
         recipient_did = await self.ensure_ready()
         if recipient_did is None:
@@ -394,6 +395,8 @@ class NotificationService:
                 message.text("\n")
             if (hidden := len(owners) - IMAGE_FLAG_OWNER_LIMIT) > 0:
                 message.text(f"- +{hidden} more\n")
+        elif owners is None:
+            message.text("used by: unknown (lookup failed)\n")
         else:
             message.text("used by: nothing yet\n")
         message.text(
