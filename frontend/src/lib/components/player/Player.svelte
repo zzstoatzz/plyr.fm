@@ -914,9 +914,11 @@
 	onended={() => (player.radio ? radio.onEnded() : handleTrackEnded())}
 	onerror={() => {
 		// a src that resolved `ready` but failed at decode/playback time (dead url
-		// that passed the HEAD pre-check, corrupt body). radio owns its own stream,
-		// and a fresh load hasn't attached a track yet — skip only for the queue.
-		if (player.radio || !player.currentTrack || !player.audioElement?.src) return;
+		// that passed the HEAD pre-check, corrupt body). a fresh load hasn't
+		// attached a track yet — skip only for the queue.
+		if (!player.audioElement?.src) return;
+		if (player.radio) return radio.onMediaError(player.audioElement.src);
+		if (!player.currentTrack) return;
 		if (attachedTrackId !== player.currentTrack.id) return;
 		handleLoadFailure(`media error on ${player.currentTrack.id}`);
 	}}
