@@ -197,6 +197,7 @@
 					</label>
 					<HandleAutocomplete
 						id="handle"
+						hideResults={lookup.status === 'found'}
 						bind:value={handle}
 						onSelect={handleSelect}
 						placeholder="you.example.com"
@@ -240,7 +241,7 @@
 					<button
 						type="submit"
 						class="primary"
-						disabled={loading || !handle.trim() || lookup.status === 'notfound' || lookup.status === 'loading'}
+						disabled={loading || !handle.trim() || lookup.status === 'notfound'}
 					>
 						{#if loading}
 							redirecting to {preview?.sign_in_host ?? 'sign in'}...
