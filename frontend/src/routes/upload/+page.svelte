@@ -1,4 +1,5 @@
 <script lang="ts">
+	import UploadSponsorCard from '$lib/components/UploadSponsorCard.svelte';
 	import PublishingIntro from '$lib/components/PublishingIntro.svelte';
 	import { onMount } from "svelte";
 	import { browser } from "$app/environment";
@@ -49,6 +50,7 @@
 	}
 
 	let loading = $state(true);
+	let sponsorRevision = $state(0);
 
 	// upload mode: track (single) or album (multi-track)
 	let mode = $state<'track' | 'album'>(
@@ -179,6 +181,7 @@
 	}
 
 	async function loadMyAlbums() {
+		sponsorRevision += 1;
 		if (!auth.user) return;
 		try {
 			const response = await fetch(
@@ -445,6 +448,7 @@
 			>album</button>
 		</div>
 
+		<UploadSponsorCard revision={sponsorRevision} />
 		<PublishingIntro />
 
 		{#if mode === 'track'}

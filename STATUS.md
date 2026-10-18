@@ -47,6 +47,15 @@ plyr.fm should become:
 
 ### October 2026
 
+#### upload sponsorship prompt (October 17)
+
+The upload page offers GitHub sponsorship above a configurable catalog duration
+(`UPLOAD_SPONSOR_THRESHOLD_HOURS`, default 24 hours). It shows current uploaded
+hours and an explicitly estimated copyright-scan value from retained successful
+scans. Dismissal follows the account for 30 days. Uploading remains unrestricted.
+See `docs/internal/frontend/upload-sponsor.md` for the production threshold check
+and accounting limits; the provider-attempt ledger remains #2163.
+
 #### the embeds, the radio page's loose ends, and an equalizer (#2111, #2129–#2138, October 3–9 — frontend promotes October 8 23:30Z, October 9 04:25Z and 06:40Z; no backend release)
 
 Nothing reached the production backend after October 2; the rest arrived by

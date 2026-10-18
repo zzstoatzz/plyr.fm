@@ -19,7 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend._internal import Session, require_auth
 from backend.main import app
-from backend.models import Artist, Track
+from backend.models import Artist, CopyrightScan, Track
 
 _DID = "did:plc:search_sort_artist"
 
@@ -266,3 +266,90 @@ async def test_pds_savable_count_semantics(
     filtered = await _get(test_app, "?q=alpha")
     assert filtered["total"] == 1
     assert filtered["pds_savable_count"] == 2
+
+
+async def test_upload_audio_totals_cover_catalog_and_successful_scans(
+    test_app: FastAPI, db_session: AsyncSession, artist: Artist
+) -> None:
+    other = Artist(
+        did="did:plc:sponsor_other", handle="sponsor-other.test", display_name="Other"
+    )
+    db_session.add(other)
+    await db_session.flush()
+    tracks = [
+        Track(
+            title="scanned",
+            artist_did=_DID,
+            file_id="usage_a",
+            file_type="mp3",
+            extra={"duration": 90000},
+        ),
+        Track(
+            title="private",
+            artist_did=_DID,
+            file_id="usage_b",
+            file_type="mp3",
+            extra={"duration": 3600},
+            visibility="private",
+        ),
+        Track(
+            title="failed",
+            artist_did=_DID,
+            file_id="usage_c",
+            file_type="mp3",
+            extra={"duration": 1800},
+        ),
+        Track(
+            title="unknown",
+            artist_did=_DID,
+            file_id="usage_d",
+            file_type="mp3",
+            extra={},
+        ),
+        Track(
+            title="malformed",
+            artist_did=_DID,
+            file_id="usage_e",
+            file_type="mp3",
+            extra={"duration": "unknown"},
+        ),
+        Track(
+            title="other",
+            artist_did=other.did,
+            file_id="usage_f",
+            file_type="mp3",
+            extra={"duration": 999999},
+        ),
+    ]
+    db_session.add_all(tracks)
+    await db_session.flush()
+    db_session.add_all(
+        [
+            CopyrightScan(track_id=tracks[0].id, raw_response={"status": "success"}),
+            CopyrightScan(track_id=tracks[0].id, raw_response={"status": "success"}),
+            CopyrightScan(
+                track_id=tracks[2].id, raw_response={"status": "scan_failed"}
+            ),
+            CopyrightScan(track_id=tracks[5].id, raw_response={"status": "success"}),
+        ]
+    )
+    await db_session.commit()
+
+    data = await _get_upload_summary(test_app)
+    assert data["uploaded_audio_seconds"] == 95400
+    assert data["scanned_audio_seconds"] == 90000
+
+
+async def test_empty_upload_audio_totals(test_app: FastAPI) -> None:
+    data = await _get_upload_summary(test_app)
+    assert data["uploaded_audio_seconds"] == 0
+    assert data["scanned_audio_seconds"] == 0
+
+
+async def _get_upload_summary(test_app: FastAPI) -> dict:
+    async with AsyncClient(
+        transport=ASGITransport(app=test_app), base_url="http://test"
+    ) as client:
+        response = await client.get("/tracks/me/upload-summary")
+    assert response.status_code == 200, response.text
+    return response.json()

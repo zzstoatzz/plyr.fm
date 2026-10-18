@@ -15,6 +15,7 @@ export function getAtprotofansSupportUrl(did: string): string {
 }
 
 interface ServerConfig {
+	upload_sponsor_threshold_hours: number;
 	max_upload_size_mb: number;
 	max_image_size_mb: number;
 	browser_observability: boolean;
@@ -30,8 +31,8 @@ interface ServerConfig {
 
 let serverConfig: ServerConfig | null = null;
 
-export async function getServerConfig(): Promise<ServerConfig> {
-	if (serverConfig !== null) {
+export async function getServerConfig(refresh = false): Promise<ServerConfig> {
+	if (serverConfig !== null && !refresh) {
 		return serverConfig;
 	}
 

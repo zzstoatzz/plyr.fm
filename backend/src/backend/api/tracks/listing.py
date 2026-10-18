@@ -9,7 +9,7 @@ import logfire
 from fastapi import Depends, HTTPException, Query
 from pydantic import BaseModel
 from redis.exceptions import RedisError
-from sqlalchemy import func, select
+from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -26,6 +26,7 @@ from backend._internal.track_visibility import visible_filter
 from backend.config import settings
 from backend.models import (
     Artist,
+    CopyrightScan,
     Tag,
     Track,
     TrackLike,
@@ -545,6 +546,47 @@ async def list_my_tracks(
         total=total,
         has_more=offset + len(track_responses) < total,
         pds_savable_count=pds_savable_count,
+    )
+
+
+class UploadSummaryResponse(BaseModel):
+    uploaded_audio_seconds: float
+    scanned_audio_seconds: float
+
+
+@router.get("/me/upload-summary")
+async def get_upload_summary(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    auth_session: AuthSession = Depends(require_auth),
+) -> UploadSummaryResponse:
+    """Summarize current uploads and successfully scanned audio for the owner."""
+    duration = case(
+        (
+            func.jsonb_typeof(Track.extra["duration"]) == "number",
+            func.greatest(Track.extra["duration"].as_float(), 0),
+        ),
+        else_=0,
+    )
+    scanned = (
+        select(CopyrightScan.id)
+        .where(
+            CopyrightScan.track_id == Track.id,
+            CopyrightScan.raw_response["status"].astext == "success",
+        )
+        .exists()
+    )
+    usage = (
+        await db.execute(
+            select(
+                func.coalesce(func.sum(duration), 0),
+                func.coalesce(func.sum(case((scanned, duration), else_=0)), 0),
+            ).where(Track.artist_did == auth_session.did)
+        )
+    ).one()
+
+    return UploadSummaryResponse(
+        uploaded_audio_seconds=usage[0],
+        scanned_audio_seconds=usage[1],
     )
 
 
