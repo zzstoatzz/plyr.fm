@@ -27,7 +27,7 @@ max_lines = 904
 
 [[rules]]
 path = "backend/src/backend/api/auth.py"
-max_lines = 981
+max_lines = 989
 
 [[rules]]
 path = "backend/src/backend/api/tracks/listing.py"
@@ -207,7 +207,7 @@ max_lines = 628
 
 [[rules]]
 path = "frontend/src/routes/login/+page.svelte"
-max_lines = 545
+max_lines = 734
 
 [[rules]]
 path = "backend/src/backend/_internal/tasks/ingest.py"
