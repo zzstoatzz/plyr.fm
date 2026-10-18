@@ -23,22 +23,18 @@ run:
 
 # run tests with docker-compose (parallel, the way CI runs them)
 test *ARGS='tests/':
-    {{ compose }} up -d --wait
-    {{ test_env }} uv run pytest -n auto {{ ARGS }}
-    {{ compose }} down
+    trap '{{ compose }} down' EXIT; trap 'exit 130' INT; trap 'exit 143' TERM; {{ compose }} up -d --wait && {{ test_env }} uv run pytest -n auto {{ ARGS }}
 
 # run tests in one process — for pdb, -s, or iterating on a single test.
 # NOT what CI runs: the serial path skips the template database, the advisory
 # lock, and the per-worker redis db entirely. Verify with `just test` before
 # pushing. (-n0, not -p no:xdist: conftest needs xdist's `worker_id` fixture.)
 test-serial *ARGS='tests/':
-    {{ compose }} up -d --wait
-    {{ test_env }} uv run pytest -n0 {{ ARGS }}
-    {{ compose }} down
+    trap '{{ compose }} down' EXIT; trap 'exit 130' INT; trap 'exit 143' TERM; {{ compose }} up -d --wait && {{ test_env }} uv run pytest -n0 {{ ARGS }}
 
-# run integration tests (requires running backend and PLYRFM_API_TOKEN in .env)
+# run staging integration tests (PLYR_TEST_TOKEN_1 required; tokens 2 and 3 enable multi-user cases)
 integration:
-    set -a && source ../.env && set +a && uv run pytest tests/test_integration_upload.py -m integration -v -s
+    trap '{{ compose }} down' EXIT; trap 'exit 130' INT; trap 'exit 143' TERM; if [ -f .env ]; then set -a; source .env; set +a; fi; {{ compose }} up -d --wait && {{ test_env }} uv run pytest tests/integration -m integration -v -s
 
 # run type checking and linting
 lint:

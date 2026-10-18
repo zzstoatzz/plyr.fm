@@ -14,9 +14,16 @@ misbehaving client into a site-wide outage. Hence per-client keying.
 """
 
 import hashlib
+import inspect
 
-from slowapi import Limiter
+from redis.backoff import NoBackoff
+from redis.retry import Retry
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.middleware import _find_route_handler, _get_route_name
+from starlette.concurrency import run_in_threadpool
+from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.requests import Request
+from starlette.responses import Response
 
 from backend.config import settings
 
@@ -63,17 +70,68 @@ def rate_limit_key(request: Request) -> str:
     return f"ip:{client_ip(request)}"
 
 
-limiter = Limiter(
-    key_func=rate_limit_key,
-    enabled=settings.rate_limit.enabled,
-    default_limits=[settings.rate_limit.default_limit],
-    storage_uri=settings.docket.url or "memory://",
-    # a Redis outage must not take the API down with it. slowapi hands any
-    # storage exception to its rate-limit handler, which reads `exc.detail` --
-    # absent on redis errors -- so an unreachable Redis 500s every request,
-    # including /health, which then fails the platform health check.
-    # the fallback keeps limits enforced per-process and probes for recovery;
-    # swallow_errors is the backstop for paths the fallback does not cover.
-    in_memory_fallback_enabled=True,
-    swallow_errors=True,
+class RateLimitMiddleware(BaseHTTPMiddleware):
+    async def dispatch(
+        self, request: Request, call_next: RequestResponseEndpoint
+    ) -> Response:
+        active_limiter: Limiter = request.app.state.limiter
+        handler = _find_route_handler(request.app.routes, request.scope)
+        if not active_limiter.enabled or handler is None:
+            return await call_next(request)
+        name = _get_route_name(handler)
+        if name in active_limiter._exempt_routes or not active_limiter._auto_check:
+            return await call_next(request)
+        if getattr(request.state, "_rate_limiting_complete", False):
+            return await call_next(request)
+        decorated = (
+            name in active_limiter._route_limits
+            or name in active_limiter._dynamic_route_limits
+        )
+        try:
+            await run_in_threadpool(
+                active_limiter._check_request_limit, request, handler, not decorated
+            )
+            request.state._rate_limiting_complete = True
+        except Exception as exc:
+            exception_handler = request.app.exception_handlers.get(
+                type(exc), _rate_limit_exceeded_handler
+            )
+            if inspect.iscoroutinefunction(exception_handler):
+                return await exception_handler(request, exc)
+            return await run_in_threadpool(exception_handler, request, exc)
+        response = await call_next(request)
+        if not decorated:
+            response = await run_in_threadpool(
+                active_limiter._inject_headers, response, request.state.view_rate_limit
+            )
+        return response
+
+
+def create_limiter(
+    storage_uri: str, default_limit: str, enabled: bool = True
+) -> Limiter:
+    storage_options: dict[str, object] = (
+        {
+            "socket_connect_timeout": 0.5,
+            "socket_timeout": 0.5,
+            "retry": Retry(NoBackoff(), 0),
+        }
+        if storage_uri.startswith(("redis://", "rediss://"))
+        else {}
+    )
+    return Limiter(
+        key_func=rate_limit_key,
+        enabled=enabled,
+        default_limits=[default_limit],
+        storage_uri=storage_uri,
+        storage_options=storage_options,  # type: ignore[arg-type]
+        in_memory_fallback_enabled=True,
+        swallow_errors=True,
+    )
+
+
+limiter = create_limiter(
+    settings.docket.url or "memory://",
+    settings.rate_limit.default_limit,
+    settings.rate_limit.enabled,
 )

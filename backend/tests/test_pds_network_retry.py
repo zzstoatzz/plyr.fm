@@ -10,6 +10,7 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 
 from backend._internal import Session as AuthSession
+from backend._internal.atproto import client as atproto_client
 from backend._internal.atproto.client import make_pds_request, upload_blob
 
 
@@ -80,13 +81,9 @@ class TestMakePdsRequestNetworkRetry:
         assert mock_client.make_authenticated_request.call_count == 2
 
     async def test_raises_after_all_attempts_exhausted(
-        self, mock_auth_session: AuthSession
+        self, mock_auth_session: AuthSession, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        # with exponential-backoff retries the client now makes
-        # _PDS_MAX_ATTEMPTS attempts before giving up. supply enough
-        # ReadErrors to exhaust them all. backoffs are real sleeps
-        # (1s + 2s + 4s = 7s between attempts) — unavoidable for
-        # this test, but only one test pays the cost.
+        monkeypatch.setattr(atproto_client, "_PDS_BACKOFF_SCHEDULE", (0.01, 0.02, 0.04))
         mock_client = AsyncMock()
         mock_client.make_authenticated_request = AsyncMock(
             side_effect=httpx.ReadError("")
@@ -104,6 +101,11 @@ class TestMakePdsRequestNetworkRetry:
                 "POST",
                 "com.atproto.repo.createRecord",
             )
+
+        assert (
+            mock_client.make_authenticated_request.call_count
+            == atproto_client._PDS_MAX_ATTEMPTS
+        )
 
     async def test_retries_on_connect_error(
         self, mock_auth_session: AuthSession
@@ -157,8 +159,9 @@ class TestUploadBlobNetworkRetry:
         assert mock_client.make_authenticated_request.call_count == 2
 
     async def test_raises_after_all_attempts_exhausted(
-        self, mock_auth_session: AuthSession
+        self, mock_auth_session: AuthSession, monkeypatch: pytest.MonkeyPatch
     ) -> None:
+        monkeypatch.setattr(atproto_client, "_PDS_BACKOFF_SCHEDULE", (0.01, 0.02, 0.04))
         mock_client = AsyncMock()
         mock_client.make_authenticated_request = AsyncMock(
             side_effect=httpx.ReadError("")
@@ -174,6 +177,11 @@ class TestUploadBlobNetworkRetry:
             await upload_blob(
                 mock_auth_session, data=b"fake-audio", content_type="audio/mpeg"
             )
+
+        assert (
+            mock_client.make_authenticated_request.call_count
+            == atproto_client._PDS_MAX_ATTEMPTS
+        )
 
     async def test_does_not_retry_payload_too_large(
         self, mock_auth_session: AuthSession

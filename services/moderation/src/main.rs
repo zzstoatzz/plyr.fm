@@ -26,6 +26,7 @@ mod config;
 mod db;
 mod events;
 mod handlers;
+mod indexing;
 mod labels;
 mod reports;
 mod review;
@@ -128,6 +129,7 @@ fn internal_only_api() -> Router<AppState> {
         .route("/overrides", get(events::active_overrides))
         .route("/events-since", get(events::events_since))
         .route("/events-head", get(events::events_head))
+        .route("/indexing-decisions", post(indexing::decisions))
 }
 
 fn build_router(state: AppState, auth_token: Option<String>) -> Router {

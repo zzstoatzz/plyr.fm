@@ -10,10 +10,9 @@ mod docs 'docs/site'
 default:
     @just --list
 
-# verify shared agent entrypoints (symlinks are checked into git)
+# verify shared agent entrypoints (skill symlinks are checked into git)
 setup:
-    test -L AGENTS.md && test -f AGENTS.md
-    test -L CLAUDE.md && test -f CLAUDE.md
+    test -f AGENTS.md && test ! -L AGENTS.md
     test -d .agents/skills
     for skill in .agents/skills/*; do test -L ".claude/skills/$(basename "$skill")" && test -f ".claude/skills/$(basename "$skill")/SKILL.md" || exit 1; done
 

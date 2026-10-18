@@ -52,6 +52,8 @@ pub enum ModerationAction {
     OverrideClear,
     /// Content was removed. Closes review.
     Takedown,
+    IndexingExclude,
+    IndexingClear,
 }
 
 impl ModerationAction {
@@ -66,6 +68,8 @@ impl ModerationAction {
             Self::OverrideExclude => "override_exclude",
             Self::OverrideClear => "override_clear",
             Self::Takedown => "takedown",
+            Self::IndexingExclude => "indexing_exclude",
+            Self::IndexingClear => "indexing_clear",
         }
     }
 
@@ -376,6 +380,18 @@ pub async fn record_event(
         return Err(AppError::BadRequest(
             "actor is required — an unattributed action is not an audit trail".to_string(),
         ));
+    }
+
+    if matches!(
+        request.action,
+        ModerationAction::IndexingExclude | ModerationAction::IndexingClear
+    ) {
+        crate::indexing::validate_subject(&request.subject_uri)?;
+        if request.reason.as_deref().unwrap_or("").trim().is_empty() {
+            return Err(AppError::BadRequest(
+                "indexing decisions require a reason".to_string(),
+            ));
+        }
     }
 
     let id = db.record_event(&request).await?;

@@ -147,7 +147,7 @@ jobs:
                hand back to. never end your turn before `podcast_script.txt` exists.
             1. STATUS.md MUST be kept under 500 lines. this is non-negotiable.
             2. archive content MUST be moved to .status_history/, not deleted
-            3. podcast tone MUST be dry, matter-of-fact, slightly sardonic - NOT enthusiastic or complimentary
+            3. the podcast follows `.github/prompts/status-podcast.md`
 
             ## task 1: gather the window report
 
@@ -244,101 +244,16 @@ jobs:
                - Fetch https://atproto.com/guides/overview to understand ATProto primitives
                - Fetch https://atproto.com/guides/lexicon to understand NSIDs and lexicons
 
-            ### identify the narrative structure
-
-            after investigating, categorize what shipped:
-
-            **big ticket items** (1-3 major features or architectural changes):
-            - these get the most airtime (60-70% of the script)
-            - explain HOW they were designed, not just WHAT they do
-            - discuss interesting technical decisions or tradeoffs
-
-            **smaller but notable changes** (3-6 fixes, improvements, polish):
-            - these get rapid-fire coverage (20-30% of the script)
-            - one or two sentences each
-            - acknowledge they happened without belaboring them
+            the investigation is for your understanding. the episode carries
+            only what a listener needs from it, in their words.
 
             ### write the podcast script
 
-            write to podcast_script.txt with "Host: ..." and "Cohost: ..." lines.
-
-            **CHRONOLOGICAL NARRATIVE STRUCTURE** (CRITICAL):
-
-            the script must tell a coherent story of the time period, structured as:
-
-            1. **opening** (10 seconds): set the scene - what's the date range, what was the focus?
-
-            2. **the main story** (60-90 seconds): the biggest thing that shipped
-               - what problem did it solve?
-               - how was it designed? (explain the architecture accessibly)
-               - what's interesting about the implementation?
-               - the hosts should have a back-and-forth discussing the design
-
-            3. **secondary feature** (30-45 seconds, if applicable): another significant change
-               - lighter treatment than the main story
-               - still explain the "why" not just the "what"
-
-            4. **rapid fire** (20-30 seconds): the smaller changes
-               - "we also saw..." or "a few other things landed..."
-               - quick hits: bug fixes, polish, minor improvements
-               - don't dwell, just acknowledge
-
-            5. **closing** (10 seconds): looking ahead or wrapping up
-
-            the narrative should flow like you're telling a friend what happened on the project this week.
-            use transitions: "but before that landed...", "meanwhile...", "and then to tie it together..."
-
-            ### tone requirements (CRITICAL)
-
-            the hosts should sound like two engineers who:
-            - are skeptical, amused and somewhat intrigued by the absurdity of building things
-            - acknowledge problems and limitations honestly
-            - don't over-use superlatives ("amazing", "incredible", "exciting")
-            - explain technical concepts through analogy, not hypey jargon
-            - genuinely find the technical details interesting (not performatively enthusiastic)
-
-            avoid excessive phrasing:
-            - "exciting", "amazing", "incredible", "impressive", "great job"
-            - "the team has done", "they've really", "fantastic work"
-            - any variation of over-congratulating or over-sensationalizing the project
-
-            ### pronunciation (CRITICAL - READ THIS CAREFULLY)
-
-            the project name "plyr.fm" is pronounced "player FM" (like "music player").
-
-            **in your script, ALWAYS write "player FM" or "player dot FM" - NEVER write "plyr.fm" or "plyr".**
-
-            the TTS engine will mispronounce "plyr" as "plir" or "p-l-y-r" if you write it that way.
-            write phonetically for correct pronunciation: "player FM", "player dot FM".
-
-            ### terminology
-
-            plyr.fm is built on **ATProto** (the protocol), not Bluesky (the app).
-            say "atmosphere accounts" or just "accounts" - never "Bluesky accounts".
-
-            ### identifying what actually shipped
-
-            read the commit messages and PR bodies carefully to understand what changed.
-
-            - "shipped" and "launched" mean the `landed` column in window_report.md says prod; a merged PR that is `staging only` is not shipped, whatever its body says
-            - if something is completely NEW (didn't exist before) and is in prod, say it "shipped" or "launched"
-            - if something existing got improved or fixed, call it what it is: fixes, improvements, polish
-
-            don't rely on commit message prefixes like `feat:` or `fix:` - they're not always accurate.
-            read the actual content to understand the scope of what changed.
-
-            ### time references (CRITICAL)
-
-            NEVER say "last week", "this week", "recently", or vague time references.
-
-            ALWAYS use specific date ranges based on the mergedAt date from task 1:
-            - "since December 2nd" or "from December 3rd to today"
-            - "in the past six days" (if that's accurate)
-            - "since the last update"
-
-            the listener doesn't know when "last week" was - be specific.
-
-            target length: 2-3 minutes spoken (~300-400 words) (it should be 4-5 if its the first episode)
+            read `.github/prompts/status-podcast.md` in full and follow it: it
+            says who the episode is for, what the two voices do, how to pick and
+            tell the stories, the words to avoid, the facts-and-tense rules, the
+            pronunciation, and the script format. write the script to
+            podcast_script.txt.
 
             keep podcast_script.txt, window_report.md and ecosystem_context.md
             in place — do NOT delete them. after this agent exits, a dedicated
@@ -467,7 +382,7 @@ jobs:
 
   # phase 2: upload audio after PR merge
   upload-audio:
-    if: github.event.pull_request.merged == true && startsWith(github.event.pull_request.head.ref, 'status-maintenance-')
+    if: github.event.pull_request.merged == true && (startsWith(github.event.pull_request.head.ref, 'status-maintenance-') || contains(github.event.pull_request.labels.*.name, 'status-episode'))
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -485,8 +400,9 @@ jobs:
       - name: Fetch audio + transcript from phase-1 run
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          ARTIFACT: status-audio-${{ github.event.pull_request.head.ref }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
         run: |
+          ARTIFACT="status-audio-${HEAD_REF//\//-}"
           RUN_ID=$(gh api \
             "repos/${{ github.repository }}/actions/artifacts?per_page=100" \
             --jq "[.artifacts[] | select(.name==\"$ARTIFACT\" and .expired==false)] | sort_by(.created_at) | reverse | .[0].workflow_run.id")
@@ -516,7 +432,9 @@ jobs:
           TODAY_COUNT=$(echo "$EXISTING" | grep -c "plyr.fm update - $TODAY" || true)
           TODAY_COUNT=${TODAY_COUNT:-0}
 
-          if [ "$TODAY_COUNT" -gt 0 ]; then
+          if [ -s title.txt ]; then
+            TITLE=$(cat title.txt)
+          elif [ "$TODAY_COUNT" -gt 0 ]; then
             # already have one today, add episode number
             EPISODE=$((TODAY_COUNT + 1))
             TITLE="plyr.fm update - $TODAY (#$EPISODE)"

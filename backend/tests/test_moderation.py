@@ -620,7 +620,7 @@ class MockReportSession(Session):
 
 
 @pytest.fixture
-def report_test_app() -> Generator[FastAPI, None, None]:
+def report_test_app(db_session: AsyncSession) -> Generator[FastAPI, None, None]:
     """create test app with mocked auth for report tests.
 
     also resets the slowapi rate-limiter so per-IP budgets from earlier tests
@@ -953,7 +953,7 @@ async def test_label_reads_target_the_internal_surface() -> None:
         with patch("httpx.AsyncClient.post", new_callable=AsyncMock) as mock_post:
             mock_post.return_value = Mock(
                 status_code=200,
-                json=Mock(return_value={}),
+                json=Mock(return_value={"labels": {}}),
                 raise_for_status=Mock(),
             )
             await call()

@@ -6,15 +6,13 @@ integration tests run against the staging environment (`api-stg.plyr.fm`) using 
 
 ## running locally
 
-```bash
-# set tokens
-export PLYR_TEST_TOKEN_1=...
-export PLYR_TEST_TOKEN_2=...
-export PLYR_TEST_TOKEN_3=...
+Add `PLYR_TEST_TOKEN_1` to `backend/.env`; tokens 2 and 3 enable the multi-user
+cases. The just target starts the isolated local database and Redis, loads
+`backend/.env`, and targets staging by default. Set `PLYR_API_URL` in that env
+file to target another API:
 
-# run tests
-cd backend
-uv run pytest tests/integration -m integration -v
+```bash
+just backend integration
 ```
 
 ## test accounts
@@ -47,7 +45,7 @@ Generate each account's app-password once (bsky settings → app passwords, or y
 
 ### running locally
 
-`just mint-dev-token --handle <h> --bootstrap` mints a token from an account password (`$MAIN_BSKY_PASSWORD`); pass `--verify` to prove the write path. Or export `PLYR_TEST_TOKEN_{1,2,3}` yourself and run `uv run pytest tests/integration -m integration -v`. See [authentication.md](../authentication.md#browserless-minting-devstaging-test-tokens).
+`just mint-dev-token --handle <h> --bootstrap` mints a token from an account password (`$MAIN_BSKY_PASSWORD`); pass `--verify` to prove the write path. You can also export `PLYR_TEST_TOKEN_{1,2,3}` in the shell before running `just backend integration`. See [authentication.md](../authentication.md#browserless-minting-devstaging-test-tokens).
 
 ## github actions
 

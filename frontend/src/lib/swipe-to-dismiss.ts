@@ -1,163 +1,201 @@
-// swipe-to-dismiss attachment for bottom sheets — instagram-comments style.
-//
-// gesture activates anywhere on the sheet, but only when the inner scroller is
-// pinned at the top. once the user has scrolled into the content, a downward
-// swipe scrolls (browser default) rather than dragging the sheet. when scroll
-// is at top, a downward swipe drags the sheet; release past the threshold or
-// at sufficient velocity dismisses.
-//
-// usage:
-//   <div class="sheet" {@attach swipeToDismiss(() => sheet.close())}>
-//     ...
-//     <div class="sheet-content">...</div>
-//   </div>
-//
-// the attachment binds on the sheet element; it locates the inner scroller via
-// `scrollSelector` (default `.sheet-content`) to gate activation.
-
 import type { Attachment } from 'svelte/attachments';
 
-interface SwipeToDismissOptions {
-	/** css selector for the inner scroll container that gates activation (default: `.sheet-content`) */
+interface DrawerGestureOptions {
+	enabled?: boolean;
 	scrollSelector?: string;
-	/** distance in px past which release dismisses (default: 80) */
-	dismissDeltaPx?: number;
-	/** downward velocity in px/ms past which release dismisses (default: 0.5) */
-	dismissVelocityPxPerMs?: number;
-	/** ms to wait before clearing the inline dismiss transform (default: 250, matches sheet transition) */
-	dismissResetMs?: number;
-	/** minimum vertical delta (px) before activation, used to suppress accidental drags from taps (default: 6) */
-	activationDeltaPx?: number;
 }
 
 export function swipeToDismiss(
 	onDismiss: () => void,
-	options: SwipeToDismissOptions = {}
+	{ enabled = true, scrollSelector = '.sheet-content' }: DrawerGestureOptions = {}
 ): Attachment<HTMLElement> {
-	const {
-		scrollSelector = '.sheet-content',
-		dismissDeltaPx = 80,
-		dismissVelocityPxPerMs = 0.5,
-		dismissResetMs = 250,
-		activationDeltaPx = 6
-	} = options;
-
 	return (sheet) => {
-		let tracking = false;
-		let active = false;
+		if (!enabled) return;
+		let id: number | null = null;
+		let source: 'touch' | 'pointer' | null = null;
 		let startX = 0;
 		let startY = 0;
-		let delta = 0;
 		let lastY = 0;
-		let lastT = 0;
+		let lastTime = 0;
+		let delta = 0;
 		let velocity = 0;
-		let scroller: HTMLElement | null = null;
-		let pointerId = -1;
+		let dragging = false;
+		let swallowClick = false;
+		let animation: Animation | null = null;
+		let disposed = false;
+		let dismissed = false;
+		sheet.style.translate = '';
+		sheet.style.transition = '';
 
-		function findScroller(): HTMLElement | null {
-			return sheet.querySelector<HTMLElement>(scrollSelector);
-		}
-
-		function scrollAtTop(): boolean {
-			// no scroller (single-page sheet) ⇒ always at top
-			return !scroller || scroller.scrollTop <= 0;
-		}
-
-		function down(event: PointerEvent) {
-			// only react to touch/pen drags; mouse users have the close button + backdrop + escape
-			if (event.pointerType === 'mouse') return;
-			tracking = true;
-			active = false;
-			scroller = findScroller();
-			startX = event.clientX;
-			startY = event.clientY;
-			lastY = event.clientY;
-			lastT = event.timeStamp;
-			delta = 0;
-			velocity = 0;
-			pointerId = event.pointerId;
-		}
-
-		function activate(event: PointerEvent) {
-			active = true;
-			try {
-				sheet.setPointerCapture(event.pointerId);
-			} catch {
-				// pointer may have been released between move events; ignore
-			}
-			sheet.style.transition = 'none';
-		}
-
-		function move(event: PointerEvent) {
-			if (!tracking || event.pointerId !== pointerId) return;
-			const dx = event.clientX - startX;
-			const dy = event.clientY - startY;
-
-			if (!active) {
-				// not yet activated — decide whether to take over
-				if (Math.abs(dy) < activationDeltaPx) return; // below noise floor
-				if (Math.abs(dx) > Math.abs(dy)) {
-					// horizontal-dominant: not a dismiss gesture
-					tracking = false;
-					return;
-				}
-				if (dy <= 0) {
-					// upward: never a dismiss
-					tracking = false;
-					return;
-				}
-				if (!scrollAtTop()) {
-					// downward but scroller has scrolled — let the browser scroll
-					tracking = false;
-					return;
-				}
-				activate(event);
-			}
-
-			const d = Math.max(0, dy);
-			const dt = event.timeStamp - lastT;
-			if (dt > 0) velocity = (event.clientY - lastY) / dt;
-			lastY = event.clientY;
-			lastT = event.timeStamp;
-			delta = d;
-			sheet.style.transform = `translateY(${d}px)`;
-		}
-
-		function up(event: PointerEvent) {
-			if (!tracking || event.pointerId !== pointerId) return;
-			const wasActive = active;
-			tracking = false;
-			active = false;
-			pointerId = -1;
-			if (!wasActive) return;
-
+		function reset() {
+			id = null;
+			source = null;
+			dragging = false;
+			sheet.style.translate = '';
 			sheet.style.transition = '';
-			const shouldDismiss = delta > dismissDeltaPx || velocity > dismissVelocityPxPerMs;
-			if (shouldDismiss) {
-				// drive the dismiss animation explicitly so it flows from the
-				// dragged position out of view, regardless of when the parent's
-				// open class flips.
-				sheet.style.transform = 'translateY(100%)';
-				onDismiss();
-				setTimeout(() => {
-					sheet.style.transform = '';
-				}, dismissResetMs);
-			} else {
-				// snap back: clear inline transform so the open css rule wins
-				sheet.style.transform = '';
+		}
+
+		function begin(target: EventTarget | null, x: number, y: number, time: number): boolean {
+			if (id !== null || animation || !(target instanceof Element)) return false;
+			swallowClick = false;
+			if (
+				target.closest('input, textarea, select, [contenteditable="true"], [data-no-drawer-drag]')
+			)
+				return false;
+			const scroller = target.closest<HTMLElement>(scrollSelector);
+			if (scroller && scroller.scrollTop > 0) return false;
+			startX = x;
+			startY = lastY = y;
+			lastTime = time;
+			delta = velocity = 0;
+			return true;
+		}
+
+		function move(x: number, y: number, time: number): boolean {
+			const dx = x - startX;
+			const dy = y - startY;
+			if (!dragging) {
+				if (dy < 0 || Math.abs(dx) > Math.max(4, Math.abs(dy))) {
+					reset();
+					return false;
+				}
+				if (dy === 0) return false;
+				dragging = true;
+				swallowClick = true;
+				sheet.style.transition = 'none';
+			}
+			const elapsed = time - lastTime;
+			if (elapsed > 0) velocity = (y - lastY) / elapsed;
+			lastY = y;
+			lastTime = time;
+			delta = Math.max(0, dy);
+			sheet.style.translate = `0 ${delta}px`;
+			return true;
+		}
+
+		function finish(time: number, cancelled = false) {
+			if (id === null) return;
+			const wasDragging = dragging;
+			id = null;
+			source = null;
+			dragging = false;
+			if (!wasDragging) return;
+			const freshVelocity = time - lastTime < 100 ? velocity : 0;
+			const threshold = Math.min(100, Math.max(48, sheet.getBoundingClientRect().height * 0.25));
+			const dismiss = !cancelled && (delta >= threshold || (delta > 12 && freshVelocity > 0.5));
+			const destination = dismiss
+				? Math.max(delta, window.innerHeight - sheet.getBoundingClientRect().top + delta)
+				: 0;
+			const duration = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 180;
+			animation = sheet.animate(
+				[{ translate: `0 ${delta}px` }, { translate: `0 ${destination}px` }],
+				{ duration, easing: 'cubic-bezier(0.22, 1, 0.36, 1)', fill: 'forwards' }
+			);
+			void animation.finished
+				.then(() => {
+					if (disposed) return;
+					if (dismiss) {
+						dismissed = true;
+						sheet.style.translate = `0 ${destination}px`;
+					} else {
+						reset();
+					}
+					animation?.cancel();
+					animation = null;
+					if (dismiss) onDismiss();
+				})
+				.catch(() => {});
+		}
+
+		function touchStart(event: TouchEvent) {
+			if (event.touches.length !== 1) {
+				finish(event.timeStamp, true);
+				return;
+			}
+			const touch = event.touches[0];
+			if (!begin(event.target, touch.clientX, touch.clientY, event.timeStamp)) return;
+			id = touch.identifier;
+			source = 'touch';
+		}
+
+		function touchMove(event: TouchEvent) {
+			if (source !== 'touch') return;
+			const touch = Array.from(event.touches).find((touch) => touch.identifier === id);
+			if (!touch) return;
+			if (!event.cancelable) {
+				finish(event.timeStamp, true);
+				return;
+			}
+			if (move(touch.clientX, touch.clientY, event.timeStamp)) event.preventDefault();
+		}
+
+		function touchEnd(event: TouchEvent) {
+			if (
+				source !== 'touch' ||
+				!Array.from(event.changedTouches).some((touch) => touch.identifier === id)
+			)
+				return;
+			finish(event.timeStamp, event.type === 'touchcancel');
+		}
+
+		function pointerDown(event: PointerEvent) {
+			if (event.pointerType === 'touch' || event.button !== 0) return;
+			if (!begin(event.target, event.clientX, event.clientY, event.timeStamp)) return;
+			id = event.pointerId;
+			source = 'pointer';
+		}
+
+		function pointerMove(event: PointerEvent) {
+			if (source !== 'pointer' || event.pointerId !== id) return;
+			if (move(event.clientX, event.clientY, event.timeStamp)) {
+				event.preventDefault();
+				sheet.setPointerCapture?.(event.pointerId);
 			}
 		}
 
-		sheet.addEventListener('pointerdown', down);
-		sheet.addEventListener('pointermove', move);
-		sheet.addEventListener('pointerup', up);
-		sheet.addEventListener('pointercancel', up);
+		function pointerEnd(event: PointerEvent) {
+			if (source !== 'pointer' || event.pointerId !== id) return;
+			if (event.type === 'lostpointercapture' && event.target !== sheet) return;
+			finish(event.timeStamp, event.type !== 'pointerup');
+		}
 
+		function dragStart(event: DragEvent) {
+			if (dragging) event.preventDefault();
+		}
+
+		function click(event: MouseEvent) {
+			if (!swallowClick || event.detail === 0) return;
+			swallowClick = false;
+			event.preventDefault();
+			event.stopPropagation();
+		}
+
+		sheet.addEventListener('touchstart', touchStart, { passive: true });
+		sheet.addEventListener('touchmove', touchMove, { passive: false });
+		sheet.addEventListener('touchend', touchEnd);
+		sheet.addEventListener('touchcancel', touchEnd);
+		sheet.addEventListener('pointerdown', pointerDown);
+		window.addEventListener('pointermove', pointerMove);
+		window.addEventListener('pointerup', pointerEnd);
+		window.addEventListener('pointercancel', pointerEnd);
+		sheet.addEventListener('lostpointercapture', pointerEnd);
+		sheet.addEventListener('click', click, true);
+		sheet.addEventListener('dragstart', dragStart);
 		return () => {
-			sheet.removeEventListener('pointerdown', down);
-			sheet.removeEventListener('pointermove', move);
-			sheet.removeEventListener('pointerup', up);
-			sheet.removeEventListener('pointercancel', up);
+			disposed = true;
+			animation?.cancel();
+			if (!dismissed) reset();
+			sheet.removeEventListener('touchstart', touchStart);
+			sheet.removeEventListener('touchmove', touchMove);
+			sheet.removeEventListener('touchend', touchEnd);
+			sheet.removeEventListener('touchcancel', touchEnd);
+			sheet.removeEventListener('pointerdown', pointerDown);
+			window.removeEventListener('pointermove', pointerMove);
+			window.removeEventListener('pointerup', pointerEnd);
+			window.removeEventListener('pointercancel', pointerEnd);
+			sheet.removeEventListener('lostpointercapture', pointerEnd);
+			sheet.removeEventListener('click', click, true);
+			sheet.removeEventListener('dragstart', dragStart);
 		};
 	};
 }

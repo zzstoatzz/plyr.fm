@@ -6,17 +6,28 @@ on:
       - main
     paths:
       - "backend/src/**"
+      - "services/transcoder/**"
+      - ".github/workflows/deploy-transcoder.yml"
       - "backend/pyproject.toml"
       - "backend/uv.lock"
       - "backend/Dockerfile"
       - "backend/fly.staging.toml"
       - "backend/alembic/**"
       - "backend/alembic.ini"
+      - "lexicons/**"
+      - "README.md"
       - ".github/workflows/deploy-staging.yml"
   workflow_dispatch:
 
 jobs:
+  transcoder:
+    uses: ./.github/workflows/deploy-transcoder.yml
+    with:
+      target: staging
+    secrets:
+      deploy_token: ${{ secrets.FLY_API_TOKEN_TRANSCODER_STAGING }}
   deploy:
+    needs: transcoder
     name: deploy staging
     runs-on: ubuntu-latest
     concurrency: deploy-backend-staging

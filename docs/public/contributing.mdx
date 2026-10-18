@@ -19,10 +19,10 @@ For repository work, use the repository’s [contribute skill](https://github.co
 
 ## prerequisites
 
-- [uv](https://docs.astral.sh/uv/) (Python 3.11+)
+- [uv](https://docs.astral.sh/uv/) (Python 3.12; pinned by `backend/.python-version`)
 - [bun](https://bun.sh/) (frontend)
 - [just](https://just.systems/) (task runner)
-- [docker](https://www.docker.com/) (for Redis and test databases)
+- [docker](https://www.docker.com/) (for test databases and optional local Redis)
 
 ## quickstart
 
@@ -53,7 +53,7 @@ just backend migrate-up
 ### running the stack
 
 ```bash
-# start redis (required for background tasks)
+# optional: start Redis when setting up the background worker
 just dev-services
 
 # terminal 1 — backend (port 8001, hot reloads)
@@ -63,7 +63,7 @@ just backend run
 just frontend run
 ```
 
-the backend needs a Postgres connection. you can use the [Neon](https://neon.tech) dev instance or a local Postgres — set `DATABASE_URL` in your `.env`. see [`backend/.env.example`](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/.env.example) for all configuration options and the [local development setup guide](https://github.com/zzstoatzz/plyr.fm/blob/main/docs/internal/local-development/setup.md) for detailed walkthrough.
+the backend needs a Postgres connection. you can use the [Neon](https://neon.tech) dev instance or a local Postgres — set `DATABASE_URL` in `backend/.env`. see [`backend/.env.example`](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/.env.example) for all configuration options and the [local development setup guide](https://github.com/zzstoatzz/plyr.fm/blob/main/docs/internal/local-development/setup.md) for OAuth and optional service details.
 
 ## workflow
 

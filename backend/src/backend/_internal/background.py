@@ -15,7 +15,6 @@ longer kill the HTTP server. requires `DOCKET_URL` to be set to a Redis
 URL.
 """
 
-import asyncio
 import logging
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
@@ -23,6 +22,7 @@ from datetime import timedelta
 
 from docket import Docket, Worker
 
+from backend._internal.worker_lifecycle import supervised_worker
 from backend.config import settings
 
 logger = logging.getLogger(__name__)
@@ -55,7 +55,7 @@ async def docket_client_lifespan() -> AsyncGenerator[Docket, None]:
 
     logger.info(
         "initializing docket client",
-        extra={"docket_name": settings.docket.name, "url": settings.docket.url},
+        extra={"docket_name": settings.docket.name},
     )
 
     # WARNING: do not modify Docket() constructor args without reading
@@ -84,7 +84,7 @@ async def docket_worker_lifespan() -> AsyncGenerator[Docket, None]:
 
     logger.info(
         "initializing docket worker",
-        extra={"docket_name": settings.docket.name, "url": settings.docket.url},
+        extra={"docket_name": settings.docket.name},
     )
 
     # WARNING: do not modify Docket() or Worker() constructor args without
@@ -96,42 +96,25 @@ async def docket_worker_lifespan() -> AsyncGenerator[Docket, None]:
         _docket = docket
         _register_tasks(docket)
 
-        worker_task: asyncio.Task[None] | None = None
         try:
-            async with Worker(
+            worker = Worker(
                 docket,
                 concurrency=settings.docket.worker_concurrency,
-                # reduce polling frequency to save Redis costs (default is 250ms)
                 minimum_check_interval=timedelta(
                     seconds=settings.docket.check_interval_seconds
                 ),
                 scheduling_resolution=timedelta(
                     seconds=settings.docket.scheduling_resolution_seconds
                 ),
-                # disable automatic perpetual tasks in tests to avoid event loop issues
                 schedule_automatic_tasks=settings.docket.schedule_automatic_tasks,
-            ) as worker:
-                worker_task = asyncio.create_task(
-                    worker.run_forever(),
-                    name="docket-worker",
-                )
+            )
+            async with supervised_worker(worker):
                 logger.info(
                     "docket worker started",
                     extra={"concurrency": settings.docket.worker_concurrency},
                 )
                 yield docket
         finally:
-            # cancel the worker task with timeout to avoid hanging on shutdown
-            if worker_task:
-                worker_task.cancel()
-                try:
-                    # wait briefly for clean shutdown, but don't block forever
-                    await asyncio.wait_for(worker_task, timeout=2.0)
-                except TimeoutError:
-                    logger.warning("docket worker did not stop within timeout")
-                except asyncio.CancelledError:
-                    logger.debug("docket worker task cancelled")
-            # clear global after worker is fully stopped
             _docket = None
             logger.info("docket worker stopped")
 

@@ -5,7 +5,14 @@ on:
     types: [published]
 
 jobs:
+  transcoder:
+    uses: ./.github/workflows/deploy-transcoder.yml
+    with:
+      target: production
+    secrets:
+      deploy_token: ${{ secrets.FLY_API_TOKEN_TRANSCODER_PROD }}
   deploy:
+    needs: transcoder
     name: deploy prod
     runs-on: ubuntu-latest
     concurrency: deploy-backend-production

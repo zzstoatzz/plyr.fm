@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { tick, type Snippet } from 'svelte';
+	import SheetHandle from './SheetHandle.svelte';
 	import { swipeToDismiss } from '$lib/swipe-to-dismiss';
 
 	interface Props {
@@ -8,7 +9,7 @@
 		ariaLabel: string;
 		/** css max-width override (default: '400px') */
 		maxWidth?: string;
-		/** css max-height override (default: '60vh') */
+		/** css max-height override (default: '60dvh') */
 		maxHeight?: string;
 		/** on desktop (>=600px), switch from bottom sheet to centered modal */
 		centerOnDesktop?: boolean;
@@ -20,7 +21,7 @@
 		onClose,
 		ariaLabel,
 		maxWidth = '400px',
-		maxHeight = '60vh',
+		maxHeight = '60dvh',
 		centerOnDesktop = false,
 		children
 	}: Props = $props();
@@ -48,9 +49,9 @@
 
 	function trapFocus(event: KeyboardEvent) {
 		if (!sheetEl) return;
-		const focusable = sheetEl.querySelectorAll<HTMLElement>(
+		const focusable = [...sheetEl.querySelectorAll<HTMLElement>(
 			'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
-		);
+		)].filter((element) => element.checkVisibility?.() ?? true);
 		if (focusable.length === 0) {
 			event.preventDefault();
 			sheetEl.focus();
@@ -60,10 +61,10 @@
 		const last = focusable[focusable.length - 1];
 		const active = document.activeElement;
 
-		if (event.shiftKey && active === first) {
+		if (event.shiftKey && (active === first || active === sheetEl || !sheetEl.contains(active))) {
 			event.preventDefault();
 			last.focus();
-		} else if (!event.shiftKey && active === last) {
+		} else if (!event.shiftKey && (active === last || !sheetEl.contains(active))) {
 			event.preventDefault();
 			first.focus();
 		}
@@ -99,16 +100,29 @@
 		aria-label={ariaLabel}
 		tabindex="-1"
 		style="--bottom-sheet-max-width: {maxWidth}; --bottom-sheet-max-height: {maxHeight};"
-		{@attach swipeToDismiss(onClose)}
+		{@attach swipeToDismiss(onClose, { enabled: open })}
 	>
 		<div class="sheet-handle-area" role="presentation">
-			<div class="sheet-handle"></div>
+			<SheetHandle {onClose} label={`close ${ariaLabel}`} />
 		</div>
 		{@render children()}
 	</div>
 </div>
 
 <style>
+	:global(html:has(.sheet-backdrop.open)) {
+		overflow: hidden;
+	}
+
+	.sheet :global(.sheet-close) {
+		min-width: 44px;
+		min-height: 44px;
+	}
+
+	.sheet :global(.sheet-content) {
+		overscroll-behavior-y: contain;
+	}
+
 	.sheet-backdrop {
 		position: fixed;
 		inset: 0;
@@ -132,7 +146,7 @@
 	.sheet {
 		width: 100%;
 		max-width: var(--bottom-sheet-max-width, 400px);
-		max-height: var(--bottom-sheet-max-height, 60vh);
+		max-height: var(--bottom-sheet-max-height, 60dvh);
 		background: var(--bg-secondary);
 		border: 1px solid var(--border-subtle);
 		border-bottom: none;
@@ -142,9 +156,6 @@
 		transform: translateY(100%);
 		transition: transform 0.2s ease-out;
 		padding-bottom: env(safe-area-inset-bottom, 0px);
-		/* let the browser scroll vertically by default; the gesture only takes
-		   over when our pointer handler explicitly applies a transform */
-		touch-action: pan-y;
 	}
 
 	.sheet-backdrop.open .sheet {
@@ -152,20 +163,6 @@
 	}
 
 	.sheet-handle-area {
-		display: flex;
-		justify-content: center;
-		align-items: center;
-		padding: 0.75rem 1rem 0.5rem;
-		flex-shrink: 0;
-		-webkit-user-select: none;
-		user-select: none;
-	}
-
-	.sheet-handle {
-		width: 36px;
-		height: 4px;
-		background: var(--border-default);
-		border-radius: 2px;
 		flex-shrink: 0;
 	}
 

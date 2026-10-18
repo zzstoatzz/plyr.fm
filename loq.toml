@@ -27,11 +27,11 @@ max_lines = 904
 
 [[rules]]
 path = "backend/src/backend/api/auth.py"
-max_lines = 981
+max_lines = 989
 
 [[rules]]
 path = "backend/src/backend/api/tracks/listing.py"
-max_lines = 659
+max_lines = 690
 
 [[rules]]
 path = "backend/src/backend/api/tracks/mutations.py"
@@ -51,7 +51,7 @@ max_lines = 1221
 
 [[rules]]
 path = "backend/tests/api/test_audio.py"
-max_lines = 914
+max_lines = 1034
 
 [[rules]]
 path = "backend/tests/api/test_albums.py"
@@ -123,7 +123,7 @@ max_lines = 622
 
 [[rules]]
 path = "frontend/src/lib/components/player/Player.svelte"
-max_lines = 1180
+max_lines = 1189
 
 [[rules]]
 path = "frontend/src/lib/queue.svelte.ts"
@@ -159,7 +159,7 @@ max_lines = 3961
 
 [[rules]]
 path = "frontend/src/routes/settings/+page.svelte"
-max_lines = 1814
+max_lines = 1818
 
 [[rules]]
 path = "frontend/src/routes/track/\\[id\\]/+page.svelte"
@@ -175,7 +175,7 @@ max_lines = 1299
 
 [[rules]]
 path = "frontend/src/routes/upload/+page.svelte"
-max_lines = 961
+max_lines = 965
 
 [[rules]]
 path = "services/moderation/src/admin.rs"
@@ -183,7 +183,7 @@ max_lines = 785
 
 [[rules]]
 path = "services/moderation/src/db.rs"
-max_lines = 1343
+max_lines = 1348
 
 [[rules]]
 path = "frontend/src/lib/components/FeedbackModal.svelte"
@@ -207,15 +207,15 @@ max_lines = 628
 
 [[rules]]
 path = "frontend/src/routes/login/+page.svelte"
-max_lines = 545
+max_lines = 734
 
 [[rules]]
 path = "backend/src/backend/_internal/tasks/ingest.py"
-max_lines = 1139
+max_lines = 1159
 
 [[rules]]
 path = "backend/tests/test_jetstream.py"
-max_lines = 3177
+max_lines = 3186
 
 [[rules]]
 path = "frontend/src/lib/components/embed/CollectionEmbed.svelte"
@@ -283,7 +283,7 @@ max_lines = 2589
 
 [[rules]]
 path = "backend/src/backend/_internal/atproto/client.py"
-max_lines = 985
+max_lines = 994
 
 [[rules]]
 path = "backend/src/backend/_internal/auth/oauth.py"
@@ -351,7 +351,7 @@ max_lines = 785
 
 [[rules]]
 path = "backend/src/backend/_internal/clients/moderation.py"
-max_lines = 689
+max_lines = 741
 
 [[rules]]
 path = "backend/tests/_internal/test_permissioned_spaces.py"
@@ -371,7 +371,7 @@ max_lines = 1182
 
 [[rules]]
 path = "backend/src/backend/api/audio.py"
-max_lines = 568
+max_lines = 595
 
 [[rules]]
 path = "backend/src/backend/_internal/export_tasks.py"
@@ -444,3 +444,19 @@ max_lines = 1044
 [[rules]]
 path = "frontend/vendor/sister-radio/frontend/src/styles/global.css"
 max_lines = 628
+
+[[rules]]
+path = "frontend/src/lib/components/player/EqPanel.svelte"
+max_lines = 566
+
+[[rules]]
+path = "frontend/src/lib/player-radio-transition.test.ts"
+max_lines = 502
+
+[[rules]]
+path = "services/moderation/src/events.rs"
+max_lines = 506
+
+[[rules]]
+path = "docs/internal/backend/transcoder.md"
+max_lines = 508

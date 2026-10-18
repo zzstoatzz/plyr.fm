@@ -19,11 +19,23 @@ export type FontFamily = 'mono' | 'geist' | 'inter' | 'comic-sans' | 'georgia' |
 
 export const FONT_OPTIONS: { value: FontFamily; label: string; stack: string }[] = [
 	{ value: 'georgia', label: 'georgia', stack: "'Georgia', 'Times New Roman', serif" },
-	{ value: 'mono', label: 'mono', stack: "'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', 'Consolas', monospace" },
+	{
+		value: 'mono',
+		label: 'mono',
+		stack: "'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', 'Consolas', monospace"
+	},
 	{ value: 'geist', label: 'geist', stack: "'Geist', 'Inter', system-ui, sans-serif" },
 	{ value: 'inter', label: 'inter', stack: "'Inter', system-ui, sans-serif" },
-	{ value: 'system-ui', label: 'system', stack: "system-ui, -apple-system, 'Segoe UI', sans-serif" },
-	{ value: 'comic-sans', label: 'comic sans', stack: "'Comic Sans MS', 'Comic Sans', 'Comic Neue', cursive" },
+	{
+		value: 'system-ui',
+		label: 'system',
+		stack: "system-ui, -apple-system, 'Segoe UI', sans-serif"
+	},
+	{
+		value: 'comic-sans',
+		label: 'comic sans',
+		stack: "'Comic Sans MS', 'Comic Sans', 'Comic Neue', cursive"
+	}
 ];
 
 export const DEFAULT_FONT: FontFamily = 'georgia';
@@ -54,6 +66,7 @@ export interface UiSettings {
 	keep_playing?: boolean;
 	play_through_collections?: boolean;
 	pds_save_banner_dismissed?: boolean;
+	upload_sponsor_dismissed_at?: number;
 	// one-time UI hints already shown to this account, as `id@version` strings
 	seen_hints?: string[];
 }
@@ -289,14 +302,18 @@ class PreferencesManager {
 					accent_color: data.accent_color ?? null,
 					auto_advance: data.auto_advance ?? DEFAULT_PREFERENCES.auto_advance,
 					allow_comments: data.allow_comments ?? DEFAULT_PREFERENCES.allow_comments,
-				publishing_defaults: parsePublishing(JSON.stringify(data.publishing_defaults)),
+					publishing_defaults: parsePublishing(JSON.stringify(data.publishing_defaults)),
 					hidden_tags: data.hidden_tags ?? DEFAULT_PREFERENCES.hidden_tags,
 					theme: serverTheme,
-					enable_teal_scrobbling: data.enable_teal_scrobbling ?? DEFAULT_PREFERENCES.enable_teal_scrobbling,
+					enable_teal_scrobbling:
+						data.enable_teal_scrobbling ?? DEFAULT_PREFERENCES.enable_teal_scrobbling,
 					teal_needs_reauth: data.teal_needs_reauth ?? DEFAULT_PREFERENCES.teal_needs_reauth,
-					show_sensitive_artwork: data.show_sensitive_artwork ?? DEFAULT_PREFERENCES.show_sensitive_artwork,
-					show_sensitive_audio: data.show_sensitive_audio ?? DEFAULT_PREFERENCES.show_sensitive_audio,
-					show_liked_on_profile: data.show_liked_on_profile ?? DEFAULT_PREFERENCES.show_liked_on_profile,
+					show_sensitive_artwork:
+						data.show_sensitive_artwork ?? DEFAULT_PREFERENCES.show_sensitive_artwork,
+					show_sensitive_audio:
+						data.show_sensitive_audio ?? DEFAULT_PREFERENCES.show_sensitive_audio,
+					show_liked_on_profile:
+						data.show_liked_on_profile ?? DEFAULT_PREFERENCES.show_liked_on_profile,
 					support_url: data.support_url ?? DEFAULT_PREFERENCES.support_url,
 					ui_settings: data.ui_settings ?? DEFAULT_PREFERENCES.ui_settings,
 					auto_download_liked: storedAutoDownload,
@@ -306,7 +323,11 @@ class PreferencesManager {
 				// server error — fall back to localStorage cache
 				const storedTheme = parseTheme(safeLocalStorage.getItem('theme'));
 				const storedAutoDownload = safeLocalStorage.getItem('autoDownloadLiked') === '1';
-				this.data = { ...DEFAULT_PREFERENCES, theme: storedTheme ?? DEFAULT_PREFERENCES.theme, auto_download_liked: storedAutoDownload };
+				this.data = {
+					...DEFAULT_PREFERENCES,
+					theme: storedTheme ?? DEFAULT_PREFERENCES.theme,
+					auto_download_liked: storedAutoDownload
+				};
 			}
 			// sync localStorage cache and apply
 			if (browser) {

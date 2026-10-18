@@ -1,0 +1,11 @@
+**
+!services/
+!services/transcoder/
+!services/transcoder/Cargo.toml
+!services/transcoder/Cargo.lock
+!services/transcoder/src/
+!services/transcoder/src/**
+!backend/
+!backend/src/
+!backend/src/backend/
+!backend/src/backend/upload_contract.json

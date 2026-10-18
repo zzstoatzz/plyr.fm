@@ -9,12 +9,14 @@
 		setMediaSessionPlaybackState,
 		setMediaSessionPositionState
 	} from '$lib/media-session';
-	import { trackCoverUrl } from '$lib/track-cover';
+	import { trackCoverCandidates } from '$lib/track-cover';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
 	let track = $derived(data.track);
-	let coverUrl = $derived(trackCoverUrl(track));
+	let coverCandidates = $derived(trackCoverCandidates(track));
+	let failedCovers = $state(0);
+	let coverUrl = $derived(coverCandidates[failedCovers]);
 	let isAdultLabeled = $derived(
 		track.labels?.some((label) => label === 'sexual' || label === 'porn') ?? false
 	);
@@ -142,7 +144,7 @@
 	<div class="art-container">
 		{#if coverUrl}
 			<SensitiveImage src={coverUrl} respectPreference={false}>
-				<img src={coverUrl} alt={track.title} class="art" />
+				<img src={coverUrl} alt={track.title} class="art" onerror={() => failedCovers++} />
 			</SensitiveImage>
 		{:else}
 			<div class="art-placeholder">♪</div>
@@ -245,7 +247,7 @@
 	}
 	.art-container {
 		flex: 0 0 auto;
-		width: min(28vw, 200px, calc(100vh - 2 * var(--embed-space)));
+		width: min(40vw, calc(100vh - 2 * var(--embed-space)));
 		aspect-ratio: 1;
 		align-self: center;
 		position: relative;
@@ -422,7 +424,7 @@
 			display: none;
 		}
 	}
-	@media (min-height: 300px) and (max-aspect-ratio: 1/1) {
+	@media (min-height: 300px) and (max-aspect-ratio: 6/5) {
 		.embed-container {
 			flex-direction: column;
 		}

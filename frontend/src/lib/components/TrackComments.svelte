@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { browser } from '$app/environment';
 	import { auth } from '$lib/auth.svelte';
+	import SheetHandle from './SheetHandle.svelte';
 	import { swipeToDismiss } from '$lib/swipe-to-dismiss';
 	import { API_URL } from '$lib/config';
 	import { playTrack } from '$lib/playback.svelte';
@@ -401,6 +402,14 @@
 		}
 	}
 
+	function drawerTransition(node: Element) {
+		return fly(node, {
+			x: isMobileViewport() ? 0 : 40,
+			y: isMobileViewport() ? window.innerHeight - node.getBoundingClientRect().top : 0,
+			duration: reduceMotionComments ? 0 : 220
+		});
+	}
+
 	function handleWindowKeydown(e: KeyboardEvent) {
 		if (e.key === 'Escape' && commentsOpen) commentsOpen = false;
 	}
@@ -465,23 +474,28 @@
 		<aside
 			class="comments-panel"
 			aria-label="comments"
-			transition:fly={{ x: isMobileViewport() ? 0 : 40, y: isMobileViewport() ? 120 : 0, duration: 220 }}
+			transition:drawerTransition
 			{@attach swipeToDismiss(() => (commentsOpen = false), { scrollSelector: '.comments-container' })}
 		>
-			<div class="comments-panel-handle" aria-hidden="true"></div>
-			<button class="comments-panel-close" onclick={() => (commentsOpen = false)} aria-label="close comments">
-				<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-					<line x1="18" y1="6" x2="6" y2="18"></line>
-					<line x1="6" y1="6" x2="18" y2="18"></line>
-				</svg>
-			</button>
+			<div class="comments-panel-handle">
+				<SheetHandle onClose={() => (commentsOpen = false)} label="close comments" />
+			</div>
+
 			<section class="comments-section">
-				<h2 class="comments-title">
-					comments
-					{#if !loadingComments && comments.length > 0}
-						<span class="comment-count">({comments.length})</span>
-					{/if}
-				</h2>
+				<div class="comments-panel-header">
+					<h2 class="comments-title">
+						comments
+						{#if !loadingComments && comments.length > 0}
+							<span class="comment-count">({comments.length})</span>
+						{/if}
+					</h2>
+					<button class="comments-panel-close" onclick={() => (commentsOpen = false)} aria-label="close comments">
+						<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+							<line x1="18" y1="6" x2="6" y2="18"></line>
+							<line x1="6" y1="6" x2="18" y2="18"></line>
+						</svg>
+					</button>
+				</div>
 
 				{#if auth.isAuthenticated}
 					<form class="comment-form" onsubmit={(e) => { e.preventDefault(); submitComment(); }}>
@@ -809,21 +823,26 @@
 		max-height: 60dvh;
 		border-radius: 16px 16px 0 0;
 		border-bottom: none;
+		transition: transform 0.2s ease-out;
 	}
 
 	.comments-panel-handle {
-		width: 36px;
-		height: 4px;
-		border-radius: var(--radius-full);
-		background: var(--border-emphasis);
-		margin: 0.5rem auto 0;
+		flex-shrink: 0;
+		margin: 0 3rem;
+	}
+
+	.comments-panel-header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 1rem;
 		flex-shrink: 0;
 	}
 
 	.comments-panel-close {
-		position: absolute;
-		top: 0.75rem;
-		right: 0.75rem;
+		min-width: 44px;
+		min-height: 44px;
+		flex-shrink: 0;
 		display: flex;
 		align-items: center;
 		justify-content: center;
@@ -841,6 +860,7 @@
 	}
 
 	.comments-container {
+		overscroll-behavior-y: contain;
 		overflow-y: auto;
 		min-height: 0;
 	}
@@ -860,7 +880,7 @@
 			border-radius: var(--radius-lg);
 			border-bottom: 1px solid var(--glass-border, var(--border-default));
 			box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
-			transition: right 0.25s ease;
+			transition: right 0.25s ease, transform 0.2s ease-out;
 		}
 
 		.comments-panel-handle {
@@ -869,6 +889,7 @@
 	}
 
 	.comments-section {
+		min-height: 0;
 		display: flex;
 		flex-direction: column;
 		gap: 1rem;
@@ -978,27 +999,26 @@
 		display: flex;
 		flex-direction: column;
 		gap: 0.5rem;
-		max-height: 300px;
-		overflow-y: auto;
+
 		scrollbar-width: thin;
 		scrollbar-color: var(--border-default) var(--bg-primary);
 	}
 
-	.comments-list::-webkit-scrollbar {
+	.comments-container::-webkit-scrollbar {
 		width: 8px;
 	}
 
-	.comments-list::-webkit-scrollbar-track {
+	.comments-container::-webkit-scrollbar-track {
 		background: var(--bg-primary);
 		border-radius: var(--radius-sm);
 	}
 
-	.comments-list::-webkit-scrollbar-thumb {
+	.comments-container::-webkit-scrollbar-thumb {
 		background: var(--border-default);
 		border-radius: var(--radius-sm);
 	}
 
-	.comments-list::-webkit-scrollbar-thumb:hover {
+	.comments-container::-webkit-scrollbar-thumb:hover {
 		background: var(--border-emphasis);
 	}
 
@@ -1263,92 +1283,6 @@
 	}
 
 	@media (max-width: 768px) {
-		/* non-modal panel (leaflet-inspired): no backdrop, the page stays live.
-	   mobile: docked above the footer player. desktop: right-edge drawer. */
-	.comments-panel {
-		position: fixed;
-		/* below the queue sidebar (50) and its toggle (60)? no — above content,
-		   below nothing it fights: the queue-width offset keeps them siblings */
-		z-index: 45;
-		display: flex;
-		flex-direction: column;
-		/* the queue sidebar's material — the two panels are one family */
-		background: var(--glass-bg, var(--bg-secondary));
-		backdrop-filter: var(--glass-blur, none);
-		-webkit-backdrop-filter: var(--glass-blur, none);
-		border: 1px solid var(--glass-border, var(--border-default));
-		box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.35);
-		inset: auto 0 calc(var(--player-height, 0px) + env(safe-area-inset-bottom, 0px)) 0;
-		max-height: 60dvh;
-		border-radius: 16px 16px 0 0;
-		border-bottom: none;
-	}
-
-	.comments-panel-handle {
-		width: 36px;
-		height: 4px;
-		border-radius: var(--radius-full);
-		background: var(--border-emphasis);
-		margin: 0.5rem auto 0;
-		flex-shrink: 0;
-	}
-
-	.comments-panel-close {
-		position: absolute;
-		top: 0.75rem;
-		right: 0.75rem;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		padding: 0.4rem;
-		background: transparent;
-		border: none;
-		border-radius: var(--radius-full);
-		color: var(--text-tertiary);
-		cursor: pointer;
-	}
-
-	.comments-panel-close:hover {
-		color: var(--accent);
-		background: color-mix(in srgb, var(--accent) 10%, transparent);
-	}
-
-	.comments-container {
-		overflow-y: auto;
-		min-height: 0;
-	}
-
-	@media (min-width: 769px) {
-		.comments-panel {
-			/* bottom-anchored on desktop too — a narrower, queue-offset
-			   sibling of the mobile dock. content-driven height, so one
-			   comment makes a small card, never a hollow column; never
-			   pinned under the header. the offset rides the --queue-width
-			   variable the layout already maintains (leaflet's
-			   sibling-column idea). */
-			inset: auto calc(1rem + var(--queue-width, 0px))
-				calc(var(--player-height, 0px) + 1rem) auto;
-			width: min(380px, calc(100vw - 2rem));
-			max-height: min(65dvh, calc(100dvh - 7rem));
-			border-radius: var(--radius-lg);
-			border-bottom: 1px solid var(--glass-border, var(--border-default));
-			box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
-			transition: right 0.25s ease;
-		}
-
-		.comments-panel-handle {
-			display: none;
-		}
-	}
-
-	.comments-section {
-			margin-top: 1rem;
-			padding-top: 1rem;
-		}
-
-		.comments-list {
-			max-height: 200px;
-		}
 
 		.comment {
 			padding: 0.5rem;

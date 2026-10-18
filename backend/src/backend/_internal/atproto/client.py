@@ -749,7 +749,14 @@ async def _signed_streaming_post(
     dpop = client_obj._dpop
     response: httpx.Response | None = None
     for attempt in range(2):
-        await _prime_pds_nonce(oauth_session, dpop)
+        probe = await _prime_pds_nonce(oauth_session, dpop)
+        if probe is not None and probe.status_code == 401:
+            try:
+                error = probe.json().get("error")
+            except (ValueError, AttributeError):
+                error = None
+            if error in ("invalid_token", "InvalidToken", "ExpiredToken"):
+                return probe
         proof = dpop.create_proof(
             method="POST",
             url=url,
@@ -780,7 +787,9 @@ async def _signed_streaming_post(
 _PRIME_TIMEOUT = httpx.Timeout(15.0)
 
 
-async def _prime_pds_nonce(oauth_session: OAuthSession, dpop: Any) -> None:
+async def _prime_pds_nonce(
+    oauth_session: OAuthSession, dpop: Any
+) -> httpx.Response | None:
     """learn the PDS's current nonce with a bodyless signed request.
 
     A streamed upload cannot afford the usual nonce retry: a PDS that rejects
@@ -817,6 +826,7 @@ async def _prime_pds_nonce(oauth_session: OAuthSession, dpop: Any) -> None:
             pds_url=oauth_session.pds_url,
             status=response.status_code,
         )
+    return response
 
 
 async def upload_blob(

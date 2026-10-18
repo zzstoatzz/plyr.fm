@@ -2,7 +2,7 @@
 title: "design tokens"
 ---
 
-CSS custom properties defined in `frontend/src/routes/+layout.svelte`. Use these instead of hardcoding values.
+CSS custom properties defined in `frontend/src/lib/styles/theme.css`. Use these instead of hardcoding values.
 
 ## border radius
 
@@ -41,6 +41,7 @@ CSS custom properties defined in `frontend/src/routes/+layout.svelte`. Use these
 
 ```css
 --accent: #6a9fff;       /* primary brand color (user-customizable) */
+--accent-text: var(--accent); /* darker in light theme for readable text */
 --accent-hover: #8ab3ff; /* hover state */
 --accent-muted: #4a7ddd; /* subdued variant */
 --accent-rgb: 106, 159, 255; /* for rgba() usage */

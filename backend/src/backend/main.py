@@ -10,7 +10,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import ORJSONResponse
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
-from slowapi.middleware import SlowAPIMiddleware
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -55,7 +54,7 @@ from backend.utilities.observability import (
     request_attributes_mapper,
     suppress_warnings,
 )
-from backend.utilities.rate_limit import limiter
+from backend.utilities.rate_limit import RateLimitMiddleware, limiter
 
 # suppress pydantic warnings before atproto imports
 suppress_warnings()
@@ -168,7 +167,7 @@ if logfire:
 # middleware — order matters: last-added runs first in Starlette.
 # CORS must wrap SlowAPI so 429 responses include CORS headers.
 app.add_middleware(SecurityHeadersMiddleware)  # type: ignore[arg-type]
-app.add_middleware(SlowAPIMiddleware)  # type: ignore[arg-type]
+app.add_middleware(RateLimitMiddleware)  # type: ignore[arg-type]
 app.add_middleware(
     CORSMiddleware,  # type: ignore[arg-type]
     allow_origin_regex=settings.frontend.resolved_cors_origin_regex,

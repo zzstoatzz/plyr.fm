@@ -24,4 +24,3 @@ primary_region = "iad"
 [env]
   TRANSCODER_HOST = "0.0.0.0"
   TRANSCODER_PORT = "8080"
-  TRANSCODER_MAX_UPLOAD_BYTES = "1073741824"  # 1GB for large files

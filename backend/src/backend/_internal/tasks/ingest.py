@@ -25,6 +25,7 @@ from backend._internal.atproto.account_status import (
 from backend._internal.atproto.client import pds_blob_url
 from backend._internal.atproto.profile import avatar_url_from_profile_record
 from backend._internal.atproto.self_labels import self_label_values_from_record
+from backend._internal.clients.moderation import get_moderation_client
 from backend._internal.tasks.hooks import run_post_track_create_hooks
 from backend._internal.tasks.origin_trust import (
     is_trusted_audio_origin,
@@ -164,6 +165,19 @@ async def _check_tombstone(uri: str) -> bool:
         return False
 
 
+async def _indexing_excluded(uri: str) -> bool:
+    decisions = await get_moderation_client().get_indexing_decisions([uri])
+    decision = decisions[uri]
+    if decision is not None and decision.excluded:
+        logfire.info(
+            "ingest: excluded by indexing policy",
+            uri=uri,
+            decision_event_id=decision.event_id,
+        )
+        return True
+    return False
+
+
 # --- track tasks ---
 
 
@@ -206,6 +220,9 @@ async def ingest_track_create(
         artist = await db.get(Artist, did)
         if not artist:
             logger.debug("ingest_track_create: unknown artist %s, skipping", did)
+            return
+
+        if await _indexing_excluded(uri):
             return
 
         # check for existing row by URI (may be pending from upload path)
@@ -428,6 +445,9 @@ async def ingest_track_update(
                 incoming_rev=rev,
                 applied_rev=track.atproto_record_rev,
             )
+            return
+
+        if await _indexing_excluded(uri):
             return
 
         if title := record.get("title"):

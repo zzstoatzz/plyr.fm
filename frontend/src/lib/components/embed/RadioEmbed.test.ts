@@ -4,7 +4,22 @@ import { describe, it, expect, vi, beforeAll, afterEach } from 'vitest';
 import { mount, unmount } from 'svelte';
 import RadioEmbed from '$lib/components/embed/RadioEmbed.svelte';
 import { moderation, type SensitiveImagesData } from '$lib/moderation.svelte';
-import type { RadioState, RadioStation } from '$lib/radio.svelte';
+import type { LiveBroadcast, RadioState, RadioStation } from '$lib/radio.svelte';
+
+// hls.js needs MediaSource, which jsdom lacks
+const hlsAttached: { url: string; el: HTMLMediaElement }[] = [];
+class FakeHls {
+	static isSupported = () => true;
+	private url = '';
+	loadSource(url: string) {
+		this.url = url;
+	}
+	attachMedia(el: HTMLMediaElement) {
+		hlsAttached.push({ url: this.url, el });
+	}
+	destroy() {}
+}
+const importHls = () => Promise.resolve({ default: FakeHls });
 
 // jsdom doesn't implement media playback
 const playSpy = vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue(undefined);
@@ -16,6 +31,9 @@ const SAFE_ART = 'https://images.test/images/safe456.webp';
 let artworkUrl = SENSITIVE_ART;
 let trackNum = 1;
 let serverClockOffset = 0;
+let liveBroadcast: LiveBroadcast | null = null;
+let withRotation = true;
+const stateUrls: string[] = [];
 
 type StationsPayload = { stations: RadioStation[] };
 
@@ -28,33 +46,37 @@ function jsonResponse(body: RadioState | StationsPayload | SensitiveImagesData):
 
 function radioState(): RadioState {
 	return {
-		station: 'loved',
-		station_slug: 'loved',
+		...(liveBroadcast
+			? { station: 'firehose', station_slug: 'firehose' }
+			: { station: 'loved', station_slug: 'loved' }),
+		live: liveBroadcast,
 		generated_at: new Date(Date.now() + serverClockOffset).toISOString(),
 		loop_duration_seconds: 100,
 		current_index: 0,
 		current_started_at: null,
 		current_ends_at: null,
 		progress_seconds: 10,
-		current: {
-			id: trackNum,
-			title: `track ${trackNum}`,
-			artist: 'artist',
-			artist_handle: 'artist.test',
-			artist_did: 'did:plc:artist',
-			stream_url: `https://audio.test/${trackNum}.mp3`,
-			file_type: 'mp3',
-			duration: 100,
-			artwork_url: artworkUrl,
-			thumbnail_url: null,
-			atproto_record_uri: null,
-			atproto_record_cid: null,
-			created_at: '2026-01-01T00:00:00Z',
-			tags: [],
-			like_count: 0,
-			play_count: 0,
-			liked: false
-		},
+		current: !withRotation
+			? null
+			: {
+					id: trackNum,
+					title: `track ${trackNum}`,
+					artist: 'artist',
+					artist_handle: 'artist.test',
+					artist_did: 'did:plc:artist',
+					stream_url: `https://audio.test/${trackNum}.mp3`,
+					file_type: 'mp3',
+					duration: 100,
+					artwork_url: artworkUrl,
+					thumbnail_url: null,
+					atproto_record_uri: null,
+					atproto_record_cid: null,
+					created_at: '2026-01-01T00:00:00Z',
+					tags: [],
+					like_count: 0,
+					play_count: 0,
+					liked: false
+				},
 		up_next: [],
 		rotation: []
 	};
@@ -68,7 +90,7 @@ function setEmbedUrl(search: string): void {
 }
 
 async function mountRadioEmbed(): Promise<HTMLImageElement> {
-	const component = mount(RadioEmbed, { target: document.body });
+	const component = mount(RadioEmbed, { target: document.body, props: { importHls } });
 	cleanup = () => unmount(component);
 	let img: HTMLImageElement | null = null;
 	await vi.waitFor(() => {
@@ -93,6 +115,7 @@ beforeAll(async () => {
 				});
 			}
 			if (url.includes('/radio/state')) {
+				stateUrls.push(url);
 				return jsonResponse(radioState());
 			}
 			return new Response('{}', { status: 200, headers: { 'content-type': 'application/json' } });
@@ -110,6 +133,10 @@ afterEach(() => {
 	trackNum = 1;
 	playSpy.mockClear();
 	serverClockOffset = 0;
+	liveBroadcast = null;
+	withRotation = true;
+	stateUrls.length = 0;
+	hlsAttached.length = 0;
 	loadSpy.mockImplementation(() => {});
 });
 
@@ -200,5 +227,47 @@ describe('RadioEmbed auto-advance', () => {
 		await vi.waitFor(() => expect(audio.src).toBe('https://audio.test/2.mp3'));
 		audio.dispatchEvent(new Event('loadedmetadata'));
 		expect(playSpy).not.toHaveBeenCalled();
+	});
+});
+
+// shipped broken: the embed ignored `live`, so firehose either aired its
+// archived rotation instead of the broadcast or read "no tracks in rotation yet"
+describe('RadioEmbed live broadcast', () => {
+	const BROADCAST = 'https://relay.test/live/index.m3u8';
+
+	it('asks for the broadcast only on firehose', async () => {
+		setEmbedUrl('?station=firehose');
+		const component = mount(RadioEmbed, { target: document.body, props: { importHls } });
+		cleanup = () => unmount(component);
+		await vi.waitFor(() => expect(stateUrls.length).toBeGreaterThan(0));
+		expect(new URL(stateUrls[0]).searchParams.get('catalog_only')).toBe('false');
+	});
+
+	it('keeps other stations catalog-only', async () => {
+		setEmbedUrl('?station=loved');
+		await mountRadioEmbed();
+		expect(new URL(stateUrls[0]).searchParams.get('catalog_only')).toBe('true');
+	});
+
+	it('is on the air with an empty rotation, and tunes in to the broadcast', async () => {
+		liveBroadcast = { stream_url: BROADCAST, kind: 'hls', started_at: null };
+		withRotation = false;
+		setEmbedUrl('?station=firehose&autoplay=1');
+		const component = mount(RadioEmbed, { target: document.body, props: { importHls } });
+		cleanup = () => unmount(component);
+		await vi.waitFor(() => expect(hlsAttached).toHaveLength(1));
+		expect(hlsAttached[0].url).toBe(BROADCAST);
+		await vi.waitFor(() => expect(playSpy).toHaveBeenCalled());
+		expect(document.querySelector('.title')?.textContent).toBe('firehose');
+		expect(document.body.textContent).not.toContain('no tracks in rotation yet');
+	});
+
+	it('airs the broadcast over the rotation entry', async () => {
+		liveBroadcast = { stream_url: BROADCAST, kind: 'hls', started_at: null };
+		artworkUrl = SAFE_ART;
+		setEmbedUrl('?station=firehose&autoplay=1');
+		await mountRadioEmbed();
+		await vi.waitFor(() => expect(hlsAttached).toHaveLength(1));
+		expect(document.querySelector('audio')!.src).not.toBe('https://audio.test/1.mp3');
 	});
 });
