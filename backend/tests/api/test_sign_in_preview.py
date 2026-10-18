@@ -54,7 +54,7 @@ async def test_preview_uses_authserver_host_not_pds() -> None:
         patch.object(sign_in_preview, "discover_authserver_from_pds_async", discover),
         patch.object(sign_in_preview, "_fetch_profile", profile),
     ):
-        preview = await resolve_sign_in_preview("@moth.bsky.social")
+        preview = await resolve_sign_in_preview("@Moth.bsky.social")
 
     assert preview == SignInPreview(
         did=DID,

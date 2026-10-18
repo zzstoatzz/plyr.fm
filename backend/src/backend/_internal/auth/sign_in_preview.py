@@ -75,7 +75,9 @@ async def resolve_sign_in_preview(identifier: str) -> SignInPreview | None:
     if doc is None:
         return None
 
-    handle = value if not value.startswith("did:") else (doc.get_handle() or did)
+    handle = (
+        value.lower() if not value.startswith("did:") else (doc.get_handle() or did)
+    )
     profile, host = await asyncio.gather(
         _fetch_profile(did), _sign_in_host(doc.get_pds_endpoint())
     )

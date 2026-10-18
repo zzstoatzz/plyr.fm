@@ -224,7 +224,7 @@
 						</div>
 					{:else if lookup.status === 'notfound'}
 						<p class="handle-error" role="alert">
-							couldn't find @{lookup.query}. check the spelling, or paste your DID instead.
+							couldn't find @{lookup.query}. check the spelling and try again.
 						</p>
 					{:else}
 					<div class="handle-hint">
