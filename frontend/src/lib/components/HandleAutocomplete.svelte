@@ -15,6 +15,7 @@
 		placeholder?: string;
 		disabled?: boolean;
 		id?: string;
+		hideResults?: boolean;
 	}
 
 	let {
@@ -22,7 +23,8 @@
 		onSelect,
 		placeholder = 'search by handle...',
 		disabled = false,
-		id
+		id,
+		hideResults = false
 	}: Props = $props();
 
 	let results = $state<HandleResult[]>([]);
@@ -116,7 +118,7 @@
 		{/if}
 	</div>
 
-	{#if showResults && results.length > 0}
+	{#if showResults && !hideResults && results.length > 0}
 		<div class="results">
 			{#each results as result}
 				<button type="button" class="result-item" onclick={(e) => selectHandle(e, result)}>
