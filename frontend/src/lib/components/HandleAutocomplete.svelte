@@ -14,13 +14,17 @@
 		onSelect: (_handle: string) => void;
 		placeholder?: string;
 		disabled?: boolean;
+		id?: string;
+		hideResults?: boolean;
 	}
 
 	let {
 		value = $bindable(''),
 		onSelect,
 		placeholder = 'search by handle...',
-		disabled = false
+		disabled = false,
+		id,
+		hideResults = false
 	}: Props = $props();
 
 	let results = $state<HandleResult[]>([]);
@@ -95,6 +99,7 @@
 <div class="handle-autocomplete">
 	<div class="input-wrapper">
 		<input
+			{id}
 			type="text"
 			bind:value
 			oninput={handleInput}
@@ -113,7 +118,7 @@
 		{/if}
 	</div>
 
-	{#if showResults && results.length > 0}
+	{#if showResults && !hideResults && results.length > 0}
 		<div class="results">
 			{#each results as result}
 				<button type="button" class="result-item" onclick={(e) => selectHandle(e, result)}>

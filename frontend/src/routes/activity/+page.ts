@@ -1,43 +1,21 @@
 import { browser } from '$app/environment';
 import { API_URL } from '$lib/config';
-import type { ActivityEvent, ActivityHistogramBucket } from '$lib/types';
+import type { ActivityEvent } from '$lib/types';
 
-interface ActivityFeed {
+export interface PageData {
 	events: ActivityEvent[];
 	next_cursor: string | null;
 	has_more: boolean;
 }
 
-export interface PageData extends ActivityFeed {
-	histogram: ActivityHistogramBucket[];
-}
-
 export const ssr = false;
 
 export async function load(): Promise<PageData> {
-	if (!browser) {
-		return { events: [], next_cursor: null, has_more: false, histogram: [] };
-	}
-
-	const empty: PageData = { events: [], next_cursor: null, has_more: false, histogram: [] };
-
+	const empty: PageData = { events: [], next_cursor: null, has_more: false };
+	if (!browser) return empty;
 	try {
-		const [feedResult, histResult] = await Promise.allSettled([
-			fetch(`${API_URL}/activity/`),
-			fetch(`${API_URL}/activity/histogram?days=7`)
-		]);
-
-		let feed: ActivityFeed = { events: [], next_cursor: null, has_more: false };
-		if (feedResult.status === 'fulfilled' && feedResult.value.ok) {
-			feed = await feedResult.value.json();
-		}
-
-		let histogram: ActivityHistogramBucket[] = [];
-		if (histResult.status === 'fulfilled' && histResult.value.ok) {
-			histogram = (await histResult.value.json()).buckets;
-		}
-
-		return { ...feed, histogram };
+		const result = await fetch(`${API_URL}/activity/`);
+		return result.ok ? await result.json() : empty;
 	} catch (e) {
 		console.error('failed to load activity feed:', e);
 		return empty;

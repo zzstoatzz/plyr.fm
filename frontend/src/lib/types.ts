@@ -242,6 +242,11 @@ export interface ActivityEvent {
 	created_at: string;
 }
 
+export interface ActivityHistogramResponse {
+	buckets: ActivityHistogramBucket[];
+	interval: 'hour' | 'day' | 'month';
+}
+
 export interface ActivityHistogramBucket {
 	date: string;
 	count: number;

@@ -8,7 +8,8 @@
 	import { API_URL } from '$lib/config';
 	import { APP_NAME } from '$lib/branding';
 	import { statsCache, formatDuration } from '$lib/stats.svelte';
-	import type { ActivityEvent, ActivityHistogramBucket } from '$lib/types';
+	import ActivityChart from '$lib/components/ActivityChart.svelte';
+	import type { ActivityEvent } from '$lib/types';
 
 	let { data } = $props();
 
@@ -19,7 +20,6 @@
 	let initialLoad = $state(true);
 	let sentinelElement = $state<HTMLDivElement | null>(null);
 	let stats = $derived(statsCache.stats);
-	let histogram = $state<ActivityHistogramBucket[]>([]);
 	let previousCount = $state(0);
 	let showSpinner = $state(false);
 
@@ -32,16 +32,6 @@
 		}
 	});
 
-	const sparklinePath = $derived.by(() => {
-		if (histogram.length === 0) return '';
-		const max = Math.max(...histogram.map((b) => b.count), 1);
-		const w = 100;
-		const h = 32;
-		const step = w / (histogram.length - 1 || 1);
-		const points = histogram.map((b, i) => `${i * step},${h - (b.count / max) * h * 0.85}`);
-		return `M${points.join(' L')} L${w},${h} L0,${h} Z`;
-	});
-
 	onMount(() => {
 		auth.initialize();
 		statsCache.fetch();
@@ -49,7 +39,6 @@
 		events = data.events;
 		nextCursor = data.next_cursor;
 		hasMore = data.has_more;
-		histogram = data.histogram;
 		initialLoad = false;
 	});
 
@@ -130,24 +119,7 @@
 		{/if}
 	</div>
 
-	{#if histogram.some(b => b.count > 0)}
-		<div class="sparkline-container">
-			<span class="sparkline-label">last 7 days</span>
-			<svg class="sparkline" viewBox="0 0 100 32" preserveAspectRatio="none">
-				<defs>
-					<linearGradient id="spark-fill" x1="0" y1="0" x2="0" y2="1">
-						<stop offset="0%" stop-color="var(--accent)" stop-opacity="0.3" />
-						<stop offset="100%" stop-color="var(--accent)" stop-opacity="0.02" />
-					</linearGradient>
-				</defs>
-				<path d={sparklinePath} fill="url(#spark-fill)" />
-				<path
-					d={sparklinePath.replace(/ L\d+,32 L0,32 Z/, '')}
-					fill="none" stroke="var(--accent)" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"
-				/>
-			</svg>
-		</div>
-	{/if}
+	<ActivityChart />
 
 	{#if initialLoad}
 		<div class="loading-container">
@@ -360,19 +332,6 @@
 		font-size: var(--text-xs); color: var(--text-muted);
 		margin: 0.25rem 0 0 0; letter-spacing: 0.01em;
 	}
-
-	.sparkline-container {
-		margin-bottom: 1.25rem; position: relative;
-		background: color-mix(in srgb, var(--track-bg) 70%, transparent);
-		backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
-		border: 1px solid var(--glass-border, var(--track-border));
-		border-radius: var(--radius-md); padding: 0.625rem 0.75rem 0.375rem;
-	}
-	.sparkline-label {
-		font-size: var(--text-xs); color: var(--text-muted);
-		position: absolute; top: 0.375rem; right: 0.625rem;
-	}
-	.sparkline { width: 100%; height: 32px; display: block; }
 
 	.loading-container { display: flex; justify-content: center; padding: 3rem 2rem; }
 	.empty { color: var(--text-tertiary); padding: 2rem; text-align: center; }
