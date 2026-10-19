@@ -9,13 +9,21 @@ export interface PlatformStats {
 	total_duration_seconds: number;
 }
 
-/**
- * format seconds into human-readable duration string.
- * examples: "25h 32m", "3h 45m", "45m", "1h"
- */
 export function formatDuration(totalSeconds: number): string {
 	const hours = Math.floor(totalSeconds / 3600);
 	const minutes = Math.floor((totalSeconds % 3600) / 60);
+	const weeks = Math.floor(hours / 168);
+	const days = Math.floor((hours % 168) / 24);
+
+	if (hours >= 24) {
+		return [
+			weeks > 0 ? `${weeks} ${weeks === 1 ? 'week' : 'weeks'}` : '',
+			days > 0 ? `${days} ${days === 1 ? 'day' : 'days'}` : '',
+			hours % 24 > 0 ? `${hours % 24} h` : ''
+		]
+			.filter(Boolean)
+			.join(' ');
+	}
 
 	if (hours === 0) {
 		return `${minutes}m`;
