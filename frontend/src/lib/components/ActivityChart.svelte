@@ -329,7 +329,7 @@
 	}
 	.series {
 		fill: none;
-		stroke: var(--accent);
+		stroke: var(--accent-text);
 		stroke-width: 1.75;
 		stroke-linejoin: round;
 		stroke-linecap: round;
@@ -347,7 +347,7 @@
 		height: 8px;
 		transform: translate(-50%, -50%);
 		border-radius: var(--radius-full);
-		background: var(--accent);
+		background: var(--accent-text);
 		box-shadow: 0 0 0 3px var(--bg-secondary);
 		pointer-events: none;
 	}
