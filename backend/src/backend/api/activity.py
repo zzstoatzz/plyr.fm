@@ -86,16 +86,17 @@ class ActivityFeedResponse(BaseModel):
 
 
 class ActivityHistogramBucket(BaseModel):
-    """single day in the activity histogram."""
+    """one UTC time bucket in the activity histogram."""
 
     date: str
     count: int
 
 
 class ActivityHistogramResponse(BaseModel):
-    """activity counts per day over a time window."""
+    """activity counts over a time window."""
 
     buckets: list[ActivityHistogramBucket]
+    interval: Literal["hour", "day", "month"] = "day"
 
 
 # raw SQL for the UNION ALL query — each branch selects the same column shape
@@ -332,22 +333,44 @@ async def get_activity_feed(
 
 
 _HISTOGRAM_QUERY = """
-    SELECT CAST(d AS date) AS bucket_date, COALESCE(c.total, 0) AS total
-    FROM generate_series(CAST(:start AS date), CAST(:end_date AS date), '1 day') d
-    LEFT JOIN (
-        SELECT CAST(created_at AS date) AS day, COUNT(*) AS total FROM (
-            SELECT tl.created_at FROM track_likes tl WHERE tl.created_at >= :start
-            UNION ALL
-            SELECT t.created_at FROM tracks t WHERE t.created_at >= :start
-            UNION ALL
-            SELECT tc.created_at FROM track_comments tc WHERE tc.created_at >= :start
-            UNION ALL
-            SELECT a.created_at FROM artists a
-                WHERE a.handle != '' AND a.display_name != '' AND a.created_at >= :start
-            UNION ALL
-            SELECT ce.created_at FROM collection_events ce WHERE ce.created_at >= :start
-        ) events GROUP BY day
-    ) c ON c.day = CAST(d AS date)
+    WITH events AS (
+        SELECT tl.created_at FROM track_likes tl
+            WHERE tl.created_at >= COALESCE(CAST(:start AS timestamptz), '-infinity')
+                AND tl.created_at <= :now
+        UNION ALL
+        SELECT t.created_at FROM tracks t
+            WHERE t.created_at >= COALESCE(CAST(:start AS timestamptz), '-infinity')
+                AND t.created_at <= :now
+        UNION ALL
+        SELECT tc.created_at FROM track_comments tc
+            WHERE tc.created_at >= COALESCE(CAST(:start AS timestamptz), '-infinity')
+                AND tc.created_at <= :now
+        UNION ALL
+        SELECT a.created_at FROM artists a
+            WHERE a.handle != '' AND a.display_name != ''
+                AND a.created_at >= COALESCE(CAST(:start AS timestamptz), '-infinity')
+                AND a.created_at <= :now
+        UNION ALL
+        SELECT ce.created_at FROM collection_events ce
+            JOIN artists a ON a.did = ce.actor_did
+            LEFT JOIN playlists p ON p.id = ce.playlist_id
+            WHERE (ce.playlist_id IS NULL OR p.is_private = false)
+                AND ce.created_at >= COALESCE(CAST(:start AS timestamptz), '-infinity')
+                AND ce.created_at <= :now
+    ), counts AS (
+        SELECT date_trunc(:interval, created_at AT TIME ZONE 'UTC') AS bucket,
+            COUNT(*) AS total
+        FROM events GROUP BY bucket
+    )
+    SELECT d AS bucket_date, COALESCE(c.total, 0) AS total
+    FROM generate_series(
+        date_trunc(:interval,
+            COALESCE(CAST(:start AS timestamptz),
+                (SELECT MIN(created_at) FROM events), :now) AT TIME ZONE 'UTC'),
+        date_trunc(:interval, CAST(:now AS timestamptz) AT TIME ZONE 'UTC'),
+        CAST(CAST(:step AS text) AS interval)
+    ) d
+    LEFT JOIN counts c ON c.bucket = d
     ORDER BY bucket_date
 """
 
@@ -356,19 +379,41 @@ _HISTOGRAM_QUERY = """
 async def get_activity_histogram(
     db: Annotated[AsyncSession, Depends(get_db)],
     days: int = Query(7, ge=1, le=30),
+    range: Literal["day", "week", "month", "year", "all"] | None = Query(None),
 ) -> ActivityHistogramResponse:
-    """get activity counts per day for the sparkline."""
+    """get zero-filled activity counts; named ranges take precedence over days."""
     now = datetime.now(UTC)
-    start = now - timedelta(days=days - 1)
+    interval: Literal["hour", "day", "month"] = "day"
+    start: datetime | None
+    if range in ("day", "week"):
+        interval = "hour"
+        hours = 24 if range == "day" else 168
+        start = now.replace(minute=0, second=0, microsecond=0) - timedelta(
+            hours=hours - 1
+        )
+    elif range == "all":
+        interval = "month"
+        start = None
+    else:
+        day_count = {"month": 30, "year": 365}.get(range, days)
+        start = now.replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(
+            days=day_count - 1
+        )
 
     result = await db.execute(
         text(_HISTOGRAM_QUERY),
-        {"start": start, "end_date": now},
+        {"start": start, "now": now, "interval": interval, "step": f"1 {interval}"},
     )
 
     return ActivityHistogramResponse(
         buckets=[
-            ActivityHistogramBucket(date=str(row.bucket_date), count=row.total)
+            ActivityHistogramBucket(
+                date=row.bucket_date.date().isoformat()
+                if interval == "day"
+                else row.bucket_date.replace(tzinfo=UTC).isoformat(),
+                count=row.total,
+            )
             for row in result.fetchall()
-        ]
+        ],
+        interval=interval,
     )
