@@ -13,8 +13,9 @@ developer tokens receive the same server-side refusal. No notification is sent.
 
 Workers reject previously queued uploads and replacements before processing,
 using the normal failed-job cleanup. Copyright scans, embeddings, genre
-classification, PDS mirroring and deferred optimization check the account before
-starting new work. Cached tag suggestions still work; uncached suggestions do
+classification and PDS mirroring check the account before starting new work.
+Already-published audio may finish deferred conversion so raw sources such as
+AIFF become browser-playable. Cached tag suggestions still work; uncached suggestions do
 not start inference for paused artists. Calls already running when an old
 process is replaced cannot be recalled.
 

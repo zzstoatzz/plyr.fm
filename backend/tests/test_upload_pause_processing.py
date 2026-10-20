@@ -9,18 +9,16 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend._internal import Session
-from backend._internal.auth import create_session
 from backend._internal.clients import moderation
 from backend._internal.jobs import job_service
 from backend._internal.moderation import scan_track_for_copyright
 from backend._internal.tasks.ingest import ingest_track_create, ingest_track_update
 from backend._internal.tasks.ml import classify_genres, generate_embedding
 from backend._internal.tasks.pds_mirror import mirror_pds_blob
-from backend.api.tracks.audio_optimize import optimize_track_audio
 from backend.api.tracks.audio_replace import ReplaceContext, _process_replace_background
 from backend.config import settings
 from backend.models import Artist, CopyrightScan, Track
-from backend.models.job import Job, JobStatus, JobType
+from backend.models.job import JobStatus, JobType
 
 DID = "did:plc:so3ysj7gypel6w7mixdfjhkh"
 URI = f"at://{DID}/fm.plyr.track/existing"
@@ -174,21 +172,6 @@ async def test_queued_replace_keeps_existing_audio(
     assert job is not None
     assert job.status == JobStatus.FAILED.value
     assert job.error is not None and "temporarily paused" in job.error
-    await db_session.refresh(track)
-    assert track.file_id == "old"
-    assert requests == []
-
-
-async def test_queued_optimization_leaves_existing_rendition_available(
-    db_session: AsyncSession, track: Track, requests: list[httpx.Request]
-) -> None:
-    track.file_type = "wav"
-    track.original_file_id = "original"
-    track.original_file_type = "flac"
-    await db_session.commit()
-    session_id = await create_session(DID, "addline.test", {})
-    await optimize_track_audio(track.id, session_id)
-    assert await db_session.scalar(select(func.count()).select_from(Job)) == 0
     await db_session.refresh(track)
     assert track.file_id == "old"
     assert requests == []

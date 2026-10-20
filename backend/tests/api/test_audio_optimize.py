@@ -30,7 +30,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend._internal import Session
+from backend._internal import Session, upload_policy
 from backend.api.tracks.audio_optimize import optimize_track_audio
 from backend.api.tracks.uploads import (
     AudioInfo,
@@ -839,8 +839,12 @@ def _raw_interim_track(**overrides) -> Track:
     return Track(**defaults)
 
 
+@pytest.mark.parametrize("paused", [False, True])
 async def test_optimize_raw_interim_does_not_delete_the_lossless_original(
-    db_session: AsyncSession, owner: Artist
+    db_session: AsyncSession,
+    owner: Artist,
+    paused: bool,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """the load-bearing post-decoupling invariant: when the interim playable
     rendition IS the raw lossless source (`file_id == original_file_id`), the
@@ -850,6 +854,8 @@ async def test_optimize_raw_interim_does_not_delete_the_lossless_original(
 
     (contrast `test_optimize_swaps_wav_to_mp3_...`, where a distinct legacy WAV
     interim IS correctly deleted.)"""
+    if paused:
+        monkeypatch.setattr(upload_policy, "PAUSED_UPLOAD_DIDS", frozenset({owner.did}))
     track = _raw_interim_track()
     db_session.add(track)
     await db_session.commit()
