@@ -23,6 +23,7 @@ from backend._internal.content_labels import (
     label_visible_clause,
 )
 from backend._internal.track_visibility import visible_filter
+from backend._internal.upload_notifications import schedule_upload_pause_notification
 from backend._internal.upload_policy import upload_pause_message
 from backend.config import settings
 from backend.models import (
@@ -562,6 +563,10 @@ async def get_upload_summary(
     auth_session: AuthSession = Depends(require_auth),
 ) -> UploadSummaryResponse:
     """Summarize current uploads and successfully scanned audio for the owner."""
+    if upload_pause_message(auth_session.did):
+        await schedule_upload_pause_notification(
+            auth_session.did, auth_session.handle, "viewed upload pause notice"
+        )
     duration = case(
         (
             func.jsonb_typeof(Track.extra["duration"]) == "number",
