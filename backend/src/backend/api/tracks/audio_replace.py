@@ -420,14 +420,20 @@ async def _process_replace_background(ctx: ReplaceContext) -> None:
         track_id=ctx.track_id,
         filename=ctx.filename,
     ):
+        if message := upload_pause_message(ctx.auth_session.did):
+            await _delete_staged_audio(
+                ctx.audio_file_id, new_file_type_for_rollback, gated=ctx.is_gated
+            )
+            await job_service.update_progress(
+                ctx.job_id, JobStatus.FAILED, "audio replace paused", error=message
+            )
+            return
+
         # ---- pre-commit (rollback applies) ----
         try:
             await job_service.update_progress(
                 ctx.job_id, JobStatus.PROCESSING, "preparing audio replace..."
             )
-
-            if message := upload_pause_message(ctx.auth_session.did):
-                raise UploadPhaseError(message)
 
             state = await _load_and_authorize(ctx.track_id, ctx.auth_session)
             phase_ctx = _build_upload_context_for_phases(ctx, state)

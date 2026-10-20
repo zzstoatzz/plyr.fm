@@ -8,6 +8,7 @@ import pytest
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+import backend.storage
 from backend._internal import Session
 from backend._internal.clients import moderation
 from backend._internal.jobs import job_service
@@ -151,8 +152,18 @@ async def test_queued_mirror_does_not_fetch_audio(
 
 
 async def test_queued_replace_keeps_existing_audio(
-    db_session: AsyncSession, track: Track, requests: list[httpx.Request]
+    db_session: AsyncSession,
+    track: Track,
+    requests: list[httpx.Request],
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    deleted: list[str] = []
+
+    async def delete(file_id: str, file_type: str | None = None) -> bool:
+        deleted.append(file_id)
+        return True
+
+    monkeypatch.setattr(backend.storage._storage, "delete", delete)
     job_id = await job_service.create_job(JobType.UPLOAD, DID, "queued")
     session = Session(
         session_id="pause", did=DID, handle="addline.test", oauth_session={}
@@ -162,8 +173,8 @@ async def test_queued_replace_keeps_existing_audio(
             job_id=job_id,
             auth_session=session,
             track_id=track.id,
-            audio_file_id="new-staged",
-            filename="new.wav",
+            audio_file_id=track.file_id,
+            filename="new.mp3",
             duration=7200,
             is_gated=False,
         )
@@ -174,4 +185,5 @@ async def test_queued_replace_keeps_existing_audio(
     assert job.error is not None and "temporarily paused" in job.error
     await db_session.refresh(track)
     assert track.file_id == "old"
+    assert deleted == []
     assert requests == []
