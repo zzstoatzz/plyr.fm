@@ -6,6 +6,10 @@ they should be self-contained and handle their own database sessions.
 requires DOCKET_URL to be set (Redis is always available).
 """
 
+from backend._internal.upload_notifications import (
+    deliver_upload_pause_notification,
+    deliver_upload_feedback_notification,
+)
 from backend._internal.export_tasks import process_album_download, process_export
 from backend._internal.pds_save_tasks import save_tracks_to_pds
 from backend._internal.tasks.copyright import (
@@ -107,6 +111,8 @@ def _build_background_tasks() -> list:
     from backend.api.tracks.uploads import run_track_upload
 
     return [
+        deliver_upload_pause_notification,
+        deliver_upload_feedback_notification,
         mirror_pds_blob,
         scan_copyright,
         sync_copyright_resolutions,

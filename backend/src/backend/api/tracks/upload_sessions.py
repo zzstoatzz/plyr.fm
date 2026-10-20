@@ -133,7 +133,9 @@ async def start_upload_session(
     auth_session: AuthSession = Depends(require_artist_profile),
 ) -> UploadSessionState:
     """open a resumable upload; the bytes arrive through `PUT .../parts/{n}`."""
-    require_upload_allowed(auth_session.did)
+    await require_upload_allowed(
+        auth_session.did, auth_session.handle, "blocked resumable upload", body.filename
+    )
     extension = body.filename.rsplit(".", 1)[-1].lower() if "." in body.filename else ""
     if AudioFormat.from_extension(f".{extension}") is None:
         raise HTTPException(
@@ -211,7 +213,12 @@ async def put_upload_part(
     auth_session: AuthSession = Depends(require_artist_profile),
 ) -> UploadPartReceipt:
     """one fixed-size slice of the file; re-sending a part number replaces it."""
-    require_upload_allowed(auth_session.did)
+    await require_upload_allowed(
+        auth_session.did,
+        auth_session.handle,
+        "blocked upload part",
+        f"upload {upload_id}, part {part_number}",
+    )
     _, transfer = await _open_transfer(upload_id, auth_session.did)
     if not 1 <= part_number <= transfer.part_count:
         raise HTTPException(
@@ -255,7 +262,12 @@ async def finish_upload_session(
     open so the client can fix and retry; the multipart is only completed
     once nothing else can refuse the upload.
     """
-    require_upload_allowed(auth_session.did)
+    await require_upload_allowed(
+        auth_session.did,
+        auth_session.handle,
+        "blocked upload finish",
+        f"upload {upload_id}",
+    )
     await validate_upload_form(request)
     _, transfer = await _open_transfer(upload_id, auth_session.did)
     meta = await parse_upload_metadata(

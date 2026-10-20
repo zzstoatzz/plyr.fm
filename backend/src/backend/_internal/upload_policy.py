@@ -3,6 +3,7 @@
 from fastapi import HTTPException
 from sqlalchemy import select
 
+from backend._internal.upload_notifications import schedule_upload_pause_notification
 from backend.models import Track
 from backend.utilities.database import db_session
 
@@ -20,8 +21,11 @@ def upload_pause_message(did: str) -> str | None:
     return UPLOAD_PAUSE_MESSAGE if did in PAUSED_UPLOAD_DIDS else None
 
 
-def require_upload_allowed(did: str) -> None:
+async def require_upload_allowed(
+    did: str, handle: str | None, event: str, detail: str = ""
+) -> None:
     if message := upload_pause_message(did):
+        await schedule_upload_pause_notification(did, handle, event, detail)
         raise HTTPException(status_code=403, detail=message)
 
 
