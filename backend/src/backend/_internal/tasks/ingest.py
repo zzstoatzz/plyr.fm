@@ -33,6 +33,7 @@ from backend._internal.tasks.origin_trust import (
 )
 from backend._internal.tasks.pds import is_like_uri_cancelled
 from backend._internal.tasks.pds_mirror import schedule_pds_blob_mirror
+from backend._internal.upload_policy import upload_pause_message
 from backend.config import settings
 from backend.models import (
     Artist,
@@ -201,6 +202,10 @@ async def ingest_track_create(
         cid: content identifier
         rev: repo commit rev, recorded so later updates can be ordered
     """
+    if upload_pause_message(did):
+        logfire.info("ingest: uploads paused for account", artist_did=did)
+        return
+
     if errors := validate_record("fm.plyr.track", record):
         logfire.warn("ingest: invalid track record, skipping", uri=uri, errors=errors)
         return
@@ -473,7 +478,12 @@ async def ingest_track_update(
         track.self_labels = self_label_values_from_record(record.get("labels"))
 
         pds_audio_replaced = False
-        if track.audio_storage != "r2_private" and not track.is_private:
+        uploads_paused = upload_pause_message(did) is not None
+        if (
+            not uploads_paused
+            and track.audio_storage != "r2_private"
+            and not track.is_private
+        ):
             # audio storage fields
             audio_blob = record.get("audioBlob")
             audio_url = record.get("audioUrl")
@@ -520,7 +530,7 @@ async def ingest_track_update(
             if file_type := record.get("fileType"):
                 track.file_type = file_type
 
-            # gating
+        if track.audio_storage != "r2_private" and not track.is_private:
             if "supportGate" in record:
                 track.support_gate = record["supportGate"]
 
@@ -530,7 +540,7 @@ async def ingest_track_update(
         # extra fields (album, duration) — reassign to trigger change detection
         extra = dict(track.extra or {})
         extra_changed = False
-        if (duration := record.get("duration")) is not None:
+        if not uploads_paused and (duration := record.get("duration")) is not None:
             extra["duration"] = duration
             extra_changed = True
         if (album := record.get("album")) is not None:
