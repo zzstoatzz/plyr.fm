@@ -1,7 +1,7 @@
 FROM rust:1.96-bookworm AS builder
 RUN apt-get update && apt-get install -y --no-install-recommends git pkg-config libssl-dev ca-certificates && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
-ARG RADIO_REVISION=62d63eb2795a21e8290cd4191f0b6fcbcc49cdaa
+ARG RADIO_REVISION=0015d8cc1302e0307219fbe6c9513ff947e8797f
 RUN git clone https://tangled.org/zzstoatzz.io/plyr-radio . && git checkout "$RADIO_REVISION"
 RUN cargo test --locked && cargo build --release --locked
 
