@@ -6,6 +6,7 @@
 	import HandleAutocomplete from '$lib/components/HandleAutocomplete.svelte';
 	import SensitiveImage from '$lib/components/SensitiveImage.svelte';
 	import { isValidReturnPath, setReturnUrl } from '$lib/utils/return-url';
+	import { shortHost } from '$lib/utils/short-host';
 
 	const returnTo = (() => {
 		const raw = new URLSearchParams(browser ? window.location.search : '').get('return_to');
@@ -41,6 +42,8 @@
 	let lookup = $state<Lookup>({ status: 'idle' });
 	let lookupTimeout: ReturnType<typeof setTimeout> | null = null;
 	let loading = $state(false);
+	let slowRedirect = $state(false);
+	let slowRedirectTimer: ReturnType<typeof setTimeout> | null = null;
 	let showHandleInfo = $state(false);
 	let showPdsInfo = $state(false);
 
@@ -135,22 +138,40 @@
 	}
 
 	const preview = $derived(lookup.status === 'found' ? lookup.preview : null);
+	const signInHost = $derived(preview?.sign_in_host ? shortHost(preview.sign_in_host) : null);
+	const redirectTarget = $derived(
+		mode === 'signin' ? signInHost : (pdsOptions.find((p) => p.url === selectedPds)?.name ?? null)
+	);
+
+	function redirectTo(url: string) {
+		loading = true;
+		slowRedirect = false;
+		if (slowRedirectTimer) clearTimeout(slowRedirectTimer);
+		slowRedirectTimer = setTimeout(() => (slowRedirect = true), 4000);
+		window.location.href = url;
+	}
+
+	function resetAfterBack(e: PageTransitionEvent) {
+		// back from the authserver restores this page from bfcache mid-redirect
+		if (!e.persisted) return;
+		if (slowRedirectTimer) clearTimeout(slowRedirectTimer);
+		loading = false;
+		slowRedirect = false;
+	}
 
 	function beginSignIn() {
 		if (!handle.trim() || lookup.status === 'notfound') return;
-		loading = true;
-		const normalized = normalizeInput(handle);
-		window.location.href = `${API_URL}/auth/start?handle=${encodeURIComponent(normalized)}`;
+		redirectTo(`${API_URL}/auth/start?handle=${encodeURIComponent(normalizeInput(handle))}`);
 	}
 
 	function startOAuth(e: SubmitEvent) {
 		e.preventDefault();
+		if (loading) return;
 		if (mode === 'signin') {
 			beginSignIn();
 		} else {
 			if (!selectedPds) return;
-			loading = true;
-			window.location.href = `${API_URL}/auth/start?pds_url=${encodeURIComponent(selectedPds)}`;
+			redirectTo(`${API_URL}/auth/start?pds_url=${encodeURIComponent(selectedPds)}`);
 		}
 	}
 
@@ -165,6 +186,13 @@
 		showPdsInfo = false;
 	}
 </script>
+
+<svelte:window onpageshow={resetAfterBack} />
+
+{#snippet redirecting()}
+	<span class="spinner" aria-hidden="true"></span>
+	<span class="button-label">{redirectTarget ? `taking you to ${redirectTarget}` : 'redirecting'}</span>
+{/snippet}
 
 <div class="container">
 	<div class="login-card">
@@ -216,7 +244,9 @@
 								<span class="identity-name">{lookup.preview.display_name}</span>
 								<span class="identity-handle">@{lookup.preview.handle}</span>
 							</div>
-							<button type="button" class="not-you" onclick={clearHandle} disabled={loading}>not you?</button>
+							{#if !loading}
+								<button type="button" class="not-you" onclick={clearHandle}>not you?</button>
+							{/if}
 						</div>
 					{:else if lookup.status === 'loading'}
 						<div class="identity" aria-live="polite">
@@ -241,23 +271,28 @@
 					<button
 						type="submit"
 						class="primary"
+						class:redirecting={loading}
+						title={preview?.sign_in_host ?? undefined}
 						disabled={loading || !handle.trim() || lookup.status === 'notfound'}
 					>
 						{#if loading}
-							redirecting to {preview?.sign_in_host ?? 'sign in'}...
-						{:else if preview?.sign_in_host}
-							continue at {preview.sign_in_host}
+							{@render redirecting()}
+						{:else if signInHost}
+							<span class="button-label">continue at {signInHost}</span>
 							<svg class="external" aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h6v6"></path><path d="M20 4l-9 9"></path><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"></path></svg>
 						{:else}
 							sign in
 						{/if}
 					</button>
-					{#if preview?.sign_in_host}
-						<p class="handoff-note">
-							you'll sign in on {preview.sign_in_host}, then land back here.<br />
-							{APP_NAME} never sees your password.
-						</p>
-					{/if}
+					<div class="handoff-note" role="status">
+						{#if loading && slowRedirect}
+							<span>still connecting.</span>
+							<span>some servers take a few seconds.</span>
+						{:else if signInHost}
+							<span>you'll come straight back here after.</span>
+							<span>{APP_NAME} never sees your password.</span>
+						{/if}
+					</div>
 				</div>
 			{:else}
 				<div class="input-group">
@@ -296,9 +331,21 @@
 					</p>
 				</div>
 
-				<button type="submit" class="primary" disabled={loading || !selectedPds}>
-					{loading ? 'redirecting...' : 'create account'}
-				</button>
+				<div class="submit-group">
+					<button type="submit" class="primary" class:redirecting={loading} disabled={loading || !selectedPds}>
+						{#if loading}
+							{@render redirecting()}
+						{:else}
+							create account
+						{/if}
+					</button>
+					<div class="handoff-note" role="status">
+						{#if loading && slowRedirect}
+							<span>still connecting.</span>
+							<span>some servers take a few seconds.</span>
+						{/if}
+					</div>
+				</div>
 			{/if}
 		</form>
 
@@ -523,16 +570,47 @@
 	.submit-group {
 		display: flex;
 		flex-direction: column;
-		gap: 0.75rem;
 	}
 
 	.handoff-note {
-		margin: 0;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
 		font-size: var(--text-sm);
 		line-height: 1.5;
 		text-align: center;
 		color: var(--text-tertiary);
-		overflow-wrap: anywhere;
+		& span:first-child { margin-top: 0.75rem; }
+	}
+
+	.button-label {
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.external {
+		flex-shrink: 0;
+	}
+
+	.spinner {
+		width: 14px;
+		height: 14px;
+		flex-shrink: 0;
+		box-sizing: border-box;
+		border: 2px solid color-mix(in srgb, currentColor 35%, transparent);
+		border-top-color: currentColor;
+		border-radius: var(--radius-full);
+		animation: spin 0.7s linear infinite;
+	}
+
+	@keyframes spin {
+		to { transform: rotate(360deg); }
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.spinner { animation-duration: 2s; }
 	}
 
 	button.primary {
@@ -555,6 +633,11 @@
 
 	button.primary:hover:not(:disabled) {
 		opacity: 0.9;
+	}
+
+	button.primary.redirecting:disabled {
+		opacity: 1;
+		cursor: progress;
 	}
 
 	button.primary:disabled {

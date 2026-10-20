@@ -23,6 +23,7 @@ from pydantic import BaseModel, Field
 from backend._internal import Session as AuthSession
 from backend._internal import require_artist_profile
 from backend._internal.jobs import job_service
+from backend._internal.upload_policy import require_upload_allowed
 from backend.config import settings
 from backend.models.job import Job, JobStatus, JobType
 from backend.storage import storage
@@ -132,6 +133,7 @@ async def start_upload_session(
     auth_session: AuthSession = Depends(require_artist_profile),
 ) -> UploadSessionState:
     """open a resumable upload; the bytes arrive through `PUT .../parts/{n}`."""
+    require_upload_allowed(auth_session.did)
     extension = body.filename.rsplit(".", 1)[-1].lower() if "." in body.filename else ""
     if AudioFormat.from_extension(f".{extension}") is None:
         raise HTTPException(
@@ -209,6 +211,7 @@ async def put_upload_part(
     auth_session: AuthSession = Depends(require_artist_profile),
 ) -> UploadPartReceipt:
     """one fixed-size slice of the file; re-sending a part number replaces it."""
+    require_upload_allowed(auth_session.did)
     _, transfer = await _open_transfer(upload_id, auth_session.did)
     if not 1 <= part_number <= transfer.part_count:
         raise HTTPException(
@@ -252,6 +255,7 @@ async def finish_upload_session(
     open so the client can fix and retry; the multipart is only completed
     once nothing else can refuse the upload.
     """
+    require_upload_allowed(auth_session.did)
     await validate_upload_form(request)
     _, transfer = await _open_transfer(upload_id, auth_session.did)
     meta = await parse_upload_metadata(

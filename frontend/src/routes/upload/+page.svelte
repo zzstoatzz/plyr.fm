@@ -1,4 +1,5 @@
 <script lang="ts">
+	import UploadPauseNotice from '$lib/components/UploadPauseNotice.svelte';
 	import UploadSponsorCard from '$lib/components/UploadSponsorCard.svelte';
 	import PublishingIntro from '$lib/components/PublishingIntro.svelte';
 	import { onMount } from "svelte";
@@ -51,6 +52,8 @@
 
 	let loading = $state(true);
 	let sponsorRevision = $state(0);
+	let pause = $state<{ did: string; message: string } | null>(null);
+	const pauseMessage = $derived(pause?.did === auth.user?.did ? pause?.message : null);
 
 	// upload mode: track (single) or album (multi-track)
 	let mode = $state<'track' | 'album'>(
@@ -118,6 +121,25 @@
 
 		if (!auth.isAuthenticated) {
 			redirectToLogin();
+			return;
+		}
+
+		const did = auth.user?.did;
+		try {
+			const response = await fetch(`${API_URL}/tracks/me/upload-summary`, {
+				credentials: 'include'
+			});
+			if (response.ok && did) {
+				const data: { upload_pause_message?: string | null } = await response.json();
+				if (data.upload_pause_message) {
+					pause = { did, message: data.upload_pause_message };
+				}
+			}
+		} catch {
+			// The upload endpoints still enforce the pause if this read fails.
+		}
+		if (pauseMessage) {
+			loading = false;
 			return;
 		}
 
@@ -433,6 +455,9 @@
 			<h2>upload {mode === 'album' ? 'album' : 'track'}</h2>
 		</div>
 
+		{#if pauseMessage}
+			<UploadPauseNotice message={pauseMessage} />
+		{:else}
 		<div class="mode-toggle">
 			<button
 				type="button"
@@ -640,6 +665,7 @@
 			{artistProfile}
 			onAlbumsReload={loadMyAlbums}
 		/>
+		{/if}
 		{/if}
 	</main>
 {/if}

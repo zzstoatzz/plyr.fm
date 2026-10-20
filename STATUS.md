@@ -47,6 +47,15 @@ plyr.fm should become:
 
 ### October 2026
 
+#### activity chart time ranges (October 19)
+
+The activity page has day/week/month/year/all-time ranges, labeled axes, and a
+fixed date/count readout for hover, touch, and keyboard inspection. Hourly,
+daily, and monthly UTC buckets replace the seven-point sparkline. The endpoint
+zero-fills quiet periods, includes the entire first bucket, and excludes private
+playlist events. The feed list and pagination are unchanged. See
+`docs/internal/frontend/activity-chart.md` for range and retention semantics.
+
 #### upload sponsorship prompt (October 17)
 
 The upload page offers GitHub sponsorship above a configurable catalog duration

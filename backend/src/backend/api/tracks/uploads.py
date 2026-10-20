@@ -67,6 +67,7 @@ from backend._internal.image_uploads import (
 from backend._internal.jobs import job_service
 from backend._internal.tasks import schedule_album_list_sync
 from backend._internal.tasks.hooks import run_post_track_create_hooks
+from backend._internal.upload_policy import require_upload_allowed, upload_pause_message
 from backend.config import settings
 from backend.models import Album, Artist, Track, UserPreferences
 from backend.models.job import JobStatus, JobType
@@ -1313,6 +1314,10 @@ async def _cleanup_staged_media_pre_db(
     # private media never staged anything to R2 — its audio is a PDS blob and it
     # has no cover. deleting by the synthetic file_id (a content hash) could yank a
     # DIFFERENT public track's R2 object that happens to share the same bytes.
+    if ctx.staged:
+        with contextlib.suppress(Exception):
+            await storage.delete_staged(ctx.staged_key)
+
     if ctx.private:
         return
 
@@ -1361,6 +1366,9 @@ async def _process_upload_background(ctx: UploadContext) -> None:
             await job_service.update_progress(
                 ctx.upload_id, JobStatus.PROCESSING, "processing upload..."
             )
+
+            if message := upload_pause_message(ctx.auth_session.did):
+                raise UploadPhaseError(message)
 
             if ctx.staged:
                 await _settle_staged_audio(ctx)
@@ -1914,6 +1922,7 @@ async def upload_track(
     Returns:
         dict: A payload containing `upload_id` for monitoring progress via SSE.
     """
+    require_upload_allowed(auth_session.did)
     await validate_upload_form(request)
     if not file.filename:
         raise HTTPException(status_code=400, detail="no filename provided")

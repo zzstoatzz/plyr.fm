@@ -6,6 +6,7 @@ from .router import router
 # IMPORTANT: Order matters! Static paths (/tags, /liked, /me) must be imported
 # BEFORE modules with wildcard paths (/{track_id}) to ensure correct routing.
 from . import listing as _listing  # /, /me, /me/broken
+from . import upload_feedback as _upload_feedback
 from . import tags as _tags  # /tags
 from . import likes as _likes  # /liked, /{track_id}/like, /{track_id}/likes
 from . import (
