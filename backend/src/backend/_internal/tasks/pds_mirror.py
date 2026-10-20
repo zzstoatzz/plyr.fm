@@ -32,6 +32,7 @@ from sqlalchemy import select
 
 from backend._internal.atproto.client import pds_blob_url
 from backend._internal.background import get_docket
+from backend._internal.upload_policy import upload_pause_message
 from backend.config import settings
 from backend.models import Artist, Track
 from backend.storage import storage
@@ -83,6 +84,8 @@ async def mirror_pds_blob(track_id: int) -> None:
 
     r2_url, blob_cid, file_type, artist_did, artist_pds_url = row
 
+    if upload_pause_message(artist_did):
+        return
     if r2_url:
         return
     if not (blob_cid and artist_pds_url and is_safe_url(artist_pds_url)):

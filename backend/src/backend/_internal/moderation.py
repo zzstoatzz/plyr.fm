@@ -8,6 +8,7 @@ from sqlalchemy.orm import joinedload
 
 from backend._internal.clients.moderation import ScanResult, get_moderation_client
 from backend._internal.notifications import notification_service
+from backend._internal.upload_policy import track_uploads_paused
 from backend.config import settings
 from backend.models import CopyrightScan, Track
 from backend.utilities.copyright_evidence import (
@@ -52,6 +53,9 @@ async def scan_track_for_copyright(
 
     if not settings.moderation.auth_token:
         logger.warning("MODERATION_AUTH_TOKEN not set, skipping copyright scan")
+        return
+
+    if await track_uploads_paused(track_id):
         return
 
     with logfire.span(

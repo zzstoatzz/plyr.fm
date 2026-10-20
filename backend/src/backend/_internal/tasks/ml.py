@@ -8,6 +8,7 @@ from sqlalchemy import select
 from backend._internal.background import get_docket
 from backend._internal.clients.clap import get_clap_client
 from backend._internal.clients.tpuf import upsert as tpuf_upsert
+from backend._internal.upload_policy import track_uploads_paused
 from backend.config import settings
 from backend.models import Artist, Track
 from backend.utilities.database import db_session
@@ -24,6 +25,9 @@ async def generate_embedding(track_id: int, audio_url: str) -> None:
     """
     if not (settings.modal.enabled and settings.turbopuffer.enabled):
         logger.debug("embedding generation disabled, skipping track %d", track_id)
+        return
+
+    if await track_uploads_paused(track_id):
         return
 
     async with db_session() as db:
@@ -92,6 +96,9 @@ async def classify_genres(track_id: int, audio_url: str) -> None:
 
     if not settings.replicate.enabled:
         logger.debug("genre classification disabled, skipping track %d", track_id)
+        return
+
+    if await track_uploads_paused(track_id):
         return
 
     client = get_replicate_client()

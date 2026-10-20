@@ -23,6 +23,7 @@ from backend._internal.content_labels import (
     label_visible_clause,
 )
 from backend._internal.track_visibility import visible_filter
+from backend._internal.upload_policy import upload_pause_message
 from backend.config import settings
 from backend.models import (
     Artist,
@@ -550,6 +551,7 @@ async def list_my_tracks(
 
 
 class UploadSummaryResponse(BaseModel):
+    upload_pause_message: str | None = None
     uploaded_audio_seconds: float
     scanned_audio_seconds: float
 
@@ -585,6 +587,7 @@ async def get_upload_summary(
     ).one()
 
     return UploadSummaryResponse(
+        upload_pause_message=upload_pause_message(auth_session.did),
         uploaded_audio_seconds=usage[0],
         scanned_audio_seconds=usage[1],
     )

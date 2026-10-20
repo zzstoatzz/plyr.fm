@@ -34,6 +34,7 @@ from backend._internal.atproto.records import build_track_record, update_record
 from backend._internal.background import get_docket
 from backend._internal.jobs import job_service
 from backend._internal.tasks.hooks import invalidate_tracks_discovery_cache
+from backend._internal.upload_policy import upload_pause_message
 from backend.api.tracks.uploads import (
     AudioInfo,
     PdsBlobResult,
@@ -291,7 +292,7 @@ async def optimize_track_audio(
             return
 
         state = await _load_audio_state(track_id)
-        if state is None:
+        if state is None or upload_pause_message(state.artist_did):
             return
 
         job_id = await job_service.create_job(
