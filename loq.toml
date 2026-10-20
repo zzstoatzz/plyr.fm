@@ -31,7 +31,7 @@ max_lines = 989
 
 [[rules]]
 path = "backend/src/backend/api/tracks/listing.py"
-max_lines = 690
+max_lines = 693
 
 [[rules]]
 path = "backend/src/backend/api/tracks/mutations.py"
@@ -39,7 +39,7 @@ max_lines = 850
 
 [[rules]]
 path = "backend/src/backend/api/tracks/uploads.py"
-max_lines = 2177
+max_lines = 2186
 
 [[rules]]
 path = "backend/src/backend/config.py"
@@ -175,7 +175,7 @@ max_lines = 1299
 
 [[rules]]
 path = "frontend/src/routes/upload/+page.svelte"
-max_lines = 965
+max_lines = 991
 
 [[rules]]
 path = "services/moderation/src/admin.rs"
@@ -207,11 +207,11 @@ max_lines = 628
 
 [[rules]]
 path = "frontend/src/routes/login/+page.svelte"
-max_lines = 735
+max_lines = 818
 
 [[rules]]
 path = "backend/src/backend/_internal/tasks/ingest.py"
-max_lines = 1159
+max_lines = 1169
 
 [[rules]]
 path = "backend/tests/test_jetstream.py"
@@ -255,7 +255,7 @@ max_lines = 1086
 
 [[rules]]
 path = "backend/src/backend/api/tracks/audio_replace.py"
-max_lines = 852
+max_lines = 861
 
 [[rules]]
 path = "backend/tests/conftest.py"
@@ -307,7 +307,7 @@ max_lines = 542
 
 [[rules]]
 path = "backend/tests/api/test_audio_optimize.py"
-max_lines = 934
+max_lines = 940
 
 [[rules]]
 path = "frontend/src/lib/components/portal/TracksSection.svelte"
@@ -415,7 +415,7 @@ max_lines = 684
 
 [[rules]]
 path = "backend/src/backend/_internal/notifications.py"
-max_lines = 534
+max_lines = 541
 
 [[rules]]
 path = "frontend/vendor/sister-radio/frontend/src/features/equalizer/EqualizerPanel.tsx"

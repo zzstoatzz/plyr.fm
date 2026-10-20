@@ -55,6 +55,7 @@ from backend._internal.tasks.hooks import (
     run_post_track_audio_replace_hooks,
 )
 from backend._internal.track_revisions import prune_revisions
+from backend._internal.upload_policy import require_upload_allowed, upload_pause_message
 from backend.api.albums import invalidate_album_cache_by_id
 from backend.api.tracks.uploads import (
     AudioInfo,
@@ -419,6 +420,15 @@ async def _process_replace_background(ctx: ReplaceContext) -> None:
         track_id=ctx.track_id,
         filename=ctx.filename,
     ):
+        if message := upload_pause_message(ctx.auth_session.did):
+            await _delete_staged_audio(
+                ctx.audio_file_id, new_file_type_for_rollback, gated=ctx.is_gated
+            )
+            await job_service.update_progress(
+                ctx.job_id, JobStatus.FAILED, "audio replace paused", error=message
+            )
+            return
+
         # ---- pre-commit (rollback applies) ----
         try:
             await job_service.update_progress(
@@ -714,6 +724,7 @@ async def replace_track_audio(
     can reuse the existing `GET /tracks/uploads/{upload_id}/progress` SSE
     endpoint to follow progress.
     """
+    require_upload_allowed(auth_session.did)
     if not file.filename:
         raise HTTPException(status_code=400, detail="no filename provided")
 

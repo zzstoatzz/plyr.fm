@@ -18,6 +18,7 @@ from backend._internal.track_visibility import (
     ensure_track_visible,
     visible_filter,
 )
+from backend._internal.upload_policy import upload_pause_message
 from backend.config import settings
 from backend.models import Artist, Tag, Track, TrackLike, TrackTag, get_db
 from backend.schemas import TrackResponse
@@ -216,6 +217,9 @@ async def get_recommended_tags(
         and extra.get("genre_predictions_file_id") != track.file_id
     ):
         predictions = None
+
+    if predictions is None and upload_pause_message(track.artist_did):
+        return RecommendedTagsResponse(track_id=track_id, tags=[], available=False)
 
     if predictions is None and settings.replicate.enabled:
         audio_url = None if track.is_private else await resolve_audio_url(track.id)
