@@ -372,6 +372,19 @@ class NotificationService:
             logger.info(f"sent image flag notification for {image_id}")
         return result
 
+    async def send_upload_feedback_notification(
+        self, feedback_id: int, handle: str | None, message: str
+    ) -> NotificationResult | None:
+        recipient_did = await self.ensure_ready()
+        if recipient_did is None:
+            logger.warning("recipient not set, skipping upload feedback notification")
+            return None
+        return await self._send_dm_to_did(
+            recipient_did,
+            f"upload pause feedback on {_origin()} from {handle or 'an account'}. "
+            f"Full message: upload_feedback #{feedback_id}.\n\n{message[:600]}",
+        )
+
     async def send_user_report_notification(
         self,
         report_id: int,
