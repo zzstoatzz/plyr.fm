@@ -7,7 +7,7 @@ services:
     ports:
       # overridable so a second checkout can run its own stack; the project name
       # isolates the containers but not the host ports.
-      - "${TEST_DB_PORT:-5433}:5432"
+      - "127.0.0.1:${TEST_DB_PORT:-5433}:5432"
     environment:
       POSTGRES_USER: relay_test
       POSTGRES_PASSWORD: relay_test
@@ -27,7 +27,7 @@ services:
   test-redis:
     image: redis:7-alpine
     ports:
-      - "${TEST_REDIS_PORT:-6380}:6379"
+      - "127.0.0.1:${TEST_REDIS_PORT:-6380}:6379"
     # --databases: each xdist worker claims db (1 + gwN) for isolation; the
     # redis default of 16 breaks past gw14 ("DB index is out of range") on
     # many-core machines. CI's redis service container keeps the default but
