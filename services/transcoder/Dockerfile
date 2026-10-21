@@ -1,16 +1,6 @@
 # syntax=docker/dockerfile:1.7
 
-FROM debian:bookworm-slim AS ffmpeg
-RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
-    --mount=type=cache,target=/var/lib/apt,sharing=locked \
-    apt-get update && apt-get install -y --no-install-recommends \
-        ca-certificates \
-        curl \
-        xz-utils \
-        && rm -rf /var/lib/apt/lists/*
-RUN mkdir -p /tmp/ffmpeg \
-    && curl -L https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz \
-        | tar -xJ --strip-components=1 -C /tmp/ffmpeg
+FROM mwader/static-ffmpeg:7.0.2@sha256:d9b22f65c2049d73bf8ae556bb4c5c7d45e9fb85939d87951ed98f22b0f19105 AS ffmpeg
 
 FROM rust:1.85-slim AS builder
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
@@ -41,8 +31,8 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
         libssl3 \
         && rm -rf /var/lib/apt/lists/*
 
-COPY --from=ffmpeg /tmp/ffmpeg/ffmpeg /usr/local/bin/ffmpeg
-COPY --from=ffmpeg /tmp/ffmpeg/ffprobe /usr/local/bin/ffprobe
+COPY --from=ffmpeg /ffmpeg /usr/local/bin/ffmpeg
+COPY --from=ffmpeg /ffprobe /usr/local/bin/ffprobe
 COPY --from=builder /app/services/transcoder/target/release/transcoder /usr/local/bin/transcoder
 
 ENV TRANSCODER_HOST=0.0.0.0 \
