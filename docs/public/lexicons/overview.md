@@ -34,9 +34,16 @@ the core content record — an audio track uploaded by an artist.
 ```
 key: tid (timestamp-based ID)
 required: title, artist, fileType, createdAt
-optional: audioUrl, audioBlob, album, duration, features, imageUrl, description, supportGate, labels
+optional: audioUrl, audioBlob, album, duration, features, imageUrl, description, supportGate, labels, tags
 note: at least one of audioUrl or audioBlob must be present
 ```
+
+`tags` is an optional array of up to twenty strings, each at most 50 characters.
+For example, `"tags": ["ai", "ambient"]`. Use `"tags": []` to explicitly clear
+tags. plyr.fm normalizes case and whitespace when indexing. Existing records
+without this field remain valid; legacy tags saved only in plyr.fm are migrated
+when the owner next signs in with write access. Once reconciled, omitting the
+field also clears indexed tags.
 
 example record from the network:
 

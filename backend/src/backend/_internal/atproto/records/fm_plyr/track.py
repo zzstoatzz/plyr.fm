@@ -6,6 +6,7 @@ from typing import Any
 from urllib.parse import urljoin
 
 from atproto_identity.did.resolver import AsyncDidResolver
+from sqlalchemy.ext.asyncio import async_object_session
 
 from backend._internal import Session as AuthSession
 from backend._internal.atproto.client import BlobRef, make_pds_request, parse_at_uri
@@ -14,6 +15,7 @@ from backend._internal.atproto.self_labels import build_self_labels
 from backend.config import settings
 from backend.models import Track
 from backend.utilities.audio_formats import AudioFormat
+from backend.utilities.track_tags import project_record_tags, record_tags
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +38,7 @@ async def build_track_record(
     description: str | None = None,
     self_labels: list[str] | None = None,
     created_at: datetime | None = None,
+    tags: list[str] | None = None,
 ) -> dict[str, Any]:
     """Build a track record dict for ATProto.
 
@@ -97,6 +100,9 @@ async def build_track_record(
     if audio_blob:
         record["audioBlob"] = audio_blob
 
+    if tags is not None:
+        record["tags"] = record_tags({"tags": tags})
+
     return record
 
 
@@ -116,6 +122,7 @@ async def create_track_record(
     self_labels: list[str] | None = None,
     rkey: str | None = None,
     created_at: datetime | None = None,
+    tags: list[str] | None = None,
 ) -> tuple[str, str]:
     """Create a track record on the user's PDS using the configured collection.
 
@@ -162,6 +169,7 @@ async def create_track_record(
         description=description,
         self_labels=self_labels,
         created_at=created_at,
+        tags=tags,
     )
 
     payload: dict[str, Any] = {
@@ -264,6 +272,68 @@ async def get_record_public_resilient(
         return await get_record_public(record_uri, resolved_url), resolved_url
 
 
+async def read_track_record(
+    auth_session: AuthSession, record_uri: str
+) -> dict[str, Any]:
+    repo, collection, rkey = parse_at_uri(record_uri)
+    return await make_pds_request(
+        auth_session,
+        "GET",
+        "com.atproto.repo.getRecord",
+        params={"repo": repo, "collection": collection, "rkey": rkey},
+    )
+
+
+async def patch_track_record(
+    auth_session: AuthSession,
+    record_uri: str,
+    record: dict[str, Any],
+    *,
+    snapshot: dict[str, Any] | None = None,
+    rebuild: bool = False,
+    remove_fields: set[str] | None = None,
+) -> dict[str, Any]:
+    current = (
+        snapshot
+        if snapshot is not None
+        else await read_track_record(auth_session, record_uri)
+    )
+    value = dict(current["value"])
+    if rebuild:
+        for field in (
+            "album",
+            "duration",
+            "features",
+            "imageUrl",
+            "supportGate",
+            "description",
+            "labels",
+            "audioBlob",
+            "audioUrl",
+        ):
+            value.pop(field, None)
+    for field in remove_fields or ():
+        value.pop(field, None)
+    value.update(record)
+    if "createdAt" in current["value"]:
+        value["createdAt"] = current["value"]["createdAt"]
+    record_tags(value)
+    repo, collection, rkey = parse_at_uri(record_uri)
+    result = await make_pds_request(
+        auth_session,
+        "POST",
+        "com.atproto.repo.putRecord",
+        {
+            "repo": repo,
+            "collection": collection,
+            "rkey": rkey,
+            "record": value,
+            "swapRecord": current["cid"],
+        },
+    )
+    return {**result, "value": value}
+
+
 async def update_record(
     auth_session: AuthSession,
     record_uri: str,
@@ -284,6 +354,11 @@ async def update_record(
         Exception: if record update fails
     """
     repo, collection, rkey = parse_at_uri(record_uri)
+    if collection == settings.atproto.track_collection:
+        result = await patch_track_record(
+            auth_session, record_uri, record, rebuild=True
+        )
+        return result["uri"], result["cid"]
 
     payload = {
         "repo": repo,
@@ -319,6 +394,8 @@ async def rebuild_track_pds_record(
     track: Track,
     auth_session: AuthSession,
     image_url_override: str | None = None,
+    tags: list[str] | None = None,
+    fields: set[str] | None = None,
 ) -> None:
     """rebuild the fm.plyr.track PDS record from the current track row.
 
@@ -327,9 +404,8 @@ async def rebuild_track_pds_record(
     audioUrl is the auth-proxied endpoint; for public tracks it's the cached
     r2_url.
 
-    early-returns when the track has no PDS record yet or when the public
-    track's r2_url isn't available (e.g., mid-bucket-move). callers schedule
-    a follow-up if they need a definite update.
+    metadata edits patch only their changed fields. full rebuilds preserve
+    tags, unknown fields and the original creation time from the current PDS record.
 
     raises:
         Exception: if the PDS update call fails.
@@ -343,8 +419,8 @@ async def rebuild_track_pds_record(
         audio_url = urljoin(backend_url + "/", f"audio/{track.file_id}")
     else:
         audio_url = track.r2_url
-        if not audio_url:
-            return
+        if fields is None and not audio_url and not track.pds_blob_cid:
+            raise ValueError("track has no published audio")
 
     updated_record = await build_track_record(
         title=track.title,
@@ -359,16 +435,25 @@ async def rebuild_track_pds_record(
         audio_blob=audio_blob_ref(track),
         description=track.description,
         self_labels=track.self_labels,
+        tags=tags,
     )
 
-    result = await update_record(
-        auth_session=auth_session,
-        record_uri=record_uri,
-        record=updated_record,
+    if fields is not None:
+        updated_record = {
+            key: value for key, value in updated_record.items() if key in fields
+        }
+    result = await patch_track_record(
+        auth_session,
+        record_uri,
+        updated_record,
+        rebuild=fields is None,
+        remove_fields=fields,
     )
-    if result:
-        _, new_cid = result
-        track.atproto_record_cid = new_cid
+    track.atproto_record_cid = result["cid"]
+    if db := async_object_session(track):
+        await project_record_tags(db, track, result["value"])
+    if rev := result.get("commit", {}).get("rev"):
+        track.extra = {**(track.extra or {}), "tags_pds_rev": rev}
 
 
 async def delete_record_by_uri(
