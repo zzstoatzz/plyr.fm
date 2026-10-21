@@ -1,21 +1,18 @@
 """Private feedback from accounts whose uploads are paused."""
 
-import logging
 from typing import Annotated
 
-from fastapi import BackgroundTasks, Depends, HTTPException, Request
+from fastapi import Depends, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, StringConstraints
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend._internal import Session, require_auth
-from backend._internal.notifications import notification_service
+from backend._internal.upload_notifications import schedule_upload_feedback_notification
 from backend._internal.upload_policy import upload_pause_message
 from backend.models import UploadFeedback, get_db
 from backend.utilities.rate_limit import limiter
 
 from .router import router
-
-logger = logging.getLogger(__name__)
 
 
 class UploadFeedbackRequest(BaseModel):
@@ -29,23 +26,11 @@ class UploadFeedbackResponse(BaseModel):
     id: int
 
 
-async def notify_upload_feedback(
-    feedback_id: int, handle: str | None, message: str
-) -> None:
-    try:
-        await notification_service.send_upload_feedback_notification(
-            feedback_id, handle, message
-        )
-    except Exception:
-        logger.warning("upload feedback notification failed for %s", feedback_id)
-
-
 @router.post("/me/upload-feedback", status_code=201)
 @limiter.limit("3/hour")
 async def submit_upload_feedback(
     request: Request,
     body: UploadFeedbackRequest,
-    background_tasks: BackgroundTasks,
     session: Session = Depends(require_auth),
     db: AsyncSession = Depends(get_db),
 ) -> UploadFeedbackResponse:
@@ -59,7 +44,5 @@ async def submit_upload_feedback(
     db.add(feedback)
     await db.commit()
     await db.refresh(feedback)
-    background_tasks.add_task(
-        notify_upload_feedback, feedback.id, session.handle, feedback.message
-    )
+    await schedule_upload_feedback_notification(feedback.id)
     return UploadFeedbackResponse(id=feedback.id)

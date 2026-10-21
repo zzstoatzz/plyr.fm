@@ -9,12 +9,8 @@ from fastapi.testclient import TestClient
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend._internal import Session, require_auth
-from backend._internal.notifications import (
-    DmMessage,
-    NotificationResult,
-    notification_service,
-)
+from backend._internal import Session, background, require_auth
+from backend._internal.notifications import notification_service
 from backend.models import UploadFeedback
 from backend.utilities.rate_limit import limiter
 
@@ -45,26 +41,16 @@ def feedback_app(
     fastapi_app.dependency_overrides.clear()
 
 
-@pytest.mark.parametrize("notification_fails", [False, True])
-async def test_feedback_saved_before_notification(
+async def test_feedback_saved_when_queue_unavailable(
     feedback_app: FastAPI,
     db_session: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
-    notification_fails: bool,
 ) -> None:
-    notifications: list[tuple[str, DmMessage]] = []
+    async def unavailable() -> None:
+        return None
 
-    async def ready() -> str:
-        return "did:plc:operator"
-
-    async def send(recipient_did: str, message: DmMessage) -> NotificationResult:
-        notifications.append((recipient_did, message))
-        if notification_fails:
-            raise ConnectionError("notification provider unavailable")
-        return NotificationResult(success=True, recipient_did=recipient_did)
-
-    monkeypatch.setattr(notification_service, "ensure_ready", ready)
-    monkeypatch.setattr(notification_service, "_send_dm_to_did", send)
+    monkeypatch.setattr(notification_service, "ensure_ready", unavailable)
+    monkeypatch.setattr(background, "_docket", None)
     with TestClient(feedback_app, headers={"fly-client-ip": uuid4().hex}) as client:
         response = client.post(
             "/tracks/me/upload-feedback",
@@ -77,8 +63,6 @@ async def test_feedback_saved_before_notification(
     assert saved.did == PAUSED_DID
     assert saved.handle == "renamed.example"
     assert saved.message == "please email me at a@example.com"
-    assert notifications[0][0] == "did:plc:operator"
-    assert saved.message in str(notifications[0][1])
 
 
 @pytest.mark.parametrize(

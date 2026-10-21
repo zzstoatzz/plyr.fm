@@ -33,6 +33,7 @@ from backend._internal.tasks.origin_trust import (
 )
 from backend._internal.tasks.pds import is_like_uri_cancelled
 from backend._internal.tasks.pds_mirror import schedule_pds_blob_mirror
+from backend._internal.upload_notifications import schedule_upload_pause_notification
 from backend._internal.upload_policy import upload_pause_message
 from backend.config import settings
 from backend.models import (
@@ -203,6 +204,9 @@ async def ingest_track_create(
         rev: repo commit rev, recorded so later updates can be ordered
     """
     if upload_pause_message(did):
+        await schedule_upload_pause_notification(
+            did, None, "blocked external track publication", uri
+        )
         logfire.info("ingest: uploads paused for account", artist_did=did)
         return
 
@@ -479,6 +483,24 @@ async def ingest_track_update(
 
         pds_audio_replaced = False
         uploads_paused = upload_pause_message(did) is not None
+        audio_blob = record.get("audioBlob")
+        incoming_blob = (
+            audio_blob.get("ref", {}).get("$link")
+            if isinstance(audio_blob, dict)
+            else None
+        )
+        if (
+            uploads_paused
+            and track.audio_storage != "r2_private"
+            and not track.is_private
+            and (
+                (incoming_blob and incoming_blob != track.pds_blob_cid)
+                or (record.get("audioUrl") and record["audioUrl"] != track.r2_url)
+            )
+        ):
+            await schedule_upload_pause_notification(
+                did, None, "audio change observed while uploads paused", uri
+            )
         if (
             not uploads_paused
             and track.audio_storage != "r2_private"

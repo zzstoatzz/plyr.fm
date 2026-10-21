@@ -31,7 +31,7 @@ max_lines = 989
 
 [[rules]]
 path = "backend/src/backend/api/tracks/listing.py"
-max_lines = 693
+max_lines = 698
 
 [[rules]]
 path = "backend/src/backend/api/tracks/mutations.py"
@@ -39,7 +39,7 @@ max_lines = 850
 
 [[rules]]
 path = "backend/src/backend/api/tracks/uploads.py"
-max_lines = 2186
+max_lines = 2195
 
 [[rules]]
 path = "backend/src/backend/config.py"
@@ -211,7 +211,7 @@ max_lines = 818
 
 [[rules]]
 path = "backend/src/backend/_internal/tasks/ingest.py"
-max_lines = 1169
+max_lines = 1191
 
 [[rules]]
 path = "backend/tests/test_jetstream.py"
@@ -255,7 +255,7 @@ max_lines = 1086
 
 [[rules]]
 path = "backend/src/backend/api/tracks/audio_replace.py"
-max_lines = 861
+max_lines = 873
 
 [[rules]]
 path = "backend/tests/conftest.py"
@@ -415,7 +415,7 @@ max_lines = 684
 
 [[rules]]
 path = "backend/src/backend/_internal/notifications.py"
-max_lines = 541
+max_lines = 563
 
 [[rules]]
 path = "frontend/vendor/sister-radio/frontend/src/features/equalizer/EqualizerPanel.tsx"
