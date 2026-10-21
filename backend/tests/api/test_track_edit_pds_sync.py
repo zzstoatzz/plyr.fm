@@ -24,7 +24,7 @@ from backend._internal import Session, require_auth
 from backend.main import app
 from backend.models import Artist, Track
 
-_ARTIST_DID = "did:plc:edit_sync_artist"
+_ARTIST_DID = "did:plc:abcdefghijklmnopqrstuvwx"
 
 
 class MockSession(Session):
@@ -86,7 +86,11 @@ async def test_editing_track_title_syncs_to_pds(
     # mock only the PDS network call; rebuild_track_pds_record + build_track_record
     # + update_record all run for real (and through beartype).
     pds = AsyncMock(
-        return_value={"uri": published_track.atproto_record_uri, "cid": "bafyupdated"}
+        return_value={
+            "uri": published_track.atproto_record_uri,
+            "cid": "bafyupdated",
+            "value": {},
+        }
     )
     with patch("backend._internal.atproto.records.fm_plyr.track.make_pds_request", pds):
         async with AsyncClient(
@@ -101,7 +105,7 @@ async def test_editing_track_title_syncs_to_pds(
     assert response.json()["title"] == "renamed track"
 
     # the rebuild reached putRecord, carrying the new title
-    pds.assert_awaited_once()
+    assert pds.await_count == 2
     assert pds.await_args is not None
     _auth, method, nsid, payload = pds.await_args.args
     assert (method, nsid) == ("POST", "com.atproto.repo.putRecord")
@@ -116,7 +120,11 @@ async def test_editing_creator_self_label_syncs_to_pds(
     test_app: FastAPI, db_session: AsyncSession, published_track: Track
 ) -> None:
     pds = AsyncMock(
-        return_value={"uri": published_track.atproto_record_uri, "cid": "bafylabels"}
+        return_value={
+            "uri": published_track.atproto_record_uri,
+            "cid": "bafylabels",
+            "value": {},
+        }
     )
     with patch("backend._internal.atproto.records.fm_plyr.track.make_pds_request", pds):
         async with AsyncClient(
@@ -172,7 +180,19 @@ async def test_editing_keeps_the_audio_blob_in_the_pds_record(
     """a rebuilt record must still reference the audio blob — a PDS
     garbage-collects a blob no record references, which deletes the audio."""
     pds = AsyncMock(
-        return_value={"uri": track_on_pds.atproto_record_uri, "cid": "bafyupdated"}
+        return_value={
+            "uri": track_on_pds.atproto_record_uri,
+            "cid": "bafyupdated",
+            "value": {
+                "audioBlob": {
+                    "$type": "blob",
+                    "ref": {"$link": "bafkreiblobonpds"},
+                    "mimeType": "audio/mpeg",
+                    "size": 2562132,
+                },
+                "audioUrl": "https://audio.example.com/edit_sync_pds.mp3",
+            },
+        }
     )
     with patch("backend._internal.atproto.records.fm_plyr.track.make_pds_request", pds):
         async with AsyncClient(
@@ -183,7 +203,7 @@ async def test_editing_keeps_the_audio_blob_in_the_pds_record(
             )
     assert response.status_code == 200, response.text
 
-    pds.assert_awaited_once()
+    assert pds.await_count == 2
     assert pds.await_args is not None
     record = pds.await_args.args[3]["record"]
     assert record["audioBlob"] == {

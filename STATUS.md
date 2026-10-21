@@ -47,6 +47,17 @@ plyr.fm should become:
 
 ### October 2026
 
+#### portable track tags (October 21 — staging verification pending)
+
+Track records support optional `tags` arrays, including tags published directly
+by other clients. Uploads and edits write tags to the PDS; ingestion projects them
+into Postgres. Metadata edits patch only requested fields with a CID precondition,
+and record rebuilds retain tags, unknown fields and the original creation time.
+Legacy DB-only tags migrate on authorized login without overwriting an existing
+PDS tag field. Failed automatic genre-tag writes stay pending. See
+`docs/internal/backend/track-tags.md` for migration, ordering and refresh commands.
+Production promotion and Penny's production refresh await approval.
+
 #### upload pause operator DMs (October 20)
 
 Accounts on the temporary upload pause list now notify the existing operator DM

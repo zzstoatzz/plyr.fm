@@ -105,8 +105,14 @@ async def test_download_roundtrip_restores_pds_record(
                 AsyncMock(return_value="https://audio.example/audio/playback.mp3"),
             ) as copies,
             patch(
-                "backend._internal.atproto.records.fm_plyr.track.update_record",
-                AsyncMock(return_value=(track.atproto_record_uri, "record-cid")),
+                "backend._internal.atproto.records.fm_plyr.track.make_pds_request",
+                AsyncMock(
+                    return_value={
+                        "uri": track.atproto_record_uri,
+                        "cid": "record-cid",
+                        "value": {},
+                    }
+                ),
             ) as record,
         ):
             docket.return_value.add.return_value = enqueue
@@ -128,7 +134,7 @@ async def test_download_roundtrip_restores_pds_record(
                     )
                     assert status.json()["status"] == "completed", status.text
                     await db_session.refresh(track)
-                    written = record.call_args.kwargs["record"]
+                    written = record.call_args.args[3]["record"]
                     assert written["description"] == "keep this description"
                     if mode == "off":
                         assert "audioBlob" not in written
@@ -210,12 +216,16 @@ async def test_public_preparation_respects_existing_storage_contract(
             AsyncMock(return_value="https://audio.example/audio/playback.mp3"),
         ) as copy,
         patch(
-            "backend._internal.atproto.records.fm_plyr.track.update_record",
+            "backend._internal.atproto.records.fm_plyr.track.make_pds_request",
             AsyncMock(
                 side_effect=ConnectionError("record unavailable")
                 if outcome == "record_failure"
                 else None,
-                return_value=(track.atproto_record_uri, "new-cid"),
+                return_value={
+                    "uri": track.atproto_record_uri,
+                    "cid": "new-cid",
+                    "value": {},
+                },
             ),
         ),
         patch(

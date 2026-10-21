@@ -82,7 +82,8 @@ from backend.utilities.progress import R2ProgressTracker
 from backend.utilities.publishing import PublishingDefaults, resolve_publishing
 from backend.utilities.rate_limit import limiter
 from backend.utilities.slugs import slugify
-from backend.utilities.tags import add_tags_to_track, parse_tags_json
+from backend.utilities.tags import parse_tags_json
+from backend.utilities.track_tags import project_record_tags
 
 from .router import router
 from .services import get_or_create_album
@@ -1095,6 +1096,8 @@ async def _create_records(
 
         db.add(track)
         try:
+            await db.flush()
+            await project_record_tags(db, track, {"tags": ctx.tags}, authoritative=True)
             await db.commit()
             await db.refresh(track)
         except IntegrityError as e:
@@ -1135,6 +1138,7 @@ async def _create_records(
                 audio_blob=pds_result.blob_ref,
                 description=ctx.description,
                 self_labels=ctx.self_labels,
+                tags=ctx.tags,
                 created_at=created_at,
             )
             _, atproto_cid = await create_space_record(
@@ -1159,6 +1163,7 @@ async def _create_records(
                 audio_blob=pds_result.blob_ref if pds_result else None,
                 description=ctx.description,
                 self_labels=ctx.self_labels,
+                tags=ctx.tags,
                 rkey=rkey,
                 created_at=created_at,
             )
@@ -1251,9 +1256,6 @@ async def _schedule_post_upload(
     run_hooks is False when Jetstream ingest already finalized the pending
     row and ran hooks before us (race condition — hooks only run once).
     """
-    async with db_session() as db:
-        await add_tags_to_track(db, track.id, ctx.tags, ctx.artist_did)
-
     # upload-specific: album list sync (legacy path only — the explicit
     # album_id path defers list creation to POST /albums/{id}/finalize so the
     # record is written once with the user-intended order instead of racing

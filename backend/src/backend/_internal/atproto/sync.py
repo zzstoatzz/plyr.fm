@@ -12,6 +12,7 @@ from backend._internal.atproto.records.fm_plyr import (
     upsert_liked_list_record,
     upsert_profile_record,
 )
+from backend._internal.atproto.tag_sync import sync_user_track_tags
 from backend.utilities.database import db_session
 
 logger = logging.getLogger(__name__)
@@ -55,6 +56,8 @@ async def sync_atproto_records(
     should be called from a background task to avoid blocking.
     """
     from backend.models import Album, Artist, Track, TrackLike, UserPreferences
+
+    await sync_user_track_tags(auth_session, user_did)
 
     # sync profile record with avatar refresh
     async with db_session() as session:

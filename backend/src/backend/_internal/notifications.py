@@ -4,6 +4,7 @@ import logging
 import time
 from collections.abc import Sequence
 from dataclasses import dataclass
+from typing import Literal
 
 import logfire
 from atproto import AsyncClient, client_utils, models
@@ -26,6 +27,7 @@ REAPER_RUNBOOK_URL = (
     "docs/internal/runbooks/upload-stall-alert.md"
 )
 DmMessage = str | client_utils.TextBuilder
+IMAGE_FLAG_OWNER_LIMIT = 5
 
 
 def _frontend_link(path: str) -> str | None:
@@ -56,6 +58,17 @@ class NotificationResult:
     recipient_did: str
     error: str | None = None
     error_type: str | None = None  # dm_blocked|network|auth|session|unknown
+
+
+@dataclass(frozen=True)
+class ImageOwner:
+    """a row whose cover is a flagged image."""
+
+    kind: Literal["album", "playlist", "track"]
+    title: str
+    handle: str
+    path: str
+    is_private: bool = False
 
 
 _SESSION_ERRORS = frozenset({"ExpiredToken", "InvalidToken"})
@@ -344,6 +357,7 @@ class NotificationService:
         severity: str,
         categories: list[str],
         context: str,
+        owners: Sequence[ImageOwner] | None,
     ) -> NotificationResult | None:
         """send notification about a flagged image.
 
@@ -352,6 +366,8 @@ class NotificationService:
             severity: severity level (low, medium, high)
             categories: list of violated policy categories
             context: where the image was uploaded (e.g., "track cover", "album cover")
+            owners: every album, playlist and track currently using the image,
+                or None when the lookup failed
         """
         recipient_did = await self.ensure_ready()
         if recipient_did is None:
@@ -359,15 +375,38 @@ class NotificationService:
             return None
 
         categories_str = ", ".join(categories) if categories else "unspecified"
-        message_text = (
+        message = client_utils.TextBuilder().text(
             f"🚨 image flagged on {_origin()}\n\n"
-            f"context: {context}\n"
-            f"image_id: {image_id}\n"
+        )
+        if owners:
+            message.text("used by:\n")
+            for owner in owners[:IMAGE_FLAG_OWNER_LIMIT]:
+                kind = f"{owner.kind} (private)" if owner.is_private else owner.kind
+                message.text(f"- {kind} ")
+                if owner_url := _frontend_link(owner.path):
+                    message.link(f"'{owner.title}'", owner_url)
+                else:
+                    message.text(f"'{owner.title}'")
+                message.text(" by ")
+                if artist_url := _frontend_link(f"u/{owner.handle}"):
+                    message.link(f"@{owner.handle}", artist_url)
+                else:
+                    message.text(f"@{owner.handle}")
+                message.text("\n")
+            if (hidden := len(owners) - IMAGE_FLAG_OWNER_LIMIT) > 0:
+                message.text(f"- +{hidden} more\n")
+        elif owners is None:
+            message.text("used by: unknown (lookup failed)\n")
+        else:
+            message.text("used by: nothing yet\n")
+        message.text(
+            f"\ncontext: {context}\n"
             f"severity: {severity}\n"
-            f"categories: {categories_str}"
+            f"categories: {categories_str}\n"
+            f"image_id: {image_id}"
         )
 
-        result = await self._send_dm_to_did(recipient_did, message_text)
+        result = await self._send_dm_to_did(recipient_did, message)
         if result.success:
             logger.info(f"sent image flag notification for {image_id}")
         return result
