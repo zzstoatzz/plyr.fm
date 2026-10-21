@@ -411,17 +411,39 @@ class NotificationService:
             logger.info(f"sent image flag notification for {image_id}")
         return result
 
-    async def send_upload_feedback_notification(
-        self, feedback_id: int, handle: str | None, message: str
-    ) -> NotificationResult | None:
+    async def _send_operator_text(self, text: str) -> NotificationResult | None:
         recipient_did = await self.ensure_ready()
         if recipient_did is None:
-            logger.warning("recipient not set, skipping upload feedback notification")
             return None
-        return await self._send_dm_to_did(
-            recipient_did,
-            f"upload pause feedback on {_origin()} from {handle or 'an account'}. "
-            f"Full message: upload_feedback #{feedback_id}.\n\n{message[:600]}",
+        parts = [text[i : i + 900] for i in range(0, len(text), 900)]
+        result = None
+        for index, part in enumerate(parts, 1):
+            prefix = f"({index}/{len(parts)}) " if len(parts) > 1 else ""
+            result = await self._send_dm_to_did(recipient_did, prefix + part)
+            if not result.success:
+                return result
+        return result
+
+    async def send_upload_pause_notification(
+        self,
+        did: str,
+        handle: str | None,
+        event: str,
+        detail: str,
+        occurred_at: str,
+    ) -> NotificationResult | None:
+        return await self._send_operator_text(
+            f"upload pause on {_origin()}: {event}\n"
+            f"account: {handle or did}\n{did}\n"
+            f"time: {occurred_at}\n{detail}"
+        )
+
+    async def send_upload_feedback_notification(
+        self, feedback_id: int, handle: str | None, message: str, did: str = ""
+    ) -> NotificationResult | None:
+        return await self._send_operator_text(
+            f"upload pause feedback #{feedback_id} on {_origin()}\n"
+            f"account: {handle or did or 'an account'}\n{did}\n\n{message}"
         )
 
     async def send_user_report_notification(

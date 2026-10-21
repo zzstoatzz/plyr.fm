@@ -67,6 +67,7 @@ from backend._internal.image_uploads import (
 from backend._internal.jobs import job_service
 from backend._internal.tasks import schedule_album_list_sync
 from backend._internal.tasks.hooks import run_post_track_create_hooks
+from backend._internal.upload_notifications import schedule_upload_pause_notification
 from backend._internal.upload_policy import require_upload_allowed, upload_pause_message
 from backend.config import settings
 from backend.models import Album, Artist, Track, UserPreferences
@@ -1368,6 +1369,12 @@ async def _process_upload_background(ctx: UploadContext) -> None:
             )
 
             if message := upload_pause_message(ctx.auth_session.did):
+                await schedule_upload_pause_notification(
+                    ctx.auth_session.did,
+                    ctx.auth_session.handle,
+                    "blocked queued upload",
+                    ctx.filename,
+                )
                 raise UploadPhaseError(message)
 
             if ctx.staged:
@@ -1922,7 +1929,9 @@ async def upload_track(
     Returns:
         dict: A payload containing `upload_id` for monitoring progress via SSE.
     """
-    require_upload_allowed(auth_session.did)
+    await require_upload_allowed(
+        auth_session.did, auth_session.handle, "blocked upload", file.filename or ""
+    )
     await validate_upload_form(request)
     if not file.filename:
         raise HTTPException(status_code=400, detail="no filename provided")

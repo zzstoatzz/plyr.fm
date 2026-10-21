@@ -47,6 +47,19 @@ plyr.fm should become:
 
 ### October 2026
 
+#### upload pause operator DMs (October 20)
+
+Accounts on the temporary upload pause list now notify the existing operator DM
+bot when they encounter the upload notice, hit an upload endpoint, or publish new
+audio through another client. Background processing refusals also notify; normal
+metadata edits and skipped ML jobs stay quiet. Submitted private feedback is sent
+in full, split into numbered DMs when needed. Unsent drafts stay in the browser.
+Notifications run through Docket with retries and a bounded direct-DM fallback
+if Redis is unavailable. Failures leave uploads blocked and feedback saved.
+Delivery is best effort: partial delivery can repeat on retry; exhausted retries
+or failed fallback delivery are logged.
+
+
 #### activity chart time ranges (October 19)
 
 The activity page has day/week/month/year/all-time ranges, labeled axes, and a
