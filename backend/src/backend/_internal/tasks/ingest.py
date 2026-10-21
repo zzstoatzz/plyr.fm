@@ -26,7 +26,10 @@ from backend._internal.atproto.client import pds_blob_url
 from backend._internal.atproto.profile import avatar_url_from_profile_record
 from backend._internal.atproto.self_labels import self_label_values_from_record
 from backend._internal.clients.moderation import get_moderation_client
-from backend._internal.tasks.hooks import run_post_track_create_hooks
+from backend._internal.tasks.hooks import (
+    invalidate_tracks_discovery_cache,
+    run_post_track_create_hooks,
+)
 from backend._internal.tasks.origin_trust import (
     is_trusted_audio_origin,
     is_trusted_image_origin,
@@ -50,6 +53,7 @@ from backend.storage.keys import InvalidMediaExtension
 from backend.utilities.database import db_session
 from backend.utilities.lexicon import validate_record
 from backend.utilities.redis import get_async_redis_client
+from backend.utilities.track_tags import project_record_tags, record_tags
 
 logger = logging.getLogger(__name__)
 
@@ -224,6 +228,12 @@ async def ingest_track_create(
         logfire.warn("ingest: track createdAt is in the future, skipping", uri=uri)
         return
 
+    try:
+        record_tags(record)
+    except ValueError:
+        logfire.warn("ingest: invalid track tags, skipping", uri=uri)
+        return
+
     async with db_session() as db:
         # verify artist exists
         artist = await db.get(Artist, did)
@@ -236,7 +246,10 @@ async def ingest_track_create(
 
         # check for existing row by URI (may be pending from upload path)
         existing = await db.execute(
-            select(Track).where(Track.atproto_record_uri == uri).limit(1)
+            select(Track)
+            .where(Track.atproto_record_uri == uri)
+            .limit(1)
+            .with_for_update()
         )
         existing_track = existing.scalar_one_or_none()
 
@@ -246,6 +259,9 @@ async def ingest_track_create(
                 existing_track.atproto_record_cid = cid
                 existing_track.atproto_record_rev = rev
                 existing_track.publish_state = "published"
+                await project_record_tags(
+                    db, existing_track, record, authoritative=True
+                )
                 await db.commit()
                 await db.refresh(existing_track)
 
@@ -382,6 +398,8 @@ async def ingest_track_create(
         )
         db.add(track)
         try:
+            await db.flush()
+            await project_record_tags(db, track, record, authoritative=True)
             await db.commit()
         except IntegrityError:
             logger.debug("ingest_track_create: duplicate URI %s (race), skipping", uri)
@@ -438,9 +456,18 @@ async def ingest_track_update(
         logfire.warn("ingest: invalid track record, skipping", uri=uri, errors=errors)
         return
 
+    try:
+        record_tags(record)
+    except ValueError:
+        logfire.warn("ingest: invalid track tags, skipping", uri=uri)
+        return
+
     async with db_session() as db:
         result = await db.execute(
-            select(Track).where(Track.atproto_record_uri == uri).limit(1)
+            select(Track)
+            .where(Track.atproto_record_uri == uri)
+            .limit(1)
+            .with_for_update()
         )
         track = result.scalar_one_or_none()
         if not track:
@@ -458,6 +485,11 @@ async def ingest_track_update(
 
         if await _indexing_excluded(uri):
             return
+
+        if not _is_stale_commit(rev, (track.extra or {}).get("tags_pds_rev")):
+            await project_record_tags(db, track, record, cancel_auto=True)
+            if rev:
+                track.extra = {**(track.extra or {}), "tags_pds_rev": rev}
 
         if title := record.get("title"):
             track.title = title
@@ -579,6 +611,7 @@ async def ingest_track_update(
         await db.commit()
         logfire.info("ingest: track updated", uri=uri, artist_did=did)
 
+    await invalidate_tracks_discovery_cache()
     if pds_audio_replaced:
         await schedule_pds_blob_mirror(track_id)
 

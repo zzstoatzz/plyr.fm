@@ -2326,7 +2326,7 @@ class TestIngestAccountStatusChange:
         assert artist.avatar_url == new_avatar
 
     async def test_deactivation_clears_avatar(
-        self, db_session: AsyncSession, artist: Artist
+        self, db_session: AsyncSession, artist: Artist, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """deactivation clears avatar to avoid broken CDN URLs.
 
@@ -2340,6 +2340,10 @@ class TestIngestAccountStatusChange:
         )
         await db_session.commit()
 
+        monkeypatch.setattr(
+            "backend._internal.atproto.account_status.resolve_mini_doc_safe",
+            AsyncMock(return_value=None),
+        )
         await ingest_account_status_change(
             did=artist.did, active=False, status="deactivated"
         )

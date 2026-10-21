@@ -72,6 +72,15 @@
             "description": "Track description (liner notes, show notes, etc.).",
             "maxLength": 5000
           },
+          "tags": {
+            "type": "array",
+            "description": "Creator-applied tags. An empty array explicitly clears all tags.",
+            "maxLength": 20,
+            "items": {
+              "type": "string",
+              "maxLength": 50
+            }
+          },
           "labels": {
             "type": "union",
             "description": "Creator-applied content warnings using global ATProto label values.",
