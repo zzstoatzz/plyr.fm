@@ -278,6 +278,7 @@ async def test_backfill_conflict_leaves_migration_pending(
 async def test_auto_tags_publish_before_projection(
     db_session: AsyncSession, published_track: Track, pds: PdsRepository
 ) -> None:
+    await project_record_tags(db_session, published_track, {"tags": ["ai"]})
     published_track.extra = {
         "auto_tag": True,
         "genre_predictions_file_id": published_track.file_id,
@@ -287,7 +288,7 @@ async def test_auto_tags_publish_before_projection(
     pds.fail = True
     with pytest.raises(RuntimeError, match="InvalidSwap"):
         await sync_track_tags(published_track.id, MockSession())
-    assert await indexed_tags(db_session, published_track.id) == []
+    assert await indexed_tags(db_session, published_track.id) == ["ai"]
     await db_session.refresh(published_track)
     assert published_track.extra["auto_tag"]
     pds.fail = False
@@ -405,3 +406,26 @@ async def test_backfill_keeps_legacy_tags_above_editor_limit(
     await sync_track_tags(published_track.id, MockSession())
     assert pds.value["tags"] == tags
     assert await indexed_tags(db_session, published_track.id) == tags
+
+
+@pytest.mark.parametrize("missing", [False, True])
+async def test_external_tag_change_cancels_pending_auto_tags(
+    db_session: AsyncSession, published_track: Track, pds: PdsRepository, missing: bool
+) -> None:
+    await project_record_tags(db_session, published_track, {"tags": ["ai"]})
+    published_track.extra = {
+        **published_track.extra,
+        "auto_tag": True,
+        "genre_predictions_file_id": published_track.file_id,
+        "genre_predictions": [{"name": "ambient", "confidence": 0.9}],
+    }
+    await db_session.commit()
+    if missing:
+        del pds.value["tags"]
+    else:
+        pds.value["tags"] = []
+    await sync_track_tags(published_track.id, MockSession())
+    assert pds.writes == 0
+    assert await indexed_tags(db_session, published_track.id) == []
+    await db_session.refresh(published_track)
+    assert "auto_tag" not in published_track.extra

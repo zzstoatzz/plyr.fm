@@ -51,6 +51,9 @@ async def sync_track_tags(
         local = await indexed_tags(db, track.id)
         needs_write = tags is None and legacy and bool(local)
         target = local if needs_write else (tags or [])
+        if (tags is not None or not legacy) and set(tags or []) != set(local):
+            extra.pop("auto_tag", None)
+            track.extra = extra
         predictions = extra.get("genre_predictions", [])
         auto_tag = (
             extra.get("auto_tag")
