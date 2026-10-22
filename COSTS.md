@@ -174,6 +174,22 @@ in `my-prefect-server`, not in this repo.
 - The live feed itself: `https://hub.waow.tech/api/costs.json` (filter `project=="plyr.fm"`).
 
 ## changelog
+- **2026-10-22** — staging is on demand (#2202): the `app` scales to zero and `worker` +
+  `jetstream` run only while a test or a manual wake needs them (`just staging-up` /
+  `staging-down`; `.github/workflows/staging-machines.yml` rests them hourly when idle).
+  This removes most of the ~$17.76/mo `relay-api-staging` compute; the hub's Fly line
+  now prices machines by measured 7-day uptime, so it falls over the following week.
+  Destroyed the stale stopped app machine `misty-frog-9969` (`7810309b335628`, failing
+  health check). `api-recovery-stg-oct16` (`85e206b47e65e8`) remains the only app
+  machine and carries the current deployment image; the stopped standby worker
+  `e827009f530de8` is Fly's standby, not a leftover. `plyr-redis-stg` stays on.
+- **2026-10-22** — scaled `plyr-radio-preview` to zero (~$4.15/mo): machine
+  `2870904cd4d638` destroyed, volume `vol_r1jxeqkwggo5xo9r` kept; `just deploy-preview`
+  in plyr-radio restores it.
+- **2026-10-22** — known failure, not caused by the staging change:
+  `test_large_flac_upload_and_playback` in `integration-tests.yml` fails with an R2 read
+  timeout (same failure on 2026-10-21 before #2202; the workflow has failed most runs
+  since 2026-10-19).
 - **2026-06-17** — **applied the moderation fix:** `plyr-moderation` Neon endpoint
   `ep-frosty-credit-ae1vylok` switched from fixed 1 CU / no-suspend to autoscale 0.25–1 CU
   with scale-to-zero (5 min). Kills the ~720 always-on CU-h/mo.
