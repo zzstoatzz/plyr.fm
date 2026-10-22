@@ -48,6 +48,8 @@ connects to `plyr-dev` neon database, local Redis, and uses `fm.plyr.dev` atprot
 
 **testing**:
 - frontend: `https://stg.plyr.fm`
+
+**on demand**: staging rests between tests. the `app` scales to zero and wakes on the first request; `worker` and `jetstream` stay stopped until something starts them (`just staging-up`, or the "staging machines" workflow's `wake`). integration and e2e workflows wake staging before they run, and `.github/workflows/staging-machines.yml` stops `worker` + `jetstream` hourly once no staging workflow is queued or running. uploads made on `stg.plyr.fm` while it rests queue until the worker is woken.
 - backend: `https://api-stg.plyr.fm/docs`
 - database: `plyr-staging` (neon)
 - storage: `audio-staging`, `images-staging` (r2)
@@ -191,7 +193,7 @@ both environments split the backend into two fly process groups in the same app:
 approximate monthly spend; check fly.io billing for current numbers.
 
 - fly.io backend (production): 2× `app` (shared-cpu-1x, 1GB) + 1× active `worker` (shared-cpu-1x, 2GB) + 1× standby `worker` (stopped, near-zero cost)
-- fly.io backend (staging): 1× `app` (shared-cpu-1x, 1GB) + 1× active `worker` (shared-cpu-1x, 1GB) + 1× standby
+- fly.io backend (staging): 1× `app`, 1× `worker` (+ 1× standby), 1× `jetstream` (all shared-cpu-1x, 1GB), stopped between tests
 - fly.io transcoder: auto-scales to zero when idle
 - fly.io self-hosted Redis: 1× shared-cpu-1x, 256MB per env
 - neon postgres: starter plan (3 environments)

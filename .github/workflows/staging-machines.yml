@@ -1,0 +1,54 @@
+name: staging machines
+
+# staging's worker + jetstream run only while something needs them: test
+# workflows wake them, and this puts them back to rest once no test is running.
+on:
+  schedule:
+    - cron: "17 * * * *"
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "wake (start worker + jetstream) or rest (stop them)"
+        type: choice
+        options: [wake, rest]
+        default: wake
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: staging-machines
+  cancel-in-progress: false
+
+jobs:
+  staging:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_STAGING }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: wake staging
+        if: github.event_name == 'workflow_dispatch' && inputs.action == 'wake'
+        run: ./scripts/staging up
+
+      - name: rest staging unless a test is using it
+        if: github.event_name == 'schedule' || inputs.action == 'rest'
+        run: |
+          busy=0
+          for wf in deploy-staging.yml integration-tests.yml e2e-private-media.yml; do
+            for status in queued in_progress; do
+              n=$(gh run list --workflow "$wf" --status "$status" --json databaseId --jq length)
+              busy=$((busy + n))
+            done
+          done
+          if [ "$busy" -gt 0 ]; then
+            echo "staging in use by $busy run(s); leaving it up"
+          else
+            ./scripts/staging down
+          fi

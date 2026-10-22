@@ -17,6 +17,18 @@ setup:
     for skill in .agents/skills/*; do test -L ".claude/skills/$(basename "$skill")" && test -f ".claude/skills/$(basename "$skill")/SKILL.md" || exit 1; done
 
 
+# start staging's worker + jetstream and wait for health
+staging-up:
+    ./scripts/staging up
+
+# stop staging's worker + jetstream (the app scales to zero on its own)
+staging-down:
+    ./scripts/staging down
+
+# show staging machines by process group
+staging-status:
+    ./scripts/staging status
+
 # show commits since last release
 changelog:
     @git log $(git describe --tags --abbrev=0)..HEAD --pretty=format:'%C(yellow)%h%Creset %C(blue)%ad%Creset %C(green)%s%Creset %C(dim)- %an%Creset' --date=relative
