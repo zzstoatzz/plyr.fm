@@ -6,13 +6,16 @@ from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, field_validator
-from sqlalchemy import text
+from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend._internal.atproto.profile import normalize_avatar_url
-from backend.models import get_db
+from backend.models import TrackPlay, get_db
 
 logger = logging.getLogger(__name__)
+
+# all-time starts here; records can carry creator-set dates from before plyr existed
+PLYR_LAUNCH = datetime(2025, 10, 1, tzinfo=UTC)
 
 router = APIRouter(prefix="/activity", tags=["activity"])
 
@@ -97,6 +100,8 @@ class ActivityHistogramResponse(BaseModel):
 
     buckets: list[ActivityHistogramBucket]
     interval: Literal["hour", "day", "month"] = "day"
+    series: Literal["activity", "plays"] = "activity"
+    tracked_since: datetime | None = None
 
 
 # raw SQL for the UNION ALL query — each branch selects the same column shape
@@ -332,8 +337,7 @@ async def get_activity_feed(
     )
 
 
-_HISTOGRAM_QUERY = """
-    WITH events AS (
+_ACTIVITY_EVENTS = """
         SELECT tl.created_at FROM track_likes tl
             WHERE tl.created_at >= COALESCE(CAST(:start AS timestamptz), '-infinity')
                 AND tl.created_at <= :now
@@ -357,6 +361,19 @@ _HISTOGRAM_QUERY = """
             WHERE (ce.playlist_id IS NULL OR p.is_private = false)
                 AND ce.created_at >= COALESCE(CAST(:start AS timestamptz), '-infinity')
                 AND ce.created_at <= :now
+"""
+
+_PLAY_EVENTS = """
+        SELECT tp.played_at AS created_at FROM track_plays tp
+            WHERE tp.played_at >= COALESCE(CAST(:start AS timestamptz), '-infinity')
+                AND tp.played_at <= :now
+                AND (tp.source != 'teal' OR tp.played_at < COALESCE(
+                    (SELECT MIN(played_at) FROM track_plays WHERE source != 'teal'),
+                    'infinity'))
+"""
+
+_HISTOGRAM_QUERY = """
+    WITH events AS ({events}
     ), counts AS (
         SELECT date_trunc(:interval, created_at AT TIME ZONE 'UTC') AS bucket,
             COUNT(*) AS total
@@ -380,8 +397,13 @@ async def get_activity_histogram(
     db: Annotated[AsyncSession, Depends(get_db)],
     days: int = Query(7, ge=1, le=30),
     range: Literal["day", "week", "month", "year", "all"] | None = Query(None),
+    series: Literal["activity", "plays"] = Query("activity"),
 ) -> ActivityHistogramResponse:
-    """get zero-filled activity counts; named ranges take precedence over days."""
+    """get zero-filled counts; named ranges take precedence over days.
+
+    `series=plays` counts recorded plays; `tracked_since` marks where plays
+    stop being teal-only backfill.
+    """
     now = datetime.now(UTC)
     interval: Literal["hour", "day", "month"] = "day"
     start: datetime | None
@@ -393,16 +415,24 @@ async def get_activity_histogram(
         )
     elif range == "all":
         interval = "month"
-        start = None
+        start = PLYR_LAUNCH
     else:
         day_count = {"month": 30, "year": 365}.get(range, days)
         start = now.replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(
             days=day_count - 1
         )
 
+    events = _PLAY_EVENTS if series == "plays" else _ACTIVITY_EVENTS
     result = await db.execute(
-        text(_HISTOGRAM_QUERY),
+        text(_HISTOGRAM_QUERY.format(events=events)),
         {"start": start, "now": now, "interval": interval, "step": f"1 {interval}"},
+    )
+    tracked_since = (
+        await db.scalar(
+            select(func.min(TrackPlay.played_at)).where(TrackPlay.source != "teal")
+        )
+        if series == "plays"
+        else None
     )
 
     return ActivityHistogramResponse(
@@ -416,4 +446,6 @@ async def get_activity_histogram(
             for row in result.fetchall()
         ],
         interval=interval,
+        series=series,
+        tracked_since=tracked_since,
     )

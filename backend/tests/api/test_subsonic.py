@@ -19,11 +19,12 @@ import libsonic
 import pytest
 import uvicorn
 from libsonic.errors import CredentialError
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend._internal import create_session
 from backend.main import app
-from backend.models import Artist, Playlist, Track
+from backend.models import Artist, Playlist, Track, TrackPlay
 
 AUDIO_BYTES = b"ID3\x03\x00fake-mp3-payload-for-subsonic-stream-test"
 DID = "did:plc:subsonicuser"
@@ -327,6 +328,12 @@ async def test_scrobble_increments_play_count(
     await asyncio.to_thread(lambda: conn.scrobble(sid=str(track.id), submission=False))
     await db_session.refresh(track)
     assert track.play_count == 1
+    sources = (
+        await db_session.scalars(
+            select(TrackPlay.source).where(TrackPlay.track_id == track.id)
+        )
+    ).all()
+    assert sources == ["subsonic"]
 
 
 async def test_unknown_method_returns_error_envelope_not_404(

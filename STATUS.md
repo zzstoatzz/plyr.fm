@@ -47,6 +47,17 @@ plyr.fm should become:
 
 ### October 2026
 
+#### activity chart smoothing and plays (October 23)
+
+The activity chart draws a rolling-average line over faint raw bars (3h / 12h /
+3d / 7d by range), and all-time starts at plyr's launch month instead of six
+backdated 2021–2023 records. A `plays` series reads the new `track_plays`
+table (one row per counted web or Subsonic play, no listener identity). Plays
+before tracking began come from a one-off backfill of plyr-origin teal.fm
+scrobbles (`scripts/backfill_teal_plays.py`), about a fifth of counted plays,
+drawn dashed and labeled "scrobbled plays only". See
+`docs/internal/frontend/activity-chart.md`.
+
 #### account-level ai labels (October 23)
 
 plyr.fm's labeler can label an **account** `ai` (subject = the DID) when it

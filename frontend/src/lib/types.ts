@@ -246,6 +246,9 @@ export interface ActivityEvent {
 export interface ActivityHistogramResponse {
 	buckets: ActivityHistogramBucket[];
 	interval: 'hour' | 'day' | 'month';
+	series: 'activity' | 'plays';
+	/** first recorded play; plays before it are teal.fm scrobbles only */
+	tracked_since: string | null;
 }
 
 export interface ActivityHistogramBucket {
