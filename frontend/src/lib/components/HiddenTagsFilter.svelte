@@ -9,10 +9,16 @@
 
 	let hiddenTags = $derived(preferences.data?.hidden_tags ?? []);
 
-	async function setHiddenTags(updated: string[]) {
-		await preferences.update({ hidden_tags: updated });
-		tracksCache.invalidate();
-		tracksCache.fetch(true);
+	let saving: Promise<void> = Promise.resolve();
+
+	// saves run one at a time and each sends the latest list, so quick picks can't land out of order
+	function setHiddenTags(updated: string[]) {
+		if (preferences.data) preferences.data = { ...preferences.data, hidden_tags: updated };
+		saving = saving.then(async () => {
+			await preferences.update({ hidden_tags: preferences.data?.hidden_tags ?? updated });
+			tracksCache.invalidate();
+			tracksCache.fetch(true);
+		});
 	}
 
 	function removeTag(tag: string) {
