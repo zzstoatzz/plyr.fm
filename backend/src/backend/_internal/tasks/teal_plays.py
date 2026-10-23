@@ -2,10 +2,10 @@
 
 `schedule_teal_play_backfill` runs hourly and enqueues one task per plyr
 account not yet marked done in redis. each account task pages the account's
-teal play records from its PDS, keeps plyr-origin plays of tracks that still
+teal play records from the PDS its DID document names, keeps plyr-origin plays of tracks that still
 exist from before the first directly recorded play, and inserts them as
-`source = 'teal'`. failures leave the account unmarked, so the next pass
-retries it; inserts skip duplicates. once every account is done the scheduler
+`source = 'teal'`. a collection the PDS refuses (4xx) is skipped; other
+failures leave the account unmarked, so the next pass retries it; inserts skip duplicates. once every account is done the scheduler
 only checks the markers. see docs/internal/frontend/activity-chart.md.
 """
 
@@ -45,9 +45,7 @@ def plyr_track_id(value: dict) -> int | None:
     return int(match.group(1))
 
 
-async def _pds_url(did: str, cached: str | None) -> str | None:
-    if cached:
-        return cached.rstrip("/")
+async def _pds_url(did: str) -> str | None:
     document = await AsyncDidResolver().resolve(did)
     endpoint = document.get_pds_endpoint() if document else None
     return endpoint.rstrip("/") if endpoint else None
@@ -65,6 +63,15 @@ async def _plyr_plays(pds: str, did: str) -> list[tuple[int, datetime]]:
                 response = await http.get(
                     f"{pds}/xrpc/com.atproto.repo.listRecords", params=params
                 )
+                if response.is_client_error:
+                    logger.warning(
+                        "teal play backfill: %s %s refused: %s %s",
+                        did,
+                        collection,
+                        response.status_code,
+                        response.text[:200],
+                    )
+                    break
                 response.raise_for_status()
                 body = response.json()
                 for record in body.get("records", []):
@@ -80,19 +87,11 @@ async def _plyr_plays(pds: str, did: str) -> list[tuple[int, datetime]]:
 
 async def backfill_teal_plays_for_account(did: str) -> None:
     """load one account's plyr-origin teal plays into track_plays."""
-    async with db_session() as db:
-        cached_pds = await db.scalar(select(Artist.pds_url).where(Artist.did == did))
-    if not (pds := await _pds_url(did, cached_pds)):
+    if not (pds := await _pds_url(did)):
         logger.warning("teal play backfill: no PDS for %s", did)
         return
 
-    try:
-        plays = await _plyr_plays(pds, did)
-    except httpx.HTTPStatusError as exc:
-        if not exc.response.is_client_error:
-            raise
-        logger.warning("teal play backfill: %s refused: %s", did, exc)
-        plays = []
+    plays = await _plyr_plays(pds, did)
     inserted = 0
     async with db_session() as db:
         if plays:

@@ -66,6 +66,11 @@ def pds(
     seen: list[httpx.Request] = []
     real = httpx.AsyncClient
 
+    async def resolve(did: str) -> str:
+        return PDS
+
+    monkeypatch.setattr(teal_plays, "_pds_url", resolve)
+
     def install(
         handler: Callable[[httpx.Request], httpx.Response],
     ) -> list[httpx.Request]:
@@ -143,10 +148,10 @@ async def test_backfill_loads_plyr_plays_before_tracking_and_marks_done(
     await redis.delete(teal_plays.DONE_KEY.format(did=DID))
 
 
-async def test_refused_repo_is_marked_done_and_server_errors_retry(
+async def test_a_refused_collection_is_skipped_and_server_errors_retry(
     db_session: AsyncSession, pds: Callable
 ) -> None:
-    await _account(db_session)
+    track, _ = await _account(db_session)
     redis = get_async_redis_client()
     key = teal_plays.DONE_KEY.format(did=DID)
     await redis.delete(key)
@@ -156,9 +161,22 @@ async def test_refused_repo_is_marked_done_and_server_errors_retry(
         await teal_plays.backfill_teal_plays_for_account(DID)
     assert not await redis.get(key)
 
-    pds(lambda request: httpx.Response(400, json={"error": "RepoDeactivated"}))
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.params["collection"] == "fm.teal.alpha.feed.play":
+            return httpx.Response(400, json={"error": "InvalidRequest"})
+        return httpx.Response(
+            200, json={"records": [_play(track.id, FUTURE + timedelta(days=1))]}
+        )
+
+    pds(handler)
     await teal_plays.backfill_teal_plays_for_account(DID)
     assert await redis.get(key)
+    rows = (
+        await db_session.scalars(
+            select(TrackPlay.played_at).where(TrackPlay.source == "teal")
+        )
+    ).all()
+    assert rows == [FUTURE + timedelta(days=1)]
     await redis.delete(key)
 
 
