@@ -91,8 +91,8 @@ defaults chosen here; reject any of them in review.
   as `source = 'teal'` at their `playedTime`. the chart draws the stretch
   before tracking began in a distinct style, labeled "scrobbled plays only",
   so the partial history never reads as the full count.
-- **the backfill runs on heavypad, not the laptop.** an estimated few hundred
-  MB of record reads; small for heavypad, against the rule for local bandwidth.
+- **the scan reads public records only and needs no database credentials.**
+  an estimated few hundred MB of record reads, run once with nate's OK.
 
 ## not doing
 
@@ -156,7 +156,7 @@ defaults chosen here; reject any of them in review.
   scrobbled stretch.
 
 **success criteria**:
-- [ ] dry run on heavypad against production reports ~4,000 rows, matching
+- [ ] dry run against production reports ~4,000 rows, matching
       the coverage scan
 - [ ] staging first, then production; play series verified on plyr.fm at both
       widths

@@ -12,7 +12,7 @@
 three steps, so the bandwidth-heavy one needs no database credentials:
 
     uv run scripts/backfill_teal_plays.py dids --env prod > dids.txt
-    uv run scripts/backfill_teal_plays.py scan dids.txt plays.jsonl   # e.g. on heavypad
+    uv run scripts/backfill_teal_plays.py scan dids.txt plays.jsonl
     uv run scripts/backfill_teal_plays.py load plays.jsonl --env prod --dry-run
     uv run scripts/backfill_teal_plays.py load plays.jsonl --env prod
 
