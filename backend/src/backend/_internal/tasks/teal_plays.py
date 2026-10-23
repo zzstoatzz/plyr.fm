@@ -16,6 +16,7 @@ from datetime import datetime, timedelta
 import httpx
 import logfire
 from atproto_identity.did.resolver import AsyncDidResolver
+from atproto_identity.exceptions import AtProtocolError
 from docket import Perpetual
 from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert
@@ -29,6 +30,9 @@ logger = logging.getLogger(__name__)
 
 TEAL_PLAY_COLLECTIONS = ("fm.teal.alpha.feed.play", "fm.teal.feed.play")
 DONE_KEY = "plyr:teal-play-backfill:v1:done:{did}"
+ATTEMPTS_KEY = "plyr:teal-play-backfill:v1:attempts:{did}"
+# an account whose host stays unreachable this many passes (hourly) is given up on
+MAX_ATTEMPTS = 24
 _TRACK_URL = re.compile(r"^https://plyr\.fm/track/(\d+)")
 
 
@@ -86,9 +90,31 @@ async def _plyr_plays(pds: str, did: str) -> list[tuple[int, datetime]]:
 
 
 async def backfill_teal_plays_for_account(did: str) -> None:
-    """load one account's plyr-origin teal plays into track_plays."""
+    """load one account's plyr-origin teal plays into track_plays.
+
+    an unreachable host or unresolvable DID re-raises so the next pass retries,
+    until MAX_ATTEMPTS, after which the account is marked done.
+    """
+    try:
+        await _backfill_account(did)
+    except (httpx.HTTPError, AtProtocolError) as exc:
+        redis = get_async_redis_client()
+        attempts = await redis.incr(ATTEMPTS_KEY.format(did=did))
+        if attempts < MAX_ATTEMPTS:
+            raise
+        logger.warning(
+            "teal play backfill: giving up on %s after %d attempts: %s",
+            did,
+            attempts,
+            exc,
+        )
+        await redis.set(DONE_KEY.format(did=did), "1")
+
+
+async def _backfill_account(did: str) -> None:
     if not (pds := await _pds_url(did)):
         logger.warning("teal play backfill: no PDS for %s", did)
+        await get_async_redis_client().set(DONE_KEY.format(did=did), "1")
         return
 
     plays = await _plyr_plays(pds, did)

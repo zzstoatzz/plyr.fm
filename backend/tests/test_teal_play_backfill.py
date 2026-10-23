@@ -208,3 +208,23 @@ async def test_scheduler_enqueues_only_unfinished_accounts(
 
 async def _done() -> None:
     return None
+
+
+async def test_an_unreachable_host_is_given_up_after_the_attempt_cap(
+    db_session: AsyncSession, pds: Callable
+) -> None:
+    await _account(db_session)
+    redis = get_async_redis_client()
+    done = teal_plays.DONE_KEY.format(did=DID)
+    attempts = teal_plays.ATTEMPTS_KEY.format(did=DID)
+    await redis.delete(done)
+    await redis.set(attempts, teal_plays.MAX_ATTEMPTS - 2)
+
+    pds(lambda request: httpx.Response(503))
+    with pytest.raises(httpx.HTTPStatusError):
+        await teal_plays.backfill_teal_plays_for_account(DID)
+    assert not await redis.get(done)
+
+    await teal_plays.backfill_teal_plays_for_account(DID)
+    assert await redis.get(done)
+    await redis.delete(done, attempts)
