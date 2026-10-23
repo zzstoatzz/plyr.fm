@@ -47,6 +47,16 @@ plyr.fm should become:
 
 ### October 2026
 
+#### account-level ai labels (October 23)
+
+plyr.fm's labeler can label an **account** `ai` (subject = the DID) when it
+publishes AI-generated audio without tagging it. The label projects onto
+`artists.operator_labels` and hides the account's tracks wherever the `ai` tag
+already does: latest, for you, and radio outside the slop station. Artist pages
+note the label and still list every track. No record is written. Operators
+apply it with `scripts/label_account.py`. See
+`docs/internal/moderation/label-policy.md`.
+
 #### portable track tags (October 21 — staging verification pending)
 
 Track records support optional `tags` arrays, including tags published directly

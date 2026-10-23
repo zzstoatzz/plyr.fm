@@ -20,6 +20,7 @@ get up to speed on the project quickly.
 
 - features and fixes follow the `change` skill: branch → build with tests → real-browser verify (`ui-check` for UI) → PR → `self-review` → merge (= staging) → nate reviews → promote via `deploy`
 - merging to `main` deploys **staging**; production is a separate, nate-approved promote. "shipped" means production
+- staging runs on demand: the app scales to zero and wakes on request, but `worker` and `jetstream` stay stopped until `just staging-up` (or a test workflow) starts them, and rest again hourly. anything that ingests, processes uploads, or runs background tasks needs them up
 - project skills live in `.agents/skills`; use `docs/internal/tools/skills.md` as the catalog if the session does not list them
 
 ## then

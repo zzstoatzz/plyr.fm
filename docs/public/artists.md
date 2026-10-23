@@ -37,6 +37,8 @@ public records can be read by other compatible apps. protected audio remains sub
 
    <span id="auto-tagging"></span>when you add tags, you can opt in to **auto-tag with recommended genres** — plyr.fm runs [ML genre classification](https://github.com/zzstoatzz/plyr.fm/blob/main/docs/internal/backend/genre-classification.md) on the audio using the [effnet-discogs](https://replicate.com/mtg/effnet-discogs) model and suggests tags automatically. you can accept, remove, or add your own. auto-suggested tags typically appear within a few seconds of upload.
 
+   <span id="ai-generated-audio"></span>if a track is AI-generated, tag it `ai`. listeners hide `ai`, `ai-slop`, and `suno` tags by default, so these tracks stay out of the latest feed and for you unless a listener chooses to see them, and radio airs them only on the [slop](https://plyr.fm/radio/slop) station. they still appear on your artist page and in search.
+
 5. **publish it** — check the access summary, then upload. once processing completes, playback and discovery follow the choices you saved
 6. **embed it** — copy the embed code to put a player on your website or blog (see [embeds](#embeds) below)
 

@@ -521,6 +521,38 @@ async def test_slop_station_isolates_ai_tagged_tracks(
     assert loved_ids == {clean_track.id}  # default station excludes it
 
 
+async def test_slop_holds_untagged_tracks_from_ai_labeled_accounts(
+    radio_app: FastAPI,
+    db_session: AsyncSession,
+    radio_artist: Artist,
+) -> None:
+    """an account label of `ai` routes its untagged tracks like the tag does."""
+    now = datetime.now(UTC) + TEST_TIME_OFFSET
+    bot = await _create_artist(db_session, "did:plc:labeledbot", "bot.example")
+    bot.operator_labels = ["ai"]
+    bot_track = await _create_track(
+        db_session, bot, title="Bot Drone", file_id="botdrone", created_at=now
+    )
+    clean_track = await _create_track(
+        db_session,
+        radio_artist,
+        title="Real Jam",
+        file_id="clean",
+        created_at=now - timedelta(minutes=1),
+    )
+    await db_session.commit()
+
+    async with AsyncClient(
+        transport=ASGITransport(app=radio_app),
+        base_url="https://radio.plyr.fm",
+    ) as client:
+        slop = await client.get("/radio/state.json", params={"station": "slop"})
+        loved = await client.get("/radio/state.json")
+
+    assert {t["id"] for t in slop.json()["rotation"]} == {bot_track.id}
+    assert {t["id"] for t in loved.json()["rotation"]} == {clean_track.id}
+
+
 async def test_slop_excludes_plyr_fm_account_tracks(
     radio_app: FastAPI,
     db_session: AsyncSession,

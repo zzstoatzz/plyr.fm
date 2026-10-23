@@ -4,6 +4,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from sqlalchemy import Boolean, DateTime, Index, String
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from backend.models.database import Base
@@ -43,6 +44,11 @@ class Artist(Base):
     # the raw `status` from the last inactive #account event, NULL while active.
     # kept so the flag above can be explained rather than just believed.
     account_status: Mapped[str | None] = mapped_column(String, nullable=True)
+
+    # account-subject labels, projected by sync_operator_labels
+    operator_labels: Mapped[list[str]] = mapped_column(
+        JSONB, nullable=False, default=list, server_default="[]"
+    )
 
     # metadata
     created_at: Mapped[datetime] = mapped_column(

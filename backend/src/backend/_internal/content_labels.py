@@ -14,7 +14,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend._internal.auth.session import Session
 from backend._internal.clients.moderation import get_moderation_client
-from backend.models import Track, UserPreferences
+from backend.models import Artist, Tag, Track, TrackTag, UserPreferences
+from backend.utilities.tags import DEFAULT_HIDDEN_TAGS
 
 ADULT_AUDIO_LABELS = frozenset({"sexual", "porn"})
 COPYRIGHT_LABELS = frozenset({"copyright-violation"})
@@ -23,6 +24,9 @@ COPYRIGHT_LABELS = frozenset({"copyright-violation"})
 # sync_operator_labels background task. Only these values may be read from
 # the projection; anything else must be queried from the labeler live.
 PROJECTED_LABEL_VALUES = ADULT_AUDIO_LABELS | COPYRIGHT_LABELS
+
+# Account-subject label values, projected onto `artists.operator_labels`.
+ACCOUNT_LABEL_VALUES = frozenset({"ai"})
 
 
 def has_adult_audio_label(labels: Iterable[str]) -> bool:
@@ -47,6 +51,36 @@ def get_track_label_values(tracks: Iterable[Track]) -> dict[int, set[str]]:
         track.id: set(track.self_labels or []) | set(track.operator_labels or [])
         for track in tracks
     }
+
+
+def hidden_by_tags_clause(hidden_tags: Iterable[str]) -> ColumnElement[bool]:
+    """SQL predicate: the listener's hidden tags hide this track.
+
+    A track is hidden when it carries one of the tags, or when its artist
+    carries an account label of the same name — an account labeled `ai` is
+    hidden wherever the `ai` tag is.
+    """
+    names = sorted(set(hidden_tags))
+    tagged = (
+        select(TrackTag.track_id)
+        .join(Tag, TrackTag.tag_id == Tag.id)
+        .where(Tag.name.in_(names))
+        .where(TrackTag.track_id == Track.id)
+        .exists()
+    )
+    labeled_accounts = select(Artist.did).where(
+        Artist.operator_labels.op("?|")(array(names))
+    )
+    return tagged | Track.artist_did.in_(labeled_accounts)
+
+
+def is_hidden_by_default(track: Track, tags: Iterable[str]) -> bool:
+    """Whether the default hidden tags hide this track, from its tags or its
+    artist's account labels. For surfaces with no viewer, like radio."""
+    hidden = set(DEFAULT_HIDDEN_TAGS)
+    return bool(hidden.intersection(tags)) or bool(
+        hidden.intersection(track.artist.operator_labels or [])
+    )
 
 
 def _labeled_with(values: frozenset[str]) -> ColumnElement[bool]:
