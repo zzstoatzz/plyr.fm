@@ -25,9 +25,7 @@ COPYRIGHT_LABELS = frozenset({"copyright-violation"})
 # the projection; anything else must be queried from the labeler live.
 PROJECTED_LABEL_VALUES = ADULT_AUDIO_LABELS | COPYRIGHT_LABELS
 
-# Account-subject labels (uri = bare DID), reconciled onto
-# `artists.operator_labels`. Each value is honored wherever a listener hides the
-# tag of the same name.
+# Account-subject label values, projected onto `artists.operator_labels`.
 ACCOUNT_LABEL_VALUES = frozenset({"ai"})
 
 

@@ -45,8 +45,7 @@ class Artist(Base):
     # kept so the flag above can be explained rather than just believed.
     account_status: Mapped[str | None] = mapped_column(String, nullable=True)
 
-    # account-level labels from the labeler (subject = this DID), projected
-    # by sync_operator_labels for ACCOUNT_LABEL_VALUES
+    # account-subject labels, projected by sync_operator_labels
     operator_labels: Mapped[list[str]] = mapped_column(
         JSONB, nullable=False, default=list, server_default="[]"
     )

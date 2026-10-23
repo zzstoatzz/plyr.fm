@@ -60,7 +60,8 @@ tagging its tracks `ai`. A person makes this call; nothing applies it
 automatically.
 
 - the account's tracks are treated as if each were tagged `ai`: out of the
-  latest feed and for you unless you unhide `ai` in settings, and on radio only
+  latest feed and for you unless you unhide `ai` in the hidden-tag filter on
+  the home feed, and on radio only
   through the slop station
 - the artist page lists every track, says the account is labeled, and links
   here
