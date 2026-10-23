@@ -45,6 +45,12 @@ without this field remain valid; legacy tags saved only in plyr.fm are migrated
 when the owner next signs in with write access. Once reconciled, omitting the
 field also clears indexed tags.
 
+the `ai` tag discloses AI-generated audio. plyr.fm hides tracks tagged `ai`,
+`ai-slop`, or `suno` from the latest feed and for you by default (listeners can
+change this in their settings) and airs them on radio only through the slop
+station. artist pages and search show every track regardless. clients and
+agents that publish generated audio should include `"ai"` in `tags`.
+
 example record from the network:
 
 ```json
