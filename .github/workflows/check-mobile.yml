@@ -1,0 +1,63 @@
+name: check mobile
+
+# the shared package is checked against the web app's own modules and the
+# API contract baseline, so web or contract changes run it too.
+
+on:
+  pull_request:
+    paths:
+      - "mobile/**"
+      - "shared/**"
+      - "package.json"
+      - "bun.lock"
+      - "docs/internal/contracts/**"
+      - "frontend/src/lib/skip-step.ts"
+      - "frontend/src/lib/publishing.ts"
+      - "frontend/src/lib/track-cover.ts"
+      - "frontend/src/lib/utils/display-image.ts"
+      - "frontend/src/lib/components/SearchModal.svelte"
+      - "frontend/src/lib/components/TagFilter.svelte"
+      - "backend/src/backend/utilities/tags.py"
+      - "backend/src/backend/api/albums/schemas.py"
+      - "frontend/src/lib/config.ts"
+      - "frontend/src/lib/search.svelte.ts"
+      - "frontend/src/lib/atclients.ts"
+      - "frontend/src/lib/preferences.svelte.ts"
+      - "frontend/src/routes/settings/*page.svelte"
+      - "backend/src/backend/api/search.py"
+      - "backend/src/backend/api/tracks/listing.py"
+      - "frontend/src/lib/queue.svelte.ts"
+      - "frontend/src/lib/components/RichText.svelte"
+      - "frontend/src/routes/u/*/*page.svelte"
+      - "frontend/src/lib/components/player/Player.svelte"
+      - ".github/workflows/check-mobile.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: check-mobile-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: shared + mobile
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+
+      - name: install deps
+        run: bun install --frozen-lockfile
+
+      - name: shared types and tests
+        run: cd shared && bun run check
+
+      - name: palette contrast
+        run: cd mobile && bun test src
+
+      - name: mobile types and lint
+        run: cd mobile && bun run check
+
+      - name: bundle for ios
+        run: cd mobile && bunx expo export --platform ios --output-dir /tmp/plyr-ios-export

@@ -1,0 +1,32 @@
+set shell := ["bash", "-eu", "-o", "pipefail", "-c"]
+default := "ios"
+
+# install workspace deps (shared/ + mobile/) from the repo root
+install:
+    cd .. && bun install
+
+# build and launch a development build in the simulator (needs Xcode)
+ios:
+    bun run ios
+
+# build and launch on a plugged-in iPhone
+device:
+    bun run ios -- --device
+
+# serve JS to an already-installed development build
+start:
+    bun run start
+
+# types, lint, and the shared + palette tests
+check:
+    cd ../shared && bun run check
+    bun test src
+    bun run check
+
+# cloud build for TestFlight (EAS)
+build:
+    bun run build:ios
+
+# check, cloud build, and submit to TestFlight
+ship:
+    bun run ship:ios

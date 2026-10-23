@@ -1,0 +1,154 @@
+import { queryOptions, useInfiniteQuery, useQueries, useQuery, type QueryClient } from "@tanstack/react-query";
+import {
+  parseAlbum,
+  parseArtist,
+  parseArtistAlbums,
+  parseAudioUrl,
+  parsePlaylist,
+  parsePlaylists,
+  parseSearch,
+  parseTagTracks,
+  parseTags,
+  parseTrack,
+  parseTrackList,
+  parseTrackPage,
+  type Track,
+} from "plyr-shared/contract";
+import { SEARCH_MIN_LENGTH } from "plyr-shared/search";
+import { hidesDefaultTags, isHidden, type Settings } from "plyr-shared/settings";
+import { TAG_FILTER_LIMIT } from "plyr-shared/tags";
+import { CHART_PERIODS, TOP_CHART_LIMIT, TOP_TRACKS_LIMIT, topTracksQuery, type TopPeriod } from "plyr-shared/top";
+import { getJSON } from "./api";
+
+const report = (what: string) => (error: unknown) => console.warn(`dropped a malformed ${what}`, error);
+
+export const topTracks = (period: TopPeriod, limit: number = TOP_TRACKS_LIMIT) =>
+  queryOptions({
+    queryKey: ["top", period, limit],
+    queryFn: ({ signal }) => getJSON(`/tracks/top?${topTracksQuery(period, limit)}`, (b) => parseTrackList(b, report("top track")), signal),
+  });
+
+export function useTopTracks(period: TopPeriod) {
+  return useQuery(topTracks(period));
+}
+
+/** The search tab's charts at full length; one past `depth` is not fetched. */
+export function useCharts(depth: number) {
+  return useQueries({ queries: CHART_PERIODS.map((period, i) => ({ ...topTracks(period, TOP_CHART_LIMIT), enabled: i < depth })) });
+}
+
+function tracksPath(params: { tags?: readonly string[]; artistDid?: string; cursor: string | null; unfiltered?: boolean }): string {
+  const pairs: [string, string][] = (params.tags ?? []).map((tag) => ["tags", tag]);
+  if (params.artistDid) pairs.push(["artist_did", params.artistDid]);
+  if (params.unfiltered) pairs.push(["filter_hidden_tags", "false"]);
+  if (params.cursor) pairs.push(["cursor", params.cursor]);
+  const qs = pairs.map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join("&");
+  return qs ? `/tracks/?${qs}` : "/tracks/";
+}
+
+/**
+ * The discovery feed, newest first; `tags` narrows it to tracks carrying any of them. Signed out, the server hides
+ * its default tags; a listener with a list of their own gets the feed unfiltered and it is filtered here.
+ */
+export function useLatestTracks(tags: readonly string[], settings: Settings) {
+  const own = !hidesDefaultTags(settings);
+  return useInfiniteQuery({
+    queryKey: ["latest", [...tags].sort(), own ? [...settings.hidden_tags].sort() : null],
+    initialPageParam: null as string | null,
+    queryFn: async ({ pageParam, signal }) => {
+      const page = await getJSON(tracksPath({ tags, cursor: pageParam, unfiltered: own }), (b) => parseTrackPage(b, report("track")), signal);
+      return own ? { ...page, tracks: page.tracks.filter((track) => !isHidden(settings, track.tags)) } : page;
+    },
+    getNextPageParam: (page) => (page.hasMore ? page.nextCursor : null),
+  });
+}
+
+export function useArtistTracks(did: string | undefined) {
+  return useInfiniteQuery({
+    queryKey: ["artist-tracks", did],
+    enabled: !!did,
+    initialPageParam: null as string | null,
+    queryFn: ({ pageParam, signal }) =>
+      getJSON(tracksPath({ artistDid: did, cursor: pageParam }), (b) => parseTrackPage(b, report("track")), signal),
+    getNextPageParam: (page) => (page.hasMore ? page.nextCursor : null),
+  });
+}
+
+export function usePopularTags() {
+  return useQuery({
+    queryKey: ["tags"],
+    queryFn: ({ signal }) => getJSON(`/tracks/tags?limit=${TAG_FILTER_LIMIT}`, (b) => parseTags(b, report("tag")), signal),
+    staleTime: 10 * 60_000,
+  });
+}
+
+export function useArtist(handle: string) {
+  return useQuery({
+    queryKey: ["artist", handle],
+    queryFn: ({ signal }) => getJSON(`/artists/by-handle/${encodeURIComponent(handle)}`, parseArtist, signal),
+  });
+}
+
+export function useArtistAlbums(handle: string) {
+  return useQuery({
+    queryKey: ["artist-albums", handle],
+    queryFn: ({ signal }) => getJSON(`/albums/${encodeURIComponent(handle)}`, (b) => parseArtistAlbums(b, report("album")), signal),
+  });
+}
+
+/** The playlists an artist shows on their profile. */
+export function useArtistPlaylists(did: string | undefined) {
+  return useQuery({
+    queryKey: ["artist-playlists", did],
+    enabled: !!did,
+    queryFn: ({ signal }) =>
+      getJSON(`/lists/playlists/by-artist/${encodeURIComponent(did ?? "")}`, (b) => parsePlaylists(b, report("playlist")), signal),
+  });
+}
+
+export function useAlbum(handle: string, slug: string) {
+  return useQuery({
+    queryKey: ["album", handle, slug],
+    queryFn: ({ signal }) =>
+      getJSON(`/albums/${encodeURIComponent(handle)}/${encodeURIComponent(slug)}`, (b) => parseAlbum(b, report("track")), signal),
+  });
+}
+
+export function useTagTracks(name: string) {
+  return useQuery({
+    queryKey: ["tag", name],
+    queryFn: ({ signal }) => getJSON(`/tracks/tags/${encodeURIComponent(name)}`, (b) => parseTagTracks(b, report("track")), signal),
+  });
+}
+
+export function usePlaylist(id: string) {
+  return useQuery({
+    queryKey: ["playlist", id],
+    queryFn: ({ signal }) => getJSON(`/lists/playlists/${encodeURIComponent(id)}`, (b) => parsePlaylist(b, report("track")), signal),
+  });
+}
+
+export function useSearch(query: string, limit: number) {
+  const q = query.trim();
+  return useQuery({
+    queryKey: ["search", q, limit],
+    enabled: q.length >= SEARCH_MIN_LENGTH,
+    queryFn: ({ signal }) => getJSON(`/search/?limit=${limit}&q=${encodeURIComponent(q)}`, (b) => parseSearch(b, report("search result")), signal),
+    placeholderData: (previous) => previous,
+  });
+}
+
+export function fetchTrack(client: QueryClient, id: number): Promise<Track> {
+  return client.fetchQuery({ queryKey: ["track", id], queryFn: ({ signal }) => getJSON(`/tracks/${id}`, parseTrack, signal) });
+}
+
+/** The direct, range-capable URL for a file; presigned URLs expire, so this is cached briefly. */
+export function fetchAudioUrl(client: QueryClient, fileId: string): Promise<string> {
+  return client
+    .fetchQuery({
+      queryKey: ["audio-url", fileId],
+      queryFn: ({ signal }) => getJSON(`/audio/${encodeURIComponent(fileId)}/url`, parseAudioUrl, signal),
+      staleTime: 5 * 60_000,
+    })
+    .then((audio) => audio.url);
+}

@@ -1,0 +1,77 @@
+{
+  "expo": {
+    "name": "plyr.fm",
+    "slug": "plyr-fm",
+    "owner": "zzstoatzz.io",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "scheme": "fm.plyr",
+    "userInterfaceStyle": "automatic",
+    "platforms": ["ios"],
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "fm.plyr",
+      "config": {
+        "usesNonExemptEncryption": false
+      },
+      "infoPlist": {
+        "CFBundleDisplayName": "plyr.fm"
+      }
+    },
+    "plugins": [
+      "expo-router",
+      "expo-sqlite",
+      [
+        "react-native-audio-api",
+        {
+          "iosBackgroundMode": true,
+          "iosMicrophonePermission": "plyr.fm plays music and does not record audio. Its audio engine includes microphone support that this app never turns on.",
+          "androidForegroundService": true,
+          "androidFSTypes": ["mediaPlayback"],
+          "androidPermissions": [
+            "android.permission.FOREGROUND_SERVICE",
+            "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"
+          ]
+        }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#0A0A0A",
+          "dark": {
+            "backgroundColor": "#0A0A0A"
+          },
+          "image": "./assets/splash.png",
+          "imageWidth": 120
+        }
+      ],
+      [
+        "expo-widgets",
+        {
+          "groupIdentifier": "group.fm.plyr",
+          "bundleIdentifier": "fm.plyr.widgets"
+        }
+      ],
+      [
+        "expo-font",
+        {
+          "fonts": [
+            "node_modules/@expo-google-fonts/comic-neue/400Regular/ComicNeue_400Regular.ttf",
+            "node_modules/@expo-google-fonts/comic-neue/700Bold/ComicNeue_700Bold.ttf"
+          ]
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "680fd924-087f-4ae5-8813-2fee71cb66f8"
+      }
+    }
+  }
+}
