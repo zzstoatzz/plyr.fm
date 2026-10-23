@@ -15,7 +15,7 @@ import boto3
 import logfire
 from boto3.s3.transfer import TransferConfig
 from botocore.config import Config
-from botocore.exceptions import ClientError
+from botocore.exceptions import ClientError, ReadTimeoutError, ResponseStreamingError
 from sqlalchemy import func, or_, select
 
 from backend._internal.image import ImageFormat
@@ -37,6 +37,10 @@ from backend.utilities.hashing import hash_file_chunked
 # part size and keeps per-chunk python overhead negligible against a multi-MB
 # file. callers that want different granularity can override.
 STREAM_CHUNK_SIZE = 1024 * 1024
+
+# a stalled GET body resumes via an ETag-pinned ranged GET from the last byte
+STREAM_RESUMABLE_ERRORS = (ReadTimeoutError, ResponseStreamingError)
+STREAM_MAX_RESUMES = 3
 
 
 def content_disposition(filename: str) -> str:
@@ -462,8 +466,35 @@ class R2Storage:
                         return
                     raise
 
-                async for chunk in response["Body"].iter_chunks(chunk_size=chunk_size):
-                    yield chunk
+                etag = response.get("ETag")
+                offset = 0
+                resumes = 0
+                while True:
+                    try:
+                        async for chunk in response["Body"].iter_chunks(
+                            chunk_size=chunk_size
+                        ):
+                            offset += len(chunk)
+                            yield chunk
+                        return
+                    except STREAM_RESUMABLE_ERRORS as e:
+                        resumes += 1
+                        if resumes > STREAM_MAX_RESUMES:
+                            raise
+                        logfire.warning(
+                            "R2 stream stalled, resuming from offset",
+                            file_id=file_id,
+                            key=key,
+                            offset=offset,
+                            resume=resumes,
+                            error=str(e),
+                        )
+                    range_kwargs: dict[str, str] = {"Range": f"bytes={offset}-"}
+                    if etag:
+                        range_kwargs["IfMatch"] = etag
+                    response = await client.get_object(
+                        Bucket=bucket, Key=key, **range_kwargs
+                    )
 
     async def head_file(
         self,

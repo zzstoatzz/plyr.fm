@@ -30,6 +30,9 @@ def _auth_headers(token: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {token}"}
 
 
+SSE_RECONNECTS = 3
+
+
 async def _wait_for_upload(
     http: httpx.AsyncClient,
     api_url: str,
@@ -37,24 +40,31 @@ async def _wait_for_upload(
     upload_id: str,
 ) -> int:
     """read upload SSE until the upload job completes and returns a track id."""
-    async with http.stream(
-        "GET",
-        f"{api_url}/tracks/uploads/{upload_id}/progress",
-        headers=_auth_headers(token),
-    ) as response:
-        response.raise_for_status()
-        async for line in response.aiter_lines():
-            if not line.startswith("data: "):
-                continue
+    # the endpoint polls job state, so a dropped stream reconnects like EventSource
+    for attempt in range(SSE_RECONNECTS + 1):
+        try:
+            async with http.stream(
+                "GET",
+                f"{api_url}/tracks/uploads/{upload_id}/progress",
+                headers=_auth_headers(token),
+            ) as response:
+                response.raise_for_status()
+                async for line in response.aiter_lines():
+                    if not line.startswith("data: "):
+                        continue
 
-            payload = json.loads(line.removeprefix("data: "))
-            status = payload.get("status")
-            if status == "completed":
-                return int(payload["track_id"])
-            if status == "failed":
-                raise AssertionError(
-                    f"upload {upload_id} failed: {payload.get('error')}"
-                )
+                    payload = json.loads(line.removeprefix("data: "))
+                    status = payload.get("status")
+                    if status == "completed":
+                        return int(payload["track_id"])
+                    if status == "failed":
+                        raise AssertionError(
+                            f"upload {upload_id} failed: {payload.get('error')}"
+                        )
+            break
+        except (httpx.RemoteProtocolError, httpx.ReadError):
+            if attempt == SSE_RECONNECTS:
+                raise
 
     raise AssertionError(f"upload {upload_id} stream ended without completion")
 
