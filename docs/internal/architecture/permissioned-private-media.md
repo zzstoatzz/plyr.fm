@@ -133,18 +133,24 @@ The read path is:
 3. A confidential plyr.fm deployment creates a fresh, single-use ES256 client attestation
    with `typ=atproto-client-attestation+jwt`, its published OAuth client ID, and audience
    `{authorityDid}#atproto_space_host`. Public-client deployments omit it.
-4. plyr.fm generates a fresh P-256 key and presents the delegation token and optional
-   attestation to `getSpaceCredential` on the space host. The request carries an HTTP
-   message signature labelled `atproto-space` over the `authorization` header, with the
-   key's `did:key` as `keyid`; the credential is bound to that key.
+4. plyr.fm generates a fresh P-256 key and posts an unsigned JSON body to
+   `getSpaceCredential` on the space host: `space`, `credentialKid` (the key's
+   `did:key`), `delegationToken`, and the optional `clientAttestation`. The credential
+   is bound to that key.
 5. The resulting short-lived credential reads any repo in the space from that repo's own
-   host. Each read sends `Authorization: Atproto-Space <credential>`, an
-   `atproto-space-audience` header naming the DID whose host is being asked, and a
-   signature over both made with the same key.
+   host. Each read sends `Authorization: Atproto-Space-Credential <credential>`, an
+   `atproto-space-audience` header naming the DID whose host is being asked, and an HTTP
+   message signature labelled `atproto-space-credential` over both, with
+   `tag="atproto-space-credential"`, made with the same key.
 
 Until 2026-09-29 the binding was DPoP (a `dpop` proof per request and a `DPoP`
-authorization scheme). Upstream replaced it with these signatures; a host on the newer
-branch answers the old form with `401 BadSpaceSignature`.
+authorization scheme). Upstream replaced it with signatures; a host on the newer
+branch answers the old form with `401 BadSpaceSignature`. On 2026-10-22 upstream moved
+the delegation token and key out of a signed issuance request into the body
+(`credentialKid`), renamed the read scheme to `Atproto-Space-Credential`, and tagged the
+signature; an older client gets `400 Missing credentialKid`. Upstream also added
+optional commit MACs, requested per call with a key share against the author's
+`#atproto_kem` key; plyr.fm does not verify commits and does not request them.
 
 The delegation token proves user-to-app delegation only; it does not identify the app.
 App identity comes exclusively from the separate attestation. Credentials are cached for

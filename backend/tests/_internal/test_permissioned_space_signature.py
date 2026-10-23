@@ -5,6 +5,7 @@ the header shapes are the ones ``@atproto/space`` verifies
 """
 
 import base64
+import json
 import time
 from unittest.mock import AsyncMock
 
@@ -23,7 +24,7 @@ def _verify(
     headers: dict[str, str], key: ec.EllipticCurvePrivateKey, base: str
 ) -> None:
     label, _, encoded = headers["signature"].partition("=")
-    assert label == "atproto-space"
+    assert label == "atproto-space-credential"
     assert encoded.startswith(":") and encoded.endswith(":")
     raw = base64.b64decode(encoded[1:-1])
     assert len(raw) == 64
@@ -33,23 +34,54 @@ def _verify(
     )
 
 
-def test_issuance_signs_the_delegation_token_and_names_the_key() -> None:
-    key = ec.generate_private_key(ec.SECP256R1())
+async def test_credential_request_is_unsigned_and_binds_the_key(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    space = "at://did:plc:authority/space/fm.plyr.privateMedia/self"
+    seen: list[httpx.Request] = []
 
-    headers = space_client._space_signature_headers("delegation-token", key)
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, json={"credential": "a.b.c"})
 
-    did_key = space_client._did_key(key)
-    assert parse_did_key(did_key).jwt_alg == "ES256"
-    signature_input = f'("authorization");keyid="{did_key}"'
-    assert headers["authorization"] == "Bearer delegation-token"
-    assert headers["signature-input"] == f"atproto-space={signature_input}"
-    assert "atproto-space-audience" not in headers
-    _verify(
-        headers,
-        key,
-        '"authorization": Bearer delegation-token\n'
-        f'"@signature-params": {signature_input}',
+    real_client = httpx.AsyncClient
+    monkeypatch.setattr(
+        space_client.httpx,
+        "AsyncClient",
+        lambda **kwargs: real_client(transport=httpx.MockTransport(handler), **kwargs),
     )
+    monkeypatch.setattr(
+        space_client,
+        "make_pds_request",
+        AsyncMock(return_value={"token": "delegation-token"}),
+    )
+    monkeypatch.setattr(
+        space_client, "_space_host_url", AsyncMock(return_value="https://host.test")
+    )
+    monkeypatch.setattr(
+        space_client, "create_space_client_attestation", lambda audience: None
+    )
+    session = Session(
+        session_id="s", did="did:plc:user", handle="user.test", oauth_session={}
+    )
+
+    credential = await space_client._mint_credential(session, space)
+
+    [request] = seen
+    assert (
+        str(request.url)
+        == "https://host.test/xrpc/com.atproto.space.getSpaceCredential"
+    )
+    assert "authorization" not in request.headers
+    assert "signature" not in request.headers
+    body = json.loads(request.content)
+    assert body == {
+        "space": space,
+        "credentialKid": space_client._did_key(credential.key),
+        "delegationToken": "delegation-token",
+    }
+    assert parse_did_key(body["credentialKid"]).jwt_alg == "ES256"
+    assert credential.token == "a.b.c"
 
 
 def test_credential_use_signs_the_credential_and_its_audience() -> None:
@@ -59,15 +91,17 @@ def test_credential_use_signs_the_credential_and_its_audience() -> None:
         "space-credential", key, audience="did:plc:writer"
     )
 
-    signature_input = '("authorization" "atproto-space-audience")'
-    assert headers["authorization"] == "Atproto-Space space-credential"
+    signature_input = (
+        '("authorization" "atproto-space-audience");tag="atproto-space-credential"'
+    )
+    assert headers["authorization"] == "Atproto-Space-Credential space-credential"
     assert headers["atproto-space-audience"] == "did:plc:writer"
-    assert headers["signature-input"] == f"atproto-space={signature_input}"
+    assert headers["signature-input"] == f"atproto-space-credential={signature_input}"
     assert "dpop" not in headers
     _verify(
         headers,
         key,
-        '"authorization": Atproto-Space space-credential\n'
+        '"authorization": Atproto-Space-Credential space-credential\n'
         '"atproto-space-audience": did:plc:writer\n'
         f'"@signature-params": {signature_input}',
     )
