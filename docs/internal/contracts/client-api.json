@@ -5362,6 +5362,13 @@
               }
             ],
             "title": "Support Url"
+          },
+          "labels": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Labels"
           }
         },
         "type": "object",

@@ -289,3 +289,23 @@ async def test_unpublishable_events_advance_the_cursor() -> None:
 
     mock_notifier.post_publicly.assert_not_awaited()
     redis.set.assert_awaited_with(CURSOR_KEY, "7")
+
+
+@pytest.mark.parametrize(
+    ("action", "headline"),
+    [
+        ("label_applied", "moderation: labeled an account"),
+        ("label_negated", "moderation: withdrew a label from an account"),
+    ],
+)
+def test_account_label_says_account_and_never_names_it(
+    action: str, headline: str
+) -> None:
+    event = _event(action, reason="ai_generated_audio", track_id=None)
+    event["subject_uri"] = "did:plc:labeledbot"
+    post = render(event)
+    assert post is not None
+    assert post.text.startswith(headline)
+    assert "did:plc" not in post.text
+    assert "plyr.fm/track" not in post.text
+    assert _links(post) == [POLICY_URL]

@@ -31,7 +31,10 @@ from sqlalchemy.orm import selectinload
 
 from backend._internal import Session as AuthSession
 from backend._internal import get_supported_artists, require_auth
-from backend._internal.content_labels import filter_sensitive_audio_tracks
+from backend._internal.content_labels import (
+    filter_sensitive_audio_tracks,
+    hidden_by_tags_clause,
+)
 from backend.models import (
     Artist,
     Tag,
@@ -334,13 +337,12 @@ async def get_for_you_feed(
     if hidden_tags and track_ids:
         hidden_rows = (
             await db.execute(
-                select(TrackTag.track_id)
-                .join(Tag, TrackTag.tag_id == Tag.id)
-                .where(Tag.name.in_(hidden_tags))
-                .where(TrackTag.track_id.in_(track_ids))
+                select(Track.id)
+                .where(Track.id.in_(track_ids))
+                .where(hidden_by_tags_clause(hidden_tags))
             )
         ).all()
-        hidden_set = {r.track_id for r in hidden_rows}
+        hidden_set = {r.id for r in hidden_rows}
         if hidden_set:
             track_ids = [tid for tid in track_ids if tid not in hidden_set]
 

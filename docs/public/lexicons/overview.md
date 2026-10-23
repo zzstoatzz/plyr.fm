@@ -47,7 +47,7 @@ field also clears indexed tags.
 
 the `ai` tag discloses AI-generated audio. plyr.fm hides tracks tagged `ai`,
 `ai-slop`, or `suno` from the latest feed and for you by default (listeners can
-change this in their settings) and airs them on radio only through the slop
+unhide them from the home feed's hidden-tag filter) and airs them on radio only through the slop
 station. artist pages and search show every track regardless. clients and
 agents that publish generated audio should include `"ai"` in `tags`.
 

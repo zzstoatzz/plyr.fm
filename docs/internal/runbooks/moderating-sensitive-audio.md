@@ -196,8 +196,8 @@ visibility change that remains after label enforcement is a failed cleanup.
 
 ## declaration changes
 
-the labeler account currently declares `copyright-violation`, `sexual`, and
-`porn`. Emitting one of those values does not require an ATProto account update.
+the labeler account currently declares `copyright-violation`, `sexual`,
+`porn`, and `ai` (account subjects; see `label-policy.md`). Emitting one of those values does not require an ATProto account update.
 Introducing a new value is a separate change: review taxonomy first, then update
 `app.bsky.labeler.service/self` using `MODERATION_BSKY_PASSWORD` with an atomic
 `swapRecord`. Do not add undeclared values during incident response.

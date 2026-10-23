@@ -99,11 +99,6 @@ def normalize_tags(tags: list[str]) -> set[str]:
     return normalized
 
 
-def is_tag_hidden_by_default(tag: str) -> bool:
-    """check if a tag should be hidden by default."""
-    return normalize_tag(tag) in DEFAULT_HIDDEN_TAGS
-
-
 # --- DB-facing tag operations ---
 # Tag/TrackTag imports are deferred to avoid circular import:
 # models/__init__.py -> models/preferences.py -> utilities/tags.py
