@@ -850,6 +850,7 @@ async def test_list_space_repo_ops_routes_to_writer_repo_host(
             "since": "3mabc",
             "limit": 250,
         },
+        commit_mac_repo="did:plc:writer",
     )
 
 

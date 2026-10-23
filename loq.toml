@@ -387,7 +387,7 @@ max_lines = 599
 
 [[rules]]
 path = "backend/src/backend/_internal/atproto/spaces/client.py"
-max_lines = 613
+max_lines = 653
 
 [[rules]]
 path = "frontend/tools/oxlint/anti-slop/shared/dictionary-types.ts"

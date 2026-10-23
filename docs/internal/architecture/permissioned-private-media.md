@@ -148,9 +148,16 @@ authorization scheme). Upstream replaced it with signatures; a host on the newer
 branch answers the old form with `401 BadSpaceSignature`. On 2026-10-22 upstream moved
 the delegation token and key out of a signed issuance request into the body
 (`credentialKid`), renamed the read scheme to `Atproto-Space-Credential`, and tagged the
-signature; an older client gets `400 Missing credentialKid`. Upstream also added
-optional commit MACs, requested per call with a key share against the author's
-`#atproto_kem` key; plyr.fm does not verify commits and does not request them.
+signature; an older client gets `400 Missing credentialKid`.
+
+The same release replaced signed commits with MACs. A credential read of
+`getRecord`, `getRepo`, `getLatestCommit` or `listRepoOps` must send
+`Atproto-Space-Want-Mac` with a fresh P-256 key share (ECDH against the author's
+`#atproto_kem` key, DHKEM(P-256, HKDF-SHA256) as in RFC 9180); the host returns the
+commit's HMAC in `Atproto-Space-Mac`, or `BadSpaceMac` without the header. `getBlob` and
+`listRecords` carry no MAC. `spaces/mac.py` ports `kem.ts` and `mac.ts` (checked against
+the RFC 9180 vector), and `list_space_repo_ops` requests and verifies the commit MAC
+whenever the author publishes a KEM key. Hosts that predate KEM keys get no header.
 
 The delegation token proves user-to-app delegation only; it does not identify the app.
 App identity comes exclusively from the separate attestation. Credentials are cached for
@@ -164,7 +171,7 @@ The generic client exposes:
 - ranged `open_space_blob` reads on the writer's repo host.
 
 `listRepos` and `listRepoOps` page by `cursor` (default 100, max 1000): a full page
-carries `cursor`, the final page omits it. `listRepoOps` additionally returns the signed
+carries `cursor`, the final page omits it. `listRepoOps` additionally returns the
 `commit` only on the page that reaches the head of the oplog, so a consumer must not
 expect `commit` on every page. Both client functions accept `cursor`.
 
