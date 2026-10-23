@@ -311,7 +311,7 @@
 		background: transparent;
 		border: none;
 		border-radius: var(--radius-base);
-		color: var(--accent);
+		color: var(--accent-text);
 		font-family: inherit;
 		font-size: var(--text-sm);
 		font-weight: 600;
