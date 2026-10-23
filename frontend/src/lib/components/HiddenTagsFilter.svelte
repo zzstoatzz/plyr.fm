@@ -2,156 +2,38 @@
 	import { tracksCache } from '$lib/tracks.svelte';
 	import { auth } from '$lib/auth.svelte';
 	import { preferences } from '$lib/preferences.svelte';
-	import { API_URL } from '$lib/config';
-
-	interface TagSuggestion {
-		name: string;
-		track_count: number;
-	}
+	import HideTagSheet from './HideTagSheet.svelte';
 
 	let isExpanded = $state(false);
-	let addingTag = $state(false);
-	let newTag = $state('');
-	let inputEl = $state<HTMLInputElement | null>(null);
+	let sheet = $state<ReturnType<typeof HideTagSheet> | null>(null);
 
-	// autocomplete state
-	let suggestions = $state<TagSuggestion[]>([]);
-	let showSuggestions = $state(false);
-	let selectedIndex = $state(-1);
-	let searchTimeout: ReturnType<typeof setTimeout> | null = null;
-
-	// derive hidden tags from preferences store
 	let hiddenTags = $derived(preferences.data?.hidden_tags ?? []);
 
-	async function searchTags(query: string) {
-		if (!query.trim()) {
-			suggestions = [];
-			showSuggestions = false;
-			return;
-		}
-		try {
-			const res = await fetch(`${API_URL}/tracks/tags?q=${encodeURIComponent(query.trim())}&limit=10`);
-			if (!res.ok) return;
-			const data: TagSuggestion[] = await res.json();
-			suggestions = data.filter((t) => !hiddenTags.includes(t.name));
-			showSuggestions = suggestions.length > 0;
-			selectedIndex = -1;
-		} catch {
-			suggestions = [];
-			showSuggestions = false;
-		}
-	}
+	let saving: Promise<void> = Promise.resolve();
 
-	function handleInput() {
-		if (searchTimeout) clearTimeout(searchTimeout);
-		searchTimeout = setTimeout(() => {
-			searchTags(newTag);
-		}, 200);
-	}
-
-	function clearSuggestions() {
-		suggestions = [];
-		showSuggestions = false;
-		selectedIndex = -1;
-		if (searchTimeout) {
-			clearTimeout(searchTimeout);
-			searchTimeout = null;
-		}
-	}
-
-	async function removeTag(tag: string) {
-		const updated = hiddenTags.filter((t) => t !== tag);
-		await preferences.update({ hidden_tags: updated });
-		tracksCache.invalidate();
-		tracksCache.fetch(true);
-	}
-
-	async function addTag(tag: string) {
-		const normalized = tag.trim().toLowerCase();
-		// clear input state immediately to avoid visual duplication
-		newTag = '';
-		addingTag = false;
-		clearSuggestions();
-
-		if (normalized && !hiddenTags.includes(normalized)) {
-			const updated = [...hiddenTags, normalized];
-			await preferences.update({ hidden_tags: updated });
+	// saves run one at a time and each sends the latest list, so quick picks can't land out of order
+	function setHiddenTags(updated: string[]) {
+		if (preferences.data) preferences.data = { ...preferences.data, hidden_tags: updated };
+		saving = saving.then(async () => {
+			await preferences.update({ hidden_tags: preferences.data?.hidden_tags ?? updated });
 			tracksCache.invalidate();
 			tracksCache.fetch(true);
+		});
+	}
+
+	function removeTag(tag: string) {
+		setHiddenTags(hiddenTags.filter((t) => t !== tag));
+	}
+
+	function addTag(tag: string) {
+		const normalized = tag.trim().toLowerCase();
+		if (normalized && !hiddenTags.includes(normalized)) {
+			setHiddenTags([...hiddenTags, normalized]);
 		}
-	}
-
-	function pickSuggestion(tag: TagSuggestion) {
-		addTag(tag.name);
-	}
-
-	function handleSuggestionMousedown(e: MouseEvent, tag: TagSuggestion) {
-		e.preventDefault();
-		pickSuggestion(tag);
-	}
-
-	function handleKeydown(e: KeyboardEvent) {
-		if (showSuggestions && suggestions.length > 0) {
-			if (e.key === 'ArrowDown') {
-				e.preventDefault();
-				selectedIndex = selectedIndex < suggestions.length - 1 ? selectedIndex + 1 : 0;
-				return;
-			}
-			if (e.key === 'ArrowUp') {
-				e.preventDefault();
-				selectedIndex = selectedIndex > 0 ? selectedIndex - 1 : suggestions.length - 1;
-				return;
-			}
-			if (e.key === 'Enter') {
-				e.preventDefault();
-				if (selectedIndex >= 0 && selectedIndex < suggestions.length) {
-					pickSuggestion(suggestions[selectedIndex]);
-				} else {
-					addTag(newTag);
-				}
-				return;
-			}
-			if (e.key === 'Escape') {
-				e.preventDefault();
-				clearSuggestions();
-				return;
-			}
-		} else {
-			if (e.key === 'Enter') {
-				e.preventDefault();
-				addTag(newTag);
-				return;
-			}
-			if (e.key === 'Escape') {
-				addingTag = false;
-				newTag = '';
-				clearSuggestions();
-				return;
-			}
-		}
-	}
-
-	function handleBlur() {
-		// delay to allow click on suggestion to fire first
-		setTimeout(() => {
-			if (!newTag.trim()) addingTag = false;
-			clearSuggestions();
-		}, 150);
 	}
 
 	function toggleExpanded() {
 		isExpanded = !isExpanded;
-		if (!isExpanded) {
-			addingTag = false;
-			newTag = '';
-			clearSuggestions();
-		}
-	}
-
-	function startAddingTag() {
-		addingTag = true;
-		clearSuggestions();
-		setTimeout(() => inputEl?.focus(), 0);
 	}
 </script>
 
@@ -197,47 +79,13 @@
 					</button>
 				{/each}
 
-				{#if addingTag}
-					<div class="input-wrapper" class:has-suggestions={showSuggestions}>
-						<input
-							bind:this={inputEl}
-							type="text"
-							bind:value={newTag}
-							onkeydown={handleKeydown}
-							oninput={handleInput}
-							onblur={handleBlur}
-							placeholder="tag"
-							class="add-input"
-							autocomplete="off"
-							autocapitalize="off"
-							spellcheck="false"
-						/>
-						{#if showSuggestions}
-							<ul class="suggestions" role="listbox">
-								{#each suggestions as suggestion, i (suggestion.name)}
-									<li
-										role="option"
-										aria-selected={i === selectedIndex}
-										class="suggestion-item"
-										class:selected={i === selectedIndex}
-										onmousedown={(e) => handleSuggestionMousedown(e, suggestion)}
-										onmouseenter={() => { selectedIndex = i; }}
-									>
-										<span class="suggestion-name">{suggestion.name}</span>
-										<span class="suggestion-count">{suggestion.track_count}</span>
-									</li>
-								{/each}
-							</ul>
-						{/if}
-					</div>
-				{:else}
-					<button type="button" class="add-btn" onclick={startAddingTag} title="hide a tag">
-						+
-					</button>
-				{/if}
+				<button type="button" class="add-btn" onclick={() => sheet?.open()} title="hide a tag">
+					+
+				</button>
 			</div>
 		{/if}
 	</div>
+	<HideTagSheet bind:this={sheet} {hiddenTags} onHide={addTag} onUnhide={removeTag} />
 {/if}
 
 <style>
@@ -351,103 +199,6 @@
 		color: var(--text-secondary);
 	}
 
-	.input-wrapper {
-		position: relative;
-		display: inline-flex;
-	}
-
-	.add-input {
-		padding: 0.2rem 0.4rem;
-		background: transparent;
-		border: 1px solid var(--border-default);
-		color: var(--text-primary);
-		font-size: var(--text-xs);
-		font-family: inherit;
-		min-height: 24px;
-		width: 70px;
-		outline: none;
-		border-radius: var(--radius-sm);
-		transition: width 0.15s;
-	}
-
-	.has-suggestions .add-input {
-		width: 120px;
-	}
-
-	.add-input:focus {
-		border-color: var(--text-tertiary);
-	}
-
-	.add-input::placeholder {
-		color: var(--text-tertiary);
-	}
-
-	.suggestions {
-		position: absolute;
-		top: 100%;
-		left: 0;
-		margin-top: 2px;
-		min-width: 100%;
-		max-height: 160px;
-		overflow-y: auto;
-		list-style: none;
-		padding: 0.2rem 0;
-		background: var(--glass-bg, rgba(20, 20, 25, 0.92));
-		backdrop-filter: blur(12px);
-		-webkit-backdrop-filter: blur(12px);
-		border: 1px solid var(--border-default);
-		border-radius: var(--radius-sm);
-		z-index: 50;
-		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-	}
-
-	.suggestion-item {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		gap: 0.5rem;
-		padding: 0.25rem 0.5rem;
-		font-size: var(--text-xs);
-		color: var(--text-secondary);
-		cursor: pointer;
-		transition: background 0.1s;
-		white-space: nowrap;
-	}
-
-	.suggestion-item:hover,
-	.suggestion-item.selected {
-		background: var(--bg-hover, rgba(255, 255, 255, 0.06));
-		color: var(--text-primary);
-	}
-
-	.suggestion-name {
-		overflow: hidden;
-		text-overflow: ellipsis;
-	}
-
-	.suggestion-count {
-		color: var(--text-tertiary);
-		font-size: 0.65rem;
-		flex-shrink: 0;
-	}
-
-	@media (max-width: 768px) {
-		.input-wrapper {
-			flex: 1 1 100%;
-		}
-
-		.add-input,
-		.has-suggestions .add-input {
-			width: 100%;
-			font-size: 16px; /* prevents zoom on iOS */
-		}
-
-		.suggestion-item {
-			padding: 0.5rem 0.6rem;
-			font-size: var(--text-sm);
-		}
-	}
-
 	/* mobile adjustments */
 	@media (max-width: 480px) {
 		.filter-toggle {
@@ -462,10 +213,6 @@
 		.add-btn {
 			width: 28px;
 			height: 28px;
-		}
-
-		.add-input {
-			min-height: 28px;
 		}
 	}
 </style>
