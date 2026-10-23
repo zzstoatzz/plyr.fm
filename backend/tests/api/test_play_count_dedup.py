@@ -11,11 +11,12 @@ from collections.abc import Generator
 import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend._internal import Session, get_optional_session
 from backend.main import app
-from backend.models import Artist, Track
+from backend.models import Artist, Track, TrackPlay
 
 _ARTIST_DID = "did:plc:playcount_artist"
 
@@ -219,3 +220,25 @@ async def test_counts_when_redis_unavailable(
 
     assert first.json()["play_count"] == 1
     assert second.json()["play_count"] == 2
+
+
+async def test_counted_play_records_one_timestamped_row(
+    authed_app: FastAPI, db_session: AsyncSession, fake_redis: _FakeRedis
+) -> None:
+    """the plays series reads track_plays; a deduped report must not add a row."""
+    track = await _make_track(db_session, suffix="plays_row", duration=200)
+
+    async with _client(authed_app) as client:
+        await client.post(f"/tracks/{track.id}/play")
+        await client.post(f"/tracks/{track.id}/play")
+
+    rows = (
+        (
+            await db_session.execute(
+                select(TrackPlay).where(TrackPlay.track_id == track.id)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert [row.source for row in rows] == ["web"]

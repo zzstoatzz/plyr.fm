@@ -14,6 +14,7 @@ from backend.models import (
     Track,
     TrackComment,
     TrackLike,
+    TrackPlay,
 )
 
 NOW = datetime(2026, 10, 19, 17, 30, tzinfo=UTC)
@@ -102,35 +103,97 @@ async def test_legacy_days_includes_whole_first_day(
     assert buckets[0] == {"date": "2026-10-13", "count": 1}
 
 
-async def test_all_time_includes_old_events_and_empty_months(
+async def test_all_time_starts_at_launch_and_drops_backdated_events(
     client: TestClient,
     db_session: AsyncSession,
 ) -> None:
-    db_session.add(
-        Artist(
-            did="did:plc:old",
-            handle="old.test",
-            display_name="old",
-            created_at=datetime(2024, 2, 29, 23, 59, tzinfo=UTC),
+    for did, created_at in [
+        ("did:plc:backdated", datetime(2021, 1, 1, tzinfo=UTC)),
+        ("did:plc:launch", datetime(2025, 10, 28, tzinfo=UTC)),
+    ]:
+        db_session.add(
+            Artist(
+                did=did,
+                handle=f"{did[8:]}.test",
+                display_name="a",
+                created_at=created_at,
+            )
         )
-    )
     await db_session.commit()
     data = client.get("/activity/histogram?range=all").json()
     assert data["interval"] == "month"
-    assert len(data["buckets"]) == 33
-    assert data["buckets"][0] == {"date": "2024-02-01T00:00:00+00:00", "count": 1}
-    assert sum(bucket["count"] for bucket in data["buckets"][1:]) == 0
+    assert len(data["buckets"]) == 13
+    assert data["buckets"][0] == {"date": "2025-10-01T00:00:00+00:00", "count": 1}
+    assert sum(bucket["count"] for bucket in data["buckets"]) == 1
 
 
 async def test_empty_all_time_and_invalid_range(
     client: TestClient,
     db_session: AsyncSession,
 ) -> None:
-    assert client.get("/activity/histogram?range=all").json()["buckets"] == [
-        {"date": "2026-10-01T00:00:00+00:00", "count": 0}
-    ]
+    buckets = client.get("/activity/histogram?range=all").json()["buckets"]
+    assert len(buckets) == 13
+    assert buckets[0] == {"date": "2025-10-01T00:00:00+00:00", "count": 0}
+    assert all(bucket["count"] == 0 for bucket in buckets)
     assert client.get("/activity/histogram?range=century").status_code == 422
     assert client.get("/activity/histogram?days=0").status_code == 422
+    assert client.get("/activity/histogram?series=likes").status_code == 422
+
+
+async def test_plays_series_counts_plays_not_activity(
+    client: TestClient,
+    db_session: AsyncSession,
+) -> None:
+    artist = Artist(did="did:plc:plays", handle="plays.test", display_name="p")
+    track = Track(
+        title="t",
+        file_id="plays",
+        file_type="mp3",
+        artist_did=artist.did,
+        created_at=NOW,
+    )
+    db_session.add_all([artist, track])
+    await db_session.flush()
+    db_session.add_all(
+        [
+            TrackPlay(
+                track_id=track.id, played_at=NOW - timedelta(days=3), source="teal"
+            ),
+            TrackPlay(
+                track_id=track.id, played_at=NOW - timedelta(days=1), source="web"
+            ),
+            TrackPlay(track_id=track.id, played_at=NOW, source="subsonic"),
+            TrackPlay(
+                track_id=track.id,
+                played_at=NOW - timedelta(hours=1),
+                source="teal",
+            ),
+        ]
+    )
+    await db_session.commit()
+
+    plays = client.get("/activity/histogram?range=week&series=plays").json()
+    assert plays["series"] == "plays"
+    assert len(plays["buckets"]) == 168
+    assert sum(bucket["count"] for bucket in plays["buckets"]) == 3
+    assert plays["tracked_since"] == (NOW - timedelta(days=1)).isoformat().replace(
+        "+00:00", "Z"
+    )
+
+    activity_data = client.get("/activity/histogram?range=week").json()
+    assert activity_data["series"] == "activity"
+    assert activity_data["tracked_since"] is None
+    assert sum(bucket["count"] for bucket in activity_data["buckets"]) == 1
+
+
+async def test_plays_series_without_plays_is_zero_filled(
+    client: TestClient,
+    db_session: AsyncSession,
+) -> None:
+    data = client.get("/activity/histogram?range=month&series=plays").json()
+    assert len(data["buckets"]) == 30
+    assert all(bucket["count"] == 0 for bucket in data["buckets"])
+    assert data["tracked_since"] is None
 
 
 async def test_counts_feed_events_but_not_private_collections(

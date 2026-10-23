@@ -7,6 +7,8 @@ let component: ReturnType<typeof mount> | undefined;
 const fetcher = vi.fn<typeof fetch>();
 const data: ActivityHistogramResponse = {
 	interval: 'hour',
+	series: 'activity',
+	tracked_since: null,
 	buckets: [
 		{ date: '2026-10-18T23:00:00+00:00', count: 3 },
 		{ date: '2026-10-19T00:00:00+00:00', count: 0 },
@@ -93,11 +95,56 @@ it('keeps empty periods visible and recovers from a failed request', async () =>
 	fetcher.mockImplementation(async () =>
 		Response.json({
 			interval: 'month',
+			series: 'activity',
+			tracked_since: null,
 			buckets: [{ date: '2026-10-01T00:00:00Z', count: 0 }]
 		} satisfies ActivityHistogramResponse)
 	);
 	click('try again');
 	await vi.waitFor(() => expect(document.body.textContent).toContain('no activity in this period'));
 	expect(document.querySelector('input')?.getAttribute('aria-valuetext')).toContain('October 2026');
+	expect(document.querySelector('svg')?.innerHTML).not.toMatch(/NaN|Infinity/);
+});
+
+function inspectBucket(index: number): void {
+	const slider = document.querySelector('input');
+	if (!slider) throw new Error('missing chart slider');
+	slider.focus();
+	slider.value = String(index);
+	slider.dispatchEvent(new Event('input', { bubbles: true }));
+	flushSync();
+}
+
+it('shows the rolling average beside the raw count of a complete bucket', async () => {
+	await render();
+	inspectBucket(0);
+	expect(document.querySelector('strong')?.textContent).toBe('3');
+	expect(document.querySelector('.average')?.textContent).toContain('1.5 average');
+	inspectBucket(2);
+	expect(document.querySelector('.average')).toBeNull();
+	expect(document.querySelector('.readout-value')?.textContent).toContain('so far');
+	expect(document.querySelector('.chart-footer')?.textContent).toContain('12-hour average');
+});
+
+it('switches to plays and marks the stretch before tracking began', async () => {
+	await render();
+	fetcher.mockImplementation(async () =>
+		Response.json({
+			...data,
+			series: 'plays',
+			tracked_since: '2026-10-19T00:30:00Z'
+		} satisfies ActivityHistogramResponse)
+	);
+	click('plays');
+	await vi.waitFor(() => expect(document.querySelector('.series.scrobbled')).not.toBeNull());
+	expect(String(fetcher.mock.calls.at(-1)?.[0])).toContain('series=plays');
+	expect(document.querySelector('.readout-value')?.textContent).toContain('plays');
+	expect(document.querySelector('.chart-footer')?.textContent).toContain(
+		'dashed: scrobbled plays only'
+	);
+	inspectBucket(0);
+	expect(document.querySelector('.readout-date')?.textContent).toContain('scrobbled plays only');
+	inspectBucket(1);
+	expect(document.querySelector('.readout-date')?.textContent).not.toContain('scrobbled');
 	expect(document.querySelector('svg')?.innerHTML).not.toMatch(/NaN|Infinity/);
 });
