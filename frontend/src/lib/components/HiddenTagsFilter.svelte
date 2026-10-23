@@ -431,6 +431,23 @@
 		flex-shrink: 0;
 	}
 
+	@media (max-width: 768px) {
+		.input-wrapper {
+			flex: 1 1 100%;
+		}
+
+		.add-input,
+		.has-suggestions .add-input {
+			width: 100%;
+			font-size: 16px; /* prevents zoom on iOS */
+		}
+
+		.suggestion-item {
+			padding: 0.5rem 0.6rem;
+			font-size: var(--text-sm);
+		}
+	}
+
 	/* mobile adjustments */
 	@media (max-width: 480px) {
 		.filter-toggle {
@@ -449,11 +466,6 @@
 
 		.add-input {
 			min-height: 28px;
-			width: 80px;
-		}
-
-		.has-suggestions .add-input {
-			width: 130px;
 		}
 	}
 </style>
