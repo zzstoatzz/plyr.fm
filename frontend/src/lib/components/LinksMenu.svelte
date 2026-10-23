@@ -365,8 +365,30 @@
 		.menu-popover {
 			/* stay centered but shift up to avoid player */
 			top: calc(50% - var(--player-height, 0px) / 2);
+			width: calc(100vw - 1.5rem);
 			max-height: calc(100vh - var(--player-height, 0px) - 3rem - env(safe-area-inset-bottom, 0px));
 			overflow-y: auto;
+		}
+
+		.menu-header {
+			padding: 0.75rem 1rem;
+		}
+
+		.menu-links {
+			display: grid;
+			grid-template-columns: repeat(2, minmax(0, 1fr));
+			gap: 0.25rem;
+		}
+
+		.menu-link {
+			align-items: flex-start;
+			gap: 0.6rem;
+			padding: 0.75rem 0.6rem;
+		}
+
+		.link-title,
+		.link-subtitle {
+			overflow-wrap: anywhere;
 		}
 	}
 </style>
