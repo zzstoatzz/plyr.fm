@@ -50,7 +50,11 @@ from backend.utilities.aggregations import (
 from backend.utilities.redis import get_async_redis_client
 from backend.utilities.tags import DEFAULT_HIDDEN_TAGS
 
-from .constants import DISCOVERY_CACHE_KEY, DISCOVERY_CACHE_TTL_SECONDS
+from .constants import (
+    DISCOVERY_CACHE_KEY,
+    DISCOVERY_CACHE_TTL_SECONDS,
+    LATEST_TRACKS_PER_ARTIST_PER_WEEK,
+)
 from .router import router
 
 logger = logging.getLogger(__name__)
@@ -187,6 +191,27 @@ async def list_tracks(
             context=LabelContext.VIEW if artist_did else LabelContext.LIST,
         )
     )
+
+    if not artist_did:
+        ranked = stmt.with_only_columns(
+            Track.id,
+            func.row_number()
+            .over(
+                partition_by=(
+                    Track.artist_did,
+                    func.date_trunc("week", func.timezone("UTC", Track.created_at)),
+                ),
+                order_by=Track.created_at.desc(),
+            )
+            .label("artist_week_rank"),
+        ).subquery()
+        stmt = stmt.where(
+            Track.id.in_(
+                select(ranked.c.id).where(
+                    ranked.c.artist_week_rank <= LATEST_TRACKS_PER_ARTIST_PER_WEEK
+                )
+            )
+        )
 
     # apply cursor-based pagination (tracks older than cursor timestamp)
     if cursor:

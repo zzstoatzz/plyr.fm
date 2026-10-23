@@ -43,6 +43,8 @@ def _track(
 
     created_at must be after the test's start so the db-clear procedure
     (which deletes rows newer than the test start time) removes these rows.
+    tracks sit a week apart so the latest feed's per-artist weekly cap
+    never applies.
     """
     return Track(
         title=f"Track {n}",
@@ -52,7 +54,7 @@ def _track(
         extra={"duration": 60},
         atproto_record_uri=f"at://did:plc:artist123/fm.plyr.track/t{n}",
         atproto_record_cid=f"bafy{n}",
-        created_at=datetime.now(UTC) + timedelta(seconds=n),
+        created_at=datetime.now(UTC) + timedelta(weeks=n),
         self_labels=self_labels or [],
         operator_labels=operator_labels or [],
     )
