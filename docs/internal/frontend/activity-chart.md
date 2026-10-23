@@ -28,8 +28,10 @@ creator-set dates from years earlier (six tracks are dated 2021–2023); those
 events fall outside the chart.
 
 `series=plays` buckets `track_plays.played_at`. Rows come from counted plays
-(`web`, `subsonic`) and from a one-off backfill of plyr-origin teal.fm
-scrobbles (`teal`, `scripts/backfill_teal_plays.py`), which cover only listeners
+(`web`, `subsonic`) and from a backfill of plyr-origin teal.fm scrobbles
+(`teal`), run by the docket tasks in `_internal/tasks/teal_plays.py` (hourly
+scheduler, one keyed task per account, a redis done marker per account), which
+cover only listeners
 who scrobbled — about a fifth of counted plays. `tracked_since` is the first
 non-teal play; the chart draws everything before it dashed and labels it
 "scrobbled plays only". Teal rows at or after `tracked_since` are not counted,

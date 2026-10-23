@@ -85,14 +85,14 @@ defaults chosen here; reject any of them in review.
   (`track_id`, `played_at`, `source`), inserted in the same transaction as
   `play_count += 1` in both the web and subsonic paths. no listener DID:
   aggregate charts do not need to know who listened.
-- **plays before that: teal backfill, labeled.** a one-off script reads
+- **plays before that: teal backfill, labeled.** a backend docket task reads
   plyr-origin teal plays from every plyr account's repo with `listRecords`,
   drops `localhost` origins and tracks that no longer exist, and inserts them
   as `source = 'teal'` at their `playedTime`. the chart draws the stretch
   before tracking began in a distinct style, labeled "scrobbled plays only",
   so the partial history never reads as the full count.
-- **the backfill runs on heavypad, not the laptop.** an estimated few hundred
-  MB of record reads; small for heavypad, against the rule for local bandwidth.
+- **the backfill runs on the backend worker** as docket tasks, one per account,
+  retried until each account is done.
 
 ## not doing
 
@@ -146,17 +146,18 @@ defaults chosen here; reject any of them in review.
 ### phase 3: backfill from teal, then show plays
 
 **changes**:
-- `scripts/backfill_teal_plays.py`: resolve each plyr account's PDS, page
-  both collections, keep plyr-origin non-localhost records whose track id
-  exists, insert `source = 'teal'`; `--dry-run` prints counts by month.
-  idempotent on (`track_id`, `played_at`, `source`).
+- `_internal/tasks/teal_plays.py` (as built): `schedule_teal_play_backfill`
+  (perpetual, hourly) enqueues `backfill_teal_plays_for_account` for each plyr
+  account without a redis done marker; each pages both collections from the
+  account's PDS, keeps plyr-origin plays of existing tracks from before the first
+  recorded play, and inserts `source = 'teal'` rows, skipping duplicates.
 - histogram response gains `tracked_since` (first `source != 'teal'` play)
   so the chart can style the scrobbled stretch.
 - `ActivityChart.svelte`: the `activity` / `plays` toggle and the labeled
   scrobbled stretch.
 
 **success criteria**:
-- [ ] dry run on heavypad against production reports ~4,000 rows, matching
+- [ ] production loads ~4,000 teal rows, matching
       the coverage scan
 - [ ] staging first, then production; play series verified on plyr.fm at both
       widths
