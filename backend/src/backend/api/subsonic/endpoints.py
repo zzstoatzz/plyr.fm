@@ -43,7 +43,14 @@ from backend.api.tracks.playback import (
     _claim_play,
 )
 from backend.config import settings
-from backend.models import Album, Artist, Playlist, Track, UserPreferences
+from backend.models import (
+    Album,
+    Artist,
+    Playlist,
+    Track,
+    TrackPlay,
+    UserPreferences,
+)
 from backend.utilities.database import db_session
 
 _AUDIO_CONTENT_TYPES = {
@@ -348,6 +355,7 @@ async def scrobble(request: Request) -> Response:
             if not await _claim_play(f"did:{session.did}", track.id, ttl):
                 return {}
             track.play_count += 1
+            db.add(TrackPlay(track_id=track.id, source="subsonic"))
             await db.commit()
             prefs = await db.scalar(
                 select(UserPreferences).where(UserPreferences.did == session.did)

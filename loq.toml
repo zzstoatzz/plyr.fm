@@ -460,3 +460,7 @@ max_lines = 506
 [[rules]]
 path = "docs/internal/backend/transcoder.md"
 max_lines = 508
+
+[[rules]]
+path = "frontend/src/lib/components/ActivityChart.svelte"
+max_lines = 534
