@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Response
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from redis.exceptions import RedisError
 from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -74,6 +74,7 @@ class ArtistResponse(BaseModel):
     updated_at: datetime
     show_liked_on_profile: bool = False
     support_url: str | None = None
+    labels: list[str] = Field(default_factory=list, validation_alias="operator_labels")
 
     @field_validator("avatar_url", mode="before")
     @classmethod

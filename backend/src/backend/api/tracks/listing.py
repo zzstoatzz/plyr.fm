@@ -20,6 +20,7 @@ from backend._internal.content_labels import (
     filter_sensitive_audio_tracks,
     get_operator_label_values,
     get_track_label_values,
+    hidden_by_tags_clause,
     label_visible_clause,
 )
 from backend._internal.track_visibility import visible_filter
@@ -162,14 +163,7 @@ async def list_tracks(
         filter_hidden_tags if filter_hidden_tags is not None else (artist_did is None)
     )
     if hidden_tags and should_filter:
-        hidden_exists = (
-            select(TrackTag.track_id)
-            .join(Tag, TrackTag.tag_id == Tag.id)
-            .where(Tag.name.in_(hidden_tags))
-            .where(TrackTag.track_id == Track.id)
-            .exists()
-        )
-        stmt = stmt.where(~hidden_exists)
+        stmt = stmt.where(~hidden_by_tags_clause(hidden_tags))
 
     # positive tag filter — show only tracks matching any of the selected tags
     if tags:

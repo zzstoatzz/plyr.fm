@@ -331,7 +331,7 @@ max_lines = 1284
 
 [[rules]]
 path = "backend/tests/api/test_radio.py"
-max_lines = 1442
+max_lines = 1474
 
 [[rules]]
 path = "frontend/src/lib/uploader.svelte.ts"
@@ -359,7 +359,7 @@ max_lines = 977
 
 [[rules]]
 path = "frontend/src/routes/u/[[]handle[]]/+page.svelte"
-max_lines = 1566
+max_lines = 1586
 
 [[rules]]
 path = "scripts/build_atlas.py"
@@ -399,7 +399,7 @@ max_lines = 537
 
 [[rules]]
 path = "docs/internal/contracts/client-api.json"
-max_lines = 8340
+max_lines = 8347
 
 [[rules]]
 path = "frontend/src/lib/components/TrackEditForm.svelte"

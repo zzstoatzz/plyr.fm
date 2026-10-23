@@ -1,8 +1,9 @@
 # label policy
 
-How plyr.fm turns signed labels into behavior. Grounded in the only two label
-families we actually have — adult audio and copyright — because a policy
-invented ahead of its cases tends to be wrong about both.
+How plyr.fm turns signed labels into behavior. Grounded in the label
+families we actually have — adult audio, copyright, and account-level `ai` —
+because a policy invented ahead of its cases tends to be wrong about all of
+them.
 
 ## two layers
 
@@ -41,6 +42,29 @@ the duty to act on knowledge is ours and no reader preference discharges it.
 De-listing is the cheap, reversible action that discharges it; takedown is not
 automatic because a fingerprint match is not a finding — a cover the uploader
 performed matches, and so does a remix they made.
+
+## account labels: `ai`
+
+The third family has a different subject. Its label's `uri` is a bare DID, so
+it describes the account, not a track; the atproto label spec allows a label on
+a "repository (account)". It exists for accounts that publish AI-generated
+audio without tagging it (an agent that only sometimes discloses, say), and
+plyr never writes to their records or invents tags in the index.
+
+- **who decides: the listener, through `hidden_tags`.** A label value is
+  honored wherever the tag of the same name is, so whoever hides the `ai` tag
+  also hides labeled accounts. There is no separate preference.
+- **where:** exactly the hidden-tag sites — `list_tracks` discovery (not
+  artist-scoped), `for_you.py`, and radio (`is_hidden_by_default`, so the slop
+  station airs them). Not search, not collections, same as the tag.
+- **projection:** `sync_operator_labels` routes DID subjects to
+  `artists.operator_labels` for `ACCOUNT_LABEL_VALUES` and record URIs to
+  `tracks.operator_labels`; a value from one family never lands in the other.
+- **environment-free:** one labeler serves staging and production, and a DID
+  is the same identity in both. Test with a throwaway DID.
+- **applied by an operator:** `scripts/label_account.py` emits the label and
+  records the event. Transparency posts say "labeled an account" and never
+  name it.
 
 ## why neither gates the bytes
 
@@ -104,6 +128,9 @@ verified against the code; if you change one, change this table.
 | `subsonic/endpoints.py` playlist, getSong | **VIEW** |
 | `_internal/jams.py` | LIST |
 | `tracks/listing.py` list_my_tracks | no label filter at all |
+
+account `ai` labels follow the hidden-tag sites instead of this table: see
+[account labels](#account-labels-ai).
 
 `list_my_tracks` filters on `artist_did` alone, which is why a creator's portal
 always shows their whole catalogue.

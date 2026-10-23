@@ -494,6 +494,12 @@
 							<SupporterBadge />
 						{/if}
 					</div>
+					{#if artist.labels?.includes('ai')}
+						<p class="account-label">
+							ai-generated audio ·
+							<a href="https://docs.plyr.fm/moderation/#ai-generated-audio" target="_blank" rel="noopener">labeled by {APP_NAME}</a>
+						</p>
+					{/if}
 					{#if artist.bio}
 						<p class="bio"><RichText text={artist.bio} /></p>
 					{/if}
@@ -949,6 +955,20 @@
 	}
 
 	.handle:hover {
+		color: var(--accent);
+	}
+
+	.account-label {
+		color: var(--text-tertiary);
+		font-size: var(--text-sm);
+		margin: -0.5rem 0 1rem;
+	}
+
+	.account-label a {
+		color: inherit;
+	}
+
+	.account-label a:hover {
 		color: var(--accent);
 	}
 

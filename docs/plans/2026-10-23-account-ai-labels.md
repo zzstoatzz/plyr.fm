@@ -119,11 +119,12 @@ defaults chosen here. reject any of them in review.
   `emit_label(uri=did, val="ai")`, then `record_event(subject_uri=did,
   action="label_applied" | "label_negated", ...)`. prints the resulting
   `queryLabels` row.
-- `services/moderation/src/admin.rs`: `extract_namespace` returns `None` for a
-  bare DID and the card renders an "account" badge rather than `unknown`.
+- ~~`services/moderation/src/admin.rs` account badge~~ — dropped during
+  implementation: the admin flag list selects only `copyright-violation`, so
+  an account `ai` label never renders there.
 
 **success criteria**:
-- [ ] tests pass: `just backend test` and `cargo test` in `services/moderation`
+- [ ] tests pass: `just backend test`
 - [ ] a bare-DID label projects onto `artists.operator_labels` within one
       sync, and a negation clears it
 - [ ] a track-URI label still projects onto tracks, nothing more

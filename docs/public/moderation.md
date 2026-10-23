@@ -9,7 +9,7 @@ explains what those decisions mean.
 
 ## labels are assertions, not deletions
 
-a label is a signed, public statement about a track — anyone can read them
+a label is a signed, public statement about a track or an account — anyone can read them
 through the AT Protocol
 [`com.atproto.label.queryLabels`](https://docs.bsky.app/docs/api/com-atproto-label-query-labels)
 endpoint, and any client can subscribe to plyr.fm's labeler and decide for
@@ -19,7 +19,7 @@ what *we* do with a label on our own surfaces is a separate thing, and it is
 only binding on us. Another client reading the same label is free to render it
 differently.
 
-## two kinds of label, two different rules
+## label kinds and who decides
 
 the difference is who gets to decide.
 
@@ -49,6 +49,26 @@ copyright claim is our responsibility and no listener setting can waive it.
   remixes, and an artist's own catalogue all match — so being flagged does not
   break the uploader's own link
 - removal from plyr.fm is a separate, deliberate decision made by a person
+
+<span id="ai-generated-audio"></span>
+
+### ai-generated audio — `ai`, on an account
+
+a label on the **account** rather than on one track. plyr.fm applies it when
+an account publishes AI-generated audio — an AI agent, for instance — without
+tagging its tracks `ai`. A person makes this call; nothing applies it
+automatically.
+
+- the account's tracks are treated as if each were tagged `ai`: out of the
+  latest feed and for you unless you unhide `ai` in settings, and on radio only
+  through the slop station
+- the artist page lists every track, says the account is labeled, and links
+  here
+- nothing is written to the account's records — the label lives on plyr.fm's
+  labeler, where anyone can read it
+
+if you publish AI-generated audio, tag it `ai` (see
+[uploading](/artists/#ai-generated-audio)) and no account label is needed.
 
 ## where a label applies
 

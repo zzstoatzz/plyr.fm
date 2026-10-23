@@ -16,9 +16,10 @@ The path every change takes. Staging is `main`; production is a separate, user-a
 5. **PR** — punchline first, `<details>` for the rest, intentional non-behaviors named. Bodies are read by reviewers and agents; be thorough, not long.
 6. **self-review** — run the `self-review` skill on the PR and fix what it finds in the same PR. (An automated reviewer will take this step over eventually.)
 7. **merge** — when checks are green, squash-merge. That deploys **staging** (`stg.plyr.fm`). Don't merge a backend PR while a sibling PR's staging e2e is mid-run — the deploy restarts staging under it.
-8. **hand off** — tell the user what to look at on staging. Production is their call: when they say so, run the `deploy` skill. Never `just release` on your own.
+8. **verify on staging** — staging runs on demand. The app wakes on its first request, but `worker` and `jetstream` stay stopped until something starts them, so run `just staging-up` before checking anything that ingests records, processes uploads, or runs a background task. `just staging-status` shows what is running; the hourly "staging machines" workflow rests them again, or run `just staging-down` when done.
+9. **hand off** — tell the user what to look at on staging. Production is their call: when they say so, run the `deploy` skill. Never `just release` on your own.
 
-Visual changes always pause at step 8 for the user's eyes. Non-visual bug fixes may be promoted when the user has said that's fine for this kind of change.
+Visual changes always pause at step 9 for the user's eyes. Non-visual bug fixes may be promoted when the user has said that's fine for this kind of change.
 
 Staging smoke uploads must include the `integration-test` tag. This uses the
 existing upload hook to suppress notification DMs and copyright scans; check

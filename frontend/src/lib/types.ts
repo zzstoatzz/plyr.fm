@@ -105,6 +105,7 @@ export interface Artist {
 	bio?: string;
 	show_liked_on_profile?: boolean;
 	support_url?: string;
+	labels?: string[];
 }
 
 export type RepeatMode = 'none' | 'one';
