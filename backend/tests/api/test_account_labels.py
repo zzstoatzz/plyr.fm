@@ -124,7 +124,7 @@ async def _titles(app_: FastAPI, path: str) -> list[str]:
 async def test_anonymous_latest_hides_labeled_account(
     anonymous_app: FastAPI, catalog: dict[str, Track]
 ) -> None:
-    titles = await _titles(anonymous_app, "/tracks/")
+    titles = await _titles(anonymous_app, "/tracks/?limit=50")
     assert "Human Song" in titles
     assert "Bot Drone" not in titles
 
