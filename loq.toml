@@ -303,11 +303,11 @@ max_lines = 649
 
 [[rules]]
 path = "backend/tests/test_post_create_hooks.py"
-max_lines = 542
+max_lines = 583
 
 [[rules]]
 path = "backend/tests/api/test_audio_optimize.py"
-max_lines = 940
+max_lines = 1000
 
 [[rules]]
 path = "frontend/src/lib/components/portal/TracksSection.svelte"
