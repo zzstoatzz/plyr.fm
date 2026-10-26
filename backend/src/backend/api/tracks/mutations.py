@@ -145,8 +145,12 @@ async def delete_track(
     # capture URI before deletion for tombstone
     record_uri = track.atproto_record_uri
 
-    # delete track record
-    await db.delete(track)
+    # lock tracks before the ORM cascade, the order Jetstream's delete takes
+    locked = await db.scalar(
+        select(Track.id).where(Track.id == track.id).with_for_update()
+    )
+    if locked is not None:
+        await db.delete(track)
     await db.commit()
 
     # write tombstone so Jetstream replay doesn't re-create the track
