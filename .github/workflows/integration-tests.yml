@@ -20,6 +20,11 @@ on:
 permissions:
   contents: read
 
+# a newer deploy's run supersedes one whose staging restarted under it
+concurrency:
+  group: integration-staging
+  cancel-in-progress: true
+
 jobs:
   integration:
     name: run integration tests
