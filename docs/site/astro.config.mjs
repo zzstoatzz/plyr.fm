@@ -24,6 +24,7 @@ export default defineConfig({
             { slug: "developers/agents" },
             { slug: "developers/quickstart" },
             { slug: "developers/publishing" },
+            { slug: "developers/subsonic", label: "Subsonic apps" },
             {
               label: "API reference",
               collapsed: true,

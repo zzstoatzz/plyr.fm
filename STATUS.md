@@ -54,7 +54,7 @@ The activity chart draws a rolling-average line over faint raw bars (3h / 12h /
 backdated 2021–2023 records. A `plays` series reads the new `track_plays`
 table (one row per counted web or Subsonic play, no listener identity). Plays
 before tracking began come from a one-off backfill of plyr-origin teal.fm
-scrobbles (`scripts/backfill_teal_plays.py`), about a fifth of counted plays,
+scrobbles (docket task `backfill_teal_plays_for_account`), about a fifth of counted plays,
 drawn dashed and labeled "scrobbled plays only". See
 `docs/internal/frontend/activity-chart.md`.
 

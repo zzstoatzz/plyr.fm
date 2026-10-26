@@ -132,7 +132,8 @@ The read path is:
 2. plyr.fm resolves the authority's space host.
 3. A confidential plyr.fm deployment creates a fresh, single-use ES256 client attestation
    with `typ=atproto-client-attestation+jwt`, its published OAuth client ID, and audience
-   `{authorityDid}#atproto_space_host`. Public-client deployments omit it.
+   `{authorityDid}#atproto_pds` (the October 21 alpha dropped `#atproto_space_host`).
+   Public-client deployments omit it.
 4. plyr.fm generates a fresh P-256 key and posts an unsigned JSON body to
    `getSpaceCredential` on the space host: `space`, `credentialKid` (the key's
    `did:key`), `delegationToken`, and the optional `clientAttestation`. The credential

@@ -28,10 +28,11 @@ from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from docket import ExponentialRetry
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend._internal import Session, upload_policy
-from backend.api.tracks.audio_optimize import optimize_track_audio
+from backend.api.tracks.audio_optimize import _OptimizeAbort, optimize_track_audio
 from backend.api.tracks.uploads import (
     AudioInfo,
     PdsBlobResult,
@@ -542,6 +543,10 @@ def _patch_optimize(
             "backend.api.tracks.audio_optimize.invalidate_tracks_discovery_cache",
             new_callable=AsyncMock,
         ),
+        patch(
+            "backend.api.tracks.audio_optimize.notify_new_track",
+            new_callable=AsyncMock,
+        ) as mock_notify,
         patch("backend.api.tracks.audio_optimize.job_service", job_service_mock),
     ):
         yield {
@@ -552,6 +557,7 @@ def _patch_optimize(
             "update_record": mock_update_record,
             "delete": mock_delete,
             "delete_gated": mock_delete_gated,
+            "notify": mock_notify,
         }
 
 
@@ -606,6 +612,55 @@ async def test_optimize_swaps_wav_to_mp3_preserving_original_and_created_at(
 
     # the interim WAV is now orphaned and was deleted
     assert "WAVID" in deleted
+
+    # the new-track DM waits for the playable mp3 (#1932)
+    mocks["notify"].assert_awaited_once_with(track_id)
+
+
+async def test_optimize_holds_notification_until_final_retry(
+    db_session: AsyncSession, owner: Artist
+) -> None:
+    """a retrying optimize keeps the DM back; the last failed attempt sends it so
+    followers still hear about a track that stays on its interim rendition."""
+    track = _wav_track()
+    db_session.add(track)
+    await db_session.commit()
+    await db_session.refresh(track)
+    track_id = track.id
+
+    retry = ExponentialRetry(attempts=3)
+    for attempt, expect_notify in [(1, False), (3, True)]:
+        retry.attempt = attempt
+        with (
+            _patch_optimize(transcode=None, pds=None) as mocks,
+            pytest.raises(RuntimeError, match="transcode to mp3 failed"),
+        ):
+            await optimize_track_audio(track_id, "session-id", retry=retry)
+        assert mocks["notify"].await_count == int(expect_notify)
+
+
+async def test_optimize_abort_still_notifies(
+    db_session: AsyncSession, owner: Artist
+) -> None:
+    """a terminal abort leaves the track on its interim rendition; the held DM
+    goes out rather than never."""
+    track = _wav_track()
+    db_session.add(track)
+    await db_session.commit()
+    await db_session.refresh(track)
+    track_id = track.id
+
+    with (
+        _patch_optimize(transcode=_transcode_info("MP3NEW", "mp3"), pds=None) as mocks,
+        patch(
+            "backend.api.tracks.audio_optimize._verify_still_optimizable",
+            new_callable=AsyncMock,
+            side_effect=_OptimizeAbort("track moved on"),
+        ),
+    ):
+        await optimize_track_audio(track_id, "session-id")
+
+    mocks["notify"].assert_awaited_once_with(track_id)
 
 
 async def test_optimize_is_noop_when_already_mp3(
@@ -810,12 +865,17 @@ async def test_optimize_skips_when_session_gone(
             "backend.api.tracks.audio_optimize._transcode_audio",
             new_callable=AsyncMock,
         ) as mock_transcode,
+        patch(
+            "backend.api.tracks.audio_optimize.notify_new_track",
+            new_callable=AsyncMock,
+        ) as mock_notify,
     ):
         await optimize_track_audio(track_id, "session-id")
 
     mock_transcode.assert_not_awaited()
     await db_session.refresh(track)
     assert track.file_id == "WAVID"
+    mock_notify.assert_awaited_once_with(track_id)
 
 
 def _raw_interim_track(**overrides) -> Track:

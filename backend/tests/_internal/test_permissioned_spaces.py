@@ -453,9 +453,7 @@ async def test_mint_credential_sends_separate_client_attestation(
             "space": space,
             "credentialKid": ANY,
             "delegationToken": "delegation-token",
-            "clientAttestation": (
-                "attestation-for:did:plc:authority#atproto_space_host"
-            ),
+            "clientAttestation": ("attestation-for:did:plc:authority#atproto_pds"),
         },
     )
 
@@ -476,7 +474,7 @@ def test_space_client_attestation_uses_proposal_jwt_shape(
     )
 
     token = oauth_module.create_space_client_attestation(
-        "did:plc:authority#atproto_space_host"
+        "did:plc:authority#atproto_pds"
     )
 
     assert token is not None
@@ -489,7 +487,7 @@ def test_space_client_attestation_uses_proposal_jwt_shape(
     }
     assert claims["iss"] == "https://api.plyr.fm/oauth-client-metadata.json"
     assert claims["sub"] == claims["iss"]
-    assert claims["aud"] == "did:plc:authority#atproto_space_host"
+    assert claims["aud"] == "did:plc:authority#atproto_pds"
     assert claims["exp"] - claims["iat"] == 60
     assert claims["jti"]
 

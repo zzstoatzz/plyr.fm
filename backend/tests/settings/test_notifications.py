@@ -87,16 +87,16 @@ async def test_track_notification_sent_flag_prevents_duplicates(db_session):
     assert track_id not in [t.id for t in tracks_needing_notification]
 
 
-async def test_send_track_notification_refetches_from_session(
+async def test_notify_new_track_refetches_from_session(
     db_session: AsyncSession,
 ) -> None:
-    """regression: _send_track_notification must re-fetch the track by ID.
+    """regression: notify_new_track must re-fetch the track by ID.
 
     previously it accepted a Track object and called db.refresh(), which failed
     with 'Instance is not persistent within this Session' when the track was
     created in a different session (the normal upload flow).
     """
-    from backend._internal.tasks.hooks import _send_track_notification
+    from backend._internal.tasks.hooks import notify_new_track
 
     artist = Artist(
         did="did:plc:notif_test",
@@ -121,8 +121,8 @@ async def test_send_track_notification_refetches_from_session(
     mock_service.send_track_notification = AsyncMock(return_value=None)
 
     with patch("backend._internal.notifications.notification_service", mock_service):
-        # _send_track_notification now opens its own session
-        await _send_track_notification(track_id)
+        # notify_new_track now opens its own session
+        await notify_new_track(track_id)
 
     mock_service.send_track_notification.assert_called_once()
     called_track = mock_service.send_track_notification.call_args[0][0]

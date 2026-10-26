@@ -235,8 +235,9 @@ def llm_refine_labels(
                 f"  Samples: {', '.join(repr(t) for t in sample)}"
             )
         resp = await client.messages.create(
-            model="claude-haiku-4-5-20251001",
-            max_tokens=2048,
+            model="claude-haiku-5-5",
+            max_tokens=4096,
+            output_config={"effort": "low"},
             system=[
                 {
                     "type": "text",
@@ -246,7 +247,9 @@ def llm_refine_labels(
             ],
             messages=[{"role": "user", "content": "\n\n".join(parts)}],
         )
-        text = resp.content[0].text.strip()
+        text = "".join(
+            block.text for block in resp.content if block.type == "text"
+        ).strip()
         if text.startswith("```"):
             text = text.split("\n", 1)[1].rsplit("```", 1)[0].strip()
         try:

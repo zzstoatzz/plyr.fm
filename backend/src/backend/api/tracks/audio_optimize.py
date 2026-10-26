@@ -33,7 +33,10 @@ from backend._internal import get_session
 from backend._internal.atproto.records import build_track_record, update_record
 from backend._internal.background import get_docket
 from backend._internal.jobs import job_service
-from backend._internal.tasks.hooks import invalidate_tracks_discovery_cache
+from backend._internal.tasks.hooks import (
+    invalidate_tracks_discovery_cache,
+    notify_new_track,
+)
 from backend.api.tracks.uploads import (
     AudioInfo,
     PdsBlobResult,
@@ -288,10 +291,12 @@ async def optimize_track_audio(
                 session_id,
                 track_id,
             )
+            await notify_new_track(track_id)
             return
 
         state = await _load_audio_state(track_id)
         if state is None:
+            await notify_new_track(track_id)
             return
 
         job_id = await job_service.create_job(
@@ -423,6 +428,7 @@ async def optimize_track_audio(
                 job_id, JobStatus.FAILED, "optimization aborted", error=str(e)
             )
             logger.warning("optimize: aborted for track %s: %s", track_id, e)
+            await notify_new_track(track_id)
             return
 
         except Exception as e:
@@ -444,6 +450,8 @@ async def optimize_track_audio(
                 "optimize: track %s transient failure; re-raising for retry",
                 track_id,
             )
+            if retry.attempts is not None and retry.attempt >= retry.attempts:
+                await notify_new_track(track_id)
             raise
 
         # post-commit: the interim playable rendition is now orphaned — delete
@@ -458,6 +466,7 @@ async def optimize_track_audio(
                 await delete_fn(state.interim_file_id, state.interim_file_type)
         with contextlib.suppress(Exception):
             await invalidate_tracks_discovery_cache()
+        await notify_new_track(track_id)
 
         await job_service.update_progress(
             job_id,
