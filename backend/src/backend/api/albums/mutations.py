@@ -562,15 +562,19 @@ async def delete_album(
         # delete all tracks in album
         from backend.api.tracks.mutations import delete_track
 
-        tracks_result = await db.execute(
-            select(Track).where(Track.album_id == album_id)
-        )
-        tracks = tracks_result.scalars().all()
-        for track in tracks:
+        track_ids = (
+            await db.scalars(select(Track.id).where(Track.album_id == album_id))
+        ).all()
+        any_failed = False
+        for track_id in track_ids:
             try:
-                await delete_track(track.id, db, auth_session)
+                await delete_track(track_id, db, auth_session)
             except Exception as e:
-                logger.warning(f"failed to delete track {track.id}: {e}")
+                await db.rollback()
+                any_failed = True
+                logger.warning(f"failed to delete track {track_id}: {e}")
+        if any_failed:
+            await db.refresh(album)
     else:
         # orphan tracks - set album_id to null
         await db.execute(
