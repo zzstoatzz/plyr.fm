@@ -378,7 +378,7 @@ async def _mint_credential(auth_session: AuthSession, space: str) -> SpaceCreden
     delegation_token = delegation_resp["token"]
 
     authority = parse_space_uri(space).owner_did
-    audience = f"{authority}#atproto_space_host"
+    audience = f"{authority}#atproto_pds"
     key = ec.generate_private_key(ec.SECP256R1())
     payload = {
         "space": space,
