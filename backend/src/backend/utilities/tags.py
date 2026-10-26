@@ -21,7 +21,9 @@ MAX_TAGS_PER_TRACK = 10
 TagList = TypeAdapter(list[Annotated[str, Field(max_length=MAX_TAG_LENGTH)]])
 
 
-def parse_tags_json(tags_json: str | None) -> list[str]:
+def parse_tags_json(
+    tags_json: str | None, *, max_tags: int = MAX_TAGS_PER_TRACK
+) -> list[str]:
     """parse and normalize a JSON array of tag names.
 
     args:
@@ -50,8 +52,8 @@ def parse_tags_json(tags_json: str | None) -> list[str]:
             seen.add(normalized)
             unique.append(normalized)
 
-    if len(unique) > MAX_TAGS_PER_TRACK:
-        raise ValueError(f"too many tags: {len(unique)} (maximum {MAX_TAGS_PER_TRACK})")
+    if len(unique) > max_tags:
+        raise ValueError(f"too many tags: {len(unique)} (maximum {max_tags})")
 
     return unique
 
@@ -95,11 +97,6 @@ def normalize_tags(tags: list[str]) -> set[str]:
         if n:
             normalized.add(n)
     return normalized
-
-
-def is_tag_hidden_by_default(tag: str) -> bool:
-    """check if a tag should be hidden by default."""
-    return normalize_tag(tag) in DEFAULT_HIDDEN_TAGS
 
 
 # --- DB-facing tag operations ---

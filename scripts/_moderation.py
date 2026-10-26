@@ -94,6 +94,48 @@ class ModerationClient:
         response.raise_for_status()
         return response.json()
 
+    async def emit_label(
+        self, uri: str, val: str, *, neg: bool = False
+    ) -> dict[str, Any]:
+        """Sign and publish a label (or its negation) on any subject."""
+        response = await self._client.post(
+            "/emit-label", json={"uri": uri, "val": val, "neg": neg}
+        )
+        response.raise_for_status()
+        return response.json()
+
+    async def record_event(
+        self,
+        *,
+        subject_uri: str,
+        action: str,
+        actor: str,
+        reason: str | None = None,
+        notes: str | None = None,
+    ) -> dict[str, Any]:
+        """Append a decision to the moderation event log."""
+        response = await self._client.post(
+            "/admin/events",
+            json={
+                "subject_uri": subject_uri,
+                "action": action,
+                "actor": actor,
+                "reason": reason,
+                "notes": notes,
+            },
+        )
+        response.raise_for_status()
+        return response.json()
+
+    async def query_labels(self, uri_pattern: str) -> list[dict[str, Any]]:
+        """Public `queryLabels` read, as any client would see it."""
+        response = await self._client.get(
+            "/xrpc/com.atproto.label.queryLabels",
+            params={"uriPatterns": uri_pattern},
+        )
+        response.raise_for_status()
+        return response.json().get("labels", [])
+
     def review_url(self, batch: dict[str, Any]) -> str:
         """Absolute URL for a batch returned by :meth:`create_batch`."""
         return f"{self.base_url.rstrip('/')}{batch['url']}"

@@ -51,35 +51,43 @@ SKEY = "self"
 
 
 def signed(
-    token: str, key: ec.EllipticCurvePrivateKey, audience: str | None = None
+    token: str, key: ec.EllipticCurvePrivateKey, audience: str
 ) -> dict[str, str]:
-    """headers for a space request: issuance without audience, a read with one."""
-    if audience is None:
-        public = key.public_key().public_bytes(
-            serialization.Encoding.X962, serialization.PublicFormat.CompressedPoint
-        )
-        authorization = f"Bearer {token}"
-        params = f'("authorization");keyid="{format_did_key(P256_JWT_ALG, public)}"'
-        covered = [f'"authorization": {authorization}']
-    else:
-        authorization = f"Atproto-Space {token}"
-        params = '("authorization" "atproto-space-audience")'
-        covered = [
+    """headers for a credential use, signed by the key the credential is bound to."""
+    authorization = f"Atproto-Space-Credential {token}"
+    params = '("authorization" "atproto-space-audience");tag="atproto-space-credential"'
+    base = "\n".join(
+        [
             f'"authorization": {authorization}',
             f'"atproto-space-audience": {audience}',
+            f'"@signature-params": {params}',
         ]
-    base = "\n".join([*covered, f'"@signature-params": {params}'])
+    )
     r, sig_s = decode_dss_signature(key.sign(base.encode(), ec.ECDSA(hashes.SHA256())))
     sig_s = min(sig_s, P256_CURVE_ORDER - sig_s)
     signature = base64.b64encode(r.to_bytes(32, "big") + sig_s.to_bytes(32, "big"))
-    headers = {
+    return {
         "authorization": authorization,
-        "signature-input": f"atproto-space={params}",
-        "signature": f"atproto-space=:{signature.decode()}:",
+        "atproto-space-audience": audience,
+        "signature-input": f"atproto-space-credential={params}",
+        "signature": f"atproto-space-credential=:{signature.decode()}:",
     }
-    if audience is not None:
-        headers["atproto-space-audience"] = audience
-    return headers
+
+
+def credential_request(
+    space_uri: str, delegation_token: str
+) -> tuple[dict, ec.EllipticCurvePrivateKey]:
+    """the unsigned getSpaceCredential body, and the key it binds the credential to."""
+    key = ec.generate_private_key(ec.SECP256R1())
+    public = key.public_key().public_bytes(
+        serialization.Encoding.X962, serialization.PublicFormat.CompressedPoint
+    )
+    body = {
+        "space": space_uri,
+        "credentialKid": format_did_key(P256_JWT_ALG, public),
+        "delegationToken": delegation_token,
+    }
+    return body, key
 
 
 def xrpc(
@@ -104,12 +112,8 @@ def member_reads(
     if delegation.status_code != 200:
         return delegation.status_code
     credential_url = f"{PDS}/xrpc/com.atproto.space.getSpaceCredential"
-    key = ec.generate_private_key(ec.SECP256R1())
-    cred = c.post(
-        credential_url,
-        headers=signed(delegation.json()["token"], key),
-        json={"space": space_uri},
-    )
+    body, key = credential_request(space_uri, delegation.json()["token"])
+    cred = c.post(credential_url, json=body)
     if cred.status_code != 200:
         return cred.status_code
     blob_url = f"{PDS}/xrpc/com.atproto.space.getBlob"
@@ -315,12 +319,8 @@ def main() -> int:
     print("✓ getDelegationToken")
 
     credential_url = f"{PDS}/xrpc/com.atproto.space.getSpaceCredential"
-    credential_key = ec.generate_private_key(ec.SECP256R1())
-    cred_resp = c.post(
-        credential_url,
-        headers=signed(delegation_token, credential_key),
-        json={"space": space_uri},
-    )
+    body, credential_key = credential_request(space_uri, delegation_token)
+    cred_resp = c.post(credential_url, json=body)
     cred_resp.raise_for_status()
     credential = cred_resp.json()["credential"]
     print("✓ getSpaceCredential")

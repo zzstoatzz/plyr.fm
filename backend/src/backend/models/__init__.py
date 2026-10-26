@@ -24,6 +24,7 @@ from backend.models.track import Track
 from backend.models.track_comment import TrackComment
 from backend.models.track_like import TrackLike
 from backend.models.track_revision import MAX_REVISIONS_PER_TRACK, TrackRevision
+from backend.models.track_play import TrackPlay
 from backend.models.user_copyright_config import UserCopyrightConfig
 from backend.models.upload_feedback import UploadFeedback
 from backend.utilities.database import db_session, get_db
@@ -53,6 +54,7 @@ __all__ = [
     "Track",
     "TrackComment",
     "TrackLike",
+    "TrackPlay",
     "TrackRevision",
     "TrackTag",
     "UploadFeedback",

@@ -38,11 +38,13 @@ from backend._internal.tasks import (
 from backend._internal.tasks.hooks import invalidate_tracks_discovery_cache
 from backend._internal.tasks.ingest import _write_tombstone
 from backend.config import settings
-from backend.models import Artist, Track, TrackTag, get_db
+from backend.models import Artist, Track, get_db
 from backend.schemas import MessageResponse, TrackResponse
 from backend.storage import storage
 from backend.storage.keys import AudioKey, InvalidMediaExtension
-from backend.utilities.tags import get_or_create_tag, parse_tags_json
+from backend.utilities.aggregations import get_track_tags
+from backend.utilities.tags import parse_tags_json
+from backend.utilities.track_tags import indexed_tags, project_record_tags
 
 from .metadata_service import apply_album_update
 from .router import router
@@ -211,6 +213,7 @@ async def update_track_metadata(
         .join(Artist)
         .options(selectinload(Track.artist), selectinload(Track.album_rel))
         .where(Track.id == track_id)
+        .with_for_update(of=Track)
     )
     track = result.scalar_one_or_none()
 
@@ -312,30 +315,16 @@ async def update_track_metadata(
         track.thumbnail_url = thumbnail_url
         image_changed = True
 
-    # handle tags update
-    updated_tags: set[str] = set()
+    validated_tags: list[str] | None = None
     if tags is not None:
         try:
             validated_tags = parse_tags_json(tags)
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e)) from e
-
-        # delete existing track_tags for this track
-        existing_track_tags = await db.execute(
-            select(TrackTag).where(TrackTag.track_id == track_id)
-        )
-        for tt in existing_track_tags.scalars():
-            await db.delete(tt)
-
-        # get or create tags and create track_tags
-        for tag_name in validated_tags:
-            # get or create tag with race condition handling
-            tag = await get_or_create_tag(db, tag_name, auth_session.did)
-
-            # create track_tag association
-            track_tag = TrackTag(track_id=track_id, tag_id=tag.id)
-            db.add(track_tag)
-            updated_tags.add(tag_name)
+        if not track.atproto_record_uri:
+            raise HTTPException(
+                status_code=409, detail="restore the track record before editing tags"
+            )
 
     # always update ATProto record if any metadata changed
     metadata_changed = (
@@ -345,10 +334,29 @@ async def update_track_metadata(
         or features is not None
         or image_changed
         or self_labels_changed
+        or tags is not None
     )
     if track.atproto_record_uri and metadata_changed:
         try:
-            await rebuild_track_pds_record(track, auth_session, image_url)
+            await rebuild_track_pds_record(
+                track,
+                auth_session,
+                image_url,
+                tags=validated_tags,
+                fields={
+                    name
+                    for name, changed in {
+                        "title": title_changed,
+                        "description": description_changed,
+                        "album": album is not None,
+                        "features": features is not None,
+                        "imageUrl": image_changed,
+                        "labels": self_labels_changed,
+                        "tags": tags is not None,
+                    }.items()
+                    if changed
+                },
+            )
         except Exception as exc:
             logfire.exception(
                 "failed to update ATProto record",
@@ -359,6 +367,11 @@ async def update_track_metadata(
                 status_code=500,
                 detail=f"failed to sync track update to ATProto: {exc!s}",
             ) from exc
+
+    if tags is not None:
+        extra = dict(track.extra or {})
+        extra.pop("auto_tag", None)
+        track.extra = extra
 
     await db.commit()
     await db.refresh(track)
@@ -381,14 +394,7 @@ async def update_track_metadata(
     elif metadata_changed and track.album_id:
         await invalidate_album_cache_by_id(db, track.album_id)
 
-    # build track_tags dict for response
-    # if tags were updated, use updated_tags; otherwise query for existing
-    if tags is not None:
-        track_tags_dict = {track.id: updated_tags}
-    else:
-        from backend.utilities.aggregations import get_track_tags
-
-        track_tags_dict = await get_track_tags(db, [track.id])
+    track_tags_dict = await get_track_tags(db, [track.id])
 
     return await TrackResponse.from_track(track, track_tags=track_tags_dict)
 
@@ -545,6 +551,7 @@ async def restore_track_record(
         features=track.features if track.features else None,
         image_url=await track.get_image_url(),
         self_labels=track.self_labels,
+        tags=await indexed_tags(db, track.id),
     )
     track_record["createdAt"] = track.created_at.isoformat()
 
@@ -564,6 +571,7 @@ async def restore_track_record(
     # update database
     track.atproto_record_uri = new_uri
     track.atproto_record_cid = new_cid
+    await project_record_tags(db, track, track_record)
     await db.commit()
     await db.refresh(track)
 

@@ -24,6 +24,7 @@ from backend.models import (
     ShareLinkEvent,
     Track,
     TrackLike,
+    TrackPlay,
     UserPreferences,
     get_db,
 )
@@ -210,6 +211,7 @@ async def increment_play_count(
         return PlayCountResponse(play_count=track.play_count)
 
     track.play_count += 1
+    db.add(TrackPlay(track_id=track.id, source="web"))
 
     # record share link play event if ref provided
     ref = body.ref if body else None

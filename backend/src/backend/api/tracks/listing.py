@@ -20,6 +20,7 @@ from backend._internal.content_labels import (
     filter_sensitive_audio_tracks,
     get_operator_label_values,
     get_track_label_values,
+    hidden_by_tags_clause,
     label_visible_clause,
 )
 from backend._internal.track_visibility import visible_filter
@@ -49,7 +50,11 @@ from backend.utilities.aggregations import (
 from backend.utilities.redis import get_async_redis_client
 from backend.utilities.tags import DEFAULT_HIDDEN_TAGS
 
-from .constants import DISCOVERY_CACHE_KEY, DISCOVERY_CACHE_TTL_SECONDS
+from .constants import (
+    DISCOVERY_CACHE_KEY,
+    DISCOVERY_CACHE_TTL_SECONDS,
+    LATEST_TRACKS_PER_ARTIST_PER_WEEK,
+)
 from .router import router
 
 logger = logging.getLogger(__name__)
@@ -162,14 +167,7 @@ async def list_tracks(
         filter_hidden_tags if filter_hidden_tags is not None else (artist_did is None)
     )
     if hidden_tags and should_filter:
-        hidden_exists = (
-            select(TrackTag.track_id)
-            .join(Tag, TrackTag.tag_id == Tag.id)
-            .where(Tag.name.in_(hidden_tags))
-            .where(TrackTag.track_id == Track.id)
-            .exists()
-        )
-        stmt = stmt.where(~hidden_exists)
+        stmt = stmt.where(~hidden_by_tags_clause(hidden_tags))
 
     # positive tag filter — show only tracks matching any of the selected tags
     if tags:
@@ -193,6 +191,27 @@ async def list_tracks(
             context=LabelContext.VIEW if artist_did else LabelContext.LIST,
         )
     )
+
+    if not artist_did:
+        ranked = stmt.with_only_columns(
+            Track.id,
+            func.row_number()
+            .over(
+                partition_by=(
+                    Track.artist_did,
+                    func.date_trunc("week", func.timezone("UTC", Track.created_at)),
+                ),
+                order_by=Track.created_at.desc(),
+            )
+            .label("artist_week_rank"),
+        ).subquery()
+        stmt = stmt.where(
+            Track.id.in_(
+                select(ranked.c.id).where(
+                    ranked.c.artist_week_rank <= LATEST_TRACKS_PER_ARTIST_PER_WEEK
+                )
+            )
+        )
 
     # apply cursor-based pagination (tracks older than cursor timestamp)
     if cursor:

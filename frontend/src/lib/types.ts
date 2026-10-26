@@ -105,6 +105,7 @@ export interface Artist {
 	bio?: string;
 	show_liked_on_profile?: boolean;
 	support_url?: string;
+	labels?: string[];
 }
 
 export type RepeatMode = 'none' | 'one';
@@ -245,6 +246,9 @@ export interface ActivityEvent {
 export interface ActivityHistogramResponse {
 	buckets: ActivityHistogramBucket[];
 	interval: 'hour' | 'day' | 'month';
+	series: 'activity' | 'plays';
+	/** first recorded play; plays before it are teal.fm scrobbles only */
+	tracked_since: string | null;
 }
 
 export interface ActivityHistogramBucket {

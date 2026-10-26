@@ -5,6 +5,7 @@ import logging
 import logfire
 from sqlalchemy import select
 
+from backend._internal.atproto.tag_sync import publish_auto_tags
 from backend._internal.background import get_docket
 from backend._internal.clients.clap import get_clap_client
 from backend._internal.clients.tpuf import upsert as tpuf_upsert
@@ -115,7 +116,9 @@ async def classify_genres(track_id: int, audio_url: str) -> None:
     predictions = [{"name": g.name, "confidence": g.confidence} for g in result.genres]
 
     async with db_session() as db:
-        db_result = await db.execute(select(Track).where(Track.id == track_id))
+        db_result = await db.execute(
+            select(Track).where(Track.id == track_id).with_for_update()
+        )
         track = db_result.scalar_one_or_none()
         if not track:
             logger.warning("classify_genres: track %d not found", track_id)
@@ -125,31 +128,10 @@ async def classify_genres(track_id: int, audio_url: str) -> None:
         extra["genre_predictions"] = predictions
         extra["genre_predictions_file_id"] = track.file_id
 
-        # auto-tag if requested
-        if extra.get("auto_tag") and predictions:
-            from backend.utilities.tags import add_tags_to_track
-
-            # ratio-to-top: keep tags scoring >= 50% of top score
-            top_confidence = float(predictions[0]["confidence"])
-            top_tags = [
-                str(p["name"])
-                for p in predictions
-                if float(p["confidence"]) >= top_confidence * 0.5
-            ][:5]  # cap at 5
-
-            if top_tags:
-                await add_tags_to_track(db, track_id, top_tags, track.artist_did)
-                logfire.info(
-                    "auto-tagged track",
-                    track_id=track_id,
-                    tags=top_tags,
-                )
-
-            # clean up flag
-            del extra["auto_tag"]
-
         track.extra = extra
         await db.commit()
+
+    await publish_auto_tags(track_id)
 
     logfire.info(
         "classified genres for track",

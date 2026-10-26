@@ -202,7 +202,7 @@ optional fields: `duration=15`, `description="liner notes"`, `album="album name"
 
 ### 4. verify ingestion
 
-Jetstream picks up the record within ~2 seconds. check the staging API:
+staging rests between tests, so wake it first (`just staging-up`) — with jetstream stopped nothing ingests. once it is up, Jetstream picks up the record within ~2 seconds. check the staging API:
 
 ```bash
 curl -sL "https://api-stg.plyr.fm/tracks/?limit=1" | python3 -m json.tool

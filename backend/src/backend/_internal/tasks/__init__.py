@@ -29,6 +29,10 @@ from backend._internal.tasks.hooks import (
     run_post_track_create_hooks,
 )
 from backend._internal.tasks.labels import sync_operator_labels
+from backend._internal.tasks.teal_plays import (
+    backfill_teal_plays_for_account,
+    schedule_teal_play_backfill,
+)
 from backend._internal.tasks.pds_mirror import (
     mirror_pds_blob,
     schedule_pds_blob_mirror,
@@ -117,6 +121,8 @@ def _build_background_tasks() -> list:
         scan_copyright,
         sync_copyright_resolutions,
         sync_operator_labels,
+        schedule_teal_play_backfill,
+        backfill_teal_plays_for_account,
         publish_moderation_decisions,
         process_export,
         process_album_download,
@@ -175,6 +181,7 @@ def __getattr__(name: str):
 
 __all__ = [
     "SubjectNotFoundError",
+    "backfill_teal_plays_for_account",
     "background_tasks",
     "classify_genres",
     "generate_embedding",
@@ -223,6 +230,7 @@ __all__ = [
     "schedule_pds_delete_comment",
     "schedule_pds_delete_like",
     "schedule_pds_update_comment",
+    "schedule_teal_play_backfill",
     "schedule_teal_scrobble",
     "scrobble_to_teal",
     "sweep_abandoned_uploads",

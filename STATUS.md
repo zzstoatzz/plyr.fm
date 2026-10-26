@@ -47,6 +47,38 @@ plyr.fm should become:
 
 ### October 2026
 
+#### activity chart smoothing and plays (October 23)
+
+The activity chart draws a rolling-average line over faint raw bars (3h / 12h /
+3d / 7d by range), and all-time starts at plyr's launch month instead of six
+backdated 2021–2023 records. A `plays` series reads the new `track_plays`
+table (one row per counted web or Subsonic play, no listener identity). Plays
+before tracking began come from a one-off backfill of plyr-origin teal.fm
+scrobbles (docket task `backfill_teal_plays_for_account`), about a fifth of counted plays,
+drawn dashed and labeled "scrobbled plays only". See
+`docs/internal/frontend/activity-chart.md`.
+
+#### account-level ai labels (October 23)
+
+plyr.fm's labeler can label an **account** `ai` (subject = the DID) when it
+publishes AI-generated audio without tagging it. The label projects onto
+`artists.operator_labels` and hides the account's tracks wherever the `ai` tag
+already does: latest, for you, and radio outside the slop station. Artist pages
+note the label and still list every track. No record is written. Operators
+apply it with `scripts/label_account.py`. See
+`docs/internal/moderation/label-policy.md`.
+
+#### portable track tags (October 21 — staging verification pending)
+
+Track records support optional `tags` arrays, including tags published directly
+by other clients. Uploads and edits write tags to the PDS; ingestion projects them
+into Postgres. Metadata edits patch only requested fields with a CID precondition,
+and record rebuilds retain tags, unknown fields and the original creation time.
+Legacy DB-only tags migrate on authorized login without overwriting an existing
+PDS tag field. Failed automatic genre-tag writes stay pending. See
+`docs/internal/backend/track-tags.md` for migration, ordering and refresh commands.
+Production promotion and Penny's production refresh await approval.
+
 #### upload pause operator DMs (October 20)
 
 Accounts on the temporary upload pause list now notify the existing operator DM

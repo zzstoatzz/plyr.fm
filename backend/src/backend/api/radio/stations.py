@@ -10,10 +10,10 @@ API shape.
 from collections.abc import Callable
 from dataclasses import dataclass, field
 
+from backend._internal.content_labels import is_hidden_by_default
 from backend.api.radio import lenses
 from backend.api.radio.lenses import LensContext
 from backend.models import Track
-from backend.utilities.tags import is_tag_hidden_by_default
 
 Lens = Callable[[Track, LensContext], float]
 # given a track and its normalized tags, is it eligible for this station?
@@ -24,17 +24,15 @@ CorpusFilter = Callable[[Track, set[str]], bool]
 PLYR_FM_ACCOUNT_HANDLE = "plyr.fm"
 
 
-def _has_hidden_tag(tags: set[str]) -> bool:
-    """True if the track carries any default-hidden tag (ai / ai-slop / suno)."""
-    return any(is_tag_hidden_by_default(tag) for tag in tags)
-
-
 def _exclude_slop(track: Track, tags: set[str]) -> bool:
-    return not _has_hidden_tag(tags)
+    return not is_hidden_by_default(track, tags)
 
 
 def _only_slop(track: Track, tags: set[str]) -> bool:
-    return _has_hidden_tag(tags) and track.artist.handle != PLYR_FM_ACCOUNT_HANDLE
+    return (
+        is_hidden_by_default(track, tags)
+        and track.artist.handle != PLYR_FM_ACCOUNT_HANDLE
+    )
 
 
 # the account broadcasting the sonified firehose; its published segments are

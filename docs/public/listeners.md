@@ -41,6 +41,8 @@ even today, other apps (like [aetheros.computer](https://aetheros.computer)) alr
 
    ![the feed shows top tracks and latest uploads](/screenshots/landing-page.png)
 
+   latest uploads show up to three tracks per artist each week, so one prolific uploader can't fill the feed. an artist's page always lists everything they've published.
+
    or hit `Cmd+K` to search for something specific
 
    ![Cmd+K search overlay](/screenshots/search-overlay.png)

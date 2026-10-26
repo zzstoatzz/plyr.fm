@@ -34,9 +34,22 @@ the core content record — an audio track uploaded by an artist.
 ```
 key: tid (timestamp-based ID)
 required: title, artist, fileType, createdAt
-optional: audioUrl, audioBlob, album, duration, features, imageUrl, description, supportGate, labels
+optional: audioUrl, audioBlob, album, duration, features, imageUrl, description, supportGate, labels, tags
 note: at least one of audioUrl or audioBlob must be present
 ```
+
+`tags` is an optional array of up to twenty strings, each at most 50 characters.
+For example, `"tags": ["ai", "ambient"]`. Use `"tags": []` to explicitly clear
+tags. plyr.fm normalizes case and whitespace when indexing. Existing records
+without this field remain valid; legacy tags saved only in plyr.fm are migrated
+when the owner next signs in with write access. Once reconciled, omitting the
+field also clears indexed tags.
+
+the `ai` tag discloses AI-generated audio. plyr.fm hides tracks tagged `ai`,
+`ai-slop`, or `suno` from the latest feed and for you by default (listeners can
+unhide them from the home feed's hidden-tag filter) and airs them on radio only through the slop
+station. artist pages and search show every track regardless. clients and
+agents that publish generated audio should include `"ai"` in `tags`.
 
 example record from the network:
 

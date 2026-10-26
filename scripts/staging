@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+# usage: scripts/staging up|down|status
+set -euo pipefail
+
+APP="${STAGING_APP:-relay-api-staging}"
+API="${STAGING_API:-https://api-stg.plyr.fm}"
+GROUPS_RE='^(worker|jetstream)$'
+
+machines() {
+    flyctl machines list -a "$APP" --json |
+        jq -r --arg re "$GROUPS_RE" \
+            ".[] | select(.config.metadata.fly_process_group | test(\$re))
+                 | select(.config.standbys == null) | select($1) | .id"
+}
+
+settle() {
+    for id in $(machines "$1"); do
+        flyctl machine wait -a "$APP" "$id" --state "$2" --wait-timeout 120s
+    done
+}
+
+case "${1:-}" in
+up)
+    settle '.state == "stopping"' stopped
+    ids=$(machines '.state != "started"')
+    [ -n "$ids" ] && flyctl machine start -a "$APP" $ids
+    settle true started
+    curl -sf --retry 12 --retry-delay 5 --retry-all-errors --max-time 30 "$API/health" >/dev/null
+    echo "staging up: worker + jetstream started, $API/health ok"
+    ;;
+down)
+    ids=$(machines '.state == "started" or .state == "starting"')
+    [ -n "$ids" ] && flyctl machine stop -a "$APP" $ids
+    settle '.state == "stopping"' stopped
+    echo "staging down: worker + jetstream stopped"
+    ;;
+status)
+    flyctl machines list -a "$APP" --json |
+        jq -r '.[] | "\(.config.metadata.fly_process_group)\t\(.id)\t\(.state)"'
+    ;;
+*)
+    echo "usage: $0 up|down|status" >&2
+    exit 2
+    ;;
+esac

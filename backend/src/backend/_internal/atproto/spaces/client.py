@@ -37,6 +37,15 @@ from cryptography.hazmat.primitives.asymmetric.utils import decode_dss_signature
 
 from backend._internal import Session as AuthSession
 from backend._internal.atproto.client import make_pds_request
+from backend._internal.atproto.spaces.mac import (
+    MAC_HEADER,
+    WANT_MAC_HEADER,
+    SpaceMacError,
+    encapsulate,
+    format_want_mac_header,
+    parse_mac_header,
+    verify_commit_mac,
+)
 from backend._internal.atproto.spaces.uris import (
     build_space_uri,
     parse_space_record_uri,
@@ -83,11 +92,24 @@ async def _space_host_url(space: str) -> str:
     return await _resolve_did_service(authority, "#atproto_space_host")
 
 
+async def _kem_key(did: str) -> str | None:
+    """The account's ``#atproto_kem`` key as a did:key, if its DID doc has one."""
+    document = await AsyncDidResolver().resolve(did)
+    for method in (document.verification_method or []) if document else []:
+        if method.id in ("#atproto_kem", f"{did}#atproto_kem"):
+            if method.public_key_multibase:
+                return f"did:key:{method.public_key_multibase}"
+    return None
+
+
 async def _repo_host_url(repo: str) -> str:
     return await _resolve_did_service(repo, "#atproto_pds")
 
 
-_SIGNATURE_LABEL = "atproto-space"
+_SIGNATURE_LABEL = "atproto-space-credential"
+_SIGNATURE_INPUT = (
+    '("authorization" "atproto-space-audience");tag="atproto-space-credential"'
+)
 
 
 def _did_key(key: EllipticCurvePrivateKey) -> str:
@@ -101,39 +123,31 @@ def _space_signature_headers(
     token: str,
     key: EllipticCurvePrivateKey,
     *,
-    audience: str | None = None,
+    audience: str,
 ) -> dict[str, str]:
-    """sign a space request the way ``@atproto/space`` verifies it.
+    """sign a credential use the way ``@atproto/space`` verifies it.
 
-    without ``audience`` this is credential issuance: the delegation token is
-    the bearer and the signature names the key the credential will be bound
-    to. with it, the credential is presented to the host for that DID.
+    the credential is presented to the host for the ``audience`` DID, signed by
+    the key it was issued to.
     """
-    if audience is None:
-        authorization = f"Bearer {token}"
-        signature_input = f'("authorization");keyid="{_did_key(key)}"'
-        covered = [f'"authorization": {authorization}']
-    else:
-        authorization = f"Atproto-Space {token}"
-        signature_input = '("authorization" "atproto-space-audience")'
-        covered = [
+    authorization = f"Atproto-Space-Credential {token}"
+    base = "\n".join(
+        [
             f'"authorization": {authorization}',
             f'"atproto-space-audience": {audience}',
+            f'"@signature-params": {_SIGNATURE_INPUT}',
         ]
-    base = "\n".join([*covered, f'"@signature-params": {signature_input}'])
+    )
     r, sig_s = decode_dss_signature(key.sign(base.encode(), ec.ECDSA(hashes.SHA256())))
     # compact r||s with low-S, as @atproto/crypto produces it
     sig_s = min(sig_s, P256_CURVE_ORDER - sig_s)
     signature = base64.b64encode(r.to_bytes(32, "big") + sig_s.to_bytes(32, "big"))
-
-    headers = {
+    return {
         "authorization": authorization,
-        "signature-input": f"{_SIGNATURE_LABEL}={signature_input}",
+        "atproto-space-audience": audience,
+        "signature-input": f"{_SIGNATURE_LABEL}={_SIGNATURE_INPUT}",
         "signature": f"{_SIGNATURE_LABEL}=:{signature.decode()}:",
     }
-    if audience is not None:
-        headers["atproto-space-audience"] = audience
-    return headers
 
 
 async def _space_token_request(
@@ -143,23 +157,31 @@ async def _space_token_request(
     token: str,
     key: EllipticCurvePrivateKey,
     *,
-    audience: str | None = None,
-    json: dict[str, Any] | None = None,
+    audience: str,
     params: dict[str, Any] | None = None,
+    extra_headers: dict[str, str] | None = None,
 ) -> httpx.Response:
-    """Call a permissioned XRPC, signed with the credential's key."""
+    """Call a permissioned XRPC with a space credential, signed with its key."""
     url = f"{service_url}/xrpc/{endpoint}"
     if not is_safe_url(url):
         raise ValueError(f"unsafe service URL: {url}")
-    headers = _space_signature_headers(token, key, audience=audience)
+    headers = {
+        **(extra_headers or {}),
+        **_space_signature_headers(token, key, audience=audience),
+    }
     async with httpx.AsyncClient(timeout=30) as http:
-        return await http.request(
-            method,
-            url,
-            headers=headers,
-            json=json,
-            params=params,
-        )
+        return await http.request(method, url, headers=headers, params=params)
+
+
+async def _request_space_credential(
+    service_url: str, payload: dict[str, str]
+) -> httpx.Response:
+    """Ask the space host for a credential; the request itself is unsigned."""
+    url = f"{service_url}/xrpc/com.atproto.space.getSpaceCredential"
+    if not is_safe_url(url):
+        raise ValueError(f"unsafe service URL: {url}")
+    async with httpx.AsyncClient(timeout=30) as http:
+        return await http.post(url, json=payload)
 
 
 # --- space lifecycle + record writes (owner/author, DPoP OAuth) ---------------
@@ -356,22 +378,19 @@ async def _mint_credential(auth_session: AuthSession, space: str) -> SpaceCreden
     delegation_token = delegation_resp["token"]
 
     authority = parse_space_uri(space).owner_did
-    audience = f"{authority}#atproto_space_host"
-    payload = {"space": space}
+    audience = f"{authority}#atproto_pds"
+    key = ec.generate_private_key(ec.SECP256R1())
+    payload = {
+        "space": space,
+        "credentialKid": _did_key(key),
+        "delegationToken": delegation_token,
+    }
     if attestation := create_space_client_attestation(audience):
         payload["clientAttestation"] = attestation
 
     # Credential issuance happens on the resolved space host, which may differ
     # from both the user's PDS and each writer's repo host.
-    key = ec.generate_private_key(ec.SECP256R1())
-    cred_resp = await _space_token_request(
-        await _space_host_url(space),
-        "POST",
-        "com.atproto.space.getSpaceCredential",
-        delegation_token,
-        key,
-        json=payload,
-    )
+    cred_resp = await _request_space_credential(await _space_host_url(space), payload)
     if cred_resp.status_code != 200:
         body = cred_resp.text
         # the error names com.atproto.space.getSpaceCredential declares; any 403
@@ -503,15 +522,20 @@ async def _credential_read(
     endpoint: str,
     space: str,
     params: dict[str, Any],
+    commit_mac_repo: str | None = None,
 ) -> dict[str, Any]:
     """Perform a JSON space read, renewing once when the credential is stale.
 
-    ``audience`` is the DID whose host is being asked.
+    ``audience`` is the DID whose host is being asked. With ``commit_mac_repo``,
+    each request asks that repo's host to MAC its commit (when the author
+    publishes a ``#atproto_kem`` key) and a returned commit must verify.
     """
+    kem_key = await _kem_key(commit_mac_repo) if commit_mac_repo else None
     for attempt in range(2):
         credential = await get_space_credential(
             auth_session, space, force_refresh=attempt > 0
         )
+        encapsulation = encapsulate(kem_key) if kem_key else None
         response = await _space_token_request(
             host_url,
             "GET",
@@ -520,6 +544,11 @@ async def _credential_read(
             credential.key,
             audience=audience,
             params=params,
+            extra_headers=(
+                {WANT_MAC_HEADER: format_want_mac_header(encapsulation.key_share)}
+                if encapsulation
+                else None
+            ),
         )
         if response.status_code == 401 and attempt == 0:
             continue
@@ -527,7 +556,17 @@ async def _credential_read(
             raise SpaceAccessError(
                 f"{endpoint} failed: {response.status_code} {response.text}"
             )
-        return response.json()
+        body = response.json()
+        if encapsulation and (commit := body.get("commit")):
+            try:
+                verify_commit_mac(
+                    encapsulation.shared_secret,
+                    commit,
+                    parse_mac_header(response.headers.get(MAC_HEADER)),
+                )
+            except SpaceMacError as exc:
+                raise SpaceAccessError(f"{endpoint}: {exc}") from exc
+        return body
     raise SpaceAccessError(f"{endpoint} rejected renewed credential")
 
 
@@ -595,7 +634,7 @@ async def list_space_repo_ops(
     """Pull incremental operations directly from a writer's repo host.
 
     A full page carries ``cursor`` and no ``commit``; the page that reaches the
-    head of the oplog carries the signed ``commit`` and no ``cursor``. ``cursor``
+    head of the oplog carries the ``commit`` (MAC-verified) and no ``cursor``. ``cursor``
     takes precedence over ``since`` when both are sent.
     """
     params: dict[str, Any] = {"space": space, "repo": repo, "limit": limit}
@@ -610,4 +649,5 @@ async def list_space_repo_ops(
         endpoint="com.atproto.space.listRepoOps",
         space=space,
         params=params,
+        commit_mac_repo=repo,
     )

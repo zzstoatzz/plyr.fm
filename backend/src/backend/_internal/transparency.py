@@ -51,6 +51,12 @@ _HEADLINE = {
     "label_negated": "withdrew a label from a track",
 }
 
+# a label whose subject is a bare DID is about the account, not one track
+_ACCOUNT_HEADLINE = {
+    "label_applied": "labeled an account",
+    "label_negated": "withdrew a label from an account",
+}
+
 TRACK_URL = "https://plyr.fm/track/{track_id}"
 # every post carries this, so a dead link would be a dead link on all of them.
 POLICY_URL = "https://docs.plyr.fm/moderation"
@@ -112,7 +118,12 @@ def render(event: dict[str, Any]) -> TransparencyPost | None:
     if not is_publishable(event):
         return None
 
-    segments: list[Segment] = [Segment(f"moderation: {_HEADLINE[event['action']]}")]
+    action = event["action"]
+    is_account = str(event.get("subject_uri", "")).startswith("did:")
+    headline = (_ACCOUNT_HEADLINE if is_account else _HEADLINE).get(
+        action, _HEADLINE[action]
+    )
+    segments: list[Segment] = [Segment(f"moderation: {headline}")]
 
     if reason := event.get("reason"):
         # bounded here rather than by truncating the finished post: facets are

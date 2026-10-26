@@ -375,11 +375,11 @@ async def test_mint_credential_uses_delegation_token_flow(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     pds_request = AsyncMock(return_value={"token": "delegation-token"})
-    token_request = AsyncMock(
+    credential_request = AsyncMock(
         return_value=httpx.Response(200, json={"credential": "space-credential"})
     )
     monkeypatch.setattr(space_client, "make_pds_request", pds_request)
-    monkeypatch.setattr(space_client, "_space_token_request", token_request)
+    monkeypatch.setattr(space_client, "_request_space_credential", credential_request)
     monkeypatch.setattr(
         space_client,
         "_space_host_url",
@@ -405,20 +405,20 @@ async def test_mint_credential_uses_delegation_token_flow(
         "com.atproto.space.getDelegationToken",
         params={"space": space},
     )
-    token_request.assert_awaited_once_with(
+    credential_request.assert_awaited_once_with(
         "https://space-host.test",
-        "POST",
-        "com.atproto.space.getSpaceCredential",
-        "delegation-token",
-        ANY,
-        json={"space": space},
+        {
+            "space": space,
+            "credentialKid": space_client._did_key(credential.key),
+            "delegationToken": "delegation-token",
+        },
     )
 
 
 async def test_mint_credential_sends_separate_client_attestation(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    token_request = AsyncMock(
+    credential_request = AsyncMock(
         return_value=httpx.Response(200, json={"credential": "space-credential"})
     )
     monkeypatch.setattr(
@@ -426,7 +426,7 @@ async def test_mint_credential_sends_separate_client_attestation(
         "make_pds_request",
         AsyncMock(return_value={"token": "delegation-token"}),
     )
-    monkeypatch.setattr(space_client, "_space_token_request", token_request)
+    monkeypatch.setattr(space_client, "_request_space_credential", credential_request)
     monkeypatch.setattr(
         space_client,
         "_space_host_url",
@@ -447,17 +447,13 @@ async def test_mint_credential_sends_separate_client_attestation(
 
     await space_client._mint_credential(session, space)
 
-    token_request.assert_awaited_once_with(
+    credential_request.assert_awaited_once_with(
         "https://space-host.test",
-        "POST",
-        "com.atproto.space.getSpaceCredential",
-        "delegation-token",
-        ANY,
-        json={
+        {
             "space": space,
-            "clientAttestation": (
-                "attestation-for:did:plc:authority#atproto_space_host"
-            ),
+            "credentialKid": ANY,
+            "delegationToken": "delegation-token",
+            "clientAttestation": ("attestation-for:did:plc:authority#atproto_pds"),
         },
     )
 
@@ -478,7 +474,7 @@ def test_space_client_attestation_uses_proposal_jwt_shape(
     )
 
     token = oauth_module.create_space_client_attestation(
-        "did:plc:authority#atproto_space_host"
+        "did:plc:authority#atproto_pds"
     )
 
     assert token is not None
@@ -491,7 +487,7 @@ def test_space_client_attestation_uses_proposal_jwt_shape(
     }
     assert claims["iss"] == "https://api.plyr.fm/oauth-client-metadata.json"
     assert claims["sub"] == claims["iss"]
-    assert claims["aud"] == "did:plc:authority#atproto_space_host"
+    assert claims["aud"] == "did:plc:authority#atproto_pds"
     assert claims["exp"] - claims["iat"] == 60
     assert claims["jti"]
 
@@ -546,7 +542,7 @@ async def test_mint_credential_maps_zds_access_refusal(
     )
     monkeypatch.setattr(
         space_client,
-        "_space_token_request",
+        "_request_space_credential",
         AsyncMock(
             return_value=httpx.Response(
                 403,
@@ -591,7 +587,7 @@ async def test_mint_credential_maps_lexicon_refusals_and_any_403(
     )
     monkeypatch.setattr(
         space_client,
-        "_space_token_request",
+        "_request_space_credential",
         AsyncMock(return_value=httpx.Response(status, json={"error": error})),
     )
     monkeypatch.setattr(
@@ -852,6 +848,7 @@ async def test_list_space_repo_ops_routes_to_writer_repo_host(
             "since": "3mabc",
             "limit": 250,
         },
+        commit_mac_repo="did:plc:writer",
     )
 
 

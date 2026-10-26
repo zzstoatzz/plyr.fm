@@ -73,6 +73,16 @@ jobs:
         if: steps.check-tokens.outputs.has_tokens == 'true'
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
 
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+        if: steps.check-tokens.outputs.has_tokens == 'true'
+
+      # staging rests with worker + jetstream stopped (staging-machines.yml); waking it is part of the test
+      - name: wake staging
+        if: steps.check-tokens.outputs.has_tokens == 'true'
+        run: ./scripts/staging up
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_STAGING }}
+
       # mint short-lived dev tokens just-in-time from stored app-passwords, so no
       # long-lived token is ever stored (nothing to rotate, nothing to expire).
       # the tokens are revoked in teardown; they also self-GC (1-day TTL).

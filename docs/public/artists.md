@@ -17,7 +17,7 @@ when you upload a track:
 - you can [embed a player](#embeds) on your website or blog
 - you can [gate tracks](#supporter-gated-tracks) behind supporter status
 
-public records can be read by other compatible apps. protected audio remains subject to its access rules; private Spaces require their host's authorization. you can export your catalog from the [portal](https://plyr.fm/portal).
+public records can be read by other compatible apps. protected audio remains subject to its access rules; private Spaces require their host's authorization. you can export your catalog from [Portal → manage](https://plyr.fm/portal/manage).
 
 ## your first upload
 
@@ -25,49 +25,66 @@ public records can be read by other compatible apps. protected audio remains sub
 
    ![plyr.fm sign-in page — enter your atmosphere account to get started](/screenshots/login-page.png)
 
-2. **upload** — click the upload button and choose your audio file (MP3, WAV, M4A, FLAC, AIFF). as soon as you pick it, the form shows what it knows about the file — format, size, length, a waveform for shorter tracks, and a play button to check it's the right one — without sending anything. nothing leaves your browser until you press upload, so picking the wrong file costs nothing.
+2. **upload** — click **upload** in the header (or **upload track** in the [portal](https://plyr.fm/portal)), give the track a title, and choose your audio file: MP3, WAV, M4A, FLAC, or AIFF (`.aif` works too), up to 1.5 GB (1536 MB) per file. as soon as you pick it, the form shows what it knows about the file — format, size, length, a waveform for shorter tracks, and a play button to check it's the right one — without sending anything. nothing leaves your browser until you press **upload track**, so picking the wrong file costs nothing.
+
+   releasing several tracks together? switch the toggle at the top from **track** to **album**, give the album a title and cover art, and use **choose files** to add every track at once.
 
    ![the upload form — title, audio file, description, album, tags, and artwork](/screenshots/upload-form.png)
 
-3. **add artwork** — attach cover art to your track. see [artwork guidelines](#artwork-guidelines) for format and size recommendations
+3. **add details** — the same form takes an optional description (liner notes, credits), an album, featured artists, tags, and artwork. see [artwork guidelines](#artwork-guidelines) for format and size recommendations
 
-4. **add metadata** — edit your track in the [portal](https://plyr.fm/portal) to add tags, cover art, and a description
+   <span id="auto-tagging"></span>under tags you can tick **auto-tag with recommended genres** — plyr.fm runs [ML genre classification](https://github.com/zzstoatzz/plyr.fm/blob/main/docs/internal/backend/genre-classification.md) on the audio using the [effnet-discogs](https://replicate.com/mtg/effnet-discogs) model and adds the recommended genres as tags once classification finishes. whether or not you tick it, the track editor shows **suggested** tags you can add with a tap, and you can remove any tag you don't want.
+
+   <span id="ai-generated-audio"></span>if a track is AI-generated, tag it `ai`. listeners hide `ai`, `ai-slop`, and `suno` tags by default, so these tracks stay out of the latest feed and for you unless a listener chooses to see them, and radio airs them only on the [slop](https://plyr.fm/radio/slop) station. they still appear on your artist page and in search.
+
+4. **choose who can listen** — the form shows a one-line summary of your [music access](#music-access) defaults. open **change for this track** to set this track differently. if the track contains sexually explicit audio, tick the [content notice](#adult-audio-and-content-notices)
+
+5. **publish it** — confirm you have the right to distribute the audio, then press **upload track**. a progress notice follows the file through processing and ends with a **view track** link. MP3, WAV, M4A, and FLAC play right away; a public AIFF publishes immediately with your original kept, while a smaller streaming copy is prepared in the background — until it lands, browsers that can't play the original show the track as *still processing — playable shortly*. tracks with restricted listening or downloads publish once their protected playback copy is ready
+
+6. **edit it later** — find the track in the [portal](https://plyr.fm/portal) and choose **edit track** to change its details, artwork, access, or content notice. under **audio & version history** you can replace the audio or restore an earlier version
 
    ![the track editor — title, description, album, tags, artwork, and suggested tags](/screenshots/portal-track-editor.png)
 
-   <span id="auto-tagging"></span>when you add tags, you can opt in to **auto-tag with recommended genres** — plyr.fm runs [ML genre classification](https://github.com/zzstoatzz/plyr.fm/blob/main/docs/internal/backend/genre-classification.md) on the audio using the [effnet-discogs](https://replicate.com/mtg/effnet-discogs) model and suggests tags automatically. you can accept, remove, or add your own. auto-suggested tags typically appear within a few seconds of upload.
+7. **embed it** — put a player on your website or blog using the snippets in [embeds](#embeds) below
 
-5. **publish it** — check the access summary, then upload. once processing completes, playback and discovery follow the choices you saved
-6. **embed it** — copy the embed code to put a player on your website or blog (see [embeds](#embeds) below)
+once you've shared more than 24 hours of audio, the upload page may show a card asking you to sponsor plyr.fm, with what your copyright scans have cost so far. it's optional, never blocks uploading, and **dismiss for 30 days** hides it.
 
 ## music access
 
-set your defaults in [Portal](https://plyr.fm/portal) under **music access**.
-new accounts start with anyone able to listen and download. existing artists'
-saved download choices are preserved.
+set your defaults in [Portal → manage](https://plyr.fm/portal/manage#music-access)
+under **music access**, then **save profile**. new accounts start with anyone
+able to listen and download. existing artists' saved download choices are
+preserved.
 
-uploads show a short summary and use your defaults. expand the controls to
-change a specific track. album uploads share settings across their tracks;
-individual tracks can override them. when editing an album, applying settings
-preserves track exceptions unless you explicitly choose to replace them.
+uploads show a short summary and use your defaults. open **change for this
+track** (or **change for this album**) to set a specific work differently. album
+uploads share settings across their tracks; individual tracks can override them.
+when editing an album, applying settings preserves track exceptions unless you
+explicitly choose to replace them.
 
 Portal defaults affect **future uploads**. changing them does not rewrite your
 existing catalog. use the track or album controls to change published works.
 
 listening, downloads, discovery, and rights information are separate:
 
-- **listening** controls who can play the track. turning off public listening
-  reveals the available audience choices.
-- **downloads** controls who can obtain the original file. public listening
-  with downloads off lets people hear your work without offering the master.
-- **show in feeds** controls public discovery. an unlisted track can still
-  appear on your artist page and in search; unlisted is not private.
-- **attach rights information** adds your chosen rights metadata. adding or
-  removing it does not change listening or download permissions.
+- **listening** controls who can play the track. unticking **anyone can
+  listen** reveals the audience choices: only me, signed-in listeners, verified
+  supporters, and — when your PDS supports it — my Space members.
+- **downloads** controls who can obtain the original file. unticking **anyone
+  can download** lets you choose only me or verified supporters. public
+  listening with downloads off lets people hear your work without offering the
+  master.
+- **show in feeds** (under **more options**) controls public discovery. an
+  unlisted track can still appear on your artist page, in albums, playlists,
+  and search; unlisted is not private.
+- **attach rights information** adds the rights metadata you set up in Portal.
+  adding or removing it does not change listening or download permissions.
+  this option only appears on accounts where the rights feature is enabled.
 
 restricted listening with open downloads still allows people to download the
-original. choose both settings deliberately. a support prompt is optional;
-it does not enforce a payment or subscription.
+original. choose both settings deliberately. **ask for support before
+downloading** (under **more options**) is optional; it does not enforce a
+payment or subscription.
 
 ### protected audio
 
@@ -82,8 +99,9 @@ into Spaces.
 
 ## adult audio and content notices
 
-if a track contains adult or sexual audio, enable **contains adult or sexual
-audio** when uploading it. You can change the notice later in the track editor.
+if a track contains adult or sexual audio, tick **contains sexually explicit
+audio** under **content notice** when uploading it. You can change the notice
+later under **content notice** in the track editor.
 
 the notice is stored with your track in your ATProto repository. On plyr.fm,
 noticed tracks are hidden from discovery feeds, search, and radio unless a
@@ -112,7 +130,7 @@ album and playlist covers accept the same formats except GIF.
 
 ## embeds
 
-share your audio anywhere with embed iframes. plyr.fm supports track, playlist, album, and radio embeds.
+share your audio anywhere with embed iframes. plyr.fm supports track, playlist, album, artist, and radio embeds. there's no copy-embed button yet — paste a snippet below and fill in the id from the page's address: `plyr.fm/track/{track_id}`, `plyr.fm/playlist/{playlist_id}`, or `plyr.fm/u/{handle}/album/{album_slug}`.
 
 ### track embed
 
@@ -145,6 +163,21 @@ share your audio anywhere with embed iframes. plyr.fm supports track, playlist, 
 ```html
 <iframe
   src="https://plyr.fm/embed/album/{handle}/{album_slug}"
+  width="100%"
+  height="352"
+  frameborder="0"
+  allow="autoplay; encrypted-media"
+  loading="lazy"
+></iframe>
+```
+
+### artist embed
+
+your latest tracks, with your avatar and a link back to your profile:
+
+```html
+<iframe
+  src="https://plyr.fm/embed/u/{handle}"
   width="100%"
   height="352"
   frameborder="0"
@@ -193,7 +226,7 @@ plyr.fm supports [oEmbed](https://oembed.com/) for automatic embed discovery:
 https://api.plyr.fm/oembed?url=https://plyr.fm/track/{track_id}
 ```
 
-paste a plyr.fm track link into any oEmbed-compatible platform and it will render a player automatically.
+paste a plyr.fm track, playlist, or album link into any oEmbed-compatible platform and it will render a player automatically. private tracks never resolve through oEmbed.
 
 ## supporter-gated tracks
 
@@ -201,15 +234,16 @@ paste a plyr.fm track link into any oEmbed-compatible platform and it will rende
 this feature is early and has limitations — see below.
 :::
 
-plyr.fm integrates with [ATProtoFans](https://atprotofans.com) to let artists gate tracks behind supporter status. when a listener tries to play a gated track, plyr.fm checks whether they support the artist — if they do, they get access; if not, the track is locked.
+plyr.fm lets artists gate tracks behind supporter status, verified through attested.network payment attestations and [ATProtoFans](https://atprotofans.com). when a listener tries to play a gated track, plyr.fm checks whether they support the artist — if they do, they get access; if not, the track is locked.
 
 today this is a **binary check**: a listener either supports you or they don't. there are no tiers, amounts, or expiration windows. listening and download permissions each use the audience you selected.
 
 ### how it works
 
-1. configure your support integration, then choose supporters as the listening audience in the track or Portal music access controls
-2. when a listener hits play, plyr.fm checks their support status via ATProtoFans
-3. supporters get access; everyone else sees a lock
+1. in [Portal → manage](https://plyr.fm/portal/manage), set your **support link** to **atprotofans** (choose **set up** first if you don't have an ATProtoFans profile yet), so listeners have a way to support you
+2. choose **verified supporters** under **who can listen?** (and, if you like, **who can download?**) for the track, or in your Portal music access defaults
+3. when a listener hits play, plyr.fm checks their support status — an attested.network payment attestation first, then ATProtoFans. results are cached for up to five minutes, so a brand-new supporter may need to wait that long
+4. supporters get access; everyone else sees a lock
 
 ### how gated audio is stored
 
@@ -228,15 +262,21 @@ private tracks appear only when your PDS supports the evolving ATProto permissio
 proposal. Most PDSes do not support it yet.
 :::
 
-Choosing **private** stores the track record and audio in an artist-owned permissioned
-space on your PDS. There is no public record or R2 copy. The track is hidden from feeds,
-search, profiles, albums, and playlists. You and the people on your access list (portal →
-manage) can view and play it through plyr.fm; listed people need an account on a PDS that
-supports permissioned data.
+Choosing **my Space members** under **who can listen?** stores the track record and audio
+in an artist-owned permissioned space on your PDS. There is no public record or R2 copy. The
+track is hidden from feeds, search, profiles, albums, and playlists. You and the people you
+add under **private tracks** in [Portal → manage](https://plyr.fm/portal/manage) can view and
+play it through plyr.fm; listed people need an account on a PDS that supports permissioned
+data and must have signed in to plyr.fm.
 
-The first time you choose private media, plyr.fm may ask you to approve an additional OAuth
-permission. Playback is proxied through plyr.fm because browsers do not hold the short-lived
-space credential needed to fetch the blob directly.
+Private audio is stored exactly as uploaded, so it must be web-playable — MP3, WAV, M4A, or
+FLAC. convert an AIFF before choosing this audience. private tracks are not copyright-scanned
+or auto-tagged, have no listener downloads yet, and can't be part of an album upload.
+
+The first time you choose private media, the upload button reads **approve private media**
+and plyr.fm asks you to approve an additional OAuth permission; your draft is kept and the
+upload continues once you approve. Playback is proxied through plyr.fm because browsers do
+not hold the short-lived space credential needed to fetch the blob directly.
 
 This is not the same as **unlisted** (metadata remains discoverable and listening follows its own policy) or
 **supporters only** (active supporters can play it). Broader permissioned sharing and
@@ -245,7 +285,7 @@ third-party catalog interoperability are still being designed against
 
 ## copyright detection
 
-every upload is automatically scanned for copyrighted audio. if the scan finds a likely match, your track gets a **yellow ⚠ marker** in the [portal](https://plyr.fm/portal) — tap or hover it to see what was matched.
+every upload (except private Space tracks) is automatically scanned for copyrighted audio, and replacing a track's audio scans it again. if the scan finds a likely match, your track gets a **yellow ⚠ marker** in the [portal](https://plyr.fm/portal) — tap or hover it to see what was matched.
 
 ### what a match means
 
@@ -264,7 +304,7 @@ that's why a match is flagged rather than auto-enforced — a human decides whet
 
 after your upload finishes, plyr.fm scans the audio against [AudD](https://audd.io/)'s recognition database in short segments. the more of your track that consistently matches the *same* recording, the stronger the signal. a match that carries an [ISRC code](https://en.wikipedia.org/wiki/International_Standard_Recording_Code) (a unique recording identifier) is strong evidence of a specific recording, not just similar-sounding audio.
 
-if you believe a match is a false positive, or you hold the rights to the matched work, [get in touch](https://plyr.fm) — nothing about the flag is automatic or final.
+if you believe a match is a false positive, or you hold the rights to the matched work, [get in touch](mailto:help@plyr.fm) — nothing about the flag is automatic or final.
 
 ## sensitive content labels
 
@@ -274,7 +314,7 @@ in place. plyr.fm hides the track from discovery by default, while artist pages,
 collections, and direct links still follow the work’s visibility and listening permissions. Shared radio and
 jams exclude adult-labeled audio. The creator can always manage it in the portal.
 
-enable **contains adult or sexual audio** during upload, or change the content
+tick **contains sexually explicit audio** during upload, or change the content
 notice later in the track editor. The notice is stored with your track as a
 standard ATProto self-label and immediately participates in plyr.fm's
 default-hide policy. It remains separate from any independent moderator label.
@@ -287,9 +327,10 @@ album ZIPs require permission for every included track; they do not bypass a
 track's restrictions. files are named after you and your titles, preferring the
 lossless original when available.
 
-downloads can be open, off, supporter-only, or accompanied by an optional support
-prompt. rights metadata does not itself forbid downloads. native private Space
-tracks currently support playback, not a separate listener download.
+downloads can be open to anyone, limited to you (only me) or verified supporters,
+or open with an optional **ask for support before downloading** prompt. rights
+metadata does not itself forbid downloads. native private Space tracks currently
+support playback, not a separate listener download.
 
 
 ## your data
@@ -300,10 +341,12 @@ every track you upload is tied to [your account](https://at-me.zzstoatzz.io/view
 
 public audio may be stored as a PDS blob or on plyr.fm when the host cannot accept it. protected managed audio stays in private plyr.fm storage. native private works use their PDS Space. moving your account does not by itself move these managed audio files into a Space.
 
-the [portal](https://plyr.fm/portal) offers a **bulk export** — it packages your tracks as a ZIP (using lossless originals when available) that you can download directly.
+[Portal → manage](https://plyr.fm/portal/manage) offers a bulk export under **your data → export tracks** — it packages your tracks as a ZIP (using lossless originals when available) that you can download directly.
+
+FLAC uploads stream as uploaded. for AIFF uploads, plyr.fm keeps the original alongside the MP3 streaming copy. either way, listeners whose browsers can play the lossless file get it and see a lossless marker on the track.
 
 see the [lexicons overview](/lexicons/overview/) for the full record schema.
 
 ## leaving
 
-you can leave plyr.fm at any time. download your tracks as a ZIP from the [portal](https://plyr.fm/portal), then delete your account — this removes all data from plyr.fm's infrastructure. your atproto records stay on your PDS by default, but you can choose to delete those too. for the full technical details, see the [offboarding documentation](https://github.com/zzstoatzz/plyr.fm/blob/main/docs/internal/offboarding.md).
+you can leave plyr.fm at any time. download your tracks as a ZIP from [Portal → manage](https://plyr.fm/portal/manage), then choose **delete account** under **your data** — this removes all data from plyr.fm's infrastructure. your atproto records stay on your PDS by default, but you can choose to delete those too. for the full technical details, see the [offboarding documentation](https://github.com/zzstoatzz/plyr.fm/blob/main/docs/internal/offboarding.md).

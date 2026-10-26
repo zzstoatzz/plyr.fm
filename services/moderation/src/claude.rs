@@ -6,7 +6,6 @@ use tracing::info;
 
 const CLAUDE_API_URL: &str = "https://api.anthropic.com/v1/messages";
 const ANTHROPIC_VERSION: &str = "2023-06-01";
-const STRUCTURED_OUTPUTS_BETA: &str = "structured-outputs-2025-11-13";
 
 /// Result of image moderation analysis.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -28,9 +27,13 @@ impl ClaudeClient {
     pub fn new(api_key: String, model: Option<String>) -> Self {
         Self {
             api_key,
-            model: model.unwrap_or_else(|| "claude-sonnet-4-5-20250929".to_string()),
+            model: model.unwrap_or_else(|| "claude-sonnet-5-5".to_string()),
             http: reqwest::Client::new(),
         }
+    }
+
+    pub fn model(&self) -> &str {
+        &self.model
     }
 
     /// Analyze an image for policy violations using structured outputs.
@@ -44,7 +47,7 @@ impl ClaudeClient {
         // Build request with structured output schema
         let request = serde_json::json!({
             "model": self.model,
-            "max_tokens": 1024,
+            "max_tokens": 4096,
             "messages": [{
                 "role": "user",
                 "content": [
@@ -63,32 +66,35 @@ impl ClaudeClient {
                 ]
             }],
             // Structured output schema - guarantees valid JSON matching this schema
-            "output_format": {
-                "type": "json_schema",
-                "schema": {
-                    "type": "object",
-                    "properties": {
-                        "is_safe": {
-                            "type": "boolean",
-                            "description": "Whether the image passes moderation"
+            "output_config": {
+                "effort": "low",
+                "format": {
+                    "type": "json_schema",
+                    "schema": {
+                        "type": "object",
+                        "properties": {
+                            "is_safe": {
+                                "type": "boolean",
+                                "description": "Whether the image passes moderation"
+                            },
+                            "violated_categories": {
+                                "type": "array",
+                                "items": { "type": "string" },
+                                "description": "List of policy categories violated, empty if safe"
+                            },
+                            "severity": {
+                                "type": "string",
+                                "enum": ["safe", "low", "medium", "high"],
+                                "description": "Severity level of the violation"
+                            },
+                            "explanation": {
+                                "type": "string",
+                                "description": "Brief explanation of the moderation decision"
+                            }
                         },
-                        "violated_categories": {
-                            "type": "array",
-                            "items": { "type": "string" },
-                            "description": "List of policy categories violated, empty if safe"
-                        },
-                        "severity": {
-                            "type": "string",
-                            "enum": ["safe", "low", "medium", "high"],
-                            "description": "Severity level of the violation"
-                        },
-                        "explanation": {
-                            "type": "string",
-                            "description": "Brief explanation of the moderation decision"
-                        }
-                    },
-                    "required": ["is_safe", "violated_categories", "severity", "explanation"],
-                    "additionalProperties": false
+                        "required": ["is_safe", "violated_categories", "severity", "explanation"],
+                        "additionalProperties": false
+                    }
                 }
             }
         });
@@ -100,7 +106,6 @@ impl ClaudeClient {
             .post(CLAUDE_API_URL)
             .header("x-api-key", &self.api_key)
             .header("anthropic-version", ANTHROPIC_VERSION)
-            .header("anthropic-beta", STRUCTURED_OUTPUTS_BETA)
             .header("content-type", "application/json")
             .json(&request)
             .send()

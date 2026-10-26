@@ -31,7 +31,7 @@ max_lines = 989
 
 [[rules]]
 path = "backend/src/backend/api/tracks/listing.py"
-max_lines = 698
+max_lines = 717
 
 [[rules]]
 path = "backend/src/backend/api/tracks/mutations.py"
@@ -39,7 +39,7 @@ max_lines = 850
 
 [[rules]]
 path = "backend/src/backend/api/tracks/uploads.py"
-max_lines = 2195
+max_lines = 2197
 
 [[rules]]
 path = "backend/src/backend/config.py"
@@ -211,11 +211,11 @@ max_lines = 818
 
 [[rules]]
 path = "backend/src/backend/_internal/tasks/ingest.py"
-max_lines = 1191
+max_lines = 1224
 
 [[rules]]
 path = "backend/tests/test_jetstream.py"
-max_lines = 3186
+max_lines = 3190
 
 [[rules]]
 path = "frontend/src/lib/components/embed/CollectionEmbed.svelte"
@@ -303,11 +303,11 @@ max_lines = 649
 
 [[rules]]
 path = "backend/tests/test_post_create_hooks.py"
-max_lines = 542
+max_lines = 583
 
 [[rules]]
 path = "backend/tests/api/test_audio_optimize.py"
-max_lines = 940
+max_lines = 1000
 
 [[rules]]
 path = "frontend/src/lib/components/portal/TracksSection.svelte"
@@ -331,7 +331,7 @@ max_lines = 1284
 
 [[rules]]
 path = "backend/tests/api/test_radio.py"
-max_lines = 1442
+max_lines = 1474
 
 [[rules]]
 path = "frontend/src/lib/uploader.svelte.ts"
@@ -359,11 +359,11 @@ max_lines = 977
 
 [[rules]]
 path = "frontend/src/routes/u/[[]handle[]]/+page.svelte"
-max_lines = 1566
+max_lines = 1586
 
 [[rules]]
 path = "scripts/build_atlas.py"
-max_lines = 586
+max_lines = 589
 
 [[rules]]
 path = "frontend/src/routes/atlas/renderer.ts"
@@ -387,7 +387,7 @@ max_lines = 599
 
 [[rules]]
 path = "backend/src/backend/_internal/atproto/spaces/client.py"
-max_lines = 613
+max_lines = 653
 
 [[rules]]
 path = "frontend/tools/oxlint/anti-slop/shared/dictionary-types.ts"
@@ -399,7 +399,7 @@ max_lines = 537
 
 [[rules]]
 path = "docs/internal/contracts/client-api.json"
-max_lines = 8340
+max_lines = 8347
 
 [[rules]]
 path = "frontend/src/lib/components/TrackEditForm.svelte"
@@ -415,7 +415,7 @@ max_lines = 684
 
 [[rules]]
 path = "backend/src/backend/_internal/notifications.py"
-max_lines = 563
+max_lines = 602
 
 [[rules]]
 path = "frontend/vendor/sister-radio/frontend/src/features/equalizer/EqualizerPanel.tsx"
@@ -460,3 +460,7 @@ max_lines = 506
 [[rules]]
 path = "docs/internal/backend/transcoder.md"
 max_lines = 508
+
+[[rules]]
+path = "frontend/src/lib/components/ActivityChart.svelte"
+max_lines = 534
