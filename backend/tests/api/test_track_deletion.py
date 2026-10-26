@@ -6,20 +6,24 @@ tests cover three critical fixes:
 3. ATProto cleanup removes orphaned records
 """
 
+import threading
+import time
 from collections.abc import Generator
 from contextlib import asynccontextmanager
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import psycopg
 import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import select
+from sqlalchemy import event, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend._internal import Session, require_auth
 from backend.main import app
-from backend.models import Album, Artist, Track
+from backend.models import Album, Artist, Tag, Track, TrackTag
 from backend.storage.r2 import R2Storage
+from backend.utilities.database import get_engine
 
 
 class MockSession(Session):
@@ -597,3 +601,96 @@ async def test_edit_same_image_does_not_delete(
 
     # the same image_id should NOT appear in delete calls
     assert same_image_id not in delete_calls
+
+
+async def test_api_delete_does_not_deadlock_with_ingest_delete(
+    test_app: FastAPI, db_session: AsyncSession, test_artist: Artist
+):
+    """regression: the API delete removed track_tags before tracks while
+    Jetstream's delete of the same record locks tracks first; interleaved, they
+    deadlocked and an album cascade delete answered 500."""
+    record_uri = "at://did:plc:artist123/fm.plyr.track/deadlock1"
+    track = Track(
+        title="deadlock test",
+        artist_did=test_artist.did,
+        file_id="test_file_deadlock",
+        file_type="mp3",
+        extra={},
+        atproto_record_uri=record_uri,
+        atproto_record_cid="bafydeadlock",
+    )
+    tag = Tag(name="deadlock-test", created_by_did=test_artist.did)
+    db_session.add_all([track, tag])
+    await db_session.commit()
+    db_session.add(TrackTag(track_id=track.id, tag_id=tag.id))
+    await db_session.commit()
+
+    engine = get_engine()
+    conninfo = engine.url.set(drivername="postgresql").render_as_string(
+        hide_password=False
+    )
+    ingest: dict[str, object] = {}
+
+    def ingest_delete() -> None:
+        try:
+            with psycopg.connect(conninfo) as conn:
+                cur = conn.execute(
+                    "DELETE FROM tracks WHERE atproto_record_uri = %s", (record_uri,)
+                )
+                ingest["rowcount"] = cur.rowcount
+        except Exception as e:
+            ingest["error"] = e
+
+    thread = threading.Thread(target=ingest_delete)
+
+    def start_ingest_once_tags_are_locked(
+        conn: object, cursor: object, statement: str, *_: object
+    ) -> None:
+        if not statement.startswith("DELETE FROM track_tags") or thread.ident:
+            return
+        thread.start()
+        with psycopg.connect(conninfo, autocommit=True) as probe:
+            for _attempt in range(200):
+                blocked = probe.execute(
+                    "SELECT count(*) FROM pg_stat_activity WHERE wait_event_type = 'Lock'"
+                    " AND query LIKE 'DELETE FROM tracks WHERE atproto_record_uri%%'"
+                ).fetchone()
+                if blocked and blocked[0]:
+                    return
+                time.sleep(0.05)
+        raise AssertionError("ingest delete never waited on a lock")
+
+    event.listen(
+        engine.sync_engine, "after_cursor_execute", start_ingest_once_tags_are_locked
+    )
+    try:
+        with (
+            patch(
+                "backend.api.tracks.mutations.storage.delete", new_callable=AsyncMock
+            ),
+            patch(
+                "backend.api.tracks.mutations.delete_record_by_uri",
+                new_callable=AsyncMock,
+            ),
+            patch(
+                "backend._internal.tasks.ingest.get_async_redis_client",
+                return_value=AsyncMock(),
+            ),
+        ):
+            async with AsyncClient(
+                transport=ASGITransport(app=test_app), base_url="http://test"
+            ) as client:
+                response = await client.delete(f"/tracks/{track.id}")
+    finally:
+        event.remove(
+            engine.sync_engine,
+            "after_cursor_execute",
+            start_ingest_once_tags_are_locked,
+        )
+        if thread.ident:
+            thread.join(timeout=15)
+
+    assert thread.ident, "the API delete never removed track_tags"
+    assert response.status_code == 200
+    assert "error" not in ingest, ingest.get("error")
+    assert ingest["rowcount"] == 0

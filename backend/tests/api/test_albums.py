@@ -6,11 +6,12 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend._internal import Session
 from backend.api.albums import list_artist_albums
+from backend.api.tracks import mutations as track_mutations
 from backend.main import app
 from backend.models import Album, Artist, Track
 
@@ -377,6 +378,66 @@ async def test_delete_album_cascade_deletes_tracks(
 
     result = await db_session.execute(select(Track).where(Track.id == track2_id))
     assert result.scalar_one_or_none() is None
+
+
+async def test_delete_album_cascade_survives_a_track_delete_db_error(
+    test_app: FastAPI, db_session: AsyncSession
+):
+    """regression: a database error deleting one track (a deadlock in
+    production) left the shared session failed and the album delete answered
+    500; the other tracks and the album are still deleted."""
+    artist = Artist(did="did:test:user123", handle="test.artist", display_name="A")
+    db_session.add(artist)
+    await db_session.flush()
+    album = Album(artist_did=artist.did, slug="test-album-db-error", title="T")
+    db_session.add(album)
+    await db_session.flush()
+    failing = Track(
+        title="fails",
+        file_id="db-error-1",
+        file_type="audio/mpeg",
+        artist_did=artist.did,
+        album_id=album.id,
+    )
+    other = Track(
+        title="deletes",
+        file_id="db-error-2",
+        file_type="audio/mpeg",
+        artist_did=artist.did,
+        album_id=album.id,
+    )
+    db_session.add_all([failing, other])
+    await db_session.commit()
+    album_id, failing_id, other_id = album.id, failing.id, other.id
+
+    real_delete_track = track_mutations.delete_track
+
+    async def delete_track(track_id: int, db: AsyncSession, auth_session: Session):
+        if track_id == failing_id:
+            await db.execute(text("SELECT 1 / 0"))
+        return await real_delete_track(track_id, db, auth_session)
+
+    with (
+        patch.object(track_mutations, "delete_track", delete_track),
+        patch.object(track_mutations, "schedule_album_list_sync", AsyncMock()),
+        patch(
+            "backend.api.tracks.mutations.delete_record_by_uri",
+            new_callable=AsyncMock,
+        ),
+        patch("backend.api.tracks.mutations.storage.delete", new_callable=AsyncMock),
+    ):
+        async with AsyncClient(
+            transport=ASGITransport(app=test_app), base_url="http://test"
+        ) as client:
+            response = await client.delete(f"/albums/{album_id}?cascade=true")
+
+    assert response.status_code == 200
+    assert await db_session.scalar(select(Album.id).where(Album.id == album_id)) is None
+    assert await db_session.scalar(select(Track.id).where(Track.id == other_id)) is None
+    orphaned = await db_session.scalar(
+        select(Track.album_id).where(Track.id == failing_id)
+    )
+    assert orphaned is None
 
 
 async def test_delete_album_forbidden_for_non_owner(
