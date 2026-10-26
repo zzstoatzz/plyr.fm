@@ -235,6 +235,47 @@ class TestRunPostTrackCreateHooks:
 
         mock_service.send_track_notification.assert_called_once()
 
+    async def test_holds_notification_while_optimizing(
+        self, db_session: AsyncSession
+    ) -> None:
+        """regression (#1932): an AIFF published on its interim rendition doesn't
+        DM followers until the optimize task swaps in the mp3."""
+        artist = await _create_artist(db_session)
+        track = Track(
+            title="Long Mix",
+            file_id="AIFFID",
+            file_type="aiff",
+            original_file_id="AIFFID",
+            original_file_type="aiff",
+            artist_did=artist.did,
+            r2_url="https://r2.example.com/AIFFID.aiff",
+            audio_storage="r2",
+        )
+        db_session.add(track)
+        await db_session.commit()
+
+        mock_service = AsyncMock()
+        mock_service.send_track_notification = AsyncMock(return_value=None)
+
+        with (
+            patch(MOCK_COPYRIGHT_PATH, new_callable=AsyncMock),
+            patch(MOCK_EMBEDDING_PATH, new_callable=AsyncMock),
+            patch(MOCK_GENRE_PATH, new_callable=AsyncMock),
+            patch(MOCK_NOTIFICATION_PATH, mock_service),
+            patch(MOCK_REDIS_PATH, return_value=AsyncMock()),
+            patch(MOCK_SETTINGS_PATH) as mock_settings,
+        ):
+            mock_settings.modal.enabled = False
+            mock_settings.turbopuffer.enabled = False
+            mock_settings.replicate.enabled = False
+            await run_post_track_create_hooks(
+                track.id, audio_url="https://r2.example.com/AIFFID.aiff"
+            )
+
+        mock_service.send_track_notification.assert_not_called()
+        await db_session.refresh(track)
+        assert track.notification_sent is False
+
     async def test_skips_notification_when_flagged(
         self, db_session: AsyncSession
     ) -> None:

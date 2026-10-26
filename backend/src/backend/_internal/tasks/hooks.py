@@ -110,9 +110,15 @@ async def run_post_track_create_hooks(
     # copyright scan or genre classification (the audio is credential-gated and
     # the track is owner-only). mark notification sent so it's never retried.
     async with db_session() as db:
-        is_private = await db.scalar(
-            select(Track.is_private).where(Track.id == track_id)
-        )
+        flags = (
+            await db.execute(
+                select(Track.is_private, Track.is_optimizing).where(
+                    Track.id == track_id
+                )
+            )
+        ).first()
+    is_private = bool(flags and flags.is_private)
+    is_optimizing = bool(flags and flags.is_optimizing)
     if is_private:
         await _mark_notification_sent(track_id)
         await invalidate_tracks_discovery_cache()
@@ -121,11 +127,11 @@ async def run_post_track_create_hooks(
     if audio_url is None:
         audio_url = await resolve_audio_url(track_id)
 
-    # 1. notification
+    # 1. notification (an optimizing track notifies once its mp3 swap lands)
     if skip_notification:
         await _mark_notification_sent(track_id)
-    else:
-        await _send_track_notification(track_id)
+    elif not is_optimizing:
+        await notify_new_track(track_id)
 
     # 1b. an unmirrored track's blob is copied and verified against its CID
     # before any vendor sees it — a PDS serves its blobs fresh
@@ -227,7 +233,7 @@ async def _mark_notification_sent(track_id: int) -> None:
         logger.warning(f"failed to mark notification sent for track {track_id}: {e}")
 
 
-async def _send_track_notification(track_id: int) -> None:
+async def notify_new_track(track_id: int) -> None:
     """send notification for new track, if not already sent.
 
     `notification_sent` is only flipped to True when:
