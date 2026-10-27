@@ -150,6 +150,32 @@ async def test_listener_hiding_only_suno_sees_labeled_account(
     assert "Bot Drone" in titles
 
 
+async def test_device_hidden_tags_still_hide_labeled_account(
+    anonymous_app: FastAPI, catalog: dict[str, Track]
+) -> None:
+    """a signed-out app's own list keeps the account label in force."""
+    titles = await _titles(anonymous_app, "/tracks/?hidden_tags=ai&hidden_tags=lofi")
+    assert "Human Song" in titles
+    assert "Bot Drone" not in titles
+
+
+async def test_device_hidden_tags_without_ai_show_labeled_account(
+    anonymous_app: FastAPI, catalog: dict[str, Track]
+) -> None:
+    titles = await _titles(anonymous_app, "/tracks/?hidden_tags=suno")
+    assert {"Human Song", "Bot Drone"} <= set(titles)
+
+
+async def test_device_hidden_tags_replace_saved_ones(
+    signed_in_app: FastAPI, db_session: AsyncSession, catalog: dict[str, Track]
+) -> None:
+    db_session.add(UserPreferences(did=VIEWER_DID, hidden_tags=[]))
+    await db_session.commit()
+
+    titles = await _titles(signed_in_app, "/tracks/?hidden_tags=ai")
+    assert "Bot Drone" not in titles
+
+
 async def test_artist_page_lists_labeled_account_tracks(
     anonymous_app: FastAPI, catalog: dict[str, Track]
 ) -> None:

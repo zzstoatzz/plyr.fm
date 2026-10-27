@@ -83,6 +83,9 @@ async def list_tracks(
     artist_did: str | None = None,
     filter_hidden_tags: bool | None = None,
     tags: Annotated[list[str] | None, Query()] = None,
+    listener_hidden_tags: Annotated[
+        list[str] | None, Query(alias="hidden_tags")
+    ] = None,
     cursor: str | None = None,
     limit: int | None = None,
     session: AuthSession | None = Depends(get_optional_session),
@@ -96,6 +99,8 @@ async def list_tracks(
               don't filter on artist pages)
             - True: always filter hidden tags
             - False: never filter hidden tags
+        hidden_tags: The listener's own list, replacing their saved one or the
+            defaults; for signed-out apps that keep the list on the device.
         cursor: ISO timestamp cursor from previous response's next_cursor.
             Pass this to get the next page of results.
         limit: Maximum number of tracks to return (default from settings, max 100).
@@ -106,6 +111,7 @@ async def list_tracks(
         and artist_did is None
         and cursor is None
         and not tags
+        and not listener_hidden_tags
         and limit is None
     )
     if is_cacheable:
@@ -142,6 +148,8 @@ async def list_tracks(
             hidden_tags = prefs.hidden_tags
         if prefs:
             shows_sensitive_audio = bool(prefs.show_sensitive_audio)
+    if listener_hidden_tags:
+        hidden_tags = listener_hidden_tags
 
     stmt = (
         select(Track)
