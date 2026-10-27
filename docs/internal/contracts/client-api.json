@@ -490,7 +490,7 @@
           "tracks"
         ],
         "summary": "List Tracks",
-        "description": "List tracks with cursor-based pagination.\n\nArgs:\n    artist_did: Filter to tracks by this artist only.\n    filter_hidden_tags: Whether to exclude tracks with user's hidden tags.\n        - None (default): auto-decide based on context (filter on discovery feed,\n          don't filter on artist pages)\n        - True: always filter hidden tags\n        - False: never filter hidden tags\n    cursor: ISO timestamp cursor from previous response's next_cursor.\n        Pass this to get the next page of results.\n    limit: Maximum number of tracks to return (default from settings, max 100).",
+        "description": "List tracks with cursor-based pagination.\n\nArgs:\n    artist_did: Filter to tracks by this artist only.\n    filter_hidden_tags: Whether to exclude tracks with user's hidden tags.\n        - None (default): auto-decide based on context (filter on discovery feed,\n          don't filter on artist pages)\n        - True: always filter hidden tags\n        - False: never filter hidden tags\n    hidden_tags: The listener's own list, replacing their saved one or the\n        defaults; for signed-out apps that keep the list on the device.\n    cursor: ISO timestamp cursor from previous response's next_cursor.\n        Pass this to get the next page of results.\n    limit: Maximum number of tracks to return (default from settings, max 100).",
         "operationId": "list_tracks_tracks__get",
         "parameters": [
           {
@@ -542,6 +542,25 @@
                 }
               ],
               "title": "Tags"
+            }
+          },
+          {
+            "name": "hidden_tags",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Hidden Tags"
             }
           },
           {
