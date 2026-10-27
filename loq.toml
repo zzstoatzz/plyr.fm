@@ -399,7 +399,7 @@ max_lines = 537
 
 [[rules]]
 path = "docs/internal/contracts/client-api.json"
-max_lines = 8347
+max_lines = 8366
 
 [[rules]]
 path = "frontend/src/lib/components/TrackEditForm.svelte"
