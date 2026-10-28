@@ -4,6 +4,7 @@ drives the real endpoints against the in-memory multipart store in
 `MockStorage`; only the docket enqueue is mocked.
 """
 
+import asyncio
 import hashlib
 import json
 from collections.abc import AsyncIterable, Awaitable, Callable, Generator
@@ -21,6 +22,7 @@ import backend.storage
 from backend._internal import Session, require_artist_profile
 from backend._internal.atproto.spaces import capability
 from backend._internal.jobs import job_service
+from backend.api.tracks import uploads
 from backend.api.tracks.uploads import (
     UploadContext,
     _settle_staged_audio,
@@ -28,7 +30,7 @@ from backend.api.tracks.uploads import (
 )
 from backend.models import Album, Artist, UserPreferences
 from backend.models.job import Job, JobStatus, JobType
-from backend.storage.keys import StagedUploadKey
+from backend.storage.keys import AudioKey, StagedUploadKey
 from backend.upload_limits import MAX_FILE_BYTES
 from backend.utilities.database import db_session as database_session
 
@@ -544,3 +546,62 @@ async def test_direct_protected_pds_transfer_refreshes_the_pending_job(
         )
     assert response.status_code == 200, response.text
     assert checked == [response.json()["upload_id"]]
+
+
+async def test_staged_promotion_heartbeats_only_while_copy_is_pending(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    upload_id = await job_service.create_job(
+        JobType.UPLOAD, "did:test:artist", "uploading"
+    )
+    await job_service.update_progress(
+        upload_id, JobStatus.PROCESSING, "settling", phase="settle"
+    )
+    started = asyncio.Event()
+    release = asyncio.Event()
+
+    async def copy(staged: StagedUploadKey, audio: AudioKey, *, gated: bool) -> None:
+        started.set()
+        await release.wait()
+
+    monkeypatch.setattr(uploads, "PROMOTION_HEARTBEAT_SECONDS", 0.01)
+    monkeypatch.setattr(_mock_storage(), "promote_staged", copy)
+    old = datetime.now(UTC) - timedelta(minutes=9)
+    await db_session.execute(
+        update(Job).where(Job.id == upload_id).values(updated_at=old)
+    )
+    await db_session.commit()
+    ctx = _staged_ctx(upload_id)
+    task = asyncio.create_task(
+        uploads._promote_staged_audio(
+            ctx.upload_id,
+            ctx.staged_key,
+            AudioKey.for_file("fixture", "wav"),
+            gated=False,
+        )
+    )
+    try:
+        await asyncio.wait_for(started.wait(), 2)
+        for _ in range(100):
+            async with database_session() as db:
+                job = await db.get(Job, upload_id)
+                assert job is not None
+                if job.updated_at > old:
+                    break
+            await asyncio.sleep(0.01)
+        else:
+            raise AssertionError("live promotion did not heartbeat its job")
+        assert job.status == JobStatus.PROCESSING.value
+        assert job.phase == "settle"
+    finally:
+        release.set()
+        await task
+    async with database_session() as db:
+        finished = await db.get(Job, upload_id)
+        assert finished is not None
+        last_beat = finished.updated_at
+    await asyncio.sleep(0.04)
+    async with database_session() as db:
+        stopped = await db.get(Job, upload_id)
+        assert stopped is not None
+        assert stopped.updated_at == last_beat
