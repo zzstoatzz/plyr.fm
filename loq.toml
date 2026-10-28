@@ -476,3 +476,7 @@ max_lines = 503
 [[rules]]
 path = "backend/tests/api/test_upload_sessions.py"
 max_lines = 607
+
+[[rules]]
+path = "backend/tests/api/test_account_protected_cleanup.py"
+max_lines = 581

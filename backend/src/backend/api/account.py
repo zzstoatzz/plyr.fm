@@ -10,8 +10,16 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend._internal import Session, require_auth
+from backend._internal.account_media import capture_account_media
 from backend._internal.atproto import delete_record_by_uri
+from backend._internal.atproto.client import parse_at_uri
+from backend._internal.atproto.spaces.client import delete_space_record
+from backend._internal.atproto.spaces.uris import (
+    parse_space_record_uri,
+    parse_space_uri,
+)
 from backend._internal.auth.session import _invalidate_session_cache
+from backend.config import settings
 from backend.models import (
     Album,
     Job,
@@ -23,8 +31,6 @@ from backend.models import (
     UserSession,
     get_db,
 )
-from backend.storage import storage
-from backend.storage.keys import AudioKey, InvalidMediaExtension
 from backend.utilities.tags import DEFAULT_HIDDEN_TAGS
 
 logger = logging.getLogger(__name__)
@@ -51,19 +57,10 @@ async def delete_account(
     db: Annotated[AsyncSession, Depends(get_db)],
     session: Session = Depends(require_auth),
 ) -> AccountDeleteResponse:
-    """permanently delete user account and all associated data.
+    """Remove local account data and attempt unreferenced media cleanup.
 
-    this deletes:
-    - all tracks (audio files and cover images from R2)
-    - all albums (cover images from R2)
-    - all likes given by the user
-    - all comments made by the user
-    - user preferences
-    - all sessions
-    - queue state
-    - jobs
-
-    optionally deletes ATProto records from user's PDS if requested.
+    Shared media and active upload copies are retained. Remote cleanup is
+    best effort; PDS records are retained unless deletion is explicitly requested.
     """
     # verify confirmation matches user's handle
     if request.confirmation != session.handle:
@@ -108,44 +105,11 @@ async def delete_account(
         )
         atproto_uris.extend(uri for (uri,) in comments_result.fetchall())
 
-    # collect R2 file IDs before deleting database records
-    r2_audio_files: list[tuple[str, str]] = []  # (file_id, file_type)
-    r2_image_ids: list[str] = []
-
-    # track audio and images
-    tracks_result = await db.execute(
-        select(Track.file_id, Track.file_type, Track.r2_url, Track.image_id).where(
-            Track.artist_did == session.did
-        )
+    tracks = list(
+        await db.scalars(select(Track).where(Track.artist_did == session.did))
     )
-    for file_id, file_type, r2_url, image_id in tracks_result.fetchall():
-        # an ingested row's `file_id` is the record's `fileId`/rkey and names no
-        # object of ours; `r2_url` holds the real key. deleting by `file_id`
-        # there leaves the audio behind after the account is gone.
-        try:
-            key = AudioKey.for_track(
-                file_id=file_id, file_type=file_type, r2_url=r2_url
-            )
-        except InvalidMediaExtension:
-            logger.warning("skipping unstorable audio key for %s", file_id)
-        else:
-            r2_audio_files.append((key.file_id, key.extension))
-        if image_id:
-            r2_image_ids.append(image_id)
-
-    # album images
-    albums_result = await db.execute(
-        select(Album.image_id).where(
-            Album.artist_did == session.did, Album.image_id.isnot(None)
-        )
-    )
-    r2_image_ids.extend(image_id for (image_id,) in albums_result.fetchall())
-
-    # get track IDs for cascade deletion of likes/comments received
-    track_ids_result = await db.execute(
-        select(Track.id).where(Track.artist_did == session.did)
-    )
-    track_ids = [tid for (tid,) in track_ids_result.fetchall()]
+    media = await capture_account_media(db, tracks, session.did)
+    track_ids = [track.id for track in tracks]
 
     # delete database records in dependency order
 
@@ -201,29 +165,34 @@ async def delete_account(
     for sid in session_ids_to_invalidate:
         await _invalidate_session_cache(sid)
 
-    # delete R2 objects (after database commit so refcount is 0)
-    for file_id, file_type in r2_audio_files:
-        try:
-            if await storage.delete(file_id, file_type=file_type):
-                deleted_counts["r2_objects"] += 1
-        except Exception as e:
-            logger.warning(f"failed to delete audio {file_id}: {e}")
-
-    for image_id in r2_image_ids:
-        try:
-            if await storage.delete(image_id):
-                deleted_counts["r2_objects"] += 1
-        except Exception as e:
-            logger.warning(f"failed to delete image {image_id}: {e}")
+    deleted_counts["r2_objects"] = await media.delete_copies()
 
     # delete ATProto records if requested
     if request.delete_atproto_records and atproto_uris:
         for uri in atproto_uris:
             try:
-                await delete_record_by_uri(session, uri)
+                if "/space/" in uri:
+                    record = parse_space_record_uri(uri)
+                    space = parse_space_uri(record.space)
+                    if (
+                        record.author_did != session.did
+                        or space.owner_did != session.did
+                        or space.skey != "self"
+                        or space.space_type != settings.atproto.private_media_space_type
+                        or record.collection != settings.atproto.track_collection
+                    ):
+                        raise ValueError("account does not own Space record")
+                    await delete_space_record(session, uri)
+                else:
+                    if parse_at_uri(uri)[0] != session.did:
+                        raise ValueError("account does not own public record")
+                    await delete_record_by_uri(session, uri)
                 deleted_counts["atproto_records"] += 1
             except Exception as e:
                 logger.warning(f"failed to delete ATProto record {uri}: {e}")
+
+    if request.delete_atproto_records:
+        deleted_counts["atproto_records"] += await media.delete_sources(session)
 
     logger.info(
         f"account deleted: {session.handle} ({session.did})",
