@@ -7,7 +7,30 @@ title: "streaming uploads"
 
 > the web uploader now transfers files as a resumable session — see [resumable-uploads.md](resumable-uploads.md). this page documents the single-request path (`POST /tracks/`) that the SDK still uses.
 
-## overview
+## current protected-source path
+
+The October 28 protected PDS changes are deployed to staging; production promotion
+is pending. See [protected PDS audio](../architecture/protected-pds-audio.md) and
+its [validation plan](../plans/2026-10-28-protected-pds-audio.md). Existing catalog
+sources are unchanged. The implementation examples below describe the historical
+ordinary HTTP-to-R2 path, rather than every current storage branch.
+
+Direct protected uploads spool/hash the file, write its source to the artist's
+app-restricted public-read playback Space, and then attempt a private R2 mirror.
+PDS source publication is mandatory on a capable host; mirror or staging cleanup
+failure does not undo ownership. Web-playable protected input need not wait for
+MP3 conversion. Deferred optimization keeps the original on the PDS and publishes
+a new protected record. A host without Spaces requires explicit per-upload
+acceptance before R2-only protected storage; a capable host's refusal is an error.
+
+The public track record carries `audioSpace` and `downloadPolicy`, never protected
+blob references. Replacement snapshots and retained revisions keep their source
+pointers. Cleanup checks live tracks and revisions before removing a source;
+remote cleanup failure can retain an unused asset. Imports re-resolve source
+records and verify their bytes before trusting an R2 mirror or scheduling media
+processors. Member-private metadata and audio stay in their separate self Space.
+
+## historical streaming implementation
 
 plyr.fm uses streaming uploads for audio files to maintain constant memory usage regardless of file size. this prevents out-of-memory errors when handling large files on constrained environments (fly.io shared-cpu VMs).
 

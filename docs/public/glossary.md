@@ -47,7 +47,14 @@ plyr.fm's namespaces are environment-aware: `fm.plyr` (production), `fm.plyr.stg
 
 ### PDS
 
-**Personal Data Server**. the server that stores your ATProto data repo — your records, blobs (files), and identity information. public track metadata is stored on your PDS, and so is public audio; plyr.fm keeps a copy of the audio for streaming. a file your host refuses, usually for its size, stays on plyr.fm’s CDN alone, as do many uploads from before plyr.fm stored audio on the PDS. restricted managed audio uses private plyr.fm storage. experimental private tracks use permissioned storage on a compatible PDS. you can self-host a PDS or use a provider like `bsky.social`.
+**Personal Data Server**. the server that stores your ATProto repo, records,
+blobs (files), and identity information. public track metadata and public audio
+live on your PDS; plyr.fm keeps a streaming copy. older uploads and files your
+host refused may exist only on plyr.fm. native private tracks use a compatible
+PDS Space. production protected audio uses private plyr.fm storage; the
+[staging preview](/artists/#protected-audio) uses the artist's app-restricted PDS
+Space as its primary source. you can self-host a PDS or use a provider like
+`bsky.social`.
 
 see: [atproto.com/guides/self-hosting](https://atproto.com/guides/self-hosting)
 
@@ -92,6 +99,16 @@ a 2D map of the public catalog at [plyr.fm/atlas](https://plyr.fm/atlas). every 
 ### portal
 
 the artist dashboard at [plyr.fm/portal](https://plyr.fm/portal). manage your tracks, albums, and playlists. (developer tokens and account settings live in [settings](https://plyr.fm/settings).)
+
+### protected audio
+
+audio whose listening or direct-download policy requires access checks. the
+[staging preview](/artists/#protected-audio) stores this audio in an artist-owned,
+app-restricted PDS Space, with an optional private plyr.fm playback copy. an API
+`audio_space` value identifies that PDS source even when `pds_blob_cid` is empty.
+this is separate from member-private tracks, whose metadata and audio are both
+private. hosts without Spaces require explicit per-upload acceptance of
+plyr.fm-only storage. the staging behavior awaits production promotion.
 
 ### supporter-gated content
 

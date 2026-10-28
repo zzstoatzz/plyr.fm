@@ -161,6 +161,19 @@ async def schedule_my_task(arg1: str, arg2: int) -> None:
     await get_docket().add(my_new_task)(arg1, arg2)
 ```
 
+## protected audio mirrors on staging
+
+The October 28 protected PDS source path registers
+`mirror_protected_track_audio` from `tasks/pds_mirror.py`. Publication does not
+wait for a successful delivery mirror. Transient mirror failures retry at most
+four times, with delays between 30 seconds and five minutes. Authority refusal
+or failed source verification does not retry as a storage outage. The worker
+rechecks the source, verifies its bytes, and then resumes processing hooks
+without repeating notifications. See the [source contract](../architecture/protected-pds-audio.md).
+
+Production promotion is pending. Existing public PDS mirroring remains a
+separate task and does not publish protected BlobRefs into public records.
+
 ## costs
 
 **self-hosted Redis on Fly.io** (fixed monthly):

@@ -10,7 +10,13 @@ import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from _protected_audio_smoke import checked, headers, record_parts, with_nonce
+from _protected_audio_smoke import (
+    checked,
+    headers,
+    maintenance_machine,
+    record_parts,
+    with_nonce,
+)
 
 if TYPE_CHECKING:
     from smoke_protected_audio import Smoke
@@ -36,7 +42,8 @@ async def missing_mirror(smoke: Smoke, track: dict[str, Any], original: bytes) -
         "owner": record_parts(source_uri)["repo"],
         "source": source_uri,
     }
-    script = f"""import asyncio, json
+    script = f"""import asyncio, json, os
+print(f"fixture_stage:starting:pid={{os.getpid()}}", flush=True)
 from sqlalchemy import or_, select
 from backend.models import Track
 from backend.models.track_revision import TrackRevision
@@ -44,6 +51,7 @@ from backend.storage import storage
 from backend.utilities.database import db_session
 payload = json.loads({json.dumps(payload)!r})
 async def main():
+    print("fixture_stage:database", flush=True)
     async with db_session() as db:
         track = await db.get(Track, payload["track_id"])
         assert track is not None and track.title == payload["title"]
@@ -60,10 +68,12 @@ async def main():
             or_(TrackRevision.file_id == payload["file_id"], TrackRevision.original_file_id == payload["file_id"]),
         ).limit(1))
         assert revision is None, "a revision references the fixture hash"
+    print("fixture_stage:mirror_head", flush=True)
     assert await storage.head_file(payload["file_id"], payload["extension"], private=True) is not None
+    print("fixture_stage:mirror_delete", flush=True)
     assert await storage.delete_gated(payload["file_id"], payload["extension"])
     assert await storage.head_file(payload["file_id"], payload["extension"], private=True) is None
-    print("fixture_private_mirror_removed")
+    print("fixture_private_mirror_removed", flush=True)
 asyncio.run(main())
 """
     process = await asyncio.create_subprocess_exec(
@@ -72,10 +82,10 @@ asyncio.run(main())
         "console",
         "-a",
         "relay-api-staging",
-        "-g",
-        "app",
+        "--machine",
+        maintenance_machine(),
         "-C",
-        "uv run --no-sync python -",
+        "timeout --signal=TERM --kill-after=5s 100s uv run --no-sync python -",
         stdin=asyncio.subprocess.PIPE,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
@@ -89,8 +99,14 @@ asyncio.run(main())
         await process.wait()
         raise AssertionError("staging fixture mirror-removal SSH timed out") from None
     if process.returncode != 0 or b"fixture_private_mirror_removed" not in stdout:
+        stages = [
+            line
+            for line in stdout.decode().splitlines()
+            if line.startswith("fixture_stage:")
+        ]
         raise AssertionError(
-            f"staging fixture mirror removal failed: exit {process.returncode}"
+            f"staging fixture mirror removal failed: exit {process.returncode}, "
+            f"stage {stages[-1] if stages else 'no remote stage'}"
         )
     response = checked(
         await smoke.http.get(f"{smoke.api}/audio/{file_id}", follow_redirects=True),

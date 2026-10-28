@@ -38,6 +38,43 @@ optional support prompt, not payment verification. unlisted metadata remains
 visible on profiles and in search. native private Spaces enforce their own
 membership boundary; there is no managed-storage fallback after a Space refusal.
 
+## protected audio on staging
+
+:::caution[staging contract]
+this behavior is deployed at `https://api-stg.plyr.fm` and awaits production
+promotion. check that environment's OpenAPI schema before using it. production
+still uses managed private storage for protected non-private uploads.
+:::
+
+for non-private metadata, restricted listening or downloads select protected
+audio. a Spaces-capable host stores its primary source in the artist's
+app-restricted playback Space. private R2 storage is an optional playback copy.
+web-playable Space audio is accepted as uploaded; downloads off does not force
+an encoding pass. formats needing browser conversion retain a PDS original while
+preparing a playback rendition. resumable transfers currently stage chunks in
+private R2 before publishing the PDS source; the optional copy refers to
+retained playback storage, not that initial transfer.
+
+`GET /auth/me` distinguishes `permissioned_spaces.supported` (host capability)
+from `granted` (the current OAuth permission bundle). a capable host without the
+required grant returns `403 permissioned_scope_required`; complete OAuth approval
+before retrying. host discovery failures and refused Space writes do not select
+managed storage instead.
+
+when the host lacks Spaces, `POST /tracks/` and
+`POST /tracks/uploads/{upload_id}/finish` require the optional multipart boolean
+`accept_plyr_storage=true` for a protected upload. its default is false; omission
+returns `400 plyr_storage_acceptance_required`. obtain explicit acceptance for
+each upload before sending it. it cannot bypass a capable host's scope refusal,
+and does not apply to native private Space uploads.
+
+HTTP track and revision responses may include `audio_space`, the PDS Space record
+URI. treat it as PDS ownership even when `audio_storage` is `r2_private` and
+`pds_blob_cid` is null; that public-blob field deliberately carries no protected
+CID. public ATProto track records use `audioSpace` to reference the source.
+follow plyr.fm's playback/download routes, which enforce the saved policy and
+Space app access, rather than constructing public blob URLs.
+
 ## editing published works
 
 metadata PATCH requests do not change access. use the owner-authenticated
@@ -58,14 +95,18 @@ the Python SDK's sync and async upload methods accept `PublishingDefaults`.
 the CLI accepts `--publishing` JSON. the old `unlisted` upload/update argument
 and CLI flags are removed. select unlisted discovery through the publishing
 template instead. existing-track access editing remains available through Portal
-and the HTTP endpoints above.
+and the HTTP endpoints above. source support for `accept_plyr_storage` and
+`audio_space` is merged in the Python client repository. package releases are
+separate: check the installed SDK, CLI, or MCP version and its backend contract,
+or use the staging HTTP endpoints.
 
 ## delivery and security
 
 use the track's playback and download capabilities. do not construct a public
 bucket URL or assume a playable source authorizes an original download.
-restricted managed audio uses private storage; public listening can use a separate
-rendition while its original stays protected. album archives check every track.
+production restricted managed audio uses private storage; its playback rendition
+can differ from the original. the staging Space source is described above. album
+archives check every track, including protected PDS sources.
 
 rights information does not grant playback or download access. downloads off
 does not prevent recording playback, and changing policy cannot revoke copies

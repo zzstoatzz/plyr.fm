@@ -62,7 +62,9 @@ try {
 		fail('sign-in on a spaces PDS did not carry the private-media grant');
 	}
 	if (before.permissioned_spaces.reader !== true) {
-		fail('sign-in did not carry the any-authority read grant (is the revised permission set published?)');
+		fail(
+			'sign-in did not carry the any-authority read grant (is the revised permission set published?)'
+		);
 	}
 	step('capability', 'supported=true granted=true reader=true straight from sign-in');
 
@@ -112,7 +114,12 @@ try {
 				credentials: 'include',
 				headers: { Range: 'bytes=0-99' }
 			});
-			return { detailStatus: d.status, visibility: t.visibility, extension: t.extension, audioStatus: a.status };
+			return {
+				detailStatus: d.status,
+				visibility: t.visibility,
+				extension: t.extension,
+				audioStatus: a.status
+			};
 		},
 		[API, createdTrackId]
 	);
@@ -125,7 +132,9 @@ try {
 	console.log('PASS — a private voice memo from /record works end to end');
 } catch (e) {
 	if (process.exitCode !== 1) {
-		console.error(`FAILED at [${currentStage()}]: ${String(e).slice(0, 400)}`);
+		console.error(
+			`FAILED at [${currentStage()}]: ${e.name}: ${String(e.message).split('\n')[0].slice(0, 400)}`
+		);
 		process.exitCode = 1;
 	}
 	if (dump) await dump();

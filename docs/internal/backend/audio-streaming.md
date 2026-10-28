@@ -2,100 +2,81 @@
 title: "audio streaming — the /audio dispatch tree"
 ---
 
-how `GET /audio/{file_id}` decides what bytes to serve, and from where. the
-endpoint lives in `backend/src/backend/api/audio.py`.
+`backend/src/backend/api/audio.py` serves playback, URL lookup and downloads.
+Protected PDS audio described below is deployed to staging on October 28, 2026;
+production promotion is pending. Existing catalog sources are unchanged. See
+[protected PDS audio](../architecture/protected-pds-audio.md) and its
+[validation plan](../plans/2026-10-28-protected-pds-audio.md).
 
-the load-bearing thing to internalize: **dispatch is driven by `Track.visibility`
-and `Track.support_gate`, not by `audio_storage`.** `audio_storage` (`r2` / `pds`
-/ `both`) only answers the secondary question "which copies exist" *within* a
-branch: the PDS blob is the audio's home and R2 is plyr's copy, so `both` is
-the normal case, `pds` is an unmirrored track, and `r2` is a track with no PDS
-blob. getting this backwards is what made the 2026-06-30 dead-
-audioUrl incident confusing (see the retrospective).
+## source and audience
 
-## the four track types
+Listening, metadata visibility and original downloads are independent. Storage
+fields identify copies; they do not authorize access.
 
-`Track.visibility` is the single source of truth (one mutually-exclusive value;
-see the column comment in `backend/src/backend/models/track.py`). copyright gating
-is orthogonal — it rides on `public`/`unlisted` via `support_gate`.
+| Source | Metadata | Read authorization | Delivery |
+| --- | --- | --- | --- |
+| public PDS blob / public R2 | public or unlisted | current listening policy | CDN or public PDS redirect |
+| protected PDS playback Space | public or unlisted | current listening policy plus app Space credential | verified private R2 mirror or PDS proxy |
+| legacy / explicitly accepted private R2 | public or unlisted | current listening policy | private signed URL or proxy |
+| member-private self Space | private | requesting reader's membership credential | PDS proxy |
 
-| type | `visibility` | `support_gate` | who can play | where audio lives |
-|------|-------------|----------------|--------------|-------------------|
-| public | `public` | `None` | anyone | plyr's R2 copy via the CDN (or the PDS blob if unmirrored) |
-| unlisted | `unlisted` | `None` | anyone with the link | R2 / CDN |
-| copyright-gated | `public`/`unlisted` | `{"type":"copyright"}` | any **authenticated** listener | R2 (copyright tracks never get a PDS blob) |
-| supporter-gated | `supporters` | `{"type":"any"}` | artist or validated atprotofans supporter | R2 **private** bucket (presigned) — or PDS blob if pds-stored |
-| private | `private` | `None` | owner only (app-layer policy) | artist's **permissioned space on their PDS**, never R2 |
+`protected_audio` identifies the protected source. Its public DTO field is
+`audio_space`; `pds_blob_cid` remains reserved for public blobs. `space_uri`
+identifies the separate member-private metadata path. A protected PDS source can
+have `audio_storage=r2_private` because that value describes its mirror bucket.
 
-## dispatch order in `stream_audio`
+## dispatch order
 
-```
-is_private (visibility == "private") ?  → _handle_private_audio
-support_gate is not None ?              → _handle_gated_audio
-otherwise (public/unlisted, ungated)   → public path
-```
+1. Member-private tracks check access through `can_access` and proxy using the
+   requesting user's credential. Refusal is 404 to conceal the track's existence.
+2. A protected PDS source checks any listening gate. Requests for a distinct
+   original also enforce download policy against the selected track ID. Sharing
+   a playback hash with an open track does not authorize its protected original.
+3. Protected delivery obtains or reuses a valid app credential for the artist's
+   playback Space before using R2. A verified, present mirror can serve playback;
+   otherwise the backend streams the PDS blob. Originals use the source read.
+4. Other gated/private-R2 audio uses the legacy authorized delivery path.
+5. Ordinary public audio uses its existing CDN/PDS resolution path.
 
-### private → `_handle_private_audio`
+Signed-in listening rejects anonymous requests with 401. Supporter listening
+uses `validate_supporter`; it does not require a particular supporter provider.
+Download `off` permits artist recovery, and `supporters` requires the artist or a
+verified supporter. Moderation and private-track restrictions still apply.
 
-audio + record live in the artist's ATProto permissioned space on their PDS,
-never R2. the browser has no space credential, so we cannot redirect — we
-**proxy** the bytes through the owner's credential (`open_space_blob` →
-`getDelegationToken` → `getSpaceCredential` → ranged `getBlob`). access is
-owner-only at two layers: plyr rejects non-owners, and the required
-`com.atproto.simplespace` management layer uses an explicit `memberListPolicy`
-policy for this MVP. The core permissioned-data protocol does not enumerate
-readers; `simplespace` sits above that core and may maintain members. A
-non-owner or anonymous request gets a `404`, identical to a missing file, so
-private tracks don't leak their existence. `Range` is passed through so
-seek/`206` survives the proxy.
+The playback Space has public read policy, an owner/member write policy and an
+allow-list for the deployed OAuth client. App attestation authorizes the app;
+listener delegation is unnecessary. Anonymous listeners and accounts on PDSes
+without Spaces can play through plyr. The self Space continues to use member
+policy and reader delegation; it is not opened for this delivery path.
 
-> experimental: the `com.atproto.space.*` surface is implemented only by ZDS
-> (`pds.zat.dev`); inert on prod PDSes. see
-> `architecture/permissioned-private-media.md`.
+## mirrors and response behavior
 
-### gated → `_handle_gated_audio`
+An imported source starts unverified. Before exposing its mirror to processors,
+source bytes must match CID, declared size and content hash; storage must return
+the expected hash, and a conditional update must confirm the source is unchanged.
+A claimed hash alone cannot select another artist's private object. Deterministic
+verification refusal produces no processor URL; transient errors have bounded
+background retries. Private metadata stays excluded from public hooks.
 
-both copyright- and supporter-gated tracks flow through here, but
-`_check_gate_access` applies **different** checks by `support_gate["type"]`:
+`Range` and HEAD are preserved on PDS proxy reads. `cors=1` requests bytes through
+the backend instead of a credentialed cross-origin redirect. `/url` returns a
+backend stream URL for protected PDS and member-private sources, with the same
+original authorization. Downloads and exports can read the protected original
+without an R2 playback mirror; album archives enforce per-track permissions.
 
-- `"copyright"` (indiemusi paradigm) — any authenticated listener is allowed;
-  anonymous → `401`.
-- `"any"` (supporters) — the artist always passes; otherwise the listener must
-  be a validated atprotofans supporter, else `402` with `X-Support-Required`.
+Cached Space credentials are capped at 50 minutes, shortened to JWT expiry minus
+30 seconds when present. Private R2 presigns default to 3600 seconds. App-access
+revocation is bounded by cached credentials and already issued URLs; it is not
+instant. Download restrictions do not prevent saving playback bytes.
 
-after the access check, the bytes come from the PDS blob (`audio_storage=="pds"`)
-or a presigned URL into the R2 **private** bucket. `HEAD` requests return
-`200`/`401`/`402` **without** redirecting (used as a pre-flight auth check —
-avoids CORS issues with cross-origin redirects).
+## historical public CDN incident
 
-### public/unlisted ungated → the common path
+The June 30 dead-`audioUrl` incident (#1616) concerned ordinary public `both`
+tracks trusting an indexed CDN URL that named no object. Ingest verifies public
+objects rather than adding a public R2 HEAD to every playback request. This
+history does not describe protected PDS delivery, which checks its mirror and
+can stream the artist's source when the mirror is missing.
 
-1. if serving the **original lossless** file (the request `file_id` matches
-   `original_file_id`), resolve and redirect to it.
-2. else if `r2_url` is set (`audio_storage` `r2` or `both`) → `307` redirect to
-   it (the CDN). **this is where R2 "wins" over the PDS blob for `both` tracks —
-   there is no automatic fallback to the blob if the R2 object is missing.**
-3. else if unmirrored (`audio_storage=="pds"`, `pds_blob_cid`, no `r2_url`) →
-   redirect to the PDS `getBlob` URL.
-4. else resolve via `storage.get_url`; `404` if nothing resolves.
-
-The `307` (not `302`) preserves the GET method through the redirect and offloads
-bandwidth to R2's CDN instead of proxying through the app.
-
-## why R2 can "win" but be empty
-
-For a `both` track, step 2 trusts `r2_url` unconditionally — it does not verify
-the object exists. If the row carries an `r2_url` for an object that was never
-written (the dead-audioUrl ingest bug, #1616), playback `307`s to a CDN `404`
-and the track "serves nothing" even though a usable PDS blob is present. The fix
-keeps the row honest **at ingest** (verify the object exists before trusting the
-URL) rather than adding an R2 `HEAD` to every playback request — see
-`architecture/jetstream-ingest.md` and the 2026-06-30 retrospective.
-
-## related
-
-- `GET /audio/{file_id}/url` mirrors this dispatch but returns the URL as JSON
-  (used by offline mode); private tracks return this backend's own stream URL,
-  since the bytes need the space credential the client doesn't hold.
-- the R2 key scheme and `file_id` semantics: `backend/streaming-uploads.md`.
-- `Track.visibility` model: column comment in `models/track.py`.
+See [streaming uploads](streaming-uploads.md) for key/hash semantics and
+[audio access reconciliation](../architecture/audio-access-reconciliation.md)
+for the historical policy decisions.

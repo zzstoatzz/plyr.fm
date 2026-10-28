@@ -81,6 +81,10 @@ Read the chosen track's description and tags, and distinguish its identifiers:
 - `atproto_record_uri` is its ATProto record address, when available. Resolve a
   known public URI through `GET /tracks/by-uri?uri=...`.
 - `file_id` identifies audio storage; it is not a track ID.
+- on the [staging protected-audio contract](/developers/publishing/#protected-audio-on-staging),
+  `audio_space` identifies the artist-owned PDS Space source. a null public
+  `pds_blob_cid` does not mean that source exists only on plyr.fm. published client
+  packages may not expose this field yet; inspect the target HTTP response.
 - `r2_url` in HTTP and hosted MCP JSON responses is the audio URL. Python SDK
   objects expose it as `audio_url`. The URL may point to a CDN or an authenticated route.
 
@@ -114,6 +118,15 @@ or the playlist's ordered tracks after changing its contents. An upload may
 finish before background audio optimization, PDS mirroring, or indexing finishes.
 If a request times out, inspect state before repeating a create operation so you
 do not publish duplicates.
+
+On the [staging protected-audio contract](/developers/publishing/#protected-audio-on-staging),
+the artist's app-restricted PDS Space is the primary protected audio source.
+A host without Spaces requires explicit per-upload acceptance before sending
+`accept_plyr_storage=true`; never choose that exception automatically, infer
+acceptance from an upload request, or retry a refused Space write into managed
+storage. a capable host lacking a grant needs OAuth approval. this behavior
+awaits production promotion; merged client source does not imply a published
+SDK, CLI, or MCP release.
 
 A browser session uses an HttpOnly cookie. Scripts use a developer token in the
 Authorization header. Keep credentials out of links, logs, examples, and public

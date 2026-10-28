@@ -8,13 +8,23 @@ list lands as one more *answer to the same question* rather than a fourth gate.
 Shipped 2026-08-22 (#1897–#1905); the membership mirror it first shipped with
 was removed the next day — see §3 for why plyr never stores membership.
 
+## current scope
+
+This document concerns member-private `self` Spaces. The October 28 staging
+[protected playback path](protected-pds-audio.md) uses a separate public-read,
+app-restricted `playback` Space and does not change these member lists. Production
+promotion is pending; see the [validation plan](../plans/2026-10-28-protected-pds-audio.md).
+Anonymous playback and listeners without Spaces are supported on that separate
+path because it uses app credentials without reader delegation. The reader-PDS
+requirement below applies only to member-private content.
+
 ## vocabulary (Proposal 0016, exact terms)
 
 | term | meaning | plyr.fm today |
 |---|---|---|
 | space | an authorization and sync boundary, `(authority, type, skey)` | `at://{artist}/space/fm.plyr.privateMedia/self` |
 | space authority | the DID that is the root of authority; decides who gets credentials | the artist |
-| space host | the service that answers for the space: mints credentials, enumerates writers, routes notifications | the artist's PDS (`#atproto_space_host`, fallback `#atproto_pds`) |
+| space host | the service that answers for the space: mints credentials, enumerates writers, routes notifications | the artist's PDS (`#atproto_pds` authority service) |
 | repo host | stores one writer's permissioned repo and blobs | the artist's PDS |
 | managing app | optional service the host asks at mint time (`checkUserAccess`) | none |
 | space credential | token the authority issues that grants read access, bound to a key the app holds and signs each request with | minted by plyr for the owner's own session |
@@ -38,7 +48,7 @@ that. Two consequences that shape everything below:
    the reader's PDS. A listener on bsky.social cannot be a member of anything
    until bsky.social implements spaces. Bulletin states the same constraint.
 
-## the three access mechanisms plyr.fm has, side by side
+## historical baseline before the access-list change
 
 | | supporters | private | downloads |
 |---|---|---|---|
@@ -47,9 +57,16 @@ that. Two consequences that shape everything below:
 | bytes | R2 private bucket, presigned URL (shareable for its lifetime) | PDS space, proxied through plyr with the owner's credential | R2 public bucket, presigned attachment URL |
 | denial | 402 + `X-Support-Required`, existence advertised, CTA | 404, existence hidden | 401/403 by refusal kind |
 | in feeds | yes, "locked" | never | n/a |
-| freshness | 5-minute Redis cache, re-evaluated per request, expires naturally | instant | per request |
+| freshness | 5-minute Redis cache, re-evaluated per request, expires naturally | historical assumption; see current credential bounds below | per request |
 | private tracks | exclusive (one `visibility` column) | — | never downloadable, **not even by the owner** (`download_refusal` refuses `is_private` before consulting `viewer_is_artist`) |
 | supporter-gated tracks | — | exclusive | never downloadable, even by supporters (`support_gate is not None` → `gated`) |
+
+The table records the pre-membership design, not the current staging storage or
+download contract. Current policies are documented in
+[audio access reconciliation](audio-access-reconciliation.md). Credentials are
+cached up to 50 minutes or JWT expiry minus 30 seconds, whichever is shorter.
+Playback mirrors on the separate playback path use 3600-second presigns by default;
+revocation is not instant for cached credentials or already issued URLs.
 
 Three denial conventions, three byte paths, three freshness models. The
 design below does not add a fourth; it makes "member of the artist's private
@@ -167,9 +184,8 @@ page or a link, and feeds follow once a credential is held.
   already excluded by `is_private`, and members do not change that.
 - **Revocation is eventual, and plyr does not pretend otherwise.**
   A removal stops future mints. Hosts can also receive explicit credential
-  revocations; plyr does not send those notifications itself. The October 1
-  alpha defaults to ten-minute credentials (zds uses `exp = iat + 600`), but
-  each token's `exp` is authoritative. A removal through plyr drops what it holds
+  revocations; plyr does not send those notifications itself. Credential caching uses a 50-minute cap, reduced to each token's JWT `exp`
+  minus a 30-second margin when available; do not assume a ten-minute lifetime. A removal through plyr drops what it holds
   for that reader, so their next request asks the authority and is refused;
   a removal from another client is honored when the held credential lapses.
   A refusal at read time (the host says no mid-stream) is the same 404 as a
@@ -215,7 +231,7 @@ nothing corrects, and collapse two freshness models into the worse one. If a
 — the verifier answering at mint time, no list to keep in sync. That is a
 different policy on the same space and a separate decision.
 
-## staging plan (each a PR; prod only when the whole arc is right)
+## historical staging plan for the August access-list work
 
 1. permission set: add the `authority: "*"` read permission; publish to staging; re-consent via the (now honest) scope upgrade; e2e asserts the expanded grant includes it.
 2. spaces client: member wrappers + tests; two-account extension of `scripts/permissioned_smoke.py` proving a non-owner member streams a ranged `getBlob` through `getSpaceCredential`.

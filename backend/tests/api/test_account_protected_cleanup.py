@@ -140,9 +140,9 @@ async def boundary(monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[Boundary]:
     monkeypatch.setattr(track_records, "make_pds_request", owner_request)
     monkeypatch.setattr(spaces, "make_pds_request", owner_request)
     store = backend.storage._get_storage()
-    monkeypatch.setattr(store, "delete", state.delete)
-    monkeypatch.setattr(store, "delete_gated", state.delete_private)
-    monkeypatch.setattr(store, "delete_image", state.delete_image)
+    monkeypatch.setattr(type(store), "delete", staticmethod(state.delete))
+    monkeypatch.setattr(type(store), "delete_gated", staticmethod(state.delete_private))
+    monkeypatch.setattr(type(store), "delete_image", staticmethod(state.delete_image))
     try:
         yield state
     finally:
