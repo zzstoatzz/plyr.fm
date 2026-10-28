@@ -75,6 +75,12 @@ browser                                api                              R2 / wor
   require per-upload consent for R2-only protected storage; capable-host refusal
   or unavailable discovery never silently selects it. Member-private has no such
   storage exception.
+- **large promotion**: staging #2237 copies objects over 64 MiB in 64 MiB
+  server-side multipart ranges, with a 15-minute total bound. The worker
+  heartbeats only while promotion is active. Destination size and completion
+  ETag must match HEAD before the promotion helper removes staging; failed-upload
+  cleanup still applies after an error. A protected PDS source remains owned
+  even when its optional mirror promotion fails.
 - **abandoned sessions**: a session is `pending` / phase `transfer` while
   parts arrive (each part heartbeats `updated_at`), so the stuck-upload reaper
   ignores it. `reap_abandoned_transfers` fails sessions idle for 24h and aborts

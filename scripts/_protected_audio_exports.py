@@ -6,8 +6,10 @@ import asyncio
 import hashlib
 import io
 import json
+import re
 import zipfile
 from typing import TYPE_CHECKING, Any
+from urllib.parse import unquote, urlparse
 
 from _protected_audio_smoke import audio, checked, headers, maintenance_machine
 
@@ -16,10 +18,21 @@ if TYPE_CHECKING:
 
 
 async def cleanup_zip(
-    smoke: Smoke, album: dict[str, Any], track_id: int, job_id: str, path: str
+    smoke: Smoke,
+    album: dict[str, Any],
+    track_id: int,
+    job_id: str,
+    path: str,
+    archive_key: str | None,
 ) -> None:
     payload = json.dumps(
-        {"album": album, "track_id": track_id, "job_id": job_id, "path": path}
+        {
+            "album": album,
+            "track_id": track_id,
+            "job_id": job_id,
+            "path": path,
+            "archive_key": archive_key,
+        }
     )
     script = f"""import asyncio, hashlib, json
 import aioboto3
@@ -52,6 +65,10 @@ async def main():
         entry = "01 " + download_filename(payload["album"]["artist"], track.title, key.extension)
         digest = hashlib.sha256(f"{{key.key}}|{{entry}}".encode()).hexdigest()[:16]
         r2_key = f"exports/albums/{{album.id}}-{{digest}}.zip"
+        if payload["archive_key"] is not None:
+            assert payload["archive_key"] == r2_key
+        if job.status == "completed":
+            assert await storage.object_exists(r2_key, private=True)
     async with aioboto3.Session().client("s3", endpoint_url=settings.storage.r2_endpoint_url,
         aws_access_key_id=settings.storage.aws_access_key_id,
         aws_secret_access_key=settings.storage.aws_secret_access_key) as client:
@@ -110,6 +127,7 @@ async def protected_album_zip(smoke: Smoke) -> None:
     ).json()
     track_id: int | None = None
     job_id: str | None = None
+    archive_key: str | None = None
     path = f"{smoke.api}/albums/{album['artist_handle']}/{album['slug']}/download"
     try:
         body = audio(481)
@@ -171,6 +189,12 @@ async def protected_album_zip(smoke: Smoke) -> None:
             307,
             "owner album ZIP cached redirect",
         )
+        key_match = re.search(
+            rf"exports/albums/{re.escape(album['id'])}-[0-9a-f]{{16}}\.zip$",
+            unquote(urlparse(redirect.headers["location"]).path),
+        )
+        assert key_match, "album redirect must name this disposable album's ZIP"
+        archive_key = key_match.group()
         archive = checked(
             await smoke.http.get(redirect.headers["location"]),
             200,
@@ -194,7 +218,7 @@ async def protected_album_zip(smoke: Smoke) -> None:
     finally:
         try:
             if job_id and track_id:
-                await cleanup_zip(smoke, album, track_id, job_id, path)
+                await cleanup_zip(smoke, album, track_id, job_id, path, archive_key)
         finally:
             checked(
                 await smoke.http.delete(

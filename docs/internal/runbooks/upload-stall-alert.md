@@ -44,6 +44,19 @@ only heartbeated while receiving output, leaving the encoding wait uncovered.
 This fix prevents that premature failure; it does not restore failed jobs or
 explain the unusually slow encodes.
 
+## R2 promotion waits
+
+The maximum-size staging smoke separately reproduced a `CopyObject` read
+timeout after all 154 transfer parts had arrived. #2237, deployed to staging,
+uses bounded multipart copy for objects over 64 MiB, verifies destination size
+and completion ETag, and heartbeats while the copy is active. Check the
+`R2 promote_staged` spans separately from transcoder waits. Neither a completed
+browser transfer nor a live heartbeat proves publication completed.
+
+For Spaces-backed protected audio, PDS source ownership precedes the optional
+copy. For explicitly accepted R2-only storage, promotion failure still fails
+publication. Production promotion of these fixes remains pending.
+
 ## ownership boundaries
 
 - `processing` and pre-worker `pending` jobs use the ten-minute progress budget.
