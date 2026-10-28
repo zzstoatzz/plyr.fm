@@ -44,16 +44,28 @@ the artist's retained source file.
 
 ## Account Deletion
 
-Users can permanently delete their account and all associated data. This is a synchronous, interactive process.
+Users can remove their plyr.fm account data through a synchronous, interactive
+request. Remote storage cleanup is best-effort and has the protected-audio
+limitation below; it is not a guarantee that every object has been erased.
+
+### Protected audio limitation before promotion
+
+Account deletion does not yet collect protected Space source records, retained
+revision sources, or private-bucket originals/mirrors. Its optional PDS cleanup
+collects track metadata URIs; its R2 cleanup uses the ordinary public-object path.
+Deleting protected tracks individually before deleting the account uses the
+source-aware cleanup path instead. Keep PDS sources when the user has not opted
+into PDS deletion. Reconcile the account-wide path before promoting protected
+PDS audio; tracked in [#2235](https://github.com/zzstoatzz/plyr.fm/issues/2235).
 
 ### What Gets Deleted
 
-#### Always Deleted (plyr.fm infrastructure)
+#### App data removed and storage cleanup attempted
 
 | Location | Data |
 |----------|------|
 | **PostgreSQL** | tracks, albums, likes (given), comments (made), preferences, sessions, queue entries, jobs |
-| **R2 Storage** | audio files, track cover images, album cover images |
+| **R2 Storage** | ordinary public audio and cover-image cleanup attempted after commit; protected/private sources are not fully covered |
 
 #### Optionally Deleted (user's ATProto PDS)
 
@@ -65,15 +77,17 @@ If the user opts in, we delete records from their Personal Data Server:
 | `fm.plyr.like` / `fm.plyr.dev.like` | like records |
 | `fm.plyr.comment` / `fm.plyr.dev.comment` | comment records |
 
-> **Note**: ATProto deletion requires a valid authenticated session. If the session has expired or lacks required scopes, ATProto records will remain on the user's PDS but all plyr.fm data will still be deleted.
+> ATProto deletion requires a valid authenticated session. If it expires or lacks
+> the required scopes, remote records can remain after the database rows are
+> removed. The protected-source limitation above also applies.
 
 ### Workflow
 
 1. **Confirmation**: User types their handle to confirm intent
 2. **ATProto Option**: Checkbox to opt into deleting ATProto records
 3. **Processing**:
-   - Delete R2 objects (audio, images)
    - Delete database records in dependency order
+   - Attempt ordinary R2 audio/image cleanup after commit
    - If opted in: delete ATProto records via PDS API
 4. **Session Cleanup**: All sessions invalidated, user logged out
 

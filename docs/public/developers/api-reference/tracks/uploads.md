@@ -21,10 +21,10 @@ terminal result; request acceptance is not completed publication.
 
 The following behavior is deployed to staging and awaits production promotion.
 
-For public listening with downloads restricted (`off`, `ask`, or `supporters`),
+For public listening with downloads restricted (`off` or `supporters`),
 an artist whose PDS supports Spaces stores the source audio in their PDS. The
 public track record contains `audioSpace` and `downloadPolicy`; the protected
-blob references remain inside the Space. plyr keeps a private streaming mirror.
+blob references remain inside the Space. plyr may keep a private streaming mirror.
 Listeners can play through plyr without a Spaces account or a delegated grant.
 
 Check `/auth/me` → `permissioned_spaces.supported` for the artist's PDS capability.
@@ -36,7 +36,7 @@ PDS and does not bypass missing grants or a failed PDS capability check.
 | response | meaning |
 | --- | --- |
 | `400`, `plyr_storage_acceptance_required` | protected upload on a PDS without Spaces needs explicit storage acceptance |
-| `403`, `permissioned_scope_required` | sign in again to grant access to the artist's playback Space |
+| `403`, `permissioned_scope_required` | approve the expanded owner Space permissions through scope upgrade or a fresh sign-in, then retry with the new session |
 | `503`, `could not check PDS storage support` | PDS capability check failed; retry when the PDS is reachable |
 
 The same field and validation apply to

@@ -87,9 +87,12 @@ is the support signal, cached per PDS for five minutes. A failed probe is unavai
 both the self and playback grants. If its capability read temporarily fails,
 `/auth/me` uses the existing grant as its conservative support signal.
 
-Permissions are requested through an explicit scope upgrade when needed, not on
-every base login. `space:` grants are parsed by `_internal/auth/space_scope.py`.
-The expanded permission set covers self/member-private and playback writes; app
+Base sign-in requests the private-media permission include. A Spaces PDS expands
+it into grants during consent; a host rejecting it with `invalid_scope` is retried
+without the include. Older sessions missing the expanded permissions use the
+explicit scope-upgrade flow. `space:` grants are parsed by
+`_internal/auth/space_scope.py`. The expanded permission set covers
+self/member-private and playback writes; app
 password sessions have the existing owner authority. A capable PDS that refuses
 a scope or source write fails the operation. A host without Spaces may use
 private R2 only for a new upload with explicit `accept_plyr_storage=true`.
@@ -263,12 +266,13 @@ passes `*` through at token issuance, so the expanded grant reads
 owner: `private_media_grant_present` still requires the `self`-resolved
 authority plus `manage=create`.
 
-Before October's support discovery change, base sign-in requested the include
-and capability was inferred from its expansion. That history explains the old
-`scopes_supported` workaround, but does not describe current behavior: base login
-omits the opt-in include, `spacesAlpha` discovers host support, and a scope upgrade
-requests the self/playback grants when needed. Unsupported PDSes keep the private
-option hidden. Public protected uploads can offer the explicit R2-only exception.
+Before October's support discovery change, host capability was inferred from the
+include's expansion. The base sign-in request still includes the permission set;
+what changed is discovery: `spacesAlpha` identifies host support independently
+of granted scopes. Fresh sign-in can grant the expanded self/playback bundle,
+while an older session can request it through the explicit upgrade. Unsupported
+PDSes keep the private option hidden. Public protected uploads can offer the
+explicit R2-only exception.
 
 The smoke script covers space creation, record/blob writes, credential exchange, record
 reads, and ranged blob playback. Unit tests cover URI parsing, current config shape,

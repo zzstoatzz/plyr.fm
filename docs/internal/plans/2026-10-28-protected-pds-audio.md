@@ -44,8 +44,21 @@ No package release or production promotion is implied.
   PDS ownership, anonymous actual playback and Range, download refusal, tag
   analysis, strict browser/API error checks and cleanup. An additional mobile
   run verifies that cleanup waits for the play write.
-- Full staging integration suite: still running, including the advertised
-  1.5 GiB upload boundary; add its exact result before closing this goal.
+- Protected album ZIP: **seven additional live checks passed**, covering exact
+  original bytes, anonymous/nonowner refusal before and after caching, and
+  removal of the exact private ZIP plus album/track/source/token fixtures.
+- The first full integration run passed ten cases, then exhausted its 30-minute
+  job budget during the advertised 1.5 GiB upload. Transfer completed; a real
+  R2 single-object promotion timed out in settle. This is tracked in
+  [#2236](https://github.com/zzstoatzz/plyr.fm/issues/2236). The multipart promotion
+  fix merged as [#2237](https://github.com/zzstoatzz/plyr.fm/pull/2237), commit
+  `3f6e45f1917fb2114972e119badf5e16dd19eeeb`. All 2,078 backend tests passed
+  (26 existing skips), including real HTTP regression proofs against the old
+  code. A real R2 pilot copied 20 MiB through three parts in 3.255 seconds and
+  verified bytes, completion ETag, metadata and cleanup. The failed capacity
+  object's orphan was removed after a fresh zero-reference check. Separate
+  suite/capacity CI budgets cover all 23 original cases without skipping any;
+  add exact post-deployment rerun results before closing this staging goal.
 
 The first stress run caused an API-machine OOM while supplemental maintenance
 Python competed with concurrent uploads. Fly restarted it; the isolated rerun
@@ -60,3 +73,9 @@ checks.
 
 See the [current contract and operations](../architecture/protected-pds-audio.md).
 Production remains excluded until staging evidence and the docs sweep are reviewed.
+
+The docs/code reconciliation found an account-wide deletion gap:
+[#2235](https://github.com/zzstoatzz/plyr.fm/issues/2235). Optional PDS cleanup
+does not collect protected source/revision records, and bucket cleanup misses
+private mirrors/originals. Per-track cleanup passed; account-wide cleanup is a
+production promotion blocker and needs its own scoped implementation/verification.

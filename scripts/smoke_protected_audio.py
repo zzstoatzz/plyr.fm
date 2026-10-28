@@ -25,6 +25,7 @@ from urllib.parse import urlparse
 
 import base58
 import httpx
+from _protected_audio_exports import protected_album_zip
 from _protected_audio_scenarios import aif_optimization, missing_mirror
 from _protected_audio_resumable import resumable_upload
 from _protected_audio_smoke import (
@@ -456,6 +457,7 @@ async def run(args: argparse.Namespace) -> None:
             await smoke.fallback()
             await resumable_upload(smoke)
             await aif_optimization(smoke)
+            await protected_album_zip(smoke)
             success = True
         finally:
             try:

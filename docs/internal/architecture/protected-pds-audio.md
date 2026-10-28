@@ -6,6 +6,10 @@ Production has not been promoted. Existing catalog objects are not migrated.
 The companion [client change](https://github.com/zzstoatzz/plyr-python-client/pull/44)
 is merged; this does not imply a new package release.
 
+Account-wide deletion still misses protected source/private-mirror cleanup;
+[#2235](https://github.com/zzstoatzz/plyr.fm/issues/2235) must be resolved before
+production promotion. Per-track source cleanup is implemented and smoke-tested.
+
 ## Ownership and authorization
 
 For a new protected public/unlisted upload, an artist whose PDS supports Spaces
@@ -98,6 +102,14 @@ The complete real-service harness passed 29 recorded checks on October 28:
 All harness tracks, source records and temporary API tokens were cleaned up.
 ZDS returns 404 for `deleteSession`; the harness records that limitation rather
 than claiming the separately minted PDS inspection session was revoked.
+Seven additional live album ZIP checks passed: exact original bytes, denied
+anonymous/nonowner access before and after caching, and exact artifact cleanup.
+The large capacity case exposed a separate R2 promotion timeout tracked in
+[#2236](https://github.com/zzstoatzz/plyr.fm/issues/2236). The bounded multipart
+fix merged in [#2237](https://github.com/zzstoatzz/plyr.fm/pull/2237), passed
+2,078 local backend tests and a real three-part R2 copy/cleanup pilot. The full
+post-deployment integration/capacity rerun remains pending.
+
 The real OAuth browser matrix passed at 1280px/390px, light/dark, with mobile
 touch. It checks the ownership UI, real anonymous playback, Range, download
 refusal, tag analysis and browser errors. Detailed integration results are

@@ -12,6 +12,11 @@ on:
   # allow manual trigger
   workflow_dispatch:
     inputs:
+      scope:
+        description: "Integration scope to run"
+        type: choice
+        options: [all, suite, capacity]
+        default: all
       skip_if_no_tokens:
         description: "Skip tests if tokens not configured (vs fail)"
         type: boolean
@@ -27,16 +32,18 @@ concurrency:
 
 jobs:
   integration:
-    name: run integration tests
+    name: run integration tests (${{ matrix.scope }})
     runs-on: ubuntu-latest
     # only run if staging deploy succeeded (or manual trigger)
     if: >
       github.event_name == 'workflow_dispatch' ||
       github.event.workflow_run.conclusion == 'success'
-    # 30 min accommodates the long-form regression test (a ~150 MB 60 min
-    # WAV upload + transcode + PDS upload + scanners). short-form tests
-    # finish in seconds; the cap is sized for the worst case.
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        scope: ${{ fromJSON(inputs.scope == 'suite' && '["suite"]' || inputs.scope == 'capacity' && '["capacity"]' || '["suite","capacity"]') }}
     steps:
       - uses: actions/checkout@v4
 
@@ -120,12 +127,17 @@ jobs:
         if: steps.check-tokens.outputs.has_tokens == 'true'
         env:
           PLYR_API_URL: https://api-stg.plyr.fm
+          TEST_SCOPE: ${{ matrix.scope }}
         run: |
           cd backend
-          # test_private_media.py needs local postgres/redis fixtures and runs
-          # in test-backend.yml; this workflow only has the staging API
-          uv run pytest tests/integration -m integration -v --tb=short \
-            --ignore=tests/integration/test_private_media.py
+          # native private media runs with local fixtures in test-backend.yml.
+          if [ "$TEST_SCOPE" = "capacity" ]; then
+            uv run pytest tests/integration/test_large_flac_upload.py -m integration -v --tb=short
+          else
+            uv run pytest tests/integration -m integration -v --tb=short \
+              --ignore=tests/integration/test_private_media.py \
+              --ignore=tests/integration/test_large_flac_upload.py
+          fi
 
       # throw the JIT tokens away — revoke even if the tests failed.
       - name: revoke JIT dev tokens
