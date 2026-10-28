@@ -1,6 +1,7 @@
 """The advertised size must survive transfer, conversion, and playback."""
 
 import asyncio
+import hashlib
 import json
 import sys
 from pathlib import Path
@@ -48,6 +49,7 @@ async def test_large_flac_upload_and_playback(
             f"{api}/tracks/uploads/{upload_id}/finish",
             data={
                 "title": "large FLAC capacity regression",
+                "accept_plyr_storage": "true",
                 "tags": json.dumps(["integration-test"]),
                 "publishing": json.dumps(
                     {
@@ -65,13 +67,44 @@ async def test_large_flac_upload_and_playback(
         try:
             token = headers["Authorization"].removeprefix("Bearer ")
             track_id = await _wait_for_upload(http, api, token, upload_id)
-            track = await user1_client.tracks.get(track_id)
-            assert track.file_type == "mp3"
-            response = await http.get(f"{api}/audio/{track.file_id}?cors=1")
+            response = await http.get(f"{api}/tracks/{track_id}")
+            response.raise_for_status()
+            track = response.json()
+            expected_codec = "flac" if track.get("audio_space") else "mp3"
+            assert track["file_type"] == expected_codec
+            assert track["audio_storage"] == "r2_private"
+            assert track["pds_blob_cid"] is None
+            assert track["download_policy"] == "off"
+            assert track["visibility"] == "unlisted"
+            response = await http.get(f"{api}/audio/{track['file_id']}?cors=1")
             response.raise_for_status()
             assert not response.is_redirect
-            output = tmp_path / "playback.mp3"
+            if track.get("audio_space"):
+                source_bytes = await asyncio.to_thread(source.read_bytes)
+                assert (
+                    hashlib.sha256(response.content).digest()
+                    == hashlib.sha256(source_bytes).digest()
+                )
+            output = tmp_path / f"playback.{expected_codec}"
             output.write_bytes(response.content)
+            process = await asyncio.create_subprocess_exec(
+                "ffprobe",
+                "-v",
+                "error",
+                "-select_streams",
+                "a:0",
+                "-show_entries",
+                "stream=codec_name",
+                "-of",
+                "json",
+                str(output),
+                stdout=asyncio.subprocess.PIPE,
+            )
+            encoded_probe, _ = await process.communicate()
+            assert process.returncode == 0
+            assert (
+                json.loads(encoded_probe)["streams"][0]["codec_name"] == expected_codec
+            )
             process = await asyncio.create_subprocess_exec(
                 "ffmpeg", "-v", "error", "-i", str(output), "-f", "null", "-"
             )
