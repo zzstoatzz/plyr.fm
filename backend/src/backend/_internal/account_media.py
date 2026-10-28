@@ -9,7 +9,11 @@ from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend._internal import Session
-from backend._internal.atproto.spaces.protected_audio import delete_protected_audio
+from backend._internal.atproto.spaces.client import SpaceAccessError
+from backend._internal.atproto.spaces.protected_audio import (
+    delete_protected_audio,
+    protected_record_location,
+)
 from backend._internal.jobs import TERMINAL_STATUSES
 from backend.config import settings
 from backend.models import Album, Job, Playlist, Track, TrackRevision
@@ -27,10 +31,15 @@ class AccountMedia:
     protected: dict[str, dict] = field(default_factory=dict)
     active_files: set[str] = field(default_factory=set)
 
-    def capture_audio(self, row: Track | TrackRevision) -> None:
+    def capture_audio(self, row: Track | TrackRevision, owner: str) -> None:
         protected = row.protected_audio
         if protected:
             self.protected[protected["record_uri"]] = protected
+            try:
+                protected_record_location(protected["record_uri"], owner=owner)
+            except (SpaceAccessError, ValueError):
+                logger.warning("skipping foreign protected audio ownership claim")
+                return
         if row.audio_storage == "pds" or (isinstance(row, Track) and row.is_private):
             return
         gated = row.uses_private_audio if isinstance(row, Track) else row.was_gated
@@ -129,14 +138,14 @@ async def capture_account_media(
 ) -> AccountMedia:
     media = AccountMedia()
     for track in tracks:
-        media.capture_audio(track)
+        media.capture_audio(track, owner)
         if track.image_id:
             media.images[track.image_id] = track.image_url
     revisions = await db.scalars(
         select(TrackRevision).join(Track).where(Track.artist_did == owner)
     )
     for revision in revisions:
-        media.capture_audio(revision)
+        media.capture_audio(revision, owner)
     albums = await db.execute(
         select(Album.image_id, Album.image_url).where(Album.artist_did == owner)
     )

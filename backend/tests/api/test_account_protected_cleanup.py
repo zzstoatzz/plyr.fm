@@ -489,7 +489,7 @@ async def test_foreign_source_and_storage_claims_are_not_deleted(
 ) -> None:
     audio, file_id, original_id = source(boundary, "foreign")
     audio["record_uri"] = audio["record_uri"].replace(OWNER, "did:plc:foreign")
-    audio["mirror_verified"] = False
+    audio["mirror_verified"] = True
     db_session.add(
         Track(
             artist_did=OWNER,

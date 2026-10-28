@@ -57,19 +57,10 @@ async def delete_account(
     db: Annotated[AsyncSession, Depends(get_db)],
     session: Session = Depends(require_auth),
 ) -> AccountDeleteResponse:
-    """permanently delete user account and all associated data.
+    """Remove local account data and attempt unreferenced media cleanup.
 
-    this deletes:
-    - all tracks (audio files and cover images from R2)
-    - all albums (cover images from R2)
-    - all likes given by the user
-    - all comments made by the user
-    - user preferences
-    - all sessions
-    - queue state
-    - jobs
-
-    optionally deletes ATProto records from user's PDS if requested.
+    Shared media and active upload copies are retained. Remote cleanup is
+    best effort; PDS records are retained unless deletion is explicitly requested.
     """
     # verify confirmation matches user's handle
     if request.confirmation != session.handle:
