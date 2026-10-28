@@ -97,6 +97,7 @@ asyncio.run(main())
         200,
         "PDS playback after mirror loss",
     )
+    assert not response.history, "missing mirror playback must stream through the PDS"
     assert (
         hashlib.sha256(response.content).digest() == hashlib.sha256(original).digest()
     )
@@ -109,6 +110,7 @@ asyncio.run(main())
         206,
         "PDS seek after mirror loss",
     )
+    assert not ranged.history, "missing mirror seek must stream through the PDS"
     assert ranged.content == original[100:200]
     recovered = checked(
         await smoke.http.get(

@@ -6,15 +6,16 @@ from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager, suppress
 from dataclasses import dataclass, field
 from typing import BinaryIO
+from unittest.mock import AsyncMock
 
 import httpx
 import pytest
 from fastapi import FastAPI
 from fastapi.responses import StreamingResponse
-from sqlalchemy import update
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend._internal import get_optional_session
+from backend._internal import Session, get_optional_session
 from backend._internal.atproto.spaces import protected_audio as protected
 from backend._internal.tasks import hooks
 from backend._internal.tasks.pds_mirror import cid_for_blob
@@ -96,7 +97,6 @@ async def source_server(
     async def open_source(
         audio: dict, *, original: bool = False, range_header: str | None = None
     ) -> AsyncIterator[httpx.Response]:
-        assert not original
         assert range_header is None
         async with (
             httpx.AsyncClient(timeout=2) as client,
@@ -384,9 +384,15 @@ async def test_revoked_app_access_never_signs_even_an_existing_mirror(
 @pytest.mark.parametrize("endpoint", ["", "/url"])
 @pytest.mark.parametrize("policy,expected_status", [("off", 403), ("supporters", 401)])
 async def test_shared_playback_hash_cannot_authorize_another_tracks_original(
-    db_session: AsyncSession, endpoint: str, policy: str, expected_status: int
+    db_session: AsyncSession,
+    source_server: SourceServer,
+    private_storage: PrivateStorage,
+    monkeypatch: pytest.MonkeyPatch,
+    endpoint: str,
+    policy: str,
+    expected_status: int,
 ) -> None:
-    protected_track = await create_track(db_session, b"shared playback")
+    protected_track = await create_track(db_session, source_server.body)
     protected_track.original_file_id = "protected-original"
     protected_track.original_file_type = "aiff"
     protected_track.download_policy = policy
@@ -405,9 +411,41 @@ async def test_shared_playback_hash_cannot_authorize_another_tracks_original(
     application = FastAPI()
     application.include_router(audio_api.router)
     application.dependency_overrides[get_optional_session] = lambda: None
+    monkeypatch.setattr(
+        audio_api, "get_space_credential", AsyncMock(return_value=object())
+    )
+    monkeypatch.setattr(audio_api, "open_protected_blob", protected.open_protected_blob)
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=application), base_url="http://test"
     ) as client:
         response = await client.get(f"/audio/protected-original{endpoint}")
-    assert response.status_code == expected_status
-    assert "location" not in response.headers
+        assert response.status_code == expected_status
+        assert "location" not in response.headers
+        assert source_server.requests == 0
+
+        async def authorize_by_shared_hash(
+            track_id: int, session: Session | None
+        ) -> None:
+            async with audio_api.db_session() as db:
+                selected = await db.get(Track, track_id)
+                assert selected is not None
+                sibling = await db.scalar(
+                    select(Track)
+                    .where(Track.file_id == selected.file_id)
+                    .order_by(Track.r2_url.is_not(None).desc(), Track.created_at.desc())
+                    .limit(1)
+                )
+                assert sibling is not None
+                await audio_api._authorize_download(sibling, session)
+
+        with monkeypatch.context() as baseline:
+            baseline.setattr(audio_api, "_authorize_original", authorize_by_shared_hash)
+            permitted = await client.get(f"/audio/protected-original{endpoint}")
+        assert permitted.status_code == 200
+        if endpoint:
+            assert permitted.json()["url"].endswith("/audio/protected-original")
+            assert source_server.requests == 0
+        else:
+            assert permitted.content == source_server.body
+            assert source_server.requests == 1
+        assert private_storage.signed == []

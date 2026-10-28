@@ -25,6 +25,7 @@ from urllib.parse import urlparse
 import base58
 import httpx
 from _protected_audio_scenarios import aif_optimization, missing_mirror
+from _protected_audio_resumable import resumable_upload
 from _protected_audio_smoke import (
     API,
     SmokeFixtures,
@@ -451,6 +452,7 @@ async def run(args: argparse.Namespace) -> None:
             await smoke.revisions(track, original)
             await smoke.shared_delete(track, rebuilt, source)
             await smoke.fallback()
+            await resumable_upload(smoke)
             await aif_optimization(smoke)
             success = True
         finally:
