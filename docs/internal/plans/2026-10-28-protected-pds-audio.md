@@ -21,3 +21,42 @@ An unsupported artist PDS may use private R2 only after explicit per-upload acce
 Use real local HTTP/PDS tests plus database tests for authorization, credential renewal, mirror failure, duplicate/failed publication cleanup, replacement, snapshots/restore, deletion, policy changes, export and ingestion. Run backend/frontend suites and contract checks, self-review the PR, then merge to staging.
 
 Start staging workers explicitly. Use only disposable, tagged integration-test uploads. Smoke with real OAuth, Spaces-capable and non-Spaces accounts, anonymous playback, Range/HEAD, unauthorized app/user requests, private public-getBlob denial, master recovery, replacement/restore/delete and mirror/source failure cases. Record exact results, clean fixtures, inspect deployed UI at relevant sizes/themes, and sweep current and historical docs for statements that need reconciliation. Leave production unchanged.
+
+## Staging completion evidence
+
+Implementation merged in [#2233](https://github.com/zzstoatzz/plyr.fm/pull/2233),
+staging commit `02ed1cd5d09ec923e84e251fd3b1135f4f53ef02`.
+[Client #44](https://github.com/zzstoatzz/plyr-python-client/pull/44) merged after
+its reciprocal compatibility check passed. The temporary client-head pin in the
+API check is removed in the documentation sweep; strict checks remain unchanged.
+No package release or production promotion is implied.
+
+- Local backend: 2,060 passed, 26 existing skips. Frontend: 385 passed; types,
+  lint, accessibility, API contracts and pre-merge browser checks passed.
+- Real-service protected audio harness: **29 checks passed**, including a real
+  private R2 deletion, PDS byte recovery, indexing, lifecycle/refcounts, explicit
+  non-Spaces consent, interrupted two-part 11.5 MB upload, and `.aif` optimization.
+- All harness tracks/source records and temporary API tokens were cleaned up.
+  ZDS does not implement `deleteSession`; its separate PDS inspection-session
+  teardown returned 404 and is recorded as a protocol limitation.
+- Real OAuth browser matrix: **four clean passes**, at 1280px and 390px in
+  light/dark themes, with touch on mobile. Each checked upload/storage notice,
+  PDS ownership, anonymous actual playback and Range, download refusal, tag
+  analysis, strict browser/API error checks and cleanup. An additional mobile
+  run verifies that cleanup waits for the play write.
+- Full staging integration suite: still running, including the advertised
+  1.5 GiB upload boundary; add its exact result before closing this goal.
+
+The first stress run caused an API-machine OOM while supplemental maintenance
+Python competed with concurrent uploads. Fly restarted it; the isolated rerun
+kept health passing and caused no further restart. Maintenance now requires an
+explicit temporary machine, bounded remote execution and guarded fixture-only
+mutation. The temporary machine was destroyed. Failed browser fixtures and
+exposed test sessions were cleaned/revoked; cleanup logging now omits request
+headers. Short synthetic audio and hard browser navigations also caused false
+failures in tag analysis and queue writes; the final browser smoke uses a valid
+12-second audio fixture and real application links, preserving strict error
+checks.
+
+See the [current contract and operations](../architecture/protected-pds-audio.md).
+Production remains excluded until staging evidence and the docs sweep are reviewed.

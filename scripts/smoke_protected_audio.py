@@ -8,6 +8,7 @@ uv run scripts/smoke_protected_audio.py --env-file /path/to/fixtures.env --execu
 
 Requires AUTH_APP_PASSWORD_MINT_SECRET, ZAT_TEST_HANDLE/PASSWORD/PDS, and
 NONSPACE_TEST_HANDLE/PASSWORD (or the existing PLYRFM_PASSWORD fixture).
+PLYR_SMOKE_MAINTENANCE_MACHINE must identify an isolated staging maintenance VM.
 Existing PLYR_PROTECTED_OWNER_TOKEN / PLYR_PROTECTED_READER_TOKEN may substitute
 for API token minting; ZAT credentials remain necessary for owner PDS inspection.
 Without --execute, no requests are sent. No values are printed.
@@ -33,6 +34,7 @@ from _protected_audio_smoke import (
     blob_cid,
     checked,
     headers,
+    maintenance_machine,
     record_parts,
 )
 from cryptography.hazmat.primitives import serialization
@@ -487,6 +489,7 @@ def main() -> None:
     if not args.execute:
         print("no requests sent; pass --execute after staging deployment")
         return
+    maintenance_machine()
     asyncio.run(run(args))
 
 

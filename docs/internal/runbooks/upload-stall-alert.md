@@ -27,6 +27,9 @@ alert proves those jobs stopped progressing, not that the whole pipeline is down
 
 ## Encoding waits
 
+The October 28 heartbeat fix is deployed to staging in #2233; production
+promotion is pending.
+
 The transcoder finishes encoding before sending response headers. The client
 heartbeats the job every five seconds for the entire HTTP request, including
 uploading input, waiting for headers, and reading output. The heartbeat stops

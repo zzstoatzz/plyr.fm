@@ -4,6 +4,11 @@ how the browser gets a track's bytes to plyr since `feat/resumable-upload-sessio
 (August 2026). the single-request `POST /tracks/` still exists for the SDK and the
 integration suite; the web uploader no longer uses it.
 
+Protected PDS source handling is deployed to staging on October 28, 2026;
+production promotion is pending. Existing catalog audio is unchanged. See
+[protected PDS audio](../architecture/protected-pds-audio.md) and the
+[validation plan](../plans/2026-10-28-protected-pds-audio.md).
+
 ## why
 
 `POST /tracks/` held one HTTP request open for the whole transfer and then staged
@@ -37,7 +42,8 @@ browser                                api                              R2 / wor
   │  (SSE, unchanged)                    │        phase 0: settle staged bytes
   │                                      │          stream → hash + duration + ALAC
   │                                      │          public/gated: copy_object → audio/<hash>.<ext>
-  │                                      │          private:      uploadBlob → PDS
+  │                                      │          protected:   source → playback Space, optional private mirror
+  │                                      │          private:     source → member-private self Space
   │                                      │          delete staged/<id>.<ext>
   │                                      │        phases 1–8: unchanged
 ```
@@ -55,15 +61,20 @@ browser                                api                              R2 / wor
   missing part, or a 413 for a rejected cover image all leave the parts in place
   and the session open (`GET /tracks/uploads/{id}` lists received parts). the
   multipart is completed only once nothing else can refuse the upload.
-- **the worker settles** (`_settle_staged_audio`): the staged object is read
-  once onto the worker's disk while its sha256 is computed; duration and the
-  ALAC scan run from that local copy (the handler used to do this on its own
-  `/tmp`); then a server-side `copy_object` puts the bytes at their content-hash
-  key and the staged object is deleted. the worker never re-uploads audio.
-  private media goes to the PDS as a blob instead, as before. from
-  `_validate_audio` onward nothing knows the upload was resumable — PDS blob
-  before record, reserve-then-publish, the jetstream finalize race, the
-  optimize task: all untouched.
+- **the worker settles** (`_settle_staged_audio`): the staged object is streamed
+  to local disk for hashing, duration and ALAC inspection. Ordinary audio can use
+  server-side promotion. Protected Spaces audio is uploaded to the artist's PDS
+  before the optional private R2 playback mirror; member-private audio goes to its
+  separate self Space. Staging cleanup or mirror failure must not undo successful
+  PDS ownership. Web-playable protected sources need no mandatory encode; deferred
+  optimization retains non-web originals in the Space.
+- **transport storage is separate from source ownership**: resumable transfer still
+  depends on private R2 staging. Direct protected uploads can establish PDS
+  ownership without an R2 mirror. Both finish and direct upload parse the same
+  publishing policy and explicit `accept_plyr_storage` field. Unsupported hosts
+  require per-upload consent for R2-only protected storage; capable-host refusal
+  or unavailable discovery never silently selects it. Member-private has no such
+  storage exception.
 - **abandoned sessions**: a session is `pending` / phase `transfer` while
   parts arrive (each part heartbeats `updated_at`), so the stuck-upload reaper
   ignores it. `reap_abandoned_transfers` fails sessions idle for 24h and aborts
@@ -129,10 +140,11 @@ a mistakenly chosen file must not sit in staging).
 
 `replaceAudio` (`PUT /tracks/{id}/audio`) still uses the single-request path.
 
-## not in scope (yet)
+## source ownership limits
 
-- a PDS that refuses the blob still degrades to R2-only with a portal warning,
-  as before; making that a first-class job outcome is a separate change.
-- the PDS blob is the *playable* rendition, as before. storing the artist's
-  master in the PDS and deriving delivery renditions from the mirror is the
-  larger storage-semantics change this transport makes possible.
+The R2-only degradation described by the original August transport design applies
+to the ordinary public upload path. Protected Spaces publication requires the PDS
+source write; a mirror is optional. Revisions and replacements retain immutable
+source records, and originals remain recoverable from the PDS after optimization.
+This transport does not migrate existing catalog audio or revoke historical public
+copies. See the [source lifecycle](../architecture/protected-pds-audio.md).

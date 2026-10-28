@@ -13,11 +13,16 @@ branch of [bluesky-social/atproto](https://github.com/bluesky-social/atproto/tre
 when a request shape is in doubt, match what its `lib/atproto/` does. ZDS tracks the same
 branch, and has rejected stale bodies twice (#1656, #1876).
 
-## what exists today
+## deployment and product boundaries
 
-The shipped product is the smallest personal-space case:
+The October 28 protected playback path is deployed to staging; production
+promotion is pending. See [protected PDS audio](protected-pds-audio.md) and the
+[validation plan](../plans/2026-10-28-protected-pds-audio.md). Existing catalog
+sources are not migrated automatically.
 
-- the artist is the space authority and only reader;
+The member-private `self` Space retains its own boundary:
+
+- the artist is the space authority; the artist and admitted members can read;
 - the artist uploads through plyr.fm;
 - the track record and audio blob live on the artist's PDS, never R2;
 - the browser receives audio through plyr.fm's authenticated proxy because it does not
@@ -40,8 +45,9 @@ Proposal 0016 separates roles that happen to collapse onto one PDS in the person
   permission without becoming its authority;
 - **syncer/player**: plyr.fm after a user authorizes it to read the space.
 
-The client resolves `#atproto_space_host` on the authority DID, falling back to
-`#atproto_pds`. Writer reads resolve each writer's `#atproto_pds`; they must not assume
+The current client resolves the authority host through `#atproto_pds`, matching
+the October alpha. It does not consult `#atproto_space_host`. Writer reads resolve
+each writer's `#atproto_pds`; they must not assume
 the logged-in user's PDS hosts every repo or the authority.
 
 ## space type, permission set, and addressing
@@ -51,7 +57,9 @@ The personal modality is `fm.plyr.privateMedia` (environment-aware through
 whose default collection is `fm.plyr.track`.
 
 OAuth requests `include:fm.plyr.privateMediaAccess`. That permission set grants the
-artist's `self` space record read/write operations plus explicit `manage` operations.
+artist's `self` and `playback` space record read/write operations plus explicit
+`manage` operations. The self Space uses member read policy; the playback Space
+uses public read policy and an exact deployed-app allow-list.
 The space declaration and permission set are separate NSIDs because the `main` definition
 of a space type cannot simultaneously be a permission set.
 
@@ -72,30 +80,23 @@ check is no longer sufficient.
 
 ## capability and OAuth upgrade
 
-No stable declarative PDS capability exists, and probing a `com.atproto.space.*`
-route only ever guessed at the host. The signal is the **token**: a
-spaces-capable PDS expands `include:fm.plyr.privateMediaAccess` into concrete
-`space:` grants, and one without spaces either rejects the scope
-(`invalid_scope`) or returns a token with the include silently unexpanded — the
-reference PDS's `IncludeScope.buildPermissions` skips resource types it does not
-know. Capability is therefore *presence of the parsed grant*, per session:
+PDS support and OAuth permission are separate. `describeServer.spacesAlpha=true`
+is the support signal, cached per PDS for five minutes. A failed probe is unavailable
+(503 at the upload boundary), not permission to store protected audio only in R2.
+`/auth/me.permissioned_spaces.supported` reports capability; `granted` requires
+both the self and playback grants. If its capability read temporarily fails,
+`/auth/me` uses the existing grant as its conservative support signal.
 
-- `private_media_grant_present()` requires `manage=create` on
-  `space:<type>?authority=<user did>&skey=self` **and** `action=create` on the
-  track collection — the two operations a first private upload performs;
-- absent after an upgrade → record the PDS in `artists.spaces_unsupported_pds`
-  and stop offering the option, cleared on an explicit retry or a host change;
-- `invalid_scope` at the callback is the same answer arriving faster, and never
-  replaces the old session.
+Permissions are requested through an explicit scope upgrade when needed, not on
+every base login. `space:` grants are parsed by `_internal/auth/space_scope.py`.
+The expanded permission set covers self/member-private and playback writes; app
+password sessions have the existing owner authority. A capable PDS that refuses
+a scope or source write fails the operation. A host without Spaces may use
+private R2 only for a new upload with explicit `accept_plyr_storage=true`.
+This exception does not apply to member-private uploads or authorize migration.
 
-`space:` scopes are parsed by `_internal/auth/space_scope.py`, a port of
-`SpacePermission` from `@atproto/oauth-scopes` (`permissioned-data` branch),
-which `atproto_oauth.scopes` does not yet implement. Bulletin and its fork
-secretsky read capability the same way.
-
-The result is cached per PDS and surfaced by `/auth/me`. Private-media OAuth permission is
-requested only through the explicit scope-upgrade flow for a capable PDS, never during the
-base login.
+Earlier releases inferred capability from a token's expanded grants and remembered
+unsupported hosts. That historical inference is no longer the discovery contract.
 
 ## space creation and policy
 
@@ -120,13 +121,14 @@ members through `simplespace.putMember` (read-only)/`removeMember` (see private-
 `updateSpace` takes `{space, readPolicy?, writePolicy?, appAccess?}`.
 
 App access is open for this personal experiment so local/public OAuth clients can use it
-without a confidential-client signing key. This is separate from user eligibility. A
-future cross-app catalog can use `#allowList`, which requires a verified client
-attestation.
+without a confidential-client signing key. This is separate from user eligibility.
+The separate playback Space uses `#allowList` for exactly the deployed client
+and requires a verified client attestation. Public read policy does not make
+its blobs available through public repo `getBlob`.
 
 ## credential exchange and reads
 
-The read path is:
+The member-private read path is:
 
 1. The user's DPoP OAuth session calls `getDelegationToken` on their PDS.
 2. plyr.fm resolves the authority's space host.
@@ -161,8 +163,13 @@ the RFC 9180 vector), and `list_space_repo_ops` requests and verifies the commit
 whenever the author publishes a KEM key. Hosts that predate KEM keys get no header.
 
 The delegation token proves user-to-app delegation only; it does not identify the app.
-App identity comes exclusively from the separate attestation. Credentials are cached for
-50 minutes and renewed once after a `401`.
+App identity comes exclusively from the separate attestation. Public-read playback
+credentials omit user delegation and use the deployed client's attestation. This
+allows anonymous playback without borrowing a member-private owner's credential.
+Credentials are cached for at most 50 minutes, shortened to JWT expiry minus 30
+seconds when available, and renewed once after a `401`. Protected playback checks
+that credential before using a verified mirror. Issued private R2 URLs default to
+3600 seconds, so revocation is bounded by credential and issued-URL lifetimes.
 
 The generic client exposes:
 
@@ -189,7 +196,8 @@ Private media reuses the normal environment-aware `fm.plyr.track` record body wi
 `com.atproto.space.createRecord`/`putRecord`; deletes use
 `com.atproto.space.deleteRecord`.
 
-`GET /audio/{file_id}` enforces owner visibility, obtains the space credential, then calls
+`GET /audio/{file_id}` enforces member-private visibility using the requesting
+reader's credential, then calls
 `com.atproto.space.getBlob(space, repo, cid)` on the artist's repo host. It forwards the
 browser's `Range` header and relays `206`, `Content-Range`, `Content-Type`, and length
 headers so seeking works.
@@ -217,6 +225,11 @@ record/convention and application enforcement.
 
 ## rollout and verification
 
+The following is the earlier member-private rollout procedure. For the October
+28 staging deployment and its protected-audio checks, use the linked validation
+plan; production is not yet promoted. Publishing the permission set before scope
+upgrades remains necessary.
+
 Rollout order matters:
 
 1. publish the `privateMedia` space declaration and `privateMediaAccess` permission set
@@ -239,9 +252,9 @@ Rollout order matters:
    canonical URI;
 5. verify a non-supporting PDS continues to hide the private option.
 
-The permission set `fm.plyr.privateMediaAccess` carries two permissions on the
-`fm.plyr.privateMedia` space type: the owner permission (`authority: self`, all
-actions, `manage`) and, since the access-list work, a reader permission
+The permission set `fm.plyr.privateMediaAccess` now carries owner permissions for
+self and playback (`authority: self`, write actions and `manage`) plus the
+member-private reader permission
 (`authority: "*"`, `action: ["read"]`). The reader permission is what lets a
 member's own PDS issue a delegation token for *another* artist's space; zds
 passes `*` through at token issuance, so the expanded grant reads
@@ -250,18 +263,12 @@ passes `*` through at token issuance, so the expanded grant reads
 owner: `private_media_grant_present` still requires the `self`-resolved
 authority plus `manage=create`.
 
-Publishing must precede deployment because every browser sign-in requests
-`include:<namespace>.privateMediaAccess`; the PDS must be able to resolve that permission
-set during authorization. The grant is the capability signal, as in Bulletin: a spaces
-PDS expands the include into `space:` grants at consent (`granted: true`), any other PDS
-leaves it unexpanded and private media stays hidden, and an authserver that rejects the
-include at PAR with `invalid_scope` gets the sign-in again without it. `scopes_supported`
-cannot carry this — the reference oauth-provider only ever lists `atproto` and the
-`transition:*` hints ("other atproto scopes can't be enumerated as they are dynamic"), and
-every implementation now matches it (zds briefly listed granular scopes and removed them
-to match the reference). `/auth/me.supported` therefore equals `granted`. Sessions signed in before this (no include)
-take the one-time OAuth scope upgrade the first time they choose private; the upload or
-recording is held across that redirect and completes on return without another click.
+Before October's support discovery change, base sign-in requested the include
+and capability was inferred from its expansion. That history explains the old
+`scopes_supported` workaround, but does not describe current behavior: base login
+omits the opt-in include, `spacesAlpha` discovers host support, and a scope upgrade
+requests the self/playback grants when needed. Unsupported PDSes keep the private
+option hidden. Public protected uploads can offer the explicit R2-only exception.
 
 The smoke script covers space creation, record/blob writes, credential exchange, record
 reads, and ranged blob playback. Unit tests cover URI parsing, current config shape,
@@ -271,7 +278,9 @@ record URL boundary.
 The smoke script authenticates resident operations with an app password, then proves the
 signed credential exchange and ranged read path using a separate ephemeral key. It
 does not prove the browser OAuth scope-upgrade or confidential-client attestation path.
-That browser-level interoperability proof remains in #1684.
+Those limitations describe that member-private script. The October protected
+source API and OAuth browser results are recorded separately in the validation
+plan; they do not establish every cross-account member-private case.
 
 ## remaining product work
 

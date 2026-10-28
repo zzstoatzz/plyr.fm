@@ -47,6 +47,30 @@ plyr.fm should become:
 
 ### October 2026
 
+#### protected PDS audio on staging (October 28)
+
+[#2233](https://github.com/zzstoatzz/plyr.fm/pull/2233) deployed `02ed1cd5` to staging.
+Protected uploads on a Spaces-capable PDS now establish the artist-owned source
+before the optional private R2 mirror. Public listening uses an app-restricted,
+public-read playback Space; listeners need neither a Spaces PDS nor an owner
+credential. Unsupported uploaders must explicitly accept plyr-only storage.
+Existing catalogs are not migrated. **Production has not been promoted.**
+
+The original stalled-upload investigation also fixed heartbeats during the
+transcoder's input, header/encoding wait and output phases. An R2 delivery
+failure must not erase successful protected PDS ownership. Local validation:
+2,060 backend tests passed (26 existing skips), all 385 frontend tests passed,
+and every pre-merge CI check passed. The real staging API/PDS smoke passed all
+29 recorded checks, including actual R2 deletion and PDS recovery, Jetstream
+reconstruction, revisions, shared-source cleanup, multipart resume and `.aif`
+optimization with byte-exact original recovery. Browser matrix and broader
+integration results are tracked in the [implementation plan](docs/internal/plans/2026-10-28-protected-pds-audio.md).
+
+The first stress attempt OOM-killed the 1 GiB API machine while a supplemental
+maintenance interpreter ran there. Isolating maintenance on a temporary worker
+VM kept health checks passing through the complete rerun; the temporary VM and
+failed fixtures were removed. See the [source/access contract and smoke runbook](docs/internal/architecture/protected-pds-audio.md).
+
 #### activity chart smoothing and plays (October 23)
 
 The activity chart draws a rolling-average line over faint raw bars (3h / 12h /
@@ -330,15 +354,26 @@ first suspect, a test account on blacksky.app.
 Portal defaults, album application and per-track exceptions are in production.
 Listening audience, downloads, discovery and rights metadata are separate choices.
 Today “my Space members” also means private metadata; private R2 audio alone does
-not hide a work. Future Space-backed storage must preserve those audience choices,
-rather than turn every protected work into members-only content. Moving existing
+not hide a work. The staging playback Space preserves those audience choices without making a
+protected public work members-only; production still uses the existing paths. Moving existing
 works across Space boundaries remains a separate migration decision.
 
 **records are moving into the client's hands — parked until the sign-in design is redone** (plan `docs/plans/2026-08-31-client-side-writes.md`; #1948–#1950 shipped in prod `2026.0901.065150`, reverted September 1 in #1952): phase 0 made the frontend a second OAuth client and chained its consent after the cookie login, so every sign-in showed two authorization screens. the direction stands — the file an artist uploads goes in their PDS as-is, plyr indexes/mirrors/serves, and the backend stops authoring records on anyone's behalf — but the next attempt must fit inside the single existing login, with scope growing only when a feature that needs it is used. **next**: redesign how the browser gets a repo-write capability without a second flow, then phase 1 (likes).
 
 the August arcs that sat here until September 20 — the spotify footer, supporter standing via attested.network, the iOS lock-screen scrubber, the credential chain — are in `.status_history/2026-09.md` under "priorities archived 2026-09-20"; their open threads are in known issues.
 
-**still experimental — private media on permissioned spaces** (#1557→#1574, #1684, #1876–#1905, epic #1384): private audio in an artist-owned permissioned space (never R2), credential-gated playback, and since August 22 an artist-named member list rather than owner-only — the `simplespace` member list on the artist's PDS decides, and plyr never stores membership: it asks the space host for a credential with the reader's session and holds that answer for the credential's lifetime (a refusal for five minutes), so a change the artist makes from any client is honored without plyr in the loop (August 23). Every sign-in now requests the private-media permission set and a spaces PDS expands it into `space:` grants at consent, so the *grant* is the capability signal (advertised `scopes_supported` never listed the dynamic scopes and hid the feature from the official alpha PDS). **open**: the cross-account e2e leg needs its `ALPHA_TEST_*` secrets; membership and supporter standing stay separate facts by design; downloads of private tracks are still refused for everyone, owner included, until a private download byte path exists. Design: `docs/internal/architecture/private-media-access-list.md`. the wire contract is the spaces-alpha lexicons at the tip of atproto's `permissioned-data` branch, with Bulletin as the reference client; zds tracks that branch and has rejected stale bodies twice (#1656, #1876), so drift there shows up as a failed first private upload. The July Proposal-0016 alignment replaces the obsolete `ats://` draft addresses with canonical `at://{authority}/space/{type}/{skey}` addresses, separates the space-type lexicon from the OAuth permission set, resolves dedicated space hosts with PDS fallback, and sends a confidential-client attestation separately from the user's delegation token. The current owner-only policy remains intentionally narrow; interoperable catalog sharing needs a product policy and UX on top of the protocol primitives. See `docs/internal/architecture/permissioned-private-media.md`.
+**still experimental — private media on permissioned spaces** (#1557→#1574,
+#1684, #1876–#1905, epic #1384): member-private metadata/audio lives in the
+artist-owned `self` Space. Its authority decides membership for each requesting
+reader; supporter standing remains independent. Staging additionally uses the
+separate public-read, app-restricted `playback` Space for protected public audio.
+Host support (`describeServer.spacesAlpha`) and approved OAuth permissions are
+separate facts; older owner sessions may need the expanded self/playback bundle.
+Current authority and repo hosts resolve through `#atproto_pds`. Credential
+caches and issued mirror URLs bound revocation; they do not promise immediate
+recall. See [private media](docs/internal/architecture/permissioned-private-media.md)
+and [protected public audio](docs/internal/architecture/protected-pds-audio.md).
+Production promotion and existing-catalog migration are separate decisions.
 
 **next**: remove the `/admin/*` machine-endpoint aliases now that prod calls `/internal/*` (#1691); re-enable `test_private_media.py` somewhere that has the local postgres/redis fixtures (it is excluded from the staging-facing workflow). which surfaces beyond albums/playlists count as queueable contexts (artist catalogs #1353, feeds/search). publish the five record lexicons (`fm.plyr.track`, `.like`, `.comment`, `.list`, `.actor.profile`) with a docs-quality pass on each (next phase after #1569); a production smoke-test harness for private media (file-types × visibilities, fully inert — no DM/listing/stats — per prod release); enable the `copyright-paradigm` flag for own DID and start dogfooding on prod; co-writer / publisher editing UI for `additionalInterestedParties` (backend plumbed end-to-end, frontend deferred); prefill ISWC/ISRC/masterOwner on the portal edit form (we only have the URIs locally, not field contents); fly worker tcp health check (running-but-stuck symptom detector); upstream `atproto_oauth.OAuthClient` body-factory support (lets us drop `_signed_streaming_post`); deploy-docs sanity check; `config.py` decomposition.
 

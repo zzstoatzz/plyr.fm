@@ -4,6 +4,7 @@ import io
 import json
 import math
 import os
+import re
 import secrets
 import struct
 import time
@@ -48,6 +49,13 @@ def required(name: str) -> str:
     if not value:
         raise ValueError(f"missing {name}")
     return value
+
+
+def maintenance_machine() -> str:
+    machine = required("PLYR_SMOKE_MAINTENANCE_MACHINE")
+    if not re.fullmatch(r"[0-9a-f]{14}", machine):
+        raise ValueError("invalid staging maintenance machine ID")
+    return machine
 
 
 def headers(token: str) -> dict[str, str]:

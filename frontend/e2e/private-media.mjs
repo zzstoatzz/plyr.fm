@@ -55,7 +55,9 @@ try {
 		fail('sign-in on a spaces PDS did not carry the private-media grant');
 	}
 	if (before.permissioned_spaces.reader !== true) {
-		fail('sign-in did not carry the any-authority read grant (is the revised permission set published?)');
+		fail(
+			'sign-in did not carry the any-authority read grant (is the revised permission set published?)'
+		);
 	}
 	step('capability', 'supported=true granted=true reader=true straight from sign-in');
 
@@ -102,7 +104,9 @@ try {
 	await page.goto(`${APP}/u/${before.handle}`, { waitUntil: 'domcontentloaded' });
 	await page.getByText(title, { exact: true }).first().waitFor({ timeout: 15000 });
 	const ownerCount = await page.evaluate(
-		async ([api, did]) => (await (await fetch(`${api}/artists/${did}/analytics`, { credentials: 'include' })).json()).total_items,
+		async ([api, did]) =>
+			(await (await fetch(`${api}/artists/${did}/analytics`, { credentials: 'include' })).json())
+				.total_items,
 		[API, before.did]
 	);
 	step('artist-page', `owner sees "${title}" listed; analytics total_items=${ownerCount}`);
@@ -111,7 +115,8 @@ try {
 	await stranger.waitForTimeout(2000);
 	const strangerSees = await stranger.getByText(title, { exact: true }).count();
 	const strangerCount = await stranger.evaluate(
-		async ([api, did]) => (await (await fetch(`${api}/artists/${did}/analytics`)).json()).total_items,
+		async ([api, did]) =>
+			(await (await fetch(`${api}/artists/${did}/analytics`)).json()).total_items,
 		[API, before.did]
 	);
 	await stranger.context().close();
@@ -131,11 +136,14 @@ try {
 		await signIn(member, MEMBER_HANDLE, MEMBER_PASSWORD);
 		const memberMe = await me(member);
 		if (memberMe?.permissioned_spaces?.reader !== true) {
-			fail(`member session lacks the reader grant: ${JSON.stringify(memberMe?.permissioned_spaces)}`);
+			fail(
+				`member session lacks the reader grant: ${JSON.stringify(memberMe?.permissioned_spaces)}`
+			);
 		}
 		const probe = (p) =>
 			p.evaluate(
-				async ([api, id]) => (await fetch(`${api}/tracks/${id}`, { credentials: 'include' })).status,
+				async ([api, id]) =>
+					(await fetch(`${api}/tracks/${id}`, { credentials: 'include' })).status,
 				[API, createdTrackId]
 			);
 		if ((await probe(member)) !== 404) fail('a non-member could read the private track');
@@ -145,14 +153,23 @@ try {
 		const search = page.locator('.private-media-section input.search-input');
 		await search.waitFor({ timeout: 15000 });
 		await search.fill(MEMBER_HANDLE);
-		const added = page.waitForResponse((response) => response.url() === `${API}/artists/me/private-media/members` && response.request().method() === 'POST');
-		await page.locator('.private-media-section .search-result-item').filter({ has: page.getByText(`@${MEMBER_HANDLE}`, { exact: true }) }).click({ timeout: 20000 });
+		const added = page.waitForResponse(
+			(response) =>
+				response.url() === `${API}/artists/me/private-media/members` &&
+				response.request().method() === 'POST'
+		);
+		await page
+			.locator('.private-media-section .search-result-item')
+			.filter({ has: page.getByText(`@${MEMBER_HANDLE}`, { exact: true }) })
+			.click({ timeout: 20000 });
 		const addedResponse = await added;
 		if (addedResponse.status() !== 201) fail(`adding listener returned ${addedResponse.status()}`);
 		const addedMember = await addedResponse.json();
 		grantedMemberDid = addedMember.did;
 		if (addedMember.did !== memberMe.did) fail('the portal added a different listener');
-		await page.getByText(`@${MEMBER_HANDLE} can hear your private tracks`).waitFor({ timeout: 15000 });
+		await page
+			.getByText(`@${MEMBER_HANDLE} can hear your private tracks`)
+			.waitFor({ timeout: 15000 });
 		step('member-added', `owner added ${MEMBER_HANDLE} in the portal`);
 
 		if ((await probe(member)) !== 200) fail('the member still cannot read the private track');
@@ -172,7 +189,12 @@ try {
 		}
 		step('member-plays', `audio ${memberPlayback} via the member's own delegation token`);
 
-		await page.locator('.private-media-section .selected-artist-chip').filter({ has: page.getByText(addedMember.display_name, { exact: true }) }).last().getByRole('button').click();
+		await page
+			.locator('.private-media-section .selected-artist-chip')
+			.filter({ has: page.getByText(addedMember.display_name, { exact: true }) })
+			.last()
+			.getByRole('button')
+			.click();
 		await page.getByText(/removed @/).waitFor({ timeout: 15000 });
 		if ((await probe(member)) !== 404) fail('a removed member can still read the private track');
 		grantedMemberDid = null;
@@ -214,7 +236,9 @@ try {
 	console.log('PASS — private media works end to end');
 } catch (e) {
 	if (process.exitCode !== 1) {
-		console.error(`FAILED at [${currentStage()}]: ${String(e).slice(0, 400)}`);
+		console.error(
+			`FAILED at [${currentStage()}]: ${e.name}: ${String(e.message).split('\n')[0].slice(0, 400)}`
+		);
 		process.exitCode = 1;
 	}
 	if (dumpMember) await dumpMember();
@@ -222,9 +246,18 @@ try {
 	if (dumpOwner) await dumpOwner();
 } finally {
 	if (grantedMemberDid && ownerContext) {
-		const response = await ownerContext.request.delete(`${API}/artists/me/private-media/members/${encodeURIComponent(grantedMemberDid)}`);
-		console.log(`[cleanup] remove listener -> ${response.status()}`);
-		if (response.status() !== 204) process.exitCode = 1;
+		try {
+			const response = await ownerContext.request.delete(
+				`${API}/artists/me/private-media/members/${encodeURIComponent(grantedMemberDid)}`
+			);
+			console.log(`[cleanup] remove listener -> ${response.status()}`);
+			if (response.status() !== 204) process.exitCode = 1;
+		} catch (error) {
+			console.error(
+				`[cleanup] remove listener failed: ${error.name}: ${String(error.message).split('\n')[0]}`
+			);
+			process.exitCode = 1;
+		}
 	}
 	if (createdTrackId && ownerContext) await deleteTrack(ownerContext, createdTrackId);
 	await browser.close();

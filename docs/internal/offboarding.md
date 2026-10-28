@@ -8,6 +8,12 @@ Plyr.fm provides tools for users to export their data and manage their presence 
 
 Users can download a ZIP archive containing all their uploaded tracks in their original format.
 
+Protected PDS source recovery described here is deployed to staging and awaits
+production promotion. An owner can recover a track's original through
+`GET /audio/{file_id}/download`, including when listener downloads are off. The
+export follows the same original-source choice; an optimized MP3 does not replace
+the artist's retained source file.
+
 ### Workflow
 
 1.  **Initiation**:
@@ -18,22 +24,23 @@ Users can download a ZIP archive containing all their uploaded tracks in their o
 
 2.  **Processing**:
     *   Backend queries all tracks for the user.
-    *   Backend streams files from R2 storage into a ZIP archive in memory (using a stream buffer to minimize memory usage).
+    *   Backend retrieves originals into temporary files and builds the ZIP on disk.
+    *   Protected `audioSpace` tracks are read from the artist's PDS using app credentials, including when the private R2 mirror is missing. Member-private Space tracks require the owner's authenticated session. Other tracks use their PDS blob or R2 source as appropriate.
+    *   If any original cannot be retrieved, the export fails instead of publishing a partial archive.
     *   As tracks are processed, the job progress is updated in the database.
     *   The final ZIP file is uploaded to R2 under the `exports/` prefix.
     *   The R2 object is tagged with `Content-Disposition` to ensure a friendly filename (e.g., `plyr-tracks-2024-03-20.zip`) upon download.
 
 3.  **Completion & Download**:
     *   Frontend polls the job status via SSE at `/exports/{export_id}/progress`.
-    *   Once completed, the job result contains a direct `download_url` to the R2 object.
-    *   Frontend triggers a browser download using this URL.
+    *   Once completed, the job result contains an authenticated `/exports/{export_id}/download` URL.
+    *   That owner-only endpoint redirects to a short-lived signed R2 URL.
 
 ### Storage & Cleanup
 
-*   **Location**: Exports are stored in the `audio` bucket under the `exports/` prefix.
-*   **Retention**: These files are temporary. An R2 Lifecycle Rule is configured to **automatically delete files in `exports/` after 24 hours**.
-    *   This ensures we don't pay for indefinite storage of duplicate data.
-    *   Users must download their export within this window.
+*   **Location**: ZIPs are stored in the private audio bucket under `exports/`; they have no public bucket URL.
+*   **Access**: The download endpoint checks the job owner's DID and issues a fresh signed URL after authorization. The progress stream reports job state; its completion URL points to that authenticated download endpoint.
+*   **Retention**: Treat exports as temporary. Bucket lifecycle policy controls object retention; signed URL expiry controls access through an issued link.
 
 ## Account Deletion
 

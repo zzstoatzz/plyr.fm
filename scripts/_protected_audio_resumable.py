@@ -9,7 +9,7 @@ import time
 import wave
 from typing import TYPE_CHECKING
 
-from _protected_audio_smoke import checked, headers, with_nonce
+from _protected_audio_smoke import checked, headers, maintenance_machine, with_nonce
 
 if TYPE_CHECKING:
     from smoke_protected_audio import Smoke
@@ -55,10 +55,10 @@ asyncio.run(main())
         "console",
         "-a",
         "relay-api-staging",
-        "-g",
-        "app",
+        "--machine",
+        maintenance_machine(),
         "-C",
-        "uv run --no-sync python -",
+        "timeout --signal=TERM --kill-after=5s 100s uv run --no-sync python -",
         stdin=asyncio.subprocess.PIPE,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,

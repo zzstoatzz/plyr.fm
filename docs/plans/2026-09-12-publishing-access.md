@@ -1,5 +1,9 @@
 # proposal: publishing defaults and per-work access
 
+Historical plan. The October 28 staging implementation changes protected audio
+storage and encoding behavior; see [protected PDS audio](../internal/architecture/protected-pds-audio.md).
+Production promotion remains separate.
+
 Date: 2026-09-12. Status: approved; implementation and staging smoke goal active.
 
 Nate explicitly prefers deliberate breakage over compatibility layers. Measure

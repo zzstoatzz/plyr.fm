@@ -41,7 +41,8 @@ export function observe(page, label) {
 		if (r.url().startsWith(API)) seen.push(`${r.method()} ${new URL(r.url()).pathname}`);
 	});
 	page.on('response', (r) => {
-		if (r.url().startsWith(API) && r.status() >= 400) seen.push(`  -> ${r.status()} ${new URL(r.url()).pathname}`);
+		if (r.url().startsWith(API) && r.status() >= 400)
+			seen.push(`  -> ${r.status()} ${new URL(r.url()).pathname}`);
 	});
 	page.on('console', (m) => {
 		if (m.type() === 'error') seen.push(`console.error: ${m.text().slice(0, 200)}`);
@@ -56,15 +57,16 @@ export function observe(page, label) {
 			.then((t) => t.replace(/\s+/g, ' ').slice(0, 600))
 			.catch(() => '(no body)');
 		console.error(`--- ${label}: text: ${text}`);
-		await page.screenshot({ path: `${ARTIFACTS}/${label}.png`, fullPage: true }).catch(() => undefined);
+		await page
+			.screenshot({ path: `${ARTIFACTS}/${label}.png`, fullPage: true })
+			.catch(() => undefined);
 	};
 }
 
-/** 0.2s of 8kHz mono sine — small but decodable, and unique per run so the
- * content-hash dedupe never mistakes two test runs for the same track. */
+/** Generate PCM sine audio; defaults to 0.2s at 8kHz. */
 export const seed = Date.now() % 997;
-export function wavBuffer() {
-	const frames = 1600;
+export function wavBuffer({ durationSeconds = 0.2, sampleRate = 8000 } = {}) {
+	const frames = Math.round(durationSeconds * sampleRate);
 	const data = frames * 2;
 	const b = Buffer.alloc(44 + data);
 	b.write('RIFF');
@@ -74,8 +76,8 @@ export function wavBuffer() {
 	b.writeUInt32LE(16, 16);
 	b.writeUInt16LE(1, 20);
 	b.writeUInt16LE(1, 22);
-	b.writeUInt32LE(8000, 24);
-	b.writeUInt32LE(16000, 28);
+	b.writeUInt32LE(sampleRate, 24);
+	b.writeUInt32LE(sampleRate * 2, 28);
 	b.writeUInt16LE(2, 32);
 	b.writeUInt16LE(16, 34);
 	b.write('data', 36);
@@ -93,7 +95,7 @@ export async function authorizeOnPds(page, who = HANDLE, secret = PASSWORD) {
 	if (await usePassword.count()) await usePassword.click().catch(() => undefined);
 	await page.locator('input[name="username"]').fill(who);
 	await page.locator('input[name="password"]').fill(secret);
-	await page.getByRole('button', { name: 'authorize' }).click();
+	await page.getByRole('button', { name: 'authorize' }).click({ timeout: 60000 });
 	await page.waitForURL((u) => u.href.startsWith(APP), { timeout: 30000 });
 }
 
@@ -104,7 +106,7 @@ export async function signIn(page, who = HANDLE, secret = PASSWORD) {
 	const handle = page.getByPlaceholder('you.example.com');
 	await handle.waitFor({ timeout: 15000 });
 	await handle.fill(who);
-	await page.locator('form button[type="submit"]').click();
+	await page.locator('form button[type="submit"]').click({ timeout: 60000 });
 	await page.waitForURL(/oauth\/authorize/, { timeout: 30000 });
 	await authorizeOnPds(page, who, secret);
 	let signedIn = false;
@@ -125,8 +127,10 @@ export async function signIn(page, who = HANDLE, secret = PASSWORD) {
 }
 
 export const me = (page) =>
-	page.evaluate(async (api) => (await (await fetch(`${api}/auth/me`, { credentials: 'include' })).json()), API);
-
+	page.evaluate(
+		async (api) => await (await fetch(`${api}/auth/me`, { credentials: 'include' })).json(),
+		API
+	);
 
 /** the id of the signed-in artist's track with this exact title, or null. */
 export const findTrackByTitle = (page, wanted) =>
@@ -135,7 +139,9 @@ export const findTrackByTitle = (page, wanted) =>
 			const r = await fetch(`${api}/auth/me`, { credentials: 'include' });
 			if (!r.ok) return null;
 			const who = await r.json();
-			const tr = await fetch(`${api}/tracks/?artist_did=${who.did}&limit=50`, { credentials: 'include' });
+			const tr = await fetch(`${api}/tracks/?artist_did=${who.did}&limit=50`, {
+				credentials: 'include'
+			});
 			if (!tr.ok) return null;
 			const data = await tr.json();
 			const list = data.tracks ?? data;
@@ -156,10 +162,17 @@ export async function waitForTrack(page, title, attempts = 30) {
 
 /** leave the fixture account the way we found it. */
 export async function deleteTrack(context, id) {
-	const response = await context.request.delete(`${API}/tracks/${id}`);
-	console.log(`[cleanup] DELETE /tracks/${id} -> ${response.status()}`);
-	if (response.status() !== 200) {
-		console.error(`could not delete test track ${id}`);
+	try {
+		const response = await context.request.delete(`${API}/tracks/${id}`);
+		console.log(`[cleanup] DELETE /tracks/${id} -> ${response.status()}`);
+		if (response.status() !== 200) {
+			console.error(`could not delete test track ${id}`);
+			process.exitCode = 1;
+		}
+	} catch (error) {
+		console.error(
+			`[cleanup] DELETE /tracks/${id} failed: ${error.name}: ${String(error.message).split('\n')[0]}`
+		);
 		process.exitCode = 1;
 	}
 }
