@@ -18,6 +18,7 @@ jobs:
       - uses: actions/checkout@v5
         with:
           repository: zzstoatzz/plyr-python-client
+          ref: b911ea6ac2f9403a3b04a684231359b11f24cc16 # companion PR #44; return to main after coordinated merge
           path: .client-source
           persist-credentials: false
       - uses: astral-sh/setup-uv@v7

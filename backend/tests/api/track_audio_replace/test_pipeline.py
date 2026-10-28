@@ -18,6 +18,7 @@ from backend.api.tracks.audio_replace import (
     _process_replace_background,
 )
 from backend.models import Album, Artist, Track
+from backend.storage import _get_storage
 from backend.utilities.database import db_session as _db_session
 
 from ._helpers import (
@@ -513,13 +514,11 @@ class TestGatedAudioCleanup:
                 "backend.api.tracks.audio_replace._validate_audio",
                 AsyncMock(side_effect=UploadPhaseError("nope")),
             ),
-            patch(
-                "backend.api.tracks.audio_replace.storage.delete_gated",
-                AsyncMock(return_value=True),
+            patch.object(
+                type(_get_storage()), "delete_gated", AsyncMock(return_value=True)
             ) as mock_delete_gated,
-            patch(
-                "backend.api.tracks.audio_replace.storage.delete",
-                AsyncMock(return_value=True),
+            patch.object(
+                type(_get_storage()), "delete", AsyncMock(return_value=True)
             ) as mock_delete,
             patch("backend.api.tracks.audio_replace.job_service", AsyncMock()),
             patch(

@@ -5,7 +5,7 @@
     "main": {
       "type": "permission-set",
       "title": "plyr.fm Private Media",
-      "detail": "Create and manage your private-media space, read or update the track records and audio it contains, and play private tracks other artists have shared with you.",
+      "detail": "Store and manage your private and protected audio on your PDS, serve protected audio through plyr.fm, and play private tracks shared with you.",
       "permissions": [
         {
           "type": "permission",
@@ -39,6 +39,27 @@
           ],
           "action": [
             "read"
+          ]
+        },
+        {
+          "type": "permission",
+          "resource": "space",
+          "spaceType": "fm.plyr.privateMedia",
+          "authority": "self",
+          "skey": "playback",
+          "collection": [
+            "fm.plyr.track"
+          ],
+          "action": [
+            "read",
+            "create",
+            "update",
+            "delete"
+          ],
+          "manage": [
+            "create",
+            "update",
+            "delete"
           ]
         }
       ]

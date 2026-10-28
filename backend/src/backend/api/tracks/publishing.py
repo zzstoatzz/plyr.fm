@@ -13,6 +13,8 @@ from sqlalchemy.orm import selectinload
 
 from backend._internal import Session, get_session, require_auth
 from backend._internal.atproto.records.fm_plyr.track import rebuild_track_pds_record
+from backend._internal.atproto.spaces.capability import protected_storage_choice
+from backend._internal.atproto.spaces.protected_audio import publish_protected_audio
 from backend._internal.background import get_docket
 from backend._internal.copyright import (
     TrackRightsInput,
@@ -49,7 +51,14 @@ class PublishingJobResponse(BaseModel):
 
 
 async def _prepare_protected(db: AsyncSession, track: Track, session: Session) -> None:
+    if track.protected_audio:
+        return
     was_private = track.uses_private_audio
+    use_protected_space = await protected_storage_choice(session)
+    if not was_private and not use_protected_space:
+        raise ValueError(
+            "your PDS needs Spaces to change this audio to protected storage"
+        )
     old = TrackRevision(
         track_id=track.id,
         file_id=track.file_id,
@@ -60,6 +69,7 @@ async def _prepare_protected(db: AsyncSession, track: Track, session: Session) -
         audio_url=track.r2_url,
         pds_blob_cid=track.pds_blob_cid,
         pds_blob_size=track.pds_blob_size,
+        protected_audio=track.protected_audio,
         duration=track.duration,
         was_gated=was_private,
     )
@@ -88,7 +98,16 @@ async def _prepare_protected(db: AsyncSession, track: Track, session: Session) -
             await storage.copy_audio_to_private(original_id, original_type)
             if track.file_id != original_id:
                 await storage.copy_audio_to_private(track.file_id, track.file_type)
-    if needs_rendition:
+    if use_protected_space:
+        track.protected_audio = await publish_protected_audio(
+            session,
+            file_id=track.file_id,
+            file_type=track.file_type,
+            title=track.title,
+            original_file_id=track.original_file_id,
+            original_file_type=track.original_file_type,
+        )
+    elif needs_rendition:
         job_id = await job_service.create_job(
             JobType.OPTIMIZE, session.did, "preparing protected playback"
         )
@@ -111,13 +130,14 @@ async def _prepare_protected(db: AsyncSession, track: Track, session: Session) -
         await job_service.update_progress(
             job_id, JobStatus.COMPLETED, "playback prepared"
         )
-    track.original_file_id = original_id
-    track.original_file_type = original_type
+    if not use_protected_space:
+        track.original_file_id = original_id
+        track.original_file_type = original_type
     track.audio_storage = "r2_private"
     track.r2_url = None
     track.pds_blob_cid = None
     track.pds_blob_size = None
-    if not was_private or needs_rendition:
+    if not was_private or needs_rendition or use_protected_space:
         db.add(old)
 
 

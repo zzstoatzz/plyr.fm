@@ -8,7 +8,12 @@
       "key": "tid",
       "record": {
         "type": "object",
-        "required": ["title", "artist", "fileType", "createdAt"],
+        "required": [
+          "title",
+          "artist",
+          "fileType",
+          "createdAt"
+        ],
         "properties": {
           "title": {
             "type": "string",
@@ -84,13 +89,52 @@
           "labels": {
             "type": "union",
             "description": "Creator-applied content warnings using global ATProto label values.",
-            "refs": ["com.atproto.label.defs#selfLabels"]
+            "refs": [
+              "com.atproto.label.defs#selfLabels"
+            ]
           },
           "audioBlob": {
             "type": "blob",
             "description": "Audio file stored on the user's PDS. When present, this is the canonical source; audioUrl is the CDN fallback.",
-            "accept": ["audio/*"],
+            "accept": [
+              "audio/*"
+            ],
             "maxSize": 104857600
+          },
+          "audioSpace": {
+            "type": "string",
+            "format": "uri",
+            "description": "URI of the artist-owned protected audio record in a permissioned Space. Protected BlobRefs live in that record, never in this public record."
+          },
+          "audioFileId": {
+            "type": "string",
+            "description": "Content hash used for a protected audio playback copy."
+          },
+          "originalAudioBlob": {
+            "type": "blob",
+            "description": "Original audio retained in the protected audio record alongside a playback rendition.",
+            "accept": [
+              "audio/*"
+            ],
+            "maxSize": 104857600
+          },
+          "originalFileId": {
+            "type": "string",
+            "description": "Content hash of the original audio."
+          },
+          "originalFileType": {
+            "type": "string",
+            "description": "Original audio file extension."
+          },
+          "downloadPolicy": {
+            "type": "string",
+            "knownValues": [
+              "open",
+              "ask",
+              "supporters",
+              "off"
+            ],
+            "description": "Download permission through the publishing application, independent of audio location."
           }
         }
       }
@@ -98,19 +142,25 @@
     "supportGate": {
       "type": "object",
       "description": "Configuration for supporter-gated content.",
-      "required": ["type"],
+      "required": [
+        "type"
+      ],
       "properties": {
         "type": {
           "type": "string",
           "description": "The type of support required to access this content.",
-          "knownValues": ["any"]
+          "knownValues": [
+            "any"
+          ]
         }
       }
     },
     "featuredArtist": {
       "type": "object",
-      "description": "A featured artist on a track. Identified by DID — the canonical, immutable identifier. handle and displayName are legacy denormalized snapshots; readers should resolve fresh metadata from the DID rather than trusting these fields.",
-      "required": ["did"],
+      "description": "A featured artist on a track. Identified by DID \u2014 the canonical, immutable identifier. handle and displayName are legacy denormalized snapshots; readers should resolve fresh metadata from the DID rather than trusting these fields.",
+      "required": [
+        "did"
+      ],
       "properties": {
         "did": {
           "type": "string",
@@ -120,12 +170,12 @@
         "handle": {
           "type": "string",
           "format": "handle",
-          "description": "DEPRECATED snapshot — mutable, may be stale. Resolve from `did` instead. Older records include this; new records may omit it."
+          "description": "DEPRECATED snapshot \u2014 mutable, may be stale. Resolve from `did` instead. Older records include this; new records may omit it."
         },
         "displayName": {
           "type": "string",
           "maxLength": 256,
-          "description": "DEPRECATED snapshot — mutable, may be stale. Resolve from `did` instead. Older records include this; new records may omit it."
+          "description": "DEPRECATED snapshot \u2014 mutable, may be stale. Resolve from `did` instead. Older records include this; new records may omit it."
         }
       }
     }

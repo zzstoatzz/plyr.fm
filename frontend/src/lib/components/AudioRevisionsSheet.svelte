@@ -8,6 +8,7 @@
 		file_type: string;
 		original_file_type: string | null;
 		audio_storage: string;
+		audio_space?: string | null;
 		duration: number | null;
 		was_gated: boolean;
 	}
@@ -22,15 +23,7 @@
 		onRestore: (revision: RevisionRow) => void;
 	}
 
-	let {
-		open,
-		trackTitle,
-		revisions,
-		loading,
-		error,
-		onClose,
-		onRestore
-	}: Props = $props();
+	let { open, trackTitle, revisions, loading, error, onClose, onRestore }: Props = $props();
 
 	function formatTime(isoString: string): string {
 		const seconds = Math.floor((Date.now() - new Date(isoString).getTime()) / 1000);
@@ -57,15 +50,15 @@
 		return `format: ${ft}`;
 	}
 
-	function formatStorage(storage: string): string {
-		return storage === 'pds' || storage === 'both' ? 'on your PDS' : 'on plyr.fm';
+	function formatStorage(storage: string, audioSpace?: string | null): string {
+		return audioSpace || storage === 'pds' || storage === 'both' ? 'on your PDS' : 'on plyr.fm';
 	}
 
 	function buildSubtitle(rev: RevisionRow): string {
 		const parts = [
 			formatTime(rev.created_at),
 			formatDuration(rev.duration),
-			formatStorage(rev.audio_storage)
+			formatStorage(rev.audio_storage, rev.audio_space)
 		];
 		if (rev.was_gated) parts.push('was gated');
 		return parts.join(' · ');
@@ -86,7 +79,15 @@
 			<span class="sheet-subtitle">{trackTitle}</span>
 		</div>
 		<button class="sheet-close" onclick={onClose} aria-label="close">
-			<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+			<svg
+				width="18"
+				height="18"
+				viewBox="0 0 24 24"
+				fill="none"
+				stroke="currentColor"
+				stroke-width="2"
+				stroke-linecap="round"
+			>
 				<line x1="18" y1="6" x2="6" y2="18"></line>
 				<line x1="6" y1="6" x2="18" y2="18"></line>
 			</svg>
@@ -113,7 +114,16 @@
 				{#each revisions as rev (rev.id)}
 					<div class="revision-row">
 						<div class="revision-icon" aria-hidden="true">
-							<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+							<svg
+								width="20"
+								height="20"
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="2"
+								stroke-linecap="round"
+								stroke-linejoin="round"
+							>
 								<path d="M9 18V5l12-2v13"></path>
 								<circle cx="6" cy="18" r="3"></circle>
 								<circle cx="18" cy="16" r="3"></circle>
@@ -123,12 +133,7 @@
 							<span class="revision-format">{formatFormat(rev)}</span>
 							<span class="revision-meta">{buildSubtitle(rev)}</span>
 						</div>
-						<button
-							class="restore-btn"
-							onclick={() => onRestore(rev)}
-						>
-							restore
-						</button>
+						<button class="restore-btn" onclick={() => onRestore(rev)}> restore </button>
 					</div>
 				{/each}
 			</div>
@@ -296,7 +301,12 @@
 		width: 32px;
 		height: 32px;
 		border-radius: var(--radius-sm);
-		background: linear-gradient(90deg, var(--bg-tertiary) 0%, var(--bg-hover) 50%, var(--bg-tertiary) 100%);
+		background: linear-gradient(
+			90deg,
+			var(--bg-tertiary) 0%,
+			var(--bg-hover) 50%,
+			var(--bg-tertiary) 100%
+		);
 		background-size: 200% 100%;
 		animation: shimmer 1.5s ease-in-out infinite;
 		flex-shrink: 0;
@@ -312,7 +322,12 @@
 	.text-skeleton {
 		height: 12px;
 		border-radius: var(--radius-sm);
-		background: linear-gradient(90deg, var(--bg-tertiary) 0%, var(--bg-hover) 50%, var(--bg-tertiary) 100%);
+		background: linear-gradient(
+			90deg,
+			var(--bg-tertiary) 0%,
+			var(--bg-hover) 50%,
+			var(--bg-tertiary) 100%
+		);
 		background-size: 200% 100%;
 		animation: shimmer 1.5s ease-in-out infinite;
 	}
@@ -329,15 +344,24 @@
 		width: 64px;
 		height: 28px;
 		border-radius: var(--radius-md);
-		background: linear-gradient(90deg, var(--bg-tertiary) 0%, var(--bg-hover) 50%, var(--bg-tertiary) 100%);
+		background: linear-gradient(
+			90deg,
+			var(--bg-tertiary) 0%,
+			var(--bg-hover) 50%,
+			var(--bg-tertiary) 100%
+		);
 		background-size: 200% 100%;
 		animation: shimmer 1.5s ease-in-out infinite;
 		flex-shrink: 0;
 	}
 
 	@keyframes shimmer {
-		0% { background-position: 200% 0; }
-		100% { background-position: -200% 0; }
+		0% {
+			background-position: 200% 0;
+		}
+		100% {
+			background-position: -200% 0;
+		}
 	}
 
 	@media (prefers-reduced-motion: reduce) {

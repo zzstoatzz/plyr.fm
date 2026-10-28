@@ -171,6 +171,7 @@ class TrackResponse(BaseModel):
     description: str | None = None  # track description (liner notes, show notes)
     audio_storage: str = "r2"  # "r2" | "r2_private" | "pds" | "both"
     pds_blob_cid: str | None = None  # CID if stored on user's PDS
+    audio_space: str | None = None
     is_optimizing: bool = False  # deferred mp3 optimize still pending
     visibility: str = "public"  # public | unlisted | private
     unlisted: bool = False  # derived: excluded from discovery feeds
@@ -281,6 +282,10 @@ class TrackResponse(BaseModel):
         # CDN URL, because playback must pass through the preference-enforcing
         # backend endpoint even if a client cached older track metadata.
         stream_url = track.r2_url
+        if track.protected_audio:
+            stream_url = (
+                f"{settings.atproto.base_url.rstrip('/')}/audio/{track.file_id}"
+            )
         if labels.intersection({"sexual", "porn"}) and (
             track.r2_url or track.pds_blob_cid
         ):
@@ -353,6 +358,9 @@ class TrackResponse(BaseModel):
             original_file_type=track.original_file_type,
             audio_storage=track.audio_storage,
             pds_blob_cid=track.pds_blob_cid,
+            audio_space=track.protected_audio["record_uri"]
+            if track.protected_audio
+            else None,
             is_optimizing=track.is_optimizing,
             visibility=track.visibility,
             unlisted=not track.in_discovery,

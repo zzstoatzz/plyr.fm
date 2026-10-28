@@ -2,7 +2,7 @@
 	import { SvelteSet } from 'svelte/reactivity';
 	import { API_URL } from '$lib/config';
 	import type { Track } from '$lib/types';
-	import { isOptimizing } from '$lib/utils/track-audio';
+	import { pdsSaveStatus } from '$lib/pds-audio';
 
 	interface Props {
 		tracks: Track[];
@@ -17,38 +17,21 @@
 	let fileSizes = $state<Record<number, number>>({});
 
 	let eligible = $derived(
-		tracks.filter(
-			(t) =>
-				!t.support_gate &&
-				t.audio_storage !== 'r2_private' &&
-				t.publishing?.access.visibility !== 'private' &&
-				!t.pds_blob_cid &&
-				t.file_id &&
-				!isOptimizing(t)
-		)
+		tracks.filter((track) => pdsSaveStatus(track) === 'eligible' && track.file_id)
 	);
 
 	let allSelected = $derived(eligible.length > 0 && eligible.every((t) => selected.has(t.id)));
 
-	let selectedBytes = $derived([...selected].reduce((sum, id) => sum + (fileSizes[id] ?? 0), 0));
+	let selectedTracks = $derived(eligible.filter((track) => selected.has(track.id)));
+	let selectedBytes = $derived(
+		selectedTracks.reduce((sum, track) => sum + (fileSizes[track.id] ?? 0), 0)
+	);
 
 	function formatBytes(bytes: number): string {
 		if (bytes === 0) return '0 B';
 		if (bytes < 1024) return `${bytes} B`;
 		if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
 		return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-	}
-
-	function trackStatus(track: Track): 'eligible' | 'saved' | 'gated' | 'optimizing' {
-		if (
-			track.support_gate ||
-			track.audio_storage === 'r2_private' ||
-			track.publishing?.access.visibility === 'private'
-		)
-			return 'gated';
-		if (track.audio_storage === 'both' || track.pds_blob_cid) return 'saved';
-		if (isOptimizing(track)) return 'optimizing';
-		return 'eligible';
 	}
 
 	$effect(() => {
@@ -96,8 +79,8 @@
 	}
 
 	function startSave() {
-		if (selected.size === 0) return;
-		onSave?.([...selected]);
+		if (selectedTracks.length === 0) return;
+		onSave?.(selectedTracks.map((track) => track.id));
 		onClose();
 	}
 
@@ -142,7 +125,7 @@
 
 		<div class="pds-track-list">
 			{#each tracks as track (track.id)}
-				{@const status = trackStatus(track)}
+				{@const status = pdsSaveStatus(track)}
 				<div class="pds-track-row" class:dimmed={status !== 'eligible'}>
 					<div class="pds-track-checkbox">
 						{#if status === 'eligible'}
@@ -163,7 +146,9 @@
 						{#if fileSizes[track.id]}
 							<span class="pds-track-size">{formatBytes(fileSizes[track.id])}</span>
 						{/if}
-						{#if status === 'gated'}
+						{#if status === 'saved'}
+							<span class="pds-badge">on your PDS</span>
+						{:else if status === 'gated'}
 							<span class="pds-badge gated">gated</span>
 						{:else if status === 'optimizing'}
 							<span
@@ -178,8 +163,10 @@
 		</div>
 
 		<div class="pds-footer">
-			<button class="pds-save-btn" disabled={selected.size === 0} onclick={startSave}>
-				save {selected.size} track{selected.size !== 1 ? 's' : ''}{#if selectedBytes > 0}
+			<button class="pds-save-btn" disabled={selectedTracks.length === 0} onclick={startSave}>
+				save {selectedTracks.length} track{selectedTracks.length !== 1
+					? 's'
+					: ''}{#if selectedBytes > 0}
 					&nbsp;({formatBytes(selectedBytes)}){/if}
 			</button>
 		</div>

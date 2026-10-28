@@ -11,7 +11,10 @@ import hmac
 import re
 import struct
 from dataclasses import dataclass
+from typing import Any
 
+import libipld
+from atproto_core.cid import CID
 from atproto_crypto.consts import P256_JWT_ALG
 from atproto_crypto.did import format_did_key, parse_did_key
 from cryptography.hazmat.primitives import hashes, serialization
@@ -19,6 +22,7 @@ from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 
 COMMIT_MAC_TYPE = "atproto-space-repo"
+RECORD_MAC_TYPE = "atproto-space-record"
 COMMIT_VERSION = 1
 WANT_MAC_HEADER = "atproto-space-want-mac"
 MAC_HEADER = "atproto-space-mac"
@@ -89,19 +93,19 @@ def decapsulate(author_kem_key: ec.EllipticCurvePrivateKey, key_share: str) -> b
     return _derive_shared_secret(dh, syncer_bytes, author_bytes)
 
 
-def format_want_mac_header(key_share: str) -> str:
-    return f'type="{COMMIT_MAC_TYPE}", ver={COMMIT_VERSION}, key_share="{key_share}"'
+def format_want_mac_header(key_share: str, *, mac_type: str = COMMIT_MAC_TYPE) -> str:
+    return f'type="{mac_type}", ver={COMMIT_VERSION}, key_share="{key_share}"'
 
 
 _MAC_FIELDS = re.compile(r'(\w+)=("[^"]*"|:[A-Za-z0-9+/=]*:|\d+)')
 
 
-def parse_mac_header(value: str | None) -> bytes:
+def parse_mac_header(value: str | None, *, mac_type: str = COMMIT_MAC_TYPE) -> bytes:
     """The commit MAC carried in an ``Atproto-Space-Mac`` response header."""
     if not value:
         raise SpaceMacError("missing Atproto-Space-Mac header")
     fields = dict(_MAC_FIELDS.findall(value))
-    if fields.get("type") != f'"{COMMIT_MAC_TYPE}"' or fields.get("ver") != str(
+    if fields.get("type") != f'"{mac_type}"' or fields.get("ver") != str(
         COMMIT_VERSION
     ):
         raise SpaceMacError(f"unexpected MAC type or version: {value}")
@@ -146,3 +150,52 @@ def verify_commit_mac(shared_secret: bytes, commit: dict, mac: bytes) -> None:
         raise SpaceMacError(f"malformed commit: {commit}") from exc
     if not hmac.compare_digest(expected, mac):
         raise SpaceMacError("commit MAC did not verify")
+
+
+def verify_record_mac(shared_secret: bytes, *, uri: str, cid: str, mac: bytes) -> None:
+    if not cid.startswith("b"):
+        raise SpaceMacError("record CID is not base32")
+    try:
+        raw_cid = base64.b32decode(cid[1:].upper() + "=" * (-len(cid[1:]) % 8))
+    except ValueError as exc:
+        raise SpaceMacError("malformed record CID") from exc
+    expected = hmac.new(
+        shared_secret,
+        f"{RECORD_MAC_TYPE}-v{COMMIT_VERSION}".encode()
+        + _length_prefixed(uri)
+        + raw_cid,
+        hashlib.sha256,
+    ).digest()
+    if not hmac.compare_digest(expected, mac):
+        raise SpaceMacError("record MAC did not verify")
+
+
+def _ipld_value(value: Any) -> Any:
+    if isinstance(value, dict):
+        if set(value) == {"$link"}:
+            cid = value["$link"]
+            CID.decode(cid)
+            return libipld.decode_multibase(cid)[1]
+        if set(value) == {"$bytes"}:
+            decoded = _b64(value["$bytes"])
+            try:
+                CID.decode(decoded)
+            except ValueError:
+                return decoded
+            raise SpaceMacError("ambiguous binary value in protected audio record")
+        return {key: _ipld_value(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_ipld_value(item) for item in value]
+    return value
+
+
+def verify_record_value(value: dict, cid: str) -> None:
+    try:
+        expected = CID.decode(cid)
+        encoded = libipld.encode_dag_cbor(_ipld_value(value))
+        if expected.codec != 0x71 or expected.hash.code != 0x12:
+            raise SpaceMacError("unsupported protected record CID")
+        if hashlib.sha256(encoded).digest() != expected.hash.digest:
+            raise SpaceMacError("record value does not match its CID")
+    except (ValueError, TypeError) as exc:
+        raise SpaceMacError("malformed protected record value") from exc

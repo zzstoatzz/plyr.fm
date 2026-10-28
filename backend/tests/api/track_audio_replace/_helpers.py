@@ -18,6 +18,7 @@ from backend.api.tracks.uploads import (
     StorageResult,
 )
 from backend.models import Track
+from backend.storage import _get_storage
 from backend.utilities.audio_formats import AudioFormat
 
 OWNER_DID = "did:plc:owner"
@@ -175,13 +176,11 @@ def patched_replace_pipeline(
             "backend.api.tracks.audio_replace.update_record",
             AsyncMock(**update_record_kwargs),
         ) as mock_update_record,
-        patch(
-            "backend.api.tracks.audio_replace.storage.delete",
-            AsyncMock(**storage_delete_kwargs),
+        patch.object(
+            type(_get_storage()), "delete", AsyncMock(**storage_delete_kwargs)
         ) as mock_storage_delete,
-        patch(
-            "backend.api.tracks.audio_replace.storage.delete_gated",
-            AsyncMock(return_value=True),
+        patch.object(
+            type(_get_storage()), "delete_gated", AsyncMock(return_value=True)
         ) as mock_storage_delete_gated,
         patch(
             "backend.api.tracks.audio_replace.run_post_track_audio_replace_hooks",

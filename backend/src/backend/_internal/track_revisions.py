@@ -7,8 +7,8 @@ pruning, delete the backing blob if no other revision (or the track itself)
 still references it.
 
 prune is best-effort and runs OUTSIDE the swap transaction. a failure to
-prune leaves the row in place — worst case a track has more revisions than
-the cap, never silently corrupts the live audio pointer.
+pruning does not change the live audio pointer. Protected source cleanup runs
+after the revision transaction; a failed remote delete retains the PDS asset.
 """
 
 import logging
@@ -17,6 +17,8 @@ from urllib.parse import urlparse
 
 from sqlalchemy import select
 
+from backend._internal import Session as AuthSession
+from backend._internal.atproto.spaces.protected_audio import delete_protected_audio
 from backend.models import MAX_REVISIONS_PER_TRACK, Track, TrackRevision
 from backend.storage import storage
 from backend.storage.keys import AudioKey
@@ -38,7 +40,9 @@ def _file_ids_in_url(audio_url: str | None) -> set[str]:
     return {stem} if stem else set()
 
 
-async def prune_revisions(track_id: int) -> None:
+async def prune_revisions(
+    track_id: int, auth_session: AuthSession | None = None
+) -> None:
     """drop oldest revisions beyond `MAX_REVISIONS_PER_TRACK`, freeing blobs.
 
     runs in its own short transaction. exceptions are logged but never
@@ -57,8 +61,12 @@ async def prune_revisions(track_id: int) -> None:
             if excess <= 0:
                 return
 
-            to_prune = revisions[:excess]
-            keepers = revisions[excess:]
+            to_prune = [
+                revision
+                for revision in revisions[:excess]
+                if not revision.protected_audio or auth_session is not None
+            ]
+            keepers = [revision for revision in revisions if revision not in to_prune]
 
             # collect file_ids still in use by the live track + the revisions
             # we're keeping, so we don't delete a blob another row depends on
@@ -82,6 +90,11 @@ async def prune_revisions(track_id: int) -> None:
                 if keeper.original_file_id:
                     in_use_original_file_ids.add(keeper.original_file_id)
 
+            protected_assets = {
+                revision.protected_audio["record_uri"]: revision.protected_audio
+                for revision in to_prune
+                if revision.protected_audio
+            }
             for revision in to_prune:
                 await _maybe_delete_blob(
                     revision, in_use_file_ids, in_use_original_file_ids
@@ -89,12 +102,23 @@ async def prune_revisions(track_id: int) -> None:
                 await db.delete(revision)
 
             await db.commit()
+            if auth_session is not None:
+                await delete_unreferenced_protected_audio(
+                    auth_session, list(protected_assets.values())
+                )
     except Exception:
         logger.exception(
             "prune_revisions failed for track_id=%s (revisions may exceed the "
             "retention cap until the next prune)",
             track_id,
         )
+
+
+async def delete_unreferenced_protected_audio(
+    auth_session: AuthSession, assets: list[dict]
+) -> None:
+    for asset in {asset["record_uri"]: asset for asset in assets}.values():
+        await delete_protected_audio(auth_session, asset)
 
 
 async def _maybe_delete_blob(

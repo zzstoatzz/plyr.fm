@@ -25,9 +25,14 @@ from backend._internal.atproto.account_status import (
 from backend._internal.atproto.client import pds_blob_url
 from backend._internal.atproto.profile import avatar_url_from_profile_record
 from backend._internal.atproto.self_labels import self_label_values_from_record
+from backend._internal.atproto.spaces.protected_audio import (
+    protected_record_location,
+    resolve_protected_audio,
+)
 from backend._internal.clients.moderation import get_moderation_client
 from backend._internal.tasks.hooks import (
     invalidate_tracks_discovery_cache,
+    run_post_track_audio_replace_hooks,
     run_post_track_create_hooks,
 )
 from backend._internal.tasks.origin_trust import (
@@ -50,6 +55,7 @@ from backend.models import (
 from backend.models.session import UserSession
 from backend.storage import storage
 from backend.storage.keys import InvalidMediaExtension
+from backend.utilities.audio_formats import AudioFormat
 from backend.utilities.database import db_session
 from backend.utilities.lexicon import validate_record
 from backend.utilities.redis import get_async_redis_client
@@ -111,6 +117,33 @@ def _features_to_did_list(features: list | None) -> list[dict[str, str]]:
         elif isinstance(entry, str) and entry.startswith("did:"):
             out.append({"did": entry})
     return out
+
+
+def _protected_audio_fields(audio: dict, value: dict) -> dict:
+    file_id = value.get("audioFileId")
+    file_type = value.get("fileType")
+    if not isinstance(file_id, str) or not file_id or not isinstance(file_type, str):
+        raise ValueError("protected audio record has no file identity")
+    if AudioFormat.from_extension(file_type) is None:
+        raise ValueError("protected audio record has unsupported file type")
+    return {
+        "file_id": file_id,
+        "file_type": file_type,
+        "original_file_id": value.get("originalFileId"),
+        "original_file_type": value.get("originalFileType"),
+        "protected_audio": {**audio, "mirror_verified": False},
+        "audio_storage": "r2_private",
+        "r2_url": None,
+        "pds_blob_cid": None,
+        "pds_blob_size": None,
+    }
+
+
+def _record_download_policy(record: dict, *, protected: bool) -> str:
+    policy = record.get("downloadPolicy", "off" if protected else "open")
+    if policy not in ("open", "ask", "supporters", "off"):
+        raise ValueError("invalid track download policy")
+    return policy
 
 
 _INGEST_RETRY = ExponentialRetry(
@@ -218,7 +251,11 @@ async def ingest_track_create(
         logfire.warn("ingest: invalid track record, skipping", uri=uri, errors=errors)
         return
 
-    if not record.get("audioUrl") and not record.get("audioBlob"):
+    if (
+        not record.get("audioUrl")
+        and not record.get("audioBlob")
+        and not record.get("audioSpace")
+    ):
         logfire.warn(
             "ingest: track has neither audioUrl nor audioBlob, skipping", uri=uri
         )
@@ -303,12 +340,26 @@ async def ingest_track_create(
             )
             return
 
+        protected_fields: dict = {}
+        audio_space = record.get("audioSpace")
+        if audio_space:
+            if not isinstance(audio_space, str) or record.get("audioBlob"):
+                raise ValueError("invalid protected audio reference")
+            protected_record_location(audio_space, owner=did)
+            audio, value = await resolve_protected_audio(audio_space, did)
+            protected_fields = _protected_audio_fields(audio, value)
+        download_policy = _record_download_policy(record, protected=bool(audio_space))
+
         # no existing row — create from scratch (external ATProto client)
         audio_blob = record.get("audioBlob")
         audio_url = record.get("audioUrl")
 
         # validate audioUrl origin — untrusted URLs are stripped or rejected
-        if audio_url and not await is_trusted_audio_origin(audio_url, artist_did=did):
+        if (
+            not audio_space
+            and audio_url
+            and not await is_trusted_audio_origin(audio_url, artist_did=did)
+        ):
             if audio_blob:
                 logfire.warn(
                     "ingest: stripping untrusted audioUrl, using blob only",
@@ -329,7 +380,7 @@ async def ingest_track_create(
         # content-addressed URL, or an interrupted write). drop the dead URL and
         # lean on the PDS blob — the real substrate — rather than persisting an
         # r2_url that 404s forever on playback (issue: natespilman 1153/1154).
-        if audio_url and not await _audio_object_exists(audio_url):
+        if not audio_space and audio_url and not await _audio_object_exists(audio_url):
             if audio_blob:
                 logfire.warn(
                     "ingest: audioUrl has no backing R2 object, using blob only",
@@ -396,6 +447,9 @@ async def ingest_track_create(
             created_at=_parse_datetime(record.get("createdAt")),
             extra=extra,
         )
+        for field, value in protected_fields.items():
+            setattr(track, field, value)
+        track.download_policy = download_policy
         db.add(track)
         try:
             await db.flush()
@@ -514,7 +568,52 @@ async def ingest_track_update(
         track.self_labels = self_label_values_from_record(record.get("labels"))
 
         pds_audio_replaced = False
+        protected_audio_replaced = False
         uploads_paused = upload_pause_message(did) is not None
+        incoming_space = record.get("audioSpace")
+        protected_source = track.protected_audio
+        if incoming_space and not uploads_paused and not track.is_private:
+            if not isinstance(incoming_space, str) or record.get("audioBlob"):
+                raise ValueError("invalid protected audio reference")
+            protected_record_location(incoming_space, owner=did)
+            audio, value = await resolve_protected_audio(incoming_space, did)
+            fields = _protected_audio_fields(audio, value)
+            source_unchanged = (
+                protected_source is not None
+                and all(
+                    protected_source.get(key) == audio.get(key)
+                    for key in (
+                        "record_uri",
+                        "record_cid",
+                        "audio_blob",
+                        "original_blob",
+                    )
+                )
+                and all(
+                    getattr(track, key) == fields[key]
+                    for key in (
+                        "file_id",
+                        "file_type",
+                        "original_file_id",
+                        "original_file_type",
+                    )
+                )
+            )
+            protected_audio_replaced = not source_unchanged
+            if source_unchanged and protected_source is not None:
+                fields["protected_audio"]["mirror_verified"] = protected_source.get(
+                    "mirror_verified", False
+                )
+            for field, field_value in fields.items():
+                setattr(track, field, field_value)
+            track.download_policy = _record_download_policy(record, protected=True)
+            track.support_gate = record.get("supportGate")
+        elif protected_source and not incoming_space:
+            logfire.warn(
+                "ingest: preserving protected audio when audioSpace is omitted", uri=uri
+            )
+        elif "downloadPolicy" in record:
+            track.download_policy = _record_download_policy(record, protected=False)
         audio_blob = record.get("audioBlob")
         incoming_blob = (
             audio_blob.get("ref", {}).get("$link")
@@ -603,7 +702,7 @@ async def ingest_track_update(
         if extra_changed:
             track.extra = extra
 
-        if pds_audio_replaced:
+        if pds_audio_replaced or protected_audio_replaced:
             await db.execute(
                 delete(CopyrightScan).where(CopyrightScan.track_id == track.id)
             )
@@ -614,6 +713,8 @@ async def ingest_track_update(
     await invalidate_tracks_discovery_cache()
     if pds_audio_replaced:
         await schedule_pds_blob_mirror(track_id)
+    elif protected_audio_replaced:
+        await run_post_track_audio_replace_hooks(track_id)
 
 
 async def ingest_track_delete(

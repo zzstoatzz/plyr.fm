@@ -67,8 +67,8 @@ const MOBILE_LARGE_FILE_THRESHOLD_MB = 50;
  * (private media) scope, then redirect to the authorization URL. After the user
  * returns, they retry the upload with the scope granted.
  */
-export async function startPermissionedScopeUpgrade(): Promise<void> {
-	toast.info('approving private media — your draft is saved', 6000);
+export async function startPermissionedScopeUpgrade(returnUrl = '/upload'): Promise<void> {
+	toast.info('approving PDS storage — your draft is saved', 6000);
 	try {
 		const res = await fetch(`${API_URL}/auth/scope-upgrade/start`, {
 			method: 'POST',
@@ -83,7 +83,7 @@ export async function startPermissionedScopeUpgrade(): Promise<void> {
 			// the backend has recorded that, so refreshing auth stops offering it.
 			const detail = await res.json().catch(() => null);
 			if (detail?.detail === 'spaces_refused') {
-				toast.error('your PDS refused private media', 8000);
+				toast.error('your PDS refused audio storage', 8000);
 				await auth.refresh();
 				return;
 			}
@@ -93,10 +93,10 @@ export async function startPermissionedScopeUpgrade(): Promise<void> {
 		// preserve intent across the consent redirect via the same plyr_return_to
 		// cookie jams/login use — the scope-upgrade lands on /settings, which
 		// consumes it and bounces back to /upload (the stashed draft restores there).
-		setReturnUrl('/upload');
+		setReturnUrl(returnUrl);
 		if (browser && data.auth_url) window.location.href = data.auth_url;
 	} catch {
-		toast.error('could not start the approval needed for private media');
+		toast.error("couldn't start PDS storage approval");
 	}
 }
 
@@ -167,8 +167,7 @@ function describeUploadFailure(
 ): string | null {
 	if (error instanceof UploadSessionHttpError) {
 		if (error.status === 403 && error.detail === 'permissioned_scope_required') {
-			void startPermissionedScopeUpgrade();
-			return null;
+			return 'approve PDS audio storage, then try uploading again';
 		}
 		if (error.status === 401 && error.detail === 'session_expired') {
 			toast.error('your session expired — sign in to finish your upload');
@@ -176,6 +175,8 @@ function describeUploadFailure(
 			if (browser) void goto('/login');
 			return null;
 		}
+		if (error.detail === 'plyr_storage_acceptance_required')
+			return 'confirm where to store your audio';
 		if (error.status === 413) return 'file too large: please use a smaller file';
 		if (error.status === 409) return 'upload incomplete — try again';
 		if (error.status >= 500) return 'server error: please try again in a moment';
@@ -239,7 +240,8 @@ class UploaderState {
 		label?: string,
 		albumId?: string,
 		copyright?: TrackRights | null,
-		selfLabels: string[] = []
+		selfLabels: string[] = [],
+		acceptPlyrStorage = false
 	): void {
 		if (!browser) return;
 		const staged = source instanceof StagedTransfer ? source : this.stage(source);
@@ -275,6 +277,7 @@ class UploaderState {
 			formData.append('image', image);
 		}
 		if (publishing) formData.append('publishing', JSON.stringify(publishing));
+		if (acceptPlyrStorage) formData.append('accept_plyr_storage', 'true');
 		if (copyright) {
 			formData.append('copyright', JSON.stringify(copyright));
 		}

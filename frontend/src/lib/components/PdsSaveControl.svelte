@@ -6,7 +6,7 @@
 	import { API_URL } from '$lib/config';
 	import { toast } from '$lib/toast.svelte';
 	import type { Track } from '$lib/types';
-	import { isOptimizing } from '$lib/utils/track-audio';
+	import { hasPdsAudio, pdsSaveStatus } from '$lib/pds-audio';
 
 	// `?save=pds` opens the picker straight away — the control sits below the
 	// profile, rights, and sharing sections, so landing at the top of /manage
@@ -27,17 +27,10 @@
 	let controlEl = $state<HTMLDivElement | null>(null);
 
 	let savableTrackCount = $derived(
-		tracks.filter(
-			(track) =>
-				!track.support_gate && track.audio_storage !== 'r2_private' &&
-				(track.audio_storage ?? 'r2') !== 'both' &&
-				!isOptimizing(track)
-		).length
+		tracks.filter((track) => pdsSaveStatus(track) === 'eligible').length
 	);
-	let savedTrackCount = $derived(
-		tracks.filter((track) => ['both', 'pds'].includes(track.audio_storage ?? 'r2')).length
-	);
-	let gatedTrackCount = $derived(tracks.filter((track) => track.support_gate || track.audio_storage === 'r2_private').length);
+	let savedTrackCount = $derived(tracks.filter(hasPdsAudio).length);
+	let gatedTrackCount = $derived(tracks.filter((track) => pdsSaveStatus(track) === 'gated').length);
 
 	onMount(() => {
 		if ($page.url.searchParams.get(DEEP_LINK_PARAM) !== DEEP_LINK_VALUE) return;
@@ -116,9 +109,7 @@
 					eventSource.close();
 					saving = false;
 					toast.dismiss(toastId);
-					const firstReason: string | undefined = (data.failure_summary ??
-						data.errors ??
-						[])[0];
+					const firstReason: string | undefined = (data.failure_summary ?? data.errors ?? [])[0];
 					toast.error(firstReason || data.error || 'save failed', 0);
 				}
 			} catch {
@@ -141,15 +132,11 @@
 			<h3>save audio to your PDS</h3>
 			<p class="control-description">
 				{savableTrackCount === 1
-					? 'copy your audio blob to your PDS and keep the CDN fallback'
-					: `copy ${savableTrackCount} audio blobs to your PDS and keep the CDN fallback`}
+					? 'copy your audio to your PDS; plyr.fm keeps a playback copy'
+					: `copy ${savableTrackCount} audio files to your PDS; plyr.fm keeps playback copies`}
 			</p>
 		</div>
-		<button
-			class="save-trigger-btn"
-			onclick={() => (showModal = true)}
-			disabled={saving}
-		>
+		<button class="save-trigger-btn" onclick={() => (showModal = true)} disabled={saving}>
 			{saving ? 'saving...' : 'choose tracks'}
 		</button>
 	</div>
@@ -169,15 +156,15 @@
 				>
 					<polyline points="20 6 9 17 4 12"></polyline>
 				</svg>
-				all your audio is on your PDS
+				{savedTrackCount === tracks.length ? 'all your audio is on your PDS' : 'audio on your PDS'}
 			</h3>
 			<p class="control-description">
-				{savedTrackCount === 1
-					? 'your track'
-					: `all ${savedTrackCount} tracks`} live on your personal data server, with the CDN as fallback{gatedTrackCount >
-				0
-					? ` (${gatedTrackCount} protected ${gatedTrackCount === 1 ? 'track streams' : 'tracks stream'} through plyr.fm and ${gatedTrackCount === 1 ? "isn't" : "aren't"} mirrored)`
-					: ''}
+				{savedTrackCount}
+				{savedTrackCount === 1 ? 'track lives' : 'tracks live'} on your personal data server.
+				{#if gatedTrackCount > 0}
+					{gatedTrackCount} protected {gatedTrackCount === 1 ? 'track remains' : 'tracks remain'} only
+					on plyr.fm.
+				{/if}
 			</p>
 		</div>
 	</div>
@@ -219,7 +206,7 @@
 
 	.control-description {
 		font-size: var(--text-xs);
-		color: var(--text-tertiary);
+		color: var(--text-secondary);
 		margin: 0;
 	}
 

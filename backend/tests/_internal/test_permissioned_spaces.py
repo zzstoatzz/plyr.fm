@@ -492,7 +492,7 @@ def test_space_client_attestation_uses_proposal_jwt_shape(
     assert claims["jti"]
 
 
-async def test_space_host_resolution_prefers_dedicated_service(
+async def test_space_host_resolution_ignores_removed_dedicated_service(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     did = "did:plc:authority"
@@ -512,7 +512,7 @@ async def test_space_host_resolution_prefers_dedicated_service(
         f"at://{did}/space/fm.plyr.privateMedia/self"
     )
 
-    assert endpoint == "https://spaces.example"
+    assert endpoint == "https://pds.example"
 
 
 async def test_space_host_resolution_falls_back_to_pds(
