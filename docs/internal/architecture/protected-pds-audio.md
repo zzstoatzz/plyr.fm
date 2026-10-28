@@ -114,8 +114,8 @@ fix merged in [#2237](https://github.com/zzstoatzz/plyr.fm/pull/2237), passed
 [staging integration rerun](https://github.com/zzstoatzz/plyr.fm/actions/runs/40755846905)
 passed all 23 cases: 22 normal cases in 584.43 seconds and the full 1.5 GiB
 upload/playback/cleanup case in 1,036.78 seconds. The later account-only change
-retains that upload implementation; its ordinary suite and focused source cleanup
-smoke are checked separately.
+retains that upload implementation. Its [final ordinary suite](https://github.com/zzstoatzz/plyr.fm/actions/runs/40761156430)
+passed all 22 cases in 562.78 seconds; ten focused source cleanup checks also passed.
 
 The real OAuth browser matrix passed at 1280px/390px, light/dark, with mobile
 touch. It checks the ownership UI, real anonymous playback, Range, download
@@ -135,7 +135,7 @@ mint access through a process environment or fixture file; a local development
 mint secret does not authorize staging. Never print tokens or copy a development
 `.env` into another deployment.
 
-The two maintenance operations run Python on a separate temporary machine,
+Maintenance operations run Python on a separate temporary machine,
 identified by `PLYR_SMOKE_MAINTENANCE_MACHINE`. Clone the staging worker’s exact
 image/config with `sleep 1800` as its command and no HTTP service, and destroy
 that temporary machine in a `finally` path after the test. Do not run the
