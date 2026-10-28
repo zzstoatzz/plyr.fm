@@ -235,7 +235,7 @@ async def publish_protected_audio(
     return protected
 
 
-async def delete_protected_audio(session: Session, protected_audio: dict) -> None:
+async def delete_protected_audio(session: Session, protected_audio: dict) -> bool:
     uri = protected_audio["record_uri"]
     protected_record_location(uri, owner=session.did)
     async with db_session() as db:
@@ -245,12 +245,14 @@ async def delete_protected_audio(session: Session, protected_audio: dict) -> Non
                 .where(model.protected_audio["record_uri"].astext == uri)
                 .limit(1)
             ):
-                return
+                return False
     try:
         await delete_space_record(session, uri)
     except Exception as exc:
         if "RecordNotFound" not in str(exc):
             raise
+
+    return True
 
 
 @asynccontextmanager
