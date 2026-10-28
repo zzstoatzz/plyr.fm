@@ -7,10 +7,34 @@ vi.spyOn(HTMLMediaElement.prototype, 'canPlayType').mockReturnValue('probably');
 
 it('streams the protected rendition even when the original is browser-playable', () => {
 	const track: Track = {
-		id: 1, title: 'protected work', artist: 'artist', artist_handle: 'artist.test',
-		file_id: 'rendition', file_type: 'mp3', play_count: 0,
-		original_file_id: 'master', original_file_type: 'flac', audio_storage: 'r2_private'
+		id: 1,
+		title: 'protected work',
+		artist: 'artist',
+		artist_handle: 'artist.test',
+		file_id: 'rendition',
+		file_type: 'mp3',
+		play_count: 0,
+		original_file_id: 'master',
+		original_file_type: 'flac',
+		audio_storage: 'r2_private'
 	};
 	expect(pickFileIdForTrack(track)).toBe('rendition');
 	expect(pickFileIdForTrack({ ...track, audio_storage: 'r2' })).toBe('master');
+});
+
+it('keeps an app-restricted Space source on its playback rendition', () => {
+	const track: Track = {
+		id: 2,
+		title: 'Space audio',
+		artist: 'artist',
+		artist_handle: 'artist.test',
+		file_id: 'rendition',
+		file_type: 'mp3',
+		play_count: 0,
+		original_file_id: 'master',
+		original_file_type: 'flac',
+		audio_space:
+			'at://did:plc:artist/space/fm.plyr.stg.privateMedia/playback/did:plc:artist/fm.plyr.stg.track/audio'
+	};
+	expect(pickFileIdForTrack(track)).toBe('rendition');
 });

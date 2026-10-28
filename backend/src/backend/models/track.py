@@ -147,6 +147,9 @@ class Track(Base):
 
     # canonical at:// permissioned-space URI for private media; None otherwise.
     space_uri: Mapped[str | None] = mapped_column(String, nullable=True)
+    protected_audio: Mapped[dict | None] = mapped_column(
+        JSONB(none_as_null=True), nullable=True
+    )
 
     # copyright paradigm record pointers — set when the user has opted into a
     # copyright paradigm and filled out the rights form on upload/edit. AT-URIs

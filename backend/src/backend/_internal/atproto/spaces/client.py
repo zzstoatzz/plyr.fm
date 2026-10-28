@@ -1,18 +1,4 @@
-"""Client for the Proposal-0016 permissioned-data surfaces.
-
-Owner/author writes go through the DPoP-protected OAuth path
-([make_pds_request][backend._internal.atproto.client.make_pds_request]). Space
-credentials are bound to a separate ephemeral P-256 key generated during
-credential exchange and retained with the credential; every request carrying
-the delegation token or the credential is signed with it (an HTTP message
-signature labelled ``atproto-space``).
-
-Read path:
-
-    user OAuth -> getDelegationToken (requester PDS, DPoP) -> getSpaceCredential
-    (space authority, delegation token + signature naming the key + optional
-    client attestation) -> reads (credential + audience DID + signature)
-"""
+"""Owner-authenticated writes and user- or app-authorized Spaces reads."""
 
 import asyncio
 import base64
@@ -67,7 +53,7 @@ class SpaceAccessError(Exception):
 
 
 async def _resolve_did_service(did: str, fragment: str) -> str:
-    """Resolve a DID service, falling back to its PDS for space hosting."""
+    """Resolve and validate the requested DID service endpoint."""
     document = await AsyncDidResolver().resolve(did)
     if document is None:
         raise ValueError(f"could not resolve DID document for {did}")
@@ -77,7 +63,7 @@ async def _resolve_did_service(did: str, fragment: str) -> str:
         if service.id in (fragment, f"{did}{fragment}"):
             endpoint = service.service_endpoint
             break
-    if endpoint is None and fragment == "#atproto_space_host":
+    if endpoint is None and fragment == "#atproto_pds":
         endpoint = document.get_pds_endpoint()
     if endpoint is None:
         raise ValueError(f"no {fragment} service for {did}")
@@ -89,7 +75,7 @@ async def _resolve_did_service(did: str, fragment: str) -> str:
 
 async def _space_host_url(space: str) -> str:
     authority = parse_space_uri(space).owner_did
-    return await _resolve_did_service(authority, "#atproto_space_host")
+    return await _resolve_did_service(authority, "#atproto_pds")
 
 
 async def _kem_key(did: str) -> str | None:
@@ -361,21 +347,25 @@ _DELEGATION_REFUSALS = (
 )
 
 
-async def _mint_credential(auth_session: AuthSession, space: str) -> SpaceCredential:
-    try:
-        delegation_resp = await make_pds_request(
-            auth_session,
-            "GET",
-            "com.atproto.space.getDelegationToken",
-            params={"space": space},
-        )
-    except Exception as exc:
-        if any(marker in str(exc) for marker in _DELEGATION_REFUSALS):
-            raise SpaceAccessError(
-                f"requester's PDS did not delegate for {space}: {exc}"
-            ) from exc
-        raise
-    delegation_token = delegation_resp["token"]
+async def _mint_credential(
+    auth_session: AuthSession | None, space: str
+) -> SpaceCredential:
+    delegation_token: str | None = None
+    if auth_session is not None:
+        try:
+            delegation_resp = await make_pds_request(
+                auth_session,
+                "GET",
+                "com.atproto.space.getDelegationToken",
+                params={"space": space},
+            )
+        except Exception as exc:
+            if any(marker in str(exc) for marker in _DELEGATION_REFUSALS):
+                raise SpaceAccessError(
+                    f"requester's PDS did not delegate for {space}: {exc}"
+                ) from exc
+            raise
+        delegation_token = delegation_resp["token"]
 
     authority = parse_space_uri(space).owner_did
     audience = f"{authority}#atproto_pds"
@@ -383,10 +373,13 @@ async def _mint_credential(auth_session: AuthSession, space: str) -> SpaceCreden
     payload = {
         "space": space,
         "credentialKid": _did_key(key),
-        "delegationToken": delegation_token,
     }
+    if delegation_token is not None:
+        payload["delegationToken"] = delegation_token
     if attestation := create_space_client_attestation(audience):
         payload["clientAttestation"] = attestation
+    elif auth_session is None:
+        raise SpaceAccessError("app-only Spaces reads require a confidential client")
 
     # Credential issuance happens on the resolved space host, which may differ
     # from both the user's PDS and each writer's repo host.
@@ -433,7 +426,7 @@ def _credential_expires_at(token: str) -> float:
 
 
 async def get_space_credential(
-    auth_session: AuthSession, space: str, *, force_refresh: bool = False
+    auth_session: AuthSession | None, space: str, *, force_refresh: bool = False
 ) -> SpaceCredential:
     """obtain a space credential for `space`, minting+caching or renewing as needed.
 
@@ -441,7 +434,7 @@ async def get_space_credential(
     that arrives while that mint is in flight reuses its result rather than
     spending another delegation token.
     """
-    cache_key = (auth_session.did, space)
+    cache_key = (auth_session.did if auth_session else "app", space)
     if force_refresh:
         _credential_cache.pop(cache_key, None)
     elif cached := _cached_credential(cache_key):
@@ -456,7 +449,7 @@ async def get_space_credential(
 
 @asynccontextmanager
 async def open_space_blob(
-    auth_session: AuthSession,
+    auth_session: AuthSession | None,
     *,
     space: str,
     repo: str,

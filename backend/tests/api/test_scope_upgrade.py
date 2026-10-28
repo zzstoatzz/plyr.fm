@@ -354,25 +354,52 @@ async def test_non_permissioned_start_failure_is_not_swallowed(
     assert "invalid_scope" in response.json()["detail"]
 
 
-async def test_auth_me_supported_is_the_grant(
-    test_app: FastAPI, db_session: AsyncSession, upgrade_artist: Artist
-):
-    """the expanded grant is the only capability signal: supported == granted."""
-    async with AsyncClient(
-        transport=ASGITransport(app=test_app), base_url="http://test"
-    ) as client:
-        response = await client.get("/auth/me")
-    assert response.status_code == 200
-    assert response.json()["permissioned_spaces"] == {
-        "supported": False,
-        "granted": False,
-        "reader": False,
-    }
-
-    with patch("backend.api.auth.session_has_private_media_access", return_value=True):
+@pytest.mark.parametrize(
+    "supported,granted", [(False, False), (True, False), (True, True)]
+)
+async def test_auth_me_distinguishes_host_support_from_permission(
+    test_app: FastAPI,
+    db_session: AsyncSession,
+    upgrade_artist: Artist,
+    supported: bool,
+    granted: bool,
+) -> None:
+    with (
+        patch(
+            "backend.api.auth.pds_supports_spaces",
+            new=AsyncMock(return_value=supported),
+        ),
+        patch(
+            "backend.api.auth.session_has_private_media_access", return_value=granted
+        ),
+        patch(
+            "backend.api.auth.session_has_protected_audio_access", return_value=granted
+        ),
+    ):
         async with AsyncClient(
             transport=ASGITransport(app=test_app), base_url="http://test"
         ) as client:
             response = await client.get("/auth/me")
-    spaces = response.json()["permissioned_spaces"]
-    assert spaces["supported"] is True and spaces["granted"] is True
+    assert response.status_code == 200
+    assert response.json()["permissioned_spaces"] == {
+        "supported": supported,
+        "granted": granted,
+        "reader": False,
+    }
+
+
+async def test_auth_me_survives_temporary_capability_outage(
+    test_app: FastAPI,
+    db_session: AsyncSession,
+    upgrade_artist: Artist,
+) -> None:
+    with patch(
+        "backend.api.auth.pds_supports_spaces",
+        new=AsyncMock(side_effect=HTTPException(status_code=503)),
+    ):
+        async with AsyncClient(
+            transport=ASGITransport(app=test_app), base_url="http://test"
+        ) as client:
+            response = await client.get("/auth/me")
+    assert response.status_code == 200
+    assert response.json()["permissioned_spaces"]["supported"] is False

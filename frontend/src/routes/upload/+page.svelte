@@ -1,50 +1,60 @@
 <script lang="ts">
 	import UploadPauseNotice from '$lib/components/UploadPauseNotice.svelte';
 	import UploadSponsorCard from '$lib/components/UploadSponsorCard.svelte';
+	import UploadStorageNotice from '$lib/components/UploadStorageNotice.svelte';
+	import {
+		needsProtectedAudio,
+		needsPlyrStorageAcceptance,
+		needsSpacesApproval
+	} from '$lib/upload-storage';
 	import PublishingIntro from '$lib/components/PublishingIntro.svelte';
-	import { onMount } from "svelte";
-	import { browser } from "$app/environment";
-	import Header from "$lib/components/Header.svelte";
-	import HandleSearch from "$lib/components/HandleSearch.svelte";
-	import AlbumSelect from "$lib/components/AlbumSelect.svelte";
-	import AlbumUploadForm from "$lib/components/AlbumUploadForm.svelte";
-	import PdsTooltip from "$lib/components/PdsTooltip.svelte";
-	import InfoTooltip from "$lib/components/InfoTooltip.svelte";
-	import WaveLoading from "$lib/components/WaveLoading.svelte";
-	import AudioPreview from "$lib/components/AudioPreview.svelte";
-	import TagInput from "$lib/components/TagInput.svelte";
-	import CopyrightRightsPanel from "$lib/components/CopyrightRightsPanel.svelte";
-	import PublishingSettings from "$lib/components/PublishingSettings.svelte";
-	import { preferences } from "$lib/preferences.svelte";
-	import type { PublishingDefaults } from "$lib/publishing";
-	import { isWebPlayableAudioFile } from "$lib/utils/web-playable";
-	import type { TrackRights } from "$lib/components/CopyrightRightsPanel.svelte";
-	import type { FeaturedArtist, AlbumSummary, Artist } from "$lib/types";
-	import { API_URL, COPYRIGHT_PARADIGM_FLAG, getServerConfig } from "$lib/config";
-	import { profileLink } from "$lib/atclients";
-	import { uploader } from "$lib/uploader.svelte";
-	import { toast } from "$lib/toast.svelte";
-	import { auth } from "$lib/auth.svelte";
-	import { redirectToLogin } from "$lib/utils/auth-redirect";
+	import { onMount } from 'svelte';
+	import { browser } from '$app/environment';
+	import Header from '$lib/components/Header.svelte';
+	import HandleSearch from '$lib/components/HandleSearch.svelte';
+	import AlbumSelect from '$lib/components/AlbumSelect.svelte';
+	import AlbumUploadForm from '$lib/components/AlbumUploadForm.svelte';
+	import PdsTooltip from '$lib/components/PdsTooltip.svelte';
+	import InfoTooltip from '$lib/components/InfoTooltip.svelte';
+	import WaveLoading from '$lib/components/WaveLoading.svelte';
+	import AudioPreview from '$lib/components/AudioPreview.svelte';
+	import TagInput from '$lib/components/TagInput.svelte';
+	import CopyrightRightsPanel from '$lib/components/CopyrightRightsPanel.svelte';
+	import PublishingSettings from '$lib/components/PublishingSettings.svelte';
+	import { preferences } from '$lib/preferences.svelte';
+	import type { PublishingDefaults } from '$lib/publishing';
+	import { isWebPlayableAudioFile } from '$lib/utils/web-playable';
+	import type { TrackRights } from '$lib/components/CopyrightRightsPanel.svelte';
+	import type { FeaturedArtist, AlbumSummary, Artist } from '$lib/types';
+	import { API_URL, COPYRIGHT_PARADIGM_FLAG, getServerConfig } from '$lib/config';
+	import { profileLink } from '$lib/atclients';
+	import { uploader } from '$lib/uploader.svelte';
+	import { toast } from '$lib/toast.svelte';
+	import { auth } from '$lib/auth.svelte';
+	import { redirectToLogin } from '$lib/utils/auth-redirect';
 	import {
 		stashTrackForm,
 		restoreTrackForm,
 		clearTrackFormStash,
-		preflightAuth,
-	} from "$lib/upload-form-stash";
-	import { stashUploadFiles, takeUploadFiles } from "$lib/record-stash";
-	import { startPermissionedScopeUpgrade } from "$lib/uploader.svelte";
-	import type { StagedTransfer } from "$lib/staged-transfer.svelte";
+		preflightAuth
+	} from '$lib/upload-form-stash';
+	import { stashUploadFiles, takeUploadFiles } from '$lib/record-stash';
+	import { startPermissionedScopeUpgrade } from '$lib/uploader.svelte';
+	import type { StagedTransfer } from '$lib/staged-transfer.svelte';
 
-	const AUDIO_EXTENSIONS = [".mp3", ".wav", ".m4a", ".aiff", ".aif", ".flac"];
+	const AUDIO_EXTENSIONS = ['.mp3', '.wav', '.m4a', '.aiff', '.aif', '.flac'];
 	const AUDIO_MIME_TYPES = [
-		"audio/mpeg", "audio/wav", "audio/mp4",
-		"audio/aiff", "audio/x-aiff", "audio/flac",
+		'audio/mpeg',
+		'audio/wav',
+		'audio/mp4',
+		'audio/aiff',
+		'audio/x-aiff',
+		'audio/flac'
 	];
-	const FILE_INPUT_ACCEPT = [...AUDIO_EXTENSIONS, ...AUDIO_MIME_TYPES].join(",");
+	const FILE_INPUT_ACCEPT = [...AUDIO_EXTENSIONS, ...AUDIO_MIME_TYPES].join(',');
 
 	function isSupportedAudioFile(name: string): boolean {
-		const dotIndex = name.lastIndexOf(".");
+		const dotIndex = name.lastIndexOf('.');
 		if (dotIndex === -1) return false;
 		const ext = name.slice(dotIndex).toLowerCase();
 		return AUDIO_EXTENSIONS.includes(ext);
@@ -74,8 +84,8 @@
 	}
 
 	// upload form fields
-	let title = $state("");
-	let albumTitle = $state("");
+	let title = $state('');
+	let albumTitle = $state('');
 	let file = $state<File | null>(null);
 	// the file's transfer into staging; nothing leaves the browser until submit
 	let staged = $state<StagedTransfer | null>(null);
@@ -85,30 +95,33 @@
 	let imageFile = $state<File | null>(null);
 	let featuredArtists = $state<FeaturedArtist[]>([]);
 	let uploadTags = $state<string[]>([]);
-	let description = $state("");
+	let description = $state('');
 	let hasUnresolvedFeaturesInput = $state(false);
 	let attestedRights = $state(false);
 	let autoTag = $state(false);
 	let sensitiveAudio = $state(false);
 	let albums = $state<AlbumSummary[]>([]);
 	let publishingOverride = $state<PublishingDefaults | null>(null);
-	const albumDefaults = $derived(albums.find((album) => album.title === albumTitle)?.publishing_defaults ?? null);
+	let acceptPlyrStorage = $state(false);
+	const albumDefaults = $derived(
+		albums.find((album) => album.title === albumTitle)?.publishing_defaults ?? null
+	);
 	const publishingDefaults = $derived(albumDefaults ?? preferences.publishingDefaults);
 	const publishing = $derived(publishingOverride ?? publishingDefaults);
 	const visibility = $derived(publishing.access.visibility);
-	const permissionedSupported = $derived(
-		auth.user?.permissioned_spaces?.supported ?? false
+	const permissionedSupported = $derived(auth.user?.permissioned_spaces?.supported ?? false);
+	const permissionedGranted = $derived(auth.user?.permissioned_spaces?.granted ?? false);
+	const requiresStorageAcceptance = $derived(
+		needsPlyrStorageAcceptance(publishing, permissionedSupported)
 	);
-	const permissionedGranted = $derived(
-		auth.user?.permissioned_spaces?.granted ?? false
+	const requiresSpacesApproval = $derived(
+		needsSpacesApproval(publishing, permissionedSupported, permissionedGranted)
 	);
 	// copyright rights metadata — orthogonal, rides on public/unlisted tracks.
 	// when enabled, audio is uploaded to private storage and the backend writes
 	// indiemusi song + recording records after the track is published.
 	const copyrightEnabled = $derived(publishing.attach_rights);
 	let copyrightRights = $state<TrackRights>({});
-
-
 
 	// artist profile for checking atprotofans eligibility
 	let artistProfile = $state<Artist | null>(null);
@@ -166,16 +179,16 @@
 				chooseFile(files.file);
 				imageFile = files.imageFile;
 			}
-			if (visibility === "private" && !permissionedGranted) {
-				toast.error("not approved — your draft is still here", 6000);
-			} else if (files && visibility === "private") {
-				toast.success("approved — uploading your track", 4000);
+			if (requiresSpacesApproval) {
+				toast.error('not approved — your draft is still here', 6000);
+			} else if (
+				files &&
+				(visibility === 'private' || (permissionedSupported && needsProtectedAudio(publishing)))
+			) {
+				toast.success('approved — uploading your track', 4000);
 				await submitUpload();
 			} else if (!files) {
-				toast.info(
-					"your draft was restored — please reattach your audio file",
-					7000,
-				);
+				toast.info('your draft was restored — please reattach your audio file', 7000);
 			}
 		}
 
@@ -184,6 +197,7 @@
 	});
 
 	function chooseFile(selected: File | null) {
+		acceptPlyrStorage = false;
 		file = selected;
 		staged = null;
 	}
@@ -191,14 +205,12 @@
 	async function loadArtistProfile() {
 		if (!auth.user) return;
 		try {
-			const response = await fetch(
-				`${API_URL}/artists/by-handle/${auth.user.handle}`,
-			);
+			const response = await fetch(`${API_URL}/artists/by-handle/${auth.user.handle}`);
 			if (response.ok) {
 				artistProfile = await response.json();
 			}
 		} catch (_e) {
-			console.error("failed to load artist profile:", _e);
+			console.error('failed to load artist profile:', _e);
 		}
 	}
 
@@ -206,15 +218,13 @@
 		sponsorRevision += 1;
 		if (!auth.user) return;
 		try {
-			const response = await fetch(
-				`${API_URL}/albums/${auth.user.handle}`,
-			);
+			const response = await fetch(`${API_URL}/albums/${auth.user.handle}`);
 			if (response.ok) {
 				const data = await response.json();
 				albums = data.albums;
 			}
 		} catch (_e) {
-			console.error("failed to load albums:", _e);
+			console.error('failed to load albums:', _e);
 		}
 	}
 
@@ -232,7 +242,7 @@
 			autoTag,
 			sensitiveAudio,
 			publishing: publishing,
-			copyrightRights,
+			copyrightRights
 		};
 	}
 
@@ -254,13 +264,14 @@
 	async function startUpload() {
 		if (!preferences.data) return;
 		if (!file) return;
+		if (requiresStorageAcceptance && !acceptPlyrStorage) return;
 
 		// private media has no transcode step (audio is stored as-is as a PDS
 		// blob), so reject non-web-playable formats here instead of uploading the
 		// whole file and failing server-side.
-		if (visibility === "private" && !isWebPlayableAudioFile(file.name)) {
+		if (visibility === 'private' && !isWebPlayableAudioFile(file.name)) {
 			toast.error(
-				"private tracks must be web-playable (mp3, wav, m4a, or flac) — convert aiff first",
+				'private tracks must be web-playable (mp3, wav, m4a, or flac) — convert aiff first'
 			);
 			return;
 		}
@@ -272,21 +283,17 @@
 		// draft, and redirect to /login so the user can recover without losing
 		// what they typed.
 		const authStatus = await preflightAuth();
-		if (authStatus === "expired") {
+		if (authStatus === 'expired') {
 			stashTrackForm(currentFormStash());
-			toast.error(
-				"your session expired — sign in to continue your upload",
-			);
-			redirectToLogin("/upload");
+			toast.error('your session expired — sign in to continue your upload');
+			redirectToLogin('/upload');
 			return;
 		}
-		if (authStatus === "unverified") {
+		if (authStatus === 'unverified') {
 			// couldn't reach /auth/me — session may be fine, but we can't tell.
 			// don't redirect (might be a transient network blip), don't proceed
 			// (the upload would fail anyway). user retries when they're back online.
-			toast.error(
-				"couldn't verify your session — check your connection and try again",
-			);
+			toast.error("couldn't verify your session — check your connection and try again");
 			return;
 		}
 
@@ -297,14 +304,15 @@
 		const uploadImage = imageFile;
 		const tagsToUpload = [...uploadTags];
 		const uploadPublishing = publishingOverride;
+		const uploadAcceptPlyrStorage = requiresStorageAcceptance && acceptPlyrStorage;
 		const shouldAutoTag = autoTag;
 		const uploadSelfLabels = sensitiveAudio ? ['sexual'] : [];
 		const uploadDescription = description;
 
 		const clearForm = () => {
-			title = "";
-			albumTitle = "";
-			description = "";
+			title = '';
+			albumTitle = '';
+			description = '';
 			file = null;
 			staged = null;
 			imageFile = null;
@@ -314,23 +322,22 @@
 			autoTag = false;
 			sensitiveAudio = false;
 			publishingOverride = null;
+			acceptPlyrStorage = false;
 			copyrightRights = {};
 
-			const fileInput = document.getElementById("file-input");
-			if (fileInput instanceof HTMLInputElement) fileInput.value = "";
-			const imageInput = document.getElementById("image-input");
-			if (imageInput instanceof HTMLInputElement) imageInput.value = "";
+			const fileInput = document.getElementById('file-input');
+			if (fileInput instanceof HTMLInputElement) fileInput.value = '';
+			const imageInput = document.getElementById('image-input');
+			if (imageInput instanceof HTMLInputElement) imageInput.value = '';
 		};
 
-		const copyrightToSend: TrackRights | null = copyrightEnabled
-			? copyrightRights
-			: null;
+		const copyrightToSend: TrackRights | null = copyrightEnabled ? copyrightRights : null;
 
 		// a private upload may bounce to the one-time scope-upgrade consent (when
 		// the session doesn't yet hold the permissioned-space scope). stash the
 		// draft first so it survives that redirect; cleared on success or on a
 		// terminal error (the scope-upgrade path returns without firing onError).
-		if (visibility === "private") {
+		if (visibility === 'private' || (permissionedSupported && needsProtectedAudio(publishing))) {
 			stashTrackForm(currentFormStash());
 			if (!permissionedGranted) {
 				if (!(await stashUploadFiles({ file: uploadFile, imageFile: uploadImage }))) {
@@ -366,11 +373,17 @@
 			},
 			// enqueue / terminal-error callbacks: leave the form intact so a failed
 			// upload (duplicate, worker error) is recoverable without re-typing.
-			{ onError: (message) => { uploadError = message; staged = null; } },
+			{
+				onError: (message) => {
+					uploadError = message;
+					staged = null;
+				}
+			},
 			undefined, // label
 			albums.find((album) => album.title === uploadAlbum)?.id, // albumId
 			copyrightToSend,
 			uploadSelfLabels,
+			uploadAcceptPlyrStorage
 		);
 	}
 
@@ -379,10 +392,8 @@
 		if (target.files && target.files[0]) {
 			const selected = target.files[0];
 			if (!isSupportedAudioFile(selected.name)) {
-				toast.error(
-					`unsupported file type. supported: ${AUDIO_EXTENSIONS.join(", ")}`,
-				);
-				target.value = "";
+				toast.error(`unsupported file type. supported: ${AUDIO_EXTENSIONS.join(', ')}`);
+				target.value = '';
 				chooseFile(null);
 				return;
 			}
@@ -392,14 +403,14 @@
 				const sizeMB = selected.size / (1024 * 1024);
 				if (sizeMB > config.max_upload_size_mb) {
 					toast.error(
-						`audio file too large (${sizeMB.toFixed(1)}MB). max: ${config.max_upload_size_mb}MB`,
+						`audio file too large (${sizeMB.toFixed(1)}MB). max: ${config.max_upload_size_mb}MB`
 					);
-					target.value = "";
+					target.value = '';
 					chooseFile(null);
 					return;
 				}
 			} catch (_e) {
-				console.error("failed to validate file size:", _e);
+				console.error('failed to validate file size:', _e);
 			}
 
 			chooseFile(selected);
@@ -416,14 +427,14 @@
 				const sizeMB = selected.size / (1024 * 1024);
 				if (sizeMB > config.max_image_size_mb) {
 					toast.error(
-						`image too large (${sizeMB.toFixed(1)}MB). max: ${config.max_image_size_mb}MB`,
+						`image too large (${sizeMB.toFixed(1)}MB). max: ${config.max_image_size_mb}MB`
 					);
-					target.value = "";
+					target.value = '';
 					imageFile = null;
 					return;
 				}
 			} catch (_e) {
-				console.error("failed to validate image size:", _e);
+				console.error('failed to validate image size:', _e);
 			}
 
 			imageFile = selected;
@@ -432,7 +443,7 @@
 
 	async function logout() {
 		await auth.logout();
-		window.location.href = "/";
+		window.location.href = '/';
 	}
 </script>
 
@@ -445,11 +456,7 @@
 		<WaveLoading size="lg" message="loading..." />
 	</div>
 {:else}
-	<Header
-		user={auth.user}
-		isAuthenticated={auth.isAuthenticated}
-		onLogout={logout}
-	/>
+	<Header user={auth.user} isAuthenticated={auth.isAuthenticated} onLogout={logout} />
 	<main>
 		<div class="section-header">
 			<h2>upload {mode === 'album' ? 'album' : 'track'}</h2>
@@ -458,214 +465,205 @@
 		{#if pauseMessage}
 			<UploadPauseNotice message={pauseMessage} />
 		{:else}
-		<div class="mode-toggle">
-			<button
-				type="button"
-				class="mode-btn"
-				class:active={mode === 'track'}
-				onclick={() => setMode('track')}
-			>track</button>
-			<button
-				type="button"
-				class="mode-btn"
-				class:active={mode === 'album'}
-				onclick={() => setMode('album')}
-			>album</button>
-		</div>
-
-		<UploadSponsorCard revision={sponsorRevision} />
-		<PublishingIntro />
-
-		{#if mode === 'track'}
-		<form onsubmit={handleUpload}>
-			<div class="form-group">
-				<label for="title">track title</label>
-				<input
-					id="title"
-					type="text"
-					bind:value={title}
-					required
-					maxlength="256"
-					placeholder="my awesome song"
-				/>
-			</div>
-
-			<div class="form-group">
-				<label for="file-input" class="label-with-tooltip">
-					audio file
-					<PdsTooltip />
-				</label>
-				<input
-					id="file-input"
-					type="file"
-					accept={FILE_INPUT_ACCEPT}
-					onchange={handleFileChange}
-					required
-				/>
-				<p class="format-hint">
-					supported: {AUDIO_EXTENSIONS.map(e => e.slice(1)).join(", ")}
-				</p>
-				{#if file}
-					<div class="file-preview">
-						<AudioPreview source={file} transfer={staged} />
-					{#if uploadError}<p role="alert">{uploadError}</p>{/if}
-					</div>
-				{/if}
-			</div>
-
-			<div class="form-group">
-				<label for="description">description (optional)</label>
-				<textarea
-					id="description"
-					bind:value={description}
-					placeholder="liner notes, show notes, credits..."
-					rows="3"
-					maxlength="5000"
-				></textarea>
-				{#if description.length > 0}
-					<div class="char-count">{description.length} / 5000</div>
-				{/if}
-			</div>
-
-			<div class="form-group">
-				<label for="album">album (optional)</label>
-				<AlbumSelect {albums} bind:value={albumTitle} />
-			</div>
-
-			<div class="form-group">
-				<label for="features">featured artists (optional)</label>
-				<HandleSearch
-					bind:selected={featuredArtists}
-					bind:hasUnresolvedInput={hasUnresolvedFeaturesInput}
-					onAdd={(artist) => {
-						featuredArtists = [...featuredArtists, artist];
-					}}
-					onRemove={(did) => {
-						featuredArtists = featuredArtists.filter(
-							(a) => a.did !== did,
-						);
-					}}
-				/>
-			</div>
-
-			<div class="form-group">
-				<label for="upload-tags">tags (optional)</label>
-				<TagInput
-					tags={uploadTags}
-					onAdd={(tag) => {
-						uploadTags = [...uploadTags, tag];
-					}}
-					onRemove={(tag) => {
-						uploadTags = uploadTags.filter((t) => t !== tag);
-					}}
-					placeholder="type to search tags..."
-				/>
-				<label class="checkbox-label" style="margin-top: 0.75rem;">
-					<input type="checkbox" bind:checked={autoTag} />
-					<span class="checkbox-text">auto-tag with recommended genres</span>
-					<InfoTooltip label="auto-tagging info">
-						ML genre classification suggests tags from your audio.
-						<a href="https://docs.plyr.fm/artists/#auto-tagging" target="_blank" rel="noopener">learn more</a>
-					</InfoTooltip>
-				</label>
-			</div>
-
-			<div class="form-group">
-				<label for="image-input">artwork (optional)</label>
-				<input
-					id="image-input"
-					type="file"
-					accept="image/*"
-					onchange={handleImageChange}
-				/>
-				<p class="format-hint">supported: jpg, png, webp, gif</p>
-				{#if imageFile}
-					<p class="file-info">
-						{imageFile.name} ({(
-							imageFile.size /
-							1024 /
-							1024
-						).toFixed(2)} MB)
-					</p>
-				{/if}
-			</div>
-
-
-			<fieldset class="form-group content-notice-card">
-				<legend>content notice</legend>
-				<label class="content-notice-row checkbox-label">
-					<input type="checkbox" bind:checked={sensitiveAudio} />
-					<span class="access-body">
-						<span class="checkbox-text">contains sexually explicit audio</span>
-						<span class="access-note">hidden by default; listeners must sign in and choose to hear sensitive audio. the notice travels with this track on ATProto.</span>
-					</span>
-				</label>
-			</fieldset>
-
-			<div class="form-group">
-				<PublishingSettings bind:value={publishingOverride} defaults={publishingDefaults}
-					source={albumDefaults ? 'album' : 'Portal'} showSpace={permissionedSupported}
-					showRights={auth.user?.enabled_flags?.includes(COPYRIGHT_PARADIGM_FLAG) ?? false} />
-			</div>
-			{#if copyrightEnabled}
-				<CopyrightRightsPanel enabled={true} showToggle={false} bind:rights={copyrightRights} />
-			{/if}
-
-			<div class="form-group attestation">
-				<label class="checkbox-label">
-					<input
-						type="checkbox"
-						bind:checked={attestedRights}
-						required
-					/>
-					<span class="checkbox-text">
-						I have the right to distribute this content, I am not
-						knowingly infringing on copyright or otherwise stealing
-						from artists.
-					</span>
-				</label>
-				<p class="attestation-note">
-					Content appearing on other platforms (YouTube, SoundCloud,
-					Internet Archive, etc.) does not mean it's licensed for
-					redistribution. You should own the rights or have explicit
-					permission, or the content may be removed to keep plyr.fm in
-					compliance. For any questions or concerns, please DM
-					<a
-						href={profileLink('zzstoatzz.io')}
-						target="_blank"
-						rel="noopener">@zzstoatzz.io</a
-					> :) have a nice day!
-				</p>
-			</div>
-
-			<button
-				type="submit"
-				disabled={!preferences.data || !file ||
-					uploadInFlight ||
-					hasUnresolvedFeaturesInput ||
-					!attestedRights}
-				class="upload-btn"
-				title={hasUnresolvedFeaturesInput
-					? "please select or clear featured artist"
-					: !attestedRights
-						? "please confirm you have distribution rights"
-						: ""}
-			>
-				<span
-					>{visibility === "private" && !permissionedGranted
-						? "approve private media"
-						: "upload track"}</span
+			<div class="mode-toggle">
+				<button
+					type="button"
+					class="mode-btn"
+					class:active={mode === 'track'}
+					onclick={() => setMode('track')}>track</button
 				>
-			</button>
+				<button
+					type="button"
+					class="mode-btn"
+					class:active={mode === 'album'}
+					onclick={() => setMode('album')}>album</button
+				>
+			</div>
 
-		</form>
-		{:else}
-		<AlbumUploadForm
-			{albums}
-			{artistProfile}
-			onAlbumsReload={loadMyAlbums}
-		/>
-		{/if}
+			<UploadSponsorCard revision={sponsorRevision} />
+			<PublishingIntro />
+
+			{#if mode === 'track'}
+				<form onsubmit={handleUpload}>
+					<div class="form-group">
+						<label for="title">track title</label>
+						<input
+							id="title"
+							type="text"
+							bind:value={title}
+							required
+							maxlength="256"
+							placeholder="my awesome song"
+						/>
+					</div>
+
+					<div class="form-group">
+						<label for="file-input" class="label-with-tooltip">
+							audio file
+							<PdsTooltip />
+						</label>
+						<input
+							id="file-input"
+							type="file"
+							accept={FILE_INPUT_ACCEPT}
+							onchange={handleFileChange}
+							required
+						/>
+						<p class="format-hint">
+							supported: {AUDIO_EXTENSIONS.map((e) => e.slice(1)).join(', ')}
+						</p>
+						{#if file}
+							<div class="file-preview">
+								<AudioPreview source={file} transfer={staged} />
+								{#if uploadError}<p role="alert">{uploadError}</p>{/if}
+							</div>
+						{/if}
+					</div>
+
+					<div class="form-group">
+						<label for="description">description (optional)</label>
+						<textarea
+							id="description"
+							bind:value={description}
+							placeholder="liner notes, show notes, credits..."
+							rows="3"
+							maxlength="5000"
+						></textarea>
+						{#if description.length > 0}
+							<div class="char-count">{description.length} / 5000</div>
+						{/if}
+					</div>
+
+					<div class="form-group">
+						<label for="album">album (optional)</label>
+						<AlbumSelect {albums} bind:value={albumTitle} />
+					</div>
+
+					<div class="form-group">
+						<label for="features">featured artists (optional)</label>
+						<HandleSearch
+							bind:selected={featuredArtists}
+							bind:hasUnresolvedInput={hasUnresolvedFeaturesInput}
+							onAdd={(artist) => {
+								featuredArtists = [...featuredArtists, artist];
+							}}
+							onRemove={(did) => {
+								featuredArtists = featuredArtists.filter((a) => a.did !== did);
+							}}
+						/>
+					</div>
+
+					<div class="form-group">
+						<label for="upload-tags">tags (optional)</label>
+						<TagInput
+							tags={uploadTags}
+							onAdd={(tag) => {
+								uploadTags = [...uploadTags, tag];
+							}}
+							onRemove={(tag) => {
+								uploadTags = uploadTags.filter((t) => t !== tag);
+							}}
+							placeholder="type to search tags..."
+						/>
+						<label class="checkbox-label" style="margin-top: 0.75rem;">
+							<input type="checkbox" bind:checked={autoTag} />
+							<span class="checkbox-text">auto-tag with recommended genres</span>
+							<InfoTooltip label="auto-tagging info">
+								ML genre classification suggests tags from your audio.
+								<a href="https://docs.plyr.fm/artists/#auto-tagging" target="_blank" rel="noopener"
+									>learn more</a
+								>
+							</InfoTooltip>
+						</label>
+					</div>
+
+					<div class="form-group">
+						<label for="image-input">artwork (optional)</label>
+						<input id="image-input" type="file" accept="image/*" onchange={handleImageChange} />
+						<p class="format-hint">supported: jpg, png, webp, gif</p>
+						{#if imageFile}
+							<p class="file-info">
+								{imageFile.name} ({(imageFile.size / 1024 / 1024).toFixed(2)} MB)
+							</p>
+						{/if}
+					</div>
+
+					<fieldset class="form-group content-notice-card">
+						<legend>content notice</legend>
+						<label class="content-notice-row checkbox-label">
+							<input type="checkbox" bind:checked={sensitiveAudio} />
+							<span class="access-body">
+								<span class="checkbox-text">contains sexually explicit audio</span>
+								<span class="access-note"
+									>hidden by default; listeners must sign in and choose to hear sensitive audio. the
+									notice travels with this track on ATProto.</span
+								>
+							</span>
+						</label>
+					</fieldset>
+
+					<div class="form-group">
+						<PublishingSettings
+							bind:value={publishingOverride}
+							defaults={publishingDefaults}
+							source={albumDefaults ? 'album' : 'Portal'}
+							showSpace={permissionedSupported}
+							showRights={auth.user?.enabled_flags?.includes(COPYRIGHT_PARADIGM_FLAG) ?? false}
+						/>
+					</div>
+					{#if visibility !== 'private' && needsProtectedAudio(publishing)}
+						<div class="form-group">
+							<UploadStorageNotice
+								protectedAudio
+								spacesSupported={permissionedSupported}
+								bind:accepted={acceptPlyrStorage}
+								disabled={uploadInFlight}
+							/>
+						</div>
+					{/if}
+					{#if copyrightEnabled}
+						<CopyrightRightsPanel enabled={true} showToggle={false} bind:rights={copyrightRights} />
+					{/if}
+
+					<div class="form-group attestation">
+						<label class="checkbox-label">
+							<input type="checkbox" bind:checked={attestedRights} required />
+							<span class="checkbox-text">
+								I have the right to distribute this content, I am not knowingly infringing on
+								copyright or otherwise stealing from artists.
+							</span>
+						</label>
+						<p class="attestation-note">
+							Content appearing on other platforms (YouTube, SoundCloud, Internet Archive, etc.)
+							does not mean it's licensed for redistribution. You should own the rights or have
+							explicit permission, or the content may be removed to keep plyr.fm in compliance. For
+							any questions or concerns, please DM
+							<a href={profileLink('zzstoatzz.io')} target="_blank" rel="noopener">@zzstoatzz.io</a> :)
+							have a nice day!
+						</p>
+					</div>
+
+					<button
+						type="submit"
+						disabled={!preferences.data ||
+							!file ||
+							uploadInFlight ||
+							hasUnresolvedFeaturesInput ||
+							(requiresStorageAcceptance && !acceptPlyrStorage) ||
+							!attestedRights}
+						class="upload-btn"
+						title={hasUnresolvedFeaturesInput
+							? 'please select or clear featured artist'
+							: !attestedRights
+								? 'please confirm you have distribution rights'
+								: ''}
+					>
+						<span>{requiresSpacesApproval ? 'approve PDS storage' : 'upload track'}</span>
+					</button>
+				</form>
+			{:else}
+				<AlbumUploadForm {albums} {artistProfile} onAlbumsReload={loadMyAlbums} />
+			{/if}
 		{/if}
 	</main>
 {/if}
@@ -684,11 +682,7 @@
 	main {
 		max-width: 800px;
 		margin: 0 auto;
-		padding: 0 1rem
-			calc(
-				var(--player-height, 120px) + 2rem +
-					env(safe-area-inset-bottom, 0px)
-			);
+		padding: 0 1rem calc(var(--player-height, 120px) + 2rem + env(safe-area-inset-bottom, 0px));
 	}
 
 	.section-header {
@@ -768,7 +762,7 @@
 		font-size: var(--text-base);
 	}
 
-	input[type="text"] {
+	input[type='text'] {
 		width: 100%;
 		padding: 0.75rem;
 		background: var(--bg-primary);
@@ -780,7 +774,7 @@
 		transition: all 0.2s;
 	}
 
-	input[type="text"]:focus {
+	input[type='text']:focus {
 		outline: none;
 		border-color: var(--accent);
 	}
@@ -804,7 +798,7 @@
 		border-color: var(--accent);
 	}
 
-	input[type="file"] {
+	input[type='file'] {
 		width: 100%;
 		padding: 0.75rem;
 		background: var(--bg-primary);
@@ -861,8 +855,7 @@
 	button:hover:not(:disabled) {
 		background: var(--accent-hover);
 		transform: translateY(-1px);
-		box-shadow: 0 4px 12px
-			color-mix(in srgb, var(--accent) 30%, transparent);
+		box-shadow: 0 4px 12px color-mix(in srgb, var(--accent) 30%, transparent);
 	}
 
 	button:disabled {
@@ -897,7 +890,7 @@
 		margin-bottom: 0;
 	}
 
-	.checkbox-label input[type="checkbox"] {
+	.checkbox-label input[type='checkbox'] {
 		width: 1.25rem;
 		height: 1.25rem;
 		margin-top: 0.1rem;
@@ -951,17 +944,11 @@
 		margin: 0;
 	}
 
-
-
-
-
 	.access-body {
 		display: flex;
 		flex-direction: column;
 		gap: 0.25rem;
 	}
-
-
 
 	.access-note {
 		font-size: var(--text-sm);
@@ -969,15 +956,10 @@
 		line-height: 1.4;
 	}
 
-
-
 	@media (max-width: 768px) {
 		main {
 			padding: 0 0.75rem
-				calc(
-					var(--player-height, 120px) + 1.5rem +
-						env(safe-area-inset-bottom, 0px)
-				);
+				calc(var(--player-height, 120px) + 1.5rem + env(safe-area-inset-bottom, 0px));
 		}
 
 		form {

@@ -1,9 +1,17 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
+	import UploadStorageNotice from './UploadStorageNotice.svelte';
+	import {
+		needsProtectedAudio,
+		needsPlyrStorageAcceptance,
+		needsSpacesApproval
+	} from '$lib/upload-storage';
+	import { stashAlbumUpload, takeAlbumUpload } from '$lib/record-stash';
 	import type { AlbumSummary, Artist } from '$lib/types';
 	import type { TrackEntry } from '$lib/components/TrackEntryCard.svelte';
 	import TrackEntryCard from '$lib/components/TrackEntryCard.svelte';
 	import PdsTooltip from '$lib/components/PdsTooltip.svelte';
-	import { uploader, type UploadResult } from '$lib/uploader.svelte';
+	import { uploader, startPermissionedScopeUpgrade, type UploadResult } from '$lib/uploader.svelte';
 	import { toast } from '$lib/toast.svelte';
 	import { redirectToLogin } from '$lib/utils/auth-redirect';
 	import { preflightAuth } from '$lib/upload-form-stash';
@@ -29,8 +37,13 @@
 
 	let albumTitle = $state('');
 	let publishingOverride = $state<PublishingDefaults | null>(null);
-	const existingAlbum = $derived(albums.find((album) => album.title.toLowerCase() === albumTitle.trim().toLowerCase()));
-	const albumDefaults = $derived(existingAlbum?.publishing_defaults ?? preferences.publishingDefaults);
+	let acceptPlyrStorage = $state(false);
+	const existingAlbum = $derived(
+		albums.find((album) => album.title.toLowerCase() === albumTitle.trim().toLowerCase())
+	);
+	const albumDefaults = $derived(
+		existingAlbum?.publishing_defaults ?? preferences.publishingDefaults
+	);
 	const publishing = $derived(publishingOverride ?? albumDefaults);
 	let coverArtFile = $state<File | null>(null);
 	const initialTrack = createEmptyTrack();
@@ -39,21 +52,64 @@
 	let uploading = $state(false);
 	let expandedTrackId = $state<string | null>(initialTrack.id);
 
+	const permissionedSupported = $derived(auth.user?.permissioned_spaces?.supported ?? false);
+	const permissionedGranted = $derived(auth.user?.permissioned_spaces?.granted ?? false);
+	const protectedAudio = $derived(
+		tracks.some((track) => {
+			const policy = track.publishing ?? publishing;
+			return policy.access.visibility !== 'private' && needsProtectedAudio(policy);
+		})
+	);
+	const requiresStorageAcceptance = $derived(
+		tracks.some((track) =>
+			needsPlyrStorageAcceptance(track.publishing ?? publishing, permissionedSupported)
+		)
+	);
+	const requiresSpacesApproval = $derived(
+		tracks.some((track) =>
+			needsSpacesApproval(
+				track.publishing ?? publishing,
+				permissionedSupported,
+				permissionedGranted
+			)
+		)
+	);
+
+	onMount(async () => {
+		const draft = await takeAlbumUpload();
+		if (!draft) return;
+		albumTitle = draft.albumTitle;
+		publishingOverride = draft.publishing;
+		coverArtFile = draft.coverArtFile;
+		tracks = draft.tracks;
+		attestedRights = draft.attestedRights;
+		expandedTrackId = tracks[0]?.id ?? null;
+		toast.info('album draft restored — ready to upload');
+	});
+
 	let bulkFileInputEl = $state<HTMLInputElement | null>(null);
 
 	let albumTitleConflict = $derived(
 		albumTitle.trim().length > 0 &&
-			albums.some((a) => a.title.toLowerCase() === albumTitle.trim().toLowerCase()),
+			albums.some((a) => a.title.toLowerCase() === albumTitle.trim().toLowerCase())
 	);
 
 	let hasUnresolvedFeatures = $derived(tracks.some((t) => t.hasUnresolvedFeaturesInput));
 
 	let canSubmit = $derived(
-		albumTitle.trim().length > 0 && preferences.data !== null && publishing.access.visibility !== 'private' &&
-			tracks.every((t) => t.file !== null && t.title.trim().length > 0) &&
+		albumTitle.trim().length > 0 &&
+			preferences.data !== null &&
+			publishing.access.visibility !== 'private' &&
+			tracks.every(
+				(t) =>
+					t.file !== null &&
+					t.title.trim().length > 0 &&
+					(t.publishing ?? publishing).access.visibility !== 'private'
+			) &&
+			(!requiresStorageAcceptance || acceptPlyrStorage) &&
 			attestedRights &&
 			!hasUnresolvedFeatures &&
-			!uploading,
+			!uploading
 	);
 
 	function createEmptyTrack(): TrackEntry {
@@ -69,7 +125,7 @@
 			sensitiveAudio: false,
 			publishing: null,
 			status: 'pending',
-			error: null,
+			error: null
 		};
 	}
 
@@ -126,7 +182,9 @@
 
 			const sizeMB = file.size / (1024 * 1024);
 			if (sizeMB > config.max_upload_size_mb) {
-				skipped.push(`${file.name} (${sizeMB.toFixed(1)}MB exceeds ${config.max_upload_size_mb}MB limit)`);
+				skipped.push(
+					`${file.name} (${sizeMB.toFixed(1)}MB exceeds ${config.max_upload_size_mb}MB limit)`
+				);
 				continue;
 			}
 
@@ -142,7 +200,7 @@
 				sensitiveAudio: false,
 				publishing: null,
 				status: 'pending',
-				error: null,
+				error: null
 			};
 			added.push(entry);
 		}
@@ -158,7 +216,9 @@
 		}
 
 		if (skipped.length > 0) {
-			toast.warning(`skipped ${skipped.length} file${skipped.length > 1 ? 's' : ''}: ${skipped.join('; ')}`);
+			toast.warning(
+				`skipped ${skipped.length} file${skipped.length > 1 ? 's' : ''}: ${skipped.join('; ')}`
+			);
 		}
 	}
 
@@ -192,7 +252,9 @@
 			const config = await getServerConfig();
 			const sizeMB = file.size / (1024 * 1024);
 			if (sizeMB > config.max_upload_size_mb) {
-				toast.error(`audio file too large (${sizeMB.toFixed(1)}MB). max: ${config.max_upload_size_mb}MB`);
+				toast.error(
+					`audio file too large (${sizeMB.toFixed(1)}MB). max: ${config.max_upload_size_mb}MB`
+				);
 				return;
 			}
 		} catch (_e) {
@@ -219,7 +281,9 @@
 				const config = await getServerConfig();
 				const sizeMB = selected.size / (1024 * 1024);
 				if (sizeMB > config.max_image_size_mb) {
-					toast.error(`image too large (${sizeMB.toFixed(1)}MB). max: ${config.max_image_size_mb}MB`);
+					toast.error(
+						`image too large (${sizeMB.toFixed(1)}MB). max: ${config.max_image_size_mb}MB`
+					);
 					target.value = '';
 					coverArtFile = null;
 					return;
@@ -263,6 +327,22 @@
 			return;
 		}
 
+		if (requiresSpacesApproval) {
+			const saved = await stashAlbumUpload({
+				albumTitle,
+				publishing: $state.snapshot(publishing),
+				coverArtFile,
+				tracks: $state.snapshot(tracks),
+				attestedRights
+			});
+			if (!saved) {
+				toast.error("couldn't save your album draft");
+				return;
+			}
+			await startPermissionedScopeUpgrade('/upload?mode=album');
+			return;
+		}
+
 		uploading = true;
 		let completed = 0;
 		let failed = 0;
@@ -279,8 +359,8 @@
 				credentials: 'include',
 				body: JSON.stringify({
 					title: albumTitle.trim(),
-					publishing_defaults: publishing,
-				}),
+					publishing_defaults: publishing
+				})
 			});
 			if (!createResponse.ok) {
 				const err = await createResponse.json().catch(() => ({ detail: 'unknown error' }));
@@ -291,7 +371,7 @@
 			albumSlug = created.slug;
 		} catch (err) {
 			toast.error(
-				err instanceof Error ? `failed to create album: ${err.message}` : 'failed to create album',
+				err instanceof Error ? `failed to create album: ${err.message}` : 'failed to create album'
 			);
 			uploading = false;
 			return;
@@ -306,7 +386,7 @@
 				const coverResponse = await fetch(`${API_URL}/albums/${albumId}/cover`, {
 					method: 'POST',
 					credentials: 'include',
-					body: coverForm,
+					body: coverForm
 				});
 				if (!coverResponse.ok) {
 					toast.warning('cover art failed to upload — you can add it later from the album page');
@@ -372,12 +452,14 @@
 							tracks[i] = { ...tracks[i], status: 'failed', error };
 							failed++;
 							safeResolve();
-						},
+						}
 					},
 					track.title,
 					albumId ?? undefined,
 					undefined, // copyright
 					track.sensitiveAudio ? ['sexual'] : [],
+					acceptPlyrStorage &&
+						needsPlyrStorageAcceptance(track.publishing ?? publishing, permissionedSupported)
 				);
 			});
 		});
@@ -396,16 +478,16 @@
 					method: 'POST',
 					headers: { 'Content-Type': 'application/json' },
 					credentials: 'include',
-					body: JSON.stringify({ track_ids: orderedTrackIds }),
+					body: JSON.stringify({ track_ids: orderedTrackIds })
 				});
 				if (!finalizeResponse.ok) {
 					toast.warning(
-						'tracks uploaded but failed to save order — you can reorder from the album page',
+						'tracks uploaded but failed to save order — you can reorder from the album page'
 					);
 				}
 			} catch {
 				toast.warning(
-					'tracks uploaded but failed to save order — you can reorder from the album page',
+					'tracks uploaded but failed to save order — you can reorder from the album page'
 				);
 			}
 		}
@@ -425,9 +507,9 @@
 				albumSlug && artistHandle
 					? {
 							label: 'view album',
-							href: `/u/${artistHandle}/album/${albumSlug}`,
+							href: `/u/${artistHandle}/album/${albumSlug}`
 						}
-					: undefined,
+					: undefined
 			);
 		}
 
@@ -454,7 +536,9 @@
 			disabled={uploading}
 		/>
 		{#if albumTitleConflict}
-			<p class="title-warning">an album with this title already exists — tracks will be added to it</p>
+			<p class="title-warning">
+				an album with this title already exists — tracks will be added to it
+			</p>
 		{/if}
 	</div>
 
@@ -478,11 +562,29 @@
 		{/if}
 	</div>
 
-	<PublishingSettings bind:value={publishingOverride} defaults={albumDefaults} scope="album"
+	<PublishingSettings
+		bind:value={publishingOverride}
+		defaults={albumDefaults}
+		scope="album"
 		source={existingAlbum ? 'existing album' : 'Portal'}
-		showRights={auth.user?.enabled_flags?.includes(COPYRIGHT_PARADIGM_FLAG) ?? false} />
+		showRights={auth.user?.enabled_flags?.includes(COPYRIGHT_PARADIGM_FLAG) ?? false}
+	/>
 
-	{#if publishing.access.visibility === 'private'}<p class="title-warning">private album metadata is not supported yet. choose an audience with public album details to continue.</p>{/if}
+	{#if protectedAudio}
+		<div class="storage-choice">
+			<UploadStorageNotice
+				{protectedAudio}
+				spacesSupported={permissionedSupported}
+				bind:accepted={acceptPlyrStorage}
+				disabled={uploading}
+			/>
+		</div>
+	{/if}
+
+	{#if publishing.access.visibility === 'private'}<p class="title-warning">
+			private album metadata is not supported yet. choose an audience with public album details to
+			continue.
+		</p>{/if}
 
 	<div class="tracks-section">
 		<span class="tracks-label">tracks</span>
@@ -529,29 +631,19 @@
 
 	<div class="form-group attestation">
 		<label class="checkbox-label">
-			<input
-				type="checkbox"
-				bind:checked={attestedRights}
-				required
-				disabled={uploading}
-			/>
+			<input type="checkbox" bind:checked={attestedRights} required disabled={uploading} />
 			<span class="checkbox-text">
-				I have the right to distribute this content, I am not
-				knowingly infringing on copyright or otherwise stealing
-				from artists.
+				I have the right to distribute this content, I am not knowingly infringing on copyright or
+				otherwise stealing from artists.
 			</span>
 		</label>
 		<p class="attestation-note">
-			Content appearing on other platforms (YouTube, SoundCloud,
-			Internet Archive, etc.) does not mean it's licensed for
-			redistribution. You should own the rights or have explicit
-			permission, or the content may be removed to keep plyr.fm in
-			compliance. For any questions or concerns, please DM
-			<a
-				href={profileLink('zzstoatzz.io')}
-				target="_blank"
-				rel="noopener">@zzstoatzz.io</a
-			> :) have a nice day!
+			Content appearing on other platforms (YouTube, SoundCloud, Internet Archive, etc.) does not
+			mean it's licensed for redistribution. You should own the rights or have explicit permission,
+			or the content may be removed to keep plyr.fm in compliance. For any questions or concerns,
+			please DM
+			<a href={profileLink('zzstoatzz.io')} target="_blank" rel="noopener">@zzstoatzz.io</a> :) have a
+			nice day!
 		</p>
 	</div>
 
@@ -571,6 +663,8 @@
 	>
 		{#if uploading}
 			uploading...
+		{:else if requiresSpacesApproval}
+			approve PDS storage
 		{:else}
 			upload album ({tracks.length} track{tracks.length > 1 ? 's' : ''})
 		{/if}
@@ -657,6 +751,10 @@
 		margin-top: 0.375rem;
 		font-size: var(--text-sm);
 		color: var(--warning, #e6a817);
+	}
+
+	.storage-choice {
+		margin: 1.5rem 0;
 	}
 
 	.tracks-section {

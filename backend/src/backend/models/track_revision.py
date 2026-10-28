@@ -19,6 +19,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from backend.models.database import Base
@@ -76,6 +77,10 @@ class TrackRevision(Base):
     # PDS blob ref (when audio_storage in {"pds", "both"})
     pds_blob_cid: Mapped[str | None] = mapped_column(String, nullable=True)
     pds_blob_size: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    protected_audio: Mapped[dict | None] = mapped_column(
+        JSONB(none_as_null=True), nullable=True
+    )
 
     # --- display + restore-safety helpers ---
 

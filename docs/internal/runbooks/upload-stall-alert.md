@@ -25,6 +25,22 @@ alert proves those jobs stopped progressing, not that the whole pipeline is down
 5. Use the full job IDs from the alert to inspect the rows. Preserve the failed
    state and cleanup hints until storage ownership is understood.
 
+## Encoding waits
+
+The transcoder finishes encoding before sending response headers. The client
+heartbeats the job every five seconds for the entire HTTP request, including
+uploading input, waiting for headers, and reading output. The heartbeat stops
+when the request completes, times out, or is cancelled; HTTP timeouts still
+bound a stalled service. A heartbeat failure is logged and retried on the next
+tick.
+
+On October 28, renderg.host retried five uploads after R2 errors. Four distinct
+tracks published; Creative Space Podcast did not. Two retry jobs were reaped
+in `transcode` while their ffmpeg processes were still alive. The prior client
+only heartbeated while receiving output, leaving the encoding wait uncovered.
+This fix prevents that premature failure; it does not restore failed jobs or
+explain the unusually slow encodes.
+
 ## ownership boundaries
 
 - `processing` and pre-worker `pending` jobs use the ten-minute progress budget.

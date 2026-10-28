@@ -10,11 +10,20 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend._internal import Session, require_artist_profile, require_auth
 from backend.api.tracks.publishing import apply_publishing, run_publishing_change
+from backend.config import settings
 from backend.main import app
 from backend.models import Album, Artist, Track, get_db
 from backend.models.track_revision import TrackRevision
 from backend.utilities.database import db_session as open_db_session
 from backend.utilities.publishing import PublishingDefaults, PublishingPolicy
+
+
+@pytest.fixture(autouse=True)
+def pds_without_spaces(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "backend._internal.atproto.spaces.capability.pds_supports_spaces",
+        AsyncMock(return_value=False),
+    )
 
 
 @pytest.fixture
@@ -43,47 +52,83 @@ async def published(db_session: AsyncSession) -> tuple[Track, Session]:
     return track, session
 
 
-@pytest.mark.parametrize("rendition_id", [None, "master", "playback"])
-async def test_restriction_requires_separate_rendition(
-    db_session: AsyncSession, published: tuple[Track, Session], rendition_id: str | None
+async def test_unsupported_protected_conversion_preserves_public_source(
+    db_session: AsyncSession, published: tuple[Track, Session]
 ) -> None:
     track, session = published
     requested = PublishingDefaults(access=PublishingPolicy(downloads="off"))
     with (
         patch(
-            "backend.api.tracks.publishing.storage.copy_audio_to_private",
-            new_callable=AsyncMock,
+            "backend.api.tracks.publishing.storage.copy_audio_to_private", AsyncMock()
         ) as copy,
         patch(
-            "backend.api.tracks.publishing._transcode_audio", new_callable=AsyncMock
+            "backend.api.tracks.publishing._transcode_audio", AsyncMock()
+        ) as transcode,
+        pytest.raises(ValueError, match="PDS needs Spaces"),
+    ):
+        await apply_publishing(track.id, requested, "track", session)
+    copy.assert_not_awaited()
+    transcode.assert_not_awaited()
+    await db_session.refresh(track)
+    assert track.file_id == "master"
+    assert track.download_policy == "open"
+    assert track.audio_storage == "r2"
+    assert track.r2_url == "https://audio.example/master.flac"
+    assert track.protected_audio is None
+    assert (
+        await db_session.scalar(
+            select(TrackRevision.id).where(TrackRevision.track_id == track.id)
+        )
+        is None
+    )
+
+
+async def test_supported_protected_conversion_keeps_source_without_encoding(
+    db_session: AsyncSession, published: tuple[Track, Session]
+) -> None:
+    track, session = published
+    requested = PublishingDefaults(access=PublishingPolicy(downloads="off"))
+    protected = {
+        "record_uri": f"at://{session.did}/space/{settings.atproto.private_media_space_type}/playback/{session.did}/{settings.atproto.track_collection}/source",
+        "record_cid": "source-cid",
+        "audio_blob": {
+            "$type": "blob",
+            "ref": {"$link": "source-blob"},
+            "mimeType": "audio/flac",
+            "size": 5,
+        },
+    }
+    with (
+        patch(
+            "backend.api.tracks.publishing.protected_storage_choice",
+            AsyncMock(return_value=True),
+        ),
+        patch(
+            "backend.api.tracks.publishing.storage.copy_audio_to_private", AsyncMock()
+        ) as copy,
+        patch(
+            "backend.api.tracks.publishing.publish_protected_audio",
+            AsyncMock(return_value=protected),
+        ),
+        patch(
+            "backend.api.tracks.publishing._transcode_audio", AsyncMock()
         ) as transcode,
     ):
-        transcode.return_value = (
-            SimpleNamespace(transcoded_file_id=rendition_id) if rendition_id else None
-        )
-        if rendition_id == "playback":
-            await apply_publishing(track.id, requested, "track", session)
-        else:
-            with pytest.raises(ValueError, match="separate playback"):
-                await apply_publishing(track.id, requested, "track", session)
-        copy.assert_awaited_once_with("master", "flac")
+        await apply_publishing(track.id, requested, "track", session)
+    copy.assert_awaited_once_with("master", "flac")
+    transcode.assert_not_awaited()
     await db_session.refresh(track)
-    if rendition_id == "playback":
-        assert track.file_id == "playback"
-        assert track.original_file_id == "master"
-        assert track.audio_storage == "r2_private"
-        assert track.publishing == requested
-        assert track.policy_origin == "track"
-        revision = (
-            await db_session.execute(
-                select(TrackRevision).where(TrackRevision.track_id == track.id)
-            )
-        ).scalar_one()
-        assert revision.file_id == "master"
-    else:
-        assert track.file_id == "master"
-        assert track.download_policy == "open"
-        assert track.audio_storage == "r2"
+    assert track.file_id == "master"
+    assert track.protected_audio == protected
+    assert track.pds_blob_cid is None
+    assert track.download_policy == "off"
+    assert track.audio_storage == "r2_private"
+    revision = await db_session.scalar(
+        select(TrackRevision).where(TrackRevision.track_id == track.id)
+    )
+    assert revision is not None
+    assert revision.file_id == "master"
+    assert revision.protected_audio is None
 
 
 async def test_space_boundary_is_not_rewritten(

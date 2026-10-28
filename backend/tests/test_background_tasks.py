@@ -164,6 +164,7 @@ async def test_process_export_downloads_concurrently() -> None:
         track.file_type = "mp3"
         track.original_file_id = None
         track.original_file_type = None
+        track.protected_audio = None
         # likewise null the cached public URL: with none set, the key comes
         # from file_id/file_type (an ingested row would resolve it from the
         # URL instead — see AudioKey.for_track)

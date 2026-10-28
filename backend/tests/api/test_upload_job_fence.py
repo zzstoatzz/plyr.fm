@@ -209,7 +209,7 @@ async def test_worker_that_wakes_after_the_reaper_cannot_publish(
     mocks.create_record.assert_not_awaited()
     assert mocks.discard.await_args_list == [
         ((FILE_ID, "mp3"), {"gated": False}),
-        ((FILE_ID, "mp3"), {}),
+        ((FILE_ID, "mp3"), {"gated": False}),
     ]
 
     await db_session.refresh(job)

@@ -13,12 +13,17 @@ from sqlalchemy import delete, select
 from sqlalchemy.orm import joinedload
 
 from backend._internal.atproto.client import pds_blob_url
+from backend._internal.atproto.spaces.client import SpaceAccessError
+from backend._internal.atproto.spaces.protected_audio import mirror_protected_audio
 from backend._internal.tasks.copyright import schedule_copyright_scan
 from backend._internal.tasks.ml import (
     schedule_embedding_generation,
     schedule_genre_classification,
 )
-from backend._internal.tasks.pds_mirror import schedule_pds_blob_mirror
+from backend._internal.tasks.pds_mirror import (
+    schedule_pds_blob_mirror,
+    schedule_protected_audio_mirror,
+)
 from backend.config import settings
 from backend.models import Artist, CopyrightScan, Track
 from backend.storage import storage
@@ -41,6 +46,25 @@ async def invalidate_tracks_discovery_cache() -> None:
 
 async def resolve_audio_url(track_id: int) -> str | None:
     """resolve a fetchable audio URL for a track (R2 or PDS blob)."""
+    async with db_session() as db:
+        protected = await db.scalar(
+            select(Track.protected_audio).where(Track.id == track_id)
+        )
+    if protected:
+        try:
+            if not await mirror_protected_audio(track_id):
+                return None
+        except SpaceAccessError:
+            logger.exception(
+                "protected audio verification refused", extra={"track_id": track_id}
+            )
+            return None
+        except Exception:
+            logger.exception(
+                "protected audio mirror unavailable", extra={"track_id": track_id}
+            )
+            await schedule_protected_audio_mirror(track_id)
+            return None
     async with db_session() as db:
         result = await db.execute(
             select(
@@ -84,6 +108,11 @@ async def resolve_audio_url(track_id: int) -> str | None:
 async def _has_own_audio_object(track_id: int) -> bool:
     """whether plyr holds its own copy of the track's audio (it is mirrored)."""
     async with db_session() as db:
+        protected = await db.scalar(
+            select(Track.protected_audio).where(Track.id == track_id)
+        )
+        if protected:
+            return protected.get("mirror_verified") is True
         return bool(
             await db.scalar(
                 select(

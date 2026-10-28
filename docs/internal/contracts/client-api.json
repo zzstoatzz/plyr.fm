@@ -5578,6 +5578,11 @@
               }
             ],
             "title": "Image"
+          },
+          "accept_plyr_storage": {
+            "type": "boolean",
+            "title": "Accept Plyr Storage",
+            "default": false
           }
         },
         "type": "object",
@@ -5879,6 +5884,11 @@
               }
             ],
             "title": "Image"
+          },
+          "accept_plyr_storage": {
+            "type": "boolean",
+            "title": "Accept Plyr Storage",
+            "default": false
           }
         },
         "type": "object",
@@ -7135,6 +7145,17 @@
           "was_gated": {
             "type": "boolean",
             "title": "Was Gated"
+          },
+          "audio_space": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Audio Space"
           }
         },
         "type": "object",
@@ -7902,6 +7923,17 @@
             "type": "array",
             "uniqueItems": true,
             "title": "Labels"
+          },
+          "audio_space": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Audio Space"
           }
         },
         "type": "object",

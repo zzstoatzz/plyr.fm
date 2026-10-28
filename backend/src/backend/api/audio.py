@@ -1,5 +1,8 @@
 """audio streaming endpoint."""
 
+from typing import Any
+from urllib.parse import quote
+
 import httpx
 import logfire
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
@@ -9,7 +12,15 @@ from sqlalchemy import or_, select
 
 from backend._internal import Session, get_optional_session, validate_supporter
 from backend._internal.atproto.client import pds_blob_url
-from backend._internal.atproto.spaces.client import SpaceAccessError, open_space_blob
+from backend._internal.atproto.spaces.client import (
+    SpaceAccessError,
+    get_space_credential,
+    open_space_blob,
+)
+from backend._internal.atproto.spaces.protected_audio import (
+    open_protected_blob,
+    protected_record_location,
+)
 from backend._internal.private_access import can_access
 from backend.config import settings
 from backend.models import Artist, Track, UserPreferences
@@ -78,6 +89,7 @@ async def stream_audio(
     async with db_session() as db:
         result = await db.execute(
             select(
+                Track.id,
                 Track.file_id,
                 Track.r2_url,
                 Track.file_type,
@@ -89,6 +101,7 @@ async def stream_audio(
                 Track.pds_blob_cid,
                 Track.is_private,
                 Track.space_uri,
+                Track.protected_audio,
             )
             .where(or_(Track.file_id == file_id, Track.original_file_id == file_id))
             .order_by(Track.r2_url.is_not(None).desc(), Track.created_at.desc())
@@ -100,6 +113,7 @@ async def stream_audio(
             raise HTTPException(status_code=404, detail="audio file not found")
 
         (
+            track_id,
             track_file_id,
             r2_url,
             file_type,
@@ -111,6 +125,7 @@ async def stream_audio(
             pds_blob_cid,
             is_private,
             space_uri,
+            protected_audio,
         ) = track_data
 
     # private media lives in a permissioned space — proxy the bytes through the
@@ -125,6 +140,25 @@ async def stream_audio(
             pds_blob_cid=pds_blob_cid,
             request=request,
             is_head_request=is_head_request,
+        )
+
+    if protected_audio:
+        if support_gate is not None:
+            await _check_gate_access(support_gate, session, artist_did)
+        if file_id == original_file_id and file_id != track_file_id:
+            await _authorize_original(track_id, session)
+            return await _serve_protected_audio(
+                protected_audio,
+                request=request,
+                original=True,
+                is_head=is_head_request,
+            )
+        return await _serve_protected_audio(
+            protected_audio,
+            request=request,
+            file_id=track_file_id,
+            file_type=file_type,
+            is_head=is_head_request,
         )
 
     # determine if we're serving the original lossless file
@@ -296,7 +330,7 @@ async def _proxy_audio(url: str, request: Request) -> StreamingResponse:
 async def download_audio(
     file_id: str,
     session: Session | None = Depends(get_optional_session),
-) -> RedirectResponse:
+) -> Response:
     """download a track's audio as an attachment named `artist - title.ext`.
 
     resolves the track override before the artist policy and signs the source
@@ -323,6 +357,7 @@ async def download_audio(
                 Artist.display_name,
                 Track.download_policy,
                 Track.extra,
+                Track.protected_audio,
                 UserPreferences.support_url,
             )
             .join(Artist, Artist.did == Track.artist_did)
@@ -336,6 +371,38 @@ async def download_audio(
         if not row:
             raise HTTPException(status_code=404, detail="audio file not found")
 
+    await _authorize_download(row, session)
+    if row.protected_audio:
+        return await _serve_protected_audio(
+            row.protected_audio,
+            original=True,
+            filename=download_filename(
+                row.display_name, row.title, row.original_file_type or row.file_type
+            ),
+        )
+
+    key = download_key(
+        file_id=row.file_id,
+        file_type=row.file_type,
+        original_file_id=row.original_file_id,
+        original_file_type=row.original_file_type,
+        r2_url=row.r2_url,
+        audio_storage=row.audio_storage,
+    )
+    if key is None:
+        # we hold no object to serve as a file (the track is unmirrored)
+        raise HTTPException(status_code=404, detail="no downloadable file")
+
+    filename = download_filename(row.display_name, row.title, key.extension)
+    url = await storage.generate_download_url(
+        key=key.key,
+        filename=filename,
+        private=row.audio_storage == "r2_private" or row.support_gate is not None,
+    )
+    return RedirectResponse(url=url)
+
+
+async def _authorize_download(row: Any, session: Session | None) -> None:
     policy = row.download_policy
     viewer_is_artist = session is not None and session.did == row.artist_did
     viewer_is_supporter = False
@@ -377,25 +444,13 @@ async def download_audio(
                 headers={"X-Support-Required": "true"},
             )
 
-    key = download_key(
-        file_id=row.file_id,
-        file_type=row.file_type,
-        original_file_id=row.original_file_id,
-        original_file_type=row.original_file_type,
-        r2_url=row.r2_url,
-        audio_storage=row.audio_storage,
-    )
-    if key is None:
-        # we hold no object to serve as a file (the track is unmirrored)
-        raise HTTPException(status_code=404, detail="no downloadable file")
 
-    filename = download_filename(row.display_name, row.title, key.extension)
-    url = await storage.generate_download_url(
-        key=key.key,
-        filename=filename,
-        private=row.audio_storage == "r2_private" or row.support_gate is not None,
-    )
-    return RedirectResponse(url=url)
+async def _authorize_original(track_id: int, session: Session | None) -> None:
+    async with db_session() as db:
+        track = await db.get(Track, track_id)
+        if track is None:
+            raise HTTPException(status_code=404, detail="audio file not found")
+        await _authorize_download(track, session)
 
 
 @router.get("/{file_id}/url")
@@ -413,6 +468,7 @@ async def get_audio_url(
     async with db_session() as db:
         result = await db.execute(
             select(
+                Track.id,
                 Track.file_id,
                 Track.r2_url,
                 Track.file_type,
@@ -424,6 +480,7 @@ async def get_audio_url(
                 Track.pds_blob_cid,
                 Track.is_private,
                 Track.space_uri,
+                Track.protected_audio,
             )
             .where(or_(Track.file_id == file_id, Track.original_file_id == file_id))
             .order_by(Track.r2_url.is_not(None).desc(), Track.created_at.desc())
@@ -435,6 +492,7 @@ async def get_audio_url(
             raise HTTPException(status_code=404, detail="audio file not found")
 
         (
+            track_id,
             track_file_id,
             r2_url,
             file_type,
@@ -446,6 +504,7 @@ async def get_audio_url(
             pds_blob_cid,
             is_private,
             _space_uri,
+            protected_audio,
         ) = track_data
 
     # private media is proxied through the permissioned-space credential path,
@@ -459,6 +518,16 @@ async def get_audio_url(
             url=f"{backend_url}/audio/{file_id}",
             file_id=file_id,
             file_type=file_type,
+        )
+
+    if protected_audio:
+        if support_gate is not None:
+            await _check_gate_access(support_gate, session, artist_did)
+        if file_id == original_file_id and file_id != track_file_id:
+            await _authorize_original(track_id, session)
+        backend_url = settings.atproto.redirect_uri.rsplit("/", 2)[0]
+        return AudioUrlResponse(
+            url=f"{backend_url}/audio/{file_id}", file_id=file_id, file_type=file_type
         )
 
     # determine if we're serving the original lossless file
@@ -593,3 +662,77 @@ async def _handle_private_audio(
             await cm.__aexit__(None, None, None)
 
     return StreamingResponse(body(), status_code=resp.status_code, headers=headers)
+
+
+async def _serve_protected_audio(
+    audio: dict,
+    *,
+    request: Request | None = None,
+    file_id: str | None = None,
+    file_type: str | None = None,
+    is_head: bool = False,
+    original: bool = False,
+    filename: str | None = None,
+) -> Response:
+    try:
+        space, _ = protected_record_location(audio["record_uri"])
+        await get_space_credential(None, space)
+    except SpaceAccessError as exc:
+        raise HTTPException(
+            status_code=403, detail="audio access refused by the PDS"
+        ) from exc
+    if file_id and file_type and not original and audio.get("mirror_verified") is True:
+        try:
+            size = await storage.head_file(file_id, file_type, private=True)
+        except Exception:
+            size = None
+            logfire.warn("protected playback mirror unavailable")
+        if size is not None:
+            if is_head:
+                return Response(
+                    status_code=200,
+                    headers={"content-length": str(size), "accept-ranges": "bytes"},
+                )
+            url = await storage.generate_presigned_url(
+                file_id=file_id, extension=file_type
+            )
+            if request is not None and _wants_cors(request):
+                return await _proxy_audio(url, request)
+            return RedirectResponse(url=url)
+    cm = open_protected_blob(
+        audio,
+        original=original,
+        range_header=request.headers.get("range") if request is not None else None,
+    )
+    try:
+        response = await cm.__aenter__()
+    except SpaceAccessError as exc:
+        raise HTTPException(
+            status_code=403, detail="audio access refused by the PDS"
+        ) from exc
+    headers = _relay_headers(response)
+    blob = audio.get("original_blob") if original else None
+    media_type = (blob or audio["audio_blob"]).get("mimeType", "")
+    headers["content-type"] = (
+        media_type
+        if isinstance(media_type, str) and media_type.startswith("audio/")
+        else "application/octet-stream"
+    )
+    headers["x-content-type-options"] = "nosniff"
+    if filename:
+        headers["content-disposition"] = (
+            f"attachment; filename*=UTF-8''{quote(filename)}"
+        )
+    if is_head:
+        status = response.status_code
+        await cm.__aexit__(None, None, None)
+        return Response(status_code=status, headers=headers)
+
+    async def body():
+        try:
+            async for chunk in response.aiter_bytes():
+                yield chunk
+        finally:
+            await cm.__aexit__(None, None, None)
+
+    return StreamingResponse(body(), status_code=response.status_code, headers=headers)

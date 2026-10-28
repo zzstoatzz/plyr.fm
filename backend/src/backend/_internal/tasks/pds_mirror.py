@@ -24,13 +24,16 @@ mirror. an unverified event can cause a failed mirror, never a wrong one.
 import base64
 import hashlib
 import logging
+from datetime import timedelta
 from io import BytesIO
 
 import logfire
 from atproto_oauth.security import get_hardened_async_client, is_safe_url
+from docket import ExponentialRetry
 from sqlalchemy import select
 
 from backend._internal.atproto.client import pds_blob_url
+from backend._internal.atproto.spaces.protected_audio import mirror_protected_audio
 from backend._internal.background import get_docket
 from backend._internal.upload_policy import upload_pause_message
 from backend.config import settings
@@ -201,3 +204,29 @@ async def schedule_pds_blob_mirror(track_id: int) -> None:
     docket = get_docket()
     await docket.add(mirror_pds_blob)(track_id)
     logfire.info("scheduled pds blob mirror", track_id=track_id)
+
+
+_PROTECTED_MIRROR_RETRY = ExponentialRetry(
+    attempts=4, minimum_delay=timedelta(seconds=30), maximum_delay=timedelta(minutes=5)
+)
+
+
+async def mirror_protected_track_audio(
+    track_id: int,
+    retry: ExponentialRetry = _PROTECTED_MIRROR_RETRY,
+) -> None:
+    if not await mirror_protected_audio(track_id):
+        return
+    from backend._internal.tasks.hooks import run_post_track_create_hooks
+
+    await run_post_track_create_hooks(
+        track_id,
+        skip_notification=True,
+        skip_copyright=settings.observability.environment == "staging",
+    )
+
+
+async def schedule_protected_audio_mirror(track_id: int) -> None:
+    await get_docket().add(
+        mirror_protected_track_audio, key=f"protected-audio-mirror:{track_id}"
+    )(track_id)

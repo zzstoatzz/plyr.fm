@@ -6,6 +6,7 @@
 	import { toast } from '$lib/toast.svelte';
 	import { uploader, type AudioReplacementStatus } from '$lib/uploader.svelte';
 	import { isOptimizing } from '$lib/utils/track-audio';
+	import { hasPdsAudio } from '$lib/pds-audio';
 	import type { Track } from '$lib/types';
 	interface Props {
 		track: Track;
@@ -206,8 +207,10 @@
 							track.original_file_type !== track.file_type
 								? ` (transcoded from ${track.original_file_type})`
 								: ''}{isOptimizing(track)
-								? ' · optimizing — mp3 will land on your PDS shortly'
-								: track.audio_storage === 'both' || track.audio_storage === 'pds'
+								? hasPdsAudio(track)
+									? ' · stored on your PDS · preparing playback'
+									: ' · preparing playback'
+								: hasPdsAudio(track)
 									? ' · stored on your PDS'
 									: ' · stored on plyr.fm'}
 						</span>

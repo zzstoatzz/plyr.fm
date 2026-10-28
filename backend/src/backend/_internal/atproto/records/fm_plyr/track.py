@@ -39,6 +39,8 @@ async def build_track_record(
     self_labels: list[str] | None = None,
     created_at: datetime | None = None,
     tags: list[str] | None = None,
+    audio_space: str | None = None,
+    download_policy: str | None = None,
 ) -> dict[str, Any]:
     """Build a track record dict for ATProto.
 
@@ -97,8 +99,14 @@ async def build_track_record(
         record["description"] = description
     if labels := build_self_labels(self_labels or []):
         record["labels"] = labels
+    if audio_blob and audio_space:
+        raise ValueError("protected audio must not have a public blob reference")
     if audio_blob:
         record["audioBlob"] = audio_blob
+    if audio_space:
+        record["audioSpace"] = audio_space
+    if download_policy is not None:
+        record["downloadPolicy"] = download_policy
 
     if tags is not None:
         record["tags"] = record_tags({"tags": tags})
@@ -123,6 +131,8 @@ async def create_track_record(
     rkey: str | None = None,
     created_at: datetime | None = None,
     tags: list[str] | None = None,
+    audio_space: str | None = None,
+    download_policy: str | None = None,
 ) -> tuple[str, str]:
     """Create a track record on the user's PDS using the configured collection.
 
@@ -170,6 +180,8 @@ async def create_track_record(
         self_labels=self_labels,
         created_at=created_at,
         tags=tags,
+        audio_space=audio_space,
+        download_policy=download_policy,
     )
 
     payload: dict[str, Any] = {
@@ -310,6 +322,8 @@ async def patch_track_record(
             "labels",
             "audioBlob",
             "audioUrl",
+            "audioSpace",
+            "downloadPolicy",
         ):
             value.pop(field, None)
     for field in remove_fields or ():
@@ -380,7 +394,7 @@ def audio_blob_ref(track: Track) -> BlobRef | None:
     blob the moment no record references it, so dropping the field here is
     what deletes the audio from the user's account.
     """
-    if not track.pds_blob_cid:
+    if track.protected_audio or not track.pds_blob_cid:
         return None
     return {
         "$type": "blob",
@@ -433,6 +447,8 @@ async def rebuild_track_pds_record(
         image_url=image_url_override or await track.get_image_url(),
         support_gate=track.support_gate,
         audio_blob=audio_blob_ref(track),
+        audio_space=(track.protected_audio or {}).get("record_uri"),
+        download_policy=track.download_policy,
         description=track.description,
         self_labels=track.self_labels,
         tags=tags,

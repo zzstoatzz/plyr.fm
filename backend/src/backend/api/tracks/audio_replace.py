@@ -29,7 +29,9 @@ from pathlib import Path
 from typing import Annotated
 from urllib.parse import urljoin
 
+import aiofiles
 import logfire
+from anyio import to_thread
 from docket import ConcurrencyLimit
 from fastapi import (
     Depends,
@@ -46,6 +48,10 @@ from backend._internal import get_session, require_auth
 from backend._internal.atproto.records import (
     build_track_record,
     update_record,
+)
+from backend._internal.atproto.spaces.protected_audio import (
+    protect_audio_file,
+    publish_protected_audio,
 )
 from backend._internal.background import get_docket
 from backend._internal.jobs import job_service
@@ -74,11 +80,10 @@ from backend.api.tracks.uploads import (
 from backend.config import settings
 from backend.models import Track, TrackRevision
 from backend.models.job import JobStatus, JobType
-from backend.storage import storage
-from backend.utilities.audio import extract_duration
+from backend.utilities.audio import extract_duration, is_alac
 from backend.utilities.audio_formats import AudioFormat
 from backend.utilities.database import db_session
-from backend.utilities.hashing import CHUNK_SIZE
+from backend.utilities.hashing import CHUNK_SIZE, hash_file_chunked
 from backend.utilities.rate_limit import limiter
 
 from .router import router
@@ -119,6 +124,8 @@ class TrackAudioState:
     created_at: datetime  # original record creation time — must survive replace
     private_audio: bool = False
     audio_storage: str = "r2"
+    protected_audio: dict | None = None
+    download_policy: str = "open"
 
 
 @dataclass
@@ -145,6 +152,8 @@ class ReplaceContext:
     filename: str
     duration: int | None
     is_gated: bool
+    protected_audio: dict | None = None
+    needs_transcode: bool = False
 
 
 async def _load_and_authorize(
@@ -188,6 +197,8 @@ async def _load_and_authorize(
             created_at=track.created_at,
             private_audio=track.uses_private_audio,
             audio_storage=track.audio_storage,
+            protected_audio=track.protected_audio,
+            download_policy=track.download_policy,
         )
 
 
@@ -214,6 +225,8 @@ def _build_upload_context_for_phases(
         tags=[],
         support_gate=state.support_gate,
         private_audio=state.private_audio,
+        use_protected_space=state.protected_audio is not None,
+        needs_transcode=ctx.needs_transcode,
     )
 
 
@@ -236,6 +249,7 @@ async def _publish_record_update(
     audio_info: AudioInfo,
     sr: StorageResult,
     pds_result: PdsBlobResult | None,
+    protected_audio: dict | None = None,
 ) -> str:
     """phase 5: rebuild the track ATProto record with new audio fields.
 
@@ -245,9 +259,15 @@ async def _publish_record_update(
     returns the new record CID.
     """
     playable_file_type = (
-        sr.playable_format.value
-        if sr.playable_format
-        else Path(ctx.filename).suffix.lower().lstrip(".")
+        sr.original_file_type
+        if protected_audio
+        and sr.original_file_id == sr.file_id
+        and sr.original_file_type
+        else (
+            sr.playable_format.value
+            if sr.playable_format
+            else Path(ctx.filename).suffix.lower().lstrip(".")
+        )
     )
 
     new_record = await build_track_record(
@@ -260,7 +280,9 @@ async def _publish_record_update(
         features=state.features or None,
         image_url=state.image_url,
         support_gate=state.support_gate,
-        audio_blob=pds_result.blob_ref if pds_result else None,
+        audio_blob=pds_result.blob_ref if pds_result and not protected_audio else None,
+        audio_space=(protected_audio or {}).get("record_uri"),
+        download_policy=state.download_policy,
         description=state.description,
         self_labels=state.self_labels,
         created_at=state.created_at,
@@ -290,6 +312,7 @@ async def _commit_db_swap(
     sr: StorageResult,
     pds_result: PdsBlobResult | None,
     new_record_cid: str,
+    protected_audio: dict | None = None,
 ) -> Track:
     """phase 6: atomically swap track audio fields AND snapshot the displaced
     audio into a new TrackRevision row, in a single transaction.
@@ -303,9 +326,11 @@ async def _commit_db_swap(
     post-replace hooks make a clean re-classification decision.
     """
     playable_file_type = (
-        sr.playable_format.value
-        if sr.playable_format
-        else state.old_file_type  # transcode shouldn't have run if web-playable; safe fallback
+        sr.original_file_type
+        if protected_audio
+        and sr.original_file_id == sr.file_id
+        and sr.original_file_type
+        else (sr.playable_format.value if sr.playable_format else state.old_file_type)
     )
     has_pds_blob = bool(pds_result and pds_result.cid)
 
@@ -334,6 +359,7 @@ async def _commit_db_swap(
             audio_url=track.r2_url,
             pds_blob_cid=track.pds_blob_cid,
             pds_blob_size=track.pds_blob_size,
+            protected_audio=track.protected_audio,
             duration=track.duration,
             was_gated=track.uses_private_audio,
         )
@@ -349,8 +375,13 @@ async def _commit_db_swap(
             if state.audio_storage == "r2_private"
             else ("both" if has_pds_blob else "r2")
         )
-        track.pds_blob_cid = pds_result.cid if pds_result else None
-        track.pds_blob_size = pds_result.size if pds_result else None
+        track.pds_blob_cid = (
+            pds_result.cid if pds_result and not protected_audio else None
+        )
+        track.pds_blob_size = (
+            pds_result.size if pds_result and not protected_audio else None
+        )
+        track.protected_audio = protected_audio
         track.atproto_record_cid = new_record_cid
 
         # update duration; clear stale genre-prediction provenance so a future
@@ -454,6 +485,20 @@ async def _process_replace_background(ctx: ReplaceContext) -> None:
             new_original_file_id_for_rollback = sr.original_file_id
             new_original_file_type_for_rollback = sr.original_file_type
 
+            protected_audio = ctx.protected_audio
+            if state.protected_audio and protected_audio is None:
+                protected_audio = await publish_protected_audio(
+                    ctx.auth_session,
+                    file_id=sr.file_id,
+                    file_type=(
+                        sr.playable_format.value
+                        if sr.playable_format
+                        else Path(ctx.filename).suffix.lower().lstrip(".")
+                    ),
+                    title=state.title,
+                    original_file_id=sr.original_file_id,
+                    original_file_type=sr.original_file_type,
+                )
             pds_result = await _upload_to_pds(phase_ctx, audio_info, sr)
 
             # the PDS upload may have refreshed the OAuth token in-place; pull
@@ -470,11 +515,11 @@ async def _process_replace_background(ctx: ReplaceContext) -> None:
             state = await _refresh_metadata_state(state)
 
             new_cid = await _publish_record_update(
-                ctx, state, audio_info, sr, pds_result
+                ctx, state, audio_info, sr, pds_result, protected_audio
             )
 
             track = await _commit_db_swap(
-                ctx.job_id, state, audio_info, sr, pds_result, new_cid
+                ctx.job_id, state, audio_info, sr, pds_result, new_cid, protected_audio
             )
             replaced_needs_optimization = sr.needs_optimization
 
@@ -515,7 +560,7 @@ async def _process_replace_background(ctx: ReplaceContext) -> None:
         # the OLD audio is NOT deleted here — it now belongs to the revision
         # row inserted alongside the swap. pruning (below) handles long-term
         # retention and blob cleanup when the per-track cap is exceeded.
-        await prune_revisions(state.track_id)
+        await prune_revisions(state.track_id, ctx.auth_session)
 
         try:
             await run_post_track_audio_replace_hooks(track.id, audio_url=sr.r2_url)
@@ -577,6 +622,12 @@ async def _refresh_metadata_state(state: TrackAudioState) -> TrackAudioState:
             # row vanished between authorize and publish; let the caller
             # raise the same UploadPhaseError it would have on _commit_db_swap.
             raise UploadPhaseError("track was deleted during replace")
+        if (
+            track.file_id != state.old_file_id
+            or track.uses_private_audio != state.private_audio
+            or track.protected_audio != state.protected_audio
+        ):
+            raise UploadPhaseError("track audio or storage changed during replace")
         return TrackAudioState(
             track_id=track.id,
             artist_did=track.artist_did,
@@ -597,6 +648,8 @@ async def _refresh_metadata_state(state: TrackAudioState) -> TrackAudioState:
             created_at=state.created_at,
             private_audio=state.private_audio,
             audio_storage=state.audio_storage,
+            protected_audio=state.protected_audio,
+            download_policy=track.download_policy,
         )
 
 
@@ -618,14 +671,11 @@ async def _rollback_new_files(
     yet established a playable format) deletes the right key.
     """
     if new_file_id:
-        delete_fn = storage.delete_gated if gated else storage.delete
-        with contextlib.suppress(Exception):
-            await delete_fn(new_file_id, new_file_type)
+        await _delete_staged_audio(new_file_id, new_file_type, gated=gated)
     if new_original_file_id:
-        with contextlib.suppress(Exception):
-            await (storage.delete_gated if gated else storage.delete)(
-                new_original_file_id, new_original_file_type
-            )
+        await _delete_staged_audio(
+            new_original_file_id, new_original_file_type, gated=gated
+        )
 
 
 # -- background task registration -----------------------------------------------
@@ -640,6 +690,8 @@ async def run_track_audio_replace(
     filename: str,
     duration: int | None,
     is_gated: bool,
+    protected_audio: dict | None = None,
+    needs_transcode: bool = False,
     concurrency: ConcurrencyLimit = ConcurrencyLimit("user_did", max_concurrent=3),
 ) -> None:
     """docket task entry point for audio replace.
@@ -684,6 +736,8 @@ async def run_track_audio_replace(
         filename=filename,
         duration=duration,
         is_gated=is_gated,
+        protected_audio=protected_audio,
+        needs_transcode=needs_transcode,
     )
     await _process_replace_background(ctx)
 
@@ -707,6 +761,8 @@ async def schedule_track_audio_replace(ctx: ReplaceContext) -> None:
         filename=ctx.filename,
         duration=ctx.duration,
         is_gated=ctx.is_gated,
+        protected_audio=ctx.protected_audio,
+        needs_transcode=ctx.needs_transcode,
     )
 
 
@@ -749,7 +805,6 @@ async def replace_track_audio(
                 f"supported: {AudioFormat.supported_extensions_str()}"
             ),
         )
-    del audio_format  # validated; the background pipeline re-derives it
 
     # cheap pre-check so we 404/403 before streaming a multi-MB body to disk.
     # also captures the track's gating state — needed up here so the staged
@@ -762,12 +817,22 @@ async def replace_track_audio(
                 Track.support_gate,
                 Track.uses_private_audio,
                 Track.is_private,
+                Track.protected_audio,
+                Track.title,
             ).where(Track.id == track_id)
         )
         row = result.first()
         if not row:
             raise HTTPException(status_code=404, detail="track not found")
-        artist_did, atproto_uri, _support_gate, private_audio, is_private = row
+        (
+            artist_did,
+            atproto_uri,
+            _support_gate,
+            private_audio,
+            is_private,
+            previous_protected_audio,
+            title,
+        ) = row
         if artist_did != auth_session.did:
             raise HTTPException(
                 status_code=403,
@@ -809,12 +874,14 @@ async def replace_track_audio(
 
     file_path: str | None = None
     audio_file_id: str | None = None
+    protected_audio: dict | None = None
     enqueued = False
     try:
         max_size = settings.storage.max_upload_size_mb * 1024 * 1024
         bytes_read = 0
         with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp:
             file_path = tmp.name
+        async with aiofiles.open(file_path, "wb") as output:
             while chunk := await file.read(CHUNK_SIZE):
                 bytes_read += len(chunk)
                 if bytes_read > max_size:
@@ -825,15 +892,61 @@ async def replace_track_audio(
                             f"{settings.storage.max_upload_size_mb}MB)"
                         ),
                     )
-                tmp.write(chunk)
+                await output.write(chunk)
 
-        with open(file_path, "rb") as f:
-            duration = extract_duration(f)
+        def scan() -> tuple[int | None, str, bool]:
+            with open(file_path, "rb") as source:
+                duration = extract_duration(source)
+                source.seek(0)
+                source_id = hash_file_chunked(source)[:16]
+                source.seek(0)
+                needs_transcode = audio_format is AudioFormat.M4A and is_alac(source)
+                return duration, source_id, needs_transcode
 
-        with open(file_path, "rb") as f:
-            audio_file_id = await stage_audio_to_storage(
-                job_id, f, file.filename, gated=is_gated
+        duration, source_id, needs_transcode = await to_thread.run_sync(scan)
+        if previous_protected_audio:
+
+            async def heartbeat() -> None:
+                await job_service.heartbeat(job_id)
+
+            protected_audio = await protect_audio_file(
+                auth_session,
+                file_path,
+                file_id=source_id,
+                file_type=audio_extension or "mp3",
+                title=title,
+                rkey=job_id,
+                needs_optimization=(
+                    not audio_format.is_web_playable or needs_transcode
+                ),
+                heartbeat=heartbeat,
             )
+            audio_file_id = source_id
+            await job_service.update_progress(
+                job_id,
+                JobStatus.PROCESSING,
+                "audio saved to your PDS",
+                result={"protected_audio": protected_audio},
+            )
+            try:
+                with open(file_path, "rb") as source:
+                    mirrored_id = await stage_audio_to_storage(
+                        job_id, source, file.filename, gated=True
+                    )
+                    if mirrored_id != source_id:
+                        raise ValueError(
+                            "replacement mirror does not match its PDS source"
+                        )
+                    protected_audio["mirror_verified"] = True
+            except Exception:
+                logger.exception(
+                    "replacement PDS audio saved; playback mirror unavailable"
+                )
+        else:
+            with open(file_path, "rb") as source:
+                audio_file_id = await stage_audio_to_storage(
+                    job_id, source, file.filename, gated=is_gated
+                )
 
         await schedule_track_audio_replace(
             ReplaceContext(
@@ -844,6 +957,8 @@ async def replace_track_audio(
                 filename=file.filename,
                 duration=duration,
                 is_gated=is_gated,
+                protected_audio=protected_audio,
+                needs_transcode=needs_transcode,
             ),
         )
         enqueued = True
