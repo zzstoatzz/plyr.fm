@@ -55,8 +55,12 @@ before the optional private R2 mirror. Public listening uses an app-restricted,
 public-read playback Space; listeners need neither a Spaces PDS nor an owner
 credential. Unsupported uploaders must explicitly accept plyr-only storage.
 Existing catalogs are not migrated. **Production has not been promoted.**
-Account-wide protected-source/private-mirror deletion remains a promotion blocker
-in [#2235](https://github.com/zzstoatzz/plyr.fm/issues/2235); per-track cleanup passed.
+The account-wide cleanup gap in [#2235](https://github.com/zzstoatzz/plyr.fm/issues/2235)
+is fixed by [#2238](https://github.com/zzstoatzz/plyr.fm/pull/2238), deployed to
+staging as `141a178c`, with 2,094 backend tests passing. The user's PDS deletion
+choice and shared/active media remain protected. The final staging suite passed
+all 22 ordinary cases; the unchanged 1.5 GiB capacity case also passed. Ten
+additional live checks passed on the account-cleanup build.
 
 The original stalled-upload investigation also fixed heartbeats during the
 transcoder's input, header/encoding wait and output phases. An R2 delivery
@@ -74,7 +78,8 @@ VM kept health checks passing through the complete rerun; the temporary VM and
 failed fixtures were removed. The maximum-size case then found a single-copy R2
 promotion timeout; [#2237](https://github.com/zzstoatzz/plyr.fm/pull/2237) adds
 bounded multipart promotion and active-copy heartbeats. Its 2,078 backend tests
-and real R2 pilot passed; the post-deployment capacity rerun is pending. See the
+and real R2 pilot passed. All 23 live integration cases then passed, including
+the full 1.5 GiB upload, transcoding, playback and cleanup. See the
 [source/access contract and smoke runbook](docs/internal/architecture/protected-pds-audio.md).
 
 #### activity chart smoothing and plays (October 23)

@@ -57,8 +57,11 @@ No package release or production promotion is implied.
   code. A real R2 pilot copied 20 MiB through three parts in 3.255 seconds and
   verified bytes, completion ETag, metadata and cleanup. The failed capacity
   object's orphan was removed after a fresh zero-reference check. Separate
-  suite/capacity CI budgets cover all 23 original cases without skipping any;
-  add exact post-deployment rerun results before closing this staging goal.
+  suite/capacity CI budgets cover all 23 original cases without skipping any.
+  [Run 40755846905](https://github.com/zzstoatzz/plyr.fm/actions/runs/40755846905)
+  passed **22 normal cases in 584.43 seconds plus the 1.5 GiB case in 1,036.78
+  seconds**, including actual transcoding, playable output and cleanup on
+  `3f6e45f1`. The upload code is unchanged by the subsequent account-only fix.
 
 The first stress run caused an API-machine OOM while supplemental maintenance
 Python competed with concurrent uploads. Fly restarted it; the isolated rerun
@@ -74,8 +77,19 @@ checks.
 See the [current contract and operations](../architecture/protected-pds-audio.md).
 Production remains excluded until staging evidence and the docs sweep are reviewed.
 
-The docs/code reconciliation found an account-wide deletion gap:
-[#2235](https://github.com/zzstoatzz/plyr.fm/issues/2235). Optional PDS cleanup
-does not collect protected source/revision records, and bucket cleanup misses
-private mirrors/originals. Per-track cleanup passed; account-wide cleanup is a
-production promotion blocker and needs its own scoped implementation/verification.
+The docs/code reconciliation found the account-wide deletion gap in
+[#2235](https://github.com/zzstoatzz/plyr.fm/issues/2235), now fixed by
+[#2238](https://github.com/zzstoatzz/plyr.fm/pull/2238), commit
+`141a178cc9fc1e4be946ad190d0c70e240e2d0fe`. It captures current/revision originals
+and protected sources, respects the PDS deletion choice, and retains shared/active
+media. Actual local Postgres and HTTP PDS tests cover both choices, reference
+protection, malformed/foreign sources and remote refusal. Full backend: **2,094
+passed**, 26 existing skips. No real staging account was deleted.
+
+Post-account rollout: **ten focused live checks passed** on `141a178c` for fresh
+protected upload, PDS ownership, listening/download boundaries, direct index
+rebuild, shared-source retention/final deletion and complete fixture cleanup.
+The normal four machines remain, with no maintenance helpers, and health is 200.
+The [final suite rerun](https://github.com/zzstoatzz/plyr.fm/actions/runs/40761156430)
+passed all **22 cases in 562.78 seconds** on this build, and revoked its temporary
+tokens. The unchanged maximum-size upload already passed above.

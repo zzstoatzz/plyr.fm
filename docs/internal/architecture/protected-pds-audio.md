@@ -6,9 +6,12 @@ Production has not been promoted. Existing catalog objects are not migrated.
 The companion [client change](https://github.com/zzstoatzz/plyr-python-client/pull/44)
 is merged; this does not imply a new package release.
 
-Account-wide deletion still misses protected source/private-mirror cleanup;
-[#2235](https://github.com/zzstoatzz/plyr.fm/issues/2235) must be resolved before
-production promotion. Per-track source cleanup is implemented and smoke-tested.
+The account-wide cleanup gap found in [#2235](https://github.com/zzstoatzz/plyr.fm/issues/2235)
+is fixed by [#2238](https://github.com/zzstoatzz/plyr.fm/pull/2238), staging commit
+`141a178cc9fc1e4be946ad190d0c70e240e2d0fe`. It preserves the user's PDS deletion
+choice and shared/active media. All 2,094 local backend tests passed, including
+real Postgres/HTTP account deletion cases. Existing staging accounts were not
+deleted for validation; per-track source cleanup was exercised live.
 
 ## Ownership and authorization
 
@@ -108,16 +111,21 @@ The large capacity case exposed a separate R2 promotion timeout tracked in
 [#2236](https://github.com/zzstoatzz/plyr.fm/issues/2236). The bounded multipart
 fix merged in [#2237](https://github.com/zzstoatzz/plyr.fm/pull/2237), passed
 2,078 local backend tests and a real three-part R2 copy/cleanup pilot. The full
-post-deployment integration/capacity rerun remains pending.
+[staging integration rerun](https://github.com/zzstoatzz/plyr.fm/actions/runs/40755846905)
+passed all 23 cases: 22 normal cases in 584.43 seconds and the full 1.5 GiB
+upload/playback/cleanup case in 1,036.78 seconds. The later account-only change
+retains that upload implementation; its ordinary suite and focused source cleanup
+smoke are checked separately.
 
 The real OAuth browser matrix passed at 1280px/390px, light/dark, with mobile
 touch. It checks the ownership UI, real anonymous playback, Range, download
 refusal, tag analysis and browser errors. Detailed integration results are
 recorded in the [implementation plan](../plans/2026-10-28-protected-pds-audio.md).
 
-The full local backend suite passed 2,060 tests (26 existing skips); all 385
-frontend tests passed, along with types, lint, accessibility, API/client contracts
-and pre-merge private-media browser checks. See the PR for exact CI runs.
+Initial #2233 validation passed 2,060 backend tests (26 existing skips) and all
+385 frontend tests, plus types, lint, accessibility, API/client contracts and
+private-media browser checks. The later R2/account fixes increased the backend
+suite to 2,094 passing tests. See the linked PRs for exact CI runs.
 
 ## Running the smoke safely
 

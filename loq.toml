@@ -39,7 +39,7 @@ max_lines = 850
 
 [[rules]]
 path = "backend/src/backend/api/tracks/uploads.py"
-max_lines = 2322
+max_lines = 2343
 
 [[rules]]
 path = "backend/src/backend/config.py"
@@ -475,4 +475,8 @@ max_lines = 503
 
 [[rules]]
 path = "backend/tests/api/test_upload_sessions.py"
-max_lines = 546
+max_lines = 607
+
+[[rules]]
+path = "backend/tests/api/test_account_protected_cleanup.py"
+max_lines = 581

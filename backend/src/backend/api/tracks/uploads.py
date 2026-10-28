@@ -98,6 +98,7 @@ from .services import get_or_create_album
 logger = logging.getLogger(__name__)
 
 PDS_AUDIO_UPLOADS_SETTING_KEY = "pds_audio_uploads_enabled"
+PROMOTION_HEARTBEAT_SECONDS = 5
 
 
 class UploadStartResponse(BaseModel):
@@ -637,6 +638,25 @@ async def _transcode_audio(
     )
 
 
+async def _promote_staged_audio(
+    upload_id: str, staged: StagedUploadKey, audio: AudioKey, *, gated: bool
+) -> None:
+    async def heartbeat() -> None:
+        while True:
+            try:
+                await job_service.heartbeat(upload_id)
+            except Exception:
+                logger.exception("heartbeat raised during promotion; continuing")
+            await asyncio.sleep(PROMOTION_HEARTBEAT_SECONDS)
+
+    async with asyncio.TaskGroup() as tasks:
+        pulse = tasks.create_task(heartbeat())
+        try:
+            await storage.promote_staged(staged, audio, gated=gated)
+        finally:
+            pulse.cancel()
+
+
 async def _settle_staged_audio(ctx: UploadContext) -> None:
     """phase 0 (resumable uploads only): turn staged bytes into what the
     single-request handler would have produced — a content-hash `file_id`
@@ -732,7 +752,8 @@ async def _settle_staged_audio(ctx: UploadContext) -> None:
                     is_gated=is_gated,
                 )
                 try:
-                    await storage.promote_staged(
+                    await _promote_staged_audio(
+                        ctx.upload_id,
                         staged,
                         AudioKey.for_file(file_id, ctx.audio_extension),
                         gated=is_gated,

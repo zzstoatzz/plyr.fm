@@ -45,18 +45,29 @@ the artist's retained source file.
 ## Account Deletion
 
 Users can remove their plyr.fm account data through a synchronous, interactive
-request. Remote storage cleanup is best-effort and has the protected-audio
-limitation below; it is not a guarantee that every object has been erased.
+request. Remote storage cleanup is best-effort; it is not a guarantee that every
+object has been physically erased.
 
-### Protected audio limitation before promotion
+### Protected cleanup on staging
 
-Account deletion does not yet collect protected Space source records, retained
-revision sources, or private-bucket originals/mirrors. Its optional PDS cleanup
-collects track metadata URIs; its R2 cleanup uses the ordinary public-object path.
-Deleting protected tracks individually before deleting the account uses the
-source-aware cleanup path instead. Keep PDS sources when the user has not opted
-into PDS deletion. Reconcile the account-wide path before promoting protected
-PDS audio; tracked in [#2235](https://github.com/zzstoatzz/plyr.fm/issues/2235).
+[#2238](https://github.com/zzstoatzz/plyr.fm/pull/2238) fixes the account-wide gap
+found during the October 28 docs sweep. It captures current and retained-revision
+sources before removing database rows, then attempts cleanup in the correct
+public/private buckets. Shared media and active uploads are retained. Protected
+copies must belong to the deleting artist and have a verified, raw-SHA256-bound
+source before their storage keys can authorize cleanup; unavailable reference
+checks fail closed.
+
+`delete_atproto_records=false` preserves user-owned PDS records and sources.
+When true, cleanup routes member-private metadata through the Space API and
+also attempts unreferenced protected playback source deletion with the owner's
+session. Remote refusal is logged and does not inflate successful-operation
+counts. Account tests use real Postgres and an HTTP PDS boundary; existing
+staging accounts were not deleted as a smoke test.
+
+This fix is on staging. Production promotion is pending; until then production
+still has the older protected/private cleanup limitation. Deleting protected
+tracks individually uses the previously shipped per-track cleanup path.
 
 ### What Gets Deleted
 
@@ -65,21 +76,21 @@ PDS audio; tracked in [#2235](https://github.com/zzstoatzz/plyr.fm/issues/2235).
 | Location | Data |
 |----------|------|
 | **PostgreSQL** | tracks, albums, likes (given), comments (made), preferences, sessions, queue entries, jobs |
-| **R2 Storage** | ordinary public audio and cover-image cleanup attempted after commit; protected/private sources are not fully covered |
+| **R2 Storage** | staging attempts unreferenced public/private audio, originals, revisions and cover cleanup after commit; shared/active media stays |
 
 #### Optionally Deleted (user's ATProto PDS)
 
-If the user opts in, we delete records from their Personal Data Server:
+If the user opts in, cleanup attempts the collected records on their Personal Data Server:
 
 | Collection | Description |
 |------------|-------------|
-| `fm.plyr.track` / `fm.plyr.dev.track` | track metadata records |
+| environment-aware `fm.plyr.track` | public and member-private metadata, plus protected playback source records on staging |
 | `fm.plyr.like` / `fm.plyr.dev.like` | like records |
 | `fm.plyr.comment` / `fm.plyr.dev.comment` | comment records |
 
 > ATProto deletion requires a valid authenticated session. If it expires or lacks
 > the required scopes, remote records can remain after the database rows are
-> removed. The protected-source limitation above also applies.
+> removed. Cached copies and unreferenced blobs may also outlive record deletion.
 
 ### Workflow
 
