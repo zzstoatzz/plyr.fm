@@ -93,3 +93,10 @@ The normal four machines remain, with no maintenance helpers, and health is 200.
 The [final suite rerun](https://github.com/zzstoatzz/plyr.fm/actions/runs/40761156430)
 passed all **22 cases in 562.78 seconds** on this build, and revoked its temporary
 tokens. The unchanged maximum-size upload already passed above.
+
+Final docs-PR CI exposed order-dependent test isolation: account cleanup fixtures
+patched inherited methods on the shared storage instance, and teardown left bound
+methods shadowing later class patches. Running account tests before replacement
+tests reproduced all four failures. Patching the concrete class instead restores
+cleanly; all 70 tests in that ordered run passed afterward. Application code
+and staging behavior are unchanged.
