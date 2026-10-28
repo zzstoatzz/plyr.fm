@@ -25,7 +25,14 @@ export default defineConfig({
 			enabled: true,
 			headless: true,
 			provider: playwright(),
-			instances: [{ browser: 'chromium' }]
+			instances: [
+				{ browser: 'chromium', name: 'desktop' },
+				{
+					browser: 'chromium',
+					name: 'touch',
+					provider: playwright({ contextOptions: { hasTouch: true } })
+				}
+			]
 		}
 	}
 });

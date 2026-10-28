@@ -48,6 +48,7 @@
 	--text-section-heading: 1.2rem;
 	--text-body: var(--text-lg);
 	--text-small: var(--text-base);
+	--text-input: max(16px, 1rem);
 
 	/* border radius scale */
 	--motion-feedback: 140ms;
@@ -136,4 +137,25 @@ body {
 	background-color: var(--bg-primary);
 	color: var(--text-primary);
 	-webkit-font-smoothing: antialiased;
+	touch-action: manipulation;
+}
+
+@media (max-width: 768px), (any-pointer: coarse) {
+	input:not(
+		[type='checkbox'],
+		[type='radio'],
+		[type='range'],
+		[type='color'],
+		[type='file'],
+		[type='button'],
+		[type='submit'],
+		[type='reset'],
+		[type='image'],
+		[type='hidden']
+	),
+	textarea,
+	select {
+		/* Component font rules must not reintroduce iOS focus zoom. */
+		font-size: var(--text-input) !important;
+	}
 }
