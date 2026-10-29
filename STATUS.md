@@ -288,6 +288,13 @@ and got `404 UnknownMethod` from zds; #2124 (prod `2026.1002.054138`) uses
 returns. Verified by real requests against both hosts, in both roles. HappyView's
 2.16 notes, published October 2, list the same breaking changes from a host's side.
 
+the October 29 spaces alpha removed `com.atproto.simplespace.*`, and zds 0.7.0
+(live 2026-10-29) dropped those routes: private spaces are now created with
+`com.atproto.space.createSpace` and a `com.atproto.memberspace.policy`, and the
+access list uses `com.atproto.memberspace.{putMember,removeMember,listMembers}`.
+A refused listener now gets `SpaceNotFound` (400) from the authority, which plyr
+already treats as a refusal.
+
 #### a copyright flag now means a recording plays through the upload (#2112–#2117, October 1 — #2112, #2113 in prod `2026.1001.062017`; #2114, #2116, #2117 in `2026.1002.021006`; moderation service v77)
 
 The fingerprint scanner flagged a track when one song was a large share of its

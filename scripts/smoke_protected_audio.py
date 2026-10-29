@@ -185,17 +185,16 @@ class Smoke(SmokeFixtures):
             source = checked(response, 200, "protected source snapshot").json()["value"]
         policy = checked(
             await self.http.get(
-                f"{self.pds}/xrpc/com.atproto.simplespace.getSpace",
+                f"{self.pds}/xrpc/com.atproto.space.getSpace",
                 params={"space": parts["space"]},
                 headers=headers(self.pds_access),
             ),
             200,
-            "playback Space policies",
-        ).json()
-        assert policy["readPolicy"]["$type"].endswith("#publicPolicy")
-        assert policy["writePolicy"]["$type"].endswith("#memberListPolicy")
-        assert policy["appAccess"]["$type"].endswith("#allowList")
-        assert len(policy["appAccess"]["allowed"]) == 1
+            "playback Space policy",
+        ).json()["policy"]
+        assert policy["$type"] == "com.atproto.memberspace.policy"
+        assert policy["publicRead"] is True and policy["publicWrite"] is False
+        assert len(policy["allowedApps"]) == 1
         source_blob = source.get("originalAudioBlob") or source["audioBlob"]
         cid = blob_cid(source_blob)
         for protected_cid in {cid, blob_cid(source["audioBlob"])}:
@@ -231,7 +230,7 @@ class Smoke(SmokeFixtures):
             f"{self.pds}/xrpc/com.atproto.space.getSpaceCredential",
             json={"space": parts["space"], "credentialKid": kid},
         )
-        checked(refused, 403, "unattested app credential")
+        checked(refused, 400, "unattested app credential")
         assert refused.json()["error"] == "AppNotAuthorized"
         self.passed(
             "PDS ownership and app access", track_id=track["id"], source=source_uri
