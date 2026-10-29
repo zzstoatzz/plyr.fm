@@ -172,7 +172,7 @@ async def _request_space_credential(
 
 # --- space lifecycle + record writes (owner/author, DPoP OAuth) ---------------
 
-MEMBER_LIST_POLICY = {"$type": "com.atproto.simplespace.defs#memberListPolicy"}
+MEMBERSPACE_POLICY = {"$type": "com.atproto.memberspace.policy"}
 
 
 async def ensure_personal_space(
@@ -182,10 +182,11 @@ async def ensure_personal_space(
 ) -> str:
     """create (or find) the caller's artist-owned personal space; return its URI.
 
-    The space is anchored on the authenticated DID. Reads and writes are both
-    governed by the space's member list; the authority is authorized on its
-    own member-list space without an explicit member grant. App access stays open so local/public OAuth clients can
-    exercise the experimental feature without a confidential-client key.
+    The space is anchored on the authenticated DID and governed by a
+    memberspace policy: reads and writes follow the member list, and the
+    authority is authorized without a member grant. ``allowedApps`` is omitted
+    so local/public OAuth clients can exercise the experimental feature
+    without a confidential-client key.
     """
     space_type = settings.atproto.private_media_space_type
     space_uri = build_space_uri(auth_session.did, space_type, skey)
@@ -193,13 +194,11 @@ async def ensure_personal_space(
         await make_pds_request(
             auth_session,
             "POST",
-            "com.atproto.simplespace.createSpace",
+            "com.atproto.space.createSpace",
             payload={
                 "spaceType": space_type,
                 "skey": skey,
-                "readPolicy": MEMBER_LIST_POLICY,
-                "writePolicy": MEMBER_LIST_POLICY,
-                "appAccess": {"$type": "com.atproto.simplespace.defs#open"},
+                "policy": MEMBERSPACE_POLICY,
             },
         )
     except Exception as exc:
@@ -213,7 +212,7 @@ async def add_space_member(auth_session: AuthSession, *, space: str, did: str) -
     await make_pds_request(
         auth_session,
         "POST",
-        "com.atproto.simplespace.putMember",
+        "com.atproto.memberspace.putMember",
         payload={"space": space, "did": did, "read": True, "write": False},
         parse_response=False,
     )
@@ -229,7 +228,7 @@ async def remove_space_member(
     await make_pds_request(
         auth_session,
         "POST",
-        "com.atproto.simplespace.removeMember",
+        "com.atproto.memberspace.removeMember",
         payload={"space": space, "did": did},
         parse_response=False,
     )
@@ -249,7 +248,7 @@ async def list_space_members(
     result = await make_pds_request(
         auth_session,
         "GET",
-        "com.atproto.simplespace.listMembers",
+        "com.atproto.memberspace.listMembers",
         params=params,
     )
     return [m["did"] for m in result.get("members", [])], result.get("cursor")

@@ -17,7 +17,6 @@ from sqlalchemy import select, update
 from backend._internal import Session
 from backend._internal.atproto.client import BlobRef, upload_blob
 from backend._internal.atproto.spaces.client import (
-    MEMBER_LIST_POLICY,
     SpaceAccessError,
     _kem_key,
     _repo_host_url,
@@ -78,34 +77,39 @@ async def ensure_playback_space(session: Session) -> str:
     )
     if create_space_client_attestation(f"{session.did}#atproto_pds") is None:
         raise SpaceAccessError("protected audio requires a confidential app identity")
-    policy = {
-        "readPolicy": {"$type": "com.atproto.simplespace.defs#publicPolicy"},
-        "writePolicy": MEMBER_LIST_POLICY,
-        "appAccess": {
-            "$type": "com.atproto.simplespace.defs#allowList",
-            "allowed": [settings.atproto.client_id],
-        },
-    }
+    policy = playback_policy()
     try:
         await make_pds_request(
             session,
             "POST",
-            "com.atproto.simplespace.createSpace",
+            "com.atproto.space.createSpace",
             payload={
                 "spaceType": settings.atproto.private_media_space_type,
                 "skey": "playback",
-                **policy,
+                "policy": policy,
             },
         )
     except Exception as exc:
         if "SpaceAlreadyExists" not in str(exc):
             raise
     actual = await make_pds_request(
-        session, "GET", "com.atproto.simplespace.getSpace", params={"space": space}
+        session, "GET", "com.atproto.space.getSpace", params={"space": space}
     )
-    if any(actual.get(key) != value for key, value in policy.items()):
-        raise SpaceAccessError("playback Space has different access policies")
+    if actual.get("policy") != policy:
+        raise SpaceAccessError("playback Space has a different access policy")
     return space
+
+
+def playback_policy() -> dict[str, Any]:
+    """public reads through plyr's attested app only; writes stay with the artist."""
+    return {
+        "$type": "com.atproto.memberspace.policy",
+        "publicRead": True,
+        "publicWrite": False,
+        "allowedApps": [settings.atproto.client_id],
+        "publishPolicy": False,
+        "publishMembers": False,
+    }
 
 
 async def protect_audio_file(

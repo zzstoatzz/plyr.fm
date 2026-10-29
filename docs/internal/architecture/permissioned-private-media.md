@@ -8,7 +8,7 @@ and intentionally isolated under `backend/_internal/atproto/spaces/`.
 
 The wire contract is the **spaces-alpha lexicons** at the tip of the `permissioned-data`
 branch of [bluesky-social/atproto](https://github.com/bluesky-social/atproto/tree/permissioned-data/lexicons/com/atproto)
-(`lexicons/com/atproto/{space,simplespace}`) — not the proposal prose, which lags them.
+(`lexicons/com/atproto/{space,memberspace,managedspace,personalspace}`) — not the proposal prose, which lags them.
 [Bulletin](https://github.com/bluesky-social/bulletin) is the alpha's reference client;
 when a request shape is in doubt, match what its `lib/atproto/` does. ZDS tracks the same
 branch, and has rejected stale bodies twice (#1656, #1876).
@@ -103,25 +103,23 @@ unsupported hosts. That historical inference is no longer the discovery contract
 
 ## space creation and policy
 
-`com.atproto.simplespace.createSpace` receives the alpha body. The space is anchored on
-the authenticated DID (no `did` field), and `readPolicy`, `writePolicy` and `appAccess` are `$type` unions:
+`com.atproto.space.createSpace` receives the October 29 alpha body. The space is anchored
+on the authenticated DID (no `did` field) and governed by one `policy`, a `$type` union:
 
 ```json
 {
   "spaceType": "fm.plyr.privateMedia",
   "skey": "self",
-  "readPolicy": {"$type": "com.atproto.simplespace.defs#memberListPolicy"},
-  "writePolicy": {"$type": "com.atproto.simplespace.defs#memberListPolicy"},
-  "appAccess": {"$type": "com.atproto.simplespace.defs#open"}
+  "policy": {"$type": "com.atproto.memberspace.policy"}
 }
 ```
 
-The `simplespace` management layer has a member list even though the core sync protocol
-does not enumerate readers. The authority is authorized on its own member-list space
-without an explicit member grant; plyr.fm's portal access list adds and removes further
-members through `simplespace.putMember` (read-only)/`removeMember` (see private-media-access-list.md).
-`getSpace` returns `{uri, readPolicy, writePolicy, appAccess}` with the same unions;
-`updateSpace` takes `{space, readPolicy?, writePolicy?, appAccess?}`.
+The memberspace policy keeps a member list even though the core sync protocol does not
+enumerate readers. The authority is authorized under every policy without a member
+grant; plyr.fm's portal access list adds and removes further members through
+`memberspace.putMember` (read-only)/`removeMember` (see private-media-access-list.md).
+`getSpace` (owner only) returns `{uri, policy}`; `updateSpace` takes `{space, policy}` and
+replaces the policy wholesale.
 
 App access is open for this personal experiment so local/public OAuth clients can use it
 without a confidential-client signing key. This is separate from user eligibility.
