@@ -18,6 +18,7 @@ from backend._internal.content_labels import (
     LabelContext,
     filter_sensitive_audio_tracks_for_viewer,
 )
+from backend._internal.private_access import held_access
 from backend.config import settings
 from backend.models import QueueState, Track, UserPreferences
 from backend.schemas import TrackResponse
@@ -171,7 +172,15 @@ class QueueService:
         cached = self.cache.get(did)
         if cached:
             logger.debug(f"cache hit for queue {did}")
-            return cached
+            async with db_session() as db:
+                state, revision, _tracks = cached
+                tracks = await self._hydrate_tracks(
+                    db,
+                    state.get("track_ids", []),
+                    did,
+                    record_ids=state.get("track_record_ids"),
+                )
+            return state, revision, tracks
 
         # fetch from database
         async with db_session() as db:
@@ -330,6 +339,7 @@ class QueueService:
         if not (record_ids if record_ids is not None else track_ids):
             return []
 
+        accessible = await held_access(viewer_did)
         stmt = (
             select(Track)
             .options(selectinload(Track.artist), selectinload(Track.album_rel))
@@ -337,6 +347,15 @@ class QueueService:
                 Track.id.in_(record_ids)
                 if record_ids is not None
                 else Track.file_id.in_(track_ids)
+            )
+            .where(
+                Track.publicly_visible
+                | (Track.artist_did == viewer_did)
+                | (
+                    Track.is_private
+                    & ~Track.is_owner_only
+                    & Track.artist_did.in_(accessible)
+                )
             )
             .order_by(Track.id)
         )

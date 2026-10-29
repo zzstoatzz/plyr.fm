@@ -2,6 +2,11 @@ import { describe, expect, it } from 'vitest';
 import { defaultPublishing, parsePublishing, publishingSummary } from './publishing';
 
 describe('publishing contract', () => {
+	it('does not promise public downloads for legacy owner-only settings', () => {
+		const settings = defaultPublishing();
+		settings.access.listening = 'owner';
+		expect(publishingSummary(settings)).toBe('only you can listen · downloads off');
+	});
 	it('describes public listening independently of file access', () => {
 		const settings = parsePublishing(
 			JSON.stringify({

@@ -3,7 +3,7 @@
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import ColumnElement, DateTime, ForeignKey, Integer, String
+from sqlalchemy import ColumnElement, DateTime, ForeignKey, Integer, String, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -171,14 +171,32 @@ class Track(Base):
         return cls.visibility == "private"
 
     @hybrid_property
+    def is_owner_only(self) -> bool:
+        return bool(self.support_gate and self.support_gate.get("type") == "owner")
+
+    @is_owner_only.inplace.expression
+    @classmethod
+    def _is_owner_only_expr(cls) -> ColumnElement[bool]:
+        return func.coalesce(cls.support_gate["type"].astext == "owner", False)
+
+    @hybrid_property
+    def publicly_visible(self) -> bool:
+        return not self.is_private and not self.is_owner_only
+
+    @publicly_visible.inplace.expression
+    @classmethod
+    def _publicly_visible_expr(cls) -> ColumnElement[bool]:
+        return ~cls.is_private & ~cls.is_owner_only
+
+    @hybrid_property
     def in_discovery(self) -> bool:
         """appears in discovery feeds (latest / top / for-you / radio)."""
-        return self.visibility == "public"
+        return self.visibility == "public" and not self.is_owner_only
 
     @in_discovery.inplace.expression
     @classmethod
     def _in_discovery_expr(cls) -> ColumnElement[bool]:
-        return cls.visibility == "public"
+        return (cls.visibility == "public") & ~cls.is_owner_only
 
     @hybrid_property
     def is_optimizing(self) -> bool:

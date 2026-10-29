@@ -35,7 +35,10 @@ the resolved settings are saved on the track, along with `policy_origin`
 
 the server validates available audiences and host capabilities. `ask` is an
 optional support prompt, not payment verification. unlisted metadata remains
-visible on profiles and in search. native private Spaces enforce their own
+visible on profiles and in search unless listening is `owner`. Owner-only works
+are visible only to their artist within plyr, even with `visibility: public`;
+other viewers receive 404. Previously published public PDS metadata is not
+retracted by this choice. native private Spaces enforce their own
 membership boundary; there is no managed-storage fallback after a Space refusal.
 
 <a id="protected-audio-on-staging"></a>

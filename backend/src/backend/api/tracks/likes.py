@@ -212,7 +212,10 @@ async def get_track_likes(
     """
     row = (
         await db.execute(
-            select(Track.is_private, Track.artist_did).where(Track.id == track_id)
+            select(
+                (Track.is_private | Track.is_owner_only).label("restricted"),
+                Track.artist_did,
+            ).where(Track.id == track_id)
         )
     ).first()
     if not row:

@@ -47,6 +47,19 @@ plyr.fm should become:
 
 ### October 2026
 
+#### owner-only visibility audit (October 29)
+
+A production access change correctly blocked audio but left public metadata and
+feed eligibility intact. Owner-only listening now restricts metadata to its owner,
+independently of the stored discovery setting. Shared filters cover listings,
+search, albums, interactions and Subsonic; activity SQL and queue/jam hydration
+also enforce visibility. Cached queue and radio metadata are rechecked before
+returning it. New owner-only uploads skip public post-create hooks. Denial copy
+for owner-only/Space works is generic and offers no misleading sign-in action.
+Public PDS records already published are not retracted or migrated by this fix.
+See [the audit](docs/internal/backend/owner-only-visibility.md).
+
+
 #### tag suggestion focus and touch selection (October 29)
 
 TagInput now retains pending text while focus moves into its suggestions and

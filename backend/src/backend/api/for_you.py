@@ -126,6 +126,7 @@ _COLD_START_QUERY = text(f"""
     FROM ({_EDGES_SQL}) e
     JOIN tracks t ON t.id = e.track_id
     WHERE e.created_at > :since AND t.artist_did != :actor
+      AND t.visibility = 'public' AND COALESCE(t.support_gate->>'type', '') != 'owner'
     GROUP BY e.track_id
     ORDER BY cnt DESC
     LIMIT :limit
@@ -387,7 +388,7 @@ async def get_for_you_feed(
         select(Track)
         .join(Artist)
         .options(selectinload(Track.artist), selectinload(Track.album_rel))
-        .where(Track.id.in_(page_ids))
+        .where(Track.id.in_(page_ids), Track.in_discovery)
     )
     tracks_by_id = {t.id: t for t in track_result.scalars().all()}
     tracks = [tracks_by_id[tid] for tid in page_ids if tid in tracks_by_id]

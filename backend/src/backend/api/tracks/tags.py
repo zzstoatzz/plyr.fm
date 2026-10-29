@@ -155,6 +155,7 @@ async def list_tags(
         )
         .outerjoin(TrackTag, Tag.id == TrackTag.tag_id)
         .outerjoin(Track, TrackTag.track_id == Track.id)
+        .where(Track.publicly_visible)
         .group_by(Tag.id, Tag.name)
         .order_by(func.coalesce(func.sum(Track.play_count), 0).desc(), Tag.name)
         .limit(limit)

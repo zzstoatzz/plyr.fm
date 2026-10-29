@@ -854,7 +854,7 @@ class JamService:
         stmt = (
             select(Track)
             .options(selectinload(Track.artist), selectinload(Track.album_rel))
-            .where(Track.file_id.in_(track_ids))
+            .where(Track.file_id.in_(track_ids), Track.publicly_visible)
         )
         result = await db.execute(stmt)
         tracks = result.scalars().all()
