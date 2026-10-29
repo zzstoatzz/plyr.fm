@@ -56,6 +56,7 @@ export interface GatedError {
  */
 export function needsCredentialedAudio(track: Track): boolean {
 	return (
+		Boolean(track.audio_space) ||
 		track.audio_storage === 'r2_private' ||
 		Boolean(track.support_gate) ||
 		track.publishing?.access.visibility === 'private'
@@ -119,7 +120,8 @@ export async function resolveAudioSource(
 	track: Track,
 	fileIdUsed: string
 ): Promise<ResolvedSource> {
-	const hasAdultLabel = track.labels?.some((label) => label === 'sexual' || label === 'porn') ?? false;
+	const hasAdultLabel =
+		track.labels?.some((label) => label === 'sexual' || label === 'porn') ?? false;
 	// the interim raw source isn't playable in this browser yet — surface a
 	// "processing" outcome rather than handing `<audio>` a file it can't decode.
 	// checked before the cache lookup: a cached interim blob is just as

@@ -27,7 +27,7 @@ max_lines = 904
 
 [[rules]]
 path = "backend/src/backend/api/auth.py"
-max_lines = 989
+max_lines = 994
 
 [[rules]]
 path = "backend/src/backend/api/tracks/listing.py"
@@ -39,7 +39,7 @@ max_lines = 850
 
 [[rules]]
 path = "backend/src/backend/api/tracks/uploads.py"
-max_lines = 2203
+max_lines = 2349
 
 [[rules]]
 path = "backend/src/backend/config.py"
@@ -211,7 +211,7 @@ max_lines = 818
 
 [[rules]]
 path = "backend/src/backend/_internal/tasks/ingest.py"
-max_lines = 1224
+max_lines = 1325
 
 [[rules]]
 path = "backend/tests/test_jetstream.py"
@@ -235,7 +235,7 @@ max_lines = 656
 
 [[rules]]
 path = "frontend/src/lib/components/AlbumUploadForm.svelte"
-max_lines = 823
+max_lines = 916
 
 [[rules]]
 path = "frontend/src/lib/components/TrackEntryCard.svelte"
@@ -255,11 +255,11 @@ max_lines = 1086
 
 [[rules]]
 path = "backend/src/backend/api/tracks/audio_replace.py"
-max_lines = 873
+max_lines = 988
 
 [[rules]]
 path = "backend/tests/conftest.py"
-max_lines = 666
+max_lines = 671
 
 [[rules]]
 path = "backend/tests/api/track_audio_replace/test_pipeline.py"
@@ -335,7 +335,7 @@ max_lines = 1474
 
 [[rules]]
 path = "frontend/src/lib/uploader.svelte.ts"
-max_lines = 625
+max_lines = 629
 
 [[rules]]
 path = "frontend/src/routes/track/[[]id[]]/+page.svelte"
@@ -371,11 +371,11 @@ max_lines = 1182
 
 [[rules]]
 path = "backend/src/backend/api/audio.py"
-max_lines = 595
+max_lines = 738
 
 [[rules]]
 path = "backend/src/backend/_internal/export_tasks.py"
-max_lines = 600
+max_lines = 622
 
 [[rules]]
 path = "frontend/src/lib/components/TrackComments.svelte"
@@ -399,7 +399,7 @@ max_lines = 537
 
 [[rules]]
 path = "docs/internal/contracts/client-api.json"
-max_lines = 8347
+max_lines = 8379
 
 [[rules]]
 path = "frontend/src/lib/components/TrackEditForm.svelte"
@@ -407,7 +407,7 @@ max_lines = 544
 
 [[rules]]
 path = "frontend/src/lib/components/track-edit/TrackAudioEditor.svelte"
-max_lines = 555
+max_lines = 558
 
 [[rules]]
 path = "backend/tests/_internal/test_stuck_upload_reaper.py"
@@ -464,3 +464,19 @@ max_lines = 508
 [[rules]]
 path = "frontend/src/lib/components/ActivityChart.svelte"
 max_lines = 534
+
+[[rules]]
+path = "backend/src/backend/api/tracks/audio_optimize.py"
+max_lines = 615
+
+[[rules]]
+path = "backend/src/backend/_internal/atproto/records/fm_plyr/track.py"
+max_lines = 503
+
+[[rules]]
+path = "backend/tests/api/test_upload_sessions.py"
+max_lines = 607
+
+[[rules]]
+path = "backend/tests/api/test_account_protected_cleanup.py"
+max_lines = 581

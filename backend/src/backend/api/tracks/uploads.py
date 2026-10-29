@@ -51,9 +51,16 @@ from backend._internal.atproto.spaces import (
     build_record_uri,
     session_has_private_media_access,
 )
+from backend._internal.atproto.spaces.capability import protected_storage_choice
 from backend._internal.atproto.spaces.client import (
     create_space_record,
     ensure_personal_space,
+)
+from backend._internal.atproto.spaces.protected_audio import (
+    delete_protected_audio,
+    protect_audio_file,
+    publish_protected_audio,
+    publish_protected_blob,
 )
 from backend._internal.background import get_docket
 from backend._internal.clients.transcoder import (
@@ -92,6 +99,7 @@ from .services import get_or_create_album
 logger = logging.getLogger(__name__)
 
 PDS_AUDIO_UPLOADS_SETTING_KEY = "pds_audio_uploads_enabled"
+PROMOTION_HEARTBEAT_SECONDS = 5
 
 
 class UploadStartResponse(BaseModel):
@@ -145,6 +153,8 @@ class UploadContext:
     download_policy: str | None = None
     policy_origin: str = "portal"
     private_audio: bool = False
+    use_protected_space: bool = False
+    protected_audio: dict | None = None
 
     # Rights metadata is serialized independently of access for the worker.
     copyright_rights: dict | None = None
@@ -634,6 +644,25 @@ async def _transcode_audio(
     )
 
 
+async def _promote_staged_audio(
+    upload_id: str, staged: StagedUploadKey, audio: AudioKey, *, gated: bool
+) -> None:
+    async def heartbeat() -> None:
+        while True:
+            try:
+                await job_service.heartbeat(upload_id)
+            except Exception:
+                logger.exception("heartbeat raised during promotion; continuing")
+            await asyncio.sleep(PROMOTION_HEARTBEAT_SECONDS)
+
+    async with asyncio.TaskGroup() as tasks:
+        pulse = tasks.create_task(heartbeat())
+        try:
+            await storage.promote_staged(staged, audio, gated=gated)
+        finally:
+            pulse.cancel()
+
+
 async def _settle_staged_audio(ctx: UploadContext) -> None:
     """phase 0 (resumable uploads only): turn staged bytes into what the
     single-request handler would have produced — a content-hash `file_id`
@@ -680,6 +709,24 @@ async def _settle_staged_audio(ctx: UploadContext) -> None:
 
             ctx.duration, ctx.needs_transcode = await anyio.to_thread.run_sync(_scan)
 
+            if ctx.use_protected_space:
+
+                async def _heartbeat() -> None:
+                    await job_service.heartbeat(ctx.upload_id)
+
+                ctx.protected_audio = await protect_audio_file(
+                    ctx.auth_session,
+                    tmp.name,
+                    file_id=file_id,
+                    file_type=ctx.audio_extension,
+                    title=ctx.title,
+                    rkey=ctx.upload_id,
+                    heartbeat=_heartbeat,
+                    needs_optimization=not ctx.audio_format.is_web_playable
+                    or ctx.needs_transcode,
+                )
+                ctx.audio_file_id = file_id
+
             if ctx.private:
 
                 def _body() -> AsyncIterable[bytes]:
@@ -710,11 +757,21 @@ async def _settle_staged_audio(ctx: UploadContext) -> None:
                     file_type=ctx.audio_extension,
                     is_gated=is_gated,
                 )
-                await storage.promote_staged(
-                    staged,
-                    AudioKey.for_file(file_id, ctx.audio_extension),
-                    gated=is_gated,
-                )
+                try:
+                    await _promote_staged_audio(
+                        ctx.upload_id,
+                        staged,
+                        AudioKey.for_file(file_id, ctx.audio_extension),
+                        gated=is_gated,
+                    )
+                    if ctx.protected_audio:
+                        ctx.protected_audio["mirror_verified"] = True
+                except Exception:
+                    if not ctx.protected_audio:
+                        raise
+                    logger.exception(
+                        "PDS audio published; playback mirror promotion failed"
+                    )
                 ctx.audio_file_id = file_id
         except Exception:
             with contextlib.suppress(Exception):
@@ -747,7 +804,11 @@ async def _validate_audio(ctx: UploadContext) -> AudioInfo:
 
 async def _store_audio(ctx: UploadContext, audio_info: AudioInfo) -> StorageResult:
     """Prepare protected playback before publication; optimize public audio later."""
-    if audio_info.is_gated and not audio_info.is_private:
+    if (
+        audio_info.is_gated
+        and not audio_info.is_private
+        and not ctx.use_protected_space
+    ):
         rendition = await _transcode_audio(
             ctx.upload_id,
             ctx.audio_file_id,
@@ -841,15 +902,23 @@ async def _discard_unowned_media(
     sr: StorageResult,
     playable_file_type: str,
     image_id: str | None,
+    *,
+    discard_protected: bool = True,
 ) -> None:
     # private audio is a PDS blob; its file_id can collide with a public R2 key
     if ctx.private:
         return
+    if discard_protected and ctx.protected_audio:
+        with contextlib.suppress(Exception):
+            await delete_protected_audio(ctx.auth_session, ctx.protected_audio)
+    gated = ctx.private_audio or ctx.support_gate is not None
     with contextlib.suppress(Exception):
-        await storage.discard_staged(sr.file_id, playable_file_type)
+        await storage.discard_staged(sr.file_id, playable_file_type, gated=gated)
     if sr.original_file_id and sr.original_file_type:
         with contextlib.suppress(Exception):
-            await storage.discard_staged(sr.original_file_id, sr.original_file_type)
+            await storage.discard_staged(
+                sr.original_file_id, sr.original_file_type, gated=gated
+            )
     if image_id:
         with contextlib.suppress(Exception):
             await storage.discard_staged(image_id)
@@ -953,7 +1022,13 @@ async def _create_records(
     from backend._internal.atproto.tid import datetime_to_tid
 
     ext = Path(ctx.filename).suffix.lower()
-    playable_file_type = sr.playable_format.value if sr.playable_format else ext[1:]
+    playable_file_type = (
+        ctx.audio_extension
+        if sr.file_id == ctx.audio_file_id and sr.transcode_info is None
+        else sr.playable_format.value
+        if sr.playable_format
+        else ext[1:]
+    )
 
     created_at = datetime.now(UTC)
     rkey = datetime_to_tid(created_at)
@@ -1098,6 +1173,7 @@ async def _create_records(
             pds_blob_cid=pds_result.cid if pds_result else None,
             pds_blob_size=pds_result.size if pds_result else None,
             space_uri=space_uri,
+            protected_audio=ctx.protected_audio,
         )
 
         db.add(track)
@@ -1167,6 +1243,10 @@ async def _create_records(
                 image_url=image_url,
                 support_gate=ctx.support_gate,
                 audio_blob=pds_result.blob_ref if pds_result else None,
+                audio_space=ctx.protected_audio["record_uri"]
+                if ctx.protected_audio
+                else None,
+                download_policy=ctx.download_policy,
                 description=ctx.description,
                 self_labels=ctx.self_labels,
                 tags=ctx.tags,
@@ -1197,7 +1277,9 @@ async def _create_records(
                 deleted_pending = result.rowcount == 1  # type: ignore[union-attr]
 
         if deleted_pending:
-            await _discard_unowned_media(ctx, sr, playable_file_type, image_id)
+            await _discard_unowned_media(
+                ctx, sr, playable_file_type, image_id, discard_protected=False
+            )
         # else: Jetstream finalized the row — media belongs to the published track
 
         raise UploadPhaseError(f"failed to sync track to ATProto: {err_detail}") from e
@@ -1327,6 +1409,9 @@ async def _cleanup_staged_media_pre_db(
         with contextlib.suppress(Exception):
             await storage.delete_staged(ctx.staged_key)
 
+    if ctx.protected_audio:
+        with contextlib.suppress(Exception):
+            await delete_protected_audio(ctx.auth_session, ctx.protected_audio)
     if ctx.private:
         return
 
@@ -1393,6 +1478,17 @@ async def _process_upload_background(ctx: UploadContext) -> None:
 
             # phase 2: store audio (transcode if lossless)
             sr = await _store_audio(ctx, audio_info)
+            if ctx.use_protected_space and ctx.protected_audio is None:
+                ctx.protected_audio = await publish_protected_audio(
+                    ctx.auth_session,
+                    file_id=sr.file_id,
+                    file_type=ctx.audio_extension
+                    if sr.file_id == ctx.audio_file_id
+                    else sr.playable_format.value,
+                    title=ctx.title,
+                    original_file_id=sr.original_file_id,
+                    original_file_type=sr.original_file_type,
+                )
 
             # phase 3: check for duplicates
             await _check_duplicate(ctx, sr)
@@ -1522,6 +1618,8 @@ async def run_track_upload(
     download_policy: str | None = None,
     policy_origin: str = "portal",
     private_audio: bool = False,
+    use_protected_space: bool = False,
+    protected_audio: dict | None = None,
     concurrency: ConcurrencyLimit = ConcurrencyLimit("artist_did", max_concurrent=3),
 ) -> None:
     """docket task entry point for track uploads.
@@ -1600,6 +1698,8 @@ async def run_track_upload(
         thumbnail_url=thumbnail_url,
         support_gate=support_gate,
         private_audio=private_audio,
+        use_protected_space=use_protected_space,
+        protected_audio=protected_audio,
         download_policy=download_policy,
         policy_origin=policy_origin,
         copyright_rights=copyright_rights,
@@ -1646,6 +1746,8 @@ async def schedule_track_upload(ctx: UploadContext) -> None:
         thumbnail_url=ctx.thumbnail_url,
         support_gate=ctx.support_gate,
         private_audio=ctx.private_audio,
+        use_protected_space=ctx.use_protected_space,
+        protected_audio=ctx.protected_audio,
         download_policy=ctx.download_policy,
         policy_origin=ctx.policy_origin,
         copyright_rights=ctx.copyright_rights,
@@ -1682,6 +1784,8 @@ class UploadMetadata:
     download_policy: str | None = None
     policy_origin: str = "portal"
     private_audio: bool = False
+    use_protected_space: bool = False
+    protected_audio: dict | None = None
 
     @property
     def is_private(self) -> bool:
@@ -1696,6 +1800,7 @@ async def validate_upload_form(request: Request) -> None:
     allowed = {
         "title",
         "publishing",
+        "accept_plyr_storage",
         "album",
         "album_id",
         "features",
@@ -1725,6 +1830,7 @@ async def parse_upload_metadata(
     features: str | None,
     tags: str | None,
     publishing: str | None,
+    accept_plyr_storage: bool = False,
     copyright: str | None,
     description: str | None,
     self_labels: str | None,
@@ -1840,6 +1946,13 @@ async def parse_upload_metadata(
             )
 
     private_audio = policy.requires_protected_audio and not is_private
+    use_protected_space = False
+    if private_audio:
+        use_protected_space = await protected_storage_choice(auth_session)
+        if not use_protected_space and not accept_plyr_storage:
+            raise HTTPException(
+                status_code=400, detail="plyr_storage_acceptance_required"
+            )
 
     return UploadMetadata(
         title=title,
@@ -1858,6 +1971,7 @@ async def parse_upload_metadata(
         download_policy=policy.downloads,
         policy_origin=resolved.origin,
         private_audio=private_audio,
+        use_protected_space=use_protected_space,
     )
 
 
@@ -1900,6 +2014,7 @@ async def upload_track(
     features: Annotated[str | None, Form()] = None,
     tags: Annotated[str | None, Form(description="JSON array of tag names")] = None,
     publishing: Annotated[str | None, Form()] = None,
+    accept_plyr_storage: Annotated[bool, Form()] = False,
     copyright: Annotated[
         str | None,
         Form(
@@ -1953,6 +2068,7 @@ async def upload_track(
         features=features,
         tags=tags,
         publishing=publishing,
+        accept_plyr_storage=accept_plyr_storage,
         copyright=copyright,
         description=description,
         self_labels=self_labels,
@@ -1986,6 +2102,7 @@ async def upload_track(
     file_path: str | None = None
     audio_file_id: str | None = None
     audio_blob: BlobRef | None = None
+    protected_audio: dict | None = None
     image_id: str | None = None
     image_url: str | None = None
     thumbnail_url: str | None = None
@@ -2028,7 +2145,7 @@ async def upload_track(
 
             needs_transcode = await anyio.to_thread.run_sync(_scan_alac)
 
-        if is_private:
+        if is_private or meta.use_protected_space:
             # permissioned media: audio lives ON THE PDS, never R2. upload the
             # blob straight to the user's PDS blobstore here (we hold the bytes +
             # the auth session); the worker only writes the permissioned record.
@@ -2048,13 +2165,37 @@ async def upload_track(
 
                 return _gen()
 
+            async def _pds_heartbeat() -> None:
+                await job_service.heartbeat(upload_id)
+
             audio_blob = await upload_blob(
                 auth_session,
                 body_factory=_private_body,
                 content_length=bytes_read,
                 content_type=audio_format.media_type,
+                heartbeat=_pds_heartbeat,
             )
-            # no R2 object, no cleanup hint — nothing public/private to roll back
+            if meta.use_protected_space:
+                protected_audio = await publish_protected_blob(
+                    auth_session,
+                    audio_blob=audio_blob,
+                    file_id=audio_file_id,
+                    file_type=meta.audio_extension,
+                    title=meta.title,
+                    rkey=upload_id,
+                    original_file_id=audio_file_id
+                    if not audio_format.is_web_playable or needs_transcode
+                    else None,
+                    original_file_type=meta.audio_extension
+                    if not audio_format.is_web_playable or needs_transcode
+                    else None,
+                )
+                try:
+                    with open(file_path, "rb") as f:
+                        await stage_audio_to_storage(upload_id, f, filename, gated=True)
+                    protected_audio["mirror_verified"] = True
+                except Exception:
+                    logger.exception("PDS audio published; playback mirror failed")
         else:
             # stage audio bytes to shared storage (R2). gated tracks (supporter/
             # copyright) go to the private bucket; public tracks to the public one.
@@ -2091,6 +2232,8 @@ async def upload_track(
             thumbnail_url=thumbnail_url,
             support_gate=parsed_support_gate,
             private_audio=meta.private_audio,
+            use_protected_space=meta.use_protected_space,
+            protected_audio=protected_audio,
             download_policy=meta.download_policy,
             policy_origin=meta.policy_origin,
             copyright_rights=parsed_copyright,
@@ -2103,6 +2246,9 @@ async def upload_track(
         enqueued = True
     except Exception:
         if not enqueued:
+            if protected_audio:
+                with contextlib.suppress(Exception):
+                    await delete_protected_audio(auth_session, protected_audio)
             # private media has no R2 object to roll back — the audio is a PDS
             # blob (an unreferenced blob is GC'd by the PDS). only clean R2 for
             # the public/gated path.

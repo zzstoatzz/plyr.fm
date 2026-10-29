@@ -20,6 +20,7 @@ from sqlalchemy.orm import selectinload
 from backend._internal import get_session
 from backend._internal.atproto.client import pds_blob_url
 from backend._internal.atproto.spaces.client import open_space_blob
+from backend._internal.atproto.spaces.protected_audio import open_protected_blob
 from backend._internal.background import get_docket
 from backend._internal.jobs import job_service
 from backend.config import settings
@@ -170,7 +171,18 @@ async def process_export(
                 async with semaphore:
                     track = info["track"]
                     try:
-                        if track.audio_storage == "pds" and not track.original_file_id:
+                        if track.protected_audio:
+                            async with (
+                                open_protected_blob(
+                                    track.protected_audio, original=True
+                                ) as response,
+                                aiofiles.open(info["temp_path"], "wb") as f,
+                            ):
+                                async for chunk in response.aiter_bytes():
+                                    await f.write(chunk)
+                        elif (
+                            track.audio_storage == "pds" and not track.original_file_id
+                        ):
                             if not track.pds_blob_cid:
                                 raise RuntimeError("PDS audio has no blob")
                             if track.is_private:
@@ -471,15 +483,25 @@ async def process_album_download(
                 nonlocal downloaded
                 async with semaphore:
                     try:
-                        response = await s3_client.get_object(
-                            Bucket=storage.private_audio_bucket_name
-                            if info["track"].uses_private_audio
-                            else storage.audio_bucket_name,
-                            Key=info["key"],
-                        )
-                        async with aiofiles.open(info["temp_path"], "wb") as f:
-                            async for chunk in response["Body"].iter_chunks():
-                                await f.write(chunk)
+                        if info["track"].protected_audio:
+                            async with (
+                                open_protected_blob(
+                                    info["track"].protected_audio, original=True
+                                ) as response,
+                                aiofiles.open(info["temp_path"], "wb") as f,
+                            ):
+                                async for chunk in response.aiter_bytes():
+                                    await f.write(chunk)
+                        else:
+                            response = await s3_client.get_object(
+                                Bucket=storage.private_audio_bucket_name
+                                if info["track"].uses_private_audio
+                                else storage.audio_bucket_name,
+                                Key=info["key"],
+                            )
+                            async with aiofiles.open(info["temp_path"], "wb") as f:
+                                async for chunk in response["Body"].iter_chunks():
+                                    await f.write(chunk)
                         async with download_lock:
                             downloaded += 1
                             await job_service.update_progress(

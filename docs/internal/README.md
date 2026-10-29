@@ -79,12 +79,18 @@ organized knowledge base for plyr.fm development.
 ## architecture overview
 
 plyr.fm uses a hybrid storage model:
-- **audio files**: cloudflare R2 for public and app-gated delivery; experimental
-  owner-private audio lives only in an artist-owned permissioned space on their PDS
+- **audio files**: artist-owned PDS sources with R2 delivery mirrors; member-private
+  audio lives in a reader-authorized PDS Space. On staging, protected public audio
+  uses a public-read, app-restricted PDS Space, with private R2-only storage requiring
+  explicit acceptance when the uploader's PDS lacks Spaces. Production promotion is
+  pending; see [protected audio](./architecture/protected-pds-audio.md).
 - **metadata**: ATProto records on user's PDS (decentralized, user-owned)
 - **indexes**: neon postgres for fast queries
 
-**lossless audio**: AIFF/FLAC uploads are transcoded to MP3 for universal browser playback while originals are preserved for export. browsers that support lossless (Safari, native apps) are served the original quality.
+**lossless audio**: playable formats such as FLAC can publish directly; AIFF/AIF
+publishes its source before deferred MP3 optimization. On staging, protected
+Spaces uploads also preserve playable inputs without a redundant encode. Original
+sources remain available through authorized recovery/export paths.
 
 key namespaces:
 - `fm.plyr.track` - track metadata

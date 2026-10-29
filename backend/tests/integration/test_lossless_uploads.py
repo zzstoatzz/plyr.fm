@@ -73,6 +73,7 @@ async def _upload_support_gated_track(
             headers=_auth_headers(token),
             data={
                 "title": title,
+                "accept_plyr_storage": "true",
                 "tags": json.dumps(["integration-test", "lossless", "gated"]),
                 "publishing": json.dumps(
                     {

@@ -212,16 +212,16 @@ def allows_space(
     )
 
 
-def private_media_grant_present(scope: str, did: str) -> bool:
+def private_media_grant_present(scope: str, did: str, *, skey: str = "self") -> bool:
     """whether ``scope`` carries the expanded private-media grant for ``did``."""
     space_type = settings.atproto.private_media_space_type
     return allows_space(
-        scope, type=space_type, authority=did, skey="self", manage="create"
+        scope, type=space_type, authority=did, skey=skey, manage="create"
     ) and allows_space(
         scope,
         type=space_type,
         authority=did,
-        skey="self",
+        skey=skey,
         action="create",
         collection=settings.atproto.track_collection,
     )

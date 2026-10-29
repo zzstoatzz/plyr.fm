@@ -35,6 +35,7 @@ from backend._internal.tasks.teal_plays import (
 )
 from backend._internal.tasks.pds_mirror import (
     mirror_pds_blob,
+    mirror_protected_track_audio,
     schedule_pds_blob_mirror,
 )
 from backend._internal.tasks.transparency import publish_moderation_decisions
@@ -118,6 +119,7 @@ def _build_background_tasks() -> list:
         deliver_upload_pause_notification,
         deliver_upload_feedback_notification,
         mirror_pds_blob,
+        mirror_protected_track_audio,
         scan_copyright,
         sync_copyright_resolutions,
         sync_operator_labels,

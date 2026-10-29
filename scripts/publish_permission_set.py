@@ -21,7 +21,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 ROOT = Path(__file__).parent.parent
 LEXICON_DIR = ROOT / "lexicons"
 PROD_NAMESPACE = "fm.plyr"
-LEXICONS = ("authFullApp", "privateMedia", "privateMediaAccess")
+LEXICONS = ("authFullApp", "privateMedia", "privateMediaAccess", "track")
 
 
 class Settings(BaseSettings):

@@ -10,6 +10,7 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+import backend.storage
 from backend._internal import Session, require_auth
 from backend.main import app
 from backend.models import (
@@ -129,7 +130,9 @@ async def test_delete_account_deletes_tracks(
     result = await db_session.execute(select(Track).where(Track.artist_did == TEST_DID))
     assert len(result.scalars().all()) == 2
 
-    with patch("backend.api.account.storage.delete", new_callable=AsyncMock):
+    with patch(
+        "backend._internal.account_media.storage.delete", new_callable=AsyncMock
+    ):
         async with AsyncClient(
             transport=ASGITransport(app=test_app), base_url="http://test"
         ) as client:
@@ -154,7 +157,9 @@ async def test_delete_account_deletes_albums(
     db_session.add(album)
     await db_session.commit()
 
-    with patch("backend.api.account.storage.delete", new_callable=AsyncMock):
+    with patch(
+        "backend._internal.account_media.storage.delete", new_callable=AsyncMock
+    ):
         async with AsyncClient(
             transport=ASGITransport(app=test_app), base_url="http://test"
         ) as client:
@@ -197,7 +202,9 @@ async def test_delete_account_deletes_likes_given(
     db_session.add(like)
     await db_session.commit()
 
-    with patch("backend.api.account.storage.delete", new_callable=AsyncMock):
+    with patch(
+        "backend._internal.account_media.storage.delete", new_callable=AsyncMock
+    ):
         async with AsyncClient(
             transport=ASGITransport(app=test_app), base_url="http://test"
         ) as client:
@@ -244,7 +251,9 @@ async def test_delete_account_deletes_comments_made(
     db_session.add(comment)
     await db_session.commit()
 
-    with patch("backend.api.account.storage.delete", new_callable=AsyncMock):
+    with patch(
+        "backend._internal.account_media.storage.delete", new_callable=AsyncMock
+    ):
         async with AsyncClient(
             transport=ASGITransport(app=test_app), base_url="http://test"
         ) as client:
@@ -272,7 +281,9 @@ async def test_delete_account_deletes_preferences(
     db_session.add(prefs)
     await db_session.commit()
 
-    with patch("backend.api.account.storage.delete", new_callable=AsyncMock):
+    with patch(
+        "backend._internal.account_media.storage.delete", new_callable=AsyncMock
+    ):
         async with AsyncClient(
             transport=ASGITransport(app=test_app), base_url="http://test"
         ) as client:
@@ -299,7 +310,9 @@ async def test_delete_account_deletes_sessions(
     db_session.add(session)
     await db_session.commit()
 
-    with patch("backend.api.account.storage.delete", new_callable=AsyncMock):
+    with patch(
+        "backend._internal.account_media.storage.delete", new_callable=AsyncMock
+    ):
         async with AsyncClient(
             transport=ASGITransport(app=test_app), base_url="http://test"
         ) as client:
@@ -324,7 +337,9 @@ async def test_delete_account_deletes_queue(
     db_session.add(queue)
     await db_session.commit()
 
-    with patch("backend.api.account.storage.delete", new_callable=AsyncMock):
+    with patch(
+        "backend._internal.account_media.storage.delete", new_callable=AsyncMock
+    ):
         async with AsyncClient(
             transport=ASGITransport(app=test_app), base_url="http://test"
         ) as client:
@@ -354,7 +369,7 @@ async def test_delete_account_with_atproto_records(
     await db_session.commit()
 
     with (
-        patch("backend.api.account.storage.delete", new_callable=AsyncMock),
+        patch("backend._internal.account_media.storage.delete", new_callable=AsyncMock),
         patch(
             "backend.api.account.delete_record_by_uri", new_callable=AsyncMock
         ) as mock_delete_atproto,
@@ -391,7 +406,9 @@ async def test_delete_account_deletes_r2_objects(
         delete_calls.append((file_id, file_type))
         return True
 
-    with patch("backend.api.account.storage.delete", side_effect=mock_delete):
+    with patch.object(
+        backend.storage._get_storage(), "delete", side_effect=mock_delete
+    ):
         async with AsyncClient(
             transport=ASGITransport(app=test_app), base_url="http://test"
         ) as client:
@@ -427,7 +444,9 @@ async def test_delete_account_deletes_likes_on_user_tracks(
     db_session.add(other_like)
     await db_session.commit()
 
-    with patch("backend.api.account.storage.delete", new_callable=AsyncMock):
+    with patch(
+        "backend._internal.account_media.storage.delete", new_callable=AsyncMock
+    ):
         async with AsyncClient(
             transport=ASGITransport(app=test_app), base_url="http://test"
         ) as client:
@@ -465,7 +484,9 @@ async def test_delete_account_deletes_comments_on_user_tracks(
     db_session.add(other_comment)
     await db_session.commit()
 
-    with patch("backend.api.account.storage.delete", new_callable=AsyncMock):
+    with patch(
+        "backend._internal.account_media.storage.delete", new_callable=AsyncMock
+    ):
         async with AsyncClient(
             transport=ASGITransport(app=test_app), base_url="http://test"
         ) as client:

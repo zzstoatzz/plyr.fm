@@ -44,6 +44,10 @@ from backend._internal.atproto.spaces import (
     session_can_read_shared_private_media,
     session_has_private_media_access,
 )
+from backend._internal.atproto.spaces.capability import (
+    pds_supports_spaces,
+    session_has_protected_audio_access,
+)
 from backend._internal.auth import get_refresh_token_lifetime_days
 from backend._internal.auth.app_password import (
     AppPasswordAuthError,
@@ -78,14 +82,7 @@ class LinkedAccountResponse(BaseModel):
 
 
 class PermissionedSpacesStatus(BaseModel):
-    """private-media availability for this session.
-
-    ``granted``: the token carries the expanded space grant. ``supported``
-    equals it — the grant is the only capability signal — and stays for
-    clients that key on it. ``reader``: the token also carries the
-    any-authority read grant, so this session can play private tracks other
-    artists share with it.
-    """
+    """Host capability and approval for the current Spaces permission bundle."""
 
     supported: bool = False
     granted: bool = False
@@ -559,7 +556,15 @@ async def get_current_user(
     # get feature flags for current user from dedicated table
     current_user_flags = await get_user_flags(db, session.did)
 
-    granted = session_has_private_media_access(session)
+    granted = session_has_private_media_access(
+        session
+    ) and session_has_protected_audio_access(session)
+
+    try:
+        supported = await pds_supports_spaces(session)
+    except HTTPException:
+        supported = granted
+        logger.warning("PDS storage capability is temporarily unavailable")
 
     return CurrentUserResponse(
         did=session.did,
@@ -574,7 +579,7 @@ async def get_current_user(
         ],
         enabled_flags=current_user_flags,
         permissioned_spaces=PermissionedSpacesStatus(
-            supported=granted,
+            supported=supported,
             granted=granted,
             reader=session_can_read_shared_private_media(session),
         ),

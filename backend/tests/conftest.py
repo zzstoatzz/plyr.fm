@@ -28,6 +28,7 @@ from backend.config import settings
 from backend.models import Base
 from backend.storage.keys import AudioKey, StagedUploadKey
 from backend.storage.r2 import R2Storage
+from backend.utilities.rate_limit import create_limiter, limiter
 from backend.utilities.redis import clear_client_cache
 
 # the suite's scope/collection assertions are written against the production
@@ -636,6 +637,13 @@ def redis_database(worker_id: str) -> Generator[None, None, None]:
 
     # patch settings for this worker process
     settings.docket.url = new_url
+    isolated_limiter = create_limiter(
+        new_url, settings.rate_limit.default_limit, limiter.enabled
+    )
+    limiter._storage_uri = new_url
+    limiter._storage = isolated_limiter._storage
+    limiter._limiter = isolated_limiter._limiter
+    limiter._storage_dead = False
     os.environ["DOCKET_URL"] = new_url
 
     # clear any cached clients (they have old URL)

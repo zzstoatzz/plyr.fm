@@ -120,6 +120,19 @@ def test_headers_round_trip_the_upstream_shapes() -> None:
             mac.parse_mac_header(bad)
 
 
+def test_record_value_matches_canonical_dag_cbor_with_links_and_bytes() -> None:
+    value = {
+        "data": {"$bytes": "AQID"},
+        "ref": {"$link": "bafkreigh2akiscaildcdrw3q4p6vn6c7bbzxwk5xehbim3zbytb5w3tsru"},
+    }
+    cid = "bafyreicqq52uip66vysa7hc73yk4g6cphpdyvsxbngsshw73vftwmpicti"
+    mac.verify_record_value(value, cid)
+    with pytest.raises(mac.SpaceMacError, match="does not match"):
+        mac.verify_record_value({**value, "data": {"$bytes": "BAUG"}}, cid)
+    with pytest.raises(mac.SpaceMacError, match="does not match"):
+        mac.verify_record_value({**value, "ref": {"$bytes": "AQID"}}, cid)
+
+
 def _session() -> Session:
     return Session(
         session_id="s", did="did:plc:user", handle="user.test", oauth_session={}

@@ -1,4 +1,5 @@
 import type { PublishingDefaults } from './publishing';
+import type { TrackEntry } from './components/TrackEntryCard.svelte';
 /**
  * Holds a pending recording across the one-time private-media consent redirect.
  *
@@ -40,7 +41,10 @@ function openDb(): Promise<IDBDatabase> {
 	});
 }
 
-function tx<T>(mode: IDBTransactionMode, run: (_store: IDBObjectStore) => IDBRequest<T>): Promise<T> {
+function tx<T>(
+	mode: IDBTransactionMode,
+	run: (_store: IDBObjectStore) => IDBRequest<T>
+): Promise<T> {
 	return openDb().then(
 		(db) =>
 			new Promise<T>((resolve, reject) => {
@@ -93,7 +97,9 @@ export async function stashUploadFiles(files: StashedUploadFiles): Promise<boole
 
 export async function takeUploadFiles(): Promise<StashedUploadFiles | null> {
 	try {
-		const stashed = await tx<StashedUploadFiles | undefined>('readonly', (store) => store.get(UPLOAD_KEY));
+		const stashed = await tx<StashedUploadFiles | undefined>('readonly', (store) =>
+			store.get(UPLOAD_KEY)
+		);
 		await clearUploadFiles();
 		return stashed?.file ? stashed : null;
 	} catch (e) {
@@ -107,5 +113,36 @@ export async function clearUploadFiles(): Promise<void> {
 		await tx('readwrite', (store) => store.delete(UPLOAD_KEY));
 	} catch (e) {
 		console.error('could not clear the stashed upload files:', e);
+	}
+}
+
+export interface StashedAlbumUpload {
+	albumTitle: string;
+	publishing: PublishingDefaults;
+	coverArtFile: File | null;
+	tracks: TrackEntry[];
+	attestedRights: boolean;
+}
+
+export async function stashAlbumUpload(draft: StashedAlbumUpload): Promise<boolean> {
+	try {
+		await tx('readwrite', (store) => store.put(draft, 'album-upload'));
+		return true;
+	} catch (error) {
+		console.error('could not stash the album:', error);
+		return false;
+	}
+}
+
+export async function takeAlbumUpload(): Promise<StashedAlbumUpload | null> {
+	try {
+		const draft = await tx<StashedAlbumUpload | undefined>('readonly', (store) =>
+			store.get('album-upload')
+		);
+		await tx('readwrite', (store) => store.delete('album-upload'));
+		return draft ?? null;
+	} catch (error) {
+		console.error('could not restore the album:', error);
+		return null;
 	}
 }

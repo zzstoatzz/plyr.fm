@@ -1,4 +1,8 @@
 > **status (2026-09-02): phase 0 shipped as #1948–#1950 and was reverted the
+
+Historical plan. The October 28 staging implementation changes protected audio
+storage and encoding behavior; see [protected PDS audio](../internal/architecture/protected-pds-audio.md).
+Production promotion remains separate.
 > same day in #1952.** it made the frontend a second OAuth client and chained
 > its consent after the cookie login, so every sign-in showed two
 > authorization screens. the rule that came out of it: **there is exactly one

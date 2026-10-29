@@ -19,9 +19,17 @@ from backend.utilities.publishing import (
 )
 
 
+@pytest.fixture(autouse=True)
+def pds_without_spaces(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "backend._internal.atproto.spaces.capability.pds_supports_spaces",
+        AsyncMock(return_value=False),
+    )
+
+
 @pytest.mark.parametrize("visibility", ["public", "unlisted"])
 @pytest.mark.parametrize("downloads", ["open", "ask"])
-async def test_download_roundtrip_restores_pds_record(
+async def test_legacy_protected_download_changes_restore_public_pds_record(
     db_session: AsyncSession,
     visibility: PublicationVisibility,
     downloads: DownloadPolicy,
@@ -39,12 +47,12 @@ async def test_download_roundtrip_restores_pds_record(
         file_type="mp3",
         original_file_id="master",
         original_file_type="wav",
-        audio_storage="both",
-        r2_url="https://audio.example/audio/playback.mp3",
-        pds_blob_cid="old-cid",
-        pds_blob_size=5,
+        audio_storage="r2_private",
+        r2_url=None,
+        pds_blob_cid=None,
+        pds_blob_size=None,
         visibility=visibility,
-        download_policy=downloads,
+        download_policy="off",
         atproto_record_uri="at://did:test:roundtrip/fm.plyr.track/test",
     )
     db_session.add(track)

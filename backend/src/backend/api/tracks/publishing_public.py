@@ -13,6 +13,8 @@ from .uploads import _should_upload_pds_blob
 
 
 async def prepare_public(db: AsyncSession, track: Track, session: Session) -> None:
+    if track.protected_audio:
+        return
     key = AudioKey.for_track(
         file_id=track.file_id, file_type=track.file_type, r2_url=track.r2_url
     )
@@ -35,6 +37,7 @@ async def prepare_public(db: AsyncSession, track: Track, session: Session) -> No
         await storage.copy_audio_to_public(
             track.original_file_id, track.original_file_type or track.file_type
         )
+    track.protected_audio = None
     track.audio_storage = "both" if blob else "r2"
     track.r2_url = audio_url
     track.pds_blob_cid = blob["ref"]["$link"] if blob else None

@@ -23,6 +23,7 @@ from backend.config import settings
 from backend.models.album import Album
 from backend.models.playlist import Playlist
 from backend.models.track import Track
+from backend.storage._promotion import promote_object
 from backend.storage.keys import (
     AudioKey,
     ImageKey,
@@ -618,29 +619,27 @@ class R2Storage:
     async def promote_staged(
         self, staged: StagedUploadKey, audio: AudioKey, *, gated: bool
     ) -> None:
-        """server-side copy of a completed staged object to its content-hash key.
-
-        the copy carries the public cache headers the direct `save` path
-        writes; the staged object is deleted afterwards. a copy onto a key
-        that already holds these exact bytes (a re-upload of a published
-        file) is harmless — the duplicate check downstream rejects the track
-        and `discard_staged` keeps the referenced object.
-        """
-        src_bucket = self._staged_bucket()
+        """Copy staged audio to its content-hash key, verify, then remove staging."""
         dst_bucket = self.private_audio_bucket_name if gated else self.audio_bucket_name
         with logfire.span(
             "R2 promote_staged", src=staged.key, dst=audio.key, gated=gated
         ):
-            async with self._s3_client() as client:
-                await client.copy_object(
-                    CopySource={"Bucket": src_bucket, "Key": staged.key},
-                    Bucket=dst_bucket,
-                    Key=audio.key,
-                    MetadataDirective="REPLACE",
-                    ContentType=audio.format.media_type,
-                    CacheControl=IMMUTABLE_CACHE_CONTROL,
+            async with self._s3_client(
+                config=Config(
+                    connect_timeout=10,
+                    read_timeout=90,
+                    retries={"mode": "standard", "total_max_attempts": 3},
                 )
-                await client.delete_object(Bucket=src_bucket, Key=staged.key)
+            ) as client:
+                await promote_object(
+                    client,
+                    source_bucket=self._staged_bucket(),
+                    source_key=staged.key,
+                    bucket=dst_bucket,
+                    key=audio.key,
+                    content_type=audio.format.media_type,
+                    cache_control=IMMUTABLE_CACHE_CONTROL,
+                )
 
     async def delete_staged(self, staged: StagedUploadKey) -> None:
         async with self._s3_client() as client:

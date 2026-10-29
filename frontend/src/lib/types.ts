@@ -72,8 +72,9 @@ export interface Track {
 	original_file_id?: string | null; // original file hash if transcoded
 	original_file_type?: string | null; // original format if transcoded (e.g., aiff, flac)
 	description?: string | null; // track description (liner notes, show notes)
-	audio_storage?: 'r2' | 'r2_private' | 'pds' | 'both'; // where audio is stored
-	pds_blob_cid?: string | null; // CID if stored on user's PDS
+	audio_storage?: 'r2' | 'r2_private' | 'pds' | 'both'; // playback storage; protected PDS source is audio_space
+	pds_blob_cid?: string | null; // public-repo audio blob CID
+	audio_space?: string | null;
 	is_optimizing?: boolean; // deferred mp3 optimize still pending (server-computed)
 	unlisted?: boolean; // excluded from discovery feeds
 	copyright_song_uri?: string | null; // indiemusi song record (set if track has rights metadata)
@@ -92,8 +93,7 @@ export interface User {
 	linked_accounts: LinkedAccount[];
 	enabled_flags: string[];
 	// private media on ATProto permissioned spaces. `granted` = this session's
-	// token carries the expanded space grant; `supported` = still worth offering
-	// (false once an upgrade on this PDS came back without one).
+	// token carries the expanded space grant; `supported` is the PDS capability.
 	permissioned_spaces?: { supported: boolean; granted?: boolean; reader?: boolean };
 }
 

@@ -4,28 +4,35 @@ drives the real endpoints against the in-memory multipart store in
 `MockStorage`; only the docket enqueue is mocked.
 """
 
+import asyncio
 import hashlib
 import json
-from collections.abc import Generator
+from collections.abc import AsyncIterable, Awaitable, Callable, Generator
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from cachetools import TTLCache
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 import backend.storage
 from backend._internal import Session, require_artist_profile
+from backend._internal.atproto.spaces import capability
 from backend._internal.jobs import job_service
+from backend.api.tracks import uploads
 from backend.api.tracks.uploads import (
     UploadContext,
     _settle_staged_audio,
     parse_upload_metadata,
 )
 from backend.models import Album, Artist, UserPreferences
-from backend.models.job import JobStatus, JobType
-from backend.storage.keys import StagedUploadKey
+from backend.models.job import Job, JobStatus, JobType
+from backend.storage.keys import AudioKey, StagedUploadKey
 from backend.upload_limits import MAX_FILE_BYTES
+from backend.utilities.database import db_session as database_session
 
 PART = 8
 _AUDIO = bytes(range(20))  # 3 parts of 8, last is 4
@@ -47,6 +54,13 @@ class _ArtistSession(Session):
             "dpop_authserver_nonce": "",
             "dpop_pds_nonce": "",
         }
+
+
+@pytest.fixture(autouse=True)
+def unsupported_fixture_pds(monkeypatch: pytest.MonkeyPatch) -> None:
+    cache: TTLCache[str, bool] = TTLCache(maxsize=10, ttl=300)
+    cache["https://test.pds"] = False
+    monkeypatch.setattr(capability, "_capabilities", cache)
 
 
 @pytest.fixture
@@ -119,6 +133,7 @@ def test_session_round_trip_enqueues_a_staged_upload(
                     {"access": {"visibility": visibility, "downloads": download_policy}}
                 ),
                 "tags": '["a"]',
+                "accept_plyr_storage": "true",
             },
         )
         assert resp.status_code == 200, resp.text
@@ -412,6 +427,7 @@ async def test_upload_storage_resolves_artist_download_default(
         album_id=album.id if album and source == "album" else None,
         features=None,
         tags=None,
+        accept_plyr_storage=True,
         publishing=json.dumps({"access": {"downloads": override}})
         if override
         else None,
@@ -427,3 +443,165 @@ async def test_upload_storage_resolves_artist_download_default(
         "track" if override else "album" if album else "portal"
     )
     assert meta.visibility == "public"
+
+
+def test_protected_transfer_requires_explicit_storage_acceptance(
+    artist_app: FastAPI,
+) -> None:
+    with TestClient(artist_app) as client:
+        upload = _start(client)
+        _send_parts(client, upload["upload_id"])
+        response = client.post(
+            f"/tracks/uploads/{upload['upload_id']}/finish",
+            data={
+                "title": "song",
+                "publishing": json.dumps({"access": {"downloads": "off"}}),
+            },
+        )
+        assert response.status_code == 400
+        assert response.json()["detail"] == "plyr_storage_acceptance_required"
+        state = client.get(f"/tracks/uploads/{upload['upload_id']}")
+        assert state.status_code == 200
+        assert state.json()["received_parts"] == [1, 2, 3]
+
+
+def test_capable_pds_cannot_bypass_scope_with_storage_acceptance(
+    artist_app: FastAPI,
+) -> None:
+    capability._capabilities["https://test.pds"] = True
+    with TestClient(artist_app) as client:
+        upload = _start(client)
+        _send_parts(client, upload["upload_id"])
+        response = client.post(
+            f"/tracks/uploads/{upload['upload_id']}/finish",
+            data={
+                "title": "song",
+                "publishing": json.dumps({"access": {"downloads": "off"}}),
+                "accept_plyr_storage": "true",
+            },
+        )
+        assert response.status_code == 403
+        assert response.json()["detail"] == "permissioned_scope_required"
+
+
+async def test_direct_protected_pds_transfer_refreshes_the_pending_job(
+    artist_app: FastAPI,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    checked: list[str] = []
+    blob = {
+        "$type": "blob",
+        "ref": {"$link": "bafksource"},
+        "mimeType": "audio/mpeg",
+        "size": len(_AUDIO),
+    }
+
+    async def transfer(
+        session: Session,
+        *,
+        body_factory: Callable[[], AsyncIterable[bytes]],
+        content_length: int,
+        content_type: str,
+        heartbeat: Callable[[], Awaitable[None]],
+    ) -> dict:
+        assert content_length == len(_AUDIO)
+        assert b"".join([chunk async for chunk in body_factory()]) == _AUDIO
+        async with database_session() as db:
+            job = await db.scalar(select(Job).where(Job.owner_did == session.did))
+            assert job is not None
+            job_id = job.id
+            assert job.status == JobStatus.PENDING.value
+            stale = datetime.now(UTC) - timedelta(minutes=20)
+            await db.execute(
+                update(Job).where(Job.id == job_id).values(updated_at=stale)
+            )
+            await db.commit()
+        await heartbeat()
+        refreshed = await job_service.get_job(job_id)
+        assert refreshed is not None
+        assert refreshed.updated_at > stale + timedelta(minutes=10)
+        checked.append(job_id)
+        return blob
+
+    async def supported(session: Session) -> bool:
+        return True
+
+    monkeypatch.setattr(
+        "backend.api.tracks.uploads.protected_storage_choice", supported
+    )
+    monkeypatch.setattr("backend.api.tracks.uploads.upload_blob", transfer)
+    monkeypatch.setattr(
+        "backend.api.tracks.uploads.publish_protected_blob",
+        AsyncMock(return_value={"record_uri": "at://protected", "audio_blob": blob}),
+    )
+    monkeypatch.setattr("backend.api.tracks.uploads.schedule_track_upload", AsyncMock())
+    with TestClient(artist_app) as client:
+        response = client.post(
+            "/tracks/",
+            files={"file": ("song.mp3", _AUDIO, "audio/mpeg")},
+            data={
+                "title": "song",
+                "publishing": json.dumps({"access": {"downloads": "off"}}),
+            },
+        )
+    assert response.status_code == 200, response.text
+    assert checked == [response.json()["upload_id"]]
+
+
+async def test_staged_promotion_heartbeats_only_while_copy_is_pending(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    upload_id = await job_service.create_job(
+        JobType.UPLOAD, "did:test:artist", "uploading"
+    )
+    await job_service.update_progress(
+        upload_id, JobStatus.PROCESSING, "settling", phase="settle"
+    )
+    started = asyncio.Event()
+    release = asyncio.Event()
+
+    async def copy(staged: StagedUploadKey, audio: AudioKey, *, gated: bool) -> None:
+        started.set()
+        await release.wait()
+
+    monkeypatch.setattr(uploads, "PROMOTION_HEARTBEAT_SECONDS", 0.01)
+    monkeypatch.setattr(_mock_storage(), "promote_staged", copy)
+    old = datetime.now(UTC) - timedelta(minutes=9)
+    await db_session.execute(
+        update(Job).where(Job.id == upload_id).values(updated_at=old)
+    )
+    await db_session.commit()
+    ctx = _staged_ctx(upload_id)
+    task = asyncio.create_task(
+        uploads._promote_staged_audio(
+            ctx.upload_id,
+            ctx.staged_key,
+            AudioKey.for_file("fixture", "wav"),
+            gated=False,
+        )
+    )
+    try:
+        await asyncio.wait_for(started.wait(), 2)
+        for _ in range(100):
+            async with database_session() as db:
+                job = await db.get(Job, upload_id)
+                assert job is not None
+                if job.updated_at > old:
+                    break
+            await asyncio.sleep(0.01)
+        else:
+            raise AssertionError("live promotion did not heartbeat its job")
+        assert job.status == JobStatus.PROCESSING.value
+        assert job.phase == "settle"
+    finally:
+        release.set()
+        await task
+    async with database_session() as db:
+        finished = await db.get(Job, upload_id)
+        assert finished is not None
+        last_beat = finished.updated_at
+    await asyncio.sleep(0.04)
+    async with database_session() as db:
+        stopped = await db.get(Job, upload_id)
+        assert stopped is not None
+        assert stopped.updated_at == last_beat

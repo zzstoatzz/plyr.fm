@@ -19,10 +19,12 @@ orphaned MP3 (if any) is cleaned up. docket retries the task.
 
 import contextlib
 import logging
+import tempfile
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from urllib.parse import urljoin
 
+import aiofiles
 import logfire
 from docket import ConcurrencyLimit, ExponentialRetry
 from sqlalchemy import select
@@ -31,8 +33,16 @@ from sqlalchemy.orm import selectinload
 
 from backend._internal import get_session
 from backend._internal.atproto.records import build_track_record, update_record
+from backend._internal.atproto.spaces.client import get_space_credential
+from backend._internal.atproto.spaces.protected_audio import (
+    delete_protected_audio,
+    open_protected_blob,
+    protected_record_location,
+    publish_protected_blob,
+)
 from backend._internal.background import get_docket
 from backend._internal.jobs import job_service
+from backend._internal.pds_audio import upload_stored_audio
 from backend._internal.tasks.hooks import (
     invalidate_tracks_discovery_cache,
     notify_new_track,
@@ -49,6 +59,7 @@ from backend.config import settings
 from backend.models import Track
 from backend.models.job import JobStatus, JobType
 from backend.storage import storage
+from backend.storage.keys import AudioKey
 from backend.utilities.audio_formats import AudioFormat
 from backend.utilities.database import db_session
 
@@ -94,6 +105,7 @@ class _AudioState:
     created_at: datetime
     is_gated: bool
     audio_storage: str = "r2"
+    protected_audio: dict | None = None
 
 
 @dataclass
@@ -110,6 +122,7 @@ class _MetadataState:
     self_labels: list[str]
     support_gate: dict | None
     atproto_record_uri: str
+    download_policy: str
 
 
 def _needs_optimization(track: Track) -> bool:
@@ -161,6 +174,7 @@ async def _load_audio_state(track_id: int) -> _AudioState | None:
             created_at=track.created_at,
             is_gated=track.uses_private_audio,
             audio_storage=track.audio_storage,
+            protected_audio=track.protected_audio,
         )
 
 
@@ -188,6 +202,7 @@ async def _refresh_metadata(state: _AudioState) -> _MetadataState:
             self_labels=list(track.self_labels or []),
             support_gate=dict(track.support_gate) if track.support_gate else None,
             atproto_record_uri=track.atproto_record_uri,
+            download_policy=track.download_policy,
         )
 
 
@@ -206,17 +221,18 @@ async def _verify_still_optimizable(state: _AudioState) -> None:
     async with db_session() as db:
         row = (
             await db.execute(
-                select(Track.file_id, Track.original_file_id).where(
-                    Track.id == state.track_id
-                )
+                select(
+                    Track.file_id, Track.original_file_id, Track.protected_audio
+                ).where(Track.id == state.track_id)
             )
         ).first()
         if row is None:
             raise _OptimizeAbort("track removed during optimization")
-        current_file_id, current_original_file_id = row
+        current_file_id, current_original_file_id, current_protected_audio = row
         if (
             current_file_id != state.interim_file_id
             or current_original_file_id != state.original_file_id
+            or current_protected_audio != state.protected_audio
         ):
             raise _OptimizeAbort(
                 f"track audio changed during optimization "
@@ -231,6 +247,7 @@ async def _commit_optimize_swap(
     sr: StorageResult,
     pds_result: PdsBlobResult | None,
     new_record_cid: str,
+    protected_audio: dict | None = None,
 ) -> bool:
     """conditional swap to the MP3 rendition. succeeds iff the track is still
     pointing at the captured interim WAV + lossless original (CAS via WHERE).
@@ -252,6 +269,7 @@ async def _commit_optimize_swap(
                 Track.id == state.track_id,
                 Track.file_id == state.interim_file_id,
                 Track.original_file_id == state.original_file_id,
+                Track.protected_audio == state.protected_audio,
             )
             .values(
                 file_id=sr.file_id,
@@ -263,10 +281,71 @@ async def _commit_optimize_swap(
                 pds_blob_cid=pds_result.cid if pds_result else None,
                 pds_blob_size=pds_result.size if pds_result else None,
                 atproto_record_cid=new_record_cid,
+                protected_audio=protected_audio,
             )
         )
         await db.commit()
-        return result.rowcount == 1  # type: ignore[union-attr]
+        if result.rowcount == 1:  # type: ignore[union-attr]
+            return True
+        if protected_audio is not None:
+            current = await db.scalar(
+                select(Track).where(Track.id == state.track_id).with_for_update()
+            )
+            expected = {
+                key: value
+                for key, value in protected_audio.items()
+                if key != "mirror_verified"
+            }
+            observed = (
+                {
+                    key: value
+                    for key, value in (current.protected_audio or {}).items()
+                    if key != "mirror_verified"
+                }
+                if current
+                else {}
+            )
+            if (
+                current
+                and current.file_id == sr.file_id
+                and current.original_file_id == state.original_file_id
+                and observed == expected
+                and current.atproto_record_cid == new_record_cid
+            ):
+                current.protected_audio = protected_audio
+                await db.commit()
+                return True
+        return False
+
+
+async def _restore_protected_source(state: _AudioState) -> None:
+    if not state.protected_audio:
+        return
+    space, _ = protected_record_location(
+        state.protected_audio["record_uri"], owner=state.artist_did
+    )
+    await get_space_credential(None, space)
+    if state.protected_audio.get("mirror_verified") and (
+        await storage.head_file(
+            state.original_file_id, state.original_file_type, private=True
+        )
+        is not None
+    ):
+        return
+    with tempfile.NamedTemporaryFile(suffix=f".{state.original_file_type}") as tmp:
+        async with open_protected_blob(
+            state.protected_audio, original=True
+        ) as response:
+            response.raise_for_status()
+            async with aiofiles.open(tmp.name, "wb") as output:
+                async for chunk in response.aiter_bytes():
+                    await output.write(chunk)
+        with open(tmp.name, "rb") as source:
+            restored = await storage.save_gated(
+                source, f"source.{state.original_file_type}"
+            )
+        if restored != state.original_file_id:
+            raise ValueError("protected source does not match its stored content hash")
 
 
 async def optimize_track_audio(
@@ -310,7 +389,10 @@ async def optimize_track_audio(
         # — third-party PDS readers depend on the url being reachable. better
         # to leak storage than 404 their playback.
         pds_published = False
+        protected_published: dict | None = None
+        protected_publish_attempted = False
         try:
+            await _restore_protected_source(state)
             transcode_info = await _transcode_audio(
                 job_id,
                 state.original_file_id,
@@ -369,7 +451,11 @@ async def optimize_track_audio(
                 features_json=None,
                 tags=[],
             )
-            pds_result = await _upload_to_pds(phase_ctx, audio_info, sr)
+            pds_result = (
+                None
+                if state.protected_audio
+                else await _upload_to_pds(phase_ctx, audio_info, sr)
+            )
             if pds_result and (refreshed := await get_session(session_id)):
                 session = refreshed
 
@@ -377,6 +463,30 @@ async def optimize_track_audio(
             # last cheap check before we go write to PDS: bail if the track has
             # been replaced/edited under us during the encode.
             await _verify_still_optimizable(state)
+            if state.protected_audio:
+                size = await storage.head_file(
+                    new_mp3_file_id, OPTIMIZE_TARGET_FORMAT, private=True
+                )
+                if size is None:
+                    raise ValueError("optimized protected audio mirror is missing")
+                blob = await upload_stored_audio(
+                    session,
+                    AudioKey.for_file(new_mp3_file_id, OPTIMIZE_TARGET_FORMAT),
+                    size,
+                    private=True,
+                )
+                protected_published = await publish_protected_blob(
+                    session,
+                    audio_blob=blob,
+                    file_id=new_mp3_file_id,
+                    file_type=OPTIMIZE_TARGET_FORMAT,
+                    title=meta.title,
+                    original_blob=state.protected_audio.get("original_blob")
+                    or state.protected_audio["audio_blob"],
+                    original_file_id=state.original_file_id,
+                    original_file_type=state.original_file_type,
+                )
+                protected_published["mirror_verified"] = True
 
             new_record = await build_track_record(
                 title=meta.title,
@@ -389,10 +499,15 @@ async def optimize_track_audio(
                 image_url=meta.image_url,
                 support_gate=meta.support_gate,
                 audio_blob=pds_result.blob_ref if pds_result else None,
+                audio_space=protected_published["record_uri"]
+                if protected_published
+                else None,
+                download_policy=meta.download_policy,
                 description=meta.description,
                 self_labels=meta.self_labels,
                 created_at=state.created_at,
             )
+            protected_publish_attempted = protected_published is not None
             _, new_cid = await update_record(
                 auth_session=session,
                 record_uri=meta.atproto_record_uri,
@@ -400,7 +515,9 @@ async def optimize_track_audio(
             )
             pds_published = True
 
-            swapped = await _commit_optimize_swap(state, sr, pds_result, new_cid)
+            swapped = await _commit_optimize_swap(
+                state, sr, pds_result, new_cid, protected_published
+            )
             if not swapped:
                 # CAS-miss: the track moved on between the pre-publish guard
                 # and now. PDS has been written to point at our MP3, so we
@@ -414,6 +531,9 @@ async def optimize_track_audio(
                 )
 
         except _OptimizeAbort as e:
+            if protected_published and not protected_publish_attempted:
+                with contextlib.suppress(Exception):
+                    await delete_protected_audio(session, protected_published)
             # terminal: track is no longer in our captured state. don't retry.
             # only clean up the new MP3 if we hadn't already pushed it to PDS;
             # once the record points at the url, third-party readers may be
@@ -432,6 +552,9 @@ async def optimize_track_audio(
             return
 
         except Exception as e:
+            if protected_published and not protected_publish_attempted:
+                with contextlib.suppress(Exception):
+                    await delete_protected_audio(session, protected_published)
             # transient: let docket retry. same cleanup discipline — keep the
             # mp3 if PDS already references it; the next attempt will reconcile.
             if new_mp3_file_id and not pds_published:
@@ -453,6 +576,10 @@ async def optimize_track_audio(
             if retry.attempts is not None and retry.attempt >= retry.attempts:
                 await notify_new_track(track_id)
             raise
+
+        if state.protected_audio:
+            with contextlib.suppress(Exception):
+                await delete_protected_audio(session, state.protected_audio)
 
         # post-commit: the interim playable rendition is now orphaned — delete
         # it. best-effort; a leaked object is harmless (no row references it).

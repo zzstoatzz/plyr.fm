@@ -59,6 +59,7 @@ class RevisionResponse(BaseModel):
     audio_storage: str  # "r2" | "pds" | "both"
     duration: int | None
     was_gated: bool
+    audio_space: str | None = None
 
     @classmethod
     def from_revision(cls, revision: TrackRevision) -> "RevisionResponse":
@@ -71,6 +72,7 @@ class RevisionResponse(BaseModel):
             audio_storage=revision.audio_storage,
             duration=revision.duration,
             was_gated=revision.was_gated,
+            audio_space=(revision.protected_audio or {}).get("record_uri"),
         )
 
 
@@ -198,6 +200,12 @@ async def restore_track_revision(
             ),
         )
 
+    if bool(track.protected_audio) != bool(revision.protected_audio):
+        raise HTTPException(
+            status_code=409,
+            detail="restoring across audio storage boundaries requires a migration",
+        )
+
     # build + publish the updated PDS record FIRST, mirroring the replace flow.
     # if this fails, we abort before touching the DB.
     #
@@ -211,7 +219,7 @@ async def restore_track_revision(
     audio_format = AudioFormat.from_extension(f".{revision.file_type}")
     content_type = audio_format.media_type if audio_format else "audio/mpeg"
     audio_blob: dict | None = None
-    if revision.pds_blob_cid:
+    if revision.pds_blob_cid and not revision.protected_audio:
         audio_blob = {
             "$type": "blob",
             "ref": {"$link": revision.pds_blob_cid},
@@ -230,6 +238,8 @@ async def restore_track_revision(
         image_url=await track.get_image_url(),
         support_gate=dict(track.support_gate) if track.support_gate else None,
         audio_blob=audio_blob,
+        audio_space=(revision.protected_audio or {}).get("record_uri"),
+        download_policy=track.download_policy,
         description=track.description,
         self_labels=track.self_labels,
     )
@@ -347,6 +357,7 @@ async def restore_track_revision(
             audio_url=live_track.r2_url,
             pds_blob_cid=live_track.pds_blob_cid,
             pds_blob_size=live_track.pds_blob_size,
+            protected_audio=live_track.protected_audio,
             duration=live_track.duration,
             was_gated=live_track.uses_private_audio,
         )
@@ -358,6 +369,7 @@ async def restore_track_revision(
         live_track.original_file_type = revision.original_file_type
         live_track.r2_url = None if revision.was_gated else revision.audio_url
         live_track.atproto_record_cid = new_cid
+        live_track.protected_audio = revision.protected_audio
 
         # if the PDS lost the blob AND we couldn't re-upload it, downgrade the
         # track's recorded storage state to match the published record (no
@@ -405,7 +417,7 @@ async def restore_track_revision(
     # post-commit best-effort:
     # - prune revisions if the snapshot pushed us over the cap
     # - resync album list record so its strongRef carries the new CID
-    await prune_revisions(track_id)
+    await prune_revisions(track_id, auth_session)
 
     if track.album_id:
         from backend._internal.tasks import schedule_album_list_sync

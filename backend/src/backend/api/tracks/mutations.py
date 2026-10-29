@@ -3,6 +3,7 @@
 import contextlib
 import logging
 from typing import Annotated
+from urllib.parse import urljoin
 
 import logfire
 from fastapi import Depends, File, Form, HTTPException, Request, UploadFile
@@ -37,8 +38,9 @@ from backend._internal.tasks import (
 )
 from backend._internal.tasks.hooks import invalidate_tracks_discovery_cache
 from backend._internal.tasks.ingest import _write_tombstone
+from backend._internal.track_revisions import delete_unreferenced_protected_audio
 from backend.config import settings
-from backend.models import Artist, Track, get_db
+from backend.models import Artist, Track, TrackRevision, get_db
 from backend.schemas import MessageResponse, TrackResponse
 from backend.storage import storage
 from backend.storage.keys import AudioKey, InvalidMediaExtension
@@ -73,6 +75,18 @@ async def delete_track(
             status_code=403,
             detail="you can only delete your own tracks",
         )
+
+    protected_assets = [track.protected_audio] if track.protected_audio else []
+    protected_assets.extend(
+        asset
+        for asset in await db.scalars(
+            select(TrackRevision.protected_audio).where(
+                TrackRevision.track_id == track_id,
+                TrackRevision.protected_audio.is_not(None),
+            )
+        )
+        if asset
+    )
 
     # delete ATProto record if it exists
     if track.atproto_record_uri:
@@ -152,6 +166,11 @@ async def delete_track(
     if locked is not None:
         await db.delete(track)
     await db.commit()
+
+    try:
+        await delete_unreferenced_protected_audio(auth_session, protected_assets)
+    except Exception:
+        logger.exception("could not remove deleted track's protected audio records")
 
     # write tombstone so Jetstream replay doesn't re-create the track
     if record_uri:
@@ -533,7 +552,7 @@ async def restore_track_record(
         )
 
     # validate track has R2 URL (required for ATProto records)
-    if not track.r2_url:
+    if not track.r2_url and not track.protected_audio:
         raise HTTPException(
             status_code=400,
             detail={
@@ -548,7 +567,13 @@ async def restore_track_record(
     track_record = await build_track_record(
         title=track.title,
         artist=track.artist.display_name,
-        audio_url=track.r2_url,
+        audio_url=(
+            urljoin(settings.atproto.base_url + "/", f"audio/{track.file_id}")
+            if track.protected_audio
+            else track.r2_url
+        ),
+        audio_space=(track.protected_audio or {}).get("record_uri"),
+        download_policy=track.download_policy,
         file_type=track.file_type,
         album=track.album,
         duration=track.duration,

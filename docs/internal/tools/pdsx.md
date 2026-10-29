@@ -216,8 +216,32 @@ the track should appear with `audio_storage: "pds"` and `r2_url: null`.
 |-------|----------------|----------|
 | `audioBlob` only | `pds` | unmirrored: a third-party client wrote it; plyr holds no copy yet |
 | `audioUrl` only | `r2` | no PDS blob: the PDS refused the upload, or the track predates blob uploads |
-| both | `both` | the normal case: the audio is on the user's PDS, and plyr keeps a copy for streaming |
-| neither | rejected | ingest guard rejects — must have at least one |
+| both | `both` | public audio on the user's PDS, with a plyr streaming copy |
+| `audioSpace` | `r2_private` | protected source on the artist's Spaces PDS, with an optional private plyr streaming mirror |
+| none of these | rejected | ingest requires a supported audio source |
+
+### inspect a protected source
+
+The `audioSpace` path is deployed to staging and awaits production promotion.
+Ordinary repository reads can inspect its public track record, which contains
+`audioSpace` and `downloadPolicy`. The Space URI points to an immutable source
+record containing `audioBlob`, source file identifiers/types, and, after
+optimization, the retained original blob and format. Protected blob references
+must not be copied into the public repository record.
+
+The playback Space uses public read policy with app access restricted to plyr's
+OAuth client identity. An ordinary `pdsx cat` or unauthenticated
+`com.atproto.sync.getBlob` is insufficient to read its audio. Use the owner's
+authorized Space API or plyr's playback/original-download endpoints; this guide
+does not assume pdsx implements Spaces credentials.
+
+Ingest validates the source owner, environment, record MAC and blob references,
+then projects it into `Track.protected_audio`. A valid direct PDS publication can
+rebuild the index without an upload reservation. Its `r2_private` storage label
+describes the serving policy and does not prove an R2 object exists. Imported
+file identifiers remain untrusted until a mirror is fetched from the PDS and its
+bytes verified. Preserve `audioSpace` and `downloadPolicy` when editing metadata;
+changing the title must not expose a protected blob or reset download policy.
 
 ### cleanup
 

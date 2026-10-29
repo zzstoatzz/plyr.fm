@@ -1,4 +1,10 @@
 <script lang="ts">
+	import UploadStorageNotice from '$lib/components/UploadStorageNotice.svelte';
+	import {
+		needsProtectedAudio,
+		needsPlyrStorageAcceptance,
+		needsSpacesApproval
+	} from '$lib/upload-storage';
 	import PublishingIntro from '$lib/components/PublishingIntro.svelte';
 	import { onDestroy, onMount } from 'svelte';
 	import { browser } from '$app/environment';
@@ -15,11 +21,7 @@
 	import { APP_NAME, APP_CANONICAL_URL } from '$lib/branding';
 	import { API_URL, COPYRIGHT_PARADIGM_FLAG } from '$lib/config';
 	import { setReturnUrl } from '$lib/utils/return-url';
-	import {
-		clearStashedRecording,
-		stashRecording,
-		takeStashedRecording
-	} from '$lib/record-stash';
+	import { clearStashedRecording, stashRecording, takeStashedRecording } from '$lib/record-stash';
 	import { Recorder, RecorderError, extensionForMime } from '$lib/recorder.svelte';
 	import { isWebPlayableExtension } from '$lib/utils/web-playable';
 	import { toWav } from '$lib/audio/wav';
@@ -35,6 +37,7 @@
 	let title = $state('');
 	let tags = $state<string[]>([]);
 	let publishingOverride = $state<PublishingDefaults | null>(null);
+	let acceptPlyrStorage = $state(false);
 	const publishing = $derived(publishingOverride ?? preferences.publishingDefaults);
 	const visibility = $derived(publishing.access.visibility);
 	let previewBlob = $state<Blob | null>(null);
@@ -42,14 +45,16 @@
 	// browser has scanned the recording for its real one
 	let capturedDuration = $state(0);
 
-	const reducedMotion =
-		browser && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+	const reducedMotion = browser && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-	const permissionedSupported = $derived(
-		auth.user?.permissioned_spaces?.supported ?? false
+	const permissionedSupported = $derived(auth.user?.permissioned_spaces?.supported ?? false);
+	const permissionedGranted = $derived(auth.user?.permissioned_spaces?.granted ?? false);
+
+	const requiresStorageAcceptance = $derived(
+		needsPlyrStorageAcceptance(publishing, permissionedSupported)
 	);
-	const permissionedGranted = $derived(
-		auth.user?.permissioned_spaces?.granted ?? false
+	const requiresSpacesApproval = $derived(
+		needsSpacesApproval(publishing, permissionedSupported, permissionedGranted)
 	);
 
 	const recorder = new Recorder({
@@ -85,6 +90,7 @@
 	}
 
 	function reRecord() {
+		acceptPlyrStorage = false;
 		previewBlob = null;
 		title = '';
 		tags = [];
@@ -127,7 +133,7 @@
 			blob,
 			title,
 			tags: $state.snapshot(tags),
-			publishing,
+			publishing: $state.snapshot(publishing),
 			capturedDuration
 		});
 		if (!stashed) {
@@ -145,7 +151,7 @@
 				const detail = await res.json().catch(() => null);
 				await clearStashedRecording();
 				if (detail?.detail === 'spaces_refused') {
-					toast.error("your PDS refused private media", 8000);
+					toast.error('your PDS refused audio storage', 8000);
 					await auth.refresh();
 				} else {
 					toast.error("couldn't start approval");
@@ -153,7 +159,7 @@
 				return false;
 			}
 			const data = await res.json();
-			toast.info('approving private media — your recording is saved', 6000);
+			toast.info('approving PDS storage — your recording is saved', 6000);
 			setReturnUrl('/record');
 			if (browser && data.auth_url) window.location.href = data.auth_url;
 			return true;
@@ -168,6 +174,7 @@
 	async function handleUpload() {
 		if (!preferences.data) return;
 		if (!previewBlob) return;
+		if (requiresStorageAcceptance && !acceptPlyrStorage) return;
 		let blob = previewBlob;
 
 		if (visibility === 'private') {
@@ -180,7 +187,7 @@
 			blob = prepared;
 		}
 
-		if (visibility === 'private' && !permissionedGranted) {
+		if (requiresSpacesApproval) {
 			uiState = 'uploading';
 			if (!(await upgradeForPrivate(blob))) uiState = 'preview';
 			return;
@@ -201,7 +208,8 @@
 			title,
 			undefined,
 			undefined,
-			[]
+			[],
+			acceptPlyrStorage && requiresStorageAcceptance
 		);
 		uiState = 'uploading';
 		void clearStashedRecording();
@@ -223,7 +231,7 @@
 		uiState = 'preview';
 		publishingOverride = parsePublishing(JSON.stringify(stashed.publishing));
 		if (!permissionedGranted) {
-			toast.error("not approved — your recording is still here", 6000);
+			toast.error('not approved — your recording is still here', 6000);
 			return;
 		}
 		toast.success('approved — saving your recording', 4000);
@@ -282,8 +290,23 @@
 	{#if uiState === 'idle'}
 		<div class="stage">
 			<div class="mic-aura">
-				<button type="button" class="record-btn" onclick={startRecording} aria-label="start recording">
-					<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+				<button
+					type="button"
+					class="record-btn"
+					onclick={startRecording}
+					aria-label="start recording"
+				>
+					<svg
+						width="48"
+						height="48"
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="2"
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						aria-hidden="true"
+					>
 						<path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
 						<path d="M19 10v2a7 7 0 0 1-14 0v-2" />
 						<line x1="12" y1="19" x2="12" y2="23" />
@@ -296,11 +319,13 @@
 	{:else if uiState === 'recording'}
 		<div class="stage">
 			<div class="timer" aria-live="polite">{elapsedDisplay}</div>
-			<div
-				class="mic-aura recording"
-				style="--input-level: {recorder.inputLevel.toFixed(3)}"
-			>
-				<button type="button" class="record-btn recording" onclick={() => recorder.stop()} aria-label="stop recording">
+			<div class="mic-aura recording" style="--input-level: {recorder.inputLevel.toFixed(3)}">
+				<button
+					type="button"
+					class="record-btn recording"
+					onclick={() => recorder.stop()}
+					aria-label="stop recording"
+				>
 					<svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
 						<rect x="6" y="6" width="12" height="12" rx="2" />
 					</svg>
@@ -344,28 +369,67 @@
 				/>
 			</div>
 
-			<PublishingSettings bind:value={publishingOverride} defaults={preferences.publishingDefaults} showSpace={permissionedSupported}
-				showRights={auth.user?.enabled_flags?.includes(COPYRIGHT_PARADIGM_FLAG)} />
+			<PublishingSettings
+				bind:value={publishingOverride}
+				defaults={preferences.publishingDefaults}
+				showSpace={permissionedSupported}
+				showRights={auth.user?.enabled_flags?.includes(COPYRIGHT_PARADIGM_FLAG)}
+			/>
+
+			<UploadStorageNotice
+				protectedAudio={visibility !== 'private' && needsProtectedAudio(publishing)}
+				spacesSupported={permissionedSupported}
+				bind:accepted={acceptPlyrStorage}
+			/>
 
 			<div class="actions">
 				<button type="button" class="secondary-btn" onclick={reRecord}>
-					<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+					<svg
+						width="16"
+						height="16"
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="2"
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						aria-hidden="true"
+					>
 						<line x1="18" y1="6" x2="6" y2="18" />
 						<line x1="6" y1="6" x2="18" y2="18" />
 					</svg>
 					re-record
 				</button>
-				<button type="button" class="primary-btn" onclick={handleUpload} disabled={!previewBlob || !preferences.data}>
-					<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+				<button
+					type="button"
+					class="primary-btn"
+					onclick={handleUpload}
+					disabled={!previewBlob ||
+						!preferences.data ||
+						(requiresStorageAcceptance && !acceptPlyrStorage)}
+				>
+					<svg
+						width="16"
+						height="16"
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="2"
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						aria-hidden="true"
+					>
 						<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
 						<polyline points="17 8 12 3 7 8" />
 						<line x1="12" y1="3" x2="12" y2="15" />
 					</svg>
-					{visibility !== 'private'
-						? 'publish'
-						: permissionedGranted
-							? 'save privately'
-							: 'approve private media'}
+					{requiresSpacesApproval
+						? 'approve PDS storage'
+						: visibility !== 'private'
+							? 'publish'
+							: permissionedGranted
+								? 'save privately'
+								: 'approve private media'}
 				</button>
 			</div>
 		</div>
@@ -384,8 +448,7 @@
 	main {
 		max-width: 640px;
 		margin: 0 auto;
-		padding: 0 1rem
-			calc(var(--player-height, 0px) + 2rem + env(safe-area-inset-bottom, 0px));
+		padding: 0 1rem calc(var(--player-height, 0px) + 2rem + env(safe-area-inset-bottom, 0px));
 	}
 
 	.section-header {
@@ -443,11 +506,7 @@
 	.mic-aura.recording::before {
 		background: radial-gradient(
 			circle at center,
-			color-mix(
-				in srgb,
-				var(--accent) calc(30% + var(--input-level) * 45%),
-				transparent
-			),
+			color-mix(in srgb, var(--accent) calc(30% + var(--input-level) * 45%), transparent),
 			transparent calc(62% + var(--input-level) * 12%)
 		);
 		transform: scale(calc(1 + var(--input-level) * 0.12));
