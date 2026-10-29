@@ -25,7 +25,7 @@ _TYPE = settings.atproto.private_media_space_type
 PERM_SCOPE = (
     f"space:{_TYPE}?authority=did:test:artist&skey=self"
     f"&collection={settings.atproto.track_collection}"
-    "&action=read&action=create&action=update&action=delete&manage=create"
+    "&action=read&action=create&action=update&action=delete&manage=create&manage=update&manage=delete"
 )
 
 
