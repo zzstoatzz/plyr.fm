@@ -1,21 +1,8 @@
-"""private (permissioned-space) track visibility — one place, applied everywhere.
+"""Viewer-aware metadata visibility for owner-only and permissioned-Space works.
 
-a private track (`Track.is_private`) lives in the artist's permissioned space and
-is visible to its owner and to anyone the space authority will issue a
-credential to ([private_access][backend._internal.private_access]), and
-invisible and inert to everyone else: no metadata reads, no listing/counting,
-no likes/comments/shares/embeds. public, unlisted, and gated tracks are
-unaffected (unlisted is still searchable/listable by design).
-
-two shapes:
-- [visible_filter][backend._internal.track_visibility.visible_filter]: a
-  SQLAlchemy condition for queries that list/count tracks. it shows the private
-  tracks of artists the viewer already holds a credential for; naming an
-  ``artist_did`` asks the authority for that one artist first, so an artist's
-  own page is answered from the source of truth.
-- [ensure_track_visible][backend._internal.track_visibility.ensure_track_visible]:
-  a guard for endpoints that load one track by id/uri/file_id. asks the
-  authority.
+Owner-only listening hides a track from every other viewer, independently of its
+stored discovery setting. Space membership grants access only to Space tracks.
+Direct reads use 404; SQL filters remove inaccessible rows before pagination.
 """
 
 import asyncio
@@ -71,7 +58,7 @@ async def visible_filter(
     """SQL condition: non-private tracks, plus private tracks the viewer owns or
     holds access to. pass ``artist_did`` (with ``db``) to ask the authority for
     that artist first."""
-    not_private = Track.visibility != "private"
+    not_private = Track.publicly_visible.is_(True)
     if session is None:
         return not_private
     accessible = await held_access(session.did)
@@ -85,12 +72,16 @@ async def visible_filter(
         accessible.add(artist_did)
     conditions = [not_private, Track.artist_did == session.did]
     if accessible:
-        conditions.append(Track.artist_did.in_(accessible))
+        conditions.append(
+            Track.is_private & ~Track.is_owner_only & Track.artist_did.in_(accessible)
+        )
     return or_(*conditions)
 
 
 async def can_view_track(session: Session | None, track: Track) -> bool:
     """whether the viewer may see/interact with `track`."""
+    if track.is_owner_only:
+        return session is not None and session.did == track.artist_did
     if not track.is_private:
         return True
     return await can_access(session, track.artist_did)

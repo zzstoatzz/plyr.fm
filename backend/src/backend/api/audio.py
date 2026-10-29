@@ -220,6 +220,8 @@ async def _check_gate_access(
     gate: dict, session: Session | None, artist_did: str
 ) -> None:
     """Authorize the explicit listening audience independently of downloads."""
+    if gate.get("type") == "owner" and (session is None or session.did != artist_did):
+        raise HTTPException(status_code=404, detail="audio file not found")
     if not session:
         raise HTTPException(status_code=401, detail="sign in to listen to this track")
     if session.did == artist_did:
@@ -403,6 +405,10 @@ async def download_audio(
 
 
 async def _authorize_download(row: Any, session: Session | None) -> None:
+    if (row.support_gate or {}).get("type") == "owner" and (
+        session is None or session.did != row.artist_did
+    ):
+        raise HTTPException(status_code=404, detail="audio file not found")
     policy = row.download_policy
     viewer_is_artist = session is not None and session.did == row.artist_did
     viewer_is_supporter = False

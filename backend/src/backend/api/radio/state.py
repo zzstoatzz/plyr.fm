@@ -17,6 +17,7 @@ from typing import Annotated
 from urllib.parse import urljoin
 
 from fastapi import Depends, HTTPException, Query
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend._internal import Session as AuthSession
@@ -387,6 +388,23 @@ async def radio_state(
 
     now = datetime.now(UTC)
     raw_rotation, anchor, upcoming = await _station_clock(db, resolved, limit, now)
+    candidate_ids = {track.id for track in raw_rotation + (upcoming or [])}
+    allowed_ids = (
+        set(
+            await db.scalars(
+                select(Track.id).where(
+                    Track.id.in_(candidate_ids),
+                    Track.in_discovery,
+                    Track.support_gate.is_(None),
+                )
+            )
+        )
+        if candidate_ids
+        else set()
+    )
+    raw_rotation = [track for track in raw_rotation if track.id in allowed_ids]
+    if upcoming is not None:
+        upcoming = [track for track in upcoming if track.id in allowed_ids]
     rotation = await _with_liked_state(db, raw_rotation, session)
     current_index, progress, started_at, ends_at = _live_window(now, rotation, anchor)
     current = rotation[current_index] if current_index is not None else None

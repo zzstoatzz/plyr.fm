@@ -13,7 +13,7 @@ from .schemas import AlbumListItem, AlbumMetadata, ArtistAlbumListItem
 
 logger = logging.getLogger(__name__)
 
-ALBUM_CACHE_PREFIX = "plyr:album:v3:"
+ALBUM_CACHE_PREFIX = "plyr:album:v4:"
 ALBUM_CACHE_TTL_SECONDS = 300  # 5 minutes
 
 

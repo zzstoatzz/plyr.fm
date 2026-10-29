@@ -549,7 +549,7 @@ class TestRunPostTrackCreateHooks:
                 track.id, audio_url="https://r2.example.com/test.mp3"
             )
 
-        mock_redis.delete.assert_called_once_with("plyr:tracks:discovery:v2")
+        mock_redis.delete.assert_called_once_with("plyr:tracks:discovery:v3")
 
     async def test_no_audio_url_skips_audio_tasks(
         self, db_session: AsyncSession

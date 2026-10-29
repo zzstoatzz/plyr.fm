@@ -230,7 +230,7 @@ async def _search_tracks(
         .join(Artist, Track.artist_did == Artist.did)
         .where(_matches(Track.title, query))
         # private (permissioned-space) media is never publicly searchable
-        .where(Track.visibility != "private")
+        .where(Track.publicly_visible)
         .order_by(relevance.desc())
         .limit(limit)
     )
@@ -297,7 +297,12 @@ async def _search_albums(
     relevance = _lexical_relevance(Album.title, query)
 
     # filter out empty albums (unfinalized drafts or legacy rows awaiting sync)
-    has_tracks = select(Track.id).where(Track.album_id == Album.id).limit(1).exists()
+    has_tracks = (
+        select(Track.id)
+        .where(Track.album_id == Album.id, Track.publicly_visible)
+        .limit(1)
+        .exists()
+    )
     stmt = (
         select(Album, Artist, relevance.label("relevance"))
         .join(Artist, Album.artist_did == Artist.did)
@@ -332,6 +337,8 @@ async def _search_tags(
     # count tracks per tag
     track_count_subq = (
         select(TrackTag.tag_id, func.count(TrackTag.track_id).label("track_count"))
+        .join(Track, Track.id == TrackTag.track_id)
+        .where(Track.publicly_visible)
         .group_by(TrackTag.tag_id)
         .subquery()
     )
@@ -342,7 +349,7 @@ async def _search_tags(
             func.coalesce(track_count_subq.c.track_count, 0).label("track_count"),
             relevance.label("relevance"),
         )
-        .outerjoin(track_count_subq, Tag.id == track_count_subq.c.tag_id)
+        .join(track_count_subq, Tag.id == track_count_subq.c.tag_id)
         .where(_matches(Tag.name, query))
         .order_by(relevance.desc())
         .limit(limit)
@@ -463,7 +470,7 @@ async def semantic_search(
         .join(Artist, Track.artist_did == Artist.did)
         .where(Track.id.in_(track_ids))
         # private media is never publicly searchable (also shouldn't be indexed)
-        .where(Track.visibility != "private")
+        .where(Track.publicly_visible)
     )
     result = await db.execute(stmt)
     rows = result.all()

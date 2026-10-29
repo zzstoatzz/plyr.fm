@@ -175,7 +175,7 @@ export async function resolveAudioSource(
 					requiresAuth: false,
 					artistDid: track.artist_did ?? '',
 					artistHandle: track.artist_handle,
-					listening: track.publishing?.access.listening
+					listening: response.status === 404 ? undefined : track.publishing?.access.listening
 				};
 			}
 		} catch (err) {

@@ -36,6 +36,7 @@ export function parsePublishing(raw: string): PublishingDefaults {
 }
 
 export function publishingSummary(settings: PublishingDefaults): string {
+	if (settings.access.listening === 'owner') return 'only you can listen · downloads off';
 	const listening = {
 		public: 'anyone can listen',
 		signed_in: 'sign in to listen',

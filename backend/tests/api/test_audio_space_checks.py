@@ -85,7 +85,7 @@ async def test_space_authority_only_for_space_audio(
                     )
             assert (
                 error.value.status_code
-                == {"space": 404, "owner": 403, "supporters": 402}[audience]
+                == {"space": 404, "owner": 404, "supporters": 402}[audience]
             )
         elif endpoint == "url":
             response = await get_audio_url(track.file_id, session)
