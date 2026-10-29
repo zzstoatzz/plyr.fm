@@ -130,6 +130,10 @@ _NULL_COLLECTION_COLUMNS = """
     NULL AS collection_slug
 """
 
+_PUBLIC_TRACK = (
+    "t.visibility != 'private' AND COALESCE(t.support_gate->>'type', '') != 'owner'"
+)
+
 _LIKE_QUERY = f"""
     (SELECT 'like' AS event_type,
         {_BASE_COLUMNS},
@@ -141,6 +145,7 @@ _LIKE_QUERY = f"""
     JOIN artists a ON a.did = tl.user_did
     JOIN tracks t ON t.id = tl.track_id
     JOIN artists ta ON ta.did = t.artist_did
+    WHERE {_PUBLIC_TRACK}
     {{cursor_clause}}
     ORDER BY tl.created_at DESC LIMIT :limit)
 """
@@ -159,6 +164,7 @@ _TRACK_QUERY = f"""
         t.created_at AS created_at
     FROM tracks t
     JOIN artists a ON a.did = t.artist_did
+    WHERE {_PUBLIC_TRACK}
     {{cursor_clause}}
     ORDER BY t.created_at DESC LIMIT :limit)
 """
@@ -174,6 +180,7 @@ _COMMENT_QUERY = f"""
     JOIN artists a ON a.did = tc.user_did
     JOIN tracks t ON t.id = tc.track_id
     JOIN artists ta ON ta.did = t.artist_did
+    WHERE {_PUBLIC_TRACK}
     {{cursor_clause}}
     ORDER BY tc.created_at DESC LIMIT :limit)
 """
@@ -226,6 +233,7 @@ _COLLECTION_QUERY = f"""
     -- even if a CollectionEvent for one accidentally exists. callers don't
     -- emit events for private playlists, but rely on this filter too.
     WHERE (ce.playlist_id IS NULL OR p.is_private = false)
+        AND (ce.track_id IS NULL OR ({_PUBLIC_TRACK}))
     {{cursor_clause}}
     ORDER BY ce.created_at DESC LIMIT :limit)
 """
@@ -239,9 +247,9 @@ def _build_query(cursor: datetime | None) -> str:
     all qualifying rows before sorting.
     """
     if cursor:
-        like_clause = "WHERE tl.created_at < :cursor"
-        track_clause = "WHERE t.created_at < :cursor"
-        comment_clause = "WHERE tc.created_at < :cursor"
+        like_clause = "AND tl.created_at < :cursor"
+        track_clause = "AND t.created_at < :cursor"
+        comment_clause = "AND tc.created_at < :cursor"
         join_clause = "AND a.created_at < :cursor"
         collection_clause = "AND ce.created_at < :cursor"
     else:
@@ -337,17 +345,19 @@ async def get_activity_feed(
     )
 
 
-_ACTIVITY_EVENTS = """
+_ACTIVITY_EVENTS = f"""
         SELECT tl.created_at FROM track_likes tl
-            WHERE tl.created_at >= COALESCE(CAST(:start AS timestamptz), '-infinity')
+            JOIN tracks t ON t.id = tl.track_id
+            WHERE {_PUBLIC_TRACK} AND tl.created_at >= COALESCE(CAST(:start AS timestamptz), '-infinity')
                 AND tl.created_at <= :now
         UNION ALL
         SELECT t.created_at FROM tracks t
-            WHERE t.created_at >= COALESCE(CAST(:start AS timestamptz), '-infinity')
+            WHERE {_PUBLIC_TRACK} AND t.created_at >= COALESCE(CAST(:start AS timestamptz), '-infinity')
                 AND t.created_at <= :now
         UNION ALL
         SELECT tc.created_at FROM track_comments tc
-            WHERE tc.created_at >= COALESCE(CAST(:start AS timestamptz), '-infinity')
+            JOIN tracks t ON t.id = tc.track_id
+            WHERE {_PUBLIC_TRACK} AND tc.created_at >= COALESCE(CAST(:start AS timestamptz), '-infinity')
                 AND tc.created_at <= :now
         UNION ALL
         SELECT a.created_at FROM artists a
@@ -358,14 +368,16 @@ _ACTIVITY_EVENTS = """
         SELECT ce.created_at FROM collection_events ce
             JOIN artists a ON a.did = ce.actor_did
             LEFT JOIN playlists p ON p.id = ce.playlist_id
-            WHERE (ce.playlist_id IS NULL OR p.is_private = false)
+            LEFT JOIN tracks t ON t.id = ce.track_id
+            WHERE (ce.track_id IS NULL OR ({_PUBLIC_TRACK})) AND (ce.playlist_id IS NULL OR p.is_private = false)
                 AND ce.created_at >= COALESCE(CAST(:start AS timestamptz), '-infinity')
                 AND ce.created_at <= :now
 """
 
-_PLAY_EVENTS = """
+_PLAY_EVENTS = f"""
         SELECT tp.played_at AS created_at FROM track_plays tp
-            WHERE tp.played_at >= COALESCE(CAST(:start AS timestamptz), '-infinity')
+            JOIN tracks t ON t.id = tp.track_id
+            WHERE {_PUBLIC_TRACK} AND tp.played_at >= COALESCE(CAST(:start AS timestamptz), '-infinity')
                 AND tp.played_at <= :now
                 AND (tp.source != 'teal' OR tp.played_at < COALESCE(
                     (SELECT MIN(played_at) FROM track_plays WHERE source != 'teal'),

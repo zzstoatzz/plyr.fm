@@ -30,7 +30,7 @@ afterEach(() => {
 
 it('does not offer payment for artist-only queue access', () => {
 	expect(guardGatedTrack(track, true)).toBe(false);
-	expect(toast.toasts[0]?.message).toBe('only the artist can play this track');
+	expect(toast.toasts[0]?.message).toBe('track unavailable');
 	expect(toast.toasts[0]?.action).toBeUndefined();
 });
 
@@ -62,4 +62,28 @@ it('asks for authentication without describing signed-in listening as paid', () 
 	expect(guardGatedTrack(signedIn, false)).toBe(false);
 	expect(toast.toasts[0]?.message).toBe('this track requires an account');
 	expect(toast.toasts[0]?.action?.label).toBe('sign in');
+});
+
+it('does not disclose owner-only policy or offer sign-in to anonymous listeners', () => {
+	expect(guardGatedTrack(track, false)).toBe(false);
+	expect(toast.toasts[0]?.message).toBe('track unavailable');
+	expect(toast.toasts[0]?.action).toBeUndefined();
+});
+
+it('does not offer payment from stale metadata after a not-found response', async () => {
+	vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(null, { status: 404 }));
+	const stale: Track = {
+		...track,
+		publishing: {
+			access: { listening: 'supporters', downloads: 'off', visibility: 'public' },
+			attach_rights: false
+		}
+	};
+	expect(await playTrack(stale)).toBe(false);
+	expect(toast.toasts[0]?.message).toBe('track unavailable');
+	expect(toast.toasts[0]?.action).toBeUndefined();
+	expect(await resolveAudioSource(stale, stale.file_id)).toMatchObject({
+		kind: 'gated-denied',
+		listening: undefined
+	});
 });

@@ -73,7 +73,7 @@ async def list_albums(
             Track,
             and_(
                 Track.album_id == Album.id,
-                Track.visibility != "private",
+                Track.publicly_visible,
                 copyright_visible_clause(),
             ),
         )
@@ -113,9 +113,7 @@ async def list_artist_albums(
             func.count(Track.id).label("track_count"),
             func.coalesce(func.sum(Track.play_count), 0).label("total_plays"),
         )
-        .outerjoin(
-            Track, and_(Track.album_id == Album.id, Track.visibility != "private")
-        )
+        .outerjoin(Track, and_(Track.album_id == Album.id, Track.publicly_visible))
         .where(Album.artist_did == artist.did)
         .group_by(Album.id)
         .having(func.count(Track.id) > 0)

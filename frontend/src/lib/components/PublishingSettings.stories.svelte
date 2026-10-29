@@ -65,3 +65,21 @@
 		showSpace: true
 	}}
 />
+<Story
+	name="Owner audience"
+	args={{
+		value: {
+			access: { listening: 'owner', downloads: 'off', visibility: 'public' },
+			attach_rights: false
+		},
+		defaults: defaultPublishing()
+	}}
+	play={async ({ canvasElement }) => {
+		const canvas = within(canvasElement);
+		await userEvent.click(canvas.getByText('change for this track'));
+		await expect(canvas.getByText(/hidden from other listeners in plyr/)).toBeVisible();
+		await expect(canvas.getByRole('checkbox', { name: 'anyone can download' })).toBeDisabled();
+		await expect(canvas.queryByText('more options')).not.toBeInTheDocument();
+		await expect(canvas.queryByRole('checkbox', { name: 'show in feeds' })).not.toBeInTheDocument();
+	}}
+/>

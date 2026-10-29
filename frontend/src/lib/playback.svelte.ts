@@ -55,7 +55,7 @@ async function checkAccess(track: Track): Promise<GatedCheckResult> {
 				allowed: false,
 				requiresAuth: false,
 				artistDid: track.artist_did,
-				listening: track.publishing?.access.listening
+				listening: response.status === 404 ? undefined : track.publishing?.access.listening
 			};
 		}
 

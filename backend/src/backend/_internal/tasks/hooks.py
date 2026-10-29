@@ -32,7 +32,7 @@ from backend.utilities.redis import get_async_redis_client
 
 logger = logging.getLogger(__name__)
 
-_DISCOVERY_CACHE_KEY = "plyr:tracks:discovery:v2"
+_DISCOVERY_CACHE_KEY = "plyr:tracks:discovery:v3"
 
 
 async def invalidate_tracks_discovery_cache() -> None:
@@ -141,9 +141,10 @@ async def run_post_track_create_hooks(
     async with db_session() as db:
         flags = (
             await db.execute(
-                select(Track.is_private, Track.is_optimizing).where(
-                    Track.id == track_id
-                )
+                select(
+                    (Track.is_private | Track.is_owner_only).label("is_private"),
+                    Track.is_optimizing,
+                ).where(Track.id == track_id)
             )
         ).first()
     is_private = bool(flags and flags.is_private)
@@ -286,6 +287,8 @@ async def notify_new_track(track_id: int) -> None:
             )
             if not track:
                 logger.warning(f"track {track_id} not found for notification")
+                return
+            if not track.publicly_visible:
                 return
             if track.notification_sent:
                 return

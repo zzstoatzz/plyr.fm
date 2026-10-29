@@ -20,7 +20,7 @@
 			access: {
 				...value.access,
 				listening: next,
-				downloads: next === 'space' ? 'off' : value.access.downloads,
+				downloads: next === 'space' || next === 'owner' ? 'off' : value.access.downloads,
 				visibility:
 					next === 'space'
 						? 'private'
@@ -72,8 +72,9 @@
 	<label class="choice">
 		<input
 			type="checkbox"
-			disabled={value.access.listening === 'space'}
-			checked={value.access.downloads === 'open' || value.access.downloads === 'ask'}
+			disabled={value.access.listening === 'space' || value.access.listening === 'owner'}
+			checked={value.access.listening !== 'owner' &&
+				(value.access.downloads === 'open' || value.access.downloads === 'ask')}
 			onchange={(event) =>
 				(value = {
 					...value,
@@ -82,7 +83,7 @@
 		/>
 		<span>anyone can download</span>
 	</label>
-	{#if value.access.listening !== 'space' && (value.access.downloads === 'off' || value.access.downloads === 'supporters')}
+	{#if value.access.listening !== 'space' && value.access.listening !== 'owner' && (value.access.downloads === 'off' || value.access.downloads === 'supporters')}
 		<label class="audience"
 			>who can download?
 			<select
@@ -98,6 +99,9 @@
 			</select>
 		</label>
 		<p>people who can listen can still save or record playback.</p>
+	{/if}
+	{#if value.access.listening === 'owner'}
+		<p>hidden from other listeners in plyr. track metadata remains public on your PDS.</p>
 	{/if}
 	{#if value.access.listening === 'space'}
 		<p>
@@ -118,7 +122,7 @@
 				download.
 			</p>{/if}
 	{/if}
-	{#if value.access.listening !== 'space'}
+	{#if value.access.listening !== 'space' && value.access.listening !== 'owner'}
 		<details>
 			<summary>more options</summary>
 			{#if value.access.visibility !== 'private'}
