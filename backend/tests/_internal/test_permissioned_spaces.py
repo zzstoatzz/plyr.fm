@@ -263,7 +263,7 @@ def test_permissioned_scope_opt_in_only():
 # --- space credential caching + renewal ---------------------------------------
 
 
-async def test_ensure_personal_space_uses_simplespace_shape(
+async def test_ensure_personal_space_uses_memberspace_policy(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     request = AsyncMock(return_value={"uri": "unused"})
@@ -287,20 +287,19 @@ async def test_ensure_personal_space_uses_simplespace_shape(
     request.assert_awaited_once_with(
         session,
         "POST",
-        "com.atproto.simplespace.createSpace",
+        "com.atproto.space.createSpace",
         payload={
             "spaceType": "fm.plyr.privateMedia",
             "skey": "self",
-            "readPolicy": {"$type": "com.atproto.simplespace.defs#memberListPolicy"},
-            "writePolicy": {"$type": "com.atproto.simplespace.defs#memberListPolicy"},
-            "appAccess": {"$type": "com.atproto.simplespace.defs#open"},
+            "policy": {"$type": "com.atproto.memberspace.policy"},
         },
     )
     assert request.await_args is not None
     payload = request.await_args.kwargs["payload"]
     assert "did" not in payload
     assert "config" not in payload
-    assert "policy" not in payload
+    assert "readPolicy" not in payload
+    assert "appAccess" not in payload
 
 
 def _owner_session() -> Session:
@@ -312,7 +311,7 @@ def _owner_session() -> Session:
     )
 
 
-async def test_add_and_remove_member_use_simplespace_shapes(
+async def test_add_and_remove_member_use_memberspace_methods(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     request = AsyncMock(return_value={})
@@ -324,7 +323,7 @@ async def test_add_and_remove_member_use_simplespace_shapes(
     request.assert_awaited_with(
         session,
         "POST",
-        "com.atproto.simplespace.putMember",
+        "com.atproto.memberspace.putMember",
         payload={"space": space, "did": "did:plc:friend", "read": True, "write": False},
         parse_response=False,
     )
@@ -338,7 +337,7 @@ async def test_add_and_remove_member_use_simplespace_shapes(
     request.assert_awaited_with(
         session,
         "POST",
-        "com.atproto.simplespace.removeMember",
+        "com.atproto.memberspace.removeMember",
         payload={"space": space, "did": "did:plc:friend"},
         parse_response=False,
     )

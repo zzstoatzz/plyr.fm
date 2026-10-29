@@ -74,8 +74,8 @@ media space" a second source for one existing fact.
 
 ## what the access list is
 
-`simplespace` already has it: `memberListPolicy` (what plyr creates today, with
-nobody added) plus `putMember(space, did, read=true, write=false)`,
+the memberspace policy already has it: `com.atproto.memberspace.policy` (what plyr
+creates today, with nobody added) plus `putMember(space, did, read=true, write=false)`,
 `removeMember`, and `listMembers`. The list is **host-internal state consulted
 at credential-mint time** — not synced,
 not enumerated to the network, readable only by the authority's OAuth session.
@@ -209,8 +209,8 @@ page or a link, and feeds follow once a credential is held.
   readers. plyr must tell members what was shared with them at the app layer
   (a "shared with you" surface), never by publishing a public pointer record —
   that is the existence leak the doodl notes warn about.
-- **`appAccess` stays `open`.** `allowList` refuses every request without an
-  attested `client_id`, which is every public browser client — members
+- **`allowedApps` stays unset.** An allow-list refuses every request without
+  an attested `client_id`, which is every public browser client — members
   included.
 
 ## how this reconciles with attested.network / ATM (#1871)
@@ -227,7 +227,7 @@ event). It would make plyr an effectful actor on the artist's PDS driven by
 broker webhooks, turn every missed `subscription.canceled` into an over-grant
 nothing corrects, and collapse two freshness models into the worse one. If a
 "supporters can hear my private space" mode is wanted later, it is
-`managingAppPolicy` with plyr's `checkUserAccess` calling `validate_supporter`
+a `managedspace` policy with plyr's `checkUserAccess` calling `validate_supporter`
 — the verifier answering at mint time, no list to keep in sync. That is a
 different policy on the same space and a separate decision.
 

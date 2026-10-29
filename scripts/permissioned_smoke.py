@@ -144,7 +144,7 @@ def membership_leg(
     xrpc(
         c,
         "POST",
-        "com.atproto.simplespace.removeMember",
+        "com.atproto.memberspace.removeMember",
         token=owner_token,
         json={"space": space_uri, "did": member_did},
     )
@@ -155,21 +155,21 @@ def membership_leg(
     added = xrpc(
         c,
         "POST",
-        "com.atproto.simplespace.addMember",
+        "com.atproto.memberspace.putMember",
         token=owner_token,
-        json={"space": space_uri, "did": member_did},
+        json={"space": space_uri, "did": member_did, "read": True, "write": False},
     )
     added.raise_for_status()
     members = xrpc(
         c,
         "GET",
-        "com.atproto.simplespace.listMembers",
+        "com.atproto.memberspace.listMembers",
         token=owner_token,
         params={"space": space_uri, "limit": 100},
     )
     members.raise_for_status()
     assert member_did in members.text, members.text
-    print("✓ addMember + listMembers")
+    print("✓ putMember + listMembers")
 
     during = member_reads(c, member_token, space_uri, owner_did, blob_cid)
     assert during == 206, f"member read should succeed, got {during}"
@@ -178,7 +178,7 @@ def membership_leg(
     removed = xrpc(
         c,
         "POST",
-        "com.atproto.simplespace.removeMember",
+        "com.atproto.memberspace.removeMember",
         token=owner_token,
         json={"space": space_uri, "did": member_did},
     )
@@ -233,14 +233,12 @@ def main() -> int:
     created = xrpc(
         c,
         "POST",
-        "com.atproto.simplespace.createSpace",
+        "com.atproto.space.createSpace",
         token=token,
         json={
             "spaceType": SPACE_TYPE,
             "skey": SKEY,
-            "readPolicy": {"$type": "com.atproto.simplespace.defs#memberListPolicy"},
-            "writePolicy": {"$type": "com.atproto.simplespace.defs#memberListPolicy"},
-            "appAccess": {"$type": "com.atproto.simplespace.defs#open"},
+            "policy": {"$type": "com.atproto.memberspace.policy"},
         },
     )
     if created.status_code == 400 and "SpaceAlreadyExists" in created.text:
