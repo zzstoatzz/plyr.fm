@@ -18,6 +18,7 @@ jobs:
       - uses: actions/checkout@v5
         with:
           repository: zzstoatzz/plyr-python-client
+          ref: f9afe0b5e2cc9fc1a828f589b56053ff7f14a3af
           path: .client-source
           persist-credentials: false
       - uses: astral-sh/setup-uv@v7
