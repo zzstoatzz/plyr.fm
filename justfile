@@ -34,8 +34,8 @@ changelog:
     @git log $(git describe --tags --abbrev=0)..HEAD --pretty=format:'%C(yellow)%h%Creset %C(blue)%ad%Creset %C(green)%s%Creset %C(dim)- %an%Creset' --date=relative
 
 # create a github release (triggers production deployment)
-release:
-    ./scripts/release
+release *args:
+    ./scripts/release {{args}}
 
 # deploy frontend only (promote remote main to production-fe branch)
 release-frontend-only:

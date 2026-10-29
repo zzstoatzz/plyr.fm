@@ -67,9 +67,13 @@ connects to `plyr-dev` neon database, local Redis, and uses `fm.plyr.dev` atprot
 3. backend available at `https://api.plyr.fm`
 
 **frontend**:
-1. release script fast-forwards `production-fe` to `main` with a direct push
-   (`git push origin main:production-fe` — no local branch, no merge; the
-   push refuses a non-fast-forward the way `--ff-only` did)
+1. release script checks frontend history before creating a release. Normally it
+   fast-forwards `production-fe` to `main`. If hotfixes diverged, review
+   `git diff origin/production-fe origin/main` and run
+   `just release --reconcile-production-history`. This promotes exactly the
+   reviewed main tree in a commit retaining both histories, using a normal push.
+   Any production-only content absent from main is deliberately replaced, so
+   reconcile needed hotfixes into main first.
 2. cloudflare pages production environment tracks `production-fe` branch
 3. uses production environment with `PUBLIC_API_URL=https://api.plyr.fm`
 4. available at `https://plyr.fm`

@@ -12,13 +12,45 @@ usage:
     ./scripts/release
 """
 
+import argparse
 import subprocess
 import sys
 from datetime import UTC, datetime
 
 
+def production_promotion(target: str, *, reconcile: bool = False) -> str:
+    production = subprocess.check_output(
+        ["git", "rev-parse", "origin/production-fe"], text=True
+    ).strip()
+    ancestor = subprocess.run(
+        ["git", "merge-base", "--is-ancestor", production, target], check=False
+    )
+    if ancestor.returncode == 0:
+        return target
+    if ancestor.returncode != 1:
+        raise RuntimeError("could not inspect production history")
+    if not reconcile:
+        raise RuntimeError(
+            "production-fe has divergent history; review git diff "
+            "origin/production-fe origin/main, then use --reconcile-production-history "
+            "to promote exactly main's tree while retaining both histories"
+        )
+    tree = subprocess.check_output(
+        ["git", "rev-parse", f"{target}^{{tree}}"], text=True
+    ).strip()
+    return subprocess.check_output(
+        ["git", "commit-tree", tree, "-p", production, "-p", target],
+        input="release: promote reviewed main preserving production history\n",
+        text=True,
+    ).strip()
+
+
 def main() -> int:
     """create release with timestamp version."""
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--reconcile-production-history", action="store_true")
+    args = parser.parse_args()
+
     # HEAD must be origin/main; the local `main` branch is never required
     subprocess.run(["git", "fetch", "origin"], capture_output=True, check=True)
     head, remote_main = (
@@ -85,6 +117,14 @@ def main() -> int:
             print("   only frontend/docs changes do not require a backend release")
             return 1
 
+    try:
+        promotion = production_promotion(
+            remote_main, reconcile=args.reconcile_production_history
+        )
+    except RuntimeError as exc:
+        print(f"❌ {exc}")
+        return 1
+
     version = datetime.now(UTC).strftime("%Y.%m%d.%H%M%S")
 
     # print banner using figlet
@@ -113,11 +153,10 @@ def main() -> int:
     print(f"\n✓ release {version} created")
     print("✓ production backend deployment starting...")
 
-    # fast-forward production-fe to main to trigger frontend deployment.
-    # a plain push refuses a non-fast-forward, so no local branch is needed.
+    # A plain push rejects any concurrent divergent production promotion.
     print("\n🔄 updating production-fe branch...")
     subprocess.run(
-        ["git", "push", "origin", f"{remote_main}:refs/heads/production-fe"], check=True
+        ["git", "push", "origin", f"{promotion}:refs/heads/production-fe"], check=True
     )
 
     print("✓ production frontend deployment starting...")
