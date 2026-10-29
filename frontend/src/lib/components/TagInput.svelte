@@ -109,7 +109,13 @@
 		}
 	}
 
-	function handleBlur() {
+	function handleFocusOut(event: FocusEvent) {
+		if (
+			event.relatedTarget instanceof Node &&
+			event.currentTarget instanceof Node &&
+			event.currentTarget.contains(event.relatedTarget)
+		)
+			return;
 		if (inputValue.trim()) {
 			addTag(inputValue);
 		}
@@ -126,7 +132,7 @@
 
 <svelte:window onclick={handleClickOutside} />
 
-<div class="tag-input-wrapper">
+<div class="tag-input-wrapper" onfocusout={handleFocusOut}>
 	<div class="tags-container">
 		{#each tags as tag}
 			<span class="tag-chip">
@@ -147,7 +153,6 @@
 			bind:value={inputValue}
 			oninput={handleInput}
 			onkeydown={handleKeydown}
-			onblur={handleBlur}
 			onfocus={() => {
 				if (suggestions.length > 0) showSuggestions = true;
 			}}
@@ -175,7 +180,9 @@
 					type="button"
 					class="suggestion-item"
 					class:selected={i === selectedIndex}
-					onpointerdown={(event) => event.preventDefault()}
+					onmousedown={(event) => {
+						if (event.button === 0) event.preventDefault();
+					}}
 					onclick={() => selectSuggestion(suggestion)}
 				>
 					<span class="tag-name">{suggestion.name}</span>
