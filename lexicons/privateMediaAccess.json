@@ -4,8 +4,8 @@
   "defs": {
     "main": {
       "type": "permission-set",
-      "title": "plyr.fm Private Media",
-      "detail": "Store and manage your private and protected audio on your PDS, serve protected audio through plyr.fm, and play private tracks shared with you.",
+      "title": "manage and play protected audio",
+      "detail": "store and manage your private and protected audio, manage access to private tracks, and play private tracks shared with you through plyr.fm.",
       "permissions": [
         {
           "type": "permission",

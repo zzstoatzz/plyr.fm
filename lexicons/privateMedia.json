@@ -4,9 +4,9 @@
   "defs": {
     "main": {
       "type": "space",
-      "description": "An artist-owned space containing private plyr.fm track records and their audio blobs.",
+      "description": "Artist-owned spaces for plyr.fm track records and audio, with access defined by each space.",
       "key": "any",
-      "name": "plyr.fm Private Media",
+      "name": "plyr.fm audio",
       "collections": ["fm.plyr.track"]
     }
   }

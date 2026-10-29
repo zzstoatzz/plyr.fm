@@ -262,17 +262,21 @@ the sync pattern: when a user logs in, we fetch their records from their PDS and
 
 ## permission sets
 
-permission sets bundle OAuth permissions under human-readable titles. instead of users seeing "fm.plyr.track, fm.plyr.like, ..." they see "plyr.fm Audio Library".
+permission sets bundle OAuth permissions under human-readable titles. instead of users seeing "fm.plyr.track, fm.plyr.like, ..." they see "manage your plyr.fm library".
 
 ### fm.plyr.authFullApp
 
-full access for the main web app - create/update/delete on all collections.
+create, update, and delete tracks, albums, playlists, likes, comments, and artist profiles in the five listed public collections. blob upload and Spaces access are requested separately.
 
 ### fm.plyr.privateMediaAccess
 
-access to the artist's own `fm.plyr.privateMedia` space. this include is requested as a
-one-time scope upgrade only for users whose PDS supports permissioned data and who choose
-private media.
+displayed as "manage and play protected audio". bundles management of the artist's
+own `self` and `playback` spaces with read access to private tracks shared with them.
+other artists' membership policies still control which tracks they can access.
+
+requested during sign-in, with a retry without this set if the authorization server
+rejects the scope. existing sessions can also request an explicit scope upgrade.
+Space support, OAuth consent, and track access are separate checks.
 
 ### enabling permission sets
 

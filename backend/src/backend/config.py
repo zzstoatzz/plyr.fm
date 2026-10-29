@@ -570,9 +570,9 @@ class AtprotoSettings(AppSettingsSection):
             teal_play: teal.fm play collection NSID, present iff teal scopes wanted
             teal_status: teal.fm status collection NSID, present iff teal scopes wanted
             indiemusi_tokens: indiemusi paradigm scope tokens, present iff requested
-            permissioned_spaces: include the private-media space scope. only ever
-                requested as an opt-in upgrade for accounts on a PDS that supports
-                permissioned spaces (never in a base login).
+            permissioned_spaces: include private-media permissions at sign-in or
+                during an explicit upgrade. sign-in retries without this set
+                if the authorization server rejects the scope.
 
         either teal pair must both be set or both be None.
         """
