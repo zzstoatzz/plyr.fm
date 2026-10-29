@@ -230,7 +230,7 @@ class Smoke(SmokeFixtures):
             f"{self.pds}/xrpc/com.atproto.space.getSpaceCredential",
             json={"space": parts["space"], "credentialKid": kid},
         )
-        checked(refused, 403, "unattested app credential")
+        checked(refused, 400, "unattested app credential")
         assert refused.json()["error"] == "AppNotAuthorized"
         self.passed(
             "PDS ownership and app access", track_id=track["id"], source=source_uri
