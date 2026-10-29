@@ -39,7 +39,7 @@ public records can be read by other compatible apps. protected audio remains sub
 
 4. **choose who can listen** — the form shows a one-line summary of your [music access](#music-access) defaults. open **change for this track** to set this track differently. if the track contains sexually explicit audio, tick the [content notice](#adult-audio-and-content-notices)
 
-5. **publish it** — confirm you have the right to distribute the audio, then press **upload track**. a progress notice follows the file through processing and ends with a **view track** link. MP3, WAV, M4A, and FLAC play right away; a public AIFF publishes immediately with your original kept, while a smaller streaming copy is prepared in the background — until it lands, browsers that can't play the original show the track as *still processing — playable shortly*. production tracks with restricted listening or downloads publish once their protected playback copy is ready. the [staging preview](#protected-audio) stores protected audio on a compatible PDS and accepts web-playable files as uploaded
+5. **publish it** — confirm you have the right to distribute the audio, then press **upload track**. a progress notice follows the file through processing and ends with a **view track** link. MP3, WAV, M4A, and FLAC play right away; a public AIFF publishes immediately with your original kept, while a smaller streaming copy is prepared in the background — until it lands, browsers that can't play the original show the track as *still processing — playable shortly*. [protected audio](#protected-audio) stores its source on a compatible PDS and accepts web-playable files as uploaded
 
 6. **edit it later** — find the track in the [portal](https://plyr.fm/portal) and choose **edit track** to change its details, artwork, access, or content notice. under **audio & version history** you can replace the audio or restore an earlier version
 
@@ -88,13 +88,7 @@ payment or subscription.
 
 ### protected audio
 
-:::caution[staging preview]
-the protected-audio behavior below is live on [stg.plyr.fm](https://stg.plyr.fm)
-and awaits production promotion. production still uses plyr.fm-managed private
-storage for these uploads; native private Space tracks are a separate feature.
-:::
-
-on staging, tracks with restricted listening or downloads store their audio in
+tracks with restricted listening or downloads store their audio in
 an app-restricted Space on **your PDS** when your host supports Spaces. that is
 the primary audio source. plyr.fm may keep a private playback copy and checks
 your chosen listening and download permissions before serving it. people can
@@ -266,12 +260,13 @@ today this is a **binary check**: a listener either supports you or they don't. 
 
 ### how gated audio is stored
 
-gated audio lives in a **private bucket** on plyr.fm's infrastructure — not publicly accessible. when a supporter plays a gated track, plyr.fm validates their support status and generates a time-limited presigned URL. downloads follow their separate policy; choosing open downloads makes the original available even when listening is restricted.
-
-on the [staging preview](#protected-audio), a compatible PDS holds gated audio in
-your app-restricted playback Space, with an optional private plyr.fm copy.
-plyr.fm still checks supporter access; supporters do not need a Spaces-enabled
-PDS. this differs from the member-only private Space described below.
+new gated audio uses the [protected audio](#protected-audio) path: a compatible
+PDS holds the source in an app-restricted Space, with an optional private
+playback copy on plyr.fm. hosts without Spaces require explicit acceptance of
+plyr.fm-only storage. existing managed tracks remain in private storage.
+listening checks still apply before delivery; downloads follow their separate
+policy. choosing open downloads makes the original available even when
+listening is supporter-gated. supporters do not need a Spaces-enabled PDS.
 
 we'd also like to support more expressive gating — tiers, time-limited early access, per-track pricing — as the ecosystem matures.
 
@@ -359,7 +354,7 @@ support playback, not a separate listener download.
 
 every track you upload is tied to [your account](https://at-me.zzstoatzz.io/view/?handle=zzstoatzz.io) — you can inspect your records in a [PDS viewer](https://pdsls.dev), and they travel with you if you move to a different host.
 
-your PDS is the source for public audio blobs and native private Space works. some older uploads, and public files your host could not accept, exist only on plyr.fm. production protected audio still uses private plyr.fm storage; the [staging preview](#protected-audio) stores new protected uploads in your PDS Space when supported, with explicit per-upload acceptance required for plyr.fm-only storage otherwise. moving your account does not automatically move earlier managed audio into a Space.
+your PDS is the source for public audio blobs and native private Space works. some older uploads, and public files your host could not accept, exist only on plyr.fm. [protected audio](#protected-audio) stores new protected uploads in your PDS Space when supported, with explicit per-upload acceptance required for plyr.fm-only storage otherwise. moving your account does not automatically move earlier managed audio into a Space.
 
 [Portal → manage](https://plyr.fm/portal/manage) offers a bulk export under **your data → export tracks** — it packages your tracks as a ZIP (using lossless originals when available) that you can download directly.
 

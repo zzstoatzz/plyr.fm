@@ -16,6 +16,10 @@ check:
 test:
     bun run test
 
+# browser regressions for mouse, touch and keyboard suggestion selection
+test-autocomplete:
+    node e2e/tag-input.mjs
+
 # accessibility gate: render every story in chromium, fail on axe violations
 # (needs `bunx playwright install chromium` once)
 test-storybook:

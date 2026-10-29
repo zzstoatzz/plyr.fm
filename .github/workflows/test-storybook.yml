@@ -27,8 +27,11 @@ jobs:
       - name: install deps
         run: cd frontend && bun install
 
-      - name: install chromium
-        run: cd frontend && bunx playwright install --with-deps chromium
+      - name: install browsers
+        run: cd frontend && bunx playwright install --with-deps chromium webkit
+
+      - name: test autocomplete interactions
+        run: cd frontend && node e2e/tag-input.mjs
 
       - name: run storybook a11y gate
         run: cd frontend && bun run test-storybook

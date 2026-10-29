@@ -2,7 +2,8 @@
 
 Implemented on staging by [#2233](https://github.com/zzstoatzz/plyr.fm/pull/2233),
 commit `02ed1cd5d09ec923e84e251fd3b1135f4f53ef02`, October 28, 2026.
-Production has not been promoted. Existing catalog objects are not migrated.
+Promoted to production in release `2026.1029.040850` on October 29, 2026 (UTC).
+Existing catalog objects are not migrated.
 The companion [client change](https://github.com/zzstoatzz/plyr-python-client/pull/44)
 is merged; this does not imply a new package release.
 
@@ -126,6 +127,33 @@ Initial #2233 validation passed 2,060 backend tests (26 existing skips) and all
 385 frontend tests, plus types, lint, accessibility, API/client contracts and
 private-media browser checks. The later R2/account fixes increased the backend
 suite to 2,094 passing tests. See the linked PRs for exact CI runs.
+
+## Production promotion evidence
+
+Release [2026.1029.040850](https://github.com/zzstoatzz/plyr.fm/releases/tag/2026.1029.040850)
+promoted `fa3d2ed5`, with frontend promotion `a196d5d1` retaining production
+hotfix history and exactly matching the release tree. GitHub deployment
+[40816098178](https://github.com/zzstoatzz/plyr.fm/actions/runs/40816098178)
+and Cloudflare Pages deployment `9b4d6979-b550-40f3-b692-3cddf520186f` succeeded.
+Production migration is `3d875a858a31`. API and worker source hashes match the
+reviewed protected-audio implementation and terminal OAuth-session fix.
+Production `fm.plyr.privateMediaAccess` and `fm.plyr.track` schemas were published
+and read back against reviewed source.
+
+Live production browser smoke passed at 1280px/light and 390px/dark/touch:
+real OAuth, unlisted protected upload, PDS ownership UI, byte-exact owner
+recovery, anonymous actual playback and Range, and anonymous download denial.
+Each disposable track was deleted, preferences restored, and session logged out.
+A separate non-Spaces publishing-account smoke verified refusal without explicit
+storage acceptance, successful consented upload, ranged playback, download denial,
+byte-exact original recovery, and deletion. Its first playback assertion compared
+the MP3 rendition to WAV input; the corrected check validates range delivery and
+compares the owner original instead. The one-second fixture also produced genre/
+embedding errors; browser smoke used twelve-second audio and passed tag analysis.
+
+The destructive mirror-loss and capacity tests remain the staging evidence above;
+no production R2 object was manually deleted. Tangled mirroring still rejects the
+configured SSH identity; both production deployments succeeded independently.
 
 ## Running the smoke safely
 

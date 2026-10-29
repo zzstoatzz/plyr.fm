@@ -75,10 +75,24 @@ describe('autocomplete interactions inside a dialog', () => {
 		const input = await showTagSuggestions();
 		const suggestion = document.querySelector<HTMLButtonElement>('.suggestion-item');
 		if (!suggestion) throw new Error('suggestion not rendered');
-		const pointerdown = new Event('pointerdown', { bubbles: true, cancelable: true });
-		suggestion.dispatchEvent(pointerdown);
-		expect(pointerdown.defaultPrevented).toBe(true);
+		const mousedown = new MouseEvent('mousedown', { bubbles: true, cancelable: true });
+		suggestion.dispatchEvent(mousedown);
+		expect(mousedown.defaultPrevented).toBe(true);
 		expect(document.activeElement).toBe(input);
+		suggestion.click();
+		expect(onAdd).toHaveBeenCalledExactlyOnceWith('ambient');
+	});
+
+	it('keeps the fragment pending when focus enters a suggestion', async () => {
+		const onAdd = vi.fn();
+		mountTags(onAdd);
+		await showTagSuggestions();
+		const suggestion = document.querySelector<HTMLButtonElement>('.suggestion-item');
+		if (!suggestion) throw new Error('suggestion not rendered');
+		suggestion.focus();
+		flushSync();
+		expect(onAdd).not.toHaveBeenCalled();
+		expect(suggestion.isConnected).toBe(true);
 		suggestion.click();
 		expect(onAdd).toHaveBeenCalledExactlyOnceWith('ambient');
 	});

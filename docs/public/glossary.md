@@ -51,8 +51,7 @@ plyr.fm's namespaces are environment-aware: `fm.plyr` (production), `fm.plyr.stg
 blobs (files), and identity information. public track metadata and public audio
 live on your PDS; plyr.fm keeps a streaming copy. older uploads and files your
 host refused may exist only on plyr.fm. native private tracks use a compatible
-PDS Space. production protected audio uses private plyr.fm storage; the
-[staging preview](/artists/#protected-audio) uses the artist's app-restricted PDS
+PDS Space. new [protected audio](/artists/#protected-audio) uses the artist's app-restricted PDS
 Space as its primary source. you can self-host a PDS or use a provider like
 `bsky.social`.
 
@@ -103,12 +102,12 @@ the artist dashboard at [plyr.fm/portal](https://plyr.fm/portal). manage your tr
 ### protected audio
 
 audio whose listening or direct-download policy requires access checks. the
-[staging preview](/artists/#protected-audio) stores this audio in an artist-owned,
+[protected audio path](/artists/#protected-audio) stores this audio in an artist-owned,
 app-restricted PDS Space, with an optional private plyr.fm playback copy. an API
 `audio_space` value identifies that PDS source even when `pds_blob_cid` is empty.
 this is separate from member-private tracks, whose metadata and audio are both
 private. hosts without Spaces require explicit per-upload acceptance of
-plyr.fm-only storage. the staging behavior awaits production promotion.
+plyr.fm-only storage. existing catalogs are not migrated automatically.
 
 ### supporter-gated content
 
