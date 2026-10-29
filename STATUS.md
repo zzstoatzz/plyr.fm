@@ -54,7 +54,12 @@ Protected uploads on a Spaces-capable PDS now establish the artist-owned source
 before the optional private R2 mirror. Public listening uses an app-restricted,
 public-read playback Space; listeners need neither a Spaces PDS nor an owner
 credential. Unsupported uploaders must explicitly accept plyr-only storage.
-Existing catalogs are not migrated. **Production has not been promoted.**
+Existing catalogs are not migrated. Promoted to production in
+[release 2026.1029.040850](https://github.com/zzstoatzz/plyr.fm/releases/tag/2026.1029.040850)
+on October 29 (UTC), including the terminal OAuth session fix (#2239/#2240).
+Production OAuth/browser smoke passed at desktop/light and mobile/dark sizes,
+including PDS ownership, anonymous playback, download denial and byte-exact owner
+recovery. Explicit non-Spaces storage consent and fixture cleanup also passed.
 The account-wide cleanup gap in [#2235](https://github.com/zzstoatzz/plyr.fm/issues/2235)
 is fixed by [#2238](https://github.com/zzstoatzz/plyr.fm/pull/2238), deployed to
 staging as `141a178c`, with 2,094 backend tests passing. The user's PDS deletion
