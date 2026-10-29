@@ -40,6 +40,7 @@ from backend._internal.atproto import (
     create_track_record,
     upload_blob,
 )
+from backend._internal.atproto.client import SessionExpiredError
 from backend._internal.atproto.handles import (
     InvalidFeaturesError,
     resolve_featured_artists,
@@ -421,6 +422,11 @@ async def _try_upload_to_pds(
             did=auth_session.did,
         )
         return PdsBlobResult(blob_ref=blob_ref, cid=cid, size=size)
+
+    except SessionExpiredError as e:
+        raise UploadPhaseError(
+            "your session expired — sign in again and retry the upload"
+        ) from e
 
     except PayloadTooLargeError as e:
         # expected: file exceeds PDS blob limit, gracefully fall back to R2-only

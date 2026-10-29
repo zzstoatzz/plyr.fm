@@ -2,6 +2,7 @@
 
 import asyncio
 import contextlib
+import json
 import logging
 import time
 from collections.abc import AsyncIterable, AsyncIterator, Awaitable, Callable
@@ -12,6 +13,7 @@ import httpcore
 import httpx
 import logfire
 from atproto import AtUri
+from atproto_oauth.exceptions import OAuthTokenError
 from atproto_oauth.models import OAuthSession
 from atproto_oauth.security import is_safe_url
 from cachetools import LRUCache
@@ -20,6 +22,7 @@ from redis.exceptions import RedisError
 from backend._internal import Session as AuthSession
 from backend._internal import get_oauth_client, get_session, update_session_tokens
 from backend._internal.auth import (
+    delete_session,
     get_client_auth_method,
     get_refresh_token_lifetime_days,
 )
@@ -254,6 +257,20 @@ async def reconstruct_oauth_session(oauth_data: dict[str, Any]) -> OAuthSession:
     return await hydrate_pds_nonce(session)
 
 
+def _is_invalid_refresh_grant(exc: Exception) -> bool:
+    if not isinstance(exc, OAuthTokenError):
+        return False
+    prefix = "Token refresh failed: 400 "
+    message = str(exc)
+    if not message.startswith(prefix):
+        return False
+    try:
+        body = json.loads(message[len(prefix) :])
+    except json.JSONDecodeError:
+        return False
+    return isinstance(body, dict) and body.get("error") == "invalid_grant"
+
+
 async def _refresh_session_tokens(
     auth_session: AuthSession,
     oauth_session: OAuthSession,
@@ -271,7 +288,9 @@ async def _refresh_session_tokens(
         # reload session from DB to get potentially updated tokens
         updated_auth_session = await get_session(session_id)
         if not updated_auth_session:
-            raise ValueError(f"session {session_id} no longer exists")
+            raise SessionExpiredError(
+                "atproto session expired — re-authentication required"
+            )
 
         # reconstruct oauth session from potentially updated data
         updated_oauth_data = updated_auth_session.oauth_session
@@ -356,7 +375,8 @@ async def _refresh_session_tokens(
             # a dead refresh token (`invalid_grant`) is terminal — the session
             # can't be saved by a retry, the user must sign in again. surface it
             # as a distinct type so handlers return 401 instead of 500.
-            if "invalid_grant" in str(e):
+            if _is_invalid_refresh_grant(e):
+                await delete_session(session_id)
                 raise SessionExpiredError(
                     "atproto session expired — re-authentication required"
                 ) from e
