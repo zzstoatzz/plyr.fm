@@ -10,12 +10,14 @@ feature. Rename the displayed library set to “manage your plyr.fm library”, 
 Spaces set to “manage and play protected audio”, and the Space type to
 “plyr.fm audio”. Names do not change data visibility or existing authorizations.
 
-These are source changes. Consent servers resolve published lexicons and may cache
-them; merging or deploying the application alone does not publish these labels.
-Publish the reviewed schemas separately and inspect an actual authorization screen
-before claiming that users see the new copy.
+The reviewed labels were subsequently published to staging and production authority
+records on October 29 with structural comparison confirming unchanged grants.
+Readback matches the source, and a real production OAuth screen displays both new
+permission-set titles at mobile and desktop widths. Consent-server caches may
+delay their appearance elsewhere. Application deployment alone does not publish
+these labels.
 
-## Current implementation
+## Findings before remediation
 
 - `lexicons/authFullApp.json:8`: the old “Full” title overstated CRUD access to
   five public collections. Albums and playlists share the list collection; artist
@@ -70,7 +72,8 @@ fully settled would be premature.
 
 ## Recommended follow-up order
 
-1. Make readiness honest: validate the operations each feature needs, including
+1. Readiness remediation: the follow-up now validates the complete owner-management
+   grant for each Space and requires both Spaces at upgrade completion, including
    existing sessions with partial grants. Test refusal and upgrade paths against
    a real Spaces PDS. Avoid declaring every feature unavailable just because an
    unrelated reader grant is absent.

@@ -47,6 +47,17 @@ plyr.fm should become:
 
 ### October 2026
 
+#### Spaces consent and readiness (October 29)
+
+Permission labels now describe library management and protected audio consistently;
+staging and production authority records were published with unchanged grants.
+Readiness now requires the complete owner-management grant for each Space, and
+scope-upgrade completion verifies both private and playback Spaces. Shared-reader
+readiness remains independent. Partial-grant endpoint and callback regressions
+cover the previously false-positive states. See the
+[permission audit](docs/internal/research/2026-10-29-permission-consent-audit.md).
+
+
 #### owner-only visibility audit (October 29)
 
 A production access change correctly blocked audio but left public metadata and

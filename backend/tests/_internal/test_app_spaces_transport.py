@@ -120,7 +120,9 @@ async def test_app_only_reads_refuse_public_client_before_http(
 def test_existing_private_grant_does_not_authorize_playback_space() -> None:
     scope = (
         f"space:{settings.atproto.private_media_space_type}?authority=did:plc:artist&skey=self"
-        f"&collection={settings.atproto.track_collection}&action=create&manage=create"
+        f"&collection={settings.atproto.track_collection}"
+        "&action=read&action=create&action=update&action=delete"
+        "&manage=create&manage=update&manage=delete"
     )
     assert private_media_grant_present(scope, "did:plc:artist")
     assert not private_media_grant_present(scope, "did:plc:artist", skey="playback")
