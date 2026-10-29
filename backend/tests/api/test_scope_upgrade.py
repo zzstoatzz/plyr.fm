@@ -160,6 +160,9 @@ _GRANTED_SCOPE = (
     "&skey=self&collection=fm.plyr.dev.track&action=read&action=create"
     "&action=update&action=delete&manage=create&manage=update&manage=delete"
 )
+_GRANTED_SCOPE += " " + _GRANTED_SCOPE.split(" ")[-1].replace(
+    "skey=self", "skey=playback"
+)
 _UNEXPANDED_SCOPE = "atproto blob:*/* include:fm.plyr.dev.privateMediaAccess"
 
 
@@ -403,3 +406,19 @@ async def test_auth_me_survives_temporary_capability_outage(
             response = await client.get("/auth/me")
     assert response.status_code == 200
     assert response.json()["permissioned_spaces"]["supported"] is False
+
+
+@pytest.mark.parametrize("skey", ["self", "playback"])
+async def test_permissioned_callback_with_partial_grant_reports_refusal(
+    test_app: FastAPI,
+    db_session: AsyncSession,
+    upgrade_artist: Artist,
+    monkeypatch: pytest.MonkeyPatch,
+    skey: str,
+) -> None:
+    scope = " ".join(
+        token.replace("&action=update", "") if f"skey={skey}" in token else token
+        for token in _GRANTED_SCOPE.split()
+    )
+    location = await _run_permissioned_callback(test_app, scope, monkeypatch)
+    assert location.endswith("/settings?exchange_token=xt&scope_upgrade_error=refused")

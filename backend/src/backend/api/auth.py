@@ -348,7 +348,12 @@ async def oauth_callback(
         redirect_path = pending_scope_upgrade.redirect_to or "/settings"
         outcome = "scope_upgraded=true"
         if pending_scope_upgrade.requested_scopes == "permissioned" and not (
-            private_media_grant_present(oauth_session.get("scope", ""), did)
+            all(
+                private_media_grant_present(
+                    oauth_session.get("scope", ""), did, skey=skey
+                )
+                for skey in ("self", "playback")
+            )
         ):
             outcome = "scope_upgrade_error=refused"
         return RedirectResponse(
