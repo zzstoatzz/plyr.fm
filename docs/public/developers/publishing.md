@@ -38,13 +38,12 @@ optional support prompt, not payment verification. unlisted metadata remains
 visible on profiles and in search. native private Spaces enforce their own
 membership boundary; there is no managed-storage fallback after a Space refusal.
 
-## protected audio on staging
+<a id="protected-audio-on-staging"></a>
 
-:::caution[staging contract]
-this behavior is deployed at `https://api-stg.plyr.fm` and awaits production
-promotion. check that environment's OpenAPI schema before using it. production
-still uses managed private storage for protected non-private uploads.
-:::
+## protected audio
+
+this behavior is live at `https://api.plyr.fm`. existing catalog audio is not
+migrated automatically.
 
 for non-private metadata, restricted listening or downloads select protected
 audio. a Spaces-capable host stores its primary source in the artist's
@@ -98,14 +97,14 @@ template instead. existing-track access editing remains available through Portal
 and the HTTP endpoints above. source support for `accept_plyr_storage` and
 `audio_space` is merged in the Python client repository. package releases are
 separate: check the installed SDK, CLI, or MCP version and its backend contract,
-or use the staging HTTP endpoints.
+or use the production HTTP endpoints.
 
 ## delivery and security
 
 use the track's playback and download capabilities. do not construct a public
 bucket URL or assume a playable source authorizes an original download.
-production restricted managed audio uses private storage; its playback rendition
-can differ from the original. the staging Space source is described above. album
+older managed audio uses private storage; its playback rendition can differ from
+the original. new protected uploads use the Space source described above. album
 archives check every track, including protected PDS sources.
 
 rights information does not grant playback or download access. downloads off

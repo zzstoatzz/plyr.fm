@@ -17,9 +17,10 @@ the response contains an `upload_id`. follow
 `GET /tracks/uploads/{upload_id}/progress` for processing progress and the
 terminal result; request acceptance is not completed publication.
 
-## protected audio storage on staging
+## protected audio storage
 
-The following behavior is deployed to staging and awaits production promotion.
+The following behavior is live in production for new uploads. Existing catalog
+audio is not migrated automatically.
 
 For public listening with downloads restricted (`off` or `supporters`),
 an artist whose PDS supports Spaces stores the source audio in their PDS. The
