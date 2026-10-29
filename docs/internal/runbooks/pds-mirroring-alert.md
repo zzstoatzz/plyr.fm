@@ -38,3 +38,22 @@ reauthentication; this change does not repair historical tracks automatically.
 Regression tests use a real local HTTP server to verify rejection before body
 consumption, a successful request with a fresh token, and preservation of nonce
 and scope behavior. Existing upload tests cover bounded repeated token refresh.
+
+## Rejected refresh grants
+
+On October 28, `penny.hailey.at` submitted 24 failed uploads after its PDS
+rejected its OAuth refresh token with `invalid_grant`. The locally valid
+publishing token kept admitting new attempts. Record publication also failed;
+the fallback log did not mean the upload completed, and temporary audio was
+cleaned up.
+
+A confirmed OAuth token-endpoint `400` with `error=invalid_grant` now deletes
+only the affected local session and its Redis cache entry, after checking for
+tokens refreshed by another request. Later submissions receive `401` and the
+upload stops with a sign-in instruction rather than attempting record publication.
+Transient refresh failures retain the session and the existing fallback behavior.
+
+The account owner must sign in again and mint a new publishing token for their
+automation. A release cannot restore a rejected grant. Existing sessions are
+invalidated when they next encounter the terminal rejection; there is no bulk
+session deletion or automatic replay of failed uploads.
