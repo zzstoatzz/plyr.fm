@@ -47,6 +47,19 @@ plyr.fm should become:
 
 ### October 2026
 
+#### tag suggestion focus and touch selection (October 29)
+
+TagInput now retains pending text while focus moves into its suggestions and
+commits custom text only when focus leaves the widget. Mouse-down prevention
+preserves mouse selection without canceling WebKit touch clicks. Real Chromium
+and WebKit browser regressions cover selecting `ambient` from `amb`, keyboard
+selection, and saving pending custom text. The shared fix covers upload,
+per-track album entry, recording and track editing. Album/artist autocomplete,
+hidden-tag selection and tag filters do not commit fragments on blur; no matching
+failure was found there. The browser regression runs in the existing accessibility
+workflow; synthetic DOM events alone had missed these failures.
+
+
 #### protected PDS audio on staging (October 28)
 
 [#2233](https://github.com/zzstoatzz/plyr.fm/pull/2233) deployed `02ed1cd5` to staging.
