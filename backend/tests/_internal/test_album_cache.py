@@ -65,6 +65,7 @@ async def test_album_cache_miss_then_hit(
             artist_handle=artist.handle,
             artist_did=artist.did,
             track_count=0,
+            created_at=album.created_at,
             total_plays=0,
             image_url=None,
         ),

@@ -129,6 +129,7 @@ class TrackResponse(BaseModel):
     artist_avatar_url: str | None
     file_id: str
     file_type: str
+    duration: int | None = None
     features: list[FeaturedArtist] = Field(default_factory=list)
     r2_url: str | None
     atproto_record_uri: str | None
@@ -330,6 +331,7 @@ class TrackResponse(BaseModel):
             artist_avatar_url=track.artist.avatar_url,
             file_id=track.file_id,
             file_type=track.file_type,
+            duration=track.duration,
             features=await _hydrate_features(track.features),
             r2_url=stream_url,
             atproto_record_uri=track.atproto_record_uri,

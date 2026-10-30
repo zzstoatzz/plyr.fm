@@ -13,7 +13,7 @@ from .schemas import AlbumListItem, AlbumMetadata, ArtistAlbumListItem
 
 logger = logging.getLogger(__name__)
 
-ALBUM_CACHE_PREFIX = "plyr:album:v4:"
+ALBUM_CACHE_PREFIX = "plyr:album:v5:"
 ALBUM_CACHE_TTL_SECONDS = 300  # 5 minutes
 
 
@@ -80,6 +80,7 @@ async def _album_list_item(
         artist=artist.display_name,
         artist_handle=artist.handle,
         track_count=track_count,
+        created_at=album.created_at,
         total_plays=total_plays,
         image_url=image_url,
     )
@@ -100,6 +101,7 @@ async def _artist_album_summary(
         title=album.title,
         slug=album.slug,
         track_count=track_count,
+        created_at=album.created_at,
         total_plays=total_plays,
         image_url=image_url,
     )
@@ -124,6 +126,7 @@ async def _album_metadata(
         artist_handle=artist.handle,
         artist_did=artist.did,
         track_count=track_count,
+        created_at=album.created_at,
         total_plays=total_plays,
         image_url=image_url,
         list_uri=album.atproto_record_uri,
