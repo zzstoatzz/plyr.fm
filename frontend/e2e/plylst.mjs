@@ -95,6 +95,7 @@ try {
 		await page.setViewportSize({ width, height: 1000 });
 		await page.goto(`${APP}${path}`);
 		await page.getByRole('button', { name: 'edit album', exact: true }).click();
+		await page.locator(`html.theme-${theme}`).waitFor();
 		assert.equal(await page.getByRole('checkbox', { name: /show plylst link/ }).isChecked(), true);
 		assert.equal(
 			await page.locator('html').evaluate((element) => element.scrollWidth <= element.clientWidth),
@@ -110,9 +111,14 @@ try {
 			colorScheme: theme
 		});
 		try {
+			await visitor.addInitScript(
+				(preferredTheme) => localStorage.setItem('theme', preferredTheme),
+				theme
+			);
 			const publicPage = await visitor.newPage();
 			await publicPage.goto(`${APP}${path}`);
 			await publicPage.getByRole('link', { name }).waitFor();
+			await publicPage.locator(`html.theme-${theme}`).waitFor();
 			assert.equal(
 				await publicPage.getByRole('button', { name: 'edit album', exact: true }).count(),
 				0
@@ -140,6 +146,7 @@ try {
 	);
 	await page.getByRole('checkbox', { name: /show plylst link/ }).uncheck();
 	assert.equal((await disabled).status(), 200);
+	await page.getByRole('link', { name }).waitFor({ state: 'hidden' });
 	assert.equal(await page.getByRole('link', { name }).count(), 0);
 	const fresh = await (
 		await owner.request.get(`${API}/albums/${user.handle}/${album.slug}`)
