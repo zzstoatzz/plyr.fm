@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator, Callable
 from io import BytesIO
-from typing import TYPE_CHECKING, BinaryIO, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, BinaryIO, Literal, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
     from backend.storage.keys import AudioKey, StagedUploadKey
@@ -127,6 +127,8 @@ class StorageProtocol(Protocol):
         file_id: str,
         extension: str,
         expires_in: int | None = None,
+        *,
+        http_method: Literal["GET", "HEAD"] = "GET",
     ) -> str: ...
 
     async def object_exists(self, key: str, *, private: bool = False) -> bool:
