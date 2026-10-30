@@ -32,3 +32,7 @@ storybook:
 # build the static storybook (used to sanity-check stories in CI)
 build-storybook:
     PUBLIC_API_URL="${PUBLIC_API_URL:-https://api.plyr.fm}" bun run build-storybook
+
+# owner-selected plylst link against staging, with disposable fixtures
+test-plylst:
+    node e2e/plylst.mjs

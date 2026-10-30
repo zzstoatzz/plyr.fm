@@ -18,6 +18,7 @@ export interface AlbumSummary {
 }
 
 export interface AlbumMetadata extends AlbumSummary {
+	show_plylst?: boolean;
 	description?: string | null;
 	artist: string;
 	artist_handle: string;

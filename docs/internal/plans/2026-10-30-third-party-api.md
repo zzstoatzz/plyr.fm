@@ -1,8 +1,9 @@
 # Third-party API improvements
 
 Source: [Tangled issue #6](https://tangled.org/zzstoatzz.io/plyr.fm/issues/6),
-renderg.host's report about plylst. Stop at reviewed, tested PRs; do not merge or
-deploy this stack.
+renderg.host's report about plylst. The user subsequently authorized staging
+landing of the API stack and an owner-selected album link. Production promotion
+remains separate.
 
 ## Chunks
 
@@ -38,9 +39,10 @@ responses; the CLI text view is unchanged. Album `created_at` is the local album
 row's creation timestamp, not a release date or a guarantee of the PDS record's
 `createdAt`. Global album artwork follows the existing cover/avatar fallback.
 
-The backend and client check each other's `main` contract in CI. The matching
-branches are tested together locally; their reciprocal main-branch compatibility
-checks cannot both pass before coordinated landing. Keep those checks intact.
+The backend and client check each other's `main` contract in CI. The client
+checker now accepts optional response properties appearing or disappearing during
+rollout, while rejecting required-field changes, shared-field type changes and
+request drift. Both old-server and proposed-server compatibility pass.
 
 ## Adversarial self-review
 

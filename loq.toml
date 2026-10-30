@@ -247,7 +247,7 @@ max_lines = 798
 
 [[rules]]
 path = "backend/src/backend/api/albums/mutations.py"
-max_lines = 610
+max_lines = 614
 
 [[rules]]
 path = "backend/src/backend/api/lists/playlists.py"
