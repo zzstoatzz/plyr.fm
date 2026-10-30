@@ -112,7 +112,7 @@ try {
 		});
 		try {
 			await visitor.addInitScript(
-				(preferredTheme) => localStorage.setItem('theme', preferredTheme),
+				(preferredTheme) => globalThis.localStorage.setItem('theme', preferredTheme),
 				theme
 			);
 			const publicPage = await visitor.newPage();
