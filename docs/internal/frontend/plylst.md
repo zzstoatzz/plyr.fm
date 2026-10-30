@@ -1,8 +1,11 @@
 # plylst album link
 
 Album owners can enable **show plylst link** while editing an album. It defaults
-off and saves immediately; a failed save restores the previous choice and shows
-an inline error. Only the album owner can change the setting.
+off. The owner edits a draft in album settings and presses **save changes**;
+**cancel** restores saved settings. Failed saves retain the draft and show an
+inline error. Only the album owner can change the setting. Link-only saves do
+not start a track access job. If access changes succeed but the link save fails,
+retrying saves only the link.
 
 The public album action is plylst's favicon and an outbound arrow, with an
 accessible name and tooltip. The favicon is served locally from

@@ -1,17 +1,19 @@
 <script lang="ts">
-	import type { PublishingDefaults } from '$lib/publishing';
+	import { LISTENING_POLICIES, DOWNLOAD_POLICIES, type PublishingDefaults } from '$lib/publishing';
 
 	interface Props {
 		value: PublishingDefaults;
 		showSpace?: boolean;
 		showRights?: boolean;
 		disabled?: boolean;
+		layout?: 'choices' | 'rows';
 	}
 	let {
 		value = $bindable(),
 		showSpace = false,
 		showRights = false,
-		disabled = false
+		disabled = false,
+		layout = 'choices'
 	}: Props = $props();
 
 	function listening(next: PublishingDefaults['access']['listening']): void {
@@ -35,69 +37,111 @@
 
 <fieldset {disabled} class="publishing-controls">
 	<legend class="sr-only">music access</legend>
-	<label class="choice">
-		<input
-			type="checkbox"
-			checked={value.access.listening === 'public'}
-			onchange={(event) => listening(event.currentTarget.checked ? 'public' : 'owner')}
-		/>
-		<span>anyone can listen</span>
-	</label>
-	{#if value.access.listening !== 'public'}
-		<label class="audience"
-			>who can listen?
+	{#if layout === 'rows'}
+		<label class="row"
+			>who can listen
 			<select
+				aria-label="who can listen"
 				value={value.access.listening}
 				onchange={(event) => {
-					const selected = event.currentTarget.value;
-					if (
-						selected === 'owner' ||
-						selected === 'signed_in' ||
-						selected === 'supporters' ||
-						selected === 'space'
-					)
-						listening(selected);
+					const next = LISTENING_POLICIES.find((policy) => policy === event.currentTarget.value);
+					if (next) listening(next);
 				}}
 			>
-				<option value="owner">only me</option>
+				<option value="public">anyone</option>
 				<option value="signed_in">signed-in listeners</option>
 				<option value="supporters">verified supporters</option>
+				<option value="owner">only me</option>
 				{#if showSpace || value.access.listening === 'space'}<option
 						value="space"
 						disabled={!showSpace}>my Space members</option
 					>{/if}
 			</select>
 		</label>
-	{/if}
-	<label class="choice">
-		<input
-			type="checkbox"
-			disabled={value.access.listening === 'space' || value.access.listening === 'owner'}
-			checked={value.access.listening !== 'owner' &&
-				(value.access.downloads === 'open' || value.access.downloads === 'ask')}
-			onchange={(event) =>
-				(value = {
-					...value,
-					access: { ...value.access, downloads: event.currentTarget.checked ? 'open' : 'off' }
-				})}
-		/>
-		<span>anyone can download</span>
-	</label>
-	{#if value.access.listening !== 'space' && value.access.listening !== 'owner' && (value.access.downloads === 'off' || value.access.downloads === 'supporters')}
-		<label class="audience"
-			>who can download?
+		<label class="row"
+			>downloads
 			<select
+				aria-label="downloads"
 				value={value.access.downloads}
+				disabled={value.access.listening === 'space' || value.access.listening === 'owner'}
 				onchange={(event) => {
-					const downloads = event.currentTarget.value;
-					if (downloads === 'off' || downloads === 'supporters')
-						value = { ...value, access: { ...value.access, downloads } };
+					const next = DOWNLOAD_POLICIES.find((policy) => policy === event.currentTarget.value);
+					if (next) value = { ...value, access: { ...value.access, downloads: next } };
 				}}
 			>
-				<option value="off">only me</option>
+				<option value="open">allowed</option>
+				<option value="ask">allowed, with a support prompt</option>
 				<option value="supporters">verified supporters</option>
+				<option value="off">off</option>
 			</select>
 		</label>
+	{:else}
+		<label class="choice">
+			<input
+				type="checkbox"
+				checked={value.access.listening === 'public'}
+				onchange={(event) => listening(event.currentTarget.checked ? 'public' : 'owner')}
+			/>
+			<span>anyone can listen</span>
+		</label>
+		{#if value.access.listening !== 'public'}
+			<label class="audience"
+				>who can listen?
+				<select
+					value={value.access.listening}
+					onchange={(event) => {
+						const selected = event.currentTarget.value;
+						if (
+							selected === 'owner' ||
+							selected === 'signed_in' ||
+							selected === 'supporters' ||
+							selected === 'space'
+						)
+							listening(selected);
+					}}
+				>
+					<option value="owner">only me</option>
+					<option value="signed_in">signed-in listeners</option>
+					<option value="supporters">verified supporters</option>
+					{#if showSpace || value.access.listening === 'space'}<option
+							value="space"
+							disabled={!showSpace}>my Space members</option
+						>{/if}
+				</select>
+			</label>
+		{/if}
+		<label class="choice">
+			<input
+				type="checkbox"
+				disabled={value.access.listening === 'space' || value.access.listening === 'owner'}
+				checked={value.access.listening !== 'owner' &&
+					(value.access.downloads === 'open' || value.access.downloads === 'ask')}
+				onchange={(event) =>
+					(value = {
+						...value,
+						access: { ...value.access, downloads: event.currentTarget.checked ? 'open' : 'off' }
+					})}
+			/>
+			<span>anyone can download</span>
+		</label>
+	{/if}
+	{#if value.access.listening !== 'space' && value.access.listening !== 'owner' && (value.access.downloads === 'off' || value.access.downloads === 'supporters')}
+		{#if layout === 'choices'}
+			<label class="audience"
+				>who can download?
+				<select
+					value={value.access.downloads}
+					onchange={(event) => {
+						const downloads = event.currentTarget.value;
+						if (downloads === 'off' || downloads === 'supporters')
+							value = { ...value, access: { ...value.access, downloads } };
+					}}
+				>
+					<option value="off">only me</option>
+					<option value="supporters">verified supporters</option>
+				</select>
+			</label>
+		{/if}
 		<p>people who can listen can still save or record playback.</p>
 	{/if}
 	{#if value.access.listening === 'owner'}
@@ -142,7 +186,7 @@
 				>
 				<p>when off, this can still appear on your profile, in albums, playlists and search.</p>
 			{/if}
-			{#if value.access.downloads === 'open' || value.access.downloads === 'ask'}
+			{#if layout === 'choices' && (value.access.downloads === 'open' || value.access.downloads === 'ask')}
 				<label class="choice"
 					><input
 						type="checkbox"
@@ -168,6 +212,30 @@
 		display: grid;
 		gap: 0.85rem;
 		min-width: 0;
+	}
+	.row {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 1rem;
+	}
+	.row select {
+		width: auto;
+		max-width: 65%;
+		font-size: var(--text-sm);
+		background: var(--bg-secondary);
+	}
+	@media (max-width: 600px) {
+		.row {
+			flex-direction: column;
+			align-items: stretch;
+			gap: 0.5rem;
+		}
+		.row select {
+			width: 100%;
+			max-width: 100%;
+			font-size: var(--text-lg);
+		}
 	}
 	.choice {
 		display: flex;
