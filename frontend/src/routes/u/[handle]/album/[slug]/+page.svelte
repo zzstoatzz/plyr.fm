@@ -3,7 +3,6 @@
 	import { browser } from '$app/environment';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import Header from '$lib/components/Header.svelte';
-	import AlbumPlylstSettings from '$lib/components/AlbumPlylstSettings.svelte';
 	import PlylstLink from '$lib/components/PlylstLink.svelte';
 	import AlbumPublishingEditor from '$lib/components/AlbumPublishingEditor.svelte';
 	import TrackItem from '$lib/components/TrackItem.svelte';
@@ -675,15 +674,14 @@
 
 		{#if isEditMode && isOwner}
 			{#key albumMetadata.id}
-				<AlbumPlylstSettings
-					albumId={albumMetadata.id}
-					enabled={albumMetadata.show_plylst ?? false}
+				<AlbumPublishingEditor
+					album={albumMetadata}
+					{tracks}
 					onchange={(albumId, enabled) => {
 						if (albumMetadata.id === albumId) albumMetadata.show_plylst = enabled;
 					}}
 				/>
 			{/key}
-			<AlbumPublishingEditor album={albumMetadata} {tracks} />
 		{/if}
 
 		<div class="tracks-section">
