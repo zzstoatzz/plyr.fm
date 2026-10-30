@@ -674,13 +674,15 @@
 		</div>
 
 		{#if isEditMode && isOwner}
-			<AlbumPlylstSettings
-				albumId={albumMetadata.id}
-				enabled={albumMetadata.show_plylst ?? false}
-				onchange={(albumId, enabled) => {
-					if (albumMetadata.id === albumId) albumMetadata.show_plylst = enabled;
-				}}
-			/>
+			{#key albumMetadata.id}
+				<AlbumPlylstSettings
+					albumId={albumMetadata.id}
+					enabled={albumMetadata.show_plylst ?? false}
+					onchange={(albumId, enabled) => {
+						if (albumMetadata.id === albumId) albumMetadata.show_plylst = enabled;
+					}}
+				/>
+			{/key}
 			<AlbumPublishingEditor album={albumMetadata} {tracks} />
 		{/if}
 
