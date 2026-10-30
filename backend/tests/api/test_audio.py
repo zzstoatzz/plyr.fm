@@ -1037,7 +1037,7 @@ async def test_public_stream_with_cors_still_redirects_to_cdn(
     assert response.headers["location"] == test_track_with_r2_url.r2_url
 
 
-@pytest.mark.parametrize("range_header", ["bytes=100-", "bytes=0-5,10-15"])
+@pytest.mark.parametrize("range_header", ["bytes=100-"])
 async def test_cors_proxy_preserves_unsatisfiable_range(
     test_app: FastAPI,
     gated_track: Track,
@@ -1114,3 +1114,63 @@ async def test_cors_head_returns_upstream_metadata(
     assert response.headers["accept-ranges"] == "bytes"
     assert response.content == b""
     assert seen == ["HEAD"]
+
+
+async def test_cors_head_uses_a_head_signed_url(
+    test_app: FastAPI, gated_track: Track, owner_session: Session
+) -> None:
+    test_app.dependency_overrides[get_optional_session] = lambda: owner_session
+    sign = AsyncMock(return_value="https://presigned.example/audio.mp3")
+    try:
+        with (
+            patch("backend.api.audio.storage.generate_presigned_url", sign),
+            patch(
+                "backend.api.audio.httpx.AsyncClient",
+                _upstream_client(
+                    lambda req: httpx.Response(200, headers={"content-length": "100"})
+                ),
+            ),
+        ):
+            async with AsyncClient(
+                transport=ASGITransport(app=test_app), base_url="http://test"
+            ) as client:
+                response = await client.head(f"/audio/{gated_track.file_id}?cors=1")
+        assert response.status_code == 200
+        sign.assert_awaited_once_with(
+            file_id=gated_track.file_id,
+            extension=gated_track.file_type,
+            http_method="HEAD",
+        )
+    finally:
+        test_app.dependency_overrides.pop(get_optional_session, None)
+
+
+async def test_cors_proxy_rejects_multiple_ranges_before_upstream(
+    test_app: FastAPI, gated_track: Track, owner_session: Session
+) -> None:
+    seen: list[httpx.Request] = []
+
+    def upstream(req: httpx.Request) -> httpx.Response:
+        seen.append(req)
+        return httpx.Response(400)
+
+    test_app.dependency_overrides[get_optional_session] = lambda: owner_session
+    try:
+        with (
+            patch(
+                "backend.api.audio.storage.generate_presigned_url",
+                AsyncMock(return_value="https://presigned.example/audio.mp3"),
+            ),
+            patch("backend.api.audio.httpx.AsyncClient", _upstream_client(upstream)),
+        ):
+            async with AsyncClient(
+                transport=ASGITransport(app=test_app), base_url="http://test"
+            ) as client:
+                response = await client.get(
+                    f"/audio/{gated_track.file_id}?cors=1",
+                    headers={"range": "bytes=0-5,10-15"},
+                )
+        assert response.status_code == 416
+        assert seen == []
+    finally:
+        test_app.dependency_overrides.pop(get_optional_session, None)

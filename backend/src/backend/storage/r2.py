@@ -6,7 +6,7 @@ from collections.abc import AsyncIterator, Callable
 from functools import reduce
 from io import BytesIO
 from pathlib import Path, PurePosixPath
-from typing import Any, BinaryIO
+from typing import Any, BinaryIO, Literal
 from urllib.parse import quote
 
 import aioboto3
@@ -1016,6 +1016,8 @@ class R2Storage:
         file_id: str,
         extension: str,
         expires_in: int | None = None,
+        *,
+        http_method: Literal["GET", "HEAD"] = "GET",
     ) -> str:
         """generate a presigned URL for accessing gated content.
 
@@ -1056,6 +1058,7 @@ class R2Storage:
                         "Key": key,
                     },
                     ExpiresIn=expiry,
+                    HttpMethod=http_method,
                 )
                 logfire.info(
                     "generated presigned URL",
