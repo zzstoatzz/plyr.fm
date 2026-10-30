@@ -80,3 +80,16 @@ can stream the artist's source when the mirror is missing.
 See [streaming uploads](streaming-uploads.md) for key/hash semantics and
 [audio access reconciliation](../architecture/audio-access-reconciliation.md)
 for the historical policy decisions.
+
+## third-party range reads
+
+Audio proxy responses expose `Content-Range`, `Content-Length` and `Accept-Ranges`
+to browsers under the existing CORS origin policy. The R2/PDS URL proxy forwards
+GET ranges and preserves upstream 416 responses (including `Content-Range` and
+the error body); other upstream failures remain 502. Multi-range support depends
+on the source: an unsupported range can return 416 rather than a gateway error.
+
+For legacy/private-R2 delivery, `HEAD ?cors=1` performs an authorized upstream
+HEAD and returns file headers without downloading bytes. HEAD without `cors=1`
+retains the existing authorization-check behavior. Neither mode grants access
+or changes download permissions.
