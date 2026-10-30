@@ -3,6 +3,8 @@
 	import { browser } from '$app/environment';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import Header from '$lib/components/Header.svelte';
+	import AlbumPlylstSettings from '$lib/components/AlbumPlylstSettings.svelte';
+	import PlylstLink from '$lib/components/PlylstLink.svelte';
 	import AlbumPublishingEditor from '$lib/components/AlbumPublishingEditor.svelte';
 	import TrackItem from '$lib/components/TrackItem.svelte';
 	import ShareButton from '$lib/components/ShareButton.svelte';
@@ -45,8 +47,7 @@
 
 	// check if current track is from this album (active, regardless of paused state)
 	const isAlbumActive = $derived(
-		player.currentTrack !== null &&
-		tracks.some(t => t.id === player.currentTrack?.id)
+		player.currentTrack !== null && tracks.some((t) => t.id === player.currentTrack?.id)
 	);
 
 	// check if actively playing (not paused)
@@ -235,18 +236,27 @@
 
 <svelte:head>
 	<title>{albumMetadata.title} by {albumMetadata.artist} - plyr.fm</title>
-	<meta name="description" content="{albumMetadata.title} by {albumMetadata.artist} - {albumMetadata.track_count} tracks on plyr.fm" />
+	<meta
+		name="description"
+		content="{albumMetadata.title} by {albumMetadata.artist} - {albumMetadata.track_count} tracks on plyr.fm"
+	/>
 
 	<!-- Open Graph / Facebook -->
 	<meta property="og:type" content="music.album" />
 	<meta property="og:title" content="{albumMetadata.title} by {albumMetadata.artist}" />
-	<meta property="og:description" content="{albumMetadata.track_count} tracks • {albumMetadata.total_plays} plays" />
-	<meta property="og:url" content="{APP_CANONICAL_URL}/u/{albumMetadata.artist_handle}/album/{albumMetadata.slug}" />
+	<meta
+		property="og:description"
+		content="{albumMetadata.track_count} tracks • {albumMetadata.total_plays} plays"
+	/>
+	<meta
+		property="og:url"
+		content="{APP_CANONICAL_URL}/u/{albumMetadata.artist_handle}/album/{albumMetadata.slug}"
+	/>
 	<meta property="og:site_name" content={APP_NAME} />
-	<meta property="music:musician" content="{albumMetadata.artist_handle}" />
+	<meta property="music:musician" content={albumMetadata.artist_handle} />
 	{#if albumMetadata.image_url && !moderation.isSensitive(albumMetadata.image_url)}
-		<meta property="og:image" content="{albumMetadata.image_url}" />
-		<meta property="og:image:secure_url" content="{albumMetadata.image_url}" />
+		<meta property="og:image" content={albumMetadata.image_url} />
+		<meta property="og:image:secure_url" content={albumMetadata.image_url} />
 		<meta property="og:image:width" content="1200" />
 		<meta property="og:image:height" content="1200" />
 		<meta property="og:image:alt" content="{albumMetadata.title} by {albumMetadata.artist}" />
@@ -255,14 +265,19 @@
 	<!-- Twitter -->
 	<meta name="twitter:card" content="summary" />
 	<meta name="twitter:title" content="{albumMetadata.title} by {albumMetadata.artist}" />
-	<meta name="twitter:description" content="{albumMetadata.track_count} tracks • {albumMetadata.total_plays} plays" />
+	<meta
+		name="twitter:description"
+		content="{albumMetadata.track_count} tracks • {albumMetadata.total_plays} plays"
+	/>
 	{#if albumMetadata.image_url && !moderation.isSensitive(albumMetadata.image_url)}
-		<meta name="twitter:image" content="{albumMetadata.image_url}" />
+		<meta name="twitter:image" content={albumMetadata.image_url} />
 	{/if}
 	<link
 		rel="alternate"
 		type="application/json+oembed"
-		href="{API_URL}/oembed?url={encodeURIComponent(`${APP_CANONICAL_URL}/u/${albumMetadata.artist_handle}/album/${albumMetadata.slug}`)}"
+		href="{API_URL}/oembed?url={encodeURIComponent(
+			`${APP_CANONICAL_URL}/u/${albumMetadata.artist_handle}/album/${albumMetadata.slug}`
+		)}"
 		title="{albumMetadata.title} by {albumMetadata.artist}"
 	/>
 
@@ -297,23 +312,60 @@
 					disabled={uploadingCover}
 				>
 					{#if albumMetadata.image_url}
-						<img src={albumMetadata.image_url} alt="{albumMetadata.title} artwork" class="album-art" />
+						<img
+							src={albumMetadata.image_url}
+							alt="{albumMetadata.title} artwork"
+							class="album-art"
+						/>
 					{:else}
 						<div class="album-art-placeholder">
-							<svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-								<rect x="3" y="3" width="18" height="18" stroke="currentColor" stroke-width="1.5" fill="none"/>
-								<circle cx="12" cy="12" r="4" fill="currentColor"/>
+							<svg
+								width="64"
+								height="64"
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="1.5"
+							>
+								<rect
+									x="3"
+									y="3"
+									width="18"
+									height="18"
+									stroke="currentColor"
+									stroke-width="1.5"
+									fill="none"
+								/>
+								<circle cx="12" cy="12" r="4" fill="currentColor" />
 							</svg>
 						</div>
 					{/if}
 					<div class="art-edit-overlay" class:uploading={uploadingCover}>
 						{#if uploadingCover}
-							<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="spinner">
-								<circle cx="12" cy="12" r="10" stroke-dasharray="31.4" stroke-dashoffset="10"></circle>
+							<svg
+								width="24"
+								height="24"
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="2"
+								class="spinner"
+							>
+								<circle cx="12" cy="12" r="10" stroke-dasharray="31.4" stroke-dashoffset="10"
+								></circle>
 							</svg>
 							<span>uploading...</span>
 						{:else}
-							<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+							<svg
+								width="24"
+								height="24"
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="2"
+								stroke-linecap="round"
+								stroke-linejoin="round"
+							>
 								<rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
 								<circle cx="8.5" cy="8.5" r="1.5"></circle>
 								<polyline points="21 15 16 10 5 21"></polyline>
@@ -324,13 +376,32 @@
 				</button>
 			{:else if albumMetadata.image_url}
 				<SensitiveImage src={albumMetadata.image_url} tooltipPosition="center">
-					<img src={albumMetadata.image_url} alt="{albumMetadata.title} artwork" class="album-art" />
+					<img
+						src={albumMetadata.image_url}
+						alt="{albumMetadata.title} artwork"
+						class="album-art"
+					/>
 				</SensitiveImage>
 			{:else}
 				<div class="album-art-placeholder">
-					<svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-						<rect x="3" y="3" width="18" height="18" stroke="currentColor" stroke-width="1.5" fill="none"/>
-						<circle cx="12" cy="12" r="4" fill="currentColor"/>
+					<svg
+						width="64"
+						height="64"
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="1.5"
+					>
+						<rect
+							x="3"
+							y="3"
+							width="18"
+							height="18"
+							stroke="currentColor"
+							stroke-width="1.5"
+							fill="none"
+						/>
+						<circle cx="12" cy="12" r="4" fill="currentColor" />
 					</svg>
 				</div>
 			{/if}
@@ -352,9 +423,15 @@
 							{albumMetadata.artist}
 						</a>
 						<span class="meta-separator">•</span>
-						<span>{albumMetadata.track_count} {albumMetadata.track_count === 1 ? 'track' : 'tracks'}</span>
+						<span
+							>{albumMetadata.track_count}
+							{albumMetadata.track_count === 1 ? 'track' : 'tracks'}</span
+						>
 						<span class="meta-separator">•</span>
-						<span>{albumMetadata.total_plays} {albumMetadata.total_plays === 1 ? 'play' : 'plays'}</span>
+						<span
+							>{albumMetadata.total_plays}
+							{albumMetadata.total_plays === 1 ? 'play' : 'plays'}</span
+						>
 					</div>
 				</div>
 
@@ -363,12 +440,18 @@
 					{#if albumDownloadable}
 						<DownloadButton
 							onDownload={() =>
-								requestAlbumDownload(albumMetadata.artist_handle, albumMetadata.slug, tracks[0] ? {
-									artistName: tracks[0].artist,
-									artistDid: tracks[0].artist_did,
-									policy: tracks[0].download_policy,
-									supportUrl: tracks[0].artist_support_url
-								} : null)}
+								requestAlbumDownload(
+									albumMetadata.artist_handle,
+									albumMetadata.slug,
+									tracks[0]
+										? {
+												artistName: tracks[0].artist,
+												artistDid: tracks[0].artist_did,
+												policy: tracks[0].download_policy,
+												supportUrl: tracks[0].artist_support_url
+											}
+										: null
+								)}
 							title="download album"
 						/>
 					{/if}
@@ -382,16 +465,43 @@
 						>
 							{#if isEditMode}
 								{#if isSaving}
-									<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="spinner">
-										<circle cx="12" cy="12" r="10" stroke-dasharray="31.4" stroke-dashoffset="10"></circle>
+									<svg
+										width="18"
+										height="18"
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="2"
+										class="spinner"
+									>
+										<circle cx="12" cy="12" r="10" stroke-dasharray="31.4" stroke-dashoffset="10"
+										></circle>
 									</svg>
 								{:else}
-									<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+									<svg
+										width="18"
+										height="18"
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="2"
+										stroke-linecap="round"
+										stroke-linejoin="round"
+									>
 										<polyline points="20 6 9 17 4 12"></polyline>
 									</svg>
 								{/if}
 							{:else}
-								<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+								<svg
+									width="18"
+									height="18"
+									viewBox="0 0 24 24"
+									fill="none"
+									stroke="currentColor"
+									stroke-width="2"
+									stroke-linecap="round"
+									stroke-linejoin="round"
+								>
 									<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
 									<path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
 								</svg>
@@ -403,9 +513,19 @@
 							aria-label="delete album"
 							title="delete album"
 						>
-							<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+							<svg
+								width="18"
+								height="18"
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="2"
+								stroke-linecap="round"
+								stroke-linejoin="round"
+							>
 								<polyline points="3 6 5 6 21 6"></polyline>
-								<path d="m19 6-.867 12.142A2 2 0 0 1 16.138 20H7.862a2 2 0 0 1-1.995-1.858L5 6"></path>
+								<path d="m19 6-.867 12.142A2 2 0 0 1 16.138 20H7.862a2 2 0 0 1-1.995-1.858L5 6"
+								></path>
 								<path d="M10 11v6"></path>
 								<path d="M14 11v6"></path>
 								<path d="m9 6 .5-2h5l.5 2"></path>
@@ -420,22 +540,30 @@
 			<button
 				class="play-button"
 				class:is-playing={isAlbumPlaying}
-				onclick={() => isAlbumActive ? queue.togglePlayPause() : playNow()}
+				onclick={() => (isAlbumActive ? queue.togglePlayPause() : playNow())}
 			>
 				{#if isAlbumPlaying}
 					<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-						<path d="M6 4h4v16H6zM14 4h4v16h-4z"/>
+						<path d="M6 4h4v16H6zM14 4h4v16h-4z" />
 					</svg>
 					pause
 				{:else}
 					<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-						<path d="M8 5v14l11-7z"/>
+						<path d="M8 5v14l11-7z" />
 					</svg>
 					play
 				{/if}
 			</button>
 			<button class="queue-button" onclick={addToQueue}>
-				<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+				<svg
+					width="18"
+					height="18"
+					viewBox="0 0 24 24"
+					fill="none"
+					stroke="currentColor"
+					stroke-width="2"
+					stroke-linecap="round"
+				>
 					<line x1="5" y1="15" x2="5" y2="21"></line>
 					<line x1="2" y1="18" x2="8" y2="18"></line>
 					<line x1="9" y1="6" x2="21" y2="6"></line>
@@ -444,19 +572,26 @@
 				</svg>
 				add to queue
 			</button>
+			<PlylstLink album={albumMetadata} {tracks} />
 			<div class="mobile-buttons">
 				<ShareButton url={shareUrl} title="share album" />
 				{#if albumDownloadable}
 					<DownloadButton
-							onDownload={() =>
-								requestAlbumDownload(albumMetadata.artist_handle, albumMetadata.slug, tracks[0] ? {
-									artistName: tracks[0].artist,
-									artistDid: tracks[0].artist_did,
-									policy: tracks[0].download_policy,
-									supportUrl: tracks[0].artist_support_url
-								} : null)}
-							title="download album"
-						/>
+						onDownload={() =>
+							requestAlbumDownload(
+								albumMetadata.artist_handle,
+								albumMetadata.slug,
+								tracks[0]
+									? {
+											artistName: tracks[0].artist,
+											artistDid: tracks[0].artist_did,
+											policy: tracks[0].download_policy,
+											supportUrl: tracks[0].artist_support_url
+										}
+									: null
+							)}
+						title="download album"
+					/>
 				{/if}
 				{#if isOwner}
 					<button
@@ -468,16 +603,43 @@
 					>
 						{#if isEditMode}
 							{#if isSaving}
-								<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="spinner">
-									<circle cx="12" cy="12" r="10" stroke-dasharray="31.4" stroke-dashoffset="10"></circle>
+								<svg
+									width="18"
+									height="18"
+									viewBox="0 0 24 24"
+									fill="none"
+									stroke="currentColor"
+									stroke-width="2"
+									class="spinner"
+								>
+									<circle cx="12" cy="12" r="10" stroke-dasharray="31.4" stroke-dashoffset="10"
+									></circle>
 								</svg>
 							{:else}
-								<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+								<svg
+									width="18"
+									height="18"
+									viewBox="0 0 24 24"
+									fill="none"
+									stroke="currentColor"
+									stroke-width="2"
+									stroke-linecap="round"
+									stroke-linejoin="round"
+								>
 									<polyline points="20 6 9 17 4 12"></polyline>
 								</svg>
 							{/if}
 						{:else}
-							<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+							<svg
+								width="18"
+								height="18"
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="2"
+								stroke-linecap="round"
+								stroke-linejoin="round"
+							>
 								<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
 								<path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
 							</svg>
@@ -489,9 +651,19 @@
 						aria-label="delete album"
 						title="delete album"
 					>
-						<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+						<svg
+							width="18"
+							height="18"
+							viewBox="0 0 24 24"
+							fill="none"
+							stroke="currentColor"
+							stroke-width="2"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+						>
 							<polyline points="3 6 5 6 21 6"></polyline>
-							<path d="m19 6-.867 12.142A2 2 0 0 1 16.138 20H7.862a2 2 0 0 1-1.995-1.858L5 6"></path>
+							<path d="m19 6-.867 12.142A2 2 0 0 1 16.138 20H7.862a2 2 0 0 1-1.995-1.858L5 6"
+							></path>
 							<path d="M10 11v6"></path>
 							<path d="M14 11v6"></path>
 							<path d="m9 6 .5-2h5l.5 2"></path>
@@ -502,6 +674,13 @@
 		</div>
 
 		{#if isEditMode && isOwner}
+			<AlbumPlylstSettings
+				albumId={albumMetadata.id}
+				enabled={albumMetadata.show_plylst ?? false}
+				onchange={(albumId, enabled) => {
+					if (albumMetadata.id === albumId) albumMetadata.show_plylst = enabled;
+				}}
+			/>
 			<AlbumPublishingEditor album={albumMetadata} {tracks} />
 		{/if}
 
@@ -570,11 +749,31 @@
 								title="remove track"
 							>
 								{#if removingTrackId === track.id}
-									<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="spinner">
-										<circle cx="12" cy="12" r="10" stroke-dasharray="31.4" stroke-dashoffset="10"></circle>
+									<svg
+										width="16"
+										height="16"
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="2"
+										stroke-linecap="round"
+										stroke-linejoin="round"
+										class="spinner"
+									>
+										<circle cx="12" cy="12" r="10" stroke-dasharray="31.4" stroke-dashoffset="10"
+										></circle>
 									</svg>
 								{:else}
-									<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+									<svg
+										width="16"
+										height="16"
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="2"
+										stroke-linecap="round"
+										stroke-linejoin="round"
+									>
 										<line x1="18" y1="6" x2="6" y2="18"></line>
 										<line x1="6" y1="6" x2="18" y2="18"></line>
 									</svg>
@@ -616,7 +815,6 @@
 		margin: 0 auto;
 		padding: 0 1rem calc(var(--player-height, 120px) + 2rem + env(safe-area-inset-bottom, 0px)) 1rem;
 	}
-
 
 	main {
 		margin-top: 2rem;
@@ -1043,5 +1241,4 @@
 		cursor: not-allowed;
 		opacity: 0.5;
 	}
-
 </style>

@@ -13,7 +13,7 @@ from .schemas import AlbumListItem, AlbumMetadata, ArtistAlbumListItem
 
 logger = logging.getLogger(__name__)
 
-ALBUM_CACHE_PREFIX = "plyr:album:v5:"
+ALBUM_CACHE_PREFIX = "plyr:album:v6:"
 ALBUM_CACHE_TTL_SECONDS = 300  # 5 minutes
 
 
@@ -115,6 +115,7 @@ async def _album_metadata(
 ) -> AlbumMetadata:
     image_url = await _album_image_url(album, artist)
     return AlbumMetadata(
+        show_plylst=album.show_plylst,
         publishing_defaults=PublishingDefaults.model_validate(album.publishing_defaults)
         if album.publishing_defaults is not None
         else None,

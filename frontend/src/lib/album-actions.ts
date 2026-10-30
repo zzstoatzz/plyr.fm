@@ -23,6 +23,16 @@ export async function updateTitle(albumId: string, title: string): Promise<void>
 	}
 }
 
+export async function updatePlylstLink(albumId: string, enabled: boolean): Promise<void> {
+	const response = await fetch(`${API_URL}/albums/${albumId}?show_plylst=${enabled}`, {
+		method: 'PATCH',
+		credentials: 'include'
+	});
+	if (!response.ok) {
+		throw new Error(await detailFrom(response, 'could not save plylst link — retry'));
+	}
+}
+
 export async function uploadCover(albumId: string, file: File): Promise<{ image_url: string }> {
 	const formData = new FormData();
 	formData.append('image', file);
