@@ -264,7 +264,7 @@ async def _handle_gated_audio(
     if support_gate is not None:
         await _check_gate_access(support_gate, session, artist_did)
 
-    if is_head_request:
+    if is_head_request and proxy_request is None:
         return Response(status_code=200)
 
     # artist always sees their own track; otherwise we already validated above
@@ -292,7 +292,7 @@ async def _handle_gated_audio(
     return RedirectResponse(url=url)
 
 
-async def _proxy_audio(url: str, request: Request) -> StreamingResponse:
+async def _proxy_audio(url: str, request: Request) -> Response:
     """relay upstream audio bytes, passing Range through so seeking survives."""
     client = httpx.AsyncClient(
         timeout=httpx.Timeout(30.0, read=None), follow_redirects=True
@@ -302,18 +302,25 @@ async def _proxy_audio(url: str, request: Request) -> StreamingResponse:
         upstream_headers["range"] = range_header
     try:
         resp = await client.send(
-            client.build_request("GET", url, headers=upstream_headers), stream=True
+            client.build_request(request.method, url, headers=upstream_headers),
+            stream=True,
         )
     except httpx.HTTPError as exc:
         await client.aclose()
         logfire.warn("audio proxy: upstream unreachable", error=str(exc))
         raise HTTPException(status_code=502, detail="audio upstream failed") from exc
-    if resp.status_code >= 400:
+    if resp.status_code >= 400 and resp.status_code != 416:
         status = resp.status_code
         await resp.aclose()
         await client.aclose()
         logfire.warn("audio proxy: upstream refused", status=status)
         raise HTTPException(status_code=502, detail="audio upstream failed")
+    if request.method == "HEAD":
+        status = resp.status_code
+        headers = _relay_headers(resp)
+        await resp.aclose()
+        await client.aclose()
+        return Response(status_code=status, headers=headers)
 
     async def body():
         try:
@@ -614,7 +621,10 @@ def _wants_cors(request: Request) -> bool:
 
 
 def _relay_headers(resp) -> dict[str, str]:
-    return {k: resp.headers[k] for k in _PROXY_HEADERS if k in resp.headers}
+    return {
+        **{k: resp.headers[k] for k in _PROXY_HEADERS if k in resp.headers},
+        "access-control-expose-headers": "Content-Range, Content-Length, Accept-Ranges",
+    }
 
 
 async def _handle_private_audio(
