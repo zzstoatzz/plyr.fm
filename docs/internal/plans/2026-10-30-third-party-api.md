@@ -29,3 +29,38 @@ Endpoint regressions must fail before each fix, using real PostgreSQL and Redis
 and mocking only upstream network/storage boundaries. Run backend lint, the full
 backend suite and API/SDK contract gates. Review the complete stack against access
 control, cache compatibility, HTTP framing, and client compatibility before handoff.
+
+## Metadata contract
+
+`duration` is nullable integer seconds read from `Track.extra`; no PDS fetch or
+backfill runs on reads. The SDK Track model preserves it for sync/async and MCP
+responses; the CLI text view is unchanged. Album `created_at` is the local album
+row's creation timestamp, not a release date or a guarantee of the PDS record's
+`createdAt`. Global album artwork follows the existing cover/avatar fallback.
+
+The backend and client check each other's `main` contract in CI. The matching
+branches are tested together locally; their reciprocal main-branch compatibility
+checks cannot both pass before coordinated landing. Keep those checks intact.
+
+## Adversarial self-review
+
+Reviewed the audio PR's complete diff and the metadata/client diffs against the
+report, not just their happy paths. The full suite caught a regression-fixture
+collision: Redis persists between tests in a worker, so parameterized albums now
+use distinct cache keys. No surviving implementation correctness finding:
+
+- Gate checks precede upstream HEAD/GET. `cors=1` does not authorize listeners,
+  disclose signed URLs, or change original-download restrictions.
+- Upstream HEAD resources close before return. A 416 GET retains its body and
+  length together; returning an empty response with an upstream body length
+  would break HTTP framing. Other upstream refusals remain gateway failures.
+- Proxy headers remain allow-listed; header exposure does not expand origins.
+- Metadata comes from loaded rows and existing builders, with no new per-track
+  PDS/SQL request, data rewrite, tag policy, or hidden-track aggregation.
+- Album cache generation changes with the response shape. Required creation
+  timestamps are supplied by every builder, including mutation responses.
+- SDK duration defaults to None for older servers; both repositories have the
+  same minimal contract delta and proposed-backend compatibility passes.
+
+Review is a self-review, not an independent human or agent approval. Live
+production, browser, and staging behavior has not been claimed or exercised.
