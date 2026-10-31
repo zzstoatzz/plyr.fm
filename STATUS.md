@@ -47,6 +47,40 @@ plyr.fm should become:
 
 ### October 2026
 
+#### third-party players and compact album settings (October 31)
+
+Production release [2026.1031.194332](https://github.com/zzstoatzz/plyr.fm/releases/tag/2026.1031.194332)
+promoted #2250–#2254. Renderg.host's [plylst feedback](https://tangled.org/zzstoatzz.io/plyr.fm/issues/6)
+prompted browser-readable audio range metadata, correct HEAD signing for private
+R2, and explicit 416 refusals for unsupported multi-range requests. Track duration
+and album artwork, creation time and play totals are returned directly by the API.
+The matching Python client change is merged (zzstoatzz/plyr-python-client#45).
+
+Album owners can opt in to a minimal plylst favicon/outbound-arrow link. It starts
+off and is offered only for nonempty albums whose tracks permit public listening.
+Album editing uses compact disclosures, a switch row and one save/cancel footer.
+Link-only saves do not rewrite track access; track overrides remain protected
+unless their replacement is explicitly selected. Failed partial saves retain the
+unsaved draft for retry. Plylst currently supports albums and reads production.
+See [the integration](docs/internal/frontend/plylst.md).
+
+Validation: 2,156 backend tests and 403 frontend tests passed; staging browser
+checks covered actual owner saves, anonymous visitors, cancel and publishing
+jobs across mobile/desktop and light/dark. The later full staging integration
+run passed, including the large-FLAC case that had timed out in an earlier run.
+Production deployment, migration defaults, metadata, public album layouts and
+cross-origin R2 HEAD/single-range/multi-range responses passed live checks.
+
+#### first anniversary (October 28)
+
+The first commit was October 28, 2025. The earlier whole-history podcast,
+[plyr.fm update - year one](https://plyr.fm/track/1394), was already published on
+October 11, 2026 through #2146. The latest maintenance run was October 26;
+its #2229 and the October 12/19 maintenance PRs remain unmerged. The last merged
+maintenance baseline is #2141, October 11 UTC, so the next regular episode still
+has that larger unpublished window to cover.
+
+
 #### Spaces consent and readiness (October 29)
 
 Permission labels now describe library management and protected audio consistently;
@@ -647,10 +681,7 @@ see the [contributing guide](https://docs.plyr.fm/contributing/) for setup instr
 
 ---
 
-this is a living document. last updated 2026-10-10 (status maintenance): the
-October 3–9 window written up (#2111, #2129–#2138); the equalizer's prod
-split and #2140 recorded; #2124 added to the October 2 entry; the copyright
-entry's release tags corrected; the September summary moved to
-`.status_history/2026-09.md`. before that, 2026-10-02: the review queue's
-first decisions (76 → 33 open), #2123 filed; spaces credentials signed per the
-current permissioned-data branch, unmirrored-track ingest fixed (#2121, #2122).
+this is a living document. last updated 2026-10-31: third-party audio APIs,
+compact owner album settings, production release 2026.1031.194332 and first-year
+podcast provenance. The last merged status-maintenance pass was October 11 UTC
+(#2141); the subsequent weekly maintenance PRs remain pending.
