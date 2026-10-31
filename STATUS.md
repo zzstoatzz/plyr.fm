@@ -72,14 +72,14 @@ it lists six `/rest` defects noticed while writing it (known issues).
 
 #### protected audio stays on the artist's PDS (#2233, #2237, #2238, #2244, #2246–#2249, October 28–29 — prod `2026.1029.040850` → `2026.1029.204905`)
 
-Protected public-metadata audio (public listening with downloads off, sign-in
-or supporter gates) used to live only in plyr's private R2. When the artist's PDS supports Spaces, the audio now stays
-there: the artist owns a public-read, app-restricted **playback** Space that only
+Audio with public metadata but restricted listening or downloads used to live
+only in plyr's private R2. When the artist's PDS supports Spaces, the audio now
+stays there: the artist owns a public-read, app-restricted **playback** Space that only
 plyr's attested client can open, listeners stream through plyr and need neither a
 Spaces PDS nor a credential, and the private R2 copy is a best-effort mirror
 established after ownership. Member-private works retain their separate `self`
-Space and reader-specific authorization. Uploaders on hosts without Spaces must explicitly
-accept plyr-only storage. Existing catalogs are not migrated. Along the way: the
+Space and reader-specific authorization. Uploaders on hosts without Spaces must
+explicitly accept plyr-only storage. Existing catalogs are not migrated. Along the way: the
 1.5 GiB case found a single-copy R2 promotion timeout, fixed with bounded
 multipart copy (#2237); account deletion learned the protected source boundaries
 (#2238, closing #2235); the October 29 spaces alpha removed
@@ -132,7 +132,7 @@ Uploads and processing are paused for an explicit DID list in `upload_policy.py`
 feedback form that DMs the operator in full (#2198). Staging rests its worker and
 Jetstream between tests and scales the app to zero (#2202), and the CLAP embedding
 service source now allows scale-to-zero (#2231); its separate Modal rollout is
-not established by a backend release. `just staging-up` is now a step before verifying
+not established by a backend release. Run `just staging-up` before verifying
 anything that ingests.
 
 #### listening history, and the chart to read it (#2191, #2212, #2218–#2220, October 19–23 — prod `2026.1019.172214` → `2026.1023.212809`)
@@ -200,6 +200,10 @@ The first commit was October 28, 2025; 400 production releases to date. The
 whole-history episode, [plyr.fm update - year one](https://plyr.fm/track/1394),
 was published October 11 (#2146). Three maintenance PRs (#2147, #2190, #2229)
 remain unmerged, so this pass covers October 11–31 in one episode.
+
+Episode audio used to expire after seven days; the October 12/19 audio is gone,
+although their transcripts remain in the PRs. Retention is now 30 days, matching
+the lab. The October 26 audio and this run were also backed up locally.
 
 ### September 2026
 
@@ -306,10 +310,6 @@ Existing-catalog migration is a separate decision; the spec is still moving
 - **the Blacksky sign-in shim is still needed; nothing was filed upstream** (#2089, re-checked October 10): `oauth_compat.py` rewrites `repo:?collection=…` to `repo?collection=…` in the granted scope, for the exact issuer `https://blacksky.app` and nowhere else, before the normal scope check. Blacksky's PDS (rsky) still writes the stray colon at commit `7964ffa` (October 9): its repo prefix constant is `repo:`, `to_repo_scope` appends `?` to it, and its own test asserts the result starts with `repo:?`. Bluesky's reference parser (`@atproto/oauth-scopes`, October 9) rejects a positional part alongside a named `collection`, and the Python client follows it, so without the shim every Blacksky sign-in ends in `Scope mismatch`. It loosens no permission. Remove it when rsky emits `repo?`; the decision on October 10 was not to open an upstream issue.
 - **the upload-stall alert shows three job IDs plus "(+N more)"** (#2087): the triage runbook's step 5 says to use the full IDs from the alert; the rest are in Logfire. The freshness monitor's wiring lives outside this repo.
 - **nothing alerts when a workflow on main is red**: `e2e private media` failed on ten consecutive pushes (September 12–18) before anyone looked. `gh run list --workflow "e2e private media"` is the check until there is one.
-- **status episode audio expires before delayed review**: the maintenance artifact
-  retained audio for seven days; the October 12/19 audio is gone, although the
-  transcripts remain in their PRs. Retention is now 30 days, matching the lab.
-  The October 26 audio and this run were also backed up locally before expiry.
 - **light777.selfhosted.social's duplicate track (1323/1324) is theirs to remove**: same `file_id`, one R2 object; the refcount guard keeps the audio when either row is deleted. `test_refcount_prevents_r2_deletion` covers it.
 - **staging has two artist rows for `nate.selfhosted.social`**: `GET /artists/by-handle/…` and `GET /albums/…` 500 with `MultipleResultsFound` on staging; prod has one row.
 - **one artwork scan returned 400** (September 13, 18:33 UTC): track 1303's
