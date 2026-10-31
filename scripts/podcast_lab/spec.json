@@ -1,20 +1,17 @@
 {
   "model": "gemini-3.8-flash-tts",
-  "round": 4,
   "publish": {
-    "variant": "9-year-one-podcaster2-brio",
-    "title": "plyr.fm update - year one"
+    "variant": "october-31-reviewed",
+    "title": "plyr.fm update - October 31, 2026"
   },
   "variants": [
     {
-      "name": "9-year-one-podcaster2-brio",
-      "script": "year-one.txt",
-      "voices": { "Host": "en-us-podcaster-2", "Cohost": "en-us-brio" }
-    },
-    {
-      "name": "10-year-one-jori-rami",
-      "script": "year-one.txt",
-      "voices": { "Host": "en-us-jori", "Cohost": "en-us-rami" }
+      "name": "october-31-reviewed",
+      "script": "october-31.txt",
+      "voices": {
+        "Host": "en-us-podcaster-2",
+        "Cohost": "en-us-brio"
+      }
     }
   ]
 }

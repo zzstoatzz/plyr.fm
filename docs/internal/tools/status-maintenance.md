@@ -148,6 +148,11 @@ corrects STATUS.md.
 
 archival means MOVING content, not summarizing. the detailed write-ups are preserved in the archive.
 
+The audio/transcript artifact is retained for 30 days for review and publication;
+run diagnostics are retained for 14 days. If review will take longer, download
+the audio before expiry. An expired artifact cannot be published by merging its PR;
+rerender it through the podcast lab first.
+
 ## audio generation
 
 ### pronunciation

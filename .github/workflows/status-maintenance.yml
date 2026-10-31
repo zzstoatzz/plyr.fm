@@ -378,7 +378,7 @@ jobs:
             update.wav
             podcast_script.txt
           if-no-files-found: ignore
-          retention-days: 7
+          retention-days: 30
 
   # phase 2: upload audio after PR merge
   upload-audio:

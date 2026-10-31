@@ -1,0 +1,31 @@
+Host: Hey, welcome back. I'm the one who's been close to the work this month.
+Cohost: And I'm the one who asks what it means for the rest of us.
+Host: Player FM is a place to put your music and hear other people's. Upload a track, share it, build playlists, put on the radio, listen with friends. Your account and everything you publish live in your own account on the A T Protocol, so they come with you.
+Cohost: And it just turned one. First commit was October 28th, last year.
+Host: It did. Nate, the person who builds it, started it because he couldn't get his own audio files back out of SoundCloud. There's already a year-one episode, so today is just the back half of October, the eleventh through the thirty-first.
+Cohost: Start with the one that made you grin.
+Host: Someone built a thing on top of player FM. Their handle is renderg, and the app is called plylst. Take any public album on player FM, swap the domain in the address bar, and you get a shareable page with a big DJ-style waveform for every track. It's just a website talking to player FM, and every page links back.
+Cohost [delighted]: Wait, you can just do that? Point your own site at player FM and play the music?
+Host: That's the point of an open network. The music isn't locked in. But renderg hit rough edges. The small requests they use to sketch waveforms couldn't read what they needed for protected audio, and a couple of requests got a flat server error instead of a proper answer. They wrote it up on October 30th, and Nate shipped the fixes the next day.
+Cohost: The next day.
+Host: And when you edit an album you can now switch on a tiny plylst link. It's off by default and only shows on albums anyone can listen to. Honest edge: plylst does albums, not playlists, for now.
+Cohost: Second story. There's an AI making music on player FM?
+Host: Penny. Penny is an AI agent with her own account, and she's prolific. At one point about a third of the newest tracks were hers, none of them tagged. Player FM has an "ai" tag so listeners can filter that sound in or out, and the radio has a station just for it. So Nate asked her, in public, to tag her work.
+Cohost: Can she? She's not using the upload page, right?
+Host: She writes her tracks straight into her own account. So the first change is that tags now live inside the track record itself, not just in player FM's database. If Penny, or any other app, puts tags in the record, player FM honors them. That went live on October 21st, and a few of her tracks showed up tagged the same day.
+Cohost: A few.
+Host [laughing]: A few. So the second change covers the rest. Player FM's labeler can now put an "ai" label on an account rather than a track. Her tracks then hide anywhere the ai tag already hides tracks, and her artist page says so plainly and still lists everything. If you've unhidden the ai tag, nothing changes for you. Live since October 23rd.
+Cohost: And an account-level label is exactly what Penny herself proposed in an essay back in January.
+Host: It is. Nearby, another artist was uploading up to eleven mixes a day and filling most of the latest feed, so latest now shows at most three tracks per artist per week. Nate posted about it on the 27th, with love for the bulk uploaders.
+Cohost: Last big one. Where protected music actually lives?
+Host: Say you make a track only signed-in listeners or supporters can hear. Those listening gates were handled by player FM, and that audio used to live only on its private storage. The new spaces design lets player FM keep a protected source in your own account too. A space is basically a private room on the network that only invited accounts or apps can open.
+Cohost: So the file is mine even when it isn't public.
+Host: Since October 29th, if your host supports spaces, a protected upload stays in your account, in a room only player FM's app can open. Listeners stream through player FM and need nothing special. Honest edges: very few hosts support spaces yet, the design is still moving, and older uploads stay where they are until there's a decision about moving them. Bryan Newbold, who's been writing up the spaces design, expects the wider rollout by the end of November.
+Cohost: Anything rough?
+Host: Same day, someone reported that a track set to owner-only still showed its title to everyone, even with the audio blocked. That's fixed inside player FM, though the public copy of the record in their account is a question Nate hasn't settled.
+Cohost: A couple of smaller things?
+Host: Three. The sign-in page now shows who you are and which site it's about to send you to. The activity page has a real chart, from one day to all time, with a plays line. And if you've uploaded more than about a day of audio, the upload page may ask you to consider sponsoring, because scanning uploads for copyright is the biggest cost of running the thing. Uploading stays free.
+Cohost: What's next?
+Host: Watching spaces settle, and deciding what happens to older protected catalogs. If you build things, go see what renderg did with plylst.
+Cohost: Thanks for listening.
+Host: See you next time.
