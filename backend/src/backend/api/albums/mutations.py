@@ -374,6 +374,9 @@ async def update_album(
     db: Annotated[AsyncSession, Depends(get_db)],
     auth_session: Annotated[AuthSession, Depends(require_artist_profile)],
     title: Annotated[str | None, Query(description="new album title")] = None,
+    show_plylst: Annotated[
+        bool | None, Query(description="show the external plylst album link")
+    ] = None,
     description: Annotated[
         str | None, Query(description="new album description")
     ] = None,
@@ -391,6 +394,9 @@ async def update_album(
         raise HTTPException(
             status_code=403, detail="you can only update your own albums"
         )
+
+    if show_plylst is not None:
+        album.show_plylst = show_plylst
 
     old_title = album.title
     old_slug = album.slug
@@ -483,16 +489,14 @@ async def update_album(
             detail="another of your albums already uses that name",
         ) from None
 
-    # invalidate cache for old slug (new slug will be a cache miss)
-    await invalidate_album_cache(auth_session.handle, old_slug)
-    if album.slug != old_slug:
-        await invalidate_album_cache(auth_session.handle, album.slug)
-
-    # fetch artist for response
     artist_result = await db.execute(
         select(Artist).where(Artist.did == album.artist_did)
     )
     artist = artist_result.scalar_one()
+    await invalidate_album_cache(artist.handle, old_slug)
+    if album.slug != old_slug:
+        await invalidate_album_cache(artist.handle, album.slug)
+
     track_count, total_plays = await _album_stats(db, album_id)
 
     return await _album_metadata(album, artist, track_count, total_plays)

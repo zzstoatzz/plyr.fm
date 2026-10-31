@@ -1,11 +1,14 @@
 """pydantic models for album endpoints."""
 
+from datetime import datetime
+
 from pydantic import BaseModel
 
 from backend.utilities.publishing import PublishingDefaults
 
 
 class AlbumMetadata(BaseModel):
+    show_plylst: bool = False
     publishing_defaults: PublishingDefaults | None = None
 
     """album metadata response."""
@@ -18,6 +21,7 @@ class AlbumMetadata(BaseModel):
     artist_handle: str
     artist_did: str
     track_count: int
+    created_at: datetime
     total_plays: int
     image_url: str | None
     list_uri: str | None = None  # ATProto list record URI for reordering
@@ -39,6 +43,9 @@ class AlbumListItem(BaseModel):
     artist: str
     artist_handle: str
     track_count: int
+    total_plays: int
+    image_url: str | None
+    created_at: datetime
 
 
 class RemoveTrackFromAlbumResponse(BaseModel):
@@ -64,6 +71,7 @@ class ArtistAlbumListItem(BaseModel):
     title: str
     slug: str
     track_count: int
+    created_at: datetime
     total_plays: int
     image_url: str | None
 

@@ -7627,6 +7627,17 @@
             "type": "string",
             "title": "File Type"
           },
+          "duration": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration"
+          },
           "features": {
             "items": {
               "$ref": "#/components/schemas/FeaturedArtist"

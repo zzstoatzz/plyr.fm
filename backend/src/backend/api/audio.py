@@ -264,7 +264,7 @@ async def _handle_gated_audio(
     if support_gate is not None:
         await _check_gate_access(support_gate, session, artist_did)
 
-    if is_head_request:
+    if is_head_request and proxy_request is None:
         return Response(status_code=200)
 
     # artist always sees their own track; otherwise we already validated above
@@ -286,34 +286,51 @@ async def _handle_gated_audio(
 
     # R2-backed gated tracks: presigned URL for private bucket
     if url is None:
-        url = await storage.generate_presigned_url(file_id=file_id, extension=file_type)
+        if is_head_request:
+            url = await storage.generate_presigned_url(
+                file_id=file_id, extension=file_type, http_method="HEAD"
+            )
+        else:
+            url = await storage.generate_presigned_url(
+                file_id=file_id, extension=file_type
+            )
     if proxy_request is not None:
         return await _proxy_audio(url, proxy_request)
     return RedirectResponse(url=url)
 
 
-async def _proxy_audio(url: str, request: Request) -> StreamingResponse:
+async def _proxy_audio(url: str, request: Request) -> Response:
     """relay upstream audio bytes, passing Range through so seeking survives."""
+    range_header = request.headers.get("range") if request.method == "GET" else None
+    if range_header and "," in range_header:
+        raise HTTPException(status_code=416, detail="multiple ranges are not supported")
     client = httpx.AsyncClient(
         timeout=httpx.Timeout(30.0, read=None), follow_redirects=True
     )
     upstream_headers = {}
-    if range_header := request.headers.get("range"):
+    if range_header:
         upstream_headers["range"] = range_header
     try:
         resp = await client.send(
-            client.build_request("GET", url, headers=upstream_headers), stream=True
+            client.build_request(request.method, url, headers=upstream_headers),
+            stream=True,
         )
     except httpx.HTTPError as exc:
         await client.aclose()
         logfire.warn("audio proxy: upstream unreachable", error=str(exc))
         raise HTTPException(status_code=502, detail="audio upstream failed") from exc
-    if resp.status_code >= 400:
+    if resp.status_code >= 400 and resp.status_code != 416:
         status = resp.status_code
         await resp.aclose()
         await client.aclose()
         logfire.warn("audio proxy: upstream refused", status=status)
         raise HTTPException(status_code=502, detail="audio upstream failed")
+    if request.method == "HEAD":
+        status = resp.status_code
+        headers = _relay_headers(resp)
+        await resp.aclose()
+        await client.aclose()
+        return Response(status_code=status, headers=headers)
 
     async def body():
         try:
@@ -614,7 +631,10 @@ def _wants_cors(request: Request) -> bool:
 
 
 def _relay_headers(resp) -> dict[str, str]:
-    return {k: resp.headers[k] for k in _PROXY_HEADERS if k in resp.headers}
+    return {
+        **{k: resp.headers[k] for k in _PROXY_HEADERS if k in resp.headers},
+        "access-control-expose-headers": "Content-Range, Content-Length, Accept-Ranges",
+    }
 
 
 async def _handle_private_audio(
