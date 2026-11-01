@@ -38,7 +38,9 @@ class Settings(BaseSettings):
     def get_url(self, env: str) -> str:
         url = getattr(self, f"neon_database_url_{env}", None) or self.neon_database_url
         if not url:
-            raise SystemExit(f"no database url for {env}: set NEON_DATABASE_URL_{env.upper()}")
+            raise SystemExit(
+                f"no database url for {env}: set NEON_DATABASE_URL_{env.upper()}"
+            )
         return re.sub(r"postgresql\+\w+://", "postgresql://", url)
 
 
