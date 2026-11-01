@@ -116,8 +116,12 @@ voice.
 
 ## shape and length
 
-- **opening** (a few lines): who they are in one breath, what player FM is in
-  one sentence, the date range, and what the episode is about.
+- **opening** (a few lines): start by welcoming listeners to the player FM
+  update. Say what player FM is in one sentence, the date range, and what the
+  episode is about. The Host and Cohost descriptions are writing guidance;
+  do not have the speakers introduce themselves by explaining their roles.
+- Follow the requested occasion. An earlier recap is context, not a reason to
+  turn a requested anniversary episode into a routine catch-up.
 - **the stories**, biggest first.
 - **close** (a few lines): what's next, or what to try, said plainly. end on a
   normal sign-off, not a joke.
