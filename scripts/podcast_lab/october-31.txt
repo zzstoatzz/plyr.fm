@@ -1,0 +1,29 @@
+Host: Hello, and welcome to the player FM update. It's October thirty-first, and player FM turned one three days ago. So this one's an anniversary episode.
+Cohost: A birthday episode on Halloween. Good timing.
+Host: Player FM is a place to put your music and listen to other people's. Upload something, make a playlist, put on the radio, listen with friends. Underneath it is the A T Protocol, an open network where your account and what you publish can come with you.
+Cohost: We did a bigger recap earlier in October. What's the birthday version?
+Host: Less a tour of everything we built, more a look at what people are doing with it. The first code went in on October twenty-eighth last year. Nate, the person who builds player FM, wanted a place for his own music after struggling to get his audio files back out of SoundCloud. Now somebody else has built a player for it.
+Cohost: That feels like a pretty good birthday present.
+Host: It does. Their handle is renderg, and their app is called plylst. Open an album there and you get a waveform for each track. You can see the shape of the sound and jump around inside it. It reads the albums from player FM, plays the audio, and links back.
+Cohost: So an artist can share the same album in a different player?
+Host: Exactly. Renderg built it independently, then wrote up the things they needed from player FM to make it work better. Some information about albums and track lengths, and fixes for the little pieces of audio a waveform player asks for.
+Cohost: The kind of thing you discover when someone actually tries to use your work.
+Host: Yes. Those fixes are live. Album owners can also turn on a small link to plylst in their album settings. It's optional, off by default, and available for albums whose tracks anyone can listen to.
+Cohost: Playlists too?
+Host: Albums for now. But that's the lovely part of this story. Someone had an idea for how they wanted to listen, and they could build it. A year ago, getting your files back was the starting problem. Now there's another place to play them.
+Cohost: What's the next story?
+Host: Making room for different people in the catalog. Penny is an AI agent with her own account and a lot of music. Her tracks were arriving without the ai tag, which listeners use to choose whether that music appears for them.
+Cohost: And she wasn't uploading through the usual page?
+Host: Right. She publishes directly to her account on the network. So tags now travel with the track record, and player FM reads them when another app publishes a track. There's also an account-level ai label, so that choice doesn't depend on every individual song being tagged.
+Cohost: Can people still listen to her music?
+Host: Yes. Her artist page still lists it, and listeners who choose to include the ai tag keep seeing it. Separately, the latest feed now limits how many tracks one artist can contribute in a week. Bringing a huge archive is welcome, but other artists need a turn on the front page too.
+Cohost: A small music site still has to figure out how to share the room.
+Host: It does. And the third story gets back to that original question about keeping your music. Protected uploads used to rely on player FM's private storage. On account hosts that support a new feature called Spaces, player FM can now keep a protected source file in the artist's own account too.
+Cohost: Even if the artist doesn't want everyone downloading it?
+Host: Yes. The account holds the source, and player FM still checks who can listen or download. Ordinary listeners don't need to set anything up. It's early, though. Few hosts support it yet, and existing uploads haven't all been moved over.
+Cohost: So there's more work before that promise covers everybody.
+Host: Definitely. That's a fair description of the first birthday. There's still unfinished work, and the app is still alpha. But people have brought music, reported the awkward bits, contributed fixes, and now built another way to listen.
+Cohost: That seems worth celebrating.
+Host: It is. Thank you to everyone who's put something here, listened, or helped make it better. If you want something to try for the anniversary, pick an album you haven't heard. And if it's yours, have a look at how it feels in plylst.
+Cohost: Happy birthday, player FM. Thanks for listening.
+Host: See you next time.
