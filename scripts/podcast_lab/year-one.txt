@@ -50,9 +50,9 @@ Host: Fair, though! So it learned to. Now if you publish a track from a differen
 
 Cohost: So the alarm system was a person named cameron.
 
-Host: Pretty much. A lot of the year after that was building the alarms that should have caught it. And people kept helping. aila sent in the first outside contribution in May, and later aila's repeat button got finished. In September an engineer named garrison wrote an essay about four real gaps in how uploads were saved, and all four got fixed.
+Host: Pretty much. A lot of the year after that was building the alarms that should have caught it. And people kept helping. aila sent in the first outside contribution in May, and later aila's repeat button got finished. In September an engineer named garrison wrote an essay thinking out loud about a problem in her own work, and nate saw it mapped right onto plyr: four real gaps in how uploads were saved, and all four got fixed.
 
-Cohost: That's kind of the dream, right? Strangers reading your code and writing you an essay about it.
+Cohost: That's kind of the dream, right? Someone thinking out loud about their own thing, and it fixes yours.
 
 Host: It's very nice. Then there's the stuff that just didn't work. There were four tries at showing live activity on the homepage. One had these floating bubbles that, in the project's own notes, looked like dopey submarines.
 
