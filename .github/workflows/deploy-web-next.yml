@@ -1,0 +1,57 @@
+name: deploy next web
+
+# Builds web-next/ (the read-only-appview frontend) and deploys it to the
+# cloudflare pages project plyr-fm-next. Never touches production-fe or the
+# plyr-fm pages project.
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "web-next/**"
+      - ".github/workflows/deploy-web-next.yml"
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: deploy next web
+    runs-on: ubuntu-latest
+    concurrency: deploy-web-next
+    permissions:
+      contents: read
+      deployments: write
+    env:
+      # until api.next.plyr.fm / next.plyr.fm have DNS
+      PUBLIC_API_URL: https://plyr-api-zig-canary.fly.dev
+      PUBLIC_SITE_URL: https://plyr-fm-next.pages.dev
+      PUBLIC_NSID_PREFIX: fm.plyr.stg
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web-next/package-lock.json
+
+      - name: check and build
+        working-directory: web-next
+        run: |
+          npm ci
+          npm run check
+          npm run build
+
+      - name: ensure pages project
+        continue-on-error: true
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages project create plyr-fm-next --production-branch main
+
+      - name: deploy to cloudflare pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy web-next/build --project-name plyr-fm-next --branch main
