@@ -102,8 +102,15 @@ pub const Config = struct {
     auth: ?AuthConfig,
 
     pub fn fromEnvironment() !Config {
-        const role_value = getenv("MODE") orelse return error.RoleRequired;
-        const role = try Role.parse(role_value);
+        // A Fly process group named after a role (e.g. `ingester`) selects
+        // that role, so one app can run the api and its workers from one
+        // image; otherwise MODE decides (the default `app` group is the api).
+        const process_role: ?Role = if (getenv("FLY_PROCESS_GROUP")) |group|
+            Role.parse(group) catch null
+        else
+            null;
+        const role = process_role orelse
+            try Role.parse(getenv("MODE") orelse return error.RoleRequired);
         const port_value = getenv("PORT") orelse "8001";
         const track_collection = getenv("TRACK_COLLECTION_NSID") orelse
             return error.TrackCollectionRequired;

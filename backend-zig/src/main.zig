@@ -44,10 +44,12 @@ pub fn main() !void {
         null;
     defer if (postgres_store) |*store| store.deinit();
     if (settings.role != .api) if (postgres_store) |*store| logDatabaseUser(store.pool);
-    if (settings.database_role) |expected_role| {
+    // DATABASE_ROLE pins the api to its least-privilege login; workers in the
+    // same app connect with their own credential (WORKER_DATABASE_URL).
+    if (settings.role == .api) if (settings.database_role) |expected_role| {
         const store = if (postgres_store) |*value| value else return error.DatabaseRoleWithoutDatabase;
         try store.requireRole(expected_role);
-    }
+    };
 
     var postgres_composed_track_store: ?postgres_composed_tracks.PostgresComposedTrackStore = if (postgres_store) |*store|
         .{

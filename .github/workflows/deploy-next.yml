@@ -2,7 +2,7 @@ name: deploy next (zig)
 
 # Deploys backend-zig to the isolated next environment only:
 #   fly app  plyr-api-zig-canary  (api.next.plyr.fm)
-#   fly app  plyr-ingest-zig-next (relay firehose -> plyr_index)
+#            (process groups: app = api, ingester = relay -> plyr_index)
 #   database the Neon branch of staging marked 'plyr-zig-next'
 # It never touches relay-api, relay-api-staging, their databases, or
 # production-fe. Manual dispatch only.
@@ -13,10 +13,6 @@ on:
         description: re-index staging-namespace repositories into next before deploying
         type: boolean
         default: false
-      deploy_ingester:
-        description: also deploy the relay ingester (plyr-ingest-zig-next)
-        type: boolean
-        default: true
 
 permissions:
   contents: read
@@ -135,6 +131,15 @@ jobs:
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_ZIG_NEXT }}
 
+      # The ingester process group writes plyr_index as the branch owner. Its
+      # credential is staged as WORKER_DATABASE_URL, which only non-api roles
+      # read; the api keeps DATABASE_URL (read-only) and its DATABASE_ROLE pin.
+      - name: stage ingester credential
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_ZIG_NEXT }}
+          WORKER_DATABASE_URL: ${{ secrets.ZIG_NEXT_MIGRATOR_DATABASE_URL }}
+        run: flyctl secrets set --stage --app "$FLY_APP" WORKER_DATABASE_URL="$WORKER_DATABASE_URL" > /dev/null
+
       - name: deploy image
         working-directory: backend-zig
         run: >-
@@ -150,25 +155,10 @@ jobs:
         working-directory: backend-zig
         run: python3 scripts/canary_smoke.py "https://${FLY_APP}.fly.dev"
 
-      # The ingester is a separate app so its write credential never reaches
-      # the api. It builds from the same Dockerfile (deploy tokens are
-      # app-scoped, so it can't pull the api app's image).
-      - name: deploy relay ingester
-        if: inputs.deploy_ingester
-        working-directory: backend-zig
+      - name: ingester status
         env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_ZIG_INGEST_NEXT }}
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_ZIG_NEXT }}
         run: |
-          set -euo pipefail
-          test -n "$FLY_API_TOKEN"
-          flyctl secrets list --app plyr-ingest-zig-next --json \
-            | jq -e 'map(.Name // .name) | index("WORKER_DATABASE_URL")' > /dev/null
-          flyctl deploy \
-            --config fly.ingest-next.toml \
-            --app plyr-ingest-zig-next \
-            --remote-only \
-            --ha=false \
-            --image-label "$GITHUB_SHA"
-          flyctl status --app plyr-ingest-zig-next
-          sleep 30
-          flyctl logs --app plyr-ingest-zig-next --no-tail | tail -40 || true
+          flyctl status --app "$FLY_APP"
+          sleep 45
+          flyctl logs --app "$FLY_APP" --no-tail | grep -i ingest | tail -30 || true

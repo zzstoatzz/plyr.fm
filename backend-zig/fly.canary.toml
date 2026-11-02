@@ -4,6 +4,13 @@ primary_region = "sjc"
 [build]
   dockerfile = "Dockerfile"
 
+# One image, two process groups. The binary ignores argv; the group name
+# (FLY_PROCESS_GROUP) selects the role: `app` runs MODE=api, `ingester` runs
+# the relay-to-projection ingester with WORKER_DATABASE_URL.
+[processes]
+  app = "serve"
+  ingester = "ingester"
+
 [env]
   CORS_ALLOWED_ORIGINS = "https://next.plyr.fm"
   AUTH_START_CLIENT_LIMIT = "10"
@@ -14,6 +21,8 @@ primary_region = "sjc"
   AUTH_TRUSTED_PROXY_CIDRS = "173.245.48.0/20,103.21.244.0/22,103.22.200.0/22,103.31.4.0/22,141.101.64.0/18,108.162.192.0/18,190.93.240.0/20,188.114.96.0/20,197.234.240.0/22,198.41.128.0/17,162.158.0.0/15,104.16.0.0/13,104.24.0.0/14,172.64.0.0/13,131.0.72.0/22,2400:cb00::/32,2606:4700::/32,2803:f800::/32,2405:b500::/32,2405:8100::/32,2a06:98c0::/29,2c0f:f248::/32"
   DATABASE_ROLE = "plyr_zig_canary"
   DATABASE_POOL_SIZE = "16"
+  INGEST_RELAY_HOSTS = "wss://bsky.network"
+  INGEST_RELAY_NAME = "bsky.network"
   INDEX_MODE = "required"
   LIST_COLLECTION_NSID = "fm.plyr.stg.list"
   LIKE_COLLECTION_NSID = "fm.plyr.stg.like"
@@ -28,6 +37,7 @@ primary_region = "sjc"
   ZIG_OAUTH_SCOPE = "atproto repo:fm.plyr.stg.like?action=create&action=update&action=delete"
 
 [http_service]
+  processes = ["app"]
   internal_port = 8000
   force_https = true
   auto_stop_machines = "stop"
@@ -46,7 +56,18 @@ primary_region = "sjc"
     method = "GET"
     path = "/ready"
 
+[[restart]]
+  policy = "always"
+  processes = ["ingester"]
+
 [[vm]]
+  processes = ["app"]
   cpu_kind = "shared"
   cpus = 1
   memory = "256mb"
+
+[[vm]]
+  processes = ["ingester"]
+  cpu_kind = "shared"
+  cpus = 2
+  memory = "1gb"
