@@ -9,6 +9,11 @@ query or connection. Operation and request spans retain application context,
 and exceptions still propagate to the existing error logging path. Historical
 SQL dashboards describe earlier releases, not query volume after this change.
 
+## Request telemetry
+
+Health polling and browser telemetry forwarding do not create request spans.
+Application requests and their failures remain traced.
+
 ## Basic Concepts
 
 Logfire uses Apache DataFusion (PostgreSQL-flavored SQL) to query trace data. All data is stored in the `records` table.

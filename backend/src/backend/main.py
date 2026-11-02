@@ -51,7 +51,7 @@ from backend.utilities.database import get_engine
 from backend.utilities.middleware import SecurityHeadersMiddleware
 from backend.utilities.observability import (
     configure_observability,
-    request_attributes_mapper,
+    configure_request_tracing,
     suppress_warnings,
 )
 from backend.utilities.rate_limit import RateLimitMiddleware, limiter
@@ -162,7 +162,7 @@ app.add_exception_handler(Exception, _unhandled_exception_handler)
 
 # instrument fastapi with logfire
 if logfire:
-    logfire.instrument_fastapi(app, request_attributes_mapper=request_attributes_mapper)
+    configure_request_tracing(app, logfire)
 
 # middleware — order matters: last-added runs first in Starlette.
 # CORS must wrap SlowAPI so 429 responses include CORS headers.
