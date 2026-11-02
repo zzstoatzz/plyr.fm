@@ -94,5 +94,7 @@ def request_attributes_mapper(
 
 def configure_request_tracing(app: FastAPI, logfire_module: ModuleType) -> None:
     logfire_module.instrument_fastapi(
-        app, request_attributes_mapper=request_attributes_mapper
+        app,
+        excluded_urls=r"/health(?:\?.*)?$|/logfire-proxy/",
+        request_attributes_mapper=request_attributes_mapper,
     )
