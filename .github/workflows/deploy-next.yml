@@ -2,6 +2,7 @@ name: deploy next (zig)
 
 # Deploys backend-zig to the isolated next environment only:
 #   fly app  plyr-api-zig-canary  (api.next.plyr.fm)
+#            (process groups: app = api, ingester = relay -> plyr_index)
 #   database the Neon branch of staging marked 'plyr-zig-next'
 # It never touches relay-api, relay-api-staging, their databases, or
 # production-fe. Manual dispatch only.
@@ -130,6 +131,15 @@ jobs:
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_ZIG_NEXT }}
 
+      # The ingester process group writes plyr_index as the branch owner. Its
+      # credential is staged as WORKER_DATABASE_URL, which only non-api roles
+      # read; the api keeps DATABASE_URL (read-only) and its DATABASE_ROLE pin.
+      - name: stage ingester credential
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_ZIG_NEXT }}
+          WORKER_DATABASE_URL: ${{ secrets.ZIG_NEXT_MIGRATOR_DATABASE_URL }}
+        run: flyctl secrets set --stage --app "$FLY_APP" WORKER_DATABASE_URL="$WORKER_DATABASE_URL" > /dev/null
+
       - name: deploy image
         working-directory: backend-zig
         run: >-
@@ -144,3 +154,11 @@ jobs:
       - name: smoke the deployed api
         working-directory: backend-zig
         run: python3 scripts/canary_smoke.py "https://${FLY_APP}.fly.dev"
+
+      - name: ingester status
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_ZIG_NEXT }}
+        run: |
+          flyctl status --app "$FLY_APP"
+          sleep 45
+          flyctl logs --app "$FLY_APP" --no-tail | grep -i ingest | tail -30 || true

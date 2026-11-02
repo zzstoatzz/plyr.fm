@@ -17,6 +17,19 @@ const track_change = @import("track_change.zig");
 const record_rejection = @import("record_rejection.zig");
 const verified = @import("verified_snapshot.zig");
 
+/// Version of the record decoders and projection rules. Bump it whenever a
+/// change alters what an unchanged repository projects to (e.g. a decoder
+/// that used to reject valid records). A complete snapshot at the same
+/// revision as a head with an older version is then rebuilt instead of being
+/// treated as idempotent, so reconciliation repairs stale projections.
+pub const projection_version: i32 = 1;
+
+const HeadDecision = union(enum) {
+    done: verified.ApplyResult,
+    apply,
+    rebuild,
+};
+
 pub const PostgresVerifiedSnapshotStore = struct {
     pool: *pg.Pool,
 
@@ -104,13 +117,18 @@ pub const PostgresVerifiedSnapshotStore = struct {
         } orelse return error.CorruptProjection;
         lock_row.deinit() catch return error.CorruptProjection;
 
-        if (try classifyHead(conn, allocator, snapshot, commit_cid, data_cid)) |result| {
-            conn.rollback() catch |err| {
-                logPgError(conn, "verified snapshot no-op rollback failed", err);
-                return error.ProjectionUnavailable;
-            };
-            transaction_open = false;
-            return result;
+        const decision = try classifyHead(conn, allocator, snapshot, commit_cid, data_cid);
+        switch (decision) {
+            .done => |result| {
+                conn.rollback() catch |err| {
+                    logPgError(conn, "verified snapshot no-op rollback failed", err);
+                    return error.ProjectionUnavailable;
+                };
+                transaction_open = false;
+                return result;
+            },
+            .apply => {},
+            .rebuild => try clearRepository(conn, snapshot),
         }
         var future_row = conn.row(has_future_records_sql, .{
             snapshot.repo_did,
@@ -250,6 +268,7 @@ pub const PostgresVerifiedSnapshotStore = struct {
             commit_cid,
             data_cid,
             snapshot.indexed_at_us,
+            projection_version,
         }) catch |err| {
             logPgError(conn, "verified snapshot head installation failed", err);
             return error.ProjectionUnavailable;
@@ -297,17 +316,43 @@ fn mapRejectionError(err: postgres_rejections.Error) verified.Error {
     };
 }
 
+/// Drop this repository's projected rows (and rejections) in the snapshot's
+/// collections, inside the snapshot transaction, so the complete snapshot is
+/// re-applied from scratch under the current decoders.
+fn clearRepository(conn: *pg.Conn, snapshot: verified.Snapshot) verified.Error!void {
+    const collections = [_][]const u8{
+        snapshot.list_collection,
+        snapshot.track_collection,
+        snapshot.profile_collection,
+        snapshot.like_collection,
+    };
+    for (clear_repository_sql) |sql| {
+        _ = conn.exec(sql, .{ snapshot.repo_did, @as([]const []const u8, &collections) }) catch |err| {
+            logPgError(conn, "verified snapshot rebuild clear failed", err);
+            return error.ProjectionUnavailable;
+        };
+    }
+}
+
+const clear_repository_sql = [_][]const u8{
+    "DELETE FROM plyr_index.list_records WHERE owner_did = $1 AND collection = ANY($2::text[])",
+    "DELETE FROM plyr_index.track_records WHERE owner_did = $1 AND collection = ANY($2::text[])",
+    "DELETE FROM plyr_index.profile_records WHERE owner_did = $1 AND collection = ANY($2::text[])",
+    "DELETE FROM plyr_index.like_records WHERE owner_did = $1 AND collection = ANY($2::text[])",
+    "DELETE FROM plyr_index.record_rejections WHERE owner_did = $1 AND collection = ANY($2::text[])",
+};
+
 fn classifyHead(
     conn: *pg.Conn,
     allocator: std.mem.Allocator,
     snapshot: verified.Snapshot,
     commit_cid: []const u8,
     data_cid: []const u8,
-) verified.Error!?verified.ApplyResult {
+) verified.Error!HeadDecision {
     var row = conn.row(head_sql, .{snapshot.repo_did}) catch |err| {
         logPgError(conn, "verified snapshot head read failed", err);
         return error.ProjectionUnavailable;
-    } orelse return null;
+    } orelse return .apply;
     const current_rev = allocator.dupe(u8, row.get([]const u8, 0) catch {
         row.deinit() catch {};
         return error.CorruptProjection;
@@ -332,16 +377,22 @@ fn classifyHead(
         return error.OutOfMemory;
     };
     defer allocator.free(current_data);
+    const current_version = row.get(i32, 3) catch {
+        row.deinit() catch {};
+        return error.CorruptProjection;
+    };
     row.deinit() catch return error.CorruptProjection;
 
     return switch (std.mem.order(u8, current_rev, snapshot.commit_rev)) {
-        .gt => .stale,
-        .lt => null,
-        .eq => if (std.mem.eql(u8, current_commit, commit_cid) and
-            std.mem.eql(u8, current_data, data_cid))
-            .idempotent
+        .gt => .{ .done = .stale },
+        .lt => .apply,
+        .eq => if (!std.mem.eql(u8, current_commit, commit_cid) or
+            !std.mem.eql(u8, current_data, data_cid))
+            error.RevisionConflict
+        else if (current_version < projection_version)
+            .rebuild
         else
-            error.RevisionConflict,
+            .{ .done = .idempotent },
     };
 }
 
@@ -350,7 +401,7 @@ const advisory_lock_sql =
 ;
 
 const head_sql =
-    \\SELECT commit_rev, commit_cid, data_cid
+    \\SELECT commit_rev, commit_cid, data_cid, projection_version
     \\FROM plyr_index.repo_heads
     \\WHERE repo_did = $1
     \\FOR UPDATE
@@ -456,14 +507,17 @@ const tombstone_absent_likes_sql =
 
 const install_head_sql =
     \\INSERT INTO plyr_index.repo_heads (
-    \\  repo_did, commit_rev, commit_cid, data_cid, indexed_at_us
-    \\) VALUES ($1, $2, $3, $4, $5)
+    \\  repo_did, commit_rev, commit_cid, data_cid, indexed_at_us, projection_version
+    \\) VALUES ($1, $2, $3, $4, $5, $6)
     \\ON CONFLICT (repo_did) DO UPDATE SET
     \\  commit_rev = EXCLUDED.commit_rev,
     \\  commit_cid = EXCLUDED.commit_cid,
     \\  data_cid = EXCLUDED.data_cid,
-    \\  indexed_at_us = EXCLUDED.indexed_at_us
+    \\  indexed_at_us = EXCLUDED.indexed_at_us,
+    \\  projection_version = EXCLUDED.projection_version
     \\WHERE plyr_index.repo_heads.commit_rev < EXCLUDED.commit_rev
+    \\  OR (plyr_index.repo_heads.commit_rev = EXCLUDED.commit_rev
+    \\    AND plyr_index.repo_heads.projection_version < EXCLUDED.projection_version)
 ;
 
 test "PostgreSQL complete snapshot bootstraps and reconciles atomically" {
@@ -491,7 +545,8 @@ test "PostgreSQL complete snapshot bootstraps and reconciles atomically" {
         \\  commit_rev text NOT NULL,
         \\  commit_cid text NOT NULL,
         \\  data_cid text NOT NULL,
-        \\  indexed_at_us bigint NOT NULL CHECK (indexed_at_us >= 0)
+        \\  indexed_at_us bigint NOT NULL CHECK (indexed_at_us >= 0),
+        \\  projection_version integer NOT NULL DEFAULT 0
         \\)
     , .{});
 
@@ -535,6 +590,18 @@ test "PostgreSQL complete snapshot bootstraps and reconciles atomically" {
     const store = implementation.store();
     try std.testing.expectEqual(verified.ApplyResult.applied, try store.apply(a, initial));
     try std.testing.expectEqual(verified.ApplyResult.idempotent, try store.apply(a, initial));
+
+    // A head built by an older decoder is rebuilt at the same revision: here
+    // the like is missing as if the old decoder had rejected it.
+    _ = try pool.exec("UPDATE plyr_index.repo_heads SET projection_version = 0", .{});
+    _ = try pool.exec("DELETE FROM plyr_index.like_records", .{});
+    try std.testing.expectEqual(verified.ApplyResult.applied, try store.apply(a, initial));
+    try std.testing.expectEqual(verified.ApplyResult.idempotent, try store.apply(a, initial));
+    {
+        var version_row = (try pool.row("SELECT projection_version FROM plyr_index.repo_heads", .{})).?;
+        defer version_row.deinit() catch {};
+        try std.testing.expectEqual(projection_version, try version_row.get(i32, 0));
+    }
     try expectState(pool, &rev_1.str(), "one", false);
     try expectState(pool, &rev_1.str(), "two", false);
     try expectTrackState(pool, "track-one", &rev_1.str(), false);
