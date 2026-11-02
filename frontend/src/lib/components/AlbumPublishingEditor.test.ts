@@ -30,7 +30,8 @@ const tracks = [
 		publishing: defaultPublishing()
 	}
 ] satisfies Track[];
-let component: object | undefined;
+let component: { save: () => Promise<string | null> } | undefined;
+let dirty = false;
 
 afterEach(async () => {
 	if (component) await unmount(component);
@@ -52,9 +53,20 @@ function setup(respond: (request: Request) => Promise<Response> = async () => Re
 		})
 	);
 	const onchange = vi.fn<(id: string, enabled: boolean) => void>();
+	dirty = false;
 	component = mount(AlbumPublishingEditor, {
 		target: document.body,
-		props: { album, tracks, onchange }
+		props: {
+			album,
+			tracks,
+			onchange,
+			get dirty() {
+				return dirty;
+			},
+			set dirty(value: boolean) {
+				dirty = value;
+			}
+		}
 	});
 	flushSync();
 	return { requests, onchange };
@@ -82,13 +94,10 @@ function choose(name: string, value: string): void {
 	select.dispatchEvent(new Event('change', { bubbles: true }));
 	flushSync();
 }
-function click(text: string): void {
-	const button = [...document.querySelectorAll('button')].find(
-		(button) => button.textContent?.trim() === text
-	);
-	if (!button) throw new Error(`missing ${text}`);
-	button.click();
-	flushSync();
+/** the album page's single save action calls this; failures reject */
+function save(): Promise<string | null> {
+	if (!component) throw new Error('not mounted');
+	return component.save();
 }
 function publishingResponse(request: Request): Promise<Response> {
 	return Promise.resolve(
@@ -104,29 +113,38 @@ describe('compact album settings', () => {
 		expect([...document.querySelectorAll('details')].every((details) => !details.open)).toBe(true);
 		check('show plylst link');
 		expect(requests).toHaveLength(0);
-		click('save changes');
-		await vi.waitFor(() => expect(onchange).toHaveBeenCalledWith('album', true));
+		expect(dirty).toBe(true);
+		expect(await save()).toBe('album settings saved');
+		expect(onchange).toHaveBeenCalledWith('album', true);
+		flushSync();
+		expect(dirty).toBe(false);
 		expect(requests).toHaveLength(1);
 		expect(requests[0].method).toBe('PATCH');
 		expect(requests[0].url).toContain('/albums/album?show_plylst=true');
 	});
-	it('cancels drafts without changing album or track access', () => {
+	it('reports clean once a draft is put back the way it was', () => {
 		const { requests } = setup();
-		choose('settings', 'custom');
-		choose('who can listen', 'owner');
+		expect(dirty).toBe(false);
 		check('show plylst link');
-		click('cancel');
+		expect(dirty).toBe(true);
+		check('show plylst link', false);
+		expect(dirty).toBe(false);
 		expect(requests).toHaveLength(0);
-		expect(checkbox('show plylst link').checked).toBe(false);
-		expect(document.body.textContent).toContain('anyone can listen · downloads allowed');
-		expect(document.body.textContent).toContain('no changes');
+	});
+	it('has no save button of its own; the page owns the one save action', () => {
+		setup();
+		expect(document.querySelectorAll('button')).toHaveLength(0);
+	});
+	it('resolves null without requests when nothing changed', async () => {
+		const { requests } = setup();
+		expect(await save()).toBeNull();
+		expect(requests).toHaveLength(0);
 	});
 	it('preserves track overrides by default and waits for the publishing job', async () => {
 		const { requests } = setup(publishingResponse);
 		choose('settings', 'custom');
 		choose('downloads', 'ask');
-		click('save changes');
-		await vi.waitFor(() => expect(document.body.textContent).toContain('0 tracks updated'));
+		expect(await save()).toBe('album defaults saved; 0 tracks updated');
 		expect(await requests[0].json()).toEqual({
 			settings: {
 				...defaultPublishing(),
@@ -139,8 +157,7 @@ describe('compact album settings', () => {
 	it('replaces track overrides only when explicitly selected', async () => {
 		const { requests } = setup(publishingResponse);
 		check('also replace');
-		click('save changes');
-		await vi.waitFor(() => expect(document.body.textContent).toContain('1 track updated'));
+		expect(await save()).toBe('album defaults saved; 1 track updated');
 		expect(await requests[0].json()).toEqual({ settings: null, replace_overrides: true });
 	});
 	it('normalizes restricted listening and disables downloads', () => {
@@ -156,10 +173,10 @@ describe('compact album settings', () => {
 	it('retains an unsaved link choice after refusal so the owner can retry', async () => {
 		const { onchange } = setup(async () => Response.json({}, { status: 403 }));
 		check('show plylst link');
-		click('save changes');
-		await vi.waitFor(() =>
-			expect(document.querySelector('[role=alert]')?.textContent).toContain('could not save')
-		);
+		await expect(save()).rejects.toThrow('could not save');
+		flushSync();
+		expect(document.querySelector('[role=alert]')?.textContent).toContain('could not save');
+		expect(dirty).toBe(true);
 		expect(checkbox('show plylst link').checked).toBe(true);
 		expect(onchange).not.toHaveBeenCalled();
 	});
@@ -175,11 +192,11 @@ describe('compact album settings', () => {
 		choose('settings', 'custom');
 		choose('downloads', 'off');
 		check('show plylst link');
-		click('save changes');
-		await vi.waitFor(() => expect(document.querySelector('[role=alert]')).not.toBeNull());
-		expect(document.body.textContent).toContain('album defaults saved');
-		click('save changes');
-		await vi.waitFor(() => expect(onchange).toHaveBeenCalled());
+		await expect(save()).rejects.toThrow();
+		flushSync();
+		expect(document.querySelector('[role=alert]')).not.toBeNull();
+		expect(await save()).toBe('album settings saved');
+		expect(onchange).toHaveBeenCalled();
 		expect(requests.map((request) => request.method)).toEqual(['POST', 'GET', 'PATCH', 'PATCH']);
 	});
 	it('keeps the link unchanged if access changes fail', async () => {
@@ -188,10 +205,9 @@ describe('compact album settings', () => {
 		);
 		choose('settings', 'custom');
 		check('show plylst link');
-		click('save changes');
-		await vi.waitFor(() =>
-			expect(document.querySelector('[role=alert]')?.textContent).toContain('access refused')
-		);
+		await expect(save()).rejects.toThrow('access refused');
+		flushSync();
+		expect(document.querySelector('[role=alert]')?.textContent).toContain('access refused');
 		expect(requests.map((request) => request.method)).toEqual(['POST']);
 		expect(onchange).not.toHaveBeenCalled();
 	});

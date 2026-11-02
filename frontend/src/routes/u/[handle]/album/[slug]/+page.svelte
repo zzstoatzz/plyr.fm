@@ -85,50 +85,98 @@
 		queueCollection(tracks, albumMetadata.title);
 	}
 
+	// order of track ids when edit mode opened, so save only rewrites the list
+	// record when the owner actually reordered
+	let orderAtEdit: number[] = [];
+	let settingsEditor = $state<ReturnType<typeof AlbumPublishingEditor> | null>(null);
+	let settingsDirty = $state(false);
+
+	const titleDirty = $derived(
+		isEditMode && !!editTitle.trim() && editTitle.trim() !== albumMetadata.title
+	);
+	const orderDirty = $derived(
+		isEditMode && tracks.map((t) => t.id).join(',') !== orderAtEdit.join(',')
+	);
+	const editDirty = $derived(titleDirty || orderDirty || settingsDirty);
+
+	function enterEditMode() {
+		editTitle = albumMetadata.title;
+		orderAtEdit = tracks.map((t) => t.id);
+		settingsDirty = false;
+		isEditMode = true;
+	}
+
 	function toggleEditMode() {
 		if (isEditMode) {
-			// exiting edit mode - save changes
-			saveAllChanges();
+			void saveAndExit();
 		} else {
-			// entering edit mode - initialize edit state
-			editTitle = albumMetadata.title;
-		}
-		isEditMode = !isEditMode;
-	}
-
-	async function saveAllChanges() {
-		// save track order if album has ATProto list
-		if (canReorder) {
-			await saveOrder();
-		}
-
-		// save title if changed
-		if (editTitle.trim() && editTitle.trim() !== albumMetadata.title) {
-			saveTitleChange();
+			enterEditMode();
 		}
 	}
 
-	function saveTitleChange() {
-		const newTitle = editTitle.trim();
-		if (!newTitle || newTitle === albumMetadata.title) return;
+	/** discard every unsaved edit (title, order, settings) and leave edit mode */
+	function cancelEdit() {
+		if (isSaving) return;
+		editTitle = albumMetadata.title;
+		if (orderDirty) {
+			const byId = new Map(tracks.map((t) => [t.id, t]));
+			tracks = orderAtEdit.flatMap((id) => byId.get(id) ?? []);
+		}
+		isEditMode = false;
+	}
 
-		// optimistic update - UI updates immediately
-		const oldTitle = albumMetadata.title;
-		albumMetadata.title = newTitle;
-
-		// fire off backend call without blocking UI
-		albumActions
-			.updateTitle(albumMetadata.id, newTitle)
-			.then(() => {
-				toast.success('title updated');
-			})
-			.catch((e) => {
-				console.error('failed to save title:', e);
-				toast.error(e instanceof Error ? e.message : 'failed to save title');
-				// revert on failure
-				albumMetadata.title = oldTitle;
-				editTitle = oldTitle;
-			});
+	/**
+	 * the one save action for edit mode: writes whatever changed (title, track
+	 * order, album settings) and closes the editor. on any failure edit mode
+	 * stays open with the draft intact so nothing is silently dropped.
+	 */
+	async function saveAndExit() {
+		if (isSaving) return;
+		if (!editDirty) {
+			isEditMode = false;
+			return;
+		}
+		isSaving = true;
+		const saved: string[] = [];
+		const failed: string[] = [];
+		try {
+			if (titleDirty) {
+				const newTitle = editTitle.trim();
+				try {
+					await albumActions.updateTitle(albumMetadata.id, newTitle);
+					albumMetadata.title = newTitle;
+					saved.push('title saved');
+				} catch (e) {
+					console.error('failed to save title:', e);
+					failed.push(e instanceof Error ? e.message : 'failed to save title');
+				}
+			}
+			if (orderDirty && canReorder) {
+				try {
+					await albumActions.reorderTracks(albumMetadata.list_uri, tracks);
+					orderAtEdit = tracks.map((t) => t.id);
+					saved.push('track order saved');
+				} catch (e) {
+					failed.push(e instanceof Error ? e.message : 'failed to save order');
+				}
+			}
+			if (settingsDirty && settingsEditor) {
+				try {
+					const summary = await settingsEditor.save();
+					if (summary) saved.push(summary);
+				} catch (e) {
+					failed.push(e instanceof Error ? e.message : 'failed to save album settings');
+				}
+			}
+		} finally {
+			isSaving = false;
+		}
+		if (failed.length > 0) {
+			toast.error(failed.join('; '));
+			return;
+		}
+		toast.success(saved.length === 1 ? saved[0] : 'changes saved');
+		isEditMode = false;
 	}
 
 	function handleCoverSelect(event: Event & { currentTarget: HTMLInputElement }) {
@@ -201,24 +249,8 @@
 			if (showDeleteConfirm) {
 				showDeleteConfirm = false;
 			} else if (isEditMode) {
-				// revert title change and exit edit mode
-				editTitle = albumMetadata.title;
-				isEditMode = false;
+				cancelEdit();
 			}
-		}
-	}
-
-	async function saveOrder() {
-		isSaving = true;
-		try {
-			const saved = await albumActions.reorderTracks(albumMetadata.list_uri, tracks);
-			if (saved) {
-				toast.success('order saved');
-			}
-		} catch (e) {
-			toast.error(e instanceof Error ? e.message : 'failed to save order');
-		} finally {
-			isSaving = false;
 		}
 	}
 
@@ -230,6 +262,60 @@
 		}
 	});
 </script>
+
+{#snippet editToggle()}
+	<button
+		class="icon-btn"
+		class:active={isEditMode}
+		onclick={toggleEditMode}
+		aria-label={isEditMode ? (editDirty ? 'save changes' : 'done editing') : 'edit album'}
+		title={isEditMode ? (editDirty ? 'save changes' : 'done editing') : 'edit album'}
+		disabled={isSaving}
+	>
+		{#if isEditMode}
+			{#if isSaving}
+				<svg
+					width="18"
+					height="18"
+					viewBox="0 0 24 24"
+					fill="none"
+					stroke="currentColor"
+					stroke-width="2"
+					class="spinner"
+				>
+					<circle cx="12" cy="12" r="10" stroke-dasharray="31.4" stroke-dashoffset="10"></circle>
+				</svg>
+			{:else}
+				<svg
+					width="18"
+					height="18"
+					viewBox="0 0 24 24"
+					fill="none"
+					stroke="currentColor"
+					stroke-width="2"
+					stroke-linecap="round"
+					stroke-linejoin="round"
+				>
+					<polyline points="20 6 9 17 4 12"></polyline>
+				</svg>
+			{/if}
+		{:else}
+			<svg
+				width="18"
+				height="18"
+				viewBox="0 0 24 24"
+				fill="none"
+				stroke="currentColor"
+				stroke-width="2"
+				stroke-linecap="round"
+				stroke-linejoin="round"
+			>
+				<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+				<path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+			</svg>
+		{/if}
+	</button>
+{/snippet}
 
 <svelte:window on:keydown={handleKeydown} />
 
@@ -455,57 +541,7 @@
 						/>
 					{/if}
 					{#if isOwner}
-						<button
-							class="icon-btn"
-							class:active={isEditMode}
-							onclick={toggleEditMode}
-							aria-label={isEditMode ? 'done editing' : 'edit album'}
-							title={isEditMode ? 'done editing' : 'edit album'}
-						>
-							{#if isEditMode}
-								{#if isSaving}
-									<svg
-										width="18"
-										height="18"
-										viewBox="0 0 24 24"
-										fill="none"
-										stroke="currentColor"
-										stroke-width="2"
-										class="spinner"
-									>
-										<circle cx="12" cy="12" r="10" stroke-dasharray="31.4" stroke-dashoffset="10"
-										></circle>
-									</svg>
-								{:else}
-									<svg
-										width="18"
-										height="18"
-										viewBox="0 0 24 24"
-										fill="none"
-										stroke="currentColor"
-										stroke-width="2"
-										stroke-linecap="round"
-										stroke-linejoin="round"
-									>
-										<polyline points="20 6 9 17 4 12"></polyline>
-									</svg>
-								{/if}
-							{:else}
-								<svg
-									width="18"
-									height="18"
-									viewBox="0 0 24 24"
-									fill="none"
-									stroke="currentColor"
-									stroke-width="2"
-									stroke-linecap="round"
-									stroke-linejoin="round"
-								>
-									<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-									<path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-								</svg>
-							{/if}
-						</button>
+						{@render editToggle()}
 						<button
 							class="icon-btn danger"
 							onclick={() => (showDeleteConfirm = true)}
@@ -593,57 +629,7 @@
 					/>
 				{/if}
 				{#if isOwner}
-					<button
-						class="icon-btn"
-						class:active={isEditMode}
-						onclick={toggleEditMode}
-						aria-label={isEditMode ? 'done editing' : 'edit album'}
-						title={isEditMode ? 'done editing' : 'edit album'}
-					>
-						{#if isEditMode}
-							{#if isSaving}
-								<svg
-									width="18"
-									height="18"
-									viewBox="0 0 24 24"
-									fill="none"
-									stroke="currentColor"
-									stroke-width="2"
-									class="spinner"
-								>
-									<circle cx="12" cy="12" r="10" stroke-dasharray="31.4" stroke-dashoffset="10"
-									></circle>
-								</svg>
-							{:else}
-								<svg
-									width="18"
-									height="18"
-									viewBox="0 0 24 24"
-									fill="none"
-									stroke="currentColor"
-									stroke-width="2"
-									stroke-linecap="round"
-									stroke-linejoin="round"
-								>
-									<polyline points="20 6 9 17 4 12"></polyline>
-								</svg>
-							{/if}
-						{:else}
-							<svg
-								width="18"
-								height="18"
-								viewBox="0 0 24 24"
-								fill="none"
-								stroke="currentColor"
-								stroke-width="2"
-								stroke-linecap="round"
-								stroke-linejoin="round"
-							>
-								<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-								<path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-							</svg>
-						{/if}
-					</button>
+					{@render editToggle()}
 					<button
 						class="icon-btn danger"
 						onclick={() => (showDeleteConfirm = true)}
@@ -675,6 +661,8 @@
 		{#if isEditMode && isOwner}
 			{#key albumMetadata.id}
 				<AlbumPublishingEditor
+					bind:this={settingsEditor}
+					bind:dirty={settingsDirty}
 					album={albumMetadata}
 					{tracks}
 					onchange={(albumId, enabled) => {
@@ -682,6 +670,23 @@
 					}}
 				/>
 			{/key}
+			<div class="edit-footer">
+				<span class="edit-status" role="status"
+					>{isSaving ? 'saving…' : editDirty ? 'unsaved changes' : 'no changes'}</span
+				>
+				<div class="edit-footer-actions">
+					<button type="button" class="edit-cancel" disabled={isSaving} onclick={cancelEdit}
+						>cancel</button
+					>
+					<button
+						type="button"
+						class="edit-save"
+						disabled={isSaving}
+						onclick={() => void saveAndExit()}
+						>{isSaving ? 'saving…' : editDirty ? 'save' : 'done'}</button
+					>
+				</div>
+			</div>
 		{/if}
 
 		<div class="tracks-section">
@@ -1079,6 +1084,49 @@
 		display: flex;
 		flex-direction: column;
 		gap: 0.5rem;
+	}
+
+	.edit-footer {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 1rem;
+		max-width: 44rem;
+		margin: -1rem 0 2rem;
+	}
+	.edit-status {
+		font-size: var(--text-sm);
+		color: var(--text-secondary);
+	}
+	.edit-footer-actions {
+		display: flex;
+		gap: 0.5rem;
+	}
+	.edit-cancel,
+	.edit-save {
+		padding: 0.6rem 1.1rem;
+		border-radius: var(--radius-sm);
+		font: inherit;
+		font-size: var(--text-sm);
+		border: 0;
+		cursor: pointer;
+		white-space: nowrap;
+	}
+	.edit-cancel {
+		background: none;
+		color: var(--text-secondary);
+	}
+	.edit-cancel:hover:not(:disabled) {
+		color: var(--text-primary);
+	}
+	.edit-save {
+		background: var(--accent);
+		color: var(--accent-contrast);
+	}
+	.edit-cancel:disabled,
+	.edit-save:disabled {
+		opacity: 0.5;
+		cursor: default;
 	}
 
 	/* edit mode styles */

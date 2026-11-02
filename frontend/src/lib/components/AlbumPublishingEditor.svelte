@@ -10,13 +10,18 @@
 	import type { AlbumMetadata, Track } from '$lib/types';
 	import PublishingControls from './PublishingControls.svelte';
 
+	// the album page owns the one save action for edit mode (header ✓ and the
+	// footer button both call the page's save, which calls `save()` here), so
+	// this component only holds the settings draft and reports `dirty`.
 	let {
 		album,
 		tracks,
+		dirty = $bindable(false),
 		onchange
 	}: {
 		album: AlbumMetadata;
 		tracks: Track[];
+		dirty?: boolean;
 		onchange: (albumId: string, enabled: boolean) => void;
 	} = $props();
 	let override = $state<PublishingDefaults | null>(null);
@@ -25,13 +30,15 @@
 	let savedPlylst = $state(false);
 	let replaceOverrides = $state(false);
 	let saving = $state(false);
-	let result = $state('');
 	let error = $state('');
 	const exceptions = $derived(tracks.filter((track) => track.policy_origin === 'track').length);
 	const selectedCount = $derived(replaceOverrides ? tracks.length : tracks.length - exceptions);
 	const publishingDirty = $derived(JSON.stringify(override) !== JSON.stringify(savedOverride));
-	const dirty = $derived(publishingDirty || plylst !== savedPlylst || replaceOverrides);
 	const effective = $derived(override ?? preferences.publishingDefaults);
+
+	$effect(() => {
+		dirty = publishingDirty || plylst !== savedPlylst || replaceOverrides;
+	});
 
 	onMount(() => {
 		override = globalThis.structuredClone($state.snapshot(album.publishing_defaults ?? null));
@@ -40,20 +47,17 @@
 		void preferences.fetch();
 	});
 
-	function cancel(): void {
-		override = globalThis.structuredClone($state.snapshot(savedOverride));
-		plylst = savedPlylst;
-		replaceOverrides = false;
-		result = '';
-		error = '';
-	}
-
-	async function save(): Promise<void> {
-		if (saving || !dirty) return;
+	/**
+	 * persist the settings draft. resolves to a short summary for a toast, or
+	 * null when there was nothing to save; throws (and shows the error inline)
+	 * on failure so the page can keep edit mode open.
+	 */
+	export async function save(): Promise<string | null> {
+		if (saving || !dirty) return null;
 		const id = album.id;
 		saving = true;
-		result = '';
 		error = '';
+		let summary = 'album settings saved';
 		let publishingSaved = false;
 		try {
 			if (publishingDirty || replaceOverrides) {
@@ -65,16 +69,17 @@
 				savedOverride = globalThis.structuredClone($state.snapshot(override));
 				replaceOverrides = false;
 				publishingSaved = true;
-				result = `album defaults saved; ${count} ${count === 1 ? 'track' : 'tracks'} updated`;
+				summary = `album defaults saved; ${count} ${count === 1 ? 'track' : 'tracks'} updated`;
 			}
 			if (plylst !== savedPlylst) {
 				await updatePlylstLink(id, plylst);
 				savedPlylst = plylst;
 				onchange(id, plylst);
 			}
-			if (!publishingSaved) result = 'album settings saved';
+			return summary;
 		} catch (cause) {
 			error = cause instanceof Error ? cause.message : 'could not save album settings — retry';
+			throw new Error(error, { cause });
 		} finally {
 			if (publishingSaved) {
 				await invalidateAll().catch(() => {
@@ -91,7 +96,6 @@
 	<fieldset
 		disabled={saving || !preferences.data}
 		onchange={() => {
-			result = '';
 			error = '';
 		}}
 	>
@@ -161,17 +165,6 @@
 				<p>audio that was already public cannot be recalled.</p>
 			</div>
 		</details>
-		<footer>
-			<span class="status" role="status"
-				>{saving ? 'saving changes…' : result || (dirty ? 'unsaved changes' : 'no changes')}</span
-			>
-			<div class="actions">
-				<button class="cancel" type="button" disabled={!dirty} onclick={cancel}>cancel</button>
-				<button class="save" type="button" disabled={!dirty} onclick={() => void save()}
-					>{saving ? 'saving…' : 'save changes'}</button
-				>
-			</div>
-		</footer>
 	</fieldset>
 	{#if error}<p class="error" role="alert">{error}</p>{/if}
 </section>
@@ -215,8 +208,7 @@
 	}
 	.description,
 	small,
-	p,
-	.status {
+	p {
 		font-size: var(--text-sm);
 		color: var(--text-secondary);
 		line-height: 1.5;
@@ -307,38 +299,6 @@
 		gap: 0.5rem;
 		font-size: var(--text-sm);
 	}
-	footer {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		gap: 1rem;
-		padding-top: 1.25rem;
-	}
-	.actions {
-		display: flex;
-		gap: 0.5rem;
-	}
-	button {
-		padding: 0.6rem 1rem;
-		border-radius: var(--radius-sm);
-		font: inherit;
-		font-size: var(--text-sm);
-		cursor: pointer;
-		border: 0;
-		white-space: nowrap;
-	}
-	.cancel {
-		background: none;
-		color: var(--text-secondary);
-	}
-	.save {
-		background: var(--accent);
-		color: var(--accent-contrast);
-	}
-	button:disabled {
-		opacity: 0.5;
-		cursor: default;
-	}
 	.error {
 		margin-top: 1rem;
 		color: var(--error);
@@ -359,13 +319,6 @@
 		select {
 			max-width: 100%;
 			font-size: var(--text-lg);
-		}
-		footer {
-			align-items: flex-start;
-			flex-direction: column;
-		}
-		.actions {
-			align-self: flex-end;
 		}
 	}
 </style>
