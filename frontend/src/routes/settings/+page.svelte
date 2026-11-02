@@ -418,13 +418,8 @@ import WaveLoading from '$lib/components/WaveLoading.svelte';
 	}
 
 	async function revokeToken(tokenId: string, name: string | null) {
-		const confirmed = await confirmAction({
-			title: 'revoke token?',
-			body: `"${name || tokenId}" will stop working immediately.`,
-			confirmText: 'revoke',
-			variant: 'danger'
-		});
-		if (!confirmed) return;
+		const body = `"${name || tokenId}" will stop working immediately.`;
+		if (!(await confirmAction({ title: 'revoke token?', body, confirmText: 'revoke', variant: 'danger' }))) return;
 
 		revokingToken = tokenId;
 		try {
