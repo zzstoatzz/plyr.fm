@@ -3,13 +3,7 @@ const get_track = @import("../internal/application/get_track.zig");
 const get_playback = @import("../internal/application/get_playback.zig");
 const list_track_likes = @import("../internal/application/list_track_likes.zig");
 const list_tracks = @import("../internal/application/list_tracks.zig");
-const like_track = @import("../internal/application/like_track.zig");
-const unlike_track = @import("../internal/application/unlike_track.zig");
 const record_play = @import("../internal/application/record_play.zig");
-const authenticated_pds = @import("../internal/application/authenticated_pds.zig");
-const config = @import("../config.zig");
-const auth_store = @import("../internal/auth/store.zig");
-const key_store = @import("../internal/command/record_key_store.zig");
 const PlaybackStore = @import("../internal/index/playback_store.zig").PlaybackStore;
 const LikeQueryStore = @import("../internal/index/like_query_store.zig").LikeQueryStore;
 const TrackStore = @import("../internal/index/track_store.zig").TrackStore;
@@ -17,7 +11,6 @@ const PlayDedupStore = @import("../internal/metrics/play_dedup_store.zig").PlayD
 const PlayMetricStore = @import("../internal/metrics/play_metric_store.zig").PlayMetricStore;
 const query = @import("../internal/http/query.zig");
 const response = @import("response.zig");
-const auth = @import("auth.zig");
 
 pub fn list(
     request: *std.http.Server.Request,
@@ -90,171 +83,6 @@ pub fn likes(
         .internal_error => try response.apiError(request, .internal_error, request_id, cors),
         .unavailable => try response.apiError(request, .service_unavailable, request_id, cors),
     }
-}
-
-pub fn like(
-    request: *std.http.Server.Request,
-    allocator: std.mem.Allocator,
-    io: std.Io,
-    track_store: ?TrackStore,
-    like_store: ?LikeQueryStore,
-    record_keys: ?key_store.Store,
-    pds: ?authenticated_pds.Client,
-    auth_config: ?config.AuthConfig,
-    sessions: ?auth_store.Store,
-    track_collection: []const u8,
-    like_collection: []const u8,
-    cors: response.CorsPolicy,
-    id: []const u8,
-    request_id: []const u8,
-) !void {
-    var identity = (try auth.requireMutationIdentity(
-        request,
-        allocator,
-        auth_config,
-        sessions,
-        cors,
-        request_id,
-    )) orelse return;
-    defer identity.deinit(allocator);
-    const candidate = makeLikeCandidate(allocator, io) catch {
-        try response.apiError(request, .service_unavailable, request_id, cors);
-        return;
-    };
-    switch (like_track.execute(
-        allocator,
-        track_store,
-        like_store,
-        record_keys,
-        pds,
-        identity.session_digest,
-        identity.session.did,
-        identity.session.scope,
-        track_collection,
-        like_collection,
-        id,
-        candidate,
-    )) {
-        .liked => try writeLikeReceipt(request, allocator, request_id, cors, true, false, 0),
-        .already_liked => try writeLikeReceipt(request, allocator, request_id, cors, true, true, 0),
-        .invalid_id => try response.apiError(request, .invalid_request, request_id, cors),
-        .not_found => try response.apiError(request, .not_found, request_id, cors),
-        .unverified_target => try response.apiError(request, .conflict, request_id, cors),
-        .invalid_pds_response => try response.apiError(request, .upstream_failure, request_id, cors),
-        .session_unavailable => try response.apiError(request, .authentication_required, request_id, cors),
-        .insufficient_scope => try response.apiError(request, .insufficient_scope, request_id, cors),
-        .rejected => try response.apiError(request, .upstream_failure, request_id, cors),
-        .unavailable => try response.apiError(request, .service_unavailable, request_id, cors),
-    }
-}
-
-pub fn unlike(
-    request: *std.http.Server.Request,
-    allocator: std.mem.Allocator,
-    track_store: ?TrackStore,
-    like_store: ?LikeQueryStore,
-    record_keys: ?key_store.Store,
-    pds: ?authenticated_pds.Client,
-    auth_config: ?config.AuthConfig,
-    sessions: ?auth_store.Store,
-    track_collection: []const u8,
-    like_collection: []const u8,
-    cors: response.CorsPolicy,
-    id: []const u8,
-    request_id: []const u8,
-) !void {
-    var identity = (try auth.requireMutationIdentity(
-        request,
-        allocator,
-        auth_config,
-        sessions,
-        cors,
-        request_id,
-    )) orelse return;
-    defer identity.deinit(allocator);
-    switch (unlike_track.execute(
-        allocator,
-        track_store,
-        like_store,
-        record_keys,
-        pds,
-        identity.session_digest,
-        identity.session.did,
-        identity.session.scope,
-        track_collection,
-        like_collection,
-        id,
-    )) {
-        .unliked => |count| try writeLikeReceipt(request, allocator, request_id, cors, false, false, count),
-        .already_unliked => try writeLikeReceipt(request, allocator, request_id, cors, false, true, 0),
-        .invalid_id => try response.apiError(request, .invalid_request, request_id, cors),
-        .not_found => try response.apiError(request, .not_found, request_id, cors),
-        .unverified_target, .too_many_records => try response.apiError(request, .conflict, request_id, cors),
-        .invalid_pds_response, .rejected => try response.apiError(request, .upstream_failure, request_id, cors),
-        .session_unavailable => try response.apiError(request, .authentication_required, request_id, cors),
-        .insufficient_scope => try response.apiError(request, .insufficient_scope, request_id, cors),
-        .unavailable => try response.apiError(request, .service_unavailable, request_id, cors),
-    }
-}
-
-fn writeLikeReceipt(
-    request: *std.http.Server.Request,
-    allocator: std.mem.Allocator,
-    request_id: []const u8,
-    cors: response.CorsPolicy,
-    liked: bool,
-    indexed: bool,
-    deleted_records: usize,
-) !void {
-    const body = try std.json.Stringify.valueAlloc(allocator, .{
-        .object = "like_command",
-        .liked = liked,
-        .indexed = indexed,
-        .deleted_records = deleted_records,
-    }, .{});
-    try response.jsonWithHeaders(
-        request,
-        .ok,
-        body,
-        request_id,
-        cors,
-        &.{
-            .{ .name = "cache-control", .value = "no-store" },
-            .{ .name = "pragma", .value = "no-cache" },
-        },
-    );
-}
-
-fn makeLikeCandidate(allocator: std.mem.Allocator, io: std.Io) !like_track.Candidate {
-    const micros = std.Io.Timestamp.now(io, .real).toMicroseconds();
-    if (micros < 0) return error.InvalidClock;
-    var random: [2]u8 = undefined;
-    io.random(&random);
-    const clock_id: u10 = @intCast(std.mem.readInt(u16, &random, .big) & 0x03ff);
-    const tid = @import("zat").Tid.fromTimestamp(@intCast(micros), clock_id);
-    const tid_str = tid.str();
-    const rkey = try allocator.dupe(u8, &tid_str);
-
-    const seconds = @divFloor(micros, std.time.us_per_s);
-    const remainder: u32 = @intCast(micros - seconds * std.time.us_per_s);
-    const epoch_seconds: std.time.epoch.EpochSeconds = .{ .secs = @intCast(seconds) };
-    const year_day = epoch_seconds.getEpochDay().calculateYearDay();
-    const month_day = year_day.calculateMonthDay();
-    const day_seconds = epoch_seconds.getDaySeconds();
-    const created_at = try std.fmt.allocPrint(
-        allocator,
-        "{d:0>4}-{d:0>2}-{d:0>2}T{d:0>2}:{d:0>2}:{d:0>2}.{d:0>6}Z",
-        .{
-            year_day.year,
-            month_day.month.numeric(),
-            @as(u32, month_day.day_index) + 1,
-            day_seconds.getHoursIntoDay(),
-            day_seconds.getMinutesIntoHour(),
-            day_seconds.getSecondsIntoMinute(),
-            remainder,
-        },
-    );
-    return .{ .rkey = rkey, .created_at = created_at };
 }
 
 pub fn playback(

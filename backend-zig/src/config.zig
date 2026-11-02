@@ -1,55 +1,5 @@
 const std = @import("std");
 const zat = @import("zat");
-const sealed_secret = @import("internal/auth/sealed_secret.zig");
-const client_identity = @import("internal/http/client_identity.zig");
-
-pub const AuthConfig = struct {
-    client_id: []const u8,
-    client_uri: []const u8,
-    redirect_uri: []const u8,
-    frontend_origin: []const u8,
-    scope: []const u8,
-    client_keypair: zat.Keypair,
-    encryption_key: sealed_secret.Key,
-
-    fn fromValues(values: struct {
-        client_id: []const u8,
-        redirect_uri: []const u8,
-        frontend_origin: []const u8,
-        scope: []const u8,
-        client_private_key: []const u8,
-        encryption_key: []const u8,
-    }) !AuthConfig {
-        const metadata_suffix = "/oauth-client-metadata.json";
-        if (!std.mem.endsWith(u8, values.client_id, metadata_suffix))
-            return error.InvalidOauthClientId;
-        try validateHttpsUrl(values.client_id, false);
-        try validateHttpsUrl(values.redirect_uri, false);
-        try validateHttpsUrl(values.frontend_origin, true);
-        const client_uri = values.client_id[0 .. values.client_id.len - metadata_suffix.len];
-        const callback_suffix = "/auth/callback";
-        if (values.redirect_uri.len != client_uri.len + callback_suffix.len or
-            !std.mem.startsWith(u8, values.redirect_uri, client_uri) or
-            !std.mem.endsWith(u8, values.redirect_uri, callback_suffix))
-            return error.OauthRedirectMismatch;
-        if (!scopeContains(values.scope, "atproto")) return error.InvalidOauthScope;
-        if (scopeContains(values.scope, "transition:generic"))
-            return error.OverbroadOauthScope;
-        const client_secret = try sealed_secret.parseKey(values.client_private_key);
-        const encryption_key = try sealed_secret.parseKey(values.encryption_key);
-        if (std.mem.eql(u8, &client_secret, &encryption_key))
-            return error.ReusedAuthKey;
-        return .{
-            .client_id = values.client_id,
-            .client_uri = client_uri,
-            .redirect_uri = values.redirect_uri,
-            .frontend_origin = values.frontend_origin,
-            .scope = values.scope,
-            .client_keypair = try zat.Keypair.fromSecretKey(.p256, client_secret),
-            .encryption_key = encryption_key,
-        };
-    }
-};
 
 pub const Role = enum {
     account_reconciler,
@@ -94,12 +44,6 @@ pub const Config = struct {
     account_check_lease_us: i64,
     account_check_seed_us: i64,
     account_check_idle_ms: i64,
-    auth_start_client_limit: u32,
-    auth_start_subject_limit: u32,
-    auth_start_global_limit: u32,
-    auth_start_window_seconds: u32,
-    auth_trusted_proxy_cidrs: []const u8,
-    auth: ?AuthConfig,
 
     pub fn fromEnvironment() !Config {
         // A Fly process group named after a role (e.g. `ingester`) selects
@@ -159,9 +103,6 @@ pub const Config = struct {
         if (role == .catalog_reconciler and (database_url == null or index_mode != .required))
             return error.CatalogReconcilerDatabaseRequired;
 
-        const auth_trusted_proxy_cidrs = getenv("AUTH_TRUSTED_PROXY_CIDRS") orelse "";
-        try client_identity.validateTrustedProxyCidrs(auth_trusted_proxy_cidrs);
-
         return .{
             .role = role,
             .port = std.fmt.parseInt(u16, port_value, 10) catch return error.InvalidPort,
@@ -194,76 +135,9 @@ pub const Config = struct {
             .account_check_idle_ms = try parsePositiveI64(
                 getenv("ACCOUNT_CHECK_IDLE_MILLISECONDS") orelse "1000",
             ),
-            .auth_start_client_limit = try parsePositiveU32(
-                getenv("AUTH_START_CLIENT_LIMIT") orelse "10",
-            ),
-            .auth_start_subject_limit = try parsePositiveU32(
-                getenv("AUTH_START_SUBJECT_LIMIT") orelse "10",
-            ),
-            .auth_start_global_limit = try parsePositiveU32(
-                getenv("AUTH_START_GLOBAL_LIMIT") orelse "120",
-            ),
-            .auth_start_window_seconds = try parsePositiveU32(
-                getenv("AUTH_START_WINDOW_SECONDS") orelse "60",
-            ),
-            .auth_trusted_proxy_cidrs = auth_trusted_proxy_cidrs,
-            // Only the api serves browser OAuth. Workers must not fail on the
-            // app-wide auth secrets they inherit without the api's [env].
-            .auth = if (role == .api) try authFromEnvironment() else null,
         };
     }
 };
-
-fn authFromEnvironment() !?AuthConfig {
-    const client_id = getenv("ZIG_OAUTH_CLIENT_ID");
-    const redirect_uri = getenv("ZIG_OAUTH_REDIRECT_URI");
-    const frontend_origin = getenv("ZIG_OAUTH_FRONTEND_ORIGIN");
-    const scope = getenv("ZIG_OAUTH_SCOPE");
-    const client_private_key = getenv("ZIG_OAUTH_CLIENT_PRIVATE_KEY");
-    const encryption_key = getenv("ZIG_AUTH_ENCRYPTION_KEY");
-    const configured = presentCount(.{
-        client_id != null,
-        redirect_uri != null,
-        frontend_origin != null,
-        scope != null,
-        client_private_key != null,
-        encryption_key != null,
-    });
-    if (configured == 0) return null;
-    if (configured != 6)
-        return error.PartialAuthConfiguration;
-    return try AuthConfig.fromValues(.{
-        .client_id = client_id.?,
-        .redirect_uri = redirect_uri.?,
-        .frontend_origin = frontend_origin.?,
-        .scope = scope.?,
-        .client_private_key = client_private_key.?,
-        .encryption_key = encryption_key.?,
-    });
-}
-
-fn presentCount(values: [6]bool) u8 {
-    var count: u8 = 0;
-    for (values) |present| count += @intFromBool(present);
-    return count;
-}
-
-fn validateHttpsUrl(value: []const u8, origin_only: bool) !void {
-    const uri = std.Uri.parse(value) catch return error.InvalidHttpsUrl;
-    if (!std.ascii.eqlIgnoreCase(uri.scheme, "https") or uri.host == null or
-        uri.user != null or uri.password != null or uri.query != null or uri.fragment != null)
-        return error.InvalidHttpsUrl;
-    if (origin_only and !std.mem.eql(u8, uri.path.percent_encoded, ""))
-        return error.InvalidHttpsOrigin;
-}
-
-fn scopeContains(scope: []const u8, expected: []const u8) bool {
-    var parts = std.mem.tokenizeScalar(u8, scope, ' ');
-    while (parts.next()) |part| {
-        if (std.mem.eql(u8, part, expected)) return true;
-    }
-    return false;
-}
 
 fn getenv(name: [*:0]const u8) ?[]const u8 {
     const value = std.c.getenv(name) orelse return null;
@@ -278,12 +152,6 @@ fn parsePositiveUsize(value: []const u8) !usize {
 
 fn parsePositiveU16(value: []const u8) !u16 {
     const parsed = std.fmt.parseInt(u16, value, 10) catch return error.InvalidPositiveInteger;
-    if (parsed == 0) return error.InvalidPositiveInteger;
-    return parsed;
-}
-
-fn parsePositiveU32(value: []const u8) !u32 {
-    const parsed = std.fmt.parseInt(u32, value, 10) catch return error.InvalidPositiveInteger;
     if (parsed == 0) return error.InvalidPositiveInteger;
     return parsed;
 }
@@ -335,11 +203,9 @@ test "index mode and connection bounds are explicit" {
     try std.testing.expectError(error.InvalidIndexMode, IndexMode.parse("optional"));
     try std.testing.expectEqual(@as(usize, 128), try parsePositiveUsize("128"));
     try std.testing.expectEqual(@as(u16, 16), try parsePositiveU16("16"));
-    try std.testing.expectEqual(@as(u32, 60), try parsePositiveU32("60"));
     try std.testing.expectEqual(@as(i64, 6_000_000), try parseSecondsMicros("6"));
     try std.testing.expectError(error.InvalidPositiveInteger, parsePositiveUsize("0"));
     try std.testing.expectError(error.InvalidPositiveInteger, parsePositiveU16("65536"));
-    try std.testing.expectError(error.InvalidPositiveInteger, parsePositiveU32("0"));
 }
 
 test "database role expectations use unquoted PostgreSQL identifiers" {
@@ -360,50 +226,4 @@ test "record collections are distinct routing keys" {
         error.DuplicateCollection,
         validateDistinctCollections(.{ "a.b.track", "a.b.list", "a.b.profile", "a.b.track" }),
     );
-}
-
-test "auth configuration is exact, confidential, and uses separate keys" {
-    try std.testing.expectEqual(@as(u8, 0), presentCount(@as([6]bool, @splat(false))));
-    try std.testing.expectEqual(
-        @as(u8, 1),
-        presentCount(.{ true, false, false, false, false, false }),
-    );
-    try std.testing.expectEqual(@as(u8, 6), presentCount(@as([6]bool, @splat(true))));
-
-    const client_key = "QkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkI=";
-    const encryption_key = "Q0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0M=";
-    const auth = try AuthConfig.fromValues(.{
-        .client_id = "https://api.next.plyr.fm/oauth-client-metadata.json",
-        .redirect_uri = "https://api.next.plyr.fm/auth/callback",
-        .frontend_origin = "https://next.plyr.fm",
-        .scope = "atproto repo:fm.plyr.like?action=create&action=update&action=delete",
-        .client_private_key = client_key,
-        .encryption_key = encryption_key,
-    });
-    try std.testing.expectEqualStrings("https://api.next.plyr.fm", auth.client_uri);
-    try std.testing.expectEqualStrings("ES256", @tagName(auth.client_keypair.algorithm()));
-    try std.testing.expectError(error.OverbroadOauthScope, AuthConfig.fromValues(.{
-        .client_id = auth.client_id,
-        .redirect_uri = auth.redirect_uri,
-        .frontend_origin = auth.frontend_origin,
-        .scope = "atproto transition:generic",
-        .client_private_key = client_key,
-        .encryption_key = encryption_key,
-    }));
-    try std.testing.expectError(error.InvalidOauthScope, AuthConfig.fromValues(.{
-        .client_id = auth.client_id,
-        .redirect_uri = auth.redirect_uri,
-        .frontend_origin = auth.frontend_origin,
-        .scope = "transition:generic",
-        .client_private_key = client_key,
-        .encryption_key = encryption_key,
-    }));
-    try std.testing.expectError(error.ReusedAuthKey, AuthConfig.fromValues(.{
-        .client_id = auth.client_id,
-        .redirect_uri = auth.redirect_uri,
-        .frontend_origin = auth.frontend_origin,
-        .scope = auth.scope,
-        .client_private_key = client_key,
-        .encryption_key = client_key,
-    }));
 }

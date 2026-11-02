@@ -54,9 +54,9 @@ decision.
 | `GET /v1/tracks/{track_id}` | covered | public, published track detail from the projection | private/gated tracks, list/search views, publication and mutations |
 | `GET /v1/tracks/{track_id}/playback` | covered | anonymous authorization and delivery resolution with explicit integrity | sessions, supporter/copyright authorization, private-space proxying, PDS blob resolution, play metrics |
 | `GET /v1/tracks/{track_id}/likes` | covered | exact-URI-and-CID verified public like records with actor availability and strict pagination | aggregate history and moderation policy |
-| `PUT, DELETE /v1/tracks/{track_id}/like` | covered | replay-safe PDS-first like and idempotent unlike commands with explicit projection-lag receipts | UI treatment of pending projection state |
-| `POST /v1/me/likes/resolve` | covered | bounded exact-strong-reference viewer-state batch without personalizing public track resources | other viewer preference families |
-| `GET /v1/me/likes` | covered | authenticated exact-CID liked-track collection ordered by the viewer's verified PDS records | saved moderation preferences |
+| `PUT, DELETE /v1/tracks/{track_id}/like` | removed | clients create/delete `like` records on their own PDS, then `GET /v1/records/await` | — |
+| `POST /v1/actors/{did}/likes/resolve` | covered | public bounded exact-strong-reference like-state batch for any actor; likes are public records, so no session | — |
+| `GET /v1/actors/{did}/likes` | covered | public exact-CID liked-track collection ordered by the actor's verified PDS records | — |
 | `GET /v1/artists/{identifier}` | covered | public artist detail by canonical DID or case-insensitive handle alias | verified repository ingestion, collections, follows, profile writes, account state, viewer context |
 | `GET /v1/artists/{identifier}/metrics` | covered | derived admitted-track and canonical-URI play aggregates | likes, viewer-specific statistics, historical series |
 | `GET /v1/albums?artist_did={did}` | covered | verified list-record albums for one artist with strict scope-bound pagination | global discovery, writes, viewer state, presentation resources |
@@ -138,7 +138,7 @@ second column because every Subsonic route accepts both `GET` and `POST`.
 
 | family | current surface | principal dependencies | `/v1` disposition |
 |---|---|---|---|
-| identity and sessions | `/auth/*`, `/account/*` | ATProto OAuth/DPoP, encrypted Postgres sessions, Redis session cache | redesign as session and current-user resources; keep OAuth redirects outside normal resource semantics |
+| identity and sessions | `/auth/*`, `/account/*` | ATProto OAuth/DPoP, encrypted Postgres sessions, Redis session cache | dropped from the appview: OAuth is client-side and writes go to the PDS (read-only appview, see web-next) |
 | artists | `/artists/*` | PDS profiles, Postgres projection, image storage, follow graph | public detail started with canonical DID identity, handle aliases, and explicit field provenance |
 | tracks | 33 `/tracks/*` routes | PDS records/blobs, Postgres, R2, transcoder, Docket, moderation, ML | discovery/artist collection and detail started; split publishing commands, interactions, and repair; retire repair verbs from public API |
 | albums | `/albums/*` | ATProto list/track records, Postgres, R2 images | canonical artist collection and verified membership/detail started; eliminate local-first finalization semantics |
@@ -224,7 +224,7 @@ This is a boundary map, not a frozen schema:
 | area | initial resources |
 |---|---|
 | API metadata | `GET /v1` |
-| current identity | `GET /auth/me`, `GET /v1/me/likes`, `POST /v1/me/likes/resolve`, session/account-management resources |
+| current identity | client-held OAuth session; public `GET /v1/actors/{did}/likes`, `POST /v1/actors/{did}/likes/resolve`; session/account-management resources |
 | catalog | `/v1/artists`, `/v1/tracks`, `/v1/albums`, `/v1/playlists` |
 | interactions | verified like reads, PDS-first like/unlike commands, and separate viewer-state resolution; comments remain open |
 | publishing | `/v1/uploads` and explicit publish operations |

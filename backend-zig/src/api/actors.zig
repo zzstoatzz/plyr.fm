@@ -1,45 +1,33 @@
 const std = @import("std");
-const config = @import("../config.zig");
 const list_viewer_liked_tracks = @import("../internal/application/list_viewer_liked_tracks.zig");
 const resolve_viewer_likes = @import("../internal/application/resolve_viewer_likes.zig");
-const AuthStore = @import("../internal/auth/store.zig").Store;
 const ViewerLikeStore = @import("../internal/index/viewer_like_store.zig").Store;
 const LikedTrackStore = @import("../internal/index/liked_track_store.zig").Store;
-const auth = @import("auth.zig");
 const response = @import("response.zig");
 
 const maximum_body_bytes = 32 * 1024;
 
+/// Likes are public records in the actor's repo, so the appview serves them
+/// without a session: GET /v1/actors/{did}/likes.
 pub fn listLikes(
     request: *std.http.Server.Request,
     allocator: std.mem.Allocator,
     store: ?LikedTrackStore,
-    sessions: ?AuthStore,
+    actor_did: []const u8,
     track_collection: []const u8,
     cors: response.CorsPolicy,
     request_id: []const u8,
 ) !void {
-    var identity = (try auth.requireIdentity(
-        request,
-        allocator,
-        sessions,
-        cors,
-        request_id,
-    )) orelse return;
-    defer identity.deinit(allocator);
     switch (list_viewer_liked_tracks.execute(
         allocator,
         store,
-        identity.session.did,
+        actor_did,
         track_collection,
         request.head.target,
     )) {
         .found => |value| {
             const encoded = try std.json.Stringify.valueAlloc(allocator, value, .{});
-            try response.jsonWithHeaders(request, .ok, encoded, request_id, cors, &.{
-                .{ .name = "cache-control", .value = "no-store" },
-                .{ .name = "pragma", .value = "no-cache" },
-            });
+            try response.json(request, .ok, encoded, request_id, cors);
         },
         .invalid_request => try response.apiError(request, .invalid_request, request_id, cors),
         .corrupt_projection => try response.apiError(request, .internal_error, request_id, cors),
@@ -47,26 +35,19 @@ pub fn listLikes(
     }
 }
 
+/// Which of the given tracks the actor likes, per the index:
+/// POST /v1/actors/{did}/likes/resolve. POST only because the subject list can
+/// be long; nothing is written.
 pub fn resolveLikes(
     request: *std.http.Server.Request,
     allocator: std.mem.Allocator,
     store: ?ViewerLikeStore,
-    auth_config: ?config.AuthConfig,
-    sessions: ?AuthStore,
+    actor_did: []const u8,
     track_collection: []const u8,
     like_collection: []const u8,
     cors: response.CorsPolicy,
     request_id: []const u8,
 ) !void {
-    var identity = (try auth.requireMutationIdentity(
-        request,
-        allocator,
-        auth_config,
-        sessions,
-        cors,
-        request_id,
-    )) orelse return;
-    defer identity.deinit(allocator);
     const body_reader = request.readerExpectContinue(&.{}) catch {
         try response.apiError(request, .invalid_request, request_id, cors);
         return;
@@ -90,17 +71,14 @@ pub fn resolveLikes(
     switch (resolve_viewer_likes.execute(
         allocator,
         store,
-        identity.session.did,
+        actor_did,
         track_collection,
         like_collection,
         parsed.tracks,
     )) {
         .found => |value| {
             const encoded = try std.json.Stringify.valueAlloc(allocator, value, .{});
-            try response.jsonWithHeaders(request, .ok, encoded, request_id, cors, &.{
-                .{ .name = "cache-control", .value = "no-store" },
-                .{ .name = "pragma", .value = "no-cache" },
-            });
+            try response.json(request, .ok, encoded, request_id, cors);
         },
         .invalid_request => try response.apiError(request, .invalid_request, request_id, cors),
         .corrupt_projection => try response.apiError(request, .internal_error, request_id, cors),
