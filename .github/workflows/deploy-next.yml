@@ -85,7 +85,7 @@ jobs:
         run: >-
           flyctl machine run "registry.fly.io/${FLY_APP}:${GITHUB_SHA}"
           --app "$FLY_APP"
-          --region iad
+          --region sea
           --rm
           --restart no
           --skip-dns-registration
