@@ -68,3 +68,30 @@ jobs:
 
       - name: http contract smoke
         run: python3 scripts/test_http.py
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: install uv
+        uses: astral-sh/setup-uv@v7
+
+      # the zig schema sits on top of the python backend's public schema, so
+      # build that first on a separate marked database, then apply ours twice
+      # (the second run must be a no-op).
+      - name: migrations apply on top of the python schema
+        env:
+          PGPASSWORD: zig_test
+          DATABASE_URL: postgresql://zig_test:zig_test@127.0.0.1:5435/next_ci
+        run: |
+          psql -h 127.0.0.1 -p 5435 -U zig_test -d zig_test -c "CREATE DATABASE next_ci"
+          psql -h 127.0.0.1 -p 5435 -U zig_test -d zig_test -c "COMMENT ON DATABASE next_ci IS 'plyr-zig-test'"
+          (cd ../backend && uv sync --locked && DATABASE_URL=postgresql+psycopg://zig_test:zig_test@127.0.0.1:5435/next_ci uv run python scripts/init_db.py)
+          scripts/migrate
+          scripts/migrate | grep -q "applied 0 migration"
+
+      - name: refuses an unmarked database
+        env:
+          DATABASE_URL: postgresql://zig_test:zig_test@127.0.0.1:5435/zig_test
+        run: |
+          if scripts/migrate; then echo "migrate ran against an unmarked database" >&2; exit 1; fi
