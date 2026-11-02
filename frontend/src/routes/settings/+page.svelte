@@ -15,6 +15,7 @@ import WaveLoading from '$lib/components/WaveLoading.svelte';
 	import { player } from '$lib/player.svelte';
 	import { getReturnUrl, clearReturnUrl } from '$lib/utils/return-url';
 	import { redirectToLogin } from '$lib/utils/auth-redirect';
+	import { confirmAction } from '$lib/confirm.svelte';
 
 	type InputChangeEvent = Event & { currentTarget: HTMLInputElement };
 
@@ -417,7 +418,8 @@ import WaveLoading from '$lib/components/WaveLoading.svelte';
 	}
 
 	async function revokeToken(tokenId: string, name: string | null) {
-		if (!confirm(`revoke token "${name || tokenId}"?`)) return;
+		const body = `"${name || tokenId}" will stop working immediately.`;
+		if (!(await confirmAction({ title: 'revoke token?', body, confirmText: 'revoke', variant: 'danger' }))) return;
 
 		revokingToken = tokenId;
 		try {

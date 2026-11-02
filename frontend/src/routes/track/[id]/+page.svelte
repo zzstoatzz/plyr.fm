@@ -4,6 +4,7 @@
 	import { backOut } from 'svelte/easing';
 	import { onMount } from 'svelte';
 	import { browser } from '$app/environment';
+	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import type { PageData } from './$types';
 	import { APP_NAME, APP_CANONICAL_URL } from '$lib/branding';
@@ -733,6 +734,7 @@
 			onSaved={(updated) => {
 				if (track?.id === updated.id) track = updated;
 			}}
+			onDeleted={() => goto('/portal')}
 		/>
 	{/key}
 {/if}

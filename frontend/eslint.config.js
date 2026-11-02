@@ -56,7 +56,6 @@ export default [
 				setTimeout: 'readonly',
 				clearTimeout: 'readonly',
 				alert: 'readonly',
-				confirm: 'readonly',
 				navigator: 'readonly',
 				location: 'readonly',
 				history: 'readonly',
@@ -88,6 +87,19 @@ export default [
 					argsIgnorePattern: '^_',
 					varsIgnorePattern: '^_',
 					caughtErrors: 'none'
+				}
+			],
+			// native dialogs can silently no-op (iOS Safari, suppressed dialogs)
+			'no-restricted-globals': [
+				'error',
+				{ name: 'confirm', message: 'use confirmAction() from $lib/confirm.svelte' }
+			],
+			'no-restricted-properties': [
+				'error',
+				{
+					object: 'window',
+					property: 'confirm',
+					message: 'use confirmAction() from $lib/confirm.svelte'
 				}
 			]
 		}

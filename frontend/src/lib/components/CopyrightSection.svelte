@@ -3,6 +3,7 @@
 	import { toast } from '$lib/toast.svelte';
 	import { auth } from '$lib/auth.svelte';
 	import InfoTooltip from '$lib/components/InfoTooltip.svelte';
+	import { confirmAction } from '$lib/confirm.svelte';
 
 	// hide the entire section for users who don't have the copyright-paradigm
 	// feature flag. backend endpoints 404 for unflagged users too, so even a
@@ -218,9 +219,13 @@
 	async function handleDelete(record: PublishingOwnerRecord) {
 		if (pendingRkey) return;
 		const ownerLabel = summaryFor(record.value) ?? record.rkey;
-		if (!confirm(`delete the owner record for "${ownerLabel}"? this removes it from your PDS.`)) {
-			return;
-		}
+		const confirmed = await confirmAction({
+			title: 'delete owner record?',
+			body: `the owner record for "${ownerLabel}" will be removed from your PDS.`,
+			confirmText: 'delete',
+			variant: 'danger'
+		});
+		if (!confirmed) return;
 		pendingRkey = record.rkey;
 		try {
 			const res = await fetch(

@@ -7,6 +7,7 @@
 	import { player } from '$lib/player.svelte';
 	import { tracksCache } from '$lib/tracks.svelte';
 	import ConfirmDialog from './ConfirmDialog.svelte';
+	import DeleteTrackDialog from './DeleteTrackDialog.svelte';
 	import TrackEditForm from './TrackEditForm.svelte';
 
 	interface Props {
@@ -15,8 +16,11 @@
 		atprotofansEligible?: boolean;
 		onClose: () => void;
 		onSaved: (track: Track) => void | Promise<void>;
+		/** shows a delete button in the header; called after the track is gone */
+		onDeleted?: (trackId: number) => void | Promise<void>;
 	}
-	let { track, albums, atprotofansEligible, onClose, onSaved }: Props = $props();
+	let { track, albums, atprotofansEligible, onClose, onSaved, onDeleted }: Props = $props();
+	let deleteOpen = $state(false);
 	let dialog = $state<HTMLDialogElement>();
 	let loadedAlbums = $state<AlbumSummary[]>([]);
 	let eligible = $state(false);
@@ -120,23 +124,54 @@
 					>
 				{/if}
 			</div>
-			<button
-				class="close-button"
-				type="button"
-				aria-label="close edit track"
-				disabled={busy}
-				onclick={requestClose}
-			>
-				<svg
-					width="20"
-					height="20"
-					viewBox="0 0 24 24"
-					fill="none"
-					stroke="currentColor"
-					stroke-width="2"
-					aria-hidden="true"><path d="m6 6 12 12M6 18 18 6" /></svg
+			<div class="header-actions">
+				{#if onDeleted}
+					<button
+						class="icon-button delete-button"
+						type="button"
+						aria-label="delete track"
+						title="delete track"
+						disabled={busy}
+						onclick={() => (deleteOpen = true)}
+					>
+						<svg
+							width="18"
+							height="18"
+							viewBox="0 0 24 24"
+							fill="none"
+							stroke="currentColor"
+							stroke-width="2"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							aria-hidden="true"
+						>
+							<polyline points="3 6 5 6 21 6"></polyline>
+							<path d="m19 6-.867 12.142A2 2 0 0 1 16.138 20H7.862a2 2 0 0 1-1.995-1.858L5 6"
+							></path>
+							<path d="M10 11v6"></path>
+							<path d="M14 11v6"></path>
+							<path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"></path>
+						</svg>
+					</button>
+				{/if}
+				<button
+					class="icon-button close-button"
+					type="button"
+					aria-label="close edit track"
+					disabled={busy}
+					onclick={requestClose}
 				>
-			</button>
+					<svg
+						width="20"
+						height="20"
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="2"
+						aria-hidden="true"><path d="m6 6 12 12M6 18 18 6" /></svg
+					>
+				</button>
+			</div>
 		</header>
 		<TrackEditForm
 			{track}
@@ -170,6 +205,20 @@
 		discardOpen = false;
 	}}
 />
+
+{#if onDeleted}
+	<DeleteTrackDialog
+		bind:open={deleteOpen}
+		{track}
+		onDeleted={async (trackId) => {
+			// the track no longer exists, so there is nothing to save or discard
+			dirty = false;
+			dialog?.close();
+			onClose();
+			await onDeleted(trackId);
+		}}
+	/>
+{/if}
 
 <style>
 	dialog {
@@ -236,7 +285,13 @@
 		margin: 0;
 		font-size: var(--text-2xl);
 	}
-	.close-button {
+	.header-actions {
+		display: flex;
+		align-items: center;
+		gap: 4px;
+		flex-shrink: 0;
+	}
+	.icon-button {
 		display: grid;
 		place-items: center;
 		width: 44px;
@@ -250,17 +305,20 @@
 			background 140ms,
 			transform 140ms;
 	}
-	.close-button:hover {
+	.icon-button:hover {
 		background: var(--bg-hover);
 	}
-	.close-button:active {
+	.delete-button:hover {
+		color: var(--error);
+	}
+	.icon-button:active {
 		transform: scale(0.94);
 	}
-	.close-button:focus-visible {
+	.icon-button:focus-visible {
 		outline: 2px solid var(--accent);
 		outline-offset: 2px;
 	}
-	.close-button:disabled {
+	.icon-button:disabled {
 		opacity: 0.5;
 		cursor: wait;
 	}
@@ -310,7 +368,7 @@
 		dialog.closing::backdrop {
 			animation: none;
 		}
-		.close-button {
+		.icon-button {
 			transition: none;
 		}
 	}
