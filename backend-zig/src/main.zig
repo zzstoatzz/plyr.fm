@@ -1,4 +1,5 @@
 const std = @import("std");
+const pg = @import("pg");
 const config = @import("config.zig");
 const server = @import("server.zig");
 const postgres = @import("internal/index/postgres_track_store.zig");
@@ -42,6 +43,7 @@ pub fn main() !void {
     else
         null;
     defer if (postgres_store) |*store| store.deinit();
+    if (settings.role != .api) if (postgres_store) |*store| logDatabaseUser(store.pool);
     if (settings.database_role) |expected_role| {
         const store = if (postgres_store) |*value| value else return error.DatabaseRoleWithoutDatabase;
         try store.requireRole(expected_role);
@@ -367,4 +369,14 @@ test {
     _ = @import("internal/projection/verified_commit.zig");
     _ = @import("internal/projection/verified_snapshot.zig");
     _ = @import("server.zig");
+}
+
+fn logDatabaseUser(pool: *pg.Pool) void {
+    var row = (pool.row("SELECT current_user::text", .{}) catch |err| {
+        std.log.warn("could not read current database user: {}", .{err});
+        return;
+    }) orelse return;
+    defer row.deinit() catch {};
+    const user = row.get([]const u8, 0) catch return;
+    std.log.info("worker connected to postgres as {s}", .{user});
 }
