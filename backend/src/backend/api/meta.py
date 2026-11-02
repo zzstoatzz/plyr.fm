@@ -3,7 +3,7 @@
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import PlainTextResponse, Response
 from logfire.experimental.forwarding import logfire_proxy
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -212,5 +212,5 @@ async def proxy_browser_telemetry(request: Request):
     global rate limiting.
     """
     if not settings.app.browser_observability:
-        return PlainTextResponse("browser observability disabled", status_code=204)
+        return Response(status_code=204)
     return await logfire_proxy(request)

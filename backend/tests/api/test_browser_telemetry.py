@@ -11,4 +11,5 @@ def test_browser_trace_forwarding_is_disabled_by_default(
         headers={"content-type": "application/x-protobuf"},
     )
     assert response.status_code == 204
+    assert response.content == b""
     assert not capfire.exporter.exported_spans
