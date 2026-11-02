@@ -5,7 +5,7 @@
 //! substituting code points for user-perceived characters.
 
 const std = @import("std");
-const graphemes = @import("graphemes");
+const graphemes = @import("grapheme.zig");
 
 pub const Error = error{
     InvalidUtf8,
@@ -39,4 +39,8 @@ test "lexicon string counts extended grapheme clusters" {
 test "lexicon string enforces bytes independently of graphemes" {
     try std.testing.expectError(error.TooManyBytes, validate("👨‍👩‍👧‍👦", 24, 1));
     try std.testing.expectError(error.InvalidUtf8, validate("\xff", 1, 1));
+}
+
+test {
+    _ = graphemes;
 }

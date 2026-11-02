@@ -10,10 +10,6 @@
             .url = "https://tangled.org/zzstoatzz.io/pg.zig/archive/554530d.tar.gz",
             .hash = "pg-0.0.0-Wp_7gaf1BgBmHy27LzHTYcWbgjYTQ_Q4pIV3Sh_CoS90",
         },
-        .zg = .{
-            .url = "https://codeberg.org/atman/zg/archive/v0.16.2.tar.gz",
-            .hash = "zg-0.16.2-oGqU3HqftgI6rwFS90ypwfjgToH8Pz829OKuFURlm773",
-        },
         .redis = .{
             .url = "https://tangled.org/zzstoatzz.io/redis/archive/89b1157.tar.gz",
             .hash = "redis-0.2.0-NGPoviplAgBRUhJJ4KgOg9vdXMNmyPTu5yFHUuBVaqBo",
