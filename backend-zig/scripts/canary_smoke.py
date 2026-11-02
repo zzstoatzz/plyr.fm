@@ -333,7 +333,9 @@ def _verify_real_product_reads(base_url: str) -> dict[str, Any]:
             record = member["track"]["record"]
             # the track record carries revision/collection/rkey too; the
             # member's subject is a strongRef, so compare only uri + cid.
-            assert {"uri": record["uri"], "cid": record["cid"]} == member["subject"], member
+            assert {"uri": record["uri"], "cid": record["cid"]} == member["subject"], (
+                member
+            )
         else:
             assert member["track"] is None, member
     return listed_track

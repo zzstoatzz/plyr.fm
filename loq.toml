@@ -515,7 +515,7 @@ max_lines = 528
 
 [[rules]]
 path = "backend-zig/src/api/router.zig"
-max_lines = 631
+max_lines = 645
 
 [[rules]]
 path = "backend-zig/scripts/test_http.py"
