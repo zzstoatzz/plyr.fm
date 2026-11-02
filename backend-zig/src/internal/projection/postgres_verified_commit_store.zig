@@ -373,7 +373,8 @@ test "PostgreSQL verified commit sink is atomic, strict, and replay safe" {
         \\  commit_rev text NOT NULL,
         \\  commit_cid text NOT NULL,
         \\  data_cid text NOT NULL,
-        \\  indexed_at_us bigint NOT NULL CHECK (indexed_at_us >= 0)
+        \\  indexed_at_us bigint NOT NULL CHECK (indexed_at_us >= 0),
+        \\  projection_version integer NOT NULL DEFAULT 0
         \\)
     , .{});
 
