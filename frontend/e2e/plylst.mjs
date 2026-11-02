@@ -75,9 +75,9 @@ try {
 	assert.ok(trackId, 'fixture upload completed');
 	const path = `/u/${user.handle}/album/${album.slug}`;
 	const name = 'open album in plylst (opens in a new tab)';
-	// edit mode has exactly one save action: it writes every change and closes
-	// the editor (the header ✓ does the same thing)
-	const editFooter = page.locator('.edit-footer');
+	// edit album is a dialog with exactly one save action; it writes every
+	// change and closes. the plylst toggle previews the link on the page live.
+	const editFooter = page.getByRole('dialog', { name: 'edit album', exact: true });
 	const editAlbum = page
 		.getByRole('button', { name: 'edit album', exact: true })
 		.locator('visible=true');
@@ -90,10 +90,10 @@ try {
 			response.request().method() === 'PATCH'
 	);
 	await page.getByRole('switch', { name: /show plylst link/ }).check();
-	assert.equal(await page.getByRole('link', { name }).count(), 0, 'draft is not public');
+	assert.equal(await page.getByRole('link', { name }).count(), 1, 'draft is previewed live');
 	await editFooter.getByRole('button', { name: 'save', exact: true }).click();
 	assert.equal((await saved).status(), 200);
-	await editAlbum.waitFor();
+	await editFooter.waitFor({ state: 'detached' });
 	await page.getByRole('link', { name }).waitFor();
 	assert.equal(
 		await page.getByRole('link', { name }).getAttribute('href'),
@@ -132,9 +132,12 @@ try {
 			fullPage: true
 		});
 		await editFooter.getByRole('button', { name: 'cancel', exact: true }).click();
+		await page.getByRole('button', { name: 'discard changes', exact: true }).click();
+		await editFooter.waitFor({ state: 'detached' });
 		await editAlbum.click();
 		assert.equal(await page.getByRole('switch', { name: /show plylst link/ }).isChecked(), true);
-		await editFooter.getByRole('button', { name: 'done', exact: true }).click();
+		await editFooter.getByRole('button', { name: 'cancel', exact: true }).click();
+		await editFooter.waitFor({ state: 'detached' });
 		const visitor = await browser.newContext({
 			viewport: { width, height: 1000 },
 			colorScheme: theme
@@ -175,7 +178,7 @@ try {
 	await settings.getByLabel('settings', { exact: true }).selectOption('custom');
 	await settings.getByLabel('downloads', { exact: true }).selectOption('ask');
 	await editFooter.getByRole('button', { name: 'save', exact: true }).click();
-	await editAlbum.waitFor({ timeout: 120000 });
+	await editFooter.waitFor({ state: 'detached', timeout: 120000 });
 	const after = await (await owner.request.get(`${API}/tracks/${trackId}`)).json();
 	const updatedAlbum = await (
 		await owner.request.get(`${API}/albums/${user.handle}/${album.slug}`)

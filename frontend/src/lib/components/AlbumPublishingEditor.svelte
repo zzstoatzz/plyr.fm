@@ -9,20 +9,23 @@
 	import { publishingSummary, type PublishingDefaults } from '$lib/publishing';
 	import type { AlbumMetadata, Track } from '$lib/types';
 	import PublishingControls from './PublishingControls.svelte';
+	import { plylstEligible } from './PlylstLink.svelte';
 
-	// the album page owns the one save action for edit mode (header ✓ and the
-	// footer button both call the page's save, which calls `save()` here), so
-	// this component only holds the settings draft and reports `dirty`.
+	// the edit album dialog owns the one save action (it calls `save()` here),
+	// so this component only holds the settings draft, reports `dirty`, and
+	// reports the draft plylst choice so the page can preview it live.
 	let {
 		album,
 		tracks,
 		dirty = $bindable(false),
-		onchange
+		onchange,
+		onpreview
 	}: {
 		album: AlbumMetadata;
 		tracks: Track[];
 		dirty?: boolean;
 		onchange: (albumId: string, enabled: boolean) => void;
+		onpreview?: (enabled: boolean) => void;
 	} = $props();
 	let override = $state<PublishingDefaults | null>(null);
 	let savedOverride = $state<PublishingDefaults | null>(null);
@@ -36,8 +39,13 @@
 	const publishingDirty = $derived(JSON.stringify(override) !== JSON.stringify(savedOverride));
 	const effective = $derived(override ?? preferences.publishingDefaults);
 
+	const eligible = $derived(plylstEligible(tracks));
+
 	$effect(() => {
 		dirty = publishingDirty || plylst !== savedPlylst || replaceOverrides;
+	});
+	$effect(() => {
+		onpreview?.(plylst);
 	});
 
 	onMount(() => {
@@ -92,7 +100,6 @@
 </script>
 
 <section class="album-settings" aria-label="album settings">
-	<h3>album settings</h3>
 	<fieldset
 		disabled={saving || !preferences.data}
 		onchange={() => {
@@ -134,13 +141,26 @@
 				{/if}
 			</div>
 		</details>
-		<label class="plylst-row">
-			<span
-				><span class="label">plylst <small>experimental</small></span><span class="description"
-					>show the waveform player link on this album</span
-				></span
-			><input type="checkbox" role="switch" aria-label="show plylst link" bind:checked={plylst} />
-		</label>
+		<div class="plylst-row">
+			<label class="plylst-toggle">
+				<span
+					><span class="label">plylst link <small>experimental</small></span><span
+						class="description">a waveform player button next to “add to queue”</span
+					></span
+				><input type="checkbox" role="switch" aria-label="show plylst link" bind:checked={plylst} />
+			</label>
+			<!-- what the album page's action row will look like with this choice -->
+			<div class="preview" aria-hidden="true">
+				<span class="mock play">▶ play</span>
+				<span class="mock">add to queue</span>
+				<span class="mock chip" class:on={plylst && eligible}
+					><img src="/integrations/plylst.svg" alt="" width="14" height="14" />↗</span
+				>
+			</div>
+			{#if plylst && !eligible}
+				<p class="note">hidden until every track is public</p>
+			{/if}
+		</div>
 		<details class="track-settings">
 			<summary
 				>track settings <span class="description"
@@ -170,17 +190,6 @@
 </section>
 
 <style>
-	.album-settings {
-		margin-block: 2rem;
-		max-width: 44rem;
-	}
-	h3 {
-		font-size: var(--text-xl);
-		font-weight: 500;
-		margin: 0;
-		padding-bottom: 1rem;
-		border-bottom: 1px solid var(--border-default);
-	}
 	fieldset {
 		padding: 0;
 		margin: 0;
@@ -188,7 +197,7 @@
 		min-width: 0;
 	}
 	summary,
-	.plylst-row {
+	.plylst-toggle {
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
@@ -225,9 +234,56 @@
 		color: var(--accent-text);
 	}
 	.access,
-	.plylst-row,
-	.track-settings {
-		border-bottom: 1px solid var(--border-default);
+	.plylst-row {
+		border-bottom: 1px solid var(--border-subtle);
+	}
+	.plylst-row {
+		padding-bottom: 1.1rem;
+	}
+	.preview {
+		display: flex;
+		align-items: center;
+		gap: 0.4rem;
+		padding: 0.6rem 0.75rem;
+		border-radius: var(--radius-md);
+		background: var(--bg-primary);
+		font-size: var(--text-xs);
+		color: var(--text-secondary);
+		overflow: hidden;
+	}
+	.mock {
+		padding: 0.3rem 0.65rem;
+		border: 1px solid var(--border-default);
+		border-radius: var(--radius-full);
+		white-space: nowrap;
+	}
+	.mock.play {
+		border-color: transparent;
+		background: var(--accent);
+		color: var(--accent-contrast);
+	}
+	.mock.chip {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.2rem;
+		border-color: transparent;
+		opacity: 0;
+		transform: translateX(-4px);
+		transition:
+			opacity var(--motion-enter, 160ms) ease,
+			transform var(--motion-enter, 160ms) ease;
+	}
+	.mock.chip.on {
+		opacity: 1;
+		transform: none;
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.mock.chip {
+			transition: none;
+		}
+	}
+	.note {
+		margin-top: 0.5rem;
 	}
 	.access-fields,
 	.track-fields {

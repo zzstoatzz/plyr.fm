@@ -4,7 +4,7 @@
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import Header from '$lib/components/Header.svelte';
 	import PlylstLink from '$lib/components/PlylstLink.svelte';
-	import AlbumPublishingEditor from '$lib/components/AlbumPublishingEditor.svelte';
+	import EditAlbumModal from '$lib/components/EditAlbumModal.svelte';
 	import TrackItem from '$lib/components/TrackItem.svelte';
 	import ShareButton from '$lib/components/ShareButton.svelte';
 	import DownloadButton from '$lib/components/DownloadButton.svelte';
@@ -52,18 +52,17 @@
 	// check if actively playing (not paused)
 	const isAlbumPlaying = $derived(isAlbumActive && !player.paused);
 
-	// edit mode state
-	let isEditMode = $state(false);
-	let isSaving = $state(false);
-	let editTitle = $state('');
+	// details + settings are edited in a dialog (one save); the track list has
+	// its own edit mode for reorder/remove (one save: done)
+	let editOpen = $state(false);
+	// the dialog's draft plylst choice, previewed live on the page; null = saved value
+	let plylstPreview = $state<boolean | null>(null);
+	let editingTracks = $state(false);
+	let savingOrder = $state(false);
 
 	// delete confirmation modal
 	let showDeleteConfirm = $state(false);
 	let deleting = $state(false);
-
-	// cover upload
-	let coverInputElement = $state<HTMLInputElement | null>(null);
-	let uploadingCover = $state(false);
 
 	// track removal
 	let removingTrackId = $state<number | null>(null);
@@ -85,129 +84,43 @@
 		queueCollection(tracks, albumMetadata.title);
 	}
 
-	// order of track ids when edit mode opened, so save only rewrites the list
-	// record when the owner actually reordered
+	// order of track ids when track editing opened, so done only rewrites the
+	// list record when the owner actually reordered
 	let orderAtEdit: number[] = [];
-	let settingsEditor = $state<ReturnType<typeof AlbumPublishingEditor> | null>(null);
-	let settingsDirty = $state(false);
-
-	const titleDirty = $derived(
-		isEditMode && !!editTitle.trim() && editTitle.trim() !== albumMetadata.title
-	);
 	const orderDirty = $derived(
-		isEditMode && tracks.map((t) => t.id).join(',') !== orderAtEdit.join(',')
+		editingTracks && tracks.map((t) => t.id).join(',') !== orderAtEdit.join(',')
 	);
-	const editDirty = $derived(titleDirty || orderDirty || settingsDirty);
 
-	function enterEditMode() {
-		editTitle = albumMetadata.title;
+	function startEditingTracks() {
 		orderAtEdit = tracks.map((t) => t.id);
-		settingsDirty = false;
-		isEditMode = true;
+		editingTracks = true;
 	}
 
-	function toggleEditMode() {
-		if (isEditMode) {
-			void saveAndExit();
-		} else {
-			enterEditMode();
-		}
-	}
-
-	/** discard every unsaved edit (title, order, settings) and leave edit mode */
-	function cancelEdit() {
-		if (isSaving) return;
-		editTitle = albumMetadata.title;
+	function cancelEditingTracks() {
+		if (savingOrder) return;
 		if (orderDirty) {
 			const byId = new Map(tracks.map((t) => [t.id, t]));
 			tracks = orderAtEdit.flatMap((id) => byId.get(id) ?? []);
 		}
-		isEditMode = false;
+		editingTracks = false;
 	}
 
-	/**
-	 * the one save action for edit mode: writes whatever changed (title, track
-	 * order, album settings) and closes the editor. on any failure edit mode
-	 * stays open with the draft intact so nothing is silently dropped.
-	 */
-	async function saveAndExit() {
-		if (isSaving) return;
-		if (!editDirty) {
-			isEditMode = false;
-			return;
-		}
-		isSaving = true;
-		const saved: string[] = [];
-		const failed: string[] = [];
-		try {
-			if (titleDirty) {
-				const newTitle = editTitle.trim();
-				try {
-					await albumActions.updateTitle(albumMetadata.id, newTitle);
-					albumMetadata.title = newTitle;
-					saved.push('title saved');
-				} catch (e) {
-					console.error('failed to save title:', e);
-					failed.push(e instanceof Error ? e.message : 'failed to save title');
-				}
+	/** done: save the new order (if any) and leave track editing; stay open on failure */
+	async function finishEditingTracks() {
+		if (savingOrder) return;
+		if (orderDirty && canReorder) {
+			savingOrder = true;
+			try {
+				await albumActions.reorderTracks(albumMetadata.list_uri, tracks);
+				toast.success('track order saved');
+			} catch (e) {
+				toast.error(e instanceof Error ? e.message : 'failed to save order');
+				return;
+			} finally {
+				savingOrder = false;
 			}
-			if (orderDirty && canReorder) {
-				try {
-					await albumActions.reorderTracks(albumMetadata.list_uri, tracks);
-					orderAtEdit = tracks.map((t) => t.id);
-					saved.push('track order saved');
-				} catch (e) {
-					failed.push(e instanceof Error ? e.message : 'failed to save order');
-				}
-			}
-			if (settingsDirty && settingsEditor) {
-				try {
-					const summary = await settingsEditor.save();
-					if (summary) saved.push(summary);
-				} catch (e) {
-					failed.push(e instanceof Error ? e.message : 'failed to save album settings');
-				}
-			}
-		} finally {
-			isSaving = false;
 		}
-		if (failed.length > 0) {
-			toast.error(failed.join('; '));
-			return;
-		}
-		toast.success(saved.length === 1 ? saved[0] : 'changes saved');
-		isEditMode = false;
-	}
-
-	function handleCoverSelect(event: Event & { currentTarget: HTMLInputElement }) {
-		const file = event.currentTarget.files?.[0];
-		if (!file) return;
-
-		if (!file.type.startsWith('image/')) {
-			toast.error('please select an image file');
-			return;
-		}
-
-		if (file.size > 20 * 1024 * 1024) {
-			toast.error('image must be under 20MB');
-			return;
-		}
-
-		uploadCover(file);
-	}
-
-	async function uploadCover(file: File) {
-		uploadingCover = true;
-		try {
-			const result = await albumActions.uploadCover(albumMetadata.id, file);
-			albumMetadata.image_url = result.image_url;
-			toast.success('cover updated');
-		} catch (e) {
-			console.error('failed to upload cover:', e);
-			toast.error(e instanceof Error ? e.message : 'failed to upload cover');
-		} finally {
-			uploadingCover = false;
-		}
+		editingTracks = false;
 	}
 
 	async function removeTrack(track: Track) {
@@ -248,8 +161,8 @@
 		if (event.key === 'Escape') {
 			if (showDeleteConfirm) {
 				showDeleteConfirm = false;
-			} else if (isEditMode) {
-				cancelEdit();
+			} else if (editingTracks) {
+				cancelEditingTracks();
 			}
 		}
 	}
@@ -266,54 +179,24 @@
 {#snippet editToggle()}
 	<button
 		class="icon-btn"
-		class:active={isEditMode}
-		onclick={toggleEditMode}
-		aria-label={isEditMode ? (editDirty ? 'save changes' : 'done editing') : 'edit album'}
-		title={isEditMode ? (editDirty ? 'save changes' : 'done editing') : 'edit album'}
-		disabled={isSaving}
+		onclick={() => (editOpen = true)}
+		aria-label="edit album"
+		title="edit album"
+		aria-haspopup="dialog"
 	>
-		{#if isEditMode}
-			{#if isSaving}
-				<svg
-					width="18"
-					height="18"
-					viewBox="0 0 24 24"
-					fill="none"
-					stroke="currentColor"
-					stroke-width="2"
-					class="spinner"
-				>
-					<circle cx="12" cy="12" r="10" stroke-dasharray="31.4" stroke-dashoffset="10"></circle>
-				</svg>
-			{:else}
-				<svg
-					width="18"
-					height="18"
-					viewBox="0 0 24 24"
-					fill="none"
-					stroke="currentColor"
-					stroke-width="2"
-					stroke-linecap="round"
-					stroke-linejoin="round"
-				>
-					<polyline points="20 6 9 17 4 12"></polyline>
-				</svg>
-			{/if}
-		{:else}
-			<svg
-				width="18"
-				height="18"
-				viewBox="0 0 24 24"
-				fill="none"
-				stroke="currentColor"
-				stroke-width="2"
-				stroke-linecap="round"
-				stroke-linejoin="round"
-			>
-				<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-				<path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-			</svg>
-		{/if}
+		<svg
+			width="18"
+			height="18"
+			viewBox="0 0 24 24"
+			fill="none"
+			stroke="currentColor"
+			stroke-width="2"
+			stroke-linecap="round"
+			stroke-linejoin="round"
+		>
+			<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+			<path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+		</svg>
 	</button>
 {/snippet}
 
@@ -378,88 +261,8 @@
 <Header user={auth.user} isAuthenticated={auth.isAuthenticated} onLogout={() => goto('/login')} />
 <div class="container">
 	<main>
-		<!-- hidden file input for cover upload -->
-		<input
-			type="file"
-			accept="image/jpeg,image/png,image/webp"
-			bind:this={coverInputElement}
-			onchange={handleCoverSelect}
-			hidden
-		/>
-
-		<div class="album-hero" class:edit-mode={isEditMode && isOwner}>
-			{#if isEditMode && isOwner}
-				<button
-					class="album-art-wrapper clickable"
-					onclick={() => coverInputElement?.click()}
-					type="button"
-					aria-label="change cover image"
-					disabled={uploadingCover}
-				>
-					{#if albumMetadata.image_url}
-						<img
-							src={albumMetadata.image_url}
-							alt="{albumMetadata.title} artwork"
-							class="album-art"
-						/>
-					{:else}
-						<div class="album-art-placeholder">
-							<svg
-								width="64"
-								height="64"
-								viewBox="0 0 24 24"
-								fill="none"
-								stroke="currentColor"
-								stroke-width="1.5"
-							>
-								<rect
-									x="3"
-									y="3"
-									width="18"
-									height="18"
-									stroke="currentColor"
-									stroke-width="1.5"
-									fill="none"
-								/>
-								<circle cx="12" cy="12" r="4" fill="currentColor" />
-							</svg>
-						</div>
-					{/if}
-					<div class="art-edit-overlay" class:uploading={uploadingCover}>
-						{#if uploadingCover}
-							<svg
-								width="24"
-								height="24"
-								viewBox="0 0 24 24"
-								fill="none"
-								stroke="currentColor"
-								stroke-width="2"
-								class="spinner"
-							>
-								<circle cx="12" cy="12" r="10" stroke-dasharray="31.4" stroke-dashoffset="10"
-								></circle>
-							</svg>
-							<span>uploading...</span>
-						{:else}
-							<svg
-								width="24"
-								height="24"
-								viewBox="0 0 24 24"
-								fill="none"
-								stroke="currentColor"
-								stroke-width="2"
-								stroke-linecap="round"
-								stroke-linejoin="round"
-							>
-								<rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-								<circle cx="8.5" cy="8.5" r="1.5"></circle>
-								<polyline points="21 15 16 10 5 21"></polyline>
-							</svg>
-							<span>change cover</span>
-						{/if}
-					</div>
-				</button>
-			{:else if albumMetadata.image_url}
+		<div class="album-hero">
+			{#if albumMetadata.image_url}
 				<SensitiveImage src={albumMetadata.image_url} tooltipPosition="center">
 					<img
 						src={albumMetadata.image_url}
@@ -493,16 +296,7 @@
 			<div class="album-info-wrapper">
 				<div class="album-info">
 					<p class="album-type">album</p>
-					{#if isEditMode && isOwner}
-						<input
-							type="text"
-							class="album-title-input"
-							bind:value={editTitle}
-							placeholder="album title"
-						/>
-					{:else}
-						<h1 class="album-title">{albumMetadata.title}</h1>
-					{/if}
+					<h1 class="album-title">{albumMetadata.title}</h1>
 					<div class="album-meta">
 						<a href="/u/{albumMetadata.artist_handle}" class="artist-link">
 							{albumMetadata.artist}
@@ -607,7 +401,12 @@
 				</svg>
 				add to queue
 			</button>
-			<PlylstLink album={albumMetadata} {tracks} />
+			<PlylstLink
+				album={plylstPreview === null
+					? albumMetadata
+					: { ...albumMetadata, show_plylst: plylstPreview }}
+				{tracks}
+			/>
 			<div class="mobile-buttons">
 				<ShareButton url={shareUrl} title="share album" />
 				{#if albumDownloadable}
@@ -658,49 +457,43 @@
 			</div>
 		</div>
 
-		{#if isEditMode && isOwner}
-			{#key albumMetadata.id}
-				<AlbumPublishingEditor
-					bind:this={settingsEditor}
-					bind:dirty={settingsDirty}
-					album={albumMetadata}
-					{tracks}
-					onchange={(albumId, enabled) => {
-						if (albumMetadata.id === albumId) albumMetadata.show_plylst = enabled;
-					}}
-				/>
-			{/key}
-			<div class="edit-footer">
-				<span class="edit-status" role="status"
-					>{isSaving ? 'saving…' : editDirty ? 'unsaved changes' : 'no changes'}</span
-				>
-				<div class="edit-footer-actions">
-					<button type="button" class="edit-cancel" disabled={isSaving} onclick={cancelEdit}
-						>cancel</button
-					>
-					<button
-						type="button"
-						class="edit-save"
-						disabled={isSaving}
-						onclick={() => void saveAndExit()}
-						>{isSaving ? 'saving…' : editDirty ? 'save' : 'done'}</button
-					>
-				</div>
-			</div>
-		{/if}
-
 		<div class="tracks-section">
-			<h2 class="section-heading">tracks</h2>
+			<div class="tracks-header">
+				<h2 class="section-heading">tracks</h2>
+				{#if isOwner && tracks.length > 0}
+					<div class="tracks-header-actions">
+						{#if editingTracks}
+							<button
+								type="button"
+								class="text-btn"
+								disabled={savingOrder}
+								onclick={cancelEditingTracks}>cancel</button
+							>
+							<button
+								type="button"
+								class="text-btn primary"
+								disabled={savingOrder}
+								onclick={() => void finishEditingTracks()}
+								>{savingOrder ? 'saving…' : 'done'}</button
+							>
+						{:else}
+							<button type="button" class="text-btn" onclick={startEditingTracks}
+								>{canReorder ? 'reorder' : 'edit tracks'}</button
+							>
+						{/if}
+					</div>
+				{/if}
+			</div>
 			<div
 				class="tracks-list"
-				class:edit-mode={isEditMode}
+				class:edit-mode={editingTracks}
 				bind:this={reorder.listElement}
-				ontouchmove={isEditMode ? reorder.handleTouchMove : undefined}
-				ontouchend={isEditMode ? reorder.handleTouchEnd : undefined}
-				ontouchcancel={isEditMode ? reorder.handleTouchEnd : undefined}
+				ontouchmove={editingTracks ? reorder.handleTouchMove : undefined}
+				ontouchend={editingTracks ? reorder.handleTouchEnd : undefined}
+				ontouchcancel={editingTracks ? reorder.handleTouchEnd : undefined}
 			>
 				{#each tracks as track, i (track.id)}
-					{#if isEditMode}
+					{#if editingTracks && isOwner}
 						<div
 							class="track-row"
 							class:drag-over={reorder.dragOverIndex === i && reorder.touchDragIndex !== i}
@@ -803,6 +596,16 @@
 	</main>
 </div>
 
+{#if editOpen && isOwner}
+	<EditAlbumModal
+		album={albumMetadata}
+		{tracks}
+		onClose={() => (editOpen = false)}
+		onSaved={(changes) => Object.assign(albumMetadata, changes)}
+		onPlylstPreview={(enabled) => (plylstPreview = enabled)}
+	/>
+{/if}
+
 <ConfirmDialog
 	bind:open={showDeleteConfirm}
 	title="delete album?"
@@ -900,64 +703,6 @@
 	.icon-btn.danger:hover {
 		border-color: var(--error);
 		color: var(--error);
-	}
-
-	.icon-btn.active {
-		border-color: var(--accent);
-		color: var(--accent);
-		background: color-mix(in srgb, var(--accent) 10%, transparent);
-	}
-
-	.album-art-wrapper {
-		position: relative;
-		border: none;
-		padding: 0;
-		background: none;
-	}
-
-	.album-art-wrapper.clickable {
-		cursor: pointer;
-	}
-
-	.album-art-wrapper.clickable:hover .art-edit-overlay {
-		opacity: 1;
-	}
-
-	.art-edit-overlay {
-		position: absolute;
-		inset: 0;
-		background: rgba(0, 0, 0, 0.6);
-		border-radius: var(--radius-md);
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		justify-content: center;
-		gap: 0.5rem;
-		color: white;
-		font-size: var(--text-sm);
-		opacity: 0;
-		transition: opacity 0.2s;
-	}
-
-	.art-edit-overlay.uploading {
-		opacity: 1;
-	}
-
-	.album-title-input {
-		font-size: 2.5rem;
-		font-weight: 700;
-		background: transparent;
-		border: none;
-		border-bottom: 2px solid var(--accent);
-		color: var(--text-primary);
-		padding: 0.25rem 0;
-		width: 100%;
-		outline: none;
-		font-family: inherit;
-	}
-
-	.album-title-input::placeholder {
-		color: var(--text-muted);
 	}
 
 	.album-type {
@@ -1086,45 +831,36 @@
 		gap: 0.5rem;
 	}
 
-	.edit-footer {
+	.tracks-header {
 		display: flex;
-		align-items: center;
+		align-items: baseline;
 		justify-content: space-between;
 		gap: 1rem;
-		max-width: 44rem;
-		margin: -1rem 0 2rem;
 	}
-	.edit-status {
-		font-size: var(--text-sm);
-		color: var(--text-secondary);
-	}
-	.edit-footer-actions {
+	.tracks-header-actions {
 		display: flex;
-		gap: 0.5rem;
+		gap: 0.25rem;
 	}
-	.edit-cancel,
-	.edit-save {
-		padding: 0.6rem 1.1rem;
-		border-radius: var(--radius-sm);
+	.text-btn {
+		min-height: 36px;
+		padding: 0 0.9rem;
+		border: 0;
+		border-radius: var(--radius-full);
+		background: transparent;
+		color: var(--text-secondary);
 		font: inherit;
 		font-size: var(--text-sm);
-		border: 0;
 		cursor: pointer;
-		white-space: nowrap;
 	}
-	.edit-cancel {
-		background: none;
-		color: var(--text-secondary);
-	}
-	.edit-cancel:hover:not(:disabled) {
+	.text-btn:not(.primary):hover:not(:disabled) {
+		background: var(--bg-hover);
 		color: var(--text-primary);
 	}
-	.edit-save {
+	.text-btn.primary {
 		background: var(--accent);
 		color: var(--accent-contrast);
 	}
-	.edit-cancel:disabled,
-	.edit-save:disabled {
+	.text-btn:disabled {
 		opacity: 0.5;
 		cursor: default;
 	}
