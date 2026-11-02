@@ -1,6 +1,20 @@
-<script lang="ts">
+<script lang="ts" module>
 	import type { AlbumMetadata, Track } from '$lib/types';
 
+	/** the link only renders when every track on the album is publicly listenable */
+	export function plylstEligible(tracks: Pick<Track, 'publishing'>[]): boolean {
+		return (
+			tracks.length > 0 &&
+			tracks.every(
+				(track) =>
+					track.publishing?.access.listening === 'public' &&
+					track.publishing.access.visibility !== 'private'
+			)
+		);
+	}
+</script>
+
+<script lang="ts">
 	let {
 		album,
 		tracks
@@ -8,15 +22,7 @@
 		album: Pick<AlbumMetadata, 'artist_handle' | 'slug' | 'show_plylst'>;
 		tracks: Pick<Track, 'publishing'>[];
 	} = $props();
-	const visible = $derived(
-		(album.show_plylst ?? true) &&
-			tracks.length > 0 &&
-			tracks.every(
-				(track) =>
-					track.publishing?.access.listening === 'public' &&
-					track.publishing.access.visibility !== 'private'
-			)
-	);
+	const visible = $derived((album.show_plylst ?? true) && plylstEligible(tracks));
 </script>
 
 {#if visible}
