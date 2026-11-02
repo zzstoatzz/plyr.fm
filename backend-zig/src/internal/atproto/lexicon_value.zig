@@ -1,6 +1,23 @@
 //! Shared validation for AT Protocol Lexicon scalar formats.
 
 const std = @import("std");
+const zat = @import("zat");
+
+/// Decode the `cid` of a `com.atproto.repo.strongRef`. The lexicon types it
+/// as `string` with `format: cid`, so in DAG-CBOR it is a text string, not a
+/// tag-42 CID link. Only dag-cbor record CIDs are accepted.
+pub fn strongRefCid(
+    allocator: std.mem.Allocator,
+    subject: zat.cbor.Value,
+) error{ InvalidCid, OutOfMemory }!zat.Cid {
+    const text = subject.getString("cid") orelse return error.InvalidCid;
+    const cid = zat.Cid.fromString(allocator, text) catch |err| switch (err) {
+        error.OutOfMemory => return error.OutOfMemory,
+        else => return error.InvalidCid,
+    };
+    if (cid.codec() != zat.cbor.Codec.dag_cbor) return error.InvalidCid;
+    return cid;
+}
 
 pub fn validUri(value: []const u8) bool {
     if (!std.unicode.utf8ValidateSlice(value) or value.len == 0) return false;
