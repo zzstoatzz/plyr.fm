@@ -2,6 +2,13 @@
 title: "logfire querying guide"
 ---
 
+## Database telemetry
+
+Database engines do not automatically export a span or metric series for every
+query or connection. Operation and request spans retain application context,
+and exceptions still propagate to the existing error logging path. Historical
+SQL dashboards describe earlier releases, not query volume after this change.
+
 ## Basic Concepts
 
 Logfire uses Apache DataFusion (PostgreSQL-flavored SQL) to query trace data. All data is stored in the `records` table.

@@ -68,12 +68,6 @@ def get_engine() -> AsyncEngine:
             **kwargs,
         )
 
-        # instrument sqlalchemy with logfire if enabled
-        if settings.observability.enabled:
-            import logfire
-
-            logfire.instrument_sqlalchemy(engine.sync_engine)
-
         ENGINES[cache_key] = engine
 
     return ENGINES[cache_key]
