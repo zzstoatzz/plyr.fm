@@ -16,6 +16,6 @@ npm install
 npm run dev            # http://127.0.0.1:5174 (atproto oauth loopback client)
 ```
 
-deploys to the cloudflare pages project `plyr-fm-next` via
+deploys to the production branch of the cloudflare pages project `plyr-fm-next` (served at next.plyr.fm) via
 `.github/workflows/deploy-web-next.yml`. it never touches `frontend/`,
 `production-fe` or the prod pages project.

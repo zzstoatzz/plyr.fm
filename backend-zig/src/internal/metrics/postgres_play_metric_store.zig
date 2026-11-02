@@ -1,8 +1,12 @@
 //! PostgreSQL adapter for application-owned play aggregates.
 //!
-//! The durable key is the authenticated record URI. The `public.tracks`
-//! update is an explicitly transitional mirror for the Python backend; no
-//! legacy identifier enters the application contract.
+//! The durable key is the authenticated record URI; no legacy identifier
+//! enters the application contract, and the Python `public.tracks.play_count`
+//! column is not written (next's api is not the Python backend's writer).
+//!
+//! The api role defaults to read-only transactions, so the increment opens an
+//! explicit READ WRITE transaction: plays are application metrics, the one
+//! thing the read-only appview owns.
 
 const std = @import("std");
 const pg = @import("pg");
@@ -70,17 +74,32 @@ pub const PostgresPlayMetricStore = struct {
         defer self.pool.release(conn);
         const ref_code: ?[]const u8 = if (attribution) |value| value.ref_code else null;
         const listener_did: ?[]const u8 = if (attribution) |value| value.listener_did else null;
-        var query_row = conn.row(increment_query, .{ record_uri, ref_code, listener_did }) catch |err| {
-            logQueryError(conn, "play metric increment failed", err);
+        _ = conn.exec("BEGIN READ WRITE", .{}) catch |err| {
+            logQueryError(conn, "play metric transaction failed", err);
             return error.MetricsUnavailable;
-        } orelse return null;
-        var active = true;
-        defer if (active) forceReleaseQueryRow(&query_row);
-
-        const count = query_row.get(i64, 0) catch return error.CorruptMetrics;
-        if (count < 0) return error.CorruptMetrics;
-        finishQueryRow(&query_row) catch return error.MetricsUnavailable;
-        active = false;
+        };
+        var committed = false;
+        defer if (!committed) {
+            _ = conn.exec("ROLLBACK", .{}) catch {};
+        };
+        const count = blk: {
+            var query_row = conn.row(increment_query, .{ record_uri, ref_code, listener_did }) catch |err| {
+                logQueryError(conn, "play metric increment failed", err);
+                return error.MetricsUnavailable;
+            } orelse break :blk null;
+            var active = true;
+            defer if (active) forceReleaseQueryRow(&query_row);
+            const value = query_row.get(i64, 0) catch return error.CorruptMetrics;
+            if (value < 0) return error.CorruptMetrics;
+            finishQueryRow(&query_row) catch return error.MetricsUnavailable;
+            active = false;
+            break :blk value;
+        };
+        _ = conn.exec("COMMIT", .{}) catch |err| {
+            logQueryError(conn, "play metric commit failed", err);
+            return error.MetricsUnavailable;
+        };
+        committed = true;
         return count;
     }
 };
@@ -151,13 +170,6 @@ const increment_query = "WITH admitted AS (\n" ++ admitted_cte ++
     \\    write_source = EXCLUDED.write_source,
     \\    observed_at_us = EXCLUDED.observed_at_us
     \\  RETURNING record_uri, play_count
-    \\), legacy_mirror AS (
-    \\  UPDATE public.tracks AS legacy
-    \\  SET play_count = metric.play_count::integer
-    \\  FROM metric
-    \\  WHERE legacy.atproto_record_uri = metric.record_uri
-    \\    AND metric.play_count <= 2147483647
-    \\  RETURNING legacy.atproto_record_uri
     \\), share_attribution AS (
     \\  INSERT INTO public.share_link_events (share_link_id, visitor_did, event_type)
     \\  SELECT share.id, $3::text, 'play'
@@ -284,6 +296,16 @@ test "PostgreSQL metric writes are canonical, atomic, and policy gated" {
         \\WHERE atproto_record_uri = $1
     , .{public_uri});
 
+    // mirror next's api role, which defaults to read-only transactions
+    {
+        const first = try postgres.pool.acquire();
+        const second = try postgres.pool.acquire();
+        defer postgres.pool.release(first);
+        defer postgres.pool.release(second);
+        _ = try first.exec("SET SESSION default_transaction_read_only = on", .{});
+        _ = try second.exec("SET SESSION default_transaction_read_only = on", .{});
+    }
+
     const before = (try store.inspect(allocator, public_uri)).?;
     try std.testing.expectEqual(@as(?i64, 180), before.duration_seconds);
     try std.testing.expectEqual(@as(i64, 7), before.play_count);
@@ -302,7 +324,8 @@ test "PostgreSQL metric writes are canonical, atomic, and policy gated" {
         \\WHERE m.record_uri = $1
     , .{public_uri})).?;
     try std.testing.expectEqual(@as(i64, 9), try counts.get(i64, 0));
-    try std.testing.expectEqual(@as(i32, 9), try counts.get(i32, 1));
+    // the Python column is no longer mirrored
+    try std.testing.expectEqual(@as(i32, 7), try counts.get(i32, 1));
     try counts.deinit();
     var events = (try postgres.pool.row(
         "SELECT count(*)::bigint FROM share_link_events WHERE event_type = 'play'",
