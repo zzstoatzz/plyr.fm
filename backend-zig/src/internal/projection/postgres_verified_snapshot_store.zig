@@ -87,26 +87,26 @@ pub const PostgresVerifiedSnapshotStore = struct {
         };
         defer self.pool.release(conn);
         conn.begin() catch |err| {
-            std.log.err("verified snapshot transaction begin failed: {}", .{err});
+            logPgError(conn, "verified snapshot transaction begin failed", err);
             return error.ProjectionUnavailable;
         };
         var transaction_open = true;
         defer if (transaction_open) conn.rollback() catch |err| {
-            std.log.err("verified snapshot rollback failed: {}", .{err});
+            logPgError(conn, "verified snapshot rollback failed", err);
         };
 
         // A row lock cannot serialize two initial bootstraps because the row
         // does not exist yet. The transaction-scoped hash lock closes that
         // race and is shared by bootstrap and repair for one DID only.
         var lock_row = conn.row(advisory_lock_sql, .{snapshot.repo_did}) catch |err| {
-            std.log.err("verified snapshot advisory lock failed: {}", .{err});
+            logPgError(conn, "verified snapshot advisory lock failed", err);
             return error.ProjectionUnavailable;
         } orelse return error.CorruptProjection;
         lock_row.deinit() catch return error.CorruptProjection;
 
         if (try classifyHead(conn, allocator, snapshot, commit_cid, data_cid)) |result| {
             conn.rollback() catch |err| {
-                std.log.err("verified snapshot no-op rollback failed: {}", .{err});
+                logPgError(conn, "verified snapshot no-op rollback failed", err);
                 return error.ProjectionUnavailable;
             };
             transaction_open = false;
@@ -120,7 +120,7 @@ pub const PostgresVerifiedSnapshotStore = struct {
             snapshot.like_collection,
             snapshot.commit_rev,
         }) catch |err| {
-            std.log.err("verified snapshot future-record check failed: {}", .{err});
+            logPgError(conn, "verified snapshot future-record check failed", err);
             return error.ProjectionUnavailable;
         } orelse return error.CorruptProjection;
         const has_future = future_row.get(bool, 0) catch {
@@ -199,7 +199,7 @@ pub const PostgresVerifiedSnapshotStore = struct {
             snapshot.commit_rev,
             snapshot.indexed_at_us,
         }) catch |err| {
-            std.log.err("verified snapshot absence reconciliation failed: {}", .{err});
+            logPgError(conn, "verified snapshot absence reconciliation failed", err);
             return error.ProjectionUnavailable;
         };
         _ = conn.exec(delete_tombstoned_members_sql, .{
@@ -208,7 +208,7 @@ pub const PostgresVerifiedSnapshotStore = struct {
             snapshot.commit_rev,
             commit_cid,
         }) catch |err| {
-            std.log.err("verified snapshot tombstone member cleanup failed: {}", .{err});
+            logPgError(conn, "verified snapshot tombstone member cleanup failed", err);
             return error.ProjectionUnavailable;
         };
         _ = conn.exec(tombstone_absent_tracks_sql, .{
@@ -219,7 +219,7 @@ pub const PostgresVerifiedSnapshotStore = struct {
             snapshot.commit_rev,
             snapshot.indexed_at_us,
         }) catch |err| {
-            std.log.err("verified snapshot track absence reconciliation failed: {}", .{err});
+            logPgError(conn, "verified snapshot track absence reconciliation failed", err);
             return error.ProjectionUnavailable;
         };
         _ = conn.exec(tombstone_absent_profiles_sql, .{
@@ -230,7 +230,7 @@ pub const PostgresVerifiedSnapshotStore = struct {
             snapshot.commit_rev,
             snapshot.indexed_at_us,
         }) catch |err| {
-            std.log.err("verified snapshot profile absence reconciliation failed: {}", .{err});
+            logPgError(conn, "verified snapshot profile absence reconciliation failed", err);
             return error.ProjectionUnavailable;
         };
         _ = conn.exec(tombstone_absent_likes_sql, .{
@@ -241,7 +241,7 @@ pub const PostgresVerifiedSnapshotStore = struct {
             snapshot.commit_rev,
             snapshot.indexed_at_us,
         }) catch |err| {
-            std.log.err("verified snapshot like absence reconciliation failed: {}", .{err});
+            logPgError(conn, "verified snapshot like absence reconciliation failed", err);
             return error.ProjectionUnavailable;
         };
         const advanced = conn.exec(install_head_sql, .{
@@ -251,19 +251,33 @@ pub const PostgresVerifiedSnapshotStore = struct {
             data_cid,
             snapshot.indexed_at_us,
         }) catch |err| {
-            std.log.err("verified snapshot head installation failed: {}", .{err});
+            logPgError(conn, "verified snapshot head installation failed", err);
             return error.ProjectionUnavailable;
         };
         if (advanced != 1) return error.CorruptProjection;
 
         conn.commit() catch |err| {
-            std.log.err("verified snapshot transaction commit failed: {}", .{err});
+            logPgError(conn, "verified snapshot transaction commit failed", err);
             return error.ProjectionUnavailable;
         };
         transaction_open = false;
         return .applied;
     }
 };
+
+fn logPgError(conn: *pg.Conn, message: []const u8, err: anyerror) void {
+    if (conn.err) |pg_err|
+        std.log.err("{s}: {}: {s} (sqlstate {s}){s}{s}", .{
+            message,
+            err,
+            pg_err.message,
+            pg_err.code,
+            if (pg_err.detail != null) " detail: " else "",
+            pg_err.detail orelse "",
+        })
+    else
+        std.log.err("{s}: {}", .{ message, err });
+}
 
 fn mapAvailabilityError(err: availability.Error) verified.Error {
     return switch (err) {
@@ -291,7 +305,7 @@ fn classifyHead(
     data_cid: []const u8,
 ) verified.Error!?verified.ApplyResult {
     var row = conn.row(head_sql, .{snapshot.repo_did}) catch |err| {
-        std.log.err("verified snapshot head read failed: {}", .{err});
+        logPgError(conn, "verified snapshot head read failed", err);
         return error.ProjectionUnavailable;
     } orelse return null;
     const current_rev = allocator.dupe(u8, row.get([]const u8, 0) catch {
