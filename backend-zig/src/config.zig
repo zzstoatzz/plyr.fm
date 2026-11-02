@@ -124,7 +124,14 @@ pub const Config = struct {
             like_collection,
         });
         const index_mode = try IndexMode.parse(getenv("INDEX_MODE") orelse "required");
-        const database_url = getenv("DATABASE_URL");
+        // Fly gives every machine in an app the app's secrets, and a secret
+        // wins over `machine run --env`. Workers that must write (reconcilers,
+        // ingester, repair) therefore read their own variable first, so a
+        // least-privilege api DATABASE_URL secret cannot shadow them.
+        const database_url = if (role == .api)
+            getenv("DATABASE_URL")
+        else
+            getenv("WORKER_DATABASE_URL") orelse getenv("DATABASE_URL");
         if (index_mode == .required and database_url == null) return error.DatabaseUrlRequired;
         const database_role = getenv("DATABASE_ROLE");
         if (database_role) |value| {

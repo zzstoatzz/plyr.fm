@@ -81,8 +81,9 @@ jobs:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_ZIG_NEXT }}
 
       # The reconciler reads the python tables and writes plyr_index, so it
-      # runs as the migrator (the branch owner). The writer secret is the
-      # api's least-privilege role, which has no grant on public.track_likes.
+      # runs as the migrator (the branch owner). It is passed as
+      # WORKER_DATABASE_URL because the app's DATABASE_URL secret (the api's
+      # read-only role) is injected into every machine and wins over --env.
       # `machine run` returns once the machine starts, so wait for it to exit
       # and fail the job on a nonzero exit code instead of passing silently.
       - name: reconcile staging-namespace catalog into next
@@ -98,7 +99,7 @@ jobs:
             --vm-cpus 1 \
             --vm-memory 256 \
             --metadata purpose=zig-catalog-reconciliation \
-            --env "DATABASE_URL=${{ secrets.ZIG_NEXT_MIGRATOR_DATABASE_URL }}" \
+            --env "WORKER_DATABASE_URL=${{ secrets.ZIG_NEXT_MIGRATOR_DATABASE_URL }}" \
             --env MODE=catalog_reconciler \
             --env INDEX_MODE=required \
             --env TRACK_COLLECTION_NSID=fm.plyr.stg.track \
