@@ -1,11 +1,23 @@
 //! Shared validation for AT Protocol Lexicon scalar formats.
 
 const std = @import("std");
+const zat = @import("zat");
 
 pub fn validUri(value: []const u8) bool {
     if (!std.unicode.utf8ValidateSlice(value) or value.len == 0) return false;
     const uri = std.Uri.parse(value) catch return false;
     return uri.scheme.len != 0;
+}
+
+/// Decodes a `format: cid` string that names a DAG-CBOR record, as in
+/// `com.atproto.repo.strongRef`. The returned CID's bytes are owned by `allocator`.
+pub fn recordCid(allocator: std.mem.Allocator, value: []const u8) error{ InvalidCid, OutOfMemory }!zat.Cid {
+    const cid = zat.Cid.fromString(allocator, value) catch |err| return switch (err) {
+        error.OutOfMemory => error.OutOfMemory,
+        else => error.InvalidCid,
+    };
+    if (cid.codec() != zat.cbor.Codec.dag_cbor) return error.InvalidCid;
+    return cid;
 }
 
 pub fn validDatetime(value: []const u8) bool {
@@ -69,4 +81,19 @@ test "URI format requires an absolute valid UTF-8 URI" {
     try std.testing.expect(validUri("did:plc:alice"));
     try std.testing.expect(!validUri("/relative/avatar.png"));
     try std.testing.expect(!validUri("\xff"));
+}
+
+test "record CIDs are DAG-CBOR CID strings" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+
+    const staging_track = "bafyreib5jz5snqxpduf6ljejpjbagmtnfyauows5l4d47nohup5a6qld2e";
+    const cid = try recordCid(a, staging_track);
+    try std.testing.expectEqualStrings(staging_track, try cid.toString(a));
+
+    const raw = try zat.Cid.create(a, 1, zat.cbor.Codec.raw, zat.cbor.HashFn.sha2_256, "audio");
+    try std.testing.expectError(error.InvalidCid, recordCid(a, try raw.toString(a)));
+    try std.testing.expectError(error.InvalidCid, recordCid(a, "bafy-not-a-cid"));
+    try std.testing.expectError(error.InvalidCid, recordCid(a, ""));
 }

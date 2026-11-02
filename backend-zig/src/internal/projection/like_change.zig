@@ -76,7 +76,7 @@ pub fn fromVerifiedOperation(
         .delete => unreachable,
     }
     try validateDagCborCid(cid);
-    const parsed = try like_record.parse(value, like_collection, track_collection);
+    const parsed = try like_record.parse(allocator, value, like_collection, track_collection);
     return .{ .upsert = .{
         .record_uri = record_uri,
         .record_cid = try cid.toString(allocator),
@@ -112,7 +112,7 @@ test "verified like operation binds authored record and track identity" {
         .{ .key = "$type", .value = .{ .text = "fm.plyr.dev.like" } },
         .{ .key = "subject", .value = .{ .map = &.{
             .{ .key = "uri", .value = .{ .text = "at://did:plc:artist/fm.plyr.dev.track/one" } },
-            .{ .key = "cid", .value = .{ .cid = track_cid } },
+            .{ .key = "cid", .value = .{ .text = try track_cid.toString(a) } },
         } } },
         .{ .key = "createdAt", .value = .{ .text = "2026-08-09T12:00:00Z" } },
     } };
