@@ -21,8 +21,16 @@ pub const PostgresRepositoryCandidates = struct {
         allocator: std.mem.Allocator,
     ) candidates.Error!candidates.CandidateSet {
         const self: *PostgresRepositoryCandidates = @ptrCast(@alignCast(context));
-        var result = self.pool.query(candidate_query, .{}) catch |err| {
-            std.log.err("catalog candidate query failed: {}", .{err});
+        const conn = self.pool.acquire() catch |err| {
+            std.log.err("catalog candidate connection failed: {}", .{err});
+            return error.SourceUnavailable;
+        };
+        defer self.pool.release(conn);
+        var result = conn.query(candidate_query, .{}) catch |err| {
+            if (conn.err) |pg_err|
+                std.log.err("catalog candidate query failed: {}: {s}", .{ err, pg_err.message })
+            else
+                std.log.err("catalog candidate query failed: {}", .{err});
             return error.SourceUnavailable;
         };
         defer result.deinit();
