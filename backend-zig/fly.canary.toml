@@ -12,7 +12,7 @@ primary_region = "sjc"
   ingester = "ingester"
 
 [env]
-  CORS_ALLOWED_ORIGINS = "https://next.plyr.fm"
+  CORS_ALLOWED_ORIGINS = "https://next.plyr.fm,https://plyr-fm-next.pages.dev,http://127.0.0.1:5174"
   AUTH_START_CLIENT_LIMIT = "10"
   AUTH_START_SUBJECT_LIMIT = "10"
   AUTH_START_GLOBAL_LIMIT = "120"
