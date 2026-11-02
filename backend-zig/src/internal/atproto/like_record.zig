@@ -18,9 +18,11 @@ pub const Error = error{
     InvalidSubjectCid,
     WrongSubjectCollection,
     InvalidDatetime,
+    OutOfMemory,
 };
 
 pub fn parse(
+    allocator: std.mem.Allocator,
     value: zat.cbor.Value,
     like_collection: []const u8,
     track_collection: []const u8,
@@ -29,7 +31,6 @@ pub fn parse(
     if (!std.mem.eql(u8, record_type, like_collection)) return error.WrongRecordType;
     const subject = value.get("subject") orelse return error.InvalidSubject;
     const subject_uri = subject.getString("uri") orelse return error.InvalidSubjectUri;
-    const subject_cid = subject.getCid("cid") orelse return error.InvalidSubjectCid;
     const parsed_uri = zat.AtUri.parse(subject_uri) orelse return error.InvalidSubjectUri;
     if (zat.Did.parse(parsed_uri.authority()) == null or !parsed_uri.hasRkey())
         return error.InvalidSubjectUri;
@@ -38,10 +39,10 @@ pub fn parse(
         parsed_uri.collection() orelse return error.InvalidSubjectUri,
         track_collection,
     )) return error.WrongSubjectCollection;
-    const parsed_cid = zat.Cid.fromBytes(subject_cid.raw) catch
-        return error.InvalidSubjectCid;
-    if (parsed_cid.codec() != zat.cbor.Codec.dag_cbor)
-        return error.InvalidSubjectCid;
+    const subject_cid = lexicon_value.strongRefCid(allocator, subject) catch |err| switch (err) {
+        error.OutOfMemory => return error.OutOfMemory,
+        error.InvalidCid => return error.InvalidSubjectCid,
+    };
     const created_at = value.getString("createdAt") orelse return error.InvalidRecord;
     if (!lexicon_value.validDatetime(created_at)) return error.InvalidDatetime;
     return .{
@@ -63,13 +64,15 @@ fn fixture(subject: zat.cbor.Value, entries: *[3]zat.cbor.Value.MapEntry) zat.cb
 test "like records preserve an exact track strong reference" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    const cid = try zat.Cid.forDagCbor(arena.allocator(), "track");
+    const a = arena.allocator();
+    const cid = try zat.Cid.forDagCbor(a, "track");
     const subject: zat.cbor.Value = .{ .map = &.{
         .{ .key = "uri", .value = .{ .text = "at://did:plc:artist/fm.plyr.dev.track/one" } },
-        .{ .key = "cid", .value = .{ .cid = cid } },
+        .{ .key = "cid", .value = .{ .text = try cid.toString(a) } },
     } };
     var entries: [3]zat.cbor.Value.MapEntry = undefined;
     const record = try parse(
+        a,
         fixture(subject, &entries),
         "fm.plyr.dev.like",
         "fm.plyr.dev.track",
@@ -81,7 +84,7 @@ test "like records preserve an exact track strong reference" {
     try std.testing.expectEqualSlices(u8, cid.raw, record.subject_cid.raw);
 }
 
-test "like records reject text CIDs, cross-environment subjects, and invalid time" {
+test "like records reject CID links, malformed CIDs, cross-environment subjects, and invalid time" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const a = arena.allocator();
@@ -90,29 +93,42 @@ test "like records reject text CIDs, cross-environment subjects, and invalid tim
         .{ .key = "$type", .value = .{ .text = "fm.plyr.dev.like" } },
         .{ .key = "subject", .value = .{ .map = &.{
             .{ .key = "uri", .value = .{ .text = "at://did:plc:artist/fm.plyr.dev.track/one" } },
-            .{ .key = "cid", .value = .{ .text = "bafy-not-a-link" } },
+            .{ .key = "cid", .value = .{ .text = "bafy-not-a-cid" } },
         } } },
         .{ .key = "createdAt", .value = .{ .text = "2026-08-09T12:00:00Z" } },
     } };
     try std.testing.expectError(
         error.InvalidSubjectCid,
-        parse(text_cid, "fm.plyr.dev.like", "fm.plyr.dev.track"),
+        parse(a, text_cid, "fm.plyr.dev.like", "fm.plyr.dev.track"),
     );
-    const foreign: zat.cbor.Value = .{ .map = &.{
+    // strongRef.cid is a string; a tag-42 link is not a valid encoding.
+    const link_cid: zat.cbor.Value = .{ .map = &.{
         .{ .key = "$type", .value = .{ .text = "fm.plyr.dev.like" } },
         .{ .key = "subject", .value = .{ .map = &.{
-            .{ .key = "uri", .value = .{ .text = "at://did:plc:artist/fm.plyr.track/one" } },
+            .{ .key = "uri", .value = .{ .text = "at://did:plc:artist/fm.plyr.dev.track/one" } },
             .{ .key = "cid", .value = .{ .cid = cid } },
         } } },
         .{ .key = "createdAt", .value = .{ .text = "2026-08-09T12:00:00Z" } },
     } };
     try std.testing.expectError(
+        error.InvalidSubjectCid,
+        parse(a, link_cid, "fm.plyr.dev.like", "fm.plyr.dev.track"),
+    );
+    const foreign: zat.cbor.Value = .{ .map = &.{
+        .{ .key = "$type", .value = .{ .text = "fm.plyr.dev.like" } },
+        .{ .key = "subject", .value = .{ .map = &.{
+            .{ .key = "uri", .value = .{ .text = "at://did:plc:artist/fm.plyr.track/one" } },
+            .{ .key = "cid", .value = .{ .text = try cid.toString(a) } },
+        } } },
+        .{ .key = "createdAt", .value = .{ .text = "2026-08-09T12:00:00Z" } },
+    } };
+    try std.testing.expectError(
         error.WrongSubjectCollection,
-        parse(foreign, "fm.plyr.dev.like", "fm.plyr.dev.track"),
+        parse(a, foreign, "fm.plyr.dev.like", "fm.plyr.dev.track"),
     );
     const subject: zat.cbor.Value = .{ .map = &.{
         .{ .key = "uri", .value = .{ .text = "at://did:plc:artist/fm.plyr.dev.track/one" } },
-        .{ .key = "cid", .value = .{ .cid = cid } },
+        .{ .key = "cid", .value = .{ .text = try cid.toString(a) } },
     } };
     var entries: [3]zat.cbor.Value.MapEntry = undefined;
     var invalid_time = fixture(subject, &entries);
@@ -123,6 +139,6 @@ test "like records reject text CIDs, cross-environment subjects, and invalid tim
     } };
     try std.testing.expectError(
         error.InvalidDatetime,
-        parse(invalid_time, "fm.plyr.dev.like", "fm.plyr.dev.track"),
+        parse(a, invalid_time, "fm.plyr.dev.like", "fm.plyr.dev.track"),
     );
 }

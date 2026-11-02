@@ -146,7 +146,7 @@ test "verified list upsert is atomic, ordered, and schema independent" {
     const commit_cid = try zat.Cid.forDagCbor(a, "commit");
     const subject: zat.cbor.Value = .{ .map = &.{
         .{ .key = "uri", .value = .{ .text = "at://did:plc:artist/fm.plyr.dev.track/t" } },
-        .{ .key = "cid", .value = .{ .cid = track_cid } },
+        .{ .key = "cid", .value = .{ .text = try track_cid.toString(a) } },
     } };
     const items = [_]zat.cbor.Value{.{ .map = &.{
         .{ .key = "subject", .value = subject },

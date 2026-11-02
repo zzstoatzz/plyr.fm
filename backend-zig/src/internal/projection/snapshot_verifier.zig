@@ -326,7 +326,7 @@ fn buildFixture(
         .key = "subject",
         .value = .{ .map = &.{
             .{ .key = "uri", .value = .{ .text = "at://did:plc:other/fm.plyr.dev.track/one" } },
-            .{ .key = "cid", .value = .{ .text = "bafy-invalid-text-link" } },
+            .{ .key = "cid", .value = .{ .text = "bafy-invalid-cid" } },
         } },
     }} }};
     const record: zat.cbor.Value = .{ .map = &.{
@@ -375,7 +375,7 @@ fn buildFixture(
         .{ .key = "$type", .value = .{ .text = "fm.plyr.dev.like" } },
         .{ .key = "subject", .value = .{ .map = &.{
             .{ .key = "uri", .value = .{ .text = subject_uri } },
-            .{ .key = "cid", .value = .{ .cid = track_cid } },
+            .{ .key = "cid", .value = .{ .text = try track_cid.toString(allocator) } },
         } } },
         .{ .key = "createdAt", .value = .{ .text = "2026-08-08T12:00:00Z" } },
     } };

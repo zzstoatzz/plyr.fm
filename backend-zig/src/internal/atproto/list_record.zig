@@ -77,7 +77,7 @@ pub fn parse(
     const items = try allocator.alloc(StrongRef, raw_items.len);
 
     for (raw_items, items) |raw_item, *item| {
-        item.* = try parseItem(raw_item, track_collection);
+        item.* = try parseItem(allocator, raw_item, track_collection);
     }
 
     return .{
@@ -97,19 +97,23 @@ fn optionalString(value: zat.cbor.Value, key: []const u8) !?[]const u8 {
     };
 }
 
-fn parseItem(value: zat.cbor.Value, track_collection: []const u8) Error!StrongRef {
+fn parseItem(
+    allocator: std.mem.Allocator,
+    value: zat.cbor.Value,
+    track_collection: []const u8,
+) Error!StrongRef {
     const subject = value.get("subject") orelse return error.InvalidStrongRefSubject;
     const uri = subject.getString("uri") orelse return error.InvalidStrongRefUri;
-    const cid = subject.getCid("cid") orelse return error.InvalidStrongRefCid;
 
     const parsed_uri = zat.AtUri.parse(uri) orelse return error.InvalidStrongRefUri;
     if (zat.Did.parse(parsed_uri.authority()) == null or !parsed_uri.hasRkey())
         return error.InvalidStrongRefUri;
     const collection = parsed_uri.collection() orelse return error.InvalidStrongRefUri;
     if (!std.mem.eql(u8, collection, track_collection)) return error.WrongItemCollection;
-    const parsed_cid = zat.Cid.fromBytes(cid.raw) catch return error.InvalidStrongRefCid;
-    if (parsed_cid.codec() != zat.cbor.Codec.dag_cbor)
-        return error.InvalidStrongRefCid;
+    const cid = lexicon_value.strongRefCid(allocator, subject) catch |err| switch (err) {
+        error.OutOfMemory => return error.OutOfMemory,
+        error.InvalidCid => return error.InvalidStrongRefCid,
+    };
 
     return .{ .uri = uri, .cid = cid };
 }
@@ -137,11 +141,11 @@ test "list record preserves verified strong-reference order" {
     const items = [_]zat.cbor.Value{
         .{ .map = &.{.{ .key = "subject", .value = .{ .map = &.{
             .{ .key = "uri", .value = .{ .text = "at://did:plc:a/fm.plyr.dev.track/a" } },
-            .{ .key = "cid", .value = .{ .cid = cid_a } },
+            .{ .key = "cid", .value = .{ .text = try cid_a.toString(a) } },
         } } }} },
         .{ .map = &.{.{ .key = "subject", .value = .{ .map = &.{
             .{ .key = "uri", .value = .{ .text = "at://did:plc:b/fm.plyr.dev.track/b" } },
-            .{ .key = "cid", .value = .{ .cid = cid_b } },
+            .{ .key = "cid", .value = .{ .text = try cid_b.toString(a) } },
         } } }} },
     };
 
@@ -153,7 +157,7 @@ test "list record preserves verified strong-reference order" {
     try std.testing.expectEqualStrings("at://did:plc:b/fm.plyr.dev.track/b", record.items[1].uri);
 }
 
-test "list record rejects text CIDs and cross-environment members" {
+test "list record rejects CID links, malformed CIDs, and cross-environment members" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const a = arena.allocator();
@@ -161,7 +165,7 @@ test "list record rejects text CIDs and cross-environment members" {
 
     const text_cid_items = [_]zat.cbor.Value{.{ .map = &.{.{ .key = "subject", .value = .{ .map = &.{
         .{ .key = "uri", .value = .{ .text = "at://did:plc:a/fm.plyr.dev.track/a" } },
-        .{ .key = "cid", .value = .{ .text = "bafy-not-a-link" } },
+        .{ .key = "cid", .value = .{ .text = "bafy-not-a-cid" } },
     } } }} }};
 
     var entries_text_cid_items: [5]zat.cbor.Value.MapEntry = undefined;
@@ -170,9 +174,21 @@ test "list record rejects text CIDs and cross-environment members" {
         parse(a, fixtureRecord(&entries_text_cid_items, &text_cid_items), "fm.plyr.dev.list", "fm.plyr.dev.track"),
     );
 
+    // strongRef.cid is a string; a tag-42 link is not a valid encoding.
+    const link_cid_items = [_]zat.cbor.Value{.{ .map = &.{.{ .key = "subject", .value = .{ .map = &.{
+        .{ .key = "uri", .value = .{ .text = "at://did:plc:a/fm.plyr.dev.track/a" } },
+        .{ .key = "cid", .value = .{ .cid = cid } },
+    } } }} }};
+
+    var entries_link_cid_items: [5]zat.cbor.Value.MapEntry = undefined;
+    try std.testing.expectError(
+        error.InvalidStrongRefCid,
+        parse(a, fixtureRecord(&entries_link_cid_items, &link_cid_items), "fm.plyr.dev.list", "fm.plyr.dev.track"),
+    );
+
     const foreign_items = [_]zat.cbor.Value{.{ .map = &.{.{ .key = "subject", .value = .{ .map = &.{
         .{ .key = "uri", .value = .{ .text = "at://did:plc:a/fm.plyr.track/a" } },
-        .{ .key = "cid", .value = .{ .cid = cid } },
+        .{ .key = "cid", .value = .{ .text = try cid.toString(a) } },
     } } }} }};
 
     var entries_foreign_items: [5]zat.cbor.Value.MapEntry = undefined;
