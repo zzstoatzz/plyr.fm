@@ -65,6 +65,7 @@ decision.
 | `GET /v1/playlists/{playlist_id}` | covered | verified playlist record and position-complete exact-CID member hydration | private authorization, cover presentation, recommendations, writes |
 | `GET /v1/search` | covered | globally ranked keyword references across verified tracks, artists, albums, and playlists | tags, semantic/vector search, viewer-specific moderation, playlist-page client wiring |
 | `GET /v1/charts/tracks` | covered | period-ranked verified tracks from distinct available liker DIDs | pagination, historical snapshots, viewer-specific policy |
+| `GET /v1/records/await` | covered | read-after-write for clients that write straight to their PDS: blocks (≤10 s) until the ingester has projected `uri` at `cid`, rejected it, or (no `cid`) removed it; `pending` on timeout | per-viewer rate limiting, long-poll fan-out instead of DB polling |
 | `GET /health` | covered | process liveness | none for liveness |
 | `GET /ready` | covered | index configuration and a live database probe | readiness for dependencies required by future routes |
 | `GET /` | covered | points clients at `/v1` | protocol metadata remains separate |
