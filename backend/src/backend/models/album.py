@@ -35,7 +35,7 @@ class Album(Base):
     slug: Mapped[str] = mapped_column(String, nullable=False)
     title: Mapped[str] = mapped_column(String, nullable=False)
     show_plylst: Mapped[bool] = mapped_column(
-        sa.Boolean, default=False, server_default=sa.false(), nullable=False
+        sa.Boolean, default=True, server_default=sa.true(), nullable=False
     )
     description: Mapped[str | None] = mapped_column(String, nullable=True)
     publishing_defaults: Mapped[dict | None] = mapped_column(

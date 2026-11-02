@@ -8,7 +8,7 @@ from backend.utilities.publishing import PublishingDefaults
 
 
 class AlbumMetadata(BaseModel):
-    show_plylst: bool = False
+    show_plylst: bool = True
     publishing_defaults: PublishingDefaults | None = None
 
     """album metadata response."""

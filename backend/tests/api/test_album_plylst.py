@@ -43,23 +43,24 @@ async def test_only_owner_can_change_plylst_link(
             transport=ASGITransport(app=app), base_url="http://test"
         ) as client:
             before = await client.get(f"/albums/{artist.handle}/{album.slug}")
-            assert before.json()["metadata"]["show_plylst"] is False
+            # on by default; only the owner can turn it off
+            assert before.json()["metadata"]["show_plylst"] is True
             with patch(
                 "backend.api.albums.mutations.update_list_record"
             ) as update_list:
                 response = await client.patch(
-                    f"/albums/{album.id}", params={"show_plylst": "true"}
+                    f"/albums/{album.id}", params={"show_plylst": "false"}
                 )
                 assert response.status_code == (200 if owner else 403)
                 update_list.assert_not_called()
             after = await client.get(f"/albums/{artist.handle}/{album.slug}")
-            assert after.json()["metadata"]["show_plylst"] is owner
+            assert after.json()["metadata"]["show_plylst"] is (not owner)
             if owner:
                 response = await client.patch(
-                    f"/albums/{album.id}", params={"show_plylst": "false"}
+                    f"/albums/{album.id}", params={"show_plylst": "true"}
                 )
                 assert response.status_code == 200
                 after = await client.get(f"/albums/{artist.handle}/{album.slug}")
-                assert after.json()["metadata"]["show_plylst"] is False
+                assert after.json()["metadata"]["show_plylst"] is True
     finally:
         app.dependency_overrides.pop(require_artist_profile, None)

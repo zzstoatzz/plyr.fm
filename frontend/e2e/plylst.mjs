@@ -50,7 +50,12 @@ try {
 	assert.equal(created.status(), 200);
 	const album = await created.json();
 	albumId = album.id;
-	assert.equal(album.show_plylst, false);
+	// on by default; start this flow from off so it exercises turning it on
+	assert.equal(album.show_plylst, true);
+	assert.equal(
+		(await owner.request.patch(`${API}/albums/${albumId}?show_plylst=false`)).status(),
+		200
+	);
 	const uploaded = await owner.request.post(`${API}/tracks/`, {
 		multipart: {
 			title,
@@ -70,6 +75,12 @@ try {
 	assert.ok(trackId, 'fixture upload completed');
 	const path = `/u/${user.handle}/album/${album.slug}`;
 	const name = 'open album in plylst (opens in a new tab)';
+	// edit mode has exactly one save action: it writes every change and closes
+	// the editor (the header ✓ does the same thing)
+	const editFooter = page.locator('.edit-footer');
+	const editAlbum = page
+		.getByRole('button', { name: 'edit album', exact: true })
+		.locator('visible=true');
 	await page.goto(`${APP}${path}`);
 	assert.equal(await page.getByRole('link', { name }).count(), 0);
 	await page.getByRole('button', { name: 'edit album', exact: true }).click();
@@ -80,8 +91,9 @@ try {
 	);
 	await page.getByRole('switch', { name: /show plylst link/ }).check();
 	assert.equal(await page.getByRole('link', { name }).count(), 0, 'draft is not public');
-	await page.getByRole('button', { name: 'save changes', exact: true }).click();
+	await editFooter.getByRole('button', { name: 'save', exact: true }).click();
 	assert.equal((await saved).status(), 200);
+	await editAlbum.waitFor();
 	await page.getByRole('link', { name }).waitFor();
 	assert.equal(
 		await page.getByRole('link', { name }).getAttribute('href'),
@@ -119,8 +131,10 @@ try {
 			path: `${ARTIFACTS}/plylst-expanded-${width}-${theme}.png`,
 			fullPage: true
 		});
-		await settings.getByRole('button', { name: 'cancel', exact: true }).click();
+		await editFooter.getByRole('button', { name: 'cancel', exact: true }).click();
+		await editAlbum.click();
 		assert.equal(await page.getByRole('switch', { name: /show plylst link/ }).isChecked(), true);
+		await editFooter.getByRole('button', { name: 'done', exact: true }).click();
 		const visitor = await browser.newContext({
 			viewport: { width, height: 1000 },
 			colorScheme: theme
@@ -156,12 +170,12 @@ try {
 	}
 	const settings = page.getByRole('region', { name: 'album settings', exact: true });
 	const before = await (await owner.request.get(`${API}/tracks/${trackId}`)).json();
+	await editAlbum.click();
+	await settings.locator('.access > summary').click();
+	await settings.getByLabel('settings', { exact: true }).selectOption('custom');
 	await settings.getByLabel('downloads', { exact: true }).selectOption('ask');
-	await settings.getByRole('button', { name: 'save changes', exact: true }).click();
-	await settings
-		.getByRole('status')
-		.filter({ hasText: 'album defaults saved' })
-		.waitFor({ timeout: 120000 });
+	await editFooter.getByRole('button', { name: 'save', exact: true }).click();
+	await editAlbum.waitFor({ timeout: 120000 });
 	const after = await (await owner.request.get(`${API}/tracks/${trackId}`)).json();
 	const updatedAlbum = await (
 		await owner.request.get(`${API}/albums/${user.handle}/${album.slug}`)
@@ -177,8 +191,9 @@ try {
 			response.url().includes(`albums/${albumId}?show_plylst=false`) &&
 			response.request().method() === 'PATCH'
 	);
+	await editAlbum.click();
 	await page.getByRole('switch', { name: /show plylst link/ }).uncheck();
-	await page.getByRole('button', { name: 'save changes', exact: true }).click();
+	await editFooter.getByRole('button', { name: 'save', exact: true }).click();
 	assert.equal((await disabled).status(), 200);
 	await page.getByRole('link', { name }).waitFor({ state: 'hidden' });
 	assert.equal(await page.getByRole('link', { name }).count(), 0);
