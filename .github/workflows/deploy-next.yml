@@ -1,0 +1,119 @@
+name: deploy next (zig)
+
+# Deploys backend-zig to the isolated next environment only:
+#   fly app  plyr-api-zig-canary  (api.next.plyr.fm)
+#   database the Neon branch of staging marked 'plyr-zig-next'
+# It never touches relay-api, relay-api-staging, their databases, or
+# production-fe. Manual dispatch only.
+on:
+  workflow_dispatch:
+    inputs:
+      reconcile_catalog:
+        description: re-index staging-namespace repositories into next before deploying
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency: deploy-next
+
+env:
+  FLY_APP: plyr-api-zig-canary
+
+jobs:
+  deploy:
+    name: deploy next api
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: preflight next-only credentials
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_ZIG_NEXT }}
+          ZIG_NEXT_WRITER_DATABASE_URL: ${{ secrets.ZIG_NEXT_WRITER_DATABASE_URL }}
+          ZIG_NEXT_MIGRATOR_DATABASE_URL: ${{ secrets.ZIG_NEXT_MIGRATOR_DATABASE_URL }}
+        run: |
+          test -n "$FLY_API_TOKEN"
+          test -n "$ZIG_NEXT_WRITER_DATABASE_URL"
+          test -n "$ZIG_NEXT_MIGRATOR_DATABASE_URL"
+          flyctl secrets list --app "$FLY_APP" --json > "$RUNNER_TEMP/next-secrets.json"
+          python3 - "$RUNNER_TEMP/next-secrets.json" <<'PY'
+          import json
+          import sys
+
+          with open(sys.argv[1], encoding="utf-8") as source:
+              configured = {item.get("Name") or item.get("name") for item in json.load(source)}
+          required = {
+              "DATABASE_URL",
+              "DOCKET_URL",
+              "ZIG_AUTH_ENCRYPTION_KEY",
+              "ZIG_OAUTH_CLIENT_PRIVATE_KEY",
+          }
+          missing = sorted(required - configured)
+          if missing:
+              raise SystemExit(f"missing next secrets: {', '.join(missing)}")
+          PY
+
+      # scripts/migrate refuses any database without the 'plyr-zig-next'
+      # marker, so a mis-set secret cannot reach staging or prod.
+      - name: apply backend-zig migrations to the next branch
+        working-directory: backend-zig
+        env:
+          DATABASE_URL: ${{ secrets.ZIG_NEXT_MIGRATOR_DATABASE_URL }}
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client
+          scripts/migrate
+
+      - name: build and publish image
+        working-directory: backend-zig
+        run: >-
+          flyctl deploy
+          --config fly.canary.toml
+          --remote-only
+          --app "$FLY_APP"
+          --build-only
+          --push
+          --image-label "$GITHUB_SHA"
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_ZIG_NEXT }}
+
+      - name: reconcile staging-namespace catalog into next
+        if: inputs.reconcile_catalog
+        run: >-
+          flyctl machine run "registry.fly.io/${FLY_APP}:${GITHUB_SHA}"
+          --app "$FLY_APP"
+          --region iad
+          --rm
+          --restart no
+          --skip-dns-registration
+          --vm-cpu-kind shared
+          --vm-cpus 1
+          --vm-memory 256
+          --metadata purpose=zig-catalog-reconciliation
+          --env "DATABASE_URL=${{ secrets.ZIG_NEXT_WRITER_DATABASE_URL }}"
+          --env MODE=catalog_reconciler
+          --env INDEX_MODE=required
+          --env TRACK_COLLECTION_NSID=fm.plyr.stg.track
+          --env LIST_COLLECTION_NSID=fm.plyr.stg.list
+          --env LIKE_COLLECTION_NSID=fm.plyr.stg.like
+          --env PROFILE_COLLECTION_NSID=fm.plyr.stg.actor.profile
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_ZIG_NEXT }}
+
+      - name: deploy image
+        working-directory: backend-zig
+        run: >-
+          flyctl deploy
+          --config fly.canary.toml
+          --app "$FLY_APP"
+          --ha=false
+          --image "registry.fly.io/${FLY_APP}:${GITHUB_SHA}"
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_ZIG_NEXT }}
+
+      - name: smoke the deployed api
+        working-directory: backend-zig
+        run: python3 scripts/canary_smoke.py "https://${FLY_APP}.fly.dev"
