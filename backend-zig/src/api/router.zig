@@ -5,6 +5,7 @@ const albums = @import("albums.zig");
 const artists = @import("artists.zig");
 const charts = @import("charts.zig");
 const playlists = @import("playlists.zig");
+const records = @import("records.zig");
 const response = @import("response.zig");
 const search = @import("search.zig");
 const tracks = @import("tracks.zig");
@@ -22,6 +23,7 @@ const PlayMetricStore = @import("../internal/metrics/play_metric_store.zig").Pla
 const TrackStore = @import("../internal/index/track_store.zig").TrackStore;
 const TrackChartStore = @import("../internal/index/track_chart_store.zig").TrackChartStore;
 const VerifiedListStore = @import("../internal/index/verified_list_store.zig").VerifiedListStore;
+const RecordStatusStore = @import("../internal/index/record_status_store.zig").RecordStatusStore;
 const AuthStore = @import("../internal/auth/store.zig").Store;
 const OAuthClient = @import("../internal/auth/oauth_gateway.zig").Client;
 const StartAdmission = @import("../internal/auth/start_admission.zig").Store;
@@ -44,6 +46,7 @@ pub const App = struct {
     artist_store: ?ArtistStore,
     artist_metric_store: ?ArtistMetricStore,
     verified_list_store: ?VerifiedListStore,
+    record_status_store: ?RecordStatusStore = null,
     search_store: ?SearchStore,
     play_metric_store: ?PlayMetricStore,
     play_dedup_store: ?PlayDedupStore,
@@ -256,6 +259,17 @@ pub fn handle(
             app.io,
             request_id,
         );
+    } else if (mem.eql(u8, path, prefix ++ "/records/await")) {
+        if (request.head.method != .GET) {
+            try response.apiError(request, .method_not_allowed, request_id, app.cors);
+            return;
+        }
+        try records.awaitRecord(request, allocator, app.io, app.record_status_store, .{
+            .track = app.track_collection,
+            .list = app.list_collection,
+            .like = app.like_collection,
+            .profile = app.profile_collection,
+        }, app.cors, request_id);
     } else if (mem.eql(u8, path, prefix ++ "/search")) {
         if (request.head.method != .GET) {
             try response.apiError(request, .method_not_allowed, request_id, app.cors);
