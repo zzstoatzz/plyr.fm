@@ -193,7 +193,9 @@ pub const Config = struct {
                 getenv("AUTH_START_WINDOW_SECONDS") orelse "60",
             ),
             .auth_trusted_proxy_cidrs = auth_trusted_proxy_cidrs,
-            .auth = try authFromEnvironment(),
+            // Only the api serves browser OAuth. Workers must not fail on the
+            // app-wide auth secrets they inherit without the api's [env].
+            .auth = if (role == .api) try authFromEnvironment() else null,
         };
     }
 };
