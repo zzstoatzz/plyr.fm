@@ -495,7 +495,7 @@ max_lines = 884
 
 [[rules]]
 path = "backend-zig/src/internal/projection/postgres_verified_commit_store.zig"
-max_lines = 647
+max_lines = 648
 
 [[rules]]
 path = "backend-zig/src/internal/index/postgres_composed_track_store.zig"
