@@ -50,7 +50,12 @@ try {
 	assert.equal(created.status(), 200);
 	const album = await created.json();
 	albumId = album.id;
-	assert.equal(album.show_plylst, false);
+	// on by default; start this flow from off so it exercises turning it on
+	assert.equal(album.show_plylst, true);
+	assert.equal(
+		(await owner.request.patch(`${API}/albums/${albumId}?show_plylst=false`)).status(),
+		200
+	);
 	const uploaded = await owner.request.post(`${API}/tracks/`, {
 		multipart: {
 			title,

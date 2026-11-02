@@ -9,7 +9,7 @@
 		tracks: Pick<Track, 'publishing'>[];
 	} = $props();
 	const visible = $derived(
-		album.show_plylst &&
+		(album.show_plylst ?? true) &&
 			tracks.length > 0 &&
 			tracks.every(
 				(track) =>

@@ -43,7 +43,7 @@
 	onMount(() => {
 		override = globalThis.structuredClone($state.snapshot(album.publishing_defaults ?? null));
 		savedOverride = globalThis.structuredClone($state.snapshot(album.publishing_defaults ?? null));
-		plylst = savedPlylst = album.show_plylst ?? false;
+		plylst = savedPlylst = album.show_plylst ?? true;
 		void preferences.fetch();
 	});
 
