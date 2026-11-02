@@ -4,6 +4,7 @@
 	import { toast } from '$lib/toast.svelte';
 	import { API_URL } from '$lib/config';
 	import type { Track } from '$lib/types';
+	import { confirmAction } from '$lib/confirm.svelte';
 
 	let brokenTracks = $state<Track[]>([]);
 	let loading = $state(true);
@@ -34,9 +35,12 @@
 	}
 
 	async function restoreRecord(trackId: number, trackTitle: string) {
-		if (!confirm(`restore ATProto record for "${trackTitle}"?\n\nthis will create a new record on your PDS with the original timestamp.`)) {
-			return;
-		}
+		const confirmed = await confirmAction({
+			title: 'restore record?',
+			body: `this will create a new ATProto record for "${trackTitle}" on your PDS with the original timestamp.`,
+			confirmText: 'restore'
+		});
+		if (!confirmed) return;
 
 		restoringTrackId = trackId;
 
@@ -75,9 +79,12 @@
 	}
 
 	async function restoreAll() {
-		if (!confirm(`restore all ${brokenTracks.length} tracks?\n\nthis will create new records on your PDS with the original timestamps.`)) {
-			return;
-		}
+		const confirmed = await confirmAction({
+			title: `restore all ${brokenTracks.length} tracks?`,
+			body: 'this will create new records on your PDS with the original timestamps.',
+			confirmText: 'restore all'
+		});
+		if (!confirmed) return;
 
 		restoringAll = true;
 		const trackCount = brokenTracks.length;

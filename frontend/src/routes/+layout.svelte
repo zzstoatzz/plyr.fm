@@ -12,6 +12,7 @@
 	import FeedbackModal from '$lib/components/FeedbackModal.svelte';
 	import TermsOverlay from '$lib/components/TermsOverlay.svelte';
 	import LikersSheet from '$lib/components/LikersSheet.svelte';
+	import ConfirmHost from '$lib/components/ConfirmHost.svelte';
 	import { onMount, onDestroy, untrack } from 'svelte';
 	import { page } from '$app/stores';
 	import { afterNavigate, goto } from '$app/navigation';
@@ -572,6 +573,7 @@
 <DownloadAskModal />
 <FeedbackModal />
 <LikersSheet />
+<ConfirmHost />
 {#if showTermsOverlay}
 	<TermsOverlay />
 {/if}

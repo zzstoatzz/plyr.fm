@@ -1,11 +1,12 @@
 <script lang="ts">
 	import EditTrackModal from '$lib/components/EditTrackModal.svelte';
+	import DeleteTrackDialog from '$lib/components/DeleteTrackDialog.svelte';
 	import WaveLoading from '$lib/components/WaveLoading.svelte';
 	import CopyrightFlag from '$lib/components/portal/CopyrightFlag.svelte';
 	import type { Track, AlbumSummary } from '$lib/types';
-	import { API_URL } from '$lib/config';
-	import { toast } from '$lib/toast.svelte';
 	let editingTrack = $state<Track | null>(null);
+	let deletingTrack = $state<Track | null>(null);
+	let deleteOpen = $state(false);
 	type SortMode = 'recent' | 'title' | 'plays';
 
 	interface Props {
@@ -54,25 +55,9 @@
 		searchDebounce = setTimeout(emitFilter, 250);
 	}
 
-	async function deleteTrack(trackId: number, trackTitle: string) {
-		if (!confirm(`delete "${trackTitle}"?`)) return;
-
-		try {
-			const response = await fetch(`${API_URL}/tracks/${trackId}`, {
-				method: 'DELETE',
-				credentials: 'include'
-			});
-
-			if (response.ok) {
-				await onTracksChanged();
-				toast.success('track deleted');
-			} else {
-				const error = await response.json();
-				toast.error(error.detail || 'failed to delete track');
-			}
-		} catch (e) {
-			toast.error(`network error: ${e instanceof Error ? e.message : 'unknown error'}`);
-		}
+	function requestDelete(track: Track) {
+		deletingTrack = track;
+		deleteOpen = true;
 	}
 </script>
 
@@ -233,7 +218,8 @@
 						<button
 							type="button"
 							class="track-action-btn delete"
-							onclick={() => deleteTrack(track.id, track.title)}
+							onclick={() => requestDelete(track)}
+							aria-label={`delete ${track.title}`}
 						>
 							<svg
 								width="14"
@@ -272,8 +258,11 @@
 			editingTrack = null;
 		}}
 		onSaved={onTracksChanged}
+		onDeleted={onTracksChanged}
 	/>
 {/if}
+
+<DeleteTrackDialog bind:open={deleteOpen} track={deletingTrack} onDeleted={onTracksChanged} />
 
 <style>
 	.empty {
@@ -550,7 +539,8 @@
 		color: var(--text-secondary);
 	}
 	.track-action-btn.delete:hover {
-		color: var(--text-secondary);
+		color: var(--error);
+		border-color: color-mix(in srgb, var(--error) 50%, transparent);
 	}
 	@media (max-width: 600px) {
 		.tracks-section h2 {

@@ -151,6 +151,14 @@ class TracksCache {
 		this.hasMore = true;
 	}
 
+	/** drop a deleted track from the feed now, not on the next background fetch */
+	removeTrack(trackId: number): void {
+		const remaining = this.tracks.filter((track) => track.id !== trackId);
+		if (remaining.length === this.tracks.length) return;
+		this.tracks = remaining;
+		this.persistToStorage();
+	}
+
 	setTags(tags: string[]): void {
 		this.activeTags = tags;
 		this.nextCursor = null;
@@ -167,6 +175,25 @@ class TracksCache {
 }
 
 export const tracksCache = new TracksCache();
+
+/**
+ * delete one of the signed-in artist's tracks. a 404 means it is already gone
+ * (a second click, or Jetstream got there first), which is the outcome the
+ * caller wanted, so it resolves. any other failure throws with the server's
+ * detail so the caller can show it.
+ */
+export async function deleteTrack(trackId: number): Promise<void> {
+	const response = await fetch(`${API_URL}/tracks/${trackId}`, {
+		method: 'DELETE',
+		credentials: 'include'
+	});
+	if (!response.ok && response.status !== 404) {
+		const body: { detail?: string } | null = await response.json().catch(() => null);
+		throw new Error(body?.detail || `failed to delete track (${response.status})`);
+	}
+	tracksCache.invalidate();
+	tracksCache.removeTrack(trackId);
+}
 
 // like/unlike track functions
 // gated: true means viewer lacks access (non-supporter), false means accessible
