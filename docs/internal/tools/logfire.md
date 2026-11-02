@@ -14,6 +14,12 @@ SQL dashboards describe earlier releases, not query volume after this change.
 Health polling and browser telemetry forwarding do not create request spans.
 Application requests and their failures remain traced.
 
+## Browser telemetry
+
+Browser forwarding is disabled by default. `BROWSER_OBSERVABILITY=true` is an
+explicit opt-in to forwarding client-controlled batches to the paid ingest
+endpoint. Server request tracing is independent of this flag.
+
 ## Basic Concepts
 
 Logfire uses Apache DataFusion (PostgreSQL-flavored SQL) to query trace data. All data is stored in the `records` table.
