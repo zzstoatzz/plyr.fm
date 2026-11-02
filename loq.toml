@@ -484,3 +484,47 @@ max_lines = 581
 [[rules]]
 path = "backend/src/backend/api/search.py"
 max_lines = 506
+
+[[rules]]
+path = "backend-zig/src/internal/index/postgres_track_store.zig"
+max_lines = 831
+
+[[rules]]
+path = "backend-zig/src/internal/projection/postgres_verified_snapshot_store.zig"
+max_lines = 802
+
+[[rules]]
+path = "backend-zig/src/internal/projection/postgres_verified_commit_store.zig"
+max_lines = 647
+
+[[rules]]
+path = "backend-zig/src/internal/index/postgres_composed_track_store.zig"
+max_lines = 1272
+
+[[rules]]
+path = "backend-zig/src/internal/ingest/projector.zig"
+max_lines = 515
+
+[[rules]]
+path = "backend-zig/scripts/test_list_migration.py"
+max_lines = 807
+
+[[rules]]
+path = "backend-zig/src/internal/index/postgres_verified_list_store.zig"
+max_lines = 528
+
+[[rules]]
+path = "backend-zig/src/api/router.zig"
+max_lines = 631
+
+[[rules]]
+path = "backend-zig/scripts/test_http.py"
+max_lines = 599
+
+[[rules]]
+path = "backend-zig/src/api/auth.zig"
+max_lines = 680
+
+[[rules]]
+path = "backend-zig/src/api/tracks.zig"
+max_lines = 516

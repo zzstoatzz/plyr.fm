@@ -1,0 +1,29 @@
+.{
+    .name = .plyr_backend,
+    .version = "0.0.1",
+    .dependencies = .{
+        .zat = .{
+            .url = "https://tangled.org/zat.dev/zat/archive/v0.6.4.tar.gz",
+            .hash = "zat-0.6.4-5PuC7grADQByu3wo5NojgQ58IsD-NaLkZvbB65xYhiGo",
+        },
+        .pg = .{
+            .url = "https://tangled.org/zzstoatzz.io/pg.zig/archive/554530d.tar.gz",
+            .hash = "pg-0.0.0-Wp_7gaf1BgBmHy27LzHTYcWbgjYTQ_Q4pIV3Sh_CoS90",
+        },
+        .zg = .{
+            .url = "https://codeberg.org/atman/zg/archive/v0.16.2.tar.gz",
+            .hash = "zg-0.16.2-oGqU3HqftgI6rwFS90ypwfjgToH8Pz829OKuFURlm773",
+        },
+        .redis = .{
+            .url = "https://tangled.org/zzstoatzz.io/redis/archive/89b1157.tar.gz",
+            .hash = "redis-0.2.0-NGPoviplAgBRUhJJ4KgOg9vdXMNmyPTu5yFHUuBVaqBo",
+        },
+    },
+    .fingerprint = 0x4fd7f1002bfb4cee,
+    .minimum_zig_version = "0.17.0",
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "src",
+    },
+}
