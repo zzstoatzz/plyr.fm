@@ -1,13 +1,13 @@
 {
   "model": "gemini-3.8-flash-tts",
   "publish": {
-    "variant": "october-31-anniversary",
-    "title": "plyr.fm update - first birthday"
+    "variant": "year-one-people",
+    "title": "plyr.fm update - year one"
   },
   "variants": [
     {
-      "name": "october-31-anniversary",
-      "script": "october-31.txt",
+      "name": "year-one-people",
+      "script": "year-one.txt",
       "voices": {
         "Host": "en-us-podcaster-2",
         "Cohost": "en-us-brio"
