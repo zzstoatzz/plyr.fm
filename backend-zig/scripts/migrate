@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+# Applies backend-zig/migrations/*.sql in order, each in its own transaction,
+# recording what ran in plyr_zig.schema_migrations.
+#
+# These schemas (plyr_index, plyr_auth, plyr_command) belong to the Zig
+# backend. They are applied on top of a database that already has the Python
+# backend's public schema (the transitional adapters read public.tracks and
+# friends), e.g. a Neon branch of staging for next.plyr.fm.
+#
+# Guard: the target database must carry an explicit marker comment, set once
+# by hand on the dedicated database (a Neon branch does not inherit a comment
+# set after it was created, and no shared database ever has one):
+#
+#   COMMENT ON DATABASE <name> IS 'plyr-zig-next';   -- or 'plyr-zig-test'
+#
+# Any other database is refused before a single statement runs.
+set -euo pipefail
+
+: "${DATABASE_URL:?set DATABASE_URL to the next/test database}"
+
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+url="${DATABASE_URL/postgresql+psycopg:/postgresql:}"
+url="${url/postgresql+psycopg2:/postgresql:}"
+url="${url/postgresql+asyncpg:/postgresql:}"
+psql_run() { PGOPTIONS='-c client_min_messages=warning' psql "$url" -X -q -v ON_ERROR_STOP=1 "$@"; }
+
+actual="$(psql_run -At -c 'SELECT current_database()')"
+marker="$(psql_run -At -c "SELECT coalesce(shobj_description(oid, 'pg_database'), '') FROM pg_database WHERE datname = current_database()")"
+case "$marker" in
+    plyr-zig-next | plyr-zig-test) ;;
+    *)
+        echo "refusing: database '$actual' has no plyr-zig marker comment (got '$marker')" >&2
+        exit 1
+        ;;
+esac
+
+psql_run -c 'CREATE SCHEMA IF NOT EXISTS plyr_zig;
+CREATE TABLE IF NOT EXISTS plyr_zig.schema_migrations (
+    version TEXT PRIMARY KEY,
+    applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);'
+
+applied=0
+for file in "$here"/migrations/[0-9][0-9][0-9][0-9]_*.sql; do
+    version="$(basename "$file" .sql)"
+    if [[ "$(psql_run -At -c "SELECT 1 FROM plyr_zig.schema_migrations WHERE version = '$version'")" == "1" ]]; then
+        continue
+    fi
+    echo "applying $version"
+    {
+        cat "$file"
+        printf "\nINSERT INTO plyr_zig.schema_migrations (version) VALUES ('%s');\n" "$version"
+    } | psql_run -1 -f -
+    applied=$((applied + 1))
+done
+echo "applied $applied migration(s) to $actual"

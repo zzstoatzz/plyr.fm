@@ -1,0 +1,47 @@
+#!/bin/sh
+set -eu
+
+process_exe=${PROCESS_EXE:-/usr/local/bin/plyr-backend}
+proc_root=${PROC_ROOT:-/proc}
+cgroup_root=${CGROUP_ROOT:-/sys/fs/cgroup}
+pid=
+
+for process_dir in "$proc_root"/[0-9]*; do
+    if [ "$(readlink "$process_dir/exe" 2>/dev/null || true)" = "$process_exe" ]; then
+        pid=${process_dir##*/}
+        break
+    fi
+done
+
+if [ -z "$pid" ]; then
+    echo "cannot find process executable: $process_exe" >&2
+    exit 1
+fi
+
+status_file="$proc_root/$pid/status"
+stat_file="$proc_root/$pid/stat"
+rss_kib=$(awk '$1 == "VmRSS:" { print $2 }' "$status_file")
+peak_rss_kib=$(awk '$1 == "VmHWM:" { print $2 }' "$status_file")
+cpu_ticks=$(awk '{ print $14 + $15 }' "$stat_file")
+clock_ticks=$(getconf CLK_TCK)
+uptime_seconds=$(awk '{ print $1 }' "$proc_root/uptime")
+if [ -r "$cgroup_root/memory.current" ] && [ -r "$cgroup_root/memory.peak" ]; then
+    cgroup_current_bytes=$(cat "$cgroup_root/memory.current")
+    cgroup_peak_bytes=$(cat "$cgroup_root/memory.peak")
+elif [ -r "$cgroup_root/memory/memory.usage_in_bytes" ] && \
+    [ -r "$cgroup_root/memory/memory.max_usage_in_bytes" ]; then
+    cgroup_current_bytes=$(cat "$cgroup_root/memory/memory.usage_in_bytes")
+    cgroup_peak_bytes=$(cat "$cgroup_root/memory/memory.max_usage_in_bytes")
+else
+    echo "cgroup memory counters are unavailable" >&2
+    exit 1
+fi
+
+if [ -z "$rss_kib" ] || [ -z "$peak_rss_kib" ]; then
+    echo "process status did not expose RSS counters" >&2
+    exit 1
+fi
+
+printf '{"pid":%s,"application_rss_kib":%s,"application_peak_rss_kib":%s,"process_cpu_ticks":%s,"clock_ticks_per_second":%s,"machine_uptime_seconds":%s,"cgroup_current_bytes":%s,"cgroup_peak_bytes":%s}\n' \
+    "$pid" "$rss_kib" "$peak_rss_kib" "$cpu_ticks" "$clock_ticks" \
+    "$uptime_seconds" "$cgroup_current_bytes" "$cgroup_peak_bytes"

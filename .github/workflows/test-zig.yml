@@ -1,0 +1,97 @@
+name: zig backend tests
+
+# Builds and tests backend-zig only. Runs against disposable service
+# containers; it has no deploy step and no credentials.
+on:
+  pull_request:
+    paths:
+      - "backend-zig/**"
+      - ".github/workflows/test-zig.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: zig build + test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: zig_test
+          POSTGRES_PASSWORD: zig_test
+          POSTGRES_DB: zig_test
+        ports:
+          - 5435:5432
+        options: >-
+          --health-cmd "pg_isready -U zig_test -d zig_test"
+          --health-interval 2s --health-timeout 5s --health-retries 30
+      redis:
+        image: redis:7
+        ports:
+          - 6380:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 2s --health-timeout 5s --health-retries 30
+
+    defaults:
+      run:
+        working-directory: backend-zig
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: install zig 0.17.0
+        run: |
+          python3 -m pip install --user ziglang==0.17.0
+          ln -s "$(python3 -c 'import ziglang, os; print(os.path.dirname(ziglang.__file__))')/zig" /usr/local/bin/zig || sudo ln -s "$(python3 -c 'import ziglang, os; print(os.path.dirname(ziglang.__file__))')/zig" /usr/local/bin/zig
+          zig version
+
+      - name: install openssl headers
+        run: sudo apt-get update && sudo apt-get install -y libssl-dev
+
+      - name: fmt
+        run: zig fmt --check build.zig src
+
+      - name: build
+        run: zig build
+
+      - name: test (with postgres + redis)
+        env:
+          PLYR_ZIG_TEST_DATABASE_URL: postgresql://zig_test:zig_test@127.0.0.1:5435/zig_test
+          PLYR_ZIG_TEST_REDIS_URL: redis://127.0.0.1:6380/0
+        run: zig build test
+
+      - name: http contract smoke
+        run: python3 scripts/test_http.py
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: install uv
+        uses: astral-sh/setup-uv@v7
+
+      # the zig schema sits on top of the python backend's public schema, so
+      # build that first on a separate marked database, then apply ours twice
+      # (the second run must be a no-op).
+      - name: migrations apply on top of the python schema
+        env:
+          PGPASSWORD: zig_test
+          DATABASE_URL: postgresql://zig_test:zig_test@127.0.0.1:5435/next_ci
+        run: |
+          psql -h 127.0.0.1 -p 5435 -U zig_test -d zig_test -c "CREATE DATABASE next_ci"
+          psql -h 127.0.0.1 -p 5435 -U zig_test -d zig_test -c "COMMENT ON DATABASE next_ci IS 'plyr-zig-test'"
+          (cd ../backend && uv sync --locked && DATABASE_URL=postgresql+psycopg://zig_test:zig_test@127.0.0.1:5435/next_ci uv run python scripts/init_db.py)
+          scripts/migrate
+          scripts/migrate | grep -q "applied 0 migration"
+
+      - name: refuses an unmarked database
+        env:
+          DATABASE_URL: postgresql://zig_test:zig_test@127.0.0.1:5435/zig_test
+        run: |
+          if scripts/migrate; then echo "migrate ran against an unmarked database" >&2; exit 1; fi
