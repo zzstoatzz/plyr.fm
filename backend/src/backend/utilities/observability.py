@@ -6,7 +6,7 @@ import warnings
 from types import ModuleType
 from typing import Any
 
-from fastapi import Request, WebSocket
+from fastapi import FastAPI, Request, WebSocket
 
 from backend.config import Settings
 
@@ -90,3 +90,9 @@ def request_attributes_mapper(
     """extract client metadata from request headers for span enrichment."""
     user_agent = request.headers.get("user-agent")
     return parse_plyrfm_user_agent(user_agent)
+
+
+def configure_request_tracing(app: FastAPI, logfire_module: ModuleType) -> None:
+    logfire_module.instrument_fastapi(
+        app, request_attributes_mapper=request_attributes_mapper
+    )
