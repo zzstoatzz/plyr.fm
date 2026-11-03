@@ -36,6 +36,7 @@ function Shell() {
   const auth = useAuth();
   const { width } = useWindowDimensions();
   const wide = width >= 800;
+  if (path.startsWith('/embed/')) return <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: 'transparent' } }} />;
   const accountPath = auth.did ? '/portal' : '/login';
   const tabs: { label: string; href: Href; icon: typeof House; active: boolean }[] = [
     { label: 'Home', href: '/', icon: House, active: path === '/' },

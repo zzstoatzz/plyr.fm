@@ -8,10 +8,10 @@ import { usePlayback } from '../src/playback';
 import { useAppPreferences } from '../src/preference-context';
 import { radioMedia, radioPosition, radioStations, readRadio, type RadioSnapshot } from '../src/radio';
 
-export default function Radio() {
-  const { autoplay } = useLocalSearchParams<{ autoplay?: string }>();
+export default function Radio({ compact = false }: { compact?: boolean }) {
+  const { autoplay, station: stationSlug } = useLocalSearchParams<{ autoplay?: string; station?: string }>();
   const autoTuned = useRef(false);
-  const [station, setStation] = useState<typeof radioStations[number]>(radioStations[0]);
+  const [station, setStation] = useState<typeof radioStations[number]>(() => radioStations.find(item => item.slug === stationSlug) ?? radioStations[0]);
   const [snapshot, setSnapshot] = useState<RadioSnapshot>();
   const [listening, setListening] = useState(false);
   const [error, setError] = useState('');
@@ -88,6 +88,20 @@ export default function Radio() {
     }
     if (!audio.playing) audio.play();
   }, [audio, listening, snapshot, source, status.isLoaded]);
+
+  if (compact) return <View style={{ padding: 8, gap: 6 }}>
+    {song && <View style={row}>
+      <Cover size={48} uri={song.hasCover ? radioMedia(station, song, 'cover') : null} />
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Heading>{song.title}</Heading>
+        <Copy>{song.artist} · Radio</Copy>
+      </View>
+    </View>}
+    {error && <Copy>{error}</Copy>}
+    {!snapshot && !error && <Copy>Loading station…</Copy>}
+    <Action label={listening ? 'Stop listening' : 'Listen live'} disabled={!song && !listening}
+      onPress={() => setListening(!listening)} />
+  </View>;
 
   return <Page title="Radio">
     <View style={row}>
