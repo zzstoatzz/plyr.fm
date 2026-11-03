@@ -1,5 +1,5 @@
 import { ExpoOAuthClient, type OAuthSession } from '@atproto/oauth-client-expo';
-import { NATIVE_REDIRECT_URI, SCOPE_PARTS, SITE_URL } from './auth-config';
+import { NATIVE_REDIRECT_URI, BASE_SCOPE_PARTS, SCOPE_PARTS, SITE_URL } from './auth-config';
 import { clearAuth, getAuth, scopeFor, setAuth } from './auth-state';
 import { readLocal, removeLocal, writeLocal } from './storage';
 
@@ -51,6 +51,14 @@ export async function login(identifier: string, deviceOnly = false, intent?: str
 	const session = await oauthClient().signIn(handle, {
 		scope: await scopeFor(handle, deviceOnly, intent?.startsWith('/jam/')),
 		redirect_uri: NATIVE_REDIRECT_URI
+	});
+	await activate(session);
+	writeLocal(ACTIVE_KEY, session.did);
+}
+
+export async function createAccount(provider: string, _intent?: string) {
+	const session = await oauthClient().signIn(provider, {
+		scope: BASE_SCOPE_PARTS.join(' '), prompt: 'create', redirect_uri: NATIVE_REDIRECT_URI
 	});
 	await activate(session);
 	writeLocal(ACTIVE_KEY, session.did);

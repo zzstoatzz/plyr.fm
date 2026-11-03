@@ -1,5 +1,5 @@
 import { BrowserOAuthClient, type OAuthSession } from '@atproto/oauth-client-browser';
-import { SCOPE_PARTS, SITE_URL } from './auth-config';
+import { BASE_SCOPE_PARTS, SCOPE_PARTS, SITE_URL } from './auth-config';
 import { clearAuth, getAuth, scopeFor, setAuth } from './auth-state';
 
 import { returnPath } from './return-path';
@@ -71,6 +71,12 @@ async function initialize() {
 export async function login(identifier: string, deviceOnly = false, intent?: string): Promise<void> {
 	const handle = identifier.trim().replace(/^@/, '');
 	await (await oauthClient()).signInRedirect(handle, { scope: await scopeFor(handle, deviceOnly, intent?.startsWith('/jam/')), state: intent });
+}
+
+export async function createAccount(provider: string, intent?: string): Promise<void> {
+	await (await oauthClient()).signInRedirect(provider, {
+		scope: BASE_SCOPE_PARTS.join(' '), prompt: 'create', state: intent
+	});
 }
 
 export async function logout() {
