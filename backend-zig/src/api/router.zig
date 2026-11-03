@@ -1,6 +1,4 @@
 const std = @import("std");
-const auth = @import("auth.zig");
-const config = @import("../config.zig");
 const albums = @import("albums.zig");
 const artists = @import("artists.zig");
 const charts = @import("charts.zig");
@@ -9,7 +7,7 @@ const records = @import("records.zig");
 const response = @import("response.zig");
 const search = @import("search.zig");
 const tracks = @import("tracks.zig");
-const viewer = @import("viewer.zig");
+const actors = @import("actors.zig");
 const path_segment = @import("../internal/http/path_segment.zig");
 const ArtistStore = @import("../internal/index/artist_store.zig").ArtistStore;
 const ArtistMetricStore = @import("../internal/metrics/artist_metric_store.zig").ArtistMetricStore;
@@ -24,11 +22,6 @@ const TrackStore = @import("../internal/index/track_store.zig").TrackStore;
 const TrackChartStore = @import("../internal/index/track_chart_store.zig").TrackChartStore;
 const VerifiedListStore = @import("../internal/index/verified_list_store.zig").VerifiedListStore;
 const RecordStatusStore = @import("../internal/index/record_status_store.zig").RecordStatusStore;
-const AuthStore = @import("../internal/auth/store.zig").Store;
-const OAuthClient = @import("../internal/auth/oauth_gateway.zig").Client;
-const StartAdmission = @import("../internal/auth/start_admission.zig").Store;
-const RecordKeyStore = @import("../internal/command/record_key_store.zig").Store;
-const AuthenticatedPdsClient = @import("../internal/application/authenticated_pds.zig").Client;
 
 const http = std.http;
 const mem = std.mem;
@@ -55,17 +48,6 @@ pub const App = struct {
     profile_collection: []const u8,
     like_collection: []const u8,
     cors: response.CorsPolicy,
-    auth: ?config.AuthConfig = null,
-    auth_store: ?AuthStore = null,
-    oauth_client: ?OAuthClient = null,
-    auth_start_admission: ?StartAdmission = null,
-    record_key_store: ?RecordKeyStore = null,
-    authenticated_pds: ?AuthenticatedPdsClient = null,
-    auth_start_client_limit: u32 = 10,
-    auth_start_subject_limit: u32 = 10,
-    auth_start_global_limit: u32 = 120,
-    auth_start_window_seconds: u32 = 60,
-    auth_trusted_proxy_cidrs: []const u8 = "",
 };
 
 pub fn handle(
@@ -87,71 +69,6 @@ pub fn handle(
 
     if (request.head.method == .OPTIONS) {
         try response.empty(request, .no_content, request_id, app.cors);
-    } else if (mem.eql(u8, path, "/oauth-client-metadata.json")) {
-        if (request.head.method != .GET) {
-            try response.apiError(request, .method_not_allowed, request_id, app.cors);
-            return;
-        }
-        try auth.clientMetadata(request, allocator, app.auth, app.cors, request_id);
-    } else if (mem.eql(u8, path, "/auth/pds-options")) {
-        if (request.head.method != .GET) {
-            try response.apiError(request, .method_not_allowed, request_id, app.cors);
-            return;
-        }
-        try auth.pdsOptions(request, app.cors, request_id);
-    } else if (mem.eql(u8, path, "/auth/start")) {
-        if (request.head.method != .GET) {
-            try response.apiError(request, .method_not_allowed, request_id, app.cors);
-            return;
-        }
-        try auth.start(
-            request,
-            allocator,
-            app.io,
-            app.auth,
-            app.auth_store,
-            app.oauth_client,
-            app.auth_start_admission,
-            app.auth_start_client_limit,
-            app.auth_start_subject_limit,
-            app.auth_start_global_limit,
-            app.auth_start_window_seconds,
-            app.auth_trusted_proxy_cidrs,
-            app.cors,
-            request_id,
-        );
-    } else if (mem.eql(u8, path, "/auth/callback")) {
-        if (request.head.method != .GET) {
-            try response.apiError(request, .method_not_allowed, request_id, app.cors);
-            return;
-        }
-        try auth.callback(
-            request,
-            allocator,
-            app.io,
-            app.auth,
-            app.auth_store,
-            app.oauth_client,
-            request_id,
-        );
-    } else if (mem.eql(u8, path, "/auth/exchange")) {
-        if (request.head.method != .POST) {
-            try response.apiError(request, .method_not_allowed, request_id, app.cors);
-            return;
-        }
-        try auth.exchange(request, allocator, app.auth, app.auth_store, app.cors, request_id);
-    } else if (mem.eql(u8, path, "/auth/me")) {
-        if (request.head.method != .GET) {
-            try response.apiError(request, .method_not_allowed, request_id, app.cors);
-            return;
-        }
-        try auth.me(request, allocator, app.auth_store, app.cors, request_id);
-    } else if (mem.eql(u8, path, "/auth/logout")) {
-        if (request.head.method != .POST) {
-            try response.apiError(request, .method_not_allowed, request_id, app.cors);
-            return;
-        }
-        try auth.logout(request, app.auth, app.auth_store, app.cors, request_id);
     } else if (mem.eql(u8, path, "/health")) {
         if (request.head.method != .GET) {
             try response.apiError(request, .method_not_allowed, request_id, app.cors);
@@ -213,31 +130,30 @@ pub fn handle(
             app.cors,
             request_id,
         );
-    } else if (mem.eql(u8, path, prefix ++ "/me/likes")) {
+    } else if (actorLikesDid(path)) |did| {
         if (request.head.method != .GET) {
             try response.apiError(request, .method_not_allowed, request_id, app.cors);
             return;
         }
-        try viewer.listLikes(
+        try actors.listLikes(
             request,
             allocator,
             app.liked_track_store,
-            app.auth_store,
+            did,
             app.track_collection,
             app.cors,
             request_id,
         );
-    } else if (mem.eql(u8, path, prefix ++ "/me/likes/resolve")) {
+    } else if (actorLikesResolveDid(path)) |did| {
         if (request.head.method != .POST) {
             try response.apiError(request, .method_not_allowed, request_id, app.cors);
             return;
         }
-        try viewer.resolveLikes(
+        try actors.resolveLikes(
             request,
             allocator,
             app.viewer_like_store,
-            app.auth,
-            app.auth_store,
+            did,
             app.track_collection,
             app.like_collection,
             app.cors,
@@ -317,45 +233,6 @@ pub fn handle(
             id,
             request_id,
         );
-    } else if (trackLikeId(path)) |id| {
-        if (request.head.method != .PUT and request.head.method != .DELETE) {
-            try response.apiError(request, .method_not_allowed, request_id, app.cors);
-            return;
-        }
-        if (request.head.method == .PUT) {
-            try tracks.like(
-                request,
-                allocator,
-                app.io,
-                app.track_store,
-                app.like_store,
-                app.record_key_store,
-                app.authenticated_pds,
-                app.auth,
-                app.auth_store,
-                app.track_collection,
-                app.like_collection,
-                app.cors,
-                id,
-                request_id,
-            );
-        } else {
-            try tracks.unlike(
-                request,
-                allocator,
-                app.track_store,
-                app.like_store,
-                app.record_key_store,
-                app.authenticated_pds,
-                app.auth,
-                app.auth_store,
-                app.track_collection,
-                app.like_collection,
-                app.cors,
-                id,
-                request_id,
-            );
-        }
     } else if (trackLikesId(path)) |id| {
         if (request.head.method != .GET) {
             try response.apiError(request, .method_not_allowed, request_id, app.cors);
@@ -492,15 +369,23 @@ fn trackLikesId(path: []const u8) ?[]const u8 {
     return id;
 }
 
-fn trackLikeId(path: []const u8) ?[]const u8 {
-    const tracks_prefix = prefix ++ "/tracks/";
-    const like_suffix = "/like";
-    if (!mem.startsWith(u8, path, tracks_prefix) or
-        !mem.endsWith(u8, path, like_suffix)) return null;
-    if (path.len <= tracks_prefix.len + like_suffix.len) return null;
-    const id = path[tracks_prefix.len .. path.len - like_suffix.len];
-    if (id.len == 0 or mem.indexOfScalar(u8, id, '/') != null) return null;
-    return id;
+fn actorLikesDid(path: []const u8) ?[]const u8 {
+    return actorSuffixed(path, "/likes");
+}
+
+fn actorLikesResolveDid(path: []const u8) ?[]const u8 {
+    return actorSuffixed(path, "/likes/resolve");
+}
+
+/// /v1/actors/{did}{suffix}. Only DIDs: likes are keyed by repo, and a
+/// client that just wrote to its PDS already knows its own DID.
+fn actorSuffixed(path: []const u8, comptime suffix: []const u8) ?[]const u8 {
+    const actors_prefix = prefix ++ "/actors/";
+    if (!mem.startsWith(u8, path, actors_prefix) or !mem.endsWith(u8, path, suffix)) return null;
+    if (path.len <= actors_prefix.len + suffix.len) return null;
+    const did = path[actors_prefix.len .. path.len - suffix.len];
+    if (!mem.startsWith(u8, did, "did:") or mem.indexOfScalar(u8, did, '/') != null) return null;
+    return did;
 }
 
 fn trackPlayId(path: []const u8) ?[]const u8 {
@@ -597,11 +482,13 @@ test "track like-read routes accept one opaque track segment" {
     try std.testing.expect(trackLikesId("/tracks/trk_abc/likes") == null);
 }
 
-test "track like-write routes accept one opaque track segment" {
-    try std.testing.expectEqualStrings("trk_abc", trackLikeId("/v1/tracks/trk_abc/like").?);
-    try std.testing.expect(trackLikeId("/v1/tracks/like") == null);
-    try std.testing.expect(trackLikeId("/v1/tracks/trk_abc/like/more") == null);
-    try std.testing.expect(trackLikeId("/tracks/trk_abc/like") == null);
+test "actor like routes take one DID segment" {
+    try std.testing.expectEqualStrings("did:plc:abc", actorLikesDid("/v1/actors/did:plc:abc/likes").?);
+    try std.testing.expectEqualStrings("did:plc:abc", actorLikesResolveDid("/v1/actors/did:plc:abc/likes/resolve").?);
+    try std.testing.expect(actorLikesDid("/v1/actors/did:plc:abc/likes/resolve") == null);
+    try std.testing.expect(actorLikesDid("/v1/actors/alice.example/likes") == null);
+    try std.testing.expect(actorLikesDid("/v1/actors//likes") == null);
+    try std.testing.expect(actorLikesDid("/v1/actors/did:plc:a/b/likes") == null);
 }
 
 test "track play-write routes accept one opaque track segment" {

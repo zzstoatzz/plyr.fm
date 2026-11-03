@@ -1,8 +1,9 @@
 name: deploy next web
 
 # Builds web-next/ (the read-only-appview frontend) and deploys it to the
-# cloudflare pages project plyr-fm-next. Never touches production-fe or the
-# plyr-fm pages project.
+# production branch of the direct-upload pages project plyr-fm-next, which
+# next.plyr.fm already CNAMEs to. Never touches production-fe or the plyr-fm
+# pages project.
 on:
   push:
     branches:
@@ -21,9 +22,8 @@ jobs:
       contents: read
       deployments: write
     env:
-      # until api.next.plyr.fm / next.plyr.fm have DNS
       PUBLIC_API_URL: https://plyr-api-zig-canary.fly.dev
-      PUBLIC_SITE_URL: https://plyr-fm-next.pages.dev
+      PUBLIC_SITE_URL: https://next.plyr.fm
       PUBLIC_NSID_PREFIX: fm.plyr.stg
     steps:
       - uses: actions/checkout@v4
@@ -41,17 +41,25 @@ jobs:
           npm run check
           npm run build
 
-      - name: ensure pages project
-        continue-on-error: true
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages project create plyr-fm-next --production-branch main
+      # the project predates this workflow, so deploy to whatever branch it
+      # serves as production rather than guessing (a non-production branch
+      # only lands on a <branch>.plyr-fm-next.pages.dev preview).
+      - name: resolve production branch
+        id: project
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          branch=$(curl -fsS \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects/plyr-fm-next" \
+            | jq -er '.result.production_branch')
+          echo "production branch: $branch"
+          echo "branch=$branch" >> "$GITHUB_OUTPUT"
 
       - name: deploy to cloudflare pages
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy web-next/build --project-name plyr-fm-next --branch main
+          command: pages deploy web-next/build --project-name plyr-fm-next --branch ${{ steps.project.outputs.branch }}

@@ -120,6 +120,9 @@ export const api = {
 	playlists: (p: { limit?: number; cursor?: string; owner_did?: string } = {}) =>
 		get<Page<ListSummary>>('/v1/playlists', p),
 	playlist: (id: string) => get<ListDetail>(`/v1/playlists/${encodeURIComponent(id)}`),
+	/** an actor's likes are public records, so the appview serves them without a session. */
+	actorLikes: (did: string, p: { limit?: number; cursor?: string } = {}) =>
+		get<Page<Track>>(`/v1/actors/${did}/likes`, p),
 	search: (q: string) => get<Page<SearchHit>>('/v1/search', { q }),
 	chart: (period: 'day' | 'week' | 'month' | 'all_time' = 'week') =>
 		get<{ period: string; data: ChartEntry[] }>('/v1/charts/tracks', { period }),

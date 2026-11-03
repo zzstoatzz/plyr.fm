@@ -18,12 +18,6 @@ const repair_runner = @import("internal/ingest/repair_runner.zig");
 const continuous_runner = @import("internal/ingest/continuous_runner.zig");
 const catalog_reconcile_runner = @import("internal/ingest/catalog_reconcile_runner.zig");
 const account_reconciler = @import("internal/account/reconciler.zig");
-const postgres_auth = @import("internal/auth/postgres_store.zig");
-const oauth_gateway = @import("internal/auth/oauth_gateway.zig");
-const pds_gateway = @import("internal/auth/pds_gateway.zig");
-const redis_start_admission = @import("internal/auth/redis_start_admission.zig");
-const authenticated_pds = @import("internal/application/authenticated_pds.zig");
-const postgres_record_keys = @import("internal/command/postgres_record_key_store.zig");
 
 var threaded_io: std.Io.Threaded = undefined;
 pub const std_options_debug_threaded_io: ?*std.Io.Threaded = &threaded_io;
@@ -37,7 +31,6 @@ pub fn main() !void {
         std.log.err("invalid configuration: {}", .{err});
         return err;
     };
-    std.log.info("browser authentication configured: {}", .{settings.auth != null});
 
     var postgres_store: ?postgres.PostgresTrackStore = if (settings.database_url) |url|
         try postgres.PostgresTrackStore.init(allocator, io, url, settings.database_pool_size)
@@ -126,39 +119,6 @@ pub fn main() !void {
                 null;
             defer if (redis_play_dedup_store) |*store| store.deinit();
             const play_dedup_store = if (redis_play_dedup_store) |*store| store.store() else null;
-            var postgres_auth_store: ?postgres_auth.PostgresAuthStore = if (settings.auth != null)
-                if (postgres_store) |*store| .{ .pool = store.pool } else null
-            else
-                null;
-            const auth_store = if (postgres_auth_store) |*store| store.store() else null;
-            var oauth: ?oauth_gateway.OAuthGateway = if (settings.auth != null)
-                .{ .io = io }
-            else
-                null;
-            var pds_transport: ?pds_gateway.Gateway = if (settings.auth != null)
-                .{ .io = io }
-            else
-                null;
-            var pds_service: ?authenticated_pds.Service = if (settings.auth) |auth_config|
-                if (auth_store) |store| if (oauth) |*oauth_client| if (pds_transport) |*transport| .{
-                    .io = io,
-                    .settings = auth_config,
-                    .store = store,
-                    .oauth = oauth_client.client(),
-                    .pds = transport.client(),
-                } else null else null else null
-            else
-                null;
-            var postgres_record_key_store: ?postgres_record_keys.PostgresRecordKeyStore =
-                if (settings.auth != null) if (postgres_store) |*store|
-                    .{ .pool = store.pool }
-                else
-                    null else null;
-            var auth_start_admission: ?redis_start_admission.RedisStartAdmission = if (settings.auth) |_| blk: {
-                const url = settings.redis_url orelse break :blk null;
-                break :blk try redis_start_admission.RedisStartAdmission.init(allocator, io, url);
-            } else null;
-            defer if (auth_start_admission) |*limiter| limiter.deinit();
             try server.run(io, settings.port, settings.max_connections, .{
                 .io = io,
                 .track_store = track_store,
@@ -179,17 +139,6 @@ pub fn main() !void {
                 .profile_collection = settings.profile_collection,
                 .like_collection = settings.like_collection,
                 .cors = .{ .allowed_origins = settings.cors_allowed_origins },
-                .auth = settings.auth,
-                .auth_store = auth_store,
-                .oauth_client = if (oauth) |*client| client.client() else null,
-                .record_key_store = if (postgres_record_key_store) |*store| store.store() else null,
-                .authenticated_pds = if (pds_service) |*service| service.client() else null,
-                .auth_start_admission = if (auth_start_admission) |*limiter| limiter.store() else null,
-                .auth_start_client_limit = settings.auth_start_client_limit,
-                .auth_start_subject_limit = settings.auth_start_subject_limit,
-                .auth_start_global_limit = settings.auth_start_global_limit,
-                .auth_start_window_seconds = settings.auth_start_window_seconds,
-                .auth_trusted_proxy_cidrs = settings.auth_trusted_proxy_cidrs,
             });
         },
         .catalog_reconciler => {
@@ -243,28 +192,10 @@ pub fn main() !void {
 }
 
 test {
-    _ = @import("internal/auth/bearer_token.zig");
-    _ = @import("internal/auth/sealed_secret.zig");
-    _ = @import("internal/auth/postgres_store.zig");
-    _ = @import("internal/auth/repo_scope.zig");
-    _ = @import("internal/auth/store.zig");
-    _ = @import("internal/auth/oauth_state.zig");
-    _ = @import("internal/auth/oauth_gateway.zig");
-    _ = @import("internal/auth/pds_gateway.zig");
-    _ = @import("internal/auth/start_admission.zig");
-    _ = @import("internal/auth/redis_start_admission.zig");
     _ = @import("internal/redis/connection_config.zig");
-    _ = @import("internal/http/client_identity.zig");
-    _ = @import("internal/application/browser_login.zig");
-    _ = @import("internal/application/credential_refresh.zig");
-    _ = @import("internal/application/authenticated_pds.zig");
-    _ = @import("internal/application/like_track.zig");
     _ = @import("internal/application/resolve_viewer_likes.zig");
     _ = @import("internal/application/list_viewer_liked_tracks.zig");
-    _ = @import("internal/application/unlike_track.zig");
     _ = @import("internal/application/verified_track_subject.zig");
-    _ = @import("internal/command/record_key_store.zig");
-    _ = @import("internal/command/postgres_record_key_store.zig");
     _ = @import("internal/account/availability.zig");
     _ = @import("internal/account/current_pds_status_source.zig");
     _ = @import("internal/account/check_schedule.zig");
@@ -273,13 +204,12 @@ test {
     _ = @import("internal/account/reconciler.zig");
     _ = @import("internal/account/repo_status.zig");
     _ = @import("api/response.zig");
-    _ = @import("api/auth.zig");
     _ = @import("api/router.zig");
     _ = @import("api/artists.zig");
     _ = @import("api/charts.zig");
     _ = @import("api/albums.zig");
     _ = @import("api/tracks.zig");
-    _ = @import("api/viewer.zig");
+    _ = @import("api/actors.zig");
     _ = @import("api/playlists.zig");
     _ = @import("api/search.zig");
     _ = @import("config.zig");

@@ -101,17 +101,6 @@ Direct SQL is reserved for projection adapter tests and benchmark fixtures.
 | `MAX_CONNECTIONS` | no | hard cap on accepted connection handlers, default `128` |
 | `PORT` | no | listener port, default `8001` |
 | `CORS_ALLOWED_ORIGINS` | no | comma-separated exact browser origins; empty disables CORS |
-| `ZIG_OAUTH_CLIENT_ID` | as an all-or-nothing auth set | HTTPS metadata-document URL; canary value is `https://api.next.plyr.fm/oauth-client-metadata.json` |
-| `ZIG_OAUTH_REDIRECT_URI` | as an all-or-nothing auth set | exact callback URL on the same API origin |
-| `ZIG_OAUTH_FRONTEND_ORIGIN` | as an all-or-nothing auth set | exact frontend origin used for post-callback redirects and authorization of browser credential mutations |
-| `ZIG_OAUTH_SCOPE` | as an all-or-nothing auth set | ATProto OAuth scope containing `atproto` |
-| `ZIG_OAUTH_CLIENT_PRIVATE_KEY` | as an all-or-nothing auth set | standard-base64 raw 32-byte P-256 confidential-client key |
-| `ZIG_AUTH_ENCRYPTION_KEY` | as an all-or-nothing auth set | standard-base64 raw 32-byte XChaCha20-Poly1305 key; must differ from the OAuth client key |
-| `AUTH_START_CLIENT_LIMIT` | no | per-client OAuth-start admissions per fixed window, default `10` |
-| `AUTH_START_SUBJECT_LIMIT` | no | per-normalized-handle OAuth-start admissions per fixed window, default `10` |
-| `AUTH_START_GLOBAL_LIMIT` | no | process-fleet OAuth-start circuit breaker per fixed window, default `120` |
-| `AUTH_START_WINDOW_SECONDS` | no | OAuth-start fixed-window duration, default `60` |
-| `AUTH_TRUSTED_PROXY_CIDRS` | no | comma-separated reverse-proxy ranges allowed to supply `CF-Connecting-IP`; empty trusts only Fly's observed peer |
 | `INGEST_REPAIR_DID` | in repair mode | canonical DID whose complete repository is fetched, verified, and atomically reconciled |
 | `ACCOUNT_CHECK_INTERVAL_SECONDS` | no | authoritative current-PDS recheck interval, default 21600 (six hours) |
 | `ACCOUNT_CHECK_RETRY_SECONDS` | no | retry interval after transport or non-authoritative status, default 300 |
@@ -124,43 +113,19 @@ configured track index. The listener acquires a connection permit before
 `accept`, so saturation applies kernel-backlog backpressure instead of creating
 unbounded detached threads.
 
-The browser-authentication compatibility surface is `GET /auth/start`,
-`GET /auth/callback`, `POST /auth/exchange`, `GET /auth/me`,
-`POST /auth/logout`, `GET /auth/pds-options`, and
-`GET /oauth-client-metadata.json`. OAuth ceremony terminates on
-`api.next.plyr.fm`; the existing frontend receives only a one-minute,
-single-use exchange capability in a URL fragment that is never sent to the
-frontend server, then uses the `__Host-plyr_session` API cookie. Its browser-
-enforced prefix forbids a `Domain` attribute and requires root path plus TLS.
-Cookie-setting and cookie-mutating endpoints reject requests without the exact
-configured frontend `Origin`; CORS response headers alone are not treated as
-CSRF protection, and successful credential responses are explicitly `no-store`.
-Identity/session reads project only DID, handle, and scope;
-they never retrieve the sealed OAuth credentials. A future PDS-write slice must
-request that separate capability explicitly.
-
-`GET /auth/start` is the one authentication request that deliberately depends
-on Redis: it can trigger handle and DID resolution, several independently
-validated metadata fetches, and PAR. A Lua command atomically increments the
-hashed client, normalized-handle, and global buckets and establishes their
-expiry across all API instances. Defaults are 10 starts per client, 10 per
-handle, and a 120-start fleet circuit breaker each minute. Fly's observed peer is authoritative unless
-it belongs to an explicitly configured trusted reverse-proxy range; only then
-may `CF-Connecting-IP` identify the original client. A direct caller cannot
-select that branch by forging headers, and the API never trusts
-`X-Forwarded-For`. Requests with no Fly identity share a conservative anonymous
-bucket. The handle and global limits bound outbound work even if a reverse-
-proxy client identity is untrustworthy or intentionally varied.
-Redis is probed when the auth limiter is configured, broken connections are
-discarded for a later reconnect, and limiter failure returns `503` only from
-the expensive start path. A missing limiter likewise keeps login starts closed
-without affecting metadata, existing sessions, or public reads.
+The appview is read-only and holds no sessions. Clients run ATProto OAuth
+themselves (`web-next/` uses `@atcute/oauth-browser-client`), write tracks,
+lists, likes, and profiles straight to the user's PDS, and use
+`GET /v1/records/await?uri=...&cid=...` to wait for the ingester to project the
+write. There is no `/auth/*`, no OAuth client metadata, no cookie, and no
+server-held credential to protect; every route is a public projection of
+public records.
 
 The current product surface is `GET /v1/tracks`,
 `GET /v1/tracks/{track_id}`, `GET /v1/tracks/{track_id}/playback`,
 `GET /v1/tracks/{track_id}/likes`,
-`PUT` and `DELETE /v1/tracks/{track_id}/like`,
-`GET /v1/me/likes`, `POST /v1/me/likes/resolve`,
+`GET /v1/actors/{did}/likes`, `POST /v1/actors/{did}/likes/resolve`,
+`GET /v1/records/await`,
 `GET /v1/artists/{identifier}`, `GET /v1/artists/{identifier}/metrics`,
 `GET /v1/charts/tracks`, and the collection and detail forms of `GET /v1/albums`
 and `GET /v1/playlists`, plus `GET /v1/search`. Search accepts

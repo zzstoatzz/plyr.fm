@@ -50,8 +50,6 @@ jobs:
           required = {
               "DATABASE_URL",
               "DOCKET_URL",
-              "ZIG_AUTH_ENCRYPTION_KEY",
-              "ZIG_OAUTH_CLIENT_PRIVATE_KEY",
           }
           missing = sorted(required - configured)
           if missing:

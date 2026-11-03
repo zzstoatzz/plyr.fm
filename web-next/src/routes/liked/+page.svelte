@@ -1,7 +1,6 @@
 <script lang="ts">
-	import { api, trackIdFromUri, type Track } from '$lib/api';
+	import { api, type Track } from '$lib/api';
 	import { auth } from '$lib/auth.svelte';
-	import { myLikes } from '$lib/pds';
 	import TrackRow from '$lib/TrackRow.svelte';
 
 	let tracks = $state<Track[]>([]);
@@ -14,15 +13,10 @@
 			loading = false;
 			return;
 		}
-		// likes come from the viewer's own repo; track details from the appview
-		myLikes()
-			.then(async (likes) => {
-				const ids = [...likes.values()].map((l) => l.subject.uri);
-				const resolved = await Promise.all(
-					ids.map((uri) => api.track(trackIdFromUri(uri)).catch(() => null))
-				);
-				tracks = resolved.filter((t): t is Track => !!t);
-			})
+		// the appview projects the viewer's like records; one paged read, no PDS fan-out
+		api
+			.actorLikes(auth.did, { limit: 100 })
+			.then((page) => (tracks = page.data))
 			.catch((e) => (error = e.message))
 			.finally(() => (loading = false));
 	});
