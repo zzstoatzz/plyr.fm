@@ -3,7 +3,7 @@
 	import { api, type Artist, type ArtistMetrics, type ListSummary, type Track } from '$lib/api';
 	import { auth } from '$lib/auth.svelte';
 	import { share } from '$lib/menus.svelte';
-	import { player } from '$lib/player.svelte';
+	import { player, plural } from '$lib/player.svelte';
 	import TrackRow from '$lib/TrackRow.svelte';
 	import Artwork from '$lib/ui/Artwork.svelte';
 	import Icon from '$lib/ui/Icon.svelte';
@@ -61,7 +61,7 @@
 	const isMe = $derived(!!artist && artist.did === auth.did);
 </script>
 
-<ScreenHeader title={artist ? artist.display_name || artist.handle : ''} subtitle={metrics ? `${metrics.totals.tracks} tracks` : undefined} />
+<ScreenHeader title={artist ? artist.display_name || artist.handle : ''} subtitle={metrics ? plural(metrics.totals.tracks, 'track') : undefined} />
 
 {#if error}
 	<p class="error pad">{error}</p>
@@ -72,7 +72,7 @@
 		<p class="muted">@{artist.handle}</p>
 		{#if metrics}
 			<div class="stats small">
-				<span><strong>{metrics.totals.tracks}</strong> tracks</span>
+				<span><strong>{metrics.totals.tracks}</strong> {metrics.totals.tracks === 1 ? 'track' : 'tracks'}</span>
 				<span><strong>{metrics.totals.plays}</strong> plays</span>
 			</div>
 		{/if}
@@ -105,10 +105,10 @@
 		<div class="list">
 			{#each tab === 'albums' ? albums : playlists as l (l.id)}
 				<a class="row-item" href="/{tab === 'albums' ? 'album' : 'playlist'}/{l.id}">
-					<Artwork seed={l.metadata.name ?? l.id} size={48} />
+					<Artwork src={l.media?.artwork?.url} seed={l.metadata.name ?? l.id} size={48} />
 					<span class="grow">
 						<span class="ellipsis" style="display:block;font-weight:600">{l.metadata.name ?? 'untitled'}</span>
-						<span class="muted small">{l.metrics.member_count} tracks</span>
+						<span class="muted small">{plural(l.metrics.member_count, 'track')}</span>
 					</span>
 				</a>
 			{/each}

@@ -70,7 +70,7 @@
 		aspect-ratio: 1;
 		flex-shrink: 1;
 		min-height: 0;
-		margin: auto 0;
+		margin-top: var(--s-md);
 		box-shadow: 0 12px 40px rgb(0 0 0 / 0.25);
 		border-radius: var(--r-md);
 	}
@@ -81,6 +81,7 @@
 		margin: 0 calc(-1 * var(--s-lg));
 	}
 	.info {
+		margin-top: auto;
 		display: flex;
 		align-items: center;
 		gap: var(--s-md);

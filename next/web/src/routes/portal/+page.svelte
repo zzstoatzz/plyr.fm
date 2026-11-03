@@ -4,7 +4,8 @@
 	import { api, type ListSummary, type Track } from '$lib/api';
 	import { auth } from '$lib/auth.svelte';
 	import { deleteTrack, editTrack, myProfile, saveProfile, type ProfileRecord } from '$lib/pds';
-	import { formatDuration } from '$lib/player.svelte';
+	import { formatDuration, plural } from '$lib/player.svelte';
+	import ArtworkPicker from '$lib/ArtworkPicker.svelte';
 	import Artwork from '$lib/ui/Artwork.svelte';
 	import Icon from '$lib/ui/Icon.svelte';
 	import ScreenHeader from '$lib/ui/ScreenHeader.svelte';
@@ -66,6 +67,7 @@
 	let title = $state('');
 	let album = $state('');
 	let description = $state('');
+	let artwork = $state<File | null | undefined>(undefined);
 
 	function openTrack(t: Track) {
 		editing = t;
@@ -73,6 +75,7 @@
 		title = t.metadata.title;
 		album = t.metadata.album ?? '';
 		description = t.metadata.description ?? '';
+		artwork = undefined;
 	}
 
 	async function submitTrack(e: SubmitEvent) {
@@ -80,7 +83,7 @@
 		if (!editing) return;
 		busy = true;
 		try {
-			const status = await editTrack(editing.record.uri, { title, album, description });
+			const status = await editTrack(editing.record.uri, { title, album, description, artwork });
 			toast.show(writeNote(status, 'track saved'));
 			editing = null;
 			if (auth.did) tracks = (await api.tracks({ artist_did: auth.did, limit: 100 })).data;
@@ -138,7 +141,7 @@
 		</div>
 	</section>
 	<div class="stats small">
-		<span><strong>{tracks?.length ?? '–'}</strong> tracks</span>
+		<span><strong>{tracks?.length ?? '–'}</strong> {tracks?.length === 1 ? 'track' : 'tracks'}</span>
 		<span><strong>{plays}</strong> plays</span>
 		<span><strong>{likes}</strong> likes</span>
 	</div>
@@ -176,10 +179,10 @@
 		<div class="list">
 			{#each albums as a (a.id)}
 				<a class="row-item" href="/album/{a.id}">
-					<Artwork seed={a.metadata.name ?? a.id} size={44} />
+					<Artwork src={a.media?.artwork?.url} seed={a.metadata.name ?? a.id} size={44} />
 					<span class="grow">
 						<span class="ellipsis" style="display:block;font-weight:600">{a.metadata.name ?? 'untitled'}</span>
-						<span class="muted small">{a.metrics.member_count} tracks</span>
+						<span class="muted small">{plural(a.metrics.member_count, 'track')}</span>
 					</span>
 					<span class="chev"><Icon name="chevron" size={18} /></span>
 				</a>
@@ -191,10 +194,10 @@
 	<div class="list">
 		{#each playlists as p (p.id)}
 			<a class="row-item" href="/playlist/{p.id}">
-				<Artwork seed={p.metadata.name ?? p.id} size={44} />
+				<Artwork src={p.media?.artwork?.url} seed={p.metadata.name ?? p.id} size={44} />
 				<span class="grow">
 					<span class="ellipsis" style="display:block;font-weight:600">{p.metadata.name ?? 'untitled'}</span>
-					<span class="muted small">{p.metrics.member_count} tracks</span>
+					<span class="muted small">{plural(p.metrics.member_count, 'track')}</span>
 				</span>
 				<span class="chev"><Icon name="chevron" size={18} /></span>
 			</a>
@@ -222,6 +225,10 @@
 <Sheet open={!!editing} onclose={() => (editing = null)} title="edit track">
 	{#if editing}
 		<form onsubmit={submitTrack}>
+			<div class="field">
+				<span>cover art</span>
+				<ArtworkPicker bind:value={artwork} current={editing.media.artwork?.url ?? null} seed={title} />
+			</div>
 			<label class="field">
 				<span>title</span>
 				<input bind:value={title} maxlength="256" required />

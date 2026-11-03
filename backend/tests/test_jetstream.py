@@ -94,7 +94,8 @@ def _mock_trusted_origins():
             "backend._internal.tasks.ingest.is_trusted_audio_origin", return_value=True
         ),
         patch(
-            "backend._internal.tasks.ingest.is_trusted_image_origin", return_value=True
+            "backend._internal.tasks.origin_trust.is_trusted_image_origin",
+            return_value=True,
         ),
     ):
         yield

@@ -74,13 +74,13 @@ status: ✅ in next · 🟡 partial · ⬜ not yet · 🚫 needs an API/lexicon 
 |---|---|
 | library: liked + playlists, create playlist | ✅ |
 | playlist: rename, delete, remove track, add track | ✅ |
-| playlist reorder, playlist cover art | ⬜ / 🚫 (artwork) |
+| playlist reorder, playlist cover art | ⬜ (lexicon has fm.plyr.list#imageBlob now) |
 
 ### upload & portal (artist tools)
 | prod | next |
 |---|---|
 | upload track: audio, title, album, description | ✅ (audio on your PDS) |
-| upload: artwork | 🚫 `imageBlob` on fm.plyr.track/list (both apps) |
+| upload + edit: artwork | ✅ `imageBlob` on fm.plyr.track (PDS blob, shrunk to ≤ 2000px) + `imageUrl` = its getBlob url |
 | upload: tags, featured artists, album mode, supporter gate | ⬜ / 🟡 (gate works on staging namespaces only) |
 | portal: profile (bio, avatar), your tracks (edit, delete), albums, playlists | ✅ |
 | portal: private tracks, share links, copyright flags, export, delete account | ⬜ |

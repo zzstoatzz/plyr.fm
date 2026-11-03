@@ -62,6 +62,12 @@
             "format": "uri",
             "description": "URL to cover artwork image."
           },
+          "imageBlob": {
+            "type": "blob",
+            "description": "Cover artwork stored on the user's PDS. When present it is the canonical cover; imageUrl may carry its getBlob URL for clients that only read imageUrl.",
+            "accept": ["image/png", "image/jpeg", "image/webp", "image/gif"],
+            "maxSize": 10000000
+          },
           "createdAt": {
             "type": "string",
             "format": "datetime",

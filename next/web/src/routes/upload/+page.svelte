@@ -6,6 +6,7 @@
 	import type { Gate } from '$lib/spaces';
 	import { formatDuration } from '$lib/player.svelte';
 	import Icon from '$lib/ui/Icon.svelte';
+	import ArtworkPicker from '$lib/ArtworkPicker.svelte';
 	import ScreenHeader from '$lib/ui/ScreenHeader.svelte';
 
 	let file = $state<File | null>(null);
@@ -15,8 +16,11 @@
 	let description = $state('');
 	let duration = $state<number | undefined>(undefined);
 	let gate = $state<Gate | ''>('');
+	let artwork = $state<File | null | undefined>(undefined);
 	let busy = $state(false);
 	let note = $state<string | null>(null);
+	/** once the PDS has the record, it's saved: never create it again on retry */
+	let saved = $state<{ uri: string; status: string } | null>(null);
 
 	$effect(() => {
 		if (!artist && auth.handle) artist = auth.handle;
@@ -35,14 +39,14 @@
 
 	async function submit(e: SubmitEvent) {
 		e.preventDefault();
-		if (!file) return;
+		if (!file || busy || saved) return;
 		busy = true;
 		note = 'uploading to your PDS…';
 		try {
-			const { uri, status } = await uploadTrack({ file, title, artist, album, description, duration, gate: gate || null });
+			const { uri, status } = await uploadTrack({ file, title, artist, album, description, duration, artwork, gate: gate || null });
+			saved = { uri, status };
+			note = null;
 			if (status === 'indexed') location.href = `/track/${trackIdFromUri(uri)}`;
-			else if (status === 'rejected') note = 'saved to your PDS, but the appview rejected the record';
-			else note = 'saved to your PDS; still indexing, it will show up shortly';
 		} catch (err) {
 			note = (err as Error).message;
 		} finally {
@@ -61,6 +65,29 @@
 		<a class="btn primary" href="/login">sign in</a>
 	</div>
 {:else}
+	{#if saved}
+		<div class="saved pad" role="status">
+			<strong>saved to your PDS</strong>
+			<p class="hint">
+				{saved.status === 'rejected'
+					? "the appview didn't accept the record, so it won't show up here yet. it's still in your repo."
+					: "it's still being indexed and will show up shortly. nothing else to do."}
+			</p>
+			<div class="row">
+				<a class="btn outline" href="/track/{trackIdFromUri(saved.uri)}">view track</a>
+				<button
+					class="btn"
+					onclick={() => {
+						saved = null;
+						file = null;
+						title = album = description = '';
+						artwork = undefined;
+						duration = undefined;
+					}}>upload another</button
+				>
+			</div>
+		</div>
+	{:else}
 	<form class="pad" onsubmit={submit}>
 		<label class="drop" class:has={!!file}>
 			<input type="file" accept="audio/*" onchange={pick} required />
@@ -78,8 +105,8 @@
 		<label class="field"><span>album <em>(optional)</em></span><input bind:value={album} maxlength="256" /></label>
 		<label class="field"><span>description <em>(optional)</em></span><textarea bind:value={description} maxlength="5000"></textarea></label>
 		<div class="field">
-			<span>artwork</span>
-			<p class="hint">coming soon: cover art will be stored on your PDS too.</p>
+			<span>cover art <em>(optional)</em></span>
+			<ArtworkPicker bind:value={artwork} seed={title} />
 		</div>
 		{#if auth.spaces}
 			<label class="field">
@@ -97,6 +124,7 @@
 		<button class="btn primary block lg" disabled={busy || !file || !title.trim() || !artist.trim()}>{busy ? 'uploading…' : 'upload'}</button>
 		{#if note}<p class="hint note" role="status">{note}</p>{/if}
 	</form>
+	{/if}
 {/if}
 
 <style>
@@ -141,6 +169,18 @@
 	.note {
 		margin-top: var(--s-md);
 		text-align: center;
+	}
+	.saved {
+		display: flex;
+		flex-direction: column;
+		gap: var(--s-sm);
+		text-align: center;
+		align-items: center;
+		padding-top: var(--s-4xl);
+	}
+	.saved .row {
+		display: flex;
+		gap: var(--s-sm);
 	}
 	.empty .btn {
 		margin-top: var(--s-md);

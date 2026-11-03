@@ -6,10 +6,26 @@ import { api, type AwaitStatus, type Track } from './api';
 import { auth } from './auth.svelte';
 import { NSID } from './config';
 import type { Gate } from './spaces';
+import { prepareArtwork } from './artwork';
+import { blobUrl } from './identity';
 
 function session() {
 	if (!auth.rpc || !auth.did) throw new Error('sign in first');
 	return { rpc: auth.rpc, did: auth.did as `did:${string}:${string}` };
+}
+
+/**
+ * the PDS accepted the write, so it is saved. waiting for the appview to
+ * index it is best-effort: a timeout or network error means "saved, still
+ * indexing", never "failed", so callers don't retry a create that already
+ * happened. a newer revision showing up first also counts as indexed.
+ */
+async function settle(uri: string, cid?: string): Promise<AwaitStatus> {
+	try {
+		return (await api.awaitRecord(uri, cid)).status;
+	} catch {
+		return 'pending';
+	}
 }
 
 export interface LikeRef {
@@ -66,7 +82,7 @@ export async function like(track: Track): Promise<AwaitStatus> {
 		})
 	);
 	(await myLikes()).set(subject.uri, { uri: res.uri, rkey: res.uri.split('/').pop()!, subject });
-	return (await api.awaitRecord(res.uri, res.cid)).status;
+	return await settle(res.uri, res.cid);
 }
 
 export async function unlike(track: Track): Promise<AwaitStatus> {
@@ -80,7 +96,7 @@ export async function unlike(track: Track): Promise<AwaitStatus> {
 		})
 	);
 	likes.delete(track.record.uri);
-	return (await api.awaitRecord(existing.uri)).status;
+	return await settle(existing.uri);
 }
 
 // playlists are fm.plyr.*.list records with listType "playlist". edits are a
@@ -127,7 +143,7 @@ async function writeList(uri: string, value: ListRecord, swap: string): Promise<
 			}
 		})
 	);
-	return (await api.awaitRecord(res.uri, res.cid)).status;
+	return await settle(res.uri, res.cid);
 }
 
 export async function createPlaylist(name: string, first?: Track): Promise<{ uri: string; status: AwaitStatus }> {
@@ -142,7 +158,7 @@ export async function createPlaylist(name: string, first?: Track): Promise<{ uri
 			}
 		})
 	);
-	return { uri: res.uri, status: (await api.awaitRecord(res.uri, res.cid)).status };
+	return { uri: res.uri, status: await settle(res.uri, res.cid) };
 }
 
 export async function addToPlaylist(playlistUri: string, track: Track): Promise<AwaitStatus> {
@@ -169,7 +185,7 @@ export async function renamePlaylist(playlistUri: string, name: string): Promise
 export async function deletePlaylist(playlistUri: string): Promise<AwaitStatus> {
 	const { rpc, did } = session();
 	await ok(rpc.post('com.atproto.repo.deleteRecord', { input: { repo: did, collection: LIST(), rkey: rkeyOf(playlistUri) } }));
-	return (await api.awaitRecord(playlistUri)).status;
+	return await settle(playlistUri);
 }
 
 // uploads: the audio goes to the user's PDS as a blob and the track record
@@ -185,6 +201,8 @@ export interface NewTrack {
 	album?: string;
 	description?: string;
 	duration?: number;
+	/** cover art, stored on your PDS as imageBlob */
+	artwork?: File | null;
 	/** keep the audio in a gate space on your PDS instead of public */
 	gate?: Gate | null;
 }
@@ -208,6 +226,7 @@ export async function uploadTrack(input: NewTrack): Promise<{ uri: string; statu
 	if (input.album?.trim()) record.album = input.album.trim();
 	if (input.description?.trim()) record.description = input.description.trim();
 	if (input.duration && Number.isFinite(input.duration)) record.duration = Math.round(input.duration);
+	if (input.artwork) Object.assign(record, await uploadArtwork(input.artwork));
 
 	let res: { uri: string; cid: string };
 	if (spaces && space) {
@@ -236,7 +255,7 @@ export async function uploadTrack(input: NewTrack): Promise<{ uri: string; statu
 			})
 		);
 	}
-	return { uri: res.uri, status: (await api.awaitRecord(res.uri, res.cid)).status };
+	return { uri: res.uri, status: await settle(res.uri, res.cid) };
 }
 
 /** read duration locally so the record can carry it. */
@@ -308,7 +327,7 @@ export async function saveProfile(
 			}
 		})
 	);
-	return (await api.awaitRecord(res.uri, res.cid)).status;
+	return await settle(res.uri, res.cid);
 }
 
 // your own tracks: edits are a read-modify-write of the fm.plyr.track record,
@@ -318,6 +337,20 @@ export interface TrackEdits {
 	title: string;
 	album: string;
 	description: string;
+	/** a new cover (File), remove it (null), or keep it (undefined) */
+	artwork?: File | null;
+}
+
+/**
+ * upload cover art as a blob and return the record fields: imageBlob is the
+ * canonical cover; imageUrl is its getBlob url for clients that only read urls.
+ */
+async function uploadArtwork(file: File): Promise<{ imageBlob: unknown; imageUrl: string }> {
+	const { rpc, did } = session();
+	const body = await prepareArtwork(file);
+	const uploaded = await ok(rpc.post('com.atproto.repo.uploadBlob', { input: body }));
+	const cid = (uploaded.blob as { ref: { $link: string } }).ref.$link;
+	return { imageBlob: uploaded.blob, imageUrl: await blobUrl(did, cid) };
 }
 
 export async function editTrack(uri: string, edits: TrackEdits): Promise<AwaitStatus> {
@@ -333,6 +366,12 @@ export async function editTrack(uri: string, edits: TrackEdits): Promise<AwaitSt
 		if (v) record[key] = v;
 		else delete record[key];
 	}
+	if (edits.artwork === null) {
+		delete record.imageBlob;
+		delete record.imageUrl;
+	} else if (edits.artwork) {
+		Object.assign(record, await uploadArtwork(edits.artwork));
+	}
 	const res = await ok(
 		rpc.post('com.atproto.repo.putRecord', {
 			input: {
@@ -344,7 +383,7 @@ export async function editTrack(uri: string, edits: TrackEdits): Promise<AwaitSt
 			}
 		})
 	);
-	return (await api.awaitRecord(res.uri, res.cid)).status;
+	return await settle(res.uri, res.cid);
 }
 
 export async function deleteTrack(uri: string): Promise<AwaitStatus> {
@@ -354,5 +393,5 @@ export async function deleteTrack(uri: string): Promise<AwaitStatus> {
 			input: { repo: did, collection: NSID.track as Nsid, rkey: rkeyOf(uri) }
 		})
 	);
-	return (await api.awaitRecord(uri)).status;
+	return await settle(uri);
 }

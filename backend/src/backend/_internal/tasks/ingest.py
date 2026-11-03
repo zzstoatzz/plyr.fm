@@ -37,7 +37,7 @@ from backend._internal.tasks.hooks import (
 )
 from backend._internal.tasks.origin_trust import (
     is_trusted_audio_origin,
-    is_trusted_image_origin,
+    record_image_url,
 )
 from backend._internal.tasks.pds import is_like_uri_cancelled
 from backend._internal.tasks.pds_mirror import schedule_pds_blob_mirror
@@ -417,15 +417,9 @@ async def ingest_track_create(
         if album := record.get("album"):
             extra["album"] = album
 
-        # validate imageUrl origin — untrusted URLs are stripped (track is still valid)
-        image_url = record.get("imageUrl")
-        if image_url and not await is_trusted_image_origin(image_url, artist_did=did):
-            logfire.warn(
-                "ingest: stripping untrusted imageUrl",
-                uri=uri,
-                image_url=image_url,
-            )
-            image_url = None
+        # untrusted imageUrls are stripped (track is still valid); an imageBlob on
+        # the artist's own PDS is trusted as derived.
+        image_url = await record_image_url(record, uri=uri, did=did, artist=artist)
 
         track = Track(
             title=record.get("title", "untitled"),
@@ -549,15 +543,9 @@ async def ingest_track_update(
             track.title = title
         if description := record.get("description"):
             track.description = description
-        if image_url := record.get("imageUrl"):
-            if await is_trusted_image_origin(image_url, artist_did=did):
-                track.image_url = image_url
-            else:
-                logfire.warn(
-                    "ingest: stripping untrusted imageUrl on update",
-                    uri=uri,
-                    image_url=image_url,
-                )
+        artist = await db.get(Artist, did)
+        if image_url := await record_image_url(record, uri=uri, did=did, artist=artist):
+            track.image_url = image_url
         if cid:
             track.atproto_record_cid = cid
         if rev:

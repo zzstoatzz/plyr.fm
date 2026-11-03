@@ -269,3 +269,6 @@ export function formatDuration(seconds: number | null | undefined) {
 }
 
 export const artistName = (t: Track) => t.artist.profile.display_name || t.artist.profile.handle;
+
+/** "1 track", "2 tracks" */
+export const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;

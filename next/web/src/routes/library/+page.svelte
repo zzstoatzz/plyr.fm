@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { plural } from '$lib/player.svelte';
 	import { goto } from '$app/navigation';
 	import { api, playlistIdFromUri, type ListSummary, type Track } from '$lib/api';
 	import { auth } from '$lib/auth.svelte';
@@ -77,10 +78,10 @@
 			</button>
 			{#each lists as list (list.id)}
 				<a class="row-item" href="/playlist/{list.id}">
-					<Artwork seed={list.metadata.name ?? list.id} size={48} />
+					<Artwork src={list.media?.artwork?.url} seed={list.metadata.name ?? list.id} size={48} />
 					<span class="grow">
 						<span class="ellipsis" style="display:block;font-weight:600">{list.metadata.name ?? 'untitled'}</span>
-						<span class="muted small">{list.metrics.member_count} tracks</span>
+						<span class="muted small">{plural(list.metrics.member_count, 'track')}</span>
 					</span>
 					<span class="chev"><Icon name="chevron" size={18} /></span>
 				</a>
