@@ -57,6 +57,8 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
     const track = tracks[at];
     if (!track) return false;
     const request = ++sequence.current;
+    const startedAt = Date.now();
+    console.info("[playback] load", { request, track: track.id, start });
     player.pause();
     setQueue(tracks);
     setIndex(at);
@@ -67,6 +69,7 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
     try {
       const playback = await api.playback(track.id);
       const { status: availability, space, delivery, artifact } = playback.availability;
+      console.info("[playback] availability", { request, track: track.id, availability, delivery: !!delivery, artifact: !!artifact, elapsedMs: Date.now() - startedAt });
       let url: string;
       if (availability === 'gated' && space) {
         url = await gatedAudioUrl(space.record, auth);
@@ -97,6 +100,7 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
           artworkUrl: track.media.artwork?.url
         }, { showSeekForward: true, showSeekBackward: true });
       }
+      console.info("[playback] source attached", { request, track: track.id, elapsedMs: Date.now() - startedAt });
       setReady(true);
       if (start) {
         setStarting(request);
@@ -104,6 +108,7 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
       }
       return true;
     } catch (cause) {
+      console.warn("[playback] load failed", { request, track: track.id, error: cause instanceof Error ? cause.name : "unknown", elapsedMs: Date.now() - startedAt });
       if (request === sequence.current) {
         setStarting(null);
         setError(cause instanceof Error ? cause.message : 'could not play audio');
@@ -117,6 +122,7 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
   useEffect(() => {
     if (starting === null) return;
     if ((status.playing && player.playing && player.currentTime > 0) || status.error) {
+      console.info("[playback] startup settled", { request: starting, track: current?.id, position: player.currentTime, mediaError: !!status.error });
       setStarting(null);
       return;
     }
@@ -124,10 +130,12 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
       if (starting !== sequence.current) return;
       player.pause();
       setStarting(null);
+      console.warn('[playback] startup timeout', { request: starting, track: current?.id, loaded: player.isLoaded, position: player.currentTime });
+      setReady(false);
       setError('Playback took too long to start');
     }, 15_000);
     return () => clearTimeout(timeout);
-  }, [player, starting, status.currentTime, status.error, status.playing]);
+  }, [current?.id, player, starting, status.currentTime, status.error, status.playing]);
 
   function play(track: Track, collection?: Track[]) {
     const list = playThrough && collection?.some((item) => item.id === track.id) ? collection : [track];
@@ -158,7 +166,7 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
 
   function toggle() {
     if (loading || !current) return;
-    if (!ready) void load(queue, index);
+    if (!ready || status.error || error) void load(queue, index);
     else if (status.playing) player.pause();
     else player.play();
   }

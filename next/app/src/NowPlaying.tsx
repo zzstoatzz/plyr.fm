@@ -79,7 +79,7 @@ export function NowPlaying({ track, close }: { track: Track; close: () => void }
               <View style={styles.time}>
                 <Text style={[caption, styles.numeric]}>{time(position)}</Text>
                 <Text accessibilityLiveRegion="polite" style={[caption, styles.status]}>
-                  {error ? 'Couldn’t play this track' : player.loading ? 'Loading…' : ''}
+                  {error ? 'Couldn’t play this track' : ''}
                 </Text>
                 <Text style={[caption, styles.numeric]}>{time(duration)}</Text>
               </View>
