@@ -131,7 +131,7 @@ pub const PostgresLikeQueryStore = struct {
             \\FROM plyr_index.like_records
             \\WHERE owner_did = $1 AND subject_uri = $2 AND subject_cid = $3
             \\  AND collection = $4 AND NOT deleted
-            \\ORDER BY record_created_at::timestamptz DESC, record_uri DESC
+            \\ORDER BY record_created_at_us DESC, record_uri DESC
             \\LIMIT 33
         , .{
             request.actor_did,
@@ -283,7 +283,7 @@ const columns =
     \\  CASE WHEN actor.did IS NULL THEN NULL ELSE COALESCE(profile.avatar, actor.avatar_url) END,
     \\  actor.did IS NOT NULL AND profile.avatar IS NOT NULL,
     \\  availability.evidence_source,
-    \\  (extract(epoch FROM likes.record_created_at::timestamptz) * 1000000)::bigint
+    \\  likes.record_created_at_us
 ;
 
 const joins =
@@ -300,20 +300,21 @@ const joins =
 const where =
     \\WHERE likes.subject_uri = $1 AND likes.subject_cid = $2
     \\  AND likes.collection = $3 AND NOT likes.deleted
+    \\  AND likes.record_created_at_us IS NOT NULL
 ;
 
 const base_query = columns ++ "\n" ++ joins ++ "\n" ++ where ++ "\n" ++
-    \\ORDER BY likes.record_created_at::timestamptz DESC, likes.record_uri DESC
+    \\ORDER BY likes.record_created_at_us DESC, likes.record_uri DESC
     \\LIMIT $5::bigint
 ;
 
 const after_query = columns ++ "\n" ++ joins ++ "\n" ++ where ++ "\n" ++
     \\  AND (
-    \\    likes.record_created_at::timestamptz < TIMESTAMPTZ 'epoch' + ($5::bigint * INTERVAL '1 microsecond')
-    \\    OR (likes.record_created_at::timestamptz = TIMESTAMPTZ 'epoch' + ($5::bigint * INTERVAL '1 microsecond')
+    \\    likes.record_created_at_us < $5::bigint
+    \\    OR (likes.record_created_at_us = $5::bigint
     \\      AND likes.record_uri < $6)
     \\  )
-    \\ORDER BY likes.record_created_at::timestamptz DESC, likes.record_uri DESC
+    \\ORDER BY likes.record_created_at_us DESC, likes.record_uri DESC
     \\LIMIT $7::bigint
 ;
 

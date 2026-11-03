@@ -64,8 +64,7 @@ const chart_query =
     \\WITH ranked_likes AS MATERIALIZED (
     \\  SELECT likes.subject_uri, likes.subject_cid,
     \\    COUNT(DISTINCT likes.owner_did) FILTER (
-    \\      WHERE $4::bigint IS NULL OR likes.record_created_at::timestamptz >=
-    \\        TIMESTAMPTZ 'epoch' + ($4::bigint * INTERVAL '1 microsecond')
+    \\      WHERE $4::bigint IS NULL OR likes.record_created_at_us >= $4::bigint
     \\    )::bigint AS period_like_count,
     \\    COUNT(DISTINCT likes.owner_did)::bigint AS all_time_like_count
     \\  FROM plyr_index.like_records AS likes

@@ -441,12 +441,13 @@ const collection_select = "SELECT\n" ++ header_columns ++ "\n" ++
     \\  , COALESCE(sum(COALESCE(metrics.play_count, 0)) FILTER (
     \\      WHERE aa.repo_did IS NOT NULL AND a.did IS NOT NULL
     \\    ), 0)::bigint
-    \\  , (extract(epoch FROM records.record_created_at::timestamptz) * 1000000)::bigint
+    \\  , records.record_created_at_us
 ;
 
 const collection_where =
     \\WHERE records.collection = $1 AND records.list_type = $3
     \\  AND ($4::text IS NULL OR records.owner_did = $4) AND NOT records.deleted
+    \\  AND records.record_created_at_us IS NOT NULL
 ;
 
 const collection_group =
@@ -455,19 +456,19 @@ const collection_group =
 
 const collection_query = collection_select ++ "\n" ++ collection_joins ++ "\n" ++
     collection_where ++ "\n" ++ collection_group ++ "\n" ++
-    \\ORDER BY records.record_created_at::timestamptz DESC, records.record_uri DESC
+    \\ORDER BY records.record_created_at_us DESC, records.record_uri DESC
     \\LIMIT $5::bigint
 ;
 
 const collection_after_query = collection_select ++ "\n" ++ collection_joins ++ "\n" ++
     collection_where ++ "\n" ++
     \\  AND (
-    \\    records.record_created_at::timestamptz < TIMESTAMPTZ 'epoch' + ($5::bigint * INTERVAL '1 microsecond')
-    \\    OR (records.record_created_at::timestamptz = TIMESTAMPTZ 'epoch' + ($5::bigint * INTERVAL '1 microsecond')
+    \\    records.record_created_at_us < $5::bigint
+    \\    OR (records.record_created_at_us = $5::bigint
     \\      AND records.record_uri < $6)
     \\  )
 ++ "\n" ++ collection_group ++ "\n" ++
-    \\ORDER BY records.record_created_at::timestamptz DESC, records.record_uri DESC
+    \\ORDER BY records.record_created_at_us DESC, records.record_uri DESC
     \\LIMIT $7::bigint
 ;
 
