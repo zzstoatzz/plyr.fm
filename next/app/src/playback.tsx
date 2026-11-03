@@ -19,6 +19,7 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
   const [error, setError] = useState<string | null>(null);
   const [repeat, setRepeat] = useState<'off' | 'all' | 'one'>('off');
   const sequence = useRef(0);
+  const jamTrack = useRef<string | null>(null);
   const objectUrl = useRef<string | null>(null);
   const current = queue[index];
 
@@ -49,9 +50,9 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
   useEffect(() => { player.volume = volume; }, [player, volume]);
   useEffect(() => { player.loop = repeat === 'one'; }, [player, repeat]);
 
-  async function load(tracks: Track[], at: number) {
+  async function load(tracks: Track[], at: number, start = true) {
     const track = tracks[at];
-    if (!track) return;
+    if (!track) return false;
     const request = ++sequence.current;
     player.pause();
     setQueue(tracks);
@@ -74,7 +75,7 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
       }
       if (request !== sequence.current) {
         if (availability === 'gated') releaseGatedAudioUrl(url);
-        return;
+        return false;
       }
       const previousSource = objectUrl.current;
       try {
@@ -93,9 +94,11 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
         }, { showSeekForward: true, showSeekBackward: true });
       }
       setReady(true);
-      player.play();
+      if (start) player.play();
+      return true;
     } catch (cause) {
       if (request === sequence.current) setError(cause instanceof Error ? cause.message : 'could not play audio');
+      return false;
     } finally {
       if (request === sequence.current) setLoading(false);
     }
@@ -107,8 +110,8 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
   }
 
   async function next() {
-    if (index + 1 < queue.length) return load(queue, index + 1);
-    if (repeat === 'all' && queue.length) return load(queue, 0);
+    if (index + 1 < queue.length) { await load(queue, index + 1); return; }
+    if (repeat === 'all' && queue.length) { await load(queue, 0); return; }
     if (!keepPlaying) return;
     const request = sequence.current;
     try {
@@ -123,7 +126,7 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
   }
 
   useEffect(() => {
-    if (ready && status.didJustFinish && repeat !== 'one') void next();
+    if (!jamTrack.current && ready && status.didJustFinish && repeat !== 'one') void next();
     // Audio status is the trigger. Queue edits must not replay a finish event.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status.didJustFinish]);
@@ -136,6 +139,22 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
   }
 
   const value: Playback = {
+    async syncJam(track, position, playing) {
+      const key = `${track.id}/${track.record.cid}`;
+      if (jamTrack.current !== key || current?.id !== track.id || !ready) {
+        jamTrack.current = key;
+        if (!await load([track], 0, false) || jamTrack.current !== key) return;
+      }
+      if (Math.abs(player.currentTime - position) > 0.6) await player.seekTo(position);
+      if (playing && !player.playing) player.play();
+      else if (!playing && player.playing) player.pause();
+    },
+    leaveJam() {
+      if (!jamTrack.current) return;
+      jamTrack.current = null;
+      sequence.current++;
+      player.pause();
+    },
     play, queue, current, index, loading, error, status, repeat, setRepeat, toggle, next,
     previous: () => { if (status.currentTime > 3 || index === 0) void player.seekTo(0); else void load(queue, index - 1); },
     seek: (seconds) => { if (ready) void player.seekTo(seconds); },
@@ -163,6 +182,8 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
 }
 
 interface Playback {
+  syncJam(track: Track, position: number, playing: boolean): Promise<void>;
+  leaveJam(): void;
   play(track: Track, collection?: Track[]): void;
   queue: Track[];
   current?: Track;

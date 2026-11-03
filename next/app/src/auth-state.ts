@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react';
 import { Client } from '@atcute/client';
-import { BASE_SCOPE_PARTS, SCOPE_PARTS, hasPreferenceGrant } from './auth-config';
+import { BASE_SCOPE_PARTS, SCOPE_PARTS, STANDARD_SCOPE_PARTS, hasPreferenceGrant, hasJamGrant } from './auth-config';
 import { didDocument, pdsEndpoint, pdsSupportsSpaces } from './identity';
 
 export type Did = `did:${string}:${string}`;
@@ -12,13 +12,14 @@ export type Auth = {
 	agent: Agent | null;
 	rpc: Client | null;
 	preferenceSpace: boolean;
+	jamSpace: boolean;
 	error: string | null;
 	scopeRejected: boolean;
 };
 
 const initial: Auth = {
 	did: null, ready: false, handle: null, agent: null, rpc: null,
-	preferenceSpace: false, error: null, scopeRejected: false
+	preferenceSpace: false, jamSpace: false, error: null, scopeRejected: false
 };
 
 let state = initial;
@@ -41,7 +42,7 @@ export function getAuth(): Auth {
 }
 
 export function setAuth(did: Did, agent: Agent, scope: string) {
-	update({ ...initial, ready: true, did, agent, rpc: new Client({ handler: agent }), preferenceSpace: hasPreferenceGrant(scope, did) });
+	update({ ...initial, ready: true, did, agent, rpc: new Client({ handler: agent }), preferenceSpace: hasPreferenceGrant(scope, did), jamSpace: hasJamGrant(scope) });
 	void didDocument(did).then(doc => {
 		if (state.agent !== agent) return;
 		update({ ...state, handle: doc.alsoKnownAs?.find(value => value.startsWith('at://'))?.slice(5) ?? null });
@@ -54,12 +55,12 @@ function update(next: Auth) {
 }
 
 
-export async function scopeFor(identifier: string, deviceOnly: boolean): Promise<string> {
+export async function scopeFor(identifier: string, deviceOnly: boolean, jam = false): Promise<string> {
 	const base = BASE_SCOPE_PARTS.join(' ');
 	if (deviceOnly || SCOPE_PARTS.length === BASE_SCOPE_PARTS.length) return base;
 	try {
 		const did = identifier.startsWith('did:') ? identifier : await resolveHandle(identifier);
-		if (typeof did === 'string' && await pdsSupportsSpaces(await pdsEndpoint(did))) return SCOPE_PARTS.join(' ');
+		if (typeof did === 'string' && await pdsSupportsSpaces(await pdsEndpoint(did))) return (jam ? SCOPE_PARTS : STANDARD_SCOPE_PARTS).join(' ');
 	} catch {
 		/* Space scope is optional when capability discovery fails. */
 	}

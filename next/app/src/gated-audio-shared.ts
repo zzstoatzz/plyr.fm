@@ -36,7 +36,7 @@ async function mint(agent: Agent, space: string, authorityPds: string, transport
 	return { key, token, expires: payload.exp * 1000 };
 }
 
-async function credentialFor(agent: Agent, space: string, authorityPds: string, transport: SpaceAudioTransport): Promise<Credential> {
+export async function credentialFor(agent: Agent, space: string, authorityPds: string, transport: SpaceAudioTransport): Promise<Credential> {
 	let cache = credentials.get(agent);
 	if (!cache) {
 		cache = new Map();
@@ -54,7 +54,7 @@ async function credentialFor(agent: Agent, space: string, authorityPds: string, 
 	}
 }
 
-async function signedFetch(transport: SpaceAudioTransport, credential: Credential, url: string, audience: Did, extra: Record<string, string> = {}) {
+export async function signedFetch(transport: SpaceAudioTransport, credential: Credential, url: string, audience: Did, extra: Record<string, string> = {}) {
 	const headers = await createSpaceSigHeaders(credential.key, {
 		authorization: `Atproto-Space-Credential ${credential.token}`,
 		audience

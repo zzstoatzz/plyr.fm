@@ -14,13 +14,32 @@ export const PREFERENCE_SPACE = {
 	collection: process.env.EXPO_PUBLIC_PREFERENCE_COLLECTION || 'fm.plyr.stg.preference'
 } as const;
 
+export const JAM_SPACE = {
+	type: process.env.EXPO_PUBLIC_JAM_SPACE_TYPE || 'fm.plyr.stg.jam',
+	collection: process.env.EXPO_PUBLIC_JAM_STATE_COLLECTION || 'fm.plyr.stg.jamState'
+} as const;
+
+export const JAM_SCOPE_PARTS = [
+	`space:${JAM_SPACE.type}?authority=self&collection=${JAM_SPACE.collection}&action=create&action=update&manage=create&manage=update`,
+	`space:${JAM_SPACE.type}?authority=*&action=read`
+];
+
+export function hasJamGrant(scope: string): boolean {
+	return scope.split(' ').some(value => {
+		const [type, query] = value.split('?');
+		const grant = new URLSearchParams(query);
+		return type === `space:${JAM_SPACE.type}` && grant.get('authority') === '*' && grant.getAll('action').includes('read');
+	});
+}
+
 export const PREFERENCE_SYNC = process.env.EXPO_PUBLIC_PREFERENCE_SYNC !== 'false';
 export const BASE_SCOPE_PARTS = ['atproto', ...Object.values(NSID).map(nsid => `repo:${nsid}`), 'blob:*/*'];
 const preferenceScope = `space:${PREFERENCE_SPACE.type}?authority=self&skey=self&collection=${PREFERENCE_SPACE.collection}&action=read_self&action=create&action=update&manage=create`;
 const protectedAudioScope = prefix === 'fm.plyr'
 	? [`space:${prefix}.privateMedia?authority=*&collection=${NSID.track}&action=read`]
 	: [];
-export const SCOPE_PARTS = [...BASE_SCOPE_PARTS, ...(PREFERENCE_SYNC ? [preferenceScope] : []), ...protectedAudioScope];
+export const STANDARD_SCOPE_PARTS = [...BASE_SCOPE_PARTS, ...(PREFERENCE_SYNC ? [preferenceScope] : []), ...protectedAudioScope];
+export const SCOPE_PARTS = [...STANDARD_SCOPE_PARTS, ...JAM_SCOPE_PARTS];
 
 export function hasPreferenceGrant(scope: string, did: string): boolean {
 	return PREFERENCE_SYNC && scope.split(' ').some((value) => {
