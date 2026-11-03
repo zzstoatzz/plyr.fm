@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { auth } from '$lib/auth.svelte';
+	import ScreenHeader from '$lib/ui/ScreenHeader.svelte';
 
 	let handle = $state('');
 	let error = $state<string | null>(null);
@@ -18,26 +19,30 @@
 	}
 </script>
 
-<h1>sign in</h1>
-<p class="muted">
-	sign in with your atproto account. your browser talks to your PDS directly: likes, playlists and
-	uploads are written to your repo, and plyr.fm just reads them back.
-</p>
-<form onsubmit={submit}>
-	<input bind:value={handle} placeholder="you.bsky.social" autocomplete="username" required />
-	<button class="btn" disabled={busy}>{busy ? 'redirecting…' : 'continue'}</button>
-</form>
-{#if error}<p class="error">{error}</p>{/if}
+<ScreenHeader title="sign in" />
+<div class="pad">
+	<p class="lede">sign in with your atproto account (bluesky or any PDS).</p>
+	<p class="muted small">
+		your browser talks to your PDS directly: likes, playlists and uploads are written to your repo, and plyr.fm just
+		reads them back.
+	</p>
+	<form onsubmit={submit}>
+		<label class="field">
+			<span>handle</span>
+			<input bind:value={handle} placeholder="you.bsky.social" autocomplete="username" autocapitalize="none" spellcheck="false" required />
+		</label>
+		<button class="btn primary block lg" disabled={busy || !handle.trim()}>{busy ? 'redirecting…' : 'continue'}</button>
+	</form>
+	{#if error}<p class="error">{error}</p>{/if}
+</div>
 
 <style>
-	form {
-		display: flex;
-		gap: 0.5rem;
-		margin-top: 1rem;
+	.lede {
+		font-size: var(--t-lg);
+		font-weight: 600;
+		margin: var(--s-sm) 0 var(--s-xs);
 	}
-	input {
-		flex: 1;
-		max-width: 320px;
-		padding: 0.5rem 0.75rem;
+	form {
+		margin-top: var(--s-xl);
 	}
 </style>

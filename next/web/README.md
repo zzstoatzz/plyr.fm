@@ -1,11 +1,13 @@
 # next/web
 
+layout and design follow bluesky's social-app (see [DESIGN.md](DESIGN.md) for the tokens, the shell and the prod → next parity inventory).
+
 the frontend for next.plyr.fm, built for a **read-only appview**:
 
 - the browser signs in with atproto oauth (`@atcute/oauth-browser-client`) and
   holds the session. the zig api never sees it.
 - writes (likes now; playlists, profile, uploads next) go straight to the
-  user's PDS as `fm.plyr.stg.*` records.
+  user's PDS as the real `fm.plyr.*` records.
 - reads come only from the zig appview's `/v1`. after a write, the client calls
   `GET /v1/records/await?uri=&cid=` to wait until the relay ingester has
   projected it.

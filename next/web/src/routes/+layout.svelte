@@ -2,161 +2,99 @@
 	import { onMount } from 'svelte';
 	import { auth } from '$lib/auth.svelte';
 	import { player } from '$lib/player.svelte';
-	import { goto } from '$app/navigation';
+	import { prefs } from '$lib/prefs.svelte';
+	import AddToPlaylist from '$lib/AddToPlaylist.svelte';
+	import Nav from '$lib/Nav.svelte';
+	import NowPlaying from '$lib/NowPlaying.svelte';
+	import PlayerBar from '$lib/PlayerBar.svelte';
+	import TrackMenu from '$lib/TrackMenu.svelte';
+	import { toast } from '$lib/ui/toast.svelte';
 	import '../app.css';
 
 	let { children } = $props();
-	let audio = $state<HTMLAudioElement>();
-	let q = $state('');
 
+	prefs.init();
 	onMount(() => {
 		auth.restore();
 	});
 
-	$effect(() => {
-		if (!audio) return;
-		if (player.src && audio.src !== player.src) audio.src = player.src;
-		if (player.playing) audio.play().catch(() => (player.playing = false));
-		else audio.pause();
-	});
-
-	function search(e: SubmitEvent) {
-		e.preventDefault();
-		if (q.trim()) goto(`/search?q=${encodeURIComponent(q.trim())}`);
+	function keys(e: KeyboardEvent) {
+		const el = e.target as HTMLElement;
+		if (el.closest('input, textarea, select, [contenteditable]') || e.metaKey || e.ctrlKey || e.altKey) return;
+		if (e.key === ' ' && player.current && !el.closest('button, a')) {
+			e.preventDefault();
+			player.toggle();
+		} else if (e.key === 'ArrowRight' && player.current) player.seek(player.time + 5);
+		else if (e.key === 'ArrowLeft' && player.current) player.seek(player.time - 5);
 	}
 </script>
 
-<header>
-	<a class="brand" href="/">plyr.fm <span class="tag">next</span></a>
-	<form onsubmit={search}><input bind:value={q} placeholder="search" aria-label="search" /></form>
-	<nav>
-		<a href="/playlists">playlists</a>
-		{#if auth.did}
-			<a href="/liked">liked</a>
-			<a href="/upload">upload</a>
-			<a href="/profile">profile</a>
-			<button class="link viewer" onclick={() => auth.logout()} title="sign out">
-				{#if auth.avatar}<img src={auth.avatar} alt="" width="20" height="20" />{/if}
-				<span>{auth.displayName ?? auth.handle ?? 'sign out'}</span>
-			</button>
-		{:else if auth.ready}
-			<a href="/login">sign in</a>
-		{/if}
-	</nav>
-</header>
+<svelte:window onkeydown={keys} />
 
-<main>{@render children()}</main>
+<div class="shell" class:playing={!!player.current}>
+	<Nav />
+	<main>{@render children()}</main>
+</div>
 
-{#if player.current}
-	<footer class="player">
-		<div class="now">
-			<a href="/track/{player.current.id}">{player.current.metadata.title}</a>
-			<span>{player.current.artist.profile.display_name || player.current.artist.profile.handle}</span>
-			{#if player.error}<span class="error">{player.error}</span>{/if}
-		</div>
-		<div class="controls">
-			<button onclick={() => player.prev()} aria-label="previous">⏮</button>
-			<button onclick={() => (player.playing = !player.playing)} aria-label={player.playing ? 'pause' : 'play'}>
-				{player.playing ? '⏸' : '▶'}
-			</button>
-			<button onclick={() => player.next()} aria-label="next">⏭</button>
-		</div>
-		<audio bind:this={audio} controls onended={() => player.next()} onpause={() => (player.playing = false)} onplay={() => (player.playing = true)}></audio>
-	</footer>
+<PlayerBar />
+<NowPlaying />
+<TrackMenu />
+<AddToPlaylist />
+
+{#if toast.message}
+	<div class="toast" role="status">{toast.message}</div>
 {/if}
 
 <style>
-	header {
+	.shell {
 		display: flex;
-		align-items: center;
-		gap: 1rem;
-		padding: 0.75rem 1rem;
-		position: sticky;
-		top: 0;
-		z-index: 1;
-		background: Canvas;
-	}
-	.tag {
-		padding: 0 0.3rem;
-		vertical-align: middle;
-	}
-	form {
-		flex: 1;
-		min-width: 0;
-	}
-	@media (max-width: 560px) {
-	header {
-		flex-wrap: wrap;
-		gap: 0.5rem 0.75rem;
-	}
-	header form {
-		order: 3;
-		flex-basis: 100%;
-	}
-	header input {
-		max-width: none;
-	}
-	nav {
-		margin-left: auto;
-	}
-	}
-	input {
-		box-sizing: border-box;
-		width: 100%;
-		max-width: 320px;
-		padding: 0.4rem 0.6rem;
-	}
-	nav {
-		display: flex;
-		gap: 0.75rem;
-		align-items: center;
-	}
-	nav a,
-		.link {
-		cursor: pointer;
-	}
-	.viewer {
-		display: inline-flex;
-		align-items: center;
-		gap: 6px;
-	}
-	.viewer img {
-		object-fit: cover;
+		justify-content: center;
+		min-height: 100dvh;
 	}
 	main {
-		max-width: 880px;
-		margin: 0 auto;
-		padding: 1rem 1rem 7rem;
-	}
-	.player {
-		position: fixed;
-		bottom: 0;
-		left: 0;
-		right: 0;
-		display: grid;
-		grid-template-columns: 1fr auto 1fr;
-		align-items: center;
-		gap: 1rem;
-		padding: 0.6rem 1rem;
-		background: Canvas;
-	}
-	.now {
-		display: flex;
-		flex-direction: column;
-		min-width: 0;
-	}
-	.controls button {
-		cursor: pointer;
-	}
-	audio {
 		width: 100%;
+		max-width: var(--center);
+		min-width: 0;
+		padding-bottom: calc(var(--tabbar) + env(safe-area-inset-bottom) + var(--s-lg));
 	}
-	@media (max-width: 600px) {
-	.player {
-		grid-template-columns: 1fr auto;
+	.playing main {
+		padding-bottom: calc(var(--tabbar) + var(--mini) + env(safe-area-inset-bottom) + var(--s-2xl));
 	}
-	audio {
-		display: none;
+	.toast {
+		position: fixed;
+		left: 50%;
+		bottom: calc(var(--tabbar) + var(--mini) + env(safe-area-inset-bottom) + var(--s-xl));
+		transform: translateX(-50%);
+		z-index: 30;
+		max-width: calc(100% - 2 * var(--s-lg));
+		padding: var(--s-sm) var(--s-lg);
+		border-radius: var(--r-full);
+		background: var(--c-1000);
+		color: var(--c-0);
+		font-size: var(--t-sm);
+		font-weight: 600;
+		box-shadow: 0 6px 20px rgb(0 0 0 / 0.2);
 	}
+	@media (min-width: 800px) {
+		main {
+			border-left: 1px solid var(--c-50);
+			border-right: 1px solid var(--c-50);
+			padding-bottom: var(--s-4xl);
+		}
+		.playing main {
+			padding-bottom: calc(72px + var(--s-4xl));
+		}
+		.shell {
+			/* keep the column centered: a spacer as wide as the rail on the right */
+			padding-right: var(--rail);
+		}
+		.toast {
+			bottom: calc(72px + var(--s-xl));
+		}
+	}
+	@media (min-width: 800px) and (max-width: 1099px) {
+		.shell {
+			padding-right: 0;
+		}
 	}
 </style>

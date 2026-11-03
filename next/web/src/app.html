@@ -2,9 +2,16 @@
 <html lang="en">
 	<head>
 		<meta charset="utf-8" />
-		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 		<meta name="color-scheme" content="dark light" />
 		<title>plyr.fm (next)</title>
+		<script>
+			// apply the stored theme before first paint (see lib/prefs.svelte.ts)
+			try {
+				var p = JSON.parse(localStorage.getItem('plyr-next:prefs') || '{}');
+				if (p.theme === 'light' || p.theme === 'dark') document.documentElement.dataset.theme = p.theme;
+			} catch (e) {}
+		</script>
 		%sveltekit.head%
 	</head>
 	<body data-sveltekit-preload-data="hover">
