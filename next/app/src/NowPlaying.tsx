@@ -30,8 +30,9 @@ export function NowPlaying({ track, close }: { track: Track; close: () => void }
   const compact = width < 600;
   const sideBySide = width >= 800;
   const panelWidth = sideBySide ? Math.min(width - 80, 748) : 420;
+  const controlRoom = 370 + 64 * (theme.scale - 1);
   const artwork = sideBySide ? Math.min(310, Math.floor((panelWidth - 76) / 2))
-    : Math.max(1, Math.min(width - 40, 372, Math.max(144, height - 340)));
+    : Math.max(1, Math.min(width - 40, 372, Math.max(128, height - controlRoom)));
   const duration = player.status.duration || track.metadata.duration_seconds || 0;
   const position = Math.max(0, Math.min(duration, scrub?.id === track.id ? scrub.seconds : player.status.currentTime));
   const updateScrub = (seconds: number) => setScrub({ id: track.id, seconds });
