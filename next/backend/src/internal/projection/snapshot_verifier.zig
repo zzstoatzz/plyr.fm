@@ -82,7 +82,7 @@ pub fn verify(
     );
     var collector: Collector = .{
         .allocator = allocator,
-        .repo_car = repo_car,
+        .cars = &.{repo_car},
         .repo_did = expected_did,
         .list_collection = list_collection,
         .track_collection = track_collection,
@@ -115,9 +115,14 @@ pub fn verify(
     return snapshot;
 }
 
-const Collector = struct {
+pub fn findInCars(cars: []const zat.car.Car, cid_raw: []const u8) ?[]const u8 {
+    for (cars) |c| if (zat.car.findBlock(c, cid_raw)) |bytes| return bytes;
+    return null;
+}
+
+pub const Collector = struct {
     allocator: std.mem.Allocator,
-    repo_car: zat.car.Car,
+    cars: []const zat.car.Car,
     repo_did: []const u8,
     list_collection: []const u8,
     track_collection: []const u8,
@@ -130,7 +135,7 @@ const Collector = struct {
     like_changes: std.ArrayList(like_change.Change) = .empty,
     rejections: std.ArrayList(record_rejection.Rejection) = .empty,
 
-    fn entry(context: *anyopaque, item: zat.mst.WalkEntry) anyerror!void {
+    pub fn entry(context: *anyopaque, item: zat.mst.WalkEntry) anyerror!void {
         const self: *Collector = @ptrCast(@alignCast(context));
         const separator = std.mem.indexOfScalar(u8, item.key, '/') orelse
             return error.InvalidRepoPath;
@@ -143,7 +148,7 @@ const Collector = struct {
             !std.mem.eql(u8, collection, self.like_collection)) return;
         const rkey = item.key[separator + 1 ..];
         if (zat.Rkey.parse(rkey) == null) return error.InvalidRepoPath;
-        const record_bytes = zat.car.findBlock(self.repo_car, item.value.raw) orelse
+        const record_bytes = findInCars(self.cars, item.value.raw) orelse
             return error.IncompleteRepo;
         const record = zat.cbor.decodeAll(self.allocator, record_bytes) catch |err| {
             try self.reject(collection, rkey, item.value, .invalid_dag_cbor, @errorName(err));
@@ -307,13 +312,13 @@ test "complete repo quarantines malformed selected records without losing valid 
     try std.testing.expectEqualStrings("InvalidStrongRefCid", snapshot.rejections[0].detail);
 }
 
-const Fixture = struct {
+pub const Fixture = struct {
     car_bytes: []const u8,
     did: []const u8,
     public_key: zat.multicodec.PublicKey,
 };
 
-fn buildFixture(
+pub fn buildFixture(
     allocator: std.mem.Allocator,
     include_record: bool,
     malformed_list: bool,

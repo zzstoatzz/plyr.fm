@@ -86,10 +86,12 @@ pub fn run(
     var key_upstream: zat_keys.ZatSigningKeyResolver = .{ .resolver = &identity };
     var key_cache = cached_keys.CachedSigningKeyResolver.init(allocator, io, 1024, key_upstream.port());
     defer key_cache.deinit();
+    const wanted = [_][]const u8{ collections.list, collections.track, collections.profile, collections.like };
     var repositories: pds_source.ZatPdsRepositorySource = .{
         .io = io,
         .identity_resolver = &identity,
         .transport = &repository_transport,
+        .collections = &wanted,
     };
     var commits: commit_store.PostgresVerifiedCommitStore = .{ .pool = pool };
     var snapshots: snapshot_store.PostgresVerifiedSnapshotStore = .{ .pool = pool };
@@ -116,7 +118,6 @@ pub fn run(
         .checkpoint = &checkpoint,
         .account_checks = status_checks.port(),
     };
-    const wanted = [_][]const u8{ collections.list, collections.track, collections.profile, collections.like };
     const cursor = checkpoint.persisted orelse start_us - initial_lookback_us;
     var client = zat.JetstreamClient.init(io, allocator, .{
         .hosts = hosts,

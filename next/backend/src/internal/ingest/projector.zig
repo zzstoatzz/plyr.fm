@@ -10,6 +10,7 @@ const repository_source = @import("repository_source.zig");
 const signing_key = @import("signing_key.zig");
 const repository_head = @import("../projection/repository_head.zig");
 const snapshot_verifier = @import("../projection/snapshot_verifier.zig");
+const record_proof_verifier = @import("../projection/record_proof_verifier.zig");
 const verified_commit = @import("../projection/verified_commit.zig");
 const verified_snapshot = @import("../projection/verified_snapshot.zig");
 
@@ -25,6 +26,8 @@ pub const Projector = struct {
     track_collection: []const u8,
     profile_collection: []const u8,
     like_collection: []const u8,
+
+    const verifyFetched = verifyFetchedImpl;
 
     pub fn repair(
         self: Projector,
@@ -51,17 +54,7 @@ pub const Projector = struct {
         };
         defer fetched.release();
 
-        const snapshot = snapshot_verifier.verify(
-            allocator,
-            fetched.bytes,
-            did,
-            key.publicKey(),
-            self.list_collection,
-            self.track_collection,
-            self.profile_collection,
-            self.like_collection,
-            indexed_at_us,
-        ) catch |first_error| blk: {
+        const snapshot = self.verifyFetched(allocator, fetched, did, key.publicKey(), indexed_at_us) catch |first_error| blk: {
             if (first_error != error.SignatureVerificationFailed) {
                 if (!builtin.is_test)
                     log.warn("repository snapshot for {s} was rejected: {}", .{ did, first_error });
@@ -71,17 +64,7 @@ pub const Projector = struct {
                 error.OutOfMemory => return error.OutOfMemory,
                 else => return .unverified_identity,
             };
-            break :blk snapshot_verifier.verify(
-                allocator,
-                fetched.bytes,
-                did,
-                key.publicKey(),
-                self.list_collection,
-                self.track_collection,
-                self.profile_collection,
-                self.like_collection,
-                indexed_at_us,
-            ) catch |second_error| {
+            break :blk self.verifyFetched(allocator, fetched, did, key.publicKey(), indexed_at_us) catch |second_error| {
                 if (!builtin.is_test)
                     log.warn("repository snapshot for {s} was rejected after key refresh: {}", .{ did, second_error });
                 return classifySnapshotVerification(second_error);
@@ -101,6 +84,39 @@ pub const Projector = struct {
         };
     }
 };
+
+fn verifyFetchedImpl(
+    self: Projector,
+    allocator: std.mem.Allocator,
+    fetched: repository_source.Repo,
+    did: []const u8,
+    public_key: zat.multicodec.PublicKey,
+    indexed_at_us: i64,
+) !verified_snapshot.Snapshot {
+    if (fetched.proofs) |proofs| return record_proof_verifier.verifyProofs(
+        allocator,
+        proofs,
+        fetched.paths orelse return error.InvalidSnapshot,
+        did,
+        public_key,
+        self.list_collection,
+        self.track_collection,
+        self.profile_collection,
+        self.like_collection,
+        indexed_at_us,
+    );
+    return snapshot_verifier.verify(
+        allocator,
+        fetched.bytes,
+        did,
+        public_key,
+        self.list_collection,
+        self.track_collection,
+        self.profile_collection,
+        self.like_collection,
+        indexed_at_us,
+    );
+}
 
 pub const RepairOutcome = enum {
     applied,
