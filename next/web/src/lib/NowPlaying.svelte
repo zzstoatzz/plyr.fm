@@ -57,7 +57,7 @@
 		flex-direction: column;
 		gap: var(--s-lg);
 		height: 100%;
-		max-width: 480px;
+		max-width: 30rem;
 		margin: 0 auto;
 	}
 	.bar {
@@ -71,7 +71,7 @@
 		flex-shrink: 1;
 		min-height: 0;
 		margin-top: var(--s-md);
-		box-shadow: 0 12px 40px rgb(0 0 0 / 0.25);
+		box-shadow: 0 0.75rem 2.5rem rgb(0 0 0 / 0.25);
 		border-radius: var(--r-md);
 	}
 	.queue {
@@ -104,15 +104,15 @@
 		justify-content: center;
 	}
 	.on {
-		color: var(--accent);
+		color: var(--accent-text);
 	}
 	@media (min-width: 800px) {
 		.art {
-			max-width: 360px;
+			max-width: 22.5rem;
 			align-self: center;
 		}
 		.queue {
-			max-height: 360px;
+			max-height: 22.5rem;
 		}
 	}
 </style>

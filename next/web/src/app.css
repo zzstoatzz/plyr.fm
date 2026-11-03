@@ -4,35 +4,35 @@
  */
 :root {
 	--s-2xs: 2px;
-	--s-xs: 4px;
-	--s-sm: 8px;
-	--s-md: 12px;
-	--s-lg: 16px;
-	--s-xl: 20px;
-	--s-2xl: 24px;
-	--s-3xl: 28px;
-	--s-4xl: 32px;
-	--s-5xl: 40px;
+	--s-xs: 0.25rem;
+	--s-sm: 0.5rem;
+	--s-md: 0.75rem;
+	--s-lg: 1rem;
+	--s-xl: 1.25rem;
+	--s-2xl: 1.5rem;
+	--s-3xl: 1.75rem;
+	--s-4xl: 2rem;
+	--s-5xl: 2.5rem;
 
-	--t-xs: 11.3px;
-	--t-sm: 13.1px;
-	--t-md: 15px;
-	--t-lg: 16.9px;
-	--t-xl: 18.8px;
-	--t-2xl: 20.6px;
-	--t-3xl: 24.3px;
-	--t-4xl: 30px;
+	--t-xs: 0.75rem;
+	--t-sm: 0.875rem;
+	--t-md: 1rem;
+	--t-lg: 1.125rem;
+	--t-xl: 1.25rem;
+	--t-2xl: 1.375rem;
+	--t-3xl: 1.625rem;
+	--t-4xl: 2rem;
 
-	--r-xs: 4px;
-	--r-sm: 8px;
-	--r-md: 12px;
-	--r-lg: 16px;
-	--r-full: 999px;
+	--r-xs: 0.25rem;
+	--r-sm: 0.5rem;
+	--r-md: 0.75rem;
+	--r-lg: 1rem;
+	--r-full: 62.4375rem;
 
-	--center: 600px;
-	--rail: 240px;
-	--tabbar: 56px;
-	--mini: 60px;
+	--center: 37.5rem;
+	--rail: 15rem;
+	--tabbar: 3.5rem;
+	--mini: 3.75rem;
 
 	--font: system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
 	--mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -54,8 +54,17 @@
 	--c-975: #111822;
 	--c-1000: #000000;
 
+	/* floating chrome: subtle frosted glass (tab bar, mini player, headers, sheets) */
+	--glass: color-mix(in srgb, var(--c-0) 72%, transparent);
+	--glass-blur: blur(24px) saturate(180%);
+	--glass-edge: color-mix(in srgb, var(--c-1000) 8%, transparent);
+	/* raised surfaces (sheets, menus) read apart from the page in both themes */
+	--raised: var(--c-0);
+
 	--accent: #6a9fff;
 	--accent-fg: #000000;
+	/* accent as text/icon color: pulled toward the foreground so it keeps contrast on the page */
+	--accent-text: color-mix(in srgb, var(--accent) 62%, var(--c-1000));
 	--like: #ec4899;
 	--negative: #e91646;
 	--positive: #09b35e;
@@ -79,6 +88,7 @@
 	--c-950: #dce2ea;
 	--c-975: #eff2f6;
 	--c-1000: #ffffff;
+	--raised: #161d27;
 	color-scheme: dark;
 }
 
@@ -99,6 +109,7 @@
 		--c-950: #dce2ea;
 		--c-975: #eff2f6;
 		--c-1000: #ffffff;
+		--raised: #161d27;
 		color-scheme: dark;
 	}
 }
@@ -125,11 +136,15 @@ a {
 	color: inherit;
 	text-decoration: none;
 }
-a:hover {
-	text-decoration: underline;
+@media (hover: hover) {
+	a:hover {
+		text-decoration: underline;
+	}
 }
-a.plain:hover {
-	text-decoration: none;
+@media (hover: hover) {
+	a.plain:hover {
+		text-decoration: none;
+	}
 }
 
 button,
@@ -157,7 +172,7 @@ h3 {
 }
 
 .muted {
-	color: var(--c-600);
+	color: var(--c-700);
 }
 .small {
 	font-size: var(--t-sm);
@@ -217,7 +232,7 @@ ul.plain {
 	align-items: center;
 	justify-content: center;
 	gap: var(--s-xs);
-	min-height: 36px;
+	min-height: 2.25rem;
 	padding: 0 var(--s-lg);
 	border: 1px solid transparent;
 	border-radius: var(--r-full);
@@ -230,9 +245,11 @@ ul.plain {
 	text-decoration: none;
 	transition: background 0.1s;
 }
-.btn:hover {
-	background: var(--c-100);
-	text-decoration: none;
+@media (hover: hover) {
+	.btn:hover {
+		background: var(--c-100);
+		text-decoration: none;
+	}
 }
 .btn:disabled {
 	opacity: 0.5;
@@ -242,48 +259,54 @@ ul.plain {
 	background: var(--accent);
 	color: var(--accent-fg);
 }
-.btn.primary:hover {
-	background: color-mix(in srgb, var(--accent) 88%, var(--c-1000));
+@media (hover: hover) {
+	.btn.primary:hover {
+		background: color-mix(in srgb, var(--accent) 88%, var(--c-1000));
+	}
 }
 .btn.outline {
 	background: transparent;
 	border-color: var(--c-100);
 }
-.btn.outline:hover {
-	background: var(--c-25);
+@media (hover: hover) {
+	.btn.outline:hover {
+		background: var(--c-25);
+	}
 }
 .btn.ghost {
 	background: transparent;
 }
-.btn.ghost:hover {
-	background: var(--c-50);
+@media (hover: hover) {
+	.btn.ghost:hover {
+		background: var(--c-50);
+	}
 }
 .btn.negative {
 	background: var(--negative);
 	color: #fff;
 }
 .btn.sm {
-	min-height: 30px;
+	min-height: 1.875rem;
 	padding: 0 var(--s-md);
 	font-size: var(--t-sm);
 }
 .btn.lg {
-	min-height: 44px;
+	min-height: 2.75rem;
 	padding: 0 var(--s-xl);
 	font-size: var(--t-lg);
 }
 .btn.icon {
 	padding: 0;
-	width: 36px;
-	min-height: 36px;
+	width: 2.75rem;
+	min-height: 2.75rem;
 }
 .btn.icon.sm {
-	width: 30px;
-	min-height: 30px;
+	width: 2.25rem;
+	min-height: 2.25rem;
 }
 .btn.icon.lg {
-	width: 52px;
-	min-height: 52px;
+	width: 3.25rem;
+	min-height: 3.25rem;
 }
 .btn.block {
 	width: 100%;
@@ -306,15 +329,15 @@ ul.plain {
 .field textarea,
 .field select {
 	width: 100%;
-	min-height: 44px;
+	min-height: 2.75rem;
 	padding: var(--s-sm) var(--s-md);
 	border: 1px solid var(--c-100);
 	border-radius: var(--r-md);
 	background: var(--c-25);
-	font-size: 16px; /* no zoom-on-focus in iOS safari */
+	font-size: max(16px, 1rem); /* no zoom-on-focus in iOS safari */
 }
 .field textarea {
-	min-height: 96px;
+	min-height: 6rem;
 	resize: vertical;
 }
 .input:focus,
@@ -338,7 +361,7 @@ ul.plain {
 	display: flex;
 	align-items: center;
 	gap: var(--s-md);
-	min-height: 52px;
+	min-height: 3.25rem;
 	padding: var(--s-sm) var(--s-lg);
 	background: none;
 	border: 0;
@@ -348,9 +371,11 @@ ul.plain {
 	color: inherit;
 	text-decoration: none;
 }
-.row-item:hover {
-	background: var(--c-25);
-	text-decoration: none;
+@media (hover: hover) {
+	.row-item:hover {
+		background: var(--c-50);
+		text-decoration: none;
+	}
 }
 .row-item .grow {
 	flex: 1;
@@ -393,8 +418,8 @@ ul.plain {
 	appearance: none;
 	position: relative;
 	flex-shrink: 0;
-	width: 40px;
-	height: 24px;
+	width: 2.5rem;
+	height: 1.5rem;
 	border-radius: var(--r-full);
 	background: var(--c-200);
 	cursor: pointer;
@@ -406,8 +431,8 @@ ul.plain {
 	position: absolute;
 	top: 3px;
 	left: 3px;
-	width: 18px;
-	height: 18px;
+	width: 1.125rem;
+	height: 1.125rem;
 	border-radius: 50%;
 	background: #fff;
 	transition: transform 0.15s;
@@ -416,5 +441,46 @@ ul.plain {
 	background: var(--accent);
 }
 .switch:checked::after {
-	transform: translateX(16px);
+	transform: translateX(1rem);
+}
+
+.glass {
+	background: var(--glass);
+	backdrop-filter: var(--glass-blur);
+	-webkit-backdrop-filter: var(--glass-blur);
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+	.glass {
+		background: var(--c-0);
+	}
+}
+
+/* pressed feedback works on touch, where hover never fires */
+.btn:active,
+.row-item:active {
+	background: var(--c-100);
+}
+
+@media (prefers-reduced-motion: reduce) {
+	*,
+	*::before,
+	*::after {
+		animation-duration: 0.01ms !important;
+		transition-duration: 0.01ms !important;
+	}
+}
+
+.skip {
+	position: fixed;
+	top: var(--s-sm);
+	left: var(--s-sm);
+	z-index: 100;
+	padding: var(--s-sm) var(--s-lg);
+	border-radius: var(--r-full);
+	background: var(--c-1000);
+	color: var(--c-0);
+	transform: translateY(-200%);
+}
+.skip:focus {
+	transform: none;
 }

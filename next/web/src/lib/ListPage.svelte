@@ -146,7 +146,7 @@
 		padding: var(--s-lg);
 	}
 	.art {
-		width: min(100%, 240px);
+		width: min(100%, 15rem);
 		aspect-ratio: 1;
 		align-self: center;
 	}
@@ -184,7 +184,7 @@
 			align-items: flex-end;
 		}
 		.art {
-			width: 180px;
+			width: 11.25rem;
 			flex-shrink: 0;
 		}
 	}

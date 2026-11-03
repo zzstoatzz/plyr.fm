@@ -42,40 +42,40 @@
 		-webkit-appearance: none;
 		appearance: none;
 		width: 100%;
-		height: 20px;
+		height: 1.25rem;
 		margin: 0;
 		background: transparent;
 		cursor: pointer;
 	}
 	input::-webkit-slider-runnable-track {
-		height: 4px;
+		height: 0.25rem;
 		border-radius: var(--r-full);
 		background: linear-gradient(to right, var(--c-1000) var(--pct), var(--c-100) var(--pct));
 	}
 	input::-moz-range-track {
-		height: 4px;
+		height: 0.25rem;
 		border-radius: var(--r-full);
 		background: linear-gradient(to right, var(--c-1000) var(--pct), var(--c-100) var(--pct));
 	}
 	input::-webkit-slider-thumb {
 		-webkit-appearance: none;
-		width: 14px;
-		height: 14px;
+		width: 0.875rem;
+		height: 0.875rem;
 		margin-top: -5px;
 		border-radius: 50%;
 		background: var(--c-1000);
 		border: 0;
 	}
 	input::-moz-range-thumb {
-		width: 14px;
-		height: 14px;
+		width: 0.875rem;
+		height: 0.875rem;
 		border-radius: 50%;
 		background: var(--c-1000);
 		border: 0;
 	}
 	.compact input::-webkit-slider-thumb {
-		width: 10px;
-		height: 10px;
+		width: 0.625rem;
+		height: 0.625rem;
 		margin-top: -3px;
 	}
 	.times {

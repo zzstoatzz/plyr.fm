@@ -70,13 +70,13 @@
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		min-height: 52px;
+		min-height: 3.25rem;
 		padding: var(--s-xs) var(--s-sm) var(--s-xs) var(--s-lg);
 		padding-top: max(var(--s-xs), env(safe-area-inset-top));
-		background: color-mix(in srgb, var(--c-0) 88%, transparent);
-		backdrop-filter: blur(12px);
-		-webkit-backdrop-filter: blur(12px);
-		border-bottom: 1px solid var(--c-50);
+		background: var(--glass);
+		backdrop-filter: var(--glass-blur);
+		-webkit-backdrop-filter: var(--glass-blur);
+		box-shadow: inset 0 -1px 0 var(--glass-edge);
 	}
 	.brand {
 		font-size: var(--t-xl);
@@ -86,7 +86,7 @@
 	.tag {
 		font-size: var(--t-xs);
 		font-weight: 700;
-		color: var(--accent);
+		color: var(--accent-text);
 		vertical-align: super;
 	}
 	.center {

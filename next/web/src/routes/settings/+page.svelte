@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { auth } from '$lib/auth.svelte';
-	import { ACCENTS, FONTS, prefs, type Theme } from '$lib/prefs.svelte';
+	import { ACCENTS, FONTS, prefs, SCALES, type Theme } from '$lib/prefs.svelte';
 	import Icon from '$lib/ui/Icon.svelte';
 	import ScreenHeader from '$lib/ui/ScreenHeader.svelte';
 
@@ -11,6 +11,17 @@
 
 <h2 class="section">appearance</h2>
 <div class="group">
+	<div class="setting">
+		<span class="label">size</span>
+		<div class="chips" role="radiogroup" aria-label="interface size">
+			{#each SCALES as sc (sc.value)}
+				<button class="chip" role="radio" aria-checked={prefs.scale === sc.value} onclick={() => (prefs.scale = sc.value)}>
+					<span style:font-size="{sc.value}em">{sc.label}</span>
+				</button>
+			{/each}
+		</div>
+		<span class="hint">text, icons, artwork and buttons all scale together</span>
+	</div>
 	<div class="setting">
 		<span class="label">theme</span>
 		<div class="chips" role="radiogroup" aria-label="theme">
@@ -144,8 +155,8 @@
 		position: relative;
 		display: grid;
 		place-items: center;
-		width: 32px;
-		height: 32px;
+		width: 2rem;
+		height: 2rem;
 		border-radius: 50%;
 		border: 0;
 		background: var(--c);
@@ -156,7 +167,7 @@
 	.swatch[aria-checked='true'] {
 		box-shadow:
 			0 0 0 2px var(--c-0),
-			0 0 0 4px var(--c);
+			0 0 0 0.25rem var(--c);
 	}
 	.custom {
 		background: conic-gradient(#f87171, #fbbf24, #4ade80, #22d3ee, #818cf8, #f472b6, #f87171);
@@ -172,8 +183,10 @@
 		cursor: default;
 		align-items: flex-start;
 	}
-	.static:hover {
-		background: none;
+	@media (hover: hover) {
+		.static:hover {
+			background: none;
+		}
 	}
 	.danger {
 		color: var(--negative);

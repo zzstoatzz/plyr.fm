@@ -40,7 +40,7 @@
 	{/if}
 </nav>
 
-<nav class="tabbar" aria-label="tabs">
+<nav class="tabbar glass" aria-label="tabs">
 	{#each tabs as t (t.href)}
 		<a class="tab plain" class:active={t.active} href={t.href} aria-current={t.active ? 'page' : undefined}>
 			{#if t.href === '/portal' && auth.avatar}
@@ -66,8 +66,11 @@
 		display: flex;
 		height: calc(var(--tabbar) + env(safe-area-inset-bottom));
 		padding-bottom: env(safe-area-inset-bottom);
-		background: var(--c-0);
-		border-top: 1px solid var(--c-50);
+		box-shadow: inset 0 1px 0 var(--glass-edge);
+	}
+	/* docked under the mini player: one surface, no seam */
+	:global(.has-player) .tabbar {
+		box-shadow: none;
 	}
 	.tab {
 		flex: 1;
@@ -79,6 +82,8 @@
 		color: var(--c-1000);
 	}
 	.tab-avatar {
+		width: 1.625rem;
+		height: 1.625rem;
 		border-radius: 50%;
 		object-fit: cover;
 		box-shadow: 0 0 0 1px var(--c-100);
@@ -98,7 +103,7 @@
 			gap: var(--s-2xs);
 			width: var(--rail);
 			height: 100dvh;
-			padding: var(--s-lg) var(--s-md) calc(var(--s-lg) + 72px);
+			padding: var(--s-lg) var(--s-md) calc(var(--s-lg) + 4.5rem);
 		}
 		.brand {
 			padding: var(--s-sm) var(--s-md) var(--s-lg);
@@ -109,7 +114,7 @@
 		.tag {
 			font-size: var(--t-xs);
 			font-weight: 700;
-			color: var(--accent);
+			color: var(--accent-text);
 			vertical-align: super;
 		}
 		.item {
@@ -121,38 +126,40 @@
 			font-size: var(--t-lg);
 			color: var(--c-800);
 		}
+	@media (hover: hover) {
 		.item:hover {
-			background: var(--c-25);
-		}
-		.item.active {
-			font-weight: 700;
-			color: var(--c-1000);
-		}
-		.me {
-			margin-top: auto;
-			display: flex;
-			align-items: center;
-			gap: var(--s-sm);
-			padding: var(--s-sm);
-			border-radius: var(--r-md);
-			min-width: 0;
-		}
-		.me:hover {
-			background: var(--c-25);
-		}
-		.me > span {
-			display: flex;
-			flex-direction: column;
-			min-width: 0;
-		}
-		.me img,
-		.ph {
-			width: 32px;
-			height: 32px;
-			border-radius: 50%;
-			object-fit: cover;
-			background: var(--c-50);
-			flex-shrink: 0;
+				background: var(--c-25);
+			}
+			.item.active {
+				font-weight: 700;
+				color: var(--c-1000);
+			}
+			.me {
+				margin-top: auto;
+				display: flex;
+				align-items: center;
+				gap: var(--s-sm);
+				padding: var(--s-sm);
+				border-radius: var(--r-md);
+				min-width: 0;
+			}
+			.me:hover {
+				background: var(--c-25);
+			}
+			.me > span {
+				display: flex;
+				flex-direction: column;
+				min-width: 0;
+			}
+			.me img,
+			.ph {
+				width: 2rem;
+				height: 2rem;
+				border-radius: 50%;
+				object-fit: cover;
+				background: var(--c-50);
+				flex-shrink: 0;
+			}
 		}
 	}
 </style>

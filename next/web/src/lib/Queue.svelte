@@ -71,6 +71,6 @@
 		font-weight: 600;
 	}
 	.current .title {
-		color: var(--accent);
+		color: var(--accent-text);
 	}
 </style>

@@ -70,12 +70,12 @@
 	}
 	.overlay {
 		position: absolute;
-		right: 6px;
-		bottom: 6px;
+		right: 0.375rem;
+		bottom: 0.375rem;
 		display: grid;
 		place-items: center;
-		width: 28px;
-		height: 28px;
+		width: 1.75rem;
+		height: 1.75rem;
 		border-radius: 50%;
 		background: rgb(0 0 0 / 0.6);
 		color: #fff;

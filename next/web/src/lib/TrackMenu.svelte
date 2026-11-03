@@ -32,6 +32,7 @@
 					setTimeout(() => (menus.addTo = t), 200);
 				}
 			},
+			{ icon: 'music', label: 'track details', run: () => goto(`/track/${t.id}`) },
 			{ icon: 'user', label: `go to ${artistName(t)}`, run: () => goto(`/u/${t.artist.profile.handle}`) },
 			{
 				icon: 'share',
@@ -50,7 +51,7 @@
 	{#if menus.track}
 		{@const t = menus.track}
 		<div class="head">
-			<Artwork src={t.media.artwork?.url} seed={t.metadata.title} size={44} />
+			<Artwork src={t.media.artwork?.url} seed={t.metadata.title} size={52} />
 			<div class="meta">
 				<strong class="ellipsis">{t.metadata.title}</strong>
 				<span class="muted small ellipsis">{artistName(t)}</span>
@@ -59,7 +60,7 @@
 		<div class="list">
 			{#each items as item (item.label)}
 				<button class="row-item" onclick={act(item.run)}>
-					<Icon name={item.icon} />
+					<Icon name={item.icon} size={24} />
 					<span class="grow">{item.label}</span>
 				</button>
 			{/each}
@@ -82,8 +83,16 @@
 		min-width: 0;
 	}
 	.row-item {
-		padding-left: var(--s-xs);
-		padding-right: var(--s-xs);
-		border-radius: var(--r-sm);
+		padding-left: var(--s-sm);
+		padding-right: var(--s-sm);
+		border-radius: var(--r-md);
+	}
+	.row-item:focus-visible {
+		background: var(--c-50);
+	}
+	@media (hover: hover) {
+		.row-item:hover {
+			background: var(--c-50);
+		}
 	}
 </style>

@@ -4,6 +4,14 @@
 export type Theme = 'system' | 'light' | 'dark';
 export type Font = 'system' | 'mono' | 'serif';
 
+/** the whole UI is in rem, so one root size scales text, icons, art and tap targets together */
+export const SCALES = [
+	{ value: 0.9, label: 'small' },
+	{ value: 1, label: 'default' },
+	{ value: 1.15, label: 'large' },
+	{ value: 1.3, label: 'larger' }
+] as const;
+
 export const ACCENTS = ['#6a9fff', '#4ade80', '#f472b6', '#fbbf24', '#a78bfa', '#fb7185', '#2dd4bf', '#f97316'];
 
 export const FONTS: { value: Font; label: string; stack: string }[] = [
@@ -21,6 +29,7 @@ interface Stored {
 	/** playing from a list queues the rest of the list */
 	playThrough: boolean;
 	volume: number;
+	scale: number;
 }
 
 const DEFAULTS: Stored = {
@@ -29,7 +38,8 @@ const DEFAULTS: Stored = {
 	font: 'system',
 	keepPlaying: false,
 	playThrough: true,
-	volume: 1
+	volume: 1,
+	scale: 1
 };
 
 const KEY = 'plyr-next:prefs';
@@ -82,6 +92,12 @@ class Prefs {
 	set playThrough(v: boolean) {
 		this.#set({ playThrough: v });
 	}
+	get scale() {
+		return this.#s.scale;
+	}
+	set scale(v: number) {
+		this.#set({ scale: v });
+	}
 	get volume() {
 		return this.#s.volume;
 	}
@@ -104,6 +120,8 @@ class Prefs {
 		const root = document.documentElement;
 		if (this.#s.theme === 'system') root.removeAttribute('data-theme');
 		else root.dataset.theme = this.#s.theme;
+		// percent of the browser's own default, so a user's system text size still counts
+		root.style.fontSize = `${this.#s.scale * 100}%`;
 		root.style.setProperty('--accent', this.#s.accent);
 		root.style.setProperty('--accent-fg', readableOn(this.#s.accent));
 		root.style.setProperty('--font', FONTS.find((f) => f.value === this.#s.font)?.stack ?? FONTS[0].stack);

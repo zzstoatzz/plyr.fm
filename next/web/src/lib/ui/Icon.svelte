@@ -3,7 +3,7 @@
 	const PATHS = {
 		home: 'M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z',
 		search: 'M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14zM20 20l-4-4',
-		library: 'M4 4v16M9 4v16M14 4l5 16',
+		library: 'M4 9h16v11H4zM6 6h12M8 3h8',
 		user: 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21c0-4 3.6-6 8-6s8 2 8 6',
 		upload: 'M12 16V4M7 9l5-5 5 5M4 20h16',
 		settings:
@@ -55,6 +55,8 @@
 <svg
 	width={size}
 	height={size}
+	style:width="{size / 16}rem"
+	style:height="{size / 16}rem"
 	viewBox="0 0 24 24"
 	fill={filled ? 'currentColor' : 'none'}
 	stroke={filled ? 'none' : 'currentColor'}
