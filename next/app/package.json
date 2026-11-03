@@ -41,8 +41,9 @@
     "react-native-web": "^0.21.4"
   },
   "devDependencies": {
-    "@types/react": "~19.2.0",
-    "typescript": "~5.9.3"
+    "@types/node": "^22.20.5",
+    "@types/react": "~19.3.0",
+    "typescript": "~6.0.3"
   },
   "overrides": {
     "@atproto/car": "0.0.0-spaces-alpha-20261029171913",
