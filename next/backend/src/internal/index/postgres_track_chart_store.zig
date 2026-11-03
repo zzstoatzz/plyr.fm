@@ -73,12 +73,10 @@ const chart_query =
     \\    ON liker_account.repo_did = likes.owner_did AND liker_account.available
     \\  WHERE likes.collection = $3 AND NOT likes.deleted
     \\  GROUP BY likes.subject_uri, likes.subject_cid
-    \\)
-    \\SELECT
-++ composed.projected_columns ++
-    \\, ranked_likes.period_like_count,
-    \\  ranked_likes.all_time_like_count
-++ "\n" ++ composed.projected_from ++ "\n" ++
+    \\),
+    \\page AS MATERIALIZED (
+    \\  SELECT v.record_uri, ranked_likes.period_like_count, ranked_likes.all_time_like_count
+++ "\n" ++ composed.page_from ++ "\n" ++
     \\JOIN ranked_likes ON ranked_likes.subject_uri = v.record_uri
     \\  AND ranked_likes.subject_cid = v.record_cid
     \\WHERE ranked_likes.period_like_count > 0
@@ -86,4 +84,13 @@ const chart_query =
     \\ORDER BY ranked_likes.period_like_count DESC,
     \\  ranked_likes.all_time_like_count DESC, v.record_uri ASC
     \\LIMIT $5::bigint
+    \\)
+    \\SELECT
+++ composed.projected_columns ++
+    \\, page.period_like_count,
+    \\  page.all_time_like_count
+    \\FROM page
+    \\JOIN plyr_index.track_records AS v ON v.record_uri = page.record_uri
+++ "\n" ++ composed.projected_joins ++ "\n" ++
+    \\ORDER BY page.period_like_count DESC, page.all_time_like_count DESC, v.record_uri ASC
 ;

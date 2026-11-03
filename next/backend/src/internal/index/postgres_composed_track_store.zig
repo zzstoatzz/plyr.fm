@@ -499,7 +499,7 @@ pub const projected_columns =
 
 pub const projected_from = "FROM plyr_index.track_records AS v\n" ++ projected_joins;
 
-const projected_joins =
+pub const projected_joins =
     \\JOIN plyr_index.account_availability AS aa
     \\  ON aa.repo_did = v.owner_did AND aa.available
     \\LEFT JOIN plyr_index.track_delivery_origins AS d
@@ -559,19 +559,20 @@ const artist_policy = common_policy ++
     \\  AND COALESCE(pol.visibility, 'public') <> 'private'
 ;
 
+/// the joins a page's filters read, without the per-track data
+pub const page_from =
+    \\FROM plyr_index.track_records AS v
+    \\JOIN plyr_index.account_availability AS aa ON aa.repo_did = v.owner_did AND aa.available
+    \\JOIN plyr_index.actor_identities AS a ON a.did = v.owner_did
+    \\LEFT JOIN plyr_index.track_policies AS pol ON pol.record_uri = v.record_uri
+;
+
 const page_order = "ORDER BY v.record_created_at::timestamptz DESC, v.record_uri DESC";
 
 /// Filters, sorts, and limits on the cheap columns first, so the like-count
 /// subquery and the other per-track joins run for one page, not the catalog.
 fn pagedQuery(comptime filter: []const u8, comptime limit: []const u8) []const u8 {
-    return "WITH page AS MATERIALIZED (\n" ++
-        \\SELECT v.record_uri
-        \\FROM plyr_index.track_records AS v
-        \\JOIN plyr_index.account_availability AS aa ON aa.repo_did = v.owner_did AND aa.available
-        \\JOIN plyr_index.actor_identities AS a ON a.did = v.owner_did
-        \\LEFT JOIN plyr_index.track_policies AS pol ON pol.record_uri = v.record_uri
-        \\WHERE true
-    ++ "\n" ++ filter ++ "\n" ++ page_order ++ "\nLIMIT " ++ limit ++ "\n)\nSELECT\n" ++ projected_columns ++
+    return "WITH page AS MATERIALIZED (\nSELECT v.record_uri\n" ++ page_from ++ "\nWHERE true\n" ++ filter ++ "\n" ++ page_order ++ "\nLIMIT " ++ limit ++ "\n)\nSELECT\n" ++ projected_columns ++
         "\nFROM page\nJOIN plyr_index.track_records AS v ON v.record_uri = page.record_uri\n" ++
         projected_joins ++ "\n" ++ page_order;
 }
