@@ -79,6 +79,9 @@ jobs:
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_ZIG_NEXT }}
 
+      # The ingester process group writes plyr_index as the branch owner. Its
+      # credential is staged as WORKER_DATABASE_URL, which only non-api roles
+      # read; the api keeps DATABASE_URL (read-only) and its DATABASE_ROLE pin.
       - name: stage ingester credential
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_ZIG_NEXT }}
@@ -158,7 +161,3 @@ jobs:
           test "$exit_code" = "0"
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_ZIG_NEXT }}
-
-      # The ingester process group writes plyr_index as the branch owner. Its
-      # credential is staged as WORKER_DATABASE_URL, which only non-api roles
-      # read; the api keeps DATABASE_URL (read-only) and its DATABASE_ROLE pin.
