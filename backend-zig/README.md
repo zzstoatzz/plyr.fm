@@ -113,7 +113,8 @@ Direct SQL is reserved for projection adapter tests and benchmark fixtures.
 | `MIRROR_PUBLIC_BASE_URL` | to enable mirror | https public origin for the bucket; origins are `{base}/{prefix}/{cid}` |
 | `MIRROR_S3_REGION` / `MIRROR_KEY_PREFIX` | no | SigV4 region, default `auto`; object prefix, default `audio` |
 
-The `mirror` role fetches each live track's audio blob from the owner's
+The ingester runs the blob mirror on a side thread when configured (`MODE=mirror` runs it
+alone). It fetches each live track's audio blob from the owner's
 current PDS (SSRF-pinned, no redirects, 100 MB cap), verifies the bytes hash to
 the record's raw-codec CID, uploads them content-addressed, and records an `r2`
 delivery origin bound to that exact record CID. Failures back off from one
