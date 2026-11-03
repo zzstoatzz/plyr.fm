@@ -189,7 +189,7 @@ configured track index. The listener acquires a connection permit before
 unbounded detached threads.
 
 The appview is read-only and holds no sessions. Clients run ATProto OAuth
-themselves (`next/web/` uses `@atcute/oauth-browser-client`), write tracks,
+themselves (`next/app/` hosts the Expo client), write tracks,
 lists, likes, and profiles straight to the user's PDS, and use
 `GET /v1/records/await?uri=...&cid=...` to wait for the ingester to project the
 write. There is no `/auth/*`, no OAuth client metadata, no cookie, and no
@@ -412,9 +412,8 @@ the deployment workflow remains the authoritative Fly image build.
 not a percentage canary. It always means a frontend backed by the Zig `/v1`
 surface. The initial A/AAAA records exposing the bare Fly service were a
 temporary backend-verification state, not the completed next application. The
-dedicated `plyr-fm-next` Pages project claims the hostname only after the
-existing Svelte frontend's `zig-v1` client boundary passes locally and on the
-Pages deployment. The successor API lives at `api.next.plyr.fm`, mirroring the
+dedicated `plyr-fm-next` Pages project serves the Expo client's web export.
+The successor API lives at `api.next.plyr.fm`, mirroring the
 production frontend/API hostname split while remaining same-site. It evolves beside
 `plyr.fm` without changing the existing production or staging applications.
 `next.plyr.fm` has one proxied CNAME to that project and does not expose the Fly

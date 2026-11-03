@@ -1,0 +1,31 @@
+{
+  "expo": {
+    "name": "plyr.fm",
+    "slug": "plyr-next",
+    "scheme": "fm.plyr.next",
+    "version": "1.0.0",
+    "ios": {
+      "bundleIdentifier": "fm.plyr.next"
+    },
+    "android": {
+      "package": "fm.plyr.next"
+    },
+    "web": {
+      "output": "single",
+      "bundler": "metro"
+    },
+    "plugins": [
+      [
+        "expo-audio",
+        {
+          "enableBackgroundPlayback": true,
+          "recordAudioAndroid": false,
+          "microphonePermission": false
+        }
+      ],
+      "expo-router",
+      "expo-status-bar",
+      "expo-web-browser"
+    ]
+  }
+}
