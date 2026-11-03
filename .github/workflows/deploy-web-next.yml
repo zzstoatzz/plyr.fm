@@ -25,6 +25,7 @@ jobs:
       PUBLIC_API_URL: https://api.next.plyr.fm
       PUBLIC_SITE_URL: https://next.plyr.fm
       PUBLIC_NSID_PREFIX: fm.plyr
+      PUBLIC_PREFERENCE_SYNC: "true"
     steps:
       - uses: actions/checkout@v4
 

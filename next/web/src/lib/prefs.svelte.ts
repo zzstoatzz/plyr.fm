@@ -1,5 +1,4 @@
-// device-local preferences. prod keeps these in its database; next's appview
-// is read-only, so they live here until a private (space) record syncs them.
+import { type personalPreferenceSpace, type PersonalPreferences } from './preference-space';
 
 export type Theme = 'system' | 'light' | 'dark';
 export type Font = 'system' | 'mono' | 'serif';
@@ -20,17 +19,18 @@ export const FONTS: { value: Font; label: string; stack: string }[] = [
 	{ value: 'serif', label: 'serif', stack: "ui-serif, 'New York', Georgia, 'Times New Roman', serif" }
 ];
 
-interface Stored {
-	theme: Theme;
-	accent: string;
-	font: Font;
-	/** when a collection ends, keep going with the next thing in the feed */
-	keepPlaying: boolean;
-	/** playing from a list queues the rest of the list */
-	playThrough: boolean;
+interface Stored extends PersonalPreferences {
 	volume: number;
-	scale: number;
 }
+
+type Remote = ReturnType<typeof personalPreferenceSpace>;
+type Account = {
+	did: string;
+	remote: Remote | null;
+	pending: Partial<PersonalPreferences>;
+	busy: boolean;
+	timer?: ReturnType<typeof setTimeout>;
+};
 
 const DEFAULTS: Stored = {
 	theme: 'system',
@@ -55,11 +55,79 @@ function load(): Stored {
 }
 
 class Prefs {
+	status = $state<'local' | 'syncing' | 'synced' | 'error'>('local');
+	#account: Account | null = null;
 	#s = $state<Stored>({ ...DEFAULTS });
 
 	init() {
 		this.#s = load();
 		this.apply();
+	}
+
+	connect(did: string | null, remote: Remote | null) {
+		if (this.#account?.timer) clearTimeout(this.#account.timer);
+		const volume = this.#s.volume;
+		this.#account = null;
+		this.#s = { ...load(), volume };
+		this.status = 'local';
+		if (did) {
+			const account: Account = { did, remote, pending: {}, busy: false };
+			try {
+				const cached = JSON.parse(localStorage.getItem(`${KEY}:${did}`) ?? 'null');
+				if (cached) {
+					this.#s = { ...this.#s, ...cached.preferences, volume };
+					account.pending = cached.pending ?? {};
+				}
+			} catch {
+				/* storage unavailable */
+			}
+			this.#account = account;
+			if (remote) void this.sync();
+		}
+		this.apply();
+	}
+
+	async sync() {
+		const account = this.#account;
+		if (!account?.remote || account.busy) return;
+		account.busy = true;
+		this.status = 'syncing';
+		const patch = account.pending;
+		try {
+			const remote = Object.keys(patch).length ? await account.remote.write(patch) : await account.remote.read();
+			if (account !== this.#account) return;
+			const remaining = { ...account.pending };
+			for (const key of Object.keys(patch) as (keyof PersonalPreferences)[]) {
+				if (remaining[key] === patch[key]) delete remaining[key];
+			}
+			account.pending = remaining;
+			this.#s = { ...this.#s, ...remote, ...patch, ...remaining };
+			this.#cache(account);
+			this.apply();
+			this.status = 'synced';
+			if (Object.keys(remaining).length) this.#schedule(account);
+		} catch {
+			if (account === this.#account) this.status = 'error';
+		} finally {
+			account.busy = false;
+		}
+	}
+
+	#schedule(account: Account) {
+		this.status = 'syncing';
+		clearTimeout(account.timer);
+		account.timer = setTimeout(() => {
+			if (account === this.#account) void this.sync();
+		}, 300);
+	}
+
+	#cache(account: Account) {
+		const { volume: _, ...preferences } = this.#s;
+		try {
+			localStorage.setItem(`${KEY}:${account.did}`, JSON.stringify({ preferences, pending: account.pending }));
+		} catch {
+			/* storage unavailable */
+		}
 	}
 
 	get theme() {
@@ -107,10 +175,18 @@ class Prefs {
 
 	#set(patch: Partial<Stored>) {
 		this.#s = { ...this.#s, ...patch };
-		try {
-			localStorage.setItem(KEY, JSON.stringify(this.#s));
-		} catch {
-			/* not persisted; still applies for this visit */
+		const account = this.#account;
+		if (account && patch.volume === undefined) {
+			account.pending = { ...account.pending, ...patch };
+			this.#cache(account);
+			if (account.remote) this.#schedule(account);
+		} else {
+			try {
+				const local = patch.volume === undefined ? this.#s : { ...load(), volume: this.#s.volume };
+				localStorage.setItem(KEY, JSON.stringify(local));
+			} catch {
+				/* storage unavailable */
+			}
 		}
 		this.apply();
 	}
