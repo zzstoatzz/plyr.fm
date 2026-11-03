@@ -26,6 +26,7 @@ function Home({ onPlay }: { onPlay: Play }) {
   const chart = useResource(loadChart);
   const chartTracks = chart.data?.data.slice(0, 5).map(({ track }) => track) ?? [];
   return <>
+    <View style={{ alignSelf: 'flex-start' }}><Action label="Radio" href="/radio" /></View>
     {chartTracks.length > 0 && <View style={styles.group}>
       <Heading>Top this week</Heading>
       <TrackRows tracks={chartTracks} onPlay={onPlay} />
