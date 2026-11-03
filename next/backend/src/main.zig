@@ -309,6 +309,7 @@ test {
     _ = @import("internal/projection/list_change.zig");
     _ = @import("internal/projection/profile_change.zig");
     _ = @import("internal/projection/like_change.zig");
+    _ = @import("internal/projection/like_counts.zig");
     _ = @import("internal/projection/track_change.zig");
     _ = @import("internal/projection/snapshot_verifier.zig");
     _ = @import("internal/projection/list_store.zig");

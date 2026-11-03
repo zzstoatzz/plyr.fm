@@ -101,6 +101,20 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
+    # the like-count property runs the migration's triggers against this
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: zig_test
+          POSTGRES_PASSWORD: zig_test
+          POSTGRES_DB: zig_test
+        ports:
+          - 5435:5432
+        options: >-
+          --health-cmd "pg_isready -U zig_test -d zig_test"
+          --health-interval 2s --health-timeout 5s --health-retries 30
+
     defaults:
       run:
         working-directory: next/backend
@@ -114,6 +128,9 @@ jobs:
           ln -s "$(python3 -c 'import ziglang, os; print(os.path.dirname(ziglang.__file__))')/zig" /usr/local/bin/zig || sudo ln -s "$(python3 -c 'import ziglang, os; print(os.path.dirname(ziglang.__file__))')/zig" /usr/local/bin/zig
           zig version
 
+      - name: install openssl headers
+        run: sudo apt-get update && sudo apt-get install -y libssl-dev
+
       # libhegel is a cargo build of one pinned hegel-rust revision
       - uses: actions/cache@v4
         with:
@@ -121,4 +138,6 @@ jobs:
           key: hegel-zig-${{ hashFiles('next/backend/build.zig.zon') }}
 
       - name: property harnesses
+        env:
+          PLYR_ZIG_TEST_DATABASE_URL: postgresql://zig_test:zig_test@127.0.0.1:5435/zig_test
         run: zig build fuzz -Dhegel -Dfuzz-cases=500

@@ -510,14 +510,9 @@ const detail_query = "SELECT\n" ++ header_columns ++ "\n" ++
     \\  AND d.service = 'r2' AND d.verification = 'verified_blob_cid'
     \\LEFT JOIN plyr_index.track_metrics AS metrics
     \\  ON metrics.record_uri = v.record_uri
-    \\LEFT JOIN LATERAL (
-    \\  SELECT count(DISTINCT likes.owner_did)::bigint AS like_count
-    \\  FROM plyr_index.like_records AS likes
-    \\  JOIN plyr_index.account_availability AS liker_account
-    \\    ON liker_account.repo_did = likes.owner_did AND liker_account.available
-    \\  WHERE likes.subject_uri = v.record_uri AND likes.subject_cid = v.record_cid
-    \\    AND likes.collection = $6 AND NOT likes.deleted
-    \\) AS like_metrics ON true
+    \\LEFT JOIN plyr_index.track_like_counts AS like_metrics
+    \\  ON like_metrics.collection = $6 AND like_metrics.subject_uri = v.record_uri
+    \\  AND like_metrics.subject_cid = v.record_cid
     \\LEFT JOIN plyr_index.actor_identities AS a ON a.did = v.owner_did
     \\LEFT JOIN plyr_index.profile_records AS p
     \\  ON p.owner_did = v.owner_did AND p.collection = $4
