@@ -15,6 +15,7 @@ function oauthClient() {
 		: `${SITE_URL}/oauth-client-metadata.json`;
 	client = BrowserOAuthClient.load({
 		clientId,
+		allowHttp: loopback,
 		handleResolver: 'https://public.api.bsky.app',
 		onSessionDeleted: did => { if (getAuth().did === did) clearAuth(); }
 	});
