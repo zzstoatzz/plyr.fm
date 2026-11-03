@@ -89,7 +89,7 @@ Direct SQL is reserved for projection adapter tests and benchmark fixtures.
 
 | variable | required | purpose |
 |---|---:|---|
-| `MODE` | yes | `api`, `ingester`, `repair`, `catalog_reconciler`, or separately supervised `account_reconciler` |
+| `MODE` | yes | `api`, `ingester`, `mirror`, `repair`, `catalog_reconciler`, or separately supervised `account_reconciler` |
 | `TRACK_COLLECTION_NSID` | yes | exact environment-aware track-record NSID |
 | `LIST_COLLECTION_NSID` | yes | exact environment-aware list-record NSID used by albums and playlists |
 | `PROFILE_COLLECTION_NSID` | yes | exact environment-aware authored profile-record NSID |
@@ -107,6 +107,19 @@ Direct SQL is reserved for projection adapter tests and benchmark fixtures.
 | `ACCOUNT_CHECK_LEASE_SECONDS` | no | expired-worker claim recovery window, default 120 |
 | `ACCOUNT_CHECK_SEED_SECONDS` | no | periodic sweep from authenticated repository heads, default 300 |
 | `ACCOUNT_CHECK_IDLE_MILLISECONDS` | no | idle claim-poll interval, default 1000 |
+| `MIRROR_S3_ENDPOINT` | to enable mirror | https S3-compatible endpoint (R2: `https://<account>.r2.cloudflarestorage.com`) |
+| `MIRROR_S3_BUCKET` | to enable mirror | bucket for mirrored audio, addressed path-style |
+| `MIRROR_S3_ACCESS_KEY_ID` / `MIRROR_S3_SECRET_ACCESS_KEY` | to enable mirror | SigV4 credentials with object write on the bucket |
+| `MIRROR_PUBLIC_BASE_URL` | to enable mirror | https public origin for the bucket; origins are `{base}/{prefix}/{cid}` |
+| `MIRROR_S3_REGION` / `MIRROR_KEY_PREFIX` | no | SigV4 region, default `auto`; object prefix, default `audio` |
+
+The `mirror` role fetches each live track's audio blob from the owner's
+current PDS (SSRF-pinned, no redirects, 100 MB cap), verifies the bytes hash to
+the record's raw-codec CID, uploads them content-addressed, and records an `r2`
+delivery origin bound to that exact record CID. Failures back off from one
+minute to one day per record version. Without the `MIRROR_*` settings it idles.
+Mirrored origins give clients a Range-capable URL even when the PDS ignores
+`Range` on `getBlob`.
 
 `/health` is process liveness. `/ready` is product readiness and requires a
 configured track index. The listener acquires a connection permit before

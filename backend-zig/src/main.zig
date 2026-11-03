@@ -18,6 +18,7 @@ const repair_runner = @import("internal/ingest/repair_runner.zig");
 const continuous_runner = @import("internal/ingest/continuous_runner.zig");
 const catalog_reconcile_runner = @import("internal/ingest/catalog_reconcile_runner.zig");
 const account_reconciler = @import("internal/account/reconciler.zig");
+const blob_mirror = @import("internal/delivery/blob_mirror.zig");
 
 var threaded_io: std.Io.Threaded = undefined;
 pub const std_options_debug_threaded_io: ?*std.Io.Threaded = &threaded_io;
@@ -140,6 +141,10 @@ pub fn main() !void {
                 .like_collection = settings.like_collection,
                 .cors = .{ .allowed_origins = settings.cors_allowed_origins },
             });
+        },
+        .mirror => {
+            const store = if (postgres_store) |*value| value else return error.MirrorDatabaseRequired;
+            try blob_mirror.run(io, allocator, store.pool);
         },
         .catalog_reconciler => {
             const store = if (postgres_store) |*value| value else return error.CatalogReconcilerDatabaseRequired;
@@ -272,6 +277,9 @@ test {
     _ = @import("internal/cache/lru.zig");
     _ = @import("internal/ingest/cached_signing_key_resolver.zig");
     _ = @import("internal/ingest/catalog_reconciler.zig");
+    _ = @import("internal/delivery/sigv4.zig");
+    _ = @import("internal/delivery/blob_mirror.zig");
+    _ = @import("internal/delivery/postgres_mirror_store.zig");
     _ = @import("internal/ingest/catalog_reconcile_runner.zig");
     _ = @import("internal/ingest/continuous_runner.zig");
     _ = @import("internal/ingest/postgres_relay_cursor.zig");

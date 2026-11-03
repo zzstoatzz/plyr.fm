@@ -6,6 +6,7 @@ pub const Role = enum {
     api,
     catalog_reconciler,
     ingester,
+    mirror,
     repair,
 
     pub fn parse(value: []const u8) !Role {
@@ -100,6 +101,8 @@ pub const Config = struct {
             return error.IngesterDatabaseRequired;
         if (role == .account_reconciler and (database_url == null or index_mode != .required))
             return error.AccountReconcilerDatabaseRequired;
+        if (role == .mirror and (database_url == null or index_mode != .required))
+            return error.MirrorDatabaseRequired;
         if (role == .catalog_reconciler and (database_url == null or index_mode != .required))
             return error.CatalogReconcilerDatabaseRequired;
 
