@@ -16,6 +16,7 @@ export default function Login() {
   const auth = useAuth();
   const { deviceOnly, return_to } = useLocalSearchParams<{ deviceOnly?: string; return_to?: string }>();
   const intent = returnPath(return_to);
+  const [showHelp, setShowHelp] = useState(false);
   const [creating, setCreating] = useState(false);
   const [handle, setHandle] = useState('');
   const [actors, setActors] = useState<Actor[]>([]);
@@ -116,11 +117,11 @@ export default function Login() {
   const host = creating ? provider?.name : preview?.sign_in_host;
   return <Page title={creating ? 'create account' : 'sign in to plyr.fm'}>
     <View style={row}>
-      <Action label="sign in" selected={!creating} disabled={busy} onPress={() => { setCreating(false); setError(undefined); }} />
-      <Action label="create account" selected={creating} disabled={busy} onPress={() => { setCreating(true); setError(undefined); }} />
+      <Action label="sign in" selected={!creating} disabled={busy} onPress={() => { setCreating(false); setShowHelp(false); setError(undefined); }} />
+      <Action label="create account" selected={creating} disabled={busy} onPress={() => { setCreating(true); setShowHelp(false); setError(undefined); }} />
     </View>
     {creating ? <>
-      <Copy>choose a home for your data. you can always move your account later.</Copy>
+      <Copy>choose a <Link href="https://at-me.zzstoatzz.io/view/?handle=zzstoatzz.io">home</Link> for your data</Copy>
       {providers === undefined && <Copy>loading account providers…</Copy>}
       {providers?.length === 0 && <Copy>account providers are unavailable right now. you can still create an account with Bluesky or Blacksky.</Copy>}
       {providers?.map(item => <View key={item.url} style={{ gap: 6 }}>
@@ -139,12 +140,22 @@ export default function Login() {
         <Copy>{preview.display_name ? preview.display_name + ' · ' : ''}@{preview.handle}</Copy>
         {!busy && <Action label="not you?" onPress={() => updateHandle('')} />}
       </View>}
-      <Copy>Use an existing account from <Link href="https://bsky.app">Bluesky</Link>, <Link href="https://blackskyweb.xyz">Blacksky</Link>, or another <Link href="https://atproto.com/guides/glossary#handle">Atmosphere provider</Link>.</Copy>
+      <Copy>your @handle from <Link href="https://bsky.app">Bluesky</Link> or <Link href="https://blackskyweb.xyz">Blacksky</Link></Copy>
       {deviceOnly === 'true' && <Copy>Preferences will stay on this device for this sign-in.</Copy>}
     </>}
     <Action primary label={busy ? (host ? 'taking you to ' + host + '…' : 'redirecting…') : creating ? 'create account' : host ? 'continue at ' + host : 'sign in'}
       onPress={() => void submit()} disabled={busy || (creating ? !provider : !identifier)} />
     <Copy>{busy && slow ? 'still connecting. some servers take a few seconds.' : 'you’ll come straight back here after. plyr.fm never sees your password.'}</Copy>
+    <Action label={creating ? 'what’s a Personal Data Server?' : 'new to the atmosphere?'}
+      selected={showHelp} onPress={() => setShowHelp(!showHelp)} />
+    {showHelp && (creating ? <>
+      <Copy>a Personal Data Server (PDS) is where your data lives on the <Link href="https://atproto.com">AT Protocol</Link> network. think of it as choosing a home for your account — you can always move later.</Copy>
+      <Copy>learn more at <Link href="https://atproto.com/guides/self-hosting">atproto.com</Link>.</Copy>
+    </> : <>
+      <Copy>hey, welcome in! you'll need an account.</Copy>
+      <Action label="create one here" disabled={busy} onPress={() => { setCreating(true); setShowHelp(false); }} />
+      <Copy>or sign up with <Link href="https://bsky.app">Bluesky</Link> or <Link href="https://blackskyweb.xyz">Blacksky</Link> and come back.</Copy>
+    </>)}
     {(error || (!creating && auth.error)) && <Copy>{error || auth.error}</Copy>}
     {!creating && (error || auth.scopeRejected) && <Action label="sign in without preference sync" onPress={() => void submit(true)}
       disabled={busy || !identifier} />}
