@@ -1,6 +1,6 @@
 name: deploy next web
 
-# Builds next/web/ (the read-only-appview frontend) and deploys it to the
+# Exports the Expo client in next/app/ for web and deploys it to the
 # production branch of the direct-upload pages project plyr-fm-next, which
 # next.plyr.fm already CNAMEs to. Never touches production-fe or the plyr-fm
 # pages project.
@@ -9,7 +9,11 @@ on:
     branches:
       - main
     paths:
-      - "next/web/**"
+      - "next/app/**"
+      - ".github/workflows/deploy-web-next.yml"
+  pull_request:
+    paths:
+      - "next/app/**"
       - ".github/workflows/deploy-web-next.yml"
   workflow_dispatch:
 
@@ -17,15 +21,15 @@ jobs:
   deploy:
     name: deploy next web
     runs-on: ubuntu-latest
-    concurrency: deploy-web-next
+    concurrency: deploy-web-next-${{ github.event_name == 'pull_request' && github.ref || 'main' }}
     permissions:
       contents: read
       deployments: write
     env:
-      PUBLIC_API_URL: https://api.next.plyr.fm
-      PUBLIC_SITE_URL: https://next.plyr.fm
-      PUBLIC_NSID_PREFIX: fm.plyr
-      PUBLIC_PREFERENCE_SYNC: "true"
+      EXPO_PUBLIC_API_URL: https://api.next.plyr.fm
+      EXPO_PUBLIC_SITE_URL: https://next.plyr.fm
+      EXPO_PUBLIC_NSID_PREFIX: fm.plyr
+      EXPO_PUBLIC_PREFERENCE_SYNC: "true"
     steps:
       - uses: actions/checkout@v4
 
@@ -33,19 +37,34 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: next/web/package-lock.json
+          cache-dependency-path: next/app/package-lock.json
 
       - name: check and build
-        working-directory: next/web
+        working-directory: next/app
         run: |
           npm ci
           npm run check
-          npm run build
+          npm run build:web
+          test -s dist/index.html
+          test -s dist/oauth-client-metadata.json
+          test -s dist/oauth-native-client-metadata.json
+          test ! -e dist/404.html
+
+      - name: bundle iOS and Android
+        if: github.event_name == 'pull_request'
+        working-directory: next/app
+        run: npx expo export --platform ios --platform android --output-dir "$RUNNER_TEMP/next-native"
+
+      - name: check native bundles
+        if: github.event_name == 'pull_request'
+        working-directory: next/app
+        run: npx --no-install expo export --platform ios --platform android --output-dir "$RUNNER_TEMP/next-native"
 
       # the project predates this workflow, so deploy to whatever branch it
       # serves as production rather than guessing (a non-production branch
       # only lands on a <branch>.plyr-fm-next.pages.dev preview).
       - name: resolve production branch
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
         id: project
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -59,8 +78,9 @@ jobs:
           echo "branch=$branch" >> "$GITHUB_OUTPUT"
 
       - name: deploy to cloudflare pages
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy next/web/build --project-name plyr-fm-next --branch ${{ steps.project.outputs.branch }}
+          command: pages deploy next/app/dist --project-name plyr-fm-next --branch ${{ steps.project.outputs.branch }}
