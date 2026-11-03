@@ -10,6 +10,7 @@ import House from 'lucide-react-native/icons/house';
 import Search from 'lucide-react-native/icons/search';
 import Library from 'lucide-react-native/icons/library';
 import UserRound from 'lucide-react-native/icons/user-round';
+import Radio from 'lucide-react-native/icons/radio';
 import Settings from 'lucide-react-native/icons/settings';
 import { PlaybackProvider } from '../src/playback';
 import { PlayerBar } from '../src/PlayerBar';
@@ -80,6 +81,10 @@ function Shell() {
             style={{ flex: 1, color: theme.text, fontFamily: theme.fontFamily, fontSize: 30 * theme.scale, fontWeight: '800', letterSpacing: -0.8 }}>{tabTitle}</Text>
             : detail ? <Text numberOfLines={1} style={{ flex: 1, textAlign: 'center', color: theme.text, fontSize: 16 * theme.scale, fontWeight: '700' }}>{detailTitle}</Text>
             : <View style={{ flex: 1 }} />}
+          {path === '/' && <Link href="/radio" asChild><Pressable accessibilityRole="link" accessibilityLabel="Radio"
+            style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}>
+            <Radio size={21} color={theme.muted} />
+          </Pressable></Link>}
           {path !== '/settings' && <Link href="/settings" asChild><Pressable accessibilityRole="link" accessibilityLabel="Settings"
             style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}>
             <Settings size={20} color={theme.muted} />
