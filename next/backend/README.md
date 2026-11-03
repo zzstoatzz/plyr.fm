@@ -111,6 +111,10 @@ Direct SQL is reserved for projection adapter tests and benchmark fixtures.
 | `MIRROR_BASE_URL` | to enable mirror | https origin of the `next-audio` worker (`next/services/audio/`); uploads PUT to and playback reads from `{base}/{prefix}/{cid}` |
 | `MIRROR_UPLOAD_TOKEN` | to enable mirror | bearer secret shared with the worker's `UPLOAD_TOKEN` (32+ chars) |
 | `MIRROR_KEY_PREFIX` | no | object prefix, default `audio` |
+| `SPACE_SERVICE_DID` | to enable gated audio | plyr's managing-app DID, e.g. `did:web:api.next.plyr.fm`; enables `/.well-known/did.json` and `checkUserAccess` |
+| `SPACE_SERVICE_ENDPOINT` | with `SPACE_SERVICE_DID` | public https origin of this API, published as the service endpoint |
+| `SPACE_SERVICE_ID` | no | DID-doc service fragment, default `plyr_space` |
+| `SPACE_TYPE_NSID` | no | the space type plyr manages, default `fm.plyr.stg.audio` |
 
 The ingester subscribes to jetstreams (`INGEST_STREAM_HOSTS`) filtered to the
 four plyr collections and trusts their upstream commit verification; it checks
@@ -118,6 +122,16 @@ each record's JSON against the CID the stream reports before projecting it, and
 checkpoints the portable `time_us` cursor so failover between hosts resumes in
 place. A repository seen for the first time is bootstrapped once from a
 verified PDS snapshot.
+
+Gated audio lives in managedspaces on the artist's own PDS
+(`at://{artist}/space/{SPACE_TYPE_NSID}/{skey}`) whose policy names
+`{SPACE_SERVICE_DID}#{SPACE_SERVICE_ID}` as the managing app. Listeners'
+browsers mint space credentials from that PDS and read blobs directly; the
+PDS asks this API `GET /xrpc/com.atproto.managedspace.checkUserAccess`
+with a service JWT from the artist (aud = the managing app, fragment
+included). The skey is the gate: `supporters` checks atprotofans,
+`signed-in` admits any account; the artist always has access and nobody
+else may write. The API never proxies or stores gated audio.
 
 The ingester runs the blob mirror on a side thread when configured (`MODE=mirror` runs it
 alone). It fetches each live track's audio blob from the owner's

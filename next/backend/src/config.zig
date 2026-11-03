@@ -1,4 +1,5 @@
 const std = @import("std");
+const ManagedSpace = @import("internal/space/managed_space.zig").Config;
 const zat = @import("zat");
 
 pub const Role = enum {
@@ -40,6 +41,9 @@ pub const Config = struct {
     repair_did: ?[]const u8,
     /// Comma-separated jetstream hostnames, tried in order (zat stream first).
     stream_hosts: []const u8,
+    /// plyr's managing-app identity for gated-audio spaces; null disables
+    /// the did:web document and checkUserAccess.
+    managed_space: ?ManagedSpace,
     account_check_interval_us: i64,
     account_check_retry_us: i64,
     account_check_lease_us: i64,
@@ -123,6 +127,13 @@ pub const Config = struct {
             .repair_did = repair_did,
             .stream_hosts = getenv("INGEST_STREAM_HOSTS") orelse
                 "stream.waow.tech,jetstream1.us-east.bsky.network,jetstream2.us-east.bsky.network,jetstream1.us-west.bsky.network,jetstream2.us-west.bsky.network",
+            .managed_space = if (getenv("SPACE_SERVICE_DID")) |did| .{
+                .service_did = did,
+                .service_id = getenv("SPACE_SERVICE_ID") orelse "plyr_space",
+                .service_endpoint = getenv("SPACE_SERVICE_ENDPOINT") orelse
+                    return error.SpaceServiceEndpointRequired,
+                .space_type = getenv("SPACE_TYPE_NSID") orelse "fm.plyr.stg.audio",
+            } else null,
             .account_check_interval_us = try parseSecondsMicros(
                 getenv("ACCOUNT_CHECK_INTERVAL_SECONDS") orelse "21600",
             ),

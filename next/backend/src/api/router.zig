@@ -8,6 +8,8 @@ const response = @import("response.zig");
 const search = @import("search.zig");
 const tracks = @import("tracks.zig");
 const actors = @import("actors.zig");
+const managed_space = @import("managed_space.zig");
+const ManagedSpaceConfig = @import("../internal/space/managed_space.zig").Config;
 const path_segment = @import("../internal/http/path_segment.zig");
 const ArtistStore = @import("../internal/index/artist_store.zig").ArtistStore;
 const ArtistMetricStore = @import("../internal/metrics/artist_metric_store.zig").ArtistMetricStore;
@@ -48,6 +50,7 @@ pub const App = struct {
     profile_collection: []const u8,
     like_collection: []const u8,
     cors: response.CorsPolicy,
+    managed_space: ?ManagedSpaceConfig = null,
 };
 
 pub fn handle(
@@ -89,6 +92,26 @@ pub fn handle(
             return;
         }
         try response.json(request, .ok, "{\"status\":\"ready\",\"index\":\"reachable\"}", request_id, app.cors);
+    } else if (mem.eql(u8, path, "/.well-known/did.json")) {
+        const config = app.managed_space orelse {
+            try response.apiError(request, .not_found, request_id, app.cors);
+            return;
+        };
+        if (request.head.method != .GET) {
+            try response.apiError(request, .method_not_allowed, request_id, app.cors);
+            return;
+        }
+        try managed_space.didDocument(request, allocator, config, app.cors, request_id);
+    } else if (mem.eql(u8, path, "/xrpc/com.atproto.managedspace.checkUserAccess")) {
+        const config = app.managed_space orelse {
+            try response.apiError(request, .not_found, request_id, app.cors);
+            return;
+        };
+        if (request.head.method != .GET) {
+            try response.apiError(request, .method_not_allowed, request_id, app.cors);
+            return;
+        }
+        try managed_space.checkUserAccess(request, allocator, app.io, config, app.cors, request_id);
     } else if (mem.eql(u8, path, prefix ++ "/albums")) {
         if (request.head.method != .GET) {
             try response.apiError(request, .method_not_allowed, request_id, app.cors);
