@@ -7,6 +7,7 @@ import { getAuth } from './auth-state';
 import {
   Button, Detail, Heading, ListRows, Status, TrackRows, errorMessage, useColors, usePages, useResource, type Play,
 } from './CatalogPieces';
+import { Sheet } from './Sheet';
 import { createPds } from './pds';
 
 function usePds() {
@@ -111,13 +112,13 @@ function AccountLibrary({ did, likesOnly, onPlay }: { did: string; likesOnly: bo
       <Status loading={lists.loading} error={lists.error} retry={lists.more} empty={!lists.data.length ? 'No playlists yet.' : undefined} />
       {lists.cursor && !lists.loading && !lists.error && <Button label="More playlists" onPress={lists.more} />}
       <Link href="/playlists"><Detail>Browse public playlists</Detail></Link>
-      {creating ? <View style={styles.group}>
+      {creating ? <Sheet title="New playlist" close={() => { if (!mutation.busy) setCreating(false); }}>
         <NameInput label="Playlist name" value={name} onChange={setName} />
         {!mutation.busy && <View style={styles.actions}>
           {name.trim() && <Button label="Create playlist" onPress={create} />}
           <Button label="Cancel" onPress={() => setCreating(false)} />
         </View>}
-      </View> : <Button label="New playlist" onPress={() => setCreating(true)} />}
+      </Sheet> : <Button label="New playlist" onPress={() => setCreating(true)} />}
       <Status loading={mutation.busy} empty={mutation.message} />
     </>}
   </>;
@@ -152,23 +153,21 @@ function TrackActions({ track, did }: { track: Track; did: string }) {
       {!choosing && <Button label="Add to playlist" onPress={() => setChoosing(true)} />}
     </>}
     {like.error && liked === undefined && <Status error={like.error} retry={like.retry} />}
-    {choosing && <PlaylistPicker did={did} onChoose={(uri) => {
+    {choosing && <Sheet title="Add to playlist" close={() => setChoosing(false)}><PlaylistPicker did={did} onChoose={(uri) => {
       setChoosing(false);
       void mutation.run(async () => messageFor(await pds.addToPlaylist(uri, track), 'Added to playlist.'));
-    }} onCancel={() => setChoosing(false)} />}
+    }} /></Sheet>}
     <Status loading={mutation.busy} empty={mutation.message} />
   </>;
 }
 
-function PlaylistPicker({ did, onChoose, onCancel }: { did: string; onChoose: (uri: string) => void; onCancel: () => void }) {
+function PlaylistPicker({ did, onChoose }: { did: string; onChoose: (uri: string) => void }) {
   const load = useCallback((cursor?: string) => api.playlists({ owner_did: did, limit: 30, cursor }), [did]);
   const lists = usePages(load);
   return <View style={styles.wide}>
-    <Heading>Choose a playlist</Heading>
     {lists.data.map((list) => <Button key={list.id} label={list.metadata.name ?? 'Untitled'} onPress={() => onChoose(list.record.uri)} />)}
     <Status loading={lists.loading} error={lists.error} retry={lists.more} empty={!lists.data.length ? 'Create a playlist from your library first.' : undefined} />
     {lists.cursor && !lists.loading && !lists.error && <Button label="More playlists" onPress={lists.more} />}
-    <Button label="Cancel" onPress={onCancel} />
   </View>;
 }
 
@@ -181,6 +180,7 @@ function EditCollection({ list, refresh }: { list: ListDetail; refresh: () => vo
   const pds = usePds();
   const router = useRouter();
   const [editing, setEditing] = useState(false);
+  const album = list.object === 'album';
   const [name, setName] = useState(list.metadata.name ?? '');
   const [confirmDelete, setConfirmDelete] = useState(false);
   const mutation = useMutation();
@@ -191,10 +191,9 @@ function EditCollection({ list, refresh }: { list: ListDetail; refresh: () => vo
   }, []));
   function rename() {
     void mutation.run(async () => {
-      const status = await pds.renamePlaylist(list.record.uri, name);
-      setEditing(false);
+      const status = await pds.renameCollection(list.record.uri, name, list.object);
       if (status === 'indexed') refresh();
-      return messageFor(status, 'Playlist renamed.');
+      return messageFor(status, album ? 'Album renamed.' : 'Playlist renamed.');
     });
   }
   function remove(uri: string) {
@@ -212,28 +211,25 @@ function EditCollection({ list, refresh }: { list: ListDetail; refresh: () => vo
       return messageFor(status, 'Playlist deleted.');
     });
   }
-  return <View style={styles.group}>
-    <Heading>Manage playlist</Heading>
-    {editing && <NameInput label="Playlist name" value={name} onChange={setName} />}
-    {!mutation.busy && <>
-      <View style={styles.actions}>
-        {editing ? <>
-          {name.trim() && <Button label="Save name" onPress={rename} />}
-          <Button label="Cancel rename" onPress={() => setEditing(false)} />
-        </> : <Button label="Rename playlist" onPress={() => setEditing(true)} />}
-        {confirmDelete ? <>
-          <Button label="Confirm delete playlist" onPress={deletePlaylist} />
-          <Button label="Cancel deletion" onPress={() => setConfirmDelete(false)} />
-        </> : <Button label="Delete playlist" onPress={() => setConfirmDelete(true)} />}
-      </View>
-      {list.members.map((member) => <Button
-        key={member.position}
-        label={`Remove ${member.track?.metadata.title ?? 'unavailable track'}`}
-        onPress={() => remove(member.subject.uri)}
-      />)}
-    </>}
-    <Status loading={mutation.busy} empty={mutation.message} />
-  </View>;
+  return <>
+    <Button label={album ? 'Edit album' : 'Edit playlist'} onPress={() => { setName(list.metadata.name ?? ''); setEditing(true); }} />
+    {editing && <Sheet title={album ? 'Edit album' : 'Edit playlist'} close={() => { if (!mutation.busy) { setEditing(false); setConfirmDelete(false); } }}>
+      <NameInput label={album ? 'Album name' : 'Playlist name'} value={name} onChange={setName} />
+      <Status loading={mutation.busy} empty={mutation.message} />
+      {!mutation.busy && <>
+        {name.trim() && <Button label="Save name" onPress={rename} />}
+        {!album && <>
+          <Heading>Tracks</Heading>
+          {list.members.map((member) => <Button key={member.position}
+            label={`Remove ${member.track?.metadata.title ?? 'unavailable track'}`}
+            onPress={() => remove(member.subject.uri)} />)}
+          <Button label={confirmDelete ? 'Confirm delete playlist' : 'Delete playlist'}
+            onPress={confirmDelete ? deletePlaylist : () => setConfirmDelete(true)} />
+          {confirmDelete && <Button label="Cancel deletion" onPress={() => setConfirmDelete(false)} />}
+        </>}
+      </>}
+    </Sheet>}
+  </>;
 }
 
 const styles = StyleSheet.create({

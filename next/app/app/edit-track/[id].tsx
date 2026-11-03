@@ -3,7 +3,8 @@ import { useEffect, useState } from 'react';
 import { View } from 'react-native';
 import { api, type Track } from '../../src/api';
 import { useAuth } from '../../src/auth';
-import { Action, Copy, Field, Page, row } from '../../src/controls';
+import { Sheet } from '../../src/Sheet';
+import { Action, Copy, Field, row } from '../../src/controls';
 import { pickMedia } from '../../src/media-picker';
 import { createPds, type MediaFile } from '../../src/pds';
 
@@ -17,6 +18,7 @@ export default function EditTrack() {
   const [artwork, setArtwork] = useState<MediaFile | null>();
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState(false);
+  const [saved, setSaved] = useState(false);
   const [confirm, setConfirm] = useState(false);
 
   useEffect(() => {
@@ -34,11 +36,17 @@ export default function EditTrack() {
   async function save(deleting: boolean) {
     if (!track || track.artist.did !== auth.did || busy) return;
     setBusy(true);
+    setError(undefined);
     try {
       const pds = createPds(auth);
-      if (deleting) await pds.deleteTrack(track.record.uri);
-      else await pds.editTrack(track.record.uri, { title, album, description, artwork });
-      router.replace(deleting ? '/portal' : `/track/${track.id}`);
+      const status = deleting ? await pds.deleteTrack(track.record.uri)
+        : await pds.editTrack(track.record.uri, { title, album, description, artwork });
+      if (status === 'indexed' || status === 'deleted' || status === 'absent') {
+        router.replace(deleting ? '/portal' : `/track/${track.id}`);
+        return;
+      }
+      setSaved(true);
+      setError(status === 'rejected' ? 'Saved to your PDS. The catalog rejected the change.' : 'Saved to your PDS. The catalog is catching up.');
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : 'Could not update track.');
     } finally {
@@ -46,9 +54,11 @@ export default function EditTrack() {
     }
   }
 
-  return <Page title="Edit track">
+  return <Sheet title="Edit track" close={() => {
+    if (!busy) router.canGoBack() ? router.back() : router.replace(`/track/${id}`);
+  }}>
     {error && <Copy>{error}</Copy>}
-    {track && track.artist.did === auth.did ? <>
+    {saved ? null : track && track.artist.did === auth.did ? <>
       <Field label="Title" value={title} onChangeText={setTitle} maxLength={256} />
       <Field label="Album" value={album} onChangeText={setAlbum} maxLength={256} />
       <Field label="Description" value={description} onChangeText={setDescription} maxLength={5000} multiline />
@@ -58,9 +68,9 @@ export default function EditTrack() {
         }).catch(() => setError('Could not open cover art.'))} />
         <Action label={artwork === null ? 'Cover will be removed' : 'Remove cover'} disabled={busy} onPress={() => setArtwork(null)} />
       </View>
-      <Action label="Save" disabled={busy || !title.trim()} onPress={() => void save(false)} />
+      <Action primary label="Save" disabled={busy || !title.trim()} onPress={() => void save(false)} />
       <Action label={confirm ? 'Confirm delete' : 'Delete track'} disabled={busy} onPress={() => confirm ? void save(true) : setConfirm(true)} />
       {confirm && <Action label="Cancel delete" disabled={busy} onPress={() => setConfirm(false)} />}
-    </> : <Copy>{track ? 'Only the artist can edit this track.' : 'Loading track…'}</Copy>}
-  </Page>;
+    </> : <Copy>{track ? 'Only the artist can edit this track.' : error ? '' : 'Loading track…'}</Copy>}
+  </Sheet>;
 }

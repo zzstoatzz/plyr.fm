@@ -1,11 +1,11 @@
-import { Stack, usePathname } from 'expo-router';
+import { Link, Stack, router, usePathname, type Href } from 'expo-router';
 import { useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Text, View } from 'react-native';
+import { Pressable, Text, View, useWindowDimensions, StyleSheet } from 'react-native';
 import { AppearanceProvider, useAppearance } from '../src/appearance';
 import { restoreAuth, useAuth } from '../src/auth';
-import { Action, row } from '../src/controls';
+import { ArrowLeft, House, Search, Library, UserRound, Settings, type LucideIcon } from 'lucide-react-native';
 import { PlaybackProvider } from '../src/playback';
 import { PlayerBar } from '../src/PlayerBar';
 import { PreferencesProvider } from '../src/preference-context';
@@ -28,19 +28,53 @@ function Shell() {
   const theme = useAppearance();
   const path = usePathname();
   const auth = useAuth();
+  const { width } = useWindowDimensions();
+  const wide = width >= 800;
+  const accountPath = auth.did ? '/portal' : '/login';
+  const tabs: { label: string; href: Href; icon: LucideIcon; active: boolean }[] = [
+    { label: 'Home', href: '/', icon: House, active: path === '/' },
+    { label: 'Search', href: '/search', icon: Search, active: path === '/search' },
+    { label: 'Library', href: '/library', icon: Library, active: ['/library', '/liked', '/playlists'].includes(path) },
+    { label: 'You', href: accountPath, icon: UserRound, active: ['/portal', '/login', '/settings', '/upload'].includes(path) }
+  ];
+  const detail = /^\/(track|u|album|playlist|edit-track)\//.test(path);
+  const header = detail ? path.startsWith('/u/') ? 'Artist' : path.startsWith('/edit-track/') ? 'Edit track'
+    : path.startsWith('/album/') ? 'Album' : path.startsWith('/playlist/') ? 'Playlist' : 'Track' : path === '/search' ? 'Search' : path === '/library' || path === '/liked' ? 'Library' : wide ? 'Next' : 'plyr.fm';
+  const nav = <View style={{
+    flexDirection: wide ? 'column' : 'row', padding: 6, gap: 4, width: wide ? 172 : '100%',
+    borderRightWidth: wide ? StyleSheet.hairlineWidth : 0, borderTopWidth: wide ? 0 : StyleSheet.hairlineWidth, borderColor: theme.surface
+  }}>
+    {wide && <Text style={{ color: theme.text, fontSize: 25, fontWeight: '900', margin: 12 }}>plyr.fm</Text>}
+    {tabs.map(({ label, href, icon: Icon, active }) => <Link key={label} href={href} asChild>
+      <Pressable accessibilityRole="link" accessibilityLabel={label} accessibilityState={{ selected: active }}
+        style={{ minHeight: 48, flex: wide ? undefined : 1, paddingHorizontal: 8, borderRadius: 12, gap: wide ? 12 : 3,
+          flexDirection: wide ? 'row' : 'column', alignItems: 'center', justifyContent: wide ? 'flex-start' : 'center',
+          backgroundColor: active ? theme.surface : theme.background }}>
+        <Icon size={21} color={active ? theme.text : theme.muted} strokeWidth={active ? 2.5 : 1.8} />
+        <Text style={{ color: active ? theme.text : theme.muted, fontSize: wide ? 15 : 11, fontWeight: active ? '700' : '500' }}>{label}</Text>
+      </Pressable>
+    </Link>)}
+  </View>;
   return <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }}>
     <StatusBar style={theme.dark ? 'light' : 'dark'} />
-    <View style={{ flex: 1, width: '100%', maxWidth: 1000, alignSelf: 'center' }}>
-      <View style={{ ...row, padding: 8, borderBottomWidth: 1, borderColor: theme.surface }}>
-        <Text accessibilityRole="header" style={{ color: theme.text, fontWeight: '800', marginHorizontal: 8 }}>plyr.fm</Text>
-        <Action label="Home" href="/" selected={path === '/'} />
-        <Action label="Search" href="/search" selected={path === '/search'} />
-        <Action label="Library" href="/library" selected={path === '/library'} />
-        <Action label={auth.did ? 'Portal' : 'Sign in'} href={auth.did ? '/portal' : '/login'} />
-        <Action label="Settings" href="/settings" selected={path === '/settings'} />
+    <View style={{ flex: 1, width: '100%', maxWidth: 1100, alignSelf: 'center', flexDirection: wide ? 'row' : 'column' }}>
+      {wide && nav}
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <View style={{ minHeight: 49, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12,
+          borderBottomWidth: StyleSheet.hairlineWidth, borderColor: theme.surface }}>
+          {detail ? <Pressable accessibilityRole="button" accessibilityLabel="Back"
+            onPress={() => router.canGoBack() ? router.back() : router.replace('/')}
+            style={{ width: 44, minHeight: 44, justifyContent: 'center' }}><ArrowLeft color={theme.text} size={23} /></Pressable> : <View style={{ width: 44 }} />}
+          <Text numberOfLines={1} style={{ flex: 1, textAlign: 'center', color: theme.text, fontWeight: '800', fontSize: 18 }}>{header}</Text>
+          <Link href="/settings" asChild><Pressable accessibilityRole="link" accessibilityLabel="Settings"
+            style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}>
+            <Settings size={20} color={theme.muted} />
+          </Pressable></Link>
+        </View>
+        <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: theme.background } }} />
+        <PlayerBar />
+        {!wide && nav}
       </View>
-      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: theme.background } }} />
-      <PlayerBar />
     </View>
   </SafeAreaView>;
 }

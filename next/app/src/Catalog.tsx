@@ -3,9 +3,13 @@ import { useCallback, useState, type ReactNode } from 'react';
 import { Platform, ScrollView, Share, StyleSheet, TextInput, View } from 'react-native';
 import { api, type SearchHit, type Track } from './api';
 import {
-  Button, Cover, Detail, Heading, ListRows, Row, Status, TrackRows, artistName, useColors,
+  Button, Detail, Heading, ListRows, Row, Status, TrackRows, artistName, useColors,
   usePages, useResource, type Play, type TrackActions,
 } from './CatalogPieces';
+import { DetailHeader } from './DetailHeader';
+import { TrackLikes } from './TrackLikes';
+import { useAuth } from './auth';
+import { Action } from './controls';
 import { SITE_URL } from './config';
 import { CollectionActions, Library, SignedTrackActions } from './AccountCatalog';
 
@@ -106,17 +110,19 @@ function TrackDetail({ id, onPlay, onEnqueue, trackActions }: {
   const load = useCallback(() => api.track(id), [id]);
   const result = useResource(load);
   const track = result.data;
+  const auth = useAuth();
   if (!track) return <Status loading={!result.error} error={result.error} retry={result.retry} />;
   return <>
-    <Cover uri={track.media.artwork?.url} size={184} />
-    <Heading main>{track.metadata.title}</Heading>
+    <DetailHeader title={track.metadata.title} artwork={track.media.artwork?.url}>
     <Link href={{ pathname: '/u/[handle]', params: { handle: track.artist.profile.handle || track.artist.did } }}>
       <Detail>{artistName(track)}</Detail>
     </Link>
     {track.metadata.album && <Detail>{track.metadata.album}</Detail>}
-    <Detail>{track.metrics.play_count} plays · {track.metrics.like_count} likes</Detail>
+    <View style={styles.actions}><Detail>{track.metrics.play_count} plays</Detail><TrackLikes track={track} /></View>
+    </DetailHeader>
     <View style={styles.actions}>
-      <Button label="Play" onPress={() => onPlay(track)} />
+      <Action primary label="Play track" onPress={() => onPlay(track)} />
+      {auth.did === track.artist.did && <Action label="Edit track" href={`/edit-track/${track.id}`} />}
       <Button label="Add to queue" onPress={() => onEnqueue(track)} />
       <ShareLink path={`/track/${encodeURIComponent(track.id)}`} />
       {trackActions ? trackActions(track) : <SignedTrackActions track={track} />}
@@ -132,16 +138,19 @@ function Collection({ id, album, onPlay }: { id: string; album: boolean; onPlay:
   if (!list) return <Status loading={!result.error} error={result.error} retry={result.retry} />;
   const tracks = list.members.flatMap((member) => member.track ? [member.track] : []);
   return <>
-    <Cover uri={list.media?.artwork?.url} size={156} />
-    <Heading main>{list.metadata.name ?? (album ? 'Album' : 'Playlist')}</Heading>
+    <DetailHeader title={list.metadata.name ?? (album ? 'Album' : 'Playlist')} artwork={list.media?.artwork?.url}>
     {list.owner.profile && <Link href={{ pathname: '/u/[handle]', params: { handle: list.owner.profile.handle || list.owner.did } }}>
       <Detail>{list.owner.profile.display_name || list.owner.profile.handle}</Detail>
     </Link>}
     <Detail>{tracks.length} of {list.metrics.member_count} tracks available</Detail>
-    {tracks[0] && <Button label={album ? 'Play album' : 'Play playlist'} onPress={() => onPlay(tracks[0], tracks)} />}
-    <ShareLink path={`/${album ? "album" : "playlist"}/${encodeURIComponent(id)}`} />
+    </DetailHeader>
+    <View style={styles.actions}>
+      {tracks[0] && <Action primary label={album ? 'Play album' : 'Play playlist'} onPress={() => onPlay(tracks[0], tracks)} />}
+      <ShareLink path={`/${album ? 'album' : 'playlist'}/${encodeURIComponent(id)}`} />
+      <CollectionActions list={list} refresh={result.retry} />
+    </View>
+    <Heading>Tracks</Heading>
     <TrackRows tracks={tracks} onPlay={onPlay} />
-    {!album && <CollectionActions list={list} refresh={result.retry} />}
   </>;
 }
 
@@ -152,14 +161,22 @@ function ArtistPage({ handle, onPlay }: { handle: string; onPlay: Play }) {
   const artist = result.data;
   const support = /^https?:\/\//i.test(artist.support_url ?? '') ? artist.support_url : null;
   return <>
-    <Cover uri={artist.avatar_url} size={96} round />
-    <Heading main>{artist.display_name || artist.handle}</Heading>
+    <DetailHeader title={artist.display_name || artist.handle} artwork={artist.avatar_url} round>
     <Detail>@{artist.handle}</Detail>
     {artist.bio && <Detail>{artist.bio}</Detail>}
     {support && <Link href={support as Href}><Detail>Support artist</Detail></Link>}
-    <ShareLink path={`/u/${encodeURIComponent(artist.handle || artist.did)}`} />
+    </DetailHeader>
+    <View style={styles.actions}>
+      <ShareLink path={`/u/${encodeURIComponent(artist.handle || artist.did)}`} />
+      <ArtistEdit did={artist.did} />
+    </View>
     <ArtistCatalog did={artist.did} onPlay={onPlay} />
   </>;
+}
+
+function ArtistEdit({ did }: { did: string }) {
+  const auth = useAuth();
+  return auth.did === did ? <Action label="Edit profile" href="/edit-profile" /> : null;
 }
 
 function ArtistCatalog({ did, onPlay }: { did: string; onPlay: Play }) {
@@ -222,7 +239,7 @@ export function Catalog({
 }
 
 const styles = StyleSheet.create({
-  page: { alignSelf: 'center', width: '100%', maxWidth: 660, padding: 20, paddingBottom: 40, gap: 14 },
+  page: { alignSelf: 'center', width: '100%', maxWidth: 660, padding: 16, paddingBottom: 32, gap: 16 },
   group: { gap: 7 },
   actions: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8 },
   input: { padding: 13, minHeight: 46, borderRadius: 9 },
