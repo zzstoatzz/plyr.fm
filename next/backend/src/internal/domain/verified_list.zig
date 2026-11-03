@@ -15,8 +15,14 @@ pub const Summary = struct {
     metadata: Metadata,
     owner: Owner,
     metrics: Metrics,
+    /// Cover art: the first available member's artwork, in list order.
+    media: Media = .{},
     sources: Sources,
     projection: Projection,
+};
+
+pub const Media = struct {
+    artwork: ?track.Artwork = null,
 };
 
 pub const Detail = struct {

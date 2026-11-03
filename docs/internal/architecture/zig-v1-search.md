@@ -12,7 +12,7 @@ The strict query contract is:
 
 | parameter | contract |
 |---|---|
-| `q` | required, trimmed UTF-8 containing 2–100 Unicode code points and at most 400 bytes |
+| `q` | required, trimmed UTF-8 of at most 100 Unicode code points and 400 bytes; fewer than 2 code points returns an empty page (typeahead keystrokes are not errors) |
 | `types` | optional unique comma-separated set of `track`, `artist`, `album`, and `playlist` |
 | `limit` | optional global result limit from 1 through 50; defaults to 20 |
 

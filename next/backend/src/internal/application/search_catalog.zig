@@ -37,7 +37,13 @@ pub fn execute(
     };
     const raw = options.q orelse return .invalid_request;
     const search_query = std.mem.trim(u8, raw, " \t\r\n");
-    if (!validQuery(search_query)) return .invalid_request;
+    switch (classifyQuery(search_query)) {
+        .invalid => return .invalid_request,
+        // a one-character query is a normal keystroke in a typeahead, not a
+        // client error: answer with an empty page instead of a 400
+        .too_short => return .{ .found = .{ .data = &.{}, .query = search_query, .counts = .{} } },
+        .ok => {},
+    }
 
     const configured = store orelse return .unavailable;
     const hits = configured.search(allocator, .{
@@ -124,16 +130,16 @@ fn parseTypes(value: []const u8) !store_module.Types {
     return result;
 }
 
-fn validQuery(value: []const u8) bool {
-    if (value.len == 0 or value.len > max_query_bytes) return false;
-    const view = std.unicode.Utf8View.init(value) catch return false;
+fn classifyQuery(value: []const u8) enum { ok, too_short, invalid } {
+    if (value.len > max_query_bytes) return .invalid;
+    const view = std.unicode.Utf8View.init(value) catch return .invalid;
     var iterator = view.iterator();
     var count: usize = 0;
     while (iterator.nextCodepointSlice() != null) {
         count += 1;
-        if (count > max_query_codepoints) return false;
+        if (count > max_query_codepoints) return .invalid;
     }
-    return count >= min_query_codepoints;
+    return if (count < min_query_codepoints) .too_short else .ok;
 }
 
 test "search parses one strict bounded query and type set" {
@@ -181,7 +187,6 @@ test "search rejects ambiguous, malformed, and unsupported options" {
     defer arena.deinit();
     const targets = [_][]const u8{
         "/v1/search",
-        "/v1/search?q=a",
         "/v1/search?q=ok&q=again",
         "/v1/search?q=okay&limit=0",
         "/v1/search?q=okay&limit=51",
@@ -202,5 +207,21 @@ test "search rejects ambiguous, malformed, and unsupported options" {
                 target,
             ),
         );
+    }
+}
+
+test "search answers a one-character or blank query with an empty page" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    for ([_][]const u8{ "/v1/search?q=a", "/v1/search?q=", "/v1/search?q=+" }) |target| {
+        const result = execute(
+            arena.allocator(),
+            null,
+            "fm.plyr.dev.track",
+            "fm.plyr.dev.list",
+            "fm.plyr.dev.actor.profile",
+            target,
+        );
+        try std.testing.expectEqual(@as(usize, 0), result.found.data.len);
     }
 }
