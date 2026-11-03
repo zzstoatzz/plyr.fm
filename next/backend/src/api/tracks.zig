@@ -94,8 +94,13 @@ pub fn playback(
     id: []const u8,
     request_id: []const u8,
 ) !void {
-    switch (get_playback.execute(allocator, store, collection, id)) {
+    const result = get_playback.execute(allocator, store, collection, id);
+    std.log.info("playback request={s} track={s} result={s}", .{ request_id, id, @tagName(result) });
+    switch (result) {
         .found => |value| {
+            std.log.info("playback request={s} availability={s} delivery={any} artifact={any}", .{
+                request_id, @tagName(value.availability.status), value.availability.delivery != null, value.availability.artifact != null,
+            });
             const body = try std.json.Stringify.valueAlloc(allocator, value, .{});
             try response.json(request, .ok, body, request_id, cors);
         },
