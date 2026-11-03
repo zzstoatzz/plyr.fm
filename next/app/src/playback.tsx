@@ -116,7 +116,7 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
 
   useEffect(() => {
     if (starting === null) return;
-    if ((status.playing && status.isLoaded && player.playing) || status.error) {
+    if ((status.playing && player.playing && player.currentTime > 0) || status.error) {
       setStarting(null);
       return;
     }
@@ -127,7 +127,7 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
       setError('Playback took too long to start');
     }, 15_000);
     return () => clearTimeout(timeout);
-  }, [player, starting, status.error, status.isLoaded, status.playing]);
+  }, [player, starting, status.currentTime, status.error, status.playing]);
 
   function play(track: Track, collection?: Track[]) {
     const list = playThrough && collection?.some((item) => item.id === track.id) ? collection : [track];

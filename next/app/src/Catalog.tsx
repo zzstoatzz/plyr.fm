@@ -125,7 +125,8 @@ function TrackDetail({ id, onPlay, onEnqueue, trackActions }: {
     <View style={styles.actions}><Detail>{track.metrics.play_count} plays</Detail><TrackLikes track={track} /></View>
     </DetailHeader>
     <View style={styles.actions}>
-      <Action primary label={player.current?.id === track.id && player.status.playing ? 'Pause' : 'Play'}
+      <Action primary disabled={player.current?.id === track.id && player.loading}
+        label={player.current?.id === track.id ? (player.loading ? 'Loading…' : player.status.playing ? 'Pause' : 'Play') : 'Play'}
         onPress={() => player.current?.id === track.id ? player.toggle() : onPlay(track)} />
       <Action label="Add to queue" onPress={() => onEnqueue(track)} />
       <Action label="More" onPress={() => setActionsOpen(true)} />
