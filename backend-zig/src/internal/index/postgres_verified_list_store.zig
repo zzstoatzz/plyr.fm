@@ -408,8 +408,8 @@ const collection_joins =
     \\FROM plyr_index.list_records AS records
     \\JOIN plyr_index.account_availability AS owner_aa
     \\  ON owner_aa.repo_did = records.owner_did AND owner_aa.available
-    \\LEFT JOIN artists AS owner_a
-    \\  ON owner_a.did = records.owner_did AND NOT owner_a.deactivated
+    \\LEFT JOIN plyr_index.actor_identities AS owner_a
+    \\  ON owner_a.did = records.owner_did
     \\LEFT JOIN plyr_index.profile_records AS owner_p
     \\  ON owner_p.owner_did = records.owner_did AND owner_p.collection = $2
     \\  AND owner_p.rkey = 'self' AND NOT owner_p.deleted
@@ -430,7 +430,7 @@ const collection_joins =
     \\  )
     \\LEFT JOIN plyr_index.account_availability AS aa
     \\  ON aa.repo_did = v.owner_did AND aa.available
-    \\LEFT JOIN artists AS a ON a.did = v.owner_did AND NOT a.deactivated
+    \\LEFT JOIN plyr_index.actor_identities AS a ON a.did = v.owner_did
     \\LEFT JOIN plyr_index.track_metrics AS metrics
     \\  ON metrics.record_uri = v.record_uri
 ;
@@ -481,8 +481,8 @@ const detail_query = "SELECT\n" ++ header_columns ++ "\n" ++
     \\FROM plyr_index.list_records AS records
     \\JOIN plyr_index.account_availability AS owner_aa
     \\  ON owner_aa.repo_did = records.owner_did AND owner_aa.available
-    \\LEFT JOIN artists AS owner_a
-    \\  ON owner_a.did = records.owner_did AND NOT owner_a.deactivated
+    \\LEFT JOIN plyr_index.actor_identities AS owner_a
+    \\  ON owner_a.did = records.owner_did
     \\LEFT JOIN plyr_index.profile_records AS owner_p
     \\  ON owner_p.owner_did = records.owner_did AND owner_p.collection = $4
     \\  AND owner_p.rkey = 'self' AND NOT owner_p.deleted
@@ -504,7 +504,6 @@ const detail_query = "SELECT\n" ++ header_columns ++ "\n" ++
     \\  )
     \\LEFT JOIN plyr_index.account_availability AS aa
     \\  ON aa.repo_did = v.owner_did AND aa.available
-    \\LEFT JOIN tracks AS t ON t.atproto_record_uri = v.record_uri
     \\LEFT JOIN plyr_index.track_delivery_origins AS d
     \\  ON d.record_uri = v.record_uri AND d.record_cid = v.record_cid
     \\  AND d.service = 'r2' AND d.verification = 'verified_blob_cid'
@@ -518,7 +517,7 @@ const detail_query = "SELECT\n" ++ header_columns ++ "\n" ++
     \\  WHERE likes.subject_uri = v.record_uri AND likes.subject_cid = v.record_cid
     \\    AND likes.collection = $6 AND NOT likes.deleted
     \\) AS like_metrics ON true
-    \\LEFT JOIN artists AS a ON a.did = v.owner_did AND NOT a.deactivated
+    \\LEFT JOIN plyr_index.actor_identities AS a ON a.did = v.owner_did
     \\LEFT JOIN plyr_index.profile_records AS p
     \\  ON p.owner_did = v.owner_did AND p.collection = $4
     \\  AND p.rkey = 'self' AND NOT p.deleted

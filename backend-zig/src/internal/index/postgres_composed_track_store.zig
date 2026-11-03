@@ -469,10 +469,10 @@ pub const projected_columns =
     \\  a.display_name,
     \\  COALESCE(p.avatar, a.avatar_url),
     \\  p.avatar IS NOT NULL,
-    \\  COALESCE(p.bio, a.bio),
+    \\  p.bio,
     \\  p.bio IS NOT NULL,
-    \\  t.r2_url,
-    \\  t.file_type,
+    \\  NULL::text,
+    \\  NULL::text,
     \\  COALESCE(pol.visibility, 'public'),
     \\  COALESCE(pol.visibility, 'public') IN ('public', 'supporters'),
     \\  pol.space_uri,
@@ -484,7 +484,7 @@ pub const projected_columns =
     \\    'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'
     \\  ),
     \\  aa.evidence_source,
-    \\  t.atproto_record_uri IS NOT NULL,
+    \\  false,
     \\  (extract(epoch FROM v.record_created_at::timestamptz) * 1000000)::bigint,
     \\  d.origin_url,
     \\  d.media_type,
@@ -501,7 +501,6 @@ pub const projected_from =
     \\FROM plyr_index.track_records AS v
     \\JOIN plyr_index.account_availability AS aa
     \\  ON aa.repo_did = v.owner_did AND aa.available
-    \\LEFT JOIN tracks AS t ON t.atproto_record_uri = v.record_uri
     \\LEFT JOIN plyr_index.track_delivery_origins AS d
     \\  ON d.record_uri = v.record_uri AND d.record_cid = v.record_cid
     \\  AND d.service = 'r2' AND d.verification = 'verified_blob_cid'
@@ -517,7 +516,7 @@ pub const projected_from =
     \\  WHERE likes.subject_uri = v.record_uri AND likes.subject_cid = v.record_cid
     \\    AND likes.collection = $3 AND NOT likes.deleted
     \\) AS like_metrics ON true
-    \\JOIN artists AS a ON a.did = v.owner_did
+    \\JOIN plyr_index.actor_identities AS a ON a.did = v.owner_did
     \\LEFT JOIN plyr_index.profile_records AS p
     \\  ON p.owner_did = v.owner_did AND p.collection = $2
     \\  AND p.rkey = 'self' AND NOT p.deleted
@@ -639,8 +638,7 @@ const readiness_sql =
     \\  AND to_regclass('plyr_index.track_policies') IS NOT NULL
     \\  AND to_regclass('plyr_index.track_metrics') IS NOT NULL
     \\  AND to_regclass('plyr_index.like_records') IS NOT NULL
-    \\  AND to_regclass('tracks') IS NOT NULL
-    \\  AND to_regclass('artists') IS NOT NULL
+    \\  AND to_regclass('plyr_index.actor_identities') IS NOT NULL
 ;
 
 fn finishQueryRow(query_row: *pg.QueryRow) !void {
@@ -701,8 +699,6 @@ test "composed PostgreSQL reads use verified records and authoritative account s
     try requireDisposableDatabase(pool, allocator);
     _ = try pool.exec("DROP SCHEMA IF EXISTS plyr_index CASCADE", .{});
     defer _ = pool.exec("DROP SCHEMA IF EXISTS plyr_index CASCADE", .{}) catch null;
-    _ = try pool.exec("DROP TABLE IF EXISTS tracks CASCADE", .{});
-    _ = try pool.exec("DROP TABLE IF EXISTS artists CASCADE", .{});
     _ = try pool.exec("CREATE SCHEMA plyr_index", .{});
     _ = try pool.exec("CREATE EXTENSION IF NOT EXISTS pg_trgm", .{});
     try projected_tracks.createTestTable(pool);
@@ -732,38 +728,16 @@ test "composed PostgreSQL reads use verified records and authoritative account s
         \\  write_source text NOT NULL, observed_at_us bigint NOT NULL
         \\)
     , .{});
-    _ = try pool.exec(
-        \\CREATE TABLE artists (
-        \\  did text PRIMARY KEY, handle text NOT NULL, display_name text NOT NULL,
-        \\  bio text, avatar_url text, deactivated boolean NOT NULL DEFAULT false
-        \\)
-    , .{});
-    _ = try pool.exec(
-        \\CREATE TABLE tracks (
-        \\  atproto_record_uri text PRIMARY KEY,
-        \\  created_at timestamptz NOT NULL,
-        \\  r2_url text,
-        \\  file_type text NOT NULL,
-        \\  visibility text NOT NULL,
-        \\  space_uri text,
-        \\  operator_labels jsonb NOT NULL DEFAULT '[]',
-        \\  moderation_override text,
-        \\  play_count integer NOT NULL DEFAULT 0,
-        \\  publish_state text
-        \\)
-    , .{});
+    try @import("../identity/postgres_actor_identity_store.zig").createTestTable(pool);
     const did = "did:plc:artist";
     const record_uri = "at://did:plc:artist/fm.plyr.dev.track/track";
-    _ = try pool.exec(
-        "INSERT INTO artists VALUES ($1, 'artist.example', 'Legacy Name', 'legacy bio', 'https://legacy.example/avatar.jpg')",
-        .{did},
+    try @import("../identity/postgres_actor_identity_store.zig").insertTestIdentity(
+        pool,
+        did,
+        "artist.example",
+        "Legacy Name",
+        "https://legacy.example/avatar.jpg",
     );
-    _ = try pool.exec(
-        \\INSERT INTO tracks VALUES (
-        \\  $1, '2026-08-08T12:00:00Z', 'https://r2.example/audio.flac',
-        \\  'audio/flac', 'public', NULL, '["legacy-note"]', NULL, 700, 'published'
-        \\)
-    , .{record_uri});
     _ = try pool.exec(
         "INSERT INTO plyr_index.track_policies VALUES ($1, 'public', NULL, 'legacy_import', 1000, '[\"copyright-violation\"]', 'allow', 'legacy_import', 1000)",
         .{record_uri},
@@ -850,7 +824,7 @@ test "composed PostgreSQL reads use verified records and authoritative account s
     try std.testing.expectEqualStrings("https://pds.example/avatar.jpg", value.artist.profile.avatar_url.?);
     try std.testing.expectEqualStrings("future-gate", value.access.gate.?.type);
     try std.testing.expectEqual(@as(usize, 1), value.media.artifacts.len);
-    try std.testing.expectEqual(@as(usize, 2), value.media.origins.len);
+    try std.testing.expectEqual(@as(usize, 1), value.media.origins.len);
     try std.testing.expectEqualStrings("https://images.example/cover.jpg", value.media.artwork.?.url);
     try std.testing.expectEqual(track.Source.verified_repo, value.media.artwork.?.source);
     try std.testing.expectEqual(track.Source.verified_repo, value.sources.record);
@@ -1068,7 +1042,7 @@ test "composed PostgreSQL reads use verified records and authoritative account s
         \\)
     , .{ record_uri, try record.toString(a), try blob.toString(a) });
     const delivered = (try implementation.store().getByUri(a, record_uri)).?;
-    try std.testing.expectEqual(@as(usize, 3), delivered.media.origins.len);
+    try std.testing.expectEqual(@as(usize, 2), delivered.media.origins.len);
     try std.testing.expectEqualStrings(
         "https://r2.example/verified.flac",
         delivered.media.origins[1].url,
@@ -1103,7 +1077,7 @@ test "composed PostgreSQL reads use verified records and authoritative account s
         .{},
     );
     const shared_origin = (try implementation.store().getByUri(a, record_uri)).?;
-    try std.testing.expectEqual(@as(usize, 2), shared_origin.media.origins.len);
+    try std.testing.expectEqual(@as(usize, 1), shared_origin.media.origins.len);
     try std.testing.expectEqual(track.Source.mixed, shared_origin.media.origins[0].source);
     try std.testing.expectEqualStrings(
         try blob.toString(a),
@@ -1115,7 +1089,7 @@ test "composed PostgreSQL reads use verified records and authoritative account s
         .{try commit.toString(a)},
     );
     const stale_delivery = (try implementation.store().getByUri(a, record_uri)).?;
-    try std.testing.expectEqual(@as(usize, 2), stale_delivery.media.origins.len);
+    try std.testing.expectEqual(@as(usize, 1), stale_delivery.media.origins.len);
     try std.testing.expectEqual(track.ArtifactVerification.declared, stale_delivery.media.artifacts[0].verification);
     const stale_playback = (try playback_implementation.store().getByUri(a, record_uri)).?;
     try std.testing.expect(stale_playback.verified_delivery == null);

@@ -137,8 +137,8 @@ const select_fields =
     \\  a.display_name,
     \\  p.bio,
     \\  p.avatar,
-    \\  COALESCE(prefs.show_liked_on_profile, false),
-    \\  prefs.support_url,
+    \\  false,
+    \\  NULL::text,
     \\  p.record_created_at,
     \\  COALESCE(p.record_updated_at, p.record_created_at),
     \\  p.record_uri,
@@ -154,13 +154,11 @@ const select_fields =
     \\FROM plyr_index.profile_records AS p
     \\JOIN plyr_index.account_availability AS aa
     \\  ON aa.repo_did = p.owner_did AND aa.available
-    \\JOIN artists AS a ON a.did = p.owner_did
-    \\LEFT JOIN user_preferences AS prefs ON prefs.did = a.did
+    \\JOIN plyr_index.actor_identities AS a ON a.did = p.owner_did
 ;
 
 const detail_by_did_query = select_fields ++ "\n" ++
     \\WHERE a.did = $1
-    \\  AND a.deactivated = false
     \\  AND p.collection = $2
     \\  AND p.rkey = 'self'
     \\  AND NOT p.deleted
@@ -169,7 +167,6 @@ const detail_by_did_query = select_fields ++ "\n" ++
 
 const detail_by_handle_query = select_fields ++ "\n" ++
     \\WHERE lower(a.handle) = $1
-    \\  AND a.deactivated = false
     \\  AND p.collection = $2
     \\  AND p.rkey = 'self'
     \\  AND NOT p.deleted

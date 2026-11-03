@@ -290,8 +290,8 @@ const joins =
     \\FROM plyr_index.like_records AS likes
     \\JOIN plyr_index.account_availability AS availability
     \\  ON availability.repo_did = likes.owner_did AND availability.available
-    \\LEFT JOIN artists AS actor
-    \\  ON actor.did = likes.owner_did AND NOT actor.deactivated
+    \\LEFT JOIN plyr_index.actor_identities AS actor
+    \\  ON actor.did = likes.owner_did
     \\LEFT JOIN plyr_index.profile_records AS profile
     \\  ON profile.owner_did = likes.owner_did AND profile.collection = $4
     \\  AND profile.rkey = 'self' AND NOT profile.deleted
@@ -347,17 +347,11 @@ test "PostgreSQL likes require exact subject CIDs and available actors" {
     try requireDisposableDatabase(pool, allocator);
     _ = try pool.exec("DROP SCHEMA IF EXISTS plyr_index CASCADE", .{});
     defer _ = pool.exec("DROP SCHEMA IF EXISTS plyr_index CASCADE", .{}) catch null;
-    _ = try pool.exec("DROP TABLE IF EXISTS artists CASCADE", .{});
     _ = try pool.exec("CREATE SCHEMA plyr_index", .{});
     try @import("../projection/postgres_like_store.zig").createTestTable(pool);
     try @import("../projection/postgres_profile_store.zig").createTestTable(pool);
     try @import("../account/postgres_availability_store.zig").createTestTable(pool);
-    _ = try pool.exec(
-        \\CREATE TABLE artists (
-        \\  did text PRIMARY KEY, handle text NOT NULL, display_name text NOT NULL,
-        \\  bio text, avatar_url text, deactivated boolean NOT NULL DEFAULT false
-        \\)
-    , .{});
+    try @import("../identity/postgres_actor_identity_store.zig").createTestTable(pool);
 
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
@@ -372,9 +366,9 @@ test "PostgreSQL likes require exact subject CIDs and available actors" {
     const profile_collection = "fm.plyr.dev.actor.profile";
 
     _ = try pool.exec(
-        \\INSERT INTO artists VALUES
-        \\  ('did:plc:listenerone', 'one.example', 'One', NULL, 'https://legacy.example/one.jpg', false),
-        \\  ('did:plc:listenertwo', 'two.example', 'Two', NULL, NULL, false)
+        \\INSERT INTO plyr_index.actor_identities VALUES
+        \\  ('did:plc:listenerone', 'one.example', 'One', 'https://legacy.example/one.jpg', NULL, 0, 0, 0),
+        \\  ('did:plc:listenertwo', 'two.example', 'Two', NULL, NULL, 0, 0, 0)
     , .{});
     _ = try pool.exec(
         \\INSERT INTO plyr_index.account_availability VALUES

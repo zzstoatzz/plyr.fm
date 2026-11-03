@@ -1,7 +1,8 @@
 //! PostgreSQL adapter for catalog-reconciliation discovery hints.
 //!
-//! The legacy app-view contributes DIDs only. Every record subsequently comes
-//! from an authenticated current repository snapshot.
+//! Hints are DIDs the projection has already seen (repo heads and record
+//! owners). Every record subsequently comes from an authenticated current
+//! repository snapshot. Python's public tables are no longer consulted.
 
 const std = @import("std");
 const pg = @import("pg");
@@ -57,22 +58,16 @@ pub const PostgresRepositoryCandidates = struct {
 const candidate_query =
     \\SELECT source.did
     \\FROM (
-    \\  SELECT artist_did AS did
-    \\  FROM public.tracks
-    \\  WHERE atproto_record_uri IS NOT NULL AND atproto_record_cid IS NOT NULL
-    \\  UNION
-    \\  SELECT artist_did AS did
-    \\  FROM public.albums
-    \\  WHERE atproto_record_uri IS NOT NULL AND atproto_record_cid IS NOT NULL
-    \\  UNION
-    \\  SELECT user_did AS did
-    \\  FROM public.track_likes
-    \\  WHERE atproto_like_uri IS NOT NULL
+    \\  SELECT repo_did AS did FROM plyr_index.repo_heads
+    \\  UNION SELECT owner_did FROM plyr_index.track_records
+    \\  UNION SELECT owner_did FROM plyr_index.list_records
+    \\  UNION SELECT owner_did FROM plyr_index.like_records
+    \\  UNION SELECT owner_did FROM plyr_index.profile_records
     \\) AS source
     \\ORDER BY source.did
 ;
 
-test "PostgreSQL candidates are distinct hints from canonical-looking legacy rows" {
+test "PostgreSQL candidates are distinct DIDs the projection has seen" {
     const database_url_z = std.c.getenv("PLYR_ZIG_TEST_DATABASE_URL") orelse
         return error.SkipZigTest;
     const allocator = std.testing.allocator;
@@ -90,24 +85,16 @@ test "PostgreSQL candidates are distinct hints from canonical-looking legacy row
     try database_row.deinit();
     if (!std.mem.eql(u8, database_name, "zig_test")) return error.UnsafeTestDatabase;
 
-    _ = try pool.exec("DROP TABLE IF EXISTS tracks CASCADE", .{});
-    _ = try pool.exec("DROP TABLE IF EXISTS albums CASCADE", .{});
-    _ = try pool.exec("DROP TABLE IF EXISTS track_likes CASCADE", .{});
-    _ = try pool.exec("CREATE TABLE tracks (artist_did text NOT NULL, atproto_record_uri text, atproto_record_cid text)", .{});
-    _ = try pool.exec("CREATE TABLE albums (artist_did text NOT NULL, atproto_record_uri text, atproto_record_cid text)", .{});
-    _ = try pool.exec("CREATE TABLE track_likes (user_did text NOT NULL, atproto_like_uri text)", .{});
-    _ = try pool.exec(
-        "INSERT INTO tracks VALUES ('did:plc:two', 'at://two/track/one', 'bafy'), ('did:plc:one', 'at://one/track/one', 'bafy'), ('did:plc:ignored', NULL, NULL)",
-        .{},
-    );
-    _ = try pool.exec(
-        "INSERT INTO albums VALUES ('did:plc:one', 'at://one/list/one', 'bafy')",
-        .{},
-    );
-    _ = try pool.exec(
-        "INSERT INTO track_likes VALUES ('did:plc:three', 'at://three/like/one'), ('did:plc:ignored', NULL)",
-        .{},
-    );
+    _ = try pool.exec("DROP SCHEMA IF EXISTS plyr_index CASCADE", .{});
+    defer _ = pool.exec("DROP SCHEMA IF EXISTS plyr_index CASCADE", .{}) catch null;
+    _ = try pool.exec("CREATE SCHEMA plyr_index", .{});
+    _ = try pool.exec("CREATE TABLE plyr_index.repo_heads (repo_did text PRIMARY KEY)", .{});
+    inline for (.{ "track_records", "list_records", "like_records", "profile_records" }) |table|
+        _ = try pool.exec("CREATE TABLE plyr_index." ++ table ++ " (owner_did text NOT NULL)", .{});
+    _ = try pool.exec("INSERT INTO plyr_index.repo_heads VALUES ('did:plc:two')", .{});
+    _ = try pool.exec("INSERT INTO plyr_index.track_records VALUES ('did:plc:two'), ('did:plc:one')", .{});
+    _ = try pool.exec("INSERT INTO plyr_index.list_records VALUES ('did:plc:one')", .{});
+    _ = try pool.exec("INSERT INTO plyr_index.like_records VALUES ('did:plc:three')", .{});
 
     var adapter: PostgresRepositoryCandidates = .{ .pool = pool };
     var found = try adapter.source().list(allocator);
