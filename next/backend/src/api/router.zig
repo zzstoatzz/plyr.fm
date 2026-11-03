@@ -3,6 +3,7 @@ const albums = @import("albums.zig");
 const artists = @import("artists.zig");
 const charts = @import("charts.zig");
 const playlists = @import("playlists.zig");
+const health = @import("health.zig");
 const records = @import("records.zig");
 const response = @import("response.zig");
 const search = @import("search.zig");
@@ -24,6 +25,7 @@ const TrackStore = @import("../internal/index/track_store.zig").TrackStore;
 const TrackChartStore = @import("../internal/index/track_chart_store.zig").TrackChartStore;
 const VerifiedListStore = @import("../internal/index/verified_list_store.zig").VerifiedListStore;
 const RecordStatusStore = @import("../internal/index/record_status_store.zig").RecordStatusStore;
+const IngestStatusStore = @import("../internal/index/ingest_status_store.zig").IngestStatusStore;
 
 const http = std.http;
 const mem = std.mem;
@@ -42,6 +44,7 @@ pub const App = struct {
     artist_metric_store: ?ArtistMetricStore,
     verified_list_store: ?VerifiedListStore,
     record_status_store: ?RecordStatusStore = null,
+    ingest_status_store: ?IngestStatusStore = null,
     search_store: ?SearchStore,
     play_metric_store: ?PlayMetricStore,
     play_dedup_store: ?PlayDedupStore,
@@ -198,6 +201,12 @@ pub fn handle(
             app.io,
             request_id,
         );
+    } else if (mem.eql(u8, path, prefix ++ "/health/ingest")) {
+        if (request.head.method != .GET) {
+            try response.apiError(request, .method_not_allowed, request_id, app.cors);
+            return;
+        }
+        try health.ingest(request, allocator, app.io, app.ingest_status_store, app.cors, request_id);
     } else if (mem.eql(u8, path, prefix ++ "/records/await")) {
         if (request.head.method != .GET) {
             try response.apiError(request, .method_not_allowed, request_id, app.cors);

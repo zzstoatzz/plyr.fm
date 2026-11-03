@@ -112,16 +112,17 @@ fn logError(conn: *pg.Conn, message: []const u8, err: anyerror) void {
         std.log.err("{s}: {}", .{ message, err });
 }
 
-const candidate_query =
-    \\SELECT v.record_uri, v.record_cid, v.owner_did, v.audio_blob_cid,
-    \\  v.audio_blob_media_type, v.audio_blob_size
+/// Track versions the mirror still has to copy, whether or not a retry is
+/// due; shared with the backlog count in /v1/health/ingest.
+pub const pending_from =
     \\FROM plyr_index.track_records AS v
     \\JOIN plyr_index.account_availability AS aa
     \\  ON aa.repo_did = v.owner_did AND aa.available
     \\LEFT JOIN plyr_index.track_delivery_origins AS d
     \\  ON d.record_uri = v.record_uri AND d.service = 'r2'
-    \\LEFT JOIN plyr_index.track_mirror_attempts AS m
-    \\  ON m.record_uri = v.record_uri AND m.record_cid = v.record_cid
+;
+
+pub const pending_where =
     \\WHERE NOT v.deleted
     \\  AND v.record_cid IS NOT NULL
     \\  AND v.audio_blob_cid IS NOT NULL
@@ -131,6 +132,15 @@ const candidate_query =
     \\  AND (v.audio_url IS NULL OR v.audio_url NOT LIKE 'https://%')
     \\  AND (d.record_uri IS NULL OR d.record_cid <> v.record_cid
     \\       OR d.artifact_cid <> v.audio_blob_cid)
+;
+
+const candidate_query =
+    \\SELECT v.record_uri, v.record_cid, v.owner_did, v.audio_blob_cid,
+    \\  v.audio_blob_media_type, v.audio_blob_size
+++ "\n" ++ pending_from ++ "\n" ++
+    \\LEFT JOIN plyr_index.track_mirror_attempts AS m
+    \\  ON m.record_uri = v.record_uri AND m.record_cid = v.record_cid
+++ "\n" ++ pending_where ++ "\n" ++
     \\  AND (m.record_uri IS NULL OR m.next_attempt_us <= $1)
     \\ORDER BY m.attempts NULLS FIRST, v.record_uri
     \\LIMIT $2

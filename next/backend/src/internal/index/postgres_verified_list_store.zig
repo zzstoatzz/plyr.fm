@@ -441,12 +441,13 @@ const collection_select = "SELECT\n" ++ header_columns ++ "\n" ++
     \\  , COALESCE(sum(COALESCE(metrics.play_count, 0)) FILTER (
     \\      WHERE aa.repo_did IS NOT NULL AND a.did IS NOT NULL
     \\    ), 0)::bigint
-    \\  , (extract(epoch FROM records.record_created_at::timestamptz) * 1000000)::bigint
+    \\  , records.record_created_at_us
 ;
 
 const collection_where =
     \\WHERE records.collection = $1 AND records.list_type = $3
     \\  AND ($4::text IS NULL OR records.owner_did = $4) AND NOT records.deleted
+    \\  AND records.record_created_at_us IS NOT NULL
 ;
 
 const collection_group =
@@ -455,19 +456,19 @@ const collection_group =
 
 const collection_query = collection_select ++ "\n" ++ collection_joins ++ "\n" ++
     collection_where ++ "\n" ++ collection_group ++ "\n" ++
-    \\ORDER BY records.record_created_at::timestamptz DESC, records.record_uri DESC
+    \\ORDER BY records.record_created_at_us DESC, records.record_uri DESC
     \\LIMIT $5::bigint
 ;
 
 const collection_after_query = collection_select ++ "\n" ++ collection_joins ++ "\n" ++
     collection_where ++ "\n" ++
     \\  AND (
-    \\    records.record_created_at::timestamptz < TIMESTAMPTZ 'epoch' + ($5::bigint * INTERVAL '1 microsecond')
-    \\    OR (records.record_created_at::timestamptz = TIMESTAMPTZ 'epoch' + ($5::bigint * INTERVAL '1 microsecond')
+    \\    records.record_created_at_us < $5::bigint
+    \\    OR (records.record_created_at_us = $5::bigint
     \\      AND records.record_uri < $6)
     \\  )
 ++ "\n" ++ collection_group ++ "\n" ++
-    \\ORDER BY records.record_created_at::timestamptz DESC, records.record_uri DESC
+    \\ORDER BY records.record_created_at_us DESC, records.record_uri DESC
     \\LIMIT $7::bigint
 ;
 
@@ -509,14 +510,9 @@ const detail_query = "SELECT\n" ++ header_columns ++ "\n" ++
     \\  AND d.service = 'r2' AND d.verification = 'verified_blob_cid'
     \\LEFT JOIN plyr_index.track_metrics AS metrics
     \\  ON metrics.record_uri = v.record_uri
-    \\LEFT JOIN LATERAL (
-    \\  SELECT count(DISTINCT likes.owner_did)::bigint AS like_count
-    \\  FROM plyr_index.like_records AS likes
-    \\  JOIN plyr_index.account_availability AS liker_account
-    \\    ON liker_account.repo_did = likes.owner_did AND liker_account.available
-    \\  WHERE likes.subject_uri = v.record_uri AND likes.subject_cid = v.record_cid
-    \\    AND likes.collection = $6 AND NOT likes.deleted
-    \\) AS like_metrics ON true
+    \\LEFT JOIN plyr_index.track_like_counts AS like_metrics
+    \\  ON like_metrics.collection = $6 AND like_metrics.subject_uri = v.record_uri
+    \\  AND like_metrics.subject_cid = v.record_cid
     \\LEFT JOIN plyr_index.actor_identities AS a ON a.did = v.owner_did
     \\LEFT JOIN plyr_index.profile_records AS p
     \\  ON p.owner_did = v.owner_did AND p.collection = $4

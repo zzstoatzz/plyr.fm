@@ -41,4 +41,22 @@
         .old = "return ri_count % 2 == 0;",
         .new = "return ri_count % 2 == 1;",
     },
+    .{
+        .name = "await backoff has no cap",
+        .file = "src/internal/application/await_record.zig",
+        .old = "const step: u64 = @min(doubled, max_poll_ms);",
+        .new = "const step: u64 = doubled;",
+    },
+    .{
+        .name = "like counts ignore availability changes",
+        .file = "migrations/0029_add_track_like_counts.sql",
+        .old = "AFTER INSERT OR DELETE OR UPDATE OF available ON plyr_index.account_availability",
+        .new = "AFTER DELETE ON plyr_index.account_availability",
+    },
+    .{
+        .name = "a retargeted like keeps counting its old subject",
+        .file = "migrations/0029_add_track_like_counts.sql",
+        .old = "IF TG_OP IN ('UPDATE', 'DELETE') AND OLD.subject_uri IS NOT NULL THEN",
+        .new = "IF TG_OP = 'DELETE' AND OLD.subject_uri IS NOT NULL THEN",
+    },
 }

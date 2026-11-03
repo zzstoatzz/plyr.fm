@@ -2,6 +2,7 @@
 
 const std = @import("std");
 const pg = @import("pg");
+const created_at_us = @import("created_at_us.zig");
 const postgres_test_lock = @import("../testing/postgres_lock.zig");
 const zat = @import("zat");
 const track_change = @import("track_change.zig");
@@ -331,6 +332,7 @@ pub fn createTestTable(pool: *pg.Pool) !void {
         \\  CONSTRAINT uq_track_records_repo_path UNIQUE (owner_did, collection, rkey)
         \\)
     , .{});
+    try created_at_us.addTestColumn(pool, "track_records");
 }
 
 test "PostgreSQL track projection replaces complete records and keeps tombstones" {

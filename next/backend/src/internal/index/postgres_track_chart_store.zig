@@ -61,18 +61,26 @@ pub const PostgresTrackChartStore = struct {
 };
 
 const chart_query =
-    \\WITH ranked_likes AS MATERIALIZED (
+    \\WITH period_likes AS MATERIALIZED (
     \\  SELECT likes.subject_uri, likes.subject_cid,
-    \\    COUNT(DISTINCT likes.owner_did) FILTER (
-    \\      WHERE $4::bigint IS NULL OR likes.record_created_at::timestamptz >=
-    \\        TIMESTAMPTZ 'epoch' + ($4::bigint * INTERVAL '1 microsecond')
-    \\    )::bigint AS period_like_count,
-    \\    COUNT(DISTINCT likes.owner_did)::bigint AS all_time_like_count
+    \\    COUNT(DISTINCT likes.owner_did)::bigint AS like_count
     \\  FROM plyr_index.like_records AS likes
     \\  JOIN plyr_index.account_availability AS liker_account
     \\    ON liker_account.repo_did = likes.owner_did AND liker_account.available
-    \\  WHERE likes.collection = $3 AND NOT likes.deleted
+    \\  WHERE $4::bigint IS NOT NULL AND likes.collection = $3 AND NOT likes.deleted
+    \\    AND likes.record_created_at_us >= $4::bigint
     \\  GROUP BY likes.subject_uri, likes.subject_cid
+    \\),
+    \\ranked_likes AS MATERIALIZED (
+    \\  SELECT counts.subject_uri, counts.subject_cid,
+    \\    CASE WHEN $4::bigint IS NULL THEN counts.like_count
+    \\      ELSE COALESCE(period_likes.like_count, 0) END AS period_like_count,
+    \\    counts.like_count AS all_time_like_count
+    \\  FROM plyr_index.track_like_counts AS counts
+    \\  LEFT JOIN period_likes
+    \\    ON period_likes.subject_uri = counts.subject_uri
+    \\    AND period_likes.subject_cid = counts.subject_cid
+    \\  WHERE counts.collection = $3
     \\),
     \\page AS MATERIALIZED (
     \\  SELECT v.record_uri, ranked_likes.period_like_count, ranked_likes.all_time_like_count

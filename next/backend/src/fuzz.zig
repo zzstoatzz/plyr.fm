@@ -11,6 +11,9 @@ const groups = .{
     .{ "text", @import("fuzz/text.zig") },
     .{ "records", @import("fuzz/records.zig") },
     .{ "pagination", @import("fuzz/pagination.zig") },
+    .{ "await", @import("fuzz/await.zig") },
+    .{ "health", @import("fuzz/health.zig") },
+    .{ "like_counts", @import("fuzz/like_counts.zig") },
 };
 
 pub fn main() !void {

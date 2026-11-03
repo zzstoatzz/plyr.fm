@@ -2,6 +2,7 @@
 
 const std = @import("std");
 const pg = @import("pg");
+const created_at_us = @import("created_at_us.zig");
 const zat = @import("zat");
 const postgres_test_lock = @import("../testing/postgres_lock.zig");
 const like_change = @import("like_change.zig");
@@ -212,6 +213,7 @@ pub fn createTestTable(pool: *pg.Pool) !void {
         \\      AND subject_cid IS NOT NULL AND record_created_at IS NOT NULL))
         \\)
     , .{});
+    try created_at_us.addTestColumn(pool, "like_records");
 }
 
 test "PostgreSQL like projection replaces records and keeps tombstones" {

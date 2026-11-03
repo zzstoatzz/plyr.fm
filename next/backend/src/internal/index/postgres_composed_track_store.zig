@@ -485,7 +485,7 @@ pub const projected_columns =
     \\  ),
     \\  aa.evidence_source,
     \\  false,
-    \\  (extract(epoch FROM v.record_created_at::timestamptz) * 1000000)::bigint,
+    \\  COALESCE(v.record_created_at_us, 0),
     \\  d.origin_url,
     \\  d.media_type,
     \\  d.artifact_cid,
@@ -509,14 +509,9 @@ pub const projected_joins =
     \\  ON pol.record_uri = v.record_uri
     \\LEFT JOIN plyr_index.track_metrics AS metrics
     \\  ON metrics.record_uri = v.record_uri
-    \\LEFT JOIN LATERAL (
-    \\  SELECT count(DISTINCT likes.owner_did)::bigint AS like_count
-    \\  FROM plyr_index.like_records AS likes
-    \\  JOIN plyr_index.account_availability AS liker_account
-    \\    ON liker_account.repo_did = likes.owner_did AND liker_account.available
-    \\  WHERE likes.subject_uri = v.record_uri AND likes.subject_cid = v.record_cid
-    \\    AND likes.collection = $3 AND NOT likes.deleted
-    \\) AS like_metrics ON true
+    \\LEFT JOIN plyr_index.track_like_counts AS like_metrics
+    \\  ON like_metrics.collection = $3 AND like_metrics.subject_uri = v.record_uri
+    \\  AND like_metrics.subject_cid = v.record_cid
     \\JOIN plyr_index.actor_identities AS a ON a.did = v.owner_did
     \\LEFT JOIN plyr_index.profile_records AS p
     \\  ON p.owner_did = v.owner_did AND p.collection = $2
@@ -567,21 +562,18 @@ pub const page_from =
     \\LEFT JOIN plyr_index.track_policies AS pol ON pol.record_uri = v.record_uri
 ;
 
-const page_order = "ORDER BY v.record_created_at::timestamptz DESC, v.record_uri DESC";
+const page_order = "ORDER BY v.record_created_at_us DESC, v.record_uri DESC";
 
 /// Filters, sorts, and limits on the cheap columns first, so the like-count
 /// subquery and the other per-track joins run for one page, not the catalog.
 fn pagedQuery(comptime filter: []const u8, comptime limit: []const u8) []const u8 {
-    return "WITH page AS MATERIALIZED (\nSELECT v.record_uri\n" ++ page_from ++ "\nWHERE true\n" ++ filter ++ "\n" ++ page_order ++ "\nLIMIT " ++ limit ++ "\n)\nSELECT\n" ++ projected_columns ++
+    return "WITH page AS MATERIALIZED (\nSELECT v.record_uri\n" ++ page_from ++ "\nWHERE v.record_created_at_us IS NOT NULL\n" ++ filter ++ "\n" ++ page_order ++ "\nLIMIT " ++ limit ++ "\n)\nSELECT\n" ++ projected_columns ++
         "\nFROM page\nJOIN plyr_index.track_records AS v ON v.record_uri = page.record_uri\n" ++
         projected_joins ++ "\n" ++ page_order;
 }
 
 fn afterCursor(comptime at: []const u8, comptime uri: []const u8) []const u8 {
-    return "\n  AND (\n" ++
-        "    v.record_created_at::timestamptz < TIMESTAMPTZ 'epoch' + (" ++ at ++ "::bigint * INTERVAL '1 microsecond')\n" ++
-        "    OR (v.record_created_at::timestamptz = TIMESTAMPTZ 'epoch' + (" ++ at ++ "::bigint * INTERVAL '1 microsecond')\n" ++
-        "      AND v.record_uri < " ++ uri ++ ")\n  )";
+    return "\n  AND (v.record_created_at_us, v.record_uri) < (" ++ at ++ "::bigint, " ++ uri ++ ")";
 }
 
 const discovery_query = pagedQuery(discovery_policy, "$4::bigint");
@@ -595,11 +587,12 @@ const liked_joined_projection = "SELECT\n" ++ projected_columns ++
     \\JOIN (
     \\  SELECT DISTINCT ON (likes.subject_uri, likes.subject_cid)
     \\    likes.subject_uri, likes.subject_cid, likes.record_uri AS like_uri,
-    \\    (extract(epoch FROM likes.record_created_at::timestamptz) * 1000000)::bigint AS liked_at_us
+    \\    likes.record_created_at_us AS liked_at_us
     \\  FROM plyr_index.like_records AS likes
     \\  WHERE likes.owner_did = $4 AND likes.collection = $3 AND NOT likes.deleted
+    \\    AND likes.record_created_at_us IS NOT NULL
     \\  ORDER BY likes.subject_uri, likes.subject_cid,
-    \\    likes.record_created_at::timestamptz DESC, likes.record_uri DESC
+    \\    likes.record_created_at_us DESC, likes.record_uri DESC
     \\) AS viewer_like
     \\  ON viewer_like.subject_uri = v.record_uri AND viewer_like.subject_cid = v.record_cid
 ;
@@ -707,6 +700,7 @@ test "composed PostgreSQL reads use verified records and authoritative account s
     try projected_availability.createTestTable(pool);
     try projected_lists.createTestTables(pool);
     try projected_likes.createTestTable(pool);
+    try @import("../projection/like_counts.zig").applyTestMigration(pool);
     _ = try pool.exec(
         \\CREATE TABLE plyr_index.track_delivery_origins (
         \\  record_uri text NOT NULL, service text NOT NULL, record_cid text NOT NULL,
@@ -1208,6 +1202,23 @@ test "composed PostgreSQL reads use verified records and authoritative account s
         try std.testing.expectEqual(@as(usize, 1), rest.len);
         try std.testing.expectEqualStrings(page[1].value.record.uri, rest[0].value.record.uri);
     }
+    // Postgres has no year 0; the trigger stores NULL and the list skips the row
+    _ = try pool.exec(
+        "UPDATE plyr_index.track_records SET record_created_at = '0000-01-01T00:00:00Z' WHERE record_uri = $1",
+        .{page[0].value.record.uri},
+    );
+    const without = try implementation.store().listPublic(a, .{
+        .collection = "fm.plyr.dev.track",
+        .scope = .discovery,
+        .limit = 2,
+        .after = null,
+    });
+    try std.testing.expectEqual(@as(usize, 1), without.len);
+    try std.testing.expectEqualStrings(page[1].value.record.uri, without[0].value.record.uri);
+    _ = try pool.exec(
+        "UPDATE plyr_index.track_records SET record_created_at = $2 WHERE record_uri = $1",
+        .{ page[0].value.record.uri, page[0].value.metadata.created_at },
+    );
     _ = try pool.exec(
         "UPDATE plyr_index.track_records SET self_labels = ARRAY['sexual']::text[] WHERE record_uri = $1",
         .{record_uri},

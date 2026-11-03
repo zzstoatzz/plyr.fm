@@ -2,6 +2,7 @@
 
 const std = @import("std");
 const pg = @import("pg");
+const created_at_us = @import("created_at_us.zig");
 const postgres_test_lock = @import("../testing/postgres_lock.zig");
 const zat = @import("zat");
 const list_change = @import("list_change.zig");
@@ -452,6 +453,7 @@ pub fn createTestTables(pool: *pg.Pool) !void {
         \\  PRIMARY KEY (list_uri, position)
         \\)
     , .{});
+    try created_at_us.addTestColumn(pool, "list_records");
 }
 
 fn expectRecord(
