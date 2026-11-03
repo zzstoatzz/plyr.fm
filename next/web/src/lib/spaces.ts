@@ -3,7 +3,7 @@
 // user read?" (checkUserAccess). listeners mint a space credential from the
 // artist's PDS and read the audio from it directly: no appview in the path.
 import { P256Keypair } from '@atproto/crypto';
-import { createSpaceSigHeaders } from '@atproto/space';
+import { createSpaceSigHeaders, formatWantMacHeader, RECORD_MAC_TYPE, WANT_MAC_HEADER } from '@atproto/space';
 import { auth } from './auth.svelte';
 import { NSID, SPACE } from './config';
 import { pdsEndpoint } from './identity';
@@ -135,12 +135,17 @@ function jwtExpiry(jwt: string): number {
 	}
 }
 
-async function signedFetch(cred: Credential, url: string, audience: string): Promise<Response> {
+async function signedFetch(
+	cred: Credential,
+	url: string,
+	audience: string,
+	extra: Record<string, string> = {}
+): Promise<Response> {
 	const headers = await createSpaceSigHeaders(cred.key, {
 		authorization: `Atproto-Space-Credential ${cred.credential}`,
 		audience: audience as Did
 	});
-	return fetch(url, { headers });
+	return fetch(url, { headers: { ...headers, ...extra } });
 }
 
 /** a parsed space record uri: at://{authority}/space/{type}/{skey}/{repo}/{collection}/{rkey} */
@@ -162,7 +167,13 @@ export async function gatedAudioUrl(recordUri: string): Promise<string> {
 	const cred = await credentialFor(space, authorityPds);
 
 	const recordParams = new URLSearchParams({ space, repo, collection, rkey });
-	const recordRes = await signedFetch(cred, `${repoPds}/xrpc/com.atproto.space.getRecord?${recordParams}`, repo);
+	// space.getRecord requires asking for a record MAC with a fresh key share.
+	// the record comes from the artist's own PDS over TLS, which is the trust
+	// root here, so the returned MAC isn't verified yet.
+	const macKey = await P256Keypair.create();
+	const recordRes = await signedFetch(cred, `${repoPds}/xrpc/com.atproto.space.getRecord?${recordParams}`, repo, {
+		[WANT_MAC_HEADER]: formatWantMacHeader(RECORD_MAC_TYPE, macKey.did())
+	});
 	if (!recordRes.ok) throw new Error(`space record ${recordRes.status}`);
 	const record = (await recordRes.json()) as { value?: { audioBlob?: { ref?: { $link?: string } } } };
 	const cid = record.value?.audioBlob?.ref?.$link;

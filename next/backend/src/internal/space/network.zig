@@ -19,9 +19,10 @@ pub const Network = struct {
     resolver: zat.DidResolver,
     transport: zat.HttpTransport,
 
-    pub fn init(io: std.Io, allocator: std.mem.Allocator) Network {
+    pub fn init(io: std.Io, allocator: std.mem.Allocator, plc_url: []const u8) Network {
         var resolver = zat.DidResolver.init(io, allocator);
         resolver.transport.user_agent = user_agent;
+        resolver.plc_url = plc_url;
         return .{
             .io = io,
             .allocator = allocator,

@@ -32,6 +32,8 @@ pub const Config = struct {
     service_endpoint: []const u8,
     /// the space type plyr manages, e.g. `fm.plyr.stg.audio`
     space_type: []const u8,
+    /// where did:plc documents resolve (a local stub in dev/e2e)
+    plc_url: []const u8 = "https://plc.directory",
 
     /// The managingApp value artists put in their space policy, and the aud
     /// every checkUserAccess JWT must carry (fragment included).
