@@ -1,7 +1,11 @@
+import Play from 'lucide-react-native/icons/play';
+import Pause from 'lucide-react-native/icons/pause';
+import { PlayerControl } from '../src/PlayerControl';
+import { useAppearance } from '../src/appearance';
 import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 import { useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { View } from 'react-native';
+import { Text, View } from 'react-native';
 import { Cover, Heading } from '../src/CatalogPieces';
 import { Action, Copy, Page, row } from '../src/controls';
 import { usePlayback } from '../src/playback';
@@ -10,6 +14,7 @@ import { radioMedia, radioPosition, radioStations, readRadio, type RadioSnapshot
 
 export default function Radio({ compact = false }: { compact?: boolean }) {
   const { autoplay, station: stationSlug } = useLocalSearchParams<{ autoplay?: string; station?: string }>();
+  const theme = useAppearance();
   const autoTuned = useRef(false);
   const [station, setStation] = useState<typeof radioStations[number]>(() => radioStations.find(item => item.slug === stationSlug) ?? radioStations[0]);
   const [snapshot, setSnapshot] = useState<RadioSnapshot>();
@@ -89,18 +94,18 @@ export default function Radio({ compact = false }: { compact?: boolean }) {
     if (!audio.playing) audio.play();
   }, [audio, listening, snapshot, source, status.isLoaded]);
 
-  if (compact) return <View style={{ padding: 8, gap: 6 }}>
-    {song && <View style={row}>
-      <Cover size={48} uri={song.hasCover ? radioMedia(station, song, 'cover') : null} />
+  if (compact) return <View style={{ width: '100%', maxWidth: 360, padding: 8, gap: 6 }}>
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, padding: 8, borderRadius: 12, backgroundColor: theme.background }}>
+      <Cover size={48} uri={song?.hasCover ? radioMedia(station, song, 'cover') : null} />
       <View style={{ flex: 1, minWidth: 0 }}>
-        <Heading>{song.title}</Heading>
-        <Copy>{song.artist} · Radio</Copy>
+        <Text numberOfLines={1} style={{ color: theme.text, fontSize: 15, fontWeight: '700' }}>{song?.title ?? station.label}</Text>
+        <Text numberOfLines={1} style={{ color: theme.muted, fontSize: 12 }}>
+          {status.error ? 'Couldn’t play this station' : error || (song ? `${song.artist} · Radio` : snapshot ? 'Off air' : 'Loading station…')}
+        </Text>
       </View>
-    </View>}
-    {error && <Copy>{error}</Copy>}
-    {!snapshot && !error && <Copy>Loading station…</Copy>}
-    <Action label={listening ? 'Stop listening' : 'Listen live'} disabled={!song && !listening}
-      onPress={() => setListening(!listening)} />
+      {song && <PlayerControl icon={listening ? Pause : Play} label={listening ? 'Stop listening' : 'Listen live'}
+        onPress={() => setListening(!listening)} />}
+    </View>
   </View>;
 
   return <Page title="Radio">
