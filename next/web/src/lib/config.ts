@@ -45,7 +45,7 @@ export const BASE_SCOPE_PARTS = [
  * from PDSes that advertise spaces, so others can still sign in.
  */
 export const SPACE_SCOPE_PARTS = [
-	`space:${SPACE.type}?collection=${NSID.track}&manage=create&manage=update`,
+	`space:${SPACE.type}?authority=self&collection=${NSID.track}&action=read&action=create&action=update&action=delete&manage=create&manage=update`,
 	`space:${SPACE.type}?authority=*&collection=${NSID.track}&action=read`
 ];
 
