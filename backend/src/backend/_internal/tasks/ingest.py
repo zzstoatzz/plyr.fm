@@ -37,7 +37,7 @@ from backend._internal.tasks.hooks import (
 )
 from backend._internal.tasks.origin_trust import (
     is_trusted_audio_origin,
-    is_trusted_image_origin,
+    record_image_url,
 )
 from backend._internal.tasks.pds import is_like_uri_cancelled
 from backend._internal.tasks.pds_mirror import schedule_pds_blob_mirror
@@ -81,21 +81,6 @@ def _is_stale_commit(incoming_rev: str | None, applied_rev: str | None) -> bool:
     if not incoming_rev or not applied_rev:
         return False
     return incoming_rev <= applied_rev
-
-
-def _image_blob_url(record: dict, artist: Artist | None) -> str | None:
-    """the getBlob URL for a record's imageBlob on the artist's own PDS.
-
-    imageBlob (fm.plyr.track) is cover art the client stored on the PDS, so
-    the trusted URL is derived from the blob ref, never taken from the record.
-    """
-    blob = record.get("imageBlob")
-    cid = blob.get("ref", {}).get("$link") if isinstance(blob, dict) else None
-    if not isinstance(cid, str) or not cid:
-        return None
-    if not artist or not artist.pds_url or not is_safe_url(artist.pds_url):
-        return None
-    return pds_blob_url(artist.pds_url, artist.did, cid)
 
 
 async def _audio_object_exists(audio_url: str) -> bool:
@@ -432,21 +417,9 @@ async def ingest_track_create(
         if album := record.get("album"):
             extra["album"] = album
 
-        # validate imageUrl origin — untrusted URLs are stripped (track is still valid).
-        # cover art on the artist's own PDS (imageBlob) wins over imageUrl.
-        blob_image_url = _image_blob_url(record, artist)
-        image_url = blob_image_url or record.get("imageUrl")
-        if (
-            image_url
-            and not blob_image_url
-            and not await is_trusted_image_origin(image_url, artist_did=did)
-        ):
-            logfire.warn(
-                "ingest: stripping untrusted imageUrl",
-                uri=uri,
-                image_url=image_url,
-            )
-            image_url = None
+        # untrusted imageUrls are stripped (track is still valid); an imageBlob on
+        # the artist's own PDS is trusted as derived.
+        image_url = await record_image_url(record, uri=uri, did=did, artist=artist)
 
         track = Track(
             title=record.get("title", "untitled"),
@@ -570,17 +543,9 @@ async def ingest_track_update(
             track.title = title
         if description := record.get("description"):
             track.description = description
-        if blob_image_url := _image_blob_url(record, await db.get(Artist, did)):
-            track.image_url = blob_image_url
-        elif image_url := record.get("imageUrl"):
-            if await is_trusted_image_origin(image_url, artist_did=did):
-                track.image_url = image_url
-            else:
-                logfire.warn(
-                    "ingest: stripping untrusted imageUrl on update",
-                    uri=uri,
-                    image_url=image_url,
-                )
+        artist = await db.get(Artist, did)
+        if image_url := await record_image_url(record, uri=uri, did=did, artist=artist):
+            track.image_url = image_url
         if cid:
             track.atproto_record_cid = cid
         if rev:

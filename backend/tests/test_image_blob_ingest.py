@@ -1,6 +1,6 @@
 """imageBlob: cover art on the artist's own PDS becomes the trusted image URL."""
 
-from backend._internal.tasks.ingest import _image_blob_url
+from backend._internal.tasks.origin_trust import image_blob_url as _image_blob_url
 from backend.models import Artist
 
 

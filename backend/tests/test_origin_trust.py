@@ -258,6 +258,39 @@ class TestOriginValidationOnCreate:
         track = result.scalar_one()
         assert track.image_url == "https://images.example.com/art.jpg"
 
+    async def test_image_blob_wins_over_image_url(
+        self, db_session: AsyncSession, artist: Artist
+    ) -> None:
+        """imageBlob on the artist's PDS becomes the cover; the record's imageUrl is ignored."""
+        record = {
+            "title": "Blob Image",
+            "artist": "Test",
+            "fileId": "blobimg_001",
+            "fileType": "mp3",
+            "audioUrl": "https://r2.example.com/blobimg_001.mp3",
+            "imageUrl": "https://evil.com/tracking-pixel.png",
+            "imageBlob": {
+                "$type": "blob",
+                "ref": {"$link": "bafkreicover"},
+                "mimeType": "image/png",
+                "size": 1234,
+            },
+            "createdAt": _recent_ts(),
+        }
+        uri = f"at://{artist.did}/fm.plyr.track/blobimg1"
+
+        await ingest_track_create(
+            did=artist.did, rkey="blobimg1", record=record, uri=uri, cid="bafyblobimg"
+        )
+
+        result = await db_session.execute(
+            select(Track).where(Track.atproto_record_uri == uri)
+        )
+        track = result.scalar_one()
+        assert track.image_url == (
+            f"https://bsky.social/xrpc/com.atproto.sync.getBlob?did={artist.did}&cid=bafkreicover"
+        )
+
 
 # --- integration tests: update ---
 
