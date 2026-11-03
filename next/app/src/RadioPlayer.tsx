@@ -68,10 +68,12 @@ export default function Radio({ compact = false, tuned }: { compact?: boolean; t
   }, [audio, source]);
 
   useEffect(() => {
-    if ((!tuned && (!compact || autoplay !== '1')) || autoTuned.current || !source || snapshot?.state.status !== 'playing') return;
+    if ((!tuned && autoplay !== '1') || autoTuned.current || !source || snapshot?.state.status !== 'playing') return;
+    if (solo.status.playing || solo.loading) return;
     autoTuned.current = true;
-    if (!solo.status.playing && !solo.loading) setListening(true);
-  }, [autoplay, compact, tuned, snapshot?.state.status, solo.loading, solo.status.playing, source]);
+    if (compact) setListening(true);
+    else live.tune(station);
+  }, [autoplay, compact, tuned, live.tune, station, snapshot?.state.status, solo.loading, solo.status.playing, source]);
 
   useEffect(() => {
     if (status.error) setListening(false);
