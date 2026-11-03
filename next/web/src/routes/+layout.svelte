@@ -71,22 +71,12 @@
 		align-items: center;
 		gap: 1rem;
 		padding: 0.75rem 1rem;
-		border-bottom: 1px solid var(--surface-3);
 		position: sticky;
 		top: 0;
-		background: var(--bg);
 		z-index: 1;
-	}
-	.brand {
-		font-weight: 800;
-		color: var(--text);
-		text-decoration: none;
+		background: Canvas;
 	}
 	.tag {
-		font-size: 0.7rem;
-		color: var(--accent);
-		border: 1px solid var(--accent);
-		border-radius: 4px;
 		padding: 0 0.3rem;
 		vertical-align: middle;
 	}
@@ -95,29 +85,26 @@
 		min-width: 0;
 	}
 	@media (max-width: 560px) {
-		header {
-			flex-wrap: wrap;
-			gap: 0.5rem 0.75rem;
-		}
-		header form {
-			order: 3;
-			flex-basis: 100%;
-		}
-		header input {
-			max-width: none;
-		}
-		nav {
-			margin-left: auto;
-		}
+	header {
+		flex-wrap: wrap;
+		gap: 0.5rem 0.75rem;
+	}
+	header form {
+		order: 3;
+		flex-basis: 100%;
+	}
+	header input {
+		max-width: none;
+	}
+	nav {
+		margin-left: auto;
+	}
 	}
 	input {
+		box-sizing: border-box;
 		width: 100%;
 		max-width: 320px;
 		padding: 0.4rem 0.6rem;
-		border-radius: 6px;
-		border: 1px solid var(--surface-3);
-		background: var(--surface-2);
-		color: var(--text);
 	}
 	nav {
 		display: flex;
@@ -125,13 +112,8 @@
 		align-items: center;
 	}
 	nav a,
-	.link {
-		color: var(--muted);
-		text-decoration: none;
-		background: none;
-		border: 0;
+		.link {
 		cursor: pointer;
-		font: inherit;
 	}
 	.viewer {
 		display: inline-flex;
@@ -139,7 +121,6 @@
 		gap: 6px;
 	}
 	.viewer img {
-		border-radius: 50%;
 		object-fit: cover;
 	}
 	main {
@@ -157,42 +138,25 @@
 		align-items: center;
 		gap: 1rem;
 		padding: 0.6rem 1rem;
-		background: var(--surface-2);
-		border-top: 1px solid var(--surface-3);
+		background: Canvas;
 	}
 	.now {
 		display: flex;
 		flex-direction: column;
 		min-width: 0;
 	}
-	.now a {
-		color: var(--text);
-		font-weight: 600;
-		text-decoration: none;
-	}
-	.now span {
-		color: var(--muted);
-		font-size: 0.85rem;
-	}
-	.now .error {
-		color: var(--accent);
-	}
 	.controls button {
-		background: none;
-		border: 0;
-		color: var(--text);
-		font-size: 1.2rem;
 		cursor: pointer;
 	}
 	audio {
 		width: 100%;
 	}
 	@media (max-width: 600px) {
-		.player {
-			grid-template-columns: 1fr auto;
-		}
-		audio {
-			display: none;
-		}
+	.player {
+		grid-template-columns: 1fr auto;
+	}
+	audio {
+		display: none;
+	}
 	}
 </style>

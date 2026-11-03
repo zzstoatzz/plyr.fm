@@ -45,35 +45,24 @@
 		gap: 0.75rem;
 		align-items: center;
 		padding: 0.5rem;
-		border-radius: 8px;
-	}
-	.row:hover,
-	.row.active {
-		background: var(--surface-2);
 	}
 	.play {
 		display: flex;
 		align-items: center;
 		gap: 0.5rem;
-		background: none;
-		border: 0;
 		padding: 0;
 		cursor: pointer;
-		color: inherit;
 	}
 	.rank {
 		width: 1.5rem;
 		text-align: right;
-		color: var(--muted);
 		font-variant-numeric: tabular-nums;
 	}
 	img,
-	.art-fallback {
+		.art-fallback {
 		width: 44px;
 		height: 44px;
-		border-radius: 6px;
 		object-fit: cover;
-		background: var(--surface-3);
 		display: grid;
 		place-items: center;
 	}
@@ -83,31 +72,20 @@
 		min-width: 0;
 	}
 	.title,
-	.artist {
+		.artist {
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
-		text-decoration: none;
-	}
-	.title {
-		color: var(--text);
-		font-weight: 600;
-	}
-	.artist {
-		color: var(--muted);
-		font-size: 0.875rem;
 	}
 	.stat {
-		color: var(--muted);
-		font-size: 0.8rem;
 		font-variant-numeric: tabular-nums;
 	}
 	@media (max-width: 600px) {
-		.row {
-			grid-template-columns: auto 1fr auto;
-		}
-		.stat {
-			display: none;
-		}
+	.row {
+		grid-template-columns: auto 1fr auto;
+	}
+	.stat {
+		display: none;
+	}
 	}
 </style>

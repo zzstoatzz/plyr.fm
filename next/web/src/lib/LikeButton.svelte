@@ -47,17 +47,7 @@
 
 <style>
 	.like {
-		background: none;
-		border: 0;
-		font-size: 1.15rem;
 		cursor: pointer;
-		color: var(--muted);
 		padding: 0.25rem;
-	}
-	.like.liked {
-		color: var(--accent);
-	}
-	.like:disabled {
-		opacity: 0.6;
 	}
 </style>

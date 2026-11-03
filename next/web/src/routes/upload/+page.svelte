@@ -90,13 +90,11 @@
 		display: flex;
 		flex-direction: column;
 		gap: 0.25rem;
-		font-size: 0.9rem;
 	}
 	button {
 		align-self: flex-start;
 	}
 	.small {
-		font-size: 0.8rem;
 		margin: 0;
 	}
 </style>

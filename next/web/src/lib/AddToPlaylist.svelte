@@ -87,21 +87,11 @@
 		display: flex;
 		flex-direction: column;
 		gap: 0.25rem;
-		background: var(--surface-2);
-		border: 1px solid var(--surface-3);
-		border-radius: 8px;
 	}
 	.menu > button {
 		text-align: left;
-		background: none;
-		border: 0;
-		color: inherit;
 		padding: 0.35rem 0.5rem;
-		border-radius: 6px;
 		cursor: pointer;
-	}
-	.menu > button:hover {
-		background: var(--surface-3);
 	}
 	form {
 		display: flex;

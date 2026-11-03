@@ -83,7 +83,6 @@
 		display: flex;
 		flex-direction: column;
 		gap: 0.25rem;
-		font-size: 0.9rem;
 	}
 	button {
 		align-self: flex-start;
