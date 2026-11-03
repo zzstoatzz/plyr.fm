@@ -108,7 +108,8 @@ pub fn applyOperation(
     switch (change) {
         inline else => |value, tag| {
             var store = storeFor(tag, pool);
-            _ = store.applyInTransaction(conn, arena, value) catch |err| return mapStoreError(err);
+            const result = store.applyInTransaction(conn, arena, value) catch |err| return mapStoreError(err);
+            if (result == .stale) return;
         },
     }
     var rejection_store: postgres_rejections.PostgresRecordRejectionStore = .{ .pool = pool };
@@ -259,6 +260,32 @@ test "PostgreSQL stream commits project, replay, reject and delete profile recor
         .cid = invalid.cid,
     }, 12);
     try expectProfile(pool, null, true, 1);
+    try applyCommit(pool, arena, collections, .{
+        .did = "did:plc:artist",
+        .time_us = 1,
+        .rev = &rev_1,
+        .operation = .create,
+        .collection = collections.profile,
+        .rkey = "self",
+        .record = created.json,
+        .cid = created.cid,
+    }, 14);
+    try expectProfile(pool, null, true, 1);
+    try applyCommit(pool, arena, collections, .{
+        .did = "did:plc:artist",
+        .time_us = 1,
+        .rev = &rev_1,
+        .operation = .update,
+        .collection = collections.profile,
+        .rkey = "self",
+        .record = invalid.json,
+        .cid = invalid.cid,
+    }, 15);
+    {
+        var row = (try pool.row("SELECT commit_rev FROM plyr_index.record_rejections", .{})).?;
+        defer row.deinit() catch {};
+        try std.testing.expectEqualStrings(&rev_2, try row.get([]const u8, 0));
+    }
 
     try applyCommit(pool, arena, collections, .{
         .did = "did:plc:artist",
