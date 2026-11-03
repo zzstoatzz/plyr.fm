@@ -278,7 +278,6 @@ test {
     _ = @import("internal/cache/lru.zig");
     _ = @import("internal/ingest/cached_signing_key_resolver.zig");
     _ = @import("internal/ingest/catalog_reconciler.zig");
-    _ = @import("internal/delivery/sigv4.zig");
     _ = @import("internal/delivery/blob_mirror.zig");
     _ = @import("internal/delivery/postgres_mirror_store.zig");
     _ = @import("internal/ingest/catalog_reconcile_runner.zig");
