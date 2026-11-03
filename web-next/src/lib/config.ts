@@ -2,7 +2,7 @@
 const env = import.meta.env as Record<string, string | undefined>;
 
 /** the read-only zig appview. */
-export const API_URL = (env.PUBLIC_API_URL || 'https://plyr-api-zig-canary.fly.dev').replace(/\/$/, '');
+export const API_URL = (env.PUBLIC_API_URL || 'https://api.next.plyr.fm').replace(/\/$/, '');
 
 /** public origin of this deployment; the oauth client_id lives under it. */
 export const SITE_URL = (env.PUBLIC_SITE_URL || 'https://next.plyr.fm').replace(/\/$/, '');

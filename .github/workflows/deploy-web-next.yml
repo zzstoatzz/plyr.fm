@@ -22,7 +22,7 @@ jobs:
       contents: read
       deployments: write
     env:
-      PUBLIC_API_URL: https://plyr-api-zig-canary.fly.dev
+      PUBLIC_API_URL: https://api.next.plyr.fm
       PUBLIC_SITE_URL: https://next.plyr.fm
       PUBLIC_NSID_PREFIX: fm.plyr.stg
     steps:
