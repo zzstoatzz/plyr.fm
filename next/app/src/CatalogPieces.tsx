@@ -1,7 +1,9 @@
 import { Link, type Href } from 'expo-router';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from 'react-native';
-import { Music2, Play as PlayIcon, UserRound } from 'lucide-react-native';
+import Music2 from 'lucide-react-native/icons/music-2';
+import PlayIcon from 'lucide-react-native/icons/play';
+import UserRound from 'lucide-react-native/icons/user-round';
 import type { ListSummary, Page, Track } from './api';
 import { useAppearance } from './appearance';
 
