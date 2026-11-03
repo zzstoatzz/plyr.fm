@@ -98,7 +98,7 @@ pub fn verify(
     const snapshot: verified.Snapshot = .{
         .repo_did = expected_did,
         .commit_rev = commit_rev,
-        .commit_cid = collector.proof.commit_cid,
+        .commit_cid = commit_cid,
         .data_cid = data_cid,
         .list_collection = list_collection,
         .track_collection = track_collection,

@@ -39,7 +39,7 @@ pub const Commit = struct {
             if (!std.mem.eql(u8, identity.owner_did, self.repo_did) or
                 !std.mem.eql(u8, identity.proof.commit_rev, self.commit_rev) or
                 identity.proof.indexed_at_us != self.indexed_at_us or
-                !std.mem.eql(u8, identity.proof.commit_cid.raw, self.commit_cid.raw))
+                !sameCommit(identity.proof.commit_cid, self.commit_cid))
                 return error.InvalidCommit;
             for (self.list_changes[0..index]) |prior| {
                 if (std.mem.eql(u8, identity.record_uri, identityOf(prior).record_uri))
@@ -51,7 +51,7 @@ pub const Commit = struct {
             if (!std.mem.eql(u8, identity.owner_did, self.repo_did) or
                 !std.mem.eql(u8, identity.proof.commit_rev, self.commit_rev) or
                 identity.proof.indexed_at_us != self.indexed_at_us or
-                !std.mem.eql(u8, identity.proof.commit_cid.raw, self.commit_cid.raw))
+                !sameCommit(identity.proof.commit_cid, self.commit_cid))
                 return error.InvalidCommit;
             for (self.track_changes[0..index]) |prior| {
                 if (std.mem.eql(u8, identity.record_uri, trackIdentityOf(prior).record_uri))
@@ -67,7 +67,7 @@ pub const Commit = struct {
             if (!std.mem.eql(u8, identity.owner_did, self.repo_did) or
                 !std.mem.eql(u8, identity.proof.commit_rev, self.commit_rev) or
                 identity.proof.indexed_at_us != self.indexed_at_us or
-                !std.mem.eql(u8, identity.proof.commit_cid.raw, self.commit_cid.raw))
+                !sameCommit(identity.proof.commit_cid, self.commit_cid))
                 return error.InvalidCommit;
             for (self.profile_changes[0..index]) |prior| {
                 if (std.mem.eql(u8, identity.record_uri, profileIdentityOf(prior).record_uri))
@@ -87,7 +87,7 @@ pub const Commit = struct {
             if (!std.mem.eql(u8, identity.owner_did, self.repo_did) or
                 !std.mem.eql(u8, identity.proof.commit_rev, self.commit_rev) or
                 identity.proof.indexed_at_us != self.indexed_at_us or
-                !std.mem.eql(u8, identity.proof.commit_cid.raw, self.commit_cid.raw))
+                !sameCommit(identity.proof.commit_cid, self.commit_cid))
                 return error.InvalidCommit;
             for (self.like_changes[0..index]) |prior| {
                 if (std.mem.eql(u8, identity.record_uri, likeIdentityOf(prior).record_uri))
@@ -114,7 +114,7 @@ pub const Commit = struct {
             if (!std.mem.eql(u8, rejection.owner_did, self.repo_did) or
                 !std.mem.eql(u8, rejection.proof.commit_rev, self.commit_rev) or
                 rejection.proof.indexed_at_us != self.indexed_at_us or
-                !std.mem.eql(u8, rejection.proof.commit_cid.raw, self.commit_cid.raw) or
+                !sameCommit(rejection.proof.commit_cid, self.commit_cid) or
                 !hasMatchingDelete(self, rejection.record_uri)) return error.InvalidCommit;
             for (self.rejections[0..index]) |prior| {
                 if (std.mem.eql(u8, rejection.record_uri, prior.record_uri))
@@ -282,4 +282,9 @@ test "verified commit rejects mixed provenance and duplicate paths" {
     var wrong_did = valid;
     wrong_did.repo_did = "did:plc:b";
     try std.testing.expectError(error.InvalidCommit, wrong_did.validate());
+}
+
+fn sameCommit(proof: ?zat.Cid, commit: zat.Cid) bool {
+    const cid = proof orelse return false;
+    return std.mem.eql(u8, cid.raw, commit.raw);
 }

@@ -15,7 +15,7 @@ const postgres_play_metrics = @import("internal/metrics/postgres_play_metric_sto
 const postgres_artist_metrics = @import("internal/metrics/postgres_artist_metric_store.zig");
 const redis_play_dedup = @import("internal/metrics/redis_play_dedup_store.zig");
 const repair_runner = @import("internal/ingest/repair_runner.zig");
-const continuous_runner = @import("internal/ingest/continuous_runner.zig");
+const stream_runner = @import("internal/ingest/stream_runner.zig");
 const catalog_reconcile_runner = @import("internal/ingest/catalog_reconcile_runner.zig");
 const account_reconciler = @import("internal/account/reconciler.zig");
 const blob_mirror = @import("internal/delivery/blob_mirror.zig");
@@ -184,17 +184,12 @@ pub fn main() !void {
             const store = if (postgres_store) |*value| value else return error.IngesterDatabaseRequired;
             blob_mirror.spawnBeside(io, allocator, store.pool);
             actor_identity_refresher.spawnBeside(io, allocator, store.pool);
-            try continuous_runner.run(
-                io,
-                allocator,
-                store.pool,
-                settings.relay_hosts,
-                settings.relay_name,
-                settings.list_collection,
-                settings.track_collection,
-                settings.profile_collection,
-                settings.like_collection,
-            );
+            try stream_runner.run(io, allocator, store.pool, settings.stream_hosts, .{
+                .list = settings.list_collection,
+                .track = settings.track_collection,
+                .profile = settings.profile_collection,
+                .like = settings.like_collection,
+            });
         },
     }
 }
@@ -285,7 +280,8 @@ test {
     _ = @import("internal/identity/actor_identity_refresher.zig");
     _ = @import("internal/identity/postgres_actor_identity_store.zig");
     _ = @import("internal/ingest/catalog_reconcile_runner.zig");
-    _ = @import("internal/ingest/continuous_runner.zig");
+    _ = @import("internal/ingest/stream_runner.zig");
+    _ = @import("internal/atproto/json_record.zig");
     _ = @import("internal/ingest/postgres_relay_cursor.zig");
     _ = @import("internal/ingest/postgres_repository_candidates.zig");
     _ = @import("internal/ingest/pinned_tls.zig");
@@ -304,7 +300,6 @@ test {
     _ = @import("internal/projection/profile_change.zig");
     _ = @import("internal/projection/like_change.zig");
     _ = @import("internal/projection/track_change.zig");
-    _ = @import("internal/projection/commit_verifier.zig");
     _ = @import("internal/projection/snapshot_verifier.zig");
     _ = @import("internal/projection/list_store.zig");
     _ = @import("internal/projection/postgres_list_store.zig");

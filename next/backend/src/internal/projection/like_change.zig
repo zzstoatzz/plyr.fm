@@ -57,9 +57,9 @@ pub fn fromVerifiedOperation(
         .{ repo_did, like_collection, op.rkey },
     );
     if (op.action == .delete) {
-        const previous = op.prev orelse return error.InvalidOperation;
+        // jetstream deletes carry no prior CID; firehose deletes do.
         if (op.cid != null or op.record != null) return error.InvalidOperation;
-        try validateDagCborCid(previous);
+        if (op.prev) |previous| try validateDagCborCid(previous);
         return .{ .delete = .{
             .record_uri = record_uri,
             .owner_did = repo_did,
@@ -72,7 +72,7 @@ pub fn fromVerifiedOperation(
     const value = op.record orelse return error.InvalidOperation;
     switch (op.action) {
         .create => if (op.prev != null) return error.InvalidOperation,
-        .update => try validateDagCborCid(op.prev orelse return error.InvalidOperation),
+        .update => if (op.prev) |previous| try validateDagCborCid(previous),
         .delete => unreachable,
     }
     try validateDagCborCid(cid);
@@ -93,7 +93,7 @@ pub fn fromVerifiedOperation(
 fn validateProof(proof: Proof) Error!void {
     if (zat.Tid.parse(proof.commit_rev) == null or proof.indexed_at_us < 0)
         return error.InvalidOperation;
-    try validateDagCborCid(proof.commit_cid);
+    if (proof.commit_cid) |commit_cid| try validateDagCborCid(commit_cid);
 }
 
 fn validateDagCborCid(cid: zat.Cid) Error!void {

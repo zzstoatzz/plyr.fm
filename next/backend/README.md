@@ -101,6 +101,7 @@ Direct SQL is reserved for projection adapter tests and benchmark fixtures.
 | `MAX_CONNECTIONS` | no | hard cap on accepted connection handlers, default `128` |
 | `PORT` | no | listener port, default `8001` |
 | `CORS_ALLOWED_ORIGINS` | no | comma-separated exact browser origins; empty disables CORS |
+| `INGEST_STREAM_HOSTS` | no | comma-separated jetstream hostnames the ingester subscribes to, in failover order; default `stream.waow.tech` then the bsky jetstreams |
 | `INGEST_REPAIR_DID` | in repair mode | canonical DID whose complete repository is fetched, verified, and atomically reconciled |
 | `ACCOUNT_CHECK_INTERVAL_SECONDS` | no | authoritative current-PDS recheck interval, default 21600 (six hours) |
 | `ACCOUNT_CHECK_RETRY_SECONDS` | no | retry interval after transport or non-authoritative status, default 300 |
@@ -110,6 +111,13 @@ Direct SQL is reserved for projection adapter tests and benchmark fixtures.
 | `MIRROR_BASE_URL` | to enable mirror | https origin of the `next-audio` worker (`next/services/audio/`); uploads PUT to and playback reads from `{base}/{prefix}/{cid}` |
 | `MIRROR_UPLOAD_TOKEN` | to enable mirror | bearer secret shared with the worker's `UPLOAD_TOKEN` (32+ chars) |
 | `MIRROR_KEY_PREFIX` | no | object prefix, default `audio` |
+
+The ingester subscribes to jetstreams (`INGEST_STREAM_HOSTS`) filtered to the
+four plyr collections and trusts their upstream commit verification; it checks
+each record's JSON against the CID the stream reports before projecting it, and
+checkpoints the portable `time_us` cursor so failover between hosts resumes in
+place. A repository seen for the first time is bootstrapped once from a
+verified PDS snapshot.
 
 The ingester runs the blob mirror on a side thread when configured (`MODE=mirror` runs it
 alone). It fetches each live track's audio blob from the owner's
@@ -229,11 +237,11 @@ the narrowly scoped canary API credential.
 
 `MODE=account_reconciler` is also independent of the API and firehose roles.
 It leases due DIDs from Postgres, resolves each DID's current PDS, and persists
-only authoritative account evidence. Relay account frames merely make an
+only authoritative account evidence. Jetstream account events merely make an
 existing authenticated repository due sooner. A periodic sweep is the
 correctness backstop, and transport/infrastructure failures schedule retries
 without hiding content. Multiple reconcilers coordinate with `SKIP LOCKED` and
-expired leases; an untrusted PDS never blocks signed firehose progress.
+expired leases; an untrusted PDS never blocks stream progress.
 
 Do not source or copy the root `.env` into a worktree. Point a command at the
 existing environment through the normal settings mechanism, and never print

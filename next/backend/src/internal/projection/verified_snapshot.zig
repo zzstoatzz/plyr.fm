@@ -43,7 +43,7 @@ pub const Snapshot = struct {
                 !std.mem.eql(u8, upsert.collection, self.list_collection) or
                 !std.mem.eql(u8, upsert.proof.commit_rev, self.commit_rev) or
                 upsert.proof.indexed_at_us != self.indexed_at_us or
-                !std.mem.eql(u8, upsert.proof.commit_cid.raw, self.commit_cid.raw))
+                !sameCommit(upsert.proof.commit_cid, self.commit_cid))
                 return error.InvalidSnapshot;
             for (self.list_changes[0..index]) |prior| {
                 const prior_uri = switch (prior) {
@@ -63,7 +63,7 @@ pub const Snapshot = struct {
                 !std.mem.eql(u8, upsert.collection, self.track_collection) or
                 !std.mem.eql(u8, upsert.proof.commit_rev, self.commit_rev) or
                 upsert.proof.indexed_at_us != self.indexed_at_us or
-                !std.mem.eql(u8, upsert.proof.commit_cid.raw, self.commit_cid.raw))
+                !sameCommit(upsert.proof.commit_cid, self.commit_cid))
                 return error.InvalidSnapshot;
             for (self.track_changes[0..index]) |prior| {
                 const prior_uri = switch (prior) {
@@ -84,7 +84,7 @@ pub const Snapshot = struct {
                 !std.mem.eql(u8, upsert.rkey, "self") or
                 !std.mem.eql(u8, upsert.proof.commit_rev, self.commit_rev) or
                 upsert.proof.indexed_at_us != self.indexed_at_us or
-                !std.mem.eql(u8, upsert.proof.commit_cid.raw, self.commit_cid.raw))
+                !sameCommit(upsert.proof.commit_cid, self.commit_cid))
                 return error.InvalidSnapshot;
             for (self.profile_changes[0..index]) |prior| {
                 const prior_uri = switch (prior) {
@@ -104,7 +104,7 @@ pub const Snapshot = struct {
                 !std.mem.eql(u8, upsert.collection, self.like_collection) or
                 !std.mem.eql(u8, upsert.proof.commit_rev, self.commit_rev) or
                 upsert.proof.indexed_at_us != self.indexed_at_us or
-                !std.mem.eql(u8, upsert.proof.commit_cid.raw, self.commit_cid.raw))
+                !sameCommit(upsert.proof.commit_cid, self.commit_cid))
                 return error.InvalidSnapshot;
             for (self.like_changes[0..index]) |prior| {
                 const prior_uri = switch (prior) {
@@ -124,7 +124,7 @@ pub const Snapshot = struct {
                     !std.mem.eql(u8, rejection.collection, self.like_collection)) or
                 !std.mem.eql(u8, rejection.proof.commit_rev, self.commit_rev) or
                 rejection.proof.indexed_at_us != self.indexed_at_us or
-                !std.mem.eql(u8, rejection.proof.commit_cid.raw, self.commit_cid.raw))
+                !sameCommit(rejection.proof.commit_cid, self.commit_cid))
                 return error.InvalidSnapshot;
             for (self.rejections[0..index]) |prior| {
                 if (std.mem.eql(u8, rejection.record_uri, prior.record_uri))
@@ -228,4 +228,9 @@ test "complete snapshot accepts only unique upserts with one proof" {
     var duplicate = snapshot;
     duplicate.list_changes = &.{ change, change };
     try std.testing.expectError(error.DuplicateRecord, duplicate.validate());
+}
+
+fn sameCommit(proof: ?zat.Cid, commit: zat.Cid) bool {
+    const cid = proof orelse return false;
+    return std.mem.eql(u8, cid.raw, commit.raw);
 }

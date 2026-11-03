@@ -74,9 +74,11 @@ pub const PostgresListStore = struct {
         allocator: std.mem.Allocator,
         change: list_change.Upsert,
     ) ListStore.Error!ApplyResult {
-        const commit_cid = change.proof.commit_cid.toString(allocator) catch
-            return error.OutOfMemory;
-        defer allocator.free(commit_cid);
+        const commit_cid: ?[]u8 = if (change.proof.commit_cid) |cid|
+            cid.toString(allocator) catch return error.OutOfMemory
+        else
+            null;
+        defer if (commit_cid) |text| allocator.free(text);
         const result = try applyRecord(conn, .{
             .record_uri = change.record_uri,
             .record_cid = change.record_cid,
@@ -103,9 +105,11 @@ pub const PostgresListStore = struct {
         allocator: std.mem.Allocator,
         change: list_change.Delete,
     ) ListStore.Error!ApplyResult {
-        const commit_cid = change.proof.commit_cid.toString(allocator) catch
-            return error.OutOfMemory;
-        defer allocator.free(commit_cid);
+        const commit_cid: ?[]u8 = if (change.proof.commit_cid) |cid|
+            cid.toString(allocator) catch return error.OutOfMemory
+        else
+            null;
+        defer if (commit_cid) |text| allocator.free(text);
         const result = try applyRecord(conn, .{
             .record_uri = change.record_uri,
             .record_cid = null,
@@ -138,7 +142,7 @@ const RecordWrite = struct {
     created_at: ?[]const u8,
     updated_at: ?[]const u8,
     deleted: bool,
-    commit_cid: []const u8,
+    commit_cid: ?[]const u8,
     commit_rev: []const u8,
     indexed_at_us: i64,
 };
@@ -182,10 +186,10 @@ fn classifyReplay(conn: *pg.Conn, write: RecordWrite) ListStore.Error!ApplyResul
         .lt => return error.CorruptProjection,
         .eq => {},
     }
-    const current_commit = current.get([]const u8, 1) catch return error.CorruptProjection;
+    const current_commit = current.get(?[]const u8, 1) catch return error.CorruptProjection;
     const current_deleted = current.get(bool, 2) catch return error.CorruptProjection;
     const current_record = current.get(?[]const u8, 3) catch return error.CorruptProjection;
-    if (!std.mem.eql(u8, current_commit, write.commit_cid) or
+    if (!commitMatches(current_commit, write.commit_cid) or
         current_deleted != write.deleted or !optionalEql(current_record, write.record_cid))
         return error.RevisionConflict;
     return .idempotent;
@@ -419,7 +423,7 @@ pub fn createTestTables(pool: *pg.Pool) !void {
         \\  record_created_at text,
         \\  record_updated_at text,
         \\  deleted boolean NOT NULL,
-        \\  commit_cid text NOT NULL,
+        \\  commit_cid text,
         \\  commit_rev text NOT NULL,
         \\  indexed_at_us bigint NOT NULL,
         \\  CONSTRAINT ck_list_records_canonical_uri CHECK (
@@ -483,4 +487,11 @@ fn expectMembers(
         try std.testing.expectEqualStrings(expected[index], try row.get([]const u8, 0));
     }
     try std.testing.expectEqual(expected.len, index);
+}
+
+/// Stream-ingested writes carry no commit CID; only compare when both do.
+fn commitMatches(current: ?[]const u8, incoming: ?[]const u8) bool {
+    const a = current orelse return true;
+    const b = incoming orelse return true;
+    return std.mem.eql(u8, a, b);
 }
