@@ -4,6 +4,9 @@ const env = import.meta.env as Record<string, string | undefined>;
 /** the read-only zig appview. */
 export const API_URL = (env.PUBLIC_API_URL || 'https://api.next.plyr.fm').replace(/\/$/, '');
 
+/** actor profiles (names, avatars) straight from typeahead, which follows the firehose. */
+export const TYPEAHEAD_URL = (env.PUBLIC_TYPEAHEAD_URL || 'https://typeahead.waow.tech').replace(/\/$/, '');
+
 /** public origin of this deployment; the oauth client_id lives under it. */
 export const SITE_URL = (env.PUBLIC_SITE_URL || 'https://next.plyr.fm').replace(/\/$/, '');
 

@@ -34,7 +34,10 @@
 		{#if auth.did}
 			<a href="/liked">liked</a>
 			<a href="/upload">upload</a>
-			<button class="link" onclick={() => auth.logout()}>{auth.handle ?? 'sign out'}</button>
+			<button class="link viewer" onclick={() => auth.logout()} title="sign out">
+				{#if auth.avatar}<img src={auth.avatar} alt="" width="20" height="20" />{/if}
+				<span>{auth.displayName ?? auth.handle ?? 'sign out'}</span>
+			</button>
 		{:else if auth.ready}
 			<a href="/login">sign in</a>
 		{/if}
@@ -111,6 +114,15 @@
 		border: 0;
 		cursor: pointer;
 		font: inherit;
+	}
+	.viewer {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+	}
+	.viewer img {
+		border-radius: 50%;
+		object-fit: cover;
 	}
 	main {
 		max-width: 880px;
