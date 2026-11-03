@@ -94,6 +94,37 @@ pub const SpaceUri = struct {
     }
 };
 
+/// A record inside a space:
+/// `at://{authority}/space/{type}/{skey}/{repo}/{collection}/{rkey}`.
+pub const SpaceRecordUri = struct {
+    space: SpaceUri,
+    /// `at://{authority}/space/{type}/{skey}`, a prefix of the record URI
+    space_uri: []const u8,
+    repo: []const u8,
+    collection: []const u8,
+    rkey: []const u8,
+
+    pub fn parse(text: []const u8) ?SpaceRecordUri {
+        var cut: usize = "at://".len;
+        var seen: usize = 0;
+        while (seen < 4) : (seen += 1) {
+            const slash = std.mem.indexOfScalarPos(u8, text, cut, '/') orelse return null;
+            cut = slash + 1;
+        }
+        const space_uri = text[0 .. cut - 1];
+        const space = SpaceUri.parse(space_uri) orelse return null;
+        var parts = std.mem.splitScalar(u8, text[cut..], '/');
+        const repo = parts.next() orelse return null;
+        const collection = parts.next() orelse return null;
+        const rkey = parts.next() orelse return null;
+        if (parts.next() != null) return null;
+        if (zat.Did.parse(repo) == null) return null;
+        if (zat.Nsid.parse(collection) == null) return null;
+        if (zat.Rkey.parse(rkey) == null) return null;
+        return .{ .space = space, .space_uri = space_uri, .repo = repo, .collection = collection, .rkey = rkey };
+    }
+};
+
 pub const Decision = enum { allow, deny, check_supporter };
 
 /// The access rule, without any I/O.
@@ -207,6 +238,19 @@ test "space URIs parse strictly" {
     try std.testing.expect(SpaceUri.parse("at://did:plc:artist/space/fm.plyr.stg.audio/x/y") == null);
     try std.testing.expect(SpaceUri.parse("at://did:plc:artist/fm.plyr.stg.track/abc/x") == null);
     try std.testing.expect(SpaceUri.parse("https://did:plc:artist/space/fm.plyr.stg.audio/x") == null);
+}
+
+test "space record URIs parse strictly" {
+    const record = SpaceRecordUri.parse("at://did:plc:artist/space/fm.plyr.stg.audio/supporters/did:plc:artist/fm.plyr.stg.track/3l2abc").?;
+    try std.testing.expectEqualStrings("at://did:plc:artist/space/fm.plyr.stg.audio/supporters", record.space_uri);
+    try std.testing.expectEqualStrings("supporters", record.space.skey);
+    try std.testing.expectEqualStrings("did:plc:artist", record.repo);
+    try std.testing.expectEqualStrings("fm.plyr.stg.track", record.collection);
+    try std.testing.expectEqualStrings("3l2abc", record.rkey);
+    try std.testing.expect(SpaceRecordUri.parse("at://did:plc:artist/space/fm.plyr.stg.audio/supporters") == null);
+    try std.testing.expect(SpaceRecordUri.parse("at://did:plc:artist/space/fm.plyr.stg.audio/supporters/did:plc:artist/fm.plyr.stg.track") == null);
+    try std.testing.expect(SpaceRecordUri.parse("at://did:plc:artist/fm.plyr.stg.track/3l2abc") == null);
+    try std.testing.expect(SpaceRecordUri.parse("at://did:plc:a/space/fm.plyr.stg.audio/s/did:plc:a/fm.plyr.stg.track/x/y") == null);
 }
 
 test "access rules" {

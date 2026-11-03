@@ -9,6 +9,7 @@
 const std = @import("std");
 const zat = @import("zat");
 const lexicon_value = @import("lexicon_value.zig");
+const managed_space = @import("../space/managed_space.zig");
 
 pub const max_features: usize = 10;
 pub const max_labels: usize = 10;
@@ -34,6 +35,8 @@ pub const Record = struct {
     featured_dids: []const []const u8,
     image_url: ?[]const u8,
     support_gate_type: ?[]const u8,
+    /// gated audio: the artist's space record holding the audio blob
+    audio_space: ?managed_space.SpaceRecordUri = null,
     description: ?[]const u8,
     self_labels: []const []const u8,
 };
@@ -49,6 +52,7 @@ pub const Error = error{
     TooManyFeatures,
     InvalidFeature,
     InvalidSupportGate,
+    InvalidAudioSpace,
     TooManyLabels,
     InvalidLabels,
     InvalidBlob,
@@ -71,7 +75,9 @@ pub fn parse(
 
     const audio_url = try optionalUri(value, "audioUrl");
     const audio_blob = try optionalBlob(value, "audioBlob");
-    if (audio_url == null and audio_blob == null) return error.MissingAudioSource;
+    const audio_space = try parseAudioSpace(value);
+    if (audio_url == null and audio_blob == null and audio_space == null)
+        return error.MissingAudioSource;
 
     return .{
         .title = title,
@@ -85,6 +91,7 @@ pub fn parse(
         .featured_dids = try parseFeatures(allocator, value),
         .image_url = try optionalUri(value, "imageUrl"),
         .support_gate_type = try parseSupportGate(value),
+        .audio_space = audio_space,
         .description = try optionalBoundedString(value, "description", 0, 5000),
         .self_labels = try parseLabels(allocator, value),
     };
@@ -170,6 +177,16 @@ fn parseSupportGate(value: zat.cbor.Value) Error!?[]const u8 {
     // Keep forward-compatible authored values, bounded by the record envelope.
     try validateString(gate_type, 1, max_unbounded_string);
     return gate_type;
+}
+
+fn parseAudioSpace(value: zat.cbor.Value) Error!?managed_space.SpaceRecordUri {
+    const field = value.get("audioSpace") orelse return null;
+    const text = switch (field) {
+        .text => |text| text,
+        else => return error.InvalidAudioSpace,
+    };
+    if (text.len > 2048) return error.InvalidAudioSpace;
+    return managed_space.SpaceRecordUri.parse(text) orelse error.InvalidAudioSpace;
 }
 
 fn parseLabels(allocator: std.mem.Allocator, value: zat.cbor.Value) Error![]const []const u8 {
@@ -290,6 +307,28 @@ test "track record rejects missing audio, wrong blob codec, and invalid datetime
         error.InvalidDatetime,
         parse(a, .{ .map = &bad_date_map }, "fm.plyr.dev.track"),
     );
+}
+
+test "gated tracks carry their audio in a space record" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    const gated_map = [_]zat.cbor.Value.MapEntry{
+        .{ .key = "$type", .value = .{ .text = "fm.plyr.dev.track" } },
+        .{ .key = "title", .value = .{ .text = "One" } },
+        .{ .key = "artist", .value = .{ .text = "Artist" } },
+        .{ .key = "fileType", .value = .{ .text = "mp3" } },
+        .{ .key = "createdAt", .value = .{ .text = "2026-08-08T12:00:00Z" } },
+        .{ .key = "supportGate", .value = .{ .map = &.{.{ .key = "type", .value = .{ .text = "any" } }} } },
+        .{ .key = "audioSpace", .value = .{ .text = "at://did:plc:artist/space/fm.plyr.dev.audio/supporters/did:plc:artist/fm.plyr.dev.track/3l2abc" } },
+    };
+    const record = try parse(a, .{ .map = &gated_map }, "fm.plyr.dev.track");
+    try std.testing.expectEqualStrings("supporters", record.audio_space.?.space.skey);
+    try std.testing.expect(record.audio_url == null and record.audio_blob == null);
+
+    var bad_map = gated_map;
+    bad_map[6].value = .{ .text = "at://did:plc:artist/fm.plyr.dev.track/3l2abc" };
+    try std.testing.expectError(error.InvalidAudioSpace, parse(a, .{ .map = &bad_map }, "fm.plyr.dev.track"));
 }
 
 test "datetime validation follows ATProto capitalization and offset semantics" {

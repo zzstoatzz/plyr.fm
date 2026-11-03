@@ -2,6 +2,7 @@
 	import { trackIdFromUri } from '$lib/api';
 	import { auth } from '$lib/auth.svelte';
 	import { audioDuration, MAX_AUDIO_BYTES, uploadTrack } from '$lib/pds';
+	import type { Gate } from '$lib/spaces';
 
 	let file = $state<File | null>(null);
 	let title = $state('');
@@ -9,6 +10,7 @@
 	let album = $state('');
 	let description = $state('');
 	let duration = $state<number | undefined>(undefined);
+	let gate = $state<Gate | ''>('');
 	let busy = $state(false);
 	let note = $state<string | null>(null);
 
@@ -33,7 +35,7 @@
 		busy = true;
 		note = 'uploading to your PDS…';
 		try {
-			const { uri, status } = await uploadTrack({ file, title, artist, album, description, duration });
+			const { uri, status } = await uploadTrack({ file, title, artist, album, description, duration, gate: gate || null });
 			if (status === 'indexed') location.href = `/track/${trackIdFromUri(uri)}`;
 			else if (status === 'rejected') note = 'saved to your PDS, but the appview rejected the record';
 			else note = 'saved to your PDS; still indexing, it will show up shortly';
@@ -58,6 +60,19 @@
 		<label>artist <input bind:value={artist} maxlength="256" required /></label>
 		<label>album <input bind:value={album} maxlength="256" /></label>
 		<label>description <textarea bind:value={description} maxlength="5000" rows="4"></textarea></label>
+		{#if auth.spaces}
+			<label
+				>who can listen
+				<select bind:value={gate}>
+					<option value="">everyone</option>
+					<option value="supporters">supporters only</option>
+					<option value="signed-in">anyone signed in</option>
+				</select>
+			</label>
+			{#if gate}<p class="muted small">the audio goes into a private space on your PDS; plyr only decides who gets in.</p>{/if}
+		{:else}
+			<p class="muted small">supporter-only tracks need a PDS with spaces; yours doesn't have them yet.</p>
+		{/if}
 		<button class="btn" disabled={busy || !file || !title.trim() || !artist.trim()}>upload</button>
 	</form>
 	{#if note}<p class="muted">{note}</p>{/if}
@@ -78,5 +93,9 @@
 	}
 	button {
 		align-self: flex-start;
+	}
+	.small {
+		font-size: 0.8rem;
+		margin: 0;
 	}
 </style>

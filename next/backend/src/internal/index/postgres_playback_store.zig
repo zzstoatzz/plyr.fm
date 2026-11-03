@@ -135,6 +135,7 @@ fn decode(
         .revision = revision,
         .visibility = visibility,
         .gate_type = gate_type,
+        .audio_space = try duplicateOptional(allocator, try row.get(?[]const u8, 13)),
         .artifact = artifact,
         .verified_delivery = verified_delivery,
         .authored_delivery = authored_delivery,
@@ -195,7 +196,8 @@ const query =
     \\  v.file_type,
     \\  d.origin_url,
     \\  d.media_type,
-    \\  d.artifact_cid
+    \\  d.artifact_cid,
+    \\  v.audio_space
     \\FROM plyr_index.track_records AS v
     \\JOIN plyr_index.account_availability AS aa
     \\  ON aa.repo_did = v.owner_did AND aa.available
