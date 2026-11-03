@@ -1,5 +1,5 @@
 import { Link, Stack, router, usePathname, type Href } from 'expo-router';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Pressable, Text, View, useWindowDimensions, StyleSheet } from 'react-native';
@@ -13,6 +13,8 @@ import UserRound from 'lucide-react-native/icons/user-round';
 import Radio from 'lucide-react-native/icons/radio';
 import Settings from 'lucide-react-native/icons/settings';
 import { PlaybackProvider } from '../src/playback';
+import RadioPlayer, { RadioContext } from '../src/RadioPlayer';
+import type { RadioStation } from '../src/radio';
 import { PlayerBar } from '../src/PlayerBar';
 import { PreferencesProvider } from '../src/preference-context';
 import { pageFrame } from '../src/controls';
@@ -32,6 +34,7 @@ export default function RootLayout() {
 }
 
 function Shell() {
+  const [station, tune] = useState<RadioStation | null>(null);
   const theme = useAppearance();
   const path = usePathname();
   const auth = useAuth();
@@ -65,7 +68,7 @@ function Shell() {
       </Pressable>
     </Link>)}
   </View>;
-  return <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }}>
+  return <RadioContext.Provider value={{ station, tune }}><SafeAreaView style={{ flex: 1, backgroundColor: theme.background }}>
     <StatusBar style={theme.dark ? 'light' : 'dark'} />
     <View style={{ flex: 1, width: '100%', maxWidth: 996, alignSelf: 'center', flexDirection: wide ? 'row' : 'column' }}>
       {wide && nav}
@@ -91,9 +94,9 @@ function Shell() {
           </Pressable></Link>}
         </View>
         <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: theme.background } }} />
-        <PlayerBar />
+        {station ? <RadioPlayer key={station.slug} compact tuned={station} /> : <PlayerBar />}
         {!wide && nav}
       </View>
     </View>
-  </SafeAreaView>;
+  </SafeAreaView></RadioContext.Provider>;
 }
