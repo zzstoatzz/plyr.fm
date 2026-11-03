@@ -8,6 +8,7 @@ import {
   Button, Detail, Heading, ListRows, Row, RowPlay, Status, TrackRows, artistName, errorMessage, useColors,
   usePages, useResource, type Play, type TrackActions,
 } from './CatalogPieces';
+import { WaveLoading } from './WaveLoading';
 import { DetailHeader } from './DetailHeader';
 import { Sheet } from './Sheet';
 import { usePlayback } from './playback';
@@ -33,7 +34,8 @@ function Home({ onPlay }: { onPlay: Play }) {
     <View style={styles.group}>
       <Heading>Latest</Heading>
       <TrackRows tracks={latest.data} onPlay={onPlay} />
-      <Status loading={latest.loading} error={latest.error} retry={latest.more} empty={!latest.data.length ? 'No tracks yet.' : undefined} />
+      {latest.loading ? <WaveLoading label="Loading tracks" /> :
+        <Status error={latest.error} retry={latest.more} empty={!latest.data.length ? 'No tracks yet.' : undefined} />}
       {latest.cursor && !latest.loading && !latest.error && <Button label="More tracks" onPress={latest.more} />}
     </View>
   </>;
