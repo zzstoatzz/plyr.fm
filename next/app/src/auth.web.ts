@@ -2,6 +2,8 @@ import { BrowserOAuthClient, type OAuthSession } from '@atproto/oauth-client-bro
 import { SCOPE_PARTS, SITE_URL } from './auth-config';
 import { clearAuth, getAuth, scopeFor, setAuth } from './auth-state';
 
+import { returnPath } from './return-path';
+
 export { useAuth } from './auth-state';
 export const authAvailable = true;
 
@@ -28,6 +30,13 @@ async function activate(session: OAuthSession) {
 	setAuth(session.did, { handle: session.fetchHandler.bind(session) }, token.scope);
 }
 
+let callbackIntent: ReturnType<typeof returnPath>;
+export function takeLoginIntent() {
+	const intent = callbackIntent;
+	callbackIntent = undefined;
+	return intent;
+}
+
 let initialization: Promise<void> | undefined;
 export function restoreAuth(): Promise<void> {
 	return initialization ??= initialize();
@@ -39,7 +48,8 @@ async function initialize() {
 		const params = new URLSearchParams(location.hash.slice(1) || location.search.slice(1));
 		history.replaceState(history.state, '', location.pathname);
 		try {
-			const { session } = await (await oauthClient()).initCallback(params);
+			const { session, state } = await (await oauthClient()).initCallback(params);
+			callbackIntent = returnPath(state);
 			await activate(session);
 		} catch (error) {
 			clearAuth(error instanceof Error ? error.message : 'Could not sign in', params.get('error') === 'invalid_scope');
@@ -58,9 +68,9 @@ async function initialize() {
 	clearAuth();
 }
 
-export async function login(identifier: string, deviceOnly = false): Promise<void> {
+export async function login(identifier: string, deviceOnly = false, intent?: string): Promise<void> {
 	const handle = identifier.trim().replace(/^@/, '');
-	await (await oauthClient()).signInRedirect(handle, { scope: await scopeFor(handle, deviceOnly) });
+	await (await oauthClient()).signInRedirect(handle, { scope: await scopeFor(handle, deviceOnly), state: intent });
 }
 
 export async function logout() {

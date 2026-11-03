@@ -44,7 +44,9 @@ export async function restoreAuth() {
 	clearAuth();
 }
 
-export async function login(identifier: string, deviceOnly = false) {
+export function takeLoginIntent(): undefined { return undefined; }
+
+export async function login(identifier: string, deviceOnly = false, _intent?: string) {
 	const handle = identifier.trim().replace(/^@/, '');
 	const session = await oauthClient().signIn(handle, {
 		scope: await scopeFor(handle, deviceOnly),

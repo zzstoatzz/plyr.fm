@@ -1,11 +1,13 @@
 import { router, useLocalSearchParams } from 'expo-router';
+import { returnPath } from '../src/return-path';
 import { useState } from 'react';
 import { login, useAuth } from '../src/auth';
 import { Action, Copy, Field, Page } from '../src/controls';
 
 export default function Login() {
   const auth = useAuth();
-  const { deviceOnly } = useLocalSearchParams<{ deviceOnly?: string }>();
+  const { deviceOnly, return_to } = useLocalSearchParams<{ deviceOnly?: string; return_to?: string }>();
+  const intent = returnPath(return_to);
   const [handle, setHandle] = useState('');
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState(false);
@@ -15,8 +17,8 @@ export default function Login() {
     setBusy(true);
     setError(undefined);
     try {
-      await login(handle, localOnly);
-      router.replace('/settings');
+      await login(handle, localOnly, typeof intent === 'string' ? intent : undefined);
+      router.replace(intent ?? '/settings');
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : 'Sign in failed.');
     } finally {
