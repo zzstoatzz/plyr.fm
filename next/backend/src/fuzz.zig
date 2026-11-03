@@ -1,5 +1,5 @@
 //! Property harnesses for the code that reads untrusted input, run by
-//! `zig build fuzz -Dhegel`. `FUZZ_ONLY=<name>` runs the groups whose name
+//! `zig build fuzz -Dhegel`. `-Dfuzz-only=<name>` runs the groups whose name
 //! contains it; `-Dfuzz-cases` or `HEGEL_TEST_CASES` sets the cases per
 //! property.
 

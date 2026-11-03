@@ -34,7 +34,7 @@ Every change returned identical rows or bodies. Notes:
   transaction touching more than about 6,400 distinct subjects failed with
   "out of shared memory", as a 100k-like bulk load did locally. With 0030 that
   load succeeds and matches a recount. A hegel property
-  (`FUZZ_ONLY=like_counts`, needs `PLYR_ZIG_TEST_DATABASE_URL`) drives
+  (`-Dfuzz-only=like_counts`, needs `PLYR_ZIG_TEST_DATABASE_URL`) drives
   random like upserts, retargets, multi-row statements, tombstones, owner
   purges, availability changes and truncation through both migrations and
   compares the table with a recount after every step.

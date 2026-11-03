@@ -71,6 +71,7 @@ pub fn build(b: *std.Build) void {
 
     // declared before the lazy fetch, which reruns configure without it
     const cases = b.option(u64, "fuzz-cases", "cases per property (default: HEGEL_TEST_CASES, else 100)");
+    const only = b.option([]const u8, "fuzz-only", "run the property groups whose name contains this");
     if (b.option(bool, "hegel", "build the property harnesses (builds libhegel once)") orelse false) {
         if (b.lazyDependency("hegel", .{ .target = target, .optimize = optimize })) |hegel| {
             const fuzz_module = b.createModule(.{
@@ -91,6 +92,9 @@ pub fn build(b: *std.Build) void {
             const run_fuzz = b.addRunArtifact(fuzz);
             run_fuzz.has_side_effects = true;
             if (cases) |n| run_fuzz.setEnvironmentVariable("HEGEL_TEST_CASES", b.fmt("{d}", .{n}));
+            // an option, not only the environment: zig caches the configured
+            // graph with the environment it was built under
+            if (only) |name| run_fuzz.setEnvironmentVariable("FUZZ_ONLY", name);
             b.step("fuzz", "run the property harnesses over untrusted-input parsers").dependOn(&run_fuzz.step);
 
             const mutants = b.addRunArtifact(hegel.artifact("hegel-mutants"));
