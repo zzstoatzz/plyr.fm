@@ -60,4 +60,11 @@ Tests construct signed repositories and hash-linked MSTs. They cover omitted
 records, absent requested blocks, tampered block bytes, empty collections,
 empty-root CAR responses, and skipping unrelated subtrees. PostgreSQL repair
 also refuses an older snapshot when newer live records exist, before clearing
-anything for a decoder rebuild.
+anything for a decoder rebuild. Live operations, signed commit batches and
+snapshot repair share one transaction-scoped lock per repository, so a live
+write cannot race between that check and a decoder rebuild. Different
+repositories remain independent.
+
+A stale individual operation leaves both projected content and its rejection
+bookkeeping untouched. The record store's revision guard is checked before
+clearing or replacing a rejection, including for a schema-invalid old record.
