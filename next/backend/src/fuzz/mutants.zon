@@ -1,0 +1,44 @@
+.{
+    .{
+        .name = "a percent escape takes a sign",
+        .file = "src/internal/http/query.zig",
+        .old = "const high = std.fmt.charToDigit(digits[0], 16) catch return null;\n    const low = std.fmt.charToDigit(digits[1], 16) catch return null;\n    return high * 16 + low;",
+        .new = "return std.fmt.parseInt(u8, digits, 16) catch null;",
+    },
+    .{
+        .name = "a raw NUL passes a path segment",
+        .file = "src/internal/http/path_segment.zig",
+        .old = "\"/\\\\\\x00\"",
+        .new = "\"/\\\\\"",
+    },
+    .{
+        .name = "a decimal parameter takes separators",
+        .file = "src/internal/http/query.zig",
+        .old = "for (text) |c| if (!std.ascii.isDigit(c)) return error.InvalidCharacter;",
+        .new = "",
+    },
+    .{
+        .name = "a DID-authority AT-URI is not a uri",
+        .file = "src/internal/atproto/lexicon_value.zig",
+        .old = "return atprotoUriSyntax(value);",
+        .new = "return false;",
+    },
+    .{
+        .name = "a full page claims no more",
+        .file = "src/internal/application/list_tracks.zig",
+        .old = "const has_more = items.len > options.limit;",
+        .new = "const has_more = items.len > options.limit + 1;",
+    },
+    .{
+        .name = "a cursor skips its uri check",
+        .file = "src/internal/identity/record_cursor.zig",
+        .old = "    const at_uri = raw[header_bytes..];\n    try validateRecordUri(at_uri);",
+        .new = "    const at_uri = raw[header_bytes..];",
+    },
+    .{
+        .name = "a regional indicator pair splits",
+        .file = "src/internal/text/grapheme.zig",
+        .old = "return ri_count % 2 == 0;",
+        .new = "return ri_count % 2 == 1;",
+    },
+}

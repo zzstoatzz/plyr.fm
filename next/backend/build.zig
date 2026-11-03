@@ -63,6 +63,36 @@ pub fn build(b: *std.Build) void {
     const test_step = b.step("test", "Run Zig backend tests");
     test_step.dependOn(&run_tests.step);
 
+    if (b.option(bool, "hegel", "build the property harnesses (builds libhegel once)") orelse false) {
+        if (b.lazyDependency("hegel", .{ .target = target, .optimize = optimize })) |hegel| {
+            const fuzz_module = b.createModule(.{
+                .root_source_file = b.path("src/fuzz.zig"),
+                .target = target,
+                .optimize = optimize,
+                .imports = &.{
+                    .{ .name = "hegel", .module = hegel.module("hegel") },
+                    .{ .name = "zat", .module = root_module.import_table.get("zat").? },
+                },
+            });
+            const fuzz = b.addExecutable(.{ .name = "fuzz", .root_module = fuzz_module });
+            const run_fuzz = b.addRunArtifact(fuzz);
+            run_fuzz.has_side_effects = true;
+            const cases = b.option(u64, "fuzz-cases", "cases per property (default: HEGEL_TEST_CASES, else 100)");
+            if (cases) |n| run_fuzz.setEnvironmentVariable("HEGEL_TEST_CASES", b.fmt("{d}", .{n}));
+            b.step("fuzz", "run the property harnesses over untrusted-input parsers").dependOn(&run_fuzz.step);
+
+            const mutants = b.addRunArtifact(hegel.artifact("hegel-mutants"));
+            mutants.setCwd(b.path("."));
+            mutants.addArgs(&.{ "src/fuzz/mutants.zon", "--seeds", "3", "--", b.graph.zig_exe, "build", "fuzz", "-Dhegel" });
+            if (openssl_include_path) |include_path| {
+                mutants.addPrefixedDirectoryArg("-Dopenssl_include_path=", include_path);
+                mutants.addPrefixedDirectoryArg("-Dopenssl_lib_path=", openssl_lib_path.?);
+            }
+            mutants.has_side_effects = true;
+            b.step("mutants", "plant each mutant; the harnesses must catch every one").dependOn(&mutants.step);
+        }
+    }
+
     const snapshot_bench_module = b.createModule(.{
         .root_source_file = b.path("src/bench_snapshot.zig"),
         .target = target,
