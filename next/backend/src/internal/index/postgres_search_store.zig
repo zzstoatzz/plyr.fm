@@ -146,6 +146,8 @@ fn decodeRow(
     const owner_display_source: track.Source = if (kind == .artist) .legacy_local else .legacy_projection;
     const image_source: track.Source = if (image_url == null)
         .derived
+    else if (kind == .track)
+        .verified_repo
     else if (authored_image)
         .authored_profile
     else
@@ -236,7 +238,7 @@ const search_query =
     \\    v.owner_did,
     \\    lower(a.handle) AS owner_handle,
     \\    a.display_name AS owner_display_name,
-    \\    NULL::text AS image_url,
+    \\    v.image_url AS image_url,
     \\    COALESCE(metrics.play_count, 0)::bigint AS play_count,
     \\    NULL::bigint AS member_count,
     \\    v.indexed_at_us,
@@ -280,11 +282,12 @@ const search_query =
     \\    p.owner_did,
     \\    lower(a.handle),
     \\    a.display_name,
-    \\    COALESCE(p.avatar, a.avatar_url),
+    \\    CASE WHEN a.avatar_url IS NOT NULL AND p.avatar LIKE 'https://cdn.bsky.app/img/avatar/plain/%'
+    \\      THEN a.avatar_url ELSE COALESCE(p.avatar, a.avatar_url) END,
     \\    NULL::bigint,
     \\    NULL::bigint,
     \\    p.indexed_at_us,
-    \\    p.avatar IS NOT NULL,
+    \\    p.avatar IS NOT NULL AND (a.avatar_url IS NULL OR p.avatar NOT LIKE 'https://cdn.bsky.app/img/avatar/plain/%'),
     \\    false,
     \\    aa.evidence_source,
     \\    lower(a.handle),
