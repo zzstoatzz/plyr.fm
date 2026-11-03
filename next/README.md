@@ -16,5 +16,14 @@ planned:
 - `mcp/`: MCP server built on the SDK.
 - `app/`: native client following bluesky's social-app approach (expo / react native, one codebase for ios, android and web).
 
-rules while next and legacy coexist: nothing here writes to prod, publishes
-lexicons, or uses `fm.plyr.*` collections other than the dev/stg NSIDs.
+rules while next and legacy coexist:
+
+- next has its own infra (fly app, neon branch, R2 bucket, pages project) and
+  never touches prod's database, deploys, or services.
+- the data is shared: next reads and writes the real `fm.plyr.*` records on
+  users' PDSes, so anything next writes shows up in the existing app too. writes
+  must keep the published lexicon shapes and preserve fields next doesn't know.
+- a lexicon change lands in both apps together (lexicons/, the python backend,
+  and next). gated uploads stay off on the real namespace until next's space
+  shape converges with prod's `fm.plyr.privateMedia`.
+- rolling back a next deploy doesn't undo records it wrote; they're the user's.
