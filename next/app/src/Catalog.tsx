@@ -187,7 +187,7 @@ function TrackDetail({ id, onPlay, onEnqueue, trackActions }: {
 
 function Collection({ id, album, onPlay }: { id: string; album: boolean; onPlay: Play }) {
   const load = useCallback(() => album ? api.album(id) : api.playlist(id), [id, album]);
-  const result = useResource(load);
+  const result = useResource(load, 0, true);
   const list = result.data;
   if (!list) return <Status loading={!result.error} error={result.error} retry={result.retry} />;
   const tracks = list.members.flatMap((member) => member.track ? [member.track] : []);
