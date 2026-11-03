@@ -36,6 +36,7 @@ export default function JamRoom() {
   const [joined, setJoined] = useState(false);
   const [guest, setGuest] = useState('');
   const [snapshot, setSnapshot] = useState<Snapshot>();
+  const latest = useRef<Snapshot | undefined>(undefined);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState('');
@@ -53,16 +54,16 @@ export default function JamRoom() {
     let active = true;
     let timer: ReturnType<typeof setTimeout>;
     let track: Track | undefined;
-    let revision = -1;
+    latest.current = undefined;
     async function poll() {
       try {
         const state = await client().read();
         if (!isSnapshot(state)) throw new Error('Invalid Jam playback state');
-        if (state.revision < revision) return;
+        if (state.revision < (latest.current?.revision ?? -1)) return;
         if (track?.id !== state.trackId || track.record.cid !== state.cid) track = await api.track(state.trackId);
         if (track.record.cid !== state.cid) throw new Error('The Jam track has changed');
-        if (!active) return;
-        revision = state.revision;
+        if (!active || state.revision < (latest.current?.revision ?? -1)) return;
+        latest.current = state;
         setSnapshot(state);
         const elapsed = state.playing ? Math.max(0, Date.now() - state.updatedAtMs) : 0;
         await playback.current.syncJam(track, (state.positionMs + elapsed) / 1000, state.playing);
@@ -91,10 +92,14 @@ export default function JamRoom() {
   }
 
   async function update(playing: boolean, positionMs: number) {
-    if (!snapshot) return;
-    await client().publish({
-      ...snapshot, revision: snapshot.revision + 1, playing, positionMs, updatedAtMs: Date.now()
-    });
+    const current = latest.current;
+    if (!current) return;
+    const next = { ...current, revision: current.revision + 1, playing, positionMs, updatedAtMs: Date.now() };
+    await client().publish(next);
+    if (next.revision >= (latest.current?.revision ?? -1)) {
+      latest.current = next;
+      setSnapshot(next);
+    }
   }
 
   const link = `/jam/${encodeURIComponent(room ?? '')}`;
