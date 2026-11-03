@@ -1,11 +1,11 @@
 import { Link, useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState, type ReactNode } from 'react';
 import { StyleSheet, TextInput, View } from 'react-native';
 import { api, playlistIdFromUri, type AwaitStatus, type ListDetail, type Track } from './api';
 import { useAuth } from './auth';
 import { getAuth } from './auth-state';
 import {
-  Button, Detail, Heading, ListRows, Status, TrackRows, errorMessage, useColors, usePages, useResource, type Play,
+  Button, Detail, Heading, ListRows, Row, Status, TrackRows, artistName, errorMessage, useColors, usePages, useResource, type Play,
 } from './CatalogPieces';
 import { Action } from './controls';
 import { Sheet } from './Sheet';
@@ -172,12 +172,25 @@ function PlaylistPicker({ did, onChoose }: { did: string; onChoose: (uri: string
   </View>;
 }
 
-export function CollectionActions({ list, refresh }: { list: ListDetail; refresh: () => void }) {
-  const { did } = useAuth();
-  return did && did === list.owner.did ? <EditCollection key={did} list={list} refresh={refresh} /> : null;
+interface CollectionControlsProps {
+  list: ListDetail;
+  refresh: () => void;
+  actions: ReactNode;
+  onPlay: Play;
 }
 
-function EditCollection({ list, refresh }: { list: ListDetail; refresh: () => void }) {
+export function CollectionActions(props: CollectionControlsProps) {
+  const { did } = useAuth();
+  if (did && did === props.list.owner.did) return <EditCollection key={did} {...props} />;
+  const tracks = props.list.members.flatMap(({ track }) => track ? [track] : []);
+  return <>
+    <View style={styles.actions}>{props.actions}</View>
+    <Heading>Tracks</Heading>
+    <TrackRows tracks={tracks} onPlay={props.onPlay} />
+  </>;
+}
+
+function EditCollection({ list, refresh, actions, onPlay }: CollectionControlsProps) {
   const pds = usePds();
   const router = useRouter();
   const [editing, setEditing] = useState(false);
@@ -212,23 +225,37 @@ function EditCollection({ list, refresh }: { list: ListDetail; refresh: () => vo
       return messageFor(status, 'Playlist deleted.');
     });
   }
+  const tracks = list.members.flatMap(({ track }) => track ? [track] : []);
   return <>
-    <Button label={editing ? 'Done editing' : album ? 'Edit album' : 'Edit playlist'} onPress={() => { if (mutation.busy) return; setName(list.metadata.name ?? ''); setEditing(!editing); setConfirmDelete(false); }} />
-    {editing && <View style={styles.wide}>
+    <View style={styles.actions}>
+      {actions}
+      <Button label={editing ? 'Done editing' : album ? 'Edit album' : 'Edit playlist'}
+        onPress={() => {
+          if (mutation.busy) return;
+          setName(list.metadata.name ?? '');
+          setEditing(!editing);
+          setConfirmDelete(false);
+        }} />
+    </View>
+    {editing && <View style={styles.group}>
       <NameInput label={album ? 'Album name' : 'Playlist name'} value={name} onChange={setName} />
       <Status loading={mutation.busy} empty={mutation.message} />
-      {!mutation.busy && <>
-        {name.trim() && <Button label="Save name" onPress={rename} />}
-        {!album && <>
-          <Heading>Tracks</Heading>
-          {list.members.map((member) => <Button key={member.position}
-            label={`Remove ${member.track?.metadata.title ?? 'unavailable track'}`}
-            onPress={() => remove(member.subject.uri)} />)}
-          <Button label={confirmDelete ? 'Confirm delete playlist' : 'Delete playlist'}
-            onPress={confirmDelete ? deletePlaylist : () => setConfirmDelete(true)} />
-          {confirmDelete && <Button label="Cancel deletion" onPress={() => setConfirmDelete(false)} />}
-        </>}
-      </>}
+      {!mutation.busy && name.trim() && name.trim() !== list.metadata.name &&
+        <Button label="Save name" onPress={rename} />}
+    </View>}
+    <Heading>Tracks</Heading>
+    {editing && !album ? list.members.map(({ track, position, subject }) => {
+      const removeAction = !mutation.busy && <Button
+        label={'Remove ' + (track?.metadata.title ?? 'unavailable track')}
+        onPress={() => remove(subject.uri)} />;
+      return track ? <Row key={position} href={{ pathname: '/track/[id]', params: { id: track.id } }}
+        title={track.metadata.title} subtitle={artistName(track)} image={track.media.artwork?.url} action={removeAction} />
+        : <View key={position} style={styles.actions}><Detail>Unavailable track</Detail>{removeAction}</View>;
+    }) : <TrackRows tracks={tracks} onPlay={onPlay} />}
+    {editing && !album && !mutation.busy && <View style={styles.actions}>
+      <Button label={confirmDelete ? 'Confirm delete playlist' : 'Delete playlist'}
+        onPress={confirmDelete ? deletePlaylist : () => setConfirmDelete(true)} />
+      {confirmDelete && <Button label="Cancel deletion" onPress={() => setConfirmDelete(false)} />}
     </View>}
   </>;
 }

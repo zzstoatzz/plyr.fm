@@ -196,13 +196,10 @@ function Collection({ id, album, onPlay }: { id: string; album: boolean; onPlay:
     </Link>}
     <Detail>{tracks.length} of {list.metrics.member_count} tracks available</Detail>
     </DetailHeader>
-    <View style={styles.actions}>
+    <CollectionActions list={list} refresh={result.retry} onPlay={onPlay} actions={<>
       {tracks[0] && <Action primary label={album ? 'Play album' : 'Play playlist'} onPress={() => onPlay(tracks[0], tracks)} />}
       <ShareLink path={`/${album ? 'album' : 'playlist'}/${encodeURIComponent(id)}`} />
-      <CollectionActions list={list} refresh={result.retry} />
-    </View>
-    <Heading>Tracks</Heading>
-    <TrackRows tracks={tracks} onPlay={onPlay} />
+    </>} />
   </>;
 }
 
