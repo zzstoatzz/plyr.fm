@@ -3,6 +3,7 @@
 
 interface DidDocument {
 	alsoKnownAs?: string[];
+	verificationMethod?: { id: string; publicKeyMultibase?: string }[];
 	service?: { id: string; type: string; serviceEndpoint: string }[];
 }
 

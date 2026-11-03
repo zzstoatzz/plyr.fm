@@ -1,3 +1,5 @@
+import { randomUUID } from 'expo-crypto';
+import { router } from 'expo-router';
 import { useState } from 'react';
 import { Switch, View } from 'react-native';
 import { useAuth, logout } from '../src/auth';
@@ -36,6 +38,7 @@ export default function Settings() {
     <View style={row}><Copy>Keep playing</Copy><Switch accessibilityLabel="Keep playing"
       value={preferences.keepPlaying} trackColor={{ true: theme.accent }} onValueChange={(keepPlaying) => setPreferences({ keepPlaying })} /></View>
     {auth.did ? <>
+      <Action label="Start a Jam" onPress={() => router.push({ pathname: '/jam/[room]', params: { room: `${auth.did}~${randomUUID()}` } })} />
       <Copy>{status === 'synced' ? 'Preferences synced to your private Space.' : status === 'syncing' ? 'Syncing preferences…' : 'Preferences kept on this device.'}</Copy>
       {status === 'error' && <Action label="Retry sync" onPress={() => void sync()} />}
       {!auth.preferenceSpace && <Action label="Sign in again to enable sync" href="/login" />}
