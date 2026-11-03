@@ -16,8 +16,7 @@ import {
 	finalizeAuthorization,
 	getSession
 } from '@atcute/oauth-browser-client';
-import { api } from './api';
-import { SCOPE_PARTS, SITE_URL } from './config';
+import { SCOPE_PARTS, SITE_URL, TYPEAHEAD_URL } from './config';
 
 const ACTIVE_KEY = 'plyr-next:active-did';
 
@@ -50,6 +49,8 @@ function configure() {
 class Auth {
 	did = $state<string | null>(null);
 	handle = $state<string | null>(null);
+	displayName = $state<string | null>(null);
+	avatar = $state<string | null>(null);
 	ready = $state(false);
 	agent: OAuthUserAgent | null = null;
 	rpc: Client | null = null;
@@ -94,7 +95,7 @@ class Auth {
 			deleteStoredSession(did as `did:${string}:${string}`);
 		}
 		localStorage.removeItem(ACTIVE_KEY);
-		this.did = this.handle = null;
+		this.did = this.handle = this.displayName = this.avatar = null;
 		this.agent = this.rpc = null;
 	}
 
@@ -102,19 +103,44 @@ class Auth {
 		this.agent = new OAuthUserAgent(session);
 		this.rpc = new Client({ handler: this.agent });
 		this.did = session.info.sub;
-		this.handle = null;
-		resolveHandle(session.info.sub).then((h) => (this.handle = h));
+		this.handle = this.displayName = this.avatar = null;
+		const did = session.info.sub;
+		viewerProfile(did).then((p) => {
+			if (this.did !== did) return;
+			this.handle = p.handle;
+			this.displayName = p.displayName;
+			this.avatar = p.avatar;
+		});
 	}
 }
 
 export const auth = new Auth();
 
-async function resolveHandle(did: string): Promise<string | null> {
+type ViewerProfile = { handle: string | null; displayName: string | null; avatar: string | null };
+
+// the viewer's own name and avatar come from typeahead (bsky profile, kept fresh
+// off the firehose), so there's no appview round trip and no client setting.
+async function viewerProfile(did: string): Promise<ViewerProfile> {
 	try {
-		return (await api.artist(did)).handle;
+		const res = await fetch(`${TYPEAHEAD_URL}/xrpc/app.bsky.actor.getProfile?actor=${encodeURIComponent(did)}`);
+		if (res.ok) {
+			const p = await res.json();
+			if (p?.did === did) {
+				const handle = typeof p.handle === 'string' && p.handle !== 'handle.invalid' ? p.handle : null;
+				return {
+					handle,
+					displayName: typeof p.displayName === 'string' && p.displayName.trim() ? p.displayName.trim() : null,
+					avatar: typeof p.avatar === 'string' && p.avatar.startsWith('https://') ? p.avatar : null
+				};
+			}
+		}
 	} catch {
-		/* not an artist on plyr: fall back to the did document */
+		/* typeahead unreachable or rate limited: fall back to the did document */
 	}
+	return { handle: await handleFromDidDocument(did), displayName: null, avatar: null };
+}
+
+async function handleFromDidDocument(did: string): Promise<string | null> {
 	try {
 		const doc = did.startsWith('did:plc:')
 			? await (await fetch(`https://plc.directory/${did}`)).json()

@@ -122,9 +122,13 @@ Mirrored origins give clients a Range-capable URL even when the PDS ignores
 `Range` on `getBlob`.
 
 The ingester also runs the actor identity refresher on a side thread. For every
-DID that owns plyr records it resolves the DID document, keeps the handle only
-if it resolves back to the DID (`handle.invalid` otherwise), and reads the
-actor's own `app.bsky.actor.profile/self` for display name and avatar, into
+DID that owns plyr records it asks typeahead (`IDENTITY_TYPEAHEAD_URL`, default
+`https://typeahead.waow.tech`; empty disables) for `app.bsky.actor.getProfiles`
+in batches of 25, paced under its 60/min limit; typeahead follows the firehose
+and verifies handles. DIDs it does not return fall back to resolving the DID
+document (handle kept only if it resolves back, `handle.invalid` otherwise) and
+reading the actor's own `app.bsky.actor.profile/self` from their PDS. Results go
+into
 `plyr_index.actor_identities` (every `IDENTITY_REFRESH_SECONDS`, default six
 hours). That table replaces python's `public.artists`; the zig runtime reads no
 python table.
