@@ -95,3 +95,30 @@ jobs:
           DATABASE_URL: postgresql://zig_test:zig_test@127.0.0.1:5435/zig_test
         run: |
           if scripts/migrate; then echo "migrate ran against an unmarked database" >&2; exit 1; fi
+
+  fuzz:
+    name: zig property harnesses
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    defaults:
+      run:
+        working-directory: next/backend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: install zig 0.17.0
+        run: |
+          python3 -m pip install --user ziglang==0.17.0
+          ln -s "$(python3 -c 'import ziglang, os; print(os.path.dirname(ziglang.__file__))')/zig" /usr/local/bin/zig || sudo ln -s "$(python3 -c 'import ziglang, os; print(os.path.dirname(ziglang.__file__))')/zig" /usr/local/bin/zig
+          zig version
+
+      # libhegel is a cargo build of one pinned hegel-rust revision
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/hegel-zig
+          key: hegel-zig-${{ hashFiles('next/backend/build.zig.zon') }}
+
+      - name: property harnesses
+        run: zig build fuzz -Dhegel -Dfuzz-cases=500

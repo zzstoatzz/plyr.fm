@@ -57,7 +57,7 @@ fn parseOptions(allocator: std.mem.Allocator, target: []const u8) !Options {
         if (std.mem.eql(u8, pair.name, "limit")) {
             if (saw_limit or pair.value.len == 0) return error.InvalidQuery;
             saw_limit = true;
-            options.limit = std.fmt.parseInt(usize, pair.value, 10) catch
+            options.limit = query.parseDecimal(usize, pair.value) catch
                 return error.InvalidQuery;
             if (options.limit < 1 or options.limit > max_limit) return error.InvalidQuery;
         } else if (std.mem.eql(u8, pair.name, "period")) {

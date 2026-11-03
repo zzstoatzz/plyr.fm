@@ -497,8 +497,9 @@ pub const projected_columns =
     \\  v.image_url
 ;
 
-pub const projected_from =
-    \\FROM plyr_index.track_records AS v
+pub const projected_from = "FROM plyr_index.track_records AS v\n" ++ projected_joins;
+
+pub const projected_joins =
     \\JOIN plyr_index.account_availability AS aa
     \\  ON aa.repo_did = v.owner_did AND aa.available
     \\LEFT JOIN plyr_index.track_delivery_origins AS d
@@ -558,35 +559,35 @@ const artist_policy = common_policy ++
     \\  AND COALESCE(pol.visibility, 'public') <> 'private'
 ;
 
-const discovery_query = joined_projection ++ "\nWHERE true\n" ++ discovery_policy ++ "\n" ++
-    \\ORDER BY v.record_created_at::timestamptz DESC, v.record_uri DESC
-    \\LIMIT $4::bigint
+/// the joins a page's filters read, without the per-track data
+pub const page_from =
+    \\FROM plyr_index.track_records AS v
+    \\JOIN plyr_index.account_availability AS aa ON aa.repo_did = v.owner_did AND aa.available
+    \\JOIN plyr_index.actor_identities AS a ON a.did = v.owner_did
+    \\LEFT JOIN plyr_index.track_policies AS pol ON pol.record_uri = v.record_uri
 ;
 
-const discovery_after_query = joined_projection ++ "\nWHERE true\n" ++ discovery_policy ++ "\n" ++
-    \\  AND (
-    \\    v.record_created_at::timestamptz < TIMESTAMPTZ 'epoch' + ($4::bigint * INTERVAL '1 microsecond')
-    \\    OR (v.record_created_at::timestamptz = TIMESTAMPTZ 'epoch' + ($4::bigint * INTERVAL '1 microsecond')
-    \\      AND v.record_uri < $5)
-    \\  )
-    \\ORDER BY v.record_created_at::timestamptz DESC, v.record_uri DESC
-    \\LIMIT $6::bigint
-;
+const page_order = "ORDER BY v.record_created_at::timestamptz DESC, v.record_uri DESC";
 
-const artist_query = joined_projection ++ "\nWHERE true\n" ++ artist_policy ++ "\n" ++
-    \\ORDER BY v.record_created_at::timestamptz DESC, v.record_uri DESC
-    \\LIMIT $5::bigint
-;
+/// Filters, sorts, and limits on the cheap columns first, so the like-count
+/// subquery and the other per-track joins run for one page, not the catalog.
+fn pagedQuery(comptime filter: []const u8, comptime limit: []const u8) []const u8 {
+    return "WITH page AS MATERIALIZED (\nSELECT v.record_uri\n" ++ page_from ++ "\nWHERE true\n" ++ filter ++ "\n" ++ page_order ++ "\nLIMIT " ++ limit ++ "\n)\nSELECT\n" ++ projected_columns ++
+        "\nFROM page\nJOIN plyr_index.track_records AS v ON v.record_uri = page.record_uri\n" ++
+        projected_joins ++ "\n" ++ page_order;
+}
 
-const artist_after_query = joined_projection ++ "\nWHERE true\n" ++ artist_policy ++ "\n" ++
-    \\  AND (
-    \\    v.record_created_at::timestamptz < TIMESTAMPTZ 'epoch' + ($5::bigint * INTERVAL '1 microsecond')
-    \\    OR (v.record_created_at::timestamptz = TIMESTAMPTZ 'epoch' + ($5::bigint * INTERVAL '1 microsecond')
-    \\      AND v.record_uri < $6)
-    \\  )
-    \\ORDER BY v.record_created_at::timestamptz DESC, v.record_uri DESC
-    \\LIMIT $7::bigint
-;
+fn afterCursor(comptime at: []const u8, comptime uri: []const u8) []const u8 {
+    return "\n  AND (\n" ++
+        "    v.record_created_at::timestamptz < TIMESTAMPTZ 'epoch' + (" ++ at ++ "::bigint * INTERVAL '1 microsecond')\n" ++
+        "    OR (v.record_created_at::timestamptz = TIMESTAMPTZ 'epoch' + (" ++ at ++ "::bigint * INTERVAL '1 microsecond')\n" ++
+        "      AND v.record_uri < " ++ uri ++ ")\n  )";
+}
+
+const discovery_query = pagedQuery(discovery_policy, "$4::bigint");
+const discovery_after_query = pagedQuery(discovery_policy ++ afterCursor("$4", "$5"), "$6::bigint");
+const artist_query = pagedQuery(artist_policy, "$5::bigint");
+const artist_after_query = pagedQuery(artist_policy ++ afterCursor("$5", "$6"), "$7::bigint");
 
 const liked_joined_projection = "SELECT\n" ++ projected_columns ++
     \\, viewer_like.liked_at_us, viewer_like.like_uri
@@ -1196,6 +1197,17 @@ test "composed PostgreSQL reads use verified records and authoritative account s
         .after = null,
     });
     try std.testing.expectEqual(@as(usize, 2), page.len);
+    const after: @FieldType(store_module.ListRequest, "after") = .{ .created_at_us = page[0].created_at_us, .at_uri = page[0].value.record.uri };
+    for ([_]store_module.ListScope{ .discovery, .{ .artist = did } }) |scope| {
+        const rest = try implementation.store().listPublic(a, .{
+            .collection = "fm.plyr.dev.track",
+            .scope = scope,
+            .limit = 2,
+            .after = after,
+        });
+        try std.testing.expectEqual(@as(usize, 1), rest.len);
+        try std.testing.expectEqualStrings(page[1].value.record.uri, rest[0].value.record.uri);
+    }
     _ = try pool.exec(
         "UPDATE plyr_index.track_records SET self_labels = ARRAY['sexual']::text[] WHERE record_uri = $1",
         .{record_uri},

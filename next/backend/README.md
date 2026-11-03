@@ -56,6 +56,29 @@ zig build \
 
 The two options are a pair; supplying only one is a configuration error.
 
+## property harnesses
+
+`zig build fuzz -Dhegel` runs property harnesses over the code that reads
+untrusted input: public IDs and cursors, query and path decoding, record
+strings, DAG-CBOR and Jetstream JSON records, and pagination. Each property is
+checked against a model or a reference (zat, the atproto interop fixtures, the
+track lexicon) rather than against itself. The engine is libhegel through
+[hegel-zig](https://tangled.org/zzstoatzz.io/hegel-zig), a lazy dependency, so
+`zig build test` needs neither it nor the Rust toolchain that builds libhegel
+on first use.
+
+```sh
+zig build fuzz -Dhegel                        # 100 cases per property
+zig build fuzz -Dhegel -Dfuzz-cases=5000      # a longer search
+FUZZ_ONLY=records zig build fuzz -Dhegel      # one group
+HEGEL_ZIG_REPLAY=<blob> zig build fuzz -Dhegel  # replay a reported failure
+zig build mutants -Dhegel                     # every planted bug must be caught
+```
+
+A failure prints the property, its shrunk history, and a replay blob. Each
+fixed finding's undo is a mutant, so `mutants` shows the harness still finds
+it.
+
 `check` includes a black-box HTTP contract smoke test on an ephemeral port.
 `test-postgres` starts a Zig-only disposable Postgres 14 container,
 waits for it to accept connections, creates minimal projection schemas, and
