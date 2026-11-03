@@ -92,15 +92,27 @@ const due_query =
     \\FROM owners
     \\LEFT JOIN plyr_index.actor_identities AS ai ON ai.did = owners.owner_did
     \\WHERE ai.did IS NULL OR ai.next_refresh_us <= $1
+    \\  OR (ai.failures = 0 AND EXISTS (
+    \\    SELECT 1 FROM plyr_index.profile_records AS pr
+    \\    WHERE pr.owner_did = owners.owner_did AND pr.indexed_at_us > ai.refreshed_at_us
+    \\  ))
     \\ORDER BY ai.next_refresh_us NULLS FIRST, owners.owner_did
     \\LIMIT $2
 ;
 
+// A display name on the actor's own plyr profile wins over the bsky one, and
+// a profile indexed after the last refresh makes the actor due again, so
+// profile edits show up within one refresher pass.
 const save_query =
     \\INSERT INTO plyr_index.actor_identities (
     \\  did, handle, display_name, avatar_url, pds_origin,
     \\  refreshed_at_us, next_refresh_us, failures
-    \\) VALUES ($1, $2, $3, $4, $5, $6, $7, 0)
+    \\) VALUES ($1, $2, COALESCE((
+    \\  SELECT left(NULLIF(btrim(pr.display_name), ''), 640)
+    \\  FROM plyr_index.profile_records AS pr
+    \\  WHERE pr.owner_did = $1 AND pr.rkey = 'self' AND NOT pr.deleted
+    \\  ORDER BY pr.indexed_at_us DESC LIMIT 1
+    \\), $3), $4, $5, $6, $7, 0)
     \\ON CONFLICT (did) DO UPDATE SET
     \\  handle = EXCLUDED.handle,
     \\  display_name = EXCLUDED.display_name,
@@ -148,4 +160,68 @@ pub fn insertTestIdentity(
         "INSERT INTO plyr_index.actor_identities VALUES ($1, $2, $3, $4, NULL, 0, 0, 0)",
         .{ did, handle, display_name, avatar_url },
     );
+}
+
+test "PostgreSQL identities prefer the plyr profile name and refresh on profile edits" {
+    const url_z = std.c.getenv("PLYR_ZIG_TEST_DATABASE_URL") orelse return error.SkipZigTest;
+    const allocator = std.testing.allocator;
+    var threaded = std.Io.Threaded.init(allocator, .{});
+    const io = threaded.io();
+    const lock = @import("../testing/postgres_lock.zig");
+    lock.lock(io);
+    defer lock.unlock(io);
+    const database_uri = try std.Uri.parse(std.mem.span(url_z));
+    var pool = try pg.Pool.initUri(io, allocator, database_uri, .{ .size = 1 });
+    defer pool.deinit();
+    {
+        var row = (try pool.row("SELECT current_database()", .{})).?;
+        defer row.deinit() catch {};
+        if (!std.mem.eql(u8, try row.get([]const u8, 0), "zig_test")) return error.UnsafeTestDatabase;
+    }
+    _ = try pool.exec("DROP SCHEMA IF EXISTS plyr_index CASCADE", .{});
+    defer _ = pool.exec("DROP SCHEMA IF EXISTS plyr_index CASCADE", .{}) catch null;
+    _ = try pool.exec("CREATE SCHEMA plyr_index", .{});
+    try createTestTable(pool);
+    try @import("../projection/postgres_profile_store.zig").createTestTable(pool);
+    inline for (.{ "track_records", "list_records", "like_records" }) |table|
+        _ = try pool.exec("CREATE TABLE plyr_index." ++ table ++ " (owner_did text NOT NULL, deleted boolean NOT NULL)", .{});
+    _ = try pool.exec(
+        \\INSERT INTO plyr_index.profile_records (record_uri, record_cid, owner_did, collection,
+        \\  rkey, record_created_at, deleted, commit_cid, commit_rev, indexed_at_us, display_name)
+        \\VALUES ('at://did:plc:a/fm.plyr.stg.actor.profile/self', 'cid', 'did:plc:a',
+        \\  'fm.plyr.stg.actor.profile', 'self', '2026-11-03T00:00:00Z', false, 'c', 'r', 100, ' plyr name ')
+    , .{});
+
+    var arena = std.heap.ArenaAllocator.init(allocator);
+    defer arena.deinit();
+    const store: PostgresActorIdentityStore = .{ .pool = pool };
+    try std.testing.expectEqual(@as(usize, 1), (try store.due(arena.allocator(), 0, 10)).len);
+    try store.save(.{
+        .did = "did:plc:a",
+        .handle = "a.example",
+        .display_name = "bsky name",
+        .avatar_url = null,
+        .pds_origin = null,
+    }, 200, 10_000);
+    try expectDisplayName(pool, "plyr name");
+    try std.testing.expectEqual(@as(usize, 0), (try store.due(arena.allocator(), 300, 10)).len);
+
+    // An edit indexed after the refresh makes the actor due before its timer.
+    _ = try pool.exec("UPDATE plyr_index.profile_records SET display_name = NULL, indexed_at_us = 400", .{});
+    try std.testing.expectEqual(@as(usize, 1), (try store.due(arena.allocator(), 500, 10)).len);
+    try store.save(.{
+        .did = "did:plc:a",
+        .handle = "a.example",
+        .display_name = "bsky name",
+        .avatar_url = null,
+        .pds_origin = null,
+    }, 600, 10_000);
+    try expectDisplayName(pool, "bsky name");
+    try std.testing.expectEqual(@as(usize, 0), (try store.due(arena.allocator(), 700, 10)).len);
+}
+
+fn expectDisplayName(pool: *pg.Pool, expected: []const u8) !void {
+    var row = (try pool.row("SELECT display_name FROM plyr_index.actor_identities WHERE did = 'did:plc:a'", .{})).?;
+    defer row.deinit() catch {};
+    try std.testing.expectEqualStrings(expected, try row.get([]const u8, 0));
 }

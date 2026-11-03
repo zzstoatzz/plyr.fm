@@ -78,6 +78,7 @@ fn applyUpsert(
         .owner_did = upsert.owner_did,
         .collection = upsert.collection,
         .rkey = upsert.rkey,
+        .display_name = upsert.display_name,
         .avatar = upsert.avatar,
         .bio = upsert.bio,
         .record_created_at = upsert.created_at,
@@ -103,6 +104,7 @@ fn applyDelete(
         .owner_did = delete.owner_did,
         .collection = delete.collection,
         .rkey = delete.rkey,
+        .display_name = null,
         .avatar = null,
         .bio = null,
         .record_created_at = null,
@@ -120,6 +122,7 @@ const RecordWrite = struct {
     owner_did: []const u8,
     collection: []const u8,
     rkey: []const u8,
+    display_name: ?[]const u8,
     avatar: ?[]const u8,
     bio: ?[]const u8,
     record_created_at: ?[]const u8,
@@ -145,6 +148,7 @@ fn applyRecord(conn: *pg.Conn, write: RecordWrite) ProfileStore.Error!ApplyResul
         write.commit_cid,
         write.commit_rev,
         write.indexed_at_us,
+        write.display_name,
     }) catch |err| {
         std.log.err("profile projection upsert failed: {}", .{err});
         return error.ProjectionUnavailable;
@@ -184,8 +188,8 @@ const upsert_sql =
     \\INSERT INTO plyr_index.profile_records (
     \\  record_uri, record_cid, owner_did, collection, rkey, avatar, bio,
     \\  record_created_at, record_updated_at, deleted, commit_cid, commit_rev,
-    \\  indexed_at_us
-    \\) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+    \\  indexed_at_us, display_name
+    \\) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
     \\ON CONFLICT (record_uri) DO UPDATE SET
     \\  record_cid = EXCLUDED.record_cid,
     \\  owner_did = EXCLUDED.owner_did,
@@ -193,6 +197,7 @@ const upsert_sql =
     \\  rkey = EXCLUDED.rkey,
     \\  avatar = EXCLUDED.avatar,
     \\  bio = EXCLUDED.bio,
+    \\  display_name = EXCLUDED.display_name,
     \\  record_created_at = EXCLUDED.record_created_at,
     \\  record_updated_at = EXCLUDED.record_updated_at,
     \\  deleted = EXCLUDED.deleted,
@@ -228,7 +233,8 @@ pub fn createTestTable(pool: *pg.Pool) !void {
         \\  CHECK ((deleted AND record_cid IS NULL AND avatar IS NULL AND bio IS NULL
         \\    AND record_created_at IS NULL AND record_updated_at IS NULL)
         \\    OR (NOT deleted AND record_cid IS NOT NULL AND record_created_at IS NOT NULL)),
-        \\  UNIQUE (owner_did, collection, rkey)
+        \\  UNIQUE (owner_did, collection, rkey),
+        \\  display_name text
         \\)
     , .{});
 }

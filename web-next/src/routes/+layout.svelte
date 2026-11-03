@@ -34,6 +34,7 @@
 		{#if auth.did}
 			<a href="/liked">liked</a>
 			<a href="/upload">upload</a>
+			<a href="/profile">profile</a>
 			<button class="link viewer" onclick={() => auth.logout()} title="sign out">
 				{#if auth.avatar}<img src={auth.avatar} alt="" width="20" height="20" />{/if}
 				<span>{auth.displayName ?? auth.handle ?? 'sign out'}</span>

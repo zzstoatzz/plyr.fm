@@ -223,3 +223,57 @@ export function audioDuration(file: File): Promise<number | undefined> {
 		audio.src = url;
 	});
 }
+
+// the plyr profile is one fm.plyr.*.actor.profile/self record. unknown fields
+// written by other clients are kept; swapRecord guards concurrent edits.
+
+export interface ProfileRecord {
+	$type?: string;
+	displayName?: string;
+	bio?: string;
+	avatar?: string;
+	createdAt?: string;
+	updatedAt?: string;
+	[key: string]: unknown;
+}
+
+const PROFILE = () => NSID.profile as Nsid;
+
+export async function myProfile(): Promise<{ value: ProfileRecord | null; cid: string | null }> {
+	const { rpc, did } = session();
+	const res = await rpc.get('com.atproto.repo.getRecord', {
+		params: { repo: did, collection: PROFILE(), rkey: 'self' }
+	});
+	if (!res.ok) {
+		if (res.data.error === 'RecordNotFound') return { value: null, cid: null };
+		throw new Error(res.data.message ?? res.data.error);
+	}
+	return { value: res.data.value as ProfileRecord, cid: res.data.cid ?? null };
+}
+
+export async function saveProfile(
+	edits: { displayName: string; bio: string; avatar: string },
+	current: { value: ProfileRecord | null; cid: string | null }
+): Promise<AwaitStatus> {
+	const { rpc, did } = session();
+	const now = new Date().toISOString();
+	const record: ProfileRecord = { ...(current.value ?? {}), $type: NSID.profile, createdAt: current.value?.createdAt ?? now };
+	for (const key of ['displayName', 'bio', 'avatar'] as const) {
+		const text = edits[key].trim();
+		if (text) record[key] = text;
+		else delete record[key];
+	}
+	if (current.value) record.updatedAt = now;
+	const res = await ok(
+		rpc.post('com.atproto.repo.putRecord', {
+			input: {
+				repo: did,
+				collection: PROFILE(),
+				rkey: 'self',
+				record,
+				...(current.cid ? { swapRecord: current.cid } : {})
+			}
+		})
+	);
+	return (await api.awaitRecord(res.uri, res.cid)).status;
+}
