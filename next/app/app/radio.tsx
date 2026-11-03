@@ -1,5 +1,5 @@
 import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { View } from 'react-native';
 import { Cover, Heading } from '../src/CatalogPieces';
@@ -9,6 +9,8 @@ import { useAppPreferences } from '../src/preference-context';
 import { radioMedia, radioPosition, radioStations, readRadio, type RadioSnapshot } from '../src/radio';
 
 export default function Radio() {
+  const { autoplay } = useLocalSearchParams<{ autoplay?: string }>();
+  const autoTuned = useRef(false);
   const [station, setStation] = useState<typeof radioStations[number]>(radioStations[0]);
   const [snapshot, setSnapshot] = useState<RadioSnapshot>();
   const [listening, setListening] = useState(false);
@@ -55,6 +57,16 @@ export default function Radio() {
     audio.pause();
     audio.replace(source);
   }, [audio, source]);
+
+  useEffect(() => {
+    if (autoplay !== '1' || autoTuned.current || !source || snapshot?.state.status !== 'playing') return;
+    autoTuned.current = true;
+    if (!solo.status.playing && !solo.loading) setListening(true);
+  }, [autoplay, snapshot?.state.status, solo.loading, solo.status.playing, source]);
+
+  useEffect(() => {
+    if (status.error) setListening(false);
+  }, [status.error]);
 
   useEffect(() => {
     if (solo.status.playing) setListening(false);
