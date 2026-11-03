@@ -18,17 +18,19 @@ primary_region = "sjc"
   DATABASE_POOL_SIZE = "16"
   INGEST_STREAM_HOSTS = "stream.waow.tech,jetstream1.us-east.bsky.network,jetstream2.us-east.bsky.network,jetstream1.us-west.bsky.network,jetstream2.us-west.bsky.network"
   INDEX_MODE = "required"
-  LIST_COLLECTION_NSID = "fm.plyr.stg.list"
-  LIKE_COLLECTION_NSID = "fm.plyr.stg.like"
-  PROFILE_COLLECTION_NSID = "fm.plyr.stg.actor.profile"
+  LIST_COLLECTION_NSID = "fm.plyr.list"
+  LIKE_COLLECTION_NSID = "fm.plyr.like"
+  PROFILE_COLLECTION_NSID = "fm.plyr.actor.profile"
   MAX_CONNECTIONS = "128"
   MODE = "api"
   PORT = "8000"
-  TRACK_COLLECTION_NSID = "fm.plyr.stg.track"
+  TRACK_COLLECTION_NSID = "fm.plyr.track"
   # plyr manages gated-audio spaces as did:web:api.next.plyr.fm#plyr_space
   SPACE_SERVICE_DID = "did:web:api.next.plyr.fm"
   SPACE_SERVICE_ENDPOINT = "https://api.next.plyr.fm"
   SPACE_TYPE_NSID = "fm.plyr.stg.audio"
+  # catalog bootstrap: every repo the relay has seen write fm.plyr.*
+  CATALOG_DISCOVERY_RELAY = "https://relay1.us-east.bsky.network"
 
 [http_service]
   processes = ["app"]

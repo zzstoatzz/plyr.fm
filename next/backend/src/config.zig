@@ -41,6 +41,9 @@ pub const Config = struct {
     repair_did: ?[]const u8,
     /// Comma-separated jetstream hostnames, tried in order (zat stream first).
     stream_hosts: []const u8,
+    /// relay origin for catalog discovery via listReposByCollection; null
+    /// reconciles only DIDs the projection already knows
+    discovery_relay: ?[]const u8,
     /// plyr's managing-app identity for gated-audio spaces; null disables
     /// the did:web document and checkUserAccess.
     managed_space: ?ManagedSpace,
@@ -125,6 +128,7 @@ pub const Config = struct {
             .like_collection = like_collection,
             .cors_allowed_origins = getenv("CORS_ALLOWED_ORIGINS") orelse "",
             .repair_did = repair_did,
+            .discovery_relay = getenv("CATALOG_DISCOVERY_RELAY"),
             .stream_hosts = getenv("INGEST_STREAM_HOSTS") orelse
                 "stream.waow.tech,jetstream1.us-east.bsky.network,jetstream2.us-east.bsky.network,jetstream1.us-west.bsky.network,jetstream2.us-west.bsky.network",
             .managed_space = if (getenv("SPACE_SERVICE_DID")) |did| .{

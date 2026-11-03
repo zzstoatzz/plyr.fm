@@ -158,6 +158,7 @@ pub fn main() !void {
                 settings.track_collection,
                 settings.profile_collection,
                 settings.like_collection,
+                settings.discovery_relay,
             );
             std.log.info(
                 "catalog reconciliation: {d} candidates, {d} verified, {d} absent, {d} retryable, {d} rejected",
@@ -213,6 +214,7 @@ test {
     _ = @import("internal/space/managed_space.zig");
     _ = @import("internal/space/network.zig");
     _ = @import("internal/space/attested.zig");
+    _ = @import("internal/ingest/relay_repository_candidates.zig");
     _ = @import("api/artists.zig");
     _ = @import("api/charts.zig");
     _ = @import("api/albums.zig");
