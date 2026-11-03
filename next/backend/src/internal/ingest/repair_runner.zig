@@ -22,6 +22,7 @@ pub const Runner = struct {
     commits: commit_store.PostgresVerifiedCommitStore,
     snapshots: snapshot_store.PostgresVerifiedSnapshotStore,
     projector: projector_module.Projector,
+    collection_list: [4][]const u8,
 
     pub fn init(
         self: *Runner,
@@ -48,10 +49,12 @@ pub const Runner = struct {
             1024,
             self.key_upstream.port(),
         );
+        self.collection_list = .{ list_collection, track_collection, profile_collection, like_collection };
         self.repositories = .{
             .io = io,
             .identity_resolver = &self.identity,
             .transport = &self.repository_transport,
+            .collections = &self.collection_list,
         };
         self.commits = .{ .pool = pool };
         self.snapshots = .{ .pool = pool };
