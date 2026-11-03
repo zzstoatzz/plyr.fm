@@ -70,7 +70,7 @@ on first use.
 ```sh
 zig build fuzz -Dhegel                        # 100 cases per property
 zig build fuzz -Dhegel -Dfuzz-cases=5000      # a longer search
-FUZZ_ONLY=records zig build fuzz -Dhegel      # one group
+zig build fuzz -Dhegel -Dfuzz-only=records    # one group
 HEGEL_ZIG_REPLAY=<blob> zig build fuzz -Dhegel  # replay a reported failure
 zig build mutants -Dhegel                     # every planted bug must be caught
 ```
