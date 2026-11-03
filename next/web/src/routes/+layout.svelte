@@ -92,6 +92,23 @@
 	}
 	form {
 		flex: 1;
+		min-width: 0;
+	}
+	@media (max-width: 560px) {
+		header {
+			flex-wrap: wrap;
+			gap: 0.5rem 0.75rem;
+		}
+		header form {
+			order: 3;
+			flex-basis: 100%;
+		}
+		header input {
+			max-width: none;
+		}
+		nav {
+			margin-left: auto;
+		}
 	}
 	input {
 		width: 100%;
