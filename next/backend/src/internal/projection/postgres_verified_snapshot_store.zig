@@ -4,6 +4,7 @@ const std = @import("std");
 const pg = @import("pg");
 const availability = @import("../account/availability.zig");
 const postgres_availability = @import("../account/postgres_availability_store.zig");
+const repository_lock = @import("postgres_repository_lock.zig");
 const postgres_test_lock = @import("../testing/postgres_lock.zig");
 const zat = @import("zat");
 const list_change = @import("list_change.zig");
@@ -108,14 +109,10 @@ pub const PostgresVerifiedSnapshotStore = struct {
             logPgError(conn, "verified snapshot rollback failed", err);
         };
 
-        // A row lock cannot serialize two initial bootstraps because the row
-        // does not exist yet. The transaction-scoped hash lock closes that
-        // race and is shared by bootstrap and repair for one DID only.
-        var lock_row = conn.row(advisory_lock_sql, .{snapshot.repo_did}) catch |err| {
+        repository_lock.acquire(conn, snapshot.repo_did) catch |err| {
             logPgError(conn, "verified snapshot advisory lock failed", err);
             return error.ProjectionUnavailable;
-        } orelse return error.CorruptProjection;
-        lock_row.deinit() catch return error.CorruptProjection;
+        };
 
         const decision = try classifyHead(conn, allocator, snapshot, commit_cid, data_cid);
         switch (decision) {
@@ -396,10 +393,6 @@ fn classifyHead(
             .{ .done = .idempotent },
     };
 }
-
-const advisory_lock_sql =
-    \\SELECT pg_advisory_xact_lock(hashtextextended($1, 1881820018))
-;
 
 const head_sql =
     \\SELECT commit_rev, commit_cid, data_cid, projection_version
