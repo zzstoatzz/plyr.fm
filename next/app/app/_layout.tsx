@@ -5,7 +5,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Pressable, Text, View, useWindowDimensions, StyleSheet } from 'react-native';
 import { AppearanceProvider, useAppearance } from '../src/appearance';
 import { restoreAuth, useAuth } from '../src/auth';
-import { ArrowLeft, House, Search, Library, UserRound, Settings, type LucideIcon } from 'lucide-react-native';
+import ArrowLeft from 'lucide-react-native/icons/arrow-left';
+import House from 'lucide-react-native/icons/house';
+import Search from 'lucide-react-native/icons/search';
+import Library from 'lucide-react-native/icons/library';
+import UserRound from 'lucide-react-native/icons/user-round';
+import Settings from 'lucide-react-native/icons/settings';
 import { PlaybackProvider } from '../src/playback';
 import { PlayerBar } from '../src/PlayerBar';
 import { PreferencesProvider } from '../src/preference-context';
@@ -31,7 +36,7 @@ function Shell() {
   const { width } = useWindowDimensions();
   const wide = width >= 800;
   const accountPath = auth.did ? '/portal' : '/login';
-  const tabs: { label: string; href: Href; icon: LucideIcon; active: boolean }[] = [
+  const tabs: { label: string; href: Href; icon: typeof House; active: boolean }[] = [
     { label: 'Home', href: '/', icon: House, active: path === '/' },
     { label: 'Search', href: '/search', icon: Search, active: path === '/search' },
     { label: 'Library', href: '/library', icon: Library, active: ['/library', '/liked', '/playlists'].includes(path) },

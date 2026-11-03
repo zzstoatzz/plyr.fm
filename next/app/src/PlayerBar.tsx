@@ -1,7 +1,11 @@
 import { useState } from 'react';
 import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 import Slider from '@react-native-community/slider';
-import { ListMusic, Pause, Play, SkipBack, SkipForward, type LucideIcon } from 'lucide-react-native';
+import ListMusic from 'lucide-react-native/icons/list-music';
+import Pause from 'lucide-react-native/icons/pause';
+import Play from 'lucide-react-native/icons/play';
+import SkipBack from 'lucide-react-native/icons/skip-back';
+import SkipForward from 'lucide-react-native/icons/skip-forward';
 import { Action, Copy, row } from './controls';
 import { useAppearance } from './appearance';
 import { usePlayback } from './playback';
@@ -14,7 +18,7 @@ function Time({ value }: { value: number }) {
 }
 
 function Control({ icon: Icon, label, onPress, primary, disabled }: {
-  icon: LucideIcon; label: string; onPress: () => void; primary?: boolean; disabled?: boolean;
+  icon: typeof Play; label: string; onPress: () => void; primary?: boolean; disabled?: boolean;
 }) {
   const theme = useAppearance();
   const color = primary ? theme.background : theme.text;
