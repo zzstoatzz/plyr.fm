@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { plural } from '$lib/player.svelte';
 	import { api, type ListSummary } from '$lib/api';
 	import Artwork from '$lib/ui/Artwork.svelte';
 	import ScreenHeader from '$lib/ui/ScreenHeader.svelte';
@@ -32,7 +33,7 @@
 			<span class="grow">
 				<span class="ellipsis" style="display:block;font-weight:600">{list.metadata.name ?? 'untitled'}</span>
 				<span class="muted small ellipsis" style="display:block">
-					{list.owner.profile?.display_name || list.owner.profile?.handle || list.owner.did} · {list.metrics.member_count} tracks
+					{list.owner.profile?.display_name || list.owner.profile?.handle || list.owner.did} · {plural(list.metrics.member_count, 'track')}
 				</span>
 			</span>
 		</a>

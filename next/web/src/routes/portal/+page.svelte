@@ -4,7 +4,7 @@
 	import { api, type ListSummary, type Track } from '$lib/api';
 	import { auth } from '$lib/auth.svelte';
 	import { deleteTrack, editTrack, myProfile, saveProfile, type ProfileRecord } from '$lib/pds';
-	import { formatDuration } from '$lib/player.svelte';
+	import { formatDuration, plural } from '$lib/player.svelte';
 	import ArtworkPicker from '$lib/ArtworkPicker.svelte';
 	import Artwork from '$lib/ui/Artwork.svelte';
 	import Icon from '$lib/ui/Icon.svelte';
@@ -141,7 +141,7 @@
 		</div>
 	</section>
 	<div class="stats small">
-		<span><strong>{tracks?.length ?? '–'}</strong> tracks</span>
+		<span><strong>{tracks?.length ?? '–'}</strong> {tracks?.length === 1 ? 'track' : 'tracks'}</span>
 		<span><strong>{plays}</strong> plays</span>
 		<span><strong>{likes}</strong> likes</span>
 	</div>
@@ -182,7 +182,7 @@
 					<Artwork seed={a.metadata.name ?? a.id} size={44} />
 					<span class="grow">
 						<span class="ellipsis" style="display:block;font-weight:600">{a.metadata.name ?? 'untitled'}</span>
-						<span class="muted small">{a.metrics.member_count} tracks</span>
+						<span class="muted small">{plural(a.metrics.member_count, 'track')}</span>
 					</span>
 					<span class="chev"><Icon name="chevron" size={18} /></span>
 				</a>
@@ -197,7 +197,7 @@
 				<Artwork seed={p.metadata.name ?? p.id} size={44} />
 				<span class="grow">
 					<span class="ellipsis" style="display:block;font-weight:600">{p.metadata.name ?? 'untitled'}</span>
-					<span class="muted small">{p.metrics.member_count} tracks</span>
+					<span class="muted small">{plural(p.metrics.member_count, 'track')}</span>
 				</span>
 				<span class="chev"><Icon name="chevron" size={18} /></span>
 			</a>

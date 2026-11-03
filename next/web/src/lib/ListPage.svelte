@@ -4,7 +4,7 @@
 	import { auth } from './auth.svelte';
 	import { share } from './menus.svelte';
 	import { deletePlaylist, removeFromPlaylist, renamePlaylist } from './pds';
-	import { player } from './player.svelte';
+	import { player, plural } from './player.svelte';
 	import TrackRow from './TrackRow.svelte';
 	import Artwork from './ui/Artwork.svelte';
 	import Icon from './ui/Icon.svelte';
@@ -72,7 +72,7 @@
 				{list.owner.profile?.display_name || list.owner.profile?.handle || list.owner.did}
 			</a>
 			<p class="muted small">
-				{list.metrics.member_count} tracks{#if minutes}{' · '}{minutes} min{/if}
+				{plural(list.metrics.member_count, 'track')}{#if minutes}{' · '}{minutes} min{/if}
 				{#if list.metrics.available_count < list.metrics.member_count}{' · '}{list.metrics.member_count - list.metrics.available_count} unavailable{/if}
 			</p>
 		</div>

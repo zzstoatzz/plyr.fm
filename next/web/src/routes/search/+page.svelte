@@ -16,8 +16,10 @@
 	$effect(() => {
 		const term = q.trim();
 		clearTimeout(timer);
-		if (!term) {
+		if (term.length < 2) {
+			// the API wants at least two characters
 			hits = [];
+			error = null;
 			return;
 		}
 		timer = setTimeout(async () => {
@@ -53,7 +55,7 @@
 	</label>
 </div>
 
-{#if error}<p class="error pad">{error}</p>{/if}
+{#if error}<p class="empty">search isn't working right now. try again in a moment.</p>{/if}
 {#each groups as g (g.type)}
 	<h2 class="section">{g.type}s</h2>
 	<ul class="plain">
@@ -71,7 +73,9 @@
 		{/each}
 	</ul>
 {:else}
-	{#if q.trim() && !loading && !error}
+	{#if q.trim().length === 1}
+		<p class="empty">keep typing…</p>
+	{:else if q.trim() && !loading && !error}
 		<p class="empty">nothing found for "{q.trim()}".</p>
 	{:else if !q.trim()}
 		<p class="empty">find tracks, artists, albums and playlists.</p>

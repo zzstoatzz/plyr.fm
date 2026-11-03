@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { plural } from './player.svelte';
 	// sheet: add menus.addTo to one of your playlists, or a new one.
 	import { api, type ListSummary } from './api';
 	import { auth } from './auth.svelte';
@@ -62,7 +63,7 @@
 						<Artwork seed={list.metadata.name ?? list.id} size={40} />
 						<span class="grow">
 							<span class="ellipsis" style="display:block">{list.metadata.name ?? 'untitled'}</span>
-							<span class="muted small">{list.metrics.member_count} tracks</span>
+							<span class="muted small">{plural(list.metrics.member_count, 'track')}</span>
 						</span>
 						<Icon name="plus" size={18} />
 					</button>
