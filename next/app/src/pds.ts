@@ -182,13 +182,13 @@ export function createPds(auth: Pick<Auth, 'did' | 'rpc'>) {
 		return rkey;
 	}
 
-	async function readList(uri: string): Promise<{ value: ListRecord; cid: string }> {
+	async function readList(uri: string, kind: 'album' | 'playlist' = 'playlist'): Promise<{ value: ListRecord; cid: string }> {
 		const { rpc, did } = session();
 		const res = await ok(
 			rpc.get('com.atproto.repo.getRecord', { params: { repo: did, collection: LIST(), rkey: ownedRkey(uri, did, LIST()) } })
 		);
 		const value = res.value as unknown as ListRecord;
-		if (res.uri !== uri || !res.cid || value.listType !== 'playlist') throw new Error('not an editable playlist');
+		if (res.uri !== uri || !res.cid || value.listType !== kind) throw new Error('not an editable collection');
 		return { value, cid: res.cid };
 	}
 
@@ -238,8 +238,8 @@ export function createPds(auth: Pick<Auth, 'did' | 'rpc'>) {
 		return writeList(playlistUri, value, cid);
 	}
 
-	async function renamePlaylist(playlistUri: string, name: string): Promise<AwaitStatus> {
-		const { value, cid } = await readList(playlistUri);
+	async function renameCollection(playlistUri: string, name: string, kind: 'album' | 'playlist'): Promise<AwaitStatus> {
+		const { value, cid } = await readList(playlistUri, kind);
 		value.name = name.trim().slice(0, 64);
 		return writeList(playlistUri, value, cid);
 	}
@@ -402,5 +402,5 @@ export function createPds(auth: Pick<Auth, 'did' | 'rpc'>) {
 		);
 		return await settle(uri);
 	}
-	return { myLikes, like, unlike, createPlaylist, addToPlaylist, removeFromPlaylist, renamePlaylist, deletePlaylist, uploadTrack, myProfile, saveProfile, editTrack, deleteTrack };
+	return { myLikes, like, unlike, createPlaylist, addToPlaylist, removeFromPlaylist, renameCollection, deletePlaylist, uploadTrack, myProfile, saveProfile, editTrack, deleteTrack };
 }

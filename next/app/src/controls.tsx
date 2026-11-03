@@ -3,15 +3,15 @@ import { Link, type Href } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, type TextInputProps, View } from 'react-native';
 import { useAppearance } from './appearance';
 
-export function Action({ label, onPress, href, disabled, selected }: {
-  label: string; onPress?: () => void; href?: Href; disabled?: boolean; selected?: boolean;
+export function Action({ label, onPress, href, disabled, selected, primary }: {
+  label: string; onPress?: () => void; href?: Href; disabled?: boolean; selected?: boolean; primary?: boolean;
 }) {
   const theme = useAppearance();
   const control = <Pressable accessibilityRole={href ? 'link' : 'button'} accessibilityState={{ disabled, selected }}
     disabled={disabled} onPress={onPress}
-    style={{ ...styles.button, backgroundColor: theme.surface, opacity: disabled ? 0.5 : 1,
+    style={{ ...styles.button, backgroundColor: primary ? theme.text : theme.surface, opacity: disabled ? 0.5 : 1,
       borderColor: selected ? theme.accent : 'transparent' }}>
-    <Text style={{ color: theme.text, fontFamily: theme.fontFamily, fontSize: 14 * theme.scale }}>{label}</Text>
+    <Text style={{ color: primary ? theme.background : theme.text, fontFamily: theme.fontFamily, fontSize: 14 * theme.scale }}>{label}</Text>
   </Pressable>;
   return href ? <Link href={href} asChild>{control}</Link> : control;
 }
@@ -41,6 +41,6 @@ export function Field({ label, ...props }: TextInputProps & { label: string }) {
 export const row = { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8 } as const;
 const styles = StyleSheet.create({
   page: { width: '100%', maxWidth: 720, alignSelf: 'center', gap: 16, padding: 20, paddingBottom: 32 },
-  button: { minHeight: 44, justifyContent: 'center', alignItems: 'center', borderRadius: 8, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 6 },
+  button: { minHeight: 44, justifyContent: 'center', alignItems: 'center', borderRadius: 24, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 6 },
   input: { minHeight: 48, padding: 12, borderRadius: 8 }
 });

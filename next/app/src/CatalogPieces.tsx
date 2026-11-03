@@ -1,6 +1,7 @@
 import { Link, type Href } from 'expo-router';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Music2, Play as PlayIcon, UserRound } from 'lucide-react-native';
 import type { ListSummary, Page, Track } from './api';
 import { useAppearance } from './appearance';
 
@@ -97,17 +98,19 @@ export function Button({ label, onPress }: { label: string; onPress: () => void 
 export function Cover({ uri, size = 48, round = false }: { uri?: string | null; size?: number; round?: boolean }) {
   const colors = useColors();
   const style = { width: size, height: size, borderRadius: round ? size / 2 : 9, backgroundColor: colors.surface };
-  return uri && /^https?:\/\//i.test(uri) ? <Image accessibilityIgnoresInvertColors source={{ uri }} style={style} /> : <View style={style} />;
+  return uri && /^https?:\/\//i.test(uri) ? <Image accessibilityIgnoresInvertColors source={{ uri }} style={style} /> : <View style={[style, { alignItems: 'center', justifyContent: 'center' }]}>
+    {round ? <UserRound size={size * 0.38} color={colors.muted} /> : <Music2 size={size * 0.32} color={colors.muted} />}
+  </View>;
 }
 
 export function Row({
-  title, subtitle, image, href, action, round = false,
+  title, subtitle, image, href, action, round = false, onNavigate,
 }: {
-  title: string; subtitle?: string | null; image?: string | null; href: Href; action?: ReactNode; round?: boolean;
+  title: string; subtitle?: string | null; image?: string | null; href: Href; action?: ReactNode; round?: boolean; onNavigate?: () => void;
 }) {
   const colors = useColors();
   return <View style={[styles.row, { borderColor: colors.surface }]}>
-    <Link href={href} asChild>
+    <Link href={href} asChild onPress={onNavigate}>
       <Pressable accessibilityRole="link" style={styles.rowLink}>
         <Cover uri={image} round={round} />
         <View style={styles.rowText}>
@@ -131,8 +134,16 @@ export function TrackRows({ tracks, onPlay }: { tracks: Track[]; onPlay: Play })
     title={track.metadata.title}
     subtitle={artistName(track)}
     image={track.media.artwork?.url}
-    action={<Button label="Play" onPress={() => onPlay(track, tracks)} />}
+    action={<RowPlay onPress={() => onPlay(track, tracks)} />}
   />);
+}
+
+function RowPlay({ onPress }: { onPress: () => void }) {
+  const colors = useColors();
+  return <Pressable accessibilityRole="button" accessibilityLabel="Play" onPress={onPress}
+    style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}>
+    <PlayIcon size={20} color={colors.text} fill={colors.text} />
+  </Pressable>;
 }
 
 export function ListRows({ lists }: { lists: ListSummary[] }) {

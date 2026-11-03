@@ -145,7 +145,14 @@ async function get<T>(path: string, params?: Record<string, string | number | un
 	return res.json() as Promise<T>;
 }
 
+interface TrackLike {
+	record: { uri: string };
+	actor: { did: string; profile?: { handle?: string; display_name?: string; avatar_url?: string | null } | null };
+}
+
 export const api = {
+	trackLikes: (id: string, cursor?: string) =>
+		get<Page<TrackLike>>(`/v1/tracks/${encodeURIComponent(id)}/likes`, { limit: 30, cursor }),
 	tracks: (p: { limit?: number; cursor?: string; artist_did?: string } = {}) => get<Page<Track>>('/v1/tracks', p),
 	track: (id: string) => get<Track>(`/v1/tracks/${encodeURIComponent(id)}`),
 	playback: (id: string) => get<Playback>(`/v1/tracks/${encodeURIComponent(id)}/playback`),

@@ -3,5 +3,12 @@
   "compilerOptions": {
     "strict": true,
     "allowImportingTsExtensions": true
-  }
+  },
+  "include": [
+    "app/**/*",
+    "src/**/*",
+    "scripts/**/*.mts",
+    "index.js",
+    "metro.config.js"
+  ]
 }
