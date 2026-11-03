@@ -4,7 +4,7 @@ mod backend
 mod transcoder 'services/transcoder'
 mod moderation 'services/moderation'
 mod docs 'docs/site'
-mod zig 'backend-zig'
+mod zig 'next/backend'
 
 
 # show available commands

@@ -2,7 +2,7 @@
 Unicode property data (UAX #29 Grapheme_Cluster_Break, Extended_Pictographic,
 and Indic_Conjunct_Break).
 
-    uv run --with regex python backend-zig/scripts/gen_grapheme_tables.py
+    uv run --with regex python next/backend/scripts/gen_grapheme_tables.py
 """
 
 from __future__ import annotations

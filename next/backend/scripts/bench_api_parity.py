@@ -12,9 +12,9 @@ from urllib.parse import urlsplit
 
 from bench_http import HttpTarget, benchmark_process
 
-REPOSITORY = Path(__file__).resolve().parents[2]
+REPOSITORY = Path(__file__).resolve().parents[3]
 BACKEND = REPOSITORY / "backend"
-ZIG_BACKEND = REPOSITORY / "backend-zig"
+ZIG_BACKEND = REPOSITORY / "next" / "backend"
 TEST_ENCRYPTION_KEY = "hnSkDmgbbuK0rt7Ab3eJHAktb18gmebsdwKdTmq9mes="
 
 
