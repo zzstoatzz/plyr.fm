@@ -1,6 +1,7 @@
 //! Strict percent decoding for one already-isolated HTTP path segment.
 
 const std = @import("std");
+const query = @import("query.zig");
 
 pub const Error = error{ InvalidPathSegment, OutOfMemory };
 
@@ -14,7 +15,7 @@ pub fn decode(allocator: std.mem.Allocator, encoded: []const u8) Error![]const u
     while (read < encoded.len) {
         const byte = if (encoded[read] == '%') blk: {
             if (read + 2 >= encoded.len) return error.InvalidPathSegment;
-            const value = std.fmt.parseInt(u8, encoded[read + 1 .. read + 3], 16) catch
+            const value = query.hexByte(encoded[read + 1 .. read + 3]) orelse
                 return error.InvalidPathSegment;
             read += 3;
             break :blk value;
@@ -48,4 +49,6 @@ test "path segment decoding is strict and does not use form semantics" {
     try std.testing.expectError(error.InvalidPathSegment, decode(allocator, "did%2Fplc"));
     try std.testing.expectError(error.InvalidPathSegment, decode(allocator, "did%5cplc"));
     try std.testing.expectError(error.InvalidPathSegment, decode(allocator, "did%00plc"));
+    try std.testing.expectError(error.InvalidPathSegment, decode(allocator, "did%+3plc"));
+    try std.testing.expectError(error.InvalidPathSegment, decode(allocator, "did%-0plc"));
 }

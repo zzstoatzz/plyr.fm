@@ -50,7 +50,7 @@ pub fn decodeComponent(allocator: std.mem.Allocator, encoded: []const u8) ![]con
     while (read < encoded.len) {
         if (encoded[read] == '%') {
             if (read + 2 >= encoded.len) return error.InvalidQuery;
-            decoded[written] = std.fmt.parseInt(u8, encoded[read + 1 .. read + 3], 16) catch
+            decoded[written] = hexByte(encoded[read + 1 .. read + 3]) orelse
                 return error.InvalidQuery;
             read += 3;
         } else {
@@ -60,6 +60,13 @@ pub fn decodeComponent(allocator: std.mem.Allocator, encoded: []const u8) ![]con
         written += 1;
     }
     return decoded[0..written];
+}
+
+/// Two hex digits, nothing else: `std.fmt.parseInt` would also take a sign.
+pub fn hexByte(digits: []const u8) ?u8 {
+    const high = std.fmt.charToDigit(digits[0], 16) catch return null;
+    const low = std.fmt.charToDigit(digits[1], 16) catch return null;
+    return high * 16 + low;
 }
 
 test "query iterator decodes names and values without accepting malformed pairs" {
@@ -78,4 +85,16 @@ test "query iterator decodes names and values without accepting malformed pairs"
     try std.testing.expectError(error.InvalidQuery, trailing.next());
     var invalid_escape = Iterator.init(arena.allocator(), "/v1/things?a=%3X");
     try std.testing.expectError(error.InvalidQuery, invalid_escape.next());
+}
+
+test "percent escapes take exactly two hex digits" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    try std.testing.expectEqualStrings("\x0f", try decodeComponent(allocator, "%0F"));
+    try std.testing.expectEqualStrings("\xab", try decodeComponent(allocator, "%aB"));
+    try std.testing.expectError(error.InvalidQuery, decodeComponent(allocator, "%+0"));
+    try std.testing.expectError(error.InvalidQuery, decodeComponent(allocator, "%+f"));
+    try std.testing.expectError(error.InvalidQuery, decodeComponent(allocator, "%-0"));
 }
