@@ -34,7 +34,9 @@ export interface Playback {
 	track_id: string;
 	record: { uri: string; cid: string };
 	availability: {
-		status: 'available' | 'unavailable';
+		status: 'available' | 'unavailable' | 'gated';
+		/** gated audio: read it from the artist's space with a space credential */
+		space?: { uri: string; record: string; gate: 'supporters' | 'signed-in' | string } | null;
 		/** the audio blob the signed record points at, if any */
 		artifact?: { cid: string; media_type: string; byte_length: number | null } | null;
 		delivery?: { url: string; media_type: string } | null;

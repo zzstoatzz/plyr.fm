@@ -5,6 +5,7 @@ import { ok } from '@atcute/client';
 import { api, type AwaitStatus, type Track } from './api';
 import { auth } from './auth.svelte';
 import { NSID } from './config';
+import type { Gate } from './spaces';
 
 function session() {
 	if (!auth.rpc || !auth.did) throw new Error('sign in first');
@@ -181,12 +182,17 @@ export interface NewTrack {
 	album?: string;
 	description?: string;
 	duration?: number;
+	/** keep the audio in a gate space on your PDS instead of public */
+	gate?: Gate | null;
 }
 
 export async function uploadTrack(input: NewTrack): Promise<{ uri: string; status: AwaitStatus }> {
 	const { rpc, did } = session();
 	if (!input.file.type.startsWith('audio/')) throw new Error('pick an audio file');
 	if (input.file.size > MAX_AUDIO_BYTES) throw new Error('audio files are limited to 100 MB');
+	// create the gate space first so a PDS without spaces fails before the upload
+	const spaces = input.gate ? await import('./spaces') : null;
+	const space = spaces && input.gate ? await spaces.ensureSpace(input.gate) : null;
 	const uploaded = await ok(rpc.post('com.atproto.repo.uploadBlob', { input: input.file }));
 	const ext = input.file.name.includes('.') ? input.file.name.split('.').pop()!.toLowerCase() : '';
 	const record: Record<string, unknown> = {
@@ -194,17 +200,39 @@ export async function uploadTrack(input: NewTrack): Promise<{ uri: string; statu
 		title: input.title.trim(),
 		artist: input.artist.trim(),
 		fileType: (ext || input.file.type.split('/')[1] || 'audio').slice(0, 16),
-		audioBlob: uploaded.blob,
 		createdAt: new Date().toISOString()
 	};
 	if (input.album?.trim()) record.album = input.album.trim();
 	if (input.description?.trim()) record.description = input.description.trim();
 	if (input.duration && Number.isFinite(input.duration)) record.duration = Math.round(input.duration);
-	const res = await ok(
-		rpc.post('com.atproto.repo.createRecord', {
-			input: { repo: did, collection: NSID.track as Nsid, record }
-		})
-	);
+
+	let res: { uri: string; cid: string };
+	if (spaces && space) {
+		// the blob ref lives only in the space record; the public record is a
+		// stub pointing at it, so the PDS never serves the audio publicly.
+		const spaceRecord = await spaces.putSpaceTrack(space, { ...record, audioBlob: uploaded.blob });
+		const rkey = spaceRecord.split('/').pop()!;
+		res = await ok(
+			rpc.post('com.atproto.repo.putRecord', {
+				input: {
+					repo: did,
+					collection: NSID.track as Nsid,
+					rkey,
+					record: {
+						...record,
+						audioSpace: spaceRecord,
+						...(input.gate === 'supporters' ? { supportGate: { type: 'any' } } : {})
+					}
+				}
+			})
+		);
+	} else {
+		res = await ok(
+			rpc.post('com.atproto.repo.createRecord', {
+				input: { repo: did, collection: NSID.track as Nsid, record: { ...record, audioBlob: uploaded.blob } }
+			})
+		);
+	}
 	return { uri: res.uri, status: (await api.awaitRecord(res.uri, res.cid)).status };
 }
 

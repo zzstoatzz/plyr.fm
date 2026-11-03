@@ -22,6 +22,15 @@
 		"@atcute/atproto": "^4.0.4",
 		"@atcute/client": "^5.1.2",
 		"@atcute/identity-resolver": "^2.0.3",
-		"@atcute/oauth-browser-client": "^5.1.0"
+		"@atcute/oauth-browser-client": "^5.1.0",
+		"@atproto/crypto": "0.0.0-spaces-alpha-20261029171913",
+		"@atproto/space": "0.0.0-spaces-alpha-20261029171913"
+	},
+	"overrides": {
+		"@atproto/car": "0.0.0-spaces-alpha-20261029171913",
+		"@atproto/crypto": "0.0.0-spaces-alpha-20261029171913",
+		"@atproto/lex-cbor": "0.0.0-spaces-alpha-20261029171913",
+		"@atproto/lex-data": "0.0.0-spaces-alpha-20261029171913",
+		"@atproto/syntax": "0.0.0-spaces-alpha-20261029171913"
 	}
 }

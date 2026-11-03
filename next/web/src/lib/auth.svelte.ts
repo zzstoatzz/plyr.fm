@@ -16,7 +16,8 @@ import {
 	finalizeAuthorization,
 	getSession
 } from '@atcute/oauth-browser-client';
-import { NSID, SCOPE_PARTS, SITE_URL, TYPEAHEAD_URL } from './config';
+import { BASE_SCOPE_PARTS, NSID, SCOPE_PARTS, SITE_URL, TYPEAHEAD_URL } from './config';
+import { pdsEndpoint, pdsSupportsSpaces } from './identity';
 
 const ACTIVE_KEY = 'plyr-next:active-did';
 
@@ -51,6 +52,8 @@ class Auth {
 	handle = $state<string | null>(null);
 	displayName = $state<string | null>(null);
 	avatar = $state<string | null>(null);
+	/** the session can use spaces (gated audio) */
+	spaces = $state(false);
 	ready = $state(false);
 	agent: OAuthUserAgent | null = null;
 	rpc: Client | null = null;
@@ -73,7 +76,7 @@ class Auth {
 		configure();
 		const url = await createAuthorizationUrl({
 			target: { type: 'account', identifier: identifier as `${string}.${string}` },
-			scope: SCOPE
+			scope: await scopeFor(identifier)
 		});
 		await new Promise((r) => setTimeout(r, 200));
 		location.assign(url);
@@ -96,6 +99,7 @@ class Auth {
 		}
 		localStorage.removeItem(ACTIVE_KEY);
 		this.did = this.handle = this.displayName = this.avatar = null;
+		this.spaces = false;
 		this.agent = this.rpc = null;
 	}
 
@@ -103,6 +107,7 @@ class Auth {
 		this.agent = new OAuthUserAgent(session);
 		this.rpc = new Client({ handler: this.agent });
 		this.did = session.info.sub;
+		this.spaces = session.token.scope.split(' ').some((s) => s.startsWith('space:'));
 		this.handle = this.displayName = this.avatar = null;
 		const did = session.info.sub;
 		const rpc = this.rpc;
@@ -121,6 +126,26 @@ class Auth {
 }
 
 export const auth = new Auth();
+
+/** ask for space scopes only where the PDS can grant them; others reject the whole request. */
+async function scopeFor(identifier: string): Promise<string> {
+	try {
+		const did = identifier.startsWith('did:') ? identifier : await resolveHandle(identifier);
+		if (did && (await pdsSupportsSpaces(await pdsEndpoint(did)))) return SCOPE_PARTS.join(' ');
+	} catch {
+		/* fall back to the base scope */
+	}
+	return BASE_SCOPE_PARTS.join(' ');
+}
+
+async function resolveHandle(handle: string): Promise<string | null> {
+	const res = await fetch(
+		`https://public.api.bsky.app/xrpc/com.atproto.identity.resolveHandle?handle=${encodeURIComponent(handle.replace(/^@/, ''))}`
+	);
+	if (!res.ok) return null;
+	const did = (await res.json())?.did;
+	return typeof did === 'string' ? did : null;
+}
 
 type ViewerProfile = { handle: string | null; displayName: string | null; avatar: string | null };
 
