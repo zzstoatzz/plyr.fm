@@ -14,7 +14,7 @@
 </script>
 
 {#if t}
-	<div class="mini" role="region" aria-label="player">
+	<div class="mini glass" role="region" aria-label="player">
 		<button class="open" onclick={() => (menus.nowPlaying = true)} aria-label="open now playing">
 			<Artwork src={t.media.artwork?.url} seed={t.metadata.title} size={40} />
 			<span class="meta">
@@ -29,7 +29,7 @@
 		<span class="progress" style:width="{pct}%" aria-hidden="true"></span>
 	</div>
 
-	<div class="bar" role="region" aria-label="player">
+	<div class="bar glass" role="region" aria-label="player">
 		<div class="left">
 			<button class="open" onclick={() => (menus.nowPlaying = true)} aria-label="open now playing">
 				<Artwork src={t.media.artwork?.url} seed={t.metadata.title} size={48} />
@@ -76,22 +76,20 @@
 <style>
 	.mini {
 		position: fixed;
-		left: var(--s-sm);
-		right: var(--s-sm);
-		bottom: calc(var(--tabbar) + env(safe-area-inset-bottom) + var(--s-sm));
+		left: 0;
+		right: 0;
+		/* sits flush on the tab bar: the two read as one docked surface */
+		bottom: calc(var(--tabbar) + env(safe-area-inset-bottom));
 		z-index: 19;
 		display: flex;
 		align-items: center;
 		gap: var(--s-xs);
 		height: var(--mini);
-		padding: var(--s-sm);
-		border-radius: var(--r-md);
-		background: color-mix(in srgb, var(--c-25) 92%, transparent);
-		backdrop-filter: blur(16px);
-		-webkit-backdrop-filter: blur(16px);
+		padding: var(--s-sm) var(--s-sm) var(--s-sm) var(--s-md);
+		border-radius: var(--r-lg) var(--r-lg) 0 0;
 		box-shadow:
-			0 0 0 1px var(--c-50),
-			0 8px 24px rgb(0 0 0 / 0.15);
+			inset 0 1px 0 var(--glass-edge),
+			0 -0.5rem 1.5rem rgb(0 0 0 / 0.08);
 		overflow: hidden;
 	}
 	.open {
@@ -122,7 +120,7 @@
 	.progress {
 		position: absolute;
 		left: 0;
-		bottom: 0;
+		top: 0;
 		height: 2px;
 		background: var(--c-1000);
 	}
@@ -140,13 +138,12 @@
 			bottom: 0;
 			z-index: 20;
 			display: grid;
-			grid-template-columns: 1fr minmax(320px, 1.4fr) 1fr;
+			grid-template-columns: 1fr minmax(20rem, 1.4fr) 1fr;
 			align-items: center;
 			gap: var(--s-lg);
-			height: 72px;
+			height: 4.5rem;
 			padding: 0 var(--s-lg);
-			background: var(--c-0);
-			border-top: 1px solid var(--c-50);
+			box-shadow: inset 0 1px 0 var(--glass-edge);
 		}
 		.left {
 			display: flex;
@@ -183,22 +180,22 @@
 		.vol {
 			-webkit-appearance: none;
 			appearance: none;
-			width: 96px;
-			height: 4px;
+			width: 6rem;
+			height: 0.25rem;
 			border-radius: var(--r-full);
 			background: linear-gradient(to right, var(--c-1000) var(--pct), var(--c-100) var(--pct));
 			cursor: pointer;
 		}
 		.vol::-webkit-slider-thumb {
 			-webkit-appearance: none;
-			width: 12px;
-			height: 12px;
+			width: 0.75rem;
+			height: 0.75rem;
 			border-radius: 50%;
 			background: var(--c-1000);
 		}
 		.vol::-moz-range-thumb {
-			width: 12px;
-			height: 12px;
+			width: 0.75rem;
+			height: 0.75rem;
 			border: 0;
 			border-radius: 50%;
 			background: var(--c-1000);

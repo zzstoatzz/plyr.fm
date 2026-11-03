@@ -13,7 +13,8 @@
 		failed = false;
 	});
 	const hue = $derived([...seed].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7) % 360);
-	const dim = $derived(typeof size === 'number' ? `${size}px` : size);
+	// numbers are px at the default text size; rem so the whole UI scales together
+	const dim = $derived(typeof size === 'number' ? `${size / 16}rem` : size);
 </script>
 
 <span class="art" style:width={dim} style:height={dim} style:border-radius={round ? '50%' : radius}>

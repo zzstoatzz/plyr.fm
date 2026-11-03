@@ -143,10 +143,15 @@
 		color: var(--c-700);
 		max-width: 100%;
 	}
-	.drop:hover,
 	.drop:focus-within {
 		border-color: var(--accent);
 		background: var(--c-25);
+	}
+	@media (hover: hover) {
+		.drop:hover {
+			border-color: var(--accent);
+			background: var(--c-25);
+		}
 	}
 	.drop.has {
 		border-style: solid;

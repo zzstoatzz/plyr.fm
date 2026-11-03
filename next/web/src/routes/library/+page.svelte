@@ -105,8 +105,8 @@
 	.new {
 		display: grid;
 		place-items: center;
-		width: 48px;
-		height: 48px;
+		width: 3rem;
+		height: 3rem;
 		border-radius: var(--r-sm);
 		background: var(--c-50);
 	}

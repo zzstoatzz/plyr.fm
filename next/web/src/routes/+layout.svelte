@@ -18,6 +18,10 @@
 		auth.restore();
 	});
 
+	$effect(() => {
+		document.body.classList.toggle('has-player', !!player.current);
+	});
+
 	function keys(e: KeyboardEvent) {
 		const el = e.target as HTMLElement;
 		if (el.closest('input, textarea, select, [contenteditable]') || e.metaKey || e.ctrlKey || e.altKey) return;
@@ -31,9 +35,11 @@
 
 <svelte:window onkeydown={keys} />
 
+<a class="skip" href="#main">skip to content</a>
+
 <div class="shell" class:playing={!!player.current}>
 	<Nav />
-	<main>{@render children()}</main>
+	<main id="main" tabindex="-1">{@render children()}</main>
 </div>
 
 <PlayerBar />
@@ -52,6 +58,7 @@
 		min-height: 100dvh;
 	}
 	main {
+		outline: none;
 		width: 100%;
 		max-width: var(--center);
 		min-width: 0;
@@ -73,7 +80,7 @@
 		color: var(--c-0);
 		font-size: var(--t-sm);
 		font-weight: 600;
-		box-shadow: 0 6px 20px rgb(0 0 0 / 0.2);
+		box-shadow: 0 0.375rem 1.25rem rgb(0 0 0 / 0.2);
 	}
 	@media (min-width: 800px) {
 		main {
@@ -82,14 +89,14 @@
 			padding-bottom: var(--s-4xl);
 		}
 		.playing main {
-			padding-bottom: calc(72px + var(--s-4xl));
+			padding-bottom: calc(4.5rem + var(--s-4xl));
 		}
 		.shell {
 			/* keep the column centered: a spacer as wide as the rail on the right */
 			padding-right: var(--rail);
 		}
 		.toast {
-			bottom: calc(72px + var(--s-xl));
+			bottom: calc(4.5rem + var(--s-xl));
 		}
 	}
 	@media (min-width: 800px) and (max-width: 1099px) {

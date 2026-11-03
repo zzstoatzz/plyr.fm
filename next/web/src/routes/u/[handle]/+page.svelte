@@ -179,7 +179,9 @@
 		color: var(--c-1000);
 		box-shadow: inset 0 -3px 0 var(--accent);
 	}
-	.tabs button:hover {
-		background: var(--c-25);
+	@media (hover: hover) {
+		.tabs button:hover {
+			background: var(--c-25);
+		}
 	}
 </style>

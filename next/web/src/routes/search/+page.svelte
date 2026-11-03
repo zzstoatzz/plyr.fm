@@ -96,7 +96,7 @@
 		display: flex;
 		align-items: center;
 		gap: var(--s-sm);
-		height: 40px;
+		height: 2.5rem;
 		padding: 0 var(--s-md);
 		border-radius: var(--r-full);
 		background: var(--c-50);
@@ -112,6 +112,6 @@
 		background: none;
 		outline: none;
 		color: var(--c-1000);
-		font-size: 16px;
+		font-size: 1rem;
 	}
 </style>

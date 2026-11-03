@@ -49,21 +49,23 @@
 		background: var(--c-1000);
 		color: var(--c-0);
 	}
-	.play:hover {
-		background: var(--c-900);
+	@media (hover: hover) {
+		.play:hover {
+			background: var(--c-900);
+		}
 	}
 	.mode {
 		position: relative;
 		color: var(--c-500);
 	}
 	.mode.on {
-		color: var(--accent);
+		color: var(--accent-text);
 	}
 	.one {
 		position: absolute;
-		top: 4px;
-		right: 4px;
-		font-size: 9px;
+		top: 0.25rem;
+		right: 0.25rem;
+		font-size: 0.5625rem;
 		font-weight: 800;
 	}
 </style>

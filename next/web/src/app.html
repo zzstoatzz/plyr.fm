@@ -10,6 +10,7 @@
 			try {
 				var p = JSON.parse(localStorage.getItem('plyr-next:prefs') || '{}');
 				if (p.theme === 'light' || p.theme === 'dark') document.documentElement.dataset.theme = p.theme;
+				if (typeof p.scale === 'number') document.documentElement.style.fontSize = p.scale * 100 + '%';
 			} catch (e) {}
 		</script>
 		%sveltekit.head%

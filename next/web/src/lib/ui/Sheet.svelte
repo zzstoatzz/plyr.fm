@@ -50,7 +50,7 @@
 	dialog {
 		padding: 0;
 		border: 0;
-		background: var(--c-0);
+		background: var(--raised);
 		color: var(--c-1000);
 		width: 100%;
 		max-width: 100%;
@@ -63,7 +63,16 @@
 		animation: up 0.18s ease-out;
 	}
 	dialog::backdrop {
-		background: rgb(0 0 0 / 0.45);
+		background: rgb(0 0 0 / 0.55);
+		backdrop-filter: blur(2px);
+		-webkit-backdrop-filter: blur(2px);
+	}
+	/* menus inside sheets: bigger, easier targets */
+	dialog :global(.row-item) {
+		min-height: 3.5rem;
+		font-size: var(--t-lg);
+		font-weight: 500;
+		gap: var(--s-lg);
 	}
 	dialog.full {
 		max-height: 100dvh;
@@ -79,8 +88,8 @@
 	}
 	.handle {
 		display: block;
-		width: 36px;
-		height: 4px;
+		width: 2.25rem;
+		height: 0.25rem;
 		margin: 0 auto var(--s-sm);
 		border-radius: var(--r-full);
 		background: var(--c-200);
@@ -97,9 +106,9 @@
 	@media (min-width: 500px) {
 		dialog:not(.full) {
 			margin: auto;
-			width: min(480px, calc(100% - 2 * var(--s-lg)));
+			width: min(30rem, calc(100% - 2 * var(--s-lg)));
 			border-radius: var(--r-lg);
-			box-shadow: 0 0 0 1px var(--c-100), 0 16px 48px rgb(0 0 0 / 0.3);
+			box-shadow: 0 0 0 1px var(--c-100), 0 1rem 3rem rgb(0 0 0 / 0.3);
 		}
 		dialog:not(.full) .handle {
 			display: none;
@@ -111,16 +120,16 @@
 	@media (min-width: 800px) {
 		dialog.full {
 			margin: auto;
-			width: min(560px, calc(100% - 2 * var(--s-lg)));
+			width: min(35rem, calc(100% - 2 * var(--s-lg)));
 			height: auto;
 			max-height: 90dvh;
 			border-radius: var(--r-lg);
-			box-shadow: 0 0 0 1px var(--c-100), 0 16px 48px rgb(0 0 0 / 0.3);
+			box-shadow: 0 0 0 1px var(--c-100), 0 1rem 3rem rgb(0 0 0 / 0.3);
 		}
 	}
 	@keyframes up {
 		from {
-			transform: translateY(24px);
+			transform: translateY(1.5rem);
 			opacity: 0;
 		}
 	}

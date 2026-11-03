@@ -264,8 +264,8 @@
 		padding: var(--s-xl) var(--s-lg) var(--s-md);
 	}
 	.avatar {
-		width: 72px;
-		height: 72px;
+		width: 4.5rem;
+		height: 4.5rem;
 		border-radius: 50%;
 		object-fit: cover;
 		background: var(--c-50);
