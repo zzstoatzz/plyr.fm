@@ -142,6 +142,13 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
     jump: (at) => { void load(queue, at); },
     enqueue: (track) => { if (current) setQueue((items) => [...items, track]); else play(track); },
     remove: (at) => { if (at > index) setQueue((items) => items.filter((_, position) => position !== at)); },
+    move: (from, to) => setQueue((items) => {
+      if (from <= index || to <= index || from >= items.length || to >= items.length || from === to) return items;
+      const reordered = items.slice();
+      const [track] = reordered.splice(from, 1);
+      reordered.splice(to, 0, track);
+      return reordered;
+    }),
     clear: () => setQueue((items) => items.slice(0, index + 1)),
     shuffle: () => setQueue((items) => {
       const shuffled = items.slice();
@@ -172,6 +179,7 @@ interface Playback {
   jump(index: number): void;
   enqueue(track: Track): void;
   remove(index: number): void;
+  move(from: number, to: number): void;
   clear(): void;
   shuffle(): void;
 }
