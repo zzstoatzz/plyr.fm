@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Loading from '$lib/ui/Loading.svelte';
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { auth } from '$lib/auth.svelte';
@@ -23,5 +24,5 @@
 	<p class="error">{error}</p>
 	<a href="/login">try again</a>
 {:else}
-	<p class="muted">signing you in…</p>
+	<Loading label="signing you in" />
 {/if}

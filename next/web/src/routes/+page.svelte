@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Loading from '$lib/ui/Loading.svelte';
 	import { api, type ChartEntry, type Track } from '$lib/api';
 	import TrackRow from '$lib/TrackRow.svelte';
 	import Icon from '$lib/ui/Icon.svelte';
@@ -52,7 +53,7 @@
 	{/each}
 </ol>
 {#if loading && !tracks.length}
-	<p class="empty">loading…</p>
+	<Loading />
 {:else if error && !tracks.length}
 	<div class="pad center"><button class="btn" onclick={() => ((error = null), more())}>retry</button></div>
 {/if}

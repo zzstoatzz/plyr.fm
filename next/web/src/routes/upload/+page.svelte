@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Loading from '$lib/ui/Loading.svelte';
 	import { trackIdFromUri } from '$lib/api';
 	import { auth } from '$lib/auth.svelte';
 	import { GATED_UPLOADS } from '$lib/config';
@@ -58,7 +59,7 @@
 <ScreenHeader title="upload" subtitle="audio is stored on your own PDS" />
 
 {#if !auth.ready}
-	<p class="empty">loading…</p>
+	<Loading />
 {:else if !auth.did}
 	<div class="empty">
 		<p>sign in to upload.</p>

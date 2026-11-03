@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Loading from '$lib/ui/Loading.svelte';
 	import { plural } from './player.svelte';
 	// sheet: add menus.addTo to one of your playlists, or a new one.
 	import { api, type ListSummary } from './api';
@@ -52,7 +53,7 @@
 		</form>
 		<div class="list">
 			{#if mine === null}
-				<p class="muted pad">loading…</p>
+				<Loading size="sm" inline />
 			{:else}
 				{#each mine as list (list.id)}
 					<button

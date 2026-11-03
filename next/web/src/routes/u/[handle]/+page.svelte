@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Loading from '$lib/ui/Loading.svelte';
 	import { page } from '$app/state';
 	import { api, type Artist, type ArtistMetrics, type ListSummary, type Track } from '$lib/api';
 	import { auth } from '$lib/auth.svelte';
@@ -114,14 +115,14 @@
 			{/each}
 		</div>
 	{:else if likes === null}
-		<p class="empty">loading…</p>
+		<Loading />
 	{:else}
 		<ol class="plain">
 			{#each likes as _, i (likes[i].id)}<TrackRow tracks={likes} index={i} />{:else}<p class="empty">no likes yet.</p>{/each}
 		</ol>
 	{/if}
 {:else}
-	<p class="empty">loading…</p>
+	<Loading />
 {/if}
 
 <style>
