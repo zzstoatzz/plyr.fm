@@ -49,14 +49,14 @@
     },
     .{
         .name = "like counts ignore availability changes",
-        .file = "migrations/0029_add_track_like_counts.sql",
+        .file = "migrations/0030_like_counts_statement_triggers.sql",
         .old = "AFTER INSERT OR DELETE OR UPDATE OF available ON plyr_index.account_availability",
         .new = "AFTER DELETE ON plyr_index.account_availability",
     },
     .{
         .name = "a retargeted like keeps counting its old subject",
-        .file = "migrations/0029_add_track_like_counts.sql",
-        .old = "IF TG_OP IN ('UPDATE', 'DELETE') AND OLD.subject_uri IS NOT NULL THEN",
-        .new = "IF TG_OP = 'DELETE' AND OLD.subject_uri IS NOT NULL THEN",
+        .file = "migrations/0030_like_counts_statement_triggers.sql",
+        .old = "FROM old_rows WHERE subject_uri IS NOT NULL\n              UNION",
+        .new = "FROM old_rows WHERE false\n              UNION",
     },
 }

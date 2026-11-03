@@ -1,4 +1,4 @@
-//! `track_like_counts` (migrations/0029) is kept by triggers. Random
+//! `track_like_counts` (migrations/0029, 0030) is kept by triggers. Random
 //! histories of the writes every writer makes (like upserts, retargets and
 //! tombstones from the projector, owner purges from the snapshot reconciler,
 //! availability changes from the account reconciler, truncation) must leave
@@ -13,7 +13,7 @@ const like_store = @import("../internal/projection/postgres_like_store.zig");
 const availability_store = @import("../internal/account/postgres_availability_store.zig");
 const like_counts = @import("../internal/projection/like_counts.zig");
 
-const Rule = enum { like, tombstone, purge_owner, set_available, forget_account, truncate };
+const Rule = enum { like, bulk_like, tombstone, purge_owner, set_available, forget_account, truncate };
 var tally: hegel.Tally(Rule) = .{};
 
 const owners = [_][]const u8{ "did:plc:a", "did:plc:b", "did:plc:c" };
@@ -58,7 +58,7 @@ fn reset(pool: *pg.Pool) !void {
 fn triggers(pool: *pg.Pool, case: *hegel.TestCase) !void {
     try reset(pool);
     tally.case();
-    var machine = try case.machine(Rule, &.{ 6, 2, 1, 3, 1, 1 }, 24);
+    var machine = try case.machine(Rule, &.{ 6, 2, 2, 1, 3, 1, 1 }, 24);
     defer machine.deinit();
     while (try machine.next()) |rule| {
         tally.step(rule);
@@ -77,6 +77,23 @@ fn triggers(pool: *pg.Pool, case: *hegel.TestCase) !void {
                     \\  subject_uri = EXCLUDED.subject_uri, subject_cid = EXCLUDED.subject_cid,
                     \\  record_created_at = EXCLUDED.record_created_at, deleted = false
                 , .{ owner, rkey, subjects[subject], cids[subject] });
+            },
+            .bulk_like => {
+                // one statement, every owner, liking or retargeting one rkey
+                const rkey = rkeys[try case.index(rkeys.len)];
+                const subject = try case.index(subjects.len);
+                case.note("everyone likes {s} as {s}", .{ subjects[subject], rkey });
+                _ = try pool.exec(
+                    \\INSERT INTO plyr_index.like_records (record_uri, record_cid, owner_did, collection, rkey,
+                    \\  subject_uri, subject_cid, record_created_at, deleted, commit_rev, indexed_at_us)
+                    \\SELECT 'at://' || owner || '/fm.plyr.dev.like/' || $1, 'bafylike', owner, 'fm.plyr.dev.like', $1,
+                    \\  $2, $3, '2026-01-01T00:00:00Z', false, '3jzfcijpj2z2a', 1
+                    \\FROM unnest($4::text[]) AS owner
+                    \\ON CONFLICT (record_uri) DO UPDATE SET record_cid = EXCLUDED.record_cid,
+                    \\  subject_uri = EXCLUDED.subject_uri, subject_cid = EXCLUDED.subject_cid,
+                    \\  record_created_at = EXCLUDED.record_created_at, deleted = false
+                , .{ rkey, subjects[subject], cids[subject], &owners });
+                case.event("a statement changes several likes");
             },
             .tombstone => {
                 const rkey = rkeys[try case.index(rkeys.len)];
@@ -134,6 +151,7 @@ fn divergence(pool: *pg.Pool) !bool {
         \\  GROUP BY 1, 2, 3
         \\), kept AS (
         \\  SELECT collection, subject_uri, subject_cid, like_count FROM plyr_index.track_like_counts
+        \\  WHERE like_count > 0
         \\)
         \\SELECT (SELECT count(*) FROM (SELECT * FROM recount EXCEPT SELECT * FROM kept) AS missing)
         \\     + (SELECT count(*) FROM (SELECT * FROM kept EXCEPT SELECT * FROM recount) AS extra)
