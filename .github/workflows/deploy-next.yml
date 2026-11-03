@@ -79,13 +79,42 @@ jobs:
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_ZIG_NEXT }}
 
-      # The reconciler reads the python tables and writes plyr_index, so it
+      - name: stage ingester credential
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_ZIG_NEXT }}
+          WORKER_DATABASE_URL: ${{ secrets.ZIG_NEXT_MIGRATOR_DATABASE_URL }}
+        run: flyctl secrets set --stage --app "$FLY_APP" WORKER_DATABASE_URL="$WORKER_DATABASE_URL" > /dev/null
+
+      - name: deploy image
+        working-directory: next/backend
+        run: >-
+          flyctl deploy
+          --config fly.canary.toml
+          --app "$FLY_APP"
+          --ha=false
+          --image "registry.fly.io/${FLY_APP}:${GITHUB_SHA}"
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_ZIG_NEXT }}
+
+      - name: smoke the deployed api
+        working-directory: next/backend
+        run: python3 scripts/canary_smoke.py "https://${FLY_APP}.fly.dev"
+
+      - name: ingester status
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_ZIG_NEXT }}
+        run: |
+          flyctl status --app "$FLY_APP"
+          sleep 45
+          flyctl logs --app "$FLY_APP" --no-tail | grep -i ingest | tail -30 || true
+
+      # The reconciler snapshots every fm.plyr repo the relay knows and writes plyr_index, so it
       # runs as the migrator (the branch owner). It is passed as
       # WORKER_DATABASE_URL because the app's DATABASE_URL secret (the api's
       # read-only role) is injected into every machine and wins over --env.
       # `machine run` returns once the machine starts, so wait for it to exit
       # and fail the job on a nonzero exit code instead of passing silently.
-      - name: reconcile staging-namespace catalog into next
+      - name: reconcile the fm.plyr catalog into next after deploy, so the live api serves while it fills
         if: inputs.reconcile_catalog
         run: |
           set -euo pipefail
@@ -133,31 +162,3 @@ jobs:
       # The ingester process group writes plyr_index as the branch owner. Its
       # credential is staged as WORKER_DATABASE_URL, which only non-api roles
       # read; the api keeps DATABASE_URL (read-only) and its DATABASE_ROLE pin.
-      - name: stage ingester credential
-        env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_ZIG_NEXT }}
-          WORKER_DATABASE_URL: ${{ secrets.ZIG_NEXT_MIGRATOR_DATABASE_URL }}
-        run: flyctl secrets set --stage --app "$FLY_APP" WORKER_DATABASE_URL="$WORKER_DATABASE_URL" > /dev/null
-
-      - name: deploy image
-        working-directory: next/backend
-        run: >-
-          flyctl deploy
-          --config fly.canary.toml
-          --app "$FLY_APP"
-          --ha=false
-          --image "registry.fly.io/${FLY_APP}:${GITHUB_SHA}"
-        env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_ZIG_NEXT }}
-
-      - name: smoke the deployed api
-        working-directory: next/backend
-        run: python3 scripts/canary_smoke.py "https://${FLY_APP}.fly.dev"
-
-      - name: ingester status
-        env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_ZIG_NEXT }}
-        run: |
-          flyctl status --app "$FLY_APP"
-          sleep 45
-          flyctl logs --app "$FLY_APP" --no-tail | grep -i ingest | tail -30 || true
