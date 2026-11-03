@@ -184,3 +184,7 @@ bench-snapshot:
 # Snapshot the Python surface that informs parity decisions.
 inventory *ARGS:
     cd ../../backend && RELAY_TEST_MODE=1 OAUTH_ENCRYPTION_KEY=hnSkDmgbbuK0rt7Ab3eJHAktb18gmebsdwKdTmq9mes= LOGFIRE_IGNORE_NO_CONFIG=1 uv run python ../next/backend/scripts/inventory_python_api.py "$@"
+
+# Reads public PDS proofs only; never opens a database or writes records.
+bench-collection DID:
+    PROOF_BENCH_DID={{ DID }} zig build bench-collection -Doptimize=ReleaseFast

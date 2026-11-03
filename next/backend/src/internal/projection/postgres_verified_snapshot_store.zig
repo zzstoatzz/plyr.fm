@@ -23,7 +23,7 @@ const verified = @import("verified_snapshot.zig");
 /// that used to reject valid records). A complete snapshot at the same
 /// revision as a head with an older version is then rebuilt instead of being
 /// treated as idempotent, so reconciliation repairs stale projections.
-pub const projection_version: i32 = 1;
+pub const projection_version: i32 = 2;
 
 const HeadDecision = union(enum) {
     done: verified.ApplyResult,

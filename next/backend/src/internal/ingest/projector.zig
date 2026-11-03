@@ -96,7 +96,6 @@ fn verifyFetchedImpl(
     if (fetched.proofs) |proofs| return record_proof_verifier.verifyProofs(
         allocator,
         proofs,
-        fetched.paths orelse return error.InvalidSnapshot,
         did,
         public_key,
         self.list_collection,
