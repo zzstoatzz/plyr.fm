@@ -16,7 +16,7 @@ import {
 	finalizeAuthorization,
 	getSession
 } from '@atcute/oauth-browser-client';
-import { BASE_SCOPE_PARTS, NSID, PREFERENCE_SPACE, SPACE, SCOPE_PARTS, SITE_URL, TYPEAHEAD_URL } from './config';
+import { BASE_SCOPE_PARTS, NSID, PREFERENCE_SPACE, PREFERENCE_SYNC, SPACE, SCOPE_PARTS, SITE_URL, TYPEAHEAD_URL } from './config';
 import { pdsEndpoint, pdsSupportsSpaces } from './identity';
 
 const ACTIVE_KEY = 'plyr-next:active-did';
@@ -110,7 +110,7 @@ class Auth {
 		this.did = session.info.sub;
 		const scopes = session.token.scope.split(' ');
 		this.spaces = scopes.some((s) => s.startsWith(`space:${SPACE.type}?`));
-		this.preferenceSpace = scopes.some((scope) => {
+		this.preferenceSpace = PREFERENCE_SYNC && scopes.some((scope) => {
 			const [type, query] = scope.split('?');
 			if (type !== `space:${PREFERENCE_SPACE.type}`) return false;
 			const grant = new URLSearchParams(query);

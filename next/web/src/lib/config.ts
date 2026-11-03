@@ -60,6 +60,8 @@ export const PREFERENCE_SPACE = {
 	collection: env.PUBLIC_PREFERENCE_COLLECTION || 'fm.plyr.stg.preference'
 } as const;
 
+export const PREFERENCE_SYNC = env.PUBLIC_PREFERENCE_SYNC === 'true';
+
 export const PREFERENCE_SCOPE = `space:${PREFERENCE_SPACE.type}?authority=self&skey=self&collection=${PREFERENCE_SPACE.collection}&action=read_self&action=create&action=update&manage=create`;
 
 const AUDIO_SPACE_SCOPE_PARTS = !GATED_UPLOADS ? [] : [
@@ -70,6 +72,6 @@ const AUDIO_SPACE_SCOPE_PARTS = !GATED_UPLOADS ? [] : [
 /** everything this client may ask for (registered in its metadata). */
 export const SCOPE_PARTS = [
 	...BASE_SCOPE_PARTS,
-	...(env.PUBLIC_PREFERENCE_SYNC === 'true' ? [PREFERENCE_SCOPE] : []),
+	...(PREFERENCE_SYNC ? [PREFERENCE_SCOPE] : []),
 	...AUDIO_SPACE_SCOPE_PARTS
 ];
