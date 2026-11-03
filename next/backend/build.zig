@@ -76,6 +76,8 @@ pub fn build(b: *std.Build) void {
                     .{ .name = "zat", .module = root_module.import_table.get("zat").? },
                 },
             });
+            // libhegel is a rust staticlib: off darwin, _Unwind_* come from zig's libunwind
+            if (!target.result.os.tag.isDarwin()) fuzz_module.link_libcpp = true;
             const fuzz = b.addExecutable(.{ .name = "fuzz", .root_module = fuzz_module });
             const run_fuzz = b.addRunArtifact(fuzz);
             run_fuzz.has_side_effects = true;
