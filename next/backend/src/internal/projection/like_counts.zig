@@ -1,15 +1,21 @@
-//! Runs migrations/0029 (maintained like counts) in a test database, so the
-//! tests and the property harness exercise the migration itself.
+//! Runs migrations/0029 and 0030 (maintained like counts) in a test
+//! database, in deploy order, so the tests and the property harness exercise
+//! the migrations themselves.
 
 const std = @import("std");
 const pg = @import("pg");
 
-const migration = @embedFile("migration_0029_like_counts");
+const migrations = [_][]const u8{
+    @embedFile("migration_0029_like_counts"),
+    @embedFile("migration_0030_like_counts"),
+};
 
 /// Needs `like_records` and `account_availability` to exist.
 pub fn applyTestMigration(pool: *pg.Pool) !void {
-    var statements = Statements{ .rest = migration };
-    while (statements.next()) |statement| _ = try pool.exec(statement, .{});
+    for (migrations) |migration| {
+        var statements = Statements{ .rest = migration };
+        while (statements.next()) |statement| _ = try pool.exec(statement, .{});
+    }
 }
 
 /// Splits on `;` at line ends outside `$$` bodies, after dropping comment lines.
@@ -37,8 +43,8 @@ const Statements = struct {
     }
 };
 
-test "the like-count migration splits into whole statements" {
-    var statements = Statements{ .rest = migration };
+test "the like-count migrations split into whole statements" {
+    var statements = Statements{ .rest = migrations[0] };
     var count: usize = 0;
     var functions: usize = 0;
     while (statements.next()) |statement| {
@@ -50,4 +56,19 @@ test "the like-count migration splits into whole statements" {
     }
     try std.testing.expectEqual(@as(usize, 4), functions);
     try std.testing.expectEqual(@as(usize, 11), count);
+}
+
+test "the statement-trigger migration splits into whole statements" {
+    var statements = Statements{ .rest = migrations[1] };
+    var count: usize = 0;
+    var functions: usize = 0;
+    while (statements.next()) |statement| {
+        count += 1;
+        if (std.mem.startsWith(u8, statement, "CREATE FUNCTION")) {
+            functions += 1;
+            try std.testing.expect(std.mem.endsWith(u8, statement, "$$"));
+        }
+    }
+    try std.testing.expectEqual(@as(usize, 3), functions);
+    try std.testing.expectEqual(@as(usize, 14), count);
 }

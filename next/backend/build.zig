@@ -24,6 +24,9 @@ pub fn build(b: *std.Build) void {
     root_module.addAnonymousImport("migration_0029_like_counts", .{
         .root_source_file = b.path("migrations/0029_add_track_like_counts.sql"),
     });
+    root_module.addAnonymousImport("migration_0030_like_counts", .{
+        .root_source_file = b.path("migrations/0030_like_counts_statement_triggers.sql"),
+    });
     root_module.addImport("zat", b.dependency("zat", .{
         .target = target,
         .optimize = optimize,
@@ -79,6 +82,7 @@ pub fn build(b: *std.Build) void {
                     .{ .name = "zat", .module = root_module.import_table.get("zat").? },
                     .{ .name = "pg", .module = root_module.import_table.get("pg").? },
                     .{ .name = "migration_0029_like_counts", .module = root_module.import_table.get("migration_0029_like_counts").? },
+                    .{ .name = "migration_0030_like_counts", .module = root_module.import_table.get("migration_0030_like_counts").? },
                 },
             });
             // libhegel is a rust staticlib: off darwin, _Unwind_* come from zig's libunwind

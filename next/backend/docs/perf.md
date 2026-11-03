@@ -26,18 +26,23 @@ Every change returned identical rows or bodies. Notes:
   such track, like or playlist made every list over its table fail, the
   period chart included. 0028's trigger stores NULL for a datetime Postgres
   cannot represent, and the queries skip those rows.
-- **Maintained counts are exact under any writer.** 0029's triggers on
-  `like_records` and `account_availability` recompute one subject at a time
-  under an advisory lock. A hegel property (`FUZZ_ONLY=like_counts`, needs
-  `PLYR_ZIG_TEST_DATABASE_URL`) drives random like upserts, retargets,
-  tombstones, owner purges, availability changes and truncation through the
-  migration itself and compares the table with a recount after every step.
-- **The count trigger costs writes.** A like insert or delete runs a recount
-  of its subject: about 1 ms per row op locally, so like writes run at about
-  a third of their former rate (930 vs 3,000 row ops/s). At next's ingest rate
-  that is nothing. A full reconcile pays a few seconds. Statement-level
-  triggers with transition tables would recount each subject once per
-  statement if that ever matters.
+- **Maintained counts are exact under any writer.** Statement-level
+  triggers on `like_records` (0030) and a row trigger on
+  `account_availability` recount the subjects a statement touched, after
+  locking their count rows in key order. 0029 first did this per row under
+  transaction-scoped advisory locks, which fill the shared lock table: one
+  transaction touching more than about 6,400 distinct subjects failed with
+  "out of shared memory", as a 100k-like bulk load did locally. With 0030 that
+  load succeeds and matches a recount. A hegel property
+  (`FUZZ_ONLY=like_counts`, needs `PLYR_ZIG_TEST_DATABASE_URL`) drives
+  random like upserts, retargets, multi-row statements, tombstones, owner
+  purges, availability changes and truncation through both migrations and
+  compares the table with a recount after every step.
+- **The count triggers cost writes.** Each statement recounts its distinct
+  subjects. Batches of 200 like inserts and deletes over distinct subjects
+  ran at about a third of their rate without the triggers (70 vs 223 batches
+  in 15 s locally). At next's ingest rate that is nothing; a full reconcile
+  pays a few seconds.
 
 ## ingest and the api
 
