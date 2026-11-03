@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { page } from '$app/state';
 	import { auth } from '$lib/auth.svelte';
 	import ScreenHeader from '$lib/ui/ScreenHeader.svelte';
 
@@ -11,7 +12,7 @@
 		busy = true;
 		error = null;
 		try {
-			await auth.login(handle.trim().replace(/^@/, ''));
+			await auth.login(handle.trim().replace(/^@/, ''), page.url.searchParams.has('device-only'));
 		} catch (err) {
 			error = (err as Error).message;
 			busy = false;
@@ -26,6 +27,9 @@
 		your browser talks to your PDS directly: likes, playlists and uploads are written to your repo, and plyr.fm just
 		reads them back.
 	</p>
+	{#if page.url.searchParams.has('device-only')}
+	<p class="muted small">preferences will stay on this device for this sign-in.</p>
+	{/if}
 	<form onsubmit={submit}>
 		<label class="field">
 			<span>handle</span>

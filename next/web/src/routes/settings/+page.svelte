@@ -7,7 +7,7 @@
 	const THEMES: Theme[] = ['system', 'light', 'dark'];
 </script>
 
-<ScreenHeader title="settings" subtitle="saved on this device" />
+<ScreenHeader title="settings" subtitle="appearance and playback" />
 
 <h2 class="section">appearance</h2>
 <div class="group">
@@ -79,6 +79,16 @@
 	</label>
 </div>
 
+{#if auth.did}
+	<p class="sync-status muted small" role="status">
+		{#if prefs.status === 'syncing'}syncing preferences…
+		{:else if prefs.status === 'synced'}preferences synced to your private space
+		{:else if prefs.status === 'error'}preferences kept on this device · <button onclick={() => prefs.sync()}>retry sync</button>
+		{:else}preferences kept on this device · <a href="/login">sign in again to enable sync</a>
+		{/if}
+	</p>
+{/if}
+
 <h2 class="section">account</h2>
 <div class="list">
 	{#if auth.did}
@@ -130,6 +140,7 @@
 </div>
 
 <style>
+	.sync-status { padding-inline: var(--s-lg); }
 	.group {
 		display: flex;
 		flex-direction: column;

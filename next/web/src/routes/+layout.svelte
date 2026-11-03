@@ -1,8 +1,9 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, untrack } from 'svelte';
 	import { auth } from '$lib/auth.svelte';
 	import { player } from '$lib/player.svelte';
 	import { prefs } from '$lib/prefs.svelte';
+	import { personalPreferenceSpace } from '$lib/preference-space';
 	import AddToPlaylist from '$lib/AddToPlaylist.svelte';
 	import Nav from '$lib/Nav.svelte';
 	import NowPlaying from '$lib/NowPlaying.svelte';
@@ -22,6 +23,15 @@
 		document.body.classList.toggle('has-player', !!player.current);
 	});
 
+	$effect(() => {
+		const did = auth.did;
+		const agent = auth.agent;
+		const allowed = auth.preferenceSpace;
+		const controller = new AbortController();
+		untrack(() => prefs.connect(did, did && agent && allowed ? personalPreferenceSpace(agent, did, controller.signal) : null));
+		return () => controller.abort();
+	});
+
 	function keys(e: KeyboardEvent) {
 		const el = e.target as HTMLElement;
 		if (el.closest('input, textarea, select, [contenteditable]') || e.metaKey || e.ctrlKey || e.altKey) return;
@@ -33,7 +43,7 @@
 	}
 </script>
 
-<svelte:window onkeydown={keys} />
+<svelte:window onkeydown={keys} ononline={() => prefs.sync()} onfocus={() => prefs.sync()} />
 
 <a class="skip" href="#main">skip to content</a>
 

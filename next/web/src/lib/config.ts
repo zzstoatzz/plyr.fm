@@ -55,10 +55,21 @@ export const BASE_SCOPE_PARTS = [
  */
 export const GATED_UPLOADS = NSID_PREFIX !== 'fm.plyr';
 
-export const SPACE_SCOPE_PARTS = !GATED_UPLOADS ? [] : [
+export const PREFERENCE_SPACE = {
+	type: env.PUBLIC_PREFERENCE_SPACE_TYPE || 'fm.plyr.stg.preferences',
+	collection: env.PUBLIC_PREFERENCE_COLLECTION || 'fm.plyr.stg.preference'
+} as const;
+
+export const PREFERENCE_SCOPE = `space:${PREFERENCE_SPACE.type}?authority=self&skey=self&collection=${PREFERENCE_SPACE.collection}&action=read_self&action=create&action=update&manage=create`;
+
+const AUDIO_SPACE_SCOPE_PARTS = !GATED_UPLOADS ? [] : [
 	`space:${SPACE.type}?authority=self&collection=${NSID.track}&action=read&action=create&action=update&action=delete&manage=create&manage=update`,
 	`space:${SPACE.type}?authority=*&collection=${NSID.track}&action=read`
 ];
 
 /** everything this client may ask for (registered in its metadata). */
-export const SCOPE_PARTS = [...BASE_SCOPE_PARTS, ...SPACE_SCOPE_PARTS];
+export const SCOPE_PARTS = [
+	...BASE_SCOPE_PARTS,
+	...(env.PUBLIC_PREFERENCE_SYNC === 'true' ? [PREFERENCE_SCOPE] : []),
+	...AUDIO_SPACE_SCOPE_PARTS
+];

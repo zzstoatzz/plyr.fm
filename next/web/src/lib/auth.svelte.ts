@@ -16,7 +16,7 @@ import {
 	finalizeAuthorization,
 	getSession
 } from '@atcute/oauth-browser-client';
-import { BASE_SCOPE_PARTS, NSID, SCOPE_PARTS, SITE_URL, TYPEAHEAD_URL } from './config';
+import { BASE_SCOPE_PARTS, NSID, PREFERENCE_SPACE, SPACE, SCOPE_PARTS, SITE_URL, TYPEAHEAD_URL } from './config';
 import { pdsEndpoint, pdsSupportsSpaces } from './identity';
 
 const ACTIVE_KEY = 'plyr-next:active-did';
@@ -54,6 +54,7 @@ class Auth {
 	avatar = $state<string | null>(null);
 	/** the session can use spaces (gated audio) */
 	spaces = $state(false);
+	preferenceSpace = $state(false);
 	ready = $state(false);
 	agent: OAuthUserAgent | null = null;
 	rpc: Client | null = null;
@@ -72,11 +73,11 @@ class Auth {
 		this.ready = true;
 	}
 
-	async login(identifier: string) {
+	async login(identifier: string, deviceOnly = false) {
 		configure();
 		const url = await createAuthorizationUrl({
 			target: { type: 'account', identifier: identifier as `${string}.${string}` },
-			scope: await scopeFor(identifier)
+			scope: deviceOnly ? BASE_SCOPE_PARTS.join(' ') : await scopeFor(identifier)
 		});
 		await new Promise((r) => setTimeout(r, 200));
 		location.assign(url);
@@ -99,7 +100,7 @@ class Auth {
 		}
 		localStorage.removeItem(ACTIVE_KEY);
 		this.did = this.handle = this.displayName = this.avatar = null;
-		this.spaces = false;
+		this.spaces = this.preferenceSpace = false;
 		this.agent = this.rpc = null;
 	}
 
@@ -107,7 +108,20 @@ class Auth {
 		this.agent = new OAuthUserAgent(session);
 		this.rpc = new Client({ handler: this.agent });
 		this.did = session.info.sub;
-		this.spaces = session.token.scope.split(' ').some((s) => s.startsWith('space:'));
+		const scopes = session.token.scope.split(' ');
+		this.spaces = scopes.some((s) => s.startsWith(`space:${SPACE.type}?`));
+		this.preferenceSpace = scopes.some((scope) => {
+			const [type, query] = scope.split('?');
+			if (type !== `space:${PREFERENCE_SPACE.type}`) return false;
+			const grant = new URLSearchParams(query);
+			const authority = grant.get('authority') ?? 'self';
+			const actions = grant.getAll('action');
+			return (authority === 'self' || authority === session.info.sub)
+				&& grant.get('skey') === 'self'
+				&& grant.getAll('collection').includes(PREFERENCE_SPACE.collection)
+				&& ['read_self', 'create', 'update'].every((action) => actions.includes(action))
+				&& grant.getAll('manage').includes('create');
+		});
 		this.handle = this.displayName = this.avatar = null;
 		const did = session.info.sub;
 		const rpc = this.rpc;
