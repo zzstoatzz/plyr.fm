@@ -34,6 +34,13 @@ pub const Report = struct {
         return self.candidates > 0 and self.verified > 0 and
             self.retryable == 0 and self.rejected == 0;
     }
+
+    /// The run itself failed: nothing verified, or a repository was rejected.
+    /// Retryable repositories (offline or deactivated PDSes) alone don't fail
+    /// it; they're retried by the next run and by live ingestion.
+    pub fn failed(self: Report) bool {
+        return self.candidates == 0 or self.verified == 0 or self.rejected > 0;
+    }
 };
 
 pub fn reconcile(
@@ -100,4 +107,6 @@ test "catalog reconciliation counts every disposition and requires verified work
     try std.testing.expectEqual(@as(usize, 1), report.retryable);
     try std.testing.expectEqual(@as(usize, 1), report.rejected);
     try std.testing.expect(!report.complete());
+    try std.testing.expect(report.failed());
+    try std.testing.expect(!(Report{ .candidates = 3, .verified = 2, .retryable = 1 }).failed());
 }

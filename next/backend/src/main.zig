@@ -172,7 +172,7 @@ pub fn main() !void {
                 "catalog reconciliation: {d} candidates, {d} verified, {d} absent, {d} retryable, {d} rejected",
                 .{ report.candidates, report.verified, report.absent, report.retryable, report.rejected },
             );
-            if (!report.complete()) return error.CatalogReconciliationIncomplete;
+            if (report.failed()) return error.CatalogReconciliationFailed;
         },
         .repair => {
             const store = if (postgres_store) |*value| value else return error.RepairDatabaseRequired;

@@ -421,7 +421,8 @@ production clone supply candidate DIDs only; none of their metadata, CIDs, PDS
 locations, or account state is
 trusted. The one-shot role verifies each complete repository through the same
 signature/MST/CID path as continuous ingestion and fails if no repository verifies
-or any candidate repository is retryable or rejected. An authenticated repository
+or any candidate repository is rejected; repositories that are only
+retryable (an offline or deactivated PDS) are logged and left to the next run. An authenticated repository
 can still succeed when individual selected records are malformed: those records
 are atomically quarantined with their CID, reason, and commit proof while valid
 siblings project normally. Local `just zig reconcile-catalog` remains a development
