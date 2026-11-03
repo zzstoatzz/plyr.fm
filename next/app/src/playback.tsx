@@ -52,7 +52,7 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
 
   async function load(tracks: Track[], at: number, start = true) {
     const track = tracks[at];
-    if (!track) return;
+    if (!track) return false;
     const request = ++sequence.current;
     player.pause();
     setQueue(tracks);
@@ -75,7 +75,7 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
       }
       if (request !== sequence.current) {
         if (availability === 'gated') releaseGatedAudioUrl(url);
-        return;
+        return false;
       }
       const previousSource = objectUrl.current;
       try {
@@ -95,8 +95,10 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
       }
       setReady(true);
       if (start) player.play();
+      return true;
     } catch (cause) {
       if (request === sequence.current) setError(cause instanceof Error ? cause.message : 'could not play audio');
+      return false;
     } finally {
       if (request === sequence.current) setLoading(false);
     }
@@ -108,8 +110,8 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
   }
 
   async function next() {
-    if (index + 1 < queue.length) return load(queue, index + 1);
-    if (repeat === 'all' && queue.length) return load(queue, 0);
+    if (index + 1 < queue.length) { await load(queue, index + 1); return; }
+    if (repeat === 'all' && queue.length) { await load(queue, 0); return; }
     if (!keepPlaying) return;
     const request = sequence.current;
     try {
@@ -141,12 +143,11 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
       const key = `${track.id}/${track.record.cid}`;
       if (jamTrack.current !== key || current?.id !== track.id || !ready) {
         jamTrack.current = key;
-        await load([track], 0, false);
-        if (jamTrack.current !== key) return;
+        if (!await load([track], 0, false) || jamTrack.current !== key) return;
       }
       if (Math.abs(player.currentTime - position) > 0.6) await player.seekTo(position);
-      if (playing) player.play();
-      else player.pause();
+      if (playing && !player.playing) player.play();
+      else if (!playing && player.playing) player.pause();
     },
     leaveJam() {
       if (!jamTrack.current) return;
