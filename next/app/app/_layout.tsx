@@ -14,6 +14,7 @@ import Settings from 'lucide-react-native/icons/settings';
 import { PlaybackProvider } from '../src/playback';
 import { PlayerBar } from '../src/PlayerBar';
 import { PreferencesProvider } from '../src/preference-context';
+import { pageFrame } from '../src/controls';
 import { usePreferences } from '../src/preferences';
 
 export default function RootLayout() {
@@ -42,9 +43,11 @@ function Shell() {
     { label: 'Library', href: '/library', icon: Library, active: ['/library', '/liked', '/playlists'].includes(path) },
     { label: 'You', href: accountPath, icon: UserRound, active: ['/portal', '/login', '/settings', '/upload'].includes(path) }
   ];
+  const showBack = !['/', '/search', '/library', '/portal', '/login'].includes(path);
   const detail = /^\/(track|u|album|playlist|edit-track)\//.test(path);
-  const header = detail ? path.startsWith('/u/') ? 'Artist' : path.startsWith('/edit-track/') ? 'Edit track'
-    : path.startsWith('/album/') ? 'Album' : path.startsWith('/playlist/') ? 'Playlist' : 'Track' : path === '/search' ? 'Search' : path === '/library' || path === '/liked' ? 'Library' : wide ? 'Next' : 'plyr.fm';
+  const tabTitle = path === '/' ? (wide ? 'Home' : 'plyr.fm') : path === '/search' ? 'Search' : path === '/library' ? 'Library' : undefined;
+  const detailTitle = path.startsWith('/u/') ? 'Artist' : path.startsWith('/edit-track/') ? 'Edit track'
+    : path.startsWith('/album/') ? 'Album' : path.startsWith('/playlist/') ? 'Playlist' : 'Track';
   const nav = <View style={{
     flexDirection: wide ? 'column' : 'row', padding: 6, gap: 4, width: wide ? 172 : '100%',
     borderRightWidth: wide ? StyleSheet.hairlineWidth : 0, borderTopWidth: wide ? 0 : StyleSheet.hairlineWidth, borderColor: theme.surface
@@ -62,19 +65,24 @@ function Shell() {
   </View>;
   return <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }}>
     <StatusBar style={theme.dark ? 'light' : 'dark'} />
-    <View style={{ flex: 1, width: '100%', maxWidth: 1100, alignSelf: 'center', flexDirection: wide ? 'row' : 'column' }}>
+    <View style={{ flex: 1, width: '100%', maxWidth: 996, alignSelf: 'center', flexDirection: wide ? 'row' : 'column' }}>
       {wide && nav}
       <View style={{ flex: 1, minWidth: 0 }}>
-        <View style={{ minHeight: 49, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12,
-          borderBottomWidth: StyleSheet.hairlineWidth, borderColor: theme.surface }}>
-          {detail ? <Pressable accessibilityRole="button" accessibilityLabel="Back"
+        <View style={{
+          ...pageFrame, minHeight: tabTitle ? 66 : 48, flexDirection: 'row', alignItems: 'center',
+          borderBottomWidth: detail ? StyleSheet.hairlineWidth : 0, borderColor: theme.surface
+        }}>
+          {showBack && <Pressable accessibilityRole="button" accessibilityLabel="Back"
             onPress={() => router.canGoBack() ? router.back() : router.replace('/')}
-            style={{ width: 44, minHeight: 44, justifyContent: 'center' }}><ArrowLeft color={theme.text} size={23} /></Pressable> : <View style={{ width: 44 }} />}
-          <Text numberOfLines={1} style={{ flex: 1, textAlign: 'center', color: theme.text, fontWeight: '800', fontSize: 18 }}>{header}</Text>
-          <Link href="/settings" asChild><Pressable accessibilityRole="link" accessibilityLabel="Settings"
+            style={{ width: 44, minHeight: 44, justifyContent: 'center' }}><ArrowLeft color={theme.text} size={22} /></Pressable>}
+          {tabTitle ? <Text accessibilityRole="header" numberOfLines={1}
+            style={{ flex: 1, color: theme.text, fontFamily: theme.fontFamily, fontSize: 30 * theme.scale, fontWeight: '800', letterSpacing: -0.8 }}>{tabTitle}</Text>
+            : detail ? <Text numberOfLines={1} style={{ flex: 1, textAlign: 'center', color: theme.text, fontSize: 16 * theme.scale, fontWeight: '700' }}>{detailTitle}</Text>
+            : <View style={{ flex: 1 }} />}
+          {path !== '/settings' && <Link href="/settings" asChild><Pressable accessibilityRole="link" accessibilityLabel="Settings"
             style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}>
             <Settings size={20} color={theme.muted} />
-          </Pressable></Link>
+          </Pressable></Link>}
         </View>
         <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: theme.background } }} />
         <PlayerBar />

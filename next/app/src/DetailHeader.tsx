@@ -1,20 +1,20 @@
 import type { ReactNode } from 'react';
 import { View, useWindowDimensions } from 'react-native';
 import { Cover, Heading } from './CatalogPieces';
-import { useAppearance } from './appearance';
 
 export function DetailHeader({ title, artwork, round, children }: {
   title: string; artwork?: string | null; round?: boolean; children: ReactNode;
 }) {
   const { width } = useWindowDimensions();
-  const theme = useAppearance();
-  const compact = width < 520;
+  const stacked = width < 520 && !!artwork && !round;
+  const size = round ? 88 : stacked ? Math.min(184, width - 40) : artwork ? 148 : 88;
   return <View style={{
-    backgroundColor: theme.surface, borderRadius: 20, padding: 20, gap: 18,
-    flexDirection: compact ? 'column' : 'row', alignItems: compact && !round ? 'center' : 'flex-start'
+    gap: 16, paddingVertical: 8, flexDirection: stacked ? 'column' : 'row', alignItems: stacked ? 'stretch' : 'center'
   }}>
-    <Cover uri={artwork} size={round ? 96 : compact ? Math.min(220, width - 90) : 160} round={round} />
-    <View style={{ width: compact ? '100%' : undefined, flex: compact ? undefined : 1, gap: 8 }}>
+    <View style={{ alignSelf: stacked ? 'center' : undefined }}>
+      <Cover uri={artwork} size={size} round={round} radius={14} />
+    </View>
+    <View style={{ flex: stacked ? undefined : 1, minWidth: 0, gap: 6 }}>
       <Heading main>{title}</Heading>
       {children}
     </View>

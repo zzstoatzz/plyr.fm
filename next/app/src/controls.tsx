@@ -38,9 +38,11 @@ export function Field({ label, ...props }: TextInputProps & { label: string }) {
   </View>;
 }
 
+export const pageFrame = { width: '100%', maxWidth: 824, alignSelf: 'center', paddingHorizontal: 20 } as const;
+
 export const row = { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8 } as const;
 const styles = StyleSheet.create({
-  page: { width: '100%', maxWidth: 720, alignSelf: 'center', gap: 16, padding: 20, paddingBottom: 32 },
+  page: { ...pageFrame, gap: 16, paddingTop: 16, paddingBottom: 32 },
   button: { minHeight: 44, justifyContent: 'center', alignItems: 'center', borderRadius: 24, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 6 },
   input: { minHeight: 48, padding: 12, borderRadius: 8 }
 });
