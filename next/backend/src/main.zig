@@ -141,6 +141,7 @@ pub fn main() !void {
                 .profile_collection = settings.profile_collection,
                 .like_collection = settings.like_collection,
                 .cors = .{ .allowed_origins = settings.cors_allowed_origins },
+                .managed_space = settings.managed_space,
             });
         },
         .mirror => {
@@ -208,6 +209,9 @@ test {
     _ = @import("internal/account/repo_status.zig");
     _ = @import("api/response.zig");
     _ = @import("api/router.zig");
+    _ = @import("api/managed_space.zig");
+    _ = @import("internal/space/managed_space.zig");
+    _ = @import("internal/space/network.zig");
     _ = @import("api/artists.zig");
     _ = @import("api/charts.zig");
     _ = @import("api/albums.zig");

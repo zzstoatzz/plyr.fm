@@ -1,0 +1,158 @@
+//! HTTP surface of plyr's managing-app role: the did:web document that names
+//! the service, and the XRPC method a space's PDS calls to ask whether a user
+//! may read (or write) a gated space.
+
+const std = @import("std");
+const response = @import("response.zig");
+const query = @import("../internal/http/query.zig");
+const managed_space = @import("../internal/space/managed_space.zig");
+const Network = @import("../internal/space/network.zig").Network;
+
+const http = std.http;
+
+pub fn didDocument(
+    request: *http.Server.Request,
+    allocator: std.mem.Allocator,
+    config: managed_space.Config,
+    cors: response.CorsPolicy,
+    request_id: []const u8,
+) !void {
+    try response.json(request, .ok, try config.didDocument(allocator), request_id, cors);
+}
+
+const Params = struct {
+    space: managed_space.SpaceUri,
+    user: []const u8,
+    access: managed_space.Access,
+};
+
+fn parseParams(allocator: std.mem.Allocator, target: []const u8) !Params {
+    var space: ?[]const u8 = null;
+    var user: ?[]const u8 = null;
+    var access: ?[]const u8 = null;
+    var pairs = query.Iterator.init(allocator, target);
+    while (try pairs.next()) |pair| {
+        const slot = if (std.mem.eql(u8, pair.name, "space"))
+            &space
+        else if (std.mem.eql(u8, pair.name, "user"))
+            &user
+        else if (std.mem.eql(u8, pair.name, "access"))
+            &access
+        else
+            continue; // e.g. clientId: no gate here depends on the client
+        if (slot.* != null) return error.InvalidQuery;
+        slot.* = pair.value;
+    }
+    const user_did = user orelse return error.InvalidQuery;
+    if (@import("zat").Did.parse(user_did) == null) return error.InvalidQuery;
+    return .{
+        .space = managed_space.SpaceUri.parse(space orelse return error.InvalidQuery) orelse
+            return error.InvalidQuery,
+        .user = user_did,
+        .access = managed_space.Access.parse(access orelse "read") orelse return error.InvalidQuery,
+    };
+}
+
+fn bearerToken(request: *const http.Server.Request) ?[]const u8 {
+    var token: ?[]const u8 = null;
+    var headers = request.iterateHeaders();
+    while (headers.next()) |header| {
+        if (!std.ascii.eqlIgnoreCase(header.name, "authorization")) continue;
+        if (token != null) return null;
+        if (header.value.len <= "Bearer ".len or
+            !std.ascii.eqlIgnoreCase(header.value[0.."Bearer ".len], "Bearer ")) return null;
+        token = std.mem.trim(u8, header.value["Bearer ".len..], " ");
+    }
+    return token;
+}
+
+fn xrpcError(
+    request: *http.Server.Request,
+    status: http.Status,
+    comptime name: []const u8,
+    comptime message: []const u8,
+    request_id: []const u8,
+    cors: response.CorsPolicy,
+) !void {
+    try response.json(request, status, "{\"error\":\"" ++ name ++ "\",\"message\":\"" ++ message ++ "\"}", request_id, cors);
+}
+
+pub fn checkUserAccess(
+    request: *http.Server.Request,
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    config: managed_space.Config,
+    cors: response.CorsPolicy,
+    request_id: []const u8,
+) !void {
+    const params = parseParams(allocator, request.head.target) catch {
+        try xrpcError(request, .bad_request, "InvalidRequest", "space, user and access are required", request_id, cors);
+        return;
+    };
+    const token = bearerToken(request) orelse {
+        try xrpcError(request, .unauthorized, "AuthenticationRequired", "service auth required", request_id, cors);
+        return;
+    };
+
+    var network = Network.init(io, allocator);
+    defer network.deinit();
+
+    const now = std.Io.Timestamp.now(io, .real).toSeconds();
+    managed_space.verifyServiceAuth(
+        allocator,
+        now,
+        token,
+        try config.managingApp(allocator),
+        params.space.authority,
+        network.keys(),
+    ) catch |err| switch (err) {
+        error.OutOfMemory => return error.OutOfMemory,
+        error.BadAudience => {
+            try xrpcError(request, .unauthorized, "BadJwtAudience", "jwt audience does not match the managing app", request_id, cors);
+            return;
+        },
+        error.BadMethod => {
+            try xrpcError(request, .unauthorized, "BadJwtLexiconMethod", "jwt lxm does not match", request_id, cors);
+            return;
+        },
+        error.Expired => {
+            try xrpcError(request, .unauthorized, "JwtExpired", "jwt expired", request_id, cors);
+            return;
+        },
+        else => {
+            std.log.info("checkUserAccess auth rejected: {s}", .{@errorName(err)});
+            try xrpcError(request, .unauthorized, "AuthenticationRequired", "invalid service auth", request_id, cors);
+            return;
+        },
+    };
+
+    const authorized = managed_space.authorize(
+        allocator,
+        config,
+        params.space,
+        params.user,
+        params.access,
+        network.supporters(),
+    );
+    try response.json(
+        request,
+        .ok,
+        if (authorized) "{\"authorized\":true}" else "{\"authorized\":false}",
+        request_id,
+        cors,
+    );
+}
+
+test "checkUserAccess params" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const arena = arena_state.allocator();
+    const params = try parseParams(arena, "/xrpc/x?space=at%3A%2F%2Fdid%3Aplc%3Aartist%2Fspace%2Ffm.plyr.stg.audio%2Fsupporters&user=did:plc:fan&access=read&clientId=https%3A%2F%2Fnext.plyr.fm");
+    try std.testing.expectEqualStrings("did:plc:artist", params.space.authority);
+    try std.testing.expectEqualStrings("did:plc:fan", params.user);
+    try std.testing.expectEqual(managed_space.Access.read, params.access);
+    try std.testing.expectError(error.InvalidQuery, parseParams(arena, "/xrpc/x?user=did:plc:fan&access=read"));
+    try std.testing.expectError(error.InvalidQuery, parseParams(arena, "/xrpc/x?space=at://did:plc:a/space/fm.plyr.stg.audio/s&user=nope"));
+    try std.testing.expectError(error.InvalidQuery, parseParams(arena, "/xrpc/x?space=at://did:plc:a/space/fm.plyr.stg.audio/s&user=did:plc:b&access=admin"));
+    try std.testing.expectError(error.InvalidQuery, parseParams(arena, "/xrpc/x?space=at://did:plc:a/space/fm.plyr.stg.audio/s&user=did:plc:b&user=did:plc:c"));
+}

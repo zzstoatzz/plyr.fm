@@ -25,6 +25,10 @@ primary_region = "sjc"
   MODE = "api"
   PORT = "8000"
   TRACK_COLLECTION_NSID = "fm.plyr.stg.track"
+  # plyr manages gated-audio spaces as did:web:api.next.plyr.fm#plyr_space
+  SPACE_SERVICE_DID = "did:web:api.next.plyr.fm"
+  SPACE_SERVICE_ENDPOINT = "https://api.next.plyr.fm"
+  SPACE_TYPE_NSID = "fm.plyr.stg.audio"
 
 [http_service]
   processes = ["app"]
