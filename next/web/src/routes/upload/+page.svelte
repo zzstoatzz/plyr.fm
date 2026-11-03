@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { trackIdFromUri } from '$lib/api';
 	import { auth } from '$lib/auth.svelte';
+	import { GATED_UPLOADS } from '$lib/config';
 	import { audioDuration, MAX_AUDIO_BYTES, uploadTrack } from '$lib/pds';
 	import type { Gate } from '$lib/spaces';
 
@@ -70,7 +71,7 @@
 				</select>
 			</label>
 			{#if gate}<p class="muted small">the audio goes into a private space on your PDS; plyr only decides who gets in.</p>{/if}
-		{:else}
+		{:else if GATED_UPLOADS}
 			<p class="muted small">supporter-only tracks need a PDS with spaces; yours doesn't have them yet.</p>
 		{/if}
 		<button class="btn" disabled={busy || !file || !title.trim() || !artist.trim()}>upload</button>
@@ -89,13 +90,11 @@
 		display: flex;
 		flex-direction: column;
 		gap: 0.25rem;
-		font-size: 0.9rem;
 	}
 	button {
 		align-self: flex-start;
 	}
 	.small {
-		font-size: 0.8rem;
 		margin: 0;
 	}
 </style>

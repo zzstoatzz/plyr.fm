@@ -24,7 +24,7 @@ jobs:
     env:
       PUBLIC_API_URL: https://api.next.plyr.fm
       PUBLIC_SITE_URL: https://next.plyr.fm
-      PUBLIC_NSID_PREFIX: fm.plyr.stg
+      PUBLIC_NSID_PREFIX: fm.plyr
     steps:
       - uses: actions/checkout@v4
 

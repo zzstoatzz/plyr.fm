@@ -93,10 +93,6 @@
 
 <style>
 	.remove {
-		background: none;
-		border: 0;
-		color: var(--muted);
-		font-size: 1.1rem;
 		cursor: pointer;
 		padding: 0 0.5rem;
 	}

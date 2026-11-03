@@ -39,10 +39,5 @@
 		flex: 1;
 		max-width: 320px;
 		padding: 0.5rem 0.75rem;
-		border-radius: 6px;
-		border: 1px solid var(--surface-3);
-		background: var(--surface-2);
-		color: var(--text);
-		font: inherit;
 	}
 </style>

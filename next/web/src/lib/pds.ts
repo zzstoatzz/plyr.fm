@@ -280,13 +280,15 @@ export async function myProfile(): Promise<{ value: ProfileRecord | null; cid: s
 }
 
 export async function saveProfile(
-	edits: { displayName: string; bio: string; avatar: string },
+	edits: { bio: string; avatar: string },
 	current: { value: ProfileRecord | null; cid: string | null }
 ): Promise<AwaitStatus> {
 	const { rpc, did } = session();
 	const now = new Date().toISOString();
 	const record: ProfileRecord = { ...(current.value ?? {}), $type: NSID.profile, createdAt: current.value?.createdAt ?? now };
-	for (const key of ['displayName', 'bio', 'avatar'] as const) {
+	// only fields the published fm.plyr.actor.profile lexicon has; display
+	// names come from the bluesky profile (via typeahead).
+	for (const key of ['bio', 'avatar'] as const) {
 		const text = edits[key].trim();
 		if (text) record[key] = text;
 		else delete record[key];

@@ -101,10 +101,11 @@ jobs:
             --env "WORKER_DATABASE_URL=${{ secrets.ZIG_NEXT_MIGRATOR_DATABASE_URL }}" \
             --env MODE=catalog_reconciler \
             --env INDEX_MODE=required \
-            --env TRACK_COLLECTION_NSID=fm.plyr.stg.track \
-            --env LIST_COLLECTION_NSID=fm.plyr.stg.list \
-            --env LIKE_COLLECTION_NSID=fm.plyr.stg.like \
-            --env PROFILE_COLLECTION_NSID=fm.plyr.stg.actor.profile \
+            --env TRACK_COLLECTION_NSID=fm.plyr.track \
+            --env LIST_COLLECTION_NSID=fm.plyr.list \
+            --env LIKE_COLLECTION_NSID=fm.plyr.like \
+            --env PROFILE_COLLECTION_NSID=fm.plyr.actor.profile \
+            --env CATALOG_DISCOVERY_RELAY=https://relay1.us-east.bsky.network \
             | tee "$RUNNER_TEMP/reconcile.out"
           machine_id="$(grep -oE 'Machine ID: [0-9a-f]+' "$RUNNER_TEMP/reconcile.out" | awk '{print $3}' | head -1)"
           test -n "$machine_id"

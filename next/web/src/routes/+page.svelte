@@ -45,6 +45,11 @@
 		<TrackRow {tracks} index={i} />
 	{/each}
 </ol>
+{#if loading && !tracks.length}
+	<p class="muted">loading…</p>
+{:else if error && !tracks.length}
+	<button class="btn more" onclick={() => ((error = null), more())}>retry</button>
+{/if}
 {#if cursor}
 	<button class="btn more" onclick={more} disabled={loading}>{loading ? 'loading…' : 'more'}</button>
 {:else if !loading && !tracks.length && !error}

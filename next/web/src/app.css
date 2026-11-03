@@ -1,39 +1,13 @@
 :root {
-	--bg: #0b0b0f;
-	--surface-2: #16161d;
-	--surface-3: #23232d;
-	--text: #ececf1;
-	--muted: #9a9aa8;
-	--accent: #ff6b9a;
-	color-scheme: dark;
-}
-@media (prefers-color-scheme: light) {
-	:root {
-		--bg: #fafafa;
-		--surface-2: #efeff3;
-		--surface-3: #e2e2e8;
-		--text: #15151a;
-		--muted: #5d5d6b;
-		--accent: #d93a6f;
-		color-scheme: light;
-	}
+	color-scheme: light dark;
 }
 body {
 	margin: 0;
-	background: var(--bg);
-	color: var(--text);
-	font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
-}
-a {
-	color: var(--accent);
 }
 h1 {
-	font-size: 1.5rem;
 	margin: 1rem 0 0.25rem;
 }
 h2 {
-	font-size: 1rem;
-	color: var(--muted);
 	margin: 1.5rem 0 0.5rem;
 }
 ol.tracks,
@@ -42,35 +16,17 @@ ul.plain {
 	padding: 0;
 	margin: 0;
 }
-.muted {
-	color: var(--muted);
-}
-.error {
-	color: var(--accent);
-}
 .btn {
 	padding: 0.5rem 1.25rem;
-	border-radius: 999px;
-	border: 1px solid var(--surface-3);
-	background: var(--surface-2);
-	color: var(--text);
 	cursor: pointer;
-	font: inherit;
 }
 .btn.more {
 	margin: 1rem auto;
 	display: block;
 }
-.btn:disabled {
-	opacity: 0.6;
-}
 .card {
 	display: block;
 	padding: 0.75rem;
-	border-radius: 8px;
-	background: var(--surface-2);
-	color: var(--text);
-	text-decoration: none;
 	margin-bottom: 0.5rem;
 }
 .hero {
@@ -82,7 +38,5 @@ ul.plain {
 .hero img {
 	width: 120px;
 	height: 120px;
-	border-radius: 10px;
 	object-fit: cover;
-	background: var(--surface-3);
 }

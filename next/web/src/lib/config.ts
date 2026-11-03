@@ -10,8 +10,11 @@ export const TYPEAHEAD_URL = (env.PUBLIC_TYPEAHEAD_URL || 'https://typeahead.wao
 /** public origin of this deployment; the oauth client_id lives under it. */
 export const SITE_URL = (env.PUBLIC_SITE_URL || 'https://next.plyr.fm').replace(/\/$/, '');
 
-/** record namespace for this deployment: next reads/writes the staging namespace. */
-export const NSID_PREFIX = env.PUBLIC_NSID_PREFIX || 'fm.plyr.stg';
+/**
+ * record namespace: next reads and writes the real fm.plyr.* records with the
+ * published prod lexicon shapes (a parallel client to the same PDS data).
+ */
+export const NSID_PREFIX = env.PUBLIC_NSID_PREFIX || 'fm.plyr';
 
 export const NSID = {
 	track: `${NSID_PREFIX}.track`,
@@ -25,7 +28,8 @@ export const NSID = {
  * plyr (the appview answers checkUserAccess as this service).
  */
 export const SPACE = {
-	type: `${NSID_PREFIX}.audio`,
+	// never a prod NSID: this space type isn't a published plyr lexicon
+	type: env.PUBLIC_SPACE_TYPE || 'fm.plyr.stg.audio',
 	managingApp: env.PUBLIC_SPACE_MANAGING_APP || 'did:web:api.next.plyr.fm#plyr_space'
 } as const;
 
@@ -44,7 +48,14 @@ export const BASE_SCOPE_PARTS = [
  * keeps the PDS from needing a published space-type lexicon. requested only
  * from PDSes that advertise spaces, so others can still sign in.
  */
-export const SPACE_SCOPE_PARTS = [
+/**
+ * next's gate spaces aren't the shape prod's fm.plyr.track `audioSpace`
+ * accepts (prod's are fm.plyr.privateMedia), so gated uploads stay off while
+ * next writes the real namespace; they only run against a staging namespace.
+ */
+export const GATED_UPLOADS = NSID_PREFIX !== 'fm.plyr';
+
+export const SPACE_SCOPE_PARTS = !GATED_UPLOADS ? [] : [
 	`space:${SPACE.type}?authority=self&collection=${NSID.track}&action=read&action=create&action=update&action=delete&manage=create&manage=update`,
 	`space:${SPACE.type}?authority=*&collection=${NSID.track}&action=read`
 ];

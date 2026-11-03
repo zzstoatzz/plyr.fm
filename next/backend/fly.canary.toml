@@ -15,20 +15,24 @@ primary_region = "sjc"
 [env]
   CORS_ALLOWED_ORIGINS = "https://next.plyr.fm,https://plyr-fm-next.pages.dev,http://127.0.0.1:5174"
   DATABASE_ROLE = "plyr_zig_canary"
-  DATABASE_POOL_SIZE = "16"
+  # pg.zig opens every pool connection before the api binds; each Neon
+  # connect is ~1s, so a big pool means a slow cold start (16 was ~18s).
+  DATABASE_POOL_SIZE = "4"
   INGEST_STREAM_HOSTS = "stream.waow.tech,jetstream1.us-east.bsky.network,jetstream2.us-east.bsky.network,jetstream1.us-west.bsky.network,jetstream2.us-west.bsky.network"
   INDEX_MODE = "required"
-  LIST_COLLECTION_NSID = "fm.plyr.stg.list"
-  LIKE_COLLECTION_NSID = "fm.plyr.stg.like"
-  PROFILE_COLLECTION_NSID = "fm.plyr.stg.actor.profile"
+  LIST_COLLECTION_NSID = "fm.plyr.list"
+  LIKE_COLLECTION_NSID = "fm.plyr.like"
+  PROFILE_COLLECTION_NSID = "fm.plyr.actor.profile"
   MAX_CONNECTIONS = "128"
   MODE = "api"
   PORT = "8000"
-  TRACK_COLLECTION_NSID = "fm.plyr.stg.track"
+  TRACK_COLLECTION_NSID = "fm.plyr.track"
   # plyr manages gated-audio spaces as did:web:api.next.plyr.fm#plyr_space
   SPACE_SERVICE_DID = "did:web:api.next.plyr.fm"
   SPACE_SERVICE_ENDPOINT = "https://api.next.plyr.fm"
   SPACE_TYPE_NSID = "fm.plyr.stg.audio"
+  # catalog bootstrap: every repo the relay has seen write fm.plyr.*
+  CATALOG_DISCOVERY_RELAY = "https://relay1.us-east.bsky.network"
 
 [http_service]
   processes = ["app"]

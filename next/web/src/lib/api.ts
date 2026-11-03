@@ -102,7 +102,18 @@ export class ApiError extends Error {
 async function get<T>(path: string, params?: Record<string, string | number | undefined>): Promise<T> {
 	const url = new URL(API_URL + path);
 	for (const [k, v] of Object.entries(params ?? {})) if (v !== undefined) url.searchParams.set(k, String(v));
-	const res = await fetch(url);
+	// a scaled-to-zero API can take a few seconds to wake; retry once, and
+	// never hang the page forever.
+	let res: Response;
+	try {
+		res = await fetch(url, { signal: AbortSignal.timeout(15_000) });
+	} catch {
+		try {
+			res = await fetch(url, { signal: AbortSignal.timeout(20_000) });
+		} catch {
+			throw new ApiError(0, "couldn't reach the plyr API, try again in a moment");
+		}
+	}
 	if (!res.ok) {
 		let message = res.statusText;
 		try {
