@@ -30,26 +30,7 @@ pub const ZatPdsRepositorySource = struct {
         did_text: []const u8,
     ) repository_source.Error!repository_source.Repo {
         const self: *ZatPdsRepositorySource = @ptrCast(@alignCast(context));
-        const did = zat.Did.parse(did_text) orelse return error.InvalidIdentity;
-        var document = self.identity_resolver.resolve(did) catch |err| switch (err) {
-            error.OutOfMemory => return error.OutOfMemory,
-            else => return error.RepositoryIdentityUnavailable,
-        };
-        defer document.deinit();
-        if (!std.mem.eql(u8, document.id, did_text))
-            return error.RepositoryIdentityUnavailable;
-        const pds_url = document.pdsEndpoint() orelse
-            return error.RepositoryEndpointMissing;
-        var endpoint = safe_endpoint.resolve(
-            self.io,
-            request_allocator,
-            pds_url,
-        ) catch |err| switch (err) {
-            error.OutOfMemory => return error.OutOfMemory,
-            error.UnsafeEndpoint => return error.UnsafeRepositoryEndpoint,
-            error.NoSupportedAddress => return error.UnsupportedRepositoryEndpoint,
-            error.InvalidEndpoint, error.DnsResolutionFailed => return error.RepositoryUnavailable,
-        };
+        var endpoint = try self.resolveEndpoint(request_allocator, did_text);
         defer endpoint.deinit(request_allocator);
 
         const url = std.fmt.allocPrint(
@@ -93,6 +74,54 @@ pub const ZatPdsRepositorySource = struct {
             .release_context = self,
             .release_fn = releaseOpaque,
         };
+    }
+
+    /// The DID document's PDS, DNS-checked and pinned. Caller deinits.
+    fn resolveEndpoint(
+        self: *ZatPdsRepositorySource,
+        allocator: std.mem.Allocator,
+        did_text: []const u8,
+    ) repository_source.Error!safe_endpoint.Endpoint {
+        const did = zat.Did.parse(did_text) orelse return error.InvalidIdentity;
+        var document = self.identity_resolver.resolve(did) catch |err| switch (err) {
+            error.OutOfMemory => return error.OutOfMemory,
+            else => return error.RepositoryIdentityUnavailable,
+        };
+        defer document.deinit();
+        if (!std.mem.eql(u8, document.id, did_text))
+            return error.RepositoryIdentityUnavailable;
+        const pds_url = document.pdsEndpoint() orelse
+            return error.RepositoryEndpointMissing;
+        const endpoint = safe_endpoint.resolve(
+            self.io,
+            allocator,
+            pds_url,
+        ) catch |err| switch (err) {
+            error.OutOfMemory => return error.OutOfMemory,
+            error.UnsafeEndpoint => return error.UnsafeRepositoryEndpoint,
+            error.NoSupportedAddress => return error.UnsupportedRepositoryEndpoint,
+            error.InvalidEndpoint, error.DnsResolutionFailed => return error.RepositoryUnavailable,
+        };
+        return endpoint;
+    }
+
+    /// One record's `sync.getRecord` proof from the repo's own PDS, owned by
+    /// `allocator`; null when the PDS answers 404/400 instead of a proof.
+    pub fn fetchRecordProof(
+        self: *ZatPdsRepositorySource,
+        allocator: std.mem.Allocator,
+        did: []const u8,
+        collection: []const u8,
+        rkey: []const u8,
+    ) repository_source.Error!?[]const u8 {
+        var endpoint = try self.resolveEndpoint(allocator, did);
+        defer endpoint.deinit(allocator);
+        const url = std.fmt.allocPrint(
+            allocator,
+            "{s}/xrpc/com.atproto.sync.getRecord?did={s}&collection={s}&rkey={s}",
+            .{ endpoint.base_url, did, collection, rkey },
+        ) catch return error.OutOfMemory;
+        return self.get(allocator, &endpoint, url, "application/vnd.ipld.car", 4 * 1024 * 1024);
     }
 
     /// The listed plyr records of an oversized repository, each with its

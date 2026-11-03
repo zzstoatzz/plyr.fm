@@ -18,10 +18,11 @@ for boundaries that made Postgres or R2 into accidental sources of truth.
    successful local database write never makes any of those claims canonical.
 2. **ingestion establishes trust.** Repository snapshots (bootstrap, repair,
    catalog reconcile) are verified: commit signature, MST, record CID. Live
-   ingestion currently trusts the jetstream hosts' upstream verification
-   (#2292) and only checks that the JSON re-encodes to the stated CID. Whether
-   to independently verify live changes again is an open question tracked in
-   #2303.
+   jetstream events are hints only: for each touched record the ingester
+   fetches a `sync.getRecord` proof from the repo's own PDS and projects the
+   state that proof authenticates (present or proven absent) at its signed
+   commit (#2303). An event with no verifiable proof falls back to a verified
+   repair of the whole repository.
 3. **Postgres is derived.** It is a query-optimized materialized view of verified
    repository state plus explicitly local operational state. The content index
    must be rebuildable without treating an old Postgres row as truth.
@@ -83,8 +84,9 @@ state and expire or reconcile; they are not unpublished canonical tracks.
 This branch implements the versioned REST appview plus two deliberately
 separate ingestion roles. `MODE=api` serves read-only HTTP; `MODE=repair`
 authenticates and reconciles one complete repository, then exits;
-`MODE=ingester` continuously consumes filtered jetstream events (trusted
-hosts, round-robin), bootstraps unseen repositories through verified repair,
+`MODE=ingester` continuously consumes filtered jetstream events as hints
+(round-robin hosts), verifies each touched record from its PDS proof,
+bootstraps unseen repositories through verified repair,
 and runs the blob mirror, identity refresh and label sync beside it. They share libraries but never start each other.
 Docket workers remain separate future process roles.
 

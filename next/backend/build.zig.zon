@@ -7,8 +7,8 @@
             .hash = "zat-0.6.4-5PuC7grADQByu3wo5NojgQ58IsD-NaLkZvbB65xYhiGo",
         },
         .pg = .{
-            .url = "https://tangled.org/zzstoatzz.io/pg.zig/archive/554530d.tar.gz",
-            .hash = "pg-0.0.0-Wp_7gaf1BgBmHy27LzHTYcWbgjYTQ_Q4pIV3Sh_CoS90",
+            .url = "https://tangled.org/zzstoatzz.io/pg.zig/archive/12e241e.tar.gz",
+            .hash = "pg-0.0.0-Wp_7gev1BgDcLUWDIvJBhiu32S8Sr7DX-lpOcrjBvC35",
         },
         .redis = .{
             .url = "https://tangled.org/zzstoatzz.io/redis/archive/89b1157.tar.gz",

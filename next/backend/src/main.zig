@@ -172,7 +172,7 @@ pub fn main() !void {
                 "catalog reconciliation: {d} candidates, {d} verified, {d} absent, {d} retryable, {d} rejected",
                 .{ report.candidates, report.verified, report.absent, report.retryable, report.rejected },
             );
-            if (!report.complete()) return error.CatalogReconciliationIncomplete;
+            if (report.failed()) return error.CatalogReconciliationFailed;
         },
         .repair => {
             const store = if (postgres_store) |*value| value else return error.RepairDatabaseRequired;
@@ -300,6 +300,7 @@ test {
     _ = @import("internal/identity/postgres_actor_identity_store.zig");
     _ = @import("internal/ingest/catalog_reconcile_runner.zig");
     _ = @import("internal/ingest/stream_runner.zig");
+    _ = @import("internal/ingest/record_apply.zig");
     _ = @import("internal/atproto/json_record.zig");
     _ = @import("internal/ingest/postgres_relay_cursor.zig");
     _ = @import("internal/ingest/postgres_repository_candidates.zig");
