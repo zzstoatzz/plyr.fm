@@ -7,6 +7,8 @@ import {
   usePages, useResource, type Play, type TrackActions,
 } from './CatalogPieces';
 import { DetailHeader } from './DetailHeader';
+import { Sheet } from './Sheet';
+import { usePlayback } from './playback';
 import { TrackLikes } from './TrackLikes';
 import { useAuth } from './auth';
 import { Action } from './controls';
@@ -111,6 +113,8 @@ function TrackDetail({ id, onPlay, onEnqueue, trackActions }: {
   const result = useResource(load);
   const track = result.data;
   const auth = useAuth();
+  const player = usePlayback();
+  const [actionsOpen, setActionsOpen] = useState(false);
   if (!track) return <Status loading={!result.error} error={result.error} retry={result.retry} />;
   return <>
     <DetailHeader title={track.metadata.title} artwork={track.media.artwork?.url}>
@@ -121,12 +125,18 @@ function TrackDetail({ id, onPlay, onEnqueue, trackActions }: {
     <View style={styles.actions}><Detail>{track.metrics.play_count} plays</Detail><TrackLikes track={track} /></View>
     </DetailHeader>
     <View style={styles.actions}>
-      <Action primary label="Play track" onPress={() => onPlay(track)} />
-      {auth.did === track.artist.did && <Action label="Edit track" href={`/edit-track/${track.id}`} />}
-      <Button label="Add to queue" onPress={() => onEnqueue(track)} />
-      <ShareLink path={`/track/${encodeURIComponent(track.id)}`} />
-      {trackActions ? trackActions(track) : <SignedTrackActions track={track} />}
+      <Action primary label={player.current?.id === track.id && player.status.playing ? 'Pause' : 'Play'}
+        onPress={() => player.current?.id === track.id ? player.toggle() : onPlay(track)} />
+      <Action label="Add to queue" onPress={() => onEnqueue(track)} />
+      <Action label="More" onPress={() => setActionsOpen(true)} />
     </View>
+    {actionsOpen && <Sheet title="Track actions" close={() => setActionsOpen(false)}>
+      <View style={styles.actions}>
+        {auth.did === track.artist.did && <Action label="Edit track" href={`/edit-track/${track.id}`} onPress={() => setActionsOpen(false)} />}
+        <ShareLink path={`/track/${encodeURIComponent(track.id)}`} />
+        {trackActions ? trackActions(track) : <SignedTrackActions track={track} />}
+      </View>
+    </Sheet>}
     {track.metadata.description && <Detail>{track.metadata.description}</Detail>}
   </>;
 }

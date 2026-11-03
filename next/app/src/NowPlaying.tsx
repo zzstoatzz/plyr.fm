@@ -1,5 +1,5 @@
 import Slider from '@react-native-community/slider';
-import { Link } from 'expo-router';
+import { Link, router } from 'expo-router';
 import ChevronDown from 'lucide-react-native/icons/chevron-down';
 import Info from 'lucide-react-native/icons/info';
 import ListMusic from 'lucide-react-native/icons/list-music';
@@ -78,12 +78,14 @@ export function NowPlaying({ track, close }: { track: Track; close: () => void }
             <PlayerControl icon={SkipForward} label="Next" onPress={() => void player.next()} />
           </View>
           <View style={styles.utilities}>
-            <Link href="/queue" onPress={close} asChild>
-              <Pressable accessibilityRole="link" accessibilityLabel="Queue" style={styles.utility}><ListMusic size={22} color={theme.muted} /></Pressable>
-            </Link>
-            <Link href={`/track/${track.id}`} onPress={close} asChild>
-              <Pressable accessibilityRole="link" accessibilityLabel="Track details" style={styles.utility}><Info size={22} color={theme.muted} /></Pressable>
-            </Link>
+            <Pressable accessibilityRole="button" accessibilityLabel="Queue" style={styles.utility}
+              onPress={() => { close(); router.push('/queue'); }}>
+              <ListMusic size={20} color={theme.muted} /><Text style={caption}>Queue</Text>
+            </Pressable>
+            <Pressable accessibilityRole="button" accessibilityLabel="Track details" style={styles.utility}
+              onPress={() => { close(); router.push(`/track/${track.id}`); }}>
+              <Info size={20} color={theme.muted} /><Text style={caption}>Track</Text>
+            </Pressable>
           </View>
         </ScrollView>
       </SafeAreaView>
@@ -104,6 +106,6 @@ const styles = StyleSheet.create({
   time: { minHeight: 20, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   numeric: { fontVariant: ['tabular-nums'] },
   transport: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-evenly' },
-  utilities: { flexDirection: 'row', justifyContent: 'space-between' },
-  utility: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }
+  utilities: { flexDirection: 'row', justifyContent: 'center', gap: 24 },
+  utility: { minWidth: 84, minHeight: 44, gap: 6, flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }
 });
