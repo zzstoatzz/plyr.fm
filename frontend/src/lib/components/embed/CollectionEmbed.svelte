@@ -293,16 +293,21 @@
 					{:else}
 						<span class="np-title">{currentTrack?.title ?? ''}</span>
 					{/if}
-					{#if currentTrack?.artist_handle}
-						<a
-							class="np-artist"
-							href="https://plyr.fm/u/{currentTrack.artist_handle}"
-							target="_blank"
-							rel="noopener noreferrer">{currentTrack?.artist ?? ''}</a
+					<div class="np-sub">
+						{#if currentTrack?.artist_handle}
+							<a
+								class="np-artist"
+								href="https://plyr.fm/u/{currentTrack.artist_handle}"
+								target="_blank"
+								rel="noopener noreferrer">{currentTrack?.artist ?? ''}</a
+							>
+						{:else}
+							<span class="np-artist">{currentTrack?.artist ?? ''}</span>
+						{/if}
+						<span class="np-time" aria-hidden="true"
+							>{formatTime(currentTime)} / {formatTime(duration)}</span
 						>
-					{:else}
-						<span class="np-artist">{currentTrack?.artist ?? ''}</span>
-					{/if}
+					</div>
 				</div>
 				<div class="transport">
 					<button class="ctrl-btn" onclick={skipPrev} aria-label="Previous">
@@ -697,6 +702,109 @@
 		}
 		.collection-header {
 			align-items: start;
+		}
+	}
+	.np-sub {
+		display: flex;
+		align-items: baseline;
+		gap: 6px;
+		min-width: 0;
+	}
+	.np-sub .np-artist {
+		flex: 0 1 auto;
+		min-width: 0;
+	}
+	.np-time {
+		display: none;
+		flex-shrink: 0;
+		font-size: var(--text-xs);
+		color: var(--text-tertiary);
+		font-variant-numeric: tabular-nums;
+		white-space: nowrap;
+	}
+
+	/* compact layout: phones, and any embed too short for the roomy chrome
+	 * (leaflet renders collection embeds ~210px tall at every width). every
+	 * pixel of chrome we drop here goes to the track list. */
+	@media (max-width: 499px), (max-height: 279px) {
+		.embed-container {
+			padding: 10px 12px;
+			gap: 12px;
+		}
+		.content {
+			gap: 4px;
+		}
+		/* title · owner on one line instead of two */
+		.collection-header {
+			padding-bottom: 4px;
+			gap: 8px;
+		}
+		.meta {
+			display: flex;
+			align-items: baseline;
+			gap: 6px;
+		}
+		.title {
+			flex: 0 1 auto;
+			min-width: 0;
+			font-size: 0.9rem;
+		}
+		.meta-sep {
+			display: inline;
+			flex-shrink: 0;
+			color: var(--text-tertiary);
+		}
+		.subtitle {
+			flex: 0 1000 auto;
+			min-width: 3em;
+			font-size: var(--text-xs);
+		}
+		.share-btn {
+			width: 28px;
+			height: 24px;
+		}
+		.track-row {
+			min-height: 30px;
+			padding: 4px 6px;
+		}
+		/* the seek bar doubles as the divider between list and player,
+		 * and the times move next to the artist */
+		.player-bar {
+			gap: 2px;
+			padding-top: 0;
+			border-top: 0;
+		}
+		.scrubber {
+			order: -1;
+		}
+		.scrubber .time {
+			display: none;
+		}
+		.scrubber .seek-bar {
+			height: 14px;
+		}
+		.np-time {
+			display: inline;
+		}
+		.np-art,
+		.np-art-placeholder {
+			width: 36px;
+			height: 36px;
+		}
+		.transport {
+			gap: 2px;
+		}
+		.ctrl-btn {
+			width: 28px;
+			height: 32px;
+		}
+		.play-btn {
+			width: 36px;
+			height: 36px;
+		}
+		.icon {
+			width: 20px;
+			height: 20px;
 		}
 	}
 	@media (max-height: 199px) {
