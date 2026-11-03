@@ -4,12 +4,15 @@ primary_region = "sjc"
 [build]
   dockerfile = "Dockerfile"
 
-# One image, two process groups. The binary ignores argv; the group name
+# One image, three process groups. The binary ignores argv; the group name
 # (FLY_PROCESS_GROUP) selects the role: `app` runs MODE=api, `ingester` runs
-# the relay-to-projection ingester with WORKER_DATABASE_URL.
+# the relay-to-projection ingester, and `mirror` copies verified PDS audio
+# blobs into object storage. Non-api groups use WORKER_DATABASE_URL. The
+# mirror idles until the MIRROR_S3_* secrets are set.
 [processes]
   app = "serve"
   ingester = "ingester"
+  mirror = "mirror"
 
 [env]
   CORS_ALLOWED_ORIGINS = "https://next.plyr.fm,https://plyr-fm-next.pages.dev,http://127.0.0.1:5174"
@@ -48,7 +51,7 @@ primary_region = "sjc"
 
 [[restart]]
   policy = "always"
-  processes = ["ingester"]
+  processes = ["ingester", "mirror"]
 
 [[vm]]
   processes = ["app"]
@@ -61,3 +64,9 @@ primary_region = "sjc"
   cpu_kind = "shared"
   cpus = 2
   memory = "1gb"
+
+[[vm]]
+  processes = ["mirror"]
+  cpu_kind = "shared"
+  cpus = 1
+  memory = "512mb"
