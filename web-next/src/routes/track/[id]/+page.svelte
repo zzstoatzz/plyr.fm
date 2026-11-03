@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { page } from '$app/state';
 	import { api, type Track } from '$lib/api';
+	import AddToPlaylist from '$lib/AddToPlaylist.svelte';
 	import LikeButton from '$lib/LikeButton.svelte';
 	import { formatDuration, player } from '$lib/player.svelte';
 
@@ -29,6 +30,7 @@
 			</p>
 			<button class="btn" onclick={() => player.play([track!])}>▶ play</button>
 			<LikeButton {track} />
+			<AddToPlaylist {track} />
 		</div>
 	</div>
 	{#if track.metadata.description}<p>{track.metadata.description}</p>{/if}
