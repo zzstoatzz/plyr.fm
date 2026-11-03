@@ -1,6 +1,6 @@
 import { Link, router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { Image, View } from 'react-native';
+import { Image, Platform, View } from 'react-native';
 import { createAccount, login, useAuth } from '../src/auth';
 import { Action, Copy, Field, Page, row } from '../src/controls';
 import { returnPath } from '../src/return-path';
@@ -24,6 +24,7 @@ export default function Login() {
   const [provider, setProvider] = useState<Provider>();
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState(false);
+  const [slow, setSlow] = useState(false);
   const pending = useRef(false);
   const identifier = handle.trim().replace(/^at:\/\//, '').replace(/^@/, '');
 
@@ -68,6 +69,24 @@ export default function Login() {
     return () => controller.abort();
   }, [creating]);
 
+  useEffect(() => {
+    if (!busy) return;
+    const timer = setTimeout(() => setSlow(true), 4000);
+    return () => clearTimeout(timer);
+  }, [busy]);
+
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    function reset(event: PageTransitionEvent) {
+      if (!event.persisted) return;
+      pending.current = false;
+      setBusy(false);
+      setSlow(false);
+    }
+    window.addEventListener('pageshow', reset);
+    return () => window.removeEventListener('pageshow', reset);
+  }, []);
+
   function updateHandle(value: string) {
     setHandle(value);
     setPreview(undefined);
@@ -79,6 +98,7 @@ export default function Login() {
     if (pending.current || (creating ? !provider : !identifier)) return;
     pending.current = true;
     setBusy(true);
+    setSlow(false);
     setError(undefined);
     try {
       const destination = typeof intent === 'string' ? intent : undefined;
@@ -117,13 +137,14 @@ export default function Login() {
       {preview && <View style={row}>
         {preview.avatar_url && <Image source={{ uri: preview.avatar_url }} style={{ width: 36, height: 36, borderRadius: 18 }} />}
         <Copy>{preview.display_name ? preview.display_name + ' · ' : ''}@{preview.handle}</Copy>
+        {!busy && <Action label="not you?" onPress={() => updateHandle('')} />}
       </View>}
       <Copy>Use an existing account from <Link href="https://bsky.app">Bluesky</Link>, <Link href="https://blackskyweb.xyz">Blacksky</Link>, or another <Link href="https://atproto.com/guides/glossary#handle">Atmosphere provider</Link>.</Copy>
       {deviceOnly === 'true' && <Copy>Preferences will stay on this device for this sign-in.</Copy>}
     </>}
-    <Action primary label={busy ? 'redirecting…' : creating ? 'create account' : 'sign in'}
+    <Action primary label={busy ? (host ? 'taking you to ' + host + '…' : 'redirecting…') : creating ? 'create account' : host ? 'continue at ' + host : 'sign in'}
       onPress={() => void submit()} disabled={busy || (creating ? !provider : !identifier)} />
-    <Copy>{host ? 'you’ll continue to ' + host + '. ' : ''}plyr.fm never sees your password.</Copy>
+    <Copy>{busy && slow ? 'still connecting. some servers take a few seconds.' : 'you’ll come straight back here after. plyr.fm never sees your password.'}</Copy>
     {(error || (!creating && auth.error)) && <Copy>{error || auth.error}</Copy>}
     {!creating && (error || auth.scopeRejected) && <Action label="sign in without preference sync" onPress={() => void submit(true)}
       disabled={busy || !identifier} />}
