@@ -89,7 +89,7 @@ def test_canary_carries_no_server_side_oauth_config() -> None:
         for name in environment
         if name.startswith(("ZIG_OAUTH_", "ZIG_AUTH_", "AUTH_"))
     ]
-    workflow = (ROOT.parent / ".github/workflows/deploy-next.yml").read_text()
+    workflow = (ROOT.parents[1] / ".github/workflows/deploy-next.yml").read_text()
     assert "ZIG_OAUTH_CLIENT_PRIVATE_KEY" not in workflow
     assert "ZIG_AUTH_ENCRYPTION_KEY" not in workflow
 
