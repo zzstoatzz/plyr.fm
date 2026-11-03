@@ -6,7 +6,7 @@ const query = @import("query.zig");
 pub const Error = error{ InvalidPathSegment, OutOfMemory };
 
 pub fn decode(allocator: std.mem.Allocator, encoded: []const u8) Error![]const u8 {
-    if (encoded.len == 0 or containsSeparator(encoded)) return error.InvalidPathSegment;
+    if (encoded.len == 0 or containsForbiddenByte(encoded)) return error.InvalidPathSegment;
     if (std.mem.indexOfScalar(u8, encoded, '%') == null) return encoded;
 
     const decoded = try allocator.alloc(u8, encoded.len);
@@ -31,8 +31,8 @@ pub fn decode(allocator: std.mem.Allocator, encoded: []const u8) Error![]const u
     return decoded[0..written];
 }
 
-fn containsSeparator(value: []const u8) bool {
-    return std.mem.indexOfAny(u8, value, "/\\") != null;
+fn containsForbiddenByte(value: []const u8) bool {
+    return std.mem.indexOfAny(u8, value, "/\\\x00") != null;
 }
 
 test "path segment decoding is strict and does not use form semantics" {
@@ -51,4 +51,5 @@ test "path segment decoding is strict and does not use form semantics" {
     try std.testing.expectError(error.InvalidPathSegment, decode(allocator, "did%00plc"));
     try std.testing.expectError(error.InvalidPathSegment, decode(allocator, "did%+3plc"));
     try std.testing.expectError(error.InvalidPathSegment, decode(allocator, "did%-0plc"));
+    try std.testing.expectError(error.InvalidPathSegment, decode(allocator, "did\x00plc"));
 }
