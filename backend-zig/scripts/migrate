@@ -3,9 +3,9 @@
 # recording what ran in plyr_zig.schema_migrations.
 #
 # These schemas (plyr_index, plyr_auth, plyr_command) belong to the Zig
-# backend. They are applied on top of a database that already has the Python
-# backend's public schema (the transitional adapters read public.tracks and
-# friends), e.g. a Neon branch of staging for next.plyr.fm.
+# backend. Historically they were applied on top of the Python backend's
+# public schema (early migrations grant on it, and 0023 seeds actor identities
+# from public.artists when present); the zig runtime itself no longer reads it.
 #
 # Guard: the target database must carry an explicit marker comment, set once
 # by hand on the dedicated database (a Neon branch does not inherit a comment

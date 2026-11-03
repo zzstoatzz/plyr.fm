@@ -121,6 +121,14 @@ minute to one day per record version. Without the `MIRROR_*` settings it idles.
 Mirrored origins give clients a Range-capable URL even when the PDS ignores
 `Range` on `getBlob`.
 
+The ingester also runs the actor identity refresher on a side thread. For every
+DID that owns plyr records it resolves the DID document, keeps the handle only
+if it resolves back to the DID (`handle.invalid` otherwise), and reads the
+actor's own `app.bsky.actor.profile/self` for display name and avatar, into
+`plyr_index.actor_identities` (every `IDENTITY_REFRESH_SECONDS`, default six
+hours). That table replaces python's `public.artists`; the zig runtime reads no
+python table.
+
 `/health` is process liveness. `/ready` is product readiness and requires a
 configured track index. The listener acquires a connection permit before
 `accept`, so saturation applies kernel-backlog backpressure instead of creating

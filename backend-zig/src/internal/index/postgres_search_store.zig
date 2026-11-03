@@ -250,7 +250,7 @@ const search_query =
     \\  FROM plyr_index.track_records AS v
     \\  JOIN plyr_index.account_availability AS aa
     \\    ON aa.repo_did = v.owner_did AND aa.available
-    \\  JOIN artists AS a ON a.did = v.owner_did AND NOT a.deactivated
+    \\  JOIN plyr_index.actor_identities AS a ON a.did = v.owner_did
     \\  LEFT JOIN plyr_index.track_policies AS pol ON pol.record_uri = v.record_uri
     \\  LEFT JOIN plyr_index.track_metrics AS metrics ON metrics.record_uri = v.record_uri
     \\  WHERE $5::boolean AND v.collection = $2 AND NOT v.deleted
@@ -294,7 +294,7 @@ const search_query =
     \\  FROM plyr_index.profile_records AS p
     \\  JOIN plyr_index.account_availability AS aa
     \\    ON aa.repo_did = p.owner_did AND aa.available
-    \\  JOIN artists AS a ON a.did = p.owner_did AND NOT a.deactivated
+    \\  JOIN plyr_index.actor_identities AS a ON a.did = p.owner_did
     \\  WHERE $6::boolean AND p.collection = $4 AND p.rkey = 'self' AND NOT p.deleted
     \\    AND (
     \\      a.handle ILIKE '%' || replace(replace(replace($1, E'\\', E'\\\\'), '%', E'\\%'), '_', E'\\_') || '%' ESCAPE E'\\'
@@ -325,7 +325,7 @@ const search_query =
     \\  FROM plyr_index.list_records AS records
     \\  JOIN plyr_index.account_availability AS aa
     \\    ON aa.repo_did = records.owner_did AND aa.available
-    \\  JOIN artists AS a ON a.did = records.owner_did AND NOT a.deactivated
+    \\  JOIN plyr_index.actor_identities AS a ON a.did = records.owner_did
     \\  WHERE records.collection = $3 AND NOT records.deleted AND records.name IS NOT NULL
     \\    AND ((records.list_type = 'album' AND $7::boolean)
     \\      OR (records.list_type = 'playlist' AND $8::boolean))

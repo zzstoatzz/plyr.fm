@@ -2,7 +2,7 @@
 //!
 //! The durable key is the authenticated record URI; no legacy identifier
 //! enters the application contract, and the Python `public.tracks.play_count`
-//! column is not written (next's api is not the Python backend's writer).
+//! column is not read or written; python's tables are not part of next.
 //!
 //! The api role defaults to read-only transactions, so the increment opens an
 //! explicit READ WRITE transaction: plays are application metrics, the one
@@ -72,8 +72,9 @@ pub const PostgresPlayMetricStore = struct {
             return error.MetricsUnavailable;
         };
         defer self.pool.release(conn);
-        const ref_code: ?[]const u8 = if (attribution) |value| value.ref_code else null;
-        const listener_did: ?[]const u8 = if (attribution) |value| value.listener_did else null;
+        // Share-link attribution lived in python's public tables; next does
+        // not carry it until share links exist as records.
+        _ = attribution;
         _ = conn.exec("BEGIN READ WRITE", .{}) catch |err| {
             logQueryError(conn, "play metric transaction failed", err);
             return error.MetricsUnavailable;
@@ -83,7 +84,7 @@ pub const PostgresPlayMetricStore = struct {
             _ = conn.exec("ROLLBACK", .{}) catch {};
         };
         const count = blk: {
-            var query_row = conn.row(increment_query, .{ record_uri, ref_code, listener_did }) catch |err| {
+            var query_row = conn.row(increment_query, .{record_uri}) catch |err| {
                 logQueryError(conn, "play metric increment failed", err);
                 return error.MetricsUnavailable;
             } orelse break :blk null;
@@ -170,15 +171,6 @@ const increment_query = "WITH admitted AS (\n" ++ admitted_cte ++
     \\    write_source = EXCLUDED.write_source,
     \\    observed_at_us = EXCLUDED.observed_at_us
     \\  RETURNING record_uri, play_count
-    \\), share_attribution AS (
-    \\  INSERT INTO public.share_link_events (share_link_id, visitor_did, event_type)
-    \\  SELECT share.id, $3::text, 'play'
-    \\  FROM metric
-    \\  JOIN public.tracks AS legacy ON legacy.atproto_record_uri = metric.record_uri
-    \\  JOIN public.share_links AS share
-    \\    ON share.track_id = legacy.id AND share.code = $2::text
-    \\  WHERE $2::text IS NOT NULL
-    \\    AND ($3::text IS NULL OR $3::text <> share.creator_did)
     \\)
     \\SELECT play_count FROM metric
 ;
@@ -331,6 +323,7 @@ test "PostgreSQL metric writes are canonical, atomic, and policy gated" {
         "SELECT count(*)::bigint FROM share_link_events WHERE event_type = 'play'",
         .{},
     )).?;
-    try std.testing.expectEqual(@as(i64, 1), try events.get(i64, 0));
+    // share-link attribution lived in python's tables; next never writes them
+    try std.testing.expectEqual(@as(i64, 0), try events.get(i64, 0));
     try events.deinit();
 }

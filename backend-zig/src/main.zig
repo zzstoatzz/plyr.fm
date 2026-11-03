@@ -19,6 +19,7 @@ const continuous_runner = @import("internal/ingest/continuous_runner.zig");
 const catalog_reconcile_runner = @import("internal/ingest/catalog_reconcile_runner.zig");
 const account_reconciler = @import("internal/account/reconciler.zig");
 const blob_mirror = @import("internal/delivery/blob_mirror.zig");
+const actor_identity_refresher = @import("internal/identity/actor_identity_refresher.zig");
 
 var threaded_io: std.Io.Threaded = undefined;
 pub const std_options_debug_threaded_io: ?*std.Io.Threaded = &threaded_io;
@@ -182,6 +183,7 @@ pub fn main() !void {
         .ingester => {
             const store = if (postgres_store) |*value| value else return error.IngesterDatabaseRequired;
             blob_mirror.spawnBeside(io, allocator, store.pool);
+            actor_identity_refresher.spawnBeside(io, allocator, store.pool);
             try continuous_runner.run(
                 io,
                 allocator,
@@ -280,6 +282,8 @@ test {
     _ = @import("internal/ingest/catalog_reconciler.zig");
     _ = @import("internal/delivery/blob_mirror.zig");
     _ = @import("internal/delivery/postgres_mirror_store.zig");
+    _ = @import("internal/identity/actor_identity_refresher.zig");
+    _ = @import("internal/identity/postgres_actor_identity_store.zig");
     _ = @import("internal/ingest/catalog_reconcile_runner.zig");
     _ = @import("internal/ingest/continuous_runner.zig");
     _ = @import("internal/ingest/postgres_relay_cursor.zig");
