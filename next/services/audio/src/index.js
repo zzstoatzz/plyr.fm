@@ -110,11 +110,11 @@ function objectHeaders(object) {
 }
 
 function span(range, size) {
-  if ("suffix" in range)
+  if (typeof range.suffix === "number")
     return { start: Math.max(size - range.suffix, 0), end: size - 1 };
   const start = range.offset ?? 0;
   const end =
-    range.length === undefined
+    range.length == null
       ? size - 1
       : Math.min(start + range.length, size) - 1;
   return { start, end };
