@@ -72,6 +72,33 @@ pub fn run(io: std.Io, allocator: std.mem.Allocator, pool: *pg.Pool) !void {
         log.warn("MIRROR_S3_* / MIRROR_PUBLIC_BASE_URL not set; blob mirror is idle", .{});
         while (true) try io.sleep(std.Io.Duration.fromSeconds(3600), .awake);
     };
+    try runWith(io, allocator, pool, settings);
+}
+
+/// Runs the mirror on a detached thread beside another worker (the ingester),
+/// so it needs no machine of its own. Unconfigured or invalid settings leave
+/// the host worker untouched.
+pub fn spawnBeside(io: std.Io, allocator: std.mem.Allocator, pool: *pg.Pool) void {
+    const settings = Settings.fromEnvironment() orelse {
+        log.info("MIRROR_S3_* / MIRROR_PUBLIC_BASE_URL not set; blob mirror disabled", .{});
+        return;
+    };
+    settings.validate() catch |err| {
+        log.err("blob mirror disabled, invalid settings: {}", .{err});
+        return;
+    };
+    const thread = std.Thread.spawn(.{}, backgroundMain, .{ io, allocator, pool, settings }) catch |err| {
+        log.err("blob mirror disabled, thread spawn failed: {}", .{err});
+        return;
+    };
+    thread.detach();
+}
+
+fn backgroundMain(io: std.Io, allocator: std.mem.Allocator, pool: *pg.Pool, settings: Settings) void {
+    runWith(io, allocator, pool, settings) catch |err| log.err("blob mirror stopped: {}", .{err});
+}
+
+fn runWith(io: std.Io, allocator: std.mem.Allocator, pool: *pg.Pool, settings: Settings) !void {
     try settings.validate();
 
     var identity = zat.DidResolver.init(io, allocator);

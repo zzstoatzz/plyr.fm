@@ -181,6 +181,7 @@ pub fn main() !void {
         },
         .ingester => {
             const store = if (postgres_store) |*value| value else return error.IngesterDatabaseRequired;
+            blob_mirror.spawnBeside(io, allocator, store.pool);
             try continuous_runner.run(
                 io,
                 allocator,
