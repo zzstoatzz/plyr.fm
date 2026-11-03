@@ -107,16 +107,15 @@ Direct SQL is reserved for projection adapter tests and benchmark fixtures.
 | `ACCOUNT_CHECK_LEASE_SECONDS` | no | expired-worker claim recovery window, default 120 |
 | `ACCOUNT_CHECK_SEED_SECONDS` | no | periodic sweep from authenticated repository heads, default 300 |
 | `ACCOUNT_CHECK_IDLE_MILLISECONDS` | no | idle claim-poll interval, default 1000 |
-| `MIRROR_S3_ENDPOINT` | to enable mirror | https S3-compatible endpoint (R2: `https://<account>.r2.cloudflarestorage.com`) |
-| `MIRROR_S3_BUCKET` | to enable mirror | bucket for mirrored audio, addressed path-style |
-| `MIRROR_S3_ACCESS_KEY_ID` / `MIRROR_S3_SECRET_ACCESS_KEY` | to enable mirror | SigV4 credentials with object write on the bucket |
-| `MIRROR_PUBLIC_BASE_URL` | to enable mirror | https public origin for the bucket; origins are `{base}/{prefix}/{cid}` |
-| `MIRROR_S3_REGION` / `MIRROR_KEY_PREFIX` | no | SigV4 region, default `auto`; object prefix, default `audio` |
+| `MIRROR_BASE_URL` | to enable mirror | https origin of the `next-audio` worker (`infra/next-audio/`); uploads PUT to and playback reads from `{base}/{prefix}/{cid}` |
+| `MIRROR_UPLOAD_TOKEN` | to enable mirror | bearer secret shared with the worker's `UPLOAD_TOKEN` (32+ chars) |
+| `MIRROR_KEY_PREFIX` | no | object prefix, default `audio` |
 
 The ingester runs the blob mirror on a side thread when configured (`MODE=mirror` runs it
 alone). It fetches each live track's audio blob from the owner's
 current PDS (SSRF-pinned, no redirects, 100 MB cap), verifies the bytes hash to
-the record's raw-codec CID, uploads them content-addressed, and records an `r2`
+the record's raw-codec CID, uploads them content-addressed through the worker
+(which has R2 re-check the sha256), and records an `r2`
 delivery origin bound to that exact record CID. Failures back off from one
 minute to one day per record version. Without the `MIRROR_*` settings it idles.
 Mirrored origins give clients a Range-capable URL even when the PDS ignores

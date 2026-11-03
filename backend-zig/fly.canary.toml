@@ -7,7 +7,7 @@ primary_region = "sjc"
 # One image, two process groups. The binary ignores argv; the group name
 # (FLY_PROCESS_GROUP) selects the role: `app` runs MODE=api and scales to zero;
 # `ingester` runs the relay-to-projection ingester (WORKER_DATABASE_URL) and,
-# when the MIRROR_S3_* secrets are set, the blob mirror on a side thread.
+# when MIRROR_BASE_URL + MIRROR_UPLOAD_TOKEN are set, the blob mirror on a side thread.
 [processes]
   app = "serve"
   ingester = "ingester"

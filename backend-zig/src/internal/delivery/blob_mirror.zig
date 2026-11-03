@@ -15,7 +15,6 @@ const pg = @import("pg");
 const zat = @import("zat");
 const pinned_tls = @import("../ingest/pinned_tls.zig");
 const safe_endpoint = @import("../ingest/safe_endpoint.zig");
-const sigv4 = @import("sigv4.zig");
 const store_module = @import("postgres_mirror_store.zig");
 
 const log = std.log.scoped(.blob_mirror);
@@ -25,51 +24,37 @@ pub const max_blob_bytes: usize = 104_857_600;
 const user_agent = "plyr.fm-zig-blob-mirror/0.1 (+https://plyr.fm)";
 
 pub const Settings = struct {
-    /// e.g. https://<account>.r2.cloudflarestorage.com
-    endpoint: []const u8,
-    bucket: []const u8,
-    access_key_id: []const u8,
-    secret_access_key: []const u8,
-    region: []const u8 = "auto",
-    /// public, range-capable base for the bucket, e.g. https://audio-next.plyr.fm
-    public_base_url: []const u8,
+    /// the audio worker's origin, e.g. https://plyr-next-audio.<sub>.workers.dev;
+    /// uploads PUT here and objects are served from here
+    base_url: []const u8,
+    /// bearer secret shared with the worker (`UPLOAD_TOKEN`)
+    upload_token: []const u8,
     key_prefix: []const u8 = "audio",
     batch_size: u32 = 8,
     idle_ms: i64 = 15_000,
 
     pub fn fromEnvironment() ?Settings {
-        const endpoint = getenv("MIRROR_S3_ENDPOINT");
-        const bucket = getenv("MIRROR_S3_BUCKET");
-        const access_key_id = getenv("MIRROR_S3_ACCESS_KEY_ID");
-        const secret_access_key = getenv("MIRROR_S3_SECRET_ACCESS_KEY");
-        const public_base_url = getenv("MIRROR_PUBLIC_BASE_URL");
-        if (endpoint == null or bucket == null or access_key_id == null or
-            secret_access_key == null or public_base_url == null) return null;
+        const base_url = getenv("MIRROR_BASE_URL") orelse return null;
+        const upload_token = getenv("MIRROR_UPLOAD_TOKEN") orelse return null;
         return .{
-            .endpoint = std.mem.trimEnd(u8, endpoint.?, "/"),
-            .bucket = bucket.?,
-            .access_key_id = access_key_id.?,
-            .secret_access_key = secret_access_key.?,
-            .region = getenv("MIRROR_S3_REGION") orelse "auto",
-            .public_base_url = std.mem.trimEnd(u8, public_base_url.?, "/"),
+            .base_url = std.mem.trimEnd(u8, base_url, "/"),
+            .upload_token = upload_token,
             .key_prefix = getenv("MIRROR_KEY_PREFIX") orelse "audio",
         };
     }
 
     pub fn validate(self: Settings) !void {
-        const endpoint = std.Uri.parse(self.endpoint) catch return error.InvalidMirrorEndpoint;
-        if (!std.mem.eql(u8, endpoint.scheme, "https") or endpoint.host == null)
-            return error.InvalidMirrorEndpoint;
-        const public = std.Uri.parse(self.public_base_url) catch return error.InvalidMirrorPublicUrl;
-        if (!std.mem.eql(u8, public.scheme, "https") or public.host == null)
-            return error.InvalidMirrorPublicUrl;
-        if (!safeSegment(self.bucket) or !safeSegment(self.key_prefix)) return error.InvalidMirrorBucket;
+        const base = std.Uri.parse(self.base_url) catch return error.InvalidMirrorBaseUrl;
+        if (!std.mem.eql(u8, base.scheme, "https") or base.host == null)
+            return error.InvalidMirrorBaseUrl;
+        if (self.upload_token.len < 32) return error.InvalidMirrorUploadToken;
+        if (!safeSegment(self.key_prefix)) return error.InvalidMirrorPrefix;
     }
 };
 
 pub fn run(io: std.Io, allocator: std.mem.Allocator, pool: *pg.Pool) !void {
     const settings = Settings.fromEnvironment() orelse {
-        log.warn("MIRROR_S3_* / MIRROR_PUBLIC_BASE_URL not set; blob mirror is idle", .{});
+        log.warn("MIRROR_BASE_URL / MIRROR_UPLOAD_TOKEN not set; blob mirror is idle", .{});
         while (true) try io.sleep(std.Io.Duration.fromSeconds(3600), .awake);
     };
     try runWith(io, allocator, pool, settings);
@@ -80,7 +65,7 @@ pub fn run(io: std.Io, allocator: std.mem.Allocator, pool: *pg.Pool) !void {
 /// the host worker untouched.
 pub fn spawnBeside(io: std.Io, allocator: std.mem.Allocator, pool: *pg.Pool) void {
     const settings = Settings.fromEnvironment() orelse {
-        log.info("MIRROR_S3_* / MIRROR_PUBLIC_BASE_URL not set; blob mirror disabled", .{});
+        log.info("MIRROR_BASE_URL / MIRROR_UPLOAD_TOKEN not set; blob mirror disabled", .{});
         return;
     };
     settings.validate() catch |err| {
@@ -118,9 +103,7 @@ fn runWith(io: std.Io, allocator: std.mem.Allocator, pool: *pg.Pool, settings: S
         .pds_transport = &pds_transport,
         .bucket_transport = &bucket_transport,
     };
-    log.info("blob mirror writing to {s}/{s}, served from {s}", .{
-        settings.endpoint, settings.bucket, settings.public_base_url,
-    });
+    log.info("blob mirror writing to {s}/{s}", .{ settings.base_url, settings.key_prefix });
     while (true) {
         const copied = worker.batch() catch |err| blk: {
             log.err("mirror batch failed: {}", .{err});
@@ -170,7 +153,7 @@ const Worker = struct {
         const key = try std.fmt.allocPrint(self.allocator, "{s}/{s}", .{ self.settings.key_prefix, candidate.blob_cid });
         defer self.allocator.free(key);
         try self.put(key, candidate.media_type, blob);
-        return std.fmt.allocPrint(self.allocator, "{s}/{s}", .{ self.settings.public_base_url, key });
+        return std.fmt.allocPrint(self.allocator, "{s}/{s}", .{ self.settings.base_url, key });
     }
 
     fn fetchBlob(self: *Worker, candidate: store_module.Candidate) ![]u8 {
@@ -211,48 +194,21 @@ const Worker = struct {
     }
 
     fn put(self: *Worker, key: []const u8, media_type: []const u8, body: []const u8) !void {
-        const endpoint = try std.Uri.parse(self.settings.endpoint);
-        const host = switch (endpoint.host.?) {
-            .raw, .percent_encoded => |text| text,
-        };
-        const path = try std.fmt.allocPrint(self.allocator, "/{s}/{s}", .{ self.settings.bucket, key });
-        defer self.allocator.free(path);
-        const url = try std.fmt.allocPrint(self.allocator, "{s}{s}", .{ self.settings.endpoint, path });
+        const url = try std.fmt.allocPrint(self.allocator, "{s}/{s}", .{ self.settings.base_url, key });
         defer self.allocator.free(url);
-
-        var payload_hash: [64]u8 = undefined;
-        sigv4.hexSha256(&payload_hash, body);
-        var amz_date: [16]u8 = undefined;
-        const seconds = @divFloor(try nowMicros(self.io), std.time.us_per_s);
-        sigv4.formatAmzDate(&amz_date, @intCast(seconds));
-        const auth = try sigv4.authorization(self.allocator, .{
-            .access_key_id = self.settings.access_key_id,
-            .secret_access_key = self.settings.secret_access_key,
-            .region = self.settings.region,
-        }, .{
-            .method = "PUT",
-            .canonical_path = path,
-            .headers = &.{
-                .{ .name = "host", .value = host },
-                .{ .name = "x-amz-content-sha256", .value = &payload_hash },
-                .{ .name = "x-amz-date", .value = &amz_date },
-            },
-            .payload_sha256_hex = &payload_hash,
-            .amz_date = &amz_date,
-        });
+        const auth = try std.fmt.allocPrint(self.allocator, "Bearer {s}", .{self.settings.upload_token});
         defer self.allocator.free(auth);
+        var digest: [32]u8 = undefined;
+        std.crypto.hash.sha2.Sha256.hash(body, &digest, .{});
+        const digest_hex = std.fmt.bytesToHex(digest, .lower);
         var result = self.bucket_transport.fetch(.{
             .url = url,
             .method = .PUT,
             .payload = body,
             .content_type = media_type,
             .authorization = auth,
-            .extra_headers = &.{
-                .{ .name = "x-amz-content-sha256", .value = &payload_hash },
-                .{ .name = "x-amz-date", .value = &amz_date },
-                // content-addressed key: the bytes behind it never change
-                .{ .name = "cache-control", .value = "public, max-age=31536000, immutable" },
-            },
+            // the worker hands this to R2, which rejects the write on mismatch
+            .extra_headers = &.{.{ .name = "x-content-sha256", .value = &digest_hex }},
             .max_response_size = 64 * 1024,
             .on_redirect = .refuse,
             .deadline_ns = 5 * std.time.ns_per_min,
@@ -261,9 +217,12 @@ const Worker = struct {
             else => return error.BucketUnavailable,
         };
         defer result.deinit(self.bucket_transport.allocator);
-        if (result.status != .ok) {
-            log.warn("bucket PUT {s}: {d}", .{ key, @backingInt(result.status) });
-            return error.BucketRejected;
+        switch (result.status) {
+            .ok, .created, .no_content => {},
+            else => {
+                log.warn("bucket PUT {s}: {d}", .{ key, @backingInt(result.status) });
+                return error.BucketRejected;
+            },
         }
     }
 };
@@ -315,18 +274,18 @@ test "blob bytes must match the record's raw sha256 CID" {
     try std.testing.expectError(error.UnsupportedBlobCid, verifyBlob(allocator, dag_text, bytes));
 }
 
-test "mirror settings require https and plain bucket names" {
+test "mirror settings require https, a real token, and a plain prefix" {
     var settings: Settings = .{
-        .endpoint = "https://acct.r2.cloudflarestorage.com",
-        .bucket = "audio-next",
-        .access_key_id = "a",
-        .secret_access_key = "b",
-        .public_base_url = "https://audio-next.plyr.fm",
+        .base_url = "https://plyr-next-audio.example.workers.dev",
+        .upload_token = "0123456789abcdef0123456789abcdef",
     };
     try settings.validate();
-    settings.endpoint = "http://acct.r2.cloudflarestorage.com";
-    try std.testing.expectError(error.InvalidMirrorEndpoint, settings.validate());
-    settings.endpoint = "https://acct.r2.cloudflarestorage.com";
-    settings.bucket = "../etc";
-    try std.testing.expectError(error.InvalidMirrorBucket, settings.validate());
+    settings.base_url = "http://plyr-next-audio.example.workers.dev";
+    try std.testing.expectError(error.InvalidMirrorBaseUrl, settings.validate());
+    settings.base_url = "https://plyr-next-audio.example.workers.dev";
+    settings.upload_token = "short";
+    try std.testing.expectError(error.InvalidMirrorUploadToken, settings.validate());
+    settings.upload_token = "0123456789abcdef0123456789abcdef";
+    settings.key_prefix = "../etc";
+    try std.testing.expectError(error.InvalidMirrorPrefix, settings.validate());
 }

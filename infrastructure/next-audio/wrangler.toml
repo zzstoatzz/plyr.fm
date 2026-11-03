@@ -1,0 +1,12 @@
+# next.plyr.fm audio origin: the zig blob mirror PUTs verified blobs here and
+# players read them back with Range. Next-only; prod audio lives elsewhere.
+# Deploy: `wrangler deploy` from this directory. Secret: UPLOAD_TOKEN (the same
+# value as MIRROR_UPLOAD_TOKEN on fly app plyr-api-zig-canary).
+name = "plyr-next-audio"
+main = "src/index.js"
+compatibility_date = "2026-10-01"
+workers_dev = true
+
+[[r2_buckets]]
+binding = "AUDIO"
+bucket_name = "plyr-next-audio"
