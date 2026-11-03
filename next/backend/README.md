@@ -141,8 +141,12 @@ Direct SQL is reserved for projection adapter tests and benchmark fixtures.
 | `PLC_DIRECTORY_URL` | no | did:plc resolution for the managed-space checks, default `https://plc.directory`; point it at a local PLC stub for a local zds e2e |
 
 The ingester subscribes to jetstreams (`INGEST_STREAM_HOSTS`) filtered to the
-four plyr collections and trusts their upstream commit verification; it checks
-each record's JSON against the CID the stream reports before projecting it, and
+four plyr collections and treats each event as a hint: it fetches the touched
+record's `com.atproto.sync.getRecord` proof from the repo's own PDS (DID
+document endpoint, pinned dial), verifies the signed commit and MST path, and
+projects that proven state, with deletes proven by absence. When no proof
+verifies, the repository is repaired from a verified snapshot instead. Each
+projection logs `live verified … verify Nms, event lag Nms`. It
 checkpoints the portable `time_us` cursor so failover between hosts resumes in
 place. A repository seen for the first time is bootstrapped once from a
 verified PDS snapshot.

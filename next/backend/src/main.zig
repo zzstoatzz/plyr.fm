@@ -300,6 +300,7 @@ test {
     _ = @import("internal/identity/postgres_actor_identity_store.zig");
     _ = @import("internal/ingest/catalog_reconcile_runner.zig");
     _ = @import("internal/ingest/stream_runner.zig");
+    _ = @import("internal/ingest/record_apply.zig");
     _ = @import("internal/atproto/json_record.zig");
     _ = @import("internal/ingest/postgres_relay_cursor.zig");
     _ = @import("internal/ingest/postgres_repository_candidates.zig");

@@ -1,5 +1,6 @@
-//! Authenticate per-record `sync.getRecord` proofs for repositories too large
-//! to fetch whole, producing the same verified snapshot as a full repo CAR.
+//! Authenticate `sync.getRecord` proofs: single records for live ingestion,
+//! and bundles for repositories too large to fetch whole (producing the same
+//! verified snapshot as a full repo CAR).
 
 const std = @import("std");
 const zat = @import("zat");
@@ -42,28 +43,10 @@ pub fn verifyProofs(
             !std.mem.eql(u8, cars[index].roots[0].raw, cars[0].roots[0].raw))
             return error.InvalidSnapshot;
     }
-    {
-        var proof_arena = std.heap.ArenaAllocator.init(allocator);
-        defer proof_arena.deinit();
-        _ = try zat.verifyCommitCar(proof_arena.allocator(), proofs[0], public_key, .{
-            .expected_did = expected_did,
-            .verify_mst = false,
-            .max_car_size = max_proof_bytes,
-            .max_blocks = 1024,
-        });
-    }
-    const commit_cid = cars[0].roots[0];
-    const commit_bytes = zat.car.findBlock(cars[0], commit_cid.raw) orelse return error.InvalidSnapshot;
-    const commit_value = zat.cbor.decodeAll(allocator, commit_bytes) catch return error.InvalidSnapshot;
-    const commit_did = commit_value.getString("did") orelse return error.InvalidSnapshot;
-    const commit_rev = commit_value.getString("rev") orelse return error.InvalidSnapshot;
-    const commit_version = commit_value.getInt("version") orelse return error.InvalidSnapshot;
-    const data_cid = switch (commit_value.get("data") orelse return error.InvalidSnapshot) {
-        .cid => |value| value,
-        else => return error.InvalidSnapshot,
-    };
-    if (commit_version != 3 or !std.mem.eql(u8, commit_did, expected_did) or
-        zat.Tid.parse(commit_rev) == null) return error.InvalidSnapshot;
+    const commit = try signedCommit(allocator, cars, proofs[0], expected_did, public_key);
+    const commit_cid = commit.cid;
+    const commit_rev = commit.rev;
+    const data_cid = commit.data;
 
     var blocks: CarBlocks = .{ .cars = cars };
     var tree = try zat.mst.Mst.loadLazy(allocator, data_cid.raw, blocks.reader());
@@ -100,6 +83,86 @@ pub fn verifyProofs(
     };
     try snapshot.validate();
     return snapshot;
+}
+
+const SignedCommit = struct {
+    cid: zat.Cid,
+    rev: []const u8,
+    data: zat.Cid,
+};
+
+/// Check the commit block every proof shares: signed by the repo key, version
+/// 3, for the expected DID, with a valid rev.
+fn signedCommit(
+    allocator: std.mem.Allocator,
+    cars: []const zat.car.Car,
+    first_proof: []const u8,
+    expected_did: []const u8,
+    public_key: zat.multicodec.PublicKey,
+) !SignedCommit {
+    {
+        var proof_arena = std.heap.ArenaAllocator.init(allocator);
+        defer proof_arena.deinit();
+        _ = try zat.verifyCommitCar(proof_arena.allocator(), first_proof, public_key, .{
+            .expected_did = expected_did,
+            .verify_mst = false,
+            .max_car_size = max_proof_bytes,
+            .max_blocks = 1024,
+        });
+    }
+    const commit_cid = cars[0].roots[0];
+    const commit_bytes = zat.car.findBlock(cars[0], commit_cid.raw) orelse return error.InvalidSnapshot;
+    const commit_value = zat.cbor.decodeAll(allocator, commit_bytes) catch return error.InvalidSnapshot;
+    const commit_did = commit_value.getString("did") orelse return error.InvalidSnapshot;
+    const commit_rev = commit_value.getString("rev") orelse return error.InvalidSnapshot;
+    const commit_version = commit_value.getInt("version") orelse return error.InvalidSnapshot;
+    const data_cid = switch (commit_value.get("data") orelse return error.InvalidSnapshot) {
+        .cid => |value| value,
+        else => return error.InvalidSnapshot,
+    };
+    if (commit_version != 3 or !std.mem.eql(u8, commit_did, expected_did) or
+        zat.Tid.parse(commit_rev) == null) return error.InvalidSnapshot;
+    return .{ .cid = commit_cid, .rev = commit_rev, .data = data_cid };
+}
+
+/// One record's state at a signed commit, from its `sync.getRecord` proof.
+pub const RecordState = struct {
+    commit_cid: zat.Cid,
+    commit_rev: []const u8,
+    /// null when the proven tree has no such path (the record is deleted).
+    record: ?struct { cid: zat.Cid, value: zat.cbor.Value },
+};
+
+/// Authenticate one `sync.getRecord` proof for `path`: the commit is signed by
+/// the repo key, the MST path to `path` hash-links to that commit, and the
+/// record block hashes to the CID the tree holds. Absence is proven the same
+/// way, by the tree nodes that would hold the path.
+pub fn verifyRecord(
+    allocator: std.mem.Allocator,
+    proof: []const u8,
+    path: []const u8,
+    expected_did: []const u8,
+    public_key: zat.multicodec.PublicKey,
+) !RecordState {
+    if (zat.Did.parse(expected_did) == null) return error.InvalidSnapshot;
+    const cars = try allocator.alloc(zat.car.Car, 1);
+    cars[0] = zat.car.readWithOptions(allocator, proof, .{
+        .max_size = max_proof_bytes,
+        .max_blocks = 1024,
+    }) catch return error.InvalidSnapshot;
+    if (cars[0].roots.len != 1) return error.InvalidSnapshot;
+    const commit = try signedCommit(allocator, cars, proof, expected_did, public_key);
+    var blocks: CarBlocks = .{ .cars = cars };
+    var tree = try zat.mst.Mst.loadLazy(allocator, commit.data.raw, blocks.reader());
+    const value_cid = (tree.getLazy(path) catch return error.IncompleteRepo) orelse
+        return .{ .commit_cid = commit.cid, .commit_rev = commit.rev, .record = null };
+    const bytes = zat.car.findBlock(cars[0], value_cid.raw) orelse return error.IncompleteRepo;
+    const value = zat.cbor.decodeAll(allocator, bytes) catch return error.InvalidRecord;
+    return .{
+        .commit_cid = commit.cid,
+        .commit_rev = commit.rev,
+        .record = .{ .cid = value_cid, .value = value },
+    };
 }
 
 const CarBlocks = struct {
@@ -139,4 +202,21 @@ test "record proofs authenticate listed paths through the signed commit" {
     try std.testing.expectEqual(@as(usize, 0), snapshot.list_changes.len);
     try std.testing.expectEqualStrings(full.commit_rev, snapshot.commit_rev);
     try std.testing.expectError(error.InvalidSnapshot, verifyProofs(a, &.{fixture.car_bytes}, &.{ track_path, track_path }, fixture.did, fixture.public_key, "fm.plyr.dev.list", "fm.plyr.dev.track", "fm.plyr.dev.actor.profile", "fm.plyr.dev.like", 42));
+}
+
+test "a single record proof yields the record, or proven absence, at the signed commit" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    const fixture = try snapshot_verifier.buildFixture(a, true, false);
+    const full = try snapshot_verifier.verify(a, fixture.car_bytes, fixture.did, fixture.public_key, "fm.plyr.dev.list", "fm.plyr.dev.track", "fm.plyr.dev.actor.profile", "fm.plyr.dev.like", 42);
+    const track_path = try std.fmt.allocPrint(a, "fm.plyr.dev.track/{s}", .{full.track_changes[0].upsert.rkey});
+    const present = try verifyRecord(a, fixture.car_bytes, track_path, fixture.did, fixture.public_key);
+    try std.testing.expectEqualStrings(full.commit_rev, present.commit_rev);
+    try std.testing.expectEqualStrings("Verified", present.record.?.value.getString("title").?);
+    const absent = try verifyRecord(a, fixture.car_bytes, "fm.plyr.dev.track/3zzzzzzzzzzzz", fixture.did, fixture.public_key);
+    try std.testing.expect(absent.record == null);
+    const other = try zat.Keypair.fromSecretKey(.p256, @as([32]u8, @splat(99)));
+    const other_key = try other.publicKey();
+    try std.testing.expectError(error.SignatureVerificationFailed, verifyRecord(a, fixture.car_bytes, track_path, fixture.did, .{ .key_type = .p256, .raw = &other_key }));
 }

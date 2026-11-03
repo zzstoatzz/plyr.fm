@@ -48,6 +48,11 @@ pub const WatchedRepositories = struct {
         try self.entries.put(self.allocator, owned, {});
     }
 
+    pub fn remove(self: *WatchedRepositories, did: []const u8) void {
+        const removed = self.entries.fetchRemove(did) orelse return;
+        self.allocator.free(removed.key);
+    }
+
     pub fn count(self: *const WatchedRepositories) usize {
         return self.entries.count();
     }
