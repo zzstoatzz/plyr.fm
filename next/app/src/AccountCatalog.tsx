@@ -213,8 +213,8 @@ function EditCollection({ list, refresh }: { list: ListDetail; refresh: () => vo
     });
   }
   return <>
-    <Button label={album ? 'Edit album' : 'Edit playlist'} onPress={() => { setName(list.metadata.name ?? ''); setEditing(true); }} />
-    {editing && <Sheet title={album ? 'Edit album' : 'Edit playlist'} close={() => { if (!mutation.busy) { setEditing(false); setConfirmDelete(false); } }}>
+    <Button label={editing ? 'Done editing' : album ? 'Edit album' : 'Edit playlist'} onPress={() => { if (mutation.busy) return; setName(list.metadata.name ?? ''); setEditing(!editing); setConfirmDelete(false); }} />
+    {editing && <View style={styles.wide}>
       <NameInput label={album ? 'Album name' : 'Playlist name'} value={name} onChange={setName} />
       <Status loading={mutation.busy} empty={mutation.message} />
       {!mutation.busy && <>
@@ -229,7 +229,7 @@ function EditCollection({ list, refresh }: { list: ListDetail; refresh: () => vo
           {confirmDelete && <Button label="Cancel deletion" onPress={() => setConfirmDelete(false)} />}
         </>}
       </>}
-    </Sheet>}
+    </View>}
   </>;
 }
 
