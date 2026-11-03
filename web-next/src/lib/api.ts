@@ -32,8 +32,11 @@ export interface Track {
 export interface Playback {
 	object: 'playback';
 	track_id: string;
+	record: { uri: string; cid: string };
 	availability: {
 		status: 'available' | 'unavailable';
+		/** the audio blob the signed record points at, if any */
+		artifact?: { cid: string; media_type: string; byte_length: number | null } | null;
 		delivery?: { url: string; media_type: string } | null;
 	};
 }

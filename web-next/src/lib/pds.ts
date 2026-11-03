@@ -167,3 +167,59 @@ export async function deletePlaylist(playlistUri: string): Promise<AwaitStatus> 
 	await ok(rpc.post('com.atproto.repo.deleteRecord', { input: { repo: did, collection: LIST(), rkey: rkeyOf(playlistUri) } }));
 	return (await api.awaitRecord(playlistUri)).status;
 }
+
+// uploads: the audio goes to the user's PDS as a blob and the track record
+// points at it. the appview never touches the bytes; players fetch them from
+// the PDS (see identity.blobUrl).
+
+export const MAX_AUDIO_BYTES = 104_857_600; // track lexicon audioBlob.maxSize
+
+export interface NewTrack {
+	file: File;
+	title: string;
+	artist: string;
+	album?: string;
+	description?: string;
+	duration?: number;
+}
+
+export async function uploadTrack(input: NewTrack): Promise<{ uri: string; status: AwaitStatus }> {
+	const { rpc, did } = session();
+	if (!input.file.type.startsWith('audio/')) throw new Error('pick an audio file');
+	if (input.file.size > MAX_AUDIO_BYTES) throw new Error('audio files are limited to 100 MB');
+	const uploaded = await ok(rpc.post('com.atproto.repo.uploadBlob', { input: input.file }));
+	const ext = input.file.name.includes('.') ? input.file.name.split('.').pop()!.toLowerCase() : '';
+	const record: Record<string, unknown> = {
+		$type: NSID.track,
+		title: input.title.trim(),
+		artist: input.artist.trim(),
+		fileType: (ext || input.file.type.split('/')[1] || 'audio').slice(0, 16),
+		audioBlob: uploaded.blob,
+		createdAt: new Date().toISOString()
+	};
+	if (input.album?.trim()) record.album = input.album.trim();
+	if (input.description?.trim()) record.description = input.description.trim();
+	if (input.duration && Number.isFinite(input.duration)) record.duration = Math.round(input.duration);
+	const res = await ok(
+		rpc.post('com.atproto.repo.createRecord', {
+			input: { repo: did, collection: NSID.track as Nsid, record }
+		})
+	);
+	return { uri: res.uri, status: (await api.awaitRecord(res.uri, res.cid)).status };
+}
+
+/** read duration locally so the record can carry it. */
+export function audioDuration(file: File): Promise<number | undefined> {
+	return new Promise((resolve) => {
+		const url = URL.createObjectURL(file);
+		const audio = new Audio();
+		const done = (value: number | undefined) => {
+			URL.revokeObjectURL(url);
+			resolve(value);
+		};
+		audio.preload = 'metadata';
+		audio.onloadedmetadata = () => done(Number.isFinite(audio.duration) ? audio.duration : undefined);
+		audio.onerror = () => done(undefined);
+		audio.src = url;
+	});
+}

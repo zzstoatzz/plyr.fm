@@ -33,6 +33,7 @@
 		<a href="/playlists">playlists</a>
 		{#if auth.did}
 			<a href="/liked">liked</a>
+			<a href="/upload">upload</a>
 			<button class="link" onclick={() => auth.logout()}>{auth.handle ?? 'sign out'}</button>
 		{:else if auth.ready}
 			<a href="/login">sign in</a>

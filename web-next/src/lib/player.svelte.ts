@@ -1,4 +1,5 @@
-import { api, type Track } from './api';
+import { api, type Playback, type Track } from './api';
+import { blobUrl } from './identity';
 
 class Player {
 	queue = $state<Track[]>([]);
@@ -28,9 +29,7 @@ class Player {
 		const track = this.queue[i];
 		try {
 			const playback = await api.playback(track.id);
-			const url = playback.availability.delivery?.url;
-			if (playback.availability.status !== 'available' || !url) throw new Error('unavailable');
-			this.src = url;
+			this.src = await playableUrl(playback);
 			this.playing = true;
 		} catch (e) {
 			this.src = null;
@@ -41,6 +40,17 @@ class Player {
 }
 
 export const player = new Player();
+
+/**
+ * prefer the appview's delivery (verified mirror or authored url); otherwise
+ * stream the record's audio blob straight from the owner's PDS.
+ */
+async function playableUrl(playback: Playback): Promise<string> {
+	const { delivery, artifact } = playback.availability;
+	if (playback.availability.status === 'available' && delivery?.url) return delivery.url;
+	if (artifact?.cid) return blobUrl(playback.record.uri.slice('at://'.length).split('/')[0], artifact.cid);
+	throw new Error('unavailable');
+}
 
 export function formatDuration(seconds: number | null | undefined) {
 	if (!seconds || seconds < 0) return '';
