@@ -15,29 +15,32 @@ interface RadioSong {
   hasCover: boolean;
 }
 
-export interface RadioSnapshot {
+interface RadioStateResponse {
   currentSong: RadioSong | null;
   state: {
     status: string;
-    startedAt: number | null;
     positionSeconds: number;
   };
+}
+
+export interface RadioSnapshot extends RadioStateResponse {
+  receivedAt: number;
 }
 
 export async function readRadio(station: RadioStation, signal: AbortSignal): Promise<RadioSnapshot> {
   const response = await fetch(`${station.origin}/api/radio/state`, { signal, cache: 'no-store' });
   if (!response.ok) throw new Error('Could not reach this station');
-  return response.json() as Promise<RadioSnapshot>;
+  const state: RadioStateResponse = await response.json();
+  return { ...state, receivedAt: performance.now() };
 }
 
 export function radioMedia(station: RadioStation, song: RadioSong, kind: 'audio' | 'cover') {
   return `${station.origin}/api/songs/${encodeURIComponent(song.id)}/${kind}`;
 }
 
-export function radioPosition(snapshot: RadioSnapshot, now = Date.now()) {
+export function radioPosition(snapshot: RadioSnapshot, now = performance.now()) {
   const { state, currentSong } = snapshot;
-  const position = state.status === 'playing' && state.startedAt !== null
-    ? now / 1000 - state.startedAt
-    : state.positionSeconds;
+  const elapsed = state.status === 'playing' ? Math.max(0, now - snapshot.receivedAt) / 1000 : 0;
+  const position = state.positionSeconds + elapsed;
   return Math.max(0, Math.min(position, currentSong?.durationSeconds ?? 0));
 }
