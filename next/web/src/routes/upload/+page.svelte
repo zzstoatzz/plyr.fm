@@ -6,6 +6,7 @@
 	import type { Gate } from '$lib/spaces';
 	import { formatDuration } from '$lib/player.svelte';
 	import Icon from '$lib/ui/Icon.svelte';
+	import ArtworkPicker from '$lib/ArtworkPicker.svelte';
 	import ScreenHeader from '$lib/ui/ScreenHeader.svelte';
 
 	let file = $state<File | null>(null);
@@ -15,6 +16,7 @@
 	let description = $state('');
 	let duration = $state<number | undefined>(undefined);
 	let gate = $state<Gate | ''>('');
+	let artwork = $state<File | null | undefined>(undefined);
 	let busy = $state(false);
 	let note = $state<string | null>(null);
 
@@ -39,7 +41,7 @@
 		busy = true;
 		note = 'uploading to your PDS…';
 		try {
-			const { uri, status } = await uploadTrack({ file, title, artist, album, description, duration, gate: gate || null });
+			const { uri, status } = await uploadTrack({ file, title, artist, album, description, duration, artwork, gate: gate || null });
 			if (status === 'indexed') location.href = `/track/${trackIdFromUri(uri)}`;
 			else if (status === 'rejected') note = 'saved to your PDS, but the appview rejected the record';
 			else note = 'saved to your PDS; still indexing, it will show up shortly';
@@ -78,8 +80,8 @@
 		<label class="field"><span>album <em>(optional)</em></span><input bind:value={album} maxlength="256" /></label>
 		<label class="field"><span>description <em>(optional)</em></span><textarea bind:value={description} maxlength="5000"></textarea></label>
 		<div class="field">
-			<span>artwork</span>
-			<p class="hint">coming soon: cover art will be stored on your PDS too.</p>
+			<span>cover art <em>(optional)</em></span>
+			<ArtworkPicker bind:value={artwork} seed={title} />
 		</div>
 		{#if auth.spaces}
 			<label class="field">

@@ -6,6 +6,8 @@ import { api, type AwaitStatus, type Track } from './api';
 import { auth } from './auth.svelte';
 import { NSID } from './config';
 import type { Gate } from './spaces';
+import { prepareArtwork } from './artwork';
+import { blobUrl } from './identity';
 
 function session() {
 	if (!auth.rpc || !auth.did) throw new Error('sign in first');
@@ -185,6 +187,8 @@ export interface NewTrack {
 	album?: string;
 	description?: string;
 	duration?: number;
+	/** cover art, stored on your PDS as imageBlob */
+	artwork?: File | null;
 	/** keep the audio in a gate space on your PDS instead of public */
 	gate?: Gate | null;
 }
@@ -208,6 +212,7 @@ export async function uploadTrack(input: NewTrack): Promise<{ uri: string; statu
 	if (input.album?.trim()) record.album = input.album.trim();
 	if (input.description?.trim()) record.description = input.description.trim();
 	if (input.duration && Number.isFinite(input.duration)) record.duration = Math.round(input.duration);
+	if (input.artwork) Object.assign(record, await uploadArtwork(input.artwork));
 
 	let res: { uri: string; cid: string };
 	if (spaces && space) {
@@ -318,6 +323,20 @@ export interface TrackEdits {
 	title: string;
 	album: string;
 	description: string;
+	/** a new cover (File), remove it (null), or keep it (undefined) */
+	artwork?: File | null;
+}
+
+/**
+ * upload cover art as a blob and return the record fields: imageBlob is the
+ * canonical cover; imageUrl is its getBlob url for clients that only read urls.
+ */
+async function uploadArtwork(file: File): Promise<{ imageBlob: unknown; imageUrl: string }> {
+	const { rpc, did } = session();
+	const body = await prepareArtwork(file);
+	const uploaded = await ok(rpc.post('com.atproto.repo.uploadBlob', { input: body }));
+	const cid = (uploaded.blob as { ref: { $link: string } }).ref.$link;
+	return { imageBlob: uploaded.blob, imageUrl: await blobUrl(did, cid) };
 }
 
 export async function editTrack(uri: string, edits: TrackEdits): Promise<AwaitStatus> {
@@ -332,6 +351,12 @@ export async function editTrack(uri: string, edits: TrackEdits): Promise<AwaitSt
 		const v = edits[key].trim();
 		if (v) record[key] = v;
 		else delete record[key];
+	}
+	if (edits.artwork === null) {
+		delete record.imageBlob;
+		delete record.imageUrl;
+	} else if (edits.artwork) {
+		Object.assign(record, await uploadArtwork(edits.artwork));
 	}
 	const res = await ok(
 		rpc.post('com.atproto.repo.putRecord', {

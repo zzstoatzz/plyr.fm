@@ -15,6 +15,12 @@
             "maxLength": 256,
             "maxGraphemes": 64
           },
+          "imageBlob": {
+            "type": "blob",
+            "description": "Cover artwork for the list, stored on the user's PDS.",
+            "accept": ["image/png", "image/jpeg", "image/webp", "image/gif"],
+            "maxSize": 10000000
+          },
           "listType": {
             "type": "string",
             "knownValues": ["album", "playlist", "liked"]

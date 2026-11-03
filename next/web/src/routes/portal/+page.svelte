@@ -5,6 +5,7 @@
 	import { auth } from '$lib/auth.svelte';
 	import { deleteTrack, editTrack, myProfile, saveProfile, type ProfileRecord } from '$lib/pds';
 	import { formatDuration } from '$lib/player.svelte';
+	import ArtworkPicker from '$lib/ArtworkPicker.svelte';
 	import Artwork from '$lib/ui/Artwork.svelte';
 	import Icon from '$lib/ui/Icon.svelte';
 	import ScreenHeader from '$lib/ui/ScreenHeader.svelte';
@@ -66,6 +67,7 @@
 	let title = $state('');
 	let album = $state('');
 	let description = $state('');
+	let artwork = $state<File | null | undefined>(undefined);
 
 	function openTrack(t: Track) {
 		editing = t;
@@ -73,6 +75,7 @@
 		title = t.metadata.title;
 		album = t.metadata.album ?? '';
 		description = t.metadata.description ?? '';
+		artwork = undefined;
 	}
 
 	async function submitTrack(e: SubmitEvent) {
@@ -80,7 +83,7 @@
 		if (!editing) return;
 		busy = true;
 		try {
-			const status = await editTrack(editing.record.uri, { title, album, description });
+			const status = await editTrack(editing.record.uri, { title, album, description, artwork });
 			toast.show(writeNote(status, 'track saved'));
 			editing = null;
 			if (auth.did) tracks = (await api.tracks({ artist_did: auth.did, limit: 100 })).data;
@@ -222,6 +225,10 @@
 <Sheet open={!!editing} onclose={() => (editing = null)} title="edit track">
 	{#if editing}
 		<form onsubmit={submitTrack}>
+			<div class="field">
+				<span>cover art</span>
+				<ArtworkPicker bind:value={artwork} current={editing.media.artwork?.url ?? null} seed={title} />
+			</div>
 			<label class="field">
 				<span>title</span>
 				<input bind:value={title} maxlength="256" required />
