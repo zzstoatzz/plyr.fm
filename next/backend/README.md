@@ -107,7 +107,7 @@ Direct SQL is reserved for projection adapter tests and benchmark fixtures.
 | `ACCOUNT_CHECK_LEASE_SECONDS` | no | expired-worker claim recovery window, default 120 |
 | `ACCOUNT_CHECK_SEED_SECONDS` | no | periodic sweep from authenticated repository heads, default 300 |
 | `ACCOUNT_CHECK_IDLE_MILLISECONDS` | no | idle claim-poll interval, default 1000 |
-| `MIRROR_BASE_URL` | to enable mirror | https origin of the `next-audio` worker (`infra/next-audio/`); uploads PUT to and playback reads from `{base}/{prefix}/{cid}` |
+| `MIRROR_BASE_URL` | to enable mirror | https origin of the `next-audio` worker (`next/services/audio/`); uploads PUT to and playback reads from `{base}/{prefix}/{cid}` |
 | `MIRROR_UPLOAD_TOKEN` | to enable mirror | bearer secret shared with the worker's `UPLOAD_TOKEN` (32+ chars) |
 | `MIRROR_KEY_PREFIX` | no | object prefix, default `audio` |
 
@@ -139,7 +139,7 @@ configured track index. The listener acquires a connection permit before
 unbounded detached threads.
 
 The appview is read-only and holds no sessions. Clients run ATProto OAuth
-themselves (`web-next/` uses `@atcute/oauth-browser-client`), write tracks,
+themselves (`next/web/` uses `@atcute/oauth-browser-client`), write tracks,
 lists, likes, and profiles straight to the user's PDS, and use
 `GET /v1/records/await?uri=...&cid=...` to wait for the ingester to project the
 write. There is no `/auth/*`, no OAuth client metadata, no cookie, and no

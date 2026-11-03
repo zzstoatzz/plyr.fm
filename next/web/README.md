@@ -1,4 +1,4 @@
-# web-next
+# next/web
 
 the frontend for next.plyr.fm, built for a **read-only appview**:
 

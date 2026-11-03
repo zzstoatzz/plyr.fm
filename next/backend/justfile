@@ -35,7 +35,7 @@ reconcile-catalog:
 test:
     zig build test
 
-# Applies backend-zig/migrations to a database marked 'plyr-zig-next' or
+# Applies next/backend/migrations to a database marked 'plyr-zig-next' or
 # 'plyr-zig-test' (see scripts/migrate). Never run against a shared database.
 migrate:
     scripts/migrate
@@ -45,8 +45,8 @@ check:
     zig build
     zig build test
     python3 scripts/test_http.py
-    cd ../backend && uv run ruff check ../backend-zig/scripts
-    cd ../backend && uv run pytest -q ../backend-zig/scripts/test_bench_http.py ../backend-zig/scripts/test_bench_api_parity.py ../backend-zig/scripts/test_canary_placement.py ../backend-zig/scripts/test_canary_report.py ../backend-zig/scripts/test_canary_smoke.py
+    cd ../../backend && uv run ruff check ../next/backend/scripts
+    cd ../../backend && uv run pytest -q ../next/backend/scripts/test_bench_http.py ../next/backend/scripts/test_bench_api_parity.py ../next/backend/scripts/test_canary_placement.py ../next/backend/scripts/test_canary_report.py ../next/backend/scripts/test_canary_smoke.py
 
 # Destructive only to the dedicated Zig test database on port 5435.
 test-postgres:
@@ -65,7 +65,7 @@ test-play-http: build
     docker compose -f compose.yaml up -d zig-db test-redis
     @for attempt in {1..100}; do docker compose -f compose.yaml exec -T zig-db pg_isready -U zig_test -d zig_test >/dev/null && break; sleep 0.1; done
     @for attempt in {1..100}; do docker compose -f compose.yaml exec -T test-redis redis-cli ping >/dev/null && exit 0; sleep 0.1; done; echo 'integration services did not become ready' >&2; exit 1
-    cd ../backend && uv run python ../backend-zig/scripts/test_play_http.py
+    cd ../../backend && uv run python ../next/backend/scripts/test_play_http.py
 
 test-http: build
     python3 scripts/test_http.py
@@ -186,4 +186,4 @@ bench-ingest-dispatch:
 
 # Snapshot the Python surface that informs parity decisions.
 inventory *ARGS:
-    cd ../backend && RELAY_TEST_MODE=1 OAUTH_ENCRYPTION_KEY=hnSkDmgbbuK0rt7Ab3eJHAktb18gmebsdwKdTmq9mes= LOGFIRE_IGNORE_NO_CONFIG=1 uv run python ../backend-zig/scripts/inventory_python_api.py "$@"
+    cd ../../backend && RELAY_TEST_MODE=1 OAUTH_ENCRYPTION_KEY=hnSkDmgbbuK0rt7Ab3eJHAktb18gmebsdwKdTmq9mes= LOGFIRE_IGNORE_NO_CONFIG=1 uv run python ../next/backend/scripts/inventory_python_api.py "$@"

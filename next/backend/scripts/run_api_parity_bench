@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-repository=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
+repository=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)
 project="plyr-api-parity-$$"
 compose=(docker compose -p "$project" -f "$repository/backend/tests/docker-compose.yml")
 
@@ -30,10 +30,10 @@ OAUTH_ENCRYPTION_KEY='hnSkDmgbbuK0rt7Ab3eJHAktb18gmebsdwKdTmq9mes=' \
 
 "${compose[@]}" exec -T test-db \
     psql -v ON_ERROR_STOP=1 -U relay_test -d plyr_bench \
-    < backend-zig/scripts/api_parity_bench.sql >/dev/null
+    < next/backend/scripts/api_parity_bench.sql >/dev/null
 
-cd backend-zig
+cd next/backend
 zig build -Doptimize=ReleaseFast
-cd ../backend
+cd ../../backend
 DATABASE_URL="$database_url" DOCKET_URL="$docket_url" \
-    uv run python ../backend-zig/scripts/bench_api_parity.py "$@"
+    uv run python ../next/backend/scripts/bench_api_parity.py "$@"

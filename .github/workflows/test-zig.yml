@@ -1,11 +1,11 @@
 name: zig backend tests
 
-# Builds and tests backend-zig only. Runs against disposable service
+# Builds and tests next/backend only. Runs against disposable service
 # containers; it has no deploy step and no credentials.
 on:
   pull_request:
     paths:
-      - "backend-zig/**"
+      - "next/backend/**"
       - ".github/workflows/test-zig.yml"
   workflow_dispatch:
 
@@ -40,7 +40,7 @@ jobs:
 
     defaults:
       run:
-        working-directory: backend-zig
+        working-directory: next/backend
 
     steps:
       - uses: actions/checkout@v4
@@ -86,7 +86,7 @@ jobs:
         run: |
           psql -h 127.0.0.1 -p 5435 -U zig_test -d zig_test -c "CREATE DATABASE next_ci"
           psql -h 127.0.0.1 -p 5435 -U zig_test -d zig_test -c "COMMENT ON DATABASE next_ci IS 'plyr-zig-test'"
-          (cd ../backend && uv sync --locked && DATABASE_URL=postgresql+psycopg://zig_test:zig_test@127.0.0.1:5435/next_ci uv run python scripts/init_db.py)
+          (cd ../../backend && uv sync --locked && DATABASE_URL=postgresql+psycopg://zig_test:zig_test@127.0.0.1:5435/next_ci uv run python scripts/init_db.py)
           scripts/migrate
           scripts/migrate | grep -q "applied 0 migration"
 

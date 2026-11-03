@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Applies backend-zig/migrations/*.sql in order, each in its own transaction,
+# Applies next/backend/migrations/*.sql in order, each in its own transaction,
 # recording what ran in plyr_zig.schema_migrations.
 #
 # These schemas (plyr_index, plyr_auth, plyr_command) belong to the Zig

@@ -1,6 +1,6 @@
 name: deploy next (zig)
 
-# Deploys backend-zig to the isolated next environment only:
+# Deploys next/backend to the isolated next environment only:
 #   fly app  plyr-api-zig-canary  (api.next.plyr.fm)
 #            (process groups: app = api, ingester = relay -> plyr_index)
 #   database the Neon branch of staging marked 'plyr-zig-next'
@@ -58,8 +58,8 @@ jobs:
 
       # scripts/migrate refuses any database without the 'plyr-zig-next'
       # marker, so a mis-set secret cannot reach staging or prod.
-      - name: apply backend-zig migrations to the next branch
-        working-directory: backend-zig
+      - name: apply next/backend migrations to the next branch
+        working-directory: next/backend
         env:
           DATABASE_URL: ${{ secrets.ZIG_NEXT_MIGRATOR_DATABASE_URL }}
         run: |
@@ -67,7 +67,7 @@ jobs:
           scripts/migrate
 
       - name: build and publish image
-        working-directory: backend-zig
+        working-directory: next/backend
         run: >-
           flyctl deploy
           --config fly.canary.toml
@@ -139,7 +139,7 @@ jobs:
         run: flyctl secrets set --stage --app "$FLY_APP" WORKER_DATABASE_URL="$WORKER_DATABASE_URL" > /dev/null
 
       - name: deploy image
-        working-directory: backend-zig
+        working-directory: next/backend
         run: >-
           flyctl deploy
           --config fly.canary.toml
@@ -150,7 +150,7 @@ jobs:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_ZIG_NEXT }}
 
       - name: smoke the deployed api
-        working-directory: backend-zig
+        working-directory: next/backend
         run: python3 scripts/canary_smoke.py "https://${FLY_APP}.fly.dev"
 
       - name: ingester status

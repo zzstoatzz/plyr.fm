@@ -1,6 +1,6 @@
 name: deploy next web
 
-# Builds web-next/ (the read-only-appview frontend) and deploys it to the
+# Builds next/web/ (the read-only-appview frontend) and deploys it to the
 # production branch of the direct-upload pages project plyr-fm-next, which
 # next.plyr.fm already CNAMEs to. Never touches production-fe or the plyr-fm
 # pages project.
@@ -9,7 +9,7 @@ on:
     branches:
       - main
     paths:
-      - "web-next/**"
+      - "next/web/**"
       - ".github/workflows/deploy-web-next.yml"
   workflow_dispatch:
 
@@ -32,10 +32,10 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: web-next/package-lock.json
+          cache-dependency-path: next/web/package-lock.json
 
       - name: check and build
-        working-directory: web-next
+        working-directory: next/web
         run: |
           npm ci
           npm run check
@@ -62,4 +62,4 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy web-next/build --project-name plyr-fm-next --branch ${{ steps.project.outputs.branch }}
+          command: pages deploy next/web/build --project-name plyr-fm-next --branch ${{ steps.project.outputs.branch }}
