@@ -19,7 +19,13 @@ pub const PostgresTrackStore = struct {
         var normalized = try postgres_url.normalize(allocator, database_url);
         defer normalized.deinit(allocator);
         const uri = try std.Uri.parse(normalized.value);
-        return .{ .pool = try pg.Pool.initUri(io, allocator, uri, .{ .size = pool_size }) };
+        // Open one connection before returning and the rest in the
+        // background: each Neon connect costs ~1s, and a scaled-to-zero api
+        // can't bind until this returns.
+        return .{ .pool = try pg.Pool.initUri(io, allocator, uri, .{
+            .size = pool_size,
+            .connect_on_init_count = @min(pool_size, 1),
+        }) };
     }
 
     pub fn deinit(self: *PostgresTrackStore) void {
