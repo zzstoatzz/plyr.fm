@@ -2,11 +2,12 @@
 	import type { Track } from './api';
 	import { auth } from './auth.svelte';
 	import { like, myLikes, unlike } from './pds';
+	import { toast } from './ui/toast.svelte';
+	import Icon from './ui/Icon.svelte';
 
-	let { track }: { track: Track } = $props();
+	let { track, size = 'md' }: { track: Track; size?: 'md' | 'lg' } = $props();
 	let liked = $state(false);
 	let busy = $state(false);
-	let note = $state<string | null>(null);
 
 	$effect(() => {
 		if (!auth.did) {
@@ -25,29 +26,37 @@
 			return;
 		}
 		busy = true;
-		note = null;
 		const was = liked;
 		liked = !was;
 		try {
 			const status = was ? await unlike(track) : await like(track);
-			if (status === 'rejected') note = 'the appview rejected this like';
-			else if (status === 'pending') note = 'saved to your PDS; indexing…';
+			if (status === 'rejected') toast.show('the appview rejected this like');
 		} catch (e) {
 			liked = was;
-			note = (e as Error).message;
+			toast.show((e as Error).message);
 		} finally {
 			busy = false;
 		}
 	}
 </script>
 
-<button class="like" class:liked onclick={toggle} disabled={busy} title={note ?? (liked ? 'unlike' : 'like')} aria-pressed={liked}>
-	{liked ? '♥' : '♡'}
+<button
+	class="btn ghost icon"
+	class:lg={size === 'lg'}
+	class:liked
+	onclick={toggle}
+	disabled={busy}
+	aria-label={liked ? 'unlike' : 'like'}
+	aria-pressed={liked}
+>
+	<Icon name={liked ? 'heart_f' : 'heart'} size={size === 'lg' ? 26 : 22} />
 </button>
 
 <style>
-	.like {
-		cursor: pointer;
-		padding: 0.25rem;
+	.liked {
+		color: var(--like);
+	}
+	button:disabled {
+		opacity: 1;
 	}
 </style>

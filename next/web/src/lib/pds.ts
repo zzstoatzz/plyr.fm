@@ -18,35 +18,38 @@ export interface LikeRef {
 	subject: { uri: string; cid: string };
 }
 
-let likeCache: Map<string, LikeRef> | null = null;
+let likeCache: Promise<Map<string, LikeRef>> | null = null;
 let likeCacheDid: string | null = null;
 
-/** the viewer's like records, read from their own PDS (authoritative). */
-export async function myLikes(): Promise<Map<string, LikeRef>> {
+/** the viewer's like records, read from their own PDS (authoritative). one read per session, shared by every row. */
+export function myLikes(): Promise<Map<string, LikeRef>> {
 	const { rpc, did } = session();
 	if (likeCache && likeCacheDid === did) return likeCache;
-	const out = new Map<string, LikeRef>();
-	let cursor: string | undefined;
-	do {
-		const data = await ok(
-			rpc.get('com.atproto.repo.listRecords', {
-				params: { repo: did, collection: NSID.like as `${string}.${string}.${string}`, limit: 100, cursor }
-			})
-		);
-		for (const r of data.records) {
-			const value = r.value as { subject?: { uri: string; cid: string } };
-			if (!value.subject) continue;
-			out.set(value.subject.uri, {
-				uri: r.uri,
-				rkey: r.uri.split('/').pop()!,
-				subject: value.subject
-			});
-		}
-		cursor = data.cursor;
-	} while (cursor);
-	likeCache = out;
 	likeCacheDid = did;
-	return out;
+	likeCache = (async () => {
+		const out = new Map<string, LikeRef>();
+		let cursor: string | undefined;
+		do {
+			const data = await ok(
+				rpc.get('com.atproto.repo.listRecords', {
+					params: { repo: did, collection: NSID.like as `${string}.${string}.${string}`, limit: 100, cursor }
+				})
+			);
+			for (const r of data.records) {
+				const value = r.value as { subject?: { uri: string; cid: string } };
+				if (!value.subject) continue;
+				out.set(value.subject.uri, {
+					uri: r.uri,
+					rkey: r.uri.split('/').pop()!,
+					subject: value.subject
+				});
+			}
+			cursor = data.cursor;
+		} while (cursor);
+		return out;
+	})();
+	likeCache.catch(() => (likeCache = null));
+	return likeCache;
 }
 
 export async function like(track: Track): Promise<AwaitStatus> {
@@ -306,4 +309,50 @@ export async function saveProfile(
 		})
 	);
 	return (await api.awaitRecord(res.uri, res.cid)).status;
+}
+
+// your own tracks: edits are a read-modify-write of the fm.plyr.track record,
+// keeping every field other clients (and prod) wrote; swapRecord guards races.
+
+export interface TrackEdits {
+	title: string;
+	album: string;
+	description: string;
+}
+
+export async function editTrack(uri: string, edits: TrackEdits): Promise<AwaitStatus> {
+	const { rpc, did } = session();
+	const current = await ok(
+		rpc.get('com.atproto.repo.getRecord', { params: { repo: did, collection: NSID.track as Nsid, rkey: rkeyOf(uri) } })
+	);
+	const record = { ...(current.value as Record<string, unknown>) };
+	if (!edits.title.trim()) throw new Error('a track needs a title');
+	record.title = edits.title.trim();
+	for (const key of ['album', 'description'] as const) {
+		const v = edits[key].trim();
+		if (v) record[key] = v;
+		else delete record[key];
+	}
+	const res = await ok(
+		rpc.post('com.atproto.repo.putRecord', {
+			input: {
+				repo: did,
+				collection: NSID.track as Nsid,
+				rkey: rkeyOf(uri),
+				record,
+				...(current.cid ? { swapRecord: current.cid } : {})
+			}
+		})
+	);
+	return (await api.awaitRecord(res.uri, res.cid)).status;
+}
+
+export async function deleteTrack(uri: string): Promise<AwaitStatus> {
+	const { rpc, did } = session();
+	await ok(
+		rpc.post('com.atproto.repo.deleteRecord', {
+			input: { repo: did, collection: NSID.track as Nsid, rkey: rkeyOf(uri) }
+		})
+	);
+	return (await api.awaitRecord(uri)).status;
 }

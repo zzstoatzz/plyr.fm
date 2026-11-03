@@ -53,6 +53,13 @@ export interface Artist {
 	support_url: string | null;
 }
 
+export interface ArtistMetrics {
+	object: 'artist_metrics';
+	artist_did: string;
+	totals: { plays: number; tracks: number; duration_seconds: number };
+	top_track: { id: string; title: string; play_count: number } | null;
+}
+
 export interface ListSummary {
 	object: 'album' | 'playlist';
 	id: string;
@@ -131,6 +138,7 @@ export const api = {
 	track: (id: string) => get<Track>(`/v1/tracks/${encodeURIComponent(id)}`),
 	playback: (id: string) => get<Playback>(`/v1/tracks/${encodeURIComponent(id)}/playback`),
 	artist: (didOrHandle: string) => get<Artist>(`/v1/artists/${encodeURIComponent(didOrHandle)}`),
+	artistMetrics: (did: string) => get<ArtistMetrics>(`/v1/artists/${encodeURIComponent(did)}/metrics`),
 	albums: (artist_did: string) => get<Page<ListSummary>>('/v1/albums', { artist_did }),
 	album: (id: string) => get<ListDetail>(`/v1/albums/${encodeURIComponent(id)}`),
 	playlists: (p: { limit?: number; cursor?: string; owner_did?: string } = {}) =>

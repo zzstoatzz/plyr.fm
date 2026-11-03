@@ -4,6 +4,9 @@
 	import { GATED_UPLOADS } from '$lib/config';
 	import { audioDuration, MAX_AUDIO_BYTES, uploadTrack } from '$lib/pds';
 	import type { Gate } from '$lib/spaces';
+	import { formatDuration } from '$lib/player.svelte';
+	import Icon from '$lib/ui/Icon.svelte';
+	import ScreenHeader from '$lib/ui/ScreenHeader.svelte';
 
 	let file = $state<File | null>(null);
 	let title = $state('');
@@ -48,53 +51,98 @@
 	}
 </script>
 
-<h1>upload</h1>
+<ScreenHeader title="upload" subtitle="audio is stored on your own PDS" />
+
 {#if !auth.ready}
-	<p class="muted">loading…</p>
+	<p class="empty">loading…</p>
 {:else if !auth.did}
-	<p class="muted"><a href="/login">sign in</a> to upload.</p>
+	<div class="empty">
+		<p>sign in to upload.</p>
+		<a class="btn primary" href="/login">sign in</a>
+	</div>
 {:else}
-	<p class="muted">the audio is stored on your own PDS; next.plyr.fm only indexes the record.</p>
-	<form onsubmit={submit}>
-		<label>audio <input type="file" accept="audio/*" onchange={pick} required /></label>
-		<label>title <input bind:value={title} maxlength="256" required /></label>
-		<label>artist <input bind:value={artist} maxlength="256" required /></label>
-		<label>album <input bind:value={album} maxlength="256" /></label>
-		<label>description <textarea bind:value={description} maxlength="5000" rows="4"></textarea></label>
+	<form class="pad" onsubmit={submit}>
+		<label class="drop" class:has={!!file}>
+			<input type="file" accept="audio/*" onchange={pick} required />
+			<Icon name={file ? 'music' : 'upload'} size={28} />
+			{#if file}
+				<strong class="ellipsis">{file.name}</strong>
+				<span class="muted small">{(file.size / 1_048_576).toFixed(1)} MB{#if duration}{' · '}{formatDuration(duration)}{/if} · tap to change</span>
+			{:else}
+				<strong>choose an audio file</strong>
+				<span class="muted small">up to 100 MB</span>
+			{/if}
+		</label>
+		<label class="field"><span>title</span><input bind:value={title} maxlength="256" required /></label>
+		<label class="field"><span>artist</span><input bind:value={artist} maxlength="256" required /></label>
+		<label class="field"><span>album <em>(optional)</em></span><input bind:value={album} maxlength="256" /></label>
+		<label class="field"><span>description <em>(optional)</em></span><textarea bind:value={description} maxlength="5000"></textarea></label>
+		<div class="field">
+			<span>artwork</span>
+			<p class="hint">coming soon: cover art will be stored on your PDS too.</p>
+		</div>
 		{#if auth.spaces}
-			<label
-				>who can listen
+			<label class="field">
+				<span>who can listen</span>
 				<select bind:value={gate}>
 					<option value="">everyone</option>
 					<option value="supporters">supporters only</option>
 					<option value="signed-in">anyone signed in</option>
 				</select>
+				{#if gate}<span class="hint">the audio goes into a private space on your PDS; plyr only decides who gets in.</span>{/if}
 			</label>
-			{#if gate}<p class="muted small">the audio goes into a private space on your PDS; plyr only decides who gets in.</p>{/if}
 		{:else if GATED_UPLOADS}
-			<p class="muted small">supporter-only tracks need a PDS with spaces; yours doesn't have them yet.</p>
+			<p class="hint">supporter-only tracks need a PDS with spaces; yours doesn't have them yet.</p>
 		{/if}
-		<button class="btn" disabled={busy || !file || !title.trim() || !artist.trim()}>upload</button>
+		<button class="btn primary block lg" disabled={busy || !file || !title.trim() || !artist.trim()}>{busy ? 'uploading…' : 'upload'}</button>
+		{#if note}<p class="hint note" role="status">{note}</p>{/if}
 	</form>
-	{#if note}<p class="muted">{note}</p>{/if}
 {/if}
 
 <style>
-	form {
+	.drop {
+		position: relative;
 		display: flex;
 		flex-direction: column;
-		gap: 0.75rem;
-		max-width: 32rem;
+		align-items: center;
+		gap: var(--s-xs);
+		padding: var(--s-2xl) var(--s-lg);
+		margin-bottom: var(--s-lg);
+		border: 1.5px dashed var(--c-200);
+		border-radius: var(--r-lg);
+		text-align: center;
+		cursor: pointer;
+		color: var(--c-700);
+		max-width: 100%;
 	}
-	label {
-		display: flex;
-		flex-direction: column;
-		gap: 0.25rem;
+	.drop:hover,
+	.drop:focus-within {
+		border-color: var(--accent);
+		background: var(--c-25);
 	}
-	button {
-		align-self: flex-start;
+	.drop.has {
+		border-style: solid;
 	}
-	.small {
-		margin: 0;
+	.drop strong {
+		color: var(--c-1000);
+		max-width: 100%;
+	}
+	.drop input {
+		position: absolute;
+		inset: 0;
+		opacity: 0;
+		cursor: pointer;
+	}
+	em {
+		font-style: normal;
+		font-weight: 400;
+		color: var(--c-500);
+	}
+	.note {
+		margin-top: var(--s-md);
+		text-align: center;
+	}
+	.empty .btn {
+		margin-top: var(--s-md);
 	}
 </style>
