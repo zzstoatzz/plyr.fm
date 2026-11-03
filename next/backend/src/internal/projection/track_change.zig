@@ -30,6 +30,8 @@ pub const Upsert = struct {
     featured_dids: []const []const u8,
     image_url: ?[]const u8,
     support_gate_type: ?[]const u8,
+    /// space record URI holding gated audio, always in the owner's own space
+    audio_space: ?[]const u8 = null,
     description: ?[]const u8,
     self_labels: []const []const u8,
     proof: Proof,
@@ -96,6 +98,11 @@ pub fn fromVerifiedOperation(
     }
     try validateDagCborCid(cid);
     const parsed = try track_record.parse(allocator, value, track_collection);
+    if (parsed.audio_space) |space| {
+        // gated audio lives in the artist's own space, written by the artist
+        if (!std.mem.eql(u8, space.space.authority, repo_did) or !std.mem.eql(u8, space.repo, repo_did))
+            return error.InvalidAudioSpace;
+    }
     const audio_blob: ?Blob = if (parsed.audio_blob) |blob| .{
         .cid = try blob.cid.toString(allocator),
         .media_type = blob.media_type,
@@ -118,6 +125,10 @@ pub fn fromVerifiedOperation(
         .featured_dids = parsed.featured_dids,
         .image_url = parsed.image_url,
         .support_gate_type = parsed.support_gate_type,
+        .audio_space = if (parsed.audio_space) |space|
+            try std.fmt.allocPrint(allocator, "{s}/{s}/{s}/{s}", .{ space.space_uri, space.repo, space.collection, space.rkey })
+        else
+            null,
         .description = parsed.description,
         .self_labels = parsed.self_labels,
         .proof = proof,

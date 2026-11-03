@@ -3,6 +3,7 @@ const zat = @import("zat");
 const playback = @import("../domain/playback.zig");
 const track_id = @import("../identity/track_id.zig");
 const PlaybackStore = @import("../index/playback_store.zig").PlaybackStore;
+const managed_space = @import("../space/managed_space.zig");
 
 pub const Result = union(enum) {
     found: playback.Playback,
@@ -34,6 +35,24 @@ pub fn execute(
         }
         return classifyStoreError(err);
     } orelse return .not_found;
+
+    if (candidate.audio_space) |text| {
+        // the projection only admits a space owned by the track's author
+        const space = managed_space.SpaceRecordUri.parse(text) orelse return .internal_error;
+        if (!std.mem.eql(u8, space.space.authority, parsed.authority())) return .internal_error;
+        return .{ .found = .{
+            .track_id = id,
+            .record = .{
+                .uri = candidate.record_uri,
+                .cid = candidate.record_cid,
+                .revision = candidate.revision,
+            },
+            .availability = .{
+                .status = .gated,
+                .space = .{ .uri = space.space_uri, .record = text, .gate = space.space.skey },
+            },
+        } };
+    }
 
     if (candidate.visibility == .supporters or candidate.gate_type != null)
         return .authentication_required;
@@ -145,6 +164,30 @@ test "anonymous playback denies gates and represents missing delivery" {
     const unavailable = execute(arena.allocator(), fake.store(), "fm.plyr.dev.track", id);
     try std.testing.expectEqual(playback.AvailabilityStatus.unavailable, unavailable.found.availability.status);
     try std.testing.expect(unavailable.found.availability.delivery == null);
+}
+
+test "gated playback points at the artist's space instead of denying" {
+    const uri = "at://did:plc:artist/fm.plyr.dev.track/track";
+    var id_buffer: [256]u8 = undefined;
+    const id = try track_id.encode(&id_buffer, uri);
+    var value = fixtureCandidate(uri);
+    value.gate_type = "any";
+    value.authored_delivery = null;
+    value.audio_space = "at://did:plc:artist/space/fm.plyr.dev.audio/supporters/did:plc:artist/fm.plyr.dev.track/track";
+    var fake: FakeStore = .{ .expected_uri = uri, .candidate = value };
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const gated = execute(arena.allocator(), fake.store(), "fm.plyr.dev.track", id);
+    try std.testing.expectEqual(playback.AvailabilityStatus.gated, gated.found.availability.status);
+    const space = gated.found.availability.space.?;
+    try std.testing.expectEqualStrings("at://did:plc:artist/space/fm.plyr.dev.audio/supporters", space.uri);
+    try std.testing.expectEqualStrings("supporters", space.gate);
+    try std.testing.expect(gated.found.availability.delivery == null);
+
+    // a space owned by someone else is a corrupt projection, never followed
+    value.audio_space = "at://did:plc:mallory/space/fm.plyr.dev.audio/supporters/did:plc:mallory/fm.plyr.dev.track/track";
+    fake.candidate = value;
+    try std.testing.expectEqual(Result.internal_error, execute(arena.allocator(), fake.store(), "fm.plyr.dev.track", id));
 }
 
 test "playback store errors preserve corruption and availability" {

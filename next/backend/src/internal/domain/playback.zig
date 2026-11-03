@@ -31,9 +31,23 @@ pub const Availability = struct {
     status: AvailabilityStatus,
     artifact: ?Artifact = null,
     delivery: ?Delivery = null,
+    /// set when status is `gated`: read the audio from the artist's space
+    space: ?Space = null,
 };
 
-pub const AvailabilityStatus = enum { available, unavailable };
+pub const AvailabilityStatus = enum { available, unavailable, gated };
+
+/// Gated audio held in a space on the artist's PDS. The listener mints a
+/// space credential (the PDS asks plyr whether they pass `gate`) and reads
+/// the record, then its audio blob, straight from the PDS.
+pub const Space = struct {
+    /// `at://{artist}/space/{type}/{skey}`
+    uri: []const u8,
+    /// the space record holding `audioBlob`
+    record: []const u8,
+    /// the skey, which names the gate: `supporters` or `signed-in`
+    gate: []const u8,
+};
 
 pub const Artifact = struct {
     cid: []const u8,
@@ -65,6 +79,7 @@ pub const Candidate = struct {
     revision: []const u8,
     visibility: Visibility,
     gate_type: ?[]const u8,
+    audio_space: ?[]const u8 = null,
     artifact: ?Artifact,
     verified_delivery: ?Delivery,
     authored_delivery: ?Delivery,

@@ -463,6 +463,7 @@ const tombstone_absent_tracks_sql =
     \\  featured_dids = '{}',
     \\  image_url = NULL,
     \\  support_gate_type = NULL,
+    \\  audio_space = NULL,
     \\  description = NULL,
     \\  self_labels = '{}',
     \\  deleted = TRUE,

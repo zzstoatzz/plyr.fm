@@ -93,6 +93,7 @@ pub const PostgresTrackStore = struct {
             .featured_dids = change.featured_dids,
             .image_url = change.image_url,
             .support_gate_type = change.support_gate_type,
+            .audio_space = change.audio_space,
             .description = change.description,
             .self_labels = change.self_labels,
             .deleted = false,
@@ -161,6 +162,7 @@ const RecordWrite = struct {
     featured_dids: []const []const u8,
     image_url: ?[]const u8,
     support_gate_type: ?[]const u8,
+    audio_space: ?[]const u8 = null,
     description: ?[]const u8,
     self_labels: []const []const u8,
     deleted: bool,
@@ -195,6 +197,7 @@ fn applyRecord(conn: *pg.Conn, write: RecordWrite) TrackStore.Error!ApplyResult 
         write.commit_cid,
         write.commit_rev,
         write.indexed_at_us,
+        write.audio_space,
     }) catch |err| {
         std.log.err("track projection record upsert failed: {}", .{err});
         return error.ProjectionUnavailable;
@@ -236,10 +239,10 @@ const upsert_record_sql =
     \\  file_type, record_created_at, audio_url, audio_blob_cid,
     \\  audio_blob_media_type, audio_blob_size, album, duration_seconds,
     \\  featured_dids, image_url, support_gate_type, description, self_labels,
-    \\  deleted, commit_cid, commit_rev, indexed_at_us
+    \\  deleted, commit_cid, commit_rev, indexed_at_us, audio_space
     \\) VALUES (
     \\  $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
-    \\  $15, $16, $17, $18, $19, $20, $21, $22, $23, $24
+    \\  $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25
     \\)
     \\ON CONFLICT (record_uri) DO UPDATE SET
     \\  record_cid = EXCLUDED.record_cid,
@@ -259,6 +262,7 @@ const upsert_record_sql =
     \\  featured_dids = EXCLUDED.featured_dids,
     \\  image_url = EXCLUDED.image_url,
     \\  support_gate_type = EXCLUDED.support_gate_type,
+    \\  audio_space = EXCLUDED.audio_space,
     \\  description = EXCLUDED.description,
     \\  self_labels = EXCLUDED.self_labels,
     \\  deleted = EXCLUDED.deleted,
@@ -295,6 +299,7 @@ pub fn createTestTable(pool: *pg.Pool) !void {
         \\  featured_dids text[] NOT NULL DEFAULT '{}',
         \\  image_url text,
         \\  support_gate_type text,
+        \\  audio_space text,
         \\  description text,
         \\  self_labels text[] NOT NULL DEFAULT '{}',
         \\  deleted boolean NOT NULL,
