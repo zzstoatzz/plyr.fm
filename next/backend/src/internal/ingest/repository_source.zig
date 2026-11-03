@@ -5,11 +5,8 @@ const zat = @import("zat");
 
 pub const Repo = struct {
     bytes: []const u8,
-    /// set when the repository was too large to fetch whole: one
-    /// `sync.getRecord` proof per listed record path (same order as `paths`),
-    /// all owned by the request allocator. `bytes` is then the first proof.
+    /// A sparse CAR proving every record in the selected collection ranges.
     proofs: ?[]const []const u8 = null,
-    paths: ?[]const []const u8 = null,
     release_context: *anyopaque,
     release_fn: *const fn (*anyopaque, []const u8) void,
 

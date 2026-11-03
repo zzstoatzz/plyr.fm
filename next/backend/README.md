@@ -289,6 +289,12 @@ Do not source or copy the root `.env` into a worktree. Point a command at the
 existing environment through the normal settings mechanism, and never print
 secret values while checking configuration.
 
+## oversized repository repair
+
+When a full repository exceeds the size cap, repair proves the complete plyr
+collection ranges with `sync.getLatestCommit` and `sync.getBlocks`, independently
+of record listings. See [the proof contract, limits and measurements](docs/collection-proofs.md).
+
 ## canary deployment
 
 Browser authentication is non-rebuildable application state, not an index.

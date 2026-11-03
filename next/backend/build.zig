@@ -109,6 +109,16 @@ pub fn build(b: *std.Build) void {
         }
     }
 
+    const collection_bench_module = b.createModule(.{
+        .root_source_file = b.path("src/bench_collection.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    collection_bench_module.addImport("zat", root_module.import_table.get("zat").?);
+    const collection_bench = b.addExecutable(.{ .name = "bench-collection", .root_module = collection_bench_module });
+    const run_collection_bench = b.addRunArtifact(collection_bench);
+    b.step("bench-collection", "Read and verify public collection proofs without database writes").dependOn(&run_collection_bench.step);
+
     const snapshot_bench_module = b.createModule(.{
         .root_source_file = b.path("src/bench_snapshot.zig"),
         .target = target,
