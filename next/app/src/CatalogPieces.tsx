@@ -16,12 +16,14 @@ export function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : 'Could not load the catalog.';
 }
 
-export function useResource<T>(load: () => Promise<T>, delay = 0) {
+export function useResource<T>(load: () => Promise<T>, delay = 0, keepDataOnRetry = false) {
   const [result, setResult] = useState<Result<T>>({});
   const [attempt, setAttempt] = useState(0);
+  const previousLoad = useRef(load);
   useEffect(() => {
     let current = true;
-    setResult({});
+    if (!keepDataOnRetry || previousLoad.current !== load) setResult({});
+    previousLoad.current = load;
     const timer = setTimeout(() => {
       void load().then(
         (data) => { if (current) setResult({ data }); },
@@ -32,7 +34,7 @@ export function useResource<T>(load: () => Promise<T>, delay = 0) {
       current = false;
       clearTimeout(timer);
     };
-  }, [load, delay, attempt]);
+  }, [load, delay, attempt, keepDataOnRetry]);
   return { ...result, retry: () => setAttempt((value) => value + 1) };
 }
 
