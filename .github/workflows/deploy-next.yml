@@ -128,7 +128,7 @@ jobs:
             --skip-dns-registration \
             --vm-cpu-kind shared \
             --vm-cpus 1 \
-            --vm-memory 256 \
+            --vm-memory 1024 \
             --metadata purpose=zig-catalog-reconciliation \
             --env "WORKER_DATABASE_URL=${{ secrets.ZIG_NEXT_MIGRATOR_DATABASE_URL }}" \
             --env MODE=catalog_reconciler \
