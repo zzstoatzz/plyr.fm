@@ -6,6 +6,8 @@
 //! bucket (R2), only after the bytes hash to the record's blob CID, and records
 //! the object URL as a `verified_blob_cid` delivery origin. Playback then
 //! prefers that URL, and anyone can re-check it against the signed record.
+//! Records that already carry an https `audioUrl` aren't mirrored: they play
+//! from that URL (unverified), so storage isn't paid twice.
 //!
 //! Unconfigured, the worker idles instead of crash-looping so the process
 //! group can be deployed before the bucket credentials exist.

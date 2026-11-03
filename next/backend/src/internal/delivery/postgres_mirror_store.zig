@@ -126,6 +126,9 @@ const candidate_query =
     \\  AND v.record_cid IS NOT NULL
     \\  AND v.audio_blob_cid IS NOT NULL
     \\  AND v.audio_blob_media_type IS NOT NULL
+    \\  -- a record that already names an https audio URL (e.g. prod's CDN)
+    \\  -- plays from it; copying it again would double storage for no gain.
+    \\  AND (v.audio_url IS NULL OR v.audio_url NOT LIKE 'https://%')
     \\  AND (d.record_uri IS NULL OR d.record_cid <> v.record_cid
     \\       OR d.artifact_cid <> v.audio_blob_cid)
     \\  AND (m.record_uri IS NULL OR m.next_attempt_us <= $1)
