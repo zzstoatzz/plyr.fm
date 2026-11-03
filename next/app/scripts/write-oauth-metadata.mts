@@ -1,6 +1,6 @@
 /// <reference types="node" />
 
-import { writeFile } from 'node:fs/promises';
+import { readFile, writeFile } from 'node:fs/promises';
 import { URL } from 'node:url';
 import { NATIVE_REDIRECT_URI, SCOPE_PARTS, SITE_URL } from '../src/auth-config.ts';
 
@@ -21,3 +21,18 @@ for (const applicationType of ['web', 'native'] as const) {
 	};
 	await writeFile(new URL(`../dist/${filename}`, import.meta.url), JSON.stringify(metadata) + '\n');
 }
+
+const apiOrigin = new URL(process.env.EXPO_PUBLIC_API_URL || 'https://api.next.plyr.fm').origin;
+const htmlPath = new URL('../dist/index.html', import.meta.url);
+const html = await readFile(htmlPath, 'utf8');
+const preload = `<script>
+if (location.pathname === '/') {
+  const link = document.createElement('link');
+  link.rel = 'preload';
+  link.as = 'fetch';
+  link.crossOrigin = 'anonymous';
+  link.href = ${JSON.stringify(apiOrigin + '/v1/tracks?limit=30').replaceAll('<', '\\u003c')};
+  document.head.append(link);
+}
+</script>`;
+await writeFile(htmlPath, html.replace('</head>', preload + '</head>'));
