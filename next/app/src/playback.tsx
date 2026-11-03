@@ -14,7 +14,9 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
   const status = useAudioPlayerStatus(player);
   const [queue, setQueue] = useState<Track[]>([]);
   const [index, setIndex] = useState(-1);
-  const [loading, setLoading] = useState(false);
+  const [resolving, setResolving] = useState(false);
+  const [starting, setStarting] = useState<number | null>(null);
+  const loading = resolving || starting !== null;
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [repeat, setRepeat] = useState<'off' | 'all' | 'one'>('off');
@@ -44,7 +46,8 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
     setQueue([]);
     setIndex(-1);
     setReady(false);
-    setLoading(false);
+    setResolving(false);
+    setStarting(null);
     setError(null);
   }, [auth.did, player]);
   useEffect(() => { player.volume = volume; }, [player, volume]);
@@ -58,7 +61,8 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
     setQueue(tracks);
     setIndex(at);
     setReady(false);
-    setLoading(true);
+    setResolving(true);
+    setStarting(null);
     setError(null);
     try {
       const playback = await api.playback(track.id);
@@ -94,15 +98,36 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
         }, { showSeekForward: true, showSeekBackward: true });
       }
       setReady(true);
-      if (start) player.play();
+      if (start) {
+        setStarting(request);
+        player.play();
+      }
       return true;
     } catch (cause) {
-      if (request === sequence.current) setError(cause instanceof Error ? cause.message : 'could not play audio');
+      if (request === sequence.current) {
+        setStarting(null);
+        setError(cause instanceof Error ? cause.message : 'could not play audio');
+      }
       return false;
     } finally {
-      if (request === sequence.current) setLoading(false);
+      if (request === sequence.current) setResolving(false);
     }
   }
+
+  useEffect(() => {
+    if (starting === null) return;
+    if ((status.playing && player.playing && player.currentTime > 0) || status.error) {
+      setStarting(null);
+      return;
+    }
+    const timeout = setTimeout(() => {
+      if (starting !== sequence.current) return;
+      player.pause();
+      setStarting(null);
+      setError('Playback took too long to start');
+    }, 15_000);
+    return () => clearTimeout(timeout);
+  }, [player, starting, status.currentTime, status.error, status.playing]);
 
   function play(track: Track, collection?: Track[]) {
     const list = playThrough && collection?.some((item) => item.id === track.id) ? collection : [track];
@@ -153,6 +178,8 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
       if (!jamTrack.current) return;
       jamTrack.current = null;
       sequence.current++;
+      setStarting(null);
+      setResolving(false);
       player.pause();
     },
     play, queue, current, index, loading, error, status, repeat, setRepeat, toggle, next,

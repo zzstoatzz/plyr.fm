@@ -1,3 +1,7 @@
+import { randomUUID } from 'expo-crypto';
+import { router } from 'expo-router';
+import Users from 'lucide-react-native/icons/users';
+import { useAuth } from '../src/auth';
 import Slider from '@react-native-community/slider';
 import Ellipsis from 'lucide-react-native/icons/ellipsis';
 import Repeat from 'lucide-react-native/icons/repeat';
@@ -17,6 +21,7 @@ import { Sheet } from '../src/Sheet';
 
 export default function Queue() {
   const player = usePlayback();
+  const { did } = useAuth();
   const theme = useAppearance();
   const { preferences, setPreferences } = useAppPreferences();
   const [history, setHistory] = useState(false);
@@ -32,6 +37,11 @@ export default function Queue() {
         <View style={styles.header}>
           <Heading>Now playing</Heading>
           <View style={styles.actions}>
+            <IconButton label="Start a Jam" onPress={() => {
+              const open = (host: string) => `/jam/${encodeURIComponent(host)}~${randomUUID()}` as const;
+              if (did) router.push(open(did));
+              else router.push({ pathname: '/login', params: { return_to: '/queue' } });
+            }}><Users size={20} color={theme.text} /></IconButton>
             <IconButton label={`Repeat: ${player.repeat}`} selected={player.repeat !== 'off'}
               onPress={() => player.setRepeat(player.repeat === 'off' ? 'all' : player.repeat === 'all' ? 'one' : 'off')}>
               <RepeatIcon size={20} color={player.repeat === 'off' ? theme.muted : theme.accent} />
