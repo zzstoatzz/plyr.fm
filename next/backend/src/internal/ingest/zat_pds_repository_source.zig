@@ -10,6 +10,7 @@ const repository_source = @import("repository_source.zig");
 const safe_endpoint = @import("safe_endpoint.zig");
 const pinned_tls = @import("pinned_tls.zig");
 const snapshot_verifier = @import("../projection/snapshot_verifier.zig");
+const record_proof_verifier = @import("../projection/record_proof_verifier.zig");
 
 pub const ZatPdsRepositorySource = struct {
     io: std.Io,
@@ -108,7 +109,7 @@ pub const ZatPdsRepositorySource = struct {
         while (attempt < 3) : (attempt += 1) {
             var paths: std.ArrayList([]const u8) = .empty;
             for (self.collections) |collection| try self.listPaths(allocator, endpoint, did, collection, &paths);
-            if (paths.items.len == 0 or paths.items.len > snapshot_verifier.max_proof_records)
+            if (paths.items.len == 0 or paths.items.len > record_proof_verifier.max_proof_records)
                 return error.RepositoryTooLarge;
             var proofs: std.ArrayList([]const u8) = .empty;
             var kept: std.ArrayList([]const u8) = .empty;
@@ -159,7 +160,7 @@ pub const ZatPdsRepositorySource = struct {
             const body = (try self.get(allocator, endpoint, url, "application/json", 4 * 1024 * 1024)) orelse return;
             cursor = try collectPaths(allocator, body, collection, paths);
             if (cursor == null) return;
-            if (paths.items.len > snapshot_verifier.max_proof_records) return;
+            if (paths.items.len > record_proof_verifier.max_proof_records) return;
         }
     }
 

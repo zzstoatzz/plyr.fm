@@ -311,6 +311,7 @@ test {
     _ = @import("internal/projection/like_change.zig");
     _ = @import("internal/projection/track_change.zig");
     _ = @import("internal/projection/snapshot_verifier.zig");
+    _ = @import("internal/projection/record_proof_verifier.zig");
     _ = @import("internal/projection/list_store.zig");
     _ = @import("internal/projection/postgres_list_store.zig");
     _ = @import("internal/projection/track_store.zig");

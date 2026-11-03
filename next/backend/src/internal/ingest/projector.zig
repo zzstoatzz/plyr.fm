@@ -10,6 +10,7 @@ const repository_source = @import("repository_source.zig");
 const signing_key = @import("signing_key.zig");
 const repository_head = @import("../projection/repository_head.zig");
 const snapshot_verifier = @import("../projection/snapshot_verifier.zig");
+const record_proof_verifier = @import("../projection/record_proof_verifier.zig");
 const verified_commit = @import("../projection/verified_commit.zig");
 const verified_snapshot = @import("../projection/verified_snapshot.zig");
 
@@ -92,7 +93,7 @@ fn verifyFetchedImpl(
     public_key: zat.multicodec.PublicKey,
     indexed_at_us: i64,
 ) !verified_snapshot.Snapshot {
-    if (fetched.proofs) |proofs| return snapshot_verifier.verifyProofs(
+    if (fetched.proofs) |proofs| return record_proof_verifier.verifyProofs(
         allocator,
         proofs,
         fetched.paths orelse return error.InvalidSnapshot,
