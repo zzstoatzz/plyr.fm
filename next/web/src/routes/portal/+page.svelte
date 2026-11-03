@@ -179,7 +179,7 @@
 		<div class="list">
 			{#each albums as a (a.id)}
 				<a class="row-item" href="/album/{a.id}">
-					<Artwork seed={a.metadata.name ?? a.id} size={44} />
+					<Artwork src={a.media?.artwork?.url} seed={a.metadata.name ?? a.id} size={44} />
 					<span class="grow">
 						<span class="ellipsis" style="display:block;font-weight:600">{a.metadata.name ?? 'untitled'}</span>
 						<span class="muted small">{plural(a.metrics.member_count, 'track')}</span>
@@ -194,7 +194,7 @@
 	<div class="list">
 		{#each playlists as p (p.id)}
 			<a class="row-item" href="/playlist/{p.id}">
-				<Artwork seed={p.metadata.name ?? p.id} size={44} />
+				<Artwork src={p.media?.artwork?.url} seed={p.metadata.name ?? p.id} size={44} />
 				<span class="grow">
 					<span class="ellipsis" style="display:block;font-weight:600">{p.metadata.name ?? 'untitled'}</span>
 					<span class="muted small">{plural(p.metrics.member_count, 'track')}</span>

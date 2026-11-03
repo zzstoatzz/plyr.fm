@@ -60,7 +60,7 @@
 						disabled={busy}
 						onclick={() => run(() => addToPlaylist(list.record.uri, track), `added to ${list.metadata.name ?? 'playlist'}`)}
 					>
-						<Artwork seed={list.metadata.name ?? list.id} size={40} />
+						<Artwork src={list.media?.artwork?.url} seed={list.metadata.name ?? list.id} size={40} />
 						<span class="grow">
 							<span class="ellipsis" style="display:block">{list.metadata.name ?? 'untitled'}</span>
 							<span class="muted small">{plural(list.metrics.member_count, 'track')}</span>

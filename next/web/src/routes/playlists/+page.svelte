@@ -29,7 +29,7 @@
 <div class="list">
 	{#each lists as list (list.id)}
 		<a class="row-item" href="/playlist/{list.id}">
-			<Artwork seed={list.metadata.name ?? list.id} size={48} />
+			<Artwork src={list.media?.artwork?.url} seed={list.metadata.name ?? list.id} size={48} />
 			<span class="grow">
 				<span class="ellipsis" style="display:block;font-weight:600">{list.metadata.name ?? 'untitled'}</span>
 				<span class="muted small ellipsis" style="display:block">

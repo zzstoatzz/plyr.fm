@@ -19,7 +19,7 @@
 	// your own playlist is editable here; the edit goes to your PDS, then we
 	// re-read the appview once it has projected the new record.
 	const editable = $derived(!!list && list.object === 'playlist' && list.owner.did === auth.did);
-	const cover = $derived(tracks.find((t) => t.media.artwork?.url)?.media.artwork?.url ?? null);
+	const cover = $derived(list?.media?.artwork?.url ?? tracks.find((t) => t.media.artwork?.url)?.media.artwork?.url ?? null);
 	const minutes = $derived(Math.round(tracks.reduce((n, t) => n + (t.metadata.duration_seconds ?? 0), 0) / 60));
 	let busy = $state(false);
 	let manage = $state(false);

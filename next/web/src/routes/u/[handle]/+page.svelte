@@ -105,7 +105,7 @@
 		<div class="list">
 			{#each tab === 'albums' ? albums : playlists as l (l.id)}
 				<a class="row-item" href="/{tab === 'albums' ? 'album' : 'playlist'}/{l.id}">
-					<Artwork seed={l.metadata.name ?? l.id} size={48} />
+					<Artwork src={l.media?.artwork?.url} seed={l.metadata.name ?? l.id} size={48} />
 					<span class="grow">
 						<span class="ellipsis" style="display:block;font-weight:600">{l.metadata.name ?? 'untitled'}</span>
 						<span class="muted small">{plural(l.metrics.member_count, 'track')}</span>
