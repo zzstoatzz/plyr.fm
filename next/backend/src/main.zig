@@ -212,6 +212,7 @@ test {
     _ = @import("api/managed_space.zig");
     _ = @import("internal/space/managed_space.zig");
     _ = @import("internal/space/network.zig");
+    _ = @import("internal/space/attested.zig");
     _ = @import("api/artists.zig");
     _ = @import("api/charts.zig");
     _ = @import("api/albums.zig");
