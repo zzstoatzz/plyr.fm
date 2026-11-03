@@ -247,7 +247,7 @@ const remove_sql =
     \\    ELSE 'labeler_sync' END,
     \\  moderation_observed_at_us = CASE
     \\    WHEN jsonb_array_length(operator_labels - $2::text) = 0 AND moderation_decision IS NULL THEN NULL
-    \\    ELSE $3 END
+    \\    ELSE $3::bigint END
     \\WHERE record_uri = $1 AND operator_labels ? $2::text
 ;
 
