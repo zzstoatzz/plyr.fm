@@ -11,6 +11,7 @@ const postgres_search = @import("internal/index/postgres_search_store.zig");
 const postgres_artists = @import("internal/index/postgres_artist_store.zig");
 const postgres_verified_lists = @import("internal/index/postgres_verified_list_store.zig");
 const postgres_record_status = @import("internal/index/postgres_record_status_store.zig");
+const postgres_ingest_status = @import("internal/index/postgres_ingest_status_store.zig");
 const postgres_play_metrics = @import("internal/metrics/postgres_play_metric_store.zig");
 const postgres_artist_metrics = @import("internal/metrics/postgres_artist_metric_store.zig");
 const redis_play_dedup = @import("internal/metrics/redis_play_dedup_store.zig");
@@ -89,6 +90,11 @@ pub fn main() !void {
     else
         null;
     const record_status_store = if (postgres_record_status_store) |*store| store.store() else null;
+    var postgres_ingest_status_store: ?postgres_ingest_status.PostgresIngestStatusStore = if (postgres_store) |*store|
+        .{ .pool = store.pool }
+    else
+        null;
+    const ingest_status_store = if (postgres_ingest_status_store) |*store| store.store() else null;
     var postgres_search_store: ?postgres_search.PostgresSearchStore = if (postgres_store) |*store|
         .{ .pool = store.pool }
     else
@@ -134,6 +140,7 @@ pub fn main() !void {
                 .artist_metric_store = artist_metric_store,
                 .verified_list_store = verified_list_store,
                 .record_status_store = record_status_store,
+                .ingest_status_store = ingest_status_store,
                 .search_store = search_store,
                 .play_metric_store = play_metric_store,
                 .play_dedup_store = play_dedup_store,
@@ -236,6 +243,8 @@ test {
     _ = @import("internal/application/list_track_chart.zig");
     _ = @import("internal/application/await_record.zig");
     _ = @import("internal/index/postgres_record_status_store.zig");
+    _ = @import("internal/index/postgres_ingest_status_store.zig");
+    _ = @import("internal/application/get_ingest_status.zig");
     _ = @import("internal/application/list_track_likes.zig");
     _ = @import("internal/application/get_playlist.zig");
     _ = @import("internal/application/list_playlists.zig");

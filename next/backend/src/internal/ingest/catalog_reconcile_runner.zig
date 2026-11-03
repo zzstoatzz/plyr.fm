@@ -1,6 +1,7 @@
 //! Runtime wiring for one-shot source-authenticated catalog reconciliation.
 
 const std = @import("std");
+const relay_cursor_store = @import("postgres_relay_cursor.zig");
 const pg = @import("pg");
 const catalog = @import("catalog_reconciler.zig");
 const candidates = @import("postgres_repository_candidates.zig");
@@ -42,11 +43,22 @@ pub fn run(
     );
     defer repairs.deinit();
 
-    return catalog.reconcile(allocator, union_adapter.source(), .{
+    const report = try catalog.reconcile(allocator, union_adapter.source(), .{
         .context = &repairs,
         .repair_fn = repairOpaque,
     });
+    if (report.complete()) {
+        const now_us: i64 = @intCast(@divFloor(std.Io.Timestamp.now(io, .real).nanoseconds, std.time.ns_per_us));
+        var checkpoint: relay_cursor_store.PostgresRelayCursor = .{ .pool = pool };
+        checkpoint.store().save(completed_source, now_us, now_us) catch |err|
+            std.log.warn("could not record the reconcile time: {}", .{err});
+    }
+    return report;
 }
+
+/// Checkpoint in plyr_index.relay_cursors whose seq is the time_us of the
+/// last complete catalog reconciliation, read by /v1/health/ingest.
+pub const completed_source = "catalog_reconcile";
 
 /// Distinct DIDs from both sources, in first-seen order.
 const Union = struct {
