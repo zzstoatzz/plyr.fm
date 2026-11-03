@@ -10,6 +10,7 @@ import { blobUrl } from './identity';
 
 export interface MediaFile {
 	name: string;
+	uri?: string;
 	type: string;
 	size: number;
 	arrayBuffer(): Promise<ArrayBuffer>;

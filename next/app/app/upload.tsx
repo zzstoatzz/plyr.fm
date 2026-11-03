@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { useAuth } from '../src/auth';
+import { getAuth } from '../src/auth-state';
 import { trackIdFromUri } from '../src/api';
 import { Action, Copy, Field, Page } from '../src/controls';
-import { pickMedia } from '../src/media-picker';
+import { measureAudioDuration, pickMedia } from '../src/media-picker';
 import { createPds, MAX_AUDIO_BYTES, type MediaFile } from '../src/pds';
 
 export default function Upload() {
@@ -36,7 +37,9 @@ export default function Upload() {
     setBusy(true);
     setNote(undefined);
     try {
-      setSaved(await createPds(auth).uploadTrack({ file, artwork, title, artist, album, description }));
+      const duration = await measureAudioDuration(file).catch(() => undefined);
+      if (getAuth().agent !== auth.agent) throw new Error('Account changed before upload.');
+      setSaved(await createPds(auth).uploadTrack({ file, artwork, title, artist, album, description, duration }));
     } catch (failure) {
       setNote(failure instanceof Error ? failure.message : 'Upload failed.');
     } finally {
