@@ -125,7 +125,7 @@ fn parseOptions(
             cid = pair.value;
         } else if (std.mem.eql(u8, pair.name, "timeout_ms")) {
             if (timeout_ms != null) return error.InvalidQuery;
-            timeout_ms = std.fmt.parseInt(u32, pair.value, 10) catch return error.InvalidQuery;
+            timeout_ms = query.parseDecimal(u32, pair.value) catch return error.InvalidQuery;
             if (timeout_ms.? > max_timeout_ms) return error.InvalidQuery;
         } else return error.InvalidQuery;
     }

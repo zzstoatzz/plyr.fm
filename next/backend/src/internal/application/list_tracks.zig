@@ -87,7 +87,7 @@ fn parseOptions(allocator: std.mem.Allocator, target: []const u8) !Options {
             const value = pair.value;
             if (saw_limit or value.len == 0) return error.InvalidQuery;
             saw_limit = true;
-            const parsed = std.fmt.parseInt(usize, value, 10) catch return error.InvalidQuery;
+            const parsed = query.parseDecimal(usize, value) catch return error.InvalidQuery;
             if (parsed < 1 or parsed > max_limit) return error.InvalidQuery;
             result.limit = parsed;
         } else if (std.mem.eql(u8, pair.name, "cursor")) {
@@ -185,6 +185,7 @@ test "collection options are strict and bounded" {
     try std.testing.expectError(error.InvalidQuery, parseOptions(allocator, "/v1/tracks?limit=101"));
     try std.testing.expectError(error.InvalidQuery, parseOptions(allocator, "/v1/tracks?limit=2&limit=3"));
     try std.testing.expectError(error.InvalidQuery, parseOptions(allocator, "/v1/tracks?offset=10"));
+    try std.testing.expectError(error.InvalidQuery, parseOptions(allocator, "/v1/tracks?limit=1_0"));
 }
 
 test "artist filters accept raw and percent-encoded DIDs only once" {
@@ -208,6 +209,7 @@ test "artist filters accept raw and percent-encoded DIDs only once" {
         error.InvalidQuery,
         parseOptions(allocator, "/v1/tracks?artist_did=did%3Xplc"),
     );
+    try std.testing.expectError(error.InvalidQuery, parseOptions(allocator, "/v1/tracks?limit=%2B5"));
 }
 
 test "collection returns one page and a cursor from the last visible row" {
