@@ -1,9 +1,15 @@
 <script lang="ts">
+	import type { Snippet } from 'svelte';
 	import type { Track } from './api';
 	import LikeButton from './LikeButton.svelte';
 	import { formatDuration, player } from './player.svelte';
 
-	let { tracks, index, rank }: { tracks: Track[]; index: number; rank?: number } = $props();
+	let {
+		tracks,
+		index,
+		rank,
+		actions
+	}: { tracks: Track[]; index: number; rank?: number; actions?: Snippet } = $props();
 	const track = $derived(tracks[index]);
 	const active = $derived(player.current?.id === track.id);
 </script>
@@ -25,10 +31,14 @@
 	</div>
 	<span class="stat">{track.metrics.play_count} plays</span>
 	<span class="stat">{formatDuration(track.metadata.duration_seconds)}</span>
-	<LikeButton {track} />
+	<span class="actions"><LikeButton {track} />{#if actions}{@render actions()}{/if}</span>
 </li>
 
 <style>
+	.actions {
+		display: inline-flex;
+		align-items: center;
+	}
 	.row {
 		display: grid;
 		grid-template-columns: auto 1fr auto auto auto;
