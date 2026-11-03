@@ -13,6 +13,7 @@ const album_id = @import("../identity/album_id.zig");
 const playlist_id = @import("../identity/playlist_id.zig");
 const store_module = @import("verified_list_store.zig");
 const composed_track = @import("postgres_composed_track_store.zig");
+const lexicon_value = @import("../atproto/lexicon_value.zig");
 const VerifiedListStore = store_module.VerifiedListStore;
 
 pub const PostgresVerifiedListStore = struct {
@@ -262,6 +263,8 @@ fn decodeSummary(
     if (available_count > member_count) return error.CorruptMetrics;
     const total_plays = try row.get(i64, 18);
     if (total_plays < 0) return error.CorruptMetrics;
+    const cover = try duplicateOptional(allocator, try row.get(?[]const u8, 20));
+    if (cover) |url| if (!lexicon_value.validUri(url)) return error.CorruptArtwork;
     return .{
         .object = kind,
         .id = header.id,
@@ -273,6 +276,7 @@ fn decodeSummary(
             .available_count = available_count,
             .total_plays = total_plays,
         },
+        .media = .{ .artwork = if (cover) |url| .{ .url = url, .source = .verified_repo } else null },
         .sources = header.sources,
         .projection = header.projection,
     };
@@ -442,6 +446,7 @@ const collection_select = "SELECT\n" ++ header_columns ++ "\n" ++
     \\      WHERE aa.repo_did IS NOT NULL AND a.did IS NOT NULL
     \\    ), 0)::bigint
     \\  , records.record_created_at_us
+    \\  , (array_agg(v.image_url ORDER BY members.position) FILTER (WHERE v.image_url IS NOT NULL AND aa.repo_did IS NOT NULL AND a.did IS NOT NULL))[1]
 ;
 
 const collection_where =

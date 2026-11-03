@@ -319,7 +319,6 @@ def main() -> None:
 
         for invalid_target in (
             "/v1/search",
-            "/v1/search?q=a",
             "/v1/search?q=okay&q=again",
             "/v1/search?q=okay&types=track,track",
             "/v1/search?q=okay&types=tag",
@@ -330,6 +329,10 @@ def main() -> None:
             status, _, invalid_search = _request(base_url, invalid_target)
             assert status == 400
             assert invalid_search["error"]["code"] == "invalid_request"
+
+        status, _, short_search = _request(base_url, "/v1/search?q=a")
+        assert status == 200
+        assert short_search["data"] == []
 
         status, _, unavailable_search = _request(
             base_url,
