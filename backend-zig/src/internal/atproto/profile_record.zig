@@ -12,6 +12,8 @@ const lexicon_string = @import("../text/lexicon_string.zig");
 pub const max_uri_bytes: usize = 1_000_000;
 
 pub const Record = struct {
+    /// stg/next-only extension: overrides the bsky display name on plyr.
+    display_name: ?[]const u8 = null,
     avatar: ?[]const u8,
     bio: ?[]const u8,
     created_at: []const u8,
@@ -23,6 +25,7 @@ pub const Error = error{
     WrongRecordType,
     InvalidAvatar,
     InvalidBio,
+    InvalidDisplayName,
     InvalidDatetime,
 };
 
@@ -46,7 +49,13 @@ pub fn parse(value: zat.cbor.Value, profile_collection: []const u8) Error!Record
         lexicon_string.validate(text, 2560, 256) catch return error.InvalidBio;
     }
 
+    const display_name = try optionalText(value, "displayName");
+    if (display_name) |text| {
+        lexicon_string.validate(text, 640, 64) catch return error.InvalidDisplayName;
+    }
+
     return .{
+        .display_name = display_name,
         .avatar = avatar,
         .bio = bio,
         .created_at = created_at,
@@ -109,4 +118,21 @@ test "profile rejects relative avatars and invalid timestamps" {
         error.InvalidDatetime,
         parse(invalid_time, "fm.plyr.dev.actor.profile"),
     );
+}
+
+test "profile display name is optional and bounded" {
+    try std.testing.expect((try parse(fixture("bio"), "fm.plyr.dev.actor.profile")).display_name == null);
+    const named: zat.cbor.Value = .{ .map = &.{
+        .{ .key = "$type", .value = .{ .text = "fm.plyr.dev.actor.profile" } },
+        .{ .key = "createdAt", .value = .{ .text = "2026-08-08T12:00:00Z" } },
+        .{ .key = "displayName", .value = .{ .text = "stg nate" } },
+    } };
+    try std.testing.expectEqualStrings("stg nate", (try parse(named, "fm.plyr.dev.actor.profile")).display_name.?);
+    const long = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx";
+    const too_long: zat.cbor.Value = .{ .map = &.{
+        .{ .key = "$type", .value = .{ .text = "fm.plyr.dev.actor.profile" } },
+        .{ .key = "createdAt", .value = .{ .text = "2026-08-08T12:00:00Z" } },
+        .{ .key = "displayName", .value = .{ .text = long } },
+    } };
+    try std.testing.expectError(error.InvalidDisplayName, parse(too_long, "fm.plyr.dev.actor.profile"));
 }

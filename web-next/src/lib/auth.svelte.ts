@@ -16,7 +16,7 @@ import {
 	finalizeAuthorization,
 	getSession
 } from '@atcute/oauth-browser-client';
-import { SCOPE_PARTS, SITE_URL, TYPEAHEAD_URL } from './config';
+import { NSID, SCOPE_PARTS, SITE_URL, TYPEAHEAD_URL } from './config';
 
 const ACTIVE_KEY = 'plyr-next:active-did';
 
@@ -105,12 +105,18 @@ class Auth {
 		this.did = session.info.sub;
 		this.handle = this.displayName = this.avatar = null;
 		const did = session.info.sub;
-		viewerProfile(did).then((p) => {
+		const rpc = this.rpc;
+		Promise.all([viewerProfile(did), plyrProfile(rpc, did)]).then(([p, own]) => {
 			if (this.did !== did) return;
 			this.handle = p.handle;
-			this.displayName = p.displayName;
+			this.displayName = own?.displayName ?? p.displayName;
 			this.avatar = p.avatar;
 		});
+	}
+
+	/** apply a just-saved plyr profile name without waiting on a reload. */
+	setDisplayName(name: string | null) {
+		this.displayName = name;
 	}
 }
 
@@ -138,6 +144,20 @@ async function viewerProfile(did: string): Promise<ViewerProfile> {
 		/* typeahead unreachable or rate limited: fall back to the did document */
 	}
 	return { handle: await handleFromDidDocument(did), displayName: null, avatar: null };
+}
+
+// a displayName on the viewer's own plyr profile record wins over bsky's.
+async function plyrProfile(rpc: Client, did: string): Promise<{ displayName: string | null } | null> {
+	try {
+		const res = await rpc.get('com.atproto.repo.getRecord', {
+			params: { repo: did as `did:${string}:${string}`, collection: NSID.profile as `${string}.${string}.${string}`, rkey: 'self' }
+		});
+		if (!res.ok) return null;
+		const name = (res.data.value as { displayName?: unknown }).displayName;
+		return { displayName: typeof name === 'string' && name.trim() ? name.trim() : null };
+	} catch {
+		return null;
+	}
 }
 
 async function handleFromDidDocument(did: string): Promise<string | null> {
