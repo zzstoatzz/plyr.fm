@@ -14,6 +14,20 @@ function session() {
 	return { rpc: auth.rpc, did: auth.did as `did:${string}:${string}` };
 }
 
+/**
+ * the PDS accepted the write, so it is saved. waiting for the appview to
+ * index it is best-effort: a timeout or network error means "saved, still
+ * indexing", never "failed", so callers don't retry a create that already
+ * happened. a newer revision showing up first also counts as indexed.
+ */
+async function settle(uri: string, cid?: string): Promise<AwaitStatus> {
+	try {
+		return (await api.awaitRecord(uri, cid)).status;
+	} catch {
+		return 'pending';
+	}
+}
+
 export interface LikeRef {
 	uri: string;
 	rkey: string;
@@ -68,7 +82,7 @@ export async function like(track: Track): Promise<AwaitStatus> {
 		})
 	);
 	(await myLikes()).set(subject.uri, { uri: res.uri, rkey: res.uri.split('/').pop()!, subject });
-	return (await api.awaitRecord(res.uri, res.cid)).status;
+	return await settle(res.uri, res.cid);
 }
 
 export async function unlike(track: Track): Promise<AwaitStatus> {
@@ -82,7 +96,7 @@ export async function unlike(track: Track): Promise<AwaitStatus> {
 		})
 	);
 	likes.delete(track.record.uri);
-	return (await api.awaitRecord(existing.uri)).status;
+	return await settle(existing.uri);
 }
 
 // playlists are fm.plyr.*.list records with listType "playlist". edits are a
@@ -129,7 +143,7 @@ async function writeList(uri: string, value: ListRecord, swap: string): Promise<
 			}
 		})
 	);
-	return (await api.awaitRecord(res.uri, res.cid)).status;
+	return await settle(res.uri, res.cid);
 }
 
 export async function createPlaylist(name: string, first?: Track): Promise<{ uri: string; status: AwaitStatus }> {
@@ -144,7 +158,7 @@ export async function createPlaylist(name: string, first?: Track): Promise<{ uri
 			}
 		})
 	);
-	return { uri: res.uri, status: (await api.awaitRecord(res.uri, res.cid)).status };
+	return { uri: res.uri, status: await settle(res.uri, res.cid) };
 }
 
 export async function addToPlaylist(playlistUri: string, track: Track): Promise<AwaitStatus> {
@@ -171,7 +185,7 @@ export async function renamePlaylist(playlistUri: string, name: string): Promise
 export async function deletePlaylist(playlistUri: string): Promise<AwaitStatus> {
 	const { rpc, did } = session();
 	await ok(rpc.post('com.atproto.repo.deleteRecord', { input: { repo: did, collection: LIST(), rkey: rkeyOf(playlistUri) } }));
-	return (await api.awaitRecord(playlistUri)).status;
+	return await settle(playlistUri);
 }
 
 // uploads: the audio goes to the user's PDS as a blob and the track record
@@ -241,7 +255,7 @@ export async function uploadTrack(input: NewTrack): Promise<{ uri: string; statu
 			})
 		);
 	}
-	return { uri: res.uri, status: (await api.awaitRecord(res.uri, res.cid)).status };
+	return { uri: res.uri, status: await settle(res.uri, res.cid) };
 }
 
 /** read duration locally so the record can carry it. */
@@ -313,7 +327,7 @@ export async function saveProfile(
 			}
 		})
 	);
-	return (await api.awaitRecord(res.uri, res.cid)).status;
+	return await settle(res.uri, res.cid);
 }
 
 // your own tracks: edits are a read-modify-write of the fm.plyr.track record,
@@ -369,7 +383,7 @@ export async function editTrack(uri: string, edits: TrackEdits): Promise<AwaitSt
 			}
 		})
 	);
-	return (await api.awaitRecord(res.uri, res.cid)).status;
+	return await settle(res.uri, res.cid);
 }
 
 export async function deleteTrack(uri: string): Promise<AwaitStatus> {
@@ -379,5 +393,5 @@ export async function deleteTrack(uri: string): Promise<AwaitStatus> {
 			input: { repo: did, collection: NSID.track as Nsid, rkey: rkeyOf(uri) }
 		})
 	);
-	return (await api.awaitRecord(uri)).status;
+	return await settle(uri);
 }
