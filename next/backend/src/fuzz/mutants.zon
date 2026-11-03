@@ -41,4 +41,10 @@
         .old = "return ri_count % 2 == 0;",
         .new = "return ri_count % 2 == 1;",
     },
+    .{
+        .name = "await backoff has no cap",
+        .file = "src/internal/application/await_record.zig",
+        .old = "const step: u64 = @min(doubled, max_poll_ms);",
+        .new = "const step: u64 = doubled;",
+    },
 }

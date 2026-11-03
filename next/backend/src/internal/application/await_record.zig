@@ -20,7 +20,18 @@ const RecordStatusStore = store_module.RecordStatusStore;
 
 pub const default_timeout_ms: u32 = 5_000;
 pub const max_timeout_ms: u32 = 10_000;
-pub const poll_interval_ms: u32 = 150;
+pub const first_poll_ms: u32 = 25;
+pub const max_poll_ms: u32 = 500;
+
+/// Milliseconds to sleep after the `attempt`th check, `elapsed_ms` into a wait
+/// of `timeout_ms`: doubling from `first_poll_ms` to `max_poll_ms`, never past
+/// the deadline, so the last check lands on it. null once the deadline passed.
+pub fn pollDelay(attempt: u32, elapsed_ms: u64, timeout_ms: u32) ?u32 {
+    if (elapsed_ms >= timeout_ms) return null;
+    const doubled = std.math.shl(u64, first_poll_ms, @min(attempt, 32));
+    const step: u64 = @min(doubled, max_poll_ms);
+    return @intCast(@min(step, timeout_ms - elapsed_ms));
+}
 
 pub const Collections = struct {
     track: []const u8,
@@ -71,7 +82,8 @@ pub fn execute(
     };
     const configured = store orelse return .unavailable;
     const started = std.Io.Timestamp.now(io, .awake);
-    while (true) {
+    var attempt: u32 = 0;
+    while (true) : (attempt += 1) {
         const status = configured.get(allocator, options.uri) catch |err| return switch (err) {
             error.CorruptProjection => .internal_error,
             error.IndexUnavailable, error.OutOfMemory => .unavailable,
@@ -82,9 +94,9 @@ pub fn execute(
             return .{ .found = value };
         }
         const elapsed_ns = started.durationTo(std.Io.Timestamp.now(io, .awake)).nanoseconds;
-        const elapsed_ms: i96 = @divFloor(elapsed_ns, std.time.ns_per_ms);
-        if (elapsed_ms + poll_interval_ms > options.timeout_ms) break;
-        io.sleep(std.Io.Duration.fromMilliseconds(poll_interval_ms), .awake) catch break;
+        const elapsed_ms: u64 = @intCast(@max(0, @divFloor(elapsed_ns, std.time.ns_per_ms)));
+        const delay = pollDelay(attempt, elapsed_ms, options.timeout_ms) orelse break;
+        io.sleep(std.Io.Duration.fromMilliseconds(delay), .awake) catch break;
     }
     return .{ .found = .{ .uri = options.uri, .status = .pending, .cid = options.cid } };
 }
@@ -225,4 +237,14 @@ test "await rejects foreign collections, bad cids, and oversized timeouts" {
     }) |target| {
         try std.testing.expect(execute(a, threaded.io(), fake.store(), test_collections, target) == .invalid_request);
     }
+}
+
+test "await backs off to the cap and checks again at the deadline" {
+    try std.testing.expectEqual(@as(?u32, 25), pollDelay(0, 0, 10_000));
+    try std.testing.expectEqual(@as(?u32, 50), pollDelay(1, 25, 10_000));
+    try std.testing.expectEqual(@as(?u32, 500), pollDelay(9, 4_000, 10_000));
+    try std.testing.expectEqual(@as(?u32, 500), pollDelay(std.math.maxInt(u32), 4_000, 10_000));
+    try std.testing.expectEqual(@as(?u32, 30), pollDelay(9, 9_970, 10_000));
+    try std.testing.expectEqual(@as(?u32, null), pollDelay(9, 10_000, 10_000));
+    try std.testing.expectEqual(@as(?u32, null), pollDelay(0, 0, 0));
 }
