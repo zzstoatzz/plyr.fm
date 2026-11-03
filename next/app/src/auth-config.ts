@@ -19,7 +19,7 @@ export const JAM_SPACE = {
 	collection: process.env.EXPO_PUBLIC_JAM_STATE_COLLECTION || 'fm.plyr.stg.jamState'
 } as const;
 
-const jamScopes = [
+export const JAM_SCOPE_PARTS = [
 	`space:${JAM_SPACE.type}?authority=self&collection=${JAM_SPACE.collection}&action=create&action=update&manage=create&manage=update`,
 	`space:${JAM_SPACE.type}?authority=*&action=read`
 ];
@@ -38,7 +38,8 @@ const preferenceScope = `space:${PREFERENCE_SPACE.type}?authority=self&skey=self
 const protectedAudioScope = prefix === 'fm.plyr'
 	? [`space:${prefix}.privateMedia?authority=*&collection=${NSID.track}&action=read`]
 	: [];
-export const SCOPE_PARTS = [...BASE_SCOPE_PARTS, ...(PREFERENCE_SYNC ? [preferenceScope] : []), ...protectedAudioScope, ...jamScopes];
+export const STANDARD_SCOPE_PARTS = [...BASE_SCOPE_PARTS, ...(PREFERENCE_SYNC ? [preferenceScope] : []), ...protectedAudioScope];
+export const SCOPE_PARTS = [...STANDARD_SCOPE_PARTS, ...JAM_SCOPE_PARTS];
 
 export function hasPreferenceGrant(scope: string, did: string): boolean {
 	return PREFERENCE_SYNC && scope.split(' ').some((value) => {

@@ -46,10 +46,10 @@ export async function restoreAuth() {
 
 export function takeLoginIntent(): undefined { return undefined; }
 
-export async function login(identifier: string, deviceOnly = false, _intent?: string) {
+export async function login(identifier: string, deviceOnly = false, intent?: string) {
 	const handle = identifier.trim().replace(/^@/, '');
 	const session = await oauthClient().signIn(handle, {
-		scope: await scopeFor(handle, deviceOnly),
+		scope: await scopeFor(handle, deviceOnly, intent?.startsWith('/jam/')),
 		redirect_uri: NATIVE_REDIRECT_URI
 	});
 	await activate(session);

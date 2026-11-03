@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react';
 import { Client } from '@atcute/client';
-import { BASE_SCOPE_PARTS, SCOPE_PARTS, hasPreferenceGrant, hasJamGrant } from './auth-config';
+import { BASE_SCOPE_PARTS, SCOPE_PARTS, STANDARD_SCOPE_PARTS, hasPreferenceGrant, hasJamGrant } from './auth-config';
 import { didDocument, pdsEndpoint, pdsSupportsSpaces } from './identity';
 
 export type Did = `did:${string}:${string}`;
@@ -55,12 +55,12 @@ function update(next: Auth) {
 }
 
 
-export async function scopeFor(identifier: string, deviceOnly: boolean): Promise<string> {
+export async function scopeFor(identifier: string, deviceOnly: boolean, jam = false): Promise<string> {
 	const base = BASE_SCOPE_PARTS.join(' ');
 	if (deviceOnly || SCOPE_PARTS.length === BASE_SCOPE_PARTS.length) return base;
 	try {
 		const did = identifier.startsWith('did:') ? identifier : await resolveHandle(identifier);
-		if (typeof did === 'string' && await pdsSupportsSpaces(await pdsEndpoint(did))) return SCOPE_PARTS.join(' ');
+		if (typeof did === 'string' && await pdsSupportsSpaces(await pdsEndpoint(did))) return (jam ? SCOPE_PARTS : STANDARD_SCOPE_PARTS).join(' ');
 	} catch {
 		/* Space scope is optional when capability discovery fails. */
 	}
