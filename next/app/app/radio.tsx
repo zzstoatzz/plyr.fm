@@ -3,10 +3,10 @@ import Pause from 'lucide-react-native/icons/pause';
 import { PlayerControl } from '../src/PlayerControl';
 import { useAppearance } from '../src/appearance';
 import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
-import { useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Text, View } from 'react-native';
-import { Cover, Heading } from '../src/CatalogPieces';
+import { Image, StyleSheet, Text, View } from 'react-native';
+import { Cover } from '../src/CatalogPieces';
 import { Action, Copy, Page, row } from '../src/controls';
 import { usePlayback } from '../src/playback';
 import { useAppPreferences } from '../src/preference-context';
@@ -108,29 +108,40 @@ export default function Radio({ compact = false }: { compact?: boolean }) {
     </View>
   </View>;
 
+  const artwork = song?.hasCover ? radioMedia(station, song, 'cover') : null;
   return <Page title="Radio">
+    <Copy>Choose a station</Copy>
     <View style={row}>
-      {radioStations.map(item => <Action key={item.slug} label={item.label} selected={item === station}
+      {radioStations.map(item => <Action key={item.slug} label={item.label} selected={item === station} primary={item === station}
         onPress={() => {
           if (item === station) return;
           setSnapshot(undefined);
           setError('');
           setStation(item);
+          router.setParams({ station: item.slug });
         }} />)}
     </View>
-    {song && <View style={row}>
-      <Cover size={72} uri={song.hasCover ? radioMedia(station, song, 'cover') : null} />
-      <View style={{ flex: 1, minWidth: 0 }}>
-        <Heading>{song.title}</Heading>
-        <Copy>{song.artist}</Copy>
+    <View style={{ height: 320, overflow: 'hidden', borderRadius: 20, justifyContent: 'flex-end', backgroundColor: '#141421' }}>
+      {artwork && <Image source={{ uri: artwork }} resizeMode="cover" style={{ ...StyleSheet.absoluteFill, width: '100%', height: '100%' }} />}
+      <View style={{ ...StyleSheet.absoluteFill, backgroundColor: 'rgba(10, 10, 20, 0.50)' }} />
+      <View style={{ gap: 8, padding: 20 }}>
+        <Text accessibilityRole="header" style={{ color: '#fff', fontSize: 28, fontWeight: '800' }}>{station.label}</Text>
+        {song && <>
+          <Text numberOfLines={2} style={{ color: '#fff', fontSize: 20, fontWeight: '700' }}>{song.title}</Text>
+          <Text style={{ color: '#fff' }}>{song.artist}</Text>
+        </>}
+        {(!song || error || status.error) && <Text accessibilityLiveRegion="polite" style={{ color: '#fff' }}>
+          {status.error ? 'Couldn’t play this station.' : error || (snapshot ? 'This station is off air.' : 'Loading station…')}
+        </Text>}
+        <View style={row}>
+          <Action primary label={listening ? 'Stop listening' : 'Listen live'} disabled={!listening && !song}
+            onPress={() => {
+              if (!listening && solo.status.playing) solo.toggle();
+              setListening(!listening);
+            }} />
+          <Action label="Open OBS embed" href={`/embed/radio?station=${station.slug}&autoplay=1`} />
+        </View>
       </View>
-    </View>}
-    {error ? <Copy>{error}</Copy> : !snapshot ? <Copy>Loading station…</Copy> : !song && <Copy>This station is off air.</Copy>}
-    {status.error && <Copy>Couldn’t play this station.</Copy>}
-    <Action primary label={listening ? 'Stop listening' : 'Listen live'} disabled={!listening && !song}
-      onPress={() => {
-        if (!listening && solo.status.playing) solo.toggle();
-        setListening(!listening);
-      }} />
+    </View>
   </Page>;
 }
