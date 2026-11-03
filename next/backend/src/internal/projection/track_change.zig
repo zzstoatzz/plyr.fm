@@ -75,9 +75,9 @@ pub fn fromVerifiedOperation(
     );
 
     if (op.action == .delete) {
-        const previous = op.prev orelse return error.InvalidOperation;
+        // jetstream deletes carry no prior CID; firehose deletes do.
         if (op.cid != null or op.record != null) return error.InvalidOperation;
-        try validateDagCborCid(previous);
+        if (op.prev) |previous| try validateDagCborCid(previous);
         return .{ .delete = .{
             .record_uri = record_uri,
             .owner_did = repo_did,
@@ -91,10 +91,7 @@ pub fn fromVerifiedOperation(
     const value = op.record orelse return error.InvalidOperation;
     switch (op.action) {
         .create => if (op.prev != null) return error.InvalidOperation,
-        .update => {
-            const previous = op.prev orelse return error.InvalidOperation;
-            try validateDagCborCid(previous);
-        },
+        .update => if (op.prev) |previous| try validateDagCborCid(previous),
         .delete => unreachable,
     }
     try validateDagCborCid(cid);
@@ -130,7 +127,7 @@ pub fn fromVerifiedOperation(
 fn validateProof(proof: Proof) Error!void {
     if (zat.Tid.parse(proof.commit_rev) == null or proof.indexed_at_us < 0)
         return error.InvalidOperation;
-    try validateDagCborCid(proof.commit_cid);
+    if (proof.commit_cid) |commit_cid| try validateDagCborCid(commit_cid);
 }
 
 fn validateDagCborCid(cid: zat.Cid) Error!void {
@@ -184,12 +181,11 @@ test "verified track operation becomes a complete source-authoritative upsert" {
     try std.testing.expectEqual(@as(i64, 42), change.proof.indexed_at_us);
 }
 
-test "verified track delete requires the previous record CID" {
+test "track deletes from a jetstream need no previous record CID" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const a = arena.allocator();
-    const commit_cid = try zat.Cid.forDagCbor(a, "commit");
-    try std.testing.expectError(error.InvalidOperation, fromVerifiedOperation(
+    const change = (try fromVerifiedOperation(
         a,
         "did:plc:artist",
         .{
@@ -199,6 +195,7 @@ test "verified track delete requires the previous record CID" {
             .rkey = "3m123abc",
         },
         "fm.plyr.dev.track",
-        .{ .commit_cid = commit_cid, .commit_rev = "3jqfcqzm3fo2j", .indexed_at_us = 42 },
-    ));
+        .{ .commit_cid = null, .commit_rev = "3jqfcqzm3fo2j", .indexed_at_us = 42 },
+    )).?;
+    try std.testing.expectEqualStrings("at://did:plc:artist/fm.plyr.dev.track/3m123abc", change.delete.record_uri);
 }

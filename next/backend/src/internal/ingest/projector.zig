@@ -1,4 +1,4 @@
-//! Runtime orchestration for strict live commits and authoritative repair.
+//! Authoritative repository repair: fetch, verify and apply a full snapshot.
 //!
 //! Transport outcomes are explicit. No branch converts unavailable identity,
 //! an invalid signature, or an incomplete repository into projected data.
@@ -8,7 +8,6 @@ const builtin = @import("builtin");
 const zat = @import("zat");
 const repository_source = @import("repository_source.zig");
 const signing_key = @import("signing_key.zig");
-const commit_verifier = @import("../projection/commit_verifier.zig");
 const repository_head = @import("../projection/repository_head.zig");
 const snapshot_verifier = @import("../projection/snapshot_verifier.zig");
 const verified_commit = @import("../projection/verified_commit.zig");
@@ -26,73 +25,6 @@ pub const Projector = struct {
     track_collection: []const u8,
     profile_collection: []const u8,
     like_collection: []const u8,
-
-    pub fn ingestLive(
-        self: Projector,
-        allocator: std.mem.Allocator,
-        event: zat.firehose.CommitEvent,
-        indexed_at_us: i64,
-    ) Error!LiveOutcome {
-        if (zat.Did.parse(event.repo) == null or
-            zat.Tid.parse(event.rev) == null or
-            indexed_at_us < 0) return .invalid_commit;
-        const head = self.heads.load(allocator, event.repo) catch |err| switch (err) {
-            error.OutOfMemory => return error.OutOfMemory,
-            error.ProjectionUnavailable => return error.ProjectionUnavailable,
-            error.CorruptProjection => return error.CorruptProjection,
-            error.InvalidIdentity => return .invalid_commit,
-        } orelse return .needs_bootstrap;
-        if (std.mem.order(u8, event.rev, head.commit_rev) != .gt) return .replay;
-
-        var key = self.keys.resolve(allocator, event.repo, false) catch |err| switch (err) {
-            error.OutOfMemory => return error.OutOfMemory,
-            else => return .unverified_identity,
-        };
-        const commit = commit_verifier.verify(
-            allocator,
-            event,
-            key.publicKey(),
-            .{ .commit_rev = head.commit_rev, .data_cid = head.data_cid },
-            self.list_collection,
-            self.track_collection,
-            self.profile_collection,
-            self.like_collection,
-            indexed_at_us,
-        ) catch |first_error| blk: {
-            if (first_error != error.SignatureVerificationFailed)
-                return classifyLiveVerification(first_error);
-            key = self.keys.resolve(allocator, event.repo, true) catch |err| switch (err) {
-                error.OutOfMemory => return error.OutOfMemory,
-                else => return .unverified_identity,
-            };
-            break :blk commit_verifier.verify(
-                allocator,
-                event,
-                key.publicKey(),
-                .{ .commit_rev = head.commit_rev, .data_cid = head.data_cid },
-                self.list_collection,
-                self.track_collection,
-                self.profile_collection,
-                self.like_collection,
-                indexed_at_us,
-            ) catch |second_error| return classifyLiveVerification(second_error);
-        };
-
-        const result = self.commits.apply(allocator, commit) catch |err| switch (err) {
-            error.OutOfMemory => return error.OutOfMemory,
-            error.ProjectionUnavailable => return error.ProjectionUnavailable,
-            error.CorruptProjection => return error.CorruptProjection,
-            error.RevisionConflict => return error.RevisionConflict,
-            error.ChainGap => return .needs_repair,
-            error.InvalidCommit, error.DuplicateRecord => return .invalid_commit,
-        };
-        return switch (result) {
-            .applied => .applied,
-            .idempotent => .idempotent,
-            .stale => .replay,
-            .needs_bootstrap => .needs_bootstrap,
-        };
-    }
 
     pub fn repair(
         self: Projector,
@@ -170,17 +102,6 @@ pub const Projector = struct {
     }
 };
 
-pub const LiveOutcome = enum {
-    applied,
-    idempotent,
-    replay,
-    needs_bootstrap,
-    needs_repair,
-    unverified_identity,
-    invalid_signature,
-    invalid_commit,
-};
-
 pub const RepairOutcome = enum {
     applied,
     idempotent,
@@ -204,22 +125,6 @@ pub const Error = error{
     RevisionConflict,
 };
 
-fn classifyLiveVerification(err: anyerror) Error!LiveOutcome {
-    if (err == error.OutOfMemory) return error.OutOfMemory;
-    return switch (err) {
-        error.SignatureVerificationFailed => .invalid_signature,
-        error.RequiresRepoRepair,
-        error.PrevDataMismatch,
-        error.InversionMismatch,
-        error.PartialTree,
-        error.MstRootMismatch,
-        error.InvalidMstNode,
-        error.InvalidOperationCid,
-        => .needs_repair,
-        else => .invalid_commit,
-    };
-}
-
 fn classifySnapshotVerification(err: anyerror) Error!RepairOutcome {
     if (err == error.OutOfMemory) return error.OutOfMemory;
     return switch (err) {
@@ -227,99 +132,6 @@ fn classifySnapshotVerification(err: anyerror) Error!RepairOutcome {
         error.RepositoryTooLarge => .too_large,
         else => .invalid_repository,
     };
-}
-
-test "runtime projector short-circuits unknown and replayed repositories" {
-    const HeadFake = struct {
-        head: ?repository_head.Head,
-
-        fn reader(self: *@This()) repository_head.Reader {
-            return .{ .context = self, .load_fn = load };
-        }
-
-        fn load(
-            context: *anyopaque,
-            _: std.mem.Allocator,
-            _: []const u8,
-        ) repository_head.Error!?repository_head.Head {
-            return (@as(*@This(), @ptrCast(@alignCast(context)))).head;
-        }
-    };
-    const Never = struct {
-        fn key(
-            _: *anyopaque,
-            _: std.mem.Allocator,
-            _: []const u8,
-            _: bool,
-        ) signing_key.Error!signing_key.Key {
-            return error.IdentityUnavailable;
-        }
-
-        fn commit(
-            _: *anyopaque,
-            _: std.mem.Allocator,
-            _: verified_commit.Commit,
-        ) verified_commit.Error!verified_commit.ApplyResult {
-            return error.ProjectionUnavailable;
-        }
-
-        fn snapshot(
-            _: *anyopaque,
-            _: std.mem.Allocator,
-            _: verified_snapshot.Snapshot,
-        ) verified_snapshot.Error!verified_snapshot.ApplyResult {
-            return error.ProjectionUnavailable;
-        }
-
-        fn repo(
-            _: *anyopaque,
-            _: std.mem.Allocator,
-            _: []const u8,
-        ) repository_source.Error!repository_source.Repo {
-            return error.RepositoryUnavailable;
-        }
-    };
-    var context: u8 = 0;
-    var heads: HeadFake = .{ .head = null };
-    const projector: Projector = .{
-        .heads = heads.reader(),
-        .commits = .{ .context = &context, .apply_fn = Never.commit },
-        .snapshots = .{ .context = &context, .apply_fn = Never.snapshot },
-        .keys = .{ .context = &context, .resolve_fn = Never.key },
-        .repositories = .{ .context = &context, .fetch_fn = Never.repo },
-        .list_collection = "fm.plyr.dev.list",
-        .track_collection = "fm.plyr.dev.track",
-        .profile_collection = "fm.plyr.dev.actor.profile",
-        .like_collection = "fm.plyr.dev.like",
-    };
-    const event: zat.firehose.CommitEvent = .{
-        .seq = 1,
-        .repo = "did:plc:a",
-        .rev = "3jqfcqzm3fo2j",
-        .time = "2026-08-08T12:00:00Z",
-        .ops = &.{},
-    };
-    try std.testing.expectEqual(
-        LiveOutcome.needs_bootstrap,
-        try projector.ingestLive(std.testing.allocator, event, 1),
-    );
-
-    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer arena.deinit();
-    const a = arena.allocator();
-    const commit = try zat.Cid.forDagCbor(a, "commit");
-    const data = try zat.Cid.forDagCbor(a, "data");
-    heads.head = .{
-        .repo_did = "did:plc:a",
-        .commit_rev = "3jqfcqzm3fo2j",
-        .commit_cid = commit,
-        .data_cid = data,
-        .indexed_at_us = 1,
-    };
-    try std.testing.expectEqual(
-        LiveOutcome.replay,
-        try projector.ingestLive(a, event, 1),
-    );
 }
 
 test "repair releases an invalid fetched repository without projecting it" {

@@ -2,7 +2,7 @@ name: deploy next (zig)
 
 # Deploys next/backend to the isolated next environment only:
 #   fly app  plyr-api-zig-canary  (api.next.plyr.fm)
-#            (process groups: app = api, ingester = relay -> plyr_index)
+#            (process groups: app = api, ingester = jetstream -> plyr_index)
 #   database the Neon branch of staging marked 'plyr-zig-next'
 # It never touches relay-api, relay-api-staging, their databases, or
 # production-fe. Manual dispatch only.

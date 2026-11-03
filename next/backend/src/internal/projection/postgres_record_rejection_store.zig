@@ -60,7 +60,7 @@ pub fn createTestTable(pool: *pg.Pool) !void {
         \\  rkey text NOT NULL,
         \\  reason text NOT NULL,
         \\  detail text NOT NULL,
-        \\  commit_cid text NOT NULL,
+        \\  commit_cid text,
         \\  commit_rev text NOT NULL,
         \\  indexed_at_us bigint NOT NULL,
         \\  UNIQUE (owner_did, collection, rkey)
@@ -74,9 +74,11 @@ fn upsert(
     item: rejection.Rejection,
 ) Error!void {
     item.validate() catch return error.InvalidRejection;
-    const commit_cid = item.proof.commit_cid.toString(allocator) catch
-        return error.OutOfMemory;
-    defer allocator.free(commit_cid);
+    const commit_cid: ?[]u8 = if (item.proof.commit_cid) |cid|
+        cid.toString(allocator) catch return error.OutOfMemory
+    else
+        null;
+    defer if (commit_cid) |text| allocator.free(text);
     const record_cid = item.record_cid.toString(allocator) catch
         return error.OutOfMemory;
     defer allocator.free(record_cid);
@@ -103,11 +105,11 @@ fn upsert(
     } orelse return error.CorruptProjection;
     defer row.deinit() catch {};
     const current_rev = row.get([]const u8, 0) catch return error.CorruptProjection;
-    const current_commit = row.get([]const u8, 1) catch return error.CorruptProjection;
+    const current_commit = row.get(?[]const u8, 1) catch return error.CorruptProjection;
     const current_record = row.get([]const u8, 2) catch return error.CorruptProjection;
     if (std.mem.order(u8, current_rev, item.proof.commit_rev) == .gt) return;
     if (!std.mem.eql(u8, current_rev, item.proof.commit_rev) or
-        !std.mem.eql(u8, current_commit, commit_cid) or
+        !commitMatches(current_commit, commit_cid) or
         !std.mem.eql(u8, current_record, record_cid))
         return error.RevisionConflict;
 }
@@ -142,3 +144,10 @@ const reconcile_snapshot_sql =
     \\WHERE owner_did = $1 AND collection = ANY($2::text[])
     \\  AND NOT (record_uri = ANY($3::text[]))
 ;
+
+/// Stream-ingested writes carry no commit CID; only compare when both do.
+fn commitMatches(current: ?[]const u8, incoming: ?[]const u8) bool {
+    const a = current orelse return true;
+    const b = incoming orelse return true;
+    return std.mem.eql(u8, a, b);
+}

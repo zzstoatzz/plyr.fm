@@ -38,8 +38,8 @@ pub const Config = struct {
     like_collection: []const u8,
     cors_allowed_origins: []const u8,
     repair_did: ?[]const u8,
-    relay_hosts: []const u8,
-    relay_name: []const u8,
+    /// Comma-separated jetstream hostnames, tried in order (zat stream first).
+    stream_hosts: []const u8,
     account_check_interval_us: i64,
     account_check_retry_us: i64,
     account_check_lease_us: i64,
@@ -121,8 +121,8 @@ pub const Config = struct {
             .like_collection = like_collection,
             .cors_allowed_origins = getenv("CORS_ALLOWED_ORIGINS") orelse "",
             .repair_did = repair_did,
-            .relay_hosts = getenv("INGEST_RELAY_HOSTS") orelse "wss://bsky.network",
-            .relay_name = getenv("INGEST_RELAY_NAME") orelse "bsky.network",
+            .stream_hosts = getenv("INGEST_STREAM_HOSTS") orelse
+                "stream.waow.tech,jetstream1.us-east.bsky.network,jetstream2.us-east.bsky.network,jetstream1.us-west.bsky.network,jetstream2.us-west.bsky.network",
             .account_check_interval_us = try parseSecondsMicros(
                 getenv("ACCOUNT_CHECK_INTERVAL_SECONDS") orelse "21600",
             ),

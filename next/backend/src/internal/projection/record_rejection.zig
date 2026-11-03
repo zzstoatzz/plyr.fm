@@ -39,7 +39,7 @@ pub const Rejection = struct {
             !std.mem.eql(u8, parsed_uri.rkey() orelse return error.InvalidRejection, self.rkey))
             return error.InvalidRejection;
         try validateDagCbor(self.record_cid);
-        try validateDagCbor(self.proof.commit_cid);
+        if (self.proof.commit_cid) |commit_cid| try validateDagCbor(commit_cid);
     }
 
     pub fn listDelete(self: Rejection) list_change.Change {
