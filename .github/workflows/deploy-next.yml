@@ -5,8 +5,17 @@ name: deploy next (zig)
 #            (process groups: app = api, ingester = jetstream -> plyr_index)
 #   database the Neon branch of staging marked 'plyr-zig-next'
 # It never touches relay-api, relay-api-staging, their databases, or
-# production-fe. Manual dispatch only.
+# production-fe. Deploys on every push to main that touches next/backend
+# (PRs already ran the zig tests), and by manual dispatch.
 on:
+  push:
+    branches:
+      - main
+    paths:
+      - "next/backend/**"
+      - "!next/backend/docs/**"
+      - "!next/backend/**/*.md"
+      - ".github/workflows/deploy-next.yml"
   workflow_dispatch:
     inputs:
       reconcile_catalog:
@@ -23,8 +32,10 @@ env:
   FLY_APP: plyr-api-zig-canary
 
 jobs:
-  deploy:
-    name: deploy next api
+  # migrations and the image build are independent, so they run side by side;
+  # the deploy waits for both.
+  migrate:
+    name: migrate next db
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -63,8 +74,17 @@ jobs:
         env:
           DATABASE_URL: ${{ secrets.ZIG_NEXT_MIGRATOR_DATABASE_URL }}
         run: |
-          sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client
+          # ubuntu runners ship psql; only install it if an image ever drops it
+          command -v psql > /dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client; }
           scripts/migrate
+
+  build:
+    name: build next image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: superfly/flyctl-actions/setup-flyctl@master
 
       - name: build and publish image
         working-directory: next/backend
@@ -78,6 +98,15 @@ jobs:
           --image-label "$GITHUB_SHA"
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_ZIG_NEXT }}
+
+  deploy:
+    name: deploy next api
+    needs: [migrate, build]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: superfly/flyctl-actions/setup-flyctl@master
 
       # The ingester process group writes plyr_index as the branch owner. Its
       # credential is staged as WORKER_DATABASE_URL, which only non-api roles
@@ -108,7 +137,6 @@ jobs:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_ZIG_NEXT }}
         run: |
           flyctl status --app "$FLY_APP"
-          sleep 45
           flyctl logs --app "$FLY_APP" --no-tail | grep -i ingest | tail -30 || true
 
       # The reconciler snapshots every fm.plyr repo the relay knows and writes plyr_index, so it
