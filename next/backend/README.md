@@ -115,6 +115,7 @@ Direct SQL is reserved for projection adapter tests and benchmark fixtures.
 | `SPACE_SERVICE_ENDPOINT` | with `SPACE_SERVICE_DID` | public https origin of this API, published as the service endpoint |
 | `SPACE_SERVICE_ID` | no | DID-doc service fragment, default `plyr_space` |
 | `SPACE_TYPE_NSID` | no | the space type plyr manages, default `fm.plyr.stg.audio` |
+| `PLC_DIRECTORY_URL` | no | did:plc resolution for the managed-space checks, default `https://plc.directory`; point it at a local PLC stub for a local zds e2e |
 
 The ingester subscribes to jetstreams (`INGEST_STREAM_HOSTS`) filtered to the
 four plyr collections and trusts their upstream commit verification; it checks

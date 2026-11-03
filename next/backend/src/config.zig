@@ -133,6 +133,7 @@ pub const Config = struct {
                 .service_endpoint = getenv("SPACE_SERVICE_ENDPOINT") orelse
                     return error.SpaceServiceEndpointRequired,
                 .space_type = getenv("SPACE_TYPE_NSID") orelse "fm.plyr.stg.audio",
+                .plc_url = getenv("PLC_DIRECTORY_URL") orelse "https://plc.directory",
             } else null,
             .account_check_interval_us = try parseSecondsMicros(
                 getenv("ACCOUNT_CHECK_INTERVAL_SECONDS") orelse "21600",

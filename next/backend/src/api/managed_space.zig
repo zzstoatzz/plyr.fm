@@ -94,7 +94,7 @@ pub fn checkUserAccess(
         return;
     };
 
-    var network = Network.init(io, allocator);
+    var network = Network.init(io, allocator, config.plc_url);
     defer network.deinit();
 
     const now = std.Io.Timestamp.now(io, .real).toSeconds();
