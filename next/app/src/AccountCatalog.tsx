@@ -7,6 +7,7 @@ import { getAuth } from './auth-state';
 import {
   Button, Detail, Heading, ListRows, Status, TrackRows, errorMessage, useColors, usePages, useResource, type Play,
 } from './CatalogPieces';
+import { Action } from './controls';
 import { Sheet } from './Sheet';
 import { createPds } from './pds';
 
@@ -59,9 +60,9 @@ export function Library({ likesOnly, onPlay }: { likesOnly: boolean; onPlay: Pla
   const { ready, did } = useAuth();
   if (!ready) return <Status loading />;
   if (!did) return <>
-    <Heading main>{likesOnly ? 'Liked tracks' : 'Library'}</Heading>
+    {likesOnly && <Heading main>Liked tracks</Heading>}
     <Detail>Sign in to see your liked tracks and playlists.</Detail>
-    <Link href="/login"><Detail>Sign in</Detail></Link>
+    <View style={styles.actions}><Action primary label="Sign in" href="/login" /></View>
   </>;
   return <AccountLibrary key={did} did={did} likesOnly={likesOnly} onPlay={onPlay} />;
 }
@@ -100,7 +101,7 @@ function AccountLibrary({ did, likesOnly, onPlay }: { did: string; likesOnly: bo
     });
   }
   return <>
-    <Heading main>{likesOnly ? 'Liked tracks' : 'Library'}</Heading>
+    {likesOnly && <Heading main>Liked tracks</Heading>}
     {!likesOnly && <Heading>Liked tracks</Heading>}
     <TrackRows tracks={likes.data} onPlay={onPlay} />
     <Status loading={likes.loading} error={likes.error} retry={likes.more} empty={!likes.data.length ? 'No liked tracks yet.' : undefined} />

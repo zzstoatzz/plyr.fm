@@ -92,15 +92,16 @@ export function Detail({ children }: { children: ReactNode }) {
 
 export function Button({ label, onPress }: { label: string; onPress: () => void }) {
   const colors = useColors();
-  return <Pressable accessibilityRole="button" onPress={onPress} style={[styles.button, { backgroundColor: colors.surface, borderColor: colors.accent }]}>
+  return <Pressable accessibilityRole="button" onPress={onPress} style={[styles.button, { backgroundColor: colors.surface }]}>
     <Text style={[styles.buttonLabel, { color: colors.text, fontFamily: colors.fontFamily, fontSize: 14 * colors.scale }]}>{label}</Text>
   </Pressable>;
 }
 
-export function Cover({ uri, size = 48, round = false }: { uri?: string | null; size?: number; round?: boolean }) {
+export function Cover({ uri, size = 48, round = false, radius = 9 }: { uri?: string | null; size?: number; round?: boolean; radius?: number }) {
   const colors = useColors();
-  const style = { width: size, height: size, borderRadius: round ? size / 2 : 9, backgroundColor: colors.surface };
-  return uri && /^https?:\/\//i.test(uri) ? <Image accessibilityIgnoresInvertColors source={{ uri }} style={style} /> : <View style={[style, { alignItems: 'center', justifyContent: 'center' }]}>
+  const [failedUri, setFailedUri] = useState<string>();
+  const style = { width: size, height: size, borderRadius: round ? size / 2 : radius, backgroundColor: colors.surface };
+  return uri && uri !== failedUri && /^https?:\/\//i.test(uri) ? <Image accessibilityIgnoresInvertColors source={{ uri }} style={style} onError={() => setFailedUri(uri)} /> : <View style={[style, { alignItems: 'center', justifyContent: 'center' }]}>
     {round ? <UserRound size={size * 0.38} color={colors.muted} /> : <Music2 size={size * 0.32} color={colors.muted} />}
   </View>;
 }
@@ -140,11 +141,11 @@ export function TrackRows({ tracks, onPlay }: { tracks: Track[]; onPlay: Play })
   />);
 }
 
-function RowPlay({ onPress }: { onPress: () => void }) {
+export function RowPlay({ onPress, label = 'Play', busy = false }: { onPress: () => void; label?: string; busy?: boolean }) {
   const colors = useColors();
-  return <Pressable accessibilityRole="button" accessibilityLabel="Play" onPress={onPress}
+  return <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ busy }} disabled={busy} onPress={onPress}
     style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}>
-    <PlayIcon size={20} color={colors.text} fill={colors.text} />
+    {busy ? <ActivityIndicator color={colors.muted} /> : <PlayIcon size={20} color={colors.text} fill={colors.text} />}
   </Pressable>;
 }
 
@@ -176,10 +177,10 @@ const styles = StyleSheet.create({
   heading: { fontWeight: '700', marginTop: 5 },
   actions: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 6, borderBottomWidth: StyleSheet.hairlineWidth },
-  rowLink: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 4 },
+  rowLink: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 4 },
   rowText: { flex: 1, minWidth: 0, gap: 3 },
   rowTitle: { fontWeight: '600' },
-  button: { alignSelf: 'flex-start', minHeight: 44, borderWidth: StyleSheet.hairlineWidth, paddingHorizontal: 14, borderRadius: 9, justifyContent: 'center' },
+  button: { alignSelf: 'flex-start', minHeight: 44, paddingHorizontal: 14, borderRadius: 24, justifyContent: 'center' },
   buttonLabel: { fontWeight: '700' },
   activity: { alignSelf: 'flex-start', marginVertical: 6 },
 });
