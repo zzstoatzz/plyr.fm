@@ -21,8 +21,21 @@ pub fn strongRefCid(
 
 pub fn validUri(value: []const u8) bool {
     if (!std.unicode.utf8ValidateSlice(value) or value.len == 0) return false;
-    const uri = std.Uri.parse(value) catch return false;
-    return uri.scheme.len != 0;
+    if (std.Uri.parse(value)) |uri| return uri.scheme.len != 0 else |_| {}
+    // std.Uri reads `did:plc:x` in `at://did:plc:x/...` as host:port
+    return atprotoUriSyntax(value);
+}
+
+/// The atproto interop fixtures' `uri` grammar: a lowercase scheme of at
+/// most 81 characters, then printable non-space ASCII.
+fn atprotoUriSyntax(value: []const u8) bool {
+    if (value.len > 8192) return false;
+    const colon = std.mem.indexOfScalar(u8, value, ':') orelse return false;
+    if (colon == 0 or colon > 81 or colon + 1 == value.len) return false;
+    if (!std.ascii.isLower(value[0])) return false;
+    for (value[1..colon]) |c| if (!std.ascii.isLower(c) and c != '.' and c != '-') return false;
+    for (value[colon + 1 ..]) |c| if (c < 0x21 or c > 0x7e) return false;
+    return true;
 }
 
 pub fn validDatetime(value: []const u8) bool {
@@ -86,4 +99,12 @@ test "URI format requires an absolute valid UTF-8 URI" {
     try std.testing.expect(validUri("did:plc:alice"));
     try std.testing.expect(!validUri("/relative/avatar.png"));
     try std.testing.expect(!validUri("\xff"));
+}
+
+test "URI format accepts AT-URIs with a DID authority" {
+    try std.testing.expect(validUri("at://did:plc:ewvi7nxzyoun6zhxrhs64oiz/fm.plyr.dev.track/3m123abc"));
+    try std.testing.expect(validUri("at://did:web:example.com/app.bsky.actor.profile/self"));
+    try std.testing.expect(validUri("at://handle.example.com/nsid/rkey"));
+    try std.testing.expect(!validUri("//example.com"));
+    try std.testing.expect(!validUri("at://did:plc:a/b c"));
 }
