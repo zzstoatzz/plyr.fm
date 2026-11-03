@@ -1,105 +1,95 @@
 <script lang="ts">
-	import { api, type ListSummary, type Track } from './api';
+	// sheet: add menus.addTo to one of your playlists, or a new one.
+	import { api, type ListSummary } from './api';
 	import { auth } from './auth.svelte';
+	import { menus } from './menus.svelte';
 	import { addToPlaylist, createPlaylist } from './pds';
+	import Artwork from './ui/Artwork.svelte';
+	import Icon from './ui/Icon.svelte';
+	import Sheet from './ui/Sheet.svelte';
+	import { toast, writeNote } from './ui/toast.svelte';
 
-	let { track }: { track: Track } = $props();
-	let open = $state(false);
 	let mine = $state<ListSummary[] | null>(null);
 	let name = $state('');
-	let busy = $state(false);
-	let note = $state<string | null>(null);
-
-	async function toggle() {
-		if (!auth.did) {
-			location.href = '/login';
-			return;
-		}
-		open = !open;
-		if (open && mine === null) {
-			try {
-				mine = (await api.playlists({ owner_did: auth.did, limit: 100 })).data;
-			} catch (e) {
-				note = (e as Error).message;
-				mine = [];
-			}
-		}
-	}
-
-	async function run(action: () => Promise<string>) {
-		busy = true;
-		note = null;
-		try {
-			const status = await action();
-			note = status === 'indexed' ? 'added' : status === 'pending' ? 'saved to your PDS; indexing…' : status;
+	$effect(() => {
+		if (menus.addTo && auth.did) {
 			mine = null;
-			open = false;
+			api
+				.playlists({ owner_did: auth.did, limit: 100 })
+				.then((p) => (mine = p.data))
+				.catch(() => (mine = []));
+		}
+	});
+	let busy = $state(false);
+
+	async function run(action: () => Promise<string>, label: string) {
+		busy = true;
+		try {
+			toast.show(writeNote(await action(), label));
+			menus.addTo = null;
 		} catch (e) {
-			note = (e as Error).message;
+			toast.show((e as Error).message);
 		} finally {
 			busy = false;
 		}
 	}
 </script>
 
-<span class="wrap">
-	<button class="btn" onclick={toggle} disabled={busy} aria-expanded={open}>+ playlist</button>
-	{#if open}
-		<div class="menu" role="menu">
+<Sheet open={!!menus.addTo} onclose={() => (menus.addTo = null)} title="add to playlist">
+	{#if menus.addTo}
+		{@const track = menus.addTo}
+		<form
+			class="new"
+			onsubmit={(e) => {
+				e.preventDefault();
+				const n = name.trim();
+				if (n) run(async () => (await createPlaylist(n, track)).status, `added to ${n}`).then(() => (name = ''));
+			}}
+		>
+			<input class="input" bind:value={name} placeholder="new playlist" maxlength="64" aria-label="new playlist name" />
+			<button class="btn primary" disabled={busy || !name.trim()}>create</button>
+		</form>
+		<div class="list">
 			{#if mine === null}
-				<p class="muted">loading…</p>
+				<p class="muted pad">loading…</p>
 			{:else}
 				{#each mine as list (list.id)}
-					<button role="menuitem" onclick={() => run(() => addToPlaylist(list.record.uri, track))} disabled={busy}>
-						{list.metadata.name ?? 'untitled'}
+					<button
+						class="row-item"
+						disabled={busy}
+						onclick={() => run(() => addToPlaylist(list.record.uri, track), `added to ${list.metadata.name ?? 'playlist'}`)}
+					>
+						<Artwork seed={list.metadata.name ?? list.id} size={40} />
+						<span class="grow">
+							<span class="ellipsis" style="display:block">{list.metadata.name ?? 'untitled'}</span>
+							<span class="muted small">{list.metrics.member_count} tracks</span>
+						</span>
+						<Icon name="plus" size={18} />
 					</button>
+				{:else}
+					<p class="muted small">no playlists yet. name one above.</p>
 				{/each}
 			{/if}
-			<form
-				onsubmit={(e) => {
-					e.preventDefault();
-					if (name.trim()) run(async () => (await createPlaylist(name, track)).status);
-				}}
-			>
-				<input bind:value={name} placeholder="new playlist" maxlength="64" aria-label="new playlist name" />
-				<button class="btn" disabled={busy || !name.trim()}>create</button>
-			</form>
 		</div>
 	{/if}
-	{#if note}<small class="muted">{note}</small>{/if}
-</span>
+</Sheet>
 
 <style>
-	.wrap {
-		position: relative;
-		display: inline-flex;
-		align-items: center;
-		gap: 0.5rem;
-	}
-	.menu {
-		position: absolute;
-		top: 100%;
-		left: 0;
-		z-index: 10;
-		min-width: 14rem;
-		margin-top: 0.25rem;
-		padding: 0.5rem;
+	.new {
 		display: flex;
-		flex-direction: column;
-		gap: 0.25rem;
+		gap: var(--s-sm);
+		margin-bottom: var(--s-md);
 	}
-	.menu > button {
-		text-align: left;
-		padding: 0.35rem 0.5rem;
-		cursor: pointer;
-	}
-	form {
-		display: flex;
-		gap: 0.25rem;
-		margin-top: 0.25rem;
-	}
-	input {
+	.new .input {
 		flex: 1;
 		min-width: 0;
+	}
+	.row-item {
+		padding-left: 0;
+		padding-right: var(--s-xs);
+	}
+	.list {
+		max-height: 50dvh;
+		overflow: auto;
 	}
 </style>

@@ -1,8 +1,10 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 	import type { Track } from './api';
-	import LikeButton from './LikeButton.svelte';
-	import { formatDuration, player } from './player.svelte';
+	import { menus } from './menus.svelte';
+	import { artistName, formatDuration, player } from './player.svelte';
+	import Artwork from './ui/Artwork.svelte';
+	import Icon from './ui/Icon.svelte';
 
 	let {
 		tracks,
@@ -15,77 +17,109 @@
 </script>
 
 <li class="row" class:active>
-	<button class="play" onclick={() => player.play(tracks, index)} aria-label="play {track.metadata.title}">
-		{#if rank}<span class="rank">{rank}</span>{/if}
-		{#if track.media.artwork?.url}
-			<img src={track.media.artwork.url} alt="" loading="lazy" />
-		{:else}
-			<span class="art-fallback" aria-hidden="true">♪</span>
-		{/if}
+	{#if rank}<span class="rank">{rank}</span>{/if}
+	<button class="hit" onclick={() => player.play(tracks, index)} aria-label="play {track.metadata.title}">
+		<span class="art">
+			<Artwork src={track.media.artwork?.url} seed={track.metadata.title} size={48} />
+			{#if active}
+				<span class="eq" class:paused={!player.playing} aria-hidden="true"><i></i><i></i><i></i></span>
+			{/if}
+		</span>
 	</button>
 	<div class="meta">
-		<a class="title" href="/track/{track.id}">{track.metadata.title}</a>
-		<a class="artist" href="/u/{track.artist.profile.handle}">
-			{track.artist.profile.display_name || track.artist.profile.handle}
-		</a>
+		<a class="title ellipsis" href="/track/{track.id}">{track.metadata.title}</a>
+		<span class="sub ellipsis">
+			<a href="/u/{track.artist.profile.handle}">{artistName(track)}</a>
+			{#if track.metadata.duration_seconds}<span class="dur"> · {formatDuration(track.metadata.duration_seconds)}</span>{/if}
+		</span>
 	</div>
-	<span class="stat">{track.metrics.play_count} plays</span>
-	<span class="stat">{formatDuration(track.metadata.duration_seconds)}</span>
-	<span class="actions"><LikeButton {track} />{#if actions}{@render actions()}{/if}</span>
+	{#if actions}{@render actions()}{/if}
+	<button class="btn ghost icon" onclick={() => (menus.track = track)} aria-label="more for {track.metadata.title}">
+		<Icon name="more" stroke={3} />
+	</button>
 </li>
 
 <style>
-	.actions {
-		display: inline-flex;
-		align-items: center;
-	}
 	.row {
-		display: grid;
-		grid-template-columns: auto 1fr auto auto auto;
-		gap: 0.75rem;
-		align-items: center;
-		padding: 0.5rem;
-	}
-	.play {
 		display: flex;
 		align-items: center;
-		gap: 0.5rem;
-		padding: 0;
-		cursor: pointer;
+		gap: var(--s-md);
+		padding: var(--s-sm) var(--s-sm) var(--s-sm) var(--s-lg);
+	}
+	.row:hover {
+		background: var(--c-25);
 	}
 	.rank {
-		width: 1.5rem;
+		width: 1.25rem;
 		text-align: right;
+		font-size: var(--t-sm);
+		font-weight: 600;
+		color: var(--c-600);
 		font-variant-numeric: tabular-nums;
 	}
-	img,
-		.art-fallback {
-		width: 44px;
-		height: 44px;
-		object-fit: cover;
-		display: grid;
-		place-items: center;
+	.hit {
+		padding: 0;
+		border: 0;
+		background: none;
+		cursor: pointer;
+		border-radius: var(--r-sm);
+	}
+	.art {
+		position: relative;
+		display: block;
 	}
 	.meta {
+		flex: 1;
+		min-width: 0;
 		display: flex;
 		flex-direction: column;
-		min-width: 0;
 	}
-	.title,
-		.artist {
-		white-space: nowrap;
-		overflow: hidden;
-		text-overflow: ellipsis;
+	.title {
+		font-weight: 600;
 	}
-	.stat {
-		font-variant-numeric: tabular-nums;
+	.active .title {
+		color: var(--accent);
 	}
-	@media (max-width: 600px) {
-	.row {
-		grid-template-columns: auto 1fr auto;
+	.sub {
+		font-size: var(--t-sm);
+		color: var(--c-600);
 	}
-	.stat {
-		display: none;
+	.eq {
+		position: absolute;
+		inset: 0;
+		display: flex;
+		align-items: flex-end;
+		justify-content: center;
+		gap: 2px;
+		padding-bottom: 12px;
+		background: rgb(0 0 0 / 0.45);
+		border-radius: var(--r-sm);
 	}
+	.eq i {
+		width: 3px;
+		height: 14px;
+		background: #fff;
+		border-radius: 1px;
+		animation: bounce 0.9s ease-in-out infinite;
+		transform-origin: bottom;
+	}
+	.eq i:nth-child(2) {
+		animation-delay: -0.3s;
+	}
+	.eq i:nth-child(3) {
+		animation-delay: -0.6s;
+	}
+	.eq.paused i {
+		animation-play-state: paused;
+	}
+	@keyframes bounce {
+		50% {
+			transform: scaleY(0.3);
+		}
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.eq i {
+			animation: none;
+		}
 	}
 </style>
