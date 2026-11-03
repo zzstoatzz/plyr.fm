@@ -4,6 +4,7 @@ const std = @import("std");
 const pg = @import("pg");
 const availability = @import("../account/availability.zig");
 const postgres_availability = @import("../account/postgres_availability_store.zig");
+const repository_lock = @import("postgres_repository_lock.zig");
 const postgres_test_lock = @import("../testing/postgres_lock.zig");
 const zat = @import("zat");
 const list_change = @import("list_change.zig");
@@ -115,6 +116,7 @@ pub const PostgresVerifiedCommitStore = struct {
             std.log.err("verified commit rollback failed: {}", .{err});
         };
 
+        repository_lock.acquire(conn, commit.repo_did) catch return error.ProjectionUnavailable;
         const disposition = try lockAndClassify(
             conn,
             allocator,

@@ -14,6 +14,7 @@ const postgres_list = @import("../projection/postgres_list_store.zig");
 const postgres_track = @import("../projection/postgres_track_store.zig");
 const postgres_profile = @import("../projection/postgres_profile_store.zig");
 const postgres_like = @import("../projection/postgres_like_store.zig");
+const repository_lock = @import("../projection/postgres_repository_lock.zig");
 const postgres_rejections = @import("../projection/postgres_record_rejection_store.zig");
 const Collections = @import("stream_runner.zig").Collections;
 
@@ -102,6 +103,7 @@ pub fn applyOperation(
     conn.begin() catch return error.ProjectionUnavailable;
     var open = true;
     defer if (open) conn.rollback() catch {};
+    repository_lock.acquire(conn, did) catch return error.ProjectionUnavailable;
     const uri = try std.fmt.allocPrint(arena, "at://{s}/{s}/{s}", .{ did, operation.collection, operation.rkey });
     switch (change) {
         inline else => |value, tag| {
@@ -180,7 +182,7 @@ test "PostgreSQL stream commits project, replay, reject and delete profile recor
     lock.lock(io);
     defer lock.unlock(io);
     const uri = try std.Uri.parse(std.mem.span(url_z));
-    var pool = try pg.Pool.initUri(io, allocator, uri, .{ .size = 1 });
+    var pool = try pg.Pool.initUri(io, allocator, uri, .{ .size = 2 });
     defer pool.deinit();
     {
         var row = (try pool.row("SELECT current_database()", .{})).?;
@@ -267,6 +269,73 @@ test "PostgreSQL stream commits project, replay, reject and delete profile recor
         .rkey = "self",
     }, 13);
     try expectProfile(pool, null, true, 0);
+    try expectRepairSerializesLive(pool, io, collections, created.json, created.cid, &rev_3);
+}
+
+fn expectRepairSerializesLive(pool: *pg.Pool, io: std.Io, collections: Collections, record: std.json.Value, cid: []const u8, rev: []const u8) !void {
+    const Worker = struct {
+        pool: *pg.Pool,
+        collections: Collections,
+        record: std.json.Value,
+        cid: []const u8,
+        rev: []const u8,
+        done: std.atomic.Value(bool) = .init(false),
+        failure: ?anyerror = null,
+
+        fn run(self: *@This()) void {
+            defer self.done.store(true, .release);
+            var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+            defer arena.deinit();
+            self.execute(arena.allocator()) catch |err| {
+                self.failure = err;
+            };
+        }
+
+        fn execute(self: *@This(), a: std.mem.Allocator) !void {
+            _ = try self.pool.exec("SET application_name = 'plyr_zig_live_lock_test'", .{});
+            try applyCommit(self.pool, a, self.collections, .{
+                .did = "did:plc:locked",
+                .time_us = 1,
+                .rev = self.rev,
+                .operation = .create,
+                .collection = self.collections.profile,
+                .rkey = "self",
+                .record = self.record,
+                .cid = self.cid,
+            }, 100);
+        }
+    };
+    const conn = try pool.acquire();
+    defer pool.release(conn);
+    try conn.begin();
+    var open = true;
+    var lock_row = (try conn.row("SELECT pg_advisory_xact_lock(hashtextextended($1, 1881820018))", .{"did:plc:locked"})).?;
+    try lock_row.deinit();
+    var worker: Worker = .{ .pool = pool, .collections = collections, .record = record, .cid = cid, .rev = rev };
+    const thread = try std.Thread.spawn(.{}, Worker.run, .{&worker});
+    var joined = false;
+    defer {
+        if (open) conn.rollback() catch {};
+        if (!joined) thread.join();
+    }
+    var blocked = false;
+    for (0..500) |_| {
+        _ = try conn.exec("SELECT pg_stat_clear_snapshot()", .{});
+        var row = (try conn.row("SELECT EXISTS (SELECT 1 FROM pg_stat_activity WHERE application_name = 'plyr_zig_live_lock_test' AND wait_event = 'advisory')", .{})).?;
+        blocked = try row.get(bool, 0);
+        try row.deinit();
+        if (blocked or worker.done.load(.acquire)) break;
+        try io.sleep(std.Io.Duration.fromMilliseconds(10), .awake);
+    }
+    try conn.rollback();
+    open = false;
+    thread.join();
+    joined = true;
+    if (worker.failure) |err| return err;
+    try std.testing.expect(blocked);
+    var row = (try conn.row("SELECT NOT deleted FROM plyr_index.profile_records WHERE owner_did = 'did:plc:locked'", .{})).?;
+    defer row.deinit() catch {};
+    try std.testing.expect(try row.get(bool, 0));
 }
 
 fn streamRecord(arena: std.mem.Allocator, text: []const u8) !struct { json: std.json.Value, cid: []const u8 } {
