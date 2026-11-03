@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Loading from '$lib/ui/Loading.svelte';
 	// the artist portal: your profile, tracks, albums and playlists, all
 	// edited straight on your PDS.
 	import { api, type ListSummary, type Track } from '$lib/api';
@@ -121,7 +122,7 @@
 </ScreenHeader>
 
 {#if !auth.ready}
-	<p class="empty">loading…</p>
+	<Loading />
 {:else if !auth.did}
 	<div class="empty">
 		<p>sign in to manage your profile and tracks.</p>
@@ -153,7 +154,7 @@
 
 	<h2 class="section">your tracks</h2>
 	{#if tracks === null}
-		<p class="muted pad small">loading…</p>
+		<Loading size="sm" inline />
 	{:else if !tracks.length}
 		<p class="muted pad small">nothing yet. <a href="/upload">upload your first track</a>.</p>
 	{:else}

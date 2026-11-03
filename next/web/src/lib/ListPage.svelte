@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Loading from '$lib/ui/Loading.svelte';
 	import { goto } from '$app/navigation';
 	import type { ListDetail, Track } from './api';
 	import { auth } from './auth.svelte';
@@ -109,7 +110,7 @@
 		{/each}
 	</ol>
 {:else}
-	<p class="empty">loading…</p>
+	<Loading />
 {/if}
 
 <Sheet bind:open={manage} title="edit playlist">

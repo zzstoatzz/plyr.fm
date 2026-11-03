@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Loading from '$lib/ui/Loading.svelte';
 	import { plural } from '$lib/player.svelte';
 	import { goto } from '$app/navigation';
 	import { api, playlistIdFromUri, type ListSummary, type Track } from '$lib/api';
@@ -49,7 +50,7 @@
 </ScreenHeader>
 
 {#if !auth.ready}
-	<p class="empty">loading…</p>
+	<Loading />
 {:else if !auth.did}
 	<div class="empty">
 		<p>your liked tracks and playlists live here.</p>
@@ -58,7 +59,7 @@
 {:else}
 	<div class="section"><span>liked tracks</span><a href="/liked">see all</a></div>
 	{#if liked === null}
-		<p class="muted pad small">loading…</p>
+		<Loading size="sm" inline />
 	{:else if liked.length}
 		<ol class="plain">
 			{#each liked as _, i (liked[i].id)}<TrackRow tracks={liked} index={i} />{/each}
@@ -69,7 +70,7 @@
 
 	<div class="section"><span>playlists</span><a href="/playlists">browse all</a></div>
 	{#if lists === null}
-		<p class="muted pad small">loading…</p>
+		<Loading size="sm" inline />
 	{:else}
 		<div class="list">
 			<button class="row-item" onclick={() => (creating = true)}>

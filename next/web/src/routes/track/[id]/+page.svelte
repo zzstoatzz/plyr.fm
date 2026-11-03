@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Loading from '$lib/ui/Loading.svelte';
 	import { page } from '$app/state';
 	import { api, type Track } from '$lib/api';
 	import { auth } from '$lib/auth.svelte';
@@ -71,7 +72,7 @@
 	{#if track.metadata.description}<p class="desc">{track.metadata.description}</p>{/if}
 	<p class="uri muted"><small>{track.record.uri}</small></p>
 {:else}
-	<p class="empty">loading…</p>
+	<Loading />
 {/if}
 
 <style>
