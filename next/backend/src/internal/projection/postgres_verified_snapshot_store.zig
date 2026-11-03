@@ -128,7 +128,7 @@ pub const PostgresVerifiedSnapshotStore = struct {
                 return result;
             },
             .apply => {},
-            .rebuild => try clearRepository(conn, snapshot),
+            .rebuild => {},
         }
         var future_row = conn.row(has_future_records_sql, .{
             snapshot.repo_did,
@@ -146,7 +146,8 @@ pub const PostgresVerifiedSnapshotStore = struct {
             return error.CorruptProjection;
         };
         future_row.deinit() catch return error.CorruptProjection;
-        if (has_future) return error.CorruptProjection;
+        if (has_future) return .stale;
+        if (decision == .rebuild) try clearRepository(conn, snapshot);
 
         var lists: postgres_list.PostgresListStore = .{ .pool = self.pool };
         for (snapshot.list_changes) |change| {
@@ -410,10 +411,10 @@ const head_sql =
 const has_future_records_sql =
     \\SELECT EXISTS (
     \\  SELECT 1 FROM plyr_index.list_records
-    \\  WHERE owner_did = $1 AND collection = $2 AND commit_rev > $5
+    \\  WHERE owner_did = $1 AND collection = $2 AND commit_rev > $6
     \\  UNION ALL
     \\  SELECT 1 FROM plyr_index.track_records
-    \\  WHERE owner_did = $1 AND collection = $3 AND commit_rev > $5
+    \\  WHERE owner_did = $1 AND collection = $3 AND commit_rev > $6
     \\  UNION ALL
     \\  SELECT 1 FROM plyr_index.profile_records
     \\  WHERE owner_did = $1 AND collection = $4 AND commit_rev > $6
@@ -626,6 +627,20 @@ test "PostgreSQL complete snapshot bootstraps and reconciles atomically" {
         .{ .commit_cid = commit_2, .commit_rev = &rev_2.str(), .indexed_at_us = 2_000 },
     );
     repaired.rejections = &.{rejected};
+    const commit_1_text = try commit_1.toString(a);
+    const commit_3_text = try commit_3.toString(a);
+    inline for (.{ "list_records", "track_records", "profile_records", "like_records" }) |table| {
+        _ = try pool.exec("UPDATE plyr_index." ++ table ++ " SET commit_rev = $1, commit_cid = $2", .{ &rev_3.str(), commit_3_text });
+        try std.testing.expectEqual(verified.ApplyResult.stale, try store.apply(a, repaired));
+        try expectHead(pool, &rev_1.str());
+        _ = try pool.exec("UPDATE plyr_index.repo_heads SET projection_version = 0", .{});
+        try std.testing.expectEqual(verified.ApplyResult.stale, try store.apply(a, initial));
+        var preserved = (try pool.row("SELECT count(*) FROM plyr_index." ++ table ++ " WHERE commit_rev = $1", .{&rev_3.str()})).?;
+        try std.testing.expect((try preserved.get(i64, 0)) > 0);
+        try preserved.deinit();
+        _ = try pool.exec("UPDATE plyr_index." ++ table ++ " SET commit_rev = $1, commit_cid = $2", .{ &rev_1.str(), commit_1_text });
+        _ = try pool.exec("UPDATE plyr_index.repo_heads SET projection_version = $1", .{projection_version});
+    }
     try std.testing.expectEqual(verified.ApplyResult.applied, try store.apply(a, repaired));
     try expectState(pool, &rev_2.str(), "one", false);
     try expectState(pool, &rev_2.str(), "two", true);
