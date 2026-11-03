@@ -19,6 +19,7 @@ const stream_runner = @import("internal/ingest/stream_runner.zig");
 const catalog_reconcile_runner = @import("internal/ingest/catalog_reconcile_runner.zig");
 const account_reconciler = @import("internal/account/reconciler.zig");
 const blob_mirror = @import("internal/delivery/blob_mirror.zig");
+const label_sync = @import("internal/moderation/label_sync.zig");
 const actor_identity_refresher = @import("internal/identity/actor_identity_refresher.zig");
 
 var threaded_io: std.Io.Threaded = undefined;
@@ -186,6 +187,7 @@ pub fn main() !void {
             const store = if (postgres_store) |*value| value else return error.IngesterDatabaseRequired;
             blob_mirror.spawnBeside(io, allocator, store.pool);
             actor_identity_refresher.spawnBeside(io, allocator, store.pool);
+            label_sync.spawnBeside(io, allocator, store.pool, settings.track_collection);
             try stream_runner.run(io, allocator, store.pool, settings.stream_hosts, .{
                 .list = settings.list_collection,
                 .track = settings.track_collection,
@@ -283,6 +285,7 @@ test {
     _ = @import("internal/ingest/cached_signing_key_resolver.zig");
     _ = @import("internal/ingest/catalog_reconciler.zig");
     _ = @import("internal/delivery/blob_mirror.zig");
+    _ = @import("internal/moderation/label_sync.zig");
     _ = @import("internal/delivery/postgres_mirror_store.zig");
     _ = @import("internal/identity/actor_identity_refresher.zig");
     _ = @import("internal/identity/postgres_actor_identity_store.zig");
