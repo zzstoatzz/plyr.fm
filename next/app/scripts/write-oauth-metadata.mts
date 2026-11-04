@@ -26,6 +26,21 @@ const apiOrigin = new URL(process.env.EXPO_PUBLIC_API_URL || 'https://api.next.p
 const htmlPath = new URL('../dist/index.html', import.meta.url);
 const html = await readFile(htmlPath, 'utf8');
 const preload = `<script>
+if (!location.pathname.startsWith('/embed/')) {
+  let theme;
+  try { theme = JSON.parse(localStorage.getItem('plyr-next:prefs') || '{}').theme; } catch {}
+  const dark = theme === 'dark' || (theme !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches);
+  const background = dark ? '#10131a' : '#fbfbfd';
+  document.documentElement.style.backgroundColor = background;
+  document.documentElement.style.colorScheme = dark ? 'dark' : 'light';
+  const style = document.createElement('style');
+  style.textContent = 'body { background-color: inherit; }';
+  document.head.append(style);
+  const meta = document.createElement('meta');
+  meta.name = 'theme-color';
+  meta.content = background;
+  document.head.append(meta);
+}
 if (location.pathname === '/') {
   const link = document.createElement('link');
   link.rel = 'preload';
