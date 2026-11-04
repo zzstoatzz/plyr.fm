@@ -22,50 +22,86 @@ export function TrackEmbed({ track, adult }: { track: Track; adult: boolean }) {
   const { width, height } = useWindowDimensions();
   const [scrub, setScrub] = useState<number | null>(null);
   const active = track.id === player.current?.id;
-  const started = active;
-  const compact = height < 200;
-  const artworkWidth = compact ? Math.min(height, width * 0.38) : width;
+  const horizontal = height < 200 || width >= height * 1.7;
+  const artworkWidth = height < 200 ? Math.min(height, width * 0.4) : height;
+  const panelWidth = horizontal ? width - artworkWidth : width;
   const duration = (active && player.status.duration) || track.metadata.duration_seconds || 0;
   const position = active ? player.status.currentTime : 0;
   const busy = active && player.loading;
   const error = active && (player.error || player.status.error);
   const playing = active && player.status.playing;
   const Icon = error ? RotateCcw : playing ? Pause : Play;
-  const title = { color: compact ? theme.text : '#fff', fontSize: 15, fontWeight: '700' as const };
-  const secondary = { color: compact ? theme.muted : '#e4e5e9', fontSize: 12 };
-  return <View style={{ width: '100%', height: '100%', minHeight: 88, overflow: 'hidden', backgroundColor: theme.background }}>
-    <View style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: artworkWidth, backgroundColor: theme.surface }}>
-      {!adult && track.media.artwork?.url
-        ? <Image source={{ uri: track.media.artwork.url }} resizeMode="cover" style={StyleSheet.absoluteFill} />
-        : <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}><Music size={Math.min(64, artworkWidth / 3)} color={theme.muted} /></View>}
+  const foreground = horizontal ? theme.text : '#fff';
+  const muted = horizontal ? theme.muted : '#e4e5e9';
+
+  const play = <Pressable accessibilityRole="button"
+    accessibilityLabel={adult ? 'Adult content hidden' : error ? 'Retry playback' : playing ? 'Pause' : 'Play'}
+    accessibilityState={{ busy, disabled: adult || busy }} disabled={adult || busy}
+    onPress={() => active ? player.toggle() : player.play(track)}
+    style={({ pressed }) => ({ width: 48, height: 48, flexShrink: 0, borderRadius: 10,
+      backgroundColor: 'rgba(10, 13, 20, 0.90)', alignItems: 'center', justifyContent: 'center',
+      opacity: pressed || adult ? 0.65 : 1 })}>
+    {busy ? <ActivityIndicator color="#fff" /> : <Icon color="#fff" size={26} fill={playing || error ? 'none' : '#fff'} />}
+  </Pressable>;
+
+  const metadata = <View style={{ flex: 1, minWidth: 0, overflow: 'hidden', justifyContent: 'center', gap: 3 }}>
+    <Link href={('/track/' + encodeURIComponent(track.id))} target="_blank" asChild>
+      <Text numberOfLines={horizontal && height >= 160 ? 2 : 1}
+        style={{ width: '100%', color: foreground, fontSize: horizontal && height >= 200 ? 21 : 15,
+          lineHeight: horizontal && height >= 200 ? 27 : 20, fontWeight: '700' }}>{track.metadata.title}</Text>
+    </Link>
+    <Text numberOfLines={1} style={{ width: '100%', color: muted, fontSize: 12, lineHeight: 17 }}>
+      {adult ? 'Adult content hidden' : error ? 'Couldn’t play this track. Try again.' : artistName(track)}
+    </Text>
+  </View>;
+
+  const brand = <View style={{ width: 48, flexShrink: 0, overflow: 'hidden' }}>
+    <Link href="/" target="_blank" asChild>
+      <Text numberOfLines={1} style={{ color: foreground, fontSize: 11, lineHeight: 16, fontWeight: '700', textAlign: 'right' }}>plyr.fm</Text>
+    </Link>
+  </View>;
+
+  const progress = active && <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8,
+    minHeight: 36, backgroundColor: theme.background }}>
+    <Slider accessibilityLabel="Seek" style={{ flex: 1, width: 0, minWidth: 0, height: 32 }}
+      minimumValue={0} maximumValue={duration || 1} value={scrub ?? position} disabled={!duration || busy || !!error}
+      minimumTrackTintColor={theme.accent} maximumTrackTintColor={theme.surface} thumbTintColor={theme.accent}
+      onValueChange={setScrub} onSlidingComplete={seconds => { player.seek(seconds); setScrub(null); }} />
+    {panelWidth >= 260 && <Text numberOfLines={1} style={{ flexShrink: 0, color: theme.muted, fontSize: 11,
+      fontVariant: ['tabular-nums'] }}>{time(scrub ?? position)} / {time(duration)}</Text>}
+  </View>;
+
+  const artwork = !adult && track.media.artwork?.url
+    ? <Image source={{ uri: track.media.artwork.url }} resizeMode="cover" style={StyleSheet.absoluteFill} />
+    : <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+      <Music size={Math.min(64, width / 4)} color={theme.muted} />
+    </View>;
+
+  if (horizontal) return <View style={[styles.root, { backgroundColor: theme.background, flexDirection: 'row' }]}>
+    <View style={{ width: artworkWidth, flexShrink: 0, backgroundColor: theme.surface, overflow: 'hidden' }}>
+      {artwork}
+      <View style={{ position: 'absolute', bottom: 8, left: 8 }}>{play}</View>
     </View>
-    {started && <View style={{ position: 'absolute', top: 0, right: 0, left: compact ? artworkWidth : 0,
-      paddingHorizontal: 12, paddingTop: 8, paddingBottom: 5, backgroundColor: theme.background }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-        <Slider accessibilityLabel="Seek" style={{ flex: 1, height: 32 }} minimumValue={0} maximumValue={duration || 1}
-          value={scrub ?? position} disabled={!duration || busy || !!error}
-          minimumTrackTintColor={theme.accent} maximumTrackTintColor={theme.surface} thumbTintColor={theme.accent}
-          onValueChange={setScrub} onSlidingComplete={seconds => { player.seek(seconds); setScrub(null); }} />
-        {width >= 280 && <Text style={{ color: theme.muted, fontSize: 11, fontVariant: ['tabular-nums'] }}>{time(scrub ?? position)} / {time(duration)}</Text>}
-      </View>
-    </View>}
-    <View style={{ position: 'absolute', left: 0, bottom: 0, right: 0, minHeight: compact ? 60 : 72,
-      flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12,
-      backgroundColor: compact ? 'transparent' : 'rgba(10, 13, 20, 0.78)' }}>
-      <Pressable accessibilityRole="button" accessibilityLabel={adult ? 'Adult content hidden' : error ? 'Retry playback' : playing ? 'Pause' : 'Play'}
-        accessibilityState={{ busy, disabled: adult || busy }} disabled={adult || busy}
-        onPress={() => active ? player.toggle() : player.play(track)}
-        style={({ pressed }) => ({ width: 48, height: 48, borderRadius: 10, backgroundColor: 'rgba(10, 13, 20, 0.90)',
-          alignItems: 'center', justifyContent: 'center', opacity: pressed || adult ? 0.65 : 1 })}>
-        {busy ? <ActivityIndicator color="#fff" /> : <Icon color="#fff" size={26} fill={playing || error ? 'none' : '#fff'} />}
-      </Pressable>
-      <View style={{ flex: 1, minWidth: 0, marginLeft: compact ? Math.max(0, artworkWidth - 72) : 0 }}>
-        <Link href={('/track/' + encodeURIComponent(track.id))} target="_blank" asChild>
-          <Text numberOfLines={1} style={title}>{track.metadata.title}</Text>
-        </Link>
-        <Text numberOfLines={1} style={secondary}>{adult ? 'Adult content hidden' : error ? 'Couldn’t play this track. Try again.' : artistName(track)}</Text>
-      </View>
-      {width >= 340 && !compact && <Link href="/" target="_blank" style={{ color: '#fff', fontSize: 11, fontWeight: '700' }}>plyr.fm</Link>}
+    <View style={{ flex: 1, minWidth: 0, paddingHorizontal: 12, paddingVertical: 8, gap: 4, overflow: 'hidden' }}>
+      {progress}
+      {metadata}
+      {height >= 140 && <View style={{ alignItems: 'flex-end', paddingTop: 4 }}>{brand}</View>}
+    </View>
+  </View>;
+
+  return <View style={[styles.root, { backgroundColor: theme.surface }]}>
+    {artwork}
+    {active && <View style={{ position: 'absolute', top: 0, right: 0, left: 0,
+      paddingHorizontal: 12, paddingVertical: 4, backgroundColor: theme.background }}>{progress}</View>}
+    <View style={{ position: 'absolute', left: 0, bottom: 0, right: 0, height: 72, flexDirection: 'row',
+      alignItems: 'center', gap: 12, padding: 12, backgroundColor: 'rgba(10, 13, 20, 0.78)' }}>
+      {play}
+      {metadata}
+      {width >= 340 && brand}
     </View>
   </View>;
 }
+
+const styles = StyleSheet.create({
+  root: { width: '100%', height: '100%', minHeight: 88, overflow: 'hidden' },
+});
