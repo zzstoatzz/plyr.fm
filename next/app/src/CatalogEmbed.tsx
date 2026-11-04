@@ -4,6 +4,8 @@ import { View } from 'react-native';
 import { api, trackIdFromUri, type Track } from './api';
 import { artistName, Cover, Heading, Status, TrackRows, useResource } from './CatalogPieces';
 import { Action, Copy } from './controls';
+import { WaveLoading } from './WaveLoading';
+import { TrackEmbed } from './TrackEmbed';
 import { usePlayback } from './playback';
 
 type Kind = 'track' | 'artist' | 'playlist' | 'album';
@@ -70,7 +72,6 @@ export function CatalogEmbed({ kind }: { kind: Kind }) {
   const attempted = useRef(false);
   const data = result.data;
   const first = data?.tracks[0];
-  const active = first?.id === player.current?.id;
   const adult = [first?.moderation?.self_labels, first?.moderation?.operator_labels]
     .some(labels => labels?.some(label => label === 'sexual' || label === 'porn'));
 
@@ -80,7 +81,9 @@ export function CatalogEmbed({ kind }: { kind: Kind }) {
     if (!adult && first.access.visibility === 'public') player.play(first);
   }, [adult, autoplay, first, kind, player]);
 
+  if (!data && kind === 'track' && !result.error) return <View style={{ height: '100%', justifyContent: 'center' }}><WaveLoading label="Loading track" /></View>;
   if (!data) return <Status loading={!result.error} error={result.error} retry={result.retry} />;
+  if (kind === 'track' && first) return <TrackEmbed key={first.id} track={first} adult={adult} />;
   return <View style={{ padding: 8, gap: 8 }}>
     <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center' }}>
       <Cover uri={adult ? null : data.artwork} round={kind === 'artist'} />
@@ -88,10 +91,7 @@ export function CatalogEmbed({ kind }: { kind: Kind }) {
         <Heading>{data.title}</Heading>
         {data.subtitle && <Copy>{data.subtitle}</Copy>}
       </View>
-      {kind === 'track' && first && <Action primary
-        label={adult ? 'Adult content hidden' : active && player.loading ? 'Loading…' : active && player.status.playing ? 'Pause' : 'Play'}
-        disabled={adult || (active && player.loading)}
-        onPress={() => player.current?.id === first.id ? player.toggle() : player.play(first)} />}
+
     </View>
     {kind !== 'track' && player.current && <Action label={player.status.playing ? 'Pause' : 'Resume'} onPress={player.toggle} />}
     {kind !== 'track' && <TrackRows tracks={data.tracks} onPlay={player.play} />}
