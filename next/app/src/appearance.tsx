@@ -17,7 +17,7 @@ export function AppearanceProvider({ preferences, children }: { preferences: Per
     const background = embed ? 'transparent' : (isDark ? dark : light).background;
     document.documentElement.style.backgroundColor = background;
     document.body.style.backgroundColor = background;
-    document.documentElement.style.colorScheme = isDark ? 'dark' : 'light';
+    document.documentElement.style.colorScheme = embed ? 'normal' : isDark ? 'dark' : 'light';
     let meta = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
     if (embed) {
       meta?.remove();
