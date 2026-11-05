@@ -377,6 +377,24 @@ def main() -> None:
         assert status == 200
         assert short_search["data"] == []
 
+        for path in [
+            "/v1/tags",
+            "/v1/tags?limit=100",
+            "/v1/tracks?tag=ambient&tag=drone",
+        ]:
+            assert _request(base_url, path)[0] == 503
+        for path in [
+            "/v1/tags?limit=0",
+            "/v1/tags?limit=101",
+            "/v1/tags?limit=2&limit=3",
+            "/v1/tags?offset=1",
+            "/v1/tracks?tag=",
+            "/v1/tracks?tag=bad%00tag",
+            "/v1/tracks?tag=1&tag=2&tag=3&tag=4&tag=5&tag=6&tag=7&tag=8&tag=9&tag=10&tag=11",
+        ]:
+            assert _request(base_url, path)[0] == 400
+        assert _request(base_url, "/v1/tags", method="POST")[0] == 405
+
         status, _, empty_artists = _request(
             base_url, "/v1/artists/resolve", method="POST", data=b'{"dids":[]}'
         )

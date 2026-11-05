@@ -7,6 +7,7 @@ pub const ListRequest = struct {
     scope: ListScope,
     limit: usize,
     after: ?track_cursor.Cursor,
+    tags: []const []const u8 = &.{},
 };
 
 pub const ListScope = union(enum) {
@@ -19,11 +20,19 @@ pub const ListItem = struct {
     created_at_us: i64,
 };
 
+pub const Tag = struct { name: []const u8, track_count: i64, total_plays: i64 };
+
 pub const TrackStore = struct {
     context: *anyopaque,
     get_by_uri_fn: *const fn (*anyopaque, std.mem.Allocator, []const u8) Error!?track.Track,
     list_public_fn: *const fn (*anyopaque, std.mem.Allocator, ListRequest) Error![]ListItem,
     ready_fn: *const fn (*anyopaque) bool,
+
+    tags_fn: ?*const fn (*anyopaque, std.mem.Allocator, []const u8, usize) Error![]const Tag = null,
+
+    pub fn listTags(self: TrackStore, allocator: std.mem.Allocator, collection: []const u8, limit: usize) Error![]const Tag {
+        return (self.tags_fn orelse return error.IndexUnavailable)(self.context, allocator, collection, limit);
+    }
 
     pub const Error = error{
         IndexUnavailable,

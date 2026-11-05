@@ -30,11 +30,30 @@ pub const PostgresComposedTrackStore = struct {
             .get_by_uri_fn = getByUriOpaque,
             .list_public_fn = listPublicOpaque,
             .ready_fn = readyOpaque,
+            .tags_fn = tagsOpaque,
         };
     }
 
     pub fn likedStore(self: *PostgresComposedTrackStore) liked_track_store.Store {
         return .{ .context = self, .list_fn = listLikedOpaque };
+    }
+
+    fn tagsOpaque(context: *anyopaque, allocator: std.mem.Allocator, collection: []const u8, limit: usize) TrackStore.Error![]const store_module.Tag {
+        const self: *PostgresComposedTrackStore = @ptrCast(@alignCast(context));
+        var result = self.pool.query(tags_query, .{ collection, @as(i64, @intCast(limit)) }) catch return error.IndexUnavailable;
+        defer result.deinit();
+        var data: std.ArrayList(store_module.Tag) = .empty;
+        while (result.next() catch return error.IndexUnavailable) |row| {
+            const count = row.get(i64, 1) catch return error.CorruptProjection;
+            const plays = row.get(i64, 2) catch return error.CorruptProjection;
+            if (count <= 0 or plays < 0) return error.CorruptProjection;
+            try data.append(allocator, .{
+                .name = try allocator.dupe(u8, row.get([]const u8, 0) catch return error.CorruptProjection),
+                .track_count = count,
+                .total_plays = plays,
+            });
+        }
+        return data.toOwnedSlice(allocator);
     }
 
     fn listLikedOpaque(
@@ -163,6 +182,7 @@ pub const PostgresComposedTrackStore = struct {
                     request.collection,
                     self.profile_collection,
                     self.like_collection,
+                    request.tags,
                     after.created_at_us,
                     after.at_uri,
                     limit,
@@ -175,6 +195,7 @@ pub const PostgresComposedTrackStore = struct {
                     request.collection,
                     self.profile_collection,
                     self.like_collection,
+                    request.tags,
                     limit,
                 }) catch |err| {
                     logQueryError(conn, "composed discovery query failed", err);
@@ -185,6 +206,7 @@ pub const PostgresComposedTrackStore = struct {
                     request.collection,
                     self.profile_collection,
                     self.like_collection,
+                    request.tags,
                     artist_did,
                     after.created_at_us,
                     after.at_uri,
@@ -198,6 +220,7 @@ pub const PostgresComposedTrackStore = struct {
                     request.collection,
                     self.profile_collection,
                     self.like_collection,
+                    request.tags,
                     artist_did,
                     limit,
                 }) catch |err| {
@@ -550,7 +573,7 @@ pub const discovery_policy = common_policy ++
 
 const artist_policy = common_policy ++
     \\  AND v.collection = $1
-    \\  AND v.owner_did = $4
+    \\  AND v.owner_did = $5
     \\  AND COALESCE(pol.visibility, 'public') <> 'private'
 ;
 
@@ -576,10 +599,18 @@ fn afterCursor(comptime at: []const u8, comptime uri: []const u8) []const u8 {
     return "\n  AND (v.record_created_at_us, v.record_uri) < (" ++ at ++ "::bigint, " ++ uri ++ ")";
 }
 
-const discovery_query = pagedQuery(discovery_policy, "$4::bigint");
-const discovery_after_query = pagedQuery(discovery_policy ++ afterCursor("$4", "$5"), "$6::bigint");
-const artist_query = pagedQuery(artist_policy, "$5::bigint");
-const artist_after_query = pagedQuery(artist_policy ++ afterCursor("$5", "$6"), "$7::bigint");
+const tag_filter =
+    \\  AND (cardinality($4::text[]) = 0 OR EXISTS (
+    \\    SELECT 1 FROM plyr_index.track_tag_records AS tags
+    \\    WHERE tags.record_uri = v.record_uri AND tags.record_cid = v.record_cid
+    \\      AND tags.tags && plyr_index.normalize_track_tags($4::text[])
+    \\  ))
+;
+
+const discovery_query = pagedQuery(discovery_policy ++ tag_filter, "$5::bigint");
+const discovery_after_query = pagedQuery(discovery_policy ++ tag_filter ++ afterCursor("$5", "$6"), "$7::bigint");
+const artist_query = pagedQuery(artist_policy ++ tag_filter, "$6::bigint");
+const artist_after_query = pagedQuery(artist_policy ++ tag_filter ++ afterCursor("$6", "$7"), "$8::bigint");
 
 const liked_joined_projection = "SELECT\n" ++ projected_columns ++
     \\, viewer_like.liked_at_us, viewer_like.like_uri
@@ -1191,6 +1222,74 @@ test "composed PostgreSQL reads use verified records and authoritative account s
         .after = null,
     });
     try std.testing.expectEqual(@as(usize, 2), page.len);
+    _ = try pool.exec("UPDATE plyr_index.track_tag_records SET tags=ARRAY['drone'],tags_present=true WHERE record_uri=$1", .{record_uri});
+    _ = try pool.exec("UPDATE plyr_index.track_tag_records SET tags=ARRAY['ambient'],tags_present=true WHERE record_uri=$1", .{pds_only_uri});
+    var quiet = pds_only;
+    quiet.upsert.record_uri = "at://did:plc:artist/fm.plyr.dev.track/quiet";
+    quiet.upsert.rkey = "quiet";
+    quiet.upsert.tags = &.{"ambient"};
+    quiet.upsert.tags_present = true;
+    _ = try track_writer.store().apply(a, quiet);
+    const catalog = try implementation.store().listTags(a, "fm.plyr.dev.track", 15);
+    try std.testing.expectEqual(@as(usize, 2), catalog.len);
+    try std.testing.expectEqualStrings("drone", catalog[0].name);
+    try std.testing.expectEqual(@as(i64, 7), catalog[0].total_plays);
+    try std.testing.expectEqual(@as(i64, 1), catalog[0].track_count);
+    try std.testing.expectEqual(@as(i64, 2), catalog[1].track_count);
+    _ = try pool.exec("DELETE FROM plyr_index.track_records WHERE record_uri=$1", .{quiet.upsert.record_uri});
+
+    const tagged_page = try implementation.store().listPublic(a, .{
+        .collection = "fm.plyr.dev.track",
+        .scope = .discovery,
+        .limit = 1,
+        .after = null,
+        .tags = &.{ "DRONE", "ambient" },
+    });
+    try std.testing.expectEqual(@as(usize, 1), tagged_page.len);
+    const tagged_after: @FieldType(store_module.ListRequest, "after") = .{ .created_at_us = tagged_page[0].created_at_us, .at_uri = tagged_page[0].value.record.uri };
+    for ([_]store_module.ListScope{ .discovery, .{ .artist = did } }) |scope| {
+        const tagged_rest = try implementation.store().listPublic(a, .{
+            .collection = "fm.plyr.dev.track",
+            .scope = scope,
+            .limit = 2,
+            .after = tagged_after,
+            .tags = &.{ "ambient", "drone" },
+        });
+        try std.testing.expectEqual(@as(usize, 1), tagged_rest.len);
+        try std.testing.expect(!std.mem.eql(u8, tagged_page[0].value.record.uri, tagged_rest[0].value.record.uri));
+    }
+    _ = try pool.exec("UPDATE plyr_index.track_tag_records SET record_cid=$2 WHERE record_uri=$1", .{ record_uri, stale_subject_cid });
+    try std.testing.expectEqual(@as(usize, 1), (try implementation.store().listTags(a, "fm.plyr.dev.track", 15)).len);
+    try std.testing.expectEqual(@as(usize, 0), (try implementation.store().listPublic(a, .{
+        .collection = "fm.plyr.dev.track",
+        .scope = .discovery,
+        .limit = 2,
+        .after = null,
+        .tags = &.{"drone"},
+    })).len);
+    _ = try pool.exec("UPDATE plyr_index.track_tag_records SET record_cid=$2 WHERE record_uri=$1", .{ record_uri, record_cid });
+    _ = try pool.exec("UPDATE plyr_index.track_policies SET visibility='private' WHERE record_uri=$1", .{record_uri});
+    try std.testing.expectEqual(@as(usize, 1), (try implementation.store().listTags(a, "fm.plyr.dev.track", 15)).len);
+    _ = try pool.exec("UPDATE plyr_index.track_policies SET visibility='public',moderation_decision='exclude' WHERE record_uri=$1", .{record_uri});
+    try std.testing.expectEqual(@as(usize, 1), (try implementation.store().listTags(a, "fm.plyr.dev.track", 15)).len);
+    _ = try pool.exec("UPDATE plyr_index.track_policies SET moderation_decision='allow' WHERE record_uri=$1", .{record_uri});
+    _ = try availability_writer.store().apply(a, .{
+        .repo_did = did,
+        .available = false,
+        .reason = .deactivated,
+        .source = .current_pds,
+        .pds_origin = "https://pds.example",
+        .observed_at_us = 1_001,
+    });
+    try std.testing.expectEqual(@as(usize, 0), (try implementation.store().listTags(a, "fm.plyr.dev.track", 15)).len);
+    _ = try availability_writer.store().apply(a, .{
+        .repo_did = did,
+        .available = true,
+        .source = .verified_repository,
+        .repository_rev = &rev.str(),
+        .commit_cid = commit,
+        .observed_at_us = 1_002,
+    });
     const after: @FieldType(store_module.ListRequest, "after") = .{ .created_at_us = page[0].created_at_us, .at_uri = page[0].value.record.uri };
     for ([_]store_module.ListScope{ .discovery, .{ .artist = did } }) |scope| {
         const rest = try implementation.store().listPublic(a, .{
@@ -1258,6 +1357,30 @@ test "composed PostgreSQL reads use verified records and authoritative account s
         .profile_collection = "fm.plyr.dev.actor.profile",
         .kind = .playlist,
     })) == null);
+    _ = try availability_writer.store().apply(a, .{
+        .repo_did = did,
+        .available = true,
+        .source = .verified_repository,
+        .repository_rev = &rev.str(),
+        .commit_cid = commit,
+        .observed_at_us = 3_000,
+    });
+    _ = try pool.exec(
+        \\INSERT INTO plyr_index.track_records(record_uri, record_cid, owner_did, collection, rkey,
+        \\  title, artist_name, file_type, record_created_at, audio_url, deleted, commit_cid, commit_rev, indexed_at_us)
+        \\SELECT 'at://did:plc:artist/fm.plyr.dev.track/noise-' || n, $1, 'did:plc:artist',
+        \\  'fm.plyr.dev.track', 'noise-' || n, 'Noise', 'Artist', 'mp3',
+        \\  '2026-08-08T11:00:00Z', 'https://media.example/noise', false, $2, $3, 1
+        \\FROM generate_series(1, 10000) n
+    , .{ record_cid, try commit.toString(a), &rev.str() });
+    _ = try pool.exec("INSERT INTO plyr_index.track_tag_records SELECT record_uri,record_cid,ARRAY['noise'],true FROM plyr_index.track_records WHERE rkey LIKE 'noise-%'", .{});
+    _ = try pool.exec("ANALYZE plyr_index.track_records", .{});
+    _ = try pool.exec("ANALYZE plyr_index.track_tag_records", .{});
+    var plan = (try pool.row("EXPLAIN (ANALYZE, FORMAT JSON) " ++ discovery_query, .{ "fm.plyr.dev.track", "fm.plyr.dev.actor.profile", "fm.plyr.dev.like", &[_][]const u8{"ambient"}, @as(i64, 2) })).?;
+    const plan_json = try plan.get([]const u8, 0);
+    if (std.mem.indexOf(u8, plan_json, "ix_track_tag_records_tags") == null) std.debug.print("tag query plan: {s}\n", .{plan_json});
+    try std.testing.expect(std.mem.indexOf(u8, plan_json, "ix_track_tag_records_tags") != null);
+    try plan.deinit();
 }
 
 fn requireDisposableDatabase(pool: *pg.Pool, allocator: std.mem.Allocator) !void {
@@ -1267,3 +1390,16 @@ fn requireDisposableDatabase(pool: *pg.Pool, allocator: std.mem.Allocator) !void
     defer allocator.free(database);
     if (!std.mem.eql(u8, database, "zig_test")) return error.UnsafeTestDatabase;
 }
+
+const tags_query =
+    \\SELECT tag.name, count(*)::bigint, COALESCE(sum(metrics.play_count), 0)::bigint
+++ "\n" ++ page_from ++
+    \\ JOIN plyr_index.track_tag_records tags ON tags.record_uri=v.record_uri AND tags.record_cid=v.record_cid
+    \\ CROSS JOIN LATERAL unnest(tags.tags) AS tag(name)
+    \\ LEFT JOIN plyr_index.track_metrics metrics ON metrics.record_uri=v.record_uri
+    \\ WHERE v.record_created_at_us IS NOT NULL
+++ "\n" ++ discovery_policy ++
+    \\ GROUP BY tag.name
+    \\ ORDER BY COALESCE(sum(metrics.play_count),0) DESC, tag.name
+    \\ LIMIT $2::bigint
+;
