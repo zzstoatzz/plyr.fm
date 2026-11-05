@@ -47,6 +47,15 @@ plyr.fm should become:
 
 ### November 2026
 
+#### Next Home and desktop player (November 5)
+
+#2413–#2417 add visible playback/navigation accents, explain saving preferences
+across devices, restore colored tags and automatic virtualized Home loading,
+and replace desktop's blocking player modal with a browsing side panel.
+Mobile keeps its full-screen player. The [verification record](docs/research/2026-11-05-next-home-player.md)
+separates controlled failures, live catalog/media checks and native bundle limits.
+Production was not promoted.
+
 #### Next Settings and Search (November 5)
 
 Home actions are quiet again behind one menu. Settings now uses compact icon-led
