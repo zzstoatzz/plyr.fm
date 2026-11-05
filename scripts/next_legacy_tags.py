@@ -17,6 +17,8 @@ from typing import Any
 import psycopg
 from psycopg.types.json import Jsonb
 
+MAX_DERIVED_TAG_BYTES = 200
+
 SOURCE_SQL = """
 SELECT t.atproto_record_uri, t.atproto_record_cid, t.id,
        array_agg(g.name ORDER BY g.name)
@@ -125,7 +127,7 @@ def read_manifest(path: Path) -> dict[str, Any]:
             or not 1 <= len(tags) <= 20
             or any(
                 not isinstance(tag, str)
-                or not 1 <= len(tag.encode()) <= 50
+                or not 1 <= len(tag.encode()) <= MAX_DERIVED_TAG_BYTES
                 or "\x00" in tag
                 for tag in tags
             )
