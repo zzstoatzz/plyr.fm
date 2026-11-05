@@ -26,7 +26,7 @@ export default function Settings() {
       <Setting label="interface size"><View style={row}>{[0.9, 1, 1.15, 1.3].map(value => <Choice key={value} label={`${Math.round(value * 100)}%`} selected={preferences.scale === value} onPress={() => setPreferences({ scale: value })} />)}</View></Setting>
       <Setting label="accent color">
         <View style={row}>{accents.map(value => <Pressable key={value} accessibilityRole="button" accessibilityLabel={`Accent ${value}`}
-          accessibilityState={{ selected: preferences.accent === value }} onPress={() => { setAccent(undefined); setPreferences({ accent: value }); }}
+          aria-pressed={preferences.accent === value} accessibilityState={{ selected: preferences.accent === value }} onPress={() => { setAccent(undefined); setPreferences({ accent: value }); }}
           style={{ width: 44, height: 44, borderRadius: 22, borderWidth: 1, borderColor: preferences.accent === value ? theme.text : 'transparent', alignItems: 'center', justifyContent: 'center' }}>
           <View style={{ width: 30, height: 30, borderRadius: 15, backgroundColor: value, alignItems: 'center', justifyContent: 'center' }}>
             {preferences.accent === value && <Check color="#10131a" size={18} />}
@@ -43,7 +43,7 @@ export default function Settings() {
         ['play through collections', 'playThrough'], ['keep playing', 'keepPlaying']
       ] as const).map(([label, key]) => <View key={key} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 16, minHeight: 48 }}>
         <Text style={{ flex: 1, color: theme.text, fontSize: 15 * theme.scale }}>{label}</Text>
-        <Switch accessibilityLabel={label} value={preferences[key]} trackColor={{ true: theme.accent }} onValueChange={value => setPreferences({ [key]: value })} />
+        <Switch accessibilityLabel={label} value={preferences[key]} thumbColor={theme.background} trackColor={{ false: theme.border, true: theme.accent }} ios_backgroundColor={theme.border} onValueChange={value => setPreferences({ [key]: value })} />
       </View>)}
     </AccountSection>
     <AccountSection title="account">

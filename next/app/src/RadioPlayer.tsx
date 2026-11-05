@@ -102,7 +102,7 @@ export default function Radio({ compact = false, tuned }: { compact?: boolean; t
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, padding: 8, borderRadius: 12, backgroundColor: theme.background }}>
       <Cover size={48} uri={song?.hasCover ? radioMedia(station, song, 'cover') : null} />
       <View style={{ flex: 1, minWidth: 0 }}>
-        <Text numberOfLines={1} style={{ color: theme.text, fontSize: 15, fontWeight: '700' }}>{song?.title ?? station.label}</Text>
+        <Text numberOfLines={1} style={{ color: theme.text, fontSize: 15 * theme.scale, fontWeight: '700' }}>{song?.title ?? station.label}</Text>
         <Text numberOfLines={1} style={{ color: theme.muted, fontSize: 12 }}>
           {status.error ? 'Couldn’t play this station' : error || (song ? `${song.artist} · Radio` : snapshot ? 'Off air' : 'Loading station…')}
         </Text>
@@ -123,13 +123,13 @@ export default function Radio({ compact = false, tuned }: { compact?: boolean; t
           router.setParams({ station: item.slug });
         }} />)}
     </View>
-    <View style={{ height: 320, overflow: 'hidden', borderRadius: 20, justifyContent: 'flex-end', backgroundColor: '#141421' }}>
+    <View style={{ minHeight: 320, overflow: 'hidden', borderRadius: 20, justifyContent: 'flex-end', backgroundColor: '#141421' }}>
       {artwork && <Image source={{ uri: artwork }} resizeMode="cover" style={{ ...StyleSheet.absoluteFill, width: '100%', height: '100%' }} />}
-      <View style={{ ...StyleSheet.absoluteFill, backgroundColor: 'rgba(10, 10, 20, 0.50)' }} />
+      <View style={{ ...StyleSheet.absoluteFill, backgroundColor: 'rgba(10, 10, 20, 0.65)' }} />
       <View style={{ gap: 8, padding: 20 }}>
-        <Text accessibilityRole="header" style={{ color: '#fff', fontSize: 28, fontWeight: '800' }}>{station.label}</Text>
+        <Text accessibilityRole="header" style={{ color: '#fff', fontSize: 28 * theme.scale, fontWeight: '800' }}>{station.label}</Text>
         {song && <>
-          <Text numberOfLines={2} style={{ color: '#fff', fontSize: 20, fontWeight: '700' }}>{song.title}</Text>
+          <Text numberOfLines={2} style={{ color: '#fff', fontSize: 20 * theme.scale, fontWeight: '700' }}>{song.title}</Text>
           <Text style={{ color: '#fff' }}>{song.artist}</Text>
         </>}
         {(!song || error || status.error) && <Text accessibilityLiveRegion="polite" style={{ color: '#fff' }}>

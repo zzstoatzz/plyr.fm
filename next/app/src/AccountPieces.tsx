@@ -1,12 +1,12 @@
-import type { ReactNode } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import type { ReactNode, Ref } from 'react';
+import { Pressable, StyleSheet, View, type ViewInstance } from 'react-native';
 import { Text } from './Text';
 import { useAppearance } from './appearance';
 
 export function AccountSection({ title, children }: { title: string; children: ReactNode }) {
   const theme = useAppearance();
   return <View style={[styles.section, { borderColor: theme.surface }]}>
-    <Text accessibilityRole="header" style={{ color: theme.text, fontSize: 18 * theme.scale, fontWeight: '700' }}>{title}</Text>
+    <Text accessibilityRole="header" aria-level={2} style={{ color: theme.text, fontSize: 18 * theme.scale, fontWeight: '700' }}>{title}</Text>
     <View style={{ gap: 14 }}>{children}</View>
   </View>;
 }
@@ -22,9 +22,9 @@ export function Setting({ label, detail, children }: { label: string; detail?: s
   </View>;
 }
 
-export function Choice({ label, selected, onPress, role = 'button' }: { label: string; selected: boolean; onPress: () => void; role?: 'button' | 'tab' }) {
+export function Choice({ label, selected, onPress, role = 'button', ref }: { label: string; selected: boolean; onPress: () => void; role?: 'button' | 'tab'; ref?: Ref<ViewInstance> }) {
   const theme = useAppearance();
-  return <Pressable accessibilityRole={role} accessibilityLabel={label} accessibilityState={{ selected }} aria-selected={role === 'tab' ? selected : undefined} onPress={onPress}
+  return <Pressable ref={ref} accessibilityRole={role} tabIndex={role === 'tab' && !selected ? -1 : 0} accessibilityLabel={label} accessibilityState={{ selected }} aria-pressed={role === 'button' ? selected : undefined} aria-selected={role === 'tab' ? selected : undefined} onPress={onPress}
     style={({ pressed }) => ({ minHeight: 44, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12,
       borderWidth: 1, borderColor: selected ? theme.accent : theme.surface, backgroundColor: selected || pressed ? theme.surface : 'transparent', justifyContent: 'center' })}>
     <Text style={{ color: selected ? theme.text : theme.muted, fontSize: 14 * theme.scale, fontWeight: selected ? '700' : '400' }}>{label}</Text>

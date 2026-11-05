@@ -3,7 +3,7 @@ import { randomUUID } from 'expo-crypto';
 import { router } from 'expo-router';
 import Users from 'lucide-react-native/icons/users';
 import { useAuth } from '../src/auth';
-import Slider from '@react-native-community/slider';
+import Slider from '../src/Slider';
 import X from 'lucide-react-native/icons/x';
 import Repeat from 'lucide-react-native/icons/repeat';
 import Repeat1 from 'lucide-react-native/icons/repeat-1';

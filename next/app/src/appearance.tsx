@@ -1,15 +1,22 @@
-import { createContext, useContext, useEffect, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { usePathname } from 'expo-router';
-import { Platform, useColorScheme } from 'react-native';
+import { AccessibilityInfo, Platform, useColorScheme } from 'react-native';
 import type { PersonalPreferences } from './preference-space';
+import { palettes, readableAccent } from './colors';
 
-const light = { background: '#fbfbfd', surface: '#eceef4', text: '#141826', muted: '#50596b' };
-const dark = { background: '#10131a', surface: '#202735', text: '#f4f6fa', muted: '#b7c2d5' };
-const Appearance = createContext({ ...light, accent: '#244fa9', fontFamily: undefined as string | undefined, scale: 1, dark: false });
+const { light, dark } = palettes;
+const Appearance = createContext({ ...light, accent: '#244fa9', fontFamily: undefined as string | undefined, scale: 1, dark: false, reduceMotion: true });
 
 export function AppearanceProvider({ preferences, children }: { preferences: PersonalPreferences; children: ReactNode }) {
   const system = useColorScheme();
   const pathname = usePathname();
+  const [reduceMotion, setReduceMotion] = useState(true);
+  useEffect(() => {
+    let live = true;
+    void AccessibilityInfo.isReduceMotionEnabled().then(value => { if (live) setReduceMotion(value); }, () => undefined);
+    const listener = AccessibilityInfo.addEventListener('reduceMotionChanged', setReduceMotion);
+    return () => { live = false; listener.remove(); };
+  }, []);
   const isDark = (preferences.theme === 'system' ? system : preferences.theme) === 'dark';
   useEffect(() => {
     if (Platform.OS !== 'web') return;
@@ -30,10 +37,19 @@ export function AppearanceProvider({ preferences, children }: { preferences: Per
     }
     meta.content = background;
   }, [isDark, pathname]);
+  const palette = isDark ? dark : light;
+  const accent = useMemo(() => readableAccent(preferences.accent, [palette.background, palette.surface]), [preferences.accent, palette]);
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    const style = document.createElement('style');
+    style.textContent = `:focus-visible { outline: 2px solid ${accent}; outline-offset: 2px; }`;
+    document.head.append(style);
+    return () => style.remove();
+  }, [accent]);
   const fontFamily = preferences.font === 'comic-sans' ? 'PlyrComic' : preferences.font === 'mono' ? Platform.select({ ios: 'Menlo', default: 'monospace' })
     : preferences.font === 'serif' ? Platform.select({ ios: 'Georgia', default: 'serif' }) : undefined;
   return <Appearance.Provider value={{
-    ...(isDark ? dark : light), accent: preferences.accent, fontFamily, scale: preferences.scale, dark: isDark
+    ...palette, accent, fontFamily, scale: preferences.scale, dark: isDark, reduceMotion
   }}>{children}</Appearance.Provider>;
 }
 

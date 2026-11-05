@@ -1,6 +1,6 @@
 import { Link, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Pressable, View, type ScrollViewInstance } from 'react-native';
+import { Platform, Pressable, View, type KeyDownEvent, type ScrollViewInstance, type ViewInstance } from 'react-native';
 import Pencil from 'lucide-react-native/icons/pencil';
 import RefreshCw from 'lucide-react-native/icons/refresh-cw';
 import { api, ApiError, type Artist, type ListSummary } from './api';
@@ -25,6 +25,8 @@ export function Portal() {
 }
 
 function AccountPortal({ did, handle }: { did: string; handle: string | null }) {
+  const trackTab = useRef<ViewInstance>(null);
+  const albumTab = useRef<ViewInstance>(null);
   const [tab, setTab] = useState<'tracks' | 'albums'>('tracks');
   const visited = useRef({ tracks: true, albums: false });
   const scroll = useRef<ScrollViewInstance>(null);
@@ -73,9 +75,16 @@ function AccountPortal({ did, handle }: { did: string; handle: string | null }) 
       <Action label="public profile" href={{ pathname: '/u/[handle]', params: { handle: handle || did } }} />
     </View>
     {artist.error && <View style={row}><Copy>Couldn’t load your profile.</Copy><Action label="retry profile" onPress={artist.retry} /></View>}
-    <View accessibilityRole="tablist" style={[row, { paddingTop: 12, borderBottomWidth: 1, borderColor: theme.surface, paddingBottom: 12 }]}>
-      <Choice role="tab" label="tracks" selected={tab === 'tracks'} onPress={() => selectTab('tracks')} />
-      <Choice role="tab" label="albums" selected={tab === 'albums'} onPress={() => selectTab('albums')} />
+    <View accessibilityRole="tablist" accessibilityLabel="Your catalog" {...(Platform.OS === 'web' ? { onKeyDown: (event: KeyDownEvent) => {
+      const key = event.nativeEvent.key;
+      if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(key)) return;
+      event.preventDefault();
+      const next = key === 'Home' ? 'tracks' : key === 'End' ? 'albums' : tab === 'tracks' ? 'albums' : 'tracks';
+      selectTab(next);
+      (next === 'tracks' ? trackTab : albumTab).current?.focus();
+    } } : {})} style={[row, { paddingTop: 12, borderBottomWidth: 1, borderColor: theme.surface, paddingBottom: 12 }]}>
+      <Choice ref={trackTab} role="tab" label="tracks" selected={tab === 'tracks'} onPress={() => selectTab('tracks')} />
+      <Choice ref={albumTab} role="tab" label="albums" selected={tab === 'albums'} onPress={() => selectTab('albums')} />
     </View>
     <View style={{ display: tab === 'tracks' ? 'flex' : 'none' }} aria-hidden={tab !== 'tracks'}><OwnedTracks did={did} active={tab === 'tracks'} /></View>
     {visited.current.albums && <View style={{ display: tab === 'albums' ? 'flex' : 'none' }} aria-hidden={tab !== 'albums'}><OwnedAlbums did={did} active={tab === 'albums'} /></View>}

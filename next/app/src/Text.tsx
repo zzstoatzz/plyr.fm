@@ -8,7 +8,7 @@ export function Text({ style, ...props }: TextProps) {
   const comic = family === 'PlyrComic';
   const bold = resolved?.fontWeight === 'bold' || Number(resolved?.fontWeight ?? 400) >= 600;
   return <NativeText {...props} style={[
-    { fontFamily: theme.fontFamily }, style,
+    { color: theme.text, fontFamily: theme.fontFamily }, style,
     comic && { fontFamily: bold ? 'PlyrComicBold' : 'PlyrComic', fontWeight: '400' }
   ]} />;
 }

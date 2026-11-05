@@ -1,5 +1,5 @@
 import { Text } from './Text';
-import Slider from '@react-native-community/slider';
+import Slider from './Slider';
 import type { Href } from 'expo-router';
 import ChevronDown from 'lucide-react-native/icons/chevron-down';
 import Info from 'lucide-react-native/icons/info';
@@ -47,10 +47,10 @@ export function NowPlaying({ track, close, navigate }: { track: Track; close: ()
   const error = player.error || player.status.error;
   const caption = { color: theme.muted, fontFamily: theme.fontFamily, fontSize: 13 * theme.scale };
 
-  return <Modal visible transparent animationType="fade" onRequestClose={close}>
+  return <Modal visible transparent accessibilityLabel="Now playing" animationType={theme.reduceMotion ? 'none' : 'fade'} onRequestClose={close}>
     <View ref={dismiss.panelRef} style={styles.backdrop}>
-      {!compact && <Pressable style={StyleSheet.absoluteFill} accessibilityLabel="Dismiss now playing" onPress={close} />}
-      <AnimatedSafeAreaView {...dismiss.panHandlers} accessibilityViewIsModal edges={compact ? ['top', 'bottom'] : []}
+      {!compact && <Pressable style={StyleSheet.absoluteFill} accessible={false} focusable={false} tabIndex={-1} aria-hidden onPress={close} />}
+      <AnimatedSafeAreaView {...dismiss.panHandlers} accessibilityViewIsModal={Platform.OS === 'web' ? undefined : true} edges={compact ? ['top', 'bottom'] : []}
         style={[{ transform: [{ translateY: dismiss.translation }] }, styles.panel, compact ? styles.full : [styles.floating, { maxWidth: panelWidth }], { backgroundColor: theme.background }]}>
         <View style={[styles.header, { borderColor: theme.surface }]}>
           {compact && <View {...dismiss.protect}><PlayerControl icon={ChevronDown} label="Close" onPress={close} /></View>}
@@ -82,7 +82,7 @@ export function NowPlaying({ track, close, navigate }: { track: Track; close: ()
               </View>
               <View>
                 <View {...dismiss.protect}><Slider accessibilityLabel="Playback position" minimumValue={0} maximumValue={duration || 1}
-                  value={position} minimumTrackTintColor={theme.accent} maximumTrackTintColor={theme.surface}
+                  value={position} minimumTrackTintColor={theme.accent} maximumTrackTintColor={theme.border}
                   thumbTintColor={theme.accent} disabled={!duration || !!error}
                   onSlidingStart={updateScrub} onValueChange={updateScrub}
                   onSlidingComplete={(seconds) => { player.seek(seconds); setScrub(null); }} /></View>

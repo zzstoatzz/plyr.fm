@@ -10,18 +10,18 @@ export function Sheet({ title, close, children }: { title: string; close: () => 
   const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const wide = width >= 800;
-  return <Modal transparent animationType="fade" visible onRequestClose={close}>
+  return <Modal transparent accessibilityLabel={title} animationType={theme.reduceMotion ? 'none' : 'fade'} visible onRequestClose={close}>
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       style={{ flex: 1, justifyContent: wide ? 'center' : 'flex-end', alignItems: 'center' }}>
-      <Pressable accessibilityLabel="Dismiss dialog" onPress={close}
+      <Pressable accessible={false} focusable={false} tabIndex={-1} aria-hidden onPress={close}
         style={[StyleSheet.absoluteFill, { backgroundColor: '#0008' }]} />
-      <View accessibilityViewIsModal style={{
+      <View accessibilityViewIsModal={Platform.OS === 'web' ? undefined : true} style={{
         width: '100%', maxWidth: 520, maxHeight: '88%', borderTopLeftRadius: 22, borderTopRightRadius: 22,
         borderBottomLeftRadius: wide ? 22 : 0, borderBottomRightRadius: wide ? 22 : 0,
         backgroundColor: theme.background, paddingBottom: wide ? 12 : insets.bottom
       }}>
         <View style={{ paddingHorizontal: 20, paddingVertical: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-          <Heading>{title}</Heading>
+          <View style={{ flex: 1, minWidth: 0 }}><Heading>{title}</Heading></View>
           <Pressable accessibilityRole="button" accessibilityLabel="Close" onPress={close} style={{ padding: 12 }}><X size={22} color={theme.text} /></Pressable>
         </View>
         <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 20, paddingTop: 4, gap: 12 }}>

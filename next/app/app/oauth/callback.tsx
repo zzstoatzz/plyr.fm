@@ -1,7 +1,8 @@
 import { Text } from '../../src/Text';
 import { useEffect } from 'react';
 import { router } from 'expo-router';
-import { ActivityIndicator, View } from 'react-native';
+import { View } from 'react-native';
+import { WaveLoading } from '../../src/WaveLoading';
 import { restoreAuth, takeLoginIntent, useAuth } from '../../src/auth';
 
 export default function OAuthCallback() {
@@ -10,7 +11,7 @@ export default function OAuthCallback() {
 	useEffect(() => { if (ready) router.replace(did ? (takeLoginIntent() ?? '/settings') : '/login'); }, [did, ready]);
 	return (
 		<View style={{ padding: 24, gap: 12, alignItems: 'center' }}>
-			<ActivityIndicator />
+			<WaveLoading label="Finishing sign-in" />
 			<Text>Finishing sign-in…</Text>
 		</View>
 	);

@@ -6,6 +6,8 @@ import Music2 from 'lucide-react-native/icons/eighth-note';
 import PlayIcon from 'lucide-react-native/icons/play';
 import UserRound from 'lucide-react-native/icons/user-round';
 import type { ListSummary, Page, Track } from './api';
+import { Action } from './controls';
+import { WaveLoading } from './WaveLoading';
 import { useAppearance } from './appearance';
 
 export type Play = (track: Track, queue?: Track[]) => void;
@@ -85,7 +87,7 @@ export function usePages<T>(load: (cursor?: string) => Promise<Page<T>>) {
 
 export function Heading({ children, main = false }: { children: ReactNode; main?: boolean }) {
   const colors = useColors();
-  return <Text accessibilityRole="header" style={[main ? styles.title : styles.heading, { color: colors.text, fontFamily: colors.fontFamily, fontSize: (main ? 32 : 20) * colors.scale }]}>{children}</Text>;
+  return <Text accessibilityRole="header" aria-level={main ? 1 : 2} style={[main ? styles.title : styles.heading, { color: colors.text, fontFamily: colors.fontFamily, fontSize: (main ? 28 : 20) * colors.scale }]}>{children}</Text>;
 }
 
 export function Detail({ children }: { children: ReactNode }) {
@@ -93,11 +95,8 @@ export function Detail({ children }: { children: ReactNode }) {
   return <Text style={{ color: colors.muted, fontFamily: colors.fontFamily, fontSize: 15 * colors.scale, lineHeight: 22 * colors.scale }}>{children}</Text>;
 }
 
-export function Button({ label, onPress }: { label: string; onPress: () => void }) {
-  const colors = useColors();
-  return <Pressable accessibilityRole="button" onPress={onPress} style={[styles.button, { backgroundColor: colors.surface }]}>
-    <Text style={[styles.buttonLabel, { color: colors.text, fontFamily: colors.fontFamily, fontSize: 14 * colors.scale }]}>{label}</Text>
-  </Pressable>;
+export function Button(props: Parameters<typeof Action>[0]) {
+  return <Action {...props} />;
 }
 
 export function Cover({ uri, size = 48, round = false, radius = 9 }: { uri?: string | null; size?: number; round?: boolean; radius?: number }) {
@@ -148,7 +147,7 @@ export function RowPlay({ onPress, label = 'Play', busy = false }: { onPress: ()
   const colors = useColors();
   return <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ busy }} disabled={busy} onPress={onPress}
     style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}>
-    {busy ? <ActivityIndicator color={colors.muted} /> : <PlayIcon size={20} color={colors.text} fill={colors.text} />}
+    {busy ? <ActivityIndicator accessibilityLabel="Loading playback" color={colors.muted} /> : <PlayIcon size={20} color={colors.text} fill={colors.text} />}
   </Pressable>;
 }
 
@@ -166,8 +165,8 @@ export function ListRows({ lists }: { lists: ListSummary[] }) {
 }
 
 export function Status({ loading, error, retry, empty }: { loading?: boolean; error?: string; retry?: () => void; empty?: string }) {
-  if (loading) return <ActivityIndicator accessibilityLabel="Loading catalog" style={styles.activity} />;
-  if (error) return <View style={styles.group}>
+  if (loading) return <WaveLoading label="Loading catalog" />;
+  if (error) return <View accessibilityRole="alert" style={styles.group}>
     <Detail>{error}</Detail>
     {retry ? <Button label="Retry" onPress={retry} /> : null}
   </View>;
@@ -183,7 +182,4 @@ const styles = StyleSheet.create({
   rowLink: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 4 },
   rowText: { flex: 1, minWidth: 0, gap: 3 },
   rowTitle: { fontWeight: '600' },
-  button: { alignSelf: 'flex-start', minHeight: 44, paddingHorizontal: 14, borderRadius: 24, justifyContent: 'center' },
-  buttonLabel: { fontWeight: '700' },
-  activity: { alignSelf: 'flex-start', marginVertical: 6 },
 });

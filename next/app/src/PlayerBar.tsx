@@ -28,11 +28,11 @@ export function PlayerBar() {
       <View style={{ height: 2, width: `${Math.max(0, progress) * 100}%`, backgroundColor: theme.accent }} />
       <View style={{ flexDirection: 'row', alignItems: 'center', padding: 5, gap: 4 }}>
         <Pressable accessibilityRole="button" accessibilityLabel="Open now playing" onPress={() => Platform.OS === 'web' ? router.navigate('/now-playing') : setExpanded(true)}
-          style={{ flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 5 }}>
+          style={{ flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 5, minHeight: 44 }}>
           <Cover uri={track.media.artwork?.url} size={42} />
           <View style={{ flex: 1, minWidth: 0 }}>
-            <Text numberOfLines={1} style={{ color: theme.text, fontWeight: '700' }}>{track.metadata.title}</Text>
-            <Text numberOfLines={1} style={{ color: theme.muted, fontSize: 12 }}>{error ? "Couldn’t play this track" : artistName(track)}</Text>
+            <Text numberOfLines={1} style={{ color: theme.text, fontSize: 14 * theme.scale, fontWeight: '700' }}>{track.metadata.title}</Text>
+            <Text numberOfLines={1} style={{ color: theme.muted, fontSize: 12 * theme.scale }}>{error ? "Couldn’t play this track" : artistName(track)}</Text>
           </View>
         </Pressable>
         {play}
