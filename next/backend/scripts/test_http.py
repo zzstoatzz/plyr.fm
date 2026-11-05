@@ -429,6 +429,7 @@ def main() -> None:
             assert status == 400
             assert invalid_likes["error"]["code"] == "invalid_request"
 
+        occurrence_query = "?occurrence=01234567-89ab-4def-8123-456789abcdef"
         play_path = f"/v1/tracks/{_track_id(uri)}/plays"
         status, _, play_method = _request(base_url, play_path)
         assert status == 405
@@ -436,7 +437,7 @@ def main() -> None:
 
         status, _, unavailable_play = _request(
             base_url,
-            play_path,
+            play_path + occurrence_query,
             method="POST",
         )
         assert status == 503
@@ -458,7 +459,7 @@ def main() -> None:
 
         status, _, foreign_play = _request(
             base_url,
-            f"/v1/tracks/{_track_id(foreign_uri)}/plays",
+            f"/v1/tracks/{_track_id(foreign_uri)}/plays{occurrence_query}",
             method="POST",
         )
         assert status == 404

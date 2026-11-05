@@ -19,7 +19,6 @@ const ViewerLikeStore = @import("../internal/index/viewer_like_store.zig").Store
 const LikedTrackStore = @import("../internal/index/liked_track_store.zig").Store;
 const PlaybackStore = @import("../internal/index/playback_store.zig").PlaybackStore;
 const SearchStore = @import("../internal/index/search_store.zig").SearchStore;
-const PlayDedupStore = @import("../internal/metrics/play_dedup_store.zig").PlayDedupStore;
 const PlayMetricStore = @import("../internal/metrics/play_metric_store.zig").PlayMetricStore;
 const TrackStore = @import("../internal/index/track_store.zig").TrackStore;
 const TrackChartStore = @import("../internal/index/track_chart_store.zig").TrackChartStore;
@@ -47,7 +46,6 @@ pub const App = struct {
     ingest_status_store: ?IngestStatusStore = null,
     search_store: ?SearchStore,
     play_metric_store: ?PlayMetricStore,
-    play_dedup_store: ?PlayDedupStore,
     track_collection: []const u8,
     list_collection: []const u8,
     profile_collection: []const u8,
@@ -305,7 +303,6 @@ pub fn handle(
             request,
             allocator,
             app.play_metric_store,
-            app.play_dedup_store,
             app.track_collection,
             app.cors,
             app.io,
