@@ -6,7 +6,8 @@ const path = require('node:path');
 const { performance } = require('node:perf_hooks');
 
 const requireFrontend = createRequire(path.resolve(__dirname, '../../../frontend/package.json'));
-const { chromium } = process.env.PLAYWRIGHT_MODULE ? require(process.env.PLAYWRIGHT_MODULE) : requireFrontend('playwright');
+const { chromium, webkit } = process.env.PLAYWRIGHT_MODULE ? require(process.env.PLAYWRIGHT_MODULE) : requireFrontend('playwright');
+const engine = process.env.QUEUE_BROWSER || 'chromium';
 const dist = process.env.QUEUE_DIST || path.resolve(__dirname, '../dist');
 const output = process.env.QUEUE_OUTPUT || '/tmp/plyr-next-queue';
 const fixtureAudio = 'https://queue-fixture.invalid/audio.wav';
@@ -87,6 +88,9 @@ async function setup(browser, width, theme, queue = tracks) {
   await shot(page, `${width}-${theme}-now-playing`);
   await page.getByRole('button', { name: 'Queue', exact: true }).click();
   await handle(page, 'Alpha').waitFor();
+  await page.getByText('drag the handles to reorder', { exact: true }).waitFor();
+  const grip = await handle(page, 'Alpha').boundingBox();
+  assert.ok(grip.width >= 44 && grip.height >= 44, 'Visible drag handles remain touch targets');
   return { context, page, errors };
 }
 
@@ -121,7 +125,7 @@ async function standard(browser, width, theme) {
   const started = performance.now();
   const { context, page, errors } = await setup(browser, width, theme);
   try {
-    const cdp = await context.newCDPSession(page);
+    const cdp = engine === 'chromium' ? await context.newCDPSession(page) : null;
     await mouseDrag(page, handle(page, 'Alpha'), handle(page, 'Gamma'));
     assert.deepEqual((await order(page)).slice(0, 3), ['Beta', 'Gamma', 'Alpha']);
     await handle(page, 'Alpha').focus();
@@ -134,16 +138,18 @@ async function standard(browser, width, theme) {
     const beforeCancel = await order(page);
     await mouseDrag(page, handle(page, 'Alpha'), handle(page, 'Delta'), true);
     assert.deepEqual(await order(page), beforeCancel);
-    const beta = await handle(page, 'Beta').boundingBox();
-    await touchDrag(page, cdp, handle(page, 'Gamma'), beta.y + 10);
-    assert.deepEqual((await order(page)).slice(0, 3), ['Gamma', 'Beta', 'Alpha']);
-    await touchDrag(page, cdp, handle(page, 'Gamma'), width === 390 ? 755 : 815, false, 850);
-    assert.ok((await order(page)).indexOf('Gamma') > 5, 'Holding at the edge scrolls to farther queue positions');
-    await handle(page, 'Beta').scrollIntoViewIfNeeded();
-    const cancelBox = await handle(page, 'Beta').boundingBox();
-    const beforeTouchCancel = await order(page);
-    await touchDrag(page, cdp, handle(page, 'Beta'), cancelBox.y + 110, true);
-    assert.deepEqual(await order(page), beforeTouchCancel);
+    if (cdp) {
+      const beta = await handle(page, 'Beta').boundingBox();
+      await touchDrag(page, cdp, handle(page, 'Gamma'), beta.y + 10);
+      assert.deepEqual((await order(page)).slice(0, 3), ['Gamma', 'Beta', 'Alpha']);
+      await touchDrag(page, cdp, handle(page, 'Gamma'), width === 390 ? 755 : 815, false, 850);
+      assert.ok((await order(page)).indexOf('Gamma') > 5, 'Holding at the edge scrolls to farther queue positions');
+      await handle(page, 'Beta').scrollIntoViewIfNeeded();
+      const cancelBox = await handle(page, 'Beta').boundingBox();
+      const beforeTouchCancel = await order(page);
+      await touchDrag(page, cdp, handle(page, 'Beta'), cancelBox.y + 110, true);
+      assert.deepEqual(await order(page), beforeTouchCancel);
+    }
     assert.match(await page.getByRole('button', { name: 'Open now playing', exact: true }).innerText(), /Current song/);
     assert.equal(await page.getByRole('button', { name: 'Move up', exact: true }).count(), 0);
     await shot(page, `${width}-${theme}-queue`);
@@ -178,7 +184,7 @@ async function standard(browser, width, theme) {
       assert.deepEqual(await order(page), beforeResize);
     }
     assert.deepEqual(errors, []);
-    console.log(`${width}/${theme}: mouse, touch, keyboard focus, cancellation, autoscroll and queue change passed (${Math.round(performance.now() - started)}ms)`);
+    console.log(`${engine}/${width}/${theme}: mouse, ${engine === 'chromium' ? 'touch, autoscroll, ' : ''}keyboard focus, cancellation and queue change passed (${Math.round(performance.now() - started)}ms)`);
   } finally { await page.unrouteAll({ behavior: 'ignoreErrors' }); await context.close(); }
 }
 
@@ -199,7 +205,7 @@ async function duplicates(browser) {
   if (!process.env.QUEUE_URL) await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   origin = process.env.QUEUE_URL || `http://127.0.0.1:${server.address().port}`;
   console.log(`Queue UI source: ${origin}; catalog/media are fixtures; real API/PDS mutations blocked`);
-  const browser = await chromium.launch({ channel: 'chrome', headless: true });
+  const browser = await (engine === 'webkit' ? webkit.launch({ executablePath: process.env.WEBKIT_EXECUTABLE, headless: true }) : chromium.launch({ channel: 'chrome', headless: true }));
   try {
     for (const width of [390, 1280]) for (const theme of ['light', 'dark']) await standard(browser, width, theme);
     await duplicates(browser);
