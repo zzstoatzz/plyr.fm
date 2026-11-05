@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { Platform, Pressable, Switch, View } from 'react-native';
-import { router } from 'expo-router';
 import Check from 'lucide-react-native/icons/check';
 import Palette from 'lucide-react-native/icons/palette';
 import Headphones from 'lucide-react-native/icons/headphones';
@@ -48,11 +47,11 @@ export default function Settings() {
     <SettingsSection title="account" icon={UserRound}>
       {auth.did ? <>
         <SettingsRow label={auth.handle ? `@${auth.handle}` : auth.did} detail={status === 'synced' ? 'Preferences synced.' : status === 'syncing' ? 'Syncing preferences…' : 'Preferences kept on this device.'} />
-        <SettingsRow label="creator portal" onPress={() => router.navigate('/portal')} />
-        {status === 'error' && <SettingsRow label="retry sync" onPress={() => void sync()} />}
-        {!auth.preferenceSpace && <SettingsRow label="sign in again to enable sync" onPress={() => router.navigate(login)} />}
+        <SettingsRow label="creator portal" href="/portal" />
+        {status === 'error' && <SettingsRow label="retry sync" disclosure={false} onPress={() => void sync()} />}
+        {!auth.preferenceSpace && <SettingsRow label="sign in again to enable sync" href={login} />}
         <SettingsRow label="sign out" destructive onPress={() => void logout().catch(() => setError('Could not revoke this session.'))} />
-      </> : <SettingsRow label="sign in" detail="Sign in to sync preferences across your devices." onPress={() => router.navigate(login)} />}
+      </> : <SettingsRow label="sign in" detail="Sign in to sync preferences across your devices." href={login} />}
     </SettingsSection>
     {error && <Copy live>{error}</Copy>}
     {picker && <Sheet title={names[picker]} close={() => setPicker(undefined)}>

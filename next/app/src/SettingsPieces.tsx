@@ -1,4 +1,5 @@
-import type { ReactNode } from 'react';
+import { type ReactNode, useState } from 'react';
+import { Link, type Href } from 'expo-router';
 import { Pressable, StyleSheet, View } from 'react-native';
 import ChevronRight from 'lucide-react-native/icons/chevron-right';
 import type Palette from 'lucide-react-native/icons/palette';
@@ -16,10 +17,11 @@ export function SettingsSection({ title, icon: Icon, children }: { title: string
   </View>;
 }
 
-export function SettingsRow({ label, value, detail, onPress, children, destructive }: {
-  label: string; value?: string; detail?: string; onPress?: () => void; children?: ReactNode; destructive?: boolean;
+export function SettingsRow({ label, value, detail, onPress, children, destructive, href, disclosure = true }: {
+  label: string; value?: string; detail?: string; onPress?: () => void; children?: ReactNode; destructive?: boolean; href?: Href; disclosure?: boolean;
 }) {
   const theme = useAppearance();
+  const [pressed, setPressed] = useState(false);
   const content = <>
     <View style={{ flex: 1, minWidth: 0, gap: 4 }}>
       <Text style={{ color: destructive ? theme.danger : theme.text, fontSize: 15 * theme.scale }}>{label}</Text>
@@ -27,10 +29,11 @@ export function SettingsRow({ label, value, detail, onPress, children, destructi
     </View>
     {value && <Text numberOfLines={2} style={{ maxWidth: '44%', color: theme.muted, fontSize: 14 * theme.scale, textAlign: 'right' }}>{value}</Text>}
     {children}
-    {onPress && !destructive && <ChevronRight size={18} color={theme.muted} />}
+    {(onPress || href) && disclosure && !destructive && <ChevronRight size={18} color={theme.muted} />}
   </>;
   const style = { minHeight: 60, paddingHorizontal: 16, paddingVertical: 12, flexDirection: 'row' as const, alignItems: 'center' as const, gap: 12,
     borderBottomWidth: StyleSheet.hairlineWidth, borderColor: theme.surface };
-  return onPress ? <Pressable accessibilityRole="button" accessibilityLabel={value ? `${label}: ${value}` : label} onPress={onPress}
-    style={({ pressed }) => [style, { backgroundColor: pressed ? theme.surface : theme.background }]}>{content}</Pressable> : <View style={[style, { backgroundColor: theme.background }]}>{content}</View>;
+  const control = <Pressable accessibilityRole={href ? 'link' : 'button'} accessibilityLabel={value ? `${label}: ${value}` : label} onPress={onPress} onPressIn={() => setPressed(true)} onPressOut={() => setPressed(false)}
+    style={{ ...style, backgroundColor: pressed ? theme.surface : theme.background }}>{content}</Pressable>;
+  return href ? <Link href={href} asChild>{control}</Link> : onPress ? control : <View style={[style, { backgroundColor: theme.background }]}>{content}</View>;
 }
