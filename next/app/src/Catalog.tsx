@@ -13,6 +13,7 @@ import {
   usePages, useResource, type Play, type TrackActions,
 } from './CatalogPieces';
 import { WaveLoading } from './WaveLoading';
+import { Home } from './Home';
 import { DetailHeader } from './DetailHeader';
 import { TrackPresentation } from './TrackPresentation';
 import { PlayerControl } from './PlayerControl';
@@ -25,28 +26,7 @@ import { TrackMenu } from './TrackMenu';
 import { usePlayCount } from './use-play-count';
 import { CollectionActions, Library } from './AccountCatalog';
 
-const loadLatest = (cursor?: string) => api.tracks({ limit: 30, cursor });
 const loadPlaylists = (cursor?: string) => api.playlists({ limit: 30, cursor });
-const loadChart = () => api.chart('week');
-
-function Home({ onPlay }: { onPlay: Play }) {
-  const latest = usePages(loadLatest);
-  const chart = useResource(loadChart);
-  const chartTracks = chart.data?.data.slice(0, 5).map(({ track }) => track) ?? [];
-  return <>
-    {chartTracks.length > 0 && <View style={styles.group}>
-      <Heading>Top this week</Heading>
-      <TrackRows tracks={chartTracks} onPlay={onPlay} />
-    </View>}
-    <View style={styles.group}>
-      <Heading>Latest</Heading>
-      <TrackRows tracks={latest.data} onPlay={onPlay} />
-      {latest.loading ? <WaveLoading label="Loading tracks" /> :
-        <Status error={latest.error} retry={latest.more} empty={!latest.data.length ? 'No tracks yet.' : undefined} />}
-      {latest.cursor && !latest.loading && !latest.error && <Button label="More tracks" onPress={latest.more} />}
-    </View>
-  </>;
-}
 
 function Search({ onPlay }: { onPlay: Play }) {
   const colors = useColors();
