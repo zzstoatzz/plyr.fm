@@ -14,7 +14,6 @@ const postgres_record_status = @import("internal/index/postgres_record_status_st
 const postgres_ingest_status = @import("internal/index/postgres_ingest_status_store.zig");
 const postgres_play_metrics = @import("internal/metrics/postgres_play_metric_store.zig");
 const postgres_artist_metrics = @import("internal/metrics/postgres_artist_metric_store.zig");
-const redis_play_dedup = @import("internal/metrics/redis_play_dedup_store.zig");
 const repair_runner = @import("internal/ingest/repair_runner.zig");
 const stream_runner = @import("internal/ingest/stream_runner.zig");
 const catalog_reconcile_runner = @import("internal/ingest/catalog_reconcile_runner.zig");
@@ -122,12 +121,6 @@ pub fn main() !void {
             });
         },
         .api => {
-            var redis_play_dedup_store: ?redis_play_dedup.RedisPlayDedupStore = if (settings.redis_url) |url|
-                try redis_play_dedup.RedisPlayDedupStore.init(allocator, io, url)
-            else
-                null;
-            defer if (redis_play_dedup_store) |*store| store.deinit();
-            const play_dedup_store = if (redis_play_dedup_store) |*store| store.store() else null;
             try server.run(io, settings.port, settings.max_connections, .{
                 .io = io,
                 .track_store = track_store,
@@ -143,7 +136,6 @@ pub fn main() !void {
                 .ingest_status_store = ingest_status_store,
                 .search_store = search_store,
                 .play_metric_store = play_metric_store,
-                .play_dedup_store = play_dedup_store,
                 .track_collection = settings.track_collection,
                 .list_collection = settings.list_collection,
                 .profile_collection = settings.profile_collection,

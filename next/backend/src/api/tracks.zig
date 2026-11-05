@@ -7,7 +7,6 @@ const record_play = @import("../internal/application/record_play.zig");
 const PlaybackStore = @import("../internal/index/playback_store.zig").PlaybackStore;
 const LikeQueryStore = @import("../internal/index/like_query_store.zig").LikeQueryStore;
 const TrackStore = @import("../internal/index/track_store.zig").TrackStore;
-const PlayDedupStore = @import("../internal/metrics/play_dedup_store.zig").PlayDedupStore;
 const PlayMetricStore = @import("../internal/metrics/play_metric_store.zig").PlayMetricStore;
 const query = @import("../internal/http/query.zig");
 const response = @import("response.zig");
@@ -116,14 +115,14 @@ pub fn recordPlay(
     request: *std.http.Server.Request,
     allocator: std.mem.Allocator,
     metric_store: ?PlayMetricStore,
-    dedup_store: ?PlayDedupStore,
     collection: []const u8,
     cors: response.CorsPolicy,
     io: std.Io,
     id: []const u8,
     request_id: []const u8,
 ) !void {
-    const ref_code = parsePlayQuery(allocator, request.head.target) catch {
+    const started = std.Io.Timestamp.now(io, .awake);
+    const occurrence = parsePlayQuery(allocator, request.head.target) catch {
         try response.apiError(request, .invalid_request, request_id, cors);
         return;
     };
@@ -131,18 +130,18 @@ pub fn recordPlay(
         try response.apiError(request, .service_unavailable, request_id, cors);
         return;
     };
-    switch (record_play.execute(
+    const result = record_play.execute(
         allocator,
         metric_store,
-        dedup_store,
         collection,
         id,
         identity.listener,
-        ref_code,
-    )) {
+        occurrence,
+    );
+    std.log.info("play request={s} occurrence={s} track={s} result={s} elapsed_ms={d}", .{ request_id, occurrence, id, @tagName(result), @divTrunc(started.durationTo(std.Io.Timestamp.now(io, .awake)).nanoseconds, std.time.ns_per_ms) });
+    switch (result) {
         .recorded => |value| {
-            if (value.dedup.status == .unavailable)
-                std.log.warn("play dedup unavailable; counted {s}", .{value.record.uri});
+            std.log.info("play request={s} occurrence={s} track={s} status={s} counted={any} total={d} elapsed_ms={d}", .{ request_id, value.occurrence, id, @tagName(value.dedup.status), value.counted, value.play_count, @divTrunc(started.durationTo(std.Io.Timestamp.now(io, .awake)).nanoseconds, std.time.ns_per_ms) });
             const body = try std.json.Stringify.valueAlloc(allocator, value, .{});
             if (identity.set_cookie) |cookie| {
                 try response.jsonWithHeaders(
@@ -157,13 +156,14 @@ pub fn recordPlay(
         },
         .invalid_id, .invalid_request => try response.apiError(request, .invalid_request, request_id, cors),
         .not_found => try response.apiError(request, .not_found, request_id, cors),
+        .conflict => try response.apiError(request, .conflict, request_id, cors),
         .internal_error => try response.apiError(request, .internal_error, request_id, cors),
         .unavailable => try response.apiError(request, .service_unavailable, request_id, cors),
     }
 }
 
 const ListenerIdentity = struct {
-    listener: record_play.Listener,
+    listener: []const u8,
     set_cookie: ?[]const u8,
 };
 
@@ -173,7 +173,7 @@ fn listenerIdentity(
     io: std.Io,
 ) !ListenerIdentity {
     if (playCookie(request)) |cookie| return .{
-        .listener = .{ .dedup_key = try std.fmt.allocPrint(allocator, "anon:{s}", .{cookie}) },
+        .listener = cookie,
         .set_cookie = null,
     };
 
@@ -183,7 +183,7 @@ fn listenerIdentity(
     const token_buffer = try allocator.alloc(u8, encoded_length);
     const token = std.base64.url_safe_no_pad.Encoder.encode(token_buffer, &random);
     return .{
-        .listener = .{ .dedup_key = try std.fmt.allocPrint(allocator, "anon:{s}", .{token}) },
+        .listener = token,
         .set_cookie = try std.fmt.allocPrint(
             allocator,
             "plyr_play_id={s}; Max-Age=15552000; Path=/; HttpOnly; Secure; SameSite=Lax",
@@ -215,29 +215,26 @@ fn validPlayCookie(value: []const u8) bool {
     return true;
 }
 
-fn parsePlayQuery(allocator: std.mem.Allocator, target: []const u8) !?[]const u8 {
+fn parsePlayQuery(allocator: std.mem.Allocator, target: []const u8) ![]const u8 {
     var iterator = query.Iterator.init(allocator, target);
-    var ref_code: ?[]const u8 = null;
+    var occurrence: ?[]const u8 = null;
     while (try iterator.next()) |pair| {
-        if (!std.mem.eql(u8, pair.name, "ref") or ref_code != null or pair.value.len == 0)
+        if (!std.mem.eql(u8, pair.name, "occurrence") or occurrence != null or !record_play.validOccurrence(pair.value))
             return error.InvalidQuery;
-        ref_code = pair.value;
+        occurrence = pair.value;
     }
-    return ref_code;
+    return occurrence orelse error.InvalidQuery;
 }
 
-test "play query accepts at most one non-empty share reference" {
+test "play query requires exactly one canonical occurrence" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    try std.testing.expect((try parsePlayQuery(arena.allocator(), "/v1/tracks/x/plays")) == null);
+    try std.testing.expectError(error.InvalidQuery, parsePlayQuery(arena.allocator(), "/v1/tracks/x/plays"));
     try std.testing.expectEqualStrings(
-        "abcdEF_1",
-        (try parsePlayQuery(arena.allocator(), "/v1/tracks/x/plays?ref=abcdEF_1")).?,
+        "01234567-89ab-4def-8123-456789abcdef",
+        try parsePlayQuery(arena.allocator(), "/v1/tracks/x/plays?occurrence=01234567-89ab-4def-8123-456789abcdef"),
     );
-    try std.testing.expectError(
-        error.InvalidQuery,
-        parsePlayQuery(arena.allocator(), "/v1/tracks/x/plays?ref=a&ref=b"),
-    );
+    try std.testing.expectError(error.InvalidQuery, parsePlayQuery(arena.allocator(), "/v1/tracks/x/plays?occurrence=01234567-89ab-4def-8123-456789abcdef&occurrence=01234567-89ab-4def-8123-456789abcdef"));
 }
 
 test "anonymous play cookies require one canonical 128-bit token" {
