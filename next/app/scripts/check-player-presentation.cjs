@@ -130,7 +130,7 @@ async function run(browser, width, theme) {
     const like = page.getByRole('button', { name: 'See 7 likes' });
     const queue = page.getByRole('button', { name: 'Add to queue', exact: true });
     const play = page.getByRole('button', { name: 'Play', exact: true });
-    const geometry = await Promise.all([like.boundingBox(), play.boundingBox(), queue.boundingBox()]);
+    const geometry = await Promise.all([page.getByTestId('track-like-controls').boundingBox(), play.boundingBox(), queue.boundingBox()]);
     assert.ok(Math.abs((geometry[1].x + geometry[1].width / 2) - (geometry[0].x + geometry[0].width / 2 + geometry[2].x + geometry[2].width / 2) / 2) < 2);
     await like.click();
     await page.getByText('Liked by', { exact: true }).waitFor();

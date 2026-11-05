@@ -70,6 +70,9 @@ async function uploadBlob(rpc: NonNullable<Auth['rpc']>, file: MediaFile) {
 	}));
 }
 
+type ViewerLikes = { did: string; promise: Promise<Map<string, LikeRef>> };
+const viewerLikes = new WeakMap<NonNullable<Auth['rpc']>, ViewerLikes>();
+
 export function createPds(auth: Pick<Auth, 'did' | 'rpc'>) {
 	function session() {
 		if (!auth.rpc || !auth.did) throw new Error('sign in first');
@@ -92,15 +95,13 @@ export function createPds(auth: Pick<Auth, 'did' | 'rpc'>) {
 
 
 
-	let likeCache: Promise<Map<string, LikeRef>> | null = null;
-	let likeCacheDid: string | null = null;
 
 	/** the viewer's like records, read from their own PDS (authoritative). one read per session, shared by every row. */
 	function myLikes(): Promise<Map<string, LikeRef>> {
 		const { rpc, did } = session();
-		if (likeCache && likeCacheDid === did) return likeCache;
-		likeCacheDid = did;
-		likeCache = (async () => {
+		const cached = viewerLikes.get(rpc);
+		if (cached?.did === did) return cached.promise;
+		const promise = (async () => {
 			const out = new Map<string, LikeRef>();
 			let cursor: string | undefined;
 			const seen = new Set<string>();
@@ -126,17 +127,19 @@ export function createPds(auth: Pick<Auth, 'did' | 'rpc'>) {
 			} while (cursor);
 			return out;
 		})();
-		likeCache.catch(() => (likeCache = null));
-		return likeCache;
+		const entry = { did, promise };
+		viewerLikes.set(rpc, entry);
+		void promise.catch(() => { if (viewerLikes.get(rpc) === entry) viewerLikes.delete(rpc); });
+		return promise;
 	}
 
-	async function like(track: Track): Promise<AwaitStatus> {
+	async function like(track: Track, { waitForIndex = true }: { waitForIndex?: boolean } = {}): Promise<AwaitStatus> {
 		const { rpc, did } = session();
 		if (!track.record.cid) throw new Error('track has no verified cid');
 		const subject = { uri: track.record.uri, cid: track.record.cid };
 		const likes = await myLikes();
 		const existing = likes.get(subject.uri);
-		if (existing) return settle(existing.uri, existing.cid);
+		if (existing) return waitForIndex ? settle(existing.uri, existing.cid) : 'pending';
 		const res = await ok(
 			rpc.post('com.atproto.repo.createRecord', {
 				input: {
@@ -145,12 +148,12 @@ export function createPds(auth: Pick<Auth, 'did' | 'rpc'>) {
 					record: { $type: NSID.like, subject, createdAt: new Date().toISOString() }
 				}
 			})
-		);
+		).catch((error: unknown) => { viewerLikes.delete(rpc); throw error; });
 		likes.set(subject.uri, { uri: res.uri, cid: res.cid, rkey: ownedRkey(res.uri, did, NSID.like), subject });
-		return await settle(res.uri, res.cid);
+		return waitForIndex ? settle(res.uri, res.cid) : 'pending';
 	}
 
-	async function unlike(track: Track): Promise<AwaitStatus> {
+	async function unlike(track: Track, { waitForIndex = true }: { waitForIndex?: boolean } = {}): Promise<AwaitStatus> {
 		const { rpc, did } = session();
 		const likes = await myLikes();
 		const existing = likes.get(track.record.uri);
@@ -159,9 +162,9 @@ export function createPds(auth: Pick<Auth, 'did' | 'rpc'>) {
 			rpc.post('com.atproto.repo.deleteRecord', {
 				input: { repo: did, collection: NSID.like as `${string}.${string}.${string}`, rkey: existing.rkey, swapRecord: existing.cid }
 			})
-		);
+		).catch((error: unknown) => { viewerLikes.delete(rpc); throw error; });
 		likes.delete(track.record.uri);
-		return await settle(existing.uri);
+		return waitForIndex ? settle(existing.uri) : 'pending';
 	}
 
 	// playlists are fm.plyr.*.list records with listType "playlist". edits are a

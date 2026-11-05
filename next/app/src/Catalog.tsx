@@ -1,13 +1,12 @@
 import { Link, type Href, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useRef, useState, type ComponentRef, type ReactNode } from 'react';
-import { Platform, Pressable, ScrollView, Share, StyleSheet, TextInput, View } from 'react-native';
+import { Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import SearchIcon from 'lucide-react-native/icons/search';
 import X from 'lucide-react-native/icons/x';
 import PlayIcon from 'lucide-react-native/icons/play';
 import PauseIcon from 'lucide-react-native/icons/pause';
 import ListPlus from 'lucide-react-native/icons/list-plus';
 import Ellipsis from 'lucide-react-native/icons/ellipsis';
-import ShareIcon from 'lucide-react-native/icons/share-2';
 import { api, type SearchHit, type Track } from './api';
 import {
   Button, Detail, Heading, ListRows, Row, RowPlay, Status, TrackRows, artistName, errorMessage, useColors,
@@ -17,14 +16,14 @@ import { WaveLoading } from './WaveLoading';
 import { DetailHeader } from './DetailHeader';
 import { TrackPresentation } from './TrackPresentation';
 import { PlayerControl } from './PlayerControl';
-import { Sheet } from './Sheet';
 import { usePlayback } from './playback';
 import { TrackLikes } from './TrackLikes';
 import { useAuth } from './auth';
 import { Action, pageFrame } from './controls';
-import { SITE_URL } from './config';
+import { ShareLink } from './ShareLink';
+import { TrackMenu } from './TrackMenu';
 import { usePlayCount } from './use-play-count';
-import { CollectionActions, Library, SignedTrackActions } from './AccountCatalog';
+import { CollectionActions, Library } from './AccountCatalog';
 
 const loadLatest = (cursor?: string) => api.tracks({ limit: 30, cursor });
 const loadPlaylists = (cursor?: string) => api.playlists({ limit: 30, cursor });
@@ -134,29 +133,6 @@ function Search({ onPlay }: { onPlay: Play }) {
   </>;
 }
 
-function ShareLink({ path, compact = false }: { path: string; compact?: boolean }) {
-  const [message, setMessage] = useState<string>();
-  async function share() {
-    try {
-      const url = SITE_URL + path;
-      if (Platform.OS === 'web' && typeof navigator.share !== 'function') {
-        await navigator.clipboard.writeText(url);
-        setMessage('Link copied.');
-      } else if (Platform.OS === 'web') {
-        await navigator.share({ url });
-      } else {
-        await Share.share({ message: url });
-      }
-    } catch (error) {
-      if (!(error instanceof Error && error.name === 'AbortError')) setMessage('Could not share this link.');
-    }
-  }
-  return <View style={styles.group}>
-    {compact ? <PlayerControl icon={ShareIcon} label="Share" onPress={() => void share()} /> : <Button label="Share" onPress={() => void share()} />}
-    {message && <Detail>{message}</Detail>}
-  </View>;
-}
-
 function TrackPlayCount({ track }: { track: Track }) {
   const count = usePlayCount(track.id, track.metrics.play_count);
   return <Detail>{count} {count === 1 ? 'play' : 'plays'}</Detail>;
@@ -168,7 +144,6 @@ function TrackDetail({ id, onPlay, onEnqueue, trackActions }: {
   const load = useCallback(() => api.track(id), [id]);
   const result = useResource(load);
   const track = result.data;
-  const auth = useAuth();
   const player = usePlayback();
   const [actionsOpen, setActionsOpen] = useState(false);
   if (!track) return <Status loading={!result.error} error={result.error} retry={result.retry} />;
@@ -187,13 +162,7 @@ function TrackDetail({ id, onPlay, onEnqueue, trackActions }: {
         <ShareLink compact path={`/track/${encodeURIComponent(track.id)}`} />
         <PlayerControl icon={Ellipsis} label="More" onPress={() => setActionsOpen(true)} />
       </>} />
-    {actionsOpen && <Sheet title="Track actions" close={() => setActionsOpen(false)}>
-      <View style={styles.actions}>
-        {auth.did === track.artist.did && <Action label="Edit track" href={`/edit-track/${track.id}`} onPress={() => setActionsOpen(false)} />}
-        <ShareLink path={`/track/${encodeURIComponent(track.id)}`} />
-        {trackActions ? trackActions(track) : <SignedTrackActions track={track} />}
-      </View>
-    </Sheet>}
+    {actionsOpen && <TrackMenu track={track} close={() => setActionsOpen(false)} actions={trackActions?.(track)} />}
   </>;
 }
 
