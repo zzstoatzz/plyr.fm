@@ -30,7 +30,7 @@ const loadPlaylists = (cursor?: string) => api.playlists({ limit: 30, cursor });
 
 function Search({ onPlay }: { onPlay: Play }) {
   const colors = useColors();
-  const { q } = useLocalSearchParams<{ q?: string }>();
+  const { q, focus } = useLocalSearchParams<{ q?: string; focus?: string }>();
   const [query, setQuery] = useState(q ?? '');
   const input = useRef<ComponentRef<typeof TextInput>>(null);
   const [focused, setFocused] = useState(false);
@@ -39,8 +39,9 @@ function Search({ onPlay }: { onPlay: Play }) {
   const request = useRef(0);
   useFocusEffect(useCallback(() => {
     setPlayingHit(undefined);
+    if (focus) input.current?.focus();
     return () => { request.current += 1; };
-  }, []));
+  }, [focus]));
   function changeQuery(value: string) {
     request.current += 1;
     setQuery(value);

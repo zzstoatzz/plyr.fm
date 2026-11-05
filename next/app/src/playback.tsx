@@ -189,7 +189,7 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
   function toggle() {
     if (loading || !current) return;
     if (!ready || status.error || error) void load(queue, index);
-    else if (status.playing) player.pause();
+    else if (player.playing) player.pause();
     else player.play();
   }
 
@@ -217,6 +217,7 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
       player.pause();
     },
     play, queue, current, index, loading, error, status, repeat, setRepeat, toggle, next,
+    isPlaying: () => player.playing,
     previous: () => { if (status.currentTime > 3 || index === 0) void accounting.seekTo(0); else void load(queue, index - 1); },
     seek: (seconds) => { if (ready) void accounting.seekTo(seconds); },
     jump: (at) => { void load(queue, at); },
@@ -255,6 +256,7 @@ interface Playback {
   repeat: 'off' | 'all' | 'one';
   setRepeat(value: Playback['repeat']): void;
   toggle(): void;
+  isPlaying(): boolean;
   next(): Promise<void>;
   previous(): void;
   seek(seconds: number): void;

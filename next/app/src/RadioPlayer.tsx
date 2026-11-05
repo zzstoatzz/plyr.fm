@@ -16,7 +16,7 @@ import { usePlayerAccounting } from './use-player-accounting';
 import { useRadioFeed } from './use-radio-feed';
 
 type Station = typeof radioStations[number];
-export const RadioContext = createContext<{ station: Station | null; tune: (station: Station | null) => void }>({ station: null, tune: () => {} });
+export const RadioContext = createContext<{ station: Station | null; tune: (station: Station | null) => void; togglePlayback: (() => void) | null; registerToggle: (toggle: (() => void) | null) => void }>({ station: null, tune: () => {}, togglePlayback: null, registerToggle: () => {} });
 
 export default function Radio({ compact = false, tuned }: { compact?: boolean; tuned?: Station }) {
   const { autoplay, station: stationSlug } = useLocalSearchParams<{ autoplay?: string; station?: string }>();
@@ -26,6 +26,11 @@ export default function Radio({ compact = false, tuned }: { compact?: boolean; t
   const [station, setStation] = useState<typeof radioStations[number]>(() => tuned ?? radioStations.find(item => item.slug === stationSlug) ?? radioStations[0]);
   const { snapshot, error } = useRadioFeed(station);
   const [listening, setListening] = useState(false);
+  useEffect(() => {
+    if (!compact || !tuned) return;
+    live.registerToggle(() => setListening(value => !value));
+    return () => live.registerToggle(null);
+  }, [compact, tuned, live.registerToggle]);
   const audio = useAudioPlayer(null);
   const status = useAudioPlayerStatus(audio);
   const accounting = usePlayerAccounting(audio);
@@ -75,7 +80,7 @@ export default function Radio({ compact = false, tuned }: { compact?: boolean; t
   }, [status.error]);
 
   useEffect(() => {
-    if (solo.status.playing || solo.loading) {
+    if (solo.isPlaying() || solo.loading) {
       setListening(false);
       if (tuned) live.tune(null);
     }
@@ -107,8 +112,8 @@ export default function Radio({ compact = false, tuned }: { compact?: boolean; t
           {status.error ? 'Couldn’t play this station' : error || (song ? `${song.artist} · Radio` : snapshot ? 'Off air' : 'Loading station…')}
         </Text>
       </View>
-      {(song || tuned) && <PlayerControl icon={listening || tuned ? Pause : Play} label={listening || tuned ? 'Stop listening' : 'Listen live'}
-        onPress={() => tuned ? live.tune(null) : setListening(!listening)} />}
+      {(song || tuned) && <PlayerControl icon={listening ? Pause : Play} label={listening ? 'Stop listening' : 'Listen live'}
+        onPress={() => tuned && listening ? live.tune(null) : setListening(!listening)} />}
     </View>
   </View>;
 
@@ -138,7 +143,7 @@ export default function Radio({ compact = false, tuned }: { compact?: boolean; t
         <View style={row}>
           <Action primary label={live.station === station ? 'Stop listening' : 'Listen live'} disabled={!song || solo.loading}
             onPress={() => {
-              if (solo.status.playing) solo.toggle();
+              if (solo.isPlaying()) solo.toggle();
               live.tune(live.station === station ? null : station);
             }} />
           <Action label="Open OBS embed" href={`/embed/radio?station=${station.slug}&autoplay=1`} />
