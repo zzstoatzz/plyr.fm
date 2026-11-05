@@ -80,7 +80,7 @@ function Shell() {
           flexDirection: wide ? 'row' : 'column', alignItems: 'center', justifyContent: wide ? 'flex-start' : 'center',
           backgroundColor: active ? theme.surface : theme.background }}>
         <Icon size={21} color={active ? theme.accent : theme.muted} strokeWidth={active ? 2.5 : 1.8} />
-        <Text style={{ color: active ? theme.text : theme.muted, fontSize: (wide ? 15 : 11) * theme.scale, fontWeight: active ? '700' : '500' }}>{label}</Text>
+        <Text style={{ color: active ? theme.accent : theme.muted, fontSize: (wide ? 15 : 11) * theme.scale, fontWeight: active ? '700' : '500' }}>{label}</Text>
       </Pressable>
     </Link>)}
   </View>;
