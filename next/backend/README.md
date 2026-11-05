@@ -299,6 +299,15 @@ verifies the complete signed repository, reconciles `plyr_index`, and exits.
 It never runs migrations; use a write-capable projection role distinct from
 the narrowly scoped canary API credential.
 
+Before a decoder-version backfill, complete the CI deployment and verify every
+active ingester, repair and reconciliation machine uses that commit-addressed
+image. Retire older one-off writers first. Per-row revision/CID replay checks do
+not identify the decoder that produced a row; mixed-version projection writers
+are unsupported. Snapshot repair holds the repository lock, rejects strictly
+future rows and contradictory equal-revision signed roots before clearing old decoder state, and commits rebuilt projections
+and the new head atomically. Current-decoder snapshots accept identity-checked
+records already applied by live ingestion.
+
 `MODE=account_reconciler` is also independent of the API and firehose roles.
 It leases due DIDs from Postgres, resolves each DID's current PDS, and persists
 only authoritative account evidence. Jetstream account events merely make an

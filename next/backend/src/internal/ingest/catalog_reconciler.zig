@@ -54,7 +54,10 @@ pub fn reconcile(
     for (found.items) |did| {
         var arena = std.heap.ArenaAllocator.init(allocator);
         defer arena.deinit();
-        const outcome = try repairer.repair(arena.allocator(), did);
+        const outcome = repairer.repair(arena.allocator(), did) catch |err| {
+            std.log.err("catalog repository {s} failed: {}", .{ did, err });
+            return err;
+        };
         switch (outcome) {
             .applied, .idempotent, .stale => report.verified += 1,
             .not_found => report.absent += 1,

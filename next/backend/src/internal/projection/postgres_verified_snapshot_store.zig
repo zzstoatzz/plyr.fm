@@ -127,23 +127,29 @@ pub const PostgresVerifiedSnapshotStore = struct {
             .apply => {},
             .rebuild => {},
         }
-        var future_row = conn.row(has_future_records_sql, .{
+        var guard_row = conn.row(snapshot_guard_sql, .{
             snapshot.repo_did,
             snapshot.list_collection,
             snapshot.track_collection,
             snapshot.profile_collection,
             snapshot.like_collection,
             snapshot.commit_rev,
+            commit_cid,
         }) catch |err| {
-            logPgError(conn, "verified snapshot future-record check failed", err);
+            logPgError(conn, "verified snapshot proof guard failed", err);
             return error.ProjectionUnavailable;
         } orelse return error.CorruptProjection;
-        const has_future = future_row.get(bool, 0) catch {
-            future_row.deinit() catch {};
+        const has_future = guard_row.get(bool, 0) catch {
+            guard_row.deinit() catch {};
             return error.CorruptProjection;
         };
-        future_row.deinit() catch return error.CorruptProjection;
+        const has_conflicting_root = guard_row.get(bool, 1) catch {
+            guard_row.deinit() catch {};
+            return error.CorruptProjection;
+        };
+        guard_row.deinit() catch return error.CorruptProjection;
         if (has_future) return .stale;
+        if (has_conflicting_root) return error.RevisionConflict;
         if (decision == .rebuild) try clearRepository(conn, snapshot);
 
         var lists: postgres_list.PostgresListStore = .{ .pool = self.pool };
@@ -154,7 +160,7 @@ pub const PostgresVerifiedSnapshotStore = struct {
                 error.ProjectionUnavailable => return error.ProjectionUnavailable,
                 error.OutOfMemory => return error.OutOfMemory,
             };
-            if (result != .applied) return error.CorruptProjection;
+            if (result != .applied and result != .idempotent) return error.CorruptProjection;
         }
         var tracks: postgres_track.PostgresTrackStore = .{ .pool = self.pool };
         for (snapshot.track_changes) |change| {
@@ -164,7 +170,7 @@ pub const PostgresVerifiedSnapshotStore = struct {
                 error.ProjectionUnavailable => return error.ProjectionUnavailable,
                 error.OutOfMemory => return error.OutOfMemory,
             };
-            if (result != .applied) return error.CorruptProjection;
+            if (result != .applied and result != .idempotent) return error.CorruptProjection;
         }
         var profiles: postgres_profile.PostgresProfileStore = .{ .pool = self.pool };
         for (snapshot.profile_changes) |change| {
@@ -174,7 +180,7 @@ pub const PostgresVerifiedSnapshotStore = struct {
                 error.ProjectionUnavailable => return error.ProjectionUnavailable,
                 error.OutOfMemory => return error.OutOfMemory,
             };
-            if (result != .applied) return error.CorruptProjection;
+            if (result != .applied and result != .idempotent) return error.CorruptProjection;
         }
         var likes: postgres_like.PostgresLikeStore = .{ .pool = self.pool };
         for (snapshot.like_changes) |change| {
@@ -184,7 +190,7 @@ pub const PostgresVerifiedSnapshotStore = struct {
                 error.ProjectionUnavailable => return error.ProjectionUnavailable,
                 error.OutOfMemory => return error.OutOfMemory,
             };
-            if (result != .applied) return error.CorruptProjection;
+            if (result != .applied and result != .idempotent) return error.CorruptProjection;
         }
         var rejection_store: postgres_rejections.PostgresRecordRejectionStore = .{ .pool = self.pool };
         rejection_store.replaceForSnapshot(
@@ -383,7 +389,7 @@ fn classifyHead(
 
     return switch (std.mem.order(u8, current_rev, snapshot.commit_rev)) {
         .gt => .{ .done = .stale },
-        .lt => .apply,
+        .lt => if (current_version < projection_version) .rebuild else .apply,
         .eq => if (!std.mem.eql(u8, current_commit, commit_cid) or
             !std.mem.eql(u8, current_data, data_cid))
             error.RevisionConflict
@@ -401,20 +407,23 @@ const head_sql =
     \\FOR UPDATE
 ;
 
-const has_future_records_sql =
-    \\SELECT EXISTS (
-    \\  SELECT 1 FROM plyr_index.list_records
-    \\  WHERE owner_did = $1 AND collection = $2 AND commit_rev > $6
+const snapshot_guard_sql =
+    \\WITH projected_proofs AS MATERIALIZED (
+    \\  SELECT commit_rev, commit_cid FROM plyr_index.list_records
+    \\  WHERE owner_did = $1 AND collection = $2 AND commit_rev >= $6
     \\  UNION ALL
-    \\  SELECT 1 FROM plyr_index.track_records
-    \\  WHERE owner_did = $1 AND collection = $3 AND commit_rev > $6
+    \\  SELECT commit_rev, commit_cid FROM plyr_index.track_records
+    \\  WHERE owner_did = $1 AND collection = $3 AND commit_rev >= $6
     \\  UNION ALL
-    \\  SELECT 1 FROM plyr_index.profile_records
-    \\  WHERE owner_did = $1 AND collection = $4 AND commit_rev > $6
+    \\  SELECT commit_rev, commit_cid FROM plyr_index.profile_records
+    \\  WHERE owner_did = $1 AND collection = $4 AND commit_rev >= $6
     \\  UNION ALL
-    \\  SELECT 1 FROM plyr_index.like_records
-    \\  WHERE owner_did = $1 AND collection = $5 AND commit_rev > $6
+    \\  SELECT commit_rev, commit_cid FROM plyr_index.like_records
+    \\  WHERE owner_did = $1 AND collection = $5 AND commit_rev >= $6
     \\)
+    \\SELECT EXISTS (SELECT 1 FROM projected_proofs WHERE commit_rev > $6),
+    \\  EXISTS (SELECT 1 FROM projected_proofs
+    \\    WHERE commit_rev = $6 AND commit_cid IS NOT NULL AND commit_cid <> $7)
 ;
 
 const tombstone_absent_sql =
@@ -894,4 +903,189 @@ fn expectProfileState(pool: *pg.Pool, bio: ?[]const u8, rev: []const u8, deleted
     }
     try std.testing.expectEqualStrings(rev, try row.get([]const u8, 1));
     try std.testing.expectEqual(deleted, try row.get(bool, 2));
+}
+
+test "decoder upgrades rebuild newer snapshots even when streamed records overlap" {
+    const url_z = std.c.getenv("PLYR_ZIG_TEST_DATABASE_URL") orelse return error.SkipZigTest;
+    const allocator = std.testing.allocator;
+    var threaded = std.Io.Threaded.init(allocator, .{});
+    const io = threaded.io();
+    postgres_test_lock.lock(io);
+    defer postgres_test_lock.unlock(io);
+    const uri = try std.Uri.parse(std.mem.span(url_z));
+    var pool = try pg.Pool.initUri(io, allocator, uri, .{ .size = 1 });
+    defer pool.deinit();
+    try requireDisposableDatabase(pool, allocator);
+    _ = try pool.exec("DROP SCHEMA IF EXISTS plyr_index CASCADE", .{});
+    defer _ = pool.exec("DROP SCHEMA IF EXISTS plyr_index CASCADE", .{}) catch null;
+    try postgres_list.createTestSchema(pool);
+    try postgres_track.createTestTable(pool);
+    try postgres_profile.createTestTable(pool);
+    try postgres_like.createTestTable(pool);
+    try postgres_availability.createTestTable(pool);
+    try postgres_rejections.createTestTable(pool);
+    _ = try pool.exec(
+        \\CREATE TABLE plyr_index.repo_heads (
+        \\  repo_did text PRIMARY KEY,
+        \\  commit_rev text NOT NULL,
+        \\  commit_cid text NOT NULL,
+        \\  data_cid text NOT NULL,
+        \\  indexed_at_us bigint NOT NULL CHECK (indexed_at_us >= 0),
+        \\  projection_version integer NOT NULL DEFAULT 0
+        \\)
+    , .{});
+
+    var arena = std.heap.ArenaAllocator.init(allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    const rev_1 = zat.Tid.fromTimestamp(1_000, 1);
+    const rev_2 = zat.Tid.fromTimestamp(2_000, 1);
+    const rev_3 = zat.Tid.fromTimestamp(3_000, 1);
+    const commit_1 = try zat.Cid.forDagCbor(a, "commit-1");
+    const commit_2 = try zat.Cid.forDagCbor(a, "commit-2");
+    const commit_3 = try zat.Cid.forDagCbor(a, "commit-3");
+    const data_1 = try zat.Cid.forDagCbor(a, "data-1");
+    const data_2 = try zat.Cid.forDagCbor(a, "data-2");
+    var implementation: PostgresVerifiedSnapshotStore = .{ .pool = pool };
+    const store = implementation.store();
+    var old = makeSnapshot(&rev_1.str(), commit_1, data_1, 1_000, &.{});
+    old.track_changes = &.{trackUpsert("track-one", &rev_1.str(), commit_1, 1_000)};
+    const prior_rejection = try record_rejection.init(a, "did:plc:artist", "fm.plyr.dev.track", "rejected", try zat.Cid.forDagCbor(a, "rejected"), .invalid_schema, "InvalidTags", .{ .commit_cid = commit_1, .commit_rev = &rev_1.str(), .indexed_at_us = 1_000 });
+    old.rejections = &.{prior_rejection};
+    try std.testing.expectEqual(verified.ApplyResult.applied, try store.apply(a, old));
+    var streamed = trackUpsert("track-one", &rev_2.str(), commit_2, 2_000);
+    streamed.upsert.tags = &.{"fresh"};
+    streamed.upsert.tags_present = true;
+    var tracks: postgres_track.PostgresTrackStore = .{ .pool = pool };
+    _ = try tracks.store().apply(a, streamed);
+    _ = try pool.exec("UPDATE plyr_index.repo_heads SET projection_version=2", .{});
+    _ = try pool.exec("DELETE FROM plyr_index.track_tag_records", .{});
+    _ = try pool.exec("UPDATE plyr_index.track_records SET title='stale decoder title'", .{});
+    var fresh = makeSnapshot(&rev_2.str(), commit_2, data_2, 2_000, &.{});
+    fresh.track_changes = &.{streamed};
+    _ = try pool.exec("UPDATE plyr_index.track_records SET commit_rev=$1,commit_cid=$2", .{ &rev_3.str(), try commit_3.toString(a) });
+    try std.testing.expectEqual(verified.ApplyResult.stale, try store.apply(a, fresh));
+    try expectHead(pool, &rev_1.str());
+    try expectTrackState(pool, "track-one", &rev_3.str(), false);
+    var untouched = (try pool.row("SELECT projection_version,(SELECT count(*) FROM plyr_index.track_tag_records),(SELECT title FROM plyr_index.track_records) FROM plyr_index.repo_heads", .{})).?;
+    try std.testing.expectEqual(@as(i32, 2), try untouched.get(i32, 0));
+    try std.testing.expectEqual(@as(i64, 0), try untouched.get(i64, 1));
+    try untouched.deinit();
+    _ = try pool.exec("UPDATE plyr_index.track_records SET commit_rev=$1,commit_cid=$2", .{ &rev_2.str(), try commit_2.toString(a) });
+    _ = try pool.exec("UPDATE plyr_index.track_records SET commit_cid=$1", .{try commit_3.toString(a)});
+    try std.testing.expectError(error.RevisionConflict, store.apply(a, fresh));
+    try expectHead(pool, &rev_1.str());
+    try expectRejection(pool, prior_rejection.record_uri, "InvalidTags");
+    _ = try pool.exec("UPDATE plyr_index.track_records SET commit_cid=NULL", .{});
+    _ = try pool.exec("UPDATE plyr_index.account_availability SET observed_at_us=2000", .{});
+    try std.testing.expectError(error.RevisionConflict, store.apply(a, fresh));
+    try expectHead(pool, &rev_1.str());
+    try expectTrackState(pool, "track-one", &rev_2.str(), false);
+    try expectRejection(pool, prior_rejection.record_uri, "InvalidTags");
+    try expectAvailability(pool, &rev_1.str(), 2_000);
+    var rolled_back = (try pool.row("SELECT projection_version,(SELECT count(*) FROM plyr_index.track_tag_records),(SELECT title FROM plyr_index.track_records) FROM plyr_index.repo_heads", .{})).?;
+    try std.testing.expectEqual(@as(i32, 2), try rolled_back.get(i32, 0));
+    try std.testing.expectEqual(@as(i64, 0), try rolled_back.get(i64, 1));
+    try std.testing.expectEqualStrings("stale decoder title", try rolled_back.get([]const u8, 2));
+    try rolled_back.deinit();
+    _ = try pool.exec("UPDATE plyr_index.account_availability SET observed_at_us=1000", .{});
+    try std.testing.expectEqual(verified.ApplyResult.applied, try store.apply(a, fresh));
+    try expectNoRejection(pool, prior_rejection.record_uri);
+    try expectHead(pool, &rev_2.str());
+    var rebuilt = (try pool.row("SELECT projection_version,(SELECT array_to_json(tags)::text FROM plyr_index.track_tag_records),(SELECT title FROM plyr_index.track_records) FROM plyr_index.repo_heads", .{})).?;
+    try std.testing.expectEqual(projection_version, try rebuilt.get(i32, 0));
+    try std.testing.expectEqualStrings("[\"fresh\"]", try rebuilt.get([]const u8, 1));
+    try std.testing.expectEqualStrings("track-one", try rebuilt.get([]const u8, 2));
+    try rebuilt.deinit();
+    var conflict = fresh;
+    conflict.commit_cid = commit_3;
+    var conflicting_track = streamed;
+    conflicting_track.upsert.proof.commit_cid = commit_3;
+    conflict.track_changes = &.{conflicting_track};
+    try std.testing.expectError(error.RevisionConflict, store.apply(a, conflict));
+    try expectHead(pool, &rev_2.str());
+}
+
+test "current decoder snapshots accept proof-identical streamed records in every collection" {
+    const url_z = std.c.getenv("PLYR_ZIG_TEST_DATABASE_URL") orelse return error.SkipZigTest;
+    const allocator = std.testing.allocator;
+    var threaded = std.Io.Threaded.init(allocator, .{});
+    const io = threaded.io();
+    postgres_test_lock.lock(io);
+    defer postgres_test_lock.unlock(io);
+    const uri = try std.Uri.parse(std.mem.span(url_z));
+    var pool = try pg.Pool.initUri(io, allocator, uri, .{ .size = 1 });
+    defer pool.deinit();
+    try requireDisposableDatabase(pool, allocator);
+    _ = try pool.exec("DROP SCHEMA IF EXISTS plyr_index CASCADE", .{});
+    defer _ = pool.exec("DROP SCHEMA IF EXISTS plyr_index CASCADE", .{}) catch null;
+    try postgres_list.createTestSchema(pool);
+    try postgres_track.createTestTable(pool);
+    try postgres_profile.createTestTable(pool);
+    try postgres_like.createTestTable(pool);
+    try postgres_availability.createTestTable(pool);
+    try postgres_rejections.createTestTable(pool);
+    _ = try pool.exec(
+        \\CREATE TABLE plyr_index.repo_heads (
+        \\  repo_did text PRIMARY KEY,
+        \\  commit_rev text NOT NULL,
+        \\  commit_cid text NOT NULL,
+        \\  data_cid text NOT NULL,
+        \\  indexed_at_us bigint NOT NULL CHECK (indexed_at_us >= 0),
+        \\  projection_version integer NOT NULL DEFAULT 0
+        \\)
+    , .{});
+
+    var arena = std.heap.ArenaAllocator.init(allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    const rev_1 = zat.Tid.fromTimestamp(1_000, 1);
+    const rev_2 = zat.Tid.fromTimestamp(2_000, 1);
+    const commit_1 = try zat.Cid.forDagCbor(a, "commit-1");
+    const commit_2 = try zat.Cid.forDagCbor(a, "commit-2");
+    const data_1 = try zat.Cid.forDagCbor(a, "data-1");
+    const data_2 = try zat.Cid.forDagCbor(a, "data-2");
+    const record_cid = try cidString(a, "record");
+    var old = makeSnapshot(&rev_1.str(), commit_1, data_1, 1_000, &.{listUpsert("one", record_cid, &rev_1.str(), commit_1, 1_000)});
+    old.track_changes = &.{trackUpsert("track-one", &rev_1.str(), commit_1, 1_000)};
+    old.profile_changes = &.{postgres_profile.profileUpsert("first bio", &rev_1.str(), commit_1, 1_000)};
+    old.like_changes = &.{likeUpsert(&rev_1.str(), commit_1, 1_000)};
+    var implementation: PostgresVerifiedSnapshotStore = .{ .pool = pool };
+    const store = implementation.store();
+    try std.testing.expectEqual(verified.ApplyResult.applied, try store.apply(a, old));
+    var fresh = makeSnapshot(&rev_2.str(), commit_2, data_2, 2_000, &.{listUpsert("one", record_cid, &rev_2.str(), commit_2, 2_000)});
+    fresh.track_changes = &.{trackUpsert("track-one", &rev_2.str(), commit_2, 2_000)};
+    fresh.profile_changes = &.{postgres_profile.profileUpsert("second bio", &rev_2.str(), commit_2, 2_000)};
+    fresh.like_changes = &.{likeUpsert(&rev_2.str(), commit_2, 2_000)};
+    var lists: postgres_list.PostgresListStore = .{ .pool = pool };
+    var tracks: postgres_track.PostgresTrackStore = .{ .pool = pool };
+    var profiles: postgres_profile.PostgresProfileStore = .{ .pool = pool };
+    var likes: postgres_like.PostgresLikeStore = .{ .pool = pool };
+    _ = try lists.store().apply(a, fresh.list_changes[0]);
+    _ = try tracks.store().apply(a, fresh.track_changes[0]);
+    _ = try profiles.store().apply(a, fresh.profile_changes[0]);
+    _ = try likes.store().apply(a, fresh.like_changes[0]);
+    try expectHead(pool, &rev_1.str());
+    const other_commit = try zat.Cid.forDagCbor(a, "other-signed-commit");
+    _ = try pool.exec("UPDATE plyr_index.repo_heads SET projection_version=2", .{});
+    inline for (.{ "list_records", "track_records", "profile_records", "like_records" }) |table| {
+        _ = try pool.exec("UPDATE plyr_index." ++ table ++ " SET commit_cid=$1", .{try other_commit.toString(a)});
+        try std.testing.expectError(error.RevisionConflict, store.apply(a, fresh));
+        try expectHead(pool, &rev_1.str());
+        _ = try pool.exec("UPDATE plyr_index." ++ table ++ " SET commit_cid=$1", .{try commit_2.toString(a)});
+    }
+    _ = try pool.exec("UPDATE plyr_index.repo_heads SET projection_version=$1", .{projection_version});
+
+    try std.testing.expectEqual(verified.ApplyResult.applied, try store.apply(a, fresh));
+    try expectHead(pool, &rev_2.str());
+    try expectState(pool, &rev_2.str(), "one", false);
+    try expectTrackState(pool, "track-one", &rev_2.str(), false);
+    try expectProfileState(pool, "second bio", &rev_2.str(), false);
+    try expectLikeState(pool, &rev_2.str(), false);
+    inline for (.{ "list_records", "track_records", "profile_records", "like_records" }) |table| {
+        _ = try pool.exec("UPDATE plyr_index." ++ table ++ " SET commit_cid=NULL", .{});
+    }
+    _ = try pool.exec("UPDATE plyr_index.repo_heads SET commit_rev=$1,commit_cid=$2,data_cid=$3,indexed_at_us=1000", .{ &rev_1.str(), try commit_1.toString(a), try data_1.toString(a) });
+    try std.testing.expectEqual(verified.ApplyResult.applied, try store.apply(a, fresh));
+    try expectHead(pool, &rev_2.str());
 }
