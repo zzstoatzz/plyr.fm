@@ -8,6 +8,7 @@ from typing import ClassVar
 from unittest.mock import patch
 
 import canary_smoke
+import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -282,7 +283,8 @@ def test_real_product_reads_reject_empty_projection() -> None:
             raise AssertionError("empty projection unexpectedly passed")
 
 
-def test_sustained_play_requires_redis_claim_and_duplicate_receipt() -> None:
+def test_sustained_play_reuses_one_durable_occurrence_receipt() -> None:
+    occurrence = "01234567-89ab-4def-8123-456789abcdef"
     track = {
         "id": "trk_verified",
         "record": {"uri": "at://did:plc:artist/fm.plyr.track/one"},
@@ -298,6 +300,11 @@ def test_sustained_play_requires_redis_claim_and_duplicate_receipt() -> None:
                 },
                 body={
                     "object": "play_receipt",
+                    "occurrence": occurrence,
+                    "sources": {
+                        "metrics": "application_metrics",
+                        "dedup": "postgres_durable",
+                    },
                     "track_id": "trk_verified",
                     "record": track["record"],
                     "play_count": 8,
@@ -310,25 +317,88 @@ def test_sustained_play_requires_redis_claim_and_duplicate_receipt() -> None:
                 headers={"x-request-id": "req-duplicate"},
                 body={
                     "object": "play_receipt",
+                    "occurrence": occurrence,
+                    "sources": {
+                        "metrics": "application_metrics",
+                        "dedup": "postgres_durable",
+                    },
                     "track_id": "trk_verified",
                     "record": track["record"],
                     "play_count": 8,
-                    "counted": False,
+                    "counted": True,
                     "dedup": {"status": "duplicate", "window_seconds": 180},
                 },
             ),
         )
     )
 
-    with patch.object(canary_smoke, "_request", side_effect=responses) as request:
+    with (
+        patch.object(canary_smoke.uuid, "uuid4", return_value=occurrence) as uuid4,
+        patch.object(canary_smoke, "_request", side_effect=responses) as request,
+    ):
         canary_smoke._verify_sustained_play("https://canary.example", track)
 
+    uuid4.assert_called_once_with()
     first_call, duplicate_call = request.call_args_list
+    assert (
+        first_call.args
+        == duplicate_call.args
+        == (
+            "https://canary.example",
+            f"/v1/tracks/trk_verified/plays?occurrence={occurrence}",
+        )
+    )
     assert first_call.kwargs == {"method": "POST"}
     assert duplicate_call.kwargs == {
         "method": "POST",
         "cookie": "plyr_play_id=abcdefghijklmnopqrstuv",
     }
+
+
+@pytest.mark.parametrize(
+    ("response_index", "field", "value"),
+    [
+        (0, "sources", {"metrics": "application_metrics", "dedup": "redis_ephemeral"}),
+        (1, "counted", False),
+        (1, "play_count", 9),
+    ],
+)
+def test_sustained_play_rejects_obsolete_or_changed_receipts(
+    response_index: int, field: str, value: object
+) -> None:
+    occurrence = "01234567-89ab-4def-8123-456789abcdef"
+    track = {
+        "id": "trk_verified",
+        "record": {"uri": "at://did:plc:artist/fm.plyr.track/one"},
+        "metrics": {"play_count": 7},
+    }
+    receipt = {
+        "object": "play_receipt",
+        "occurrence": occurrence,
+        "track_id": track["id"],
+        "record": track["record"],
+        "counted": True,
+        "play_count": 8,
+        "sources": {"metrics": "application_metrics", "dedup": "postgres_durable"},
+    }
+    first = {**receipt, "dedup": {"status": "claimed"}}
+    duplicate = {**receipt, "dedup": {"status": "duplicate"}}
+    bodies = [first, duplicate]
+    bodies[response_index][field] = value
+    responses = [
+        canary_smoke.Response(
+            200,
+            {"x-request-id": "first", "set-cookie": "plyr_play_id=test; Secure"},
+            first,
+        ),
+        canary_smoke.Response(200, {"x-request-id": "second"}, duplicate),
+    ]
+    with (
+        patch.object(canary_smoke.uuid, "uuid4", return_value=occurrence),
+        patch.object(canary_smoke, "_request", side_effect=responses),
+        pytest.raises(AssertionError),
+    ):
+        canary_smoke._verify_sustained_play("https://canary.example", track)
 
 
 def test_product_only_transport_does_not_probe_infrastructure_routes() -> None:
