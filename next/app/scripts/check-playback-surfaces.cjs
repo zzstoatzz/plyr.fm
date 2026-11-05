@@ -9,7 +9,7 @@ module.exports = async function runSurfaces({ browser, browserName, prepareConte
     await prepareContext(context, 'dark');
     const page = await context.newPage();
     page.setDefaultTimeout(40_000);
-    const report = { name: `${browserName}-${surface}-real-receipt`, requests: [], errors: [], result: 'running' };
+    const report = { name: `${browserName}-${surface}-real-receipt`, requests: [], playbackLogs: [], errors: [], result: 'running' };
     reports.push(report);
     await context.route('https://api.plyr.fm/**', route => route.request().method() === 'POST' ? route.abort('blockedbyclient') : route.continue());
     const receipts = [];
@@ -19,6 +19,9 @@ module.exports = async function runSurfaces({ browser, browserName, prepareConte
       if (request.method() === 'POST' && url.host === 'api.plyr.fm') report.errors.push('Unexpected production POST');
     });
     page.on('pageerror', error => report.errors.push(error.message));
+    page.on('console', message => {
+      if (/^\[(plays|playback)\]/.test(message.text())) report.playbackLogs.push(message.text());
+    });
     context.on('response', response => {
       if (response.request().method() === 'POST' && /\/v1\/tracks\/[^/]+\/plays/.test(response.url())) {
         receipts.push({ response, at: performance.now() });

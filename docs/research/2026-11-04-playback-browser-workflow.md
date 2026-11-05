@@ -184,3 +184,34 @@ The live embed surface case also reloads the cross-site iframe after its first
 receipt. It requires a different occurrence with the same anonymous listener
 inside the cooldown and a suppressed second receipt. Only listener equality is
 recorded; the listener value is not included in the report.
+
+## Deployed-backend integration before frontend promotion
+
+After the accounting and anonymous-listener backend deploys, the built local
+frontend was exercised against the real Next API without receipt fixtures.
+Chrome and WebKit both passed the actual cross-site iframe and Radio checks.
+
+| Surface | Chrome | WebKit |
+|---|---|---|
+| Embed tap → real media progress | 1.21s | 1.68s |
+| Embed tap → durable counted receipt | 8.04s | 8.43s |
+| Iframe reload → second receipt interval | 9.15s | 9.87s |
+| Anonymous listener retained across iframe reload | yes | yes |
+| Second occurrence inside30s cooldown | suppressed, uncounted | suppressed, uncounted |
+| Radio tap → real media progress | 728ms | 568ms |
+| Radio tap → durable counted receipt | 39.31s | 32.71s |
+
+The two browsers used separate anonymous listeners, so both initial listens
+counted. Concurrent total changes do not imply a suppressed replay counted;
+the receipt's counted/status fields establish each occurrence's outcome. These
+measurements include real audio delivery, listening, canonical Radio identity
+resolution and the API transaction. They are not isolated database latency.
+
+Radio's request inventory exposed redundant work: sixteen state GETs over the
+Chrome~39second flow and two song/audio requests. The visible Radio page and
+persistent player each poll, and the page's silent Expo player also attaches the
+audio source. That is concrete fetching debt to remove, rather than assuming
+fast Zig execution makes those duplicate network reads harmless.
+
+This run verified deployed backend integration with local built assets at the
+Next origin. The final frontend deploy still requires a run without PLAYBACK_DIST.
