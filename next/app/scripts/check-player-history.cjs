@@ -86,5 +86,20 @@ async function run(browser, width) {
   finally { await page.unrouteAll({ behavior: 'ignoreErrors' }); await context.close(); }
 }
 
-withPlayerHarness(async browser => { for (const width of [390, 1280]) await run(browser, width); })
+async function coldRoute(browser) {
+  const { context, page, errors } = await setup(browser, 390, 'dark');
+  try {
+    await page.goto(new URL('/now-playing', page.url()).href);
+    await page.waitForURL(url => url.pathname === '/');
+    assert.equal(await page.getByTestId('now-playing-dismiss-region').count(), 0);
+    assert.equal(await page.getByRole('button', { name: 'Open now playing', exact: true }).count(), 0);
+    assert.deepEqual(errors, []);
+    console.log('Direct player route without playback returns Home');
+  } finally { await page.unrouteAll({ behavior: 'ignoreErrors' }); await context.close(); }
+}
+
+withPlayerHarness(async browser => {
+  for (const width of [390, 1280]) await run(browser, width);
+  await coldRoute(browser);
+})
   .catch(error => { console.error(error); process.exitCode = 1; });
