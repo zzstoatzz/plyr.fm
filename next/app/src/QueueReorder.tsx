@@ -1,6 +1,6 @@
 import GripVertical from 'lucide-react-native/icons/grip-vertical';
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
-import { PanResponder, Platform, StyleSheet, View, type ScrollViewInstance, type KeyDownEvent, type ViewInstance } from 'react-native';
+import { PanResponder, Platform, StyleSheet, useWindowDimensions, View, type ScrollViewInstance, type KeyDownEvent, type ViewInstance } from 'react-native';
 import type { Track } from './api';
 import { useAppearance } from './appearance';
 
@@ -19,6 +19,7 @@ export function QueueReorder({ queue, start, move, renderTrack, scrollRef, scrol
   onDragging(value: boolean): void;
 }) {
   const theme = useAppearance();
+  const { width, height } = useWindowDimensions();
   const layouts = useRef(new Map<number, Row>());
   const active = useRef<Drag | null>(null);
   const pickup = useRef(0);
@@ -45,6 +46,7 @@ export function QueueReorder({ queue, start, move, renderTrack, scrollRef, scrol
       focusTarget.current = null;
     }
   }, [queue, start]);
+  useEffect(() => { if (active.current) cancel(); }, [width, height]);
   useEffect(() => () => {
     pickup.current++;
     if (frame.current !== undefined) cancelAnimationFrame(frame.current);

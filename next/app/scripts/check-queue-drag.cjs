@@ -40,7 +40,7 @@ const shot = (page, name) => page.screenshot({ path: path.join(output, `${name}.
 
 async function setup(browser, width, theme, queue = tracks) {
   const context = await browser.newContext({ viewport: { width, height: 900 }, hasTouch: true, colorScheme: theme });
-  await context.addInitScript(theme => localStorage.setItem('plyr-next:prefs', JSON.stringify({ theme, playThrough: true, keepPlaying: false })), theme);
+  await context.addInitScript(({ theme, accent }) => localStorage.setItem('plyr-next:prefs', JSON.stringify({ theme, accent, playThrough: true, keepPlaying: false })), { theme, accent: process.env.QUEUE_ACCENT || '#6a9fff' });
   const page = await context.newPage();
   page.setDefaultTimeout(Number(process.env.QUEUE_TIMEOUT) || 15_000);
   const errors = [];
@@ -129,6 +129,7 @@ async function standard(browser, width, theme) {
     const primary = await page.getByRole('button', { name: /^(Pause|Play)$/ }).boundingBox();
     await page.mouse.move(primary.x + primary.width / 2, primary.y + primary.height / 2);
     await page.mouse.down();
+    await page.waitForTimeout(100);
     await shot(page, `${width}-${theme}-pressed`);
     await page.mouse.up();
     const changeBox = await handle(page, 'Beta').boundingBox();
@@ -141,6 +142,20 @@ async function standard(browser, width, theme) {
     await page.waitForTimeout(100);
     assert.equal(await page.locator('[aria-valuetext="Moving"]').count(), 0);
     assert.match(await page.getByRole('button', { name: 'Open now playing', exact: true }).innerText(), /Beta/);
+    if (width === 390 && theme === 'light') {
+      const target = handle(page, 'Alpha');
+      await target.scrollIntoViewIfNeeded();
+      const beforeResize = await order(page);
+      const box = await target.boundingBox();
+      await page.mouse.move(box.x + 22, box.y + 28);
+      await page.mouse.down();
+      await page.waitForTimeout(80);
+      await page.mouse.move(box.x + 22, box.y + 100, { steps: 5 });
+      await page.setViewportSize({ width: 430, height: 900 });
+      await page.waitForTimeout(100);
+      await page.mouse.up();
+      assert.deepEqual(await order(page), beforeResize);
+    }
     assert.deepEqual(errors, []);
     console.log(`${width}/${theme}: mouse, touch, keyboard focus, cancellation, autoscroll and queue change passed (${Math.round(performance.now() - started)}ms)`);
   } finally { await page.unrouteAll({ behavior: 'ignoreErrors' }); await context.close(); }
