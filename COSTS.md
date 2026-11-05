@@ -235,3 +235,11 @@ The useful baseline is therefore roughly $10 Fly + $19 Neon + mirror storage,
 before the unmeasured items above. Track these with subsequent cycle reviews;
 no resources or billing settings were changed in this inspection. In particular,
 API scale-to-zero does not make the continuously indexing backend scale to zero.
+
+Later in this cycle, the Next API moved from iad to sjc, leaving exactly one
+shared-1x/256MB API and the existing shared-2x/1GB ingester. Auto-stop/auto-start
+is unchanged; the relocation did not add an always-on service. The earlier
+uptime sample is historical, not a post-move measurement. Durable play receipts
+are permanently retained per submitted occurrence, including suppressed ones;
+monitor journal growth and database storage rather than assuming the initial
+61MB branch size stays constant.

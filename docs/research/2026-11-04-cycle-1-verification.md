@@ -59,3 +59,44 @@ state or rewrite callback state. The published-client run omits the asset overla
 Do not point this fixture at real accounts or count source-level inspection as
 proof of a successful two-browser run. The local PDS is a test dependency; this
 script does not start it or manage real PDS credentials.
+
+## Published verification
+
+PRs [#2366](https://github.com/zzstoatzz/plyr.fm/pull/2366) and
+[#2368](https://github.com/zzstoatzz/plyr.fm/pull/2368) are deployed on Next.
+The published frontend passed Chrome at 390/1280px in both themes and WebKit
+at phone width in dark mode, with actual media and durable API receipts.
+Cross-site embeds retained listener identity across reload; a subsequent
+occurrence was suppressed inside the cooldown. Radio counted only after local
+listening, with one audio source and no audio request before Listen.
+
+Two independent Chrome instances then repeated the room flow against the
+published frontend, real OAuth and Spaces on the disposable ZDS, and the public
+Next metrics endpoint. Sign-in preserved the room intent. Each audible browser
+received one counted receipt; pausing and paused seek/catch-up added none. All
+canonical test writes stayed on the disposable PDS. The fixture process was
+stopped afterward.
+
+The published queue was checked with actual mouse and touch dragging, duplicate
+occurrences, keyboard reorder, edge autoscroll, Escape/blur cancellation, viewport
+changes and current-track changes. Phone and desktop screenshots were inspected
+in both themes. These queue checks used isolated catalog/media fixtures and
+blocked API/PDS mutations; they are UI evidence, not backend accounting evidence.
+
+Normal production remained healthy, and production-fe remained at
+99334ecb0830fcd8eef411dad35f857361f48d43. No production promotion ran.
+
+## Placement and cost
+
+The Next API moved from IAD to SJC in
+[#2369](https://github.com/zzstoatzz/plyr.fm/pull/2369), alongside the existing
+ingester and nearer Neon us-west-2. The successful deployment left exactly one
+API Machine (shared CPU, 256MB) and the unchanged ingester. No additional
+always-on service was introduced; API auto-stop/auto-start remains enabled.
+
+Replaying an already-heard Jam occurrence kept its original total and produced
+only duplicate receipts. Server operation time fell from 365–374ms to 94–95ms.
+Twenty warm HTTP samples after three warmups measured p50 177ms / p95 207ms.
+These are receipt operation/request timings, not audio startup or human-flow
+percentiles. The dated baseline in COSTS.md remains an estimate; permanent
+receipt storage and usage growth still need monitoring.
