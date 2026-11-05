@@ -33,12 +33,12 @@ const browserName = process.env.FONT_BROWSER || 'chromium';
       const family = locator => locator.evaluate(node => getComputedStyle(node).fontFamily);
       try {
         await page.goto(origin + '/settings');
-        const heading = page.getByRole('heading', { name: 'Settings', exact: true });
+        const heading = page.getByRole('heading', { name: /^settings$/i });
         await heading.waitFor();
         assert.match(await family(heading), /PlyrComicBold/);
-        assert.match(await family(page.getByText('Font', { exact: true })), /PlyrComic/);
+        assert.match(await family(page.getByText(/^font$/i)), /PlyrComic/);
         assert.match(await family(page.getByRole('link', { name: 'Home', exact: true }).getByText('Home', { exact: true })), /PlyrComic/);
-        assert.match(await family(page.getByRole('textbox', { name: 'Custom accent', exact: true })), /PlyrComic/);
+        assert.match(await family(page.getByRole('textbox', { name: /^custom accent$/i })), /PlyrComic/);
         assert.equal(await page.evaluate(() => document.fonts.check('16px PlyrComic') && document.fonts.check('16px PlyrComicBold')), true);
         await page.screenshot({ path: path.join(output, `${browserName}-${width}-${theme}-comic.png`) });
         for (const [label, pattern] of [['mono', /Menlo|monospace/], ['serif', /Georgia|serif/], ['system', /system-ui|apple-system|Roboto/], ['comic sans', /PlyrComicBold/]]) {
