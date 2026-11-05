@@ -1,0 +1,227 @@
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const http = require('node:http');
+const { createRequire } = require('node:module');
+const path = require('node:path');
+const requireFrontend = createRequire(path.resolve(__dirname, '../../../frontend/package.json'));
+const { chromium } = process.env.PLAYWRIGHT_MODULE ? require(process.env.PLAYWRIGHT_MODULE) : requireFrontend('playwright');
+const dist = process.env.PLAYER_DIST || path.resolve(__dirname, '../dist');
+const output = process.env.PLAYER_OUTPUT || '/tmp/plyr-player-presentation';
+fs.mkdirSync(output, { recursive: true });
+const uri = 'at://did:plc:fixture/fm.plyr.track/player-presentation';
+const track = {
+  object: 'track', id: 'trk_' + Buffer.from(uri).toString('base64url'),
+  record: { uri, cid: 'fixture', revision: null, collection: 'fm.plyr.track', rkey: 'player-presentation' },
+  metadata: { title: 'acoustic guitar cover of vodka cranberry (one take)', description: 'A quiet recording from one afternoon.', album: 'A quiet room', duration_seconds: 236, created_at: '2026-11-04T00:00:00Z' },
+  artist: { did: 'did:plc:fixture', profile: { handle: 'fixture.test', display_name: 'jack', avatar_url: null } },
+  media: { artwork: { url: 'https://player-fixture.invalid/cover.jpg' } }, access: { visibility: 'public' }, metrics: { play_count: 12, like_count: 7 }
+};
+const mediaUrl = 'https://player-fixture.invalid/audio.wav';
+const audio = Buffer.alloc(44 + 8000 * 236 * 2);
+audio.write('RIFF', 0); audio.writeUInt32LE(audio.length - 8, 4); audio.write('WAVEfmt ', 8);
+audio.writeUInt32LE(16, 16); audio.writeUInt16LE(1, 20); audio.writeUInt16LE(1, 22);
+audio.writeUInt32LE(8000, 24); audio.writeUInt32LE(16000, 28); audio.writeUInt16LE(2, 32);
+audio.writeUInt16LE(16, 34); audio.write('data', 36); audio.writeUInt32LE(audio.length - 44, 40);
+const coverPath = process.env.PLAYER_COVER || '/tmp/player-presentation-cover.jpg';
+const server = http.createServer((request, response) => {
+  let filename = path.join(dist, decodeURIComponent(request.url.split('?')[0]));
+  if (!fs.existsSync(filename) || fs.statSync(filename).isDirectory()) filename = path.join(dist, 'index.html');
+  response.setHeader('Content-Type', filename.endsWith('.js') ? 'text/javascript' : filename.endsWith('.json') ? 'application/json' : 'text/html');
+  response.end(fs.readFileSync(filename));
+});
+let origin;
+const screenshot = (page, name) => page.screenshot({ path: path.join(output, `${name}.png`) });
+
+async function setup(browser, width, theme, selected = track, scale = 1, height = 900) {
+  const context = await browser.newContext({ viewport: { width, height }, hasTouch: true, colorScheme: theme });
+  await context.addInitScript(({ theme, scale }) => localStorage.setItem('plyr-next:prefs', JSON.stringify({ theme, scale, playThrough: true })), { theme, scale });
+  await context.route('**/*', route => ['GET', 'HEAD', 'OPTIONS'].includes(route.request().method()) ? route.continue() : route.abort());
+  await context.route('https://player-fixture.invalid/**', async route => {
+    if (route.request().url().endsWith('/cover.jpg')) {
+      if (fs.existsSync(coverPath)) await route.fulfill({ body: fs.readFileSync(coverPath), contentType: 'image/jpeg' });
+      else await route.abort();
+      return;
+    }
+    const range = /^bytes=(\d+)-(\d*)$/.exec(route.request().headers().range || '');
+    const start = range ? Number(range[1]) : 0;
+    const end = range?.[2] ? Math.min(Number(range[2]), audio.length - 1) : audio.length - 1;
+    const body = audio.subarray(start, end + 1);
+    await route.fulfill({ status: range ? 206 : 200, body, headers: {
+      'content-type': 'audio/wav', 'content-length': String(body.length), 'accept-ranges': 'bytes',
+      'access-control-allow-origin': '*', ...(range ? { 'content-range': `bytes ${start}-${end}/${audio.length}` } : {})
+    } });
+  });
+  await context.addInitScript(() => {
+    const play = HTMLMediaElement.prototype.play;
+    HTMLMediaElement.prototype.play = function (...args) { window.__playerPresentationMedia = this; return play.apply(this, args); };
+  });
+  const page = await context.newPage();
+  page.setDefaultTimeout(20_000);
+  const errors = [];
+  page.on('pageerror', error => errors.push(error.message));
+  await page.route('https://api.next.plyr.fm/**', async route => {
+    const request = route.request();
+    const url = new URL(request.url());
+    if (!['GET', 'HEAD', 'OPTIONS'].includes(request.method())) { await route.abort(); return; }
+    let body = {};
+    if (url.pathname.endsWith('/playback')) body = { object: 'playback', track_id: selected.id, record: selected.record,
+      availability: { status: 'available', delivery: { url: mediaUrl, media_type: 'audio/wav' } } };
+    else if (url.pathname.endsWith('/likes')) body = { object: 'list', data: [], has_more: false };
+    else if (url.pathname === '/v1/tracks/' + selected.id) body = selected;
+    else if (url.pathname === '/v1/tracks') body = { object: 'list', data: [selected], has_more: false };
+    else if (url.pathname === '/v1/charts/tracks') body = { period: 'week', data: [] };
+    await route.fulfill({ json: body });
+  });
+  await page.goto(origin + '/track/' + selected.id);
+  await page.getByRole('button', { name: 'Add to queue', exact: true }).waitFor();
+  await page.waitForTimeout(150);
+  return { context, page, errors };
+}
+
+async function plainControls(page) {
+  const controls = page.getByRole('button', { name: /^(Play|Pause)$/ });
+  for (const control of await controls.all()) {
+    const style = await control.evaluate(node => ({ background: getComputedStyle(node).backgroundColor,
+      border: getComputedStyle(node).borderWidth, width: node.getBoundingClientRect().width, height: node.getBoundingClientRect().height }));
+    assert.equal(style.background, 'rgba(0, 0, 0, 0)');
+    assert.equal(style.border, '0px');
+    assert.ok(style.width >= 44 && style.height >= 44);
+  }
+}
+
+async function gesture(page, cdp, start, dx, dy, { cancel = false, wait = 25, steps = 12, resize = false } = {}) {
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: start.x, y: start.y, id: 1 }] });
+  for (let step = 1; step <= steps; step++) {
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: start.x + dx * step / steps, y: start.y + dy * step / steps, id: 1 }] });
+    if (wait) await page.waitForTimeout(wait);
+  }
+  if (resize) { await page.setViewportSize({ width: 430, height: 900 }); await page.waitForTimeout(150); }
+  await cdp.send('Input.dispatchTouchEvent', { type: cancel ? 'touchCancel' : 'touchEnd', touchPoints: [] });
+  await page.waitForTimeout(550);
+}
+
+async function run(browser, width, theme) {
+  const { context, page, errors } = await setup(browser, width, theme);
+  const name = `${width}-${theme}`;
+  try {
+    await plainControls(page);
+    await screenshot(page, name + '-track');
+    const like = page.getByRole('button', { name: 'See 7 likes' });
+    const queue = page.getByRole('button', { name: 'Add to queue', exact: true });
+    const play = page.getByRole('button', { name: 'Play', exact: true });
+    const geometry = await Promise.all([like.boundingBox(), play.boundingBox(), queue.boundingBox()]);
+    assert.ok(Math.abs((geometry[1].x + geometry[1].width / 2) - (geometry[0].x + geometry[0].width / 2 + geometry[2].x + geometry[2].width / 2) / 2) < 2);
+    await like.click();
+    await page.getByText('Liked by', { exact: true }).waitFor();
+    await page.getByRole('button', { name: 'Close', exact: true }).click();
+    await play.click();
+    await page.getByRole('button', { name: 'Open now playing', exact: true }).waitFor();
+    await screenshot(page, name + '-busy');
+    await page.waitForFunction(() => window.__playerPresentationMedia?.currentTime > 0);
+    await page.waitForFunction(() => {
+      const controls = [...document.querySelectorAll('[aria-label="Pause"]')];
+      return controls.length === 2 && controls.every(node => node.querySelector('svg') && !node.hasAttribute('disabled') && node.getAttribute('aria-disabled') !== 'true');
+    });
+    for (const control of await page.getByRole('button', { name: 'Pause', exact: true }).all()) assert.equal(await control.isEnabled(), true);
+    await plainControls(page);
+    await screenshot(page, name + '-mini');
+    const open = async () => {
+      await page.getByRole('button', { name: 'Open now playing', exact: true }).click();
+      await page.getByTestId('now-playing-dismiss-region').waitFor();
+      await page.waitForTimeout(300);
+    };
+    await open();
+    await plainControls(page);
+    await screenshot(page, name + '-now-playing');
+    const cdp = await context.newCDPSession(page);
+    const header = page.getByTestId('now-playing-dismiss-region');
+    const box = await header.boundingBox();
+    const start = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+    const remains = async () => {
+      assert.equal(await header.count(), 1);
+      assert.ok(Math.abs((await header.boundingBox()).y - box.y) < 2, 'Cancelled panel snaps back');
+    };
+    await gesture(page, cdp, start, 0, 24); await remains();
+    await gesture(page, cdp, start, 0, 80, { wait: 40 }); await remains();
+    await gesture(page, cdp, start, 100, 18); await remains();
+    await gesture(page, cdp, start, 0, -100); await remains();
+    await gesture(page, cdp, start, 0, 160, { cancel: true }); await remains();
+    if (width < 600) {
+      await gesture(page, cdp, start, 0, 150, { resize: true });
+      assert.equal(await header.count(), 1);
+      await page.setViewportSize({ width, height: 900 });
+      await page.waitForTimeout(150);
+      await remains();
+    }
+    const slider = page.getByRole('slider', { name: 'Playback position', exact: true });
+    const scrub = await slider.boundingBox();
+    const beforeScrub = await page.evaluate(() => window.__playerPresentationMedia.currentTime);
+    await gesture(page, cdp, { x: scrub.x + 12, y: scrub.y + scrub.height / 2 }, scrub.width * 0.55, 8);
+    assert.equal(await header.count(), 1, 'Scrubbing must not dismiss the player');
+    const value = await page.evaluate(() => window.__playerPresentationMedia.currentTime);
+    assert.ok(value > beforeScrub + 30, 'Touch drag must actually seek media beyond ordinary playback');
+    const art = await page.getByTestId('now-playing-artwork').boundingBox();
+    await gesture(page, cdp, { x: art.x + art.width / 2, y: art.y + art.height / 2 }, 0, 140);
+    assert.equal(await header.count(), 1, 'Artwork/body motion must not dismiss');
+    if (width < 600) {
+      await gesture(page, cdp, start, 0, 180);
+      assert.equal(await header.count(), 0, 'Deliberate top swipe dismisses');
+      await open();
+      await gesture(page, cdp, start, 0, 90, { wait: 1, steps: 4 });
+      assert.equal(await header.count(), 0, 'A deliberate short fast flick dismisses');
+      await open();
+    } else {
+      await gesture(page, cdp, start, 0, 180);
+      assert.equal(await header.count(), 1, 'Floating desktop player does not use full-screen swipe');
+    }
+    await page.getByRole('button', { name: 'Close', exact: true }).click();
+    assert.equal(await header.count(), 0);
+    await open();
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(300);
+    assert.equal(await header.count(), 0, 'onRequestClose remains available');
+    assert.deepEqual(errors, []);
+    console.log(name + ': plain controls, balanced detail, likes, scrub isolation, top swipe thresholds/cancellation/resize and close paths passed');
+  } catch (error) {
+    await screenshot(page, name + '-failure');
+    throw error;
+  } finally { await page.unrouteAll({ behavior: 'ignoreErrors' }); await context.close(); }
+}
+
+async function longContent(browser) {
+  const selected = { ...track, media: { artwork: null }, metadata: { ...track.metadata,
+    title: 'A very long title with ünicode — an extended live recording from a quiet room across several evenings',
+    album: 'A collection with a deliberately long album name that wraps naturally' } };
+  const { context, page, errors } = await setup(browser, 390, 'dark', selected, 1.4, 620);
+  try {
+    await screenshot(page, '390-dark-long-missing-art-scale-1.4');
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+    await page.getByRole('button', { name: 'Play', exact: true }).click();
+    await page.waitForFunction(() => window.__playerPresentationMedia?.currentTime > 0);
+    await page.getByRole('button', { name: 'More', exact: true }).scrollIntoViewIfNeeded();
+    await screenshot(page, '390-dark-long-detail-controls-scale-1.4');
+    await page.getByRole('button', { name: 'Open now playing', exact: true }).click();
+    const header = page.getByTestId('now-playing-dismiss-region');
+    await header.waitFor(); await page.waitForTimeout(300);
+    const top = (await header.boundingBox()).y;
+    const art = await page.getByTestId('now-playing-artwork').boundingBox();
+    const cdp = await context.newCDPSession(page);
+    await gesture(page, cdp, { x: art.x + art.width / 2, y: art.y + art.height / 2 }, 0, -130);
+    assert.equal(await header.count(), 1);
+    assert.ok(Math.abs((await header.boundingBox()).y - top) < 2);
+    await page.getByRole('button', { name: 'Track details', exact: true }).scrollIntoViewIfNeeded();
+    await screenshot(page, '390-dark-short-player-scrolled-scale-1.4');
+    await page.getByRole('button', { name: 'Close', exact: true }).click();
+    assert.deepEqual(errors, []);
+    console.log('Long title, missing artwork, scale1.4 and short-viewport body scrolling passed');
+  } finally { await page.unrouteAll({ behavior: 'ignoreErrors' }); await context.close(); }
+}
+
+(async () => {
+  if (!process.env.PLAYER_URL) await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  origin = process.env.PLAYER_URL || `http://127.0.0.1:${server.address().port}`;
+  console.log(`Player UI source: ${origin}; catalog and media are fixtures; real API/PDS mutations blocked`);
+  const browser = await chromium.launch({ channel: 'chrome' });
+  try { for (const width of [390, 1280]) for (const theme of ['light', 'dark']) await run(browser, width, theme); await longContent(browser); }
+  finally { await browser.close(); if (server.listening) await new Promise(resolve => server.close(resolve)); }
+})().catch(error => { console.error(error); process.exitCode = 1; if (server.listening) server.close(); });
