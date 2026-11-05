@@ -16,14 +16,14 @@ import { WaveLoading } from './WaveLoading';
 import { DetailHeader } from './DetailHeader';
 import { TrackPresentation } from './TrackPresentation';
 import { PlayerControl } from './PlayerControl';
-import { Sheet } from './Sheet';
 import { usePlayback } from './playback';
 import { TrackLikes } from './TrackLikes';
 import { useAuth } from './auth';
 import { Action, pageFrame } from './controls';
 import { ShareLink } from './ShareLink';
+import { TrackMenu } from './TrackMenu';
 import { usePlayCount } from './use-play-count';
-import { CollectionActions, Library, SignedTrackActions } from './AccountCatalog';
+import { CollectionActions, Library } from './AccountCatalog';
 
 const loadLatest = (cursor?: string) => api.tracks({ limit: 30, cursor });
 const loadPlaylists = (cursor?: string) => api.playlists({ limit: 30, cursor });
@@ -144,7 +144,6 @@ function TrackDetail({ id, onPlay, onEnqueue, trackActions }: {
   const load = useCallback(() => api.track(id), [id]);
   const result = useResource(load);
   const track = result.data;
-  const auth = useAuth();
   const player = usePlayback();
   const [actionsOpen, setActionsOpen] = useState(false);
   if (!track) return <Status loading={!result.error} error={result.error} retry={result.retry} />;
@@ -163,13 +162,7 @@ function TrackDetail({ id, onPlay, onEnqueue, trackActions }: {
         <ShareLink compact path={`/track/${encodeURIComponent(track.id)}`} />
         <PlayerControl icon={Ellipsis} label="More" onPress={() => setActionsOpen(true)} />
       </>} />
-    {actionsOpen && <Sheet title="Track actions" close={() => setActionsOpen(false)}>
-      <View style={styles.actions}>
-        {auth.did === track.artist.did && <Action label="Edit track" href={`/edit-track/${track.id}`} onPress={() => setActionsOpen(false)} />}
-        <ShareLink path={`/track/${encodeURIComponent(track.id)}`} />
-        {trackActions ? trackActions(track) : <SignedTrackActions track={track} />}
-      </View>
-    </Sheet>}
+    {actionsOpen && <TrackMenu track={track} close={() => setActionsOpen(false)} actions={trackActions?.(track)} />}
   </>;
 }
 

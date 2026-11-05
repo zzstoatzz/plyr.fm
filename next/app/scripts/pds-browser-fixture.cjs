@@ -15,7 +15,7 @@ async function fixtureAccounts(names) {
   const pass='fixture-only-password';
   let a;
   try {a=await xrpc('com.atproto.server.createAccount',{handle,email:name+'@example.test',password:pass});}
-  catch(e) {console.log('Fixture create:',e.message);a=await xrpc('com.atproto.server.createSession',{identifier:handle,password:pass});}
+  catch(e) {if(!e.message.includes('account already exists')) throw e;console.log('Reusing disposable fixture account');a=await xrpc('com.atproto.server.createSession',{identifier:handle,password:pass});}
   accounts[handle]={did:a.did,pass};
  }
 
@@ -51,6 +51,7 @@ async function fixturePage(browser,accounts,options={}) {
    const response=await fetch('http://localhost:5197'+url.pathname+url.search,{
     method:req.method(),headers,body:req.postDataBuffer() ?? undefined,redirect:'manual'
    });
+   if(response.ok && options.discardPdsResponse?.(url.pathname)) { await response.arrayBuffer(); await route.abort('failed'); return; }
    const location=response.headers.get('location');
    if(response.status>=300 && response.status<400 && location?.startsWith('https://next.plyr.fm/')) {
     const cookie=response.headers.get('set-cookie');

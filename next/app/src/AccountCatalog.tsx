@@ -1,3 +1,8 @@
+import ListPlus from 'lucide-react-native/icons/list-plus';
+import Music2 from 'lucide-react-native/icons/eighth-note';
+import RefreshCw from 'lucide-react-native/icons/refresh-cw';
+import { ActionRow } from './ActionRow';
+import { WaveLoading } from './WaveLoading';
 import { Link, useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useMemo, useRef, useState, type ReactNode } from 'react';
 import { StyleSheet, TextInput, View } from 'react-native';
@@ -125,50 +130,21 @@ function AccountLibrary({ did, likesOnly, onPlay }: { did: string; likesOnly: bo
   </>;
 }
 
-export function SignedTrackActions({ track }: { track: Track }) {
-  const { did, ready } = useAuth();
-  if (!ready) return null;
-  if (!did) return <Link href="/login"><Detail>Sign in to like or save</Detail></Link>;
-  return <TrackActions key={did} track={track} did={did} />;
-}
-
-function TrackActions({ track, did }: { track: Track; did: string }) {
+export function TrackPlaylistPicker({ track }: { track: Track }) {
+  const { did } = useAuth();
   const pds = usePds();
-  const [choosing, setChoosing] = useState(false);
-  const [likedOverride, setLikedOverride] = useState<boolean>();
-  const likeLoad = useCallback(() => pds.myLikes().then((likes) => likes.has(track.record.uri)), [pds, track.record.uri]);
-  const like = useResource(likeLoad);
-  const liked = likedOverride ?? like.data;
   const mutation = useMutation();
-  function toggle() {
-    if (liked === undefined) return;
-    void mutation.run(async () => {
-      const status = await (liked ? pds.unlike(track) : pds.like(track));
-      setLikedOverride(!liked);
-      return messageFor(status, liked ? 'Like removed.' : 'Track liked.');
-    });
-  }
-  return <>
-    {!mutation.busy && <>
-      {liked !== undefined && <Button label={liked ? 'Unlike' : 'Like'} onPress={toggle} />}
-      {!choosing && <Button label="Add to playlist" onPress={() => setChoosing(true)} />}
-    </>}
-    {like.error && liked === undefined && <Status error={like.error} retry={like.retry} />}
-    {choosing && <Sheet title="Add to playlist" close={() => setChoosing(false)}><PlaylistPicker did={did} onChoose={(uri) => {
-      setChoosing(false);
-      void mutation.run(async () => messageFor(await pds.addToPlaylist(uri, track), 'Added to playlist.'));
-    }} /></Sheet>}
-    <Status loading={mutation.busy} empty={mutation.message} />
-  </>;
-}
-
-function PlaylistPicker({ did, onChoose }: { did: string; onChoose: (uri: string) => void }) {
-  const load = useCallback((cursor?: string) => api.playlists({ owner_did: did, limit: 30, cursor }), [did]);
+  const load = useCallback((cursor?: string) => api.playlists({ owner_did: did ?? undefined, limit: 30, cursor }), [did]);
   const lists = usePages(load);
-  return <View style={styles.wide}>
-    {lists.data.map((list) => <Button key={list.id} label={list.metadata.name ?? 'Untitled'} onPress={() => onChoose(list.record.uri)} />)}
-    <Status loading={lists.loading} error={lists.error} retry={lists.more} empty={!lists.data.length ? 'Create a playlist from your library first.' : undefined} />
-    {lists.cursor && !lists.loading && !lists.error && <Button label="More playlists" onPress={lists.more} />}
+  return <View style={{ gap: 8 }}>
+    {lists.data.map(list => <ActionRow key={list.record.uri} icon={Music2} label={list.metadata.name ?? 'Untitled'} disabled={mutation.busy}
+      onPress={() => void mutation.run(async () => messageFor(await pds.addToPlaylist(list.record.uri, track), 'Added to playlist.'))} />)}
+    {lists.loading && <WaveLoading label="Loading playlists" />}
+    {lists.error && <><Detail>{lists.error}</Detail><ActionRow icon={RefreshCw} label="retry" onPress={lists.more} /></>}
+    {!lists.loading && !lists.error && !lists.data.length && <Detail>Create a playlist from your library first.</Detail>}
+    {lists.cursor && !lists.loading && !lists.error && <ActionRow icon={ListPlus} label="more playlists" onPress={lists.more} />}
+    {mutation.busy && <Detail>Adding to playlist…</Detail>}
+    {mutation.message && <Detail>{mutation.message}</Detail>}
   </View>;
 }
 
