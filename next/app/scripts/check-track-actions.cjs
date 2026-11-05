@@ -86,6 +86,20 @@ const output = process.env.TRACK_ACTION_OUTPUT || `/tmp/plyr-track-actions-${Dat
         await page.screenshot({ path: path.join(output, `${width}-${theme}-playlists.png`) });
         await page.getByRole('button', { name: 'back', exact: true }).click();
         await page.getByRole('button', { name: 'Close', exact: true }).click();
+        if (width === 390 && theme === 'dark') {
+          track.metrics.like_count = 0;
+          await page.reload();
+          await page.getByRole('button', { name: 'Unlike', exact: true }).waitFor();
+          await page.getByRole('button', { name: 'See 0 likes', exact: true }).waitFor();
+          const rejectDelete = route => route.abort();
+          await page.route('https://pds.fixture.test/xrpc/com.atproto.repo.deleteRecord', rejectDelete);
+          await page.getByRole('button', { name: 'Unlike', exact: true }).click();
+          await page.getByText('Couldn’t update like', { exact: true }).waitFor();
+          await page.getByRole('button', { name: 'close', exact: true }).click();
+          await page.getByRole('button', { name: 'See 0 likes', exact: true }).waitFor();
+          await page.getByRole('button', { name: 'Unlike', exact: true }).waitFor();
+          await page.unroute('https://pds.fixture.test/xrpc/com.atproto.repo.deleteRecord', rejectDelete);
+        }
         assert.equal(catalogRequests.some(url => url.includes('/records/await')), false, 'Heart writes do not block on appview polling');
         const sessionResponse = await fetch('http://localhost:5197/xrpc/com.atproto.server.createSession', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ identifier: handle, password: accounts[handle].pass }) });
         const session = await sessionResponse.json();
@@ -94,7 +108,7 @@ const output = process.env.TRACK_ACTION_OUTPUT || `/tmp/plyr-track-actions-${Dat
         assert.equal(records.records.filter(record => record.value.subject.uri === track.record.uri).length, 1, 'Retry did not create a duplicate canonical like');
         assert.deepEqual(errors, []);
         console.log(`${width}/${theme}: direct PDS heart/unlike, count drawer, lost-response retry, single-sheet action rows passed`);
-      } finally { await context.close(); }
+      } finally { track.metrics.like_count = 7; await context.close(); }
     }
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });
