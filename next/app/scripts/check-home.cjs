@@ -21,6 +21,10 @@ async function main() {
         const exists = await fs.stat(candidate).then(stat => stat.isFile(), () => false);
         await route.fulfill({ path: exists ? candidate : path.join(path.resolve(process.env.HOME_DIST), 'index.html') });
       });
+      if (process.env.HOME_API) await context.route('https://api.next.plyr.fm/**', async route => {
+        const url = new URL(route.request().url());
+        await route.fulfill({ response: await route.fetch({ url: process.env.HOME_API + url.pathname + url.search }) });
+      });
       if (process.env.HOME_TAG_FIXTURE === '1') await context.route('https://api.next.plyr.fm/v1/tags?*', route => route.fulfill({
         json: { object: 'list', data: [{ name: 'ambient', track_count: 12, total_plays: 400 }, { name: 'electronic', track_count: 23, total_plays: 800 }] },
       }));
@@ -43,13 +47,22 @@ async function main() {
       const request = page.waitForRequest(request => new URL(request.url()).pathname === '/v1/tracks' && new URL(request.url()).searchParams.getAll('tag').includes(name));
       await chip.click();
       const filteredRequest = await request;
-      if (process.env.HOME_TAG_FIXTURE !== "1") assert.equal((await filteredRequest.response()).status(), 200);
+      if (process.env.HOME_TAG_FIXTURE !== '1') {
+        const response = await filteredRequest.response();
+        assert.equal(response.status(), 200);
+        const body = await response.json();
+        for (const track of body.data) await page.getByTestId('home-feed').getByText(track.metadata.title, { exact: true }).first().waitFor();
+        await page.waitForFunction(expected => document.querySelector('[data-testid="home-feed"]').querySelectorAll('a').length === expected, body.data.length);
+      }
+      const cleared = page.waitForResponse(response => new URL(response.url()).pathname === '/v1/tracks' && !new URL(response.url()).searchParams.has('tag'));
       await page.getByRole('button', { name: 'Clear tag filters', exact: true }).click();
+      await cleared;
       assert.deepEqual(errors, []);
       reports.push({ width, theme, elapsedMs: Date.now() - started, overflow, errors, screenshot });
+      await context.unrouteAll({ behavior: 'wait' });
       await context.close();
     }
-    await fs.writeFile(path.join(output, 'report.json'), JSON.stringify({ tagCatalogFixture: process.env.HOME_TAG_FIXTURE === '1', reports }, null, 2));
+    await fs.writeFile(path.join(output, 'report.json'), JSON.stringify({ tagCatalogFixture: process.env.HOME_TAG_FIXTURE === '1', api: process.env.HOME_API || 'public Next', reports }, null, 2));
     console.log(output);
   } finally { await browser.close(); }
 }
