@@ -21,7 +21,7 @@ const mediaState = () => window.__plyrPlaybackMedia.map(audio => ({
   ready: audio.readyState, seeking: audio.seeking, error: audio.error?.code,
 }));
 
-async function prepareContext(context, theme) {
+async function prepareContext(context, theme, preferences = {}) {
   if (process.env.PLAYBACK_DIST) {
     const root = path.resolve(process.env.PLAYBACK_DIST);
     await context.route(origin + '/**', async route => {
@@ -30,7 +30,7 @@ async function prepareContext(context, theme) {
       await route.fulfill({ path: exists ? candidate : path.join(root, 'index.html') });
     });
   }
-  await context.addInitScript(selected => localStorage.setItem('plyr-next:prefs', JSON.stringify({ theme: selected })), theme);
+  await context.addInitScript(({ theme, preferences }) => localStorage.setItem('plyr-next:prefs', JSON.stringify({ theme, ...preferences })), { theme, preferences });
   await context.addInitScript(() => {
     window.__plyrPlaybackMedia = [];
     window.__plyrPlaybackEvents = [];

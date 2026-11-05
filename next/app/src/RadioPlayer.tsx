@@ -30,6 +30,8 @@ export default function Radio({ compact = false, tuned }: { compact?: boolean; t
   const accounting = usePlayerAccounting(audio);
   const solo = usePlayback();
   const { preferences } = useAppPreferences();
+  const volume = useRef(preferences.volume);
+  volume.current = preferences.volume;
   const snapshotRef = useRef(snapshot);
   snapshotRef.current = snapshot;
   const song = snapshot?.currentSong;
@@ -50,6 +52,7 @@ export default function Radio({ compact = false, tuned }: { compact?: boolean; t
     accounting.stop();
     audio.pause();
     audio.replace(compact ? source : null);
+    audio.volume = volume.current;
   }, [accounting, audio, compact, source]);
 
   useEffect(() => {

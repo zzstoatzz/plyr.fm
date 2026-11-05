@@ -147,9 +147,9 @@ identity response and verifies that delivery preserves the same occurrence ID.
 This isolates the contract that slow identity resolution must neither delay
 listening accumulation nor discard an already qualified play when audio stops.
 
-SHORT_PLAYBACK=1 adds a real0.4second PCM WAV at the audio delivery boundary,
+SHORT_PLAYBACK=1 adds a real 0.4 second PCM WAV at the audio delivery boundary,
 with a fixture receipt endpoint. This caught an Expo status integration defect:
-Chrome and WebKit both reached the actual media end at0.4seconds but submitted
+Chrome and WebKit both reached the actual media end at 0.4 seconds but submitted
 nothing, because the first loaded observation reported playing=false at position
 zero and the next progress sample left less than half the duration accumulated.
 The acceptance is one qualification after naturally hearing half the short WAV;
@@ -197,7 +197,7 @@ Chrome and WebKit both passed the actual cross-site iframe and Radio checks.
 | Embed tap → durable counted receipt | 8.04s | 8.43s |
 | Iframe reload → second receipt interval | 9.15s | 9.87s |
 | Anonymous listener retained across iframe reload | yes | yes |
-| Second occurrence inside30s cooldown | suppressed, uncounted | suppressed, uncounted |
+| Second occurrence inside 30s cooldown | suppressed, uncounted | suppressed, uncounted |
 | Radio tap → real media progress | 728ms | 568ms |
 | Radio tap → durable counted receipt | 39.31s | 32.71s |
 
@@ -208,7 +208,7 @@ measurements include real audio delivery, listening, canonical Radio identity
 resolution and the API transaction. They are not isolated database latency.
 
 Radio's request inventory exposed redundant work: sixteen state GETs over the
-Chrome~39second flow and two song/audio requests. The visible Radio page and
+Chrome ~39 second flow and two song/audio requests. The visible Radio page and
 persistent player each poll, and the page's silent Expo player also attaches the
 audio source. That is concrete fetching debt to remove, rather than assuming
 fast Zig execution makes those duplicate network reads harmless.
@@ -229,15 +229,31 @@ completion after a stop/restart.
 
 The full Radio page still renders current artwork and controls, but attaches no
 audio URL. The compact output owns the audio source. Actual Chrome and WebKit
-runs against the deployed backend each measured **seven state GETs over~31.9s,
+runs against the deployed backend each measured **seven state GETs over ~31.9s,
 one source-audio request, and zero source-audio requests before Listen**. Both
-returned a real counted receipt at~31.93s. Tap-to-real-media progress was123ms
-and51ms respectively with the metadata already displayed. Those individual warm
+returned a real counted receipt at ~31.93s. Tap-to-real-media progress was 123ms
+and 51ms respectively with the metadata already displayed. Those individual warm
 measurements are not an uncached-media latency guarantee.
 
 The four feed tests exercise two observers sharing a read, one observer leaving,
 last-observer abort/cancel, late completion after restart, timeout/recovery, and
 shared snapshot identity. They control transport completion and polling timers;
-the browser checks retain real media clocks and real Next receipts. All26client
+the browser checks retain real media clocks and real Next receipts. All 26 client
 tests and TypeScript checks passed, and the web export succeeded. The Radio hero
 and persistent player were inspected in both browser screenshots.
+
+## Short-track startup and source settings
+
+The short WAV also exposed a separate UI lifecycle failure: the count updated,
+but a track that ended before a playing React status render left Loading and the
+Play control disabled until the startup timeout. The browser fixture now requires
+Play to be enabled after the real media end. That check failed before the
+per-source startup-event fix and passed afterward in both Chrome and WebKit.
+
+The fixture seeds a local 25% volume preference and checks the actual media
+property after source replacement. Both browsers retain volume=0.25 for the short
+track. Radio's independent output now restores the current volume immediately
+after replacement as well, without making volume changes reload the source.
+Real Radio checks in both browsers confirmed volume=0.25, one audio request,
+zero before Listen, eight state reads over roughly 38 seconds and a counted
+Postgres receipt. These are browser properties, not physical-device volume tests.

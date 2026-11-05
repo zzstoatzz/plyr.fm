@@ -6,7 +6,7 @@ const { performance } = require('node:perf_hooks');
 module.exports = async function runSurfaces({ browser, browserName, prepareContext, origin, track, output, reports, started }) {
   for (const surface of ['embed', 'radio']) {
     const context = await browser.newContext({ viewport: { width: 390, height: 844 }, colorScheme: 'dark' });
-    await prepareContext(context, 'dark');
+    await prepareContext(context, 'dark', surface === 'radio' ? { volume: 0.25 } : {});
     const page = await context.newPage();
     page.setDefaultTimeout(40_000);
     const report = { name: `${browserName}-${surface}-real-receipt`, requests: [], playbackLogs: [], errors: [], result: 'running' };
@@ -60,7 +60,7 @@ module.exports = async function runSurfaces({ browser, browserName, prepareConte
       assert.equal(receipts[0].response.status(), 200);
       report.receipt = await receipts[0].response.json();
       report.tapToReceiptMs = Math.round(receipts[0].at - tapped);
-      report.media = await target.evaluate(() => window.__plyrPlaybackMedia.map(audio => ({ playing: !audio.paused, time: audio.currentTime, duration: audio.duration })));
+      report.media = await target.evaluate(() => window.__plyrPlaybackMedia.map(audio => ({ playing: !audio.paused, time: audio.currentTime, duration: audio.duration, volume: audio.volume })));
       const active = report.media.find(audio => audio.playing);
       assert.ok(active, 'The receipt must arrive while real audio is playing');
       const threshold = Math.min(30, active.duration / 2);
@@ -69,6 +69,7 @@ module.exports = async function runSurfaces({ browser, browserName, prepareConte
       assert.equal(report.receipt.counted, true);
       assert.equal(report.receipt.sources.metrics, 'application_metrics');
       if (surface === 'radio') {
+        assert.equal(active.volume, 0.25, 'Radio source replacement preserves the selected volume');
         report.stateReadCount = report.requests.filter(request => request.path === '/api/radio/state').length;
         report.audioSourceReads = report.requests.filter(request => /\/api\/songs\/[^/]+\/audio$/.test(request.path)).length;
         assert.ok(report.stateReadCount <= Math.ceil(report.tapToReceiptMs / 5000) + 2, 'Page and player must share one polling cadence');

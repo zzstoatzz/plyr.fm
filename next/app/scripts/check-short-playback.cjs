@@ -25,7 +25,7 @@ function wave(seconds) {
 
 module.exports = async function runShortPlayback({ browser, browserName, prepareContext, origin, track, output, reports, started }) {
   const context = await browser.newContext({ viewport: { width: 390, height: 844 }, colorScheme: 'dark' });
-  await prepareContext(context, 'dark');
+  await prepareContext(context, 'dark', { volume: 0.25 });
   const page = await context.newPage();
   const report = { name: `${browserName}-short-wave-fixture`, durationSeconds: 0.4, occurrences: [], result: 'running' };
   reports.push(report);
@@ -53,11 +53,13 @@ module.exports = async function runShortPlayback({ browser, browserName, prepare
     await page.getByRole('button', { name: 'Play', exact: true }).first().click();
     await page.waitForFunction(() => window.__plyrPlaybackMedia.some(audio => audio.ended), undefined, { timeout: 15_000 });
     await page.waitForTimeout(700);
-    report.media = await page.evaluate(() => window.__plyrPlaybackMedia.map(audio => ({ duration: audio.duration, time: audio.currentTime, ended: audio.ended })));
+    report.media = await page.evaluate(() => window.__plyrPlaybackMedia.map(audio => ({ duration: audio.duration, time: audio.currentTime, ended: audio.ended, volume: audio.volume })));
     report.events = await page.evaluate(() => window.__plyrPlaybackEvents);
     assert.ok(report.media.some(audio => audio.ended && Math.abs(audio.duration - report.durationSeconds) < 0.01), 'A real short WAV reaches its end');
+    assert.ok(report.media.some(audio => audio.ended && audio.volume === 0.25), 'Source replacement preserves the selected volume');
     assert.equal(report.occurrences.length, 1, 'A 0.4second real listen qualifies once after half its duration');
     await page.getByText(new RegExp(`^${baseline + 1} plays?$`), { exact: true }).waitFor({ timeout: 4000 });
+    assert.equal(await page.getByRole('button', { name: 'Play', exact: true }).last().isEnabled(), true, 'A finished short track leaves the player ready to replay');
     report.result = 'passed';
   } catch (error) {
     report.result = 'failed';
