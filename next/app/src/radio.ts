@@ -20,6 +20,7 @@ interface RadioStateResponse {
   state: {
     status: string;
     positionSeconds: number;
+    startedAt?: number | null;
   };
 }
 

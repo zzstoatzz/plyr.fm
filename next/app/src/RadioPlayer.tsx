@@ -11,6 +11,7 @@ import { Action, Copy, Page, row } from './controls';
 import { usePlayback } from './playback';
 import { useAppPreferences } from './preference-context';
 import { radioMedia, radioPosition, radioStations, readRadio, type RadioSnapshot } from './radio';
+import { usePlayerAccounting } from './use-player-accounting';
 
 type Station = typeof radioStations[number];
 export const RadioContext = createContext<{ station: Station | null; tune: (station: Station | null) => void }>({ station: null, tune: () => {} });
@@ -26,6 +27,7 @@ export default function Radio({ compact = false, tuned }: { compact?: boolean; t
   const [error, setError] = useState('');
   const audio = useAudioPlayer(null);
   const status = useAudioPlayerStatus(audio);
+  const accounting = usePlayerAccounting(audio);
   const solo = usePlayback();
   const { preferences } = useAppPreferences();
   const snapshotRef = useRef(snapshot);
@@ -63,9 +65,16 @@ export default function Radio({ compact = false, tuned }: { compact?: boolean; t
   }, [audio, preferences.volume]);
 
   useEffect(() => {
+    accounting.stop();
     audio.pause();
     audio.replace(source);
-  }, [audio, source]);
+  }, [accounting, audio, source]);
+
+  useEffect(() => {
+    if (!listening || !song || !source) return;
+    accounting.begin(song.id.startsWith('trk_') ? song.id : `radio:${song.id}`, song.durationSeconds);
+    return () => accounting.stop();
+  }, [accounting, listening, song?.id, song?.durationSeconds, snapshot?.state.startedAt, source]);
 
   useEffect(() => {
     if ((!tuned && autoplay !== '1') || autoTuned.current || !source || snapshot?.state.status !== 'playing') return;
@@ -98,7 +107,7 @@ export default function Radio({ compact = false, tuned }: { compact?: boolean; t
     const latest = snapshotRef.current;
     if (latest) {
       const target = radioPosition(latest);
-      if (Math.abs(audio.currentTime - target) > 2) void audio.seekTo(target);
+      if (Math.abs(audio.currentTime - target) > 2) void accounting.seekTo(target);
     }
     if (!audio.playing) audio.play();
   }, [audio, listening, snapshot, source, status.isLoaded]);

@@ -5,6 +5,7 @@ import { api, type Track } from './api';
 import { useAuth } from './auth';
 import { blobUrl } from './identity';
 import { gatedAudioUrl, releaseGatedAudioUrl } from './gated-audio';
+import { usePlayerAccounting } from './use-player-accounting';
 
 export function PlaybackProvider({ children, playThrough, keepPlaying, volume }: {
   children: ReactNode; playThrough: boolean; keepPlaying: boolean; volume: number;
@@ -12,6 +13,7 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
   const auth = useAuth();
   const player = useAudioPlayer(null, { updateInterval: 250 });
   const status = useAudioPlayerStatus(player);
+  const accounting = usePlayerAccounting(player);
   const [queue, setQueue] = useState<Track[]>([]);
   const [index, setIndex] = useState(-1);
   const [resolving, setResolving] = useState(false);
@@ -22,6 +24,7 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
   const [repeat, setRepeat] = useState<'off' | 'all' | 'one'>('off');
   const sequence = useRef(0);
   const jamTrack = useRef<string | null>(null);
+  const jamSync = useRef(0);
   const objectUrl = useRef<string | null>(null);
   const current = queue[index];
 
@@ -38,6 +41,7 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
   useEffect(() => {
     if (previousAccount.current === auth.did) return;
     previousAccount.current = auth.did;
+    accounting.stop();
     sequence.current++;
     player.pause();
     player.replace(null);
@@ -59,6 +63,7 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
     const request = ++sequence.current;
     const startedAt = Date.now();
     console.info("[playback] load", { request, track: track.id, start });
+    accounting.stop();
     player.pause();
     setQueue(tracks);
     setIndex(at);
@@ -93,6 +98,7 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
       }
       objectUrl.current = availability === 'gated' ? url : null;
       if (previousSource) releaseGatedAudioUrl(previousSource);
+      accounting.begin(track.id, track.metadata.duration_seconds);
       if (Platform.OS !== 'web') {
         player.setActiveForLockScreen(true, {
           title: track.metadata.title,
@@ -173,26 +179,30 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
 
   const value: Playback = {
     async syncJam(track, position, playing) {
+      const sync = ++jamSync.current;
       const key = `${track.id}/${track.record.cid}`;
       if (jamTrack.current !== key || current?.id !== track.id || !ready) {
         jamTrack.current = key;
-        if (!await load([track], 0, false) || jamTrack.current !== key) return;
+        if (!await load([track], 0, false) || jamTrack.current !== key || sync !== jamSync.current) return;
       }
-      if (Math.abs(player.currentTime - position) > 0.6) await player.seekTo(position);
+      const request = sequence.current;
+      if (Math.abs(player.currentTime - position) > 0.6) await accounting.seekTo(position);
+      if (request !== sequence.current || jamTrack.current !== key || sync !== jamSync.current) return;
       if (playing && !player.playing) player.play();
       else if (!playing && player.playing) player.pause();
     },
     leaveJam() {
       if (!jamTrack.current) return;
       jamTrack.current = null;
+      accounting.stop();
       sequence.current++;
       setStarting(null);
       setResolving(false);
       player.pause();
     },
     play, queue, current, index, loading, error, status, repeat, setRepeat, toggle, next,
-    previous: () => { if (status.currentTime > 3 || index === 0) void player.seekTo(0); else void load(queue, index - 1); },
-    seek: (seconds) => { if (ready) void player.seekTo(seconds); },
+    previous: () => { if (status.currentTime > 3 || index === 0) void accounting.seekTo(0); else void load(queue, index - 1); },
+    seek: (seconds) => { if (ready) void accounting.seekTo(seconds); },
     jump: (at) => { void load(queue, at); },
     enqueue: (track) => { if (current) setQueue((items) => [...items, track]); else play(track); },
     remove: (at) => { if (at > index) setQueue((items) => items.filter((_, position) => position !== at)); },
