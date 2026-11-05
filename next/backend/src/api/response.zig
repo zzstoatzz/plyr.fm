@@ -114,6 +114,7 @@ pub fn jsonWithHeaders(
     try request.respond(body, .{
         .status = status,
         .extra_headers = headers[0..count],
+        .keep_alive = request.head.method != .HEAD,
     });
 }
 
