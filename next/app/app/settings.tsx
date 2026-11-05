@@ -25,6 +25,7 @@ export default function Settings() {
   const [picker, setPicker] = useState<Picker>();
   const [accent, setAccent] = useState<string>();
   const [error, setError] = useState<string>();
+  const [savingHelp, setSavingHelp] = useState(false);
   const login = { pathname: '/login', params: { return_to: '/settings' } } as const;
   const fontName = preferences.font === 'comic-sans' ? 'comic sans' : preferences.font;
   return <Page title="settings">
@@ -46,14 +47,19 @@ export default function Settings() {
     </SettingsSection>
     <SettingsSection title="account" icon={UserRound}>
       {auth.did ? <>
-        <SettingsRow label={auth.handle ? `@${auth.handle}` : auth.did} detail={status === 'synced' ? 'Preferences synced.' : status === 'syncing' ? 'Syncing preferences…' : 'Preferences kept on this device.'} />
+        <SettingsRow label={auth.handle ? `@${auth.handle}` : auth.did} detail={status === 'synced' ? 'Your settings are saved with your account.' : status === 'syncing' ? 'Saving your settings…' : status === 'error' ? 'Couldn’t save settings with your account. Your changes are kept on this device.' : 'Your settings are saved on this device.'} />
         <SettingsRow label="creator portal" href="/portal" />
-        {status === 'error' && <SettingsRow label="retry sync" disclosure={false} onPress={() => void sync()} />}
-        {!auth.preferenceSpace && <SettingsRow label="sign in again to enable sync" href={login} />}
+        {status === 'error' && <SettingsRow label="try saving again" disclosure={false} onPress={() => void sync()} />}
+        {!auth.preferenceSpace && <SettingsRow label="save preferences across devices" onPress={() => setSavingHelp(true)} />}
         <SettingsRow label="sign out" destructive onPress={() => void logout().catch(() => setError('Could not revoke this session.'))} />
-      </> : <SettingsRow label="sign in" detail="Sign in to sync preferences across your devices." href={login} />}
+      </> : <SettingsRow label="sign in" detail="Settings are saved on this device. Sign in to save them with your account." href={login} />}
     </SettingsSection>
     {error && <Copy live>{error}</Copy>}
+    {savingHelp && <Sheet title="save preferences across devices" close={() => setSavingHelp(false)}>
+      <Copy>Your appearance and playback settings are currently saved on this device. Sign in and allow plyr.fm to save them with your account so you can use them on other devices.</Copy>
+      <Copy>If your account’s server doesn’t support this yet, your settings will stay on this device.</Copy>
+      <Action label="continue to sign in" href={login} onPress={() => setSavingHelp(false)} />
+    </Sheet>}
     {picker && <Sheet title={names[picker]} close={() => setPicker(undefined)}>
       {picker === 'theme' && themes.map(value => <Choice key={value} label={value} selected={preferences.theme === value} onPress={() => { setPreferences({ theme: value }); setPicker(undefined); }} />)}
       {picker === 'font' && fonts.map(value => <Choice key={value} label={value === 'comic-sans' ? 'comic sans' : value} selected={preferences.font === value} onPress={() => { setPreferences({ font: value }); setPicker(undefined); }} />)}

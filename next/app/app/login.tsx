@@ -157,7 +157,7 @@ export default function Login() {
       <Copy>or sign up with <InlineLink href="https://bsky.app">Bluesky</InlineLink> or <InlineLink href="https://blackskyweb.xyz">Blacksky</InlineLink> and come back.</Copy>
     </>)}
     {(error || (!creating && auth.error)) && <Copy>{error || auth.error}</Copy>}
-    {!creating && (error || auth.scopeRejected) && <Action label="sign in without preference sync" onPress={() => void submit(true)}
+    {!creating && (error || auth.scopeRejected) && <Action label="keep settings on this device" onPress={() => void submit(true)}
       disabled={busy || !identifier} />}
   </Page>;
 }
