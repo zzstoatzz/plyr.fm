@@ -126,3 +126,61 @@ listen naturally for 6.5 seconds. This must retain the original occurrence and
 submit nothing new. A subsequent natural loop must qualify a different
 occurrence. Run this against the rebuilt bundle containing the seek-lifecycle
 fix; it is separate from the baseline acceptance above.
+
+## Live embed and Radio receipt checks
+
+After the accounting backend and client are deployed, PLAYBACK_SURFACES=1 adds
+an actual third-party iframe track embed and a Radio listen. These use real
+Next receipts without the accounting fixture. The embed hears the short track;
+Radio must hear the qualifying duration locally rather than using its existing
+station position. The script records tap-to-media and tap-to-receipt times,
+checks the durable receipt reports a counted play, and prevents production API
+POSTs. PLAYBACK_STATION selects a station (default loved); choose a catalog
+rotation with enough time left for the listening threshold. These checks are
+implemented for live verification, not included in the baseline passing claim.
+
+RADIO_ACCOUNTING=1 is a separate client regression with a held identity-read
+response and a fixture play receipt. It hears Radio naturally for thirty seconds,
+requires the canonical identity lookup to start only after qualification, checks
+a provisional pending occurrence in IndexedDB, stops playback, releases the
+identity response and verifies that delivery preserves the same occurrence ID.
+This isolates the contract that slow identity resolution must neither delay
+listening accumulation nor discard an already qualified play when audio stops.
+
+SHORT_PLAYBACK=1 adds a real0.4second PCM WAV at the audio delivery boundary,
+with a fixture receipt endpoint. This caught an Expo status integration defect:
+Chrome and WebKit both reached the actual media end at0.4seconds but submitted
+nothing, because the first loaded observation reported playing=false at position
+zero and the next progress sample left less than half the duration accumulated.
+The acceptance is one qualification after naturally hearing half the short WAV;
+there is no synthetic media clock or seek in this case. The source metadata
+remains the ordinary eleven-second catalog track so the test also establishes
+that actual decoded duration takes precedence.
+
+The short-WAV regression failed before the loaded-position-zero observation fix
+in both Chrome and WebKit, then passed in both after the fix, including the
+receipt-driven visible count. Repeat-one's explicit-seek and natural-loop
+regressions also passed in both. Delayed Radio identity delivery passed in both,
+including deletion of the persisted pending item after client receipt acceptance.
+The latest four-size/theme Chrome screenshots were inspected again and remained
+opaque and unclipped. Very short natural loops below the status sampling interval
+are not covered by the eleven-second repeat case.
+
+The accounting fixture now uses the exact durable receipt schema accepted by the
+client, including sources.dedup=postgres_durable. Report names identify fixtures;
+they do not establish backend durability. An initial run using an intentionally
+labeled source string correctly caused the stricter client validator to reject
+and retry; those fixtures were corrected rather than weakening validation.
+
+A subsequent WebKit repeat run hit another access-control message on a track GET
+while all functional assertions passed. The harness now records API response
+status/allow-origin, request failures and error stacks. Playwright's WebKit adapter
+promotes JavaScript-source error console messages to pageerror, so that event
+alone does not distinguish a caught Fetch failure from an uncaught exception.
+The focused recheck passed strict error assertions with this instrumentation;
+the earlier intermittent network observation remains recorded rather than hidden.
+
+The live embed surface case also reloads the cross-site iframe after its first
+receipt. It requires a different occurrence with the same anonymous listener
+inside the cooldown and a suppressed second receipt. Only listener equality is
+recorded; the listener value is not included in the report.

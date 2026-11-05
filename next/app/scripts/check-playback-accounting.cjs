@@ -8,13 +8,18 @@ module.exports = async function runAccounting({ browser, browserName, prepareCon
   await prepareContext(context, 'dark');
   const page = await context.newPage();
   page.setDefaultTimeout(40_000);
-  const report = { name: `${browserName}-accounting-fixture`, requests: [], consoleErrors: [], occurrences: [], screenshots: [], timingsMs: {}, result: 'running' };
+  const report = { name: `${browserName}-accounting-fixture`, requests: [], responses: [], requestFailures: [], consoleErrors: [], occurrences: [], screenshots: [], timingsMs: {}, result: 'running' };
   reports.push(report);
   const accepted = new Map();
   const attempts = [];
   let mode = 'reject-first';
   let baseline = 0;
-  page.on('pageerror', error => report.consoleErrors.push(error.message));
+  page.on('pageerror', error => report.consoleErrors.push({ message: error.message, name: error.name, stack: error.stack }));
+  page.on('requestfailed', request => report.requestFailures.push({ path: new URL(request.url()).pathname, error: request.failure()?.errorText }));
+  page.on('response', response => {
+    if (!new URL(response.url()).pathname.startsWith('/v1/')) return;
+    report.responses.push({ path: new URL(response.url()).pathname, status: response.status(), allowOrigin: response.headers()['access-control-allow-origin'] });
+  });
   page.on('request', request => report.requests.push({ method: request.method(), path: new URL(request.url()).pathname }));
   await page.route('**/v1/tracks/*/plays?*', async route => {
     const request = route.request();
@@ -37,7 +42,7 @@ module.exports = async function runAccounting({ browser, browserName, prepareCon
       record: { uri: Buffer.from(track.slice(4), 'base64url').toString() },
       play_count: accepted.get(occurrence), counted: true,
       dedup: { status: 'claimed', window_seconds: 30 },
-      sources: { metrics: 'application_metrics', dedup: 'durable_occurrence_fixture' },
+      sources: { metrics: 'application_metrics', dedup: 'postgres_durable' },
     }) });
   });
   const detail = `/v1/tracks/${track}`;
@@ -129,7 +134,7 @@ module.exports = async function runAccounting({ browser, browserName, prepareCon
       await page.getByRole('button', { name: 'Play', exact: true }).last().click();
       await page.waitForTimeout(6500);
       assert.equal(attempts.length, beforeExplicitSeek, 'An explicit backward seek cannot create a repeat occurrence');
-      await page.waitForRequest(request => request.method() === 'POST' && /\/plays\?/.test(request.url()), { timeout: 20_000 });
+      await page.waitForResponse(response => response.request().method() === 'POST' && /\/plays\?/.test(response.url()) && response.ok(), { timeout: 20_000 });
       assert.equal(accepted.size, 4, 'A natural repeat qualifies another occurrence');
       assert.notEqual(attempts.at(-1), attempts[beforeExplicitSeek - 1]);
       await page.getByRole('button', { name: 'Pause', exact: true }).last().click();

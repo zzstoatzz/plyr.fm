@@ -3,6 +3,10 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const { createRequire } = require('node:module');
 const { performance } = require('node:perf_hooks');
+const runAccounting = require('./check-playback-accounting.cjs');
+const runRadioAccounting = require('./check-radio-accounting.cjs');
+const runShortPlayback = require('./check-short-playback.cjs');
+const runSurfaces = require('./check-playback-surfaces.cjs');
 
 const started = performance.now();
 const origin = process.env.PLAYBACK_URL || 'https://next.plyr.fm';
@@ -165,9 +169,13 @@ async function run(browser, width, theme) {
   const browser = await playwright[browserName].launch(options);
   console.log(`Browser ready in ${Math.round(performance.now() - started)}ms`);
   try {
+    const environment = { browser, browserName, prepareContext, origin, track, output, reports, started };
+    if (process.env.SHORT_PLAYBACK === '1') await runShortPlayback(environment);
     const matrix = process.env.PLAYBACK_QUICK === '1' ? [[390, 'dark']] : [[390, 'light'], [390, 'dark'], [1280, 'light'], [1280, 'dark']];
     for (const [width, theme] of matrix) await run(browser, width, theme);
-    if (process.env.ACCOUNTING === '1' || process.env.PLAYBACK_ACCOUNTING === '1') await require('./check-playback-accounting.cjs')({ browser, browserName, prepareContext, origin, track, output, reports, started });
+    if (process.env.RADIO_ACCOUNTING === '1') await runRadioAccounting(environment);
+    if (process.env.PLAYBACK_SURFACES === '1') await runSurfaces(environment);
+    if (process.env.ACCOUNTING === '1' || process.env.PLAYBACK_ACCOUNTING === '1') await runAccounting(environment);
   } finally {
     await browser.close();
   }
