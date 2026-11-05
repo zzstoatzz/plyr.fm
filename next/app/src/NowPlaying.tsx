@@ -9,13 +9,17 @@ import SkipBack from 'lucide-react-native/icons/skip-back';
 import SkipForward from 'lucide-react-native/icons/skip-forward';
 import X from 'lucide-react-native/icons/x';
 import { useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { Animated, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { Track } from './api';
 import { useAppearance } from './appearance';
 import { Cover, artistName } from './CatalogPieces';
 import { PlayerControl } from './PlayerControl';
 import { usePlayback } from './playback';
+import { usePlayerDismiss } from './use-player-dismiss';
+
+const AnimatedSafeAreaView = Animated.createAnimatedComponent(SafeAreaView);
+const touchHeader = { touchAction: 'none', cursor: 'auto' } as const;
 
 function time(value: number) {
   const seconds = Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0;
@@ -28,6 +32,7 @@ export function NowPlaying({ track, close }: { track: Track; close: () => void }
   const { width, height } = useWindowDimensions();
   const [scrub, setScrub] = useState<{ id: string; seconds: number } | null>(null);
   const compact = width < 600;
+  const dismiss = usePlayerDismiss(compact, width, height, close);
   const sideBySide = width >= 800;
   const panelWidth = sideBySide ? Math.min(width - 80, 748) : 420;
   const controlRoom = 370 + 64 * (theme.scale - 1);
@@ -40,20 +45,22 @@ export function NowPlaying({ track, close }: { track: Track; close: () => void }
   const error = player.error || player.status.error;
   const caption = { color: theme.muted, fontFamily: theme.fontFamily, fontSize: 13 * theme.scale };
 
-  return <Modal visible transparent={!compact} animationType="fade" onRequestClose={close}>
-    <View style={[styles.backdrop, compact && { backgroundColor: theme.background }]}>
+  return <Modal visible transparent animationType="fade" onRequestClose={close}>
+    <View style={styles.backdrop}>
       {!compact && <Pressable style={StyleSheet.absoluteFill} accessibilityLabel="Dismiss now playing" onPress={close} />}
-      <SafeAreaView accessibilityViewIsModal edges={compact ? ['top', 'bottom'] : []}
-        style={[styles.panel, compact ? styles.full : [styles.floating, { maxWidth: panelWidth }], { backgroundColor: theme.background }]}>
+      <AnimatedSafeAreaView accessibilityViewIsModal edges={compact ? ['top', 'bottom'] : []}
+        style={[{ transform: [{ translateY: dismiss.translation }] }, styles.panel, compact ? styles.full : [styles.floating, { maxWidth: panelWidth }], { backgroundColor: theme.background }]}>
         <View style={[styles.header, { borderColor: theme.surface }]}>
           {compact && <PlayerControl icon={ChevronDown} label="Close" onPress={close} />}
+          <View {...dismiss.panHandlers} testID="now-playing-dismiss-region" style={[styles.dismissRegion, Platform.OS === 'web' && compact && touchHeader]}>
           <Text accessibilityRole="header"
             style={[styles.headerTitle, compact && styles.centerTitle,
               { color: theme.text, fontSize: 16 * theme.scale, fontFamily: theme.fontFamily }]}>Now playing</Text>
+          </View>
           {compact ? <View style={styles.headerSpacer} /> : <PlayerControl icon={X} label="Close" onPress={close} />}
         </View>
         <ScrollView contentContainerStyle={[styles.content, sideBySide && styles.desktopContent]} alwaysBounceVertical={false}>
-          <View style={styles.art}>
+          <View testID="now-playing-artwork" style={styles.art}>
             <Cover uri={track.media.artwork?.url} size={artwork} radius={16} />
           </View>
           <View style={[styles.body, sideBySide ? styles.desktopBody : { width: artwork }]}>
@@ -102,7 +109,7 @@ export function NowPlaying({ track, close }: { track: Track; close: () => void }
             </View>
           </View>
         </ScrollView>
-      </SafeAreaView>
+      </AnimatedSafeAreaView>
     </View>
   </Modal>;
 }
@@ -113,7 +120,8 @@ const styles = StyleSheet.create({
   full: { flex: 1 },
   floating: { maxHeight: '94%', borderRadius: 20, overflow: 'hidden' },
   header: { flexDirection: 'row', alignItems: 'center', minHeight: 50, paddingHorizontal: 20, borderBottomWidth: StyleSheet.hairlineWidth },
-  headerTitle: { flex: 1, fontWeight: '700' },
+  dismissRegion: { flex: 1, minHeight: 50, justifyContent: 'center' },
+  headerTitle: { fontWeight: '700' },
   centerTitle: { textAlign: 'center' },
   headerSpacer: { width: 44 },
   content: { paddingHorizontal: 20, paddingTop: 20, paddingBottom: 16, gap: 20, alignItems: 'center' },

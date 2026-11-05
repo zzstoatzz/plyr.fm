@@ -3,6 +3,11 @@ import { useCallback, useRef, useState, type ComponentRef, type ReactNode } from
 import { Platform, Pressable, ScrollView, Share, StyleSheet, TextInput, View } from 'react-native';
 import SearchIcon from 'lucide-react-native/icons/search';
 import X from 'lucide-react-native/icons/x';
+import PlayIcon from 'lucide-react-native/icons/play';
+import PauseIcon from 'lucide-react-native/icons/pause';
+import ListPlus from 'lucide-react-native/icons/list-plus';
+import Ellipsis from 'lucide-react-native/icons/ellipsis';
+import ShareIcon from 'lucide-react-native/icons/share-2';
 import { api, type SearchHit, type Track } from './api';
 import {
   Button, Detail, Heading, ListRows, Row, RowPlay, Status, TrackRows, artistName, errorMessage, useColors,
@@ -10,6 +15,8 @@ import {
 } from './CatalogPieces';
 import { WaveLoading } from './WaveLoading';
 import { DetailHeader } from './DetailHeader';
+import { TrackPresentation } from './TrackPresentation';
+import { PlayerControl } from './PlayerControl';
 import { Sheet } from './Sheet';
 import { usePlayback } from './playback';
 import { TrackLikes } from './TrackLikes';
@@ -127,7 +134,7 @@ function Search({ onPlay }: { onPlay: Play }) {
   </>;
 }
 
-function ShareLink({ path }: { path: string }) {
+function ShareLink({ path, compact = false }: { path: string; compact?: boolean }) {
   const [message, setMessage] = useState<string>();
   async function share() {
     try {
@@ -145,7 +152,7 @@ function ShareLink({ path }: { path: string }) {
     }
   }
   return <View style={styles.group}>
-    <Button label="Share" onPress={() => void share()} />
+    {compact ? <PlayerControl icon={ShareIcon} label="Share" onPress={() => void share()} /> : <Button label="Share" onPress={() => void share()} />}
     {message && <Detail>{message}</Detail>}
   </View>;
 }
@@ -166,20 +173,20 @@ function TrackDetail({ id, onPlay, onEnqueue, trackActions }: {
   const [actionsOpen, setActionsOpen] = useState(false);
   if (!track) return <Status loading={!result.error} error={result.error} retry={result.retry} />;
   return <>
-    <DetailHeader title={track.metadata.title} artwork={track.media.artwork?.url}>
-    <Link href={{ pathname: '/u/[handle]', params: { handle: track.artist.profile.handle || track.artist.did } }}>
-      <Detail>{artistName(track)}</Detail>
-    </Link>
-    {track.metadata.album && <Detail>{track.metadata.album}</Detail>}
-    <View style={styles.actions}><TrackPlayCount track={track} /><TrackLikes track={track} /></View>
-    </DetailHeader>
-    <View style={styles.actions}>
-      <Action primary disabled={player.current?.id === track.id && player.loading}
-        label={player.current?.id === track.id ? (player.loading ? 'Loading…' : player.status.playing ? 'Pause' : 'Play') : 'Play'}
-        onPress={() => player.current?.id === track.id ? player.toggle() : onPlay(track)} />
-      <Action label="Add to queue" onPress={() => onEnqueue(track)} />
-      <Action label="More" onPress={() => setActionsOpen(true)} />
-    </View>
+    <TrackPresentation track={track}
+      controls={<>
+        <View style={{ flex: 1, alignItems: 'center' }}><TrackLikes compact track={track} /></View>
+        <View style={{ flex: 1, alignItems: 'center' }}><PlayerControl primary large icon={player.current?.id === track.id && player.status.playing ? PauseIcon : PlayIcon}
+          label={player.current?.id === track.id && player.status.playing ? 'Pause' : 'Play'}
+          busy={player.current?.id === track.id && player.loading}
+          onPress={() => player.current?.id === track.id ? player.toggle() : onPlay(track)} /></View>
+        <View style={{ flex: 1, alignItems: 'center' }}><PlayerControl icon={ListPlus} label="Add to queue" onPress={() => onEnqueue(track)} /></View>
+      </>}
+      stats={<TrackPlayCount track={track} />}
+      utilities={<>
+        <ShareLink compact path={`/track/${encodeURIComponent(track.id)}`} />
+        <PlayerControl icon={Ellipsis} label="More" onPress={() => setActionsOpen(true)} />
+      </>} />
     {actionsOpen && <Sheet title="Track actions" close={() => setActionsOpen(false)}>
       <View style={styles.actions}>
         {auth.did === track.artist.did && <Action label="Edit track" href={`/edit-track/${track.id}`} onPress={() => setActionsOpen(false)} />}
@@ -187,7 +194,6 @@ function TrackDetail({ id, onPlay, onEnqueue, trackActions }: {
         {trackActions ? trackActions(track) : <SignedTrackActions track={track} />}
       </View>
     </Sheet>}
-    {track.metadata.description && <Detail>{track.metadata.description}</Detail>}
   </>;
 }
 
