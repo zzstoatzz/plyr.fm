@@ -75,6 +75,7 @@ pub fn build(b: *std.Build) void {
 
     const tests = b.addTest(.{ .root_module = root_module });
     const run_tests = b.addRunArtifact(tests);
+    run_tests.has_side_effects = true;
     const test_step = b.step("test", "Run Zig backend tests");
     test_step.dependOn(&run_tests.step);
 
