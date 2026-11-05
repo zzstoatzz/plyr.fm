@@ -24,6 +24,6 @@ export function parseSelectedTags(value: string | null): string[] {
   if (!value) return [];
   try {
     const parsed: unknown = JSON.parse(value);
-    return Array.isArray(parsed) ? [...new Set(parsed.filter((tag): tag is string => typeof tag === 'string' && tag.length > 0 && new TextEncoder().encode(tag).length <= 50))].slice(0, 10) : [];
+    return Array.isArray(parsed) ? [...new Set(parsed.filter((tag): tag is string => typeof tag === 'string' && tag.length > 0 && new TextEncoder().encode(tag).length <= 200))].slice(0, 10) : [];
   } catch { return []; }
 }

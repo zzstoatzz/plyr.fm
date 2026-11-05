@@ -73,3 +73,12 @@ test('long DID batches stay below the artist API body limit', async () => {
   }, new AbortController().signal);
   assert.ok(batches > 1);
 });
+
+test('catalog tags expanded by Unicode lowercase survive selection persistence', () => {
+  const authored = 'Ⱥ'.repeat(25);
+  const catalog = 'ⱥ'.repeat(25);
+  assert.equal(new TextEncoder().encode(authored).length, 50);
+  assert.equal(new TextEncoder().encode(catalog).length, 75);
+  assert.deepEqual(parseSelectedTags(JSON.stringify([catalog])), [catalog]);
+  assert.deepEqual(parseSelectedTags(JSON.stringify(['x'.repeat(200), 'x'.repeat(201)])), ['x'.repeat(200)]);
+});
