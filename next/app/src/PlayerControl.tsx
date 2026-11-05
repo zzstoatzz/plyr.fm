@@ -6,7 +6,7 @@ export function PlayerControl({ icon: Icon, label, onPress, primary, large, busy
   icon: typeof Play; label: string; onPress: () => void; primary?: boolean; large?: boolean; busy?: boolean; destructive?: boolean;
 }) {
   const theme = useAppearance();
-  const color = destructive ? theme.danger : theme.text;
+  const color = destructive ? theme.danger : primary ? theme.accent : theme.text;
   const size = large ? 64 : primary ? 48 : 44;
   return <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ busy, disabled: busy }}
     disabled={busy} onPress={onPress}
