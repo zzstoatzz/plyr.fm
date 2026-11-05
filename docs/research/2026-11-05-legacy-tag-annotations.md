@@ -72,6 +72,36 @@ confirmed all 160 had the expected source, current CID and verified absence fenc
 The rehearsal branch was deleted after evidence collection. The parent Next
 branch, production database and PDS records were not written by this rehearsal.
 
-The final Next import remains a separate step after review, deployment and normal
-verified reconciliation. Its admitted/skipped counts may differ as repositories
-change; unknown or mismatched records must continue to be skipped.
+## Final Next import
+
+After verified backfill completed and the deployment of schema 0034 succeeded,
+the frozen public artifact was imported into `next-zig` in the staging project,
+branch `br-rapid-frog-af0th9op`, database `neondb`. The endpoint, database marker,
+exact deployment commit and migration ledger were independently checked first.
+The artifact SHA-256 was
+`5d62fd0abebe86a7841e1bfbf2ac583382ed4e3a9d91336f6f87cc6badff1125`.
+
+Audit admitted 350 of its 418 tracks and skipped 68 missing/deleted records.
+There were no CID-mismatched, explicit-field or unknown-evidence exceptions.
+The first import inserted 1,250 normalized memberships; the second inserted zero.
+Independent SQL confirmed all 1,250 annotations across 350 tracks retained the
+legacy source, matching current CID, verified absent tag field and version-3
+repository head. Production and PDS records were not written.
+
+A separate read-only audit checked all 171 public source tracks marked
+`tags_pds_synced=true`: 166 had exact-CID verified nonempty tags, and five were
+missing/deleted under current version-3 heads. None were verified-absent, explicitly
+empty, CID-mismatched or unknown. At this checkpoint, excluding those source flags
+did not omit any demonstrably safe legacy fallback.
+
+The public API then returned electronic with 130 tracks (15 verified, 115 legacy),
+experimental with 45 (11 verified, 34 legacy), and dub techno with six (one verified,
+five legacy). The legacy-only tag `tech` returned its one actual track, matching
+the frozen source artifact. Two real electronic pages returned four distinct
+tracks; using their cursor with a different tag returned 400. These are current
+verified-policy and Next-metric results, not a promise of identical production
+counts or ranking.
+
+Future audits/imports may admit different records as repositories change; missing,
+unknown or mismatched evidence must continue to be skipped. Home deployment and
+browser verification are separate from this completed data migration.
