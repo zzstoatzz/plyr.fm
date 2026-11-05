@@ -66,15 +66,15 @@ jobs:
           PLYR_ZIG_TEST_REDIS_URL: redis://127.0.0.1:6380/0
         run: zig build test
 
-      - name: http contract smoke
-        run: python3 scripts/test_http.py
-
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
       - name: install uv
         uses: astral-sh/setup-uv@v7
+
+      - name: http contract smoke
+        run: uv run --no-project python scripts/test_http.py
 
       # the zig schema sits on top of the python backend's public schema, so
       # build that first on a separate marked database, then apply ours twice
