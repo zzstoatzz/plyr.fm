@@ -36,8 +36,8 @@ test('pause, buffering, restoration and unexplained jumps earn no listening', ()
 	session.observe(token, sample(100, 0));
 	session.observe(token, { ...sample(130, 1000), playing: false });
 	session.observe(token, sample(130, 60_000));
-	session.observe(token, { ...sample(135, 65_000), buffering: true });
-	session.observe(token, sample(135, 70_000));
+	session.observe(token, { ...sample(130, 65_000), buffering: true });
+	session.observe(token, sample(130, 70_000));
 	session.observe(token, sample(195, 71_000));
 	assert.equal(session.listenedSeconds, 0);
 	assert.equal(session.observe(token, sample(196, 72_000)), null);
@@ -92,4 +92,27 @@ test('invalid observations and backwards monotonic clocks cannot add credit', ()
 	session.observe(token, sample(Number.NaN));
 	session.observe(token, sample(20, 500));
 	assert.equal(session.listenedSeconds, 0);
+});
+
+test('a short track qualifies from its final paused observation without needing an intermediate tick', () => {
+	const session = new ListeningSession();
+	const token = session.begin('track', 'short', 0.4);
+	session.observe(token, sample(0));
+	assert.deepEqual(session.observe(token, { ...sample(0.4), playing: false }), { trackId: 'track', occurrenceId: 'short' });
+	assert.equal(session.observe(token, { ...sample(0.4, 1000), playing: false }), null);
+});
+
+test('pause and buffering preserve progress up to the transition and exclude the subsequent gap', () => {
+	for (const stopped of [{ playing: false }, { buffering: true }]) {
+		const session = new ListeningSession();
+		const token = session.begin('track', 'occurrence', 10);
+		session.observe(token, sample(0));
+		session.observe(token, { ...sample(2), ...stopped });
+		assert.equal(session.listenedSeconds, 2);
+		session.observe(token, { ...sample(2, 20_000), ...stopped });
+		assert.equal(session.listenedSeconds, 2);
+		session.observe(token, sample(2, 21_000));
+		assert.equal(session.listenedSeconds, 2);
+		assert.deepEqual(session.observe(token, sample(5, 24_000)), { trackId: 'track', occurrenceId: 'occurrence' });
+	}
 });

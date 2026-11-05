@@ -170,3 +170,14 @@ test('submission waits for per-event persistence before touching the transport',
 	await until(() => sent);
 	outbox.dispose();
 });
+
+test('metric cache evicts old unobserved tracks while retaining visible subscriptions', () => {
+	const metrics = new PlayMetrics();
+	metrics.observe('visible', 10);
+	const unsubscribe = metrics.subscribe('visible', () => {});
+	for (let index = 0; index < 1024; index++) metrics.observe(`track-${index}`, index);
+	assert.equal(metrics.get('visible'), 10);
+	assert.equal(metrics.get('track-0'), undefined);
+	assert.equal(metrics.get('track-1023'), 1023);
+	unsubscribe();
+});

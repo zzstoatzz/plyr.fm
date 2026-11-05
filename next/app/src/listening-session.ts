@@ -67,7 +67,7 @@ export class ListeningSession {
 		if (positive(observation.durationSeconds)) current.durationSeconds = observation.durationSeconds;
 		const previous = current.previous;
 		current.previous = observation;
-		if (previous && previous.playing && !previous.buffering && observation.playing && !observation.buffering) {
+		if (previous && previous.playing && !previous.buffering) {
 			const elapsed = (observation.monotonicMs - previous.monotonicMs) / 1000;
 			const progress = observation.positionSeconds - previous.positionSeconds;
 			const rate = positive(observation.playbackRate) ? observation.playbackRate : 1;

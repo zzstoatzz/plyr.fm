@@ -8,6 +8,13 @@ export class PlayMetrics {
 
 	observe(trackId: string, count: number): void {
 		if (!Number.isSafeInteger(count) || count < 0 || count <= (this.counts.get(trackId) ?? -1)) return;
+		if (!this.counts.has(trackId) && this.counts.size >= 1024) {
+			for (const candidate of this.counts.keys()) {
+				if (this.listeners.has(candidate)) continue;
+				this.counts.delete(candidate);
+				break;
+			}
+		}
 		this.counts.set(trackId, count);
 		for (const listener of this.listeners.get(trackId) ?? []) listener();
 	}
