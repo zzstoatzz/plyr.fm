@@ -115,7 +115,7 @@ policy rather than silently counting starts or never counting them.
 | Acceptance scenario | Required evidence |
 |---|---|
 | Normal, short, unknown-duration audio | Exact qualification boundary and documented unknown-duration behavior; fetching or clicking alone earns nothing. |
-| Seek, pause, buffer, restored position | No credit for jumps, silence or restoration; real resumed progress qualifies. |
+| Seek, pause, buffer, restored position | No credit for jumps, paused/stalled intervals or restoration; real resumed progress qualifies. |
 | Rapid A→B→A, cached readiness, stale errors | Each observation belongs to the correct load/occurrence; no successor mutation. |
 | Repeated entry, repeat-one, natural advance | Distinct occurrences; documented repeat admission; one end advances once. |
 | Offline, HTTP failure, lost response, concurrent duplicate | Same submission identity; committed event counted once; rolled-back event remains recoverable. |
