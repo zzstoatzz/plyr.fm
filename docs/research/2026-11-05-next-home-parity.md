@@ -29,7 +29,7 @@ outside this change.
 
 ## Verification
 
-`bun run check`, the Node tests and `bun run build:web` pass. Tests exercise
+`npm run check`, `npm test` and `npm run build:web` pass. Tests exercise
 multi-page public follows, failed/repeated pagination, bounded concurrent artist
 resolution, original follow ordering, account cancellation, period cycling and
 account-isolated tag persistence.
