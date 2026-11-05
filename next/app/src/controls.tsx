@@ -1,6 +1,7 @@
+import { Text } from './Text';
 import type { ReactNode, Ref } from 'react';
 import { Link, type Href } from 'expo-router';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, type TextInputProps, type ScrollViewProps, type ScrollViewInstance, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, TextInput, type TextInputProps, type ScrollViewProps, type ScrollViewInstance, View } from 'react-native';
 import { useAppearance } from './appearance';
 
 export function Action({ label, onPress, href, disabled, selected, primary }: {

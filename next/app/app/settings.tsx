@@ -6,7 +6,7 @@ import { Action, Copy, Field, Page, row } from '../src/controls';
 import { useAppPreferences } from '../src/preference-context';
 
 const themes = ['system', 'light', 'dark'] as const;
-const fonts = ['system', 'mono', 'serif'] as const;
+const fonts = ['comic-sans', 'system', 'mono', 'serif'] as const;
 const accents = ['#6a9fff', '#4ade80', '#f472b6', '#fbbf24', '#a78bfa', '#fb7185', '#2dd4bf', '#f97316'];
 
 export default function Settings() {
@@ -22,7 +22,7 @@ export default function Settings() {
     <Copy>Interface size</Copy>
     <View style={row}>{[0.9, 1, 1.15, 1.3].map((value) => <Action key={value} label={`${Math.round(value * 100)}%`} selected={preferences.scale === value} onPress={() => setPreferences({ scale: value })} />)}</View>
     <Copy>Font</Copy>
-    <View style={row}>{fonts.map((value) => <Action key={value} label={value} selected={preferences.font === value} onPress={() => setPreferences({ font: value })} />)}</View>
+    <View style={row}>{fonts.map((value) => <Action key={value} label={value === 'comic-sans' ? 'comic sans' : value} selected={preferences.font === value} onPress={() => setPreferences({ font: value })} />)}</View>
     <Copy>Accent color</Copy>
     <View style={row}>{accents.map((value) => <Action key={value} label={value} selected={preferences.accent === value} onPress={() => {
       setAccent(undefined);

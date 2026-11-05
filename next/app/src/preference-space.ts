@@ -7,7 +7,7 @@ const KEY = 'self';
 export interface PersonalPreferences {
 	theme: 'system' | 'light' | 'dark';
 	accent: string;
-	font: 'system' | 'mono' | 'serif';
+	font: 'comic-sans' | 'system' | 'mono' | 'serif';
 	keepPlaying: boolean;
 	playThrough: boolean;
 	scale: number;
@@ -19,7 +19,7 @@ export function decodePreferences(value: unknown): Partial<PersonalPreferences> 
 	const prefs: Partial<PersonalPreferences> = {};
 	if (v.theme === 'system' || v.theme === 'light' || v.theme === 'dark') prefs.theme = v.theme;
 	if (typeof v.accent === 'string' && /^#[0-9a-f]{6}$/i.test(v.accent)) prefs.accent = v.accent;
-	if (v.font === 'system' || v.font === 'mono' || v.font === 'serif') prefs.font = v.font;
+	if (v.font === 'comic-sans' || v.font === 'system' || v.font === 'mono' || v.font === 'serif') prefs.font = v.font;
 	if (typeof v.keepPlaying === 'boolean') prefs.keepPlaying = v.keepPlaying;
 	if (typeof v.playThrough === 'boolean') prefs.playThrough = v.playThrough;
 	if (v.scale === 90 || v.scale === 100 || v.scale === 115 || v.scale === 130) prefs.scale = v.scale / 100;

@@ -9,7 +9,7 @@ export type PreferenceStatus = 'local' | 'syncing' | 'synced' | 'error';
 
 const KEY = 'plyr-next:prefs';
 const DEFAULTS: Preferences = {
-	theme: 'system', accent: '#6a9fff', font: 'system', keepPlaying: false, playThrough: true, volume: 1, scale: 1
+	theme: 'system', accent: '#6a9fff', font: 'comic-sans', keepPlaying: false, playThrough: true, volume: 1, scale: 1
 };
 type Account = {
 	did: string;

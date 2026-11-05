@@ -30,7 +30,7 @@ export function AppearanceProvider({ preferences, children }: { preferences: Per
     }
     meta.content = background;
   }, [isDark, pathname]);
-  const fontFamily = preferences.font === 'mono' ? Platform.select({ ios: 'Menlo', default: 'monospace' })
+  const fontFamily = preferences.font === 'comic-sans' ? 'PlyrComic' : preferences.font === 'mono' ? Platform.select({ ios: 'Menlo', default: 'monospace' })
     : preferences.font === 'serif' ? Platform.select({ ios: 'Georgia', default: 'serif' }) : undefined;
   return <Appearance.Provider value={{
     ...(isDark ? dark : light), accent: preferences.accent, fontFamily, scale: preferences.scale, dark: isDark

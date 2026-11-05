@@ -1,8 +1,10 @@
+import { Text } from '../src/Text';
 import { Link, Stack, router, usePathname, type Href } from 'expo-router';
 import { useEffect, useState } from 'react';
+import { useFonts } from 'expo-font';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Pressable, Text, View, useWindowDimensions, StyleSheet } from 'react-native';
+import { Pressable, View, useWindowDimensions, StyleSheet } from 'react-native';
 import { AppearanceProvider, useAppearance } from '../src/appearance';
 import { restoreAuth, useAuth } from '../src/auth';
 import ArrowLeft from 'lucide-react-native/icons/arrow-left';
@@ -21,9 +23,14 @@ import { pageFrame } from '../src/controls';
 import { usePreferences } from '../src/preferences';
 
 export default function RootLayout() {
+  const [fontsLoaded, fontError] = useFonts({
+    PlyrComic: require('../assets/fonts/ComicNeue-Regular.ttf'),
+    PlyrComicBold: require('../assets/fonts/ComicNeue-Bold.ttf')
+  });
   const auth = useAuth();
   const prefs = usePreferences(auth);
   useEffect(() => { void restoreAuth(); }, []);
+  if (!fontsLoaded && !fontError) return null;
   return <PreferencesProvider value={prefs}>
     <AppearanceProvider preferences={prefs.preferences}>
       <PlaybackProvider playThrough={prefs.preferences.playThrough} keepPlaying={prefs.preferences.keepPlaying} volume={prefs.preferences.volume}>

@@ -1,3 +1,4 @@
+import { Text } from '../src/Text';
 import { randomUUID } from 'expo-crypto';
 import { router } from 'expo-router';
 import Users from 'lucide-react-native/icons/users';
@@ -10,7 +11,7 @@ import Shuffle from 'lucide-react-native/icons/shuffle';
 import Trash from 'lucide-react-native/icons/trash';
 import Volume2 from 'lucide-react-native/icons/volume-2';
 import { useRef, useState, type ReactNode } from 'react';
-import { Pressable, type ScrollViewInstance, StyleSheet, Text, View } from 'react-native';
+import { Pressable, type ScrollViewInstance, StyleSheet, View } from 'react-native';
 import type { Track } from '../src/api';
 import { useAppearance } from '../src/appearance';
 import { artistName, Cover, Heading } from '../src/CatalogPieces';

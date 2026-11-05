@@ -1,5 +1,6 @@
+import { Text } from './Text';
 import { useCallback, useState } from 'react';
-import { Pressable, Text } from 'react-native';
+import { Pressable } from 'react-native';
 import Heart from 'lucide-react-native/icons/heart';
 import { api, type Track } from './api';
 import { Button, Row, Status, usePages } from './CatalogPieces';

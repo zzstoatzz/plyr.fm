@@ -10,7 +10,7 @@
         "properties": {
           "theme": { "type": "string", "enum": ["system", "light", "dark"] },
           "accent": { "type": "string", "maxLength": 7 },
-          "font": { "type": "string", "enum": ["system", "mono", "serif"] },
+          "font": { "type": "string", "enum": ["comic-sans", "system", "mono", "serif"] },
           "keepPlaying": { "type": "boolean" },
           "playThrough": { "type": "boolean" },
           "scale": { "type": "integer", "enum": [90, 100, 115, 130], "description": "Interface scale as a percentage." }
