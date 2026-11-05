@@ -102,7 +102,8 @@ function People({ id, viewer, close }: { id: string; viewer?: { did: string; uri
   const auth = useAuth();
   const ownProfile = useCallback(() => viewer?.liked ? api.artist(viewer.did) : Promise.resolve(undefined), [viewer?.did, viewer?.liked]);
   const profile = useResource(ownProfile);
-  const actors = likes.data.filter(({ actor }) => actor.did !== viewer?.did).map(({ actor }) => actor);
+  const actors = [...new Map(likes.data.filter(({ actor }) => actor.did !== viewer?.did)
+    .map(({ actor }) => [actor.did, actor] as const)).values()];
   if (viewer?.liked) actors.unshift({ did: viewer.did, profile: {
     handle: profile.data?.handle || auth.handle || undefined,
     display_name: profile.data?.display_name, avatar_url: profile.data?.avatar_url

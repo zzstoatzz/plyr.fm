@@ -24,6 +24,7 @@ const output = process.env.TRACK_ACTION_OUTPUT || `/tmp/plyr-track-actions-${Dat
       let loseNextCreate = false;
       let lost = 0;
       let staleLikers = false;
+      let duplicateLiker = false;
       const { page, context } = await fixturePage(browser, accounts, {
         dist: process.env.TRACK_ACTION_DIST,
         context: { viewport: { width, height: 900 }, colorScheme: theme }, preferences: { theme },
@@ -41,7 +42,7 @@ const output = process.env.TRACK_ACTION_OUTPUT || `/tmp/plyr-track-actions-${Dat
         const url = new URL(request.url());
         catalogRequests.push(url.pathname);
         if (url.pathname === '/v1/tracks/' + id) return route.fulfill({ json: track });
-        if (url.pathname.endsWith('/likes')) return route.fulfill({ json: { object: 'list', data: staleLikers ? [{ record: { uri: 'at://' + accounts[handle].did + '/fm.plyr.like/stale' }, actor: { did: accounts[handle].did, profile: { handle } } }] : [], has_more: false } });
+        if (url.pathname.endsWith('/likes')) return route.fulfill({ json: { object: 'list', data: duplicateLiker ? [0, 1].map(index => ({ record: { uri: 'at://did:web:another.test/fm.plyr.like/' + index }, actor: { did: 'did:web:another.test', profile: { handle: 'another.test' } } })) : staleLikers ? [{ record: { uri: 'at://' + accounts[handle].did + '/fm.plyr.like/stale' }, actor: { did: accounts[handle].did, profile: { handle } } }] : [], has_more: false } });
         if (url.pathname === '/v1/playlists') return route.fulfill({ json: { object: 'list', data: [], has_more: false } });
         return route.fulfill({ json: { object: 'list', data: [], has_more: false } });
       });
@@ -73,6 +74,12 @@ const output = process.env.TRACK_ACTION_OUTPUT || `/tmp/plyr-track-actions-${Dat
         assert.equal(await page.getByRole('dialog').getByRole('link').count(), 0, 'Removed own like is hidden even while indexed');
         await page.getByRole('button', { name: 'Close', exact: true }).click();
         staleLikers = false;
+        duplicateLiker = true;
+        await page.getByRole('button', { name: 'See 7 likes', exact: true }).click();
+        await page.getByRole('dialog').getByRole('link', { name: /another.test/ }).first().waitFor();
+        assert.equal(await page.getByRole('dialog').getByRole('link', { name: /another.test/ }).count(), 1, 'One person appears once even with duplicate PDS likes');
+        await page.getByRole('button', { name: 'Close', exact: true }).click();
+        duplicateLiker = false;
         loseNextCreate = true;
         await page.getByRole('button', { name: 'Like', exact: true }).click();
         await page.getByText('Couldn’t update like', { exact: true }).waitFor();
