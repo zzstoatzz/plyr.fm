@@ -16,6 +16,7 @@ const verified_list = @import("../domain/verified_list.zig");
 const track_id = @import("../identity/track_id.zig");
 const liked_track_store = @import("liked_track_store.zig");
 const store_module = @import("track_store.zig");
+const track_tag_sql = @import("track_tag_sql.zig");
 
 const TrackStore = store_module.TrackStore;
 
@@ -51,6 +52,10 @@ pub const PostgresComposedTrackStore = struct {
                 .name = try allocator.dupe(u8, row.get([]const u8, 0) catch return error.CorruptProjection),
                 .track_count = count,
                 .total_plays = plays,
+                .sources = .{
+                    .verified_repo = row.get(i64, 3) catch return error.CorruptProjection,
+                    .legacy_plyr = row.get(i64, 4) catch return error.CorruptProjection,
+                },
             });
         }
         return data.toOwnedSlice(allocator);
@@ -599,18 +604,10 @@ fn afterCursor(comptime at: []const u8, comptime uri: []const u8) []const u8 {
     return "\n  AND (v.record_created_at_us, v.record_uri) < (" ++ at ++ "::bigint, " ++ uri ++ ")";
 }
 
-const tag_filter =
-    \\  AND (cardinality($4::text[]) = 0 OR EXISTS (
-    \\    SELECT 1 FROM plyr_index.track_tag_records AS tags
-    \\    WHERE tags.record_uri = v.record_uri AND tags.record_cid = v.record_cid
-    \\      AND tags.tags && plyr_index.normalize_track_tags($4::text[])
-    \\  ))
-;
-
-const discovery_query = pagedQuery(discovery_policy ++ tag_filter, "$5::bigint");
-const discovery_after_query = pagedQuery(discovery_policy ++ tag_filter ++ afterCursor("$5", "$6"), "$7::bigint");
-const artist_query = pagedQuery(artist_policy ++ tag_filter, "$6::bigint");
-const artist_after_query = pagedQuery(artist_policy ++ tag_filter ++ afterCursor("$6", "$7"), "$8::bigint");
+const discovery_query = pagedQuery(discovery_policy ++ track_tag_sql.filter, "$5::bigint");
+const discovery_after_query = pagedQuery(discovery_policy ++ track_tag_sql.filter ++ afterCursor("$5", "$6"), "$7::bigint");
+const artist_query = pagedQuery(artist_policy ++ track_tag_sql.filter, "$6::bigint");
+const artist_after_query = pagedQuery(artist_policy ++ track_tag_sql.filter ++ afterCursor("$6", "$7"), "$8::bigint");
 
 const liked_joined_projection = "SELECT\n" ++ projected_columns ++
     \\, viewer_like.liked_at_us, viewer_like.like_uri
@@ -727,6 +724,11 @@ test "composed PostgreSQL reads use verified records and authoritative account s
     _ = try pool.exec("CREATE SCHEMA plyr_index", .{});
     _ = try pool.exec("CREATE EXTENSION IF NOT EXISTS pg_trgm", .{});
     try projected_tracks.createTestTable(pool);
+    var annotation_statements = std.mem.splitScalar(u8, @embedFile("migration_0033_tag_annotations"), ';');
+    while (annotation_statements.next()) |raw| {
+        const statement = std.mem.trim(u8, raw, " \n\r\t");
+        if (statement.len != 0) _ = try pool.exec(statement, .{});
+    }
     try projected_profiles.createTestTable(pool);
     try projected_availability.createTestTable(pool);
     try projected_lists.createTestTables(pool);
@@ -1238,6 +1240,62 @@ test "composed PostgreSQL reads use verified records and authoritative account s
     try std.testing.expectEqual(@as(i64, 2), catalog[1].track_count);
     _ = try pool.exec("DELETE FROM plyr_index.track_records WHERE record_uri=$1", .{quiet.upsert.record_uri});
 
+    try std.testing.expectEqual(@as(i64, 1), catalog[0].sources.verified_repo);
+    try std.testing.expectEqual(@as(i64, 0), catalog[0].sources.legacy_plyr);
+    _ = try pool.exec("INSERT INTO plyr_index.legacy_track_tags(record_uri,observed_record_cid,tag,source_track_id,source_observed_at) VALUES ($1,$3,'legacy-only',1,now()),($1,$3,'drone',1,now()),($2,$3,'legacy-only',2,now()),($2,$3,'drone',2,now())", .{ record_uri, pds_only_uri, record_cid });
+    try std.testing.expectEqual(@as(usize, 2), (try implementation.store().listTags(a, "fm.plyr.dev.track", 15)).len);
+    _ = try track_writer.store().apply(a, pds_only);
+    const inherited = try implementation.store().listTags(a, "fm.plyr.dev.track", 15);
+    try std.testing.expectEqualStrings("drone", inherited[0].name);
+    try std.testing.expectEqual(@as(i64, 2), inherited[0].track_count);
+    try std.testing.expectEqual(@as(i64, 1), inherited[0].sources.verified_repo);
+    try std.testing.expectEqual(@as(i64, 1), inherited[0].sources.legacy_plyr);
+    const legacy_page = try implementation.store().listPublic(a, .{
+        .collection = "fm.plyr.dev.track",
+        .scope = .discovery,
+        .limit = 10,
+        .after = null,
+        .tags = &.{"legacy-only"},
+    });
+    try std.testing.expectEqual(@as(usize, 1), legacy_page.len);
+    try std.testing.expectEqualStrings(pds_only_uri, legacy_page[0].value.record.uri);
+    const overlap = try implementation.store().listPublic(a, .{
+        .collection = "fm.plyr.dev.track",
+        .scope = .discovery,
+        .limit = 10,
+        .after = null,
+        .tags = &.{ "drone", "legacy-only" },
+    });
+    try std.testing.expectEqual(@as(usize, 2), overlap.len);
+    _ = try pool.exec("UPDATE plyr_index.track_tag_records SET tags_present=true,tags='{}' WHERE record_uri=$1", .{pds_only_uri});
+    try std.testing.expectEqual(@as(usize, 0), (try implementation.store().listPublic(a, .{
+        .collection = "fm.plyr.dev.track",
+        .scope = .discovery,
+        .limit = 10,
+        .after = null,
+        .tags = &.{"legacy-only"},
+    })).len);
+    _ = try pool.exec("UPDATE plyr_index.track_tag_records SET tags_present=false WHERE record_uri=$1", .{pds_only_uri});
+    _ = try pool.exec("UPDATE plyr_index.legacy_track_tags SET observed_record_cid=$2 WHERE record_uri=$1", .{ pds_only_uri, stale_subject_cid });
+    try std.testing.expectEqual(@as(usize, 0), (try implementation.store().listPublic(a, .{
+        .collection = "fm.plyr.dev.track",
+        .scope = .discovery,
+        .limit = 10,
+        .after = null,
+        .tags = &.{"legacy-only"},
+    })).len);
+    _ = try pool.exec("UPDATE plyr_index.legacy_track_tags SET observed_record_cid=$2 WHERE record_uri=$1", .{ pds_only_uri, record_cid });
+    _ = try pool.exec("DELETE FROM plyr_index.track_tag_records WHERE record_uri=$1", .{pds_only_uri});
+    try std.testing.expectEqual(@as(usize, 0), (try implementation.store().listPublic(a, .{
+        .collection = "fm.plyr.dev.track",
+        .scope = .discovery,
+        .limit = 10,
+        .after = null,
+        .tags = &.{"legacy-only"},
+    })).len);
+    _ = try track_writer.store().apply(a, pds_only);
+    _ = try pool.exec("DELETE FROM plyr_index.legacy_track_tags", .{});
+    _ = try pool.exec("UPDATE plyr_index.track_tag_records SET tags_present=true,tags=ARRAY['ambient'] WHERE record_uri=$1", .{pds_only_uri});
     const tagged_page = try implementation.store().listPublic(a, .{
         .collection = "fm.plyr.dev.track",
         .scope = .discovery,
@@ -1381,6 +1439,20 @@ test "composed PostgreSQL reads use verified records and authoritative account s
     if (std.mem.indexOf(u8, plan_json, "ix_track_tag_records_tags") == null) std.debug.print("tag query plan: {s}\n", .{plan_json});
     try std.testing.expect(std.mem.indexOf(u8, plan_json, "ix_track_tag_records_tags") != null);
     try plan.deinit();
+    _ = try pool.exec("INSERT INTO plyr_index.legacy_track_tags(record_uri,observed_record_cid,tag,source_track_id,source_observed_at) SELECT record_uri,record_cid,'annotation-noise',1,now() FROM plyr_index.track_records WHERE rkey LIKE 'noise-%'", .{});
+    _ = try pool.exec("INSERT INTO plyr_index.legacy_track_tags(record_uri,observed_record_cid,tag,source_track_id,source_observed_at) VALUES ($1,$2,'legacy-target',1,now())", .{ pds_only_uri, record_cid });
+    _ = try pool.exec("UPDATE plyr_index.track_tag_records SET tags_present=false,tags='{}' WHERE record_uri=$1", .{pds_only_uri});
+    _ = try pool.exec("ANALYZE plyr_index.legacy_track_tags", .{});
+    var legacy_plan = (try pool.row("EXPLAIN (ANALYZE, FORMAT JSON) " ++ discovery_query, .{ "fm.plyr.dev.track", "fm.plyr.dev.actor.profile", "fm.plyr.dev.like", &[_][]const u8{"legacy-target"}, @as(i64, 2) })).?;
+    const legacy_plan_json = try legacy_plan.get([]const u8, 0);
+    if (std.mem.indexOf(u8, legacy_plan_json, "ix_legacy_track_tags_tag") == null) std.debug.print("legacy tag query plan: {s}\n", .{legacy_plan_json});
+    try std.testing.expect(std.mem.indexOf(u8, legacy_plan_json, "ix_legacy_track_tags_tag") != null);
+    try legacy_plan.deinit();
+    var unfiltered_plan = (try pool.row("EXPLAIN (FORMAT JSON) " ++ discovery_query, .{ "fm.plyr.dev.track", "fm.plyr.dev.actor.profile", "fm.plyr.dev.like", &[_][]const u8{}, @as(i64, 2) })).?;
+    const unfiltered_json = try unfiltered_plan.get([]const u8, 0);
+    try std.testing.expect(std.mem.indexOf(u8, unfiltered_json, "legacy_track_tags") == null);
+    try std.testing.expect(std.mem.indexOf(u8, unfiltered_json, "track_tag_records") == null);
+    try unfiltered_plan.deinit();
 }
 
 fn requireDisposableDatabase(pool: *pg.Pool, allocator: std.mem.Allocator) !void {
@@ -1392,10 +1464,10 @@ fn requireDisposableDatabase(pool: *pg.Pool, allocator: std.mem.Allocator) !void
 }
 
 const tags_query =
-    \\SELECT tag.name, count(*)::bigint, COALESCE(sum(metrics.play_count), 0)::bigint
-++ "\n" ++ page_from ++
-    \\ JOIN plyr_index.track_tag_records tags ON tags.record_uri=v.record_uri AND tags.record_cid=v.record_cid
-    \\ CROSS JOIN LATERAL unnest(tags.tags) AS tag(name)
+    \\SELECT tag.name, count(*)::bigint, COALESCE(sum(metrics.play_count), 0)::bigint,
+    \\  count(*) FILTER (WHERE tag.source='verified_repo')::bigint,
+    \\  count(*) FILTER (WHERE tag.source='legacy_plyr')::bigint
+++ "\n" ++ page_from ++ "\n" ++ track_tag_sql.effective_rows ++
     \\ LEFT JOIN plyr_index.track_metrics metrics ON metrics.record_uri=v.record_uri
     \\ WHERE v.record_created_at_us IS NOT NULL
 ++ "\n" ++ discovery_policy ++

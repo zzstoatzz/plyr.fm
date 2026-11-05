@@ -20,7 +20,12 @@ pub const ListItem = struct {
     created_at_us: i64,
 };
 
-pub const Tag = struct { name: []const u8, track_count: i64, total_plays: i64 };
+pub const Tag = struct {
+    name: []const u8,
+    track_count: i64,
+    total_plays: i64,
+    sources: struct { verified_repo: i64 = 0, legacy_plyr: i64 = 0 } = .{},
+};
 
 pub const TrackStore = struct {
     context: *anyopaque,
