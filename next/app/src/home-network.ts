@@ -52,13 +52,23 @@ export async function resolveFollowArtists<T extends { did: string; avatar_url: 
   follows: Follow[], resolve: (dids: string[], signal: AbortSignal) => Promise<T[]>, signal: AbortSignal,
 ): Promise<T[]> {
   const artists = new Map<string, T>();
+  const encoder = new TextEncoder();
   let next = 0;
   async function worker() {
     while (next < follows.length) {
       if (signal.aborted) throw new Error('Cancelled');
-      const batch = follows.slice(next, next + 500);
-      next += batch.length;
-      const found = await resolve(batch.map(({ did }) => did), signal);
+      const batch: string[] = [];
+      let bytes = 11;
+      while (next < follows.length && batch.length < 500) {
+        const did = follows[next].did;
+        const length = encoder.encode(JSON.stringify(did)).length + 1;
+        if (length > 60_000) throw new Error('could not read your follows');
+        if (bytes + length > 60_000) break;
+        batch.push(did);
+        bytes += length;
+        next += 1;
+      }
+      const found = await resolve(batch, signal);
       for (const artist of found) artists.set(artist.did, artist);
     }
   }

@@ -62,3 +62,14 @@ test('cancelled account traversal cannot start artist batches', async () => {
   }, controller.signal), /Cancelled/);
   assert.equal(called, false);
 });
+
+test('long DID batches stay below the artist API body limit', async () => {
+  const follows = Array.from({ length: 100 }, (_, index) => ({ did: `did:web:${'a'.repeat(1800)}${index}`, avatar: null }));
+  let batches = 0;
+  await resolveFollowArtists(follows, async (dids) => {
+    batches += 1;
+    assert.ok(new TextEncoder().encode(JSON.stringify({ dids })).length < 65_536);
+    return [];
+  }, new AbortController().signal);
+  assert.ok(batches > 1);
+});

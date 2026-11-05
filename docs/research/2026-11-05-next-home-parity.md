@@ -16,7 +16,7 @@ The browser reads the public Bluesky `app.bsky.graph.getFollows` endpoint, follo
 its cursor, and preserves production's oldest-follow-first ordering. Traversal
 has a 30-second deadline and a 100-page ceiling. Incomplete results are errors,
 not a completed graph. The appview resolves followed DIDs in batches of at most
-500 with two concurrent reads. The full operation has a 60-second deadline.
+500 and a 60-kilobyte encoded-body ceiling with two concurrent reads. The full operation has a 60-second deadline.
 Only complete artist results enter a five-minute per-DID cache, bounded to four
 accounts. Account changes abort outstanding work and hide the previous account's
 results immediately. Public follow avatars take precedence over appview avatars.
