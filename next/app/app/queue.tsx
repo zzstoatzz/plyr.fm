@@ -3,14 +3,14 @@ import { router } from 'expo-router';
 import Users from 'lucide-react-native/icons/users';
 import { useAuth } from '../src/auth';
 import Slider from '@react-native-community/slider';
-import Ellipsis from 'lucide-react-native/icons/ellipsis';
+import X from 'lucide-react-native/icons/x';
 import Repeat from 'lucide-react-native/icons/repeat';
 import Repeat1 from 'lucide-react-native/icons/repeat-1';
 import Shuffle from 'lucide-react-native/icons/shuffle';
 import Trash from 'lucide-react-native/icons/trash';
 import Volume2 from 'lucide-react-native/icons/volume-2';
-import { useState, type ReactNode } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useRef, useState, type ReactNode } from 'react';
+import { Pressable, type ScrollViewInstance, StyleSheet, Text, View } from 'react-native';
 import type { Track } from '../src/api';
 import { useAppearance } from '../src/appearance';
 import { artistName, Cover, Heading } from '../src/CatalogPieces';
@@ -18,6 +18,7 @@ import { Action, Copy, Page, row } from '../src/controls';
 import { usePlayback } from '../src/playback';
 import { useAppPreferences } from '../src/preference-context';
 import { Sheet } from '../src/Sheet';
+import { QueueReorder } from '../src/QueueReorder';
 
 export default function Queue() {
   const player = usePlayback();
@@ -26,12 +27,16 @@ export default function Queue() {
   const { preferences, setPreferences } = useAppPreferences();
   const [history, setHistory] = useState(false);
   const [dialog, setDialog] = useState<'clear' | 'volume' | null>(null);
-  const [selection, setSelection] = useState<{ index: number; track: Track; queue: Track[] } | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const scrollRef = useRef<ScrollViewInstance>(null);
+  const scrollMetrics = useRef({ offset: 0, height: 0, contentHeight: 0 });
   const upcoming = player.queue.slice(player.index + 1);
-  const active = selection?.queue === player.queue && selection.index > player.index ? selection : null;
   const RepeatIcon = player.repeat === 'one' ? Repeat1 : Repeat;
 
-  return <Page title="Queue">
+  return <Page title="Queue" scrollRef={scrollRef} scrollEnabled={!dragging}
+    onScroll={event => { scrollMetrics.current.offset = event.nativeEvent.contentOffset.y; }}
+    onLayout={event => { scrollMetrics.current.height = event.nativeEvent.layout.height; }}
+    onContentSizeChange={(_, height) => { scrollMetrics.current.contentHeight = height; }}>
     {player.current ? <>
       <View style={styles.section}>
         <View style={styles.header}>
@@ -65,11 +70,10 @@ export default function Queue() {
             </IconButton>
           </View>
         </View>
-        {upcoming.length ? upcoming.map((track, offset) => {
-          const index = player.index + 1 + offset;
-          return <QueueTrack key={`${track.id}:${index}`} track={track} play={() => player.jump(index)}
-            options={() => setSelection({ index, track, queue: player.queue })} />;
-        }) : <Copy>Nothing queued. Add tracks from their menus.</Copy>}
+        {upcoming.length ? <QueueReorder queue={player.queue} start={player.index + 1} move={player.move}
+          scrollRef={scrollRef} scrollMetrics={scrollMetrics} onDragging={setDragging}
+          renderTrack={(track, index) => <QueueTrack track={track} play={() => player.jump(index)}
+            remove={() => player.remove(index)} />} /> : <Copy>Nothing queued. Add tracks from their menus.</Copy>}
       </View>
       {player.index > 0 && <View style={styles.section}>
         <Pressable accessibilityRole="button" accessibilityState={{ expanded: history }} onPress={() => setHistory(!history)}
@@ -91,17 +95,10 @@ export default function Queue() {
       <Slider accessibilityLabel="Volume" minimumValue={0} maximumValue={1} value={preferences.volume}
         minimumTrackTintColor={theme.accent} onSlidingComplete={(volume) => setPreferences({ volume })} />
     </Sheet>}
-    {active && <Sheet title={active.track.metadata.title} close={() => setSelection(null)}>
-      <Action label="Move up" disabled={active.index === player.index + 1}
-        onPress={() => { player.move(active.index, active.index - 1); setSelection(null); }} />
-      <Action label="Move down" disabled={active.index === player.queue.length - 1}
-        onPress={() => { player.move(active.index, active.index + 1); setSelection(null); }} />
-      <Action label="Remove from queue" onPress={() => { player.remove(active.index); setSelection(null); }} />
-    </Sheet>}
   </Page>;
 }
 
-function QueueTrack({ track, play, options }: { track: Track; play?: () => void; options?: () => void }) {
+function QueueTrack({ track, play, remove }: { track: Track; play?: () => void; remove?: () => void }) {
   const theme = useAppearance();
   const title = track.metadata.title;
   const artist = artistName(track);
@@ -116,7 +113,7 @@ function QueueTrack({ track, play, options }: { track: Track; play?: () => void;
     {play ? <Pressable accessibilityRole="button" accessibilityLabel={`Play ${title} by ${artist}`} onPress={play}
       style={({ pressed }) => [styles.track, { opacity: pressed ? 0.65 : 1 }]}>{contents}</Pressable>
       : <View style={styles.track}>{contents}</View>}
-    {options && <IconButton label={`Queue options for ${title}`} onPress={options}><Ellipsis size={22} color={theme.muted} /></IconButton>}
+    {remove && <IconButton label={`Remove ${title} from queue`} onPress={remove}><X size={18} color={theme.muted} /></IconButton>}
   </View>;
 }
 
