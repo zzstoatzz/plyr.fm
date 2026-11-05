@@ -724,11 +724,6 @@ test "composed PostgreSQL reads use verified records and authoritative account s
     _ = try pool.exec("CREATE SCHEMA plyr_index", .{});
     _ = try pool.exec("CREATE EXTENSION IF NOT EXISTS pg_trgm", .{});
     try projected_tracks.createTestTable(pool);
-    var annotation_statements = std.mem.splitScalar(u8, @embedFile("migration_0033_tag_annotations"), ';');
-    while (annotation_statements.next()) |raw| {
-        const statement = std.mem.trim(u8, raw, " \n\r\t");
-        if (statement.len != 0) _ = try pool.exec(statement, .{});
-    }
     try projected_profiles.createTestTable(pool);
     try projected_availability.createTestTable(pool);
     try projected_lists.createTestTables(pool);

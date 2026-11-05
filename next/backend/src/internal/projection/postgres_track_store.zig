@@ -357,6 +357,11 @@ pub fn createTestTable(pool: *pg.Pool) !void {
         const statement = std.mem.trim(u8, raw, " \n\r\t");
         if (statement.len != 0) _ = try pool.exec(statement, .{});
     }
+    var annotations = std.mem.splitScalar(u8, @embedFile("migration_0033_tag_annotations"), ';');
+    while (annotations.next()) |raw| {
+        const statement = std.mem.trim(u8, raw, " \n\r\t");
+        if (statement.len != 0) _ = try pool.exec(statement, .{});
+    }
 }
 
 test "PostgreSQL track projection replaces complete records and keeps tombstones" {
