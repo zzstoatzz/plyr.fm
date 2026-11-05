@@ -61,27 +61,29 @@ function Shell() {
   ];
   const showBack = !['/', '/search', '/library', '/portal', '/login'].includes(path);
   const detail = /^\/(track|u|album|playlist|edit-track)\//.test(path);
-  const tabTitle = path === '/' ? (wide ? 'Home' : 'plyr.fm') : path === '/search' ? 'Search' : path === '/library' ? 'Library' : undefined;
+  const tabTitle = path === '/' ? (wide ? undefined : 'plyr.fm') : path === '/search' ? 'Search' : path === '/library' ? 'Library' : undefined;
   const detailTitle = path.startsWith('/u/') ? 'Artist' : path.startsWith('/edit-track/') ? 'Edit track'
     : path.startsWith('/album/') ? 'Album' : path.startsWith('/playlist/') ? 'Playlist' : 'Track';
-  const nav = <View style={{
-    flexDirection: wide ? 'column' : 'row', padding: 6, gap: 4, width: wide ? 172 : '100%',
+  const nav = <View role="navigation" accessibilityLabel="Main navigation" style={{
+    flexDirection: wide ? 'column' : 'row', padding: wide ? 12 : 6, gap: wide ? 8 : 4, width: wide ? 196 : '100%',
     borderRightWidth: wide ? StyleSheet.hairlineWidth : 0, borderTopWidth: wide ? 0 : StyleSheet.hairlineWidth, borderColor: theme.surface
   }}>
-    {wide && <Text style={{ color: theme.text, fontSize: 25, fontWeight: '900', margin: 12 }}>plyr.fm</Text>}
+    {wide && <Link href="/" asChild><Pressable accessibilityRole="link" accessibilityLabel="plyr.fm home" style={{ minHeight: 76, justifyContent: 'center', paddingHorizontal: 12 }}>
+      <Text style={{ color: theme.text, fontSize: 29, fontWeight: '900', letterSpacing: -1 }}>plyr.fm</Text>
+    </Pressable></Link>}
     {tabs.map(({ label, href, icon: Icon, active }) => <Link key={label} href={href} asChild>
       <Pressable accessibilityRole="link" accessibilityLabel={label} aria-current={active ? 'page' : undefined} accessibilityState={{ selected: active }}
-        style={{ minHeight: 48, flex: wide ? undefined : 1, paddingHorizontal: 8, borderRadius: 12, gap: wide ? 12 : 3,
+        style={{ minHeight: 48, flex: wide ? undefined : 1, paddingHorizontal: wide ? 12 : 8, borderRadius: 12, gap: wide ? 12 : 3,
           flexDirection: wide ? 'row' : 'column', alignItems: 'center', justifyContent: wide ? 'flex-start' : 'center',
           backgroundColor: active ? theme.surface : theme.background }}>
-        <Icon size={21} color={active ? theme.text : theme.muted} strokeWidth={active ? 2.5 : 1.8} />
+        <Icon size={21} color={active ? theme.accent : theme.muted} strokeWidth={active ? 2.5 : 1.8} />
         <Text style={{ color: active ? theme.text : theme.muted, fontSize: (wide ? 15 : 11) * theme.scale, fontWeight: active ? '700' : '500' }}>{label}</Text>
       </Pressable>
     </Link>)}
   </View>;
   return <RadioContext.Provider value={{ station, tune }}><SafeAreaView style={{ flex: 1, backgroundColor: theme.background }}>
     <StatusBar style={theme.dark ? 'light' : 'dark'} />
-    <View style={{ flex: 1, width: '100%', maxWidth: 996, alignSelf: 'center', flexDirection: wide ? 'row' : 'column' }}>
+    <View style={{ flex: 1, width: '100%', maxWidth: 1020, alignSelf: 'center', flexDirection: wide ? 'row' : 'column' }}>
       {wide && nav}
       <View style={{ flex: 1, minWidth: 0 }}>
         <View style={{
