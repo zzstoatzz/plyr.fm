@@ -74,7 +74,14 @@ branch, production database and PDS records were not written by this rehearsal.
 
 ## Final Next import
 
-After verified backfill completed and the deployment of schema 0034 succeeded,
+The scan covered 475 candidates: 456 verified, 17 retryable, one absent and one
+signature-rejected. The one-off scan completed, but its workflow controller hit
+the watch timeout; this was not an entirely green workflow or universal record
+acceptance. [#2388](https://github.com/zzstoatzz/plyr.fm/pull/2388) records the
+independent ATProto signature rejection and valid positive control. No verification
+bypass was added.
+
+After those outcomes were checked and deployment of schema 0034 succeeded,
 the frozen public artifact was imported into `next-zig` in the staging project,
 branch `br-rapid-frog-af0th9op`, database `neondb`. The endpoint, database marker,
 exact deployment commit and migration ledger were independently checked first.
