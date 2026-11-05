@@ -47,6 +47,16 @@ plyr.fm should become:
 
 ### November 2026
 
+#### Next Settings and Search (November 5)
+
+Home actions are quiet again behind one menu. Settings now uses compact icon-led
+sections and focused pickers; Search follows the iOS mixed-result shape with
+cancellable reads. Search metrics hydrate after the ranked limit, reducing a broad
+20k-track benchmark's metric probes from 19,900 to 20. #2407–#2411 are live on Next;
+production was not promoted. The [verification record](docs/research/2026-11-05-next-settings-search.md)
+separates real API/PDS/audio checks, controlled failures, local benchmarks and native
+acceptance gaps.
+
 #### Next listening controls and structure review (November 5)
 
 Home now supports body playback and independent like/queue actions. Artist avatar

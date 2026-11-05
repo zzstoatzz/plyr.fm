@@ -20,6 +20,7 @@ const list=data=>({object:'list',data,has_more:false});
   await context.route('https://api.next.plyr.fm/**',async route=>{
    const request=route.request(),url=new URL(request.url()),path=url.pathname;
    if(request.method()!=='GET')return route.abort();
+   if(process.env.SETTINGS_SEARCH_REAL_CATALOG==='true')return route.continue();
    if(path==='/v1/charts/tracks')return route.fulfill({json:list(tracks.map(track=>({track})))});
    if(path==='/v1/search'){
     const q=url.searchParams.get('q'),type=url.searchParams.get('types'),limit=Number(url.searchParams.get('limit')||20);queries.push({q,type,limit});
@@ -36,6 +37,19 @@ const list=data=>({object:'list',data,has_more:false});
   });
   async function shot(name){await page.screenshot({path:`${output}/${engine}-${width}-${theme}-${name}.png`,fullPage:true});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1),false);}
   try{
+   if(process.env.SETTINGS_SEARCH_REAL_CATALOG==='true'){
+    await page.goto(origin+'/search');
+    const field=page.getByRole('textbox',{name:'Search tracks, artists, albums and playlists',exact:true});await field.waitFor();
+    const response=page.waitForResponse(r=>{const u=new URL(r.url());return u.pathname==='/v1/search'&&u.searchParams.get('q')==='Sounds of the Drone Mix';});
+    await field.fill('Sounds of the Drone Mix');const body=await(await response).json();assert.ok(body.data.some(hit=>hit.type==='track'&&hit.title==='Sounds of the Drone Mix'));
+    const result=page.getByTestId('search-results').getByRole('button',{name:/^track: Sounds of the Drone Mix,/});await result.click();
+    await page.waitForFunction(()=>window.jamAudio.some(a=>!a.paused&&a.currentTime>1));await shot('real-search-playing');
+    const source=await page.evaluate(()=>window.jamAudio.find(a=>!a.paused).src);
+    await field.fill('zzstoatzz.io');await page.getByRole('button',{name:'artists',exact:true}).click();
+    const artist=page.getByTestId('search-results').getByRole('link').first();await artist.waitFor();await artist.click();await page.waitForURL('**/u/**');
+    await page.waitForFunction(src=>window.jamAudio.some(a=>!a.paused&&a.src===src),source);
+    assert.deepEqual(errors,[]);console.log(`${engine}/${width}/${theme}: public Search API, actual Drone Mix playback and artist navigation passed`);continue;
+   }
    await page.goto(origin+'/settings');await page.getByRole('button',{name:/^theme:/}).waitFor();
    await shot('settings');
    assert.equal(await page.getByRole('button',{name:'comic sans',exact:true}).count(),0,'Picker choices stay out of the main page');
