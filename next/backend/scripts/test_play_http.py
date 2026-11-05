@@ -278,6 +278,33 @@ def _exercise(base_url: str) -> None:
         (RECORD_URI,),
     ) == (29,)
 
+    listener = str(uuid.uuid4())
+    explicit_id = str(uuid.uuid4())
+    explicit_path = f"{_path(explicit_id)}&listener={listener}"
+    status, headers, explicit = _request(base_url, explicit_path)
+    assert status == 200 and explicit["counted"] and explicit["play_count"] == 30
+    assert "set-cookie" not in headers
+    for cookie in (None, COOKIE, "plyr_play_id=zyxwvutsrqponmlkjihgfe"):
+        status, headers, same_listener = _request(
+            base_url, f"{_path(str(uuid.uuid4()))}&listener={listener}", cookie=cookie
+        )
+        assert status == 200 and not same_listener["counted"]
+        assert same_listener["play_count"] == 30
+        assert same_listener["dedup"]["status"] == "suppressed"
+        assert "set-cookie" not in headers
+    status, headers, other_listener = _request(
+        base_url, f"{_path(str(uuid.uuid4()))}&listener={uuid.uuid4()}"
+    )
+    assert (
+        status == 200
+        and other_listener["counted"]
+        and other_listener["play_count"] == 31
+    )
+    assert "set-cookie" not in headers
+    assert _request(base_url, _path(explicit_id))[2]["play_count"] == 30
+    for suffix in ("&listener=invalid", f"&listener={listener}&listener={listener}"):
+        assert _request(base_url, _path(str(uuid.uuid4())) + suffix)[0] == 400
+
     samples: list[float] = []
     for _ in range(20):
         started = time.perf_counter()

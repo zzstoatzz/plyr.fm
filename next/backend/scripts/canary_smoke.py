@@ -9,6 +9,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+import uuid
 from dataclasses import dataclass
 from typing import Any
 
@@ -282,15 +283,21 @@ def _verify_real_product_reads(base_url: str) -> dict[str, Any]:
 
 def _verify_sustained_play(base_url: str, track: dict[str, Any]) -> None:
     track_id = urllib.parse.quote(track["id"], safe="_-")
-    path = f"/v1/tracks/{track_id}/plays"
+    occurrence = str(uuid.uuid4())
+    path = f"/v1/tracks/{track_id}/plays?occurrence={occurrence}"
     first = _request(base_url, path, method="POST")
     assert first.status == 200, (first.status, first.body)
     _expect_request_id(first)
     assert first.body["object"] == "play_receipt", first.body
+    assert first.body["occurrence"] == occurrence, first.body
     assert first.body["track_id"] == track["id"], first.body
     assert first.body["record"]["uri"] == track["record"]["uri"], first.body
     assert first.body["counted"] is True, first.body
     assert first.body["dedup"]["status"] == "claimed", first.body
+    assert first.body["sources"] == {
+        "metrics": "application_metrics",
+        "dedup": "postgres_durable",
+    }, first.body
     assert first.body["play_count"] >= track["metrics"]["play_count"] + 1, first.body
     cookie = first.headers.get("set-cookie", "").split(";", 1)[0]
     assert cookie.startswith("plyr_play_id="), first.headers
@@ -299,9 +306,11 @@ def _verify_sustained_play(base_url: str, track: dict[str, Any]) -> None:
     assert duplicate.status == 200, (duplicate.status, duplicate.body)
     _expect_request_id(duplicate)
     assert duplicate.body["track_id"] == track["id"], duplicate.body
-    assert duplicate.body["counted"] is False, duplicate.body
+    assert duplicate.body["occurrence"] == occurrence, duplicate.body
+    assert duplicate.body["counted"] is True, duplicate.body
     assert duplicate.body["dedup"]["status"] == "duplicate", duplicate.body
-    assert duplicate.body["play_count"] >= first.body["play_count"], duplicate.body
+    assert duplicate.body["play_count"] == first.body["play_count"], duplicate.body
+    assert duplicate.body["sources"] == first.body["sources"], duplicate.body
     assert "set-cookie" not in duplicate.headers, duplicate.headers
 
 
