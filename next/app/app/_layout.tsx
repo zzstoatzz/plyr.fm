@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useFonts } from 'expo-font';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Platform, Pressable, View, useWindowDimensions, StyleSheet } from 'react-native';
+import { Platform, Pressable, View, useWindowDimensions, StyleSheet, type ViewInstance } from 'react-native';
 import { AppearanceProvider, useAppearance } from '../src/appearance';
 import { restoreAuth, useAuth } from '../src/auth';
 import ArrowLeft from 'lucide-react-native/icons/arrow-left';
@@ -14,6 +14,8 @@ import Library from 'lucide-react-native/icons/library';
 import UserRound from 'lucide-react-native/icons/user-round';
 import Radio from 'lucide-react-native/icons/radio';
 import Settings from 'lucide-react-native/icons/settings';
+import { PlayerPanelContext } from '../src/player-panel';
+import { DesktopNowPlaying } from '../src/DesktopNowPlaying';
 import { PlaybackProvider } from '../src/playback';
 import RadioPlayer, { RadioContext } from '../src/RadioPlayer';
 import type { RadioStation } from '../src/radio';
@@ -43,7 +45,10 @@ export default function RootLayout() {
 }
 
 function Shell() {
-  const [station, tune] = useState<RadioStation | null>(null);
+  const [station, setStation] = useState<RadioStation | null>(null);
+  const [expanded, setExpanded] = useState(false);
+  const trigger = useRef<ViewInstance>(null);
+  const tune = useCallback((station: RadioStation | null) => { setStation(station); if (station) setExpanded(false); }, []);
   const [togglePlayback, setTogglePlayback] = useState<(() => void) | null>(null);
   const registerToggle = useCallback((toggle: (() => void) | null) => setTogglePlayback(() => toggle), []);
   const theme = useAppearance();
@@ -84,10 +89,10 @@ function Shell() {
       </Pressable>
     </Link>)}
   </View>;
-  return <RadioContext.Provider value={{ station, tune, togglePlayback, registerToggle }}><SafeAreaView style={{ flex: 1, backgroundColor: theme.background }}>
+  return <PlayerPanelContext.Provider value={{ expanded, setExpanded, trigger }}><RadioContext.Provider value={{ station, tune, togglePlayback, registerToggle }}><SafeAreaView style={{ flex: 1, backgroundColor: theme.background }}>
     <KeyboardShortcuts origin={path} />
     <StatusBar style={theme.dark ? 'light' : 'dark'} />
-    <View style={{ flex: 1, width: '100%', maxWidth: 1020, alignSelf: 'center', flexDirection: wide ? 'row' : 'column' }}>
+    <View style={{ flex: 1, width: '100%', maxWidth: expanded && wide && Platform.OS === 'web' ? 1400 : 1020, alignSelf: 'center', flexDirection: wide ? 'row' : 'column' }}>
       {wide && nav}
       <View style={{ flex: 1, minWidth: 0 }}>
         <View style={{
@@ -118,6 +123,7 @@ function Shell() {
         {station ? <RadioPlayer key={station.slug} compact tuned={station} /> : <PlayerBar />}
         {!wide && nav}
       </View>
+      {wide && expanded && Platform.OS === 'web' && <DesktopNowPlaying />}
     </View>
-  </SafeAreaView></RadioContext.Provider>;
+  </SafeAreaView></RadioContext.Provider></PlayerPanelContext.Provider>;
 }

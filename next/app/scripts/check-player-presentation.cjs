@@ -1,3 +1,4 @@
+const { runDesktop } = require('./desktop-player-check.cjs');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const http = require('node:http');
@@ -336,6 +337,6 @@ module.exports = { withPlayerHarness, setup, track, screenshot };
 
 if (require.main === module) withPlayerHarness(async browser => {
   if (process.env.PLAYER_WEBKIT) { await webkitFallback(browser); return; }
-  for (const width of [390, 1280]) for (const theme of ['light', 'dark']) await run(browser, width, theme);
+  for (const width of [390, 1280]) for (const theme of ['light', 'dark']) { if (width >= 800) await runDesktop(browser, width, theme, { setup, track, screenshot }); else await run(browser, width, theme); }
   await longContent(browser);
 }).catch(error => { console.error(error); process.exitCode = 1; if (server.listening) server.close(); });

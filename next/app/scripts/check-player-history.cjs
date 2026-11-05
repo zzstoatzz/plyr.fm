@@ -1,3 +1,4 @@
+const { runDesktop } = require('./desktop-player-check.cjs');
 const assert = require('node:assert/strict');
 const { withPlayerHarness, setup, track, screenshot } = require('./check-player-presentation.cjs');
 
@@ -8,10 +9,10 @@ async function run(browser, width) {
   try {
     await page.getByRole('link', { name: 'Home', exact: true }).click();
     await page.waitForURL(url => url.pathname === '/');
-    await page.getByRole('button', { name: 'Play', exact: true }).last().click();
+    await page.getByRole('button', { name: 'Play ' + track.metadata.title, exact: true }).click({ position: { x: 22, y: 40 } });
     await page.waitForFunction(() => window.__playerPresentationMedia?.currentTime > 0);
     await page.evaluate(() => { window.__historyMedia = window.__playerPresentationMedia; });
-    const baselineRequests = audioRequests;
+    let baselineRequests = audioRequests;
     const continuity = async () => {
       const before = await page.evaluate(() => window.__historyMedia.currentTime);
       await page.waitForTimeout(200);
@@ -74,7 +75,14 @@ async function run(browser, width) {
     await page.waitForURL('**/search');
     const search = page.getByRole('textbox', { name: 'Search tracks, artists, albums and playlists' });
     await search.fill('quiet');
-    await page.getByRole('link').filter({ hasText: track.metadata.title }).first().click();
+    const selectedPlayback = page.waitForResponse(response => new URL(response.url()).pathname.endsWith('/playback'));
+    await page.getByRole('button', { name: /^track:/ }).first().click();
+    await (await selectedPlayback).finished();
+    await page.waitForFunction(() => window.__playerPresentationMedia && !window.__playerPresentationMedia.paused && window.__playerPresentationMedia.currentTime > 0.1);
+    await page.evaluate(() => { window.__historyMedia = window.__playerPresentationMedia; });
+    baselineRequests = audioRequests;
+    await open();
+    await page.getByRole('button', { name: 'Track details', exact: true }).click();
     await page.waitForURL('**/track/' + track.id); await continuity();
     await open();
     await page.getByRole('button', { name: 'Track details', exact: true }).click();
@@ -101,7 +109,7 @@ async function coldRoute(browser) {
 }
 
 withPlayerHarness(async browser => {
-  for (const width of [390, 1280]) await run(browser, width);
+  for (const width of [390, 1280]) { if (width >= 800) await runDesktop(browser, width, 'dark', { setup, track, screenshot }); else await run(browser, width); }
   await coldRoute(browser);
 })
   .catch(error => { console.error(error); process.exitCode = 1; });

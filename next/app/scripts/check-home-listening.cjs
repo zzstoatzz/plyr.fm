@@ -53,7 +53,7 @@ const output = process.env.HOME_LISTEN_OUTPUT || '/tmp/plyr-home-listening';
    await page.getByRole('button',{name:'add to queue',exact:true}).click();
    assert.deepEqual(await page.evaluate(()=>window.jamAudio.filter(a=>!a.paused).map(a=>a.src)),before);
    await page.getByRole('button',{name:'Open now playing',exact:true}).click();
-   await page.getByRole('button',{name:'Queue',exact:true}).click();
+   await page.getByRole('button',{name:width>=800?'Open queue':'Queue',exact:true}).click();
    await page.waitForURL(origin+'/queue');
    await page.getByLabel('Reorder '+tracks[1].metadata.title,{exact:true}).first().waitFor();
    assert.equal(await page.getByLabel('Reorder '+tracks[1].metadata.title,{exact:true}).count(),2,'Enqueue appends without changing playback');

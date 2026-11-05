@@ -1,3 +1,4 @@
+const { runDesktop } = require('./desktop-player-check.cjs');
 const assert = require('node:assert/strict');
 const { withPlayerHarness, setup, track, screenshot } = require('./check-player-presentation.cjs');
 
@@ -31,7 +32,7 @@ async function run(browser, width) {
   try {
     await page.getByRole('link', { name: 'Home', exact: true }).click();
     await page.waitForURL(url => url.pathname === '/');
-    await page.getByRole('button', { name: 'Play', exact: true }).last().click();
+    await page.getByRole('button', { name: 'Play ' + track.metadata.title, exact: true }).click({ position: { x: 22, y: 40 } });
     await page.waitForFunction(() => window.__playerPresentationMedia?.currentTime > 0);
     await page.evaluate(() => { window.__navigationMedia = window.__playerPresentationMedia; });
     baselineAudioRequests = audioRequests;
@@ -74,5 +75,5 @@ async function run(browser, width) {
   finally { await page.unrouteAll({ behavior: 'ignoreErrors' }); await context.close(); }
 }
 
-withPlayerHarness(async browser => { for (const width of [390, 1280]) await run(browser, width); })
+withPlayerHarness(async browser => { for (const width of [390, 1280]) { if (width >= 800) await runDesktop(browser, width, 'dark', { setup, track, screenshot }); else await run(browser, width); } })
   .catch(error => { console.error(error); process.exitCode = 1; });

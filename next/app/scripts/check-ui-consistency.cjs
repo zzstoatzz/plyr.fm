@@ -196,7 +196,7 @@ audio.writeUInt16LE(16, 34); audio.write('data', 36); audio.writeUInt32LE(audio.
         await page.getByTestId('home-track-row').first().getByRole('button', { name: /^Play / }).click({ position: { x: 22, y: 40 } });
         await page.getByRole('button', { name: 'Open now playing', exact: true }).click();
         await scan('now-playing');
-        await page.getByRole('button', { name: 'Queue', exact: true }).click(); await scan('queue');
+        await page.getByRole('button', { name: width >= 800 ? 'Open queue' : 'Queue', exact: true }).click(); await scan('queue');
         await page.getByRole('button', { name: 'Volume', exact: true }).click(); await scan('queue-volume');
         const volume = page.getByRole('slider', { name: 'Volume', exact: true });
         await volume.focus(); await page.keyboard.press('Home');
