@@ -132,6 +132,19 @@ def main() -> None:
         _wait_until_ready(base_url, process)
         _assert_connection_backpressure(port)
 
+        for payload in (None, b"", b"ignored"):
+            status, headers, body = _request(
+                base_url,
+                "/v1/tracks",
+                method="HEAD",
+                origin=ALLOWED_ORIGIN,
+                data=payload,
+            )
+            assert status == 405 and body == {}
+            assert headers["access-control-allow-origin"] == ALLOWED_ORIGIN
+            assert headers["connection"] == "close"
+            assert _request(base_url, "/health")[0] == 200
+
         status, _, api = _request(base_url, "/v1")
         assert status == 200 and api == {"object": "api", "version": "v1"}
 
