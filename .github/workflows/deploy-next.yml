@@ -154,53 +154,17 @@ jobs:
           flyctl status --app "$FLY_APP"
           flyctl logs --app "$FLY_APP" --no-tail | grep -i ingest | tail -30 || true
 
-      # The reconciler snapshots every fm.plyr repo the relay knows and writes plyr_index, so it
-      # runs as the migrator (the branch owner). It is passed as
-      # WORKER_DATABASE_URL because the app's DATABASE_URL secret (the api's
-      # read-only role) is injected into every machine and wins over --env.
-      # `machine run` returns once the machine starts, so wait for it to exit
-      # and fail the job on a nonzero exit code instead of passing silently.
-      - name: reconcile the fm.plyr catalog into next after deploy, so the live api serves while it fills
+      - name: reconcile the fm.plyr catalog into next
         if: inputs.reconcile_catalog
-        run: |
-          set -euo pipefail
-          flyctl machine run "registry.fly.io/${FLY_APP}:${GITHUB_SHA}" \
-            --app "$FLY_APP" \
-            --region sjc \
-            --restart no \
-            --skip-dns-registration \
-            --vm-cpu-kind shared \
-            --vm-cpus 1 \
-            --vm-memory 1024 \
-            --metadata purpose=zig-catalog-reconciliation \
-            --env "WORKER_DATABASE_URL=${{ secrets.ZIG_NEXT_MIGRATOR_DATABASE_URL }}" \
-            --env MODE=catalog_reconciler \
-            --env INDEX_MODE=required \
-            --env TRACK_COLLECTION_NSID=fm.plyr.track \
-            --env LIST_COLLECTION_NSID=fm.plyr.list \
-            --env LIKE_COLLECTION_NSID=fm.plyr.like \
-            --env PROFILE_COLLECTION_NSID=fm.plyr.actor.profile \
-            --env CATALOG_DISCOVERY_RELAY=https://relay1.us-east.bsky.network \
-            | tee "$RUNNER_TEMP/reconcile.out"
-          machine_id="$(grep -oE 'Machine ID: [0-9a-f]+' "$RUNNER_TEMP/reconcile.out" | awk '{print $3}' | head -1)"
-          test -n "$machine_id"
-          echo "reconciler machine $machine_id"
-          deadline=$((SECONDS + 1800))
-          while :; do
-            state="$(flyctl machines list --app "$FLY_APP" --json | jq -r --arg id "$machine_id" '.[] | select(.id == $id) | .state')"
-            case "$state" in stopped | destroyed | failed) break ;; esac
-            if (( SECONDS > deadline )); then echo "reconciler still $state after 30m" >&2; exit 1; fi
-            sleep 10
-          done
-          # `machines list --json` omits events, so read the exit event from
-          # the Machines API (machine is still around; destroyed below).
-          case "$FLY_API_TOKEN" in FlyV1\ *) auth="$FLY_API_TOKEN" ;; *) auth="Bearer $FLY_API_TOKEN" ;; esac
-          exit_code="$(curl -fsS -H "Authorization: $auth" \
-            "https://api.machines.dev/v1/apps/${FLY_APP}/machines/${machine_id}" \
-            | jq -r '[.events[]? | select(.type == "exit") | .request.exit_event.exit_code][0] // "unknown"')" || exit_code=unknown
-          flyctl logs --app "$FLY_APP" --machine "$machine_id" --no-tail | tail -50 || true
-          flyctl machine destroy "$machine_id" --app "$FLY_APP" --force || true
-          echo "reconciler exited with $exit_code"
-          test "$exit_code" = "0"
+        timeout-minutes: 70
+        run: next/backend/scripts/canary_reconcile
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_ZIG_NEXT }}
+          WORKER_DATABASE_URL: ${{ secrets.ZIG_NEXT_MIGRATOR_DATABASE_URL }}
+
+      - name: clean up the reconciliation machine
+        timeout-minutes: 5
+        if: always() && inputs.reconcile_catalog
+        run: next/backend/scripts/canary_reconcile --cleanup-only
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_ZIG_NEXT }}

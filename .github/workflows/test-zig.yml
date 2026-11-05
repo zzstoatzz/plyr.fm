@@ -104,7 +104,7 @@ jobs:
         working-directory: backend
         run: |
           uv run ruff check ../next/backend/scripts
-          uv run pytest -q ../next/backend/scripts/test_bench_http.py ../next/backend/scripts/test_bench_api_parity.py ../next/backend/scripts/test_canary_placement.py ../next/backend/scripts/test_canary_report.py ../next/backend/scripts/test_canary_smoke.py
+          uv run pytest -q ../next/backend/scripts/test_bench_http.py ../next/backend/scripts/test_bench_api_parity.py ../next/backend/scripts/test_canary_placement.py ../next/backend/scripts/test_canary_reconcile.py ../next/backend/scripts/test_canary_report.py ../next/backend/scripts/test_canary_smoke.py
 
   fuzz:
     name: zig property harnesses

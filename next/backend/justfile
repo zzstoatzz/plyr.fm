@@ -46,7 +46,7 @@ check:
     zig build test
     uv run --project ../../backend python scripts/test_http.py
     cd ../../backend && uv run ruff check ../next/backend/scripts
-    cd ../../backend && uv run pytest -q ../next/backend/scripts/test_bench_http.py ../next/backend/scripts/test_bench_api_parity.py ../next/backend/scripts/test_canary_placement.py ../next/backend/scripts/test_canary_report.py ../next/backend/scripts/test_canary_smoke.py
+    cd ../../backend && uv run pytest -q ../next/backend/scripts/test_bench_http.py ../next/backend/scripts/test_bench_api_parity.py ../next/backend/scripts/test_canary_placement.py ../next/backend/scripts/test_canary_reconcile.py ../next/backend/scripts/test_canary_report.py ../next/backend/scripts/test_canary_smoke.py
 
 # Destructive only to the dedicated Zig test database on port 5435.
 test-postgres:
