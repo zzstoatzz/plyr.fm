@@ -31,7 +31,7 @@ export function KeyboardShortcuts({ origin }: { origin: string }) {
       }
       if (target?.closest('input,textarea,select,[contenteditable="true"],[role="textbox"]')) return;
       if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return;
-      const trackControl = key === ' ' && player.current && target?.closest('[data-testid="home-track-play"]');
+      const trackControl = key === ' ' && player.current && target?.closest('[data-testid="track-play-control"]');
       if (!trackControl && (key === ' ' || key.startsWith('arrow')) && target?.closest('button,a,[role="button"],[role="slider"],[role="tab"],[role="combobox"]')) return;
       if (![' ', 'arrowleft', 'arrowright', 'j', 'l', 'q', 'm'].includes(key)) return;
       event.preventDefault();

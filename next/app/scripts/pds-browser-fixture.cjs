@@ -63,7 +63,7 @@ async function fixturePage(browser,accounts,options={}) {
    delete out['content-length'];
    await route.fulfill({status:response.status,body:Buffer.from(await response.arrayBuffer()),headers:out});
   });
-  if(options.preferences) await context.addInitScript(prefs=>localStorage.setItem('plyr-next:prefs',JSON.stringify(prefs)),options.preferences);
+  if(options.preferences) await context.addInitScript(({prefs,once})=>{if(!once||!localStorage.getItem('plyr-next:prefs'))localStorage.setItem('plyr-next:prefs',JSON.stringify(prefs));},{prefs:options.preferences,once:options.seedPreferencesOnce});
   if(options.blockMetricWrites !== false) await context.route('https://api.next.plyr.fm/**', route => route.request().method()==='POST'?route.abort():route.fallback());
   await context.addInitScript(()=>{ const Original=window.Audio; window.jamAudio=[]; window.Audio=class extends Original { constructor(...args){super(...args);window.jamAudio.push(this);} }; });
   const page=await context.newPage();
