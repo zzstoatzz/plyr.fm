@@ -9,6 +9,14 @@ BEGIN
 END
 $$;
 
+CREATE TABLE plyr_index.actor_identities (
+    did text PRIMARY KEY, handle text NOT NULL, display_name text NOT NULL, avatar_url text
+);
+INSERT INTO plyr_index.actor_identities(did,handle,display_name,avatar_url)
+SELECT did,handle,display_name,avatar_url FROM artists;
+CREATE INDEX search_actor_handle_trgm ON plyr_index.actor_identities USING gin(handle gin_trgm_ops);
+CREATE INDEX search_actor_name_trgm ON plyr_index.actor_identities USING gin(display_name gin_trgm_ops);
+
 INSERT INTO plyr_index.track_records
 SELECT
     format('at://did:plc:bench/fm.plyr.dev.track/search-%s', n),
@@ -38,4 +46,4 @@ FROM generate_series(101, 20000) AS n;
 
 ANALYZE plyr_index.track_records;
 ANALYZE plyr_index.list_records;
-ANALYZE artists;
+ANALYZE plyr_index.actor_identities;

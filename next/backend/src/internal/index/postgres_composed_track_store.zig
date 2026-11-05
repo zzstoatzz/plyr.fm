@@ -1001,6 +1001,32 @@ test "composed PostgreSQL reads use verified records and authoritative account s
     var wildcard_query = search_request;
     wildcard_query.query = "%%";
     try std.testing.expectEqual(@as(usize, 0), (try search_store.search(a, wildcard_query)).len);
+    const search_cases = [_][]const u8{ "Search Target", "Search Target Live", "A Search Target", "Search Targat", "100% Real", "Under_score", "東京の音楽" };
+    for (search_cases, 0..) |title, index| {
+        const rkey = try std.fmt.allocPrint(a, "search-check-{d}", .{index});
+        const uri = try std.fmt.allocPrint(a, "at://{s}/fm.plyr.dev.track/{s}", .{ did, rkey });
+        _ = try pool.exec(
+            "INSERT INTO plyr_index.track_records SELECT (jsonb_populate_record(NULL::plyr_index.track_records, to_jsonb(v) || jsonb_build_object('record_uri', $1::text, 'rkey', $2::text, 'title', $3::text))).* FROM plyr_index.track_records v WHERE v.record_uri=$4",
+            .{ uri, rkey, title, record_uri },
+        );
+    }
+    var ranked_request = search_request;
+    ranked_request.query = "Search Target";
+    ranked_request.types = .{ .artist = false, .album = false, .playlist = false };
+    const ranked_hits = try search_store.search(a, ranked_request);
+    try std.testing.expectEqual(@as(usize, 4), ranked_hits.len);
+    const match_kinds = [_]@import("../domain/search.zig").MatchKind{ .exact, .prefix, .substring, .fuzzy };
+    for (ranked_hits, match_kinds) |hit, kind| try std.testing.expectEqual(kind, hit.match.kind);
+    ranked_request.limit = 2;
+    const limited_hits = try search_store.search(a, ranked_request);
+    try std.testing.expectEqual(@as(usize, 2), limited_hits.len);
+    try std.testing.expectEqualStrings(ranked_hits[0].id, limited_hits[0].id);
+    try std.testing.expectEqualStrings(ranked_hits[1].id, limited_hits[1].id);
+    for ([_][]const u8{ "100%", "Under_", "東京" }) |term| {
+        ranked_request.query = term;
+        try std.testing.expectEqual(@as(usize, 1), (try search_store.search(a, ranked_request)).len);
+    }
+    _ = try pool.exec("DELETE FROM plyr_index.track_records WHERE rkey LIKE 'search-check-%'", .{});
     var verified_list_implementation: postgres_verified_lists.PostgresVerifiedListStore = .{
         .pool = pool,
         .like_collection = "fm.plyr.dev.like",

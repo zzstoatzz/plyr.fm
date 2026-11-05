@@ -239,11 +239,11 @@ const search_query =
     \\    lower(a.handle) AS owner_handle,
     \\    a.display_name AS owner_display_name,
     \\    v.image_url AS image_url,
-    \\    COALESCE(metrics.play_count, 0)::bigint AS play_count,
+    \\    NULL::bigint AS play_count,
     \\    NULL::bigint AS member_count,
     \\    v.indexed_at_us,
     \\    false AS authored_image,
-    \\    metrics.record_uri IS NOT NULL AS has_metrics,
+    \\    false AS has_metrics,
     \\    aa.evidence_source AS account_source,
     \\    v.title AS match_a,
     \\    'title'::text AS match_a_field,
@@ -254,7 +254,6 @@ const search_query =
     \\    ON aa.repo_did = v.owner_did AND aa.available
     \\  JOIN plyr_index.actor_identities AS a ON a.did = v.owner_did
     \\  LEFT JOIN plyr_index.track_policies AS pol ON pol.record_uri = v.record_uri
-    \\  LEFT JOIN plyr_index.track_metrics AS metrics ON metrics.record_uri = v.record_uri
     \\  WHERE $5::boolean AND v.collection = $2 AND NOT v.deleted
     \\    AND COALESCE(pol.visibility, 'public') IN ('public', 'supporters')
     \\    AND pol.moderation_decision IS DISTINCT FROM 'exclude'
@@ -362,21 +361,27 @@ const search_query =
     \\    CASE WHEN a_tier > b_tier OR (a_tier = b_tier AND a_similarity >= b_similarity)
     \\      THEN match_a_field ELSE match_b_field END AS matched_field
     \\  FROM scored
+    \\), limited AS (
+    \\  SELECT * FROM ranked
+    \\  WHERE match_tier > 0
+    \\  ORDER BY match_tier DESC, lexical_similarity DESC,
+    \\    lower(primary_text), entity_type, record_uri
+    \\  LIMIT $9::bigint
     \\)
     \\SELECT
     \\  entity_type,
-    \\  record_uri,
+    \\  limited.record_uri,
     \\  record_cid,
     \\  primary_text,
     \\  owner_did,
     \\  owner_handle,
     \\  owner_display_name,
     \\  image_url,
-    \\  play_count,
+    \\  CASE WHEN entity_type = 'track' THEN COALESCE(metrics.play_count, 0)::bigint ELSE NULL::bigint END,
     \\  member_count,
     \\  indexed_at_us,
     \\  authored_image,
-    \\  has_metrics,
+    \\  entity_type = 'track' AND metrics.record_uri IS NOT NULL,
     \\  account_source,
     \\  matched_field,
     \\  CASE match_tier
@@ -386,9 +391,9 @@ const search_query =
     \\    WHEN 2 THEN 'substring'
     \\    ELSE 'fuzzy'
     \\  END AS match_kind
-    \\FROM ranked
-    \\WHERE match_tier > 0
+    \\FROM limited
+    \\LEFT JOIN plyr_index.track_metrics AS metrics
+    \\  ON entity_type = 'track' AND metrics.record_uri = limited.record_uri
     \\ORDER BY match_tier DESC, lexical_similarity DESC,
-    \\  lower(primary_text), entity_type, record_uri
-    \\LIMIT $9::bigint
+    \\  lower(primary_text), entity_type, limited.record_uri
 ;
