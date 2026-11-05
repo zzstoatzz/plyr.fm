@@ -9,6 +9,9 @@ line-for-line port of the Python service. Python tests and incident notes are
 evidence about observable behavior and failure modes. They are not authority
 for boundaries that made Postgres or R2 into accidental sources of truth.
 
+The [November 4 implementation and scope checkpoint](../../research/2026-11-04-rewrite-progress-and-scope.md)
+separates shipped foundations from remaining ports and exploratory work.
+
 ## authority model
 
 1. **authority belongs to a claim, not a database.** User-authored music
@@ -64,7 +67,8 @@ owner, reconciliation rule, and deletion behavior are explicit.
 
 This follows DASL's retrieval model: the CID is the authority for returned
 bytes, while a hostname is only a retrieval hint. See
-[`dasl-media.md`](dasl-media.md) for the protocol and Streamplace prior art.
+[the DASL research notes](../research/2026-05-28-dasl-muxl-s2pa.md)
+for broader media design research.
 
 ## write path
 
@@ -75,9 +79,10 @@ client -> authenticated PDS write -> verified repo ingestion -> derived indexes
                                       -> verified blob mirror -> async analysis
 ```
 
-An API request may coordinate or prepare the PDS write. It must not declare
-success merely because Postgres or R2 accepted data. Pending rows are operation
-state and expire or reconcile; they are not unpublished canonical tracks.
+The Expo client owns OAuth and writes canonical user records directly to the
+PDS. The AppView reports their indexed/pending/rejected state separately.
+Postgres and R2 acceptance do not establish canonical publication. Any future
+publication coordination service needs an explicit boundary and lifecycle.
 
 ## implementation boundary
 
@@ -90,13 +95,15 @@ bootstraps unseen repositories through verified repair,
 and runs the blob mirror, identity refresh and label sync beside it. They share libraries but never start each other.
 Docket workers remain separate future process roles.
 
-The REST layer depends on interfaces for indexed state, PDS commands, blobs,
-moderation, and asynchronous work. Those implementations can remain Python
-services during migration or become Zig libraries/services later. Keeping the
-interfaces explicit lets the API advance without silently expanding this
-branch into a second big-bang backend rewrite.
+The REST layer reads through indexed-state, playback, policy and metric
+interfaces. It also accepts application-owned play credits and POST-based
+read queries; read-only does not mean that every HTTP method is GET or every
+transaction is read-only. User-repository mutations stay in the client.
+Transcoding, scanning and other service migrations need their own ownership
+contracts and can retain existing implementations.
 
-Redis and Docket remain target infrastructure. Python pydocket and Zig Docket
+Redis and Docket describe the background-worker migration design, not a
+completed implementation of those worker slices. Python pydocket and Zig Docket
 are not wire-compatible, so they use separate namespaces and migrate complete
 producer/worker slices rather than sharing task messages. See
 [`zig-background-work.md`](zig-background-work.md).
@@ -119,8 +126,9 @@ before accept.
 - Every derived table documents its rebuild input and reconciliation rule.
 - Every R2 object documents the CID/digest proof that permits it to exist.
 - Environment-aware NSIDs come from settings and are never hard-coded.
-- Session identifiers remain HttpOnly-cookie credentials and never enter
-  browser local storage.
+- Next browser and native clients own their ATProto OAuth sessions through
+  their OAuth SDKs. Legacy HttpOnly server-session cookies describe the old
+  backend and must not be mistaken for a Next BFF session design.
 
 ## first vertical slice
 

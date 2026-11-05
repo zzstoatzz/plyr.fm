@@ -59,19 +59,19 @@ Every change returned identical rows or bodies. Notes:
   `relay_cursors` (`catalog_reconcile`). There is no metrics exporter in the
   backend, so these are not also emitted as metrics.
 
+The eager-pool startup issue was resolved in #2312 by passing
+`connect_on_init_count` through pg.zig's `initUri`. The earlier local measurements
+were 83, 242 and 846 ms for 1, 4 and 16 connections at 10 ms network latency.
+The deployed configuration opens one connection before binding and connects
+the remainder in the background.
+
 ## open, ranked
 
 1. **Every request re-plans its query.** pg.zig sends unnamed statements, so
    the large track query is parsed and planned on each request: about 9 ms of
    the 14 ms a discovery page takes end to end, more than it spends executing.
    Named prepared statements per pooled connection would remove that.
-2. **pg.zig's `initUri` drops `connect_on_init_count`**, so a pool built from
-   a URL always opens every connection before the server listens. Boot is
-   linear in pool size: 83, 242 and 846 ms for 1, 4 and 16 connections at
-   10 ms of network latency. Main's pool of 4 keeps that small; the one-line
-   fix in the pg.zig fork (pass the option through) would make it one
-   handshake.
-3. **Idle connections and Neon suspend.** Neon suspends a compute after 5
+2. **Idle connections and Neon suspend.** Neon suspends a compute after 5
    minutes without active queries, and idle connections do not prevent it,
    so the pool costs nothing while idle. The suspend closes the connections
    it held, though, and the pool does not notice until one is used: with
@@ -79,7 +79,7 @@ Every change returned identical rows or bodies. Notes:
    503 and the ones after it succeeded. A Fly machine that outlives a Neon
    suspend therefore fails one request on wake. Retrying once on a broken
    connection (in the pool, or around `acquire` in the stores) would hide it.
-4. **One OS thread per connection** (`server.zig` spawns a thread per
+3. **One OS thread per connection** (`server.zig` spawns a thread per
    accepted stream, bounded by `MAX_CONNECTIONS`). Fine at current load on a
    256 MB machine; worth revisiting before raising the connection limit.
 
