@@ -22,6 +22,9 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [repeat, setRepeat] = useState<'off' | 'all' | 'one'>('off');
+  const settings = useRef({ repeat, volume });
+  settings.current = { repeat, volume };
+  const sourceEvents = useRef<{ remove(): void } | null>(null);
   const sequence = useRef(0);
   const jamTrack = useRef<string | null>(null);
   const jamSync = useRef(0);
@@ -34,6 +37,7 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
     }
     return () => {
       sequence.current++;
+      sourceEvents.current?.remove();
       if (objectUrl.current) releaseGatedAudioUrl(objectUrl.current);
     };
   }, []);
@@ -42,6 +46,7 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
     if (previousAccount.current === auth.did) return;
     previousAccount.current = auth.did;
     accounting.stop();
+    sourceEvents.current?.remove();
     sequence.current++;
     player.pause();
     player.replace(null);
@@ -64,6 +69,7 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
     const startedAt = Date.now();
     console.info("[playback] load", { request, track: track.id, start });
     accounting.stop();
+    sourceEvents.current?.remove();
     player.pause();
     setQueue(tracks);
     setIndex(at);
@@ -92,6 +98,8 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
       const previousSource = objectUrl.current;
       try {
         player.replace(Platform.OS === 'web' || availability === 'gated' ? url : { uri: url, headers: { Referer: 'https://next.plyr.fm/' } });
+        player.loop = settings.current.repeat === 'one';
+        player.volume = settings.current.volume;
       } catch (cause) {
         if (availability === 'gated') releaseGatedAudioUrl(url);
         throw cause;
@@ -99,6 +107,19 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
       objectUrl.current = availability === 'gated' ? url : null;
       if (previousSource) releaseGatedAudioUrl(previousSource);
       accounting.begin(track.id, track.metadata.duration_seconds);
+      let settled = false;
+      sourceEvents.current = player.addListener('playbackStatusUpdate', (event) => {
+        if (request !== sequence.current) return;
+        if (event.error) {
+          setStarting((pending) => pending === request ? null : pending);
+          setReady(false);
+          setError(event.error);
+        } else if (!settled && ((event.playing && player.currentTime > 0) || event.didJustFinish)) {
+          settled = true;
+          console.info('[playback] startup settled', { request, track: track.id, position: player.currentTime, finished: event.didJustFinish });
+          setStarting((pending) => pending === request ? null : pending);
+        }
+      });
       if (Platform.OS !== 'web') {
         player.setActiveForLockScreen(true, {
           title: track.metadata.title,
@@ -127,11 +148,6 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
 
   useEffect(() => {
     if (starting === null) return;
-    if ((status.playing && player.playing && player.currentTime > 0) || status.error) {
-      console.info("[playback] startup settled", { request: starting, track: current?.id, position: player.currentTime, mediaError: !!status.error });
-      setStarting(null);
-      return;
-    }
     const timeout = setTimeout(() => {
       if (starting !== sequence.current) return;
       player.pause();
@@ -141,7 +157,7 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
       setError('Playback took too long to start');
     }, 15_000);
     return () => clearTimeout(timeout);
-  }, [current?.id, player, starting, status.currentTime, status.error, status.playing]);
+  }, [current?.id, player, starting]);
 
   function play(track: Track, collection?: Track[]) {
     const list = playThrough && collection?.some((item) => item.id === track.id) ? collection : [track];
