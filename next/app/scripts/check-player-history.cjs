@@ -33,6 +33,7 @@ async function run(browser, width) {
       await page.waitForURL(url => url.pathname === '/');
       assert.equal(await expanded.count(), 0);
       await continuity();
+      assert.equal(new URL(page.url()).pathname, '/', 'Closing consumes only the modal history entry');
     };
     await open();
     await screenshot(page, `history-${width}-expanded`);
@@ -43,7 +44,8 @@ async function run(browser, width) {
     await page.goBack(); await home();
     await page.goForward();
     await page.waitForURL('**/now-playing'); await expanded.waitFor();
-    await page.getByRole('button', { name: 'Close', exact: true }).click(); await home();
+    await page.getByRole('button', { name: 'Close', exact: true }).evaluate(node => { node.click(); node.click(); });
+    await home();
     await page.goBack();
     await page.waitForURL('**/track/' + track.id);
     await continuity();

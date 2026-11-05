@@ -1,5 +1,5 @@
-import { Redirect, router } from 'expo-router';
-import { useContext } from 'react';
+import { Redirect, router, type Href } from 'expo-router';
+import { useContext, useRef } from 'react';
 import { Platform } from 'react-native';
 import { NowPlaying } from '../src/NowPlaying';
 import { usePlayback } from '../src/playback';
@@ -13,11 +13,14 @@ function samePath(target: string, origin: string) {
 export default function NowPlayingRoute() {
   const player = usePlayback();
   const origin = useContext(NowPlayingOriginContext);
+  const leaving = useRef(false);
   if (Platform.OS !== 'web' || !player.current) return <Redirect href="/" />;
-  return <NowPlaying track={player.current}
-    close={() => router.canGoBack() ? router.back() : router.replace('/')}
-    navigate={target => {
-      if (typeof target === 'string' && samePath(target, origin)) router.back();
-      else router.replace(target);
-    }} />;
+  const leave = (target?: Href) => {
+    if (leaving.current) return;
+    leaving.current = true;
+    if (target !== undefined && !(typeof target === 'string' && samePath(target, origin))) router.replace(target);
+    else if (router.canGoBack()) router.back();
+    else router.replace('/');
+  };
+  return <NowPlaying track={player.current} close={() => leave()} navigate={target => leave(target)} />;
 }
