@@ -52,6 +52,8 @@ pub const CorsPolicy = struct {
     /// Comma-separated exact origins. Empty means browser cross-origin access
     /// is disabled; wildcard origins are never compatible with auth cookies.
     allowed_origins: []const u8,
+    captured_origin: ?[]const u8 = null,
+    origin_captured: bool = false,
 
     fn allows(self: CorsPolicy, candidate: []const u8) bool {
         var origins = std.mem.splitScalar(u8, self.allowed_origins, ',');
@@ -197,6 +199,7 @@ fn formatError(buffer: []u8, kind: ApiError, request_id: []const u8) ![]const u8
 }
 
 fn requestOrigin(request: *const http.Server.Request, cors: CorsPolicy) ?[]const u8 {
+    if (cors.origin_captured) return cors.captured_origin;
     var candidate: ?[]const u8 = null;
     var headers = request.iterateHeaders();
     while (headers.next()) |header| {
@@ -206,6 +209,15 @@ fn requestOrigin(request: *const http.Server.Request, cors: CorsPolicy) ?[]const
     }
     const origin = candidate orelse return null;
     return if (cors.allows(origin)) origin else null;
+}
+
+pub fn captureCors(request: *const http.Server.Request, allocator: std.mem.Allocator, cors: CorsPolicy) !CorsPolicy {
+    const origin = requestOrigin(request, cors);
+    return .{
+        .allowed_origins = cors.allowed_origins,
+        .origin_captured = true,
+        .captured_origin = if (origin) |value| try allocator.dupe(u8, value) else null,
+    };
 }
 
 pub fn allowsRequestOrigin(request: *const http.Server.Request, cors: CorsPolicy) bool {

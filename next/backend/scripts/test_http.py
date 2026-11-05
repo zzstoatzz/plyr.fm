@@ -45,10 +45,11 @@ def _request(
     *,
     method: str = "GET",
     origin: str | None = None,
+    data: bytes | None = None,
 ) -> tuple[int, dict[str, str], dict[str, Any]]:
     headers = {"Origin": origin} if origin else {}
     request = urllib.request.Request(
-        f"{base_url}{path}", headers=headers, method=method
+        f"{base_url}{path}", headers=headers, method=method, data=data
     )
     try:
         response = urllib.request.urlopen(request, timeout=2)
@@ -161,6 +162,35 @@ def main() -> None:
         )
         assert status == 405
         assert resolve_method["error"]["code"] == "method_not_allowed"
+        valid_resolve = json.dumps(
+            {
+                "tracks": [
+                    {
+                        "track_id": song_id,
+                        "record_cid": "bafyreihdcss27ihlhmjofustbdvksrwyxnjj3hhk7azqs2626paka66c2a",
+                    }
+                ]
+            }
+        ).encode()
+        for payload, expected in [(valid_resolve, 503), (b'{"bad":true}', 400)]:
+            status, headers, _ = _request(
+                base_url,
+                "/v1/actors/did:plc:artist/likes/resolve",
+                method="POST",
+                origin=ALLOWED_ORIGIN,
+                data=payload,
+            )
+            assert status == expected
+            assert headers["access-control-allow-origin"] == ALLOWED_ORIGIN
+        status, headers, _ = _request(
+            base_url,
+            "/v1/actors/did:plc:artist/likes/resolve",
+            method="POST",
+            origin="https://untrusted.example",
+            data=valid_resolve,
+        )
+        assert status == 503 and "access-control-allow-origin" not in headers
+
         status, _, handle_likes = _request(base_url, "/v1/actors/artist.example/likes")
         assert status == 404 and handle_likes["error"]["code"] == "not_found"
 
