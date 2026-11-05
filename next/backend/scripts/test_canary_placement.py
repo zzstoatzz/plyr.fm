@@ -1,13 +1,21 @@
 from __future__ import annotations
 
 import json
+import subprocess
 from copy import deepcopy
 from unittest.mock import patch
 
 import pytest
-from canary_placement import APP, PlacementError, ensure_next_api, main
+from canary_placement import (
+    APP,
+    CONFIG,
+    PlacementError,
+    _system_run,
+    ensure_next_api,
+    main,
+)
 
-NAME = "next-api-sea-123-1"
+NAME = "next-api-sjc-123-1"
 
 
 def _machine(
@@ -23,9 +31,10 @@ def _machine(
         "name": name or machine_id,
         "region": region,
         "state": "started",
+        "image_ref": {"digest": "sha256:" + "a" * 64},
         "config": {
             "metadata": {"fly_process_group": group},
-            "env": {"FLY_PROCESS_GROUP": group, "PRIMARY_REGION": "sea"},
+            "env": {"FLY_PROCESS_GROUP": group, "PRIMARY_REGION": "sjc"},
             "image": "registry.fly.io/plyr-api-zig-canary:deployed-sha",
             "services": [{"internal_port": 8000}] if group == "app" else [],
             "mounts": [],
@@ -41,7 +50,7 @@ def _machine(
 
 
 OLD = _machine("old", "iad")
-NEW = _machine("new", "sea", name=NAME)
+NEW = _machine("new", "sjc", name=NAME)
 INGESTER = _machine("ingester", "sjc", group="ingester")
 
 
@@ -52,10 +61,15 @@ class FakeRunner:
         self.failure = failure
         self.clone_ready = failure != "unhealthy"
         self.target_checks = 0
+        self.regions = [{"code": "sjc", "deprecated": False, "capacity": 1}]
 
     def __call__(self, arguments: list[str]) -> str:
         self.calls.append(arguments)
-        assert arguments[0] == "flyctl" and APP in arguments
+        assert arguments[0] == "flyctl"
+        if arguments[1:3] == ["platform", "regions"]:
+            assert arguments == ["flyctl", "platform", "regions", "--json"]
+            return json.dumps(self.regions)
+        assert APP in arguments
         command = arguments[1:3]
         if command == ["machines", "list"]:
             if any(machine["id"] == "new" for machine in self.machines):
@@ -65,7 +79,8 @@ class FakeRunner:
             return json.dumps(self.machines)
         if command == ["machine", "clone"]:
             assert arguments[3] == "old"
-            assert arguments[-4:] == ["--region", "sea", "--name", NAME]
+            assert arguments[-6:-4] == ["--config", str(CONFIG)]
+            assert arguments[-4:] == ["--region", "sjc", "--name", NAME]
             clone = deepcopy(NEW)
             if not self.clone_ready:
                 clone["checks"][0]["status"] = "critical"
@@ -203,3 +218,78 @@ def test_retirement_response_loss_never_removes_healthy_replacement() -> None:
     assert [
         call[3] for call in runner.calls if call[1:3] == ["machine", "destroy"]
     ] == ["old"]
+
+
+@pytest.mark.parametrize("failure", ["exit", "timeout"])
+def test_cli_errors_preserve_provider_reason_without_exposing_token(
+    failure: str,
+) -> None:
+    token = "FlyV1 fixture-secret-token"
+    stderr = (
+        f"Error: permission denied; authorization {token}; raw fixture-secret-token"
+    )
+    error = (
+        subprocess.CalledProcessError(1, ["flyctl"], stderr=stderr)
+        if failure == "exit"
+        else subprocess.TimeoutExpired(["flyctl"], 30, stderr=stderr.encode())
+    )
+    with (
+        patch.dict("os.environ", {"FLY_API_TOKEN": token}),
+        patch("canary_placement.subprocess.run", side_effect=error),
+        pytest.raises(PlacementError, match="permission denied") as raised,
+    ):
+        _system_run(["flyctl", "machine", "clone"])
+    assert "fixture-secret-token" not in str(raised.value)
+    assert "[redacted]" in str(raised.value)
+
+
+def test_clone_digest_pin_preserves_the_deployed_image_identity() -> None:
+    runner = FakeRunner()
+    original_run = runner.__call__
+
+    def run(arguments: list[str]) -> str:
+        result = original_run(arguments)
+        if arguments[1:3] == ["machine", "clone"]:
+            runner.machines[-1]["config"]["image"] += "@sha256:" + "a" * 64
+        return result
+
+    ensure_next_api(NAME, run)
+    assert [machine["id"] for machine in runner.machines] == ["ingester", "new"]
+
+
+def test_wrong_clone_digest_cannot_retire_original() -> None:
+    runner = FakeRunner()
+    original_run = runner.__call__
+
+    def run(arguments: list[str]) -> str:
+        result = original_run(arguments)
+        if arguments[1:3] == ["machine", "clone"]:
+            runner.machines[-1]["image_ref"]["digest"] = "sha256:" + "b" * 64
+        return result
+
+    with pytest.raises(PlacementError, match="digest"):
+        ensure_next_api(NAME, run)
+    assert runner.machines == [OLD, INGESTER]
+
+
+@pytest.mark.parametrize(
+    "regions",
+    [
+        [],
+        [{"code": "sjc", "deprecated": True, "capacity": 1}],
+        [{"code": "sjc", "deprecated": False, "capacity": 0}],
+    ],
+)
+def test_region_availability_is_checked_before_cloning(
+    regions: list[dict[str, object]],
+) -> None:
+    runner = FakeRunner()
+    runner.regions = regions
+    with pytest.raises(PlacementError, match="region sjc"):
+        ensure_next_api(NAME, runner)
+    assert runner.machines == [OLD, INGESTER]
+    assert not [
+        call
+        for call in runner.calls
+        if call[1:3] in (["machine", "clone"], ["machine", "destroy"])
+    ]

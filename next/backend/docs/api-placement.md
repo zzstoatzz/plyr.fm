@@ -6,7 +6,7 @@ was in iad, while the ingester was in sjc. Live play receipt logs measured
 path took approximately 2 ms against local Postgres. The three sequential
 transaction round trips make API-to-database distance material.
 
-The desired API region is sea. Changing primary_region sets future placement;
+The desired API region is sjc (San Jose), an active West Coast region. Changing primary_region sets future placement;
 it does not move an existing VM. The deployment workflow therefore runs
 scripts/canary_placement.py after deploying the image and passing the normal
 product smoke. The script is restricted to this repository's main-branch CI
@@ -19,14 +19,14 @@ operation. Its former generic prepare/restore/complete commands are removed.
 
 1. Inspect live Machine JSON. Require one app process with services and no
    mounted volume. Ignore the ingester; refuse unexpected public service groups.
-2. If the API is already in sea, make no Machine changes.
-3. Clone that exact API into sea with a unique CI-run name. Fly's clone starts
+2. If the API is already in sjc, make no Machine changes.
+3. Clone that exact API into sjc with a unique CI-run name. Fly's clone starts
    the replacement and retains the process group's configuration.
 4. Poll the replacement's own checks. Require started state, passing checks and
    a ready response reporting index reachable. Verify image, environment,
    services, guest size, command and restart configuration match the deployed
    original. Revalidate identities and readiness before retiring the original.
-5. Destroy only the original API ID. Confirm one API remains in sea, then run
+5. Destroy only the original API ID. Confirm one API remains in sjc, then run
    the product smoke again through the public Fly hostname.
 
 The original remains available until the replacement passes readiness. A
@@ -67,3 +67,25 @@ operation time separately from browser request time and audio startup.
   why this script refuses mounts.
 - [Fly Machines resource](https://docs.fly.io/machines/api/machines-resource):
   Machine region, identity, configuration and check state.
+
+## CLI failure diagnostics
+
+The first relocation attempt targeted Seattle (sea), which Fly deprecated in its
+[region consolidation](https://fly.io/blog/the-region-consolidation-project/).
+The live region inventory no longer includes it. San Jose (sjc) is the closest
+active Fly region to the Oregon database. Relocation now checks advertised
+region availability before cloning. Capturing
+subprocess output without reporting stderr hid the provider's reason, so that
+run did not expose the provider error directly. Failures and timeouts now report
+bounded stderr with the current
+Fly token and its unprefixed form redacted. Raw inventory/config output is not
+printed. Clone also receives the explicit fly.canary.toml path.
+
+Fly v0.5.4's [clone implementation](https://github.com/superfly/flyctl/blob/v0.5.4/internal/command/machine/clone.go)
+uses source.FullImageRef(), adding a digest pin to the copied image reference.
+Configuration comparison normalizes that pin while independently requiring the
+healthy replacement's actual image digest to match the source. Comparing the
+raw image strings would incorrectly reject an otherwise identical clone.
+The source's [config loader](https://github.com/superfly/flyctl/blob/v0.5.4/internal/command/command.go)
+permits a missing default config when --app is supplied; missing fly.toml alone
+is therefore not a demonstrated explanation for the first failure.
