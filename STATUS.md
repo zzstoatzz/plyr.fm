@@ -69,6 +69,18 @@ listened-time semantics and player lifecycle research while identifying retry,
 repeat and dedup defects to avoid copying. [Next's cost checkpoint](COSTS.md#next-backend-checkpoint-november-4-2026)
 budgets roughly $30–35/month at current baseline, before unmeasured usage.
 
+Cycle 1 implementation: [#2363](https://github.com/zzstoatzz/plyr.fm/pull/2363),
+[#2364](https://github.com/zzstoatzz/plyr.fm/pull/2364) and
+[#2366](https://github.com/zzstoatzz/plyr.fm/pull/2366) add transactional anonymous
+play receipts, actual-listened qualification across the player/embeds/Radio/Jams,
+durable client retries and receipt-driven counts. Radio shares polling and avoids
+silent audio preload. The [contract](docs/internal/architecture/next-play-accounting.md)
+and [verification record](docs/research/2026-11-04-cycle-1-verification.md) distinguish
+real media/API checks from fixtures and physical-device gaps. Personal listening
+and broader queue continuity remain subsequent cycles. Separately,
+[#2368](https://github.com/zzstoatzz/plyr.fm/pull/2368) adds direct queue dragging
+and player controls that follow the selected accent.
+
 ### October 2026
 
 The day-by-day October entries are in `.status_history/2026-10.md`. The October

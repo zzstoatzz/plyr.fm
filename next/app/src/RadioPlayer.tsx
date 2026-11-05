@@ -10,7 +10,9 @@ import { Cover } from './CatalogPieces';
 import { Action, Copy, Page, row } from './controls';
 import { usePlayback } from './playback';
 import { useAppPreferences } from './preference-context';
-import { radioMedia, radioPosition, radioStations, readRadio, type RadioSnapshot } from './radio';
+import { radioMedia, radioPosition, radioStations } from './radio';
+import { usePlayerAccounting } from './use-player-accounting';
+import { useRadioFeed } from './use-radio-feed';
 
 type Station = typeof radioStations[number];
 export const RadioContext = createContext<{ station: Station | null; tune: (station: Station | null) => void }>({ station: null, tune: () => {} });
@@ -21,38 +23,22 @@ export default function Radio({ compact = false, tuned }: { compact?: boolean; t
   const live = useContext(RadioContext);
   const autoTuned = useRef(false);
   const [station, setStation] = useState<typeof radioStations[number]>(() => tuned ?? radioStations.find(item => item.slug === stationSlug) ?? radioStations[0]);
-  const [snapshot, setSnapshot] = useState<RadioSnapshot>();
+  const { snapshot, error } = useRadioFeed(station);
   const [listening, setListening] = useState(false);
-  const [error, setError] = useState('');
   const audio = useAudioPlayer(null);
   const status = useAudioPlayerStatus(audio);
+  const accounting = usePlayerAccounting(audio);
   const solo = usePlayback();
   const { preferences } = useAppPreferences();
+  const volume = useRef(preferences.volume);
+  volume.current = preferences.volume;
   const snapshotRef = useRef(snapshot);
   snapshotRef.current = snapshot;
   const song = snapshot?.currentSong;
   const source = song ? radioMedia(station, song, 'audio') : null;
 
   useEffect(() => {
-    const controller = new AbortController();
-    let timer: ReturnType<typeof setTimeout>;
-    async function poll() {
-      try {
-        const next = await readRadio(station, controller.signal);
-        if (!controller.signal.aborted) {
-          setSnapshot(next);
-          setError('');
-        }
-      } catch {
-        if (!controller.signal.aborted) setError('Could not reach this station. Retrying…');
-      } finally {
-        if (!controller.signal.aborted) timer = setTimeout(() => void poll(), 5000);
-      }
-    }
-    void poll();
     return () => {
-      controller.abort();
-      clearTimeout(timer);
       audio.pause();
       setListening(false);
     };
@@ -63,9 +49,17 @@ export default function Radio({ compact = false, tuned }: { compact?: boolean; t
   }, [audio, preferences.volume]);
 
   useEffect(() => {
+    accounting.stop();
     audio.pause();
-    audio.replace(source);
-  }, [audio, source]);
+    audio.replace(compact ? source : null);
+    audio.volume = volume.current;
+  }, [accounting, audio, compact, source]);
+
+  useEffect(() => {
+    if (!listening || !song || !source) return;
+    accounting.begin(song.id.startsWith('trk_') ? song.id : `radio:${song.id}`, song.durationSeconds);
+    return () => accounting.stop();
+  }, [accounting, listening, song?.id, song?.durationSeconds, snapshot?.state.startedAt, source]);
 
   useEffect(() => {
     if ((!tuned && autoplay !== '1') || autoTuned.current || !source || snapshot?.state.status !== 'playing') return;
@@ -98,7 +92,7 @@ export default function Radio({ compact = false, tuned }: { compact?: boolean; t
     const latest = snapshotRef.current;
     if (latest) {
       const target = radioPosition(latest);
-      if (Math.abs(audio.currentTime - target) > 2) void audio.seekTo(target);
+      if (Math.abs(audio.currentTime - target) > 2) void accounting.seekTo(target);
     }
     if (!audio.playing) audio.play();
   }, [audio, listening, snapshot, source, status.isLoaded]);
@@ -124,8 +118,6 @@ export default function Radio({ compact = false, tuned }: { compact?: boolean; t
       {radioStations.map(item => <Action key={item.slug} label={item.label} selected={item === station} primary={item === station}
         onPress={() => {
           if (item === station) return;
-          setSnapshot(undefined);
-          setError('');
           setStation(item);
           router.setParams({ station: item.slug });
         }} />)}

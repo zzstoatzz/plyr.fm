@@ -44,6 +44,7 @@ jobs:
         run: |
           npm ci
           npm run check
+          npm test
           npm run build:web
           test -s dist/index.html
           test -s dist/oauth-client-metadata.json
@@ -51,11 +52,6 @@ jobs:
           test ! -e dist/404.html
 
       - name: bundle iOS and Android
-        if: github.event_name == 'pull_request'
-        working-directory: next/app
-        run: npx expo export --platform ios --platform android --output-dir "$RUNNER_TEMP/next-native"
-
-      - name: check native bundles
         if: github.event_name == 'pull_request'
         working-directory: next/app
         run: npx --no-install expo export --platform ios --platform android --output-dir "$RUNNER_TEMP/next-native"

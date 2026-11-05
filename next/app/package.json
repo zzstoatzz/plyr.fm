@@ -9,7 +9,8 @@
     "ios": "expo run:ios",
     "android": "expo run:android",
     "check": "tsc --noEmit",
-    "build:web": "expo export --platform web && node --experimental-strip-types scripts/write-oauth-metadata.mts"
+    "build:web": "expo export --platform web && node --experimental-strip-types scripts/write-oauth-metadata.mts",
+    "test": "node --experimental-strip-types --test tests/*.test.ts"
   },
   "dependencies": {
     "@atcute/atproto": "^4.0.4",

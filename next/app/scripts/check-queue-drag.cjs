@@ -9,6 +9,7 @@ const requireFrontend = createRequire(path.resolve(__dirname, '../../../frontend
 const { chromium } = process.env.PLAYWRIGHT_MODULE ? require(process.env.PLAYWRIGHT_MODULE) : requireFrontend('playwright');
 const dist = process.env.QUEUE_DIST || path.resolve(__dirname, '../dist');
 const output = process.env.QUEUE_OUTPUT || '/tmp/plyr-next-queue';
+const fixtureAudio = 'https://queue-fixture.invalid/audio.wav';
 fs.mkdirSync(output, { recursive: true });
 const titles = ['Current song', 'Alpha', 'Beta', 'Gamma', 'Delta', 'Echo', 'Foxtrot', 'Golf', 'Hotel', 'India', 'Juliet', 'Kilo', 'Lima', 'Mike', 'November', 'Oscar', 'Papa', 'Quebec', 'Romeo', 'Sierra'];
 const tracks = titles.map((title, index) => {
@@ -41,21 +42,41 @@ const shot = (page, name) => page.screenshot({ path: path.join(output, `${name}.
 async function setup(browser, width, theme, queue = tracks) {
   const context = await browser.newContext({ viewport: { width, height: 900 }, hasTouch: true, colorScheme: theme });
   await context.addInitScript(({ theme, accent }) => localStorage.setItem('plyr-next:prefs', JSON.stringify({ theme, accent, playThrough: true, keepPlaying: false })), { theme, accent: process.env.QUEUE_ACCENT || '#6a9fff' });
+  await context.route('**/*', route => ['GET', 'HEAD', 'OPTIONS'].includes(route.request().method()) ? route.continue() : route.abort('blockedbyclient'));
+  await context.route(fixtureAudio, async route => {
+    const range = /^bytes=(\d+)-(\d*)$/.exec(route.request().headers().range || '');
+    const start = range ? Number(range[1]) : 0;
+    const end = range && range[2] ? Math.min(Number(range[2]), audio.length - 1) : audio.length - 1;
+    const body = audio.subarray(start, end + 1);
+    await route.fulfill({ status: range ? 206 : 200, body, headers: {
+      'content-type': 'audio/wav', 'content-length': String(body.length), 'accept-ranges': 'bytes',
+      'access-control-allow-origin': '*', ...(range ? { 'content-range': `bytes ${start}-${end}/${audio.length}` } : {})
+    } });
+  });
   const page = await context.newPage();
   page.setDefaultTimeout(Number(process.env.QUEUE_TIMEOUT) || 15_000);
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
+  const receipts = new Map();
   await page.route('https://api.next.plyr.fm/**', async route => {
     const url = new URL(route.request().url());
     let body = {};
-    if (url.pathname === '/v1/tracks') body = { object: 'list', data: queue, has_more: false };
+    if (route.request().method() === 'POST') {
+      const track = queue.find(item => url.pathname === '/v1/tracks/' + item.id + '/plays');
+      const occurrence = url.searchParams.get('occurrence');
+      if (!track || !occurrence) { await route.abort('blockedbyclient'); return; }
+      if (!receipts.has(occurrence)) receipts.set(occurrence, receipts.size + 1);
+      body = { object: 'play_receipt', occurrence, track_id: track.id, record: { uri: track.record.uri },
+        play_count: receipts.get(occurrence), counted: true, dedup: { status: 'duplicate', window_seconds: 30 },
+        sources: { metrics: 'application_metrics', dedup: 'postgres_durable' } };
+    } else if (url.pathname === '/v1/tracks') body = { object: 'list', data: queue, has_more: false };
     else if (url.pathname === '/v1/charts/tracks') body = { period: 'week', data: [] };
     else if (url.pathname.endsWith('/playback')) {
       await page.waitForTimeout(350);
       body = { object: 'playback', track_id: queue[0].id, record: queue[0].record,
-        availability: { status: 'available', delivery: { url: origin + '/audio.wav', media_type: 'audio/wav' } } };
+        availability: { status: 'available', delivery: { url: fixtureAudio, media_type: 'audio/wav' } } };
     }
-    await route.fulfill({ json: body });
+    await route.fulfill({ json: body, headers: { 'access-control-allow-origin': new URL(origin).origin, 'access-control-allow-credentials': 'true' } });
   });
   await page.goto(origin);
   await page.getByRole('button', { name: 'Play', exact: true }).first().click();
@@ -175,11 +196,12 @@ async function duplicates(browser) {
 }
 
 (async () => {
-  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
-  origin = `http://127.0.0.1:${server.address().port}`;
+  if (!process.env.QUEUE_URL) await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  origin = process.env.QUEUE_URL || `http://127.0.0.1:${server.address().port}`;
+  console.log(`Queue UI source: ${origin}; catalog/media are fixtures; real API/PDS mutations blocked`);
   const browser = await chromium.launch({ channel: 'chrome', headless: true });
   try {
     for (const width of [390, 1280]) for (const theme of ['light', 'dark']) await standard(browser, width, theme);
     await duplicates(browser);
-  } finally { await browser.close(); await new Promise(resolve => server.close(resolve)); }
-})().catch(error => { console.error(error); process.exitCode = 1; server.close(); });
+  } finally { await browser.close(); if (server.listening) await new Promise(resolve => server.close(resolve)); }
+})().catch(error => { console.error(error); process.exitCode = 1; if (server.listening) server.close(); });

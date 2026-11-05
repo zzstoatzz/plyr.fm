@@ -20,18 +20,24 @@ interface RadioStateResponse {
   state: {
     status: string;
     positionSeconds: number;
+    startedAt?: number | null;
   };
 }
 
-export interface RadioSnapshot extends RadioStateResponse {
-  receivedAt: number;
+export interface RadioSnapshot {
+  readonly currentSong: Readonly<RadioSong> | null;
+  readonly state: Readonly<RadioStateResponse['state']>;
+  readonly receivedAt: number;
 }
 
 export async function readRadio(station: RadioStation, signal: AbortSignal): Promise<RadioSnapshot> {
   const response = await fetch(`${station.origin}/api/radio/state`, { signal, cache: 'no-store' });
   if (!response.ok) throw new Error('Could not reach this station');
   const state: RadioStateResponse = await response.json();
-  return { ...state, receivedAt: performance.now() };
+  return Object.freeze({
+    currentSong: state.currentSong ? Object.freeze(state.currentSong) : null,
+    state: Object.freeze(state.state), receivedAt: performance.now(),
+  });
 }
 
 export function radioMedia(station: RadioStation, song: RadioSong, kind: 'audio' | 'cover') {

@@ -1,5 +1,7 @@
-// typed client for the zig appview's /v1 (read-only; no cookies, no sessions).
+// Canonical records are read-only here; anonymous play metrics are app-owned.
 import { API_URL } from './config';
+import { PlayDeliveryError, type PlayReceipt, type QualifiedPlay } from './play-outbox';
+import { playListenerId } from './play-listener';
 
 export interface Page<T> {
 	object: 'list';
@@ -152,6 +154,22 @@ interface TrackLike {
 }
 
 export const api = {
+	recordPlay: async (play: QualifiedPlay): Promise<PlayReceipt> => {
+		const url = new URL(`${API_URL}/v1/tracks/${encodeURIComponent(play.trackId)}/plays`);
+		url.searchParams.set('occurrence', play.occurrenceId);
+		url.searchParams.set('listener', playListenerId());
+		const controller = new AbortController();
+		const timer = setTimeout(() => controller.abort(), 15_000);
+		try {
+			const response = await fetch(url, { method: 'POST', credentials: 'include', keepalive: true, signal: controller.signal });
+			if (!response.ok) throw new PlayDeliveryError(`Play receipt failed (${response.status})`, response.status >= 500 || response.status === 429);
+			const receipt: unknown = await response.json();
+			if (!isPlayReceipt(receipt, play)) throw new PlayDeliveryError('Invalid play receipt', true);
+			return receipt;
+		} finally {
+			clearTimeout(timer);
+		}
+	},
 	trackLikes: (id: string, cursor?: string) =>
 		get<Page<TrackLike>>(`/v1/tracks/${encodeURIComponent(id)}/likes`, { limit: 30, cursor }),
 	tracks: (p: { limit?: number; cursor?: string; artist_did?: string } = {}) => get<Page<Track>>('/v1/tracks', p),
@@ -178,6 +196,23 @@ export const api = {
 			timeout_ms
 		})
 };
+
+function isPlayReceipt(value: unknown, play: QualifiedPlay): value is PlayReceipt {
+	if (typeof value !== 'object' || value === null) return false;
+	return 'object' in value && value.object === 'play_receipt' &&
+		'occurrence' in value && value.occurrence === play.occurrenceId &&
+		'track_id' in value && value.track_id === play.trackId &&
+		'play_count' in value && typeof value.play_count === 'number' && Number.isSafeInteger(value.play_count) && value.play_count >= 0 &&
+		'counted' in value && typeof value.counted === 'boolean' &&
+		'record' in value && typeof value.record === 'object' && value.record !== null &&
+		'uri' in value.record && typeof value.record.uri === 'string' &&
+		'sources' in value && typeof value.sources === 'object' && value.sources !== null &&
+		'metrics' in value.sources && value.sources.metrics === 'application_metrics' &&
+		'dedup' in value.sources && value.sources.dedup === 'postgres_durable' &&
+		'dedup' in value && typeof value.dedup === 'object' && value.dedup !== null &&
+		'window_seconds' in value.dedup && typeof value.dedup.window_seconds === 'number' && Number.isFinite(value.dedup.window_seconds) &&
+		'status' in value.dedup && (value.dedup.status === 'claimed' || value.dedup.status === 'duplicate' || value.dedup.status === 'suppressed');
+}
 
 function opaqueId(prefix: string, uri: string): string {
 	const bytes = new TextEncoder().encode(uri);

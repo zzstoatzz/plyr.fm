@@ -16,6 +16,7 @@ import { TrackLikes } from './TrackLikes';
 import { useAuth } from './auth';
 import { Action, pageFrame } from './controls';
 import { SITE_URL } from './config';
+import { usePlayCount } from './use-play-count';
 import { CollectionActions, Library, SignedTrackActions } from './AccountCatalog';
 
 const loadLatest = (cursor?: string) => api.tracks({ limit: 30, cursor });
@@ -149,6 +150,11 @@ function ShareLink({ path }: { path: string }) {
   </View>;
 }
 
+function TrackPlayCount({ track }: { track: Track }) {
+  const count = usePlayCount(track.id, track.metrics.play_count);
+  return <Detail>{count} {count === 1 ? 'play' : 'plays'}</Detail>;
+}
+
 function TrackDetail({ id, onPlay, onEnqueue, trackActions }: {
   id: string; onPlay: Play; onEnqueue: (track: Track) => void; trackActions?: TrackActions;
 }) {
@@ -165,7 +171,7 @@ function TrackDetail({ id, onPlay, onEnqueue, trackActions }: {
       <Detail>{artistName(track)}</Detail>
     </Link>
     {track.metadata.album && <Detail>{track.metadata.album}</Detail>}
-    <View style={styles.actions}><Detail>{track.metrics.play_count} plays</Detail><TrackLikes track={track} /></View>
+    <View style={styles.actions}><TrackPlayCount track={track} /><TrackLikes track={track} /></View>
     </DetailHeader>
     <View style={styles.actions}>
       <Action primary disabled={player.current?.id === track.id && player.loading}
