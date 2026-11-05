@@ -41,12 +41,15 @@ The Spaces-based Jams prototype and browser acceptance cases are tracked in
 
 ## Player navigation
 
-Playback stays above the route stack. Web expanded Now Playing is owned by
-`/now-playing`, so browser Back dismisses it before navigating the page below.
-Close and Escape pop that route; links replace it with their destination,
-while a link to the page already underneath simply dismisses it. The shell
-retains the underlying header and tab context. React Native Web Modal remains
-the single full-viewport dialog and focus owner.
+Playback stays above the route stack. On desktop web (800px and wider),
+Now Playing is a persistent side panel: browsing, browser Back and queue
+navigation keep the same audio element playing. Close and Escape dismiss the
+panel and restore focus to its dock trigger.
+
+On mobile web, `/now-playing` owns the full-screen presentation. Browser Back,
+Close and Escape dismiss that route before navigating the page below. Links
+replace it with their destination. React Native Web Modal owns focus while
+open; downward swipes outside controls dismiss it.
 
 Native currently keeps its existing local React Native Modal and hardware-Back
 handling. It never pushes the web-only player route. Moving native presentation

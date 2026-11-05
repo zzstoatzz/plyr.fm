@@ -1,6 +1,6 @@
 import { Text } from './Text';
 import { Link } from 'expo-router';
-import { type ReactNode } from 'react';
+import { type ReactNode, useState } from 'react';
 import { StyleSheet, View, useWindowDimensions } from 'react-native';
 import type { Track } from './api';
 import { useAppearance } from './appearance';
@@ -11,9 +11,10 @@ export function TrackPresentation({ track, controls, stats, utilities }: {
 }) {
   const theme = useAppearance();
   const { width, height } = useWindowDimensions();
+  const [available, setAvailable] = useState(width);
   const compact = width < 600;
-  const artwork = Math.max(112, Math.min(compact ? width * 0.54 : 300, height * 0.32));
-  return <View style={styles.page}>
+  const artwork = Math.min(available, Math.max(112, Math.min(compact ? width * 0.54 : 300, height * 0.32)));
+  return <View style={styles.page} onLayout={event => { if (event.nativeEvent.layout.width > 0) setAvailable(event.nativeEvent.layout.width); }}>
     <Cover uri={track.media.artwork?.url} size={artwork} radius={12} />
     <View style={styles.identity}>
       <Text accessibilityRole="header" aria-level={1} style={{ color: theme.text, fontFamily: theme.fontFamily,

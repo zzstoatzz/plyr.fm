@@ -1,7 +1,8 @@
+import { usePlayerPanel } from './player-panel';
 import { Text } from './Text';
 import { router } from 'expo-router';
-import { useState } from 'react';
-import { Platform, Pressable, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { Platform, Pressable, View, useWindowDimensions } from 'react-native';
 import Pause from 'lucide-react-native/icons/pause';
 import Play from 'lucide-react-native/icons/play';
 import SkipForward from 'lucide-react-native/icons/skip-forward';
@@ -14,6 +15,10 @@ import { PlayerControl } from './PlayerControl';
 export function PlayerBar() {
   const player = usePlayback();
   const theme = useAppearance();
+  const panel = usePlayerPanel();
+  const { width } = useWindowDimensions();
+  const desktop = Platform.OS === 'web' && width >= 800;
+  useEffect(() => { if (!player.current) panel.setExpanded(false); }, [player.current?.id, panel.setExpanded]);
   const [expanded, setExpanded] = useState(false);
   if (!player.current) return null;
   const track = player.current;
@@ -27,7 +32,7 @@ export function PlayerBar() {
     <View style={{ backgroundColor: theme.surface, borderRadius: 14, margin: 6, overflow: 'hidden' }}>
       <View style={{ height: 2, width: `${Math.max(0, progress) * 100}%`, backgroundColor: theme.accent }} />
       <View style={{ flexDirection: 'row', alignItems: 'center', padding: 5, gap: 4 }}>
-        <Pressable accessibilityRole="button" accessibilityLabel="Open now playing" onPress={() => Platform.OS === 'web' ? router.navigate('/now-playing') : setExpanded(true)}
+        <Pressable accessibilityRole="button" ref={panel.trigger} accessibilityLabel={desktop && panel.expanded ? 'Close now playing' : 'Open now playing'} onPress={() => desktop ? panel.setExpanded(!panel.expanded) : Platform.OS === 'web' ? router.navigate('/now-playing') : setExpanded(true)}
           style={{ flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 5, minHeight: 44 }}>
           <Cover uri={track.media.artwork?.url} size={42} />
           <View style={{ flex: 1, minWidth: 0 }}>
