@@ -15,7 +15,7 @@ import { usePlayback } from './playback';
 export function HomeTrackRow({ track, tracks, onPlay }: { track: Track; tracks: Track[]; onPlay: Play }) {
   const theme = useAppearance();
   return <View testID="home-track-row" style={[styles.row, { borderColor: theme.surface }]}>
-    <Pressable accessibilityRole="button" accessibilityLabel={`Play ${track.metadata.title}`} onPress={() => onPlay(track, tracks)}
+    <Pressable testID="home-track-play" accessibilityRole="button" accessibilityLabel={`Play ${track.metadata.title}`} onPress={() => onPlay(track, tracks)}
       style={({ pressed }) => [StyleSheet.absoluteFill, { borderRadius: 10, backgroundColor: pressed ? theme.surface : 'transparent' }]} />
     <View pointerEvents="none"><Cover uri={track.media.artwork?.url} size={44} /></View>
     <View pointerEvents="box-none" style={styles.meta}>

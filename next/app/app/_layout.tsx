@@ -1,6 +1,6 @@
 import { Text } from '../src/Text';
 import { Link, Stack, router, usePathname, type Href } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useFonts } from 'expo-font';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -17,6 +17,7 @@ import Settings from 'lucide-react-native/icons/settings';
 import { PlaybackProvider } from '../src/playback';
 import RadioPlayer, { RadioContext } from '../src/RadioPlayer';
 import type { RadioStation } from '../src/radio';
+import { KeyboardShortcuts } from '../src/KeyboardShortcuts';
 import { PlayerBar } from '../src/PlayerBar';
 import { NowPlayingOriginContext } from '../src/now-playing-origin';
 import { PreferencesProvider } from '../src/preference-context';
@@ -43,6 +44,8 @@ export default function RootLayout() {
 
 function Shell() {
   const [station, tune] = useState<RadioStation | null>(null);
+  const [togglePlayback, setTogglePlayback] = useState<(() => void) | null>(null);
+  const registerToggle = useCallback((toggle: (() => void) | null) => setTogglePlayback(() => toggle), []);
   const theme = useAppearance();
   const route = usePathname();
   const lastPage = useRef('/');
@@ -81,7 +84,8 @@ function Shell() {
       </Pressable>
     </Link>)}
   </View>;
-  return <RadioContext.Provider value={{ station, tune }}><SafeAreaView style={{ flex: 1, backgroundColor: theme.background }}>
+  return <RadioContext.Provider value={{ station, tune, togglePlayback, registerToggle }}><SafeAreaView style={{ flex: 1, backgroundColor: theme.background }}>
+    <KeyboardShortcuts origin={path} />
     <StatusBar style={theme.dark ? 'light' : 'dark'} />
     <View style={{ flex: 1, width: '100%', maxWidth: 1020, alignSelf: 'center', flexDirection: wide ? 'row' : 'column' }}>
       {wide && nav}

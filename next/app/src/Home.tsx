@@ -88,7 +88,7 @@ export function Home({ onPlay }: { onPlay: Play }) {
       </View>
       {chart.length > 0 && <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.cards}>
         {chart.map((track) => <View key={track.id} style={styles.card}>
-          <Pressable accessibilityRole="button" accessibilityLabel={`Play ${track.metadata.title}`} onPress={() => onPlay(track, chart)}>
+          <Pressable testID="home-track-play" accessibilityRole="button" accessibilityLabel={`Play ${track.metadata.title}`} onPress={() => onPlay(track, chart)}>
             <Cover uri={track.media.artwork?.url ?? track.artist.profile.avatar_url} size={136} radius={8} />
           </Pressable>
           <Link href={{ pathname: '/track/[id]', params: { id: track.id } }} asChild>
