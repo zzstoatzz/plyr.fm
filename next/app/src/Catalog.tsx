@@ -1,13 +1,12 @@
 import { Link, type Href, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useRef, useState, type ComponentRef, type ReactNode } from 'react';
-import { Platform, Pressable, ScrollView, Share, StyleSheet, TextInput, View } from 'react-native';
+import { Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import SearchIcon from 'lucide-react-native/icons/search';
 import X from 'lucide-react-native/icons/x';
 import PlayIcon from 'lucide-react-native/icons/play';
 import PauseIcon from 'lucide-react-native/icons/pause';
 import ListPlus from 'lucide-react-native/icons/list-plus';
 import Ellipsis from 'lucide-react-native/icons/ellipsis';
-import ShareIcon from 'lucide-react-native/icons/share-2';
 import { api, type SearchHit, type Track } from './api';
 import {
   Button, Detail, Heading, ListRows, Row, RowPlay, Status, TrackRows, artistName, errorMessage, useColors,
@@ -22,7 +21,7 @@ import { usePlayback } from './playback';
 import { TrackLikes } from './TrackLikes';
 import { useAuth } from './auth';
 import { Action, pageFrame } from './controls';
-import { SITE_URL } from './config';
+import { ShareLink } from './ShareLink';
 import { usePlayCount } from './use-play-count';
 import { CollectionActions, Library, SignedTrackActions } from './AccountCatalog';
 
@@ -132,29 +131,6 @@ function Search({ onPlay }: { onPlay: Play }) {
       })}
     </>}
   </>;
-}
-
-function ShareLink({ path, compact = false }: { path: string; compact?: boolean }) {
-  const [message, setMessage] = useState<string>();
-  async function share() {
-    try {
-      const url = SITE_URL + path;
-      if (Platform.OS === 'web' && typeof navigator.share !== 'function') {
-        await navigator.clipboard.writeText(url);
-        setMessage('Link copied.');
-      } else if (Platform.OS === 'web') {
-        await navigator.share({ url });
-      } else {
-        await Share.share({ message: url });
-      }
-    } catch (error) {
-      if (!(error instanceof Error && error.name === 'AbortError')) setMessage('Could not share this link.');
-    }
-  }
-  return <View style={styles.group}>
-    {compact ? <PlayerControl icon={ShareIcon} label="Share" onPress={() => void share()} /> : <Button label="Share" onPress={() => void share()} />}
-    {message && <Detail>{message}</Detail>}
-  </View>;
 }
 
 function TrackPlayCount({ track }: { track: Track }) {
