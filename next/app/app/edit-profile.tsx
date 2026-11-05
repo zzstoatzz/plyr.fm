@@ -53,6 +53,6 @@ export default function EditProfile() {
       <Field label="Avatar URL" value={avatar} onChangeText={setAvatar} autoCapitalize="none" editable={!busy && !!profile} />
       <Action primary label={busy ? 'Saving…' : 'Save profile'} disabled={!profile || busy} onPress={() => void save()} />
     </>}
-    {message && <Copy>{message}</Copy>}
+    {message && <Copy live>{message}</Copy>}
   </Sheet>;
 }

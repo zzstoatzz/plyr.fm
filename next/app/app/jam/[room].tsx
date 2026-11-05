@@ -146,7 +146,7 @@ export default function JamRoom() {
       </>}
     </>}
     {joined && snapshot && <Copy>{snapshot.playing ? 'Playing' : 'Paused'}</Copy>}
-    {!!notice && <Copy>{notice}</Copy>}
-    {!!error && <Copy>{error}</Copy>}
+    {!!notice && <Copy live>{notice}</Copy>}
+    {!!error && <Copy live>{error}</Copy>}
   </Page>;
 }

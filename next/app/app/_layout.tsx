@@ -70,12 +70,12 @@ function Shell() {
   }}>
     {wide && <Text style={{ color: theme.text, fontSize: 25, fontWeight: '900', margin: 12 }}>plyr.fm</Text>}
     {tabs.map(({ label, href, icon: Icon, active }) => <Link key={label} href={href} asChild>
-      <Pressable accessibilityRole="link" accessibilityLabel={label} accessibilityState={{ selected: active }}
+      <Pressable accessibilityRole="link" accessibilityLabel={label} aria-current={active ? 'page' : undefined} accessibilityState={{ selected: active }}
         style={{ minHeight: 48, flex: wide ? undefined : 1, paddingHorizontal: 8, borderRadius: 12, gap: wide ? 12 : 3,
           flexDirection: wide ? 'row' : 'column', alignItems: 'center', justifyContent: wide ? 'flex-start' : 'center',
           backgroundColor: active ? theme.surface : theme.background }}>
         <Icon size={21} color={active ? theme.text : theme.muted} strokeWidth={active ? 2.5 : 1.8} />
-        <Text style={{ color: active ? theme.text : theme.muted, fontSize: wide ? 15 : 11, fontWeight: active ? '700' : '500' }}>{label}</Text>
+        <Text style={{ color: active ? theme.text : theme.muted, fontSize: (wide ? 15 : 11) * theme.scale, fontWeight: active ? '700' : '500' }}>{label}</Text>
       </Pressable>
     </Link>)}
   </View>;
@@ -91,7 +91,7 @@ function Shell() {
           {showBack && <Pressable accessibilityRole="button" accessibilityLabel="Back"
             onPress={() => router.canGoBack() ? router.back() : router.replace('/')}
             style={{ width: 44, minHeight: 44, justifyContent: 'center' }}><ArrowLeft color={theme.text} size={22} /></Pressable>}
-          {tabTitle ? <Text accessibilityRole="header" numberOfLines={1}
+          {tabTitle ? <Text accessibilityRole="header" aria-level={1} numberOfLines={1}
             style={{ flex: 1, color: theme.text, fontFamily: theme.fontFamily, fontSize: 30 * theme.scale, fontWeight: '800', letterSpacing: -0.8 }}>{tabTitle}</Text>
             : detail ? <Text numberOfLines={1} style={{ flex: 1, textAlign: 'center', color: theme.text, fontSize: 16 * theme.scale, fontWeight: '700' }}>{detailTitle}</Text>
             : <View style={{ flex: 1 }} />}

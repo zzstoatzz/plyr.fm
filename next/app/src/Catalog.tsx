@@ -1,6 +1,6 @@
-import { Link, type Href, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { type Href, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useRef, useState, type ComponentRef, type ReactNode } from 'react';
-import { Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import SearchIcon from 'lucide-react-native/icons/search';
 import X from 'lucide-react-native/icons/x';
 import PlayIcon from 'lucide-react-native/icons/play';
@@ -20,7 +20,7 @@ import { PlayerControl } from './PlayerControl';
 import { usePlayback } from './playback';
 import { TrackLikes } from './TrackLikes';
 import { useAuth } from './auth';
-import { Action, pageFrame } from './controls';
+import { Action, InlineLink, pageFrame } from './controls';
 import { ShareLink } from './ShareLink';
 import { TrackMenu } from './TrackMenu';
 import { usePlayCount } from './use-play-count';
@@ -73,7 +73,7 @@ function Search({ onPlay }: { onPlay: Play }) {
     ['track', 'Tracks'], ['artist', 'Artists'], ['album', 'Albums'], ['playlist', 'Playlists'],
   ] as const;
   return <>
-    <View style={[styles.searchField, { backgroundColor: colors.surface, borderColor: focused ? colors.muted : 'transparent' }]}>
+    <View style={[styles.searchField, { backgroundColor: colors.surface, borderColor: focused ? colors.accent : colors.border }]}>
       <SearchIcon size={19} color={colors.muted} />
       <TextInput
         ref={input}
@@ -154,9 +154,9 @@ function Collection({ id, album, onPlay }: { id: string; album: boolean; onPlay:
   const tracks = list.members.flatMap((member) => member.track ? [member.track] : []);
   return <>
     <DetailHeader title={list.metadata.name ?? (album ? 'Album' : 'Playlist')} artwork={list.media?.artwork?.url}>
-    {list.owner.profile && <Link href={{ pathname: '/u/[handle]', params: { handle: list.owner.profile.handle || list.owner.did } }}>
-      <Detail>{list.owner.profile.display_name || list.owner.profile.handle}</Detail>
-    </Link>}
+    {list.owner.profile && <InlineLink href={{ pathname: '/u/[handle]', params: { handle: list.owner.profile.handle || list.owner.did } }}>
+      {list.owner.profile.display_name || list.owner.profile.handle}
+    </InlineLink>}
     <Detail>{tracks.length} of {list.metrics.member_count} tracks available</Detail>
     </DetailHeader>
     <CollectionActions list={list} refresh={result.retry} onPlay={onPlay} actions={<>
@@ -176,7 +176,7 @@ function ArtistPage({ handle, onPlay }: { handle: string; onPlay: Play }) {
     <DetailHeader title={artist.display_name || artist.handle} artwork={artist.avatar_url} round>
     <Detail>@{artist.handle}</Detail>
     {artist.bio && <Detail>{artist.bio}</Detail>}
-    {support && <Link href={support as Href}><Detail>Support artist</Detail></Link>}
+    {support && <InlineLink standalone href={support as Href}>Support artist</InlineLink>}
     </DetailHeader>
     <View style={styles.actions}>
       <ShareLink path={`/u/${encodeURIComponent(artist.handle || artist.did)}`} />
@@ -254,7 +254,7 @@ const styles = StyleSheet.create({
   page: { ...pageFrame, paddingTop: 16, paddingBottom: 32, gap: 16 },
   group: { gap: 7 },
   actions: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8 },
-  searchField: { minHeight: 46, borderRadius: 24, borderWidth: 1, paddingLeft: 13, paddingRight: 4, flexDirection: 'row', alignItems: 'center', gap: 9 },
-  searchInput: { flex: 1, minWidth: 0, paddingVertical: 10, paddingRight: 4, ...Platform.select({ web: { outlineStyle: 'solid', outlineWidth: 0 } }) },
+  searchField: { minHeight: 48, borderRadius: 10, borderWidth: 1, paddingLeft: 13, paddingRight: 4, flexDirection: 'row', alignItems: 'center', gap: 9 },
+  searchInput: { flex: 1, minWidth: 0, paddingVertical: 10, paddingRight: 4 },
   clearSearch: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
 });

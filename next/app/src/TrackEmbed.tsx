@@ -1,5 +1,5 @@
 import { Text } from './Text';
-import Slider from '@react-native-community/slider';
+import Slider from './Slider';
 import { Link } from 'expo-router';
 import Music from 'lucide-react-native/icons/eighth-note';
 import Pause from 'lucide-react-native/icons/pause';
@@ -42,7 +42,7 @@ export function TrackEmbed({ track, adult }: { track: Track; adult: boolean }) {
     style={({ pressed }) => ({ width: 48, height: 48, flexShrink: 0, borderRadius: 10,
       backgroundColor: 'rgba(10, 13, 20, 0.90)', alignItems: 'center', justifyContent: 'center',
       opacity: pressed || adult ? 0.65 : 1 })}>
-    {busy ? <ActivityIndicator color="#fff" /> : <Icon color="#fff" size={26} fill={playing || error ? 'none' : '#fff'} />}
+    {busy ? <ActivityIndicator accessibilityLabel="Loading playback" color="#fff" /> : <Icon color="#fff" size={26} fill={playing || error ? 'none' : '#fff'} />}
   </Pressable>;
 
   const metadata = <View style={{ flex: 1, minWidth: 0, overflow: 'hidden', justifyContent: 'center', gap: 3 }}>
@@ -66,7 +66,7 @@ export function TrackEmbed({ track, adult }: { track: Track; adult: boolean }) {
     minHeight: 36, backgroundColor: theme.background }}>
     <Slider accessibilityLabel="Seek" style={{ flex: 1, width: 0, minWidth: 0, height: 32 }}
       minimumValue={0} maximumValue={duration || 1} value={scrub ?? position} disabled={!duration || busy || !!error}
-      minimumTrackTintColor={theme.accent} maximumTrackTintColor={theme.surface} thumbTintColor={theme.accent}
+      minimumTrackTintColor={theme.accent} maximumTrackTintColor={theme.border} thumbTintColor={theme.accent}
       onValueChange={setScrub} onSlidingComplete={seconds => { player.seek(seconds); setScrub(null); }} />
     {panelWidth >= 260 && <Text numberOfLines={1} style={{ flexShrink: 0, color: theme.muted, fontSize: 11,
       fontVariant: ['tabular-nums'] }}>{time(scrub ?? position)} / {time(duration)}</Text>}

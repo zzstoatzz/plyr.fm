@@ -6,6 +6,7 @@ import { artistName, Cover, Heading, Status, TrackRows, useResource } from './Ca
 import { Action, Copy } from './controls';
 import { WaveLoading } from './WaveLoading';
 import { TrackEmbed } from './TrackEmbed';
+import { useAppearance } from './appearance';
 import { usePlayback } from './playback';
 
 type Kind = 'track' | 'artist' | 'playlist' | 'album';
@@ -69,6 +70,7 @@ export function CatalogEmbed({ kind }: { kind: Kind }) {
   const load = useCallback(() => loadEmbed(kind, id, handle || id, slug), [kind, id, handle, slug]);
   const result = useResource(load);
   const player = usePlayback();
+  const theme = useAppearance();
   const attempted = useRef(false);
   const data = result.data;
   const first = data?.tracks[0];
@@ -84,7 +86,7 @@ export function CatalogEmbed({ kind }: { kind: Kind }) {
   if (!data && kind === 'track' && !result.error) return <View style={{ height: '100%', justifyContent: 'center' }}><WaveLoading label="Loading track" /></View>;
   if (!data) return <Status loading={!result.error} error={result.error} retry={result.retry} />;
   if (kind === 'track' && first) return <TrackEmbed key={first.id} track={first} adult={adult} />;
-  return <View style={{ padding: 8, gap: 8 }}>
+  return <View style={{ padding: 12, gap: 12, backgroundColor: theme.background }}>
     <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center' }}>
       <Cover uri={adult ? null : data.artwork} round={kind === 'artist'} />
       <View style={{ flex: 1, minWidth: 0 }}>

@@ -57,7 +57,7 @@ export default function EditTrack() {
   return <Sheet title="Edit track" close={() => {
     if (!busy) router.canGoBack() ? router.back() : router.replace(`/track/${id}`);
   }}>
-    {error && <Copy>{error}</Copy>}
+    {error && <Copy live>{error}</Copy>}
     {saved ? null : track && track.artist.did === auth.did ? <>
       <Field label="Title" value={title} onChangeText={setTitle} maxLength={256} />
       <Field label="Album" value={album} onChangeText={setAlbum} maxLength={256} />
@@ -69,7 +69,7 @@ export default function EditTrack() {
         <Action label={artwork === null ? 'Cover will be removed' : 'Remove cover'} disabled={busy} onPress={() => setArtwork(null)} />
       </View>
       <Action primary label="Save" disabled={busy || !title.trim()} onPress={() => void save(false)} />
-      <Action label={confirm ? 'Confirm delete' : 'Delete track'} disabled={busy} onPress={() => confirm ? void save(true) : setConfirm(true)} />
+      <Action destructive label={confirm ? 'Confirm delete' : 'Delete track'} disabled={busy} onPress={() => confirm ? void save(true) : setConfirm(true)} />
       {confirm && <Action label="Cancel delete" disabled={busy} onPress={() => setConfirm(false)} />}
     </> : <Copy>{track ? 'Only the artist can edit this track.' : error ? '' : 'Loading track…'}</Copy>}
   </Sheet>;

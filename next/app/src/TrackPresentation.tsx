@@ -16,7 +16,7 @@ export function TrackPresentation({ track, controls, stats, utilities }: {
   return <View style={styles.page}>
     <Cover uri={track.media.artwork?.url} size={artwork} radius={12} />
     <View style={styles.identity}>
-      <Text accessibilityRole="header" style={{ color: theme.text, fontFamily: theme.fontFamily,
+      <Text accessibilityRole="header" aria-level={1} style={{ color: theme.text, fontFamily: theme.fontFamily,
         textAlign: 'center', fontWeight: '800', fontSize: (compact ? 28 : 32) * theme.scale,
         lineHeight: (compact ? 34 : 39) * theme.scale, letterSpacing: -0.5 }}>{track.metadata.title}</Text>
       <Link href={{ pathname: '/u/[handle]', params: { handle: track.artist.profile.handle || track.artist.did } }}

@@ -63,7 +63,7 @@ export default function Upload() {
       <Field label="Album" value={album} onChangeText={setAlbum} maxLength={256} />
       <Field label="Description" value={description} onChangeText={setDescription} maxLength={5000} multiline />
       <Action label={busy ? 'Uploading…' : 'Upload'} onPress={() => void upload()} disabled={busy || !file || !title.trim() || !artist.trim()} />
-      {note && <Copy>{note}</Copy>}
+      {note && <Copy live>{note}</Copy>}
     </>}
   </Page>;
 }

@@ -1,18 +1,20 @@
+import X from 'lucide-react-native/icons/x';
+import { PlayerControl } from './PlayerControl';
 import ListPlus from 'lucide-react-native/icons/list-plus';
 import Music2 from 'lucide-react-native/icons/eighth-note';
 import RefreshCw from 'lucide-react-native/icons/refresh-cw';
 import { ActionRow } from './ActionRow';
 import { WaveLoading } from './WaveLoading';
-import { Link, useFocusEffect, useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useMemo, useRef, useState, type ReactNode } from 'react';
-import { StyleSheet, TextInput, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { api, playlistIdFromUri, type AwaitStatus, type ListDetail, type Track } from './api';
 import { useAuth } from './auth';
 import { getAuth } from './auth-state';
 import {
-  Button, Detail, Heading, ListRows, Row, Status, TrackRows, artistName, errorMessage, useColors, usePages, useResource, type Play,
+  Button, Detail, Heading, ListRows, Row, Status, TrackRows, artistName, errorMessage, usePages, useResource, type Play,
 } from './CatalogPieces';
-import { Action } from './controls';
+import { Action, Field, InlineLink } from './controls';
 import { Sheet } from './Sheet';
 import { createPds } from './pds';
 
@@ -49,16 +51,7 @@ function useMutation() {
 }
 
 function NameInput({ value, onChange, label }: { value: string; onChange: (value: string) => void; label: string }) {
-  const colors = useColors();
-  return <TextInput
-    accessibilityLabel={label}
-    placeholder={label}
-    placeholderTextColor={colors.muted}
-    value={value}
-    onChangeText={onChange}
-    maxLength={64}
-    style={[styles.input, { color: colors.text, backgroundColor: colors.surface, fontFamily: colors.fontFamily, fontSize: 16 * colors.scale }]}
-  />;
+  return <Field label={label} value={value} onChangeText={onChange} maxLength={64} />;
 }
 
 export function Library({ likesOnly, onPlay }: { likesOnly: boolean; onPlay: Play }) {
@@ -112,12 +105,12 @@ function AccountLibrary({ did, likesOnly, onPlay }: { did: string; likesOnly: bo
     <Status loading={likes.loading} error={likes.error} retry={likes.more} empty={!likes.data.length ? 'No liked tracks yet.' : undefined} />
     {likesOnly && likes.cursor && !likes.loading && !likes.error && <Button label="More liked tracks" onPress={likes.more} />}
     {!likesOnly && <>
-      <Link href="/liked"><Detail>See all liked tracks</Detail></Link>
+      <InlineLink standalone href="/liked">See all liked tracks</InlineLink>
       <Heading>Playlists</Heading>
       <ListRows lists={lists.data} />
       <Status loading={lists.loading} error={lists.error} retry={lists.more} empty={!lists.data.length ? 'No playlists yet.' : undefined} />
       {lists.cursor && !lists.loading && !lists.error && <Button label="More playlists" onPress={lists.more} />}
-      <Link href="/playlists"><Detail>Browse public playlists</Detail></Link>
+      <InlineLink standalone href="/playlists">Browse public playlists</InlineLink>
       {creating ? <Sheet title="New playlist" close={() => { if (!mutation.busy) setCreating(false); }}>
         <NameInput label="Playlist name" value={name} onChange={setName} />
         {!mutation.busy && <View style={styles.actions}>
@@ -221,7 +214,7 @@ function EditCollection({ list, refresh, actions, onPlay }: CollectionControlsPr
     </View>}
     <Heading>Tracks</Heading>
     {editing && !album ? list.members.map(({ track, position, subject }) => {
-      const removeAction = !mutation.busy && <Button
+      const removeAction = !mutation.busy && <PlayerControl icon={X} destructive
         label={'Remove ' + (track?.metadata.title ?? 'unavailable track')}
         onPress={() => remove(subject.uri)} />;
       return track ? <Row key={position} href={{ pathname: '/track/[id]', params: { id: track.id } }}
@@ -229,7 +222,7 @@ function EditCollection({ list, refresh, actions, onPlay }: CollectionControlsPr
         : <View key={position} style={styles.actions}><Detail>Unavailable track</Detail>{removeAction}</View>;
     }) : <TrackRows tracks={tracks} onPlay={onPlay} />}
     {editing && !album && !mutation.busy && <View style={styles.actions}>
-      <Button label={confirmDelete ? 'Confirm delete playlist' : 'Delete playlist'}
+      <Button destructive label={confirmDelete ? 'Confirm delete playlist' : 'Delete playlist'}
         onPress={confirmDelete ? deletePlaylist : () => setConfirmDelete(true)} />
       {confirmDelete && <Button label="Cancel deletion" onPress={() => setConfirmDelete(false)} />}
     </View>}

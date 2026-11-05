@@ -68,7 +68,7 @@ export function Home({ onPlay }: { onPlay: Play }) {
     writeLocal(key, JSON.stringify(next));
   }
   function tag(name: string, active: boolean, count?: number) {
-    return <Pressable key={name} accessibilityRole="button" accessibilityLabel={`${active ? 'Remove' : 'Filter by'} ${name}`}
+    return <Pressable key={name} accessibilityRole="button" hitSlop={4} accessibilityLabel={`${active ? 'Remove' : 'Filter by'} ${name}`}
       disabled={!active && selected.length >= 10} accessibilityState={{ selected: active, disabled: !active && selected.length >= 10 }} onPress={() => changeTags(active ? selected.filter((value) => value !== name) : [...selected, name])}
       style={styles.tagTarget}>
       <View style={[styles.tag, { backgroundColor: active ? colors.surface : 'transparent', borderColor: active ? colors.accent : colors.surface }]}>
@@ -93,7 +93,7 @@ export function Home({ onPlay }: { onPlay: Play }) {
             <View style={[styles.cardPlay, { backgroundColor: colors.background }]}><PlayIcon size={16} color={colors.text} fill={colors.text} /></View>
           </Pressable>
           <Link href={{ pathname: '/track/[id]', params: { id: track.id } }} asChild>
-            <Pressable accessibilityRole="link"><Text numberOfLines={1} style={[styles.cardTitle, { color: colors.text, fontSize: 13 * colors.scale }]}>{track.metadata.title}</Text></Pressable>
+            <Pressable accessibilityRole="link" style={{ minHeight: 44, justifyContent: 'center' }}><Text numberOfLines={1} style={[styles.cardTitle, { color: colors.text, fontSize: 13 * colors.scale }]}>{track.metadata.title}</Text></Pressable>
           </Link>
           <Text numberOfLines={1} style={{ color: colors.muted, fontSize: 12 * colors.scale }}>{artistName(track)}</Text>
         </View>)}
@@ -116,7 +116,7 @@ export function Home({ onPlay }: { onPlay: Play }) {
     {network.error && <Detail>{network.error}</Detail>}
     <View testID="home-feed" style={styles.section}>
       <View style={styles.headingRow}>
-        <Pressable accessibilityRole="button" accessibilityLabel="Refresh tracks" onPress={latest.reload}><Heading>tracks</Heading></Pressable>
+        <Pressable accessibilityRole="button" accessibilityLabel="Refresh tracks" onPress={latest.reload} style={{ minHeight: 44, justifyContent: 'center' }}><Heading>tracks</Heading></Pressable>
         <Text style={{ color: colors.muted, fontSize: 13 * colors.scale }}>latest</Text>
       </View>
       {(selected.length > 0 || tags.length > 0) && <View style={styles.tags}>
@@ -144,6 +144,6 @@ const styles = StyleSheet.create({
   cardTitle: { fontWeight: '600', marginTop: 4 }, cardPlay: { position: 'absolute', right: 7, bottom: 7, width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   artist: { width: 104, alignItems: 'center', gap: 6 }, tags: { gap: 8 }, pinned: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6 },
   tagScroller: { gap: 6, alignItems: 'center' }, tagTarget: { minWidth: 44, minHeight: 44, maxWidth: '100%', justifyContent: 'center' },
-  tag: { flexDirection: 'row', gap: 6, alignItems: 'center', borderRadius: 6, borderWidth: 1, paddingHorizontal: 9, paddingVertical: 6 },
+  tag: { flexDirection: 'row', gap: 6, alignItems: 'center', minHeight: 36, borderRadius: 8, borderWidth: 1, paddingHorizontal: 9, paddingVertical: 6 },
   clear: { minWidth: 44, minHeight: 44, justifyContent: 'center', paddingVertical: 8, paddingRight: 4 }, more: { alignSelf: 'center', padding: 14 },
 });
