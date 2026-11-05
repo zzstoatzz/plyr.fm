@@ -24,6 +24,8 @@ export function Home({ onPlay }: { onPlay: Play }) {
   const latest = usePages(loadLatest);
   const [tags, setTags] = useState<HomeTag[]>([]);
   const [tagError, setTagError] = useState<string>();
+  const [tagAttempt, setTagAttempt] = useState(0);
+  const [tagsLoading, setTagsLoading] = useState(false);
   const [period, setPeriod] = useState<ChartPeriod>('month');
   const [chart, setChart] = useState<Track[]>([]);
   const [chartLoading, setChartLoading] = useState(true);
@@ -49,13 +51,18 @@ export function Home({ onPlay }: { onPlay: Play }) {
     return () => { chartGeneration.current += 1; };
   }, []);
   useEffect(() => {
+    let current = true;
     const controller = new AbortController();
-    const timer = setTimeout(() => { setTagError("could not load tags. try refreshing the page"); controller.abort(); }, 15_000);
-    void homeTags(controller.signal).then((items) => setTags(items.sort((left, right) => right.total_plays - left.total_plays)), (error: unknown) => {
-      if (!controller.signal.aborted) setTagError(errorMessage(error));
-    }).finally(() => clearTimeout(timer));
-    return () => { controller.abort(); clearTimeout(timer); };
-  }, []);
+    setTagError(undefined);
+    setTagsLoading(true);
+    const timer = setTimeout(() => { setTagError('could not load tags'); controller.abort(); }, 15_000);
+    void homeTags(controller.signal).then((items) => {
+      if (current && !controller.signal.aborted) setTags(items.sort((left, right) => right.total_plays - left.total_plays));
+    }, (error: unknown) => {
+      if (current && !controller.signal.aborted) setTagError(errorMessage(error));
+    }).finally(() => { clearTimeout(timer); if (current) setTagsLoading(false); });
+    return () => { current = false; controller.abort(); clearTimeout(timer); };
+  }, [tagAttempt]);
   function changeTags(next: string[]) {
     setSelection({ key, tags: next });
     writeLocal(key, JSON.stringify(next));
@@ -63,9 +70,11 @@ export function Home({ onPlay }: { onPlay: Play }) {
   function tag(name: string, active: boolean, count?: number) {
     return <Pressable key={name} accessibilityRole="button" accessibilityLabel={`${active ? 'Remove' : 'Filter by'} ${name}`}
       disabled={!active && selected.length >= 10} accessibilityState={{ selected: active, disabled: !active && selected.length >= 10 }} onPress={() => changeTags(active ? selected.filter((value) => value !== name) : [...selected, name])}
-      style={[styles.tag, { backgroundColor: active ? colors.surface : 'transparent', borderColor: active ? colors.accent : colors.surface }]}>
-      <Text numberOfLines={1} style={{ color: colors.text, fontSize: 12 * colors.scale }}>{name}{count === undefined ? '' : ` (${count})`}</Text>
-      {active && <X size={12} color={colors.muted} />}
+      style={styles.tagTarget}>
+      <View style={[styles.tag, { backgroundColor: active ? colors.surface : 'transparent', borderColor: active ? colors.accent : colors.surface }]}>
+        <Text numberOfLines={1} style={{ color: colors.text, fontSize: 12 * colors.scale, flexShrink: 1 }}>{name}{count === undefined ? '' : ` (${count})`}</Text>
+        {active && <X size={12} color={colors.muted} />}
+      </View>
     </Pressable>;
   }
   return <View style={styles.home}>
@@ -119,7 +128,8 @@ export function Home({ onPlay }: { onPlay: Play }) {
           {tags.filter(({ name }) => !selected.includes(name)).map(({ name, track_count }) => tag(name, false, track_count))}
         </ScrollView>
       </View>}
-      {tagError && <Detail>{tagError}</Detail>}
+      {tagsLoading && tagAttempt > 0 && <WaveLoading label="loading tags..." />}
+      <Status error={tagError} retry={() => setTagAttempt((attempt) => attempt + 1)} />
       <TrackRows tracks={latest.data} onPlay={onPlay} />
       {latest.loading ? <WaveLoading label={latest.data.length ? 'loading more...' : 'loading tracks...'} /> :
         <Status error={latest.error} retry={latest.more} empty={!latest.data.length ? selected.length ? 'no tracks match these tags' : 'no tracks yet' : undefined} />}
@@ -129,10 +139,11 @@ export function Home({ onPlay }: { onPlay: Play }) {
 }
 
 const styles = StyleSheet.create({
-  home: { gap: 32 }, section: { gap: 14 }, headingRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  period: { paddingVertical: 8, paddingHorizontal: 2 }, cards: { gap: 16, paddingBottom: 4 }, card: { width: 136, gap: 4 },
+  home: { gap: 32 }, section: { gap: 14 }, headingRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: 12, rowGap: 4 },
+  period: { minHeight: 44, minWidth: 44, justifyContent: 'center', paddingVertical: 8, paddingHorizontal: 2 }, cards: { gap: 16, paddingBottom: 4 }, card: { width: 136, gap: 4 },
   cardTitle: { fontWeight: '600', marginTop: 4 }, cardPlay: { position: 'absolute', right: 7, bottom: 7, width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   artist: { width: 104, alignItems: 'center', gap: 6 }, tags: { gap: 8 }, pinned: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6 },
-  tagScroller: { gap: 6 }, tag: { flexDirection: 'row', gap: 6, alignItems: 'center', borderRadius: 6, borderWidth: 1, paddingHorizontal: 9, paddingVertical: 6 },
-  clear: { paddingVertical: 8, paddingRight: 4 }, more: { alignSelf: 'center', padding: 14 },
+  tagScroller: { gap: 6, alignItems: 'center' }, tagTarget: { minWidth: 44, minHeight: 44, maxWidth: '100%', justifyContent: 'center' },
+  tag: { flexDirection: 'row', gap: 6, alignItems: 'center', borderRadius: 6, borderWidth: 1, paddingHorizontal: 9, paddingVertical: 6 },
+  clear: { minWidth: 44, minHeight: 44, justifyContent: 'center', paddingVertical: 8, paddingRight: 4 }, more: { alignSelf: 'center', padding: 14 },
 });

@@ -60,10 +60,18 @@ the real tag catalog. The script writes screenshots and a report to a unique
 fixture covers only the catalog response, never synthesizes filtered track reads.
 
 The same four-layout browser check also passed against the real local Zig API
-(port8042) backed by independently repaired public repositories: nine tracks,
+(port 8042) backed by independently repaired public repositories: nine tracks,
 26 authored tag memberships. No tag/track response fixtures were used. Selecting
-a tag returned200, rendered exactly its response's track rows, and clear restored
+a tag returned 200, rendered exactly its response's track rows, and clear restored
 the unfiltered request. This verifies the authored path; production's historical
 SQL-only tag annotations require a separate provenance-fenced import before
 claiming familiar catalog coverage. `HOME_API` can point the harness at this
 real local API while retaining the built Next client origin.
+
+After rebasing onto the direct-heart/action-menu changes, the full matrix passed
+again against combined authored and actual imported legacy annotations. A separate
+390px browser injected one tag-catalog 503 response, kept all 21 feed rows visible,
+and recovered with exactly one inline retry. At 1.4x text scale, all 16 measured
+period/tag controls had physical targets at least 44px high, the headings wrapped
+within the viewport, and no horizontal page overflow appeared. The small visual
+chips sit inside the larger touch targets.
