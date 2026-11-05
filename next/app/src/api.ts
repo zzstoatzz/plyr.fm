@@ -177,7 +177,7 @@ export const api = {
 	playback: (id: string) => get<Playback>(`/v1/tracks/${encodeURIComponent(id)}/playback`),
 	artist: (didOrHandle: string) => get<Artist>(`/v1/artists/${encodeURIComponent(didOrHandle)}`),
 	artistMetrics: (did: string) => get<ArtistMetrics>(`/v1/artists/${encodeURIComponent(did)}/metrics`),
-	albums: (artist_did: string) => get<Page<ListSummary>>('/v1/albums', { artist_did }),
+	albums: (artist_did: string, p: { limit?: number; cursor?: string } = {}) => get<Page<ListSummary>>('/v1/albums', { artist_did, ...p }),
 	album: (id: string) => get<ListDetail>(`/v1/albums/${encodeURIComponent(id)}`),
 	playlists: (p: { limit?: number; cursor?: string; owner_did?: string } = {}) =>
 		get<Page<ListSummary>>('/v1/playlists', p),

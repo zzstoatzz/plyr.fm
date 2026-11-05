@@ -22,9 +22,9 @@ export function Setting({ label, detail, children }: { label: string; detail?: s
   </View>;
 }
 
-export function Choice({ label, selected, onPress }: { label: string; selected: boolean; onPress: () => void }) {
+export function Choice({ label, selected, onPress, role = 'button' }: { label: string; selected: boolean; onPress: () => void; role?: 'button' | 'tab' }) {
   const theme = useAppearance();
-  return <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ selected }} onPress={onPress}
+  return <Pressable accessibilityRole={role} accessibilityLabel={label} accessibilityState={{ selected }} aria-selected={role === 'tab' ? selected : undefined} onPress={onPress}
     style={({ pressed }) => ({ minHeight: 44, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12,
       borderWidth: 1, borderColor: selected ? theme.accent : theme.surface, backgroundColor: selected || pressed ? theme.surface : 'transparent', justifyContent: 'center' })}>
     <Text style={{ color: selected ? theme.text : theme.muted, fontSize: 14 * theme.scale, fontWeight: selected ? '700' : '400' }}>{label}</Text>

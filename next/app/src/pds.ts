@@ -6,6 +6,7 @@ import { api, type AwaitStatus, type Track } from './api';
 import type { Auth } from './auth-state';
 import { NSID } from './config';
 import { blobUrl } from './identity';
+import { catalogChanged } from './catalog-changes';
 
 
 export interface MediaFile {
@@ -87,7 +88,13 @@ export function createPds(auth: Pick<Auth, 'did' | 'rpc'>) {
 	 */
 	async function settle(uri: string, cid?: string): Promise<AwaitStatus> {
 		try {
-			return (await api.awaitRecord(uri, cid)).status;
+			const status = (await api.awaitRecord(uri, cid)).status;
+			if (status === 'indexed' || status === 'deleted' || status === 'absent') {
+				const [, owner, collection] = /^at:\/\/([^/]+)\/([^/]+)\//.exec(uri) ?? [];
+				const scope = collection === NSID.track ? 'tracks' : collection === NSID.list ? 'albums' : collection === NSID.profile ? 'profile' : null;
+				if (owner && scope) catalogChanged(owner, scope);
+			}
+			return status;
 		} catch {
 			return 'pending';
 		}
