@@ -3,8 +3,10 @@
 The Next database is Neon us-west-2. On November 5 UTC the only API Machine
 was in iad, while the ingester was in sjc. Live play receipt logs measured
 365–374 ms for both new receipts and duplicate lookups; the same transaction
-path took approximately 2 ms against local Postgres. The three sequential
-transaction round trips make API-to-database distance material.
+path took approximately 2 ms against local Postgres. The three SQL commands
+were four network round trips: BEGIN and COMMIT each used a simple-query
+cycle, while the parameterized SELECT prepared/described and then bound/executed
+in separate cycles. API-to-database distance is therefore material.
 
 The desired API region is sjc (San Jose), an active West Coast region. Changing primary_region sets future placement;
 it does not move an existing VM. The deployment workflow therefore runs
@@ -57,6 +59,28 @@ After CI deploys, inspect actual Machine IDs/regions and collect new and duplica
 receipt elapsed_ms logs again. A changed config or a passing fixture test is not
 evidence that the live API moved or that latency improved. Compare server
 operation time separately from browser request time and audio startup.
+
+## Measured result and statement reuse
+
+CI run 41974327873 completed the move on November 5 UTC. The API is now Machine
+811093f92976e8 in sjc; the old iad API was removed. The ingester remains Machine
+82756da7779398 in sjc. Warm duplicate receipt requests after relocation measured
+HTTP p50 177 ms and p95 207 ms over 20 requests, with server elapsed_ms 94–95 ms,
+compared with 365–374 ms in the old region. These are observed samples, not SLOs.
+
+The current path still uses four network cycles for its three SQL commands.
+A local prototype named the SELECT with conn.rowOpts, and wire inspection
+confirmed that a warm call omitted Parse and Describe messages. However,
+pg.zig's cached branch sends a standalone Sync, then Stmt.prepareForBind waits
+for ReadyForQuery before sending Bind/Execute. That awaited exchange replaces
+the prepare/describe exchange; it does not remove a round trip. The cache-only
+runtime change was therefore not shipped.
+
+Named statements can still save parse/planning CPU, but that is different from
+reducing network cycles. The broader prepared-statement read work in #2320
+remains separate. Any future wire-latency optimization must remove the awaited
+Sync barrier and be measured independently. The regional improvement above is
+the verified change; no driver, pool or infrastructure expansion followed it.
 
 ## Provider references
 

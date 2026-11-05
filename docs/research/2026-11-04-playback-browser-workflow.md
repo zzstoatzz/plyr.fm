@@ -257,3 +257,26 @@ after replacement as well, without making volume changes reload the source.
 Real Radio checks in both browsers confirmed volume=0.25, one audio request,
 zero before Listen, eight state reads over roughly 38 seconds and a counted
 Postgres receipt. These are browser properties, not physical-device volume tests.
+
+## Public frontend verification
+
+After PR #2366 deployed commit a0cd15c6 to next.plyr.fm, the same checks ran
+without PLAYBACK_DIST and without receipt fixtures. All four Chrome viewport /
+theme flows and the WebKit phone / dark flow passed, including real claimed
+receipts, actual media progress, pause / seek / resume and the explicitly injected
+playback-resolution 503 recovery. Each healthy flow made eleven fetch responses:
+one more than the earlier baseline for its actual play submission, with no
+receipt-triggered catalog refetch.
+
+Public cross-site embeds retained the anonymous listener across reload in both
+browsers. The first occurrence counted; the next unique occurrence was suppressed
+inside the cooldown, with receipt intervals 7.76s / 8.69s. Public Radio also passed
+in both browsers: seven state reads, one audio-source request, zero before Listen,
+actual volume 0.25 and counted receipts at 31.678s / 31.842s after tapping Listen.
+Client qualification / submit / receipt logs were captured for server correlation.
+There were no page errors in these final runs. All four public Now Playing
+screenshots were inspected and remained opaque, aligned and unclipped.
+
+This closes the public-frontend verification gap recorded in the pre-promotion
+section. Native hardware and extremely short natural-loop sampling remain outside
+these browser claims.
