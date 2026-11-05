@@ -122,11 +122,12 @@ pub fn recordPlay(
     request_id: []const u8,
 ) !void {
     const started = std.Io.Timestamp.now(io, .awake);
-    const occurrence = parsePlayQuery(allocator, request.head.target) catch {
+    const play = parsePlayQuery(allocator, request.head.target) catch {
         try response.apiError(request, .invalid_request, request_id, cors);
         return;
     };
-    const identity = listenerIdentity(request, allocator, io) catch {
+    const occurrence = play.occurrence;
+    const identity = listenerIdentity(request, allocator, io, play.listener) catch {
         try response.apiError(request, .service_unavailable, request_id, cors);
         return;
     };
@@ -171,7 +172,12 @@ fn listenerIdentity(
     request: *const std.http.Server.Request,
     allocator: std.mem.Allocator,
     io: std.Io,
+    client_listener: ?[]const u8,
 ) !ListenerIdentity {
+    if (client_listener) |listener| return .{
+        .listener = try std.fmt.allocPrint(allocator, "client:{s}", .{listener}),
+        .set_cookie = null,
+    };
     if (playCookie(request)) |cookie| return .{
         .listener = cookie,
         .set_cookie = null,
@@ -215,26 +221,43 @@ fn validPlayCookie(value: []const u8) bool {
     return true;
 }
 
-fn parsePlayQuery(allocator: std.mem.Allocator, target: []const u8) ![]const u8 {
+const PlayQuery = struct { occurrence: []const u8, listener: ?[]const u8 };
+
+fn parsePlayQuery(allocator: std.mem.Allocator, target: []const u8) !PlayQuery {
     var iterator = query.Iterator.init(allocator, target);
     var occurrence: ?[]const u8 = null;
+    var listener: ?[]const u8 = null;
     while (try iterator.next()) |pair| {
-        if (!std.mem.eql(u8, pair.name, "occurrence") or occurrence != null or !record_play.validOccurrence(pair.value))
-            return error.InvalidQuery;
-        occurrence = pair.value;
+        if (!record_play.validOccurrence(pair.value)) return error.InvalidQuery;
+        if (std.mem.eql(u8, pair.name, "occurrence") and occurrence == null) {
+            occurrence = pair.value;
+        } else if (std.mem.eql(u8, pair.name, "listener") and listener == null) {
+            listener = pair.value;
+        } else return error.InvalidQuery;
     }
-    return occurrence orelse error.InvalidQuery;
+    return .{ .occurrence = occurrence orelse return error.InvalidQuery, .listener = listener };
 }
 
-test "play query requires exactly one canonical occurrence" {
+test "play query requires one occurrence and permits one anonymous client listener" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    try std.testing.expectError(error.InvalidQuery, parsePlayQuery(arena.allocator(), "/v1/tracks/x/plays"));
-    try std.testing.expectEqualStrings(
-        "01234567-89ab-4def-8123-456789abcdef",
-        try parsePlayQuery(arena.allocator(), "/v1/tracks/x/plays?occurrence=01234567-89ab-4def-8123-456789abcdef"),
-    );
-    try std.testing.expectError(error.InvalidQuery, parsePlayQuery(arena.allocator(), "/v1/tracks/x/plays?occurrence=01234567-89ab-4def-8123-456789abcdef&occurrence=01234567-89ab-4def-8123-456789abcdef"));
+    const allocator = arena.allocator();
+    const occurrence = "01234567-89ab-4def-8123-456789abcdef";
+    const listener = "89abcdef-0123-4567-89ab-cdef01234567";
+    const plain = try parsePlayQuery(allocator, "/v1/tracks/x/plays?occurrence=" ++ occurrence);
+    try std.testing.expectEqualStrings(occurrence, plain.occurrence);
+    try std.testing.expect(plain.listener == null);
+    const explicit = try parsePlayQuery(allocator, "/v1/tracks/x/plays?listener=" ++ listener ++ "&occurrence=" ++ occurrence);
+    try std.testing.expectEqualStrings(occurrence, explicit.occurrence);
+    try std.testing.expectEqualStrings(listener, explicit.listener.?);
+    for ([_][]const u8{
+        "/v1/tracks/x/plays",
+        "/v1/tracks/x/plays?listener=" ++ listener,
+        "/v1/tracks/x/plays?occurrence=" ++ occurrence ++ "&occurrence=" ++ occurrence,
+        "/v1/tracks/x/plays?occurrence=" ++ occurrence ++ "&listener=" ++ listener ++ "&listener=" ++ listener,
+        "/v1/tracks/x/plays?occurrence=" ++ occurrence ++ "&listener=invalid",
+        "/v1/tracks/x/plays?occurrence=" ++ occurrence ++ "&unknown=" ++ listener,
+    }) |invalid| try std.testing.expectError(error.InvalidQuery, parsePlayQuery(allocator, invalid));
 }
 
 test "anonymous play cookies require one canonical 128-bit token" {
