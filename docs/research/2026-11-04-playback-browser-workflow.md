@@ -41,6 +41,27 @@ readiness condition, rather than a button label or an intercepted successful API
 response. A 400ms screenshot settle sits outside interaction timings to avoid
 mistaking the React Native modal fade for layout overlap.
 
+## Verify historical build provenance
+
+A historical source checkout does not establish which bundle the browser received.
+Before claiming a regression fails on the old implementation, inspect the exported
+JavaScript for a behavior-specific marker and verify the browser loads those assets.
+Export from an explicit project directory, clear Metro's cache when the output
+does not match that source, and use a separate output directory for each revision.
+
+During the portal regression check, an initial historical export contained the new
+`usePortalPages` implementation even though the checked-out source used the old
+focus reload. That run was discarded. An export with an explicit historical
+project path and cleared cache contained the old implementation; navigating to a
+track and Back then lost the second catalog page, as the regression required.
+This observation does not isolate cache reuse from route-context resolution as
+the cause. The compiled artifact check establishes which implementation was tested.
+
+Authentication flows also need the generated OAuth metadata. Preserve unchanged
+metadata when preparing a historical build; substituting current application
+JavaScript would invalidate the comparison. A timeout before sign-in is not
+evidence that the intended navigation regression failed.
+
 ## Baseline measurements
 
 The first complete matrix passed all four Chrome cases. One phone case completed
