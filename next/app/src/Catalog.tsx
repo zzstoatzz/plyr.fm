@@ -179,7 +179,7 @@ function ArtistPage({ handle, onPlay }: { handle: string; onPlay: Play }) {
     {support && <InlineLink standalone href={support as Href}>Support artist</InlineLink>}
     </DetailHeader>
     <View style={styles.actions}>
-      <ShareLink path={`/u/${encodeURIComponent(artist.handle || artist.did)}`} />
+      <ShareLink compact path={`/u/${encodeURIComponent(artist.handle || artist.did)}`} />
       <ArtistEdit did={artist.did} />
     </View>
     <ArtistCatalog did={artist.did} onPlay={onPlay} />

@@ -50,4 +50,4 @@ if (location.pathname === '/') {
   document.head.append(link);
 }
 </script>`;
-await writeFile(htmlPath, html.replace('</head>', preload + '</head>'));
+await writeFile(htmlPath, html.replace('</head>', '<link rel="icon" href="/favicon.ico" type="image/x-icon"><link rel="apple-touch-icon" href="/apple-touch-icon.png">' + preload + '</head>'));
