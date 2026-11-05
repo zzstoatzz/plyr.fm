@@ -48,15 +48,16 @@ pub fn resolveLikes(
     cors: response.CorsPolicy,
     request_id: []const u8,
 ) !void {
+    const response_cors = try response.captureCors(request, allocator, cors);
     const body_reader = request.readerExpectContinue(&.{}) catch {
-        try response.apiError(request, .invalid_request, request_id, cors);
+        try response.apiError(request, .invalid_request, request_id, response_cors);
         return;
     };
     const body = body_reader.allocRemaining(
         allocator,
         std.Io.Limit.limited(maximum_body_bytes),
     ) catch {
-        try response.apiError(request, .invalid_request, request_id, cors);
+        try response.apiError(request, .invalid_request, request_id, response_cors);
         return;
     };
     const parsed = std.json.parseFromSliceLeaky(
@@ -65,7 +66,7 @@ pub fn resolveLikes(
         body,
         .{ .ignore_unknown_fields = false },
     ) catch {
-        try response.apiError(request, .invalid_request, request_id, cors);
+        try response.apiError(request, .invalid_request, request_id, response_cors);
         return;
     };
     switch (resolve_viewer_likes.execute(
@@ -78,10 +79,10 @@ pub fn resolveLikes(
     )) {
         .found => |value| {
             const encoded = try std.json.Stringify.valueAlloc(allocator, value, .{});
-            try response.json(request, .ok, encoded, request_id, cors);
+            try response.json(request, .ok, encoded, request_id, response_cors);
         },
-        .invalid_request => try response.apiError(request, .invalid_request, request_id, cors),
-        .corrupt_projection => try response.apiError(request, .internal_error, request_id, cors),
-        .unavailable => try response.apiError(request, .service_unavailable, request_id, cors),
+        .invalid_request => try response.apiError(request, .invalid_request, request_id, response_cors),
+        .corrupt_projection => try response.apiError(request, .internal_error, request_id, response_cors),
+        .unavailable => try response.apiError(request, .service_unavailable, request_id, response_cors),
     }
 }
