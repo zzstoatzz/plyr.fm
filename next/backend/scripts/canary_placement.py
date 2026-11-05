@@ -10,10 +10,12 @@ import subprocess
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 APP = "plyr-api-zig-canary"
-REGION = "sea"
+REGION = "sjc"
+CONFIG = Path(__file__).resolve().parents[1] / "fly.canary.toml"
 Runner = Callable[[list[str]], str]
 
 
@@ -29,16 +31,41 @@ class Machine:
     state: str
     ready: bool
     configuration: str
+    image_digest: str | None
+
+
+def _diagnostic(stderr: str | bytes | None) -> str:
+    message = (
+        stderr.decode(errors="replace")
+        if isinstance(stderr, bytes)
+        else stderr or "no stderr"
+    )
+    token = os.environ.get("FLY_API_TOKEN", "")
+    if token:
+        message = message.replace(token, "[redacted]")
+        if token.startswith(("FlyV1 ", "Bearer ")) and token.split(" ", 1)[1]:
+            message = message.replace(token.split(" ", 1)[1], "[redacted]")
+    return message.strip()[-4000:]
 
 
 def _system_run(arguments: list[str]) -> str:
-    result = subprocess.run(
-        arguments,
-        check=True,
-        text=True,
-        capture_output=True,
-        timeout=180 if arguments[1:3] == ["machine", "clone"] else 30,
-    )
+    command = " ".join(arguments[:3])
+    try:
+        result = subprocess.run(
+            arguments,
+            check=True,
+            text=True,
+            capture_output=True,
+            timeout=180 if arguments[1:3] == ["machine", "clone"] else 30,
+        )
+    except subprocess.CalledProcessError as error:
+        raise PlacementError(
+            f"{command} exited {error.returncode}: {_diagnostic(error.stderr)}"
+        ) from None
+    except subprocess.TimeoutExpired as error:
+        raise PlacementError(
+            f"{command} timed out: {_diagnostic(error.stderr)}"
+        ) from None
     return result.stdout
 
 
@@ -98,7 +125,11 @@ def _api_machines(runner: Runner) -> list[Machine]:
                 hashlib.sha256(
                     json.dumps(
                         {
-                            key: config.get(key)
+                            key: (
+                                config.get(key, "").split("@", 1)[0]
+                                if key == "image"
+                                else config.get(key)
+                            )
                             for key in (
                                 "image",
                                 "env",
@@ -111,6 +142,7 @@ def _api_machines(runner: Runner) -> list[Machine]:
                         sort_keys=True,
                     ).encode()
                 ).hexdigest(),
+                item.get("image_ref", {}).get("digest"),
             )
         )
     return machines
@@ -136,6 +168,15 @@ def _pair(
         raise PlacementError(
             "replacement must preserve the deployed image and runtime configuration"
         )
+    if (
+        verify_target
+        and target.ready
+        and source.image_digest
+        and target.image_digest != source.image_digest
+    ):
+        raise PlacementError(
+            "replacement image digest differs from the deployed source"
+        )
     return target
 
 
@@ -149,6 +190,21 @@ def _rollback(runner: Runner, source: Machine, name: str) -> None:
     print("removed failed replacement; original API retained")
 
 
+def _require_active_region(runner: Runner) -> None:
+    regions = json.loads(runner(["flyctl", "platform", "regions", "--json"]))
+    if not isinstance(regions, list):
+        raise PlacementError("Fly region inventory must be an array")
+    target = [
+        region
+        for region in regions
+        if isinstance(region, dict) and region.get("code") == REGION
+    ]
+    if len(target) != 1 or target[0].get("deprecated") is not False:
+        raise PlacementError(f"target region {REGION} is not an active Fly region")
+    if not target[0].get("capacity"):
+        raise PlacementError(f"target region {REGION} reports no capacity")
+
+
 def ensure_next_api(
     name: str,
     runner: Runner = _system_run,
@@ -157,7 +213,7 @@ def ensure_next_api(
     sleep: Callable[[float], None] = time.sleep,
     health_timeout: float = 90,
 ) -> None:
-    if not re.fullmatch(r"next-api-sea-[0-9]+-[0-9]+", name):
+    if not re.fullmatch(r"next-api-sjc-[0-9]+-[0-9]+", name):
         raise PlacementError("replacement name must identify the CI run")
     machines = _api_machines(runner)
     if len(machines) != 1:
@@ -168,6 +224,7 @@ def ensure_next_api(
         return
     if source.name == name:
         raise PlacementError("replacement name already belongs to the source")
+    _require_active_region(runner)
     print(f"Cloning API {source.id} from {source.region} to {REGION}")
     try:
         runner(
@@ -178,6 +235,8 @@ def ensure_next_api(
                 source.id,
                 "--app",
                 APP,
+                "--config",
+                str(CONFIG),
                 "--region",
                 REGION,
                 "--name",
@@ -224,7 +283,7 @@ def main() -> None:
             "API relocation runs only in this repository's main-branch CI"
         )
     ensure_next_api(
-        f"next-api-sea-{os.environ.get('GITHUB_RUN_ID', '')}-{os.environ.get('GITHUB_RUN_ATTEMPT', '')}"
+        f"next-api-sjc-{os.environ.get('GITHUB_RUN_ID', '')}-{os.environ.get('GITHUB_RUN_ATTEMPT', '')}"
     )
 
 
