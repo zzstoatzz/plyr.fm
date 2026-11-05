@@ -51,7 +51,7 @@ export function Home({ onPlay }: { onPlay: Play }) {
   useEffect(() => {
     const controller = new AbortController();
     const timer = setTimeout(() => { setTagError("could not load tags. try refreshing the page"); controller.abort(); }, 15_000);
-    void homeTags(controller.signal).then(setTags, (error: unknown) => {
+    void homeTags(controller.signal).then((items) => setTags(items.sort((left, right) => right.total_plays - left.total_plays)), (error: unknown) => {
       if (!controller.signal.aborted) setTagError(errorMessage(error));
     }).finally(() => clearTimeout(timer));
     return () => { controller.abort(); clearTimeout(timer); };
