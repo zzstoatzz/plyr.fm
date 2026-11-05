@@ -35,6 +35,7 @@ pub const Sources = struct {
     handle: ClaimSource,
     display_name: ClaimSource,
     profile: ClaimSource,
+    avatar: ClaimSource = .legacy_projection,
     public_preferences: ClaimSource,
     account_availability: ClaimSource,
 };
