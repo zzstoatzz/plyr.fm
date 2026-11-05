@@ -15,7 +15,7 @@ import { Sheet } from './Sheet';
 import { WaveLoading } from './WaveLoading';
 import { useAppearance } from './appearance';
 
-export function TrackLikes({ track, compact = false, buttonOnly = false, returnTo }: { track: Track; compact?: boolean; buttonOnly?: boolean; returnTo?: string }) {
+export function TrackLikes({ track, compact = false, returnTo, menu = false, onNavigate }: { track: Track; compact?: boolean; returnTo?: string; menu?: boolean; onNavigate?: () => void }) {
   const [open, setOpen] = useState(false);
   const [viewer, setViewer] = useState<{ did: string; uri: string; liked: boolean }>();
   const [count, setCount] = useState(track.metrics.like_count);
@@ -32,28 +32,29 @@ export function TrackLikes({ track, compact = false, buttonOnly = false, returnT
   }
   const label = `${count} ${count === 1 ? 'like' : 'likes'}`;
   return <>
-    <View testID="track-like-controls" style={{ flexDirection: 'row', alignItems: 'center' }}>
-      {auth.did && auth.rpc ? <LikeButton key={`${auth.did}:${track.record.uri}`} track={track} change={change} reportError={setError} reportLiked={setViewer} suffix={buttonOnly ? track.metadata.title : undefined} /> :
+    <View testID="track-like-controls" style={menu ? undefined : { flexDirection: 'row', alignItems: 'center' }}>
+      {auth.did && auth.rpc ? <LikeButton key={`${auth.did}:${track.record.uri}`} track={track} change={change} reportError={setError} reportLiked={setViewer} menu={menu} /> : menu ? <ActionRow icon={Heart} label="sign in to like" href={{ pathname: '/login', params: { return_to: returnTo ?? `/track/${track.id}` } }} onPress={onNavigate} /> :
         <Link href={{ pathname: '/login', params: { return_to: returnTo ?? `/track/${track.id}` } }} asChild>
-          <Pressable accessibilityRole="link" accessibilityLabel={buttonOnly ? `sign in to like ${track.metadata.title}` : 'sign in to like'} style={target}>
+          <Pressable accessibilityRole="link" accessibilityLabel="sign in to like" style={target}>
             <Heart size={21} color={theme.muted} />
           </Pressable>
         </Link>}
-      {!buttonOnly && <Pressable accessibilityRole="button" accessibilityLabel={`See ${label}`} onPress={() => setOpen(true)} style={[target, { paddingHorizontal: 4 }]}>
+      {!menu && <Pressable accessibilityRole="button" accessibilityLabel={`See ${label}`} onPress={() => setOpen(true)} style={[target, { paddingHorizontal: 4 }]}>
         <Text numberOfLines={1} style={{ color: theme.muted, fontSize: 14 * theme.scale }}>{compact ? count : label}</Text>
       </Pressable>}
     </View>
     {open && <Sheet title="Liked by" close={() => setOpen(false)}><People id={track.id} viewer={viewer?.did === auth.did && viewer.uri === track.record.uri ? viewer : undefined} close={() => setOpen(false)} /></Sheet>}
-    {error && <Sheet title="Couldn’t update like" close={() => setError(undefined)}>
+    {error && menu && <Text accessibilityRole="alert" style={{ color: theme.danger }}>{error}</Text>}
+    {error && !menu && <Sheet title="Couldn’t update like" close={() => setError(undefined)}>
       <Text style={{ color: theme.muted, fontSize: 15 * theme.scale }}>{error}</Text>
       <ActionRow label="close" icon={X} onPress={() => setError(undefined)} />
     </Sheet>}
   </>;
 }
 
-function LikeButton({ track, change, reportError, reportLiked, suffix }: {
+function LikeButton({ track, change, reportError, reportLiked, menu }: {
   track: Track; change: (delta: number) => () => void; reportError: (error: string) => void;
-  suffix?: string;
+  menu?: boolean;
   reportLiked: (state: { did: string; uri: string; liked: boolean }) => void;
 }) {
   const { did, rpc } = useAuth();
@@ -90,12 +91,12 @@ function LikeButton({ track, change, reportError, reportLiked, suffix }: {
     }
   }
   return <>
-    <Pressable accessibilityRole="button" accessibilityLabel={result.error && liked === undefined ? 'retry like status' : liked ? `Unlike${suffix ? ' ' + suffix : ''}` : `Like${suffix ? ' ' + suffix : ''}`}
+    {menu ? <ActionRow icon={Heart} label={result.error && liked === undefined ? 'retry like status' : liked ? 'unlike' : 'like'} disabled={busy || liked === undefined && !result.error} onPress={() => void toggle()} /> : <Pressable accessibilityRole="button" accessibilityLabel={result.error && liked === undefined ? 'retry like status' : liked ? 'Unlike' : 'Like'}
       accessibilityState={{ selected: liked ?? false, busy: busy || liked === undefined && !result.error, disabled: busy || liked === undefined && !result.error }}
       disabled={busy || liked === undefined && !result.error} onPress={() => void toggle()}
       style={[target, { opacity: busy || liked === undefined ? 0.5 : 1 }]}>
       <Heart size={21} color={liked ? theme.accent : theme.muted} fill={liked ? theme.accent : 'none'} />
-    </Pressable>
+    </Pressable>}
     <Text accessibilityLiveRegion="polite" style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', color: 'transparent' }}>{status}</Text>
   </>;
 }
