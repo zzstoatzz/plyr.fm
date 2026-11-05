@@ -1,3 +1,4 @@
+import { Text } from './Text';
 import Play from 'lucide-react-native/icons/play';
 import Pause from 'lucide-react-native/icons/pause';
 import { PlayerControl } from './PlayerControl';
@@ -5,7 +6,7 @@ import { useAppearance } from './appearance';
 import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 import { router, useLocalSearchParams } from 'expo-router';
 import { createContext, useContext, useEffect, useRef, useState } from 'react';
-import { Image, StyleSheet, Text, View } from 'react-native';
+import { Image, StyleSheet, View } from 'react-native';
 import { Cover } from './CatalogPieces';
 import { Action, Copy, Page, row } from './controls';
 import { usePlayback } from './playback';

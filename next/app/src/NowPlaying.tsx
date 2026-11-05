@@ -1,3 +1,4 @@
+import { Text } from './Text';
 import Slider from '@react-native-community/slider';
 import { router } from 'expo-router';
 import ChevronDown from 'lucide-react-native/icons/chevron-down';
@@ -9,7 +10,7 @@ import SkipBack from 'lucide-react-native/icons/skip-back';
 import SkipForward from 'lucide-react-native/icons/skip-forward';
 import X from 'lucide-react-native/icons/x';
 import { useState } from 'react';
-import { Animated, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { Animated, Modal, Platform, Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { Track } from './api';
 import { useAppearance } from './appearance';

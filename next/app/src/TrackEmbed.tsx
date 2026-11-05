@@ -1,3 +1,4 @@
+import { Text } from './Text';
 import Slider from '@react-native-community/slider';
 import { Link } from 'expo-router';
 import Music from 'lucide-react-native/icons/eighth-note';
@@ -5,7 +6,7 @@ import Pause from 'lucide-react-native/icons/pause';
 import Play from 'lucide-react-native/icons/play';
 import RotateCcw from 'lucide-react-native/icons/rotate-ccw';
 import { useState } from 'react';
-import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { ActivityIndicator, Image, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
 import type { Track } from './api';
 import { useAppearance } from './appearance';
 import { artistName } from './CatalogPieces';

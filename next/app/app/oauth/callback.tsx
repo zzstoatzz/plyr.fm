@@ -1,6 +1,7 @@
+import { Text } from '../../src/Text';
 import { useEffect } from 'react';
 import { router } from 'expo-router';
-import { ActivityIndicator, Text, View } from 'react-native';
+import { ActivityIndicator, View } from 'react-native';
 import { restoreAuth, takeLoginIntent, useAuth } from '../../src/auth';
 
 export default function OAuthCallback() {

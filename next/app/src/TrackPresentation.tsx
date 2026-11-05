@@ -1,6 +1,7 @@
+import { Text } from './Text';
 import { Link } from 'expo-router';
 import { type ReactNode } from 'react';
-import { StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { StyleSheet, View, useWindowDimensions } from 'react-native';
 import type { Track } from './api';
 import { useAppearance } from './appearance';
 import { Cover, Detail, artistName } from './CatalogPieces';

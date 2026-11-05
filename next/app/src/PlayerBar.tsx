@@ -1,5 +1,6 @@
+import { Text } from './Text';
 import { useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import Pause from 'lucide-react-native/icons/pause';
 import Play from 'lucide-react-native/icons/play';
 import SkipForward from 'lucide-react-native/icons/skip-forward';

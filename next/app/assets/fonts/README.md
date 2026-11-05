@@ -1,0 +1,1 @@
+Comic Neue regular and bold are bundled from [Google Fonts](https://github.com/google/fonts/tree/main/ofl/comicneue), under the included SIL Open Font License. Production uses Comic Neue as its web fallback for the Comic Sans preference. Next deliberately uses these same bundled files across web, iOS and Android rather than depending on an installed Comic Sans font.
