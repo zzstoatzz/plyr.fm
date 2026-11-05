@@ -1,6 +1,6 @@
 import { Text } from './Text';
 import Slider from '@react-native-community/slider';
-import { router } from 'expo-router';
+import type { Href } from 'expo-router';
 import ChevronDown from 'lucide-react-native/icons/chevron-down';
 import Info from 'lucide-react-native/icons/info';
 import ListMusic from 'lucide-react-native/icons/list-music';
@@ -27,7 +27,7 @@ function time(value: number) {
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
 }
 
-export function NowPlaying({ track, close }: { track: Track; close: () => void }) {
+export function NowPlaying({ track, close, navigate }: { track: Track; close: () => void; navigate: (target: Href) => void }) {
   const player = usePlayback();
   const theme = useAppearance();
   const { width, height } = useWindowDimensions();
@@ -75,8 +75,7 @@ export function NowPlaying({ track, close }: { track: Track; close: () => void }
                   {track.metadata.title}
                 </Text>
                 <View {...dismiss.protect} style={{ alignSelf: 'flex-start', maxWidth: '100%' }}><Pressable accessibilityRole="link" style={styles.artist} onPress={() => {
-                  close();
-                  router.push({ pathname: '/u/[handle]', params: { handle: track.artist.profile.handle || track.artist.did } });
+                  navigate(`/u/${encodeURIComponent(track.artist.profile.handle || track.artist.did)}`);
                 }}>
                   <Text numberOfLines={1} style={{ ...caption, fontSize: 15 * theme.scale }}>{artistName(track)}</Text>
                 </Pressable></View>
@@ -103,11 +102,11 @@ export function NowPlaying({ track, close }: { track: Track; close: () => void }
               </View>
               <View style={[styles.utilities, { borderColor: theme.surface }]}>
                 <View {...dismiss.protect}><Pressable accessibilityRole="button" accessibilityLabel="Queue" style={styles.utility}
-                  onPress={() => { close(); router.push('/queue'); }}>
+                  onPress={() => navigate('/queue')}>
                   <ListMusic size={18} color={theme.muted} /><Text style={caption}>Queue</Text>
                 </Pressable></View>
                 <View {...dismiss.protect}><Pressable accessibilityRole="button" accessibilityLabel="Track details" style={styles.utility}
-                  onPress={() => { close(); router.push(`/track/${track.id}`); }}>
+                  onPress={() => navigate(`/track/${track.id}`)}>
                   <Info size={18} color={theme.muted} /><Text style={caption}>Track details</Text>
                 </Pressable></View>
               </View>

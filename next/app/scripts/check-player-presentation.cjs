@@ -219,6 +219,7 @@ async function run(browser, width, theme) {
       assert.equal(await header.count(), 1, 'Floating desktop player does not use full-screen swipe');
     }
     await page.getByRole('button', { name: 'Close', exact: true }).click();
+    await header.waitFor({ state: 'detached' });
     assert.equal(await header.count(), 0);
     await open();
     await page.keyboard.press('Escape');

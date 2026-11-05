@@ -1,10 +1,10 @@
 import { Text } from '../src/Text';
 import { Link, Stack, router, usePathname, type Href } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useFonts } from 'expo-font';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Pressable, View, useWindowDimensions, StyleSheet } from 'react-native';
+import { Platform, Pressable, View, useWindowDimensions, StyleSheet } from 'react-native';
 import { AppearanceProvider, useAppearance } from '../src/appearance';
 import { restoreAuth, useAuth } from '../src/auth';
 import ArrowLeft from 'lucide-react-native/icons/arrow-left';
@@ -18,6 +18,7 @@ import { PlaybackProvider } from '../src/playback';
 import RadioPlayer, { RadioContext } from '../src/RadioPlayer';
 import type { RadioStation } from '../src/radio';
 import { PlayerBar } from '../src/PlayerBar';
+import { NowPlayingOriginContext } from '../src/now-playing-origin';
 import { PreferencesProvider } from '../src/preference-context';
 import { pageFrame } from '../src/controls';
 import { usePreferences } from '../src/preferences';
@@ -43,7 +44,10 @@ export default function RootLayout() {
 function Shell() {
   const [station, tune] = useState<RadioStation | null>(null);
   const theme = useAppearance();
-  const path = usePathname();
+  const route = usePathname();
+  const lastPage = useRef('/');
+  if (route !== '/now-playing') lastPage.current = route;
+  const path = route === '/now-playing' ? lastPage.current : route;
   const auth = useAuth();
   const { width } = useWindowDimensions();
   const wide = width >= 800;
@@ -100,7 +104,11 @@ function Shell() {
             <Settings size={20} color={theme.muted} />
           </Pressable></Link>}
         </View>
-        <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: theme.background } }} />
+        <NowPlayingOriginContext.Provider value={path}>
+          <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: theme.background } }}>
+            <Stack.Screen name="now-playing" options={{ presentation: Platform.OS === 'web' ? 'transparentModal' : 'card', animation: 'none', gestureEnabled: false, contentStyle: { backgroundColor: 'transparent' } }} />
+          </Stack>
+        </NowPlayingOriginContext.Provider>
         {station ? <RadioPlayer key={station.slug} compact tuned={station} /> : <PlayerBar />}
         {!wide && nav}
       </View>
