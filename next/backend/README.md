@@ -252,7 +252,11 @@ tracks, distinguishing authored claims from imported app annotations. Private,
 unlisted, excluded, adult-discovery and unavailable records do not contribute.
 There are no Python runtime reads or PDS writes.
 `GET /v1/tracks?tag=ambient&tag=drone` applies OR semantics before keyset
-pagination, with at most ten distinct tags of fifty UTF-8 bytes each. The same
+pagination, with at most ten distinct derived tag names of 200 UTF-8 bytes each. Authored record tags retain their fifty-byte lexicon limit; Unicode lowercasing
+can expand their derived names. Migration 0034 repairs derived arrays and
+canonicalizes legacy annotations within each record URI and observed CID,
+retaining the newest provenance when names collapse. It does not change signed
+records or require a projection-version bump. The same
 SQL normalization serves projection and filtering. Cursors bind the tag set,
 artist and collection; changing a filter requires starting a fresh page. Tag
 order and ASCII case do not change cursor identity. Unfiltered discovery keeps

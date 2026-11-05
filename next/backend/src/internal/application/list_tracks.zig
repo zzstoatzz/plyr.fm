@@ -9,6 +9,7 @@ const TrackStore = store_module.TrackStore;
 
 pub const default_limit: usize = 50;
 pub const max_limit: usize = 100;
+pub const max_tag_filter_bytes: usize = 200;
 
 const Options = struct {
     limit: usize = default_limit,
@@ -105,7 +106,7 @@ fn parseOptions(allocator: std.mem.Allocator, target: []const u8) !Options {
             saw_artist_did = true;
             result.artist_did = pair.value;
         } else if (std.mem.eql(u8, pair.name, "tag")) {
-            if (pair.value.len == 0 or pair.value.len > 50 or std.mem.indexOfScalar(u8, pair.value, 0) != null or !std.unicode.utf8ValidateSlice(pair.value)) return error.InvalidQuery;
+            if (pair.value.len == 0 or pair.value.len > max_tag_filter_bytes or std.mem.indexOfScalar(u8, pair.value, 0) != null or !std.unicode.utf8ValidateSlice(pair.value)) return error.InvalidQuery;
             const normalized = try normalizeTag(allocator, pair.value);
             if (normalized.len == 0) return error.InvalidQuery;
             var seen = false;
@@ -140,7 +141,7 @@ fn normalizeTag(allocator: std.mem.Allocator, raw: []const u8) ![]const u8 {
         try result.append(allocator, std.ascii.toLower(byte));
         space = false;
     }
-    return std.mem.trim(u8, result.items, "-");
+    return std.mem.trim(u8, result.items, " -");
 }
 
 fn filterPrefix(allocator: std.mem.Allocator, options: Options, collection: []const u8) ![]const u8 {
@@ -348,4 +349,24 @@ test "tag selections are bounded normalized sets and cursors bind their filters"
     try std.testing.expectEqual(Result.invalid_request, execute(a, fake.asStore(), "fm.plyr.dev.track", changed));
     const artist_changed = try std.fmt.allocPrint(a, "/v1/tracks?tag=ambient&tag=hip-hop&artist_did=did:plc:artist&cursor={s}", .{cursor});
     try std.testing.expectEqual(Result.invalid_request, execute(a, fake.asStore(), "fm.plyr.dev.track", artist_changed));
+}
+
+test "derived tag names normalize idempotently within their filter bound" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    for ([_][]const u8{ " - ambient - ", "-- - AMBIENT - --", "\t- a\t b -\r\n", "---", "hip-hop" }) |value| {
+        const once = try normalizeTag(a, value);
+        try std.testing.expectEqualStrings(once, try normalizeTag(a, once));
+    }
+    try std.testing.expectEqualStrings("ambient", try normalizeTag(a, " - ambient - "));
+    var expanded: std.ArrayList(u8) = .empty;
+    for (0..25) |_| try expanded.appendSlice(a, "ⱥ");
+    const selected = try parseOptions(a, try std.fmt.allocPrint(a, "/v1/tracks?tag={s}", .{expanded.items}));
+    try std.testing.expectEqualStrings(expanded.items, selected.tags[0]);
+    var boundary: [200]u8 = undefined;
+    @memset(&boundary, 'a');
+    const accepted = try std.fmt.allocPrint(a, "/v1/tracks?tag={s}", .{boundary});
+    _ = try parseOptions(a, accepted);
+    try std.testing.expectError(error.InvalidQuery, parseOptions(a, try std.fmt.allocPrint(a, "{s}a", .{accepted})));
 }

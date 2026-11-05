@@ -41,7 +41,9 @@ async def main() -> None:
                 ),
             )
             await source.execute("INSERT INTO track_tags VALUES(%s,1)", (identifier,))
-        await source.execute("INSERT INTO tags VALUES(1,' Ambient ')")
+        await source.execute("INSERT INTO tags VALUES(1,' - Ambient - ')")
+        await source.execute("INSERT INTO tags VALUES(2,%s)", ("ⱥ" * 25,))
+        await source.execute("INSERT INTO track_tags VALUES(1,2)")
     async with await psycopg.AsyncConnection.connect(TARGET) as target:
         await target.execute(
             "COMMENT ON DATABASE zig_tag_annotations IS 'plyr-zig-test'"
@@ -62,6 +64,82 @@ async def main() -> None:
             (
                 ROOT / "next/backend/migrations/0033_add_legacy_tag_annotations.sql"
             ).read_text()
+        )
+        cursor = await target.execute(
+            "SELECT plyr_index.normalize_track_tags(ARRAY[' - ambient - ']), plyr_index.normalize_track_tags(ARRAY['a  b'])"
+        )
+        before = await cursor.fetchone()
+        assert before == ([" ambient "], ["a b"]), before
+        cursor = await target.execute(
+            "SELECT plyr_index.normalize_track_tags(ARRAY[%s])", ("\\synth",)
+        )
+        assert await cursor.fetchone() == (["\\synth"],)
+        repair_uri = "at://did:plc:fixture/fm.plyr.track/repair"
+        await target.execute(
+            "INSERT INTO plyr_index.track_records VALUES(%s,%s,false)",
+            (repair_uri, CID),
+        )
+        await target.execute(
+            "INSERT INTO plyr_index.track_tag_records VALUES(%s,%s,ARRAY[' ambient ','a  b','---'],true)",
+            (repair_uri, CID),
+        )
+        await target.execute(
+            "INSERT INTO plyr_index.legacy_track_tags(record_uri,observed_record_cid,tag,source_track_id,source_observed_at,imported_at) VALUES (%s,%s,'ambient',10,'2026-01-01T00:00:00Z','2026-01-02T00:00:00Z'),(%s,%s,' - ambient - ',11,'2026-01-03T00:00:00Z','2026-01-04T00:00:00Z'),(%s,%s,' ambient ',12,'2026-01-02T00:00:00Z','2026-01-05T00:00:00Z'),(%s,%s,'---',13,'2026-01-01T00:00:00Z','2026-01-01T00:00:00Z'),(%s,%s,' - ambient - ',14,'2026-01-01T00:00:00Z','2026-01-01T00:00:00Z')",
+            (
+                repair_uri,
+                CID,
+                repair_uri,
+                CID,
+                repair_uri,
+                CID,
+                repair_uri,
+                CID,
+                repair_uri,
+                CID + "stale",
+            ),
+        )
+        migration = (
+            ROOT / "next/backend/migrations/0034_normalize_derived_tags.sql"
+        ).read_text()
+        await target.execute(migration)
+        cursor = await target.execute(
+            "SELECT record_cid,tags,tags_present FROM plyr_index.track_tag_records WHERE record_uri=%s",
+            (repair_uri,),
+        )
+        assert await cursor.fetchone() == (CID, ["a b", "ambient"], True)
+        cursor = await target.execute(
+            "SELECT observed_record_cid,tag,source_track_id,source_observed_at::text,imported_at::text FROM plyr_index.legacy_track_tags ORDER BY observed_record_cid"
+        )
+        repaired = await cursor.fetchall()
+        assert [(row[0], row[1], row[2]) for row in repaired] == [
+            (CID, "ambient", 11),
+            (CID + "stale", "ambient", 14),
+        ]
+        assert repaired[0][3].startswith("2026-01-03") and repaired[0][4].startswith(
+            "2026-01-04"
+        )
+        await target.execute(migration)
+        cursor = await target.execute(
+            "SELECT observed_record_cid,tag,source_track_id,source_observed_at::text,imported_at::text FROM plyr_index.legacy_track_tags ORDER BY observed_record_cid"
+        )
+        assert await cursor.fetchall() == repaired
+        for raw, expected in [
+            ([" - ambient - "], ["ambient"]),
+            (["-- - AMBIENT - --"], ["ambient"]),
+            (["a\t  b"], ["a b"]),
+            (["hip-hop"], ["hip-hop"]),
+            (["---", "", None], []),
+            (["Ⱥ" * 25], ["ⱥ" * 25]),
+            (["ambient", " - AMBIENT - "], ["ambient"]),
+        ]:
+            cursor = await target.execute(
+                "SELECT plyr_index.normalize_track_tags(%s::text[]),plyr_index.normalize_track_tags(plyr_index.normalize_track_tags(%s::text[]))",
+                (raw, raw),
+            )
+            assert await cursor.fetchone() == (expected, expected)
+        await target.execute("DELETE FROM plyr_index.legacy_track_tags")
+        await target.execute(
+            "DELETE FROM plyr_index.track_records WHERE record_uri=%s", (repair_uri,)
         )
         for identifier in (1, 6, 7, 8):
             cid = CID + "different" if identifier == 6 else CID
@@ -90,14 +168,17 @@ async def main() -> None:
             "unverified_tags": 1,
         }
         first = await import_tags(path, "zig_tag_annotations", "127.0.0.1", True)
-        assert first["counts"]["inserted_tag_memberships"] == 1
+        assert first["counts"]["inserted_tag_memberships"] == 2
         second = await import_tags(path, "zig_tag_annotations", "127.0.0.1", True)
         assert second["counts"]["inserted_tag_memberships"] == 0
         async with await psycopg.AsyncConnection.connect(TARGET) as target:
             cursor = await target.execute(
-                "SELECT tag,source FROM plyr_index.legacy_track_tags"
+                "SELECT tag,source FROM plyr_index.legacy_track_tags ORDER BY tag"
             )
-            assert await cursor.fetchall() == [("ambient", "legacy-plyr")]
+            assert await cursor.fetchall() == [
+                ("ambient", "legacy-plyr"),
+                ("ⱥ" * 25, "legacy-plyr"),
+            ]
             cursor = await target.execute(
                 "SELECT count(*) FROM plyr_index.track_records"
             )
@@ -115,7 +196,7 @@ async def main() -> None:
             raise AssertionError("wrong target accepted")
         except ValueError as error:
             assert "explicit host and database" in str(error)
-        manifest["tracks"][0]["tags"] = ["x" * 51]
+        manifest["tracks"][0]["tags"] = ["x" * 201]
         invalid = Path(directory) / "invalid.json"
         invalid.write_text(json.dumps(manifest))
         try:

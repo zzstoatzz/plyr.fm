@@ -724,11 +724,6 @@ test "composed PostgreSQL reads use verified records and authoritative account s
     _ = try pool.exec("CREATE SCHEMA plyr_index", .{});
     _ = try pool.exec("CREATE EXTENSION IF NOT EXISTS pg_trgm", .{});
     try projected_tracks.createTestTable(pool);
-    var annotation_statements = std.mem.splitScalar(u8, @embedFile("migration_0033_tag_annotations"), ';');
-    while (annotation_statements.next()) |raw| {
-        const statement = std.mem.trim(u8, raw, " \n\r\t");
-        if (statement.len != 0) _ = try pool.exec(statement, .{});
-    }
     try projected_profiles.createTestTable(pool);
     try projected_availability.createTestTable(pool);
     try projected_lists.createTestTables(pool);
@@ -1296,6 +1291,39 @@ test "composed PostgreSQL reads use verified records and authoritative account s
     _ = try track_writer.store().apply(a, pds_only);
     _ = try pool.exec("DELETE FROM plyr_index.legacy_track_tags", .{});
     _ = try pool.exec("UPDATE plyr_index.track_tag_records SET tags_present=true,tags=ARRAY['ambient'] WHERE record_uri=$1", .{pds_only_uri});
+    var roundtrip = pds_only;
+    roundtrip.upsert.record_uri = "at://did:plc:artist/fm.plyr.dev.track/tag-roundtrip";
+    roundtrip.upsert.rkey = "tag-roundtrip";
+    var authored: std.ArrayList(u8) = .empty;
+    var expanded: std.ArrayList(u8) = .empty;
+    for (0..25) |_| {
+        try authored.appendSlice(a, "Ⱥ");
+        try expanded.appendSlice(a, "ⱥ");
+    }
+    try std.testing.expectEqual(@as(usize, 50), authored.items.len);
+    try std.testing.expectEqual(@as(usize, 75), expanded.items.len);
+    roundtrip.upsert.tags = &.{ " - edge-tag - ", authored.items };
+    roundtrip.upsert.tags_present = true;
+    _ = try track_writer.store().apply(a, roundtrip);
+    const roundtrip_catalog = try implementation.store().listTags(a, "fm.plyr.dev.track", 15);
+    for ([_][]const u8{ "edge-tag", expanded.items }) |expected_tag| {
+        var found = false;
+        for (roundtrip_catalog) |entry| {
+            if (!std.mem.eql(u8, entry.name, expected_tag)) continue;
+            found = true;
+            var target: std.ArrayList(u8) = .empty;
+            try target.appendSlice(a, "/v1/tracks?tag=");
+            const hex = "0123456789ABCDEF";
+            for (entry.name) |byte| try target.appendSlice(a, &.{ '%', hex[byte >> 4], hex[byte & 15] });
+            const result = @import("../application/list_tracks.zig").execute(a, implementation.store(), "fm.plyr.dev.track", target.items);
+            try std.testing.expect(result == .found);
+            try std.testing.expectEqual(@as(usize, 1), result.found.data.len);
+            try std.testing.expectEqualStrings(roundtrip.upsert.record_uri, result.found.data[0].record.uri);
+        }
+        try std.testing.expect(found);
+    }
+    _ = try pool.exec("DELETE FROM plyr_index.track_records WHERE record_uri=$1", .{roundtrip.upsert.record_uri});
+
     const tagged_page = try implementation.store().listPublic(a, .{
         .collection = "fm.plyr.dev.track",
         .scope = .discovery,
