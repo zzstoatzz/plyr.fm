@@ -75,3 +75,11 @@ and recovered with exactly one inline retry. At 1.4x text scale, all 16 measured
 period/tag controls had physical targets at least 44px high, the headings wrapped
 within the viewport, and no horizontal page overflow appeared. The small visual
 chips sit inside the larger touch targets.
+
+The actual Home follow/batch helpers also traversed zzstoatzz.io's public graph
+and resolved against the real local verified API: 591 follows, two bounded artist
+batches, piss.beauty with 12 visible tracks, total 1.23 seconds. Neither public
+follow nor artist responses were fixtures for this check. This covers the real
+network intersection separately from the disposable OAuth browser layout check.
+The latter still uses explicit graph/read fixtures and does not impersonate the
+public account's session.
