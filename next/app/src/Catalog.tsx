@@ -1,18 +1,17 @@
-import { type Href, useFocusEffect, useLocalSearchParams } from 'expo-router';
-import { useCallback, useRef, useState, type ComponentRef, type ReactNode } from 'react';
-import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
-import SearchIcon from 'lucide-react-native/icons/search';
-import X from 'lucide-react-native/icons/x';
+import { type Href, useLocalSearchParams } from 'expo-router';
+import { useCallback, useState, type ReactNode } from 'react';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import PlayIcon from 'lucide-react-native/icons/play';
 import PauseIcon from 'lucide-react-native/icons/pause';
 import ListPlus from 'lucide-react-native/icons/list-plus';
 import Ellipsis from 'lucide-react-native/icons/ellipsis';
-import { api, type SearchHit, type Track } from './api';
+import { api, type Track } from './api';
 import {
-  Button, Detail, Heading, ListRows, Row, RowPlay, Status, TrackRows, artistName, errorMessage, useColors,
+  Button, Detail, Heading, ListRows, Status, TrackRows, artistName, useColors,
   usePages, useResource, type Play, type TrackActions,
 } from './CatalogPieces';
 import { WaveLoading } from './WaveLoading';
+import { Search } from './Search';
 import { Home } from './Home';
 import { DetailHeader } from './DetailHeader';
 import { TrackPresentation } from './TrackPresentation';
@@ -27,92 +26,6 @@ import { usePlayCount } from './use-play-count';
 import { CollectionActions, Library } from './AccountCatalog';
 
 const loadPlaylists = (cursor?: string) => api.playlists({ limit: 30, cursor });
-
-function Search({ onPlay }: { onPlay: Play }) {
-  const colors = useColors();
-  const { q, focus } = useLocalSearchParams<{ q?: string; focus?: string }>();
-  const [query, setQuery] = useState(q ?? '');
-  const input = useRef<ComponentRef<typeof TextInput>>(null);
-  const [focused, setFocused] = useState(false);
-  const [playingHit, setPlayingHit] = useState<string>();
-  const [playError, setPlayError] = useState<string>();
-  const request = useRef(0);
-  useFocusEffect(useCallback(() => {
-    setPlayingHit(undefined);
-    if (focus) input.current?.focus();
-    return () => { request.current += 1; };
-  }, [focus]));
-  function changeQuery(value: string) {
-    request.current += 1;
-    setQuery(value);
-    setPlayingHit(undefined);
-    setPlayError(undefined);
-  }
-  async function playResult(id: string) {
-    const attempt = ++request.current;
-    setPlayingHit(id);
-    setPlayError(undefined);
-    try {
-      const track = await api.track(id);
-      if (request.current === attempt) onPlay(track);
-    } catch (error) {
-      if (request.current === attempt) setPlayError(errorMessage(error));
-    } finally {
-      if (request.current === attempt) setPlayingHit(undefined);
-    }
-  }
-  const term = query.trim();
-  const load = useCallback(() => term.length >= 2 ? api.search(term).then((page) => page.data) : Promise.resolve([]), [term]);
-  const search = useResource(load, 250);
-  function href(hit: SearchHit): Href {
-    if (hit.type === 'artist') return { pathname: '/u/[handle]', params: { handle: hit.owner.handle || hit.owner.did } };
-    if (hit.type === 'track') return { pathname: '/track/[id]', params: { id: hit.id } };
-    if (hit.type === 'album') return { pathname: '/album/[id]', params: { id: hit.id } };
-    return { pathname: '/playlist/[id]', params: { id: hit.id } };
-  }
-  const groups = [
-    ['track', 'Tracks'], ['artist', 'Artists'], ['album', 'Albums'], ['playlist', 'Playlists'],
-  ] as const;
-  return <>
-    <View style={[styles.searchField, { backgroundColor: colors.surface, borderColor: focused ? colors.accent : colors.border }]}>
-      <SearchIcon size={19} color={colors.muted} />
-      <TextInput
-        ref={input}
-        accessibilityLabel="Search tracks, artists, albums and playlists"
-        placeholder="Tracks, artists and more"
-        placeholderTextColor={colors.muted}
-        value={query}
-        onChangeText={changeQuery}
-        onFocus={() => setFocused(true)}
-        onBlur={() => setFocused(false)}
-        autoCapitalize="none"
-        autoCorrect={false}
-        returnKeyType="search"
-        style={[styles.searchInput, { color: colors.text, fontFamily: colors.fontFamily, fontSize: 16 * colors.scale }]}
-      />
-      {query.length > 0 && <Pressable accessibilityRole="button" accessibilityLabel="Clear search" style={styles.clearSearch}
-        onPress={() => { changeQuery(''); input.current?.focus(); }}>
-        <X size={18} color={colors.muted} />
-      </Pressable>}
-    </View>
-    {playError && <Detail>{playError}</Detail>}
-    {term.length < 2 ? <Detail>Enter at least two characters.</Detail> : <>
-      <Status loading={!search.data && !search.error} error={search.error} retry={search.retry} empty={search.data?.length === 0 ? 'No results.' : undefined} />
-      {groups.map(([type, title]) => {
-        const hits = search.data?.filter((hit) => hit.type === type) ?? [];
-        return hits.length > 0 ? <View style={styles.group} key={type}>
-          <Heading>{title}</Heading>
-          {hits.map((hit) => <Row
-            key={hit.id} href={href(hit)} title={hit.title} image={hit.image_url}
-            subtitle={type === 'artist' ? hit.owner.handle : hit.owner.display_name || hit.owner.handle}
-            round={type === 'artist'}
-            action={type === 'track' ? <RowPlay label={`Play ${hit.title}`} busy={playingHit === hit.id} onPress={() => void playResult(hit.id)} /> : undefined}
-          />)}
-        </View> : null;
-      })}
-    </>}
-  </>;
-}
 
 function TrackPlayCount({ track }: { track: Track }) {
   const count = usePlayCount(track.id, track.metrics.play_count);
@@ -246,7 +159,7 @@ export function Catalog({
     content = <Collection key={id} id={id} album={screen === 'album'} onPlay={onPlay} />;
   } else if (screen === 'artist' && handle) content = <ArtistPage key={handle} handle={handle} onPlay={onPlay} />;
   else content = <Detail>This catalog link is incomplete.</Detail>;
-  return <ScrollView style={{ flex: 1, backgroundColor: colors.background }} keyboardShouldPersistTaps="handled">
+  return <ScrollView style={{ flex: 1, backgroundColor: colors.background }} keyboardShouldPersistTaps="handled" keyboardDismissMode={screen === 'search' ? 'on-drag' : undefined} automaticallyAdjustKeyboardInsets={screen === 'search'}>
     <View style={styles.page}>{content}</View>
   </ScrollView>;
 }
@@ -255,7 +168,4 @@ const styles = StyleSheet.create({
   page: { ...pageFrame, paddingTop: 16, paddingBottom: 32, gap: 16 },
   group: { gap: 7 },
   actions: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8 },
-  searchField: { minHeight: 48, borderRadius: 10, borderWidth: 1, paddingLeft: 13, paddingRight: 4, flexDirection: 'row', alignItems: 'center', gap: 9 },
-  searchInput: { flex: 1, minWidth: 0, paddingVertical: 10, paddingRight: 4 },
-  clearSearch: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
 });

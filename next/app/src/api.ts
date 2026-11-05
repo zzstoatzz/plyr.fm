@@ -111,44 +111,43 @@ export class ApiError extends Error {
 	}
 }
 
-async function request(url: string, timeout: number) {
+async function request<T>(url: string, timeout: number, signal?: AbortSignal): Promise<T> {
 	const controller = new AbortController();
+	const abort = () => controller.abort();
+	if (signal?.aborted) controller.abort();
+	signal?.addEventListener('abort', abort, { once: true });
 	const timer = setTimeout(() => controller.abort(), timeout);
 	try {
-		return await fetch(url, { signal: controller.signal });
+		const response = await fetch(url, { signal: controller.signal });
+		if (!response.ok) {
+			let message = response.statusText;
+			try { message = (await response.json())?.error?.message ?? message; } catch {}
+			throw new ApiError(response.status, message);
+		}
+		return await response.json() as T;
 	} finally {
 		clearTimeout(timer);
+		signal?.removeEventListener('abort', abort);
 	}
 }
 
-async function get<T>(path: string, params?: Record<string, string | number | string[] | undefined>): Promise<T> {
+async function get<T>(path: string, params?: Record<string, string | number | string[] | undefined>, signal?: AbortSignal): Promise<T> {
 	const url = new URL(API_URL + path);
-	for (const [k, v] of Object.entries(params ?? {})) {
-		if (Array.isArray(v)) for (const value of v) url.searchParams.append(k, value);
-		else if (v !== undefined) url.searchParams.set(k, String(v));
+	for (const [key, value] of Object.entries(params ?? {})) {
+		if (Array.isArray(value)) for (const item of value) url.searchParams.append(key, item);
+		else if (value !== undefined) url.searchParams.set(key, String(value));
 	}
-	// a scaled-to-zero API can take a few seconds to wake; retry once, and
-	// never hang the page forever.
-	let res: Response;
 	try {
-		res = await request(url.toString(), 15_000);
-	} catch {
+		return await request<T>(url.toString(), 15_000, signal);
+	} catch (error) {
+		if (signal?.aborted || error instanceof ApiError) throw error;
 		try {
-			res = await request(url.toString(), 20_000);
-		} catch {
+			return await request<T>(url.toString(), 20_000, signal);
+		} catch (error) {
+			if (signal?.aborted || error instanceof ApiError) throw error;
 			throw new ApiError(0, "couldn't reach the plyr API, try again in a moment");
 		}
 	}
-	if (!res.ok) {
-		let message = res.statusText;
-		try {
-			message = (await res.json())?.error?.message ?? message;
-		} catch {
-			/* not json */
-		}
-		throw new ApiError(res.status, message);
-	}
-	return res.json() as Promise<T>;
 }
 
 interface TrackLike {
@@ -188,7 +187,8 @@ export const api = {
 	/** an actor's likes are public records, so the appview serves them without a session. */
 	actorLikes: (did: string, p: { limit?: number; cursor?: string } = {}) =>
 		get<Page<Track>>(`/v1/actors/${did}/likes`, p),
-	search: (q: string) => get<Page<SearchHit>>('/v1/search', { q }),
+	search: (q: string, options: { limit?: number; types?: SearchHit['type']; signal?: AbortSignal } = {}) =>
+		get<Page<SearchHit>>('/v1/search', { q, limit: options.limit, types: options.types }, options.signal),
 	chart: (period: 'day' | 'week' | 'month' | 'all_time' = 'week') =>
 		get<{ period: string; data: ChartEntry[] }>('/v1/charts/tracks', { period }),
 	/** block (≤ timeout) until the appview has projected a write the client made on its PDS. */
