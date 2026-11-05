@@ -193,7 +193,7 @@ audio.writeUInt16LE(16, 34); audio.write('data', 36); audio.writeUInt32LE(audio.
         }
         catalogState = 'populated';
         await freshHome();
-        await page.getByRole('button', { name: /^Play / }).first().click();
+        await page.getByTestId('home-track-row').first().getByRole('button', { name: /^Play / }).click({ position: { x: 22, y: 40 } });
         await page.getByRole('button', { name: 'Open now playing', exact: true }).click();
         await scan('now-playing');
         await page.getByRole('button', { name: 'Queue', exact: true }).click(); await scan('queue');
