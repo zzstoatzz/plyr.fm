@@ -105,7 +105,7 @@ export function Home({ onPlay }: { onPlay: Play }) {
       </ScrollView>
     </View>}
     {network.error && <Detail>{network.error}</Detail>}
-    <View style={styles.section}>
+    <View testID="home-feed" style={styles.section}>
       <View style={styles.headingRow}>
         <Pressable accessibilityRole="button" accessibilityLabel="Refresh tracks" onPress={latest.reload}><Heading>tracks</Heading></Pressable>
         <Text style={{ color: colors.muted, fontSize: 13 * colors.scale }}>latest</Text>
