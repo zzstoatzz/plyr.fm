@@ -75,7 +75,7 @@ pub const PostgresTrackStore = struct {
         else
             null;
         defer if (commit_cid) |text| allocator.free(text);
-        return applyRecord(conn, .{
+        const result = try applyRecord(conn, .{
             .record_uri = change.record_uri,
             .record_cid = change.record_cid,
             .owner_did = change.owner_did,
@@ -102,6 +102,13 @@ pub const PostgresTrackStore = struct {
             .commit_rev = change.proof.commit_rev,
             .indexed_at_us = change.proof.indexed_at_us,
         });
+        if (result != .stale) {
+            _ = conn.exec(upsert_tags_sql, .{ change.record_uri, change.record_cid, change.tags, change.tags_present }) catch |err| {
+                std.log.err("track tag projection upsert failed: {}", .{err});
+                return error.ProjectionUnavailable;
+            };
+        }
+        return result;
     }
 
     fn applyDelete(
@@ -115,7 +122,7 @@ pub const PostgresTrackStore = struct {
         else
             null;
         defer if (commit_cid) |text| allocator.free(text);
-        return applyRecord(conn, .{
+        const result = try applyRecord(conn, .{
             .record_uri = change.record_uri,
             .record_cid = null,
             .owner_did = change.owner_did,
@@ -141,6 +148,8 @@ pub const PostgresTrackStore = struct {
             .commit_rev = change.proof.commit_rev,
             .indexed_at_us = change.proof.indexed_at_us,
         });
+        if (result != .stale) _ = conn.exec("DELETE FROM plyr_index.track_tag_records WHERE record_uri=$1", .{change.record_uri}) catch return error.ProjectionUnavailable;
+        return result;
     }
 };
 
@@ -233,6 +242,16 @@ fn optionalEql(left: ?[]const u8, right: ?[]const u8) bool {
     if (left == null or right == null) return left == null and right == null;
     return std.mem.eql(u8, left.?, right.?);
 }
+
+const upsert_tags_sql =
+    \\INSERT INTO plyr_index.track_tag_records(record_uri, record_cid, tags, tags_present)
+    \\VALUES ($1, $2, plyr_index.normalize_track_tags($3::text[]), $4)
+    \\ON CONFLICT(record_uri) DO UPDATE
+    \\SET record_cid = EXCLUDED.record_cid, tags = EXCLUDED.tags, tags_present = EXCLUDED.tags_present
+    \\WHERE plyr_index.track_tag_records.record_cid IS DISTINCT FROM EXCLUDED.record_cid
+    \\   OR plyr_index.track_tag_records.tags IS DISTINCT FROM EXCLUDED.tags
+    \\   OR plyr_index.track_tag_records.tags_present IS DISTINCT FROM EXCLUDED.tags_present
+;
 
 const upsert_record_sql =
     \\INSERT INTO plyr_index.track_records (
@@ -333,6 +352,11 @@ pub fn createTestTable(pool: *pg.Pool) !void {
         \\)
     , .{});
     try created_at_us.addTestColumn(pool, "track_records");
+    var statements = std.mem.splitScalar(u8, @embedFile("migration_0032_track_tags"), ';');
+    while (statements.next()) |raw| {
+        const statement = std.mem.trim(u8, raw, " \n\r\t");
+        if (statement.len != 0) _ = try pool.exec(statement, .{});
+    }
 }
 
 test "PostgreSQL track projection replaces complete records and keeps tombstones" {
@@ -361,15 +385,31 @@ test "PostgreSQL track projection replaces complete records and keeps tombstones
     const commit_3 = try zat.Cid.forDagCbor(a, "commit-3");
     const rev_1 = zat.Tid.fromTimestamp(1_000, 1);
     const rev_2 = zat.Tid.fromTimestamp(2_000, 1);
-    const upsert_1 = makeUpsert(try cidString(a, "record-1"), "One", &rev_1.str(), commit_1);
+    var upsert_1 = makeUpsert(try cidString(a, "record-1"), "One", &rev_1.str(), commit_1);
+    upsert_1.upsert.tags_present = true;
+    upsert_1.upsert.tags = &.{ "  Hip-Hop  ", "HIP-HOP", "-Ambient-" };
     try std.testing.expectEqual(ApplyResult.applied, try store.apply(a, upsert_1));
+    var tags_row = (try pool.row("SELECT array_to_json(tags)::text,tags_present FROM plyr_index.track_tag_records", .{})).?;
+    try std.testing.expectEqualStrings("[\"ambient\",\"hip-hop\"]", try tags_row.get([]const u8, 0));
+    try std.testing.expect(try tags_row.get(bool, 1));
+    try tags_row.deinit();
+    _ = try pool.exec("DELETE FROM plyr_index.track_tag_records", .{});
+
     try std.testing.expectEqual(ApplyResult.idempotent, try store.apply(a, upsert_1));
+    var replay_tags = (try pool.row("SELECT cardinality(tags)::bigint,tags_present FROM plyr_index.track_tag_records", .{})).?;
+    try std.testing.expectEqual(@as(i64, 2), try replay_tags.get(i64, 0));
+    try replay_tags.deinit();
+
     try expectTrack(pool, "One", &rev_1.str(), false);
 
     const upsert_2 = makeUpsert(try cidString(a, "record-2"), "Two", &rev_2.str(), commit_2);
     try std.testing.expectEqual(ApplyResult.applied, try store.apply(a, upsert_2));
     try std.testing.expectEqual(ApplyResult.stale, try store.apply(a, upsert_1));
     try expectTrack(pool, "Two", &rev_2.str(), false);
+    var cleared_tags = (try pool.row("SELECT cardinality(tags)::bigint,tags_present FROM plyr_index.track_tag_records", .{})).?;
+    try std.testing.expectEqual(@as(i64, 0), try cleared_tags.get(i64, 0));
+    try std.testing.expect(!try cleared_tags.get(bool, 1));
+    try cleared_tags.deinit();
 
     const conflict = makeUpsert(try cidString(a, "record-3"), "Three", &rev_2.str(), commit_3);
     try std.testing.expectError(error.RevisionConflict, store.apply(a, conflict));

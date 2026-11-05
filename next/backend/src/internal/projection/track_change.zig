@@ -34,6 +34,8 @@ pub const Upsert = struct {
     audio_space: ?[]const u8 = null,
     description: ?[]const u8,
     self_labels: []const []const u8,
+    tags: []const []const u8 = &.{},
+    tags_present: bool = false,
     proof: Proof,
 };
 
@@ -131,6 +133,8 @@ pub fn fromVerifiedOperation(
             null,
         .description = parsed.description,
         .self_labels = parsed.self_labels,
+        .tags = parsed.tags,
+        .tags_present = parsed.tags_present,
         .proof = proof,
     } };
 }
