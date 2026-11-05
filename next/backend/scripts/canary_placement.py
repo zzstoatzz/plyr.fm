@@ -1,16 +1,20 @@
-"""Health-gated Fly Machine placement for the isolated Zig canary."""
+"""Keep Next's single stateless API Machine near its us-west-2 database."""
 
 from __future__ import annotations
 
-import argparse
+import hashlib
 import json
+import os
+import re
 import subprocess
-from collections.abc import Callable, Sequence
+import time
+from collections.abc import Callable
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any
 
-Runner = Callable[[list[str], bool], str]
+APP = "plyr-api-zig-canary"
+REGION = "sea"
+Runner = Callable[[list[str]], str]
 
 
 class PlacementError(RuntimeError):
@@ -20,142 +24,208 @@ class PlacementError(RuntimeError):
 @dataclass(frozen=True)
 class Machine:
     id: str
+    name: str
     region: str
+    state: str
+    ready: bool
+    configuration: str
 
 
-@dataclass(frozen=True)
-class PlacementPlan:
-    target: Machine | None
-    source: Machine
-    old: tuple[Machine, ...]
-
-
-def _system_run(args: list[str], capture: bool) -> str:
-    completed = subprocess.run(
-        args,
+def _system_run(arguments: list[str]) -> str:
+    result = subprocess.run(
+        arguments,
         check=True,
         text=True,
-        stdout=subprocess.PIPE if capture else None,
+        capture_output=True,
+        timeout=180 if arguments[1:3] == ["machine", "clone"] else 30,
     )
-    return completed.stdout or ""
+    return result.stdout
 
 
-def _service_machines(payload: str) -> tuple[Machine, ...]:
-    value: Any = json.loads(payload)
-    if not isinstance(value, list):
-        raise PlacementError("flyctl Machine inventory must be a JSON array")
-    machines: list[Machine] = []
-    for item in value:
-        if not isinstance(item, dict):
-            raise PlacementError("flyctl Machine inventory contains a non-object")
-        config = item.get("config")
-        if not isinstance(config, dict):
-            raise PlacementError("Fly Machine is missing config")
-        services = config.get("services")
-        if not isinstance(services, list):
-            raise PlacementError("Fly Machine services must be an array")
-        if not services:
+def _ready(machine: dict[str, Any]) -> bool:
+    checks = machine.get("checks")
+    if not isinstance(checks, list) or not checks:
+        return False
+    if any(check.get("status") != "passing" for check in checks):
+        return False
+    for check in checks:
+        try:
+            output = json.loads(check.get("output", ""))
+        except (ValueError, TypeError):
             continue
-        machine_id = item.get("id")
-        region = item.get("region")
-        if not isinstance(machine_id, str) or not machine_id:
-            raise PlacementError("service Machine has no canonical ID")
-        if not isinstance(region, str) or not region:
-            raise PlacementError("service Machine has no region")
-        machines.append(Machine(id=machine_id, region=region))
-    return tuple(machines)
+        if isinstance(output, dict) and output == {
+            "status": "ready",
+            "index": "reachable",
+        }:
+            return machine.get("state") == "started"
+    return False
 
 
-def _plan(machines: Sequence[Machine], target_region: str) -> PlacementPlan:
-    targets = tuple(machine for machine in machines if machine.region == target_region)
-    if len(targets) > 1:
-        raise PlacementError(
-            f"expected at most one service Machine in {target_region}, found {len(targets)}"
-        )
-    if not machines:
-        raise PlacementError("no service Machine is available to clone")
-    target = targets[0] if targets else None
-    source = target or machines[0]
-    old = tuple(machine for machine in machines if machine.region != target_region)
-    return PlacementPlan(target=target, source=source, old=old)
-
-
-def _list_machines(app: str, runner: Runner) -> tuple[Machine, ...]:
-    return _service_machines(
-        runner(["flyctl", "machines", "list", "--app", app, "--json"], True)
+def _api_machines(runner: Runner) -> list[Machine]:
+    inventory = json.loads(
+        runner(["flyctl", "machines", "list", "--app", APP, "--json"])
     )
+    if not isinstance(inventory, list):
+        raise PlacementError("Machine inventory must be an array")
+    machines: list[Machine] = []
+    for item in inventory:
+        if not isinstance(item, dict) or not isinstance(item.get("config"), dict):
+            raise PlacementError("Machine inventory contains malformed configuration")
+        config = item["config"]
+        group = config.get("metadata", {}).get("fly_process_group")
+        if group != "app":
+            if config.get("services"):
+                raise PlacementError("unexpected non-API Machine has public services")
+            continue
+        if config.get("env", {}).get("FLY_PROCESS_GROUP") != "app":
+            raise PlacementError("API process-group metadata disagrees")
+        if config.get("mounts"):
+            raise PlacementError("refusing to relocate an API Machine with a volume")
+        if not config.get("services"):
+            raise PlacementError("API Machine has no service configuration")
+        if any(
+            not isinstance(item.get(key), str) or not item[key]
+            for key in ("id", "name", "region", "state")
+        ):
+            raise PlacementError("API Machine identity is incomplete")
+        machines.append(
+            Machine(
+                item["id"],
+                item["name"],
+                item["region"],
+                item["state"],
+                _ready(item),
+                hashlib.sha256(
+                    json.dumps(
+                        {
+                            key: config.get(key)
+                            for key in (
+                                "image",
+                                "env",
+                                "services",
+                                "guest",
+                                "init",
+                                "restart",
+                            )
+                        },
+                        sort_keys=True,
+                    ).encode()
+                ).hexdigest(),
+            )
+        )
+    return machines
 
 
-def prepare(
-    app: str,
-    target_region: str,
-    github_output: Path,
+def _pair(
+    machines: list[Machine], source: Machine, name: str, *, verify_target: bool = True
+) -> Machine:
+    originals = [machine for machine in machines if machine.id == source.id]
+    targets = [machine for machine in machines if machine.name == name]
+    if len(machines) != 2 or len(originals) != 1 or len(targets) != 1:
+        raise PlacementError("expected only the original API and its exact replacement")
+    target = targets[0]
+    if (
+        originals[0].region != source.region
+        or target.id == source.id
+        or target.region != REGION
+    ):
+        raise PlacementError("API replacement identity or region changed")
+    if originals[0].configuration != source.configuration or (
+        verify_target and target.configuration != source.configuration
+    ):
+        raise PlacementError(
+            "replacement must preserve the deployed image and runtime configuration"
+        )
+    return target
+
+
+def _rollback(runner: Runner, source: Machine, name: str) -> None:
+    machines = _api_machines(runner)
+    candidates = [machine for machine in machines if machine.name == name]
+    if not candidates:
+        return
+    target = _pair(machines, source, name, verify_target=False)
+    runner(["flyctl", "machine", "destroy", target.id, "--app", APP, "--force"])
+    print("removed failed replacement; original API retained")
+
+
+def ensure_next_api(
+    name: str,
     runner: Runner = _system_run,
-) -> PlacementPlan:
-    plan = _plan(_list_machines(app, runner), target_region)
-    if plan.target is None:
+    *,
+    now: Callable[[], float] = time.monotonic,
+    sleep: Callable[[float], None] = time.sleep,
+    health_timeout: float = 90,
+) -> None:
+    if not re.fullmatch(r"next-api-sea-[0-9]+-[0-9]+", name):
+        raise PlacementError("replacement name must identify the CI run")
+    machines = _api_machines(runner)
+    if len(machines) != 1:
+        raise PlacementError("expected exactly one API Machine before relocation")
+    source = machines[0]
+    if source.region == REGION:
+        print(f"Next API already in {REGION}; no Machine changes")
+        return
+    if source.name == name:
+        raise PlacementError("replacement name already belongs to the source")
+    print(f"Cloning API {source.id} from {source.region} to {REGION}")
+    try:
         runner(
             [
                 "flyctl",
                 "machine",
                 "clone",
-                plan.source.id,
+                source.id,
                 "--app",
-                app,
+                APP,
                 "--region",
-                target_region,
-            ],
-            False,
+                REGION,
+                "--name",
+                name,
+            ]
         )
-        plan = _plan(_list_machines(app, runner), target_region)
-        if plan.target is None:
-            raise PlacementError("clone completed without a target-region Machine")
+        deadline = now() + health_timeout
+        while True:
+            target = _pair(_api_machines(runner), source, name)
+            if target.ready:
+                break
+            if now() >= deadline:
+                raise PlacementError(
+                    "replacement did not pass its own database readiness check"
+                )
+            sleep(2)
+    except Exception:
+        _rollback(runner, source, name)
+        raise
 
-    for machine in plan.old:
-        runner(["flyctl", "machine", "cordon", machine.id, "--app", app], False)
-    with github_output.open("a") as output:
-        output.write(f"target_id={plan.target.id}\n")
-        output.write(f"old_ids={' '.join(machine.id for machine in plan.old)}\n")
-    return plan
-
-
-def restore(app: str, machine_ids: Sequence[str], runner: Runner = _system_run) -> None:
-    for machine_id in machine_ids:
-        runner(["flyctl", "machine", "uncordon", machine_id, "--app", app], False)
-
-
-def complete(
-    app: str, machine_ids: Sequence[str], runner: Runner = _system_run
-) -> None:
-    for machine_id in machine_ids:
-        runner(
-            ["flyctl", "machine", "destroy", machine_id, "--app", app, "--force"],
-            False,
-        )
-
-
-def _parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description=__doc__)
-    subparsers = parser.add_subparsers(dest="command", required=True)
-    prepare_parser = subparsers.add_parser("prepare")
-    prepare_parser.add_argument("--app", required=True)
-    prepare_parser.add_argument("--target-region", required=True)
-    prepare_parser.add_argument("--github-output", type=Path, required=True)
-    for command in ("restore", "complete"):
-        command_parser = subparsers.add_parser(command)
-        command_parser.add_argument("--app", required=True)
-        command_parser.add_argument("machine_ids", nargs="*")
-    return parser
+    target = _pair(_api_machines(runner), source, name)
+    if not target.ready:
+        _rollback(runner, source, name)
+        raise PlacementError("replacement lost readiness before retirement")
+    print(f"Replacement API {target.id} is ready; retiring {source.id}")
+    runner(["flyctl", "machine", "destroy", source.id, "--app", APP, "--force"])
+    remaining = _api_machines(runner)
+    if (
+        len(remaining) != 1
+        or remaining[0].id != target.id
+        or remaining[0].region != REGION
+    ):
+        raise PlacementError("retirement did not leave exactly the replacement API")
+    print(f"Next API relocated to {REGION}; one API Machine remains")
 
 
 def main() -> None:
-    args = _parser().parse_args()
-    if args.command == "prepare":
-        prepare(args.app, args.target_region, args.github_output)
-    elif args.command == "restore":
-        restore(args.app, args.machine_ids)
-    else:
-        complete(args.app, args.machine_ids)
+    if (
+        os.environ.get("GITHUB_ACTIONS") != "true"
+        or os.environ.get("GITHUB_REPOSITORY") != "zzstoatzz/plyr.fm"
+        or os.environ.get("GITHUB_REF") != "refs/heads/main"
+    ):
+        raise PlacementError(
+            "API relocation runs only in this repository's main-branch CI"
+        )
+    ensure_next_api(
+        f"next-api-sea-{os.environ.get('GITHUB_RUN_ID', '')}-{os.environ.get('GITHUB_RUN_ATTEMPT', '')}"
+    )
 
 
 if __name__ == "__main__":

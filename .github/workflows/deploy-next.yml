@@ -136,6 +136,17 @@ jobs:
         working-directory: next/backend
         run: uv run --no-project python scripts/canary_smoke.py "https://${FLY_APP}.fly.dev"
 
+      - name: colocate the stateless API with its database
+        timeout-minutes: 8
+        working-directory: next/backend
+        run: uv run --no-project python scripts/canary_placement.py
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_ZIG_NEXT }}
+
+      - name: smoke after API placement
+        working-directory: next/backend
+        run: uv run --no-project python scripts/canary_smoke.py "https://${FLY_APP}.fly.dev"
+
       - name: ingester status
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_ZIG_NEXT }}
