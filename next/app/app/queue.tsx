@@ -44,8 +44,7 @@ export default function Queue() {
           <Heading>Now playing</Heading>
           <View style={styles.actions}>
             <IconButton label="Start a Jam" onPress={() => {
-              const open = (host: string) => `/jam/${encodeURIComponent(host)}~${randomUUID()}` as const;
-              if (did) router.push(open(did));
+              if (did && player.current) router.push({ pathname: '/jam/[room]', params: { room: `${did}~${randomUUID()}`, track: player.current.id } });
               else router.push({ pathname: '/login', params: { return_to: '/queue' } });
             }}><Users size={20} color={theme.text} /></IconButton>
             <IconButton label={`Repeat: ${player.repeat}`} selected={player.repeat !== 'off'}
