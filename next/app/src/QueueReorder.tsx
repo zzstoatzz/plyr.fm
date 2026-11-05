@@ -1,4 +1,4 @@
-import GripVertical from 'lucide-react-native/icons/grip-vertical';
+import GripHorizontal from 'lucide-react-native/icons/grip-horizontal';
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { PanResponder, Platform, StyleSheet, useWindowDimensions, View, type ScrollViewInstance, type KeyDownEvent, type ViewInstance } from 'react-native';
 import type { Track } from './api';
@@ -179,7 +179,9 @@ function DragHandle({ register, position, total, label, active, first, last, beg
       if (event.nativeEvent.key === 'ArrowDown' && !last) { event.preventDefault(); move(1); }
     } } : {})}
     style={[styles.handle, Platform.OS === 'web' ? webStyle : {}]}>
-    <GripVertical size={21} color={active ? theme.accent : theme.muted} />
+    <View style={{ width: 32, height: 36, borderRadius: 8, backgroundColor: theme.surface, alignItems: 'center', justifyContent: 'center' }}>
+      <GripHorizontal size={22} color={active ? theme.accent : theme.text} />
+    </View>
   </View>;
 }
 
