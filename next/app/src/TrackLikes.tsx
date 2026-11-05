@@ -24,8 +24,9 @@ export function TrackLikes({ track, compact = false }: { track: Track; compact?:
   useEffect(() => { version.current++; setCount(track.metrics.like_count); }, [track.id, track.metrics.like_count]);
   function change(delta: number) {
     const current = version.current;
-    setCount(value => Math.max(0, value + delta));
-    return () => { if (version.current === current) setCount(value => Math.max(0, value - delta)); };
+    const previous = count;
+    setCount(Math.max(0, previous + delta));
+    return () => { if (version.current === current) setCount(previous); };
   }
   const label = `${count} ${count === 1 ? 'like' : 'likes'}`;
   return <>
