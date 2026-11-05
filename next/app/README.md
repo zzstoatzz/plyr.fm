@@ -60,3 +60,16 @@ Browser regressions use `scripts/check-player-navigation.cjs` and
 `PLAYER_URL=https://next.plyr.fm` to check published assets, `PLAYER_WEBKIT=1`
 for WebKit, and `WEBKIT_EXECUTABLE` if using a separately installed browser.
 The harness uses real fixture audio and blocks all real API/PDS mutations.
+
+## Creator portal catalog state
+
+The portal reads published tracks and albums for the signed-in owner. Visited
+tabs retain their loaded cursor pages and scroll context; ordinary Back does
+not refetch them. Confirmed track, list, or profile writes in this client mark
+only that owner's corresponding catalog scope dirty. Returning to an active
+dirty panel revalidates its loaded cursor chain without clearing visible rows;
+a failed refresh keeps those rows available for retry.
+
+Changes made elsewhere, and writes still waiting for indexing, use the explicit
+refresh control. This is published-catalog management, not a private catalog
+or a client-side substitute for server search, filtering, or sorting.
