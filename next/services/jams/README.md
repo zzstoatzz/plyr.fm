@@ -1,6 +1,6 @@
 # Jams room foundation
 
-The host publishes the room snapshot in a private member Space. Guests write commands to their own repos within that Space. A host must verify the writer and record, check current membership, and serialize accepted commands against the snapshot revision. The reducer owns playback position and revision transitions. Room records live on the PDSes.
+The fuller protocol modeled by the reducer and probe works as follows. The host publishes the room snapshot in a private member Space. Guests write commands to their own repos within that Space. A host must verify the writer and record, check current membership, and serialize accepted commands against the snapshot revision. The reducer owns playback position and revision transitions. Room records live on the PDSes.
 
 Run the reducer tests with Node 22:
 
@@ -16,4 +16,6 @@ node --experimental-strip-types next/services/jams/probe-space.mjs
 
 The probe uses fixture membership for the reducer and checks credential renewal against the PDS. It exercises cross-PDS discovery, verifies record CIDs and MACs, rejects a replay, and reads the resulting host snapshot from the guest. Its discovery timing starts after the guest write returns on localhost.
 
-The running app still needs OAuth integration, live membership checks, reconnect and command delivery, host writer fencing, and speaker handoff. The revision guard assumes one serialized host writer. Test those paths with separate authenticated browser sessions before exposing Jams in Next.
+The running Next app now has client OAuth, host-owned Space creation, invite-by-DID, verified snapshot reads and a polling playback bridge. Its current room publishes a single-track snapshot from the host. Guest commands and the richer reducer tested here are not yet integrated into that room.
+
+Shared queues, track transitions, guest control, reconnect/revocation behavior, host writer fencing and speaker handoff remain acceptance work. The revision guard assumes one serialized host writer. See the [rewrite inventory](../../../docs/research/2026-11-04-rewrite-progress-and-scope.md) and [running room](../../app/app/jam/[room].tsx).

@@ -5,14 +5,19 @@ separate contract from the Python API: user-owned records remain authoritative,
 Postgres is a rebuildable index, and R2 is a delivery mirror rather than a
 second source of truth.
 
+The [rewrite inventory](../../docs/research/2026-11-04-rewrite-progress-and-scope.md)
+tracks current implementation, remaining ports, and cutover dependencies.
+
 ## schema
 
 The Zig backend owns the `plyr_index`, `plyr_auth`, and `plyr_command`
-schemas. They live in `migrations/*.sql` (converted from the alembic revisions
-on `codex/zig-backend`) and are applied by `scripts/migrate` (`just zig
-migrate`) on top of a database that already has the Python backend's public
-schema, such as a Neon branch of staging for next.plyr.fm. Nothing in the
-Python backend's alembic chain creates or knows about them.
+schemas in its SQL migration history. Apply `migrations/*.sql` with
+`scripts/migrate` (`just zig migrate`) against the explicitly marked Next/test
+database. The current runtime owns its projection and does not read Python's
+public tables; migration 0023 removes the old runtime grants. The migration
+chain still contains unconditional imports from `public.tracks` in 0010 and
+0012. Existing Next databases originated from a staging clone. A clean database
+bootstrap needs a separate migration-baseline decision and rehearsal.
 
 `scripts/migrate` refuses any database that is not explicitly marked:
 
@@ -252,7 +257,7 @@ earlier record revision neither appear in the list nor contribute to charts.
 Track representations derive a distinct-actor `metrics.like_count` through the
 same boundary and the configured like NSID, so next's existing count and liker
 UI do not consult legacy interaction rows or an adjacent environment's records.
-See [`zig-v1-track-likes.md`](../docs/internal/architecture/zig-v1-track-likes.md).
+See [`zig-v1-track-likes.md`](../../docs/internal/architecture/zig-v1-track-likes.md).
 
 Artist metrics are a separate public capability rather than extra fields on the
 artist identity resource. They resolve a handle alias through the verified
@@ -295,7 +300,27 @@ When a full repository exceeds the size cap, repair proves the complete plyr
 collection ranges with `sync.getLatestCommit` and `sync.getBlocks`, independently
 of record listings. See [the proof contract, limits and measurements](docs/collection-proofs.md).
 
-## canary deployment
+## Next deployment
+
+[deploy-next.yml](../../.github/workflows/deploy-next.yml) deploys the isolated
+plyr-api-zig-canary app on main. [fly.canary.toml](fly.canary.toml)
+defines API and ingester process groups; ingestion also supervises mirroring,
+identity refresh and label sync. The API scales to zero. Runtime database
+credentials and migration/reconciliation credentials have separate roles.
+
+Canonical writes and OAuth belong to the Expo client. The API maintains
+application-owned play aggregates and deduplication alongside read-only catalog
+operations. It does not read legacy Python tables or mirror their play totals.
+Current public-service dependencies and cutover work are in the rewrite inventory.
+
+## Historical canary design
+
+The following records the earlier server-OAuth/manual-deployment stage before
+#2281, #2288 and the continuous Next deployment. Use the workflow and Fly
+configuration above for the current boundary.
+
+<details>
+<summary>Earlier canary implementation and rollout notes</summary>
 
 Browser authentication is non-rebuildable application state, not an index.
 The successor therefore owns a separate `plyr_auth` schema. Browser sessions
@@ -433,3 +458,5 @@ are atomically quarantined with their CID, reason, and commit proof while valid
 siblings project normally. Local `just zig reconcile-catalog` remains a development
 command; remote reconciliation uses the disposable Fly Machine and a dedicated
 next-branch writer credential that cannot mutate legacy tables.
+
+</details>

@@ -45,6 +45,22 @@ plyr.fm should become:
 
 ## recent work
 
+### November 2026
+
+#### Next rewrite checkpoint (November 4)
+
+Next now runs a Zig appview with independently verified PDS projections and an
+Expo / React Native client with client-owned OAuth and direct PDS writes.
+Spaces-backed preferences, basic creator-owned Jam rooms, catalog/playback,
+Radio and embeds are implemented foundations. Production parity and cutover
+remain substantial work.
+
+The [progress and scope inventory](docs/research/2026-11-04-rewrite-progress-and-scope.md)
+records the changed ownership boundaries, partial and missing ports, retained
+production read dependencies, service migration work and decisions still open.
+It supersedes the implementation status in the November 3 handoffs, including
+the temporary Svelte client and resolved migration hold.
+
 ### October 2026
 
 The day-by-day October entries are in `.status_history/2026-10.md`. The October
