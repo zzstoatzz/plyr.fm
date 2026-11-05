@@ -150,7 +150,7 @@ export function Catalog({
   const colors = useColors();
   const { id, handle } = useLocalSearchParams<{ id?: string; handle?: string }>();
   let content: ReactNode;
-  if (screen === 'home') content = <Home onPlay={onPlay} />;
+  if (screen === 'home') return <Home onPlay={onPlay} />;
   else if (screen === 'search') content = <Search onPlay={onPlay} />;
   else if (screen === 'playlists') content = <Playlists />;
   else if (screen === 'library' || screen === 'liked') content = <Library likesOnly={screen === 'liked'} onPlay={onPlay} />;

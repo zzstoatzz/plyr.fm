@@ -57,6 +57,7 @@ export function usePages<T>(load: (cursor?: string) => Promise<Page<T>>) {
     try {
       const page = await load(next);
       if (request !== generation.current) return;
+      if (page.has_more && (!page.next_cursor || page.next_cursor === next)) throw new Error('could not load more items');
       setData((previous) => next ? [...previous, ...page.data] : page.data);
       setCursor(page.has_more ? page.next_cursor ?? undefined : undefined);
     } catch (failure) {
@@ -82,7 +83,8 @@ export function usePages<T>(load: (cursor?: string) => Promise<Page<T>>) {
       busy.current = false;
     };
   }, [reload]);
-  return { data, cursor, error, loading, reload, more: () => void fetchPage(cursor) };
+  const more = useCallback(() => void fetchPage(cursor), [fetchPage, cursor]);
+  return { data, cursor, error, loading, reload, more };
 }
 
 export function Heading({ children, main = false }: { children: ReactNode; main?: boolean }) {
