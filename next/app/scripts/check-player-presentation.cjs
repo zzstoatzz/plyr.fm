@@ -321,11 +321,19 @@ async function webkitFallback(browser) {
   } finally { await page.unrouteAll({ behavior: 'ignoreErrors' }); await context.close(); }
 }
 
-(async () => {
+async function withPlayerHarness(run) {
   if (!process.env.PLAYER_URL) await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   origin = process.env.PLAYER_URL || `http://127.0.0.1:${server.address().port}`;
   console.log(`Player UI source: ${origin}; catalog and media are fixtures; real API/PDS mutations blocked`);
   const browser = process.env.PLAYER_WEBKIT ? await webkit.launch({ executablePath: process.env.WEBKIT_EXECUTABLE }) : await chromium.launch({ channel: 'chrome' });
-  try { if (process.env.PLAYER_WEBKIT) { await webkitFallback(browser); return; } for (const width of [390, 1280]) for (const theme of ['light', 'dark']) await run(browser, width, theme); await longContent(browser); }
+  try { await run(browser); }
   finally { await browser.close(); if (server.listening) await new Promise(resolve => server.close(resolve)); }
-})().catch(error => { console.error(error); process.exitCode = 1; if (server.listening) server.close(); });
+}
+
+module.exports = { withPlayerHarness, setup, track, screenshot };
+
+if (require.main === module) withPlayerHarness(async browser => {
+  if (process.env.PLAYER_WEBKIT) { await webkitFallback(browser); return; }
+  for (const width of [390, 1280]) for (const theme of ['light', 'dark']) await run(browser, width, theme);
+  await longContent(browser);
+}).catch(error => { console.error(error); process.exitCode = 1; if (server.listening) server.close(); });
