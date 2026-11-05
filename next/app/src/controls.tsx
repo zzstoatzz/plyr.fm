@@ -1,6 +1,6 @@
-import type { ReactNode } from 'react';
+import type { ReactNode, Ref } from 'react';
 import { Link, type Href } from 'expo-router';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, type TextInputProps, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, type TextInputProps, type ScrollViewProps, type ScrollViewInstance, View } from 'react-native';
 import { useAppearance } from './appearance';
 
 export function Action({ label, onPress, href, disabled, selected, primary }: {
@@ -16,9 +16,9 @@ export function Action({ label, onPress, href, disabled, selected, primary }: {
   return href ? <Link href={href} asChild>{control}</Link> : control;
 }
 
-export function Page({ title, children }: { title: string; children: ReactNode }) {
+export function Page({ title, children, scrollRef, ...scrollProps }: { title: string; children: ReactNode; scrollRef?: Ref<ScrollViewInstance> } & Pick<ScrollViewProps, 'scrollEnabled' | 'onScroll' | 'onContentSizeChange' | 'onLayout'>) {
   const theme = useAppearance();
-  return <ScrollView keyboardShouldPersistTaps="handled" style={{ backgroundColor: theme.background }} contentContainerStyle={styles.page}>
+  return <ScrollView ref={scrollRef} {...scrollProps} scrollEventThrottle={16} keyboardShouldPersistTaps="handled" style={{ backgroundColor: theme.background }} contentContainerStyle={styles.page}>
     <Text accessibilityRole="header" style={{ color: theme.text, fontSize: 28 * theme.scale, fontFamily: theme.fontFamily, fontWeight: '700' }}>{title}</Text>
     {children}
   </ScrollView>;
