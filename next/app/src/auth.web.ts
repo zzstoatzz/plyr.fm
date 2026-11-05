@@ -70,7 +70,7 @@ async function initialize() {
 
 export async function login(identifier: string, deviceOnly = false, intent?: string): Promise<void> {
 	const handle = identifier.trim().replace(/^@/, '');
-	await (await oauthClient()).signInRedirect(handle, { scope: await scopeFor(handle, deviceOnly, intent?.startsWith('/jam/')), state: intent });
+	await (await oauthClient()).signInRedirect(handle, { scope: await scopeFor(handle, deviceOnly), state: intent });
 }
 
 export async function createAccount(provider: string, intent?: string): Promise<void> {

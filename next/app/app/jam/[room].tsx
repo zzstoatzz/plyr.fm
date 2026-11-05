@@ -1,12 +1,14 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocalSearchParams } from 'expo-router';
 import { P256Keypair } from '@atproto/crypto';
 import { api, type Track } from '../../src/api';
-import { useAuth } from '../../src/auth';
+import { login, useAuth } from '../../src/auth';
 import type { Did } from '../../src/auth-state';
 import { Action, Copy, Field, Page } from '../../src/controls';
 import { jamSpace } from '../../src/jam-space';
 import { usePlayback } from '../../src/playback';
+import { useResource } from '../../src/CatalogPieces';
+import { pdsEndpoint, pdsSupportsSpaces } from '../../src/identity';
 
 interface Snapshot {
   revision: number;
@@ -26,7 +28,7 @@ function isSnapshot(value: unknown): value is Snapshot {
 }
 
 export default function JamRoom() {
-  const { room } = useLocalSearchParams<{ room: string }>();
+  const { room, track: trackId } = useLocalSearchParams<{ room: string; track?: string }>();
   const auth = useAuth();
   const player = usePlayback();
   const playback = useRef(player);
@@ -40,6 +42,9 @@ export default function JamRoom() {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState('');
+  const checkSupport = useCallback(async () => auth.did && !auth.jamSpace
+    ? pdsSupportsSpaces(await pdsEndpoint(auth.did)) : true, [auth.did, auth.jamSpace]);
+  const support = useResource(checkSupport);
 
   function client() {
     if (!auth.agent || !auth.did) throw new Error('Sign in to join this Jam');
@@ -102,14 +107,25 @@ export default function JamRoom() {
     }
   }
 
-  const link = `/jam/${encodeURIComponent(room ?? '')}`;
+  const link = `/jam/${encodeURIComponent(room ?? '')}${trackId ? `?track=${encodeURIComponent(trackId)}` : ''}`;
   return <Page title="Jam room">
-    {!auth.ready ? <Copy>Checking sign-in…</Copy> : (!auth.did || !auth.jamSpace) ?
+    {!auth.ready ? <Copy>Checking sign-in…</Copy> : !auth.did ?
       <Action label="Sign in to join" href={`/login?return_to=${encodeURIComponent(link)}`} /> :
+      !auth.jamSpace ? <>
+        {support.data === undefined && !support.error && <Copy>Checking Jam support…</Copy>}
+        {support.data === false && <Copy>Your account’s server doesn’t support Jams yet.</Copy>}
+        {support.error && <><Copy>Couldn’t check Jam support.</Copy><Action label="try again" onPress={support.retry} /></>}
+        {support.data === true && <>
+          <Copy>You’re signed in. Allow plyr.fm to create and join Jam rooms with this account.</Copy>
+          <Action label="Enable Jams" disabled={busy} onPress={() => void run(async () => {
+            if (auth.did) await login(auth.did, false, link);
+          })} />
+        </>}
+      </> :
       !joined && <Action label="Join Jam" onPress={() => setJoined(true)} />}
-    {isHost && auth.jamSpace && !joined && <Action label="Create Jam with current track" disabled={busy || !player.current?.record.cid}
+    {isHost && auth.jamSpace && !joined && <Action label="Create Jam with current track" disabled={busy || !player.current?.record.cid && !trackId}
       onPress={() => void run(async () => {
-        const track = player.current;
+        const track = player.current ?? (trackId ? await api.track(trackId) : undefined);
         if (!track?.record.cid) return;
         const space = client();
         await space.create();
