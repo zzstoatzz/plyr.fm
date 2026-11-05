@@ -6,7 +6,7 @@ import { Button, Row, Status, usePages } from './CatalogPieces';
 import { Sheet } from './Sheet';
 import { useAppearance } from './appearance';
 
-export function TrackLikes({ track }: { track: Track }) {
+export function TrackLikes({ track, compact = false }: { track: Track; compact?: boolean }) {
   const [open, setOpen] = useState(false);
   const theme = useAppearance();
   const count = track.metrics.like_count;
@@ -15,7 +15,7 @@ export function TrackLikes({ track }: { track: Track }) {
     <Pressable accessibilityRole="button" accessibilityLabel={`See ${label}`} onPress={() => setOpen(true)}
       style={{ minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 7, paddingHorizontal: 6 }}>
       <Heart size={17} color={theme.muted} />
-      <Text style={{ color: theme.text, fontWeight: '600', fontSize: 14 * theme.scale }}>{label}</Text>
+      <Text numberOfLines={1} style={{ color: theme.text, fontWeight: '600', fontSize: 14 * theme.scale }}>{compact ? count : label}</Text>
     </Pressable>
     {open && <Sheet title="Liked by" close={() => setOpen(false)}><People id={track.id} close={() => setOpen(false)} /></Sheet>}
   </>;
