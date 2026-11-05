@@ -127,3 +127,26 @@ test "artist metric JSON uses opaque track identity and explicit sources" {
         root.get("sources").?.object.get("plays").?.string,
     );
 }
+
+pub fn resolve(request: *std.http.Server.Request, allocator: std.mem.Allocator, store: ?ArtistStore, collection: []const u8, cors: response.CorsPolicy, request_id: []const u8) !void {
+    const response_cors = try response.captureCors(request, allocator, cors);
+    const application = @import("../internal/application/resolve_artists.zig");
+    const reader = request.readerExpectContinue(&.{}) catch {
+        try response.apiError(request, .invalid_request, request_id, response_cors);
+        return;
+    };
+    const body = reader.allocRemaining(allocator, std.Io.Limit.limited(64 * 1024)) catch {
+        try response.apiError(request, .invalid_request, request_id, response_cors);
+        return;
+    };
+    const parsed = std.json.parseFromSliceLeaky(struct { dids: []const []const u8 }, allocator, body, .{ .ignore_unknown_fields = false }) catch {
+        try response.apiError(request, .invalid_request, request_id, response_cors);
+        return;
+    };
+    switch (application.execute(allocator, store, collection, parsed.dids)) {
+        .found => |value| try response.json(request, .ok, try std.json.Stringify.valueAlloc(allocator, value, .{}), request_id, response_cors),
+        .invalid_request => try response.apiError(request, .invalid_request, request_id, response_cors),
+        .unavailable => try response.apiError(request, .service_unavailable, request_id, response_cors),
+        .internal_error => try response.apiError(request, .internal_error, request_id, response_cors),
+    }
+}

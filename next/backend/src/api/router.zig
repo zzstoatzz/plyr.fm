@@ -323,6 +323,12 @@ pub fn handle(
             id,
             request_id,
         );
+    } else if (mem.eql(u8, path, prefix ++ "/artists/resolve")) {
+        if (request.head.method != .POST) {
+            try response.apiError(request, .method_not_allowed, request_id, app.cors);
+            return;
+        }
+        try artists.resolve(request, allocator, app.artist_store, app.track_collection, app.cors, request_id);
     } else if (artistMetricsIdentifier(path)) |identifier| {
         if (request.head.method != .GET) {
             try response.apiError(request, .method_not_allowed, request_id, app.cors);

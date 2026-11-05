@@ -364,6 +364,30 @@ def main() -> None:
         assert status == 200
         assert short_search["data"] == []
 
+        status, _, empty_artists = _request(
+            base_url, "/v1/artists/resolve", method="POST", data=b'{"dids":[]}'
+        )
+        assert status == 200 and empty_artists["data"] == []
+        for payload in [
+            b'{"dids":["invalid"]}',
+            b'{"dids":[],"extra":true}',
+            json.dumps({"dids": ["did:plc:artist"] * 501}).encode(),
+            b"x" * 65537,
+        ]:
+            status, _, _ = _request(
+                base_url, "/v1/artists/resolve", method="POST", data=payload
+            )
+            assert status == 400
+        status, _, _ = _request(
+            base_url,
+            "/v1/artists/resolve",
+            method="POST",
+            data=b'{"dids":["did:plc:artist"]}',
+        )
+        assert status == 503
+        status, _, _ = _request(base_url, "/v1/artists/resolve")
+        assert status == 405
+
         status, _, unavailable_search = _request(
             base_url,
             "/v1/search?q=artist.example&types=artist,track&limit=10",
