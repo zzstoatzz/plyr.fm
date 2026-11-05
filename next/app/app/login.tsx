@@ -2,13 +2,13 @@ import { Link, router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { Image, Platform, View } from 'react-native';
 import { createAccount, login, useAuth } from '../src/auth';
-import { Action, Copy, Field, Page, row } from '../src/controls';
+import { Action, Copy, Page, row } from '../src/controls';
 import { returnPath } from '../src/return-path';
+import { AccountPicker, type AccountSuggestion } from '../src/AccountPicker';
 
 const catalog = 'https://api.plyr.fm/auth';
 const typeahead = 'https://typeahead.waow.tech/xrpc/app.bsky.actor.searchActorsTypeahead';
 
-interface Actor { handle: string; displayName?: string; avatar?: string }
 interface Preview { handle: string; display_name?: string; avatar_url?: string; sign_in_host: string }
 interface Provider { url: string; name: string; recommended: boolean; description?: string; info_url?: string }
 
@@ -19,7 +19,8 @@ export default function Login() {
   const [showHelp, setShowHelp] = useState(false);
   const [creating, setCreating] = useState(false);
   const [handle, setHandle] = useState('');
-  const [actors, setActors] = useState<Actor[]>([]);
+  const [actors, setActors] = useState<AccountSuggestion[]>([]);
+  const [chosen, setChosen] = useState<AccountSuggestion>();
   const [preview, setPreview] = useState<Preview>();
   const [providers, setProviders] = useState<Provider[]>();
   const [provider, setProvider] = useState<Provider>();
@@ -43,17 +44,17 @@ export default function Login() {
             if (!signal.aborted) { setPreview(account); setActors([]); }
           }).catch(() => {});
       }
-      if (!identifier.startsWith('did:')) {
+      if (!chosen && !identifier.startsWith('did:')) {
         void fetch(typeahead + '?q=' + query + '&limit=5', { signal, headers: { 'X-Client': 'next.plyr.fm' } })
           .then(async response => {
             if (!response.ok) return;
-            const result: { actors?: Actor[] } = await response.json();
+            const result: { actors?: AccountSuggestion[] } = await response.json();
             if (!signal.aborted) setActors(result.actors ?? []);
           }).catch(() => {});
       }
     }, 300);
     return () => { clearTimeout(timer); controller.abort(); };
-  }, [identifier, creating, busy]);
+  }, [identifier, creating, busy, chosen]);
 
   useEffect(() => {
     if (!creating) return;
@@ -90,6 +91,7 @@ export default function Login() {
 
   function updateHandle(value: string) {
     setHandle(value);
+    setChosen(undefined);
     setPreview(undefined);
     setActors([]);
     setError(undefined);
@@ -131,10 +133,8 @@ export default function Login() {
       </View>)}
       <Copy><Link href="https://bsky.app">Bluesky</Link> and <Link href="https://blackskyweb.xyz">Blacksky</Link> also host accounts.</Copy>
     </> : <>
-      <Field label="atmosphere account" value={handle} onChangeText={updateHandle} autoCapitalize="none" autoCorrect={false}
-        editable={!busy} placeholder="you.example.com" onSubmitEditing={() => void submit()} />
-      {!preview && !busy && actors.map(actor => <Action key={actor.handle} label={actor.displayName ? actor.displayName + ' · @' + actor.handle : '@' + actor.handle}
-        onPress={() => updateHandle(actor.handle)} />)}
+      <AccountPicker value={handle} actors={preview ? [] : actors} disabled={busy} change={updateHandle}
+        choose={actor => { updateHandle(actor.handle); setChosen(actor); }} submit={() => void submit()} />
       {preview && <View style={row}>
         {preview.avatar_url && <Image source={{ uri: preview.avatar_url }} style={{ width: 36, height: 36, borderRadius: 18 }} />}
         <Copy>{preview.display_name ? preview.display_name + ' · ' : ''}@{preview.handle}</Copy>
