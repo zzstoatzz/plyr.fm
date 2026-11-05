@@ -1,3 +1,4 @@
+import { beginLikeInteraction, setLikeInteraction, useLikeInteraction } from './like-interactions';
 import { Text } from './Text';
 import { Link } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -14,7 +15,7 @@ import { Sheet } from './Sheet';
 import { WaveLoading } from './WaveLoading';
 import { useAppearance } from './appearance';
 
-export function TrackLikes({ track, compact = false }: { track: Track; compact?: boolean }) {
+export function TrackLikes({ track, compact = false, buttonOnly = false, returnTo }: { track: Track; compact?: boolean; buttonOnly?: boolean; returnTo?: string }) {
   const [open, setOpen] = useState(false);
   const [viewer, setViewer] = useState<{ did: string; uri: string; liked: boolean }>();
   const [count, setCount] = useState(track.metrics.like_count);
@@ -32,15 +33,15 @@ export function TrackLikes({ track, compact = false }: { track: Track; compact?:
   const label = `${count} ${count === 1 ? 'like' : 'likes'}`;
   return <>
     <View testID="track-like-controls" style={{ flexDirection: 'row', alignItems: 'center' }}>
-      {auth.did && auth.rpc ? <LikeButton key={`${auth.did}:${track.record.uri}`} track={track} change={change} reportError={setError} reportLiked={setViewer} /> :
-        <Link href={{ pathname: '/login', params: { return_to: `/track/${track.id}` } }} asChild>
-          <Pressable accessibilityRole="link" accessibilityLabel="sign in to like" style={target}>
+      {auth.did && auth.rpc ? <LikeButton key={`${auth.did}:${track.record.uri}`} track={track} change={change} reportError={setError} reportLiked={setViewer} suffix={buttonOnly ? track.metadata.title : undefined} /> :
+        <Link href={{ pathname: '/login', params: { return_to: returnTo ?? `/track/${track.id}` } }} asChild>
+          <Pressable accessibilityRole="link" accessibilityLabel={buttonOnly ? `sign in to like ${track.metadata.title}` : 'sign in to like'} style={target}>
             <Heart size={21} color={theme.muted} />
           </Pressable>
         </Link>}
-      <Pressable accessibilityRole="button" accessibilityLabel={`See ${label}`} onPress={() => setOpen(true)} style={[target, { paddingHorizontal: 4 }]}>
+      {!buttonOnly && <Pressable accessibilityRole="button" accessibilityLabel={`See ${label}`} onPress={() => setOpen(true)} style={[target, { paddingHorizontal: 4 }]}>
         <Text numberOfLines={1} style={{ color: theme.muted, fontSize: 14 * theme.scale }}>{compact ? count : label}</Text>
-      </Pressable>
+      </Pressable>}
     </View>
     {open && <Sheet title="Liked by" close={() => setOpen(false)}><People id={track.id} viewer={viewer?.did === auth.did && viewer.uri === track.record.uri ? viewer : undefined} close={() => setOpen(false)} /></Sheet>}
     {error && <Sheet title="Couldn’t update like" close={() => setError(undefined)}>
@@ -50,8 +51,9 @@ export function TrackLikes({ track, compact = false }: { track: Track; compact?:
   </>;
 }
 
-function LikeButton({ track, change, reportError, reportLiked }: {
+function LikeButton({ track, change, reportError, reportLiked, suffix }: {
   track: Track; change: (delta: number) => () => void; reportError: (error: string) => void;
+  suffix?: string;
   reportLiked: (state: { did: string; uri: string; liked: boolean }) => void;
 }) {
   const { did, rpc } = useAuth();
@@ -59,34 +61,36 @@ function LikeButton({ track, change, reportError, reportLiked }: {
   const pds = useMemo(() => createPds({ did, rpc }), [did, rpc]);
   const load = useCallback(() => pds.myLikes().then(likes => likes.has(track.record.uri)), [pds, track.record.uri]);
   const result = useResource(load);
-  const [override, setOverride] = useState<boolean>();
-  const [busy, setBusy] = useState(false);
+  const shared = useLikeInteraction(rpc, track.record.uri);
+  const busy = shared?.busy ?? false;
   const [status, setStatus] = useState('');
   const lock = useRef(false);
   const alive = useRef(true);
   useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
-  const liked = override ?? result.data;
+  const liked = shared?.liked ?? result.data;
   useEffect(() => { if (did && liked !== undefined) reportLiked({ did, uri: track.record.uri, liked }); }, [did, liked, track.record.uri, reportLiked]);
   async function toggle() {
-    if (lock.current) return;
+    if (lock.current || busy || !rpc) return;
     if (liked === undefined) { if (result.error) { reportError(result.error); result.retry(); } return; }
+    if (!beginLikeInteraction(rpc, track.record.uri, !liked)) return;
     lock.current = true;
-    setBusy(true);
-    setOverride(!liked);
+    let confirmed = !liked;
     const rollback = change(liked ? -1 : 1);
     try {
       const saved = await (liked ? pds.unlike(track, { waitForIndex: false }) : pds.like(track, { waitForIndex: false }));
       if (alive.current) setStatus(saved === 'pending' ? 'Like saved. Updating catalog.' : liked ? 'Like removed.' : 'Track liked.');
     } catch (error) {
+      confirmed = liked;
       rollback();
-      if (alive.current) { setOverride(liked); reportError(errorMessage(error)); }
+      setLikeInteraction(rpc, track.record.uri, { liked, busy: true });
+      if (alive.current) reportError(errorMessage(error));
     } finally {
       lock.current = false;
-      if (alive.current) setBusy(false);
+      setLikeInteraction(rpc, track.record.uri, { liked: confirmed, busy: false });
     }
   }
   return <>
-    <Pressable accessibilityRole="button" accessibilityLabel={result.error && liked === undefined ? 'retry like status' : liked ? 'Unlike' : 'Like'}
+    <Pressable accessibilityRole="button" accessibilityLabel={result.error && liked === undefined ? 'retry like status' : liked ? `Unlike${suffix ? ' ' + suffix : ''}` : `Like${suffix ? ' ' + suffix : ''}`}
       accessibilityState={{ selected: liked ?? false, busy: busy || liked === undefined && !result.error, disabled: busy || liked === undefined && !result.error }}
       disabled={busy || liked === undefined && !result.error} onPress={() => void toggle()}
       style={[target, { opacity: busy || liked === undefined ? 0.5 : 1 }]}>

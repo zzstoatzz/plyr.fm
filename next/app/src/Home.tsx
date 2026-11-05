@@ -1,11 +1,11 @@
 import { Link } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
-import PlayIcon from 'lucide-react-native/icons/play';
+import { HomeTrackActions, HomeTrackRow } from './HomeTrackRow';
 import X from 'lucide-react-native/icons/x';
 import { api, type Track } from './api';
 import { useAuth } from './auth';
-import { Cover, Detail, Heading, Status, TrackRows, artistName, errorMessage, useColors, usePages, type Play } from './CatalogPieces';
+import { Cover, Detail, Heading, Status, artistName, errorMessage, useColors, usePages, type Play } from './CatalogPieces';
 import { homeTags, type HomeTag } from './home-api';
 import { nextPopulatedChart, parseSelectedTags, periodLabels, selectedTagsKey, type ChartPeriod } from './home-state';
 import { readLocal, writeLocal } from './storage';
@@ -90,12 +90,12 @@ export function Home({ onPlay }: { onPlay: Play }) {
         {chart.map((track) => <View key={track.id} style={styles.card}>
           <Pressable accessibilityRole="button" accessibilityLabel={`Play ${track.metadata.title}`} onPress={() => onPlay(track, chart)}>
             <Cover uri={track.media.artwork?.url ?? track.artist.profile.avatar_url} size={136} radius={8} />
-            <View style={[styles.cardPlay, { backgroundColor: colors.background }]}><PlayIcon size={16} color={colors.text} fill={colors.text} /></View>
           </Pressable>
           <Link href={{ pathname: '/track/[id]', params: { id: track.id } }} asChild>
             <Pressable accessibilityRole="link" style={{ minHeight: 44, justifyContent: 'center' }}><Text numberOfLines={1} style={[styles.cardTitle, { color: colors.text, fontSize: 13 * colors.scale }]}>{track.metadata.title}</Text></Pressable>
           </Link>
           <Text numberOfLines={1} style={{ color: colors.muted, fontSize: 12 * colors.scale }}>{artistName(track)}</Text>
+          <HomeTrackActions track={track} />
         </View>)}
       </ScrollView>}
       {chartLoading && !chart.length ? <WaveLoading label="loading..." /> : <Status error={chartError} retry={() => void loadChart()}
@@ -130,7 +130,7 @@ export function Home({ onPlay }: { onPlay: Play }) {
       </View>}
       {tagsLoading && tagAttempt > 0 && <WaveLoading label="loading tags..." />}
       <Status error={tagError} retry={() => setTagAttempt((attempt) => attempt + 1)} />
-      <TrackRows tracks={latest.data} onPlay={onPlay} />
+      <View style={{ gap: 0 }}>{latest.data.map(track => <HomeTrackRow key={track.id} track={track} tracks={latest.data} onPlay={onPlay} />)}</View>
       {latest.loading ? <WaveLoading label={latest.data.length ? 'loading more...' : 'loading tracks...'} /> :
         <Status error={latest.error} retry={latest.more} empty={!latest.data.length ? selected.length ? 'no tracks match these tags' : 'no tracks yet' : undefined} />}
       {latest.cursor && !latest.loading && !latest.error && <Pressable accessibilityRole="button" onPress={latest.more} style={styles.more}><Text style={{ color: colors.muted }}>more tracks</Text></Pressable>}
@@ -141,7 +141,7 @@ export function Home({ onPlay }: { onPlay: Play }) {
 const styles = StyleSheet.create({
   home: { gap: 32 }, section: { gap: 14 }, headingRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: 12, rowGap: 4 },
   period: { minHeight: 44, minWidth: 44, justifyContent: 'center', paddingVertical: 8, paddingHorizontal: 2 }, cards: { gap: 16, paddingBottom: 4 }, card: { width: 136, gap: 4 },
-  cardTitle: { fontWeight: '600', marginTop: 4 }, cardPlay: { position: 'absolute', right: 7, bottom: 7, width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  cardTitle: { fontWeight: '600', marginTop: 4 },
   artist: { width: 104, alignItems: 'center', gap: 6 }, tags: { gap: 8 }, pinned: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6 },
   tagScroller: { gap: 6, alignItems: 'center' }, tagTarget: { minWidth: 44, minHeight: 44, maxWidth: '100%', justifyContent: 'center' },
   tag: { flexDirection: 'row', gap: 6, alignItems: 'center', minHeight: 36, borderRadius: 8, borderWidth: 1, paddingHorizontal: 9, paddingVertical: 6 },
