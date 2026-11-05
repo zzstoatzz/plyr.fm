@@ -241,11 +241,16 @@ verified record metadata, verified ordered-membership counts, attributed owner
 profiles, and derived metrics; detail preserves every strong-reference position
 and hydrates only an exact public URI/CID match.
 
-Tag discovery reads only independently verified creator tags joined to the current
-record CID. `GET /v1/tags?limit=15` returns `{object: "list", data: [{name,
-track_count, total_plays}]}` ranked by plays, then name; its
-limit is 1–100. Private, unlisted, excluded, adult-discovery and unavailable
-records do not contribute. Missing verified tags do not fall back to Python.
+Tag discovery prefers independently verified creator tags joined to the current
+record CID. A verified absent `tags` field may use imported, explicitly
+`legacy-plyr` app annotations for that same CID; an explicit array, including
+`[]`, always supersedes every legacy tag. Unknown fields and mismatched CIDs
+never inherit annotations. `GET /v1/tags?limit=15` returns `{object: "list", data:
+[{name, track_count, total_plays, sources: {verified_repo, legacy_plyr}}]}` ranked
+by plays, then name; its limit is 1–100. Source counters count contributing
+tracks, distinguishing authored claims from imported app annotations. Private,
+unlisted, excluded, adult-discovery and unavailable records do not contribute.
+There are no Python runtime reads or PDS writes.
 `GET /v1/tracks?tag=ambient&tag=drone` applies OR semantics before keyset
 pagination, with at most ten distinct tags of fifty UTF-8 bytes each. The same
 SQL normalization serves projection and filtering. Cursors bind the tag set,

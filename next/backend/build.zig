@@ -30,6 +30,9 @@ pub fn build(b: *std.Build) void {
     root_module.addAnonymousImport("migration_0032_track_tags", .{
         .root_source_file = b.path("migrations/0032_add_verified_track_tags.sql"),
     });
+    root_module.addAnonymousImport("migration_0033_tag_annotations", .{
+        .root_source_file = b.path("migrations/0033_add_legacy_tag_annotations.sql"),
+    });
     root_module.addImport("zat", b.dependency("zat", .{
         .target = target,
         .optimize = optimize,
@@ -88,6 +91,7 @@ pub fn build(b: *std.Build) void {
                     .{ .name = "migration_0029_like_counts", .module = root_module.import_table.get("migration_0029_like_counts").? },
                     .{ .name = "migration_0030_like_counts", .module = root_module.import_table.get("migration_0030_like_counts").? },
                     .{ .name = "migration_0032_track_tags", .module = root_module.import_table.get("migration_0032_track_tags").? },
+                    .{ .name = "migration_0033_tag_annotations", .module = root_module.import_table.get("migration_0033_tag_annotations").? },
                 },
             });
             // libhegel is a rust staticlib: off darwin, _Unwind_* come from zig's libunwind
