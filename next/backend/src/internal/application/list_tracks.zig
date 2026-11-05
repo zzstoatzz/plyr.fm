@@ -14,6 +14,7 @@ const Options = struct {
     limit: usize = default_limit,
     cursor: ?[]const u8 = null,
     artist_did: ?[]const u8 = null,
+    tags: []const []const u8 = &.{},
 };
 
 pub const Result = union(enum) {
@@ -33,9 +34,12 @@ pub fn execute(
         error.OutOfMemory => .unavailable,
         else => .invalid_request,
     };
+    const cursor_prefix = filterPrefix(allocator, options, expected_collection) catch return .unavailable;
     const after: ?track_cursor.Cursor = if (options.cursor) |token| blk: {
-        const storage = allocator.alloc(u8, token.len) catch return .unavailable;
-        const decoded = track_cursor.decode(storage, token) catch return .invalid_request;
+        if (!std.mem.startsWith(u8, token, cursor_prefix)) return .invalid_request;
+        const raw = token[cursor_prefix.len..];
+        const storage = allocator.alloc(u8, raw.len) catch return .unavailable;
+        const decoded = track_cursor.decode(storage, raw) catch return .invalid_request;
         const parsed = zat.AtUri.parse(decoded.at_uri) orelse return .invalid_request;
         const collection = parsed.collection() orelse return .invalid_request;
         if (!std.mem.eql(u8, collection, expected_collection)) return .invalid_request;
@@ -53,6 +57,7 @@ pub fn execute(
         .scope = scope,
         .limit = requested,
         .after = after,
+        .tags = options.tags,
     }) catch |err| return classifyStoreError(err);
     if (items.len > requested) return .internal_error;
 
@@ -62,7 +67,7 @@ pub fn execute(
     for (visible, data) |item, *destination| destination.* = item.value;
 
     const next_cursor = if (has_more and visible.len > 0)
-        track_cursor.encode(allocator, .{
+        encodeCursor(allocator, cursor_prefix, .{
             .created_at_us = visible[visible.len - 1].created_at_us,
             .at_uri = visible[visible.len - 1].value.record.uri,
         }) catch return .unavailable
@@ -81,6 +86,7 @@ fn parseOptions(allocator: std.mem.Allocator, target: []const u8) !Options {
     var saw_limit = false;
     var saw_cursor = false;
     var saw_artist_did = false;
+    var tags: std.ArrayList([]const u8) = .empty;
     var pairs = query.Iterator.init(allocator, target);
     while (try pairs.next()) |pair| {
         if (std.mem.eql(u8, pair.name, "limit")) {
@@ -98,11 +104,56 @@ fn parseOptions(allocator: std.mem.Allocator, target: []const u8) !Options {
             if (saw_artist_did or pair.value.len == 0) return error.InvalidQuery;
             saw_artist_did = true;
             result.artist_did = pair.value;
+        } else if (std.mem.eql(u8, pair.name, "tag")) {
+            if (pair.value.len == 0 or pair.value.len > 50 or std.mem.indexOfScalar(u8, pair.value, 0) != null or !std.unicode.utf8ValidateSlice(pair.value)) return error.InvalidQuery;
+            const normalized = try normalizeTag(allocator, pair.value);
+            if (normalized.len == 0) return error.InvalidQuery;
+            var seen = false;
+            for (tags.items) |existing| if (std.mem.eql(u8, existing, normalized)) {
+                seen = true;
+                break;
+            };
+            if (!seen) try tags.append(allocator, normalized);
+            if (tags.items.len > 10) return error.InvalidQuery;
         } else {
             return error.InvalidQuery;
         }
     }
+    std.mem.sort([]const u8, tags.items, {}, struct {
+        fn less(_: void, a: []const u8, b: []const u8) bool {
+            return std.mem.lessThan(u8, a, b);
+        }
+    }.less);
+    result.tags = try tags.toOwnedSlice(allocator);
     return result;
+}
+
+fn normalizeTag(allocator: std.mem.Allocator, raw: []const u8) ![]const u8 {
+    var result: std.ArrayList(u8) = .empty;
+    var space = false;
+    for (std.mem.trim(u8, raw, " \t\r\n")) |byte| {
+        if (std.ascii.isWhitespace(byte)) {
+            space = true;
+            continue;
+        }
+        if (space and result.items.len > 0) try result.append(allocator, ' ');
+        try result.append(allocator, std.ascii.toLower(byte));
+        space = false;
+    }
+    return std.mem.trim(u8, result.items, "-");
+}
+
+fn filterPrefix(allocator: std.mem.Allocator, options: Options, collection: []const u8) ![]const u8 {
+    if (options.tags.len == 0 and options.artist_did == null) return "";
+    const encoded = try std.json.Stringify.valueAlloc(allocator, .{ collection, options.artist_did, options.tags }, .{});
+    var digest: [32]u8 = undefined;
+    std.crypto.hash.sha2.Sha256.hash(encoded, &digest, .{});
+    return std.fmt.allocPrint(allocator, "trkfilter_{s}_", .{std.fmt.bytesToHex(digest, .lower)});
+}
+
+fn encodeCursor(allocator: std.mem.Allocator, prefix: []const u8, cursor: track_cursor.Cursor) ![]const u8 {
+    const encoded = try track_cursor.encode(allocator, cursor);
+    return std.fmt.allocPrint(allocator, "{s}{s}", .{ prefix, encoded });
 }
 
 fn classifyStoreError(err: TrackStore.Error) Result {
@@ -272,4 +323,29 @@ test "collection passes a validated artist scope to the index" {
             "/v1/tracks?artist_did=not-a-did",
         ),
     );
+}
+
+test "tag selections are bounded normalized sets and cursors bind their filters" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    const options = try parseOptions(a, "/v1/tracks?tag=Hip-Hop&tag=ambient&tag=HIP-HOP");
+    try std.testing.expectEqual(@as(usize, 2), options.tags.len);
+    try std.testing.expectEqualStrings("ambient", options.tags[0]);
+    try std.testing.expectError(error.InvalidQuery, parseOptions(a, "/v1/tracks?tag="));
+    try std.testing.expectError(error.InvalidQuery, parseOptions(a, "/v1/tracks?tag=bad%00tag"));
+    try std.testing.expectError(error.InvalidQuery, parseOptions(a, "/v1/tracks?tag=1&tag=2&tag=3&tag=4&tag=5&tag=6&tag=7&tag=8&tag=9&tag=10&tag=11"));
+    var items = [_]store_module.ListItem{
+        .{ .value = exampleTrack("at://did:plc:artist/fm.plyr.dev.track/a", "A"), .created_at_us = 300 },
+        .{ .value = exampleTrack("at://did:plc:artist/fm.plyr.dev.track/b", "B"), .created_at_us = 200 },
+    };
+    var fake = FakeStore{ .items = &items, .expected_collection = "fm.plyr.dev.track" };
+    const result = execute(a, fake.asStore(), "fm.plyr.dev.track", "/v1/tracks?tag=ambient&tag=hip-hop&limit=1");
+    const cursor = result.found.next_cursor.?;
+    const same = try std.fmt.allocPrint(a, "/v1/tracks?tag=HIP-HOP&tag=ambient&cursor={s}", .{cursor});
+    try std.testing.expect(execute(a, fake.asStore(), "fm.plyr.dev.track", same) == .found);
+    const changed = try std.fmt.allocPrint(a, "/v1/tracks?tag=ambient&cursor={s}", .{cursor});
+    try std.testing.expectEqual(Result.invalid_request, execute(a, fake.asStore(), "fm.plyr.dev.track", changed));
+    const artist_changed = try std.fmt.allocPrint(a, "/v1/tracks?tag=ambient&tag=hip-hop&artist_did=did:plc:artist&cursor={s}", .{cursor});
+    try std.testing.expectEqual(Result.invalid_request, execute(a, fake.asStore(), "fm.plyr.dev.track", artist_changed));
 }

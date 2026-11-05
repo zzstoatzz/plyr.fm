@@ -201,7 +201,7 @@ write. There is no `/auth/*`, no OAuth client metadata, no cookie, and no
 server-held credential to protect; every route is a public projection of
 public records.
 
-The current product surface is `GET /v1/tracks`,
+The current product surface is `GET /v1/tags`, `GET /v1/tracks`,
 `GET /v1/tracks/{track_id}`, `GET /v1/tracks/{track_id}/playback`,
 `GET /v1/tracks/{track_id}/likes`,
 `GET /v1/actors/{did}/likes`, `POST /v1/actors/{did}/likes/resolve`,
@@ -240,6 +240,18 @@ read the same authenticated list projection. Collection summaries contain only
 verified record metadata, verified ordered-membership counts, attributed owner
 profiles, and derived metrics; detail preserves every strong-reference position
 and hydrates only an exact public URI/CID match.
+
+Tag discovery reads only independently verified creator tags joined to the current
+record CID. `GET /v1/tags?limit=15` returns `{object: "list", data: [{name,
+track_count, total_plays}]}` ranked by plays, then name; its
+limit is 1–100. Private, unlisted, excluded, adult-discovery and unavailable
+records do not contribute. Missing verified tags do not fall back to Python.
+`GET /v1/tracks?tag=ambient&tag=drone` applies OR semantics before keyset
+pagination, with at most ten distinct tags of fifty UTF-8 bytes each. The same
+SQL normalization serves projection and filtering. Cursors bind the tag set,
+artist and collection; changing a filter requires starting a fresh page. Tag
+order and ASCII case do not change cursor identity. Unfiltered discovery keeps
+its existing cursor format. Charts have no tag filter in this cycle.
 
 The track chart is likewise an explicitly derived resource. It ranks admitted
 verified tracks by distinct, currently available liker DIDs for all time or an

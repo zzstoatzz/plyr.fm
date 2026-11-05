@@ -2,6 +2,7 @@ const std = @import("std");
 const get_track = @import("../internal/application/get_track.zig");
 const get_playback = @import("../internal/application/get_playback.zig");
 const list_track_likes = @import("../internal/application/list_track_likes.zig");
+const list_tags = @import("../internal/application/list_tags.zig");
 const list_tracks = @import("../internal/application/list_tracks.zig");
 const record_play = @import("../internal/application/record_play.zig");
 const PlaybackStore = @import("../internal/index/playback_store.zig").PlaybackStore;
@@ -366,4 +367,13 @@ test "v1 playback JSON exposes authorization availability and integrity" {
     );
     try std.testing.expect(root.get("file_id") == null);
     try std.testing.expect(root.get("r2_url") == null);
+}
+
+pub fn tags(request: *std.http.Server.Request, allocator: std.mem.Allocator, store: ?TrackStore, collection: []const u8, cors: response.CorsPolicy, request_id: []const u8) !void {
+    switch (list_tags.execute(allocator, store, collection, request.head.target)) {
+        .found => |value| try response.json(request, .ok, try std.json.Stringify.valueAlloc(allocator, value, .{}), request_id, cors),
+        .invalid_request => try response.apiError(request, .invalid_request, request_id, cors),
+        .unavailable => try response.apiError(request, .service_unavailable, request_id, cors),
+        .internal_error => try response.apiError(request, .internal_error, request_id, cors),
+    }
 }
