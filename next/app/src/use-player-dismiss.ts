@@ -9,11 +9,20 @@ export function usePlayerDismiss(enabled: boolean, width: number, height: number
   const generation = useRef(0);
   const active = useRef<number | null>(null);
   const native = Platform.OS !== 'web';
+  const snapBack = () => {
+    active.current = null;
+    Animated.spring(translation, { toValue: 0, stiffness: 280, damping: 24, mass: 1, useNativeDriver: native }).start();
+  };
   const responder = useRef(PanResponder.create({
     onMoveShouldSetPanResponderCapture: (_, gesture) => latest.current.enabled && !closing.current && gesture.numberActiveTouches === 1 &&
       gesture.dy > 10 && gesture.dy > Math.abs(gesture.dx) * 1.5,
     onPanResponderGrant: () => { active.current = generation.current; translation.stopAnimation(); },
-    onPanResponderMove: (_, gesture) => { if (active.current === generation.current) translation.setValue(Math.max(0, gesture.dy)); },
+    onPanResponderStart: (_, gesture) => { if (gesture.numberActiveTouches !== 1) snapBack(); },
+    onPanResponderMove: (_, gesture) => {
+      if (active.current !== generation.current) return;
+      if (gesture.numberActiveTouches !== 1) { snapBack(); return; }
+      translation.setValue(Math.max(0, gesture.dy));
+    },
     onPanResponderRelease: (_, gesture) => {
       if (active.current !== generation.current) return;
       active.current = null;
@@ -25,12 +34,9 @@ export function usePlayerDismiss(enabled: boolean, width: number, height: number
         Animated.timing(translation, { toValue: latest.current.height, duration: 170, useNativeDriver: native }).start(({ finished }) => {
           if (finished && request === generation.current) latest.current.close();
         });
-      } else Animated.spring(translation, { toValue: 0, stiffness: 280, damping: 24, mass: 1, useNativeDriver: native }).start();
+      } else snapBack();
     },
-    onPanResponderTerminate: () => {
-      active.current = null;
-      Animated.spring(translation, { toValue: 0, stiffness: 280, damping: 24, mass: 1, useNativeDriver: native }).start();
-    },
+    onPanResponderTerminate: snapBack,
     onPanResponderTerminationRequest: () => true
   })).current;
   useEffect(() => {

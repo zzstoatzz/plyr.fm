@@ -100,6 +100,19 @@ async function gesture(page, cdp, start, dx, dy, { cancel = false, wait = 25, st
   await page.waitForTimeout(550);
 }
 
+async function twoFingerCancel(page, cdp, start) {
+  const finger = (id, dy, dx = 0) => ({ x: start.x + dx, y: start.y + dy, id });
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [finger(1, 0)] });
+  for (const dy of [20, 45, 80]) {
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [finger(1, dy)] });
+    await page.waitForTimeout(30);
+  }
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [finger(1, 80), finger(2, 80, 30)] });
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [finger(1, 160), finger(2, 160, 30)] });
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  await page.waitForTimeout(550);
+}
+
 async function run(browser, width, theme) {
   const { context, page, errors } = await setup(browser, width, theme);
   const name = `${width}-${theme}`;
@@ -147,6 +160,7 @@ async function run(browser, width, theme) {
     await gesture(page, cdp, start, 0, -100); await remains();
     await gesture(page, cdp, start, 0, 160, { cancel: true }); await remains();
     if (width < 600) {
+      await twoFingerCancel(page, cdp, start); await remains();
       await gesture(page, cdp, start, 0, 150, { resize: true });
       assert.equal(await header.count(), 1);
       await page.setViewportSize({ width, height: 900 });
