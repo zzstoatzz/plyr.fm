@@ -54,11 +54,6 @@ jobs:
       - name: bundle iOS and Android
         if: github.event_name == 'pull_request'
         working-directory: next/app
-        run: npx expo export --platform ios --platform android --output-dir "$RUNNER_TEMP/next-native"
-
-      - name: check native bundles
-        if: github.event_name == 'pull_request'
-        working-directory: next/app
         run: npx --no-install expo export --platform ios --platform android --output-dir "$RUNNER_TEMP/next-native"
 
       # the project predates this workflow, so deploy to whatever branch it
