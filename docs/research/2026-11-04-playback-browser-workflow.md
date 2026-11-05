@@ -215,3 +215,29 @@ fast Zig execution makes those duplicate network reads harmless.
 
 This run verified deployed backend integration with local built assets at the
 Next origin. The final frontend deploy still requires a run without PLAYBACK_DIST.
+
+## Radio read ownership correction
+
+The measured duplicate work is now removed in the client. Four bounded
+[RadioFeed stores](../../next/app/src/radio-feed.ts), one per station, own the
+read lifecycle. The page and actual player observe the same immutable snapshot,
+including its original monotonic receivedAt. The first observer reads immediately;
+settled reads repeat after five seconds. A ten-second deadline bounds hung reads.
+Leaving one view cannot cancel another observer; leaving the last aborts the
+read, cancels polling and clears the snapshot. A generation fence rejects late
+completion after a stop/restart.
+
+The full Radio page still renders current artwork and controls, but attaches no
+audio URL. The compact output owns the audio source. Actual Chrome and WebKit
+runs against the deployed backend each measured **seven state GETs over~31.9s,
+one source-audio request, and zero source-audio requests before Listen**. Both
+returned a real counted receipt at~31.93s. Tap-to-real-media progress was123ms
+and51ms respectively with the metadata already displayed. Those individual warm
+measurements are not an uncached-media latency guarantee.
+
+The four feed tests exercise two observers sharing a read, one observer leaving,
+last-observer abort/cancel, late completion after restart, timeout/recovery, and
+shared snapshot identity. They control transport completion and polling timers;
+the browser checks retain real media clocks and real Next receipts. All26client
+tests and TypeScript checks passed, and the web export succeeded. The Radio hero
+and persistent player were inspected in both browser screenshots.

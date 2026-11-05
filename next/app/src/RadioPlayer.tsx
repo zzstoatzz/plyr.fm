@@ -10,8 +10,9 @@ import { Cover } from './CatalogPieces';
 import { Action, Copy, Page, row } from './controls';
 import { usePlayback } from './playback';
 import { useAppPreferences } from './preference-context';
-import { radioMedia, radioPosition, radioStations, readRadio, type RadioSnapshot } from './radio';
+import { radioMedia, radioPosition, radioStations } from './radio';
 import { usePlayerAccounting } from './use-player-accounting';
+import { useRadioFeed } from './use-radio-feed';
 
 type Station = typeof radioStations[number];
 export const RadioContext = createContext<{ station: Station | null; tune: (station: Station | null) => void }>({ station: null, tune: () => {} });
@@ -22,9 +23,8 @@ export default function Radio({ compact = false, tuned }: { compact?: boolean; t
   const live = useContext(RadioContext);
   const autoTuned = useRef(false);
   const [station, setStation] = useState<typeof radioStations[number]>(() => tuned ?? radioStations.find(item => item.slug === stationSlug) ?? radioStations[0]);
-  const [snapshot, setSnapshot] = useState<RadioSnapshot>();
+  const { snapshot, error } = useRadioFeed(station);
   const [listening, setListening] = useState(false);
-  const [error, setError] = useState('');
   const audio = useAudioPlayer(null);
   const status = useAudioPlayerStatus(audio);
   const accounting = usePlayerAccounting(audio);
@@ -36,25 +36,7 @@ export default function Radio({ compact = false, tuned }: { compact?: boolean; t
   const source = song ? radioMedia(station, song, 'audio') : null;
 
   useEffect(() => {
-    const controller = new AbortController();
-    let timer: ReturnType<typeof setTimeout>;
-    async function poll() {
-      try {
-        const next = await readRadio(station, controller.signal);
-        if (!controller.signal.aborted) {
-          setSnapshot(next);
-          setError('');
-        }
-      } catch {
-        if (!controller.signal.aborted) setError('Could not reach this station. Retrying…');
-      } finally {
-        if (!controller.signal.aborted) timer = setTimeout(() => void poll(), 5000);
-      }
-    }
-    void poll();
     return () => {
-      controller.abort();
-      clearTimeout(timer);
       audio.pause();
       setListening(false);
     };
@@ -67,8 +49,8 @@ export default function Radio({ compact = false, tuned }: { compact?: boolean; t
   useEffect(() => {
     accounting.stop();
     audio.pause();
-    audio.replace(source);
-  }, [accounting, audio, source]);
+    audio.replace(compact ? source : null);
+  }, [accounting, audio, compact, source]);
 
   useEffect(() => {
     if (!listening || !song || !source) return;
@@ -133,8 +115,6 @@ export default function Radio({ compact = false, tuned }: { compact?: boolean; t
       {radioStations.map(item => <Action key={item.slug} label={item.label} selected={item === station} primary={item === station}
         onPress={() => {
           if (item === station) return;
-          setSnapshot(undefined);
-          setError('');
           setStation(item);
           router.setParams({ station: item.slug });
         }} />)}

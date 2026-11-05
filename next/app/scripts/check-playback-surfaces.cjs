@@ -43,6 +43,9 @@ module.exports = async function runSurfaces({ browser, browserName, prepareConte
       } else {
         await page.goto(`${origin}/radio?station=${process.env.PLAYBACK_STATION || 'loved'}`, { waitUntil: 'domcontentloaded' });
         await page.getByRole('button', { name: 'Listen live', exact: true }).waitFor();
+        await page.waitForTimeout(400);
+        report.preTuneAudioReads = report.requests.filter(request => /\/api\/songs\/[^/]+\/audio$/.test(request.path)).length;
+        assert.equal(report.preTuneAudioReads, 0, 'The Radio page cannot preload audio before tuning');
         tapped = performance.now();
         await page.getByRole('button', { name: 'Listen live', exact: true }).click();
       }
@@ -65,6 +68,12 @@ module.exports = async function runSurfaces({ browser, browserName, prepareConte
       assert.equal(report.receipt.object, 'play_receipt');
       assert.equal(report.receipt.counted, true);
       assert.equal(report.receipt.sources.metrics, 'application_metrics');
+      if (surface === 'radio') {
+        report.stateReadCount = report.requests.filter(request => request.path === '/api/radio/state').length;
+        report.audioSourceReads = report.requests.filter(request => /\/api\/songs\/[^/]+\/audio$/.test(request.path)).length;
+        assert.ok(report.stateReadCount <= Math.ceil(report.tapToReceiptMs / 5000) + 2, 'Page and player must share one polling cadence');
+        assert.equal(report.audioSourceReads, 1, 'Only the actual Radio output loads the source');
+      }
       if (surface === 'embed') {
         const firstListener = new URL(receipts[0].response.url()).searchParams.get('listener');
         await page.reload({ waitUntil: 'domcontentloaded' });
