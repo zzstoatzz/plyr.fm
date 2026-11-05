@@ -147,6 +147,7 @@ pub const PostgresArtistStore = struct {
                 .handle = .legacy_projection,
                 .display_name = .legacy_local,
                 .profile = .verified_repo,
+                .avatar = if (try row.get(bool, 16)) .verified_repo else .legacy_projection,
                 .public_preferences = .legacy_local,
                 .account_availability = availability_source,
             },
@@ -164,7 +165,7 @@ const select_fields =
     \\  lower(a.handle),
     \\  a.display_name,
     \\  p.bio,
-    \\  p.avatar,
+    \\  COALESCE(NULLIF(p.avatar, ''), a.avatar_url),
     \\  false,
     \\  NULL::text,
     \\  p.record_created_at,
@@ -178,7 +179,8 @@ const select_fields =
     \\    TIMESTAMPTZ 'epoch' + (p.indexed_at_us * INTERVAL '1 microsecond'),
     \\    'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'
     \\  ),
-    \\  aa.evidence_source
+    \\  aa.evidence_source,
+    \\  p.avatar IS NOT NULL AND p.avatar <> ''
     \\FROM plyr_index.profile_records AS p
     \\JOIN plyr_index.account_availability AS aa
     \\  ON aa.repo_did = p.owner_did AND aa.available
@@ -217,7 +219,7 @@ fn duplicateOptional(allocator: std.mem.Allocator, value: ?[]const u8) !?[]const
 
 const resolve_query =
     \\SELECT identity.did, lower(identity.handle), identity.display_name,
-    \\       COALESCE(profile.avatar, identity.avatar_url), counts.track_count
+    \\       COALESCE(NULLIF(profile.avatar, ''), identity.avatar_url), counts.track_count
     \\FROM unnest($2::text[]) WITH ORDINALITY AS requested(did, position)
     \\JOIN plyr_index.actor_identities AS identity ON identity.did = requested.did
     \\LEFT JOIN plyr_index.profile_records AS profile
@@ -249,13 +251,13 @@ test "artist resolution returns ordered visible music and current profile artwor
     _ = try postgres.pool.exec("CREATE SCHEMA plyr_index", .{});
     _ = try postgres.pool.exec("CREATE TABLE plyr_index.actor_identities (did text PRIMARY KEY, handle text, display_name text, avatar_url text)", .{});
     _ = try postgres.pool.exec("CREATE TABLE plyr_index.profile_records (owner_did text, collection text, rkey text, deleted boolean, avatar text)", .{});
-    _ = try postgres.pool.exec("CREATE TABLE plyr_index.account_availability (repo_did text PRIMARY KEY, available boolean)", .{});
+    _ = try postgres.pool.exec("CREATE TABLE plyr_index.account_availability (repo_did text PRIMARY KEY, available boolean, evidence_source text DEFAULT 'verified_repository')", .{});
     _ = try postgres.pool.exec("CREATE TABLE plyr_index.track_records (record_uri text PRIMARY KEY, owner_did text, collection text, deleted boolean DEFAULT false, record_created_at_us bigint DEFAULT 1, self_labels text[] DEFAULT '{}')", .{});
     _ = try postgres.pool.exec("CREATE TABLE plyr_index.track_policies (record_uri text PRIMARY KEY, visibility text, moderation_decision text, operator_labels jsonb DEFAULT '[]')", .{});
     const owners = [_][]const u8{ "did:plc:first", "did:plc:second", "did:plc:hidden", "did:plc:offline", "did:plc:empty" };
     for (owners) |did| {
         _ = try postgres.pool.exec("INSERT INTO plyr_index.actor_identities VALUES ($1, 'Artist.Example', 'Artist', 'https://example.com/fallback')", .{did});
-        _ = try postgres.pool.exec("INSERT INTO plyr_index.account_availability VALUES ($1, $2)", .{ did, !std.mem.eql(u8, did, "did:plc:offline") });
+        _ = try postgres.pool.exec("INSERT INTO plyr_index.account_availability(repo_did,available) VALUES ($1, $2)", .{ did, !std.mem.eql(u8, did, "did:plc:offline") });
     }
     _ = try postgres.pool.exec("INSERT INTO plyr_index.profile_records VALUES ('did:plc:second', 'fm.plyr.dev.actor.profile', 'self', false, 'https://example.com/profile')", .{});
     _ = try postgres.pool.exec("INSERT INTO plyr_index.track_records(record_uri,owner_did,collection,self_labels) VALUES ('public','did:plc:first','fm.plyr.dev.track','{}'), ('supporters','did:plc:second','fm.plyr.dev.track','{}'), ('private','did:plc:hidden','fm.plyr.dev.track','{}'), ('excluded','did:plc:hidden','fm.plyr.dev.track','{}'), ('sexual','did:plc:hidden','fm.plyr.dev.track','{sexual}'), ('copyright','did:plc:hidden','fm.plyr.dev.track','{copyright-violation}'), ('offline','did:plc:offline','fm.plyr.dev.track','{}'), ('wrongcollection','did:plc:empty','fm.plyr.track','{}')", .{});
@@ -282,4 +284,19 @@ test "artist resolution returns ordered visible music and current profile artwor
     _ = try postgres.pool.exec("UPDATE plyr_index.track_policies SET visibility='private' WHERE record_uri='supporters'", .{});
     const changed = application.execute(arena.allocator(), implementation.store(), "fm.plyr.dev.track", &.{"did:plc:second"});
     try std.testing.expectEqual(@as(usize, 0), changed.found.data.len);
+    _ = try postgres.pool.exec("ALTER TABLE plyr_index.profile_records ADD COLUMN bio text, ADD COLUMN record_created_at text DEFAULT '2026-11-05T00:00:00Z', ADD COLUMN record_updated_at text, ADD COLUMN record_uri text, ADD COLUMN record_cid text DEFAULT 'bafyreiaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', ADD COLUMN commit_rev text DEFAULT '3jzfcijpj2z2a', ADD COLUMN indexed_at_us bigint DEFAULT 1", .{});
+    _ = try postgres.pool.exec("UPDATE plyr_index.profile_records SET record_uri='at://' || owner_did || '/' || collection || '/' || rkey", .{});
+    const authored = (try implementation.get(arena.allocator(), .{ .did = "did:plc:second" })).?;
+    try std.testing.expectEqualStrings("https://example.com/profile", authored.avatar_url.?);
+    try std.testing.expectEqual(artist.ClaimSource.verified_repo, authored.sources.avatar);
+    _ = try postgres.pool.exec("UPDATE plyr_index.profile_records SET avatar=NULL", .{});
+    const fallback = (try implementation.get(arena.allocator(), .{ .did = "did:plc:second" })).?;
+    try std.testing.expect(fallback.avatar_url != null);
+    try std.testing.expectEqualStrings("https://example.com/fallback", fallback.avatar_url.?);
+    try std.testing.expectEqual(artist.ClaimSource.legacy_projection, fallback.sources.avatar);
+    _ = try postgres.pool.exec("UPDATE plyr_index.profile_records SET avatar=''; UPDATE plyr_index.actor_identities SET avatar_url=NULL", .{});
+    const absent = (try implementation.get(arena.allocator(), .{ .did = "did:plc:second" })).?;
+    try std.testing.expectEqual(@as(?[]const u8, null), absent.avatar_url);
+    _ = try postgres.pool.exec("UPDATE plyr_index.account_availability SET available=false WHERE repo_did='did:plc:second'", .{});
+    try std.testing.expectEqual(@as(?artist.Artist, null), try implementation.get(arena.allocator(), .{ .did = "did:plc:second" }));
 }
