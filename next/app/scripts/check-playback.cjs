@@ -7,7 +7,7 @@ const { performance } = require('node:perf_hooks');
 const started = performance.now();
 const origin = process.env.PLAYBACK_URL || 'https://next.plyr.fm';
 const track = process.env.PLAYBACK_TRACK || 'trk_YXQ6Ly9kaWQ6cGxjOjZwbWJzbndlcm1haHYzcnBqaWxrcmd4by9mbS5wbHlyLnRyYWNrLzNtemNycWdoNDJxMjI';
-const output = path.resolve(process.env.PLAYBACK_OUTPUT || '/tmp/plyr-next-playback');
+const output = path.resolve(process.env.PLAYBACK_OUTPUT || `/tmp/plyr-next-playback-${new Date().toISOString().replace(/[:.]/g, '-')}`);
 const requireFrontend = createRequire(path.resolve(__dirname, '../../../frontend/package.json'));
 const playwright = process.env.PLAYWRIGHT_MODULE ? require(process.env.PLAYWRIGHT_MODULE) : requireFrontend('playwright');
 const browserName = process.env.PLAYBACK_BROWSER || 'chromium';
@@ -17,10 +17,15 @@ const mediaState = () => window.__plyrPlaybackMedia.map(audio => ({
   ready: audio.readyState, seeking: audio.seeking, error: audio.error?.code,
 }));
 
-async function run(browser, width, theme) {
-  const runStarted = performance.now();
-  const name = `${browserName}-${width}-${theme}`;
-  const context = await browser.newContext({ viewport: { width, height: width < 600 ? 844 : 900 }, colorScheme: theme });
+async function prepareContext(context, theme) {
+  if (process.env.PLAYBACK_DIST) {
+    const root = path.resolve(process.env.PLAYBACK_DIST);
+    await context.route(origin + '/**', async route => {
+      const candidate = path.join(root, new URL(route.request().url()).pathname);
+      const exists = await fs.stat(candidate).then(stat => stat.isFile(), () => false);
+      await route.fulfill({ path: exists ? candidate : path.join(root, 'index.html') });
+    });
+  }
   await context.addInitScript(selected => localStorage.setItem('plyr-next:prefs', JSON.stringify({ theme: selected })), theme);
   await context.addInitScript(() => {
     window.__plyrPlaybackMedia = [];
@@ -36,6 +41,13 @@ async function run(browser, width, theme) {
       return play.apply(this, args);
     };
   });
+}
+
+async function run(browser, width, theme) {
+  const runStarted = performance.now();
+  const name = `${browserName}-${width}-${theme}`;
+  const context = await browser.newContext({ viewport: { width, height: width < 600 ? 844 : 900 }, colorScheme: theme });
+  await prepareContext(context, theme);
   const page = await context.newPage();
   page.setDefaultTimeout(40_000);
   const report = { name, timingsMs: {}, requests: [], requestFailures: [], consoleErrors: [], playbackLogs: [], media: [], screenshots: [] };
@@ -155,6 +167,7 @@ async function run(browser, width, theme) {
   try {
     const matrix = process.env.PLAYBACK_QUICK === '1' ? [[390, 'dark']] : [[390, 'light'], [390, 'dark'], [1280, 'light'], [1280, 'dark']];
     for (const [width, theme] of matrix) await run(browser, width, theme);
+    if (process.env.ACCOUNTING === '1' || process.env.PLAYBACK_ACCOUNTING === '1') await require('./check-playback-accounting.cjs')({ browser, browserName, prepareContext, origin, track, output, reports, started });
   } finally {
     await browser.close();
   }

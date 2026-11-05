@@ -23,7 +23,7 @@ PLAYBACK_BROWSER=webkit and PLAYBACK_EXECUTABLE can select an installed WebKit
 binary. PLAYBACK_EXPECT_RECEIPT=1 waits for an actual successful plays response
 after resumed listening; it does not force media position or fabricate a receipt.
 
-The default output directory is /tmp/plyr-next-playback. report.json contains
+The default output directory is /tmp/plyr-next-playback-<timestamp>. report.json contains
 phase timings, request method/host/path/status/response timing, request failures,
 uncaught JavaScript errors, playback logs and real media observations. Screenshots
 cover Home, track detail, Now Playing, resumed state and an injected playback
@@ -44,7 +44,7 @@ mistaking the React Native modal fade for layout overlap.
 ## Baseline measurements
 
 The first complete matrix passed all four Chrome cases. One phone case completed
-with browser startup in 527ms and the full flow in approximately 7 seconds before
+with browser startup in 527ms and the full flow in 5.85 seconds before
 screenshot-settle waits were added. With settling, a separate WebKit phone/dark
 flow took 8.63 seconds including browser startup, screenshots and injected retry.
 These are individual runs, not percentile estimates.
@@ -87,3 +87,42 @@ count reconciliation. Do not use seek or a synthetic clock as evidence of heard
 time. Radio and Jam output ownership need their own real-player flows; this
 initial solo flow does not verify them. Bundled WebKit also does not establish
 physical iPhone background behavior or audibility through a device speaker.
+
+## Accounting integration mode
+
+```sh
+PLAYBACK_DIST=next/app/dist ACCOUNTING=1 PLAYBACK_QUICK=1 node next/app/scripts/check-playback.cjs
+```
+
+Build the Next web application first. PLAYBACK_DIST serves those local files
+through browser routing at PLAYBACK_URL, retaining the normal origin and real
+API/audio reads. ACCOUNTING=1 additionally intercepts only play POSTs with an
+explicit receipt fixture. No real accounting service or production metrics are
+written in this mode.
+
+The integration flow uses natural playback of the real eleven-second track.
+Seeking immediately near the end produces no submission. Another playback
+qualifies, receives an injected503, retries with the same occurrence and updates
+the detail count without another track GET. A further occurrence receives a
+simulated committed-but-lost response; the script reads the actual IndexedDB
+pending row, reloads the app and checks that the same ID is resent and the count
+reconciles. The fixture admits two unique occurrences across four deliveries.
+This proves the built client, media qualification, persisted outbox and UI
+integration against an HTTP boundary; backend atomicity is a separate real
+Postgres test, and live receipt verification must run without the fixture.
+
+Chrome and WebKit phone/dark passed this integration mode. Qualification plus the one-second delivery
+retry took 8.75 seconds in Chrome and 8.96 seconds in WebKit from the play tap in that run. The screenshot shows the
+new count with the player still playing. That inspection also caught the initial
+singular copy defect, “1 plays”, for correction alongside the count integration.
+
+Each run now creates a timestamped default output directory so stale fade frames
+and reports cannot be confused with a later settled capture. Explicit
+PLAYBACK_OUTPUT remains available when a fixed artifact location is desired.
+
+PLAYBACK_REPEAT=1 adds the repeat-one regression: qualify and pause, enable
+repeat-one through Queue, explicitly seek from the last second to zero, then
+listen naturally for 6.5 seconds. This must retain the original occurrence and
+submit nothing new. A subsequent natural loop must qualify a different
+occurrence. Run this against the rebuilt bundle containing the seek-lifecycle
+fix; it is separate from the baseline acceptance above.
