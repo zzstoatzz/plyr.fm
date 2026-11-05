@@ -1,0 +1,92 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+app=plyr-api-zig-canary
+purpose=zig-catalog-reconciliation
+[[ "${GITHUB_ACTIONS:-}" == true && "${GITHUB_REPOSITORY:-}" == zzstoatzz/plyr.fm && "${GITHUB_REF:-}" == refs/heads/main ]] || exit 64
+[[ "${GITHUB_RUN_ID:-}" =~ ^[0-9]+$ && "${GITHUB_RUN_ATTEMPT:-}" =~ ^[0-9]+$ && "${GITHUB_SHA:-}" =~ ^[a-f0-9]{40}$ ]] || exit 64
+: "${FLY_API_TOKEN:?required}"
+name="next-reconcile-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+timeout_seconds="${RECONCILE_TIMEOUT_SECONDS:-3600}"
+poll_seconds="${RECONCILE_POLL_SECONDS:-10}"
+[[ "$timeout_seconds" =~ ^[0-9]+$ && "$poll_seconds" =~ ^[0-9]+$ ]] || exit 64
+(( timeout_seconds >= 1 && timeout_seconds <= 3600 && poll_seconds >= 1 && poll_seconds <= 30 )) || exit 64
+output="$(mktemp "${RUNNER_TEMP:-/tmp}/next-reconcile.XXXXXX")"
+machine_id=""
+
+redact() {
+    local line
+    while IFS= read -r line; do
+        line="${line//"$FLY_API_TOKEN"/[redacted]}"
+        if [[ -n "${WORKER_DATABASE_URL:-}" ]]; then line="${line//"$WORKER_DATABASE_URL"/[redacted]}"; fi
+        printf '%s\n' "$line"
+    done
+}
+
+recover_id() {
+    flyctl machines list --app "$app" --json | jq -r --arg name "$name" --arg purpose "$purpose" '
+      [.[] | select(.name == $name and .config.metadata.purpose == $purpose
+        and ((.config.mounts // []) | length) == 0
+        and (.config.metadata.fly_process_group // "") == "")]
+      | if length == 1 then .[0].id elif length == 0 then empty else error("ambiguous reconciliation machines") end'
+}
+
+cleanup() {
+    local outcome=$? cleaned=false candidate
+    trap - EXIT INT TERM
+    if [[ -z "$machine_id" ]]; then
+        machine_id="$(sed -nE 's/.*Machine ID: ([a-f0-9]+).*/\1/p' "$output" | head -1)"
+    fi
+    for attempt in 1 2 3; do
+        if [[ -z "$machine_id" ]]; then
+            if ! machine_id="$(recover_id 2>/dev/null)"; then sleep 1; continue; fi
+        fi
+        if [[ -z "$machine_id" ]]; then cleaned=true; break; fi
+        [[ "$machine_id" =~ ^[a-f0-9]+$ ]] || break
+        if flyctl machine destroy "$machine_id" --app "$app" --force 2>&1 | redact; then cleaned=true; break; fi
+        if candidate="$(recover_id 2>/dev/null)" && [[ -z "$candidate" ]]; then cleaned=true; break; fi
+        sleep 1
+    done
+    rm -f "$output"
+    if [[ "$cleaned" != true ]]; then
+        echo "reconciliation machine cleanup failed" >&2
+        if (( outcome == 0 )); then outcome=1; fi
+    fi
+    exit "$outcome"
+}
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
+if [[ "${1:-}" == --cleanup-only ]]; then exit 0; fi
+[[ "$#" == 0 ]] || exit 64
+: "${WORKER_DATABASE_URL:?required}"
+flyctl machine run "registry.fly.io/${app}:${GITHUB_SHA}" \
+    --app "$app" --name "$name" --region sjc --restart no --detach \
+    --skip-dns-registration --vm-cpu-kind shared --vm-cpus 1 --vm-memory 1024 \
+    --metadata "purpose=$purpose" \
+    --env "WORKER_DATABASE_URL=$WORKER_DATABASE_URL" \
+    --env MODE=catalog_reconciler --env INDEX_MODE=required \
+    --env TRACK_COLLECTION_NSID=fm.plyr.track --env LIST_COLLECTION_NSID=fm.plyr.list \
+    --env LIKE_COLLECTION_NSID=fm.plyr.like --env PROFILE_COLLECTION_NSID=fm.plyr.actor.profile \
+    --env CATALOG_DISCOVERY_RELAY=https://relay1.us-east.bsky.network \
+    2>&1 | redact | tee "$output"
+machine_id="$(sed -nE 's/.*Machine ID: ([a-f0-9]+).*/\1/p' "$output" | head -1)"
+if [[ -z "$machine_id" ]]; then machine_id="$(recover_id)"; fi
+[[ "$machine_id" =~ ^[a-f0-9]+$ ]] || exit 125
+echo "reconciler machine $machine_id"
+deadline=$((SECONDS + timeout_seconds))
+while :; do
+    state="$(flyctl machines list --app "$app" --json | jq -r --arg id "$machine_id" '.[] | select(.id == $id) | .state')"
+    case "$state" in stopped | destroyed | failed) break ;; esac
+    if (( SECONDS >= deadline )); then echo "reconciler still $state after ${timeout_seconds}s" >&2; exit 124; fi
+    sleep "$poll_seconds"
+done
+case "$FLY_API_TOKEN" in FlyV1\ *) auth="$FLY_API_TOKEN" ;; *) auth="Bearer $FLY_API_TOKEN" ;; esac
+exit_code="$(curl -fsS -H "Authorization: $auth" \
+    "https://api.machines.dev/v1/apps/${app}/machines/${machine_id}" \
+    | jq -r '[.events[]? | select(.type == "exit") | .request.exit_event.exit_code][0] // "unknown"')"
+flyctl logs --app "$app" --machine "$machine_id" --no-tail 2>&1 | redact || true
+[[ "$exit_code" =~ ^[0-9]+$ ]] && (( exit_code <= 255 )) || exit 125
+echo "reconciler exited with $exit_code"
+exit "$exit_code"
