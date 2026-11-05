@@ -39,6 +39,8 @@ pub const Record = struct {
     audio_space: ?managed_space.SpaceRecordUri = null,
     description: ?[]const u8,
     self_labels: []const []const u8,
+    tags: []const []const u8 = &.{},
+    tags_present: bool = false,
 };
 
 pub const Error = error{
@@ -55,6 +57,7 @@ pub const Error = error{
     InvalidAudioSpace,
     TooManyLabels,
     InvalidLabels,
+    InvalidTags,
     InvalidBlob,
     OutOfMemory,
 };
@@ -94,7 +97,29 @@ pub fn parse(
         .audio_space = audio_space,
         .description = try optionalBoundedString(value, "description", 0, 5000),
         .self_labels = try parseLabels(allocator, value),
+        .tags = try parseTags(allocator, value),
+        .tags_present = value.get("tags") != null,
     };
+}
+
+fn parseTags(allocator: std.mem.Allocator, value: zat.cbor.Value) Error![]const []const u8 {
+    const field = value.get("tags") orelse return &.{};
+    const array = switch (field) {
+        .array => |items| items,
+        else => return error.InvalidTags,
+    };
+    if (array.len > 20) return error.InvalidTags;
+    const tags = try allocator.alloc([]const u8, array.len);
+    for (array, tags) |item, *tag| {
+        const text = switch (item) {
+            .text => |text| text,
+            else => return error.InvalidTags,
+        };
+        try validateString(text, 0, 50);
+        if (std.mem.indexOfScalar(u8, text, 0) != null) return error.InvalidTags;
+        tag.* = text;
+    }
+    return tags;
 }
 
 fn requiredBoundedString(
@@ -337,4 +362,42 @@ test "datetime validation follows ATProto capitalization and offset semantics" {
     try std.testing.expect(!lexicon_value.validDatetime("1985-04-12t23:20:50.123Z"));
     try std.testing.expect(!lexicon_value.validDatetime("1985-04-12T23:20:50.123z"));
     try std.testing.expect(!lexicon_value.validDatetime("1985-04-12T23:20:50.123-00:00"));
+}
+
+test "authored tags retain claims and reject out-of-bounds arrays" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var entries = [_]zat.cbor.Value.MapEntry{
+        .{ .key = "$type", .value = .{ .text = "fm.plyr.dev.track" } },
+        .{ .key = "title", .value = .{ .text = "Track" } },
+        .{ .key = "artist", .value = .{ .text = "Artist" } },
+        .{ .key = "fileType", .value = .{ .text = "mp3" } },
+        .{ .key = "createdAt", .value = .{ .text = "2026-08-08T12:00:00Z" } },
+        .{ .key = "audioUrl", .value = .{ .text = "https://media.example/audio" } },
+        .{ .key = "tags", .value = .{ .array = &.{ .{ .text = "Hip-Hop" }, .{ .text = "ambient" } } } },
+    };
+    const parsed = try parse(a, .{ .map = &entries }, "fm.plyr.dev.track");
+    try std.testing.expectEqual(@as(usize, 2), parsed.tags.len);
+    try std.testing.expectEqualStrings("Hip-Hop", parsed.tags[0]);
+    try std.testing.expect(parsed.tags_present);
+    entries[entries.len - 1].value = .{ .array = &.{} };
+    const cleared = try parse(a, .{ .map = &entries }, "fm.plyr.dev.track");
+    try std.testing.expect(cleared.tags_present);
+    try std.testing.expectEqual(@as(usize, 0), cleared.tags.len);
+    const absent = try parse(a, .{ .map = entries[0 .. entries.len - 1] }, "fm.plyr.dev.track");
+    try std.testing.expect(!absent.tags_present);
+
+    entries[entries.len - 1].value = .{ .array = &.{.{ .unsigned = 3 }} };
+    try std.testing.expectError(error.InvalidTags, parse(a, .{ .map = &entries }, "fm.plyr.dev.track"));
+    entries[entries.len - 1].value = .{ .array = &.{.{ .text = "bad\x00tag" }} };
+    try std.testing.expectError(error.InvalidTags, parse(a, .{ .map = &entries }, "fm.plyr.dev.track"));
+    var too_many: [21]zat.cbor.Value = undefined;
+    @memset(&too_many, .{ .text = "tag" });
+    entries[entries.len - 1].value = .{ .array = &too_many };
+    try std.testing.expectError(error.InvalidTags, parse(a, .{ .map = &entries }, "fm.plyr.dev.track"));
+    var long_tag: [51]u8 = undefined;
+    @memset(&long_tag, 'a');
+    entries[entries.len - 1].value = .{ .array = &.{.{ .text = &long_tag }} };
+    try std.testing.expectError(error.InvalidString, parse(a, .{ .map = &entries }, "fm.plyr.dev.track"));
 }

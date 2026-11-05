@@ -23,7 +23,7 @@ const verified = @import("verified_snapshot.zig");
 /// that used to reject valid records). A complete snapshot at the same
 /// revision as a head with an older version is then rebuilt instead of being
 /// treated as idempotent, so reconciliation repairs stale projections.
-pub const projection_version: i32 = 2;
+pub const projection_version: i32 = 3;
 
 const HeadDecision = union(enum) {
     done: verified.ApplyResult,
@@ -586,10 +586,9 @@ test "PostgreSQL complete snapshot bootstraps and reconciles atomically" {
     try std.testing.expectEqual(verified.ApplyResult.applied, try store.apply(a, initial));
     try std.testing.expectEqual(verified.ApplyResult.idempotent, try store.apply(a, initial));
 
-    // A head built by an older decoder is rebuilt at the same revision: here
-    // the like is missing as if the old decoder had rejected it.
-    _ = try pool.exec("UPDATE plyr_index.repo_heads SET projection_version = 0", .{});
+    _ = try pool.exec("UPDATE plyr_index.repo_heads SET projection_version = 2", .{});
     _ = try pool.exec("DELETE FROM plyr_index.like_records", .{});
+    _ = try pool.exec("DELETE FROM plyr_index.track_tag_records", .{});
     try std.testing.expectEqual(verified.ApplyResult.applied, try store.apply(a, initial));
     try std.testing.expectEqual(verified.ApplyResult.idempotent, try store.apply(a, initial));
     {
@@ -601,6 +600,12 @@ test "PostgreSQL complete snapshot bootstraps and reconciles atomically" {
     try expectState(pool, &rev_1.str(), "two", false);
     try expectTrackState(pool, "track-one", &rev_1.str(), false);
     try expectTrackState(pool, "track-two", &rev_1.str(), false);
+    {
+        var tags_row = (try pool.row("SELECT count(*)::bigint FROM plyr_index.track_tag_records", .{})).?;
+        defer tags_row.deinit() catch {};
+        try std.testing.expectEqual(@as(i64, 2), try tags_row.get(i64, 0));
+    }
+
     try expectProfileState(pool, "first bio", &rev_1.str(), false);
     try expectLikeState(pool, &rev_1.str(), false);
     try expectAvailability(pool, &rev_1.str(), 1_000);
