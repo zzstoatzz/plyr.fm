@@ -200,3 +200,38 @@ in `my-prefect-server`, not in this repo.
   omitted) and Neon's always-on 1-CU `plyr-moderation` project (~720 CU-h/mo — flagged for an
   autosuspend fix). Live total ~$68/mo vs the old page's ~$20.
 - **2026-06-17** — initial cost notice (auto-scaffold; pointed at the live hub feed).
+
+## Next backend checkpoint: November 4, 2026
+
+Read-only inventory and usage sampled November 5 UTC / November 4 local. This
+is an incremental Next estimate, not the whole production bill or an invoice.
+Budget **roughly $30–35/month at the observed baseline**, plus unmeasured
+requests, transfer and shared service usage. Do not reuse June's headline as a
+current estimate for the rewrite.
+
+| Component | Observed basis | Monthly estimate / limitation |
+|---|---|---|
+| Zig API and ingester | Fly plyr-api-zig-canary: API shared-1x/256MB in iad, stopped at inspection; ingester shared-2x/1GB in sjc, started. Feed reports API 8% uptime, ingester 100%. | Feed estimates $8.07 using July rates. Current published October rates imply about $7.39 for always-on ingester plus ~$0.18 at 8% API uptime. Region/invoice adjustments not reconciled. |
+| Redis | Fly plyr-redis-next, shared-1x/256MB in iad, running, no volume mount. | Feed $2.02; published October baseline ~$2.19. This is a separate always-on dependency, not free inside the API VM. |
+| Postgres | plyr-stg / next-zig branch br-rapid-frog-af0th9op, endpoint ep-little-band-afax917w, 0.25–1 CU, autosuspend disabled. November 3/4 full UTC days consumed 21,806/21,804 CU-seconds respectively. | 6.06 CU-hours/day ×30×$0.106 ≈ **$19.26/month compute** at measured load. Continuous 1 CU would be ~$76.32/30 days. This is a scenario, not expected usage. |
+| Audio mirror | Feed: plyr-next-audio, 7.64 GB stored. | $0.11/month allocated storage estimate after shared free tier. Requests/Worker CPU are not included in that number. |
+| Shared services and other usage | Next currently reads production radio and auth previews. Future transcoding/moderation/CLAP use needs attribution. | Not charged a second full copy here; incremental usage, network, stopped rootfs, database storage/history and branch allowances are not fully reconciled. |
+
+Neon usage comes from get_branch_consumption for November 3–5 UTC, not the
+project's zero-valued cpu_used_sec field. list_branches identifies next-zig;
+list_postgres_endpoints establishes actual compute limits and disabled suspend.
+The branch's logical database size is ~61 MB; daily public transfer was ~41 MB
+and ~31 MB. Storage/history billing is not the same as logical database size.
+
+Sources: [live feed](https://hub.waow.tech/api/costs.json), generated
+2026-11-04T08:01:20Z; live Fly machine inventory; Neon branch consumption and
+endpoint APIs; [October Fly prices](https://fly.io/pricing-update/) and
+[Neon Launch prices](https://neon.com/pricing). Feed amounts are cents. Its
+Neon line is still a $3.80 project allocation with overage uncomputed; it does
+not represent this branch's measured compute. The feed's Fly estimates also
+explicitly exclude stopped rootfs. Neither is an exact bill.
+
+The useful baseline is therefore roughly $10 Fly + $19 Neon + mirror storage,
+before the unmeasured items above. Track these with subsequent cycle reviews;
+no resources or billing settings were changed in this inspection. In particular,
+API scale-to-zero does not make the continuously indexing backend scale to zero.
