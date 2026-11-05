@@ -23,6 +23,7 @@ const output = process.env.TRACK_ACTION_OUTPUT || `/tmp/plyr-track-actions-${Dat
       const handle = name + '.test';
       let loseNextCreate = false;
       let lost = 0;
+      let staleLikers = false;
       const { page, context } = await fixturePage(browser, accounts, {
         dist: process.env.TRACK_ACTION_DIST,
         context: { viewport: { width, height: 900 }, colorScheme: theme }, preferences: { theme },
@@ -40,7 +41,7 @@ const output = process.env.TRACK_ACTION_OUTPUT || `/tmp/plyr-track-actions-${Dat
         const url = new URL(request.url());
         catalogRequests.push(url.pathname);
         if (url.pathname === '/v1/tracks/' + id) return route.fulfill({ json: track });
-        if (url.pathname.endsWith('/likes')) return route.fulfill({ json: { object: 'list', data: [], has_more: false } });
+        if (url.pathname.endsWith('/likes')) return route.fulfill({ json: { object: 'list', data: staleLikers ? [{ record: { uri: 'at://' + accounts[handle].did + '/fm.plyr.like/stale' }, actor: { did: accounts[handle].did, profile: { handle } } }] : [], has_more: false } });
         if (url.pathname === '/v1/playlists') return route.fulfill({ json: { object: 'list', data: [], has_more: false } });
         return route.fulfill({ json: { object: 'list', data: [], has_more: false } });
       });
@@ -60,9 +61,18 @@ const output = process.env.TRACK_ACTION_OUTPUT || `/tmp/plyr-track-actions-${Dat
         await page.screenshot({ path: path.join(output, `${width}-${theme}-liked.png`) });
         await page.getByRole('button', { name: 'See 8 likes', exact: true }).click();
         await page.getByText('Liked by', { exact: true }).waitFor();
+        await page.getByRole('dialog').getByRole('link', { name: new RegExp(handle.replaceAll('.', '\\.')) }).waitFor();
+        assert.equal(await page.getByText('No likes yet.', { exact: true }).count(), 0, 'Own like appears before indexing');
+        await page.screenshot({ path: path.join(output, `${width}-${theme}-likers.png`) });
         await page.getByRole('button', { name: 'Close', exact: true }).click();
         await page.getByRole('button', { name: 'Unlike', exact: true }).click();
         await page.getByRole('button', { name: 'See 7 likes', exact: true }).waitFor();
+        staleLikers = true;
+        await page.getByRole('button', { name: 'See 7 likes', exact: true }).click();
+        await page.getByText('No likes yet.', { exact: true }).waitFor();
+        assert.equal(await page.getByRole('dialog').getByRole('link').count(), 0, 'Removed own like is hidden even while indexed');
+        await page.getByRole('button', { name: 'Close', exact: true }).click();
+        staleLikers = false;
         loseNextCreate = true;
         await page.getByRole('button', { name: 'Like', exact: true }).click();
         await page.getByText('Couldn’t update like', { exact: true }).waitFor();

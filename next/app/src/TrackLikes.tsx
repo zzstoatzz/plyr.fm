@@ -16,6 +16,7 @@ import { useAppearance } from './appearance';
 
 export function TrackLikes({ track, compact = false }: { track: Track; compact?: boolean }) {
   const [open, setOpen] = useState(false);
+  const [viewer, setViewer] = useState<{ did: string; uri: string; liked: boolean }>();
   const [count, setCount] = useState(track.metrics.like_count);
   const [error, setError] = useState<string>();
   const version = useRef(0);
@@ -31,7 +32,7 @@ export function TrackLikes({ track, compact = false }: { track: Track; compact?:
   const label = `${count} ${count === 1 ? 'like' : 'likes'}`;
   return <>
     <View testID="track-like-controls" style={{ flexDirection: 'row', alignItems: 'center' }}>
-      {auth.did && auth.rpc ? <LikeButton key={auth.did} track={track} change={change} reportError={setError} /> :
+      {auth.did && auth.rpc ? <LikeButton key={`${auth.did}:${track.record.uri}`} track={track} change={change} reportError={setError} reportLiked={setViewer} /> :
         <Link href={{ pathname: '/login', params: { return_to: `/track/${track.id}` } }} asChild>
           <Pressable accessibilityRole="link" accessibilityLabel="sign in to like" style={target}>
             <Heart size={21} color={theme.muted} />
@@ -41,7 +42,7 @@ export function TrackLikes({ track, compact = false }: { track: Track; compact?:
         <Text numberOfLines={1} style={{ color: theme.muted, fontSize: 14 * theme.scale }}>{compact ? count : label}</Text>
       </Pressable>
     </View>
-    {open && <Sheet title="Liked by" close={() => setOpen(false)}><People id={track.id} close={() => setOpen(false)} /></Sheet>}
+    {open && <Sheet title="Liked by" close={() => setOpen(false)}><People id={track.id} viewer={viewer?.did === auth.did && viewer.uri === track.record.uri ? viewer : undefined} close={() => setOpen(false)} /></Sheet>}
     {error && <Sheet title="Couldn’t update like" close={() => setError(undefined)}>
       <Text style={{ color: theme.muted, fontSize: 15 * theme.scale }}>{error}</Text>
       <ActionRow label="close" icon={X} onPress={() => setError(undefined)} />
@@ -49,8 +50,9 @@ export function TrackLikes({ track, compact = false }: { track: Track; compact?:
   </>;
 }
 
-function LikeButton({ track, change, reportError }: {
+function LikeButton({ track, change, reportError, reportLiked }: {
   track: Track; change: (delta: number) => () => void; reportError: (error: string) => void;
+  reportLiked: (state: { did: string; uri: string; liked: boolean }) => void;
 }) {
   const { did, rpc } = useAuth();
   const theme = useAppearance();
@@ -64,6 +66,7 @@ function LikeButton({ track, change, reportError }: {
   const alive = useRef(true);
   useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
   const liked = override ?? result.data;
+  useEffect(() => { if (did && liked !== undefined) reportLiked({ did, uri: track.record.uri, liked }); }, [did, liked, track.record.uri, reportLiked]);
   async function toggle() {
     if (lock.current) return;
     if (liked === undefined) { if (result.error) { reportError(result.error); result.retry(); } return; }
@@ -93,18 +96,26 @@ function LikeButton({ track, change, reportError }: {
   </>;
 }
 
-function People({ id, close }: { id: string; close: () => void }) {
+function People({ id, viewer, close }: { id: string; viewer?: { did: string; uri: string; liked: boolean }; close: () => void }) {
   const load = useCallback((cursor?: string) => api.trackLikes(id, cursor), [id]);
   const likes = usePages(load);
+  const auth = useAuth();
+  const ownProfile = useCallback(() => viewer?.liked ? api.artist(viewer.did) : Promise.resolve(undefined), [viewer?.did, viewer?.liked]);
+  const profile = useResource(ownProfile);
+  const actors = likes.data.filter(({ actor }) => actor.did !== viewer?.did).map(({ actor }) => actor);
+  if (viewer?.liked) actors.unshift({ did: viewer.did, profile: {
+    handle: profile.data?.handle || auth.handle || undefined,
+    display_name: profile.data?.display_name, avatar_url: profile.data?.avatar_url
+  } });
   const theme = useAppearance();
   return <>
-    {likes.data.map(({ record, actor }) => <Row key={record.uri} round
+    {actors.map(actor => <Row key={actor.did} round
       image={actor.profile?.avatar_url} title={actor.profile?.display_name || actor.profile?.handle || actor.did}
       subtitle={actor.profile?.handle ? `@${actor.profile.handle}` : undefined}
       href={{ pathname: '/u/[handle]', params: { handle: actor.profile?.handle || actor.did } }} onNavigate={close} />)}
     {likes.loading && <WaveLoading label="Loading likes" />}
     {likes.error && <><Text style={{ color: theme.muted }}>{likes.error}</Text><ActionRow label="retry" icon={RefreshCw} onPress={likes.more} /></>}
-    {!likes.loading && !likes.error && !likes.data.length && <Text style={{ color: theme.muted }}>No likes yet.</Text>}
+    {!likes.loading && !likes.error && !actors.length && <Text style={{ color: theme.muted }}>No likes yet.</Text>}
     {likes.cursor && !likes.loading && !likes.error && <ActionRow label="more people" icon={RefreshCw} onPress={likes.more} />}
   </>;
 }
