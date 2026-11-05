@@ -61,6 +61,14 @@ production read dependencies, service migration work and decisions still open.
 It supersedes the implementation status in the November 3 handoffs, including
 the temporary Svelte client and resolved migration hold.
 
+The [player study and core parity cycles](docs/research/2026-11-04-player-lessons-and-core-cycles.md)
+make trustworthy play accounting the next cycle, followed by personal listening,
+queue continuity, Jam rooms, collections, publishing and discovery. Cutover
+rehearsal, legacy URLs, SDK and MCP are deferred. The study preserves production's
+listened-time semantics and player lifecycle research while identifying retry,
+repeat and dedup defects to avoid copying. [Next's cost checkpoint](COSTS.md#next-backend-checkpoint-november-4-2026)
+budgets roughly $30–35/month at current baseline, before unmeasured usage.
+
 ### October 2026
 
 The day-by-day October entries are in `.status_history/2026-10.md`. The October
