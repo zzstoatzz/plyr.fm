@@ -22,6 +22,9 @@ async function runDesktop(browser, width, theme, { setup, track, screenshot }) {
   await page.getByRole('link',{name:'Search',exact:true}).click();await page.waitForURL('**/search');
   const input=page.getByRole('textbox',{name:'Search tracks, artists, albums and playlists'});await input.fill('fixture');
   await page.getByText('no results for “fixture”',{exact:true}).waitFor();await continuity();
+  await input.press('Escape');await pane.waitFor({state:'detached'});await continuity();
+  assert.equal(await input.inputValue(),'fixture');
+  await page.getByRole('button',{name:'Open now playing',exact:true}).click();await pane.waitFor();
   await screenshot(page,`desktop-${width}-${theme}-browse`);
   const slider=pane.getByRole('slider',{name:'Seek',exact:true});await slider.focus();await slider.press('ArrowRight');
   await page.waitForFunction(()=>window.__desktopMedia.currentTime>=1);
