@@ -121,9 +121,12 @@ async function request(url: string, timeout: number) {
 	}
 }
 
-async function get<T>(path: string, params?: Record<string, string | number | undefined>): Promise<T> {
+async function get<T>(path: string, params?: Record<string, string | number | string[] | undefined>): Promise<T> {
 	const url = new URL(API_URL + path);
-	for (const [k, v] of Object.entries(params ?? {})) if (v !== undefined) url.searchParams.set(k, String(v));
+	for (const [k, v] of Object.entries(params ?? {})) {
+		if (Array.isArray(v)) for (const value of v) url.searchParams.append(k, value);
+		else if (v !== undefined) url.searchParams.set(k, String(v));
+	}
 	// a scaled-to-zero API can take a few seconds to wake; retry once, and
 	// never hang the page forever.
 	let res: Response;
@@ -172,7 +175,7 @@ export const api = {
 	},
 	trackLikes: (id: string, cursor?: string) =>
 		get<Page<TrackLike>>(`/v1/tracks/${encodeURIComponent(id)}/likes`, { limit: 30, cursor }),
-	tracks: (p: { limit?: number; cursor?: string; artist_did?: string } = {}) => get<Page<Track>>('/v1/tracks', p),
+	tracks: (p: { limit?: number; cursor?: string; artist_did?: string; tag?: string[] } = {}) => get<Page<Track>>('/v1/tracks', p),
 	track: (id: string) => get<Track>(`/v1/tracks/${encodeURIComponent(id)}`),
 	playback: (id: string) => get<Playback>(`/v1/tracks/${encodeURIComponent(id)}/playback`),
 	artist: (didOrHandle: string) => get<Artist>(`/v1/artists/${encodeURIComponent(didOrHandle)}`),
