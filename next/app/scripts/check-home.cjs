@@ -10,7 +10,7 @@ const output = process.env.HOME_OUTPUT || `/tmp/plyr-home-${Date.now()}`;
 
 async function expectTrackLinks(page, tracks) {
   const paths = tracks.map(track => `/track/${encodeURIComponent(track.id)}`);
-  await page.waitForFunction(expected => JSON.stringify([...document.querySelector('[data-testid="home-feed"]').querySelectorAll('a')].map(link => new URL(link.href).pathname)) === JSON.stringify(expected), paths);
+  await page.waitForFunction(expected => JSON.stringify([...document.querySelector('[data-testid="home-feed"]').querySelectorAll('[data-testid="home-track-row"]')].map(row => new URL(row.querySelector('a[href^="/track/"]').href).pathname)) === JSON.stringify(expected), paths);
 }
 
 async function main() {

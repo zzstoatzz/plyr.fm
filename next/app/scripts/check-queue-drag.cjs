@@ -80,7 +80,7 @@ async function setup(browser, width, theme, queue = tracks) {
     await route.fulfill({ json: body, headers: { 'access-control-allow-origin': new URL(origin).origin, 'access-control-allow-credentials': 'true' } });
   });
   await page.goto(origin);
-  await page.getByRole('button', { name: 'Play', exact: true }).first().click();
+  await page.getByRole('button', { name: /^Play / }).first().click();
   await page.getByRole('button', { name: 'Open now playing', exact: true }).waitFor();
   await shot(page, `${width}-${theme}-busy`);
   await page.getByRole('button', { name: 'Open now playing', exact: true }).click();
