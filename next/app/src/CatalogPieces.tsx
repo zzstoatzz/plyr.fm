@@ -116,8 +116,8 @@ export function Row({
 }) {
   const colors = useColors();
   return <View style={[styles.row, { borderColor: colors.surface }]}>
-    <Link href={href} asChild onPress={onNavigate}>
-      <Pressable accessibilityRole="link" style={styles.rowLink}>
+    <Link href={href} asChild>
+      <Pressable accessibilityRole="link" onPress={onNavigate} style={styles.rowLink}>
         <Cover uri={image} round={round} />
         <View style={styles.rowText}>
           <Text numberOfLines={1} style={[styles.rowTitle, { color: colors.text, fontFamily: colors.fontFamily, fontSize: 16 * colors.scale }]}>{title}</Text>
