@@ -25,10 +25,14 @@ export interface PlayOutboxStorage {
 export const PLAY_OUTBOX_LIMIT = 64;
 export const PLAY_OUTBOX_TTL_MS = 24 * 60 * 60 * 1000;
 
+function canonicalTrackId(value: string): boolean {
+	return /^trk_[a-zA-Z0-9_-]+$/.test(value);
+}
+
 export function pendingPlay(value: unknown): PendingPlay | null {
 	if (typeof value !== 'object' || value === null || !('trackId' in value) ||
 		!('occurrenceId' in value) || !('createdAt' in value)) return null;
-	if (typeof value.trackId !== 'string' || !value.trackId.startsWith('trk_') || value.trackId.length > 2048 ||
+	if (typeof value.trackId !== 'string' || (!canonicalTrackId(value.trackId) && !/^radio:\d+$/.test(value.trackId)) || value.trackId.length > 2048 ||
 		typeof value.occurrenceId !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(value.occurrenceId) ||
 		typeof value.createdAt !== 'number' || !Number.isFinite(value.createdAt)) return null;
 	return { trackId: value.trackId, occurrenceId: value.occurrenceId, createdAt: value.createdAt };
@@ -44,6 +48,7 @@ export class PlayDeliveryError extends Error {
 
 interface Options {
 	storage: PlayOutboxStorage;
+	resolve?(play: QualifiedPlay): Promise<QualifiedPlay>;
 	send(play: QualifiedPlay): Promise<PlayReceipt>;
 	onReceipt(receipt: PlayReceipt): void;
 	now?(): number;
@@ -123,10 +128,17 @@ export class PlayOutbox {
 	private trim(): void {
 		const now = this.now();
 		for (const item of this.items.values()) {
-			if (now - item.createdAt >= PLAY_OUTBOX_TTL_MS) this.remove(item.occurrenceId);
+			if (now - item.createdAt >= PLAY_OUTBOX_TTL_MS) this.drop(item, 'expired');
 		}
 		const oldest = [...this.items.values()].sort((a, b) => a.createdAt - b.createdAt);
-		for (const item of oldest.slice(0, Math.max(0, oldest.length - PLAY_OUTBOX_LIMIT))) this.remove(item.occurrenceId);
+		for (const item of oldest.slice(0, Math.max(0, oldest.length - PLAY_OUTBOX_LIMIT))) this.drop(item, 'capacity');
+	}
+
+	private drop(item: Attempt, reason: string, error?: unknown): void {
+		console.warn('[plays] dropped', { occurrence: item.occurrenceId, track: item.trackId,
+			attempt: item.attempts + (reason === 'permanent_rejection' ? 1 : 0), reason,
+			...(error === undefined ? {} : { error: error instanceof Error ? error.name : 'unknown' }) });
+		this.remove(item.occurrenceId);
 	}
 
 	private remove(occurrenceId: string): void {
@@ -147,6 +159,19 @@ export class PlayOutbox {
 				if (item.nextAttemptAt > this.now()) continue;
 				try {
 					await item.persisted;
+					if (!canonicalTrackId(item.trackId)) {
+						const resolved = await this.options.resolve?.(item);
+						if (!resolved || resolved.occurrenceId !== item.occurrenceId || !canonicalTrackId(resolved.trackId) || resolved.trackId.length > 2048) {
+							throw new PlayDeliveryError('Invalid resolved play identity', true);
+						}
+						item.trackId = resolved.trackId;
+						item.persisted = this.options.storage.put({ trackId: item.trackId, occurrenceId: item.occurrenceId, createdAt: item.createdAt }).catch(() => {
+							console.warn('[plays] persistence unavailable; retaining resolved play in memory');
+						});
+						await item.persisted;
+					}
+					if (this.disposed) break;
+					console.info('[plays] submit', { occurrence: item.occurrenceId, track: item.trackId, attempt: item.attempts + 1 });
 					const receipt = await this.options.send(item);
 					if (receipt.occurrence !== item.occurrenceId || receipt.track_id !== item.trackId ||
 						!Number.isSafeInteger(receipt.play_count) || receipt.play_count < 0) {
@@ -155,10 +180,13 @@ export class PlayOutbox {
 					this.remove(item.occurrenceId);
 					this.options.onReceipt(receipt);
 				} catch (error) {
-					if (error instanceof PlayDeliveryError && !error.retryable) this.remove(item.occurrenceId);
+					if (error instanceof PlayDeliveryError && !error.retryable) this.drop(item, 'permanent_rejection', error);
 					else {
 						item.attempts++;
-						item.nextAttemptAt = this.now() + Math.min(60_000, 1000 * 2 ** Math.min(item.attempts - 1, 6));
+						const delayMs = Math.min(60_000, 1000 * 2 ** Math.min(item.attempts - 1, 6));
+						item.nextAttemptAt = this.now() + delayMs;
+						console.warn('[plays] retry scheduled', { occurrence: item.occurrenceId, track: item.trackId,
+							attempt: item.attempts, delayMs, error: error instanceof Error ? error.name : 'unknown' });
 					}
 				}
 				this.notify();

@@ -181,3 +181,73 @@ test('metric cache evicts old unobserved tracks while retaining visible subscrip
 	assert.equal(metrics.get('track-1023'), 1023);
 	unsubscribe();
 });
+
+test('delayed radio resolution persists the canonical identity before a later app instance submits', async () => {
+	const storage = new MemoryStorage();
+	let release: ((value: { trackId: string; occurrenceId: string }) => void) | undefined;
+	let resolving = false;
+	const resolved = new Promise<{ trackId: string; occurrenceId: string }>(resolve => { release = resolve; });
+	const first = new PlayOutbox({ storage, now: () => 1000, resolve: async item => {
+		assert.equal(item.trackId, 'radio:123');
+		resolving = true;
+		return resolved;
+	}, send: async () => { assert.fail('disposed instance cannot submit'); }, onReceipt: () => {} });
+	first.enqueue({ ...play(1), trackId: 'radio:123' });
+	await until(() => resolving);
+	assert.equal(storage.items.get(occurrence(1))?.trackId, 'radio:123');
+	first.dispose();
+	release?.({ trackId: 'trk_record', occurrenceId: occurrence(1) });
+	await until(() => storage.items.get(occurrence(1))?.trackId === 'trk_record');
+	let accepted = false;
+	const second = new PlayOutbox({ storage, now: () => 2000, resolve: async () => {
+		assert.fail('persisted canonical identity must not resolve again');
+	}, send: async item => {
+		assert.equal(item.trackId, 'trk_record');
+		assert.equal(item.occurrenceId, occurrence(1));
+		assert.equal(storage.items.get(occurrence(1))?.trackId, 'trk_record');
+		return receipt(1);
+	}, onReceipt: () => { accepted = true; } });
+	await until(() => accepted);
+	assert.equal(storage.items.size, 0);
+	second.dispose();
+});
+
+test('failed radio identity resolution retries the same qualified occurrence', async () => {
+	const storage = new MemoryStorage();
+	let attempts = 0;
+	let accepted = false;
+	const outbox = new PlayOutbox({ storage, now: () => 1000, resolve: async item => {
+		attempts++;
+		if (attempts === 1) throw new Error('resolver unavailable');
+		return { ...item, trackId: 'trk_record' };
+	}, send: async item => {
+		assert.equal(item.occurrenceId, occurrence(1));
+		return receipt(1);
+	}, onReceipt: () => { accepted = true; } });
+	outbox.enqueue({ ...play(1), trackId: 'radio:123' });
+	await until(() => attempts === 1);
+	await setImmediate();
+	assert.equal(storage.items.get(occurrence(1))?.trackId, 'radio:123');
+	outbox.retry();
+	await until(() => accepted);
+	assert.equal(attempts, 2);
+	outbox.dispose();
+});
+
+test('identity resolution refuses changed occurrence or noncanonical track without losing the original', async () => {
+	for (const invalid of [
+		{ trackId: 'trk_record', occurrenceId: occurrence(2) },
+		{ trackId: 'radio:123', occurrenceId: occurrence(1) }
+	]) {
+		const storage = new MemoryStorage();
+		let attempts = 0;
+		const outbox = new PlayOutbox({ storage, now: () => 1000, resolve: async () => { attempts++; return invalid; },
+			send: async () => { assert.fail('invalid resolved identity must not reach transport'); }, onReceipt: () => {} });
+		outbox.enqueue({ ...play(1), trackId: 'radio:123' });
+		await until(() => attempts === 1);
+		await setImmediate();
+		assert.equal(outbox.pendingCount, 1);
+		assert.equal(storage.items.get(occurrence(1))?.trackId, 'radio:123');
+		outbox.dispose();
+	}
+});
