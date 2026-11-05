@@ -40,6 +40,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: astral-sh/setup-uv@v7
+
       - uses: superfly/flyctl-actions/setup-flyctl@master
 
       - name: preflight next-only credentials
@@ -52,7 +54,7 @@ jobs:
           test -n "$ZIG_NEXT_WRITER_DATABASE_URL"
           test -n "$ZIG_NEXT_MIGRATOR_DATABASE_URL"
           flyctl secrets list --app "$FLY_APP" --json > "$RUNNER_TEMP/next-secrets.json"
-          python3 - "$RUNNER_TEMP/next-secrets.json" <<'PY'
+          uv run --no-project python - "$RUNNER_TEMP/next-secrets.json" <<'PY'
           import json
           import sys
 
@@ -106,6 +108,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: astral-sh/setup-uv@v7
+
       - uses: superfly/flyctl-actions/setup-flyctl@master
 
       # The ingester process group writes plyr_index as the branch owner. Its
@@ -130,7 +134,7 @@ jobs:
 
       - name: smoke the deployed api
         working-directory: next/backend
-        run: python3 scripts/canary_smoke.py "https://${FLY_APP}.fly.dev"
+        run: uv run --no-project python scripts/canary_smoke.py "https://${FLY_APP}.fly.dev"
 
       - name: ingester status
         env:
