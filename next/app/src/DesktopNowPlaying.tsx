@@ -36,8 +36,8 @@ export function DesktopNowPlaying() {
     function escape(event: KeyboardEvent) {
       if (event.key === 'Escape' && !document.querySelector('[role="dialog"]')) { event.preventDefault(); close(); }
     }
-    document.addEventListener('keydown', escape);
-    return () => document.removeEventListener('keydown', escape);
+    document.addEventListener('keydown', escape, true);
+    return () => document.removeEventListener('keydown', escape, true);
   }, [close]);
   if (!track) return null;
   const size = width >= 1100 ? 340 : 280;
