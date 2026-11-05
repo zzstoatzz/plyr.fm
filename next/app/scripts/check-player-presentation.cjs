@@ -75,6 +75,7 @@ async function setup(browser, width, theme, selected = track, scale = 1, height 
     else if (url.pathname === '/v1/albums' || url.pathname === '/v1/playlists') body = { object: 'list', data: [], has_more: false };
     else if (url.pathname.endsWith('/likes')) body = { object: 'list', data: [], has_more: false };
     else if (url.pathname === '/v1/tracks/' + selected.id) body = selected;
+    else if (url.pathname === '/v1/tags') body = { object: 'list', data: [], has_more: false };
     else if (url.pathname === '/v1/tracks') body = { object: 'list', data: [selected], has_more: false };
     else if (url.pathname === '/v1/charts/tracks') body = { period: 'week', data: [] };
     await route.fulfill({ json: body });
@@ -219,6 +220,7 @@ async function run(browser, width, theme) {
       assert.equal(await header.count(), 1, 'Floating desktop player does not use full-screen swipe');
     }
     await page.getByRole('button', { name: 'Close', exact: true }).click();
+    await header.waitFor({ state: 'detached' });
     assert.equal(await header.count(), 0);
     await open();
     await page.keyboard.press('Escape');

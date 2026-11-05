@@ -13,10 +13,14 @@ async function run(browser, width) {
     const data = artist ? [track] : [...Array.from({ length: 20 }, (_, i) => ({ ...track, id: track.id + i, metadata: { ...track.metadata, title: `Earlier recording ${i + 1}` } })), track];
     await route.fulfill({ json: { object: 'list', data, has_more: false } });
   });
-  const scrollPosition = () => page.getByText('Latest', { exact: true }).evaluate(node => {
-    while (node && !(node.scrollHeight > node.clientHeight && /auto|scroll/.test(getComputedStyle(node).overflowY))) node = node.parentElement;
-    return node?.scrollTop ?? -1;
-  });
+  const scrollPosition = async () => {
+    const feed = page.getByTestId('home-feed').filter({ visible: true });
+    const target = await feed.count() ? feed.last() : page.getByRole('link').filter({ hasText: track.metadata.title }).last();
+    return target.evaluate(node => {
+      while (node && !(node.clientHeight > 100 && node.scrollHeight > node.clientHeight + 100 && /auto|scroll/.test(getComputedStyle(node).overflowY))) node = node.parentElement;
+      return node?.scrollTop ?? -1;
+    });
+  };
   const continuity = async () => {
     const before = await page.evaluate(() => window.__navigationMedia.currentTime);
     await page.waitForTimeout(200);
