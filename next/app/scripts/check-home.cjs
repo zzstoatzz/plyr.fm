@@ -4,13 +4,22 @@ const path = require('node:path');
 const { createRequire } = require('node:module');
 
 const requireFrontend = createRequire(path.resolve(__dirname, '../../../frontend/package.json'));
-const { chromium } = process.env.PLAYWRIGHT_MODULE ? require(process.env.PLAYWRIGHT_MODULE) : requireFrontend('playwright');
+const { chromium, webkit } = process.env.PLAYWRIGHT_MODULE ? require(process.env.PLAYWRIGHT_MODULE) : requireFrontend('playwright');
 const origin = process.env.HOME_URL || 'https://next.plyr.fm';
 const output = process.env.HOME_OUTPUT || `/tmp/plyr-home-${Date.now()}`;
 
+async function expectTrackLinks(page, tracks) {
+  const paths = tracks.map(track => `/track/${encodeURIComponent(track.id)}`);
+  await page.waitForFunction(expected => JSON.stringify([...document.querySelector('[data-testid="home-feed"]').querySelectorAll('a')].map(link => new URL(link.href).pathname)) === JSON.stringify(expected), paths);
+}
+
 async function main() {
   await fs.mkdir(output, { recursive: true });
-  const browser = await chromium.launch({ channel: 'chrome', headless: true });
+  const browserName = process.env.HOME_BROWSER || 'chromium';
+  assert.ok(['chromium', 'webkit'].includes(browserName), 'HOME_BROWSER must be chromium or webkit');
+  const browser = browserName === 'webkit'
+    ? await webkit.launch({ executablePath: process.env.WEBKIT_EXECUTABLE, headless: true })
+    : await chromium.launch({ channel: 'chrome', headless: true });
   const reports = [];
   try {
     for (const width of [390, 1280]) for (const theme of ['light', 'dark']) {
@@ -37,16 +46,18 @@ async function main() {
       const errors = [];
       page.on('pageerror', error => errors.push(error.message));
       const started = Date.now();
+      const initialResponse = page.waitForResponse(response => new URL(response.url()).pathname === '/v1/tracks' && !new URL(response.url()).searchParams.has('tag'));
       await page.goto(origin);
+      const initial = await (await initialResponse).json();
       await page.getByRole('button', { name: 'Refresh tracks', exact: true }).waitFor();
       await page.getByRole('button', { name: /Top tracks period:/ }).waitFor();
       if (process.env.HOME_FAIL_TAG_ONCE === '1') {
         await page.getByRole('button', { name: 'Retry', exact: true }).waitFor();
         await page.getByTestId('home-feed').getByRole('link').first().waitFor();
-        const rows = await page.getByTestId('home-feed').getByRole('link').count();
+        await expectTrackLinks(page, initial.data);
         await page.getByRole('button', { name: 'Retry', exact: true }).click();
         await page.getByRole('button', { name: /^Filter by / }).first().waitFor();
-        assert.equal(await page.getByTestId('home-feed').getByRole('link').count(), rows);
+        await expectTrackLinks(page, initial.data);
         assert.equal(tagReads, 2);
       }
       await page.getByRole('button', { name: /^Filter by / }).first().waitFor();
@@ -63,22 +74,23 @@ async function main() {
       const request = page.waitForRequest(request => new URL(request.url()).pathname === '/v1/tracks' && new URL(request.url()).searchParams.getAll('tag').includes(name));
       await chip.click();
       const filteredRequest = await request;
+      let filteredTrackIds = [];
       if (process.env.HOME_TAG_FIXTURE !== '1') {
         const response = await filteredRequest.response();
         assert.equal(response.status(), 200);
         const body = await response.json();
-        for (const track of body.data) await page.getByTestId('home-feed').getByText(track.metadata.title, { exact: true }).first().waitFor();
-        await page.waitForFunction(expected => document.querySelector('[data-testid="home-feed"]').querySelectorAll('a').length === expected, body.data.length);
+        await expectTrackLinks(page, body.data);
+        filteredTrackIds = body.data.map(track => track.id);
       }
-      const cleared = page.waitForResponse(response => new URL(response.url()).pathname === '/v1/tracks' && !new URL(response.url()).searchParams.has('tag'));
       await page.getByRole('button', { name: 'Clear tag filters', exact: true }).click();
-      await cleared;
+      await page.getByRole('button', { name: 'Clear tag filters', exact: true }).waitFor({ state: 'hidden' });
+      await expectTrackLinks(page, initial.data);
       assert.deepEqual(errors, []);
-      reports.push({ width, theme, elapsedMs: Date.now() - started, overflow, errors, screenshot, targets, tagRetry: process.env.HOME_FAIL_TAG_ONCE === '1' });
+      reports.push({ width, theme, elapsedMs: Date.now() - started, overflow, errors, screenshot, targets, filteredTrackIds, restoredTrackIds: initial.data.map(track => track.id), tagRetry: process.env.HOME_FAIL_TAG_ONCE === '1' });
       await context.unrouteAll({ behavior: 'wait' });
       await context.close();
     }
-    await fs.writeFile(path.join(output, 'report.json'), JSON.stringify({ tagCatalogFixture: process.env.HOME_TAG_FIXTURE === '1', api: process.env.HOME_API || 'public Next', reports }, null, 2));
+    await fs.writeFile(path.join(output, 'report.json'), JSON.stringify({ browser: browserName, tagCatalogFixture: process.env.HOME_TAG_FIXTURE === '1', api: process.env.HOME_API || 'public Next', reports }, null, 2));
     console.log(output);
   } finally { await browser.close(); }
 }

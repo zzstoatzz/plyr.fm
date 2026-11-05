@@ -83,3 +83,28 @@ follow nor artist responses were fixtures for this check. This covers the real
 network intersection separately from the disposable OAuth browser layout check.
 The latter still uses explicit graph/read fixtures and does not impersonate the
 public account's session.
+
+WebKit also passed all four width/theme cases against the real local API, with
+screenshots inspected and no overflow/browser exceptions. An initial harness wait
+incorrectly demanded a new network response when clearing tags; the feed and
+selection had already reset correctly. The harness now checks the exact restored
+track links, permitting browser reuse of the completed read. Use
+`HOME_BROWSER=webkit` and, when needed, `WEBKIT_EXECUTABLE` for this engine. These
+are desktop WebKit phone viewports, not a physical iPhone/Safari verification.
+
+The WebKit run used the built client and real API with:
+
+```sh
+PLAYWRIGHT_MODULE=/tmp/next-web-check/node_modules/playwright \
+HOME_BROWSER=webkit \
+WEBKIT_EXECUTABLE="$HOME/Library/Caches/ms-playwright/webkit-2359/pw_run.sh" \
+HOME_API=http://127.0.0.1:8042 HOME_DIST=/tmp/plyr-next-home/next/app/dist \
+HOME_OUTPUT=/tmp/home-webkit-identity node next/app/scripts/check-home.cjs
+```
+
+The harness checks exact ordered track-link identities against the real filtered
+response and initial unfiltered response. Clearing a chip must restore those
+identities and remove the selected filter; another network response is optional.
+For the injected tag-catalog failure and large-text Chromium matrix, the same
+command used `HOME_BROWSER=chromium HOME_FAIL_TAG_ONCE=1 HOME_SCALE=1.4`, without
+`WEBKIT_EXECUTABLE`. The existing feed identities must survive the retry.
