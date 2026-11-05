@@ -108,3 +108,25 @@ identities and remove the selected filter; another network response is optional.
 For the injected tag-catalog failure and large-text Chromium matrix, the same
 command used `HOME_BROWSER=chromium HOME_FAIL_TAG_ONCE=1 HOME_SCALE=1.4`, without
 `WEBKIT_EXECUTABLE`. The existing feed identities must survive the retry.
+
+## Published verification
+
+After the Home web deployment and the accompanying API deployment succeeded,
+Chromium and WebKit each passed the 390/1280px, light/dark matrix against published
+`next.plyr.fm`. `HOME_DIST`, `HOME_API`, tag fixtures and injected failures were
+unset. All eight screenshots were inspected: no horizontal page overflow or
+browser exceptions, with period/tag touch targets at least 44px. Each real
+electronic filter rendered the exact 30 returned track identities, and clearing
+it restored the exact 30 initial unfiltered identities.
+
+Browser request-to-response measurements were 220–378ms for the initial track
+page, 132–206ms for charts and 148–241ms for tags. Complete navigation, artwork
+settling, filtering and clearing took 3.3–5.0 seconds. That includes deliberate
+screenshot settling and interactions; it is not a first-paint measurement.
+
+The actual public follow helper and published artist API also resolved 591
+follows in two batches to 49 visible music artists in 1.29 seconds, without graph
+or artist-response fixtures. The published UI matrix was anonymous; signed-in
+card rendering remains separately covered by the disposable OAuth/browser
+fixture. These desktop Chromium/WebKit viewports do not establish physical
+iPhone/Safari performance or behavior under mobile CPU/network throttling.
