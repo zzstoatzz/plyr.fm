@@ -4,7 +4,7 @@ const http = require('node:http');
 const { createRequire } = require('node:module');
 const path = require('node:path');
 const requireFrontend = createRequire(path.resolve(__dirname, '../../../frontend/package.json'));
-const { chromium } = process.env.PLAYWRIGHT_MODULE ? require(process.env.PLAYWRIGHT_MODULE) : requireFrontend('playwright');
+const { chromium, webkit } = process.env.PLAYWRIGHT_MODULE ? require(process.env.PLAYWRIGHT_MODULE) : requireFrontend('playwright');
 const dist = process.env.PLAYER_DIST || path.resolve(__dirname, '../dist');
 const output = process.env.PLAYER_OUTPUT || '/tmp/plyr-player-presentation';
 fs.mkdirSync(output, { recursive: true });
@@ -34,6 +34,10 @@ const screenshot = (page, name) => page.screenshot({ path: path.join(output, `${
 
 async function setup(browser, width, theme, selected = track, scale = 1, height = 900) {
   const context = await browser.newContext({ viewport: { width, height }, hasTouch: true, colorScheme: theme });
+  if (process.env.PLAYER_FORCE_FALLBACK) await context.addInitScript(() => {
+    const supports = CSS.supports.bind(CSS);
+    CSS.supports = (...args) => args.join(' ').includes('pan-down') ? false : supports(...args);
+  });
   await context.addInitScript(({ theme, scale }) => localStorage.setItem('plyr-next:prefs', JSON.stringify({ theme, scale, playThrough: true })), { theme, scale });
   await context.route('**/*', route => ['GET', 'HEAD', 'OPTIONS'].includes(route.request().method()) ? route.continue() : route.abort());
   await context.route('https://player-fixture.invalid/**', async route => {
@@ -66,6 +70,9 @@ async function setup(browser, width, theme, selected = track, scale = 1, height 
     let body = {};
     if (url.pathname.endsWith('/playback')) body = { object: 'playback', track_id: selected.id, record: selected.record,
       availability: { status: 'available', delivery: { url: mediaUrl, media_type: 'audio/wav' } } };
+    else if (url.pathname.startsWith('/v1/artists/') && url.pathname.endsWith('/metrics')) body = { totals: { plays: 12, tracks: 1, duration_seconds: 236 }, top_track: null };
+    else if (url.pathname.startsWith('/v1/artists/')) body = { object: 'artist', did: selected.artist.did, handle: 'fixture.test', display_name: 'jack', bio: null, avatar_url: null, support_url: null };
+    else if (url.pathname === '/v1/albums' || url.pathname === '/v1/playlists') body = { object: 'list', data: [], has_more: false };
     else if (url.pathname.endsWith('/likes')) body = { object: 'list', data: [], has_more: false };
     else if (url.pathname === '/v1/tracks/' + selected.id) body = selected;
     else if (url.pathname === '/v1/tracks') body = { object: 'list', data: [selected], has_more: false };
@@ -138,6 +145,7 @@ async function run(browser, width, theme) {
     for (const control of await page.getByRole('button', { name: 'Pause', exact: true }).all()) assert.equal(await control.isEnabled(), true);
     await plainControls(page);
     await screenshot(page, name + '-mini');
+    await page.evaluate(() => { window.__sameMedia = window.__playerPresentationMedia; });
     const open = async () => {
       await page.getByRole('button', { name: 'Open now playing', exact: true }).click();
       await page.getByTestId('now-playing-dismiss-region').waitFor();
@@ -176,12 +184,34 @@ async function run(browser, width, theme) {
     assert.ok(value > beforeScrub + 30, 'Touch drag must actually seek media beyond ordinary playback');
     const art = await page.getByTestId('now-playing-artwork').boundingBox();
     await gesture(page, cdp, { x: art.x + art.width / 2, y: art.y + art.height / 2 }, 0, 140);
-    assert.equal(await header.count(), 1, 'Artwork/body motion must not dismiss');
+    if (width < 600) {
+      const continuous = async () => {
+        assert.equal(await header.count(), 0, 'Content pull collapses to dock');
+        await page.getByRole('button', { name: 'Open now playing', exact: true }).waitFor();
+        const before = await page.evaluate(() => window.__sameMedia.currentTime);
+        await page.waitForTimeout(300);
+        assert.equal(await page.evaluate(before => window.__sameMedia === window.__playerPresentationMedia && !window.__sameMedia.paused && window.__sameMedia.currentTime > before, before), true, 'Collapse preserves playing media');
+      };
+      await continuous(); await open();
+      for (const target of ['now-playing-title', 'now-playing-time']) {
+        const body = await page.getByTestId(target).boundingBox();
+        await gesture(page, cdp, { x: body.x + body.width / 2, y: body.y + body.height / 2 }, 0, 150);
+        await continuous(); await open();
+      }
+      await gesture(page, cdp, { x: width / 2, y: 750 }, 0, 140);
+      await continuous(); await open();
+      const pause = await page.getByTestId('now-playing-scroll').getByRole('button', { name: 'Pause', exact: true }).boundingBox();
+      await gesture(page, cdp, { x: pause.x + pause.width / 2, y: pause.y + pause.height / 2 }, 0, 150);
+      await remains();
+      const currentScrub = await slider.boundingBox();
+      await gesture(page, cdp, { x: currentScrub.x + currentScrub.width / 2, y: currentScrub.y + currentScrub.height / 2 }, 50, 150);
+      await remains();
+    } else assert.equal(await header.count(), 1, 'Desktop artwork does not dismiss');
     if (width < 600) {
       await gesture(page, cdp, start, 0, 180);
       assert.equal(await header.count(), 0, 'Deliberate top swipe dismisses');
       await open();
-      await gesture(page, cdp, start, 0, 90, { wait: 1, steps: 4 });
+      await gesture(page, cdp, start, 0, 90, { wait: 1, steps: 2 });
       assert.equal(await header.count(), 0, 'A deliberate short fast flick dismisses');
       await open();
     } else {
@@ -194,8 +224,13 @@ async function run(browser, width, theme) {
     await page.keyboard.press('Escape');
     await page.waitForTimeout(300);
     assert.equal(await header.count(), 0, 'onRequestClose remains available');
+    await open();
+    await page.getByTestId('now-playing-scroll').getByRole('link').click();
+    await page.waitForURL('**/u/fixture.test');
+    assert.equal(await header.count(), 0, 'Artist link retains normal tap navigation');
+    assert.equal(await page.evaluate(() => window.__sameMedia === window.__playerPresentationMedia && !window.__sameMedia.paused), true);
     assert.deepEqual(errors, []);
-    console.log(name + ': plain controls, balanced detail, likes, scrub isolation, top swipe thresholds/cancellation/resize and close paths passed');
+    console.log(name + ': plain controls, balanced detail, likes, protected controls/links, body pull, playback continuity, scroll arbitration and cancellation passed');
   } catch (error) {
     await screenshot(page, name + '-failure');
     throw error;
@@ -223,6 +258,25 @@ async function longContent(browser) {
     await gesture(page, cdp, { x: art.x + art.width / 2, y: art.y + art.height / 2 }, 0, -130);
     assert.equal(await header.count(), 1);
     assert.ok(Math.abs((await header.boundingBox()).y - top) < 2);
+    const scroll = page.getByTestId('now-playing-scroll');
+    assert.ok(await scroll.evaluate(node => node.scrollTop) > 20, 'Upward touch scrolls native body');
+    await screenshot(page, '390-dark-short-player-scrolled-scale-1.4');
+    await gesture(page, cdp, { x: 25, y: 280 }, 0, 260);
+    assert.equal(await header.count(), 1, 'Gesture starting scrolled does not dismiss');
+    assert.ok(await scroll.evaluate(node => node.scrollTop) <= 1, 'Downward touch returns body to top');
+    await gesture(page, cdp, { x: 25, y: 280 }, 0, 160);
+    assert.equal(await header.count(), 0, 'Fresh downward pull at top collapses');
+    await page.getByRole('button', { name: 'Open now playing', exact: true }).click();
+    await header.waitFor();
+    await page.waitForTimeout(300);
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: 25, y: 280, id: 1 }] });
+    for (const y of [260, 240, 220, 260, 300, 340, 380, 420, 460]) {
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: 25, y, id: 1 }] });
+      await page.waitForTimeout(30);
+    }
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    await page.waitForTimeout(550);
+    assert.equal(await header.count(), 1, 'Upward intent cannot reverse into dismissal in same touch');
     await page.getByRole('button', { name: 'Track details', exact: true }).scrollIntoViewIfNeeded();
     await screenshot(page, '390-dark-short-player-scrolled-scale-1.4');
     await page.getByRole('button', { name: 'Close', exact: true }).click();
@@ -231,11 +285,47 @@ async function longContent(browser) {
   } finally { await page.unrouteAll({ behavior: 'ignoreErrors' }); await context.close(); }
 }
 
+async function webkitFallback(browser) {
+  const { context, page, errors } = await setup(browser, 390, 'dark');
+  try {
+    assert.equal(await page.evaluate(() => CSS.supports('touch-action', 'pan-x pan-down')), false);
+    await page.getByRole('button', { name: 'Play', exact: true }).click();
+    await page.waitForFunction(() => window.__playerPresentationMedia?.currentTime > 0);
+    await page.getByRole('button', { name: 'Open now playing', exact: true }).click();
+    const art = page.getByTestId('now-playing-artwork');
+    await art.waitFor(); await page.waitForTimeout(300);
+    const cancelled = await art.evaluate(async target => {
+      const point = (y) => ({ identifier: 1, target, clientX: 195, clientY: y, pageX: 195, pageY: y });
+      const send = (type, y) => {
+        const touches = type === 'touchend' ? [] : [point(y)];
+        const event = new Event(type, { bubbles: true, cancelable: true });
+        Object.defineProperties(event, { touches: { value: touches }, targetTouches: { value: touches }, changedTouches: { value: [point(y)] } });
+        target.dispatchEvent(event);
+        return event.defaultPrevented;
+      };
+      send('touchstart', 200);
+      const cancelled = [];
+      for (let y = 210; y <= 360; y += 10) {
+        cancelled.push(send('touchmove', y));
+        await new Promise(resolve => setTimeout(resolve, 25));
+      }
+      send('touchend', 360);
+      return cancelled;
+    });
+    await page.waitForTimeout(600);
+    assert.ok(cancelled.some(Boolean), 'WebKit fallback cancels eligible native scrolling');
+    assert.equal(await page.getByTestId('now-playing-dismiss-region').count(), 0);
+    assert.equal(await page.evaluate(() => !window.__playerPresentationMedia.paused), true);
+    assert.deepEqual(errors, []);
+    console.log('WebKit fallback: actual playback and dispatched TouchEvent downward collapse passed; no physical Safari touch claim');
+  } finally { await page.unrouteAll({ behavior: 'ignoreErrors' }); await context.close(); }
+}
+
 (async () => {
   if (!process.env.PLAYER_URL) await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   origin = process.env.PLAYER_URL || `http://127.0.0.1:${server.address().port}`;
   console.log(`Player UI source: ${origin}; catalog and media are fixtures; real API/PDS mutations blocked`);
-  const browser = await chromium.launch({ channel: 'chrome' });
-  try { for (const width of [390, 1280]) for (const theme of ['light', 'dark']) await run(browser, width, theme); await longContent(browser); }
+  const browser = process.env.PLAYER_WEBKIT ? await webkit.launch({ executablePath: process.env.WEBKIT_EXECUTABLE }) : await chromium.launch({ channel: 'chrome' });
+  try { if (process.env.PLAYER_WEBKIT) { await webkitFallback(browser); return; } for (const width of [390, 1280]) for (const theme of ['light', 'dark']) await run(browser, width, theme); await longContent(browser); }
   finally { await browser.close(); if (server.listening) await new Promise(resolve => server.close(resolve)); }
 })().catch(error => { console.error(error); process.exitCode = 1; if (server.listening) server.close(); });

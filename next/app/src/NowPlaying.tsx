@@ -34,6 +34,7 @@ export function NowPlaying({ track, close }: { track: Track; close: () => void }
   const [scrub, setScrub] = useState<{ id: string; seconds: number } | null>(null);
   const compact = width < 600;
   const dismiss = usePlayerDismiss(compact, width, height, close);
+  const scrollTouch = { touchAction: dismiss.directionalTouch && dismiss.atTop ? 'pan-x pan-down' : 'pan-x pan-y', cursor: 'auto' } as const;
   const sideBySide = width >= 800;
   const panelWidth = sideBySide ? Math.min(width - 80, 748) : 420;
   const controlRoom = 370 + 64 * (theme.scale - 1);
@@ -47,69 +48,72 @@ export function NowPlaying({ track, close }: { track: Track; close: () => void }
   const caption = { color: theme.muted, fontFamily: theme.fontFamily, fontSize: 13 * theme.scale };
 
   return <Modal visible transparent animationType="fade" onRequestClose={close}>
-    <View style={styles.backdrop}>
+    <View ref={dismiss.panelRef} style={styles.backdrop}>
       {!compact && <Pressable style={StyleSheet.absoluteFill} accessibilityLabel="Dismiss now playing" onPress={close} />}
-      <AnimatedSafeAreaView accessibilityViewIsModal edges={compact ? ['top', 'bottom'] : []}
+      <AnimatedSafeAreaView {...dismiss.panHandlers} accessibilityViewIsModal edges={compact ? ['top', 'bottom'] : []}
         style={[{ transform: [{ translateY: dismiss.translation }] }, styles.panel, compact ? styles.full : [styles.floating, { maxWidth: panelWidth }], { backgroundColor: theme.background }]}>
         <View style={[styles.header, { borderColor: theme.surface }]}>
-          {compact && <PlayerControl icon={ChevronDown} label="Close" onPress={close} />}
-          <View {...dismiss.panHandlers} testID="now-playing-dismiss-region" style={[styles.dismissRegion, Platform.OS === 'web' && compact && touchHeader]}>
+          {compact && <View {...dismiss.protect}><PlayerControl icon={ChevronDown} label="Close" onPress={close} /></View>}
+          <View testID="now-playing-dismiss-region" style={[styles.dismissRegion, Platform.OS === 'web' && compact && touchHeader]}>
           <Text accessibilityRole="header"
             style={[styles.headerTitle, compact && styles.centerTitle,
               { color: theme.text, fontSize: 16 * theme.scale, fontFamily: theme.fontFamily }]}>Now playing</Text>
           </View>
-          {compact ? <View style={styles.headerSpacer} /> : <PlayerControl icon={X} label="Close" onPress={close} />}
+          {compact ? <View style={styles.headerSpacer} /> : <View {...dismiss.protect}><PlayerControl icon={X} label="Close" onPress={close} /></View>}
         </View>
-        <ScrollView contentContainerStyle={[styles.content, sideBySide && styles.desktopContent]} alwaysBounceVertical={false}>
-          <View testID="now-playing-artwork" style={styles.art}>
-            <Cover uri={track.media.artwork?.url} size={artwork} radius={16} />
-          </View>
-          <View style={[styles.body, sideBySide ? styles.desktopBody : { width: artwork }]}>
-            <View style={styles.meta}>
-              <Text accessibilityRole="header" accessibilityLabel={track.metadata.title} numberOfLines={2}
-                style={{ lineHeight: 30 * theme.scale, color: theme.text, fontFamily: theme.fontFamily,
-                  fontSize: 25 * theme.scale, fontWeight: '800', letterSpacing: -0.4 }}>
-                {track.metadata.title}
-              </Text>
-              <Pressable accessibilityRole="link" style={styles.artist} onPress={() => {
-                close();
-                router.push({ pathname: '/u/[handle]', params: { handle: track.artist.profile.handle || track.artist.did } });
-              }}>
-                <Text numberOfLines={1} style={{ ...caption, fontSize: 15 * theme.scale }}>{artistName(track)}</Text>
-              </Pressable>
+        <View {...dismiss.contentStartHandlers} style={compact ? styles.scrollRegion : undefined}>
+          <ScrollView testID="now-playing-scroll" onScroll={dismiss.onScroll} scrollEventThrottle={16} scrollEnabled={!dismiss.dragging}
+            style={Platform.OS === 'web' && compact ? scrollTouch : undefined} contentContainerStyle={[styles.content, sideBySide && styles.desktopContent]} alwaysBounceVertical={false}>
+            <View testID="now-playing-artwork" style={styles.art}>
+              <Cover uri={track.media.artwork?.url} size={artwork} radius={16} />
             </View>
-            <View>
-              <Slider accessibilityLabel="Playback position" minimumValue={0} maximumValue={duration || 1}
-                value={position} minimumTrackTintColor={theme.accent} maximumTrackTintColor={theme.surface}
-                thumbTintColor={theme.accent} disabled={!duration || !!error}
-                onSlidingStart={updateScrub} onValueChange={updateScrub}
-                onSlidingComplete={(seconds) => { player.seek(seconds); setScrub(null); }} />
-              <View style={styles.time}>
-                <Text style={[caption, styles.numeric]}>{time(position)}</Text>
-                <Text accessibilityLiveRegion="polite" style={[caption, styles.status]}>
-                  {error ? 'Couldn’t play this track' : ''}
+            <View style={[styles.body, sideBySide ? styles.desktopBody : { width: artwork }]}>
+              <View style={styles.meta}>
+                <Text testID="now-playing-title" accessibilityRole="header" accessibilityLabel={track.metadata.title} numberOfLines={2}
+                  style={{ lineHeight: 30 * theme.scale, color: theme.text, fontFamily: theme.fontFamily,
+                    fontSize: 25 * theme.scale, fontWeight: '800', letterSpacing: -0.4 }}>
+                  {track.metadata.title}
                 </Text>
-                <Text style={[caption, styles.numeric]}>{time(duration)}</Text>
+                <View {...dismiss.protect} style={{ alignSelf: 'flex-start', maxWidth: '100%' }}><Pressable accessibilityRole="link" style={styles.artist} onPress={() => {
+                  close();
+                  router.push({ pathname: '/u/[handle]', params: { handle: track.artist.profile.handle || track.artist.did } });
+                }}>
+                  <Text numberOfLines={1} style={{ ...caption, fontSize: 15 * theme.scale }}>{artistName(track)}</Text>
+                </Pressable></View>
+              </View>
+              <View>
+                <View {...dismiss.protect}><Slider accessibilityLabel="Playback position" minimumValue={0} maximumValue={duration || 1}
+                  value={position} minimumTrackTintColor={theme.accent} maximumTrackTintColor={theme.surface}
+                  thumbTintColor={theme.accent} disabled={!duration || !!error}
+                  onSlidingStart={updateScrub} onValueChange={updateScrub}
+                  onSlidingComplete={(seconds) => { player.seek(seconds); setScrub(null); }} /></View>
+                <View testID="now-playing-time" style={styles.time}>
+                  <Text style={[caption, styles.numeric]}>{time(position)}</Text>
+                  <Text accessibilityLiveRegion="polite" style={[caption, styles.status]}>
+                    {error ? 'Couldn’t play this track' : ''}
+                  </Text>
+                  <Text style={[caption, styles.numeric]}>{time(duration)}</Text>
+                </View>
+              </View>
+              <View style={styles.transport}>
+                <View {...dismiss.protect}><PlayerControl icon={SkipBack} label="Previous" onPress={player.previous} /></View>
+                <View {...dismiss.protect}><PlayerControl icon={playing ? Pause : Play} label={playing ? 'Pause' : 'Play'}
+                  onPress={player.toggle} primary large busy={player.loading} /></View>
+                <View {...dismiss.protect}><PlayerControl icon={SkipForward} label="Next" onPress={() => void player.next()} /></View>
+              </View>
+              <View style={[styles.utilities, { borderColor: theme.surface }]}>
+                <View {...dismiss.protect}><Pressable accessibilityRole="button" accessibilityLabel="Queue" style={styles.utility}
+                  onPress={() => { close(); router.push('/queue'); }}>
+                  <ListMusic size={18} color={theme.muted} /><Text style={caption}>Queue</Text>
+                </Pressable></View>
+                <View {...dismiss.protect}><Pressable accessibilityRole="button" accessibilityLabel="Track details" style={styles.utility}
+                  onPress={() => { close(); router.push(`/track/${track.id}`); }}>
+                  <Info size={18} color={theme.muted} /><Text style={caption}>Track details</Text>
+                </Pressable></View>
               </View>
             </View>
-            <View style={styles.transport}>
-              <PlayerControl icon={SkipBack} label="Previous" onPress={player.previous} />
-              <PlayerControl icon={playing ? Pause : Play} label={playing ? 'Pause' : 'Play'}
-                onPress={player.toggle} primary large busy={player.loading} />
-              <PlayerControl icon={SkipForward} label="Next" onPress={() => void player.next()} />
-            </View>
-            <View style={[styles.utilities, { borderColor: theme.surface }]}>
-              <Pressable accessibilityRole="button" accessibilityLabel="Queue" style={styles.utility}
-                onPress={() => { close(); router.push('/queue'); }}>
-                <ListMusic size={18} color={theme.muted} /><Text style={caption}>Queue</Text>
-              </Pressable>
-              <Pressable accessibilityRole="button" accessibilityLabel="Track details" style={styles.utility}
-                onPress={() => { close(); router.push(`/track/${track.id}`); }}>
-                <Info size={18} color={theme.muted} /><Text style={caption}>Track details</Text>
-              </Pressable>
-            </View>
-          </View>
-        </ScrollView>
+          </ScrollView>
+        </View>
       </AnimatedSafeAreaView>
     </View>
   </Modal>;
@@ -125,6 +129,7 @@ const styles = StyleSheet.create({
   headerTitle: { fontWeight: '700' },
   centerTitle: { textAlign: 'center' },
   headerSpacer: { width: 44 },
+  scrollRegion: { flex: 1, minHeight: 0 },
   content: { paddingHorizontal: 20, paddingTop: 20, paddingBottom: 16, gap: 20, alignItems: 'center' },
   desktopContent: { flexDirection: 'row', alignItems: 'center', padding: 24, gap: 28 },
   art: { alignItems: 'center' },
