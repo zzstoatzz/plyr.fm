@@ -47,6 +47,15 @@ plyr.fm should become:
 
 ### November 2026
 
+#### Next listening controls and structure review (November 5)
+
+Home now supports body playback and independent like/queue actions. Artist avatar
+fallbacks, navigation, icons and documented keyboard shortcuts are live on Next
+(#2402–#2405), including a fix for delayed-state music-to-radio handoff. Production
+was not promoted. The [structure review](docs/research/2026-11-05-next-structure-review.md)
+records live verification and proposes scoped tooling, client data/playback ownership,
+feature organization and backend adapter cleanups. Those cleanups are proposals.
+
 #### Next rewrite checkpoint (November 4)
 
 Next now runs a Zig appview with independently verified PDS projections and an
