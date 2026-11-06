@@ -36,14 +36,17 @@ pub fn build(b: *std.Build) void {
     root_module.addAnonymousImport("migration_0034_tag_normalization", .{
         .root_source_file = b.path("migrations/0034_normalize_derived_tags.sql"),
     });
-    root_module.addImport("zat", b.dependency("zat", .{
+    const zat_module = b.dependency("zat", .{
         .target = target,
         .optimize = optimize,
-    }).module("zat"));
-    root_module.addImport("websocket", b.dependency("websocket", .{
+    }).module("zat");
+    const websocket_module = b.dependency("websocket", .{
         .target = target,
         .optimize = optimize,
-    }).module("websocket"));
+    }).module("websocket");
+    zat_module.addImport("websocket", websocket_module);
+    root_module.addImport("zat", zat_module);
+    root_module.addImport("websocket", websocket_module);
     const pg_dependency = if (openssl_include_path) |include_path|
         b.dependency("pg", .{
             .target = target,
