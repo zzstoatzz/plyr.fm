@@ -1,6 +1,7 @@
 const std = @import("std");
 const albums = @import("albums.zig");
 const artists = @import("artists.zig");
+const stats = @import("stats.zig");
 const charts = @import("charts.zig");
 const playlists = @import("playlists.zig");
 const health = @import("health.zig");
@@ -33,6 +34,7 @@ pub const prefix = "/v1";
 
 pub const App = struct {
     io: std.Io,
+    stats_store: ?@import("../internal/metrics/platform_stats_store.zig").Store = null,
     track_store: ?TrackStore,
     track_chart_store: ?TrackChartStore = null,
     like_store: ?LikeQueryStore = null,
@@ -141,6 +143,9 @@ pub fn handle(
             app.cors,
             request_id,
         );
+    } else if (mem.eql(u8, path, prefix ++ "/stats")) {
+        if (request.head.method != .GET) return response.apiError(request, .method_not_allowed, request_id, app.cors);
+        try stats.get(request, allocator, app.stats_store, app.cors, request_id);
     } else if (mem.eql(u8, path, prefix ++ "/tracks")) {
         if (request.head.method != .GET) {
             try response.apiError(request, .method_not_allowed, request_id, app.cors);

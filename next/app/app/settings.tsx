@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Platform, Pressable, Switch, View } from 'react-native';
+import ChartNoAxesColumn from 'lucide-react-native/icons/chart-no-axes-column';
 import Check from 'lucide-react-native/icons/check';
 import Palette from 'lucide-react-native/icons/palette';
 import Headphones from 'lucide-react-native/icons/headphones';
@@ -54,6 +55,7 @@ export default function Settings() {
         <SettingsRow label="sign out" destructive onPress={() => void logout().catch(() => setError('Could not revoke this session.'))} />
       </> : <SettingsRow label="sign in" detail="Settings are saved on this device. Sign in to save them with your account." href={login} />}
     </SettingsSection>
+    <SettingsSection title="plyr.fm" icon={ChartNoAxesColumn}><SettingsRow label="stats" detail="tracks, artists and listening across Next" href="/stats" /></SettingsSection>
     {error && <Copy live>{error}</Copy>}
     {savingHelp && <Sheet title="save preferences across devices" close={() => setSavingHelp(false)}>
       <Copy>Your appearance and playback settings are currently saved on this device. Sign in and allow plyr.fm to save them with your account so you can use them on other devices.</Copy>

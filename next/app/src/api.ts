@@ -156,6 +156,7 @@ interface TrackLike {
 }
 
 export const api = {
+  stats: () => get<{ object: 'platform_stats'; tracks: number; artists: number; duration_seconds: number; plays: number; updated_at_ms: number }>('/v1/stats'),
 	recordPlay: async (play: QualifiedPlay): Promise<PlayReceipt> => {
 		const url = new URL(`${API_URL}/v1/tracks/${encodeURIComponent(play.trackId)}/plays`);
 		url.searchParams.set('occurrence', play.occurrenceId);
