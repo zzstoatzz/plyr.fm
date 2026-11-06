@@ -1,5 +1,5 @@
 import NativeSlider, { type SliderProps } from '@react-native-community/slider';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useAppearance } from './appearance';
 import type { KeyDownEvent } from 'react-native';
 
@@ -7,10 +7,13 @@ export default function Slider(props: SliderProps) {
   const theme = useAppearance();
   const { minimumValue = 0, maximumValue = 1, value = 0, disabled, onValueChange, onSlidingStart, onSlidingComplete } = props;
   const [current, setCurrent] = useState(value);
-  useEffect(() => setCurrent(value), [value]);
-  return <NativeSlider minimumTrackTintColor={theme.accent} maximumTrackTintColor={theme.border} thumbTintColor={theme.accent} {...props} value={current} tabIndex={disabled ? -1 : 0}
+  const gesture = useRef<number | null>(null);
+  useEffect(() => { if (gesture.current === null) setCurrent(value); }, [value]);
+  return <NativeSlider minimumTrackTintColor={theme.accent} maximumTrackTintColor={theme.border} thumbTintColor={theme.accent} {...props} value={gesture.current ?? value} tabIndex={disabled ? -1 : 0}
     aria-valuemin={minimumValue} aria-valuemax={maximumValue} aria-valuenow={current} aria-disabled={disabled}
     onValueChange={next => { setCurrent(next); onValueChange?.(next); }}
+    onSlidingStart={next => { gesture.current = value; setCurrent(next); onSlidingStart?.(next); }}
+    onSlidingComplete={next => { gesture.current = null; setCurrent(next); onSlidingComplete?.(next); }}
     {...{ onKeyDown: (event: KeyDownEvent) => {
       if (disabled) return;
       const key = event.nativeEvent.key;
