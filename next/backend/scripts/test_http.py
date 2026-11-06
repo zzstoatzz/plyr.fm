@@ -167,6 +167,12 @@ def main() -> None:
             assert status == 404, (gone_path, gone_method, status)
             assert gone["error"]["code"] == "not_found"
 
+        status, _, stats = _request(base_url, "/v1/stats")
+        assert status == 503
+        assert stats["error"]["code"] == "service_unavailable"
+        status, _, _ = _request(base_url, "/v1/stats", method="POST", data=b"")
+        assert status == 405
+
         status, _, actor_likes = _request(base_url, "/v1/actors/did:plc:artist/likes")
         assert status == 503
         assert actor_likes["error"]["code"] == "service_unavailable"

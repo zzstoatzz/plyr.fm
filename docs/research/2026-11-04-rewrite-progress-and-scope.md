@@ -8,6 +8,35 @@
 
 This is a source and Git-history audit against the existing Python/Svelte app. Earlier PRs contain browser and service verification; this audit did not repeat those acceptance tests or recheck live reconciliation coverage. “Implemented” below means an implementation is present at this checkpoint. It does not mean production parity or cutover readiness.
 
+## November 6 check-in
+
+The tables below preserve the November 4 checkpoint; they are not a live status
+matrix. Since then, Cycle 1 wired qualified listened-time accounting into the
+player, radio and Jam output, with a retryable receipt outbox. Historical total
+migration and personal listening history are still separate decisions. See
+[play accounting](../internal/architecture/next-play-accounting.md).
+
+The Spaces-backed real-time Jam MVP is now live and verified: shared explicit
+commands, host-only seeking, cross-instance Redis coordination, fresh admission
+on reconnect and real machine-failure recovery. See its
+[completion audit](2026-11-06-jams-live-verification.md) for measured behavior and
+limits, including one Redis primary, bounded membership freshness and deferred
+one-speaker/native acceptance. This replaces the polling-room description below.
+
+Discovery now has tag filters and chart period cycling, the queue has drag
+reordering, and the shared player supports keyboard shortcuts and swipe
+navigation/dismissal. For You, semantic discovery, persistence/backgrounding,
+complete publishing/collection flows and the other recorded parity gaps remain
+work to verify and complete; a visual mockup is not implementation. UI material
+and layout studies are tracked in [#2431](https://github.com/zzstoatzz/plyr.fm/issues/2431).
+
+The new Stats slice establishes four explained public-catalog totals: tracks,
+artists, duration and Next-qualified plays. It excludes private/unlisted/removed
+records and does not import production play totals. Add metrics with explicit
+sources/definitions as the rewrite progresses rather than filling the page with
+unverified parity counts. SDK/MCP, legacy-URL work and cutover rehearsal remain
+deferred per the user's revised scope.
+
 ## Direction
 
 The rewrite changes ownership and application boundaries as well as languages and frameworks.
