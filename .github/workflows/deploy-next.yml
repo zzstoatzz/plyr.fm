@@ -113,9 +113,13 @@ jobs:
       - uses: superfly/flyctl-actions/setup-flyctl@master
       - name: deploy the shared immutable backend image
         working-directory: next/backend
-        run: >-
-          flyctl deploy --config fly.jams.toml --app plyr-jams-next --ha=true
-          --image "registry.fly.io/${FLY_APP}:${GITHUB_SHA}"
+        env:
+          FLY_NEXT_IMAGE_TOKEN: ${{ secrets.FLY_API_TOKEN_ZIG_NEXT }}
+        run: |
+          [[ "$FLY_API_TOKEN" == FlyV1\ * && "$FLY_NEXT_IMAGE_TOKEN" == FlyV1\ * ]]
+          export FLY_API_TOKEN="FlyV1 ${FLY_API_TOKEN#FlyV1 },${FLY_NEXT_IMAGE_TOKEN#FlyV1 }"
+          flyctl deploy --config fly.jams.toml --app plyr-jams-next --ha=true \
+            --image "registry.fly.io/${FLY_APP}:${GITHUB_SHA}"
       - name: keep two warm instances
         run: flyctl scale count 2 --app plyr-jams-next --yes
       - name: check readiness
