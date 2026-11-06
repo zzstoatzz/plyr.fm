@@ -38,7 +38,7 @@ export function TrackEmbed({ track, adult }: { track: Track; adult: boolean }) {
   const play = <Pressable accessibilityRole="button"
     accessibilityLabel={adult ? 'Adult content hidden' : error ? 'Retry playback' : playing ? 'Pause' : 'Play'}
     accessibilityState={{ busy, disabled: adult || busy }} disabled={adult || busy}
-    onPress={() => active ? player.toggle() : player.play(track)}
+    onPress={() => active ? player.setPlaying(!player.status.playing) : player.play(track)}
     style={({ pressed }) => ({ width: 48, height: 48, flexShrink: 0, borderRadius: 10,
       backgroundColor: 'rgba(10, 13, 20, 0.90)', alignItems: 'center', justifyContent: 'center',
       opacity: pressed || adult ? 0.65 : 1 })}>
@@ -65,11 +65,11 @@ export function TrackEmbed({ track, adult }: { track: Track; adult: boolean }) {
   const progress = active && <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8,
     minHeight: 36, backgroundColor: theme.background }}>
     <Slider accessibilityLabel="Seek" style={{ flex: 1, width: 0, minWidth: 0, height: 32 }}
-      minimumValue={0} maximumValue={duration || 1} value={scrub ?? position} disabled={!duration || busy || !!error}
+      minimumValue={0} maximumValue={duration || 1} value={scrub ?? player.seekPreview ?? position} disabled={!player.canSeek || !duration || busy || !!error}
       minimumTrackTintColor={theme.accent} maximumTrackTintColor={theme.border} thumbTintColor={theme.accent}
       onValueChange={setScrub} onSlidingComplete={seconds => { player.seek(seconds); setScrub(null); }} />
     {panelWidth >= 260 && <Text numberOfLines={1} style={{ flexShrink: 0, color: theme.muted, fontSize: 11,
-      fontVariant: ['tabular-nums'] }}>{time(scrub ?? position)} / {time(duration)}</Text>}
+      fontVariant: ['tabular-nums'] }}>{time(scrub ?? player.seekPreview ?? position)} / {time(duration)}</Text>}
   </View>;
 
   const artwork = !adult && track.media.artwork?.url

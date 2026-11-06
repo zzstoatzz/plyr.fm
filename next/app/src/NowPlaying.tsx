@@ -42,7 +42,7 @@ export function NowPlaying({ track, close, navigate }: { track: Track; close: ()
   const artwork = sideBySide ? Math.max(160, Math.min(660, width * 0.48 - 56, height - 144))
     : Math.max(1, Math.min(width - 40, 372, Math.max(128, height - controlRoom)));
   const duration = player.status.duration || track.metadata.duration_seconds || 0;
-  const position = Math.max(0, Math.min(duration, scrub?.id === track.id ? scrub.seconds : player.status.currentTime));
+  const position = Math.max(0, Math.min(duration, scrub?.id === track.id ? scrub.seconds : player.seekPreview ?? player.status.currentTime));
   const updateScrub = (seconds: number) => setScrub({ id: track.id, seconds });
   const playing = player.status.playing;
   const error = player.error || player.status.error;
@@ -83,7 +83,7 @@ export function NowPlaying({ track, close, navigate }: { track: Track; close: ()
               <View>
                 <View {...dismiss.protect}><Slider accessibilityLabel="Playback position" minimumValue={0} maximumValue={duration || 1}
                   value={position} minimumTrackTintColor={theme.accent} maximumTrackTintColor={theme.border}
-                  thumbTintColor={theme.accent} disabled={!duration || !!error}
+                  thumbTintColor={theme.accent} disabled={!player.canSeek || !duration || !!error}
                   onSlidingStart={updateScrub} onValueChange={updateScrub}
                   onSlidingComplete={(seconds) => { player.seek(seconds); setScrub(null); }} /></View>
                 <View testID="now-playing-time" style={styles.time}>
@@ -98,7 +98,7 @@ export function NowPlaying({ track, close, navigate }: { track: Track; close: ()
                 <View {...dismiss.protect}><PlayerControl icon={SkipBack} label="Previous" onPress={player.previous} /></View>
                 {sideBySide && <PlayerSeek />}
                 <View {...dismiss.protect}><PlayerControl icon={playing ? Pause : Play} label={playing ? 'Pause' : 'Play'}
-                  onPress={player.toggle} primary large busy={player.loading} /></View>
+                  onPress={() => player.setPlaying(!playing)} primary large busy={player.loading} /></View>
                 {sideBySide && <PlayerSeek forward />}
                 <View {...dismiss.protect}><PlayerControl icon={SkipForward} label="Next" onPress={() => void player.next()} /></View>
               </View>

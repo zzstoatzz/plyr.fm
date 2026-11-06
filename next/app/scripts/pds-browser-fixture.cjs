@@ -22,12 +22,13 @@ async function fixtureAccounts(names) {
  return accounts;
 }
 async function fixturePage(browser,accounts,options={}) {
+  const origin=options.origin||'https://next.plyr.fm';
   const context=await browser.newContext(options.context);
-  if(options.dist) await context.route('https://next.plyr.fm/**',async route=>{
+  if(options.dist) await context.route(origin+'/**',async route=>{
    const pathname=decodeURIComponent(new URL(route.request().url()).pathname);
    let file=path.join(options.dist,pathname);
    try{if(!(await fs.stat(file)).isFile()) throw Error();}catch{if(pathname.endsWith('.js')) console.log('Missing JS asset',pathname);file=path.join(options.dist,'index.html');}
-   const type=file.endsWith('.js')?'text/javascript':file.endsWith('.json')?'application/json':file.endsWith('.png')?'image/png':'text/html';
+   const type=file.endsWith('.js')?'text/javascript':file.endsWith('.json')?'application/json':file.endsWith('.png')?'image/png':file.endsWith('.jpg')?'image/jpeg':file.endsWith('.ttf')?'font/ttf':file.endsWith('.woff2')?'font/woff2':'text/html';
    await route.fulfill({body:await fs.readFile(file),contentType:type});
   });
   await context.route('https://api.plyr.fm/**',route=>route.request().method()==='POST'?route.abort():route.continue());
@@ -51,9 +52,10 @@ async function fixturePage(browser,accounts,options={}) {
    const response=await fetch('http://localhost:5197'+url.pathname+url.search,{
     method:req.method(),headers,body:req.postDataBuffer() ?? undefined,redirect:'manual'
    });
+   options.onPdsResponse?.(url.pathname,response.status);
    if(response.ok && options.discardPdsResponse?.(url.pathname)) { await response.arrayBuffer(); await route.abort('failed'); return; }
    const location=response.headers.get('location');
-   if(response.status>=300 && response.status<400 && location?.startsWith('https://next.plyr.fm/')) {
+   if(response.status>=300 && response.status<400 && location?.startsWith(origin+'/')) {
     const cookie=response.headers.get('set-cookie');
     await route.fulfill({status:200,contentType:'text/html',headers:cookie?{'set-cookie':cookie}:{},body:'<script>location.replace('+JSON.stringify(location)+')</script>'});
     return;
@@ -64,7 +66,18 @@ async function fixturePage(browser,accounts,options={}) {
    await route.fulfill({status:response.status,body:Buffer.from(await response.arrayBuffer()),headers:out});
   });
   if(options.preferences) await context.addInitScript(({prefs,once})=>{if(!once||!localStorage.getItem('plyr-next:prefs'))localStorage.setItem('plyr-next:prefs',JSON.stringify(prefs));},{prefs:options.preferences,once:options.seedPreferencesOnce});
-  if(options.blockMetricWrites !== false) await context.route('https://api.next.plyr.fm/**', route => route.request().method()==='POST'?route.abort():route.fallback());
+  if(options.blockMetricWrites !== false || origin !== 'https://next.plyr.fm') await context.route('https://api.next.plyr.fm/**', async route => {
+   const request=route.request();
+   if(options.blockMetricWrites !== false && request.method()==='POST') return route.abort();
+   if(origin==='https://next.plyr.fm') return route.fallback();
+   if(request.method()==='OPTIONS') return route.fulfill({status:204,headers:{'access-control-allow-origin':origin,'access-control-allow-methods':'GET, HEAD, OPTIONS'}});
+   if(!['GET','HEAD'].includes(request.method())) return route.fallback();
+   const response=await fetch(request.url(),{method:request.method(),headers:{origin:'https://next.plyr.fm'}});
+   const headers=Object.fromEntries(response.headers);
+   delete headers['content-encoding'];delete headers['content-length'];
+   headers['access-control-allow-origin']=origin;
+   await route.fulfill({status:response.status,headers,body:Buffer.from(await response.arrayBuffer())});
+  });
   await context.addInitScript(()=>{ const Original=window.Audio; window.jamAudio=[]; window.Audio=class extends Original { constructor(...args){super(...args);window.jamAudio.push(this);} }; });
   const page=await context.newPage();
   page.setDefaultTimeout(30000);

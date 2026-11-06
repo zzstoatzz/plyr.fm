@@ -1,3 +1,4 @@
+import { usePressIntent } from './use-press-intent';
 import { Text } from './Text';
 import { useId, useState, type ReactNode, type Ref } from 'react';
 import { Link, type Href } from 'expo-router';
@@ -9,8 +10,9 @@ export function Action({ label, onPress, href, disabled, selected, primary, dest
 }) {
   const theme = useAppearance();
   const [pressed, setPressed] = useState(false);
+  const press = usePressIntent(onPress);
   const control = <Pressable accessibilityRole={href ? 'link' : 'button'} accessibilityState={{ disabled, selected }} aria-pressed={selected}
-    disabled={disabled} onPress={onPress} onPressIn={() => setPressed(true)} onPressOut={() => setPressed(false)}
+    disabled={disabled} onPointerDown={press.onPointerDown} onPress={press.onPress} onPressIn={() => { press.onPressIn(); setPressed(true); }} onPressOut={() => { press.onPressOut(); setPressed(false); }}
     style={{ ...styles.button, backgroundColor: primary ? (destructive ? theme.danger : theme.text) : pressed ? theme.background : theme.surface, opacity: disabled ? 0.5 : 1,
       borderColor: selected ? theme.accent : pressed ? theme.border : 'transparent' }}>
     <Text style={{ color: primary ? theme.background : destructive ? theme.danger : theme.text, fontFamily: theme.fontFamily, fontSize: 14 * theme.scale, fontWeight: '600', textAlign: 'center', flexShrink: 1 }}>{label}</Text>

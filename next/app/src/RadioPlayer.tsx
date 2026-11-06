@@ -143,8 +143,9 @@ export default function Radio({ compact = false, tuned }: { compact?: boolean; t
         <View style={row}>
           <Action primary label={live.station === station ? 'Stop listening' : 'Listen live'} disabled={!song || solo.loading}
             onPress={() => {
-              if (solo.isPlaying()) solo.toggle();
-              live.tune(live.station === station ? null : station);
+              const stopping = live.station === station;
+              if (!stopping) { if (solo.jam) solo.leaveJam(false); else solo.setPlaying(false); }
+              live.tune(stopping ? null : station);
             }} />
           <Action label="Open OBS embed" href={`/embed/radio?station=${station.slug}&autoplay=1`} />
         </View>

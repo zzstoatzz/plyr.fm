@@ -1,44 +1,32 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { useLocalSearchParams } from 'expo-router';
 import { P256Keypair } from '@atproto/crypto';
-import { api, type Track } from '../../src/api';
+import { api } from '../../src/api';
 import { login, useAuth } from '../../src/auth';
-import type { Did } from '../../src/auth-state';
+import { getAuth, type Did } from '../../src/auth-state';
 import { Action, Copy, Field, Page } from '../../src/controls';
-import { jamSpace } from '../../src/jam-space';
+import { jamSpace, joinJam, type InitialJam } from '../../src/jam-space';
 import { usePlayback } from '../../src/playback';
+import { jamTrack } from '../../src/use-jam-playback';
 import { useResource } from '../../src/CatalogPieces';
 import { pdsEndpoint, pdsSupportsSpaces } from '../../src/identity';
 
-interface Snapshot {
-  revision: number;
-  trackId: string;
-  cid: string;
-  playing: boolean;
-  positionMs: number;
-  updatedAtMs: number;
-}
-
-function isSnapshot(value: unknown): value is Snapshot {
-  if (!value || typeof value !== 'object') return false;
-  const state = value as Partial<Snapshot>;
-  return typeof state.trackId === 'string' && typeof state.cid === 'string'
-    && typeof state.playing === 'boolean'
-    && [state.revision, state.positionMs, state.updatedAtMs].every(n => Number.isSafeInteger(n) && Number(n) >= 0);
+function legacyTrack(value: unknown): { trackId: string; cid: string; playing: boolean; positionMs: number } {
+  if (!value || typeof value !== 'object') throw new Error('Could not read this Jam');
+  const record = value as Record<string, unknown>;
+  if (typeof record.trackId !== 'string' || typeof record.cid !== 'string' || typeof record.playing !== 'boolean'
+      || typeof record.positionMs !== 'number' || !Number.isSafeInteger(record.positionMs) || record.positionMs < 0) throw new Error('Could not read this Jam');
+  return { trackId: record.trackId, cid: record.cid, playing: record.playing, positionMs: record.positionMs };
 }
 
 export default function JamRoom() {
   const { room, track: trackId } = useLocalSearchParams<{ room: string; track?: string }>();
   const auth = useAuth();
   const player = usePlayback();
-  const playback = useRef(player);
-  playback.current = player;
   const [host, key] = (room ?? '').split('~');
   const isHost = auth.did === host;
-  const [joined, setJoined] = useState(false);
+  const joined = player.jam?.host === host && player.jam.key === key;
   const [guest, setGuest] = useState('');
-  const [snapshot, setSnapshot] = useState<Snapshot>();
-  const latest = useRef<Snapshot | undefined>(undefined);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState('');
@@ -49,65 +37,32 @@ export default function JamRoom() {
   function client() {
     if (!auth.agent || !auth.did) throw new Error('Sign in to join this Jam');
     return jamSpace(auth.agent, auth.did, host as Did, key, {
-      fetch: (url, init) => fetch(url, init),
-      keypair: () => P256Keypair.create()
+      fetch: (url, init) => fetch(url, init), keypair: () => P256Keypair.create()
     });
   }
 
-  useEffect(() => {
-    if (!joined || !auth.agent) return;
-    let active = true;
-    let timer: ReturnType<typeof setTimeout>;
-    let track: Track | undefined;
-    latest.current = undefined;
-    async function poll() {
-      try {
-        const state = await client().read();
-        if (!isSnapshot(state)) throw new Error('Invalid Jam playback state');
-        if (state.revision < (latest.current?.revision ?? -1)) return;
-        if (track?.id !== state.trackId || track.record.cid !== state.cid) track = await api.track(state.trackId);
-        if (track.record.cid !== state.cid) throw new Error('The Jam track has changed');
-        if (!active || state.revision < (latest.current?.revision ?? -1)) return;
-        latest.current = state;
-        setSnapshot(state);
-        const elapsed = state.playing ? Math.max(0, Date.now() - state.updatedAtMs) : 0;
-        await playback.current.syncJam(track, (state.positionMs + elapsed) / 1000, state.playing);
-        if (active) setError('');
-      } catch (failure) {
-        if (active) setError(failure instanceof Error ? failure.message : 'Could not join this Jam');
-      } finally {
-        if (active) timer = setTimeout(() => void poll(), 1000);
-      }
-    }
-    void poll();
-    return () => {
-      active = false;
-      clearTimeout(timer);
-      playback.current.leaveJam();
-    };
-  }, [auth.agent, room, joined]);
-
   async function run(action: () => Promise<void>) {
     if (busy) return;
-    setBusy(true);
-    setError('');
+    setBusy(true); setError('');
     try { await action(); }
     catch (failure) { setError(failure instanceof Error ? failure.message : 'Jam request failed'); }
     finally { setBusy(false); }
   }
 
-  async function update(playing: boolean, positionMs: number) {
-    const current = latest.current;
-    if (!current) return;
-    const next = { ...current, revision: current.revision + 1, playing, positionMs, updatedAtMs: Date.now() };
-    await client().publish(next);
-    if (next.revision >= (latest.current?.revision ?? -1)) {
-      latest.current = next;
-      setSnapshot(next);
+  async function enter(initial?: InitialJam) {
+    if (isHost && !initial) {
+      const snapshot = legacyTrack(await client().read());
+      const track = await api.track(snapshot.trackId);
+      const ref = jamTrack(track, player.current?.id === track.id ? player.status.duration : undefined);
+      if (!ref || ref.cid !== snapshot.cid) throw new Error('The Jam track has changed');
+      initial = { queue: [ref], index: 0, playing: snapshot.playing, positionMs: Math.min(ref.durationMs, snapshot.positionMs) };
     }
+    const start = initial;
+    player.joinJam({ host, key, admit: () => joinJam(getAuth(), host as Did, key, start) });
   }
 
   const link = `/jam/${encodeURIComponent(room ?? '')}${trackId ? `?track=${encodeURIComponent(trackId)}` : ''}`;
+  const state = joined ? player.jam?.state : undefined;
   return <Page title="Jam room">
     {!auth.ready ? <Copy>Checking sign-in…</Copy> : !auth.did ?
       <Action label="Sign in to join" href={`/login?return_to=${encodeURIComponent(link)}`} /> :
@@ -121,31 +76,34 @@ export default function JamRoom() {
             if (auth.did) await login(auth.did, false, link);
           })} />
         </>}
-      </> :
-      !joined && <Action label="Join Jam" onPress={() => setJoined(true)} />}
+      </> : !joined && <Action label="Join Jam" disabled={busy} onPress={() => void run(() => enter())} />}
     {isHost && auth.jamSpace && !joined && <Action label="Create Jam with current track" disabled={busy || !player.current?.record.cid && !trackId}
       onPress={() => void run(async () => {
         const track = player.current ?? (trackId ? await api.track(trackId) : undefined);
-        if (!track?.record.cid) return;
+        const ref = track ? jamTrack(track, player.current?.id === track.id ? player.status.duration : undefined) : undefined;
+        if (!track || !ref) throw new Error('Choose a track with audio before starting a Jam');
         const space = client();
         await space.create();
-        await space.publish({ revision: 0, trackId: track.id, cid: track.record.cid, playing: false, positionMs: 0, updatedAtMs: Date.now() });
-        setJoined(true);
+        await space.publish({ revision: 0, trackId: track.id, cid: ref.cid, playing: false, positionMs: 0, updatedAtMs: Date.now() });
+        await enter({ queue: [ref], index: 0, playing: false, positionMs: 0 });
       })} />}
-    {joined && isHost && <>
-      <Field label="Guest DID" value={guest} onChangeText={setGuest} autoCapitalize="none" />
-      <Action label="Invite guest" disabled={busy || !/^did:(plc|web):[^/?#]+$/.test(guest)}
-        onPress={() => void run(async () => {
-          await client().invite(guest as Did);
-          setNotice(`Share https://next.plyr.fm${link}`);
-        })} />
-      {snapshot && <>
-        <Action label={snapshot.playing ? 'Pause Jam' : 'Play Jam'} disabled={busy}
-          onPress={() => void run(() => update(!snapshot.playing, Math.round(player.status.currentTime * 1000)))} />
-        <Action label="Seek to start" disabled={busy} onPress={() => void run(() => update(snapshot.playing, 0))} />
+    {joined && <>
+      <Copy>{player.jam?.phase === 'connected' ? 'Connected' : 'Connecting to the Jam…'}</Copy>
+      {state && <>
+        <Action label={state.playing ? 'Pause Jam' : 'Play Jam'} disabled={player.jam?.phase !== 'connected'} onPress={() => player.jamCommand({ action: state.playing ? 'pause' : 'play' })} />
+        {isHost ? <Action label="Seek to start" disabled={player.jam?.phase !== 'connected'} onPress={() => player.seek(0)} /> : <Copy>The host controls seeking. Everyone can play, pause and edit the queue.</Copy>}
+        <Copy>{state.playing ? 'Playing' : 'Paused'}</Copy>
+        {state.playing && !player.status.playing && !player.loading && <Action label="Play audio on this device" onPress={() => player.jamCommand({ action: 'play' })} />}
       </>}
+      {isHost && <>
+        <Field label="Guest DID" value={guest} onChangeText={setGuest} autoCapitalize="none" />
+        <Action label="Invite guest" disabled={busy || !/^did:(plc|web):[^/?#]+$/.test(guest)} onPress={() => void run(async () => {
+          await client().invite(guest as Did); setNotice(`Share https://next.plyr.fm${link}`);
+        })} />
+      </>}
+      <Action label="Leave Jam" onPress={player.leaveJam} />
+      {!!player.jam?.error && <Copy live>{player.jam.error}</Copy>}
     </>}
-    {joined && snapshot && <Copy>{snapshot.playing ? 'Playing' : 'Paused'}</Copy>}
     {!!notice && <Copy live>{notice}</Copy>}
     {!!error && <Copy live>{error}</Copy>}
   </Page>;

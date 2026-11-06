@@ -5,6 +5,8 @@ import { api, type Track } from './api';
 import { useAuth } from './auth';
 import { blobUrl } from './identity';
 import { gatedAudioUrl, releaseGatedAudioUrl } from './gated-audio';
+import { useJamPlayback, jamTrack, type ActiveJam } from './use-jam-playback';
+import type { JamIntent } from './jam-connection';
 import { usePlayerAccounting } from './use-player-accounting';
 
 export function PlaybackProvider({ children, playThrough, keepPlaying, volume }: {
@@ -26,10 +28,32 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
   settings.current = { repeat, volume };
   const sourceEvents = useRef<{ remove(): void } | null>(null);
   const sequence = useRef(0);
-  const jamTrack = useRef<string | null>(null);
-  const jamSync = useRef(0);
   const objectUrl = useRef<string | null>(null);
   const current = queue[index];
+  const jam = useJamPlayback({
+    queue, index, current, ready, buffering: status.isBuffering, observedPosition: status.currentTime,
+    position: () => player.currentTime,
+    playing: () => player.playing,
+    load: (tracks, at) => load(tracks, at, false),
+    loaded: waitForMedia,
+    seek: accounting.seekTo,
+    play: () => player.play(),
+    pause: () => player.pause(),
+    setQueue: (tracks, at) => { setQueue(previous => previous.length === tracks.length && previous.every((track, index) => track === tracks[index]) ? previous : tracks); setIndex(at); },
+    clear: () => { accounting.stop(); sourceEvents.current?.remove(); sequence.current++; player.pause(); player.replace(null); if (objectUrl.current) releaseGatedAudioUrl(objectUrl.current); objectUrl.current = null; setQueue([]); setIndex(-1); setReady(false); setResolving(false); setStarting(null); }
+  }, auth.did);
+
+  async function waitForMedia() {
+    if (player.isLoaded) return;
+    const request = sequence.current;
+    await new Promise<void>((resolve, reject) => {
+      const listener = player.addListener('playbackStatusUpdate', event => {
+        if (request !== sequence.current || event.error) { clearTimeout(timer); listener.remove(); reject(new Error('Jam audio changed while loading')); }
+        else if (event.isLoaded) { clearTimeout(timer); listener.remove(); resolve(); }
+      });
+      const timer = setTimeout(() => { listener.remove(); reject(new Error('Jam audio took too long to load')); }, 15_000);
+    });
+  }
 
   useEffect(() => {
     if (Platform.OS !== 'web') {
@@ -60,7 +84,7 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
     setError(null);
   }, [auth.did, player]);
   useEffect(() => { player.volume = volume; }, [player, volume]);
-  useEffect(() => { player.loop = repeat === 'one'; }, [player, repeat]);
+  useEffect(() => { player.loop = !jam.jam && repeat === 'one'; }, [player, repeat, !!jam.jam]);
 
   async function load(tracks: Track[], at: number, start = true) {
     const track = tracks[at];
@@ -98,7 +122,7 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
       const previousSource = objectUrl.current;
       try {
         player.replace(Platform.OS === 'web' || availability === 'gated' ? url : { uri: url, headers: { Referer: 'https://next.plyr.fm/' } });
-        player.loop = settings.current.repeat === 'one';
+        player.loop = !jam.active() && settings.current.repeat === 'one';
         player.volume = settings.current.volume;
       } catch (cause) {
         if (availability === 'gated') releaseGatedAudioUrl(url);
@@ -161,10 +185,17 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
 
   function play(track: Track, collection?: Track[]) {
     const list = playThrough && collection?.some((item) => item.id === track.id) ? collection : [track];
-    void load(list, list.findIndex((item) => item.id === track.id));
+    const at = list.findIndex((item) => item.id === track.id);
+    if (!jam.replaceQueue(list, at, true)) void load(list, at);
   }
 
   async function next() {
+    if (jam.active()) {
+      const room = jam.state();
+      if (room && room.index + 1 < room.queue.length) jam.command({ action: 'selectTrack', index: room.index + 1 });
+      else jam.command({ action: 'pause' });
+      return;
+    }
     if (index + 1 < queue.length) { await load(queue, index + 1); return; }
     if (repeat === 'all' && queue.length) { await load(queue, 0); return; }
     if (!keepPlaying) return;
@@ -181,72 +212,91 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
   }
 
   useEffect(() => {
-    if (!jamTrack.current && ready && status.didJustFinish && repeat !== 'one') void next();
+    if (ready && status.didJustFinish && (jam.active() ? jam.jam?.canSeek : repeat !== 'one')) void next();
     // Audio status is the trigger. Queue edits must not replay a finish event.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status.didJustFinish]);
 
-  function toggle() {
+  function setPlaying(playing: boolean) {
+    if (jam.setPlaying(playing, jam.jam?.state)) return;
     if (loading || !current) return;
-    if (!ready || status.error || error) void load(queue, index);
-    else if (player.playing) player.pause();
-    else player.play();
+    if (playing && (!ready || status.error || error)) void load(queue, index);
+    else if (playing && !player.playing) player.play();
+    else if (!playing && player.playing) player.pause();
+  }
+
+  function toggle() {
+    if (jam.toggle()) return;
+    setPlaying(!player.playing);
   }
 
   const value: Playback = {
-    async syncJam(track, position, playing) {
-      const sync = ++jamSync.current;
-      const key = `${track.id}/${track.record.cid}`;
-      if (jamTrack.current !== key || current?.id !== track.id || !ready) {
-        jamTrack.current = key;
-        if (!await load([track], 0, false) || jamTrack.current !== key || sync !== jamSync.current) return;
-      }
-      const request = sequence.current;
-      if (Math.abs(player.currentTime - position) > 0.6) await accounting.seekTo(position);
-      if (request !== sequence.current || jamTrack.current !== key || sync !== jamSync.current) return;
-      if (playing && !player.playing) player.play();
-      else if (!playing && player.playing) player.pause();
-    },
-    leaveJam() {
-      if (!jamTrack.current) return;
-      jamTrack.current = null;
-      accounting.stop();
-      sequence.current++;
-      setStarting(null);
-      setResolving(false);
-      player.pause();
-    },
-    play, queue, current, index, loading, error, status, repeat, setRepeat, toggle, next,
+    jam: jam.jam,
+    canSeek: !jam.jam || jam.jam.canSeek && jam.jam.phase === 'connected',
+    seekPreview: jam.jam?.pendingSeekMs === undefined ? undefined : jam.jam.pendingSeekMs / 1000,
+    joinJam: jam.join,
+    leaveJam: (restore = true) => jam.leave(restore),
+    jamCommand: intent => intent.action === 'play' || intent.action === 'pause' ? jam.setPlaying(intent.action === 'play', jam.jam?.state) : jam.command(intent),
+    play, queue, current, index, loading, error, status, repeat: jam.jam ? 'off' : repeat, setRepeat: value => { if (!jam.active()) setRepeat(value); }, toggle, setPlaying, next,
     isPlaying: () => player.playing,
-    previous: () => { if (status.currentTime > 3 || index === 0) void accounting.seekTo(0); else void load(queue, index - 1); },
-    seek: (seconds) => { if (ready) void accounting.seekTo(seconds); },
-    skip: (seconds) => { if (ready) void accounting.seekTo(Math.max(0, Math.min(player.duration, player.currentTime + seconds))); },
-    jump: (at) => { void load(queue, at); },
-    enqueue: (track) => { if (current) setQueue((items) => [...items, track]); else play(track); },
-    remove: (at) => { if (at > index) setQueue((items) => items.filter((_, position) => position !== at)); },
-    move: (from, to) => setQueue((items) => {
+    previous: () => {
+      const room = jam.state();
+      if (jam.active()) {
+        if (room && player.currentTime > 3 && jam.jam?.canSeek) jam.command({ action: 'seek', positionMs: 0 });
+        else if (room && room.index > 0) jam.command({ action: 'selectTrack', index: room.index - 1 });
+      } else if (player.currentTime > 3 || index === 0) void accounting.seekTo(0);
+      else void load(queue, index - 1);
+    },
+    seek: (seconds) => { if (!jam.command({ action: 'seek', positionMs: Math.max(0, Math.round(seconds * 1000)) }) && ready) void accounting.seekTo(seconds); },
+    skip: (seconds) => { const base = jam.jam?.pendingSeekMs === undefined ? player.currentTime : jam.jam.pendingSeekMs / 1000; const target = Math.max(0, Math.min(player.duration, base + seconds)); if (!jam.command({ action: 'seek', positionMs: Math.round(target * 1000) }) && ready) void accounting.seekTo(target); },
+    jump: (at) => { if (!jam.command({ action: 'selectTrack', index: at })) void load(queue, at); },
+    enqueue: (track) => {
+      const ref = jamTrack(track);
+      if (jam.active()) { if (ref) jam.editQueue((items, at) => ({ queue: [...items, ref], index: at })); else jam.replaceQueue([...queue, track], index); }
+      else if (current) setQueue((items) => [...items, track]); else play(track);
+    },
+    remove: (at) => { if (jam.editQueue((items, current) => ({ queue: at > current ? items.filter((_, position) => position !== at) : items, index: current }))) return; if (at > index) setQueue((items) => items.filter((_, position) => position !== at)); },
+    move: (from, to) => {
+      if (jam.editQueue((items, at) => {
+        if (from <= at || to <= at || from >= items.length || to >= items.length) return { queue: items, index: at };
+        const reordered = items.slice(); const [track] = reordered.splice(from, 1); reordered.splice(to, 0, track);
+        return { queue: reordered, index: at };
+      })) return;
+      setQueue((items) => {
       if (from <= index || to <= index || from >= items.length || to >= items.length || from === to) return items;
       const reordered = items.slice();
       const [track] = reordered.splice(from, 1);
       reordered.splice(to, 0, track);
       return reordered;
-    }),
-    clear: () => setQueue((items) => items.slice(0, index + 1)),
-    shuffle: () => setQueue((items) => {
+      });
+    },
+    clear: () => { if (!jam.editQueue((items, at) => ({ queue: items.slice(0, at + 1), index: at }))) setQueue((items) => items.slice(0, index + 1)); },
+    shuffle: () => {
+      if (jam.editQueue((items, at) => {
+        const shuffled = items.slice();
+        for (let i = shuffled.length - 1; i > at + 1; i--) { const j = at + 1 + Math.floor(Math.random() * (i - at)); [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]; }
+        return { queue: shuffled, index: at };
+      })) return;
+      setQueue((items) => {
       const shuffled = items.slice();
       for (let i = shuffled.length - 1; i > index + 1; i--) {
         const j = index + 1 + Math.floor(Math.random() * (i - index));
         [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
       }
       return shuffled;
-    })
+      });
+    }
   };
   return <PlaybackContext.Provider value={value}>{children}</PlaybackContext.Provider>;
 }
 
 interface Playback {
-  syncJam(track: Track, position: number, playing: boolean): Promise<void>;
-  leaveJam(): void;
+  jam?: ActiveJam;
+  canSeek: boolean;
+  seekPreview?: number;
+  joinJam(input: { host: string; key: string; admit: () => Promise<{ ticket: string; websocketUrl: string }> }): void;
+  jamCommand(intent: JamIntent): boolean;
+  leaveJam(restore?: boolean): void;
   play(track: Track, collection?: Track[]): void;
   queue: Track[];
   current?: Track;
@@ -257,6 +307,7 @@ interface Playback {
   repeat: 'off' | 'all' | 'one';
   setRepeat(value: Playback['repeat']): void;
   toggle(): void;
+  setPlaying(playing: boolean): void;
   isPlaying(): boolean;
   next(): Promise<void>;
   previous(): void;
