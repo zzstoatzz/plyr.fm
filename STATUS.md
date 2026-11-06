@@ -1,18 +1,25 @@
 # plyr.fm - status
 
-## local player scrubbing fix (2026-11-06)
+## Next real-time Jams verified (2026-11-06)
 
-Local branch `codex/local-player-scrubbing` fixes a reproduced web-slider React
-update loop during touch scrubbing and the release-position rollback. Gesture
-values stay local until release; solo playback retains the requested position
-until audio status catches up, and handles rejected seeks. Nothing deployed.
+The Spaces-backed Zig/Redis Jam MVP is live on Next. Two independent browsers
+passed real OAuth create/invite/join, held duplicate Pause, host scrubbing,
+guest seek restrictions, coordinator SIGKILL/re-admission, and decoded radio
+handoff without pausing the remaining participant. Both coordinators were
+restored and are healthy. No normal production promotion ran.
 
-`next/app/scripts/check-player-scrubbing.cjs` serves a local range-capable WAV
-and exported app, with external requests intercepted. Chrome touch and mouse,
-and WebKit mouse, passed repeated forward/backward seeks while playing and
-paused at 390px/light and 1280px/dark. It checks page errors, position mutations,
-and the real audio playhead. Typecheck, web export, and all 55 unit tests pass.
-Physical iPhone Safari remains unverified. Shipping to Next for live browser verification.
+The resumed run measured 187 ms UI play delivery, about 6 ms maximum post-seek
+and post-failover playhead separation, and 92 ms guest Pause delivery afterward.
+These are observations from one live run, not latency guarantees. The
+[completion audit](docs/research/2026-11-06-jams-live-verification.md) records
+requirements, evidence, storage/cost and remaining boundaries. The
+[MVP plan](docs/plans/2026-11-05-realtime-jams-mvp.md) is complete.
+
+#2429 also shipped the player scrubbing crash/snap-back fix to Next. Live Chrome
+and WebKit checks passed in Now Playing and the desktop dock. Physical iPhone
+Safari, native background playback and broad concurrency remain unverified;
+Chromium ALAC support remains tracked in #2427. Jam Redis is persistent but has
+one primary; this MVP establishes coordinator failover, not Redis failover.
 
 ## long-term vision
 
