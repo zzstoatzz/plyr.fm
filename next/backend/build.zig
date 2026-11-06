@@ -40,6 +40,10 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     }).module("zat"));
+    root_module.addImport("websocket", b.dependency("websocket", .{
+        .target = target,
+        .optimize = optimize,
+    }).module("websocket"));
     const pg_dependency = if (openssl_include_path) |include_path|
         b.dependency("pg", .{
             .target = target,

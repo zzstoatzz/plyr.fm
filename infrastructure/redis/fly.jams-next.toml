@@ -1,0 +1,24 @@
+app = "plyr-redis-jams-next"
+primary_region = "iad"
+
+[build]
+  image = "redis:7-alpine"
+
+[mounts]
+  source = "redis_data"
+  destination = "/data"
+
+[processes]
+  app = "sh -c 'redis-server --dir /data --appendonly yes --appendfsync always --maxmemory 128mb --maxmemory-policy noeviction --requirepass \"$REDIS_PASSWORD\"'"
+
+[[services]]
+  protocol = "tcp"
+  internal_port = 6379
+  processes = ["app"]
+  [[services.ports]]
+    port = 6379
+
+[[vm]]
+  memory = "256mb"
+  cpu_kind = "shared"
+  cpus = 1

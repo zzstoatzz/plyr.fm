@@ -3,6 +3,7 @@ const ManagedSpace = @import("internal/space/managed_space.zig").Config;
 const zat = @import("zat");
 
 pub const Role = enum {
+    jams,
     account_reconciler,
     api,
     catalog_reconciler,
