@@ -394,6 +394,7 @@ async def radio_state(
             await db.scalars(
                 select(Track.id).where(
                     Track.id.in_(candidate_ids),
+                    Track.id.not_in(settings.radio.excluded_track_ids),
                     Track.in_discovery,
                     Track.support_gate.is_(None),
                 )

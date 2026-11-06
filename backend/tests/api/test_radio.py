@@ -653,6 +653,44 @@ async def test_radio_excludes_moderation_override_exclude(
     assert excluded.id not in ids
 
 
+async def test_radio_exclusions_apply_to_new_and_cached_rotations(
+    radio_app: FastAPI,
+    db_session: AsyncSession,
+    radio_artist: Artist,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    now = datetime.now(UTC) + TEST_TIME_OFFSET
+    airing = await _create_track(
+        db_session, radio_artist, title="Music", file_id="music", created_at=now
+    )
+    excluded = await _create_track(
+        db_session, radio_artist, title="Radiator", file_id="radiator", created_at=now
+    )
+    await db_session.commit()
+    redis = _FakeRedis()
+    monkeypatch.setattr(settings.radio, "rotation_cache_ttl_seconds", 60)
+    monkeypatch.setattr(radio_cache, "get_async_redis_client", lambda: redis)
+    async with AsyncClient(
+        transport=ASGITransport(app=radio_app), base_url="https://radio.plyr.fm"
+    ) as client:
+        before = (await client.get("/radio/state")).json()
+        assert excluded.id in {track["id"] for track in before["rotation"]}
+        monkeypatch.setattr(settings.radio, "excluded_track_ids", {excluded.id})
+        corpus = await radio_state.load_corpus(db_session)
+        assert {track.id for track in corpus} == {airing.id}
+        cached = (await client.get("/radio/state")).json()
+        redis.store.clear()
+        rebuilt = (await client.get("/radio/state")).json()
+
+    for state in (cached, rebuilt):
+        assert {track["id"] for track in state["rotation"]} == {airing.id}
+        assert state["current"]["id"] == airing.id
+        assert excluded.id not in {track["id"] for track in state["up_next"]}
+    await db_session.refresh(excluded)
+    assert excluded.in_discovery
+    assert excluded.moderation_override is None
+
+
 async def test_radio_state_includes_tags_and_up_next(
     radio_app: FastAPI,
     db_session: AsyncSession,

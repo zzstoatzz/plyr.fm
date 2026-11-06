@@ -935,6 +935,11 @@ class RadioSettings(AppSettingsSection):
         extra="ignore",
     )
 
+    excluded_track_ids: set[int] = Field(
+        default_factory=set,
+        description="Operator-curated track IDs excluded from radio only",
+    )
+
     rotation_cache_ttl_seconds: int = Field(
         default=60,
         description=(

@@ -15,6 +15,7 @@ from backend._internal.content_labels import (
     has_adult_audio_label,
     has_copyright_label,
 )
+from backend.config import settings
 from backend.models import Artist, Track
 
 
@@ -26,6 +27,7 @@ async def load_corpus(db: AsyncSession) -> list[Track]:
         .options(selectinload(Track.artist))
         .where(
             Track.in_discovery,
+            Track.id.not_in(settings.radio.excluded_track_ids),
             Track.support_gate.is_(None),
             # a standing operator `exclude` keeps a track off shared surfaces
             # with no label needed; NULL-safe because the column is null for
