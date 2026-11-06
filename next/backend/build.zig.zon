@@ -3,8 +3,8 @@
     .version = "0.0.1",
     .dependencies = .{
         .websocket = .{
-            .url = "https://tangled.org/zzstoatzz.io/websocket.zig/archive/v0.2.0.tar.gz",
-            .hash = "websocket-0.2.0-ZPISdXAvBgCnxrBCsKQZ7JcPMEqRjnoW8XeUmp4MRi0a",
+            .url = "https://tangled.org/zzstoatzz.io/websocket.zig/archive/acc3d588e19385001414966a9484d78fa5f7612b.tar.gz",
+            .hash = "websocket-0.2.0-ZPISdXRABgDBvkgJA7tzS9cJhxWF0LcoYLDZmSEzbRLT",
         },
         .zat = .{
             .url = "https://tangled.org/zat.dev/zat/archive/v0.6.4.tar.gz",
