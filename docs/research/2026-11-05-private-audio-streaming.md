@@ -50,3 +50,17 @@ The public baseline uses real delivery and anonymous playback, without posting r
 Browser assertions cover playback before full download, far seeking, cross-tab copied-URL denial, HEAD, 416 and release. A same-origin iframe can create/play its own source while a copied parent source is denied. Cross-site embed registration may be blocked by browser policy; that is why buffered fallback remains.
 
 Ten Node regressions cover cryptographic record rejection, credential renewal, first-chunk streaming, reconstructed range metadata, ownership, release races, cancellation, concurrency bounds and inconsistent partial lengths. They exercise the crypto SDK or the actual worker handler with only network/client boundaries replaced.
+
+## Actual managed-Space acceptance
+
+`check-private-audio-zds.cjs` additionally exercises the exported app against the running disposable ZDS/PLC, with real browser OAuth and the exact `fm.plyr.stg.audio` grant. It uploads a 300-second WAV, creates a managed Space and its protected record, verifies its real encrypted record/MAC, then plays and seeks through the actual signed `getBlob` response. The account owns this managed Space; this proves owner access, not a guest's managing-app admission policy. Only the appview catalog/availability response is a fixture, since the public appview cannot index the local PDS.
+
+Chrome started the 4,800,044-byte source in 892 ms, with 2,096,755 bytes transferred. Pointer seeks around 240, 15 and 270 seconds settled in 59, 35 and 65 ms. The PDS returned actual 206 responses for `bytes=0-`, `bytes=3899392-` and `bytes=4390912-`. The earlier position was already buffered. These timings include a fixture transport delay of 20 ms per proxy chunk, not a production latency estimate.
+
+The disposable fixture needs a real HTTP endpoint for the worker script: worker installation and fetches bypass the route-only application fixture. A temporary TLS streaming proxy preserves actual ZDS bodies, with fixture-only host mapping/certificate flags and local CORS. It never buffers the entire response or changes PDS authentication. Temporary TLS files and created records/Space are removed after the run.
+
+```sh
+PLAYWRIGHT_MODULE=/tmp/next-web-check/node_modules/playwright node next/app/scripts/check-private-audio-zds.cjs
+```
+
+Defaults require ZDS on 5197, PLC on 5296, the disposable `mvpjamhost.test` fixture account, and the exported app in `/tmp/plyr-jam-mvp-web`. JSON evidence and the playing-screen capture are written under `/tmp/plyr-private-audio-zds`. This test is deliberately separate from deployed guest-policy and physical-device acceptance.
