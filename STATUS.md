@@ -47,6 +47,13 @@ plyr.fm should become:
 
 ### November 2026
 
+#### Spaces and real-time playback research (November 5)
+
+The [research/proposal](docs/research/2026-11-05-spaces-realtime-playback.md)
+compares the current Spaces proposal and handlers, prior Jam behavior, and pinned
+Zig WebSocket/Redis/Docket capabilities. It proposes state and command boundaries
+and a measured implementation sequence; no runtime architecture was changed.
+
 #### Next full-screen player correction (November 5)
 
 #2419 removes the rejected desktop side panel. Now Playing is full-screen again,
