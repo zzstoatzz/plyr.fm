@@ -101,6 +101,26 @@ jobs:
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_ZIG_NEXT }}
 
+  deploy-jams:
+    name: deploy next Jam coordinator
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_JAMS_NEXT }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - name: deploy the shared immutable backend image
+        working-directory: next/backend
+        run: >-
+          flyctl deploy --config fly.jams.toml --app plyr-jams-next --ha=true
+          --image "registry.fly.io/${FLY_APP}:${GITHUB_SHA}"
+      - name: keep two warm instances
+        run: flyctl scale count 2 --app plyr-jams-next --yes
+      - name: check readiness
+        run: curl --fail --retry 8 --retry-delay 2 --retry-all-errors https://plyr-jams-next.fly.dev/ready
+
   deploy:
     name: deploy next api
     needs: [migrate, build]
