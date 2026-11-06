@@ -69,7 +69,7 @@ export default function Radio({ compact = false, tuned }: { compact?: boolean; t
 
   useEffect(() => {
     if ((!tuned && autoplay !== '1') || autoTuned.current || !source || snapshot?.state.status !== 'playing') return;
-    if (solo.status.playing || solo.loading) return;
+    if (solo.isPlaying() || solo.loading) return;
     autoTuned.current = true;
     if (compact) setListening(true);
     else live.tune(station);
