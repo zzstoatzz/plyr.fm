@@ -10,6 +10,7 @@ const upstreamOrigin='https://next.plyr.fm';
 const output=process.env.JAM_REALTIME_OUTPUT||'/tmp/plyr-jam-realtime';
 (async()=>{
  await fs.mkdir(output,{recursive:true});
+ if(live&&process.env.JAM_LIVE_FAILOVER_BARRIER)await fs.rm(process.env.JAM_LIVE_FAILOVER_BARRIER+'.ready',{force:true});
  let accounts,handles;
  if(live){
   const credentials=JSON.parse(await fs.readFile(process.env.JAM_REALTIME_LIVE_ACCOUNTS,'utf8'));
@@ -99,7 +100,7 @@ const output=process.env.JAM_REALTIME_OUTPUT||'/tmp/plyr-jam-realtime';
    assert.ok(drifts[9]<500,'Playing browsers should remain within 500ms after convergence');
   };
   const started=Date.now();await h.page.getByRole('button',{name:'Play Jam',exact:true}).click();
-  await g.page.getByRole('button',{name:'Pause Jam',exact:true}).waitFor();console.log('Cross-instance UI play delivery ms',Date.now()-started);
+  await g.page.getByRole('button',{name:'Pause Jam',exact:true}).waitFor();console.log(live?'Live UI play delivery ms':'Cross-instance UI play delivery ms',Date.now()-started);
   await Promise.all([h,g].map(listen));
   await sync('Initial');
   console.log('Beginning held duplicate pause');
@@ -128,11 +129,23 @@ const output=process.env.JAM_REALTIME_OUTPUT||'/tmp/plyr-jam-realtime';
   await h.page.keyboard.press('Escape');await h.page.getByText('Connected',{exact:true}).waitFor();
   await g.page.getByRole('button',{name:'Open now playing',exact:true}).click();const gs=g.page.getByRole('slider',{name:'Playback position',exact:true});await gs.waitFor();assert.equal(await gs.getAttribute('aria-disabled'),'true');await g.page.keyboard.press('Escape');
   await media(h.page);await media(g.page);await sync('After rapid scrubbing');
-  const before=h.stats();const epoch=state(h).epoch;const revision=state(h).revision;
+  const before=clients.map(c=>c.stats());const epoch=state(h).epoch;const revision=state(h).revision;
   for(const c of[h,g])await c.page.evaluate(()=>{window.preFailoverAudio=window.jamAudio.find(a=>!a.paused)});
   h.changeBackend(Number(process.env.JAM_INSTANCE_B||5302));
   const failoverStarted=performance.now();
-  if(live)await h.disconnect();
+  const barrier=live&&process.env.JAM_LIVE_FAILOVER_BARRIER;
+  if(barrier){
+   await fs.rm(barrier+'.release',{force:true});
+   await fs.writeFile(barrier+'.ready',JSON.stringify({room,readyAtMs:Date.now(),clients:before})+'\n',{mode:0o600});
+   console.log('Live failover barrier ready',barrier+'.ready','Stop a machine hosting these sockets, then create',barrier+'.release');
+   const deadline=Date.now()+300_000;
+   while(true){
+    try{await fs.access(barrier+'.release');break;}catch(error){if(error.code!=='ENOENT')throw error;}
+    assert.ok(Date.now()<deadline,'Timed out waiting for external live failover release');
+    await new Promise(resolve=>setTimeout(resolve,200));
+   }
+   console.log('External live failover released after ms',performance.now()-failoverStarted);
+  }else if(live)await h.disconnect();
   else if(process.env.JAM_KILL_INSTANCE_A_PID){
    const pid=Number(process.env.JAM_KILL_INSTANCE_A_PID);
    const executable=execFileSync('ps',['-p',String(pid),'-o','comm='],{encoding:'utf8'}).trim();
@@ -140,10 +153,12 @@ const output=process.env.JAM_REALTIME_OUTPUT||'/tmp/plyr-jam-realtime';
    assert.ok(executable.endsWith('plyr-backend')&&listener===String(pid),'Only kill the owned fixture coordinator');
    process.kill(pid,'SIGKILL');
   }else await h.disconnect();
-  await until(()=>h.stats().admissions>before.admissions&&h.stats().connections>before.connections,'Host did not reconnect through the second coordinator');
-  await h.page.getByText('Connected',{exact:true}).waitFor();
-  console.log(live?'Live reconnect fresh-admission ms':'Failover fresh-admission-to-second-instance ms',performance.now()-failoverStarted);
-  assert.equal(state(h).epoch,epoch);assert.ok(state(h).revision>=revision);
+  const recovered=c=>c.stats().admissions>before[clients.indexOf(c)].admissions&&c.stats().connections>before[clients.indexOf(c)].connections;
+  await until(()=>barrier?clients.some(recovered):recovered(h),barrier?'No browser naturally reconnected with fresh admission after external failover':'Host did not reconnect with fresh admission');
+  for(const c of clients)await c.page.getByText('Connected',{exact:true}).waitFor();
+  if(barrier)console.log('External failover naturally reconnected client indices',clients.flatMap((c,i)=>recovered(c)?[i]:[]));
+  else console.log(live?'Live reconnect fresh-admission ms':'Failover fresh-admission-to-second-instance ms',performance.now()-failoverStarted);
+  for(const c of clients){assert.equal(state(c).epoch,epoch);assert.ok(state(c).revision>=revision);}
   for(const c of[h,g])assert.equal(await c.page.evaluate(()=>window.preFailoverAudio===window.jamAudio.find(a=>!a.paused)),true,'Failover does not replace the audio source');
   await sync('After coordinator failover');
   const pauseStarted=performance.now();await g.page.getByRole('button',{name:'Pause Jam',exact:true}).click();await h.page.getByRole('button',{name:'Play Jam',exact:true}).waitFor();console.log('Post-failover guest pause UI delivery ms',performance.now()-pauseStarted);
