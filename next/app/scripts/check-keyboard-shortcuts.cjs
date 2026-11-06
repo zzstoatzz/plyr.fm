@@ -44,7 +44,7 @@ const origin = 'https://next.plyr.fm';
    await key('j');await page.waitForFunction(src=>window.jamAudio.some(a=>!a.paused&&a.src===src),first);
    await key('q');await page.waitForURL('**/queue');await playing();
    await key('q');await page.waitForURL(origin+'/');await playing();
-   await page.getByRole('button',{name:'Open now playing',exact:true}).click();if(width>=800)await page.getByTestId('desktop-now-playing').waitFor();else await page.waitForURL('**/now-playing');
+   await page.getByRole('button',{name:'Open now playing',exact:true}).click();await page.waitForURL('**/now-playing');
    await key('Space');await paused();await key('Space');await playing();
    await key('q');await page.waitForURL('**/queue');assert.equal(await page.getByRole('dialog').count(),0);
    await page.getByRole('link',{name:'Home',exact:true}).click();await page.waitForURL(origin+'/');

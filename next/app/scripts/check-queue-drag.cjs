@@ -86,7 +86,7 @@ async function setup(browser, width, theme, queue = tracks) {
   await page.getByRole('button', { name: 'Open now playing', exact: true }).click();
   await page.waitForTimeout(350);
   await shot(page, `${width}-${theme}-now-playing`);
-  await page.getByRole('button', { name: width >= 800 ? 'Open queue' : 'Queue', exact: true }).click();
+  await page.getByRole('button', { name: 'Queue', exact: true }).click();
   await handle(page, 'Alpha').waitFor();
   await page.getByText('drag the handles to reorder', { exact: true }).waitFor();
   const grip = await handle(page, 'Alpha').boundingBox();

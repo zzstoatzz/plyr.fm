@@ -15,6 +15,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import type { Track } from './api';
 import { useAppearance } from './appearance';
 import { Cover, artistName } from './CatalogPieces';
+import { PlayerVolume } from './PlayerVolume';
+import { PlayerSeek } from './PlayerSeek';
 import { PlayerControl } from './PlayerControl';
 import { usePlayback } from './playback';
 import { usePlayerDismiss } from './use-player-dismiss';
@@ -36,9 +38,8 @@ export function NowPlaying({ track, close, navigate }: { track: Track; close: ()
   const dismiss = usePlayerDismiss(compact, width, height, close);
   const scrollTouch = { touchAction: dismiss.directionalTouch && dismiss.atTop ? 'pan-x pan-down' : 'pan-x pan-y', cursor: 'auto' } as const;
   const sideBySide = width >= 800;
-  const panelWidth = sideBySide ? Math.min(width - 80, 748) : 420;
   const controlRoom = 370 + 64 * (theme.scale - 1);
-  const artwork = sideBySide ? Math.min(310, Math.floor((panelWidth - 76) / 2))
+  const artwork = sideBySide ? Math.max(160, Math.min(660, width * 0.48 - 56, height - 144))
     : Math.max(1, Math.min(width - 40, 372, Math.max(128, height - controlRoom)));
   const duration = player.status.duration || track.metadata.duration_seconds || 0;
   const position = Math.max(0, Math.min(duration, scrub?.id === track.id ? scrub.seconds : player.status.currentTime));
@@ -49,9 +50,8 @@ export function NowPlaying({ track, close, navigate }: { track: Track; close: ()
 
   return <Modal visible transparent accessibilityLabel="Now playing" animationType={theme.reduceMotion ? 'none' : 'fade'} onRequestClose={close}>
     <View ref={dismiss.panelRef} style={styles.backdrop}>
-      {!compact && <Pressable style={StyleSheet.absoluteFill} accessible={false} focusable={false} tabIndex={-1} aria-hidden onPress={close} />}
-      <AnimatedSafeAreaView {...dismiss.panHandlers} accessibilityViewIsModal={Platform.OS === 'web' ? undefined : true} edges={compact ? ['top', 'bottom'] : []}
-        style={[{ transform: [{ translateY: dismiss.translation }] }, styles.panel, compact ? styles.full : [styles.floating, { maxWidth: panelWidth }], { backgroundColor: theme.background }]}>
+      <AnimatedSafeAreaView {...dismiss.panHandlers} accessibilityViewIsModal={Platform.OS === 'web' ? undefined : true} edges={['top', 'bottom']}
+        style={[{ transform: [{ translateY: dismiss.translation }] }, styles.panel, styles.full, { backgroundColor: theme.background }]}>
         <View style={[styles.header, { borderColor: theme.surface }]}>
           {compact && <View {...dismiss.protect}><PlayerControl icon={ChevronDown} label="Close" onPress={close} /></View>}
           <View testID="now-playing-dismiss-region" style={[styles.dismissRegion, Platform.OS === 'web' && compact && touchHeader]}>
@@ -61,13 +61,13 @@ export function NowPlaying({ track, close, navigate }: { track: Track; close: ()
           </View>
           {compact ? <View style={styles.headerSpacer} /> : <View {...dismiss.protect}><PlayerControl icon={X} label="Close" onPress={close} /></View>}
         </View>
-        <View {...dismiss.contentStartHandlers} style={compact ? styles.scrollRegion : undefined}>
+        <View {...dismiss.contentStartHandlers} style={styles.scrollRegion}>
           <ScrollView testID="now-playing-scroll" onScroll={dismiss.onScroll} scrollEventThrottle={16} scrollEnabled={!dismiss.dragging}
             style={Platform.OS === 'web' && compact ? scrollTouch : undefined} contentContainerStyle={[styles.content, sideBySide && styles.desktopContent]} alwaysBounceVertical={false}>
             <View testID="now-playing-artwork" style={styles.art}>
               <Cover uri={track.media.artwork?.url} size={artwork} radius={16} />
             </View>
-            <View style={[styles.body, sideBySide ? styles.desktopBody : { width: artwork }]}>
+            <View style={[styles.body, sideBySide ? [styles.desktopBody, { maxWidth: 440 }] : { width: artwork }]}>
               <View style={styles.meta}>
                 <Text testID="now-playing-title" accessibilityRole="header" accessibilityLabel={track.metadata.title} numberOfLines={2}
                   style={{ lineHeight: 30 * theme.scale, color: theme.text, fontFamily: theme.fontFamily,
@@ -96,8 +96,10 @@ export function NowPlaying({ track, close, navigate }: { track: Track; close: ()
               </View>
               <View style={styles.transport}>
                 <View {...dismiss.protect}><PlayerControl icon={SkipBack} label="Previous" onPress={player.previous} /></View>
+                {sideBySide && <PlayerSeek />}
                 <View {...dismiss.protect}><PlayerControl icon={playing ? Pause : Play} label={playing ? 'Pause' : 'Play'}
                   onPress={player.toggle} primary large busy={player.loading} /></View>
+                {sideBySide && <PlayerSeek forward />}
                 <View {...dismiss.protect}><PlayerControl icon={SkipForward} label="Next" onPress={() => void player.next()} /></View>
               </View>
               <View style={[styles.utilities, { borderColor: theme.surface }]}>
@@ -110,6 +112,7 @@ export function NowPlaying({ track, close, navigate }: { track: Track; close: ()
                   <Info size={18} color={theme.muted} /><Text style={caption}>Track details</Text>
                 </Pressable></View>
               </View>
+              {sideBySide && <View style={{ alignItems: 'center' }}><PlayerVolume /></View>}
             </View>
           </ScrollView>
         </View>
@@ -119,10 +122,9 @@ export function NowPlaying({ track, close, navigate }: { track: Track; close: ()
 }
 
 const styles = StyleSheet.create({
-  backdrop: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#0009' },
+  backdrop: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: 'transparent' },
   panel: { width: '100%' },
   full: { flex: 1 },
-  floating: { maxHeight: '94%', borderRadius: 20, overflow: 'hidden' },
   header: { flexDirection: 'row', alignItems: 'center', minHeight: 50, paddingHorizontal: 20, borderBottomWidth: StyleSheet.hairlineWidth },
   dismissRegion: { flex: 1, minHeight: 50, justifyContent: 'center' },
   headerTitle: { fontWeight: '700' },
@@ -130,7 +132,7 @@ const styles = StyleSheet.create({
   headerSpacer: { width: 44 },
   scrollRegion: { flex: 1, minHeight: 0 },
   content: { paddingHorizontal: 20, paddingTop: 20, paddingBottom: 16, gap: 20, alignItems: 'center' },
-  desktopContent: { flexDirection: 'row', alignItems: 'center', padding: 24, gap: 28 },
+  desktopContent: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', flexGrow: 1, width: '100%', maxWidth: 1440, alignSelf: 'center', padding: 40, gap: 56 },
   art: { alignItems: 'center' },
   body: { gap: 16, minWidth: 0 },
   desktopBody: { flex: 1 },

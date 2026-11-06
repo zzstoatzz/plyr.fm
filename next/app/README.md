@@ -41,15 +41,16 @@ The Spaces-based Jams prototype and browser acceptance cases are tracked in
 
 ## Player navigation
 
-Playback stays above the route stack. On desktop web (800px and wider),
-Now Playing is a persistent side panel: browsing, browser Back and queue
-navigation keep the same audio element playing. Close and Escape dismiss the
-panel and restore focus to its dock trigger.
+Playback stays above the route stack. The desktop dock spans the viewport below
+navigation and content, with track info on the left, transport/seek in the center,
+and queue/volume on the right. Mobile keeps its compact dock above navigation.
 
-On mobile web, `/now-playing` owns the full-screen presentation. Browser Back,
-Close and Escape dismiss that route before navigating the page below. Links
-replace it with their destination. React Native Web Modal owns focus while
-open; downward swipes outside controls dismiss it.
+On web, `/now-playing` owns the full-screen presentation at every width. Desktop
+uses large artwork beside the familiar controls; mobile retains body swipe
+dismissal outside interactive controls. Browser Back, Close and Escape dismiss
+the player before navigating the page below. Links replace it with their
+destination. React Native Web Modal owns focus while open; the dock underneath
+is covered, not duplicated in the expanded player.
 
 Native currently keeps its existing local React Native Modal and hardware-Back
 handling. It never pushes the web-only player route. Moving native presentation
