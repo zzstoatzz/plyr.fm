@@ -529,3 +529,7 @@ max_lines = 516
 [[rules]]
 path = "next/backend/src/internal/text/grapheme_tables.zig"
 max_lines = 2100
+
+[[rules]]
+path = "next/backend/src/internal/jams/store.zig"
+max_lines = 781

@@ -1,0 +1,43 @@
+name: deploy next jams
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "next/backend/**"
+      - "!next/backend/**/*.md"
+      - ".github/workflows/deploy-next-jams.yml"
+      - "infrastructure/redis/fly.jams-next.toml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency: deploy-next-jams
+
+jobs:
+  redis:
+    runs-on: ubuntu-latest
+    env:
+      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_REDIS_JAMS_NEXT }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - name: deploy isolated persistent Jam state
+        working-directory: infrastructure/redis
+        run: flyctl deploy --remote-only --config fly.jams-next.toml --app plyr-redis-jams-next --ha=false
+  deploy:
+    needs: redis
+    runs-on: ubuntu-latest
+    env:
+      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_JAMS_NEXT }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - name: deploy isolated HA coordinator
+        working-directory: next/backend
+        run: flyctl deploy --remote-only --config fly.jams.toml --app plyr-jams-next --ha=true
+      - name: keep two warm instances
+        run: flyctl scale count 2 --app plyr-jams-next --yes
+      - name: check readiness
+        run: curl --fail --retry 8 --retry-delay 2 --retry-all-errors https://plyr-jams-next.fly.dev/ready

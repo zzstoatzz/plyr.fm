@@ -35,6 +35,8 @@ pub fn main() !void {
         return err;
     };
 
+    if (settings.role == .jams) return @import("internal/jams/server.zig").run(allocator, io, settings);
+
     var postgres_store: ?postgres.PostgresTrackStore = if (settings.database_url) |url|
         try postgres.PostgresTrackStore.init(allocator, io, url, settings.database_pool_size)
     else
@@ -110,6 +112,7 @@ pub fn main() !void {
         null;
     const artist_metric_store = if (postgres_artist_metric_store) |*store| store.store() else null;
     switch (settings.role) {
+        .jams => unreachable,
         .account_reconciler => {
             const store = if (postgres_store) |*value| value else return error.AccountReconcilerDatabaseRequired;
             try account_reconciler.run(io, allocator, store.pool, .{
@@ -331,6 +334,9 @@ test {
     _ = @import("internal/projection/record_rejection.zig");
     _ = @import("internal/projection/verified_commit.zig");
     _ = @import("internal/projection/verified_snapshot.zig");
+    _ = @import("internal/jams/model.zig");
+    _ = @import("internal/jams/store.zig");
+    _ = @import("internal/jams/auth.zig");
     _ = @import("server.zig");
 }
 
