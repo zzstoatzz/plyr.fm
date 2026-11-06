@@ -174,3 +174,14 @@ track and pause state to the now-playing feed used by Piper.
 Continuous live broadcasts have no catalog track to count or scrobble. Entering
 Firehose clears the previous now-playing report and skips track-play requests,
 including when a catalog track is retained only as broadcast display metadata.
+
+## operator radio exclusions
+
+`RADIO_EXCLUDED_TRACK_IDS` accepts a JSON array of numeric track IDs, for example
+`[1112]`. Exclusions apply when sampling and when serving cached rotations,
+including upcoming tracks. They do not change catalog visibility, artist pages,
+or direct playback. Keep each environment's list separate.
+
+Joe Germuska's radiator recordings are production tracks 1099–1103 and 1107–1112.
+Track 1112 is “Wednesday 09:53 AM (Fisk Hall Radiators)”. Other recordings by the
+same artist are outside this curation decision.
