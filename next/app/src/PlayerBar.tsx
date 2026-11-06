@@ -40,7 +40,7 @@ export function PlayerBar() {
   const duration = player.status.duration || track.metadata.duration_seconds || 0;
   const progress = duration ? Math.min(1, player.status.currentTime / duration) : 0;
   const play = <PlayerControl primary label={playing ? 'Pause' : 'Play'} icon={playing ? Pause : Play}
-    onPress={player.toggle} busy={player.loading} />;
+    onPress={() => player.setPlaying(!playing)} busy={player.loading} />;
   const error = player.error ?? player.status.error;
   const open = () => { openedFrom.current = path; if (Platform.OS === 'web') router.navigate('/now-playing'); else setExpanded(true); };
   const identity = <Pressable ref={trigger} accessibilityRole="button" accessibilityLabel="Open now playing" onPress={open}
@@ -64,9 +64,9 @@ export function PlayerBar() {
               <PlayerControl label="Next" icon={SkipForward} onPress={() => void player.next()} />
             </View>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <Text style={{ color: theme.muted, fontSize: 11, fontVariant: ['tabular-nums'] }}>{clock(player.status.currentTime)}</Text>
-              <View style={{ flex: 1 }}><Slider accessibilityLabel="Playback position" minimumValue={0} maximumValue={duration || 1} value={scrub?.id === track.id ? scrub.seconds : player.status.currentTime}
-                disabled={!duration || !!error} onSlidingStart={seconds => setScrub({ id: track.id, seconds })} onValueChange={seconds => setScrub({ id: track.id, seconds })} onSlidingComplete={seconds => { player.seek(seconds); setScrub(undefined); }} /></View>
+              <Text style={{ color: theme.muted, fontSize: 11, fontVariant: ['tabular-nums'] }}>{clock(player.seekPreview ?? player.status.currentTime)}</Text>
+              <View style={{ flex: 1 }}><Slider accessibilityLabel="Playback position" minimumValue={0} maximumValue={duration || 1} value={scrub?.id === track.id ? scrub.seconds : player.seekPreview ?? player.status.currentTime}
+                disabled={!player.canSeek || !duration || !!error} onSlidingStart={seconds => setScrub({ id: track.id, seconds })} onValueChange={seconds => setScrub({ id: track.id, seconds })} onSlidingComplete={seconds => { player.seek(seconds); setScrub(undefined); }} /></View>
               <Text style={{ color: theme.muted, fontSize: 11, fontVariant: ['tabular-nums'] }}>{clock(duration)}</Text>
             </View>
           </View>

@@ -43,11 +43,12 @@ export default function Queue() {
         <View style={styles.header}>
           <Heading>Now playing</Heading>
           <View style={styles.actions}>
-            <IconButton label="Start a Jam" onPress={() => {
+            <IconButton label={player.jam ? "Open Jam" : "Start a Jam"} selected={!!player.jam} onPress={() => {
+              if (player.jam) { router.push({ pathname: '/jam/[room]', params: { room: `${player.jam.host}~${player.jam.key}` } }); return; }
               if (did && player.current) router.push({ pathname: '/jam/[room]', params: { room: `${did}~${randomUUID()}`, track: player.current.id } });
               else router.push({ pathname: '/login', params: { return_to: '/queue' } });
             }}><Users size={20} color={theme.text} /></IconButton>
-            <IconButton label={`Repeat: ${player.repeat}`} selected={player.repeat !== 'off'}
+            <IconButton label={`Repeat: ${player.repeat}`} disabled={!!player.jam} selected={player.repeat !== 'off'}
               onPress={() => player.setRepeat(player.repeat === 'off' ? 'all' : player.repeat === 'all' ? 'one' : 'off')}>
               <RepeatIcon size={20} color={player.repeat === 'off' ? theme.muted : theme.accent} />
             </IconButton>

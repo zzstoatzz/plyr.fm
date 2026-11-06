@@ -47,7 +47,7 @@ export function KeyboardShortcuts({ origin }: { origin: string }) {
       } else if (!radio.station) {
         if (key === 'j') player.previous();
         else if (key === 'l') void player.next();
-        else player.seek(Math.max(0, player.status.currentTime + (key === 'arrowleft' ? -10 : 10)));
+        else player.skip(key === 'arrowleft' ? -10 : 10);
       }
     }
     document.addEventListener('keydown', keydown);

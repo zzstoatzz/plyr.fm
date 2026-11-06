@@ -2,11 +2,11 @@ import {
 	encapsulate, formatWantMacHeader, MAC_HEADER, parseMacHeader, RECORD_MAC_TYPE,
 	verifyRecord, WANT_MAC_HEADER
 } from '@atproto/space';
-import type { Agent, Did } from './auth-state';
+import type { Agent, Auth, Did } from './auth-state';
 import { credentialFor, signedFetch, type SpaceAudioTransport } from './gated-audio-shared';
 import { didDocument, pdsEndpoint } from './identity';
 
-import { JAM_SPACE } from './auth-config';
+import { JAM_SPACE, JAM_COORDINATOR_URL, JAM_SERVICE_AUDIENCE, JAM_JOIN_METHOD } from './auth-config';
 
 const { type, collection } = JAM_SPACE;
 
@@ -66,4 +66,39 @@ export function jamSpace(agent: Agent, did: Did, host: Did, key: string, transpo
 			return value.value;
 		}
 	};
+}
+
+export interface InitialJam {
+  queue: { id: string; uri: string; cid: string; durationMs: number }[];
+  index?: number;
+  playing?: boolean;
+  positionMs?: number;
+}
+
+export async function joinJam(auth: Auth, host: Did, key: string, initial?: InitialJam): Promise<{ ticket: string; websocketUrl: string }> {
+  if (!auth.agent) throw new Error('Sign in to join this Jam');
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 15_000);
+  try {
+    const space = `at://${host}/space/${JAM_SPACE.type}/${key}`;
+    const [service, delegation] = await Promise.all([
+      auth.agent.handle(`/xrpc/com.atproto.server.getServiceAuth?${new URLSearchParams({ aud: JAM_SERVICE_AUDIENCE, lxm: JAM_JOIN_METHOD })}`, { signal: controller.signal }),
+      auth.agent.handle(`/xrpc/com.atproto.space.getDelegationToken?${new URLSearchParams({ space })}`, { method: 'GET', signal: controller.signal })
+    ]);
+    if (!service.ok) throw new Error('Enable Jams again to allow real-time playback');
+    if (!delegation.ok) throw new Error('Your account cannot access this Jam');
+    const serviceBody = await service.json() as { token?: unknown };
+    const delegationBody = await delegation.json() as { token?: unknown };
+    if (typeof serviceBody.token !== 'string' || typeof delegationBody.token !== 'string') throw new Error('Could not authorize this Jam');
+    const response = await fetch(`${JAM_COORDINATOR_URL}/v1/jams/join`, {
+      method: 'POST', headers: { 'content-type': 'application/json' }, signal: controller.signal,
+      body: JSON.stringify({ host, key, serviceToken: serviceBody.token, delegationToken: delegationBody.token, initial })
+    });
+    const body = await response.json() as { ticket?: unknown; error?: { message?: string } };
+    if (!response.ok || typeof body.ticket !== 'string') throw new Error(body.error?.message || 'Could not connect to this Jam');
+    const socket = new URL('/v1/jams/socket', JAM_COORDINATOR_URL);
+    socket.protocol = socket.protocol === 'https:' ? 'wss:' : 'ws:';
+    socket.searchParams.set('ticket', body.ticket);
+    return { ticket: body.ticket, websocketUrl: socket.toString() };
+  } finally { clearTimeout(timer); }
 }

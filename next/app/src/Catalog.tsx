@@ -48,7 +48,7 @@ function TrackDetail({ id, onPlay, onEnqueue, trackActions }: {
         <View style={{ flex: 1, alignItems: 'center' }}><PlayerControl primary large icon={player.current?.id === track.id && player.status.playing ? PauseIcon : PlayIcon}
           label={player.current?.id === track.id && player.status.playing ? 'Pause' : 'Play'}
           busy={player.current?.id === track.id && player.loading}
-          onPress={() => player.current?.id === track.id ? player.toggle() : onPlay(track)} /></View>
+          onPress={() => player.current?.id === track.id ? player.setPlaying(!player.status.playing) : onPlay(track)} /></View>
         <View style={{ flex: 1, alignItems: 'center' }}><PlayerControl icon={ListPlus} label="Add to queue" onPress={() => onEnqueue(track)} /></View>
       </>}
       stats={<TrackPlayCount track={track} />}
