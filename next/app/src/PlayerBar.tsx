@@ -1,7 +1,7 @@
 import { Text } from './Text';
-import { router } from 'expo-router';
-import { useState } from 'react';
-import { Platform, Pressable, View, useWindowDimensions } from 'react-native';
+import { router, usePathname } from 'expo-router';
+import { useEffect, useRef, useState } from 'react';
+import { Platform, Pressable, View, useWindowDimensions, type ViewInstance } from 'react-native';
 import Pause from 'lucide-react-native/icons/pause';
 import Play from 'lucide-react-native/icons/play';
 import SkipBack from 'lucide-react-native/icons/skip-back';
@@ -18,6 +18,17 @@ import { PlayerControl } from './PlayerControl';
 export function PlayerBar() {
   const player = usePlayback();
   const theme = useAppearance();
+  const path = usePathname();
+  const previousPath = useRef(path);
+  const openedFrom = useRef<string | undefined>(undefined);
+  const trigger = useRef<ViewInstance>(null);
+  useEffect(() => {
+    const restore = previousPath.current === '/now-playing' && openedFrom.current === path;
+    previousPath.current = path;
+    if (!restore) return;
+    const frame = requestAnimationFrame(() => trigger.current?.focus());
+    return () => cancelAnimationFrame(frame);
+  }, [path]);
   const { width } = useWindowDimensions();
   const desktop = Platform.OS === 'web' && width >= 800;
   const [expanded, setExpanded] = useState(false);
@@ -30,8 +41,8 @@ export function PlayerBar() {
   const play = <PlayerControl primary label={playing ? 'Pause' : 'Play'} icon={playing ? Pause : Play}
     onPress={player.toggle} busy={player.loading} />;
   const error = player.error ?? player.status.error;
-  const open = () => Platform.OS === 'web' ? router.navigate('/now-playing') : setExpanded(true);
-  const identity = <Pressable accessibilityRole="button" accessibilityLabel="Open now playing" onPress={open}
+  const open = () => { openedFrom.current = path; if (Platform.OS === 'web') router.navigate('/now-playing'); else setExpanded(true); };
+  const identity = <Pressable ref={trigger} accessibilityRole="button" accessibilityLabel="Open now playing" onPress={open}
     style={{ flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 52 }}>
     <Cover uri={track.media.artwork?.url} size={desktop ? 52 : 42} />
     <View style={{ flex: 1, minWidth: 0 }}>
