@@ -48,3 +48,27 @@ A test that forcibly replaced the whole document during pagination reported a cr
 Normal production was not promoted. `production-fe` remained `99334ecb0830fcd8eef411dad35f857361f48d43`; production web/API health returned 200. Only the `plyr-fm-next` Pages workflow deployed these UI changes. Owned local ZDS/PLC fixtures were stopped and removed after testing.
 
 The [final #2417 deployment](https://github.com/zzstoatzz/plyr.fm/actions/runs/42115986928) published `b93d420da2a893af4ef984879a008d8f0c7661df`. Its live focused-search Escape check passed in Chrome at 800/1280px in both themes and WebKit at 1280px in dark, with the same real Drone Mix audio continuing after dismissal.
+
+
+## Full-screen correction (#2419)
+
+The user rejected the side-panel direction, not just its polish. #2419 removes
+that component/context and restores `/now-playing` on desktop as a true full-screen
+view with viewport-sized artwork and familiar seek, previous/next, 15-second
+rewind/forward, queue, detail and volume controls. Its dock spans the browser
+below both navigation and content, following production's left/center/right
+arrangement. The dock is hidden, rather than duplicated, during expansion.
+
+The track detail presentation and root audio owner are unchanged. Mobile keeps
+its protected body swipe. Close/Back/Escape return focus to the dock when returning
+to the originating page; queue/detail links preserve their own destination.
+
+Controlled Chrome tests covered 390/800/1280px in both themes, and WebKit covered
+800/1280px. Tests measure dock/expanded geometry, assert one exposed expanded
+transport, operate seek/volume/mute/rewind, navigate through Back/Escape/queue/detail,
+and retain the exact playing media element. Short desktop windows at 1.4x text
+scale remain scrollable with reachable controls. Mobile swipe, short-screen,
+long-name, missing-artwork and history tests passed. All documented keyboard
+shortcuts, including radio handoff, passed. Production's dock was also rendered
+in a read-only browser session for visual comparison. Native CI exports remain
+bundle checks, not physical-device acceptance.

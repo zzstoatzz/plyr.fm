@@ -16,6 +16,7 @@ import type { Track } from './api';
 import { useAppearance } from './appearance';
 import { Cover, artistName } from './CatalogPieces';
 import { PlayerVolume } from './PlayerVolume';
+import { PlayerSeek } from './PlayerSeek';
 import { PlayerControl } from './PlayerControl';
 import { usePlayback } from './playback';
 import { usePlayerDismiss } from './use-player-dismiss';
@@ -95,8 +96,10 @@ export function NowPlaying({ track, close, navigate }: { track: Track; close: ()
               </View>
               <View style={styles.transport}>
                 <View {...dismiss.protect}><PlayerControl icon={SkipBack} label="Previous" onPress={player.previous} /></View>
+                {sideBySide && <PlayerSeek />}
                 <View {...dismiss.protect}><PlayerControl icon={playing ? Pause : Play} label={playing ? 'Pause' : 'Play'}
                   onPress={player.toggle} primary large busy={player.loading} /></View>
+                {sideBySide && <PlayerSeek forward />}
                 <View {...dismiss.protect}><PlayerControl icon={SkipForward} label="Next" onPress={() => void player.next()} /></View>
               </View>
               <View style={[styles.utilities, { borderColor: theme.surface }]}>

@@ -26,13 +26,15 @@ async function runDesktop(browser, width, theme, { setup, track, screenshot }) {
   await continuity();await screenshot(page,`desktop-${width}-${theme}-expanded`);
   await dialog.getByRole('slider',{name:'Playback position',exact:true}).focus();await page.keyboard.press('ArrowRight');
   await page.waitForFunction(()=>window.__desktopMedia.currentTime>=1);
+  await dialog.getByRole('button',{name:'Forward 15 seconds',exact:true}).dblclick();await page.waitForFunction(()=>window.__desktopMedia.currentTime>30);
+  await dialog.getByRole('button',{name:'Rewind 15 seconds',exact:true}).click();await page.waitForFunction(()=>window.__desktopMedia.currentTime>15&&window.__desktopMedia.currentTime<25);
   await dialog.getByRole('slider',{name:'Volume',exact:true}).focus();await page.keyboard.press('Home');await page.waitForFunction(()=>window.__desktopMedia.volume===0);
   await page.keyboard.press('End');await page.waitForFunction(()=>window.__desktopMedia.volume===1);
   await dialog.getByRole('button',{name:'Pause',exact:true}).click();await page.waitForFunction(()=>window.__desktopMedia.paused);
   await dialog.getByRole('button',{name:'Play',exact:true}).click();await continuity();
   await page.keyboard.press('Escape');await page.waitForURL(original);await dialog.waitFor({state:'detached'});await continuity();
   await page.getByRole('button',{name:'Open now playing',exact:true}).waitFor();
-  assert.equal(await page.evaluate(()=>document.activeElement?.getAttribute('aria-label')),'Open now playing');
+  await page.waitForFunction(()=>document.activeElement?.getAttribute('aria-label')==='Open now playing');
   await page.getByRole('button',{name:'Open now playing',exact:true}).click();await page.waitForURL('**/now-playing');
   await page.goBack();await page.waitForURL(original);await continuity();
   await page.getByRole('button',{name:'Open now playing',exact:true}).click();await page.waitForURL('**/now-playing');

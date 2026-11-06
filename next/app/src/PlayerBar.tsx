@@ -13,6 +13,7 @@ import { useAppearance } from './appearance';
 import { usePlayback } from './playback';
 import { Cover, artistName } from './CatalogPieces';
 import { NowPlaying } from './NowPlaying';
+import { PlayerSeek } from './PlayerSeek';
 import { PlayerControl } from './PlayerControl';
 
 export function PlayerBar() {
@@ -57,9 +58,9 @@ export function PlayerBar() {
       <View style={{ flexDirection: 'row', alignItems: 'center', padding: desktop ? 0 : 5, gap: desktop ? 24 : 4 }}>
         {identity}
         {desktop ? <>
-          <View style={{ flex: 1.4, minWidth: 0, maxWidth: 600 }}>
+          <View style={{ flex: 1.4, minWidth: 224, maxWidth: 600 }}>
             <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center' }}>
-              <PlayerControl label="Previous" icon={SkipBack} onPress={player.previous} />{play}
+              <PlayerControl label="Previous" icon={SkipBack} onPress={player.previous} /><PlayerSeek />{play}<PlayerSeek forward />
               <PlayerControl label="Next" icon={SkipForward} onPress={() => void player.next()} />
             </View>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>

@@ -47,6 +47,14 @@ plyr.fm should become:
 
 ### November 2026
 
+#### Next full-screen player correction (November 5)
+
+#2419 removes the rejected desktop side panel. Now Playing is full-screen again,
+with large artwork and familiar controls. The desktop dock spans the entire
+window, with centered transport/seek and queue/volume on the right; expanded
+playback hides the dock. The root audio owner and track detail page are unchanged.
+Mobile retains protected body-swipe dismissal. Production was not promoted.
+
 #### Next Home and desktop player (November 5)
 
 #2413–#2417 add visible playback/navigation accents, explain saving preferences

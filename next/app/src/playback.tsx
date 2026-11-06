@@ -220,6 +220,7 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
     isPlaying: () => player.playing,
     previous: () => { if (status.currentTime > 3 || index === 0) void accounting.seekTo(0); else void load(queue, index - 1); },
     seek: (seconds) => { if (ready) void accounting.seekTo(seconds); },
+    skip: (seconds) => { if (ready) void accounting.seekTo(Math.max(0, Math.min(player.duration, player.currentTime + seconds))); },
     jump: (at) => { void load(queue, at); },
     enqueue: (track) => { if (current) setQueue((items) => [...items, track]); else play(track); },
     remove: (at) => { if (at > index) setQueue((items) => items.filter((_, position) => position !== at)); },
@@ -260,6 +261,7 @@ interface Playback {
   next(): Promise<void>;
   previous(): void;
   seek(seconds: number): void;
+  skip(seconds: number): void;
   jump(index: number): void;
   enqueue(track: Track): void;
   remove(index: number): void;
