@@ -28,8 +28,14 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
   settings.current = { repeat, volume };
   const sourceEvents = useRef<{ remove(): void } | null>(null);
   const sequence = useRef(0);
+  const seekRequest = useRef(0);
+  const [pendingSeek, setPendingSeek] = useState<{ source: number; seconds: number } | null>(null);
   const objectUrl = useRef<string | null>(null);
   const current = queue[index];
+  useEffect(() => {
+    if (pendingSeek && (pendingSeek.source !== sequence.current || status.error ||
+      !status.isBuffering && Math.abs(status.currentTime - pendingSeek.seconds) < 0.5)) setPendingSeek(null);
+  }, [pendingSeek, status.currentTime, status.isBuffering, status.error, current]);
   const jam = useJamPlayback({
     queue, index, current, ready, buffering: status.isBuffering, observedPosition: status.currentTime,
     position: () => player.currentTime,
@@ -230,10 +236,24 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
     setPlaying(!player.playing);
   }
 
+  function seek(seconds: number) {
+    if (!Number.isFinite(seconds)) return;
+    const target = Math.max(0, Math.min(player.duration || seconds, seconds));
+    if (jam.command({ action: 'seek', positionMs: Math.round(target * 1000) }) || !ready) return;
+    const request = ++seekRequest.current;
+    const source = sequence.current;
+    setPendingSeek({ source, seconds: target });
+    void accounting.seekTo(target).catch(cause => {
+      if (request !== seekRequest.current || source !== sequence.current) return;
+      setPendingSeek(null);
+      setError(cause instanceof Error ? cause.message : 'could not seek audio');
+    });
+  }
+
   const value: Playback = {
     jam: jam.jam,
     canSeek: !jam.jam || jam.jam.canSeek && jam.jam.phase === 'connected',
-    seekPreview: jam.jam?.pendingSeekMs === undefined ? undefined : jam.jam.pendingSeekMs / 1000,
+    seekPreview: jam.jam ? jam.jam.pendingSeekMs === undefined ? undefined : jam.jam.pendingSeekMs / 1000 : pendingSeek?.source === sequence.current ? pendingSeek.seconds : undefined,
     joinJam: jam.join,
     leaveJam: (restore = true) => jam.leave(restore),
     jamCommand: intent => intent.action === 'play' || intent.action === 'pause' ? jam.setPlaying(intent.action === 'play', jam.jam?.state) : jam.command(intent),
@@ -244,11 +264,11 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
       if (jam.active()) {
         if (room && player.currentTime > 3 && jam.jam?.canSeek) jam.command({ action: 'seek', positionMs: 0 });
         else if (room && room.index > 0) jam.command({ action: 'selectTrack', index: room.index - 1 });
-      } else if (player.currentTime > 3 || index === 0) void accounting.seekTo(0);
+      } else if (player.currentTime > 3 || index === 0) seek(0);
       else void load(queue, index - 1);
     },
-    seek: (seconds) => { if (!jam.command({ action: 'seek', positionMs: Math.max(0, Math.round(seconds * 1000)) }) && ready) void accounting.seekTo(seconds); },
-    skip: (seconds) => { const base = jam.jam?.pendingSeekMs === undefined ? player.currentTime : jam.jam.pendingSeekMs / 1000; const target = Math.max(0, Math.min(player.duration, base + seconds)); if (!jam.command({ action: 'seek', positionMs: Math.round(target * 1000) }) && ready) void accounting.seekTo(target); },
+    seek,
+    skip: (seconds) => { const base = jam.jam ? (jam.jam.pendingSeekMs === undefined ? player.currentTime : jam.jam.pendingSeekMs / 1000) : pendingSeek?.source === sequence.current ? pendingSeek.seconds : player.currentTime; seek(base + seconds); },
     jump: (at) => { if (!jam.command({ action: 'selectTrack', index: at })) void load(queue, at); },
     enqueue: (track) => {
       const ref = jamTrack(track);

@@ -1,5 +1,19 @@
 # plyr.fm - status
 
+## local player scrubbing fix (2026-11-06)
+
+Local branch `codex/local-player-scrubbing` fixes a reproduced web-slider React
+update loop during touch scrubbing and the release-position rollback. Gesture
+values stay local until release; solo playback retains the requested position
+until audio status catches up, and handles rejected seeks. Nothing deployed.
+
+`next/app/scripts/check-player-scrubbing.cjs` serves a local range-capable WAV
+and exported app, with external requests intercepted. Chrome touch and mouse,
+and WebKit mouse, passed repeated forward/backward seeks while playing and
+paused at 390px/light and 1280px/dark. It checks page errors, position mutations,
+and the real audio playhead. Typecheck, web export, and all 55 unit tests pass.
+Physical iPhone Safari remains unverified. Shipping to Next for live browser verification.
+
 ## long-term vision
 
 ### the problem
