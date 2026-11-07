@@ -62,7 +62,7 @@ function Shell() {
     { label: 'Home', href: '/', icon: House, active: path === '/' },
     { label: 'Search', href: '/search', icon: Search, active: path === '/search' },
     { label: 'Library', href: '/library', icon: Library, active: ['/library', '/liked', '/playlists'].includes(path) },
-    { label: 'You', href: accountPath, icon: UserRound, active: ['/portal', '/login', '/settings', '/upload'].includes(path) }
+    { label: 'You', href: accountPath, icon: UserRound, active: ['/portal', '/login', '/upload'].includes(path) || !wide && path === '/settings' }
   ];
   const showBack = !['/', '/search', '/library', '/portal', '/login'].includes(path);
   const detail = /^\/(track|u|album|playlist|edit-track)\//.test(path);
