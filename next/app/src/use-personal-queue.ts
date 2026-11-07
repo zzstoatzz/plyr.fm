@@ -138,10 +138,12 @@ export function usePersonalQueue(target: Target) {
         const at = newSource && latest.revision === wire.revision ? wire.positionMs / 1000 : jamPosition(latest, current.position(Date.now())) / 1000;
         if (newSource || Math.abs(runtime.current.position() - at) > 0.75) await runtime.current.seek(at);
         if (stale() || request !== synchronization.current || (runtime.current.suspended || held.current)) return;
+        const settled = current.wire;
+        if (!settled || settled.occurrence !== wire.occurrence) return;
         loaded.current = key;
-        if (newSource && latest.playing && latest.personal?.output?.clientId === client.current) current.command(progressIntent(current, at));
+        if (newSource && settled.playing && settled.personal?.output?.clientId === client.current) current.command(progressIntent(current, at));
         setRestoredPosition(undefined);
-        if (latest.personal?.output?.clientId === client.current && latest.playing) runtime.current.play();
+        if (settled.personal?.output?.clientId === client.current && settled.playing && !pausedHere.current) runtime.current.play();
         else runtime.current.pause();
       } catch (error) { if (!stale()) runtime.current.error(error instanceof Error ? error.message : 'Could not restore playback'); }
       finally {
