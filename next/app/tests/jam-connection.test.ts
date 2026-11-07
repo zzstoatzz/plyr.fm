@@ -132,3 +132,23 @@ test('captured pause retains its original revision and may noop after a peer alr
     assert.ok(errors.some(error => error.includes('Jam changed')));
   } finally { connection.close(); }
 });
+
+test('personal prepared headers remain identical behind an acknowledged progress sample', async () => {
+  const { connection, socket } = setup();
+  const state: JamState = { ...base, queue: [{ ...base.queue[0], key: 'one' }], personal: {
+    explicitEnd: 1, tailKind: null, label: null, repeat: 'off', keepPlaying: false,
+    cursor: null, output: null, disconnected: false,
+  } };
+  const prepared = { action: 'enqueue' as const, id: 'durable-edit', epoch: state.epoch,
+    expectedRevision: state.revision, occurrence: state.occurrence, expectedOutput: null,
+    entry: { ...base.queue[0], key: 'two' } };
+  try {
+    await connection.connect(); socket.open(); socket.receive({ type: 'state', state, serverTimeMs: 10_000 });
+    connection.command({ action: 'progress', positionMs: 1_500 });
+    const progress = socket.sent.find(frame => frame.action)!;
+    connection.enqueuePrepared({ ...prepared });
+    socket.receive({ type: 'result', id: progress.id, outcome: 'applied',
+      state: { ...state, revision: 2, positionMs: 1_500 }, serverTimeMs: 10_000 });
+    assert.deepEqual(socket.sent.filter(frame => frame.action)[1], prepared);
+  } finally { connection.close(); }
+});

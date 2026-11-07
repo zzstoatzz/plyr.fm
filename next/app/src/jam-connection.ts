@@ -202,7 +202,7 @@ export class JamConnection {
           if (message.type === 'result' && message.id === this.inFlight?.id) {
             const sent = this.inFlight;
             const revision = this.state?.revision;
-            if (message.outcome === 'applied' && sent && revision === sent.expectedRevision + 1) {
+            if (!this.state?.personal && message.outcome === 'applied' && sent && revision === sent.expectedRevision + 1) {
               for (const pending of this.pending) if (pending.epoch === sent.epoch && pending.occurrence === sent.occurrence && pending.expectedRevision === sent.expectedRevision) pending.expectedRevision = revision;
             } else if (message.outcome !== 'applied' && message.outcome !== 'noop' && message.outcome !== 'duplicate') {
               this.options.onError(message.outcome === 'forbidden' ? 'Only the host can seek in this Jam' : 'The Jam changed. Try that action again.');
