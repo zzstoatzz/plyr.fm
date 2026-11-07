@@ -9,7 +9,7 @@ function data(value: unknown): unknown[] {
 }
 
 export async function homeTags(signal: AbortSignal, cursor?: string): Promise<{ data: HomeTag[]; nextCursor?: string }> {
-  const query = new URLSearchParams({ limit: '15' });
+  const query = new URLSearchParams({ limit: '50' });
   if (cursor) query.set('cursor', cursor);
   const response = await fetch(`${API_URL}/v1/tags?${query}`, { signal });
   if (!response.ok) throw new Error('could not load tags');

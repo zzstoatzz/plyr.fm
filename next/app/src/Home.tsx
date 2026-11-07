@@ -70,7 +70,7 @@ export function Home({ onPlay }: { onPlay: Play }) {
           <Pressable accessibilityRole="button" accessibilityLabel="Clear tag filters" onPress={() => changeTags([])} style={styles.clear}><Text style={{ color: colors.muted, fontSize: 12 * colors.scale }}>clear</Text></Pressable>
           {selected.map((name) => tag(name, true, tags.find((item) => item.name === name)?.track_count))}
         </View>}
-        <TagScroller onNearEnd={() => void tagPages.more()}>
+        <TagScroller hasMore={tagPages.hasMore} onNearEnd={() => void tagPages.more()}>
           {tags.filter(({ name }) => !selected.includes(name)).map(({ name, track_count }) => tag(name, false, track_count))}
           {tagPages.hasMore && <Pressable accessibilityRole="button" accessibilityLabel="More tags" accessibilityState={{ busy: tagPages.loading, disabled: tagPages.loading }} disabled={tagPages.loading} onPress={() => void tagPages.more(true)} style={styles.tagTarget}>
             <Text style={{ color: colors.muted, fontSize: 12 * colors.scale }}>{tagPages.loading ? 'loading…' : 'more'}</Text>
