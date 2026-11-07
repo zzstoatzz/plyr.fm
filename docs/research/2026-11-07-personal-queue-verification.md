@@ -42,7 +42,11 @@ drag, scrubbing/navigation, external OAuth preservation, a real playback retry
 after an injected API 503, and two-account Jam create/invite/join. Leaving a Jam
 or tuning radio does not pause another device's personal output or a remaining
 Jam participant. Phone Now Playing was inspected at 390 × 844 in light and dark.
-Final continuation/repeat and fully deployed-client acceptance are still pending.
+Continuation enable/disable, repeat-all, repeat-one and exactly-once advancement
+through duplicate records passed in Chrome. Firefox also passed core playback,
+passive clock rendering, concurrent edits, output transfer, paused refresh, delayed
+admission Play/Pause, lost-acknowledgement recovery, drag and scrubbing/navigation.
+Fully deployed-client acceptance remains pending.
 
 The browser run exposed an Expo status edge: clearing the media source could
 retain its previous playing status. Detached status is now normalized, and source
@@ -51,7 +55,8 @@ passive timeline rendering and reconnecting Play/Pause are fenced independently.
 
 ## Evidence and practical limits
 
-Client type checking and 76 behavior tests pass locally. Real Postgres endpoint
+Client type checking and 76 behavior tests pass locally. iOS and Android bundle
+exports pass; this is not physical native acceptance. Real Postgres endpoint
 coverage and two-store Redis races passed. The coordinator browser transport
 harness uses two local coordinators with actual public-PDS authorization. CI's
 normal Zig suite passes. Six existing authored-record fixture failures under the

@@ -34,7 +34,7 @@ const assert = require('node:assert/strict');
   const context=await browser.newContext({viewport:{width:1280,height:900}});await localAssets(context);
   if(anonymous&&root)await context.route('https://next.plyr.fm/oauth-client-metadata.json',async route=>{await new Promise(resolve=>setTimeout(resolve,1000));await route.fallback();});
   if (root) await context.route('https://pds.zat.dev/oauth/authorize**', async route => {
-    const response=await route.fetch({maxRedirects:0});
+    const response=await route.fetch({maxRedirects:0,headers:{...route.request().headers(),'accept-encoding':'identity'}});
     const destination=response.headers().location;
     if(destination&&new URL(destination,'https://pds.zat.dev').origin==='https://next.plyr.fm')
       await route.fulfill({status:200,contentType:'text/html',body:'<script>location.replace('+JSON.stringify(destination)+')</script>'});
@@ -70,7 +70,7 @@ const assert = require('node:assert/strict');
   await page.getByRole('combobox').fill(identity.handle);
   await page.getByRole('combobox').press('Enter');
   await page.waitForURL('https://pds.zat.dev/**');
-  await page.locator('input[name=password]').fill(identity.password);
+  try { await page.locator('input[name=password]').fill(identity.password); } catch(error) { await page.screenshot({path:path.join(artifacts,'provider-login-failure.png')}); console.log('provider login failure',new URL(page.url()).hostname);throw error; }
   await page.getByRole('button',{name:/^authorize$/i}).click();
   await page.waitForURL(url=>url.hostname==='next.plyr.fm'&&decodeURIComponent(url.pathname)===decodeURIComponent(returnTo.split('?')[0]));
   await page.waitForFunction(()=>window.queueFrames.some(f=>f.type==='state'));
@@ -104,6 +104,11 @@ const assert = require('node:assert/strict');
  const state=await b.evaluate(()=>window.queueFrames.at(-1).state);
  assert.equal(new Set(state.queue.map(e=>e.key)).size,state.queue.length);
  console.log('duplicate track occurrences synchronized',state.queue.length,'in',Math.round(performance.now()-addingAt),'ms');
+ const passiveSlider=b.getByRole('slider',{name:'Playback position',exact:true});
+ const passivePosition=Number(await passiveSlider.getAttribute('aria-valuenow'));
+ await b.waitForTimeout(1200);
+ assert.ok(Number(await passiveSlider.getAttribute('aria-valuenow'))>passivePosition+0.5,'passive timeline must advance without local audio');
+ console.log('passive playhead follows the shared clock without fetching audio');
  await b.getByRole('button',{name:'Play',exact:true}).first().click();
  await b.waitForFunction(()=>window.queueAudio.some(a=>!a.paused&&a.currentTime>1));
  await a.waitForFunction(()=>window.queueAudio.every(a=>a.paused));
