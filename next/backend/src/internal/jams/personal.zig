@@ -106,7 +106,16 @@ pub fn transition(a: std.mem.Allocator, state: p.State, command: p.Command, clie
                 },
                 .seek, .progress => {
                     const at = command.positionMs orelse return .{ .outcome = .invalid, .state = state };
-                    next.positionMs = @min(at, duration(state.queue[state.index]));
+                    if (command.action == .progress) if (command.entry) |entry| {
+                        const current = state.queue[state.index];
+                        if (entry.durationMs == 0 or entry.durationMs > p.max_position_ms or !sameOptional(entry.key, current.key) or
+                            !std.mem.eql(u8, entry.id, current.id) or !std.mem.eql(u8, entry.uri, current.uri) or !std.mem.eql(u8, entry.cid, current.cid))
+                            return .{ .outcome = .invalid, .state = state };
+                        const tracks = try a.dupe(p.Track, state.queue);
+                        tracks[state.index].durationMs = entry.durationMs;
+                        next.queue = tracks;
+                    };
+                    next.positionMs = @min(at, duration(next.queue[state.index]));
                 },
                 .advance => {
                     if (state.index + 1 < state.queue.len) next.index += 1 else if (old.repeat == .all) next.index = 0 else {
@@ -402,4 +411,33 @@ test "continuation drops old history instead of stalling at the queue bound" {
     try std.testing.expectEqual(@as(usize, p.max_tracks), next.state.queue.len);
     try std.testing.expectEqualStrings("key-199", next.state.queue[next.state.index].key.?);
     try std.testing.expectEqual(@as(u32, 195), next.state.personal.?.explicitEnd);
+}
+
+test "observed personal media duration bounds completion and explicit replay" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var initial = try testState(a);
+    var track = initial.queue[0];
+    track.durationMs = 0;
+    initial.queue = &.{track};
+    initial.personal = .{ .explicitEnd = 1 };
+    var state = (try transition(a, initial, testCommand(initial, .play), test_client, 200, test_collection)).state;
+    var progress = testCommand(state, .progress);
+    var observed = track;
+    observed.durationMs = 500;
+    progress.entry = observed;
+    progress.positionMs = 500;
+    state = (try transition(a, state, progress, test_client, 300, test_collection)).state;
+    try std.testing.expectEqual(@as(u64, 500), state.queue[0].durationMs);
+    var stale = progress;
+    stale.entry.?.key = "another-entry";
+    try std.testing.expectEqual(p.Outcome.invalid, (try transition(a, state, stale, test_client, 310, test_collection)).outcome);
+    state = (try transition(a, state, testCommand(state, .advance), test_client, 400, test_collection)).state;
+    try std.testing.expect(!state.playing);
+    try std.testing.expectEqual(@as(u64, 500), state.positionMs);
+    const occurrence = state.occurrence;
+    state = (try transition(a, state, testCommand(state, .play), test_client, 500, test_collection)).state;
+    try std.testing.expectEqual(occurrence + 1, state.occurrence);
+    try std.testing.expectEqual(@as(u64, 0), state.positionMs);
 }
