@@ -1,4 +1,5 @@
 const std = @import("std");
+const resolve_tracks = @import("../internal/application/resolve_tracks.zig");
 const get_track = @import("../internal/application/get_track.zig");
 const get_playback = @import("../internal/application/get_playback.zig");
 const list_track_likes = @import("../internal/application/list_track_likes.zig");
@@ -375,5 +376,27 @@ pub fn tags(request: *std.http.Server.Request, allocator: std.mem.Allocator, sto
         .invalid_request => try response.apiError(request, .invalid_request, request_id, cors),
         .unavailable => try response.apiError(request, .service_unavailable, request_id, cors),
         .internal_error => try response.apiError(request, .internal_error, request_id, cors),
+    }
+}
+
+pub fn resolve(request: *std.http.Server.Request, allocator: std.mem.Allocator, store: ?TrackStore, collection: []const u8, cors: response.CorsPolicy, request_id: []const u8) !void {
+    const response_cors = try response.captureCors(request, allocator, cors);
+    const reader = request.readerExpectContinue(&.{}) catch {
+        try response.apiError(request, .invalid_request, request_id, response_cors);
+        return;
+    };
+    const body = reader.allocRemaining(allocator, std.Io.Limit.limited(64 * 1024)) catch {
+        try response.apiError(request, .invalid_request, request_id, response_cors);
+        return;
+    };
+    const parsed = std.json.parseFromSliceLeaky(struct { ids: []const []const u8 }, allocator, body, .{}) catch {
+        try response.apiError(request, .invalid_request, request_id, response_cors);
+        return;
+    };
+    switch (resolve_tracks.execute(allocator, store, collection, parsed.ids)) {
+        .found => |value| try response.json(request, .ok, try std.json.Stringify.valueAlloc(allocator, value, .{}), request_id, response_cors),
+        .invalid_request => try response.apiError(request, .invalid_request, request_id, response_cors),
+        .unavailable => try response.apiError(request, .service_unavailable, request_id, response_cors),
+        .internal_error => try response.apiError(request, .internal_error, request_id, response_cors),
     }
 }

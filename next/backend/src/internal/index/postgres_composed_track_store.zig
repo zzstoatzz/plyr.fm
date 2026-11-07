@@ -17,6 +17,7 @@ const verified_list = @import("../domain/verified_list.zig");
 const track_id = @import("../identity/track_id.zig");
 const liked_track_store = @import("liked_track_store.zig");
 const store_module = @import("track_store.zig");
+const resolve_tracks = @import("../application/resolve_tracks.zig");
 const track_tag_sql = @import("track_tag_sql.zig");
 
 const TrackStore = store_module.TrackStore;
@@ -33,11 +34,25 @@ pub const PostgresComposedTrackStore = struct {
             .list_public_fn = listPublicOpaque,
             .ready_fn = readyOpaque,
             .tags_fn = tagsOpaque,
+            .resolve_fn = resolveOpaque,
         };
     }
 
     pub fn likedStore(self: *PostgresComposedTrackStore) liked_track_store.Store {
         return .{ .context = self, .list_fn = listLikedOpaque };
+    }
+
+    fn resolveOpaque(context: *anyopaque, allocator: std.mem.Allocator, uris: []const []const u8) TrackStore.Error![]const track.Track {
+        const self: *PostgresComposedTrackStore = @ptrCast(@alignCast(context));
+        if (uris.len == 0) return &.{};
+        var result = self.pool.query(resolve_query, .{ uris, self.profile_collection, self.like_collection }) catch return error.IndexUnavailable;
+        defer result.deinit();
+        var values: std.ArrayList(track.Track) = .empty;
+        while (result.next() catch return error.IndexUnavailable) |row| {
+            const value = decodeRow(allocator, row) catch |err| return if (err == error.OutOfMemory) error.OutOfMemory else error.CorruptProjection;
+            values.append(allocator, value) catch return error.OutOfMemory;
+        }
+        return values.toOwnedSlice(allocator) catch return error.OutOfMemory;
     }
 
     fn tagsOpaque(context: *anyopaque, allocator: std.mem.Allocator, collection: []const u8, limit: usize, after: ?tag_cursor.Cursor) TrackStore.Error![]const store_module.Tag {
@@ -567,6 +582,11 @@ const detail_query = joined_projection ++ "\n" ++
 ++ common_policy ++ "\n" ++
     \\LIMIT 1
 ;
+
+const resolve_query = joined_projection ++ "\n" ++
+    \\WHERE v.record_uri = ANY($1::text[])
+    \\  AND COALESCE(pol.visibility, 'public') <> 'private'
+++ common_policy;
 
 pub const discovery_policy = common_policy ++
     \\  AND v.collection = $1
@@ -1204,6 +1224,7 @@ test "composed PostgreSQL reads use verified records and authoritative account s
         .{record_uri},
     );
     try std.testing.expect((try implementation.store().getByUri(a, record_uri)) == null);
+    try std.testing.expectEqual(@as(usize, 0), (try implementation.store().resolve(a, &.{record_uri})).len);
     try std.testing.expect((try playback_implementation.store().getByUri(a, record_uri)) == null);
     var private_query = search_request;
     private_query.query = "Verified Title";
@@ -1238,6 +1259,7 @@ test "composed PostgreSQL reads use verified records and authoritative account s
         .{record_uri},
     );
     try std.testing.expect((try implementation.store().getByUri(a, record_uri)) == null);
+    try std.testing.expectEqual(@as(usize, 0), (try implementation.store().resolve(a, &.{record_uri})).len);
     _ = try pool.exec(
         "UPDATE plyr_index.track_policies SET moderation_decision = 'allow' WHERE record_uri = $1",
         .{record_uri},
@@ -1248,6 +1270,7 @@ test "composed PostgreSQL reads use verified records and authoritative account s
         .{record_uri},
     );
     try std.testing.expect((try implementation.store().getByUri(a, record_uri)) == null);
+    try std.testing.expectEqual(@as(usize, 0), (try implementation.store().resolve(a, &.{record_uri})).len);
     _ = try pool.exec(
         "UPDATE plyr_index.track_policies SET operator_labels = '[\"copyright-violation\"]', moderation_decision = 'allow' WHERE record_uri = $1",
         .{record_uri},
@@ -1260,6 +1283,15 @@ test "composed PostgreSQL reads use verified records and authoritative account s
         .after = null,
     });
     try std.testing.expectEqual(@as(usize, 2), page.len);
+    var missing_buffer: [2048]u8 = undefined;
+    const missing_id = try track_id.encode(&missing_buffer, "at://did:plc:artist/fm.plyr.dev.track/missing");
+    const batch = resolve_tracks.execute(a, implementation.store(), "fm.plyr.dev.track", &.{ page[1].value.id, page[0].value.id, page[1].value.id, missing_id }).found;
+    try std.testing.expectEqual(@as(usize, 2), batch.data.len);
+    try std.testing.expectEqualStrings(page[1].value.id, batch.data[0].id);
+    try std.testing.expectEqualStrings(page[0].value.id, batch.data[1].id);
+    try std.testing.expectEqual(@as(usize, 1), batch.missing.len);
+    try std.testing.expectEqualStrings(missing_id, batch.missing[0]);
+
     _ = try pool.exec("UPDATE plyr_index.track_tag_records SET tags=ARRAY['drone'],tags_present=true WHERE record_uri=$1", .{record_uri});
     _ = try pool.exec("UPDATE plyr_index.track_tag_records SET tags=ARRAY['ambient'],tags_present=true WHERE record_uri=$1", .{pds_only_uri});
     var quiet = pds_only;
@@ -1492,6 +1524,7 @@ test "composed PostgreSQL reads use verified records and authoritative account s
         }),
     );
     try std.testing.expect((try implementation.store().getByUri(a, record_uri)) == null);
+    try std.testing.expectEqual(@as(usize, 0), (try implementation.store().resolve(a, &.{record_uri})).len);
     try std.testing.expect((try playback_implementation.store().getByUri(a, record_uri)) == null);
     try std.testing.expectEqual(@as(usize, 0), (try search_store.search(a, search_request)).len);
     try std.testing.expect((try list_store.getByUri(a, .{

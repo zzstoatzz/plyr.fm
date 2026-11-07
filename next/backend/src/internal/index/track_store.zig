@@ -34,7 +34,13 @@ pub const TrackStore = struct {
     list_public_fn: *const fn (*anyopaque, std.mem.Allocator, ListRequest) Error![]ListItem,
     ready_fn: *const fn (*anyopaque) bool,
 
+    resolve_fn: ?*const fn (*anyopaque, std.mem.Allocator, []const []const u8) Error![]const track.Track = null,
+
     tags_fn: ?*const fn (*anyopaque, std.mem.Allocator, []const u8, usize, ?tag_cursor.Cursor) Error![]const Tag = null,
+
+    pub fn resolve(self: TrackStore, allocator: std.mem.Allocator, uris: []const []const u8) Error![]const track.Track {
+        return (self.resolve_fn orelse return error.IndexUnavailable)(self.context, allocator, uris);
+    }
 
     pub fn listTags(self: TrackStore, allocator: std.mem.Allocator, collection: []const u8, limit: usize, after: ?tag_cursor.Cursor) Error![]const Tag {
         return (self.tags_fn orelse return error.IndexUnavailable)(self.context, allocator, collection, limit, after);
