@@ -243,3 +243,14 @@ uptime sample is historical, not a post-move measurement. Durable play receipts
 are permanently retained per submitted occurrence, including suppressed ones;
 monitor journal growth and database storage rather than assuming the initial
 61MB branch size stays constant.
+
+
+### November 6 Jam cost addendum
+
+The real-time Jam MVP adds two 256 MB Zig coordinators and one dedicated 256 MB
+Redis machine with a 1 GB persistent volume. The [Jam completion audit](docs/research/2026-11-06-jams-live-verification.md)
+records an estimated **~$6.72/month additional baseline**, using prices checked
+November 5, excluding egress/snapshots. This was not included in the November 4
+$30–35 Next baseline above. No billing query was rerun for this documentation
+update; neither estimate is a refreshed invoice or a usage ceiling. Redis has
+one persistent primary; storage failover is not included in that estimate.

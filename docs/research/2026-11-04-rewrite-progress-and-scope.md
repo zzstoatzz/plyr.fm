@@ -1,41 +1,52 @@
 # Next rewrite progress and scope
 
-**Date** November 4, 2026
+**Created** November 4, 2026. **Updated** November 6, 2026.
 
-**Code checkpoint** `4487b55d4` on main, through #2360
+**Code checkpoint** `e98a14198` on main, through #2436.
 
-**Purpose** Record the architectural changes, implemented foundations, remaining ports, and decisions required before continuing.
+**Purpose** Track the architectural rewrite, shipped foundations, remaining ports,
+and decisions required before each implementation slice.
 
-This is a source and Git-history audit against the existing Python/Svelte app. Earlier PRs contain browser and service verification; this audit did not repeat those acceptance tests or recheck live reconciliation coverage. “Implemented” below means an implementation is present at this checkpoint. It does not mean production parity or cutover readiness.
+The inventory now incorporates merged work through this checkpoint rather than
+leaving the November 4 table as the current to-do list. Implementation, browser
+acceptance, real-device acceptance and cutover readiness remain separate claims.
+This update reviewed source, merged history and existing verification reports; it
+did not rerun backend acceptance, infrastructure failure tests or billing queries.
 
-## November 6 check-in
+## Current position
 
-The tables below preserve the November 4 checkpoint; they are not a live status
-matrix. Since then, Cycle 1 wired qualified listened-time accounting into the
-player, radio and Jam output, with a retryable receipt outbox. Historical total
-migration and personal listening history are still separate decisions. See
-[play accounting](../internal/architecture/next-play-accounting.md).
+The core has advanced beyond a replatform: direct client-to-PDS writes and
+independent appview verification now coexist with durable anonymous play receipts,
+verified browser Range delivery for private audio, and real-time Spaces-backed
+Jam rooms coordinated across two Zig instances through Redis. Neon remains the
+derived catalog/accounting store; no SQL writes occur per playback tick.
 
-The Spaces-backed real-time Jam MVP is now live and verified: shared explicit
-commands, host-only seeking, cross-instance Redis coordination, fresh admission
-on reconnect and real machine-failure recovery. See its
-[completion audit](2026-11-06-jams-live-verification.md) for measured behavior and
-limits, including one Redis primary, bounded membership freshness and deferred
-one-speaker/native acceptance. This replaces the polling-room description below.
+| Recent slice | Shipped and verified | Boundary still open |
+|---|---|---|
+| Play accounting, #2363/#2364/#2366/#2370 | Actual listened time, stable occurrence IDs, bounded durable client outbox, transactional Postgres receipt/cooldown/count; solo, catalog embeds, radio and audible Jam output use the shared qualification model. [Design](../internal/architecture/next-play-accounting.md), [browser evidence](2026-11-04-playback-browser-workflow.md). | Historical totals, private history/scrobbling, ingress abuse policy and long-term receipt growth; physical-device/background acceptance. |
+| Protected audio, #2421/#2426 | Record MAC verification and client-owned browser Range capabilities, with scoped image resolution. [Acceptance report](2026-11-05-private-audio-streaming.md). | Native remains file-backed; existing private-media compatibility and complete gated publishing still need their own port slice. |
+| Real-time Jams, #2422–#2425/#2428–#2430 | Real OAuth create/invite/join, explicit play/pause, host seeking, shared queue coordination and reconnect; two independent public browsers decoded audio and survived verified coordinator SIGKILL. [Completion audit](2026-11-06-jams-live-verification.md). | One Redis primary, admission-bounded revocation, one-speaker routing, native/background behavior and larger concurrency acceptance. This is the scoped MVP, not full legacy parity. |
+| Discovery and management, #2381/#2408/#2411/#2412/#2415 | Paginated creator tracks/albums, cancellable search reads with artwork, metrics hydrated after ranking/limiting, colored tags, automatic Home pagination and network artists. | For You, semantic/CLAP search, hidden tags and full publishing/collection editing remain. |
+| Stats, #2432 | Explained public totals for tracks, artists, duration and Next-qualified plays, excluding private/unlisted/removed records; cached rather than scanning on each request. | Not production historical counts or private listening analytics. Curate new metrics with explicit sources/definitions. |
+| Player and UI, #2429/#2435/#2436 | Scrubbing crash/snap-back fixed; direct queue drag, persistent dock, shortcuts and swipe behavior. Latest live UI has no outer beveled frame/gutters, a thin full-width status light, quieter navigation and no disabled end-of-feed button. | UI remains iterative. Two-column desktop feed is provisional, not a parity requirement. Physical iPhone/native behavior remains unverified. |
 
-Discovery now has tag filters and chart period cycling, the queue has drag
-reordering, and the shared player supports keyboard shortcuts and swipe
-navigation/dismissal. For You, semantic discovery, persistence/backgrounding,
-complete publishing/collection flows and the other recorded parity gaps remain
-work to verify and complete; a visual mockup is not implementation. UI material
-and layout studies are tracked in [#2431](https://github.com/zzstoatzz/plyr.fm/issues/2431).
+The #2435 visual implementation was revised in #2436 after product review;
+the mockup is not a standing specification. Keep the current decisions in
+[#2431](https://github.com/zzstoatzz/plyr.fm/issues/2431). #2436 also fixes a
+signed-in-only Firefox/Zen page-load crash: Expo Router merged an artist link's
+style array into numbered CSS properties. Its regression renders network artists
+with fixture auth/follow responses; anonymous-only browser checks missed it.
 
-The new Stats slice establishes four explained public-catalog totals: tracks,
-artists, duration and Next-qualified plays. It excludes private/unlisted/removed
-records and does not import production play totals. Add metrics with explicit
-sources/definitions as the rewrite progresses rather than filling the page with
-unverified parity counts. SDK/MCP, legacy-URL work and cutover rehearsal remain
-deferred per the user's revised scope.
+The backend play path and Jam failure evidence are recorded separately from UI
+checks. The latest frontend passed seven live viewport/theme cases and the
+Firefox artist-render/navigation regression; the real Zen browser was reloaded
+and inspected. None of this establishes full native acceptance.
+
+**Working order:** finish core feature journeys in small cycles, preserving
+production behavior and explicit failure/recovery contracts. Personal listening
+and player continuity are the next uncompleted planned cycles; their order is a
+product choice, not work already underway. No new runtime goal starts with this
+inventory update. SDK/MCP, legacy-URL work and cutover rehearsal remain deferred.
 
 ## Direction
 
@@ -49,7 +60,7 @@ The rewrite changes ownership and application boundaries as well as languages an
 | Login | The user agent owns OAuth | Browser/native OAuth clients authorize PDS operations. Production login copy and return-intent behavior are product requirements worth preserving. |
 | Client | Expo / React Native for web, iOS, and Android | Web is deployed. Native bundle exports are not equivalent to native release acceptance. The temporary Svelte client was removed in #2331. |
 | Preferences | Owner-only personal Space | Appearance/playback settings sync through a dedicated staging Space type; volume remains local. The client currently supports a device-only fallback. |
-| Jams | A room whose creator owns the underlying member Space | “Jam” and “room” are user-facing concepts. Guests own their own command records in the fuller protocol design. Ownership transfer is explicitly later. |
+| Jams | Creator-owned Space create/invite/join; shared queue and explicit controls, host-only seek, Redis clock/revision/epoch fencing, reconnect with fresh admission and cross-instance fan-out | One-speaker routing, immediate revocation, room lifecycle/invitation polish, physical-device/native background acceptance and Redis failover. Ownership transfer remains later. [MVP audit](2026-11-06-jams-live-verification.md) |
 | Cutover | API, in-repo SDK, MCP, and UI move together | SDK and MCP are still planned. Everything new remains under `next/` until cutover. |
 | Storage exploration | Postgres remains the current index | The ZKV/R2 spike in #2318 establishes feasibility, not an adopted migration or a cutover gate. |
 
@@ -76,7 +87,7 @@ These dependencies need a retained owner or replacement before retiring the lega
 | Live ingestion, #2292 → #2312 | Upstream verification was temporarily trusted, then replaced with independent PDS proofs. Current live events are discovery hints. The old “trusts upstream” header in `stream_runner.zig` is stale; [the actual handler verifies touched records](../../next/backend/src/internal/ingest/stream_runner.zig#L158). |
 | Repair/replay, #2323/#2329/#2324/#2325/#2328 | A verified snapshot still needs completeness, ordering, and transaction guarantees. Sparse repair proves selected collection ranges before deleting missing rows; repository locking protects newer live state and newer rejection evidence. See [collection proofs](../../next/backend/docs/collection-proofs.md#L3). |
 | Fuzzing and migration #2314 | Migration 0029 exhausted locks; 0030 changed the counting mechanism before deployment. The old migration hold is resolved. Local performance results remain local measurements, rather than production SLOs. See [performance notes](../../next/backend/docs/perf.md#L29). |
-| Spaces, #2330/#2335/#2338 | Private preferences and creator-owned room snapshots established real PDS/OAuth paths. The running Jam room is narrower than the command/recovery reducer in the service probe. |
+| Spaces, #2330/#2335/#2338 | Private preferences and creator-owned room snapshots established real PDS/OAuth paths. The later #2422–#2430 arc connected the running room to cross-instance command coordination and tested real recovery; the earlier polling implementation is superseded. |
 | React Native, #2331–#2342 | Replacing the UI exposed lost product behavior in playback, queue, artwork, editors, and navigation. Framework replacement did not preserve that work automatically. |
 | Radio/auth/embeds, #2343–#2360 | Product review caught integration and layout problems that successful builds missed. Playback needed a shared persistent player, server-derived radio position, real retry checks, original account copy, actual iframe size tests, and document-level Safari theming. |
 
@@ -91,28 +102,28 @@ Existing production behavior is the review baseline. Each incomplete area needs 
 | Area | Present in Next | Remaining port or acceptance work |
 |---|---|---|
 | Public catalog | Home, keyword search, artist/track/album/playlist details, library and likes | Finish discovery controls, pagination and production behavior rather than treating route presence as completion. [Catalog](../../next/app/src/Catalog.tsx#L25) |
-| Discovery | Weekly top-five chart and Latest; keyword results with artwork | For You, semantic/CLAP search, tag browse/filtering, hidden tags, network discovery, chart period controls, Atlas. [Production route inventory](../../frontend/src/routes/) |
+| Discovery | Period-selectable charts, Latest, server tag filters, colored tags, automatic feed pagination and network artists; cancellable keyword search with artwork | For You, semantic/CLAP search, hidden tags, broader browse/Atlas behavior and representative performance budgets. Ranking/limit precede search metric hydration (#2408). [Home](../../next/app/src/Home.tsx), [Search](../../next/app/src/Search.tsx) |
 | Account entry | Typeahead, identity preview, original help copy, OAuth signup handoff | Remove or retain production discovery dependency; finish onboarding and listener/creator landing behavior; verify native OAuth and cancellation. [Login](../../next/app/app/login.tsx#L8) |
-| Login intent | Explicit `return_to` survives web OAuth, including Jam links | Global capture is incomplete. Upload, Library, Portal and signed-out track actions still link to plain `/login`. Capture the return destination and preserve relevant draft context; automatic action replay needs an explicit design. [Library sign-in](../../next/app/src/AccountCatalog.tsx#L59), [callback](../../next/app/app/oauth/callback.tsx#L9) |
-| Player and queue | Expo Audio, availability resolution, retry, startup timeout, seek, repeat, shuffle/remove/clear, now playing and native lock-screen setup | Queue/progress persistence, continuation semantics, title marquee, EQ, browser Media Session, keyboard shortcuts, interruptions/backgrounding, and production's accumulated queue edge cases. [Playback](../../next/app/src/playback.tsx#L15) |
-| Plays and history | Backend play-credit/dedup endpoint and derived totals | The Next player makes no play-credit call. Port actual listened-time accounting, including radio; choose historical-total migration and attribution policy. Queue “played” means an in-memory prefix. Listening history/scrobbling and Teal/Rocksky consolidation remain a separate design decision. [Metrics](../../next/backend/src/internal/metrics/postgres_play_metric_store.zig#L1), [client API](../../next/app/src/api.ts#L154) |
+| Login intent | Explicit return destinations survive web OAuth for Jam links and creation, Portal and signed-out track actions | Audit every protected journey and draft boundary, including Upload and Library; automatic action replay is a separate design. A Jam permission upgrade is distinct from being signed out (#2396). [Intent](../../next/app/app/oauth/callback.tsx), [Portal](../../next/app/src/Portal.tsx) |
+| Player and queue | Expo Audio, availability/retry/startup timeout, stable seek preview, repeat/shuffle/remove/clear, direct drag reorder, persistent dock, full-screen Now Playing, keyboard shortcuts and swipe navigation/dismissal | Queue/progress persistence, explicit versus generated queue semantics, title marquee, EQ, platform media controls and interruptions/backgrounding still need acceptance. Navigation/seek checks do not prove native lifecycle parity. [Playback](../../next/app/src/playback.tsx) |
+| Plays and history | Qualified listened-time accounting and receipt outbox integrated into solo, catalog embeds, radio and audible Jam playback; durable atomic Postgres receipts and totals | Historical-total migration, share attribution, private listening history and Teal/Rocksky interoperability are undecided. Cooldown suppression is distinct from receipt idempotency. [Accounting](../internal/architecture/next-play-accounting.md) |
 | Preferences | Theme, accent, font, scale, keep-playing and play-through in a personal Space | Remaining production preference categories, conflicts/offline recovery, and policy for hosts without Spaces. [Preference schema](../../next/app/src/preference-space.ts#L7) |
 | Upload/publishing | One public file, cover, metadata and locally measured duration; 100 MB client cap | Batch/album publishing, recording, tags/credits, visibility/download policies, large/resumable upload behavior, metadata extraction, replacement/revisions/optimization, rights controls and failure recovery. Album text currently does not create an album collection. [Upload](../../next/app/app/upload.tsx#L9), [PDS publication](../../next/app/src/pds.ts#L265) |
 | Playlist editing | Create, rename, add a track, remove and delete; inline editing | Cover, reorder, add-from-editor workflow and privacy/profile visibility. [Collection editor](../../next/app/src/AccountCatalog.tsx#L193) |
 | Album editing | Detail/read and rename | Album creation, artwork, member editing/reordering/removal, deletion, publishing and download policies. The current album editor is not the production editor port. [Collection editor](../../next/app/src/AccountCatalog.tsx#L193) |
-| Creator portal/profile | First 50 owned tracks, upload/edit links, bio/avatar editing | Album management, search/sort/pagination, private tracks, support settings, storage/PDS repair, share management, copyright tools, export and account departure. [Portal](../../next/app/app/portal.tsx#L14), [production management](../../frontend/src/routes/portal/manage/+page.svelte) |
-| Protected audio | Managed access checks and Space credential/fetch path | Converge with existing `fm.plyr.privateMedia` before gated publishing. Review response integrity too—the client requests a record MAC but currently uses `value.audioBlob` without verifying that MAC. [Protected fetch](../../next/app/src/gated-audio-shared.ts#L69) |
-| Jams | Host-owned Space, current-track creation, invite by DID, join, polling, host play/pause/reset | Shared queue, track transitions, arbitrary seek, guest controls, participants, room lifecycle and invitations. Integrate or reconcile the separate command reducer; test concurrency, reconnect, revocation, host fencing and speaker/output ownership. Ownership transfer is later. [Running room](../../next/app/app/jam/[room].tsx#L52), [protocol probe](../../next/services/jams/README.md) |
-| Radio | Four existing catalog stations, authoritative position, persistent tuned player and OBS link | Live/HLS preemption, firehose, presence/listeners, and play/scrobble accounting. Retain or replace the production-backed clock/delivery path. [Radio](../../next/app/src/RadioPlayer.tsx#L36) |
+| Creator portal/profile | Paginated owned tracks and albums, track search/order controls, upload/edit links and bio/avatar editing (#2381) | Album creation/member editing, private tracks, support settings, storage/PDS repair, share management, copyright tools, export and account departure. Route presence does not establish these workflows. [Portal](../../next/app/src/Portal.tsx) |
+| Protected audio | Managed access checks, verified Space record MAC and browser signed Range delivery; separate scoped image resolution | Converge with existing private-media records and complete gated publishing; native streaming/lifecycle acceptance remains separate. Jam membership does not grant audio access. [Protected fetch](../../next/app/src/gated-audio-shared.ts), [report](2026-11-05-private-audio-streaming.md) |
+| Jams | Creator-owned Space create/invite/join; shared queue and explicit controls, host-only seek, Redis clock/revision/epoch fencing, reconnect with fresh admission and cross-instance fan-out | One-speaker routing, immediate revocation, room lifecycle/invitation polish, physical-device/native background acceptance and Redis failover. Ownership transfer remains later. [MVP audit](2026-11-06-jams-live-verification.md) |
+| Radio | Four existing stations, authoritative clock, persistent tuned player, OBS link, qualified catalog accounting and decoded Jam-to-radio handoff | Live/HLS preemption, firehose, presence/listeners and personal scrobbling. Retain or replace the production-backed clock/delivery path deliberately. Operator radio exclusions shipped separately in legacy backend #2434; this is not a new Next eligibility engine. [Radio](../../next/app/src/RadioPlayer.tsx) |
 | Embeds | Track, album, playlist, artist and radio routes | Only track has the new responsive artwork design; Radio has its compact OBS layout. Port the remaining layouts, oEmbed/discovery and compatibility behavior. [Embed loader](../../next/app/src/CatalogEmbed.tsx#L33) |
 | Moderation | Existing operator-label ingestion and some discovery/playback filtering; adult guard in track embeds | Viewer preferences, sensitive artwork/interstitials across the app, reports, account labels, acceptance for negation/expiry propagation, signed-label verification, copyright evidence/review/appeals and admin operations. Current label filtering is not the full moderation product. [Label sync](../../next/backend/src/internal/moderation/label_sync.zig#L1), [catalog rows](../../next/app/src/CatalogPieces.tsx#L102) |
 | Public links and metadata | Opaque-ID Next routes; partial legacy resolution inside embeds | Existing numeric track/playlist URLs, album handle/slugs, AT-URI links, public liked-profile URLs, share attribution, canonical redirects, social previews and sitemap. [Legacy routes](../../frontend/src/routes/), [embed compatibility](../../next/app/src/CatalogEmbed.tsx#L19) |
-| Activity and integrations | Core likes are projected | Listening/activity statistics, comments, now-playing presence, exports/downloads, Subsonic, public XRPC/developer interfaces, migration tools and support/profile workflows need explicit dispositions. [Production router](../../backend/src/backend/main.py#L180) |
+| Activity and integrations | Projected likes and public /stats catalog/accounting totals | Private listening/activity analytics, timed comments (studied in #2383, not implemented), presence, exports/downloads, Subsonic and migration/support tools need explicit dispositions. Developer SDK/MCP work remains deferred. [Stats](../../next/app/app/stats.tsx) |
 | Legal and account lifecycle | Existing external account providers remain responsible for signup | Preserve terms/privacy access, deletion/deactivation behavior, data export and relevant consent flows through the new client/service boundary. [Production account API](../../backend/src/backend/api/account.py#L54) |
 | Native and accessibility | Shared Expo project and CI native bundle exports; selected roles/labels and reduced-motion behavior | Installable releases, deep links, device OAuth, background audio, interruptions, lock screen, file picker/uploads, offline/download scope, VoiceOver/TalkBack, keyboard/focus and real-device Safari checks. [App configuration](../../next/app/app.json#L7), [web/native build workflow](../../.github/workflows/deploy-web-next.yml#L42) |
-| SDK and MCP | Handwritten client API module | In-repo SDK generation, MCP built on it, external consumers and a coordinated contract/cutover plan. [Directory plan](../../next/README.md) |
+| SDK and MCP | Handwritten client API module | Explicitly deferred: SDK generation, MCP, external consumers and coordinated cutover planning. Not a prerequisite for current core parity work. [Directory plan](../../next/README.md) |
 
-The open [Now Playing PR #2336](https://github.com/zzstoatzz/plyr.fm/pull/2336) is not part of this checkpoint. Review its overlap with later merged player work before treating it as ready or counting its contents as shipped.
+The still-open [Now Playing PR #2336](https://github.com/zzstoatzz/plyr.fm/pull/2336) is not counted as shipped. Its older proposal overlaps later merged player work; reassess or close it rather than treating it as the next implementation plan.
 
 ## Service and operational work
 
@@ -126,6 +137,22 @@ The open [Now Playing PR #2336](https://github.com/zzstoatzz/plyr.fm/pull/2336) 
 | External contracts | Inventory clients, embeds, IDs/URLs, authentication/permissions and developer interfaces. A new REST contract needs explicit compatibility handling. |
 | Coexistence | Assign one owner per side effect, including notifications, analysis, media derivation and play credit. Independent projections must not produce duplicate operational effects. |
 | Cutover and rollback | Rehearse changing API/SDK/MCP/UI together, moving `next/` to the top level, retaining service dependencies deliberately, and restoring service after failure. Account for shared PDS writes and state that survives deploy rollback. |
+
+## Storage and operating cost
+
+- Neon/Postgres owns verified catalog projections, play receipts/cooldowns and
+  serving aggregates. The client owns pending receipt persistence; no network
+  round trip occurs per media progress tick. Receipts are currently retained
+  indefinitely, so storage growth is a real ongoing cost.
+- Private preference/room records and media remain on the user's PDS/Spaces.
+  Redis owns operational Jam sequencing, deduplication and snapshots; it is not
+  the canonical user repository. Docket is not in the playback command path.
+- The [cost checkpoint](../../COSTS.md#next-backend-checkpoint-november-4-2026)
+  estimated roughly $30–35/month for the observed pre-Jam Next baseline, with
+  missing usage categories called out. Jams adds a historical estimate of about
+  $6.72/month for two coordinators, dedicated persistent Redis and its volume.
+  These are dated estimates, not refreshed billing or a new total invoice.
+  Always-on ingestion/database/Redis costs persist even when the API sleeps.
 
 ## Questions to settle before their implementation slice
 
