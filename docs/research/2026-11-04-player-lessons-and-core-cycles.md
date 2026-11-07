@@ -5,6 +5,25 @@ Date: November 4, 2026. Source checkpoint: df6684dce. This narrows the
 Cutover rehearsal, legacy URL compatibility, SDK and MCP are deferred. They are
 not prerequisites for these cycles. No runtime changes are claimed here.
 
+## November 6 progress
+
+Cycle 1's backend/client implementation and public browser verification shipped
+in #2363/#2364/#2366/#2370; the initial gaps below are historical, not outstanding
+tasks. See [the implemented accounting contract](../internal/architecture/next-play-accounting.md)
+and [recorded acceptance](2026-11-04-playback-browser-workflow.md). Native lifecycle,
+historical-count migration and personal scrobbling were not silently included.
+
+The scoped real-time Jam MVP was brought forward and completed in #2422–#2430.
+Its [audit](2026-11-06-jams-live-verification.md) covers actual decoded audio and
+coordinator failure; broader Cycle 4 parity, especially one-speaker routing and
+native/backgrounding, remains. Queue dragging, shortcuts, navigation and stable
+scrubbing shipped, but queue persistence and continuation semantics do not become
+complete just because those controls now exist. Cycles 2 and 3 remain uncompleted.
+
+The [current inventory](2026-11-04-rewrite-progress-and-scope.md) is the current
+scope/status reference. This document retains the original research and ordered
+cycles so the reasoning behind them is not lost.
+
 ## What we are preserving
 
 This is an intentional rewrite: preserve the product's accumulated behavior and
@@ -67,7 +86,7 @@ a prerequisite. Anonymous aggregate metrics, private listening history, external
 scrobbles and public now-playing are separate facts with different consent and
 failure boundaries.
 
-Current gaps:
+Initial gaps at the November 4 checkpoint (addressed by the Cycle 1 implementation):
 
 - next/app/src/api.ts:154–180 and playback.tsx do not submit plays.
 - next/backend/src/internal/application/record_play.zig:67–88 claims Redis before
