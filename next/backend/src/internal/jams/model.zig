@@ -1,72 +1,22 @@
 const std = @import("std");
-const zat = @import("zat");
+const protocol = @import("protocol.zig");
+const personal = @import("personal.zig");
 const track_id = @import("../identity/track_id.zig");
 
-pub const max_tracks = 200;
-pub const max_counter = 9_007_199_254_740_991;
-pub const max_position_ms = 24 * 60 * 60 * 1000;
-
-pub const Track = struct {
-    id: []const u8,
-    uri: []const u8,
-    cid: []const u8,
-    durationMs: u64,
-};
-
-pub const State = struct {
-    epoch: []const u8,
-    revision: u64,
-    queue: []const Track,
-    index: u32,
-    occurrence: u64,
-    playing: bool,
-    positionMs: u64,
-    updatedAtMs: i64,
-};
-
-pub const Action = enum { play, pause, seek, replaceQueue, selectTrack };
-pub const Command = struct {
-    id: []const u8,
-    epoch: []const u8,
-    expectedRevision: u64,
-    occurrence: u64,
-    action: Action,
-    playing: ?bool = null,
-    positionMs: ?u64 = null,
-    queue: ?[]const Track = null,
-    index: ?u32 = null,
-};
-
-pub const Outcome = enum { applied, noop, duplicate, conflict, forbidden, invalid };
-pub const Result = struct { outcome: Outcome, state: State };
-
-pub fn boundedId(value: []const u8) bool {
-    if (value.len == 0 or value.len > 64) return false;
-    for (value) |byte| if (!std.ascii.isAlphanumeric(byte) and byte != '-' and byte != '_') return false;
-    return true;
-}
-
-pub fn validateQueue(allocator: std.mem.Allocator, queue: []const Track, collection: []const u8) !bool {
-    if (queue.len > max_tracks) return false;
-    for (queue) |track| {
-        if (track.id.len > 2048 or track.uri.len > 1024 or track.cid.len > 128 or
-            track.durationMs == 0 or track.durationMs > max_position_ms) return false;
-        var uri_buffer: [1024]u8 = undefined;
-        const uri = track_id.decode(&uri_buffer, track.id) catch return false;
-        if (!std.mem.eql(u8, uri, track.uri)) return false;
-        const parsed = zat.AtUri.parse(uri) orelse return false;
-        if (!std.mem.eql(u8, parsed.collection() orelse return false, collection)) return false;
-        const cid = zat.Cid.fromString(allocator, track.cid) catch |err| switch (err) {
-            error.OutOfMemory => return err,
-            else => return false,
-        };
-        defer allocator.free(cid.raw);
-        if (cid.codec() != 0x71) return false;
-    }
-    return true;
-}
+pub const max_tracks = protocol.max_tracks;
+pub const max_counter = protocol.max_counter;
+pub const max_position_ms = protocol.max_position_ms;
+pub const Track = protocol.Track;
+pub const State = protocol.State;
+pub const Action = protocol.Action;
+pub const Command = protocol.Command;
+pub const Outcome = protocol.Outcome;
+pub const Result = protocol.Result;
+pub const boundedId = protocol.boundedId;
+pub const validateQueue = protocol.validateQueue;
 
 pub fn validateState(allocator: std.mem.Allocator, state: State, collection: []const u8) !bool {
+    if (state.personal != null) return personal.validate(allocator, state, collection);
     if (!boundedId(state.epoch) or state.revision > max_counter or state.occurrence > max_counter or
         state.updatedAtMs < 0 or state.updatedAtMs > max_counter or !try validateQueue(allocator, state.queue, collection)) return false;
     if (state.queue.len == 0) return state.index == 0 and !state.playing and state.positionMs == 0;
@@ -74,12 +24,21 @@ pub fn validateState(allocator: std.mem.Allocator, state: State, collection: []c
 }
 
 pub fn positionAt(state: State, now_ms: i64) u64 {
+    if (state.personal != null) return personal.position(state, now_ms);
     if (state.queue.len == 0) return 0;
     const elapsed: u64 = if (state.playing and now_ms > state.updatedAtMs) @intCast(now_ms - state.updatedAtMs) else 0;
     return @min(state.queue[state.index].durationMs, state.positionMs +| elapsed);
 }
 
 pub fn transition(allocator: std.mem.Allocator, state: State, command: Command, actor_did: []const u8, host_did: []const u8, now_ms: i64, collection: []const u8) !Result {
+    return transitionAsClient(allocator, state, command, actor_did, host_did, now_ms, collection, .{});
+}
+
+pub fn transitionAsClient(allocator: std.mem.Allocator, state: State, command: Command, actor_did: []const u8, host_did: []const u8, now_ms: i64, collection: []const u8, client: protocol.Client) !Result {
+    if (state.personal != null) {
+        if (!std.mem.eql(u8, actor_did, host_did)) return .{ .outcome = .forbidden, .state = state };
+        return personal.transition(allocator, state, command, client, now_ms, collection);
+    }
     if (!boundedId(command.id) or !boundedId(command.epoch) or command.expectedRevision > max_counter or
         command.occurrence > max_counter or now_ms < state.updatedAtMs) return .{ .outcome = .invalid, .state = state };
     if (!std.mem.eql(u8, state.epoch, command.epoch) or state.occurrence != command.occurrence)
@@ -91,6 +50,7 @@ pub fn transition(allocator: std.mem.Allocator, state: State, command: Command, 
         .seek => command.playing == null and command.positionMs != null and command.positionMs.? <= max_position_ms and command.queue == null and command.index == null,
         .replaceQueue => command.queue != null and command.index != null and command.positionMs == null,
         .selectTrack => command.index != null and command.queue == null and command.positionMs == null,
+        else => false,
     };
     if (!clean) return .{ .outcome = .invalid, .state = state };
     if (command.expectedRevision > state.revision) return .{ .outcome = .conflict, .state = state };
@@ -140,6 +100,7 @@ pub fn transition(allocator: std.mem.Allocator, state: State, command: Command, 
             }
             if (queue.len == 0) next.playing = false else next.positionMs = @min(next.positionMs, queue[next.index].durationMs);
         },
+        else => return .{ .outcome = .invalid, .state = state },
     }
     return .{ .outcome = .applied, .state = next };
 }
