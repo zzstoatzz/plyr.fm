@@ -137,10 +137,10 @@ test('personal prepared headers remain identical behind an acknowledged progress
   const { connection, socket } = setup();
   const state: JamState = { ...base, queue: [{ ...base.queue[0], key: 'one' }], personal: {
     explicitEnd: 1, tailKind: null, label: null, repeat: 'off', keepPlaying: false,
-    cursor: null, output: null, disconnected: false,
+    cursor: null, output: { clientId: 'device', connectionId: 'connection' }, disconnected: false,
   } };
   const prepared = { action: 'enqueue' as const, id: 'durable-edit', epoch: state.epoch,
-    expectedRevision: state.revision, occurrence: state.occurrence, expectedOutput: null,
+    expectedRevision: state.revision, occurrence: state.occurrence, expectedOutput: 'connection',
     entry: { ...base.queue[0], key: 'two' } };
   try {
     await connection.connect(); socket.open(); socket.receive({ type: 'state', state, serverTimeMs: 10_000 });
