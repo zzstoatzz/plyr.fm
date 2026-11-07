@@ -37,7 +37,7 @@ pub fn position(state: p.State, now: i64) u64 {
 
 pub fn canRebase(action: p.Action) bool {
     return switch (action) {
-        .enqueue, .removeEntry, .moveEntry, .playContext, .selectTrack, .connected, .disconnected => true,
+        .enqueue, .removeEntry, .moveEntry, .playContext, .selectTrack, .setRepeat, .setContinuation, .connected, .disconnected => true,
         else => false,
     };
 }
@@ -440,4 +440,27 @@ test "observed personal media duration bounds completion and explicit replay" {
     state = (try transition(a, state, testCommand(state, .play), test_client, 500, test_collection)).state;
     try std.testing.expectEqual(occurrence + 1, state.occurrence);
     try std.testing.expectEqual(@as(u64, 0), state.positionMs);
+}
+
+test "personal repeat and continuation settings survive concurrent track transitions" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    const initial = try testState(a);
+    var change = testCommand(initial, .playContext);
+    change.queue = initial.queue;
+    change.label = "Album";
+    var state = (try transition(a, initial, change, test_client, 200, test_collection)).state;
+    try std.testing.expect(state.occurrence > initial.occurrence);
+    var setting = testCommand(initial, .setRepeat);
+    setting.repeat = .all;
+    var result = try transition(a, state, setting, test_client, 210, test_collection);
+    try std.testing.expectEqual(p.Outcome.applied, result.outcome);
+    try std.testing.expectEqual(p.Repeat.all, result.state.personal.?.repeat);
+    state = result.state;
+    setting = testCommand(initial, .setContinuation);
+    setting.keepPlaying = true;
+    result = try transition(a, state, setting, test_client, 220, test_collection);
+    try std.testing.expectEqual(p.Outcome.applied, result.outcome);
+    try std.testing.expect(result.state.personal.?.keepPlaying);
 }
