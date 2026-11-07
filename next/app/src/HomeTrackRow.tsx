@@ -10,9 +10,9 @@ import { Text } from './Text';
 import { TrackMenu } from './TrackMenu';
 import { PlayerControl } from './PlayerControl';
 
-export function HomeTrackRow({ track, tracks, onPlay, returnTo = '/' }: { track: Track; tracks: Track[]; onPlay: Play; returnTo?: string }) {
+export function HomeTrackRow({ track, tracks, onPlay, returnTo = '/', height }: { height?: number; track: Track; tracks: Track[]; onPlay: Play; returnTo?: string }) {
   const theme = useAppearance();
-  return <View testID="home-track-row" style={[styles.row, { borderColor: theme.surface }]}>
+  return <View testID="home-track-row" style={[styles.row, { height, borderColor: theme.surface }]}>
     <Pressable testID="track-play-control" accessibilityRole="button" accessibilityLabel={`Play ${track.metadata.title}`} onPress={() => onPlay(track, tracks)}
       style={({ pressed }) => [StyleSheet.absoluteFill, { borderRadius: 10, backgroundColor: pressed ? theme.surface : 'transparent' }]} />
     <View pointerEvents="none"><Cover uri={trackArtwork(track)} size={44} /></View>
