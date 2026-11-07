@@ -1,5 +1,7 @@
 # plyr.fm - status
 
+Start here for the next agent: [November 7 rewrite handoff](docs/research/2026-11-07-rewrite-handoff.md).
+
 ## Personal queue synchronization live (2026-11-07)
 
 #2447–#2451 and #2453 are deployed to Next. One account's queue synchronizes across
