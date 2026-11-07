@@ -106,7 +106,7 @@ export function Home({ onPlay }: { onPlay: Play }) {
     ListFooterComponent={<View style={{ paddingVertical: 12, gap: 8 }}>
       {latest.loading ? <WaveLoading label={tracks.length ? 'loading more...' : 'loading tracks...'} /> :
         <Status error={latest.error} retry={tracks.length ? undefined : latest.more} empty={!tracks.length ? selected.length ? 'no tracks match these tags' : 'no tracks yet' : undefined} />}
-      {tracks.length > 0 && <Pressable accessibilityRole="button" accessibilityState={{ disabled: latest.loading || !latest.cursor }} onPress={() => { if (!latest.loading && latest.cursor) latest.more(); }} style={styles.more}><Text style={{ color: latest.cursor ? colors.accent : colors.muted }}>{latest.error ? 'retry loading tracks' : latest.cursor ? 'more tracks' : 'all tracks loaded'}</Text></Pressable>}
+      {tracks.length > 0 && (latest.cursor || latest.error) && <Pressable accessibilityRole="button" accessibilityState={{ disabled: latest.loading || !latest.cursor }} onPress={() => { if (!latest.loading && latest.cursor) latest.more(); }} style={styles.more}><Text style={{ color: latest.cursor ? colors.accent : colors.muted }}>{latest.error ? 'retry loading tracks' : 'more tracks'}</Text></Pressable>}
       <Text accessibilityLiveRegion="polite" style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', color: 'transparent' }}>{tracks.length} tracks loaded</Text>
     </View>} />;
 }

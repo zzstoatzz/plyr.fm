@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { AccessibilityInfo, Animated, Easing, View } from 'react-native';
+import { AccessibilityInfo, Animated, Easing, Platform, View } from 'react-native';
 import { useAppearance } from './appearance';
 
 const resting = [0.4, 0.72, 1, 0.72, 0.4];
@@ -20,8 +20,8 @@ export function WaveLoading({ label }: { label: string }) {
       bars.forEach((bar, i) => bar.setValue(reduced ? resting[i] : 0.3));
       if (reduced) return;
       animation = Animated.stagger(90, bars.map((bar) => Animated.loop(Animated.sequence([
-        Animated.timing(bar, { toValue: 1, duration: 575, easing: Easing.inOut(Easing.sin), useNativeDriver: true, isInteraction: false }),
-        Animated.timing(bar, { toValue: 0.3, duration: 575, easing: Easing.inOut(Easing.sin), useNativeDriver: true, isInteraction: false }),
+        Animated.timing(bar, { toValue: 1, duration: 575, easing: Easing.inOut(Easing.sin), useNativeDriver: Platform.OS !== 'web', isInteraction: false }),
+        Animated.timing(bar, { toValue: 0.3, duration: 575, easing: Easing.inOut(Easing.sin), useNativeDriver: Platform.OS !== 'web', isInteraction: false }),
       ]))));
       animation.start();
     }

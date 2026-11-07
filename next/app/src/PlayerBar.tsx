@@ -53,14 +53,12 @@ export function PlayerBar() {
     </View>
   </Pressable>;
   return <>
-    <View testID="player-dock" style={[dockSurface(theme), { width: desktop ? '100%' : undefined, maxWidth: 1720, alignSelf: desktop ? 'center' : undefined,
-      borderRadius: desktop ? 20 : 16, margin: desktop ? 0 : 6, marginTop: desktop ? 18 : 6, paddingHorizontal: desktop ? 20 : 6, paddingTop: desktop ? 12 : 6, paddingBottom: desktop ? 9 : 5, overflow: 'hidden' }]}>
-      <View pointerEvents="none" accessible={false} style={{ position: 'absolute', top: 0, left: 18, right: 18, height: 5,
-        backgroundColor: theme.dark ? '#dae9ed0d' : '#ffffff66', borderTopWidth: 1, borderTopColor: theme.dark ? '#e3f0f21c' : '#ffffffcc', borderBottomWidth: 1, borderBottomColor: '#00000022' }} />
-      <View pointerEvents="none" accessible={false} testID="playback-status-inlay" style={{ position: 'absolute', top: 1, left: 20, width: desktop ? 78 : 68, height: 5, borderBottomLeftRadius: 3, borderBottomRightRadius: 3,
-        opacity: playing ? 0.85 : 0.22, backgroundColor: theme.dark ? '#adcdd144' : '#7398a044',
-        borderTopWidth: 1, borderTopColor: '#e2f3f229', borderBottomWidth: 1, borderBottomColor: '#050e1733',
-        ...(Platform.OS === 'web' ? { backgroundImage: 'radial-gradient(ellipse at 45% 18%, #d7eef06b, transparent 78%), linear-gradient(90deg, #7395a01a, #a6c6cf4d 24%, #bdd5d64d 65%, #7e9da01a)' } : {}) }} />
+    <View testID="player-dock" style={[dockSurface(theme), { width: desktop ? '100%' : undefined, alignSelf: desktop ? 'center' : undefined,
+      borderRadius: desktop ? 0 : 16, margin: desktop ? 0 : 6, marginTop: desktop ? 0 : 6, paddingHorizontal: desktop ? 20 : 6, paddingTop: desktop ? 12 : 6, paddingBottom: desktop ? 9 : 5, overflow: 'hidden' }]}>
+      <View pointerEvents="none" accessible={false} testID="playback-status-inlay" style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2,
+        opacity: playing ? 0.65 : 0.16, backgroundColor: theme.accent,
+        boxShadow: `0px 0px 5px ${theme.accent}66`,
+        ...(Platform.OS === 'web' ? { backgroundImage: 'linear-gradient(180deg, #ffffff80, #ffffff00)' } : {}) }} />
       <View style={{ flexDirection: 'row', alignItems: 'center', padding: desktop ? 0 : 5, gap: desktop ? 24 : 4 }}>
         <View style={{ flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: desktop ? 6 : 0 }}>{identity}<TrackLikes key={track.id} track={track} iconOnly returnTo={path} /></View>
         {desktop ? <>

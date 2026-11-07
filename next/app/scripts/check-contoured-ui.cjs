@@ -19,7 +19,7 @@ async function preview(route) {
   await fs.mkdir(output, { recursive: true });
   const browser = await chromium.launch({ channel: 'chrome' });
   try {
-    for (const width of [390, 1440, 320]) {
+    for (const width of [390, 1440, 1920, 320]) {
       for (const colorScheme of width === 320 ? ['dark'] : ['dark', 'light']) {
         const context = await browser.newContext({ viewport: { width, height: 1000 }, colorScheme });
         if (!process.env.CONTOURED_LIVE) await context.route(origin + '/**', preview);
@@ -30,6 +30,7 @@ async function preview(route) {
         });
         const page = await context.newPage();
         const errors = [];
+        page.on('console', message => { if (message.text().includes('native animated module is missing')) errors.push(message.text()); });
         page.on('pageerror', error => errors.push(error.message));
         await page.goto(origin, { waitUntil: 'domcontentloaded' });
         const chart = page.getByTestId('home-chart');
@@ -68,6 +69,15 @@ async function preview(route) {
         await covers.first().click();
         const dock = page.getByTestId('player-dock');
         await dock.waitFor();
+        const light = await page.getByTestId('playback-status-inlay').boundingBox();
+        const dockBox = await dock.boundingBox();
+        assert.ok(light && dockBox && Math.abs(light.width - dockBox.width) <= 2 && light.height <= 2, 'Status light spans the dock as a thin inset');
+        if (width >= 800) {
+          for (const element of [page.getByTestId('app-frame'), dock]) {
+            const box = await element.boundingBox();
+            assert.ok(box && Math.abs(box.x) < 1 && Math.abs(box.width - width) < 1, 'Desktop reaches both viewport edges');
+          }
+        }
         await page.screenshot({ path: path.join(output, `${width}-${colorScheme}.png`) });
         assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, 'Page does not overflow');
         await dock.getByRole('link', { name: 'sign in to like', exact: true }).click();
