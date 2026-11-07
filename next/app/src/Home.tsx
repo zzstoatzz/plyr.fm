@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
-import { FlatList, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { FlatList, Pressable, StyleSheet, View } from 'react-native';
 import { HomeTrackRow } from './HomeTrackRow';
 import { HomeChart } from './HomeChart';
 import { HomeArtists } from './HomeArtists';
@@ -15,6 +15,7 @@ import { useNetworkArtists } from './use-network-artists';
 import { pageFrame } from './controls';
 import { tagColors } from './tag-colors';
 import { WaveLoading } from './WaveLoading';
+import { TagScroller } from './TagScroller';
 
 export function Home({ onPlay }: { onPlay: Play }) {
   const colors = useColors();
@@ -39,11 +40,6 @@ export function Home({ onPlay }: { onPlay: Play }) {
   const tracks = useMemo(() => [...new Map(latest.data.map(track => [track.id, track])).values()], [latest.data]);
   const tagPages = useHomeTags();
   const tags = tagPages.tags;
-  const tagViewport = useRef({ width: 0, content: 0, offset: 0 });
-  const fillTags = () => {
-    const { width, content, offset } = tagViewport.current;
-    if (width > 0 && content > 0 && content - width - offset < 160) void tagPages.more();
-  };
   const network = useNetworkArtists(did);
   function changeTags(next: string[]) {
     list.current?.scrollToOffset({ offset: 0, animated: false });
@@ -74,15 +70,12 @@ export function Home({ onPlay }: { onPlay: Play }) {
           <Pressable accessibilityRole="button" accessibilityLabel="Clear tag filters" onPress={() => changeTags([])} style={styles.clear}><Text style={{ color: colors.muted, fontSize: 12 * colors.scale }}>clear</Text></Pressable>
           {selected.map((name) => tag(name, true, tags.find((item) => item.name === name)?.track_count))}
         </View>}
-        <ScrollView horizontal testID="home-tags" showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tagScroller}
-          onLayout={event => { tagViewport.current.width = event.nativeEvent.layout.width; fillTags(); }}
-          onContentSizeChange={width => { tagViewport.current.content = width; fillTags(); }}
-          onScroll={event => { tagViewport.current.offset = event.nativeEvent.contentOffset.x; fillTags(); }} scrollEventThrottle={64}>
+        <TagScroller onNearEnd={() => void tagPages.more()}>
           {tags.filter(({ name }) => !selected.includes(name)).map(({ name, track_count }) => tag(name, false, track_count))}
           {tagPages.hasMore && <Pressable accessibilityRole="button" accessibilityLabel="More tags" accessibilityState={{ busy: tagPages.loading, disabled: tagPages.loading }} disabled={tagPages.loading} onPress={() => void tagPages.more(true)} style={styles.tagTarget}>
             <Text style={{ color: colors.muted, fontSize: 12 * colors.scale }}>{tagPages.loading ? 'loading…' : 'more'}</Text>
           </Pressable>}
-        </ScrollView>
+        </TagScroller>
       </View>}
       <Status error={tagPages.error} retry={tagPages.retry} />
     </View>
@@ -108,7 +101,7 @@ export function Home({ onPlay }: { onPlay: Play }) {
 const styles = StyleSheet.create({
   home: { gap: 26 }, section: { gap: 12 }, headingRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: 12, rowGap: 4 },
   tags: { gap: 8 }, pinned: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6 },
-  tagScroller: { gap: 6, alignItems: 'center' }, tagTarget: { minWidth: 44, minHeight: 44, maxWidth: '100%', justifyContent: 'center' },
+  tagTarget: { minWidth: 44, minHeight: 44, maxWidth: '100%', justifyContent: 'center' },
   tag: { flexDirection: 'row', gap: 6, alignItems: 'center', minHeight: 36, borderRadius: 8, borderWidth: 1, paddingHorizontal: 9, paddingVertical: 6 },
   clear: { minWidth: 44, minHeight: 44, justifyContent: 'center', paddingVertical: 8, paddingRight: 4 }, more: { alignSelf: 'center', padding: 14 },
 });
