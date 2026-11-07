@@ -49,6 +49,9 @@ export function usePages<T>(load: (cursor?: string) => Promise<Page<T>>) {
   const [loading, setLoading] = useState(true);
   const generation = useRef(0);
   const busy = useRef(false);
+  const continuation = useRef<string | undefined>(undefined);
+  const done = useRef(false);
+  const seen = useRef(new Set<string>());
   const fetchPage = useCallback(async (next?: string) => {
     if (busy.current) return;
     busy.current = true;
@@ -58,9 +61,12 @@ export function usePages<T>(load: (cursor?: string) => Promise<Page<T>>) {
     try {
       const page = await load(next);
       if (request !== generation.current) return;
-      if (page.has_more && (!page.next_cursor || page.next_cursor === next)) throw new Error('could not load more items');
+      if (page.has_more && (!page.next_cursor || page.next_cursor === next || seen.current.has(page.next_cursor))) throw new Error('could not load more items');
+      if (next) seen.current.add(next);
+      continuation.current = page.has_more ? page.next_cursor ?? undefined : undefined;
+      done.current = !page.has_more;
       setData((previous) => next ? [...previous, ...page.data] : page.data);
-      setCursor(page.has_more ? page.next_cursor ?? undefined : undefined);
+      setCursor(continuation.current);
     } catch (failure) {
       if (request === generation.current) setError(errorMessage(failure));
     } finally {
@@ -73,6 +79,9 @@ export function usePages<T>(load: (cursor?: string) => Promise<Page<T>>) {
   const reload = useCallback(() => {
     generation.current += 1;
     busy.current = false;
+    continuation.current = undefined;
+    done.current = false;
+    seen.current.clear();
     setData([]);
     setCursor(undefined);
     void fetchPage();
@@ -84,7 +93,7 @@ export function usePages<T>(load: (cursor?: string) => Promise<Page<T>>) {
       busy.current = false;
     };
   }, [reload]);
-  const more = useCallback(() => void fetchPage(cursor), [fetchPage, cursor]);
+  const more = useCallback(() => { if (!done.current) void fetchPage(continuation.current); }, [fetchPage]);
   return { data, cursor, error, loading, reload, more };
 }
 

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { FlatList, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { HomeTrackRow } from './HomeTrackRow';
 import { HomeChart } from './HomeChart';
@@ -27,17 +27,15 @@ export function Home({ onPlay }: { onPlay: Play }) {
   const [selection, setSelection] = useState(() => ({ key, tags: parseSelectedTags(readLocal(key)) }));
   const selected = selection.key === key ? selection.tags : parseSelectedTags(readLocal(key));
   const tagKey = JSON.stringify(selected);
-  const loadLatest = useCallback((cursor?: string) => api.tracks({ limit: 30, cursor, tag: parseSelectedTags(tagKey) }), [tagKey]);
+  const loadLatest = useCallback((cursor?: string) => api.tracks({ limit: 24, cursor, tag: parseSelectedTags(tagKey) }), [tagKey]);
   const latest = usePages(loadLatest);
+  const [headerHeight, setHeaderHeight] = useState(0);
+  const rowHeight = Math.max(80, Math.ceil(48 * colors.scale + 24));
   const viewport = useRef({ height: 0, content: 0, offset: 0 });
   const fillViewport = useCallback(() => {
     const { height, content, offset } = viewport.current;
-    if (height > 0 && content > 0 && content - offset - height <= height * 0.6 && latest.cursor && !latest.loading && !latest.error) latest.more();
+    if (height > 0 && content > 0 && content - offset - height <= height * 1.5 && latest.cursor && !latest.loading && !latest.error) latest.more();
   }, [latest.cursor, latest.loading, latest.error, latest.more]);
-  useEffect(() => {
-    const frame = requestAnimationFrame(fillViewport);
-    return () => cancelAnimationFrame(frame);
-  }, [fillViewport]);
   const tracks = useMemo(() => [...new Map(latest.data.map(track => [track.id, track])).values()], [latest.data]);
   const tagPages = useHomeTags();
   const tags = tagPages.tags;
@@ -63,7 +61,7 @@ export function Home({ onPlay }: { onPlay: Play }) {
       </View>
     </Pressable>;
   }
-  const header = <View style={styles.home}>
+  const header = <View style={styles.home} onLayout={event => setHeaderHeight(event.nativeEvent.layout.height)}>
     <HomeChart onPlay={onPlay} />
     {network.artists.length > 0 && <HomeArtists artists={network.artists} />}
     {network.error && <Detail>{network.error}</Detail>}
@@ -93,15 +91,16 @@ export function Home({ onPlay }: { onPlay: Play }) {
     style={{ flex: 1, backgroundColor: colors.background }} contentContainerStyle={{ ...pageFrame, maxWidth: '100%', paddingTop: 16, paddingBottom: 24 }}
     onLayout={event => { setLayoutWidth(event.nativeEvent.layout.width); viewport.current.height = event.nativeEvent.layout.height; fillViewport(); }}
     onContentSizeChange={(_, height) => { viewport.current.content = height; fillViewport(); }}
-    onScroll={event => { viewport.current.offset = event.nativeEvent.contentOffset.y; }} scrollEventThrottle={32}
-    accessibilityState={{ busy: latest.loading }} keyboardShouldPersistTaps="handled" ListHeaderComponent={header} onEndReachedThreshold={0.6}
+    onScroll={event => { viewport.current.offset = event.nativeEvent.contentOffset.y; fillViewport(); }} scrollEventThrottle={32}
+    accessibilityState={{ busy: latest.loading }} keyboardShouldPersistTaps="handled" ListHeaderComponent={header} onEndReachedThreshold={1.5}
     onEndReached={() => { if (latest.cursor && !latest.loading && !latest.error) latest.more(); }}
-    initialNumToRender={12} maxToRenderPerBatch={10} windowSize={7}
-    renderItem={({ item }) => columns === 2 ? <View style={{ width: (contentWidth - 24) / 2 }}><HomeTrackRow track={item} tracks={tracks} onPlay={onPlay} /></View> : <HomeTrackRow track={item} tracks={tracks} onPlay={onPlay} />}
-    ListFooterComponent={<View style={{ paddingVertical: 12, gap: 8 }}>
+    getItemLayout={(_, index) => ({ length: rowHeight, offset: 16 + headerHeight + index * rowHeight, index })}
+    initialNumToRender={24} maxToRenderPerBatch={24} updateCellsBatchingPeriod={16} windowSize={11}
+    renderItem={({ item }) => columns === 2 ? <View style={{ width: (contentWidth - 24) / 2 }}><HomeTrackRow height={rowHeight} track={item} tracks={tracks} onPlay={onPlay} /></View> : <HomeTrackRow height={rowHeight} track={item} tracks={tracks} onPlay={onPlay} />}
+    ListFooterComponent={<View testID="home-feed-footer" style={{ height: 112, justifyContent: 'center' }}>
       {latest.loading ? <WaveLoading label={tracks.length ? 'loading more...' : 'loading tracks...'} /> :
         <Status error={latest.error} retry={tracks.length ? undefined : latest.more} empty={!tracks.length ? selected.length ? 'no tracks match these tags' : 'no tracks yet' : undefined} />}
-      {tracks.length > 0 && (latest.cursor || latest.error) && <Pressable accessibilityRole="button" accessibilityState={{ disabled: latest.loading || !latest.cursor }} onPress={() => { if (!latest.loading && latest.cursor) latest.more(); }} style={styles.more}><Text style={{ color: latest.cursor ? colors.accent : colors.muted }}>{latest.error ? 'retry loading tracks' : 'more tracks'}</Text></Pressable>}
+      {tracks.length > 0 && latest.error && <Pressable accessibilityRole="button" onPress={latest.more} style={styles.more}><Text style={{ color: colors.accent }}>retry loading tracks</Text></Pressable>}
       <Text accessibilityLiveRegion="polite" style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', color: 'transparent' }}>{tracks.length} tracks loaded</Text>
     </View>} />;
 }
