@@ -1,3 +1,4 @@
+import { trackArtwork } from './artwork';
 import { Text } from './Text';
 import Slider from './Slider';
 import type { Href } from 'expo-router';
@@ -65,7 +66,7 @@ export function NowPlaying({ track, close, navigate }: { track: Track; close: ()
           <ScrollView testID="now-playing-scroll" onScroll={dismiss.onScroll} scrollEventThrottle={16} scrollEnabled={!dismiss.dragging}
             style={Platform.OS === 'web' && compact ? scrollTouch : undefined} contentContainerStyle={[styles.content, sideBySide && styles.desktopContent]} alwaysBounceVertical={false}>
             <View testID="now-playing-artwork" style={styles.art}>
-              <Cover uri={track.media.artwork?.url} size={artwork} radius={16} />
+              <Cover uri={trackArtwork(track)} size={artwork} radius={16} />
             </View>
             <View style={[styles.body, sideBySide ? [styles.desktopBody, { maxWidth: 440 }] : { width: artwork }]}>
               <View style={styles.meta}>

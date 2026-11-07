@@ -1,3 +1,4 @@
+import { trackArtwork } from './artwork';
 import { Text } from './Text';
 import { router, usePathname } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
@@ -46,7 +47,7 @@ export function PlayerBar() {
   const open = () => { openedFrom.current = path; if (Platform.OS === 'web') router.navigate('/now-playing'); else setExpanded(true); };
   const identity = <Pressable ref={trigger} accessibilityRole="button" accessibilityLabel="Open now playing" onPress={open}
     style={{ flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 52 }}>
-    <Cover uri={track.media.artwork?.url} size={desktop ? 52 : 42} />
+    <Cover uri={trackArtwork(track)} size={desktop ? 52 : 42} />
     <View style={{ flex: 1, minWidth: 0 }}>
       <Text numberOfLines={1} style={{ color: theme.text, fontSize: 14 * theme.scale, fontWeight: '700' }}>{track.metadata.title}</Text>
       <Text numberOfLines={1} style={{ color: theme.muted, fontSize: 12 * theme.scale }}>{error ? "Couldn’t play this track" : artistName(track)}</Text>

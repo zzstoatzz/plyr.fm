@@ -1,3 +1,4 @@
+import { trackArtwork } from './artwork';
 import { Link } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
@@ -64,7 +65,7 @@ export function HomeChart({ onPlay }: { onPlay: Play }) {
     {width > 0 && tracks.length > 0 && <View style={[styles.cards, { gap }]}>
       {tracks.slice(visiblePage * columns, (visiblePage + 1) * columns).map(track => <View key={track.id} style={{ width: size, minWidth: 0, gap: 2 }}>
         <Pressable testID="track-play-control" accessibilityRole="button" accessibilityLabel={`Play ${track.metadata.title}`} onPress={() => onPlay(track, tracks)}>
-          <Cover uri={track.media.artwork?.url ?? track.artist.profile.avatar_url} size={size} radius={9} />
+          <Cover uri={trackArtwork(track)} size={size} radius={9} />
         </Pressable>
         <View style={styles.metadata}>
           <Link href={{ pathname: '/track/[id]', params: { id: track.id } }} asChild>

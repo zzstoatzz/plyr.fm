@@ -1,3 +1,4 @@
+import { trackArtwork, collectionArtwork } from './artwork';
 import { useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useRef } from 'react';
 import { View } from 'react-native';
@@ -37,7 +38,7 @@ async function loadEmbed(kind: Kind, id: string, handle: string, slug: string): 
       ? trackIdFromUri((await legacy<{ atproto_record_uri: string }>(`tracks/${id}`)).atproto_record_uri)
       : id;
     const track = await api.track(resolved);
-    return { title: track.metadata.title, subtitle: artistName(track), artwork: track.media.artwork?.url, tracks: [track] };
+    return { title: track.metadata.title, subtitle: artistName(track), artwork: trackArtwork(track), tracks: [track] };
   }
   if (kind === 'artist') {
     const artist = await api.artist(handle);
@@ -60,7 +61,7 @@ async function loadEmbed(kind: Kind, id: string, handle: string, slug: string): 
   return {
     title: list.metadata.name ?? (kind === 'album' ? 'Album' : 'Playlist'),
     subtitle: list.owner.profile?.display_name,
-    artwork: list.media?.artwork?.url,
+    artwork: collectionArtwork(list),
     tracks: list.members.flatMap(member => member.track ? [member.track] : []),
   };
 }

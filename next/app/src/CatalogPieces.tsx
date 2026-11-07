@@ -1,3 +1,4 @@
+import { trackArtwork, collectionArtwork } from './artwork';
 import { Text } from './Text';
 import { Link, type Href } from 'expo-router';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
@@ -140,7 +141,7 @@ export function TrackRows({ tracks, onPlay }: { tracks: Track[]; onPlay: Play })
     href={{ pathname: '/track/[id]', params: { id: track.id } }}
     title={track.metadata.title}
     subtitle={artistName(track)}
-    image={track.media.artwork?.url}
+    image={trackArtwork(track)}
     action={<RowPlay onPress={() => onPlay(track, tracks)} />}
   />);
 }
@@ -162,7 +163,7 @@ export function ListRows({ lists }: { lists: ListSummary[] }) {
     }}
     title={list.metadata.name ?? 'Untitled'}
     subtitle={`${list.metrics.member_count} tracks`}
-    image={list.media?.artwork?.url}
+    image={collectionArtwork(list)}
   />);
 }
 

@@ -1,3 +1,4 @@
+import { collectionArtwork } from './artwork';
 import { type Href, useLocalSearchParams } from 'expo-router';
 import { useCallback, useState, type ReactNode } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
@@ -67,7 +68,7 @@ function Collection({ id, album, onPlay }: { id: string; album: boolean; onPlay:
   if (!list) return <Status loading={!result.error} error={result.error} retry={result.retry} />;
   const tracks = list.members.flatMap((member) => member.track ? [member.track] : []);
   return <>
-    <DetailHeader title={list.metadata.name ?? (album ? 'Album' : 'Playlist')} artwork={list.media?.artwork?.url}>
+    <DetailHeader title={list.metadata.name ?? (album ? 'Album' : 'Playlist')} artwork={collectionArtwork(list)}>
     {list.owner.profile && <InlineLink href={{ pathname: '/u/[handle]', params: { handle: list.owner.profile.handle || list.owner.did } }}>
       {list.owner.profile.display_name || list.owner.profile.handle}
     </InlineLink>}

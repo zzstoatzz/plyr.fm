@@ -1,3 +1,4 @@
+import { trackArtwork, collectionArtwork } from './artwork';
 import { Link, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Platform, Pressable, View, type KeyDownEvent, type ScrollViewInstance, type ViewInstance } from 'react-native';
@@ -107,7 +108,7 @@ function OwnedTracks({ did, active }: { did: string; active: boolean }) {
     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
       <Detail>your published tracks</Detail><Refresh onPress={tracks.reload} disabled={tracks.loading} />
     </View>
-    {tracks.data.map(track => <Row key={track.record.uri} title={track.metadata.title} image={track.media.artwork?.url}
+    {tracks.data.map(track => <Row key={track.record.uri} title={track.metadata.title} image={trackArtwork(track)}
       subtitle={`${track.metrics.play_count} ${track.metrics.play_count === 1 ? 'play' : 'plays'}${track.metadata.album ? ` · ${track.metadata.album}` : ''}`}
       href={{ pathname: '/track/[id]', params: { id: track.id } }}
       action={<Link href={{ pathname: '/edit-track/[id]', params: { id: track.id } }} asChild>
@@ -127,7 +128,7 @@ function OwnedAlbums({ did, active }: { did: string; active: boolean }) {
     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
       <Detail>your published albums</Detail><Refresh onPress={albums.reload} disabled={albums.loading} />
     </View>
-    {albums.data.map(album => <Row key={album.record.uri} title={album.metadata.name || 'untitled album'} image={album.media?.artwork?.url}
+    {albums.data.map(album => <Row key={album.record.uri} title={album.metadata.name || 'untitled album'} image={collectionArtwork(album)}
       subtitle={`${album.metrics.member_count} ${album.metrics.member_count === 1 ? 'track' : 'tracks'}`}
       href={{ pathname: '/album/[id]', params: { id: album.id } }} />)}
     <CatalogState loading={albums.loading} error={albums.error} empty={!albums.data.length} retry={albums.retry} />
