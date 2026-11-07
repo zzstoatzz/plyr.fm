@@ -1,3 +1,4 @@
+import { trackArtwork } from './artwork';
 import X from 'lucide-react-native/icons/x';
 import { PlayerControl } from './PlayerControl';
 import ListPlus from 'lucide-react-native/icons/list-plus';
@@ -218,7 +219,7 @@ function EditCollection({ list, refresh, actions, onPlay }: CollectionControlsPr
         label={'Remove ' + (track?.metadata.title ?? 'unavailable track')}
         onPress={() => remove(subject.uri)} />;
       return track ? <Row key={position} href={{ pathname: '/track/[id]', params: { id: track.id } }}
-        title={track.metadata.title} subtitle={artistName(track)} image={track.media.artwork?.url} action={removeAction} />
+        title={track.metadata.title} subtitle={artistName(track)} image={trackArtwork(track)} action={removeAction} />
         : <View key={position} style={styles.actions}><Detail>Unavailable track</Detail>{removeAction}</View>;
     }) : <TrackRows tracks={tracks} onPlay={onPlay} />}
     {editing && !album && !mutation.busy && <View style={styles.actions}>

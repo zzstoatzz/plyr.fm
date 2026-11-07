@@ -1,3 +1,4 @@
+import { trackArtwork } from './artwork';
 import { Text } from './Text';
 import Slider from './Slider';
 import { Link } from 'expo-router';
@@ -72,8 +73,9 @@ export function TrackEmbed({ track, adult }: { track: Track; adult: boolean }) {
       fontVariant: ['tabular-nums'] }}>{time(scrub ?? player.seekPreview ?? position)} / {time(duration)}</Text>}
   </View>;
 
-  const artwork = !adult && track.media.artwork?.url
-    ? <Image source={{ uri: track.media.artwork.url }} resizeMode="cover" style={StyleSheet.absoluteFill} />
+  const artworkUrl = adult ? undefined : trackArtwork(track);
+  const artwork = artworkUrl
+    ? <Image source={{ uri: artworkUrl }} resizeMode="cover" style={StyleSheet.absoluteFill} />
     : <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
       <Music size={Math.min(64, width / 4)} color={theme.muted} />
     </View>;

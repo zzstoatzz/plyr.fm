@@ -1,3 +1,4 @@
+import { trackArtwork } from './artwork';
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Platform } from 'react-native';
 import { setAudioModeAsync, useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
@@ -154,7 +155,7 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
         player.setActiveForLockScreen(true, {
           title: track.metadata.title,
           artist: track.artist.profile.display_name,
-          artworkUrl: track.media.artwork?.url
+          artworkUrl: trackArtwork(track)
         }, { showSeekForward: true, showSeekBackward: true });
       }
       console.info("[playback] source attached", { request, track: track.id, elapsedMs: Date.now() - startedAt });

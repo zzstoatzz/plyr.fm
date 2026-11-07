@@ -68,7 +68,7 @@ export interface ListSummary {
 	id: string;
 	record: { uri: string; cid: string; collection: string; rkey: string };
 	metadata: { name: string | null; created_at: string; updated_at: string | null };
-	owner: { did: string; profile: { handle: string; display_name: string } | null };
+	owner: { did: string; profile: { handle: string; display_name: string; avatar_url?: string | null } | null };
 	/** a cover: the first available member's artwork, or null */
 	media?: { artwork?: { url: string } | null };
 	metrics: { member_count: number; available_count: number; total_plays: number };

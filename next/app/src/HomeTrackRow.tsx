@@ -1,3 +1,4 @@
+import { trackArtwork } from './artwork';
 import { Link } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
@@ -14,7 +15,7 @@ export function HomeTrackRow({ track, tracks, onPlay, returnTo = '/' }: { track:
   return <View testID="home-track-row" style={[styles.row, { borderColor: theme.surface }]}>
     <Pressable testID="track-play-control" accessibilityRole="button" accessibilityLabel={`Play ${track.metadata.title}`} onPress={() => onPlay(track, tracks)}
       style={({ pressed }) => [StyleSheet.absoluteFill, { borderRadius: 10, backgroundColor: pressed ? theme.surface : 'transparent' }]} />
-    <View pointerEvents="none"><Cover uri={track.media.artwork?.url} size={44} /></View>
+    <View pointerEvents="none"><Cover uri={trackArtwork(track)} size={44} /></View>
     <View pointerEvents="box-none" style={styles.meta}>
       <Link href={`/track/${track.id}`} asChild><Pressable accessibilityRole="link" accessibilityLabel={`Track details: ${track.metadata.title}`} style={styles.link}><Text numberOfLines={1} style={{ color: theme.text, fontSize: 15 * theme.scale, fontWeight: '600' }}>{track.metadata.title}</Text></Pressable></Link>
       <Link href={`/u/${encodeURIComponent(track.artist.profile.handle || track.artist.did)}`} asChild><Pressable accessibilityRole="link" style={styles.link}><Text numberOfLines={1} style={{ color: theme.muted, fontSize: 13 * theme.scale }}>{artistName(track)}</Text></Pressable></Link>

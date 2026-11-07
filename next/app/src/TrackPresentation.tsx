@@ -1,3 +1,4 @@
+import { trackArtwork } from './artwork';
 import { Text } from './Text';
 import { Link } from 'expo-router';
 import { type ReactNode, useState } from 'react';
@@ -15,7 +16,7 @@ export function TrackPresentation({ track, controls, stats, utilities }: {
   const compact = width < 600;
   const artwork = Math.min(available, Math.max(112, Math.min(compact ? width * 0.54 : 300, height * 0.32)));
   return <View style={styles.page} onLayout={event => { if (event.nativeEvent.layout.width > 0) setAvailable(event.nativeEvent.layout.width); }}>
-    <Cover uri={track.media.artwork?.url} size={artwork} radius={12} />
+    <Cover uri={trackArtwork(track)} size={artwork} radius={12} />
     <View style={styles.identity}>
       <Text accessibilityRole="header" aria-level={1} style={{ color: theme.text, fontFamily: theme.fontFamily,
         textAlign: 'center', fontWeight: '800', fontSize: (compact ? 28 : 32) * theme.scale,
