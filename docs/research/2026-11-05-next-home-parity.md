@@ -130,3 +130,27 @@ or artist-response fixtures. The published UI matrix was anonymous; signed-in
 card rendering remains separately covered by the disposable OAuth/browser
 fixture. These desktop Chromium/WebKit viewports do not establish physical
 iPhone/Safari performance or behavior under mobile CPU/network throttling.
+
+
+## November 6 follow-up
+
+#2438 restored direct in-place period cycling (including skipping empty periods),
+without a dropdown or replacing the current covers while the next request runs.
+#2439/#2440 made artwork fallbacks consistent in the client and search projection;
+search avatar enrichment remains after ranking/LIMIT, with no per-result HTTP
+hydration. The public DnG-161 no-cover track decoded its artist avatar in both
+Home and Search during browser verification.
+
+#2441 replaces the first-15-tags cutoff with real continuation pages. The tag
+strip stays horizontal and fetches near its trailing edge; selection stays
+pinned. Server cursors contain the complete popularity/name ordering key. Names
+are deduplicated client-side, failures preserve existing tags and require retry,
+and the final page removes the More tags control. Popularity is live rather than
+snapshot-isolated. Tracks and other discovery reads do not wait for tag pages.
+
+`next/app/scripts/check-home-tag-pagination.cjs` checks phone/light and
+desktop/dark layouts, a failed second page followed by retry, terminal-page
+handling and a pinned filter issuing the real catalog GET. Tag responses are
+explicit fixtures for that failure-path check. Real Postgres tests exercise the
+API/application/store pagination boundary. `check-contoured-ui.cjs` now checks
+click-to-cycle chart behavior; its earlier dropdown/Escape assertions are obsolete.

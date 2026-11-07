@@ -21,6 +21,19 @@ Safari, native background playback and broad concurrency remain unverified;
 Chromium ALAC support remains tracked in #2427. Jam Redis is persistent but has
 one primary; this MVP establishes coordinator failover, not Redis failover.
 
+## Rewrite inventory and discovery follow-up (2026-11-06)
+
+The [migration inventory](docs/research/2026-11-04-rewrite-progress-and-scope.md)
+is refreshed through #2441. It distinguishes shipped accounting/Jam foundations
+from remaining native lifecycle, persistence/history, publishing and collection
+work. SDK/MCP, legacy URLs and cutover rehearsal remain deferred; the cost note
+separates the earlier baseline from additional Jam infrastructure.
+
+Recent Next changes fix the signed-in Firefox/Zen homepage crash (#2436), cycle
+chart periods directly (#2438), reuse artist avatars where artwork is absent
+(#2439/#2440), and paginate the horizontal tag catalog (#2441). No normal
+production promotion is part of this work.
+
 ## long-term vision
 
 ### the problem
