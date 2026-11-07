@@ -37,6 +37,7 @@ export function usePersonalQueue(target: Target) {
   const continuing = useRef<Promise<void> | undefined>(undefined);
   const context = useRef('');
   const owned = useRef(false);
+  const pausedHere = useRef(false);
   const playRequest = useRef(0);
   const pendingPlay = useRef<number | undefined>(undefined);
   const desiredEntry = useRef('');
@@ -55,6 +56,7 @@ export function usePersonalQueue(target: Target) {
     setWaiting(early.current.some(intent => intent.kind === 'play'));
     setQueueError(undefined);
     held.current = false;
+    pausedHere.current = false;
     const previous = session.current;
     const returning = !!auth.did && consumeQueueLogin();
     const adopting = !!auth.did && (source.current === 'anonymous' || returning);
@@ -92,6 +94,7 @@ export function usePersonalQueue(target: Target) {
       if (adopt?.state.entries.length && !imported && wire.queue[wire.index]?.key !== adopt.state.entries[adopt.state.index]?.key) return;
       const mine = wire.personal.output?.clientId === client.current;
       if (mine && resuming) return;
+      if (mine && pausedHere.current && wire.playing) return;
       const becameOwner = mine && !owned.current;
       owned.current = mine;
       setOutputElsewhere(!!wire.playing && !mine);
@@ -169,6 +172,13 @@ export function usePersonalQueue(target: Target) {
         }
       },
       connected: async wire => {
+        setQueueError(undefined);
+        if (pausedHere.current && wire.personal?.output?.clientId === client.current && wire.playing) {
+          resuming = false;
+          await current.dispatch({ action: 'pause' });
+          if (current.wire) void apply(current.wire, true);
+          return;
+        }
         if (wire.revision === 0 && wire.queue.length === 0 && wire.personal?.keepPlaying !== runtime.current.keepPlaying) void current.edit({ action: 'setContinuation', keepPlaying: runtime.current.keepPlaying });
         if (resuming) {
           resuming = false;
@@ -299,7 +309,9 @@ export function usePersonalQueue(target: Target) {
   }
   useEffect(() => { void ensureContinuation(); }, [state, target.keepPlaying, target.suspended, remote?.personal?.keepPlaying]);
 
-  async function next() {
+  async function next(explicit = true) {
+    if (!explicit && pausedHere.current) return;
+    if (explicit) pausedHere.current = false;
     const current = session.current;
     if (!current || (runtime.current.suspended || held.current)) return;
     if (current.wire && !owned.current) return;
@@ -312,6 +324,8 @@ export function usePersonalQueue(target: Target) {
   }
 
   function command(intent: PlaybackIntent) {
+    if (intent.action === 'pause') pausedHere.current = true;
+    else if (intent.action === 'play') pausedHere.current = false;
     if (intent.action === 'play' && held.current) { held.current = false; loaded.current = ''; }
     const current = session.current;
     const handled = current?.command(intent) ?? false;
@@ -322,6 +336,7 @@ export function usePersonalQueue(target: Target) {
   function remember(tracks: Track[]) { session.current?.remember(tracks); }
   function play(track: Track, collection?: Track[], label?: string) {
     held.current = false;
+    pausedHere.current = false;
     const current = session.current;
     if (!current) {
       early.current = early.current.filter(intent => intent.kind !== 'play');
@@ -378,6 +393,7 @@ export function usePersonalQueue(target: Target) {
   }
   function edit(intent: Parameters<PersonalQueue['edit']>[0]) { void session.current?.edit(intent); }
   function select(at: number) {
+    pausedHere.current = false;
     const current = session.current;
     const entry = current?.state.entries[at];
     if (!entry || !current) return;

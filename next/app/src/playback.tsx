@@ -217,25 +217,25 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
     if (!jam.replaceQueue(list, at, true)) personal.play(track, list, list.length > 1 ? label ?? 'collection' : undefined);
   }
 
-  async function next() {
+  async function next(explicit = true) {
     if (jam.active()) {
       const room = jam.state();
       if (room && room.index + 1 < room.queue.length) jam.command({ action: 'selectTrack', index: room.index + 1 });
       else jam.command({ action: 'pause' });
       return;
     }
-    await personal.next();
+    await personal.next(explicit);
   }
 
   useEffect(() => {
-    if (ready && status.didJustFinish && (jam.active() ? jam.jam?.canSeek : repeat !== 'one')) void next();
+    if (ready && status.didJustFinish && (jam.active() ? jam.jam?.canSeek : repeat !== 'one')) void next(false);
     // Audio status is the trigger. Queue edits must not replay a finish event.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status.didJustFinish]);
 
   function setPlaying(playing: boolean) {
     if (jam.setPlaying(playing, jam.jam?.state)) return;
-    if (!playing) personal.checkpoint();
+    if (!playing) { personal.checkpoint(); player.pause(); }
     if (personal.command({ action: playing ? 'play' : 'pause' })) return;
     if (loading || !current) return;
     if (playing && (!ready || status.error || error)) void load(queue, index);
