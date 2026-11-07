@@ -11,6 +11,7 @@ import { Action, Copy, Field, Page, row } from '../src/controls';
 import { Choice } from '../src/AccountPieces';
 import { SettingsSection, SettingsRow } from '../src/SettingsPieces';
 import { Sheet } from '../src/Sheet';
+import { usePlayback } from '../src/playback';
 import { useAppPreferences } from '../src/preference-context';
 
 const themes = ['system', 'light', 'dark'] as const;
@@ -21,6 +22,7 @@ type Picker = keyof typeof names;
 
 export default function Settings() {
   const auth = useAuth();
+  const player = usePlayback();
   const { preferences, setPreferences, status, sync } = useAppPreferences();
   const theme = useAppearance();
   const [picker, setPicker] = useState<Picker>();
@@ -43,7 +45,7 @@ export default function Settings() {
         ['play through collections', 'when you play a track in an album or playlist, keep playing the rest of it', 'playThrough'],
         ['keep playing', 'when your queue runs out, keep playing from the catalog', 'keepPlaying']
       ] as const).map(([label, detail, key]) => <SettingsRow key={key} label={label} detail={detail}>
-        <Switch {...(Platform.OS === 'web' ? { activeThumbColor: theme.background } : {})} accessibilityLabel={label} value={preferences[key]} thumbColor={theme.background} trackColor={{ false: theme.border, true: theme.accent }} ios_backgroundColor={theme.border} onValueChange={value => setPreferences({ [key]: value })} />
+        <Switch {...(Platform.OS === 'web' ? { activeThumbColor: theme.background } : {})} accessibilityLabel={label} value={key === 'keepPlaying' ? player.keepPlaying : preferences[key]} thumbColor={theme.background} trackColor={{ false: theme.border, true: theme.accent }} ios_backgroundColor={theme.border} onValueChange={value => { if (key === 'keepPlaying') player.setKeepPlaying(value); setPreferences({ [key]: value }); }} />
       </SettingsRow>)}
     </SettingsSection>
     <SettingsSection title="account" icon={UserRound}>

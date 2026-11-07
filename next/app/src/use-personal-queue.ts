@@ -168,6 +168,7 @@ export function usePersonalQueue(target: Target) {
         }
       },
       connected: async wire => {
+        if (wire.revision === 0 && wire.queue.length === 0 && wire.personal?.keepPlaying !== runtime.current.keepPlaying) void current.edit({ action: 'setContinuation', keepPlaying: runtime.current.keepPlaying });
         if (resuming) {
           resuming = false;
           if (wire.personal?.output?.clientId === client.current) await current.dispatch(progressIntent(current, runtime.current.position()));
@@ -192,7 +193,7 @@ export function usePersonalQueue(target: Target) {
           if (current.wire) void apply(current.wire, true);
         }
       },
-      remote: (state, force) => { void apply(state, force); },
+      remote: (state, force) => { if (!stale()) { setRemote(state); void apply(state, force); } },
       ...(auth.did && auth.agent && auth.jamSpace ? { connect: { admit: () => {
         resuming = owned.current && runtime.current.playing() && !(runtime.current.suspended || held.current);
         return joinPersonalQueue(auth, client.current, current.wire ? undefined : { ...current.seed(), playing: adopting && runtime.current.playing() }, resuming);
@@ -217,8 +218,8 @@ export function usePersonalQueue(target: Target) {
 
   useEffect(() => {
     if (!session.current?.initialized || target.suspended) return;
-    session.current.save(restoredPosition ?? target.position(), target.repeat, target.keepPlaying);
-  }, [state, target.repeat, target.keepPlaying, target.suspended]);
+    session.current.save(restoredPosition ?? target.position(), target.repeat, keepPlaying());
+  }, [state, target.repeat, target.keepPlaying, target.suspended, remote?.personal?.keepPlaying]);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -233,7 +234,7 @@ export function usePersonalQueue(target: Target) {
   useEffect(() => registerQueueLogin(async () => {
     const current = session.current;
     if (!current || (runtime.current.suspended || held.current)) return false;
-    await current.save(runtime.current.position(), runtime.current.repeat, runtime.current.keepPlaying);
+    await current.save(runtime.current.position(), runtime.current.repeat, keepPlaying());
     return source.current === 'anonymous';
   }), []);
 
@@ -250,12 +251,11 @@ export function usePersonalQueue(target: Target) {
 
   useEffect(() => { if (!target.suspended) session.current?.refresh(); }, [target.suspended]);
 
+  function keepPlaying() { return session.current?.wire?.personal?.keepPlaying ?? runtime.current.keepPlaying; }
   useEffect(() => {
     const current = session.current;
-    if (!target.keepPlaying) continuation.current.reset(remote?.personal?.cursor);
-    if (remote?.personal && current && !target.suspended && remote.personal.keepPlaying !== target.keepPlaying)
-      void current.edit({ action: 'setContinuation', keepPlaying: target.keepPlaying });
-    else if (!remote && current && !target.keepPlaying && current.state.tail?.kind === 'generated') current.local(queue.trimGenerated(current.state));
+    if (!keepPlaying()) continuation.current.reset(remote?.personal?.cursor);
+    if (!remote && current && !target.keepPlaying && current.state.tail?.kind === 'generated') current.local(queue.trimGenerated(current.state));
   }, [target.keepPlaying, target.suspended, remote?.personal?.keepPlaying]);
 
   function progressIntent(current: PersonalQueue, position: number): PlaybackIntent {
@@ -267,14 +267,14 @@ export function usePersonalQueue(target: Target) {
 
   async function fillContinuation() {
     const current = session.current;
-    if (!current || (runtime.current.suspended || held.current) || !runtime.current.keepPlaying || current.wire && !owned.current) return;
+    if (!current || (runtime.current.suspended || held.current) || !keepPlaying() || current.wire && !owned.current) return;
     const entries = current.state.entries;
     const remaining = entries.length - current.state.index - 1;
     if (!entries.length || remaining > 2) return;
     const scope = context.current;
     const seen = new Set(entries.map(entry => entry.track.id));
     await continuation.current.prefetch(seen);
-    if (session.current !== current || scope !== context.current || (runtime.current.suspended || held.current) || !runtime.current.keepPlaying) return;
+    if (session.current !== current || scope !== context.current || (runtime.current.suspended || held.current) || !keepPlaying()) return;
     if (current.state.tail?.kind === 'collection' && current.state.index + 1 < current.state.entries.length) return;
     const fresh = continuation.current.peek(new Set(current.state.entries.map(entry => entry.track.id)));
     if (!fresh.length) return;
@@ -289,7 +289,7 @@ export function usePersonalQueue(target: Target) {
     continuing.current ??= fillContinuation().catch(() => runtime.current.error('Could not load more tracks')).finally(() => { continuing.current = undefined; });
     return continuing.current;
   }
-  useEffect(() => { void ensureContinuation(); }, [state, target.keepPlaying, target.suspended]);
+  useEffect(() => { void ensureContinuation(); }, [state, target.keepPlaying, target.suspended, remote?.personal?.keepPlaying]);
 
   async function next() {
     const current = session.current;
@@ -371,7 +371,7 @@ export function usePersonalQueue(target: Target) {
     if (current && !(runtime.current.suspended || held.current)) current.progress(position ?? (current.wire && !owned.current
       ? jamPosition(current.wire, current.position(Date.now())) / 1000 : runtime.current.position()));
   }
-  return { queueError, waiting, deviceOnly: !!auth.did && !auth.jamSpace, checkpoint, ownsOutput: () => owned.current, next, state, remote, outputElsewhere, restoredPosition, command, play, select, local, remember,
+  return { keepPlaying: remote?.personal?.keepPlaying ?? target.keepPlaying, setKeepPlaying: (value: boolean) => edit({ action: 'setContinuation', keepPlaying: value }), queueError, waiting, deviceOnly: !!auth.did && !auth.jamSpace, checkpoint, ownsOutput: () => owned.current, next, state, remote, outputElsewhere, restoredPosition, command, play, select, local, remember,
     enqueue: (track: Track) => { remember([track]); edit({ action: 'enqueue', entry: queueReference(track, randomUUID()) }); },
     remove: (at: number) => { const entry = session.current?.state.entries[at]; if (entry) edit({ action: 'removeEntry', entryKey: entry.key }); },
     move: (from: number, to: number) => {

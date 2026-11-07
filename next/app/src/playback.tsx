@@ -275,7 +275,7 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
     joinJam: input => { personal.suspend(); jam.join(input); },
     leaveJam: (restore = true) => { jam.leave(false); if (restore) personal.restore(); },
     jamCommand: intent => intent.action === 'play' || intent.action === 'pause' ? jam.setPlaying(intent.action === 'play', jam.jam?.state) : jam.command(intent),
-    play, queue, current, index, loading: loading || personal.waiting, error, status, tail: jam.jam ? undefined : personal.state.tail, outputElsewhere: personal.outputElsewhere, deviceQueue: personal.deviceOnly, queueError: personal.queueError, repeat: jam.jam ? 'off' : repeat, setRepeat: value => { if (!jam.active()) personal.setRepeat(value); }, toggle, setPlaying, next,
+    play, queue, current, index, loading: loading || personal.waiting, error, status, tail: jam.jam ? undefined : personal.state.tail, outputElsewhere: !jam.jam && personal.outputElsewhere, deviceQueue: personal.deviceOnly, queueError: jam.jam ? undefined : personal.queueError, keepPlaying: personal.keepPlaying, setKeepPlaying: personal.setKeepPlaying, repeat: jam.jam ? 'off' : repeat, setRepeat: value => { if (!jam.active()) personal.setRepeat(value); }, toggle, setPlaying, next,
     isPlaying: () => player.playing,
     pauseLocal: () => { personal.suspend(); player.pause(); },
     previous: () => {
@@ -328,6 +328,8 @@ interface Playback {
   outputElsewhere: boolean;
   deviceQueue: boolean;
   queueError?: string;
+  keepPlaying: boolean;
+  setKeepPlaying(value: boolean): void;
   queue: Track[];
   current?: Track;
   index: number;
