@@ -46,6 +46,7 @@ export function usePersonalQueue(target: Target) {
   const held = useRef(false);
   const [state, setState] = useState<queue.QueueState<Track>>(queue.emptyQueue());
   const [remote, setRemote] = useState<JamState>();
+  const [, refreshClock] = useState(0);
   const [outputElsewhere, setOutputElsewhere] = useState(false);
   const [restoredPosition, setRestoredPosition] = useState<number>();
 
@@ -276,6 +277,22 @@ export function usePersonalQueue(target: Target) {
     if (!remote && current && !target.keepPlaying && current.state.tail?.kind === 'generated') current.local(queue.trimGenerated(current.state));
   }, [target.keepPlaying, target.suspended, remote?.personal?.keepPlaying]);
 
+  useEffect(() => {
+    if (!remote?.playing || owned.current || target.suspended || held.current) return;
+    const timer = setInterval(() => refreshClock(value => value + 1), 250);
+    return () => clearInterval(timer);
+  }, [remote?.playing, remote?.personal?.output?.clientId, target.suspended, held.current]);
+
+  function position() {
+    const current = session.current;
+    return current?.wire && !owned.current ? jamPosition(current.wire, current.position(Date.now())) / 1000 : runtime.current.position();
+  }
+  function duration() {
+    const current = session.current;
+    const wire = current?.wire;
+    return wire ? wire.queue[wire.index]?.durationMs / 1000 || current?.state.entries[current.state.index]?.track.metadata.duration_seconds || (owned.current ? runtime.current.duration() : 0) : runtime.current.duration();
+  }
+
   function progressIntent(current: PersonalQueue, position: number): PlaybackIntent {
     const entry = current.wire?.queue[current.wire.index];
     const durationMs = Math.round(runtime.current.duration() * 1000);
@@ -419,7 +436,7 @@ export function usePersonalQueue(target: Target) {
     if (current && !(runtime.current.suspended || held.current)) current.progress(position ?? (current.wire && !owned.current
       ? jamPosition(current.wire, current.position(Date.now())) / 1000 : runtime.current.position()));
   }
-  return { keepPlaying: remote?.personal?.keepPlaying ?? target.keepPlaying, setKeepPlaying: (value: boolean) => edit({ action: 'setContinuation', keepPlaying: value }), queueError, waiting, deviceOnly: !!auth.did && !auth.jamSpace, checkpoint, ownsOutput: () => owned.current, next, state, remote, outputElsewhere, restoredPosition, command, play, select, local, remember,
+  return { position, duration, keepPlaying: remote?.personal?.keepPlaying ?? target.keepPlaying, setKeepPlaying: (value: boolean) => edit({ action: 'setContinuation', keepPlaying: value }), queueError, waiting, deviceOnly: !!auth.did && !auth.jamSpace, checkpoint, ownsOutput: () => owned.current, next, state, remote, outputElsewhere, restoredPosition, command, play, select, local, remember,
     enqueue,
     remove: (at: number) => { const entry = session.current?.state.entries[at]; if (entry) edit({ action: 'removeEntry', entryKey: entry.key }); },
     move: (from: number, to: number) => {

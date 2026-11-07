@@ -250,7 +250,8 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
 
   function seek(seconds: number) {
     if (!Number.isFinite(seconds)) return;
-    const target = Math.max(0, Math.min(player.duration || seconds, seconds));
+    const duration = !jam.active() && personal.remote ? personal.duration() : player.duration;
+    const target = Math.max(0, Math.min(duration || seconds, seconds));
     if (jam.command({ action: 'seek', positionMs: Math.round(target * 1000) })) return;
     if (personal.remote) {
       setPendingSeek({ source: sequence.current, seconds: target });
@@ -272,14 +273,18 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
     });
   }
 
+  const remoteOutput = !jam.jam && !!personal.remote && !personal.ownsOutput();
+  const presentationStatus = remoteOutput ? { ...status, playing: false, isLoaded: false, isBuffering: false, didJustFinish: false,
+    currentTime: personal.position(), duration: personal.duration(), error: null } : status;
+  useEffect(() => { if (remoteOutput) setError(null); }, [personal.remote?.personal?.output?.clientId, current?.id]);
   const value: Playback = {
     jam: jam.jam,
     canSeek: !jam.jam || jam.jam.canSeek && jam.jam.phase === 'connected',
-    seekPreview: jam.jam ? jam.jam.pendingSeekMs === undefined ? undefined : jam.jam.pendingSeekMs / 1000 : (pendingSeek?.source === sequence.current ? pendingSeek.seconds : undefined) ?? personal.restoredPosition,
+    seekPreview: jam.jam ? jam.jam.pendingSeekMs === undefined ? undefined : jam.jam.pendingSeekMs / 1000 : (pendingSeek?.source === sequence.current ? pendingSeek.seconds : undefined) ?? (remoteOutput ? undefined : personal.restoredPosition),
     joinJam: input => { personal.suspend(); jam.join(input); },
     leaveJam: (restore = true) => { jam.leave(false); if (restore) personal.restore(); },
     jamCommand: intent => intent.action === 'play' || intent.action === 'pause' ? jam.setPlaying(intent.action === 'play', jam.jam?.state) : jam.command(intent),
-    play, queue, current, index, loading: loading || personal.waiting, error, status, tail: jam.jam ? undefined : personal.state.tail, outputElsewhere: !jam.jam && personal.outputElsewhere, deviceQueue: personal.deviceOnly, queueError: jam.jam ? undefined : personal.queueError, keepPlaying: personal.keepPlaying, setKeepPlaying: personal.setKeepPlaying, repeat: jam.jam ? 'off' : repeat, setRepeat: value => { if (!jam.active()) personal.setRepeat(value); }, toggle, setPlaying, next,
+    play, queue, current, index, loading: loading || personal.waiting, error, status: presentationStatus, tail: jam.jam ? undefined : personal.state.tail, outputElsewhere: !jam.jam && personal.outputElsewhere, deviceQueue: personal.deviceOnly, queueError: jam.jam ? undefined : personal.queueError, keepPlaying: personal.keepPlaying, setKeepPlaying: personal.setKeepPlaying, repeat: jam.jam ? 'off' : repeat, setRepeat: value => { if (!jam.active()) personal.setRepeat(value); }, toggle, setPlaying, next,
     isPlaying: () => player.playing,
     pauseLocal: () => { personal.suspend(); player.pause(); },
     previous: () => {
@@ -287,11 +292,11 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
       if (jam.active()) {
         if (room && player.currentTime > 3 && jam.jam?.canSeek) jam.command({ action: 'seek', positionMs: 0 });
         else if (room && room.index > 0) jam.command({ action: 'selectTrack', index: room.index - 1 });
-      } else if (player.currentTime > 3 || index === 0) seek(0);
+      } else if (personal.position() > 3 || index === 0) seek(0);
       else personal.select(index - 1);
     },
     seek,
-    skip: (seconds) => { const base = jam.jam ? (jam.jam.pendingSeekMs === undefined ? player.currentTime : jam.jam.pendingSeekMs / 1000) : pendingSeek?.source === sequence.current ? pendingSeek.seconds : player.currentTime; seek(base + seconds); },
+    skip: (seconds) => { const base = jam.jam ? (jam.jam.pendingSeekMs === undefined ? player.currentTime : jam.jam.pendingSeekMs / 1000) : pendingSeek?.source === sequence.current ? pendingSeek.seconds : personal.position(); seek(base + seconds); },
     jump: (at) => { if (!jam.command({ action: 'selectTrack', index: at })) personal.select(at); },
     enqueue: (track) => {
       const ref = jamTrack(track);
