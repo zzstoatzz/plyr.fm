@@ -367,7 +367,7 @@ export function usePersonalQueue(target: Target) {
     held.current = false;
     pausedHere.current = false;
     const current = session.current;
-    if (!current) {
+    if (!current || source.current !== (auth.did ?? 'anonymous')) {
       early.current = early.current.filter(intent => intent.kind !== 'play');
       early.current.push({ kind: 'play', track, collection, label });
       setWaiting(true);
@@ -416,7 +416,7 @@ export function usePersonalQueue(target: Target) {
     return true;
   }
   function enqueue(track: Track) {
-    if (!session.current) { if (early.current.length < 64) early.current.push({ kind: 'enqueue', track }); return; }
+    if (!session.current || source.current !== (auth.did ?? 'anonymous')) { if (early.current.length < 64) early.current.push({ kind: 'enqueue', track }); return; }
     remember([track]);
     edit({ action: 'enqueue', entry: queueReference(track, randomUUID()) });
   }

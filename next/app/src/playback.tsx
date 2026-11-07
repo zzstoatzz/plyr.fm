@@ -103,6 +103,7 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
     objectUrl.current = null;
     setQueue([]);
     setIndex(-1);
+    setRepeat('off');
     setReady(false);
     setResolving(false);
     setStarting(null);
@@ -128,6 +129,7 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
     setError(null);
     try {
       const playback = await api.playback(track.id);
+      if (request !== sequence.current) return false;
       const { status: availability, space, delivery, artifact } = playback.availability;
       console.info("[playback] availability", { request, track: track.id, availability, delivery: !!delivery, artifact: !!artifact, elapsedMs: Date.now() - startedAt });
       let url: string;
@@ -277,14 +279,15 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
   const presentationStatus = remoteOutput ? { ...status, playing: false, isLoaded: false, isBuffering: false, didJustFinish: false,
     currentTime: personal.position(), duration: personal.duration(), error: null } : status;
   useEffect(() => { if (remoteOutput) setError(null); }, [personal.remote?.personal?.output?.clientId, current?.id]);
+  const accountVisible = previousAccount.current === null || previousAccount.current === auth.did;
   const value: Playback = {
-    jam: jam.jam,
+    jam: accountVisible ? jam.jam : undefined,
     canSeek: !jam.jam || jam.jam.canSeek && jam.jam.phase === 'connected',
     seekPreview: jam.jam ? jam.jam.pendingSeekMs === undefined ? undefined : jam.jam.pendingSeekMs / 1000 : (pendingSeek?.source === sequence.current ? pendingSeek.seconds : undefined) ?? (remoteOutput ? undefined : personal.restoredPosition),
     joinJam: input => { personal.suspend(); jam.join(input); },
     leaveJam: (restore = true) => { jam.leave(false); if (restore) personal.restore(); },
     jamCommand: intent => intent.action === 'play' || intent.action === 'pause' ? jam.setPlaying(intent.action === 'play', jam.jam?.state) : jam.command(intent),
-    play, queue, current, index, loading: loading || personal.waiting, error, status: presentationStatus, tail: jam.jam ? undefined : personal.state.tail, outputElsewhere: !jam.jam && personal.outputElsewhere, deviceQueue: personal.deviceOnly, queueError: jam.jam ? undefined : personal.queueError, keepPlaying: personal.keepPlaying, setKeepPlaying: personal.setKeepPlaying, repeat: jam.jam ? 'off' : repeat, setRepeat: value => { if (!jam.active()) personal.setRepeat(value); }, toggle, setPlaying, next,
+    play, queue: accountVisible ? queue : [], current: accountVisible ? current : undefined, index: accountVisible ? index : -1, loading: loading || personal.waiting, error, status: presentationStatus, tail: jam.jam || !accountVisible ? undefined : personal.state.tail, outputElsewhere: !jam.jam && personal.outputElsewhere, deviceQueue: personal.deviceOnly, queueError: jam.jam ? undefined : personal.queueError, keepPlaying: personal.keepPlaying, setKeepPlaying: personal.setKeepPlaying, repeat: jam.jam ? 'off' : repeat, setRepeat: value => { if (!jam.active()) personal.setRepeat(value); }, toggle, setPlaying, next,
     isPlaying: () => player.playing,
     pauseLocal: () => { personal.suspend(); player.pause(); },
     previous: () => {
