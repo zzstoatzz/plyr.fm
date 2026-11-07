@@ -144,18 +144,9 @@ fn decodeRow(
     };
     const artist_text_source: track.Source = if (kind == .artist) .legacy_local else .verified_repo;
     const owner_display_source: track.Source = if (kind == .artist) .legacy_local else .legacy_projection;
-    const image_source: track.Source = if (image_url == null)
-        .derived
-    else if (kind == .track)
-        .verified_repo
-    else if (authored_image)
-        .authored_profile
-    else
-        .legacy_projection;
-    const metric_source: track.Source = if (kind == .track and has_metrics)
-        .application_metrics
-    else
-        .derived;
+    const image_source = try parseEnum(track.Source, try row.get([]const u8, 16));
+    const metric_source: track.Source = if (kind == .track and has_metrics) .application_metrics else .derived;
+
     return .{
         .type = kind,
         .id = id,
@@ -369,31 +360,45 @@ const search_query =
     \\  LIMIT $9::bigint
     \\)
     \\SELECT
-    \\  entity_type,
+    \\  limited.entity_type,
     \\  limited.record_uri,
-    \\  record_cid,
-    \\  primary_text,
-    \\  owner_did,
-    \\  owner_handle,
-    \\  owner_display_name,
-    \\  image_url,
+    \\  limited.record_cid,
+    \\  limited.primary_text,
+    \\  limited.owner_did,
+    \\  limited.owner_handle,
+    \\  limited.owner_display_name,
+    \\  COALESCE(limited.image_url, image_profile.avatar, image_identity.avatar_url),
     \\  CASE WHEN entity_type = 'track' THEN COALESCE(metrics.play_count, 0)::bigint ELSE NULL::bigint END,
-    \\  member_count,
-    \\  indexed_at_us,
-    \\  authored_image,
+    \\  limited.member_count,
+    \\  limited.indexed_at_us,
+    \\  limited.authored_image,
     \\  entity_type = 'track' AND metrics.record_uri IS NOT NULL,
-    \\  account_source,
-    \\  matched_field,
+    \\  limited.account_source,
+    \\  limited.matched_field,
     \\  CASE match_tier
     \\    WHEN 5 THEN 'exact'
     \\    WHEN 4 THEN 'exact'
     \\    WHEN 3 THEN 'prefix'
     \\    WHEN 2 THEN 'substring'
     \\    ELSE 'fuzzy'
-    \\  END AS match_kind
+    \\  END AS match_kind,
+    \\  CASE
+    \\    WHEN limited.image_url IS NOT NULL THEN CASE
+    \\      WHEN entity_type = 'track' THEN 'verified_repo'
+    \\      WHEN authored_image THEN 'authored_profile' ELSE 'legacy_projection' END
+    \\    WHEN image_profile.avatar IS NOT NULL THEN 'authored_profile'
+    \\    WHEN image_identity.avatar_url IS NOT NULL THEN 'legacy_projection'
+    \\    ELSE 'derived'
+    \\  END AS image_source
     \\FROM limited
     \\LEFT JOIN plyr_index.track_metrics AS metrics
     \\  ON entity_type = 'track' AND metrics.record_uri = limited.record_uri
+    \\LEFT JOIN plyr_index.profile_records AS image_profile
+    \\  ON limited.image_url IS NULL AND entity_type <> 'artist'
+    \\  AND image_profile.owner_did = limited.owner_did AND image_profile.collection = $4
+    \\  AND image_profile.rkey = 'self' AND NOT image_profile.deleted
+    \\LEFT JOIN plyr_index.actor_identities AS image_identity
+    \\  ON limited.image_url IS NULL AND entity_type <> 'artist' AND image_identity.did = limited.owner_did
     \\ORDER BY match_tier DESC, lexical_similarity DESC,
     \\  lower(primary_text), entity_type, limited.record_uri
 ;
