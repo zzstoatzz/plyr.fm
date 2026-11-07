@@ -398,16 +398,17 @@ const apply_script = lua_common ++
     \\local raw=redis.call('GET',KEYS[1]); if not raw then return {'missing'} end
     \\local s=cjson.decode(raw); local now=math.max(nowms(),s.updatedAtMs)
     \\local function result(outcome,rev) return {outcome,raw,tostring(now),lastid(KEYS[4]),rev,'ok'} end
-    \\if s.epoch~=ARGV[9] or (ARGV[11]~='rebase' and s.occurrence~=tonumber(ARGV[10])) then return result('conflict',string.format('%.0f',s.revision)) end
+    \\if s.epoch~=ARGV[9] or (type(s.personal)~='table' and ARGV[11]~='rebase' and s.occurrence~=tonumber(ARGV[10])) then return result('conflict',string.format('%.0f',s.revision)) end
     \\local cached=redis.call('HGET',KEYS[2],ARGV[4])
     \\if cached then local fingerprint,outcome,rev=string.match(cached,'([^|]+)|([^|]+)|([^|]+)'); if fingerprint~=ARGV[5] then return result('invalid',string.format('%.0f',s.revision)) end; if outcome=='applied' or outcome=='noop' then return result('duplicate',rev) end; return result(outcome,rev) end
+    \\if type(s.personal)=='table' and ARGV[11]~='rebase' and s.occurrence~=tonumber(ARGV[10]) then return result('conflict',string.format('%.0f',s.revision)) end
     \\if s.epoch~=ARGV[2] or s.revision~=tonumber(ARGV[3]) then return {'retry'} end
     \\local outcome=ARGV[6]
     \\if outcome=='applied' then
     \\ local n=cjson.decode(ARGV[7]); if ARGV[8]~='seek' and ARGV[8]~='progress' and ARGV[8]~='advance' and n.occurrence==s.occurrence then
     \\  local elapsed=0; if s.playing then elapsed=math.max(0,now-s.updatedAtMs) end
     \\  local duration=0; if #n.queue>0 then duration=n.queue[n.index+1].durationMs; if duration==0 and type(n.personal)=='table' then duration=86400000 end end
-    \\  n.positionMs=math.min(duration,s.positionMs+elapsed)
+    \\  n.positionMs=math.min(duration,s.positionMs+elapsed); if type(s.personal)=='table' and s.personal['repeat']=='one' and s.playing and duration>0 and s.queue[s.index+1].durationMs>0 then n.positionMs=(s.positionMs+elapsed)%duration end
     \\ end
     \\ n.updatedAtMs=now; raw=encode(n); s=n; redis.call('SET',KEYS[1],raw,'EX',86400); if type(s.personal)=='table' then redis.call('PERSIST',KEYS[1]) end
     \\ redis.call('XADD',KEYS[4],'MAXLEN',8,'*','state',raw,'time',tostring(now)); redis.call('EXPIRE',KEYS[4],86400)
@@ -875,6 +876,16 @@ test "personal queues persist idle state and merge concurrent edits across Redis
     var forbidden = try right.applyAsClient(allocator, room, fixture_guest, fixture_host, .{ .id = "foreign", .epoch = "personal", .expectedRevision = 2, .occurrence = 1, .action = .enqueue, .entry = first }, two.client);
     defer forbidden.deinit();
     try std.testing.expectEqual(model.Outcome.forbidden, forbidden.outcome);
+    const repeat_command: model.Command = .{ .id = "repeat-once", .epoch = "personal", .expectedRevision = 2, .occurrence = 1, .action = .setRepeat, .repeat = .one };
+    var repeated = try left.applyAsClient(allocator, room, fixture_host, fixture_host, repeat_command, one.client);
+    defer repeated.deinit();
+    try std.testing.expectEqual(model.Outcome.applied, repeated.outcome);
+    var selected = try right.applyAsClient(allocator, room, fixture_host, fixture_host, .{ .id = "select-next", .epoch = "personal", .expectedRevision = 3, .occurrence = 1, .action = .selectTrack, .entryKey = snapshot.state.queue[1].key, .playing = false }, two.client);
+    defer selected.deinit();
+    try std.testing.expectEqual(model.Outcome.applied, selected.outcome);
+    var repeat_retry = try right.applyAsClient(allocator, room, fixture_host, fixture_host, repeat_command, one.client);
+    defer repeat_retry.deinit();
+    try std.testing.expectEqual(model.Outcome.duplicate, repeat_retry.outcome);
     _ = try left.send(a, &.{ "DEL", keys[1], keys[2], keys[3] }, false);
     _ = try left.send(a, &.{ "EXPIRE", keys[0], "10" }, false);
     var recovered = (try right.read(allocator, room)).?;
@@ -882,4 +893,31 @@ test "personal queues persist idle state and merge concurrent edits across Redis
     try std.testing.expectEqual(@as(usize, 3), recovered.state.queue.len);
     try std.testing.expectEqual(@as(i64, -1), (try left.send(a, &.{ "TTL", keys[0] }, false)).integer);
     try std.testing.expectEqualStrings("0-0", recovered.lastEventId);
+}
+
+test "personal repeat-one queue edits preserve wrapped timeline position in Redis" {
+    const url_z = std.c.getenv("PLYR_ZIG_TEST_REDIS_URL") orelse return;
+    const allocator = std.testing.allocator;
+    const io = std.testing.io;
+    var arena = std.heap.ArenaAllocator.init(allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var store = try Store.init(allocator, io, std.mem.span(url_z), fixture_collection);
+    defer store.deinit();
+    var random: [16]u8 = undefined;
+    io.random(&random);
+    const room = try std.fmt.allocPrint(a, "integration:personal-loop:{x}", .{random});
+    const keys = try roomKeys(a, room);
+    defer _ = store.send(a, &.{ "DEL", keys[0], keys[1], keys[2], keys[3] }, false) catch {};
+    var current = try fixtureTrack(a, "loop");
+    current.key = "current";
+    current.durationMs = 60000;
+    const state: model.State = .{ .epoch = "loop", .revision = 0, .queue = &.{current}, .index = 0, .occurrence = 1, .playing = true, .positionMs = 1000, .updatedAtMs = (try store.nowMs()) - 65000, .personal = .{ .explicitEnd = 1, .repeat = .one, .output = .{ .clientId = "a", .connectionId = "a1" } } };
+    _ = try store.send(a, &.{ "SET", keys[0], try std.json.Stringify.valueAlloc(a, state, .{}) }, false);
+    var entry = current;
+    entry.key = "next";
+    var result = try store.applyAsClient(allocator, room, fixture_host, fixture_host, .{ .id = "enqueue-after-loop", .epoch = "loop", .expectedRevision = 0, .occurrence = 1, .action = .enqueue, .entry = entry }, .{ .id = "a", .connection = "a1" });
+    defer result.deinit();
+    try std.testing.expectEqual(model.Outcome.applied, result.outcome);
+    try std.testing.expect(result.snapshot.state.positionMs >= 6000 and result.snapshot.state.positionMs < 10000);
 }
