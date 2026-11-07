@@ -47,3 +47,16 @@ test('one prefetch is bounded even when the current queue covers several discove
   await reader.prefetch(new Set(['seen']));
   assert.equal(calls, 6);
 });
+
+test('reset aborts the old fetch without exposing a stale-context error', async () => {
+  let aborted = false;
+  const reader = new QueueContinuation<{ id: string }>((cursor, signal) => cursor
+    ? Promise.resolve({ object: 'list', data: [song('new')], has_more: false })
+    : new Promise((_, reject) => { signal?.addEventListener('abort', () => { aborted = true; reject(new Error('aborted')); }); }));
+  const previous = reader.prefetch(new Set());
+  reader.reset('new-context');
+  await previous;
+  assert.equal(aborted, true);
+  await reader.prefetch(new Set());
+  assert.deepEqual(reader.peek(new Set()).map(track => track.id), ['new']);
+});

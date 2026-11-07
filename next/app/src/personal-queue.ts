@@ -14,7 +14,7 @@ export interface PersonalQueueOptions {
   owner: string;
   storage: QueueStorage;
   id(): string;
-  resolve(ids: string[]): Promise<{ data: Track[]; missing: string[] }>;
+  resolve(ids: string[], signal?: AbortSignal): Promise<{ data: Track[]; missing: string[] }>;
   changed(state: queue.QueueState<Track>, checkpoint?: QueueCheckpoint): void;
   remote(state: JamState, force: boolean): void;
   error(message: string): void;
@@ -27,6 +27,7 @@ export class PersonalQueue {
   wire?: JamState;
   readonly cache = new Map<string, Track>();
   private readonly validated = new Set<string>();
+  private readonly requests = new AbortController();
   private readonly missing = new Set<string>();
   private readonly fetching = new Set<string>();
   private connection?: JamConnection;
@@ -182,6 +183,7 @@ export class PersonalQueue {
 
   close() {
     this.closed = true;
+    this.requests.abort();
     this.connection?.close();
     for (const command of this.commands.values()) { clearTimeout(command.timer); command.finish(false); }
     this.commands.clear();
@@ -269,7 +271,7 @@ export class PersonalQueue {
     await Promise.all(chunks.map(async ids => {
       for (const id of ids) this.fetching.add(id);
       try {
-        const result = await this.options.resolve(ids);
+        const result = await this.options.resolve(ids, this.requests.signal);
         if (this.closed) return;
         this.remember(result.data);
         for (const id of result.missing) { this.missing.add(id); this.cache.delete(id); }

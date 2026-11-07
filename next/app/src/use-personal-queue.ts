@@ -32,7 +32,7 @@ export function usePersonalQueue(target: Target) {
   const loaded = useRef('');
   const synchronization = useRef(0);
   const source = useRef('');
-  const continuation = useRef(new QueueContinuation(cursor => api.tracks({ limit: 10, cursor })));
+  const continuation = useRef(new QueueContinuation((cursor, signal) => api.tracks({ limit: 10, cursor }, signal)));
   const continuing = useRef<Promise<void> | undefined>(undefined);
   const context = useRef('');
   const owned = useRef(false);
@@ -146,7 +146,7 @@ export function usePersonalQueue(target: Target) {
     }
 
     current = new PersonalQueue({ owner: account, storage: queueStorage, id: randomUUID,
-      resolve: ids => api.resolveTracks(ids),
+      resolve: (ids, signal) => api.resolveTracks(ids, signal),
       error: message => { if (!stale()) setQueueError(message); },
       changed: (state, checkpoint) => {
         if (stale() || importing || pendingPlay.current !== undefined) return;
@@ -195,7 +195,7 @@ export function usePersonalQueue(target: Target) {
       remote: (state, force) => { void apply(state, force); },
       ...(auth.did && auth.agent && auth.jamSpace ? { connect: { admit: () => {
         resuming = owned.current && runtime.current.playing() && !(runtime.current.suspended || held.current);
-        return joinPersonalQueue(auth, client.current, { ...current.seed(), playing: adopting && runtime.current.playing() }, resuming);
+        return joinPersonalQueue(auth, client.current, current.wire ? undefined : { ...current.seed(), playing: adopting && runtime.current.playing() }, resuming);
       } } } : {}),
     });
     session.current = current;
@@ -252,6 +252,7 @@ export function usePersonalQueue(target: Target) {
 
   useEffect(() => {
     const current = session.current;
+    if (!target.keepPlaying) continuation.current.reset(remote?.personal?.cursor);
     if (remote?.personal && current && !target.suspended && remote.personal.keepPlaying !== target.keepPlaying)
       void current.edit({ action: 'setContinuation', keepPlaying: target.keepPlaying });
     else if (!remote && current && !target.keepPlaying && current.state.tail?.kind === 'generated') current.local(queue.trimGenerated(current.state));
