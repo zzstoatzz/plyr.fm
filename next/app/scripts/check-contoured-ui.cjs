@@ -58,6 +58,13 @@ async function preview(route) {
           await next.click();
           await page.getByRole('button', { name: 'Previous top tracks', exact: true }).click();
         }
+        const feed = page.getByTestId('home-track-row');
+        await feed.first().waitFor();
+        if (width >= 1280) {
+          const first = await feed.nth(0).boundingBox();
+          const second = await feed.nth(1).boundingBox();
+          assert.ok(first && second && Math.abs(first.y - second.y) < 1 && second.x > first.x, 'Desktop uses two feed columns');
+        }
         await covers.first().click();
         const dock = page.getByTestId('player-dock');
         await dock.waitFor();

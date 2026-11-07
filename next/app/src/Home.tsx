@@ -19,6 +19,9 @@ import { WaveLoading } from './WaveLoading';
 export function Home({ onPlay }: { onPlay: Play }) {
   const colors = useColors();
   const list = useRef<FlatList<Track>>(null);
+  const [layoutWidth, setLayoutWidth] = useState(0);
+  const contentWidth = Math.max(0, layoutWidth - pageFrame.paddingHorizontal * 2);
+  const columns = contentWidth >= 900 * colors.scale ? 2 : 1;
   const { did } = useAuth();
   const key = selectedTagsKey(did);
   const [selection, setSelection] = useState(() => ({ key, tags: parseSelectedTags(readLocal(key)) }));
@@ -91,15 +94,15 @@ export function Home({ onPlay }: { onPlay: Play }) {
       <Status error={tagError} retry={() => setTagAttempt((attempt) => attempt + 1)} />
     </View>
   </View>;
-  return <FlatList ref={list} testID="home-feed" data={tracks} keyExtractor={track => track.id}
+  return <FlatList key={columns} numColumns={columns} columnWrapperStyle={columns === 2 ? { gap: 24 } : undefined} ref={list} testID="home-feed" data={tracks} keyExtractor={track => track.id}
     style={{ flex: 1, backgroundColor: colors.background }} contentContainerStyle={{ ...pageFrame, maxWidth: '100%', paddingTop: 16, paddingBottom: 24 }}
-    onLayout={event => { viewport.current.height = event.nativeEvent.layout.height; fillViewport(); }}
+    onLayout={event => { setLayoutWidth(event.nativeEvent.layout.width); viewport.current.height = event.nativeEvent.layout.height; fillViewport(); }}
     onContentSizeChange={(_, height) => { viewport.current.content = height; fillViewport(); }}
     onScroll={event => { viewport.current.offset = event.nativeEvent.contentOffset.y; }} scrollEventThrottle={32}
     accessibilityState={{ busy: latest.loading }} keyboardShouldPersistTaps="handled" ListHeaderComponent={header} onEndReachedThreshold={0.6}
     onEndReached={() => { if (latest.cursor && !latest.loading && !latest.error) latest.more(); }}
     initialNumToRender={12} maxToRenderPerBatch={10} windowSize={7}
-    renderItem={({ item }) => <HomeTrackRow track={item} tracks={tracks} onPlay={onPlay} />}
+    renderItem={({ item }) => columns === 2 ? <View style={{ width: (contentWidth - 24) / 2 }}><HomeTrackRow track={item} tracks={tracks} onPlay={onPlay} /></View> : <HomeTrackRow track={item} tracks={tracks} onPlay={onPlay} />}
     ListFooterComponent={<View style={{ paddingVertical: 12, gap: 8 }}>
       {latest.loading ? <WaveLoading label={tracks.length ? 'loading more...' : 'loading tracks...'} /> :
         <Status error={latest.error} retry={tracks.length ? undefined : latest.more} empty={!tracks.length ? selected.length ? 'no tracks match these tags' : 'no tracks yet' : undefined} />}
