@@ -32,6 +32,7 @@ export function usePersonalQueue(target: Target) {
   const loaded = useRef('');
   const synchronization = useRef(0);
   const source = useRef('');
+  const early = useRef<({ kind: 'play'; track: Track; collection?: Track[]; label?: string } | { kind: 'enqueue'; track: Track })[]>([]);
   const continuation = useRef(new QueueContinuation((cursor, signal) => api.tracks({ limit: 10, cursor }, signal)));
   const continuing = useRef<Promise<void> | undefined>(undefined);
   const context = useRef('');
@@ -51,7 +52,7 @@ export function usePersonalQueue(target: Target) {
     if (!auth.ready) return;
     playRequest.current++;
     pendingPlay.current = undefined;
-    setWaiting(false);
+    setWaiting(early.current.some(intent => intent.kind === 'play'));
     setQueueError(undefined);
     held.current = false;
     const previous = session.current;
@@ -149,7 +150,7 @@ export function usePersonalQueue(target: Target) {
       resolve: (ids, signal) => api.resolveTracks(ids, signal),
       error: message => { if (!stale()) setQueueError(message); },
       changed: (state, checkpoint) => {
-        if (stale() || importing || pendingPlay.current !== undefined) return;
+        if (stale() || importing || pendingPlay.current !== undefined || early.current.length) return;
         if (adopt?.state.entries.length && !imported && current.wire && current.wire.queue[current.wire.index]?.key !== adopt.state.entries[adopt.state.index]?.key) return;
         setState(state);
         if ((runtime.current.suspended || held.current)) return;
@@ -200,12 +201,19 @@ export function usePersonalQueue(target: Target) {
       } } } : {}),
     });
     session.current = current;
-    if (returning) void queueStorage.load('anonymous').then(value => {
+    const starting = returning ? queueStorage.load('anonymous').then(value => {
       const checkpoint = queueCheckpoint(value, 'anonymous');
       if (checkpoint) adopt = { ...checkpoint, owner: account };
       if (!stale()) return current.start(adopt);
-    }).catch(() => { if (!stale()) void current.start(); });
-    else void current.start(adopt);
+    }).catch(() => { if (!stale()) return current.start(); }) : current.start(adopt);
+    void starting.then(() => {
+      if (stale()) return;
+      for (const intent of early.current.splice(0)) {
+        if (intent.kind === 'play') play(intent.track, intent.collection, intent.label);
+        else enqueue(intent.track);
+      }
+    });
+
     return () => {
       synchronization.current++;
       playRequest.current++;
@@ -315,7 +323,13 @@ export function usePersonalQueue(target: Target) {
   function play(track: Track, collection?: Track[], label?: string) {
     held.current = false;
     const current = session.current;
-    if (!current) return false;
+    if (!current) {
+      early.current = early.current.filter(intent => intent.kind !== 'play');
+      early.current.push({ kind: 'play', track, collection, label });
+      setWaiting(true);
+      runtime.current.setQueue([track], 0);
+      return true;
+    }
     continuation.current.reset();
     continuing.current = undefined;
     const tracks = collection ?? [track];
@@ -352,9 +366,15 @@ export function usePersonalQueue(target: Target) {
       });
       return true;
     }
+    setWaiting(false);
     local(state);
     void runtime.current.load(state.entries.map(entry => entry.track), state.index).then(ready => { if (ready) runtime.current.play(); });
     return true;
+  }
+  function enqueue(track: Track) {
+    if (!session.current) { if (early.current.length < 64) early.current.push({ kind: 'enqueue', track }); return; }
+    remember([track]);
+    edit({ action: 'enqueue', entry: queueReference(track, randomUUID()) });
   }
   function edit(intent: Parameters<PersonalQueue['edit']>[0]) { void session.current?.edit(intent); }
   function select(at: number) {
@@ -372,7 +392,7 @@ export function usePersonalQueue(target: Target) {
       ? jamPosition(current.wire, current.position(Date.now())) / 1000 : runtime.current.position()));
   }
   return { keepPlaying: remote?.personal?.keepPlaying ?? target.keepPlaying, setKeepPlaying: (value: boolean) => edit({ action: 'setContinuation', keepPlaying: value }), queueError, waiting, deviceOnly: !!auth.did && !auth.jamSpace, checkpoint, ownsOutput: () => owned.current, next, state, remote, outputElsewhere, restoredPosition, command, play, select, local, remember,
-    enqueue: (track: Track) => { remember([track]); edit({ action: 'enqueue', entry: queueReference(track, randomUUID()) }); },
+    enqueue,
     remove: (at: number) => { const entry = session.current?.state.entries[at]; if (entry) edit({ action: 'removeEntry', entryKey: entry.key }); },
     move: (from: number, to: number) => {
       const entries = session.current?.state.entries;
