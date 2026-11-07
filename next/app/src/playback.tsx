@@ -16,7 +16,7 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
 }) {
   const auth = useAuth();
   const player = useAudioPlayer(null, { updateInterval: 250 });
-  const status = useAudioPlayerStatus(player);
+  const emittedStatus = useAudioPlayerStatus(player);
   const accounting = usePlayerAccounting(player);
   const [queue, setQueue] = useState<Track[]>([]);
   const [index, setIndex] = useState(-1);
@@ -34,6 +34,8 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
   const [pendingSeek, setPendingSeek] = useState<{ source: number; seconds: number } | null>(null);
   const objectUrl = useRef<string | null>(null);
   const current = queue[index];
+  const status = ready ? emittedStatus : { ...emittedStatus, playing: false, isLoaded: false, didJustFinish: false,
+    currentTime: 0, duration: current?.metadata.duration_seconds ?? 0, isBuffering: resolving, error: null };
   useEffect(() => {
     if (pendingSeek && (pendingSeek.source !== sequence.current || status.error ||
       !status.isBuffering && Math.abs(status.currentTime - pendingSeek.seconds) < 0.5)) setPendingSeek(null);
@@ -48,7 +50,7 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
     play: () => player.play(),
     pause: () => player.pause(),
     setQueue: (tracks, at) => { setQueue(previous => previous.length === tracks.length && previous.every((track, index) => track === tracks[index]) ? previous : tracks); setIndex(at); },
-    clear: () => { accounting.stop(); sourceEvents.current?.remove(); sequence.current++; player.pause(); player.replace(null); if (objectUrl.current) releaseGatedAudioUrl(objectUrl.current); objectUrl.current = null; setQueue([]); setIndex(-1); setReady(false); setResolving(false); setStarting(null); }
+    clear: () => { accounting.stop(); sourceEvents.current?.remove(); sequence.current++; player.pause(); player.replace(null); if (objectUrl.current) releaseGatedAudioUrl(objectUrl.current); objectUrl.current = null; setQueue([]); setIndex(-1); setReady(false); setResolving(false); setStarting(null); setError(null); }
   }, auth.did);
 
   const personal = usePersonalQueue({
@@ -69,10 +71,10 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
     const request = sequence.current;
     await new Promise<void>((resolve, reject) => {
       const listener = player.addListener('playbackStatusUpdate', event => {
-        if (request !== sequence.current || event.error) { clearTimeout(timer); listener.remove(); reject(new Error('Jam audio changed while loading')); }
+        if (request !== sequence.current || event.error) { clearTimeout(timer); listener.remove(); reject(new Error('Audio changed while loading')); }
         else if (event.isLoaded) { clearTimeout(timer); listener.remove(); resolve(); }
       });
-      const timer = setTimeout(() => { listener.remove(); reject(new Error('Jam audio took too long to load')); }, 15_000);
+      const timer = setTimeout(() => { listener.remove(); reject(new Error('Audio took too long to load')); }, 15_000);
     });
   }
 
@@ -175,6 +177,8 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
         }, { showSeekForward: true, showSeekBackward: true });
       }
       console.info("[playback] source attached", { request, track: track.id, elapsedMs: Date.now() - startedAt });
+      await waitForMedia();
+      if (request !== sequence.current) return false;
       setReady(true);
       if (start) {
         setStarting(request);
