@@ -7,6 +7,7 @@
 //! supply mutable handles, counters, and unverified R2 delivery until those
 //! projections are replaced.
 
+const tag_cursor = @import("../identity/tag_cursor.zig");
 const std = @import("std");
 const pg = @import("pg");
 const zat = @import("zat");
@@ -39,9 +40,9 @@ pub const PostgresComposedTrackStore = struct {
         return .{ .context = self, .list_fn = listLikedOpaque };
     }
 
-    fn tagsOpaque(context: *anyopaque, allocator: std.mem.Allocator, collection: []const u8, limit: usize) TrackStore.Error![]const store_module.Tag {
+    fn tagsOpaque(context: *anyopaque, allocator: std.mem.Allocator, collection: []const u8, limit: usize, after: ?tag_cursor.Cursor) TrackStore.Error![]const store_module.Tag {
         const self: *PostgresComposedTrackStore = @ptrCast(@alignCast(context));
-        var result = self.pool.query(tags_query, .{ collection, @as(i64, @intCast(limit)) }) catch return error.IndexUnavailable;
+        var result = self.pool.query(tags_query, .{ collection, @as(i64, @intCast(limit)), if (after) |c| c.plays else @as(?i64, null), if (after) |c| c.name else @as(?[]const u8, null) }) catch return error.IndexUnavailable;
         defer result.deinit();
         var data: std.ArrayList(store_module.Tag) = .empty;
         while (result.next() catch return error.IndexUnavailable) |row| {
@@ -1267,20 +1268,37 @@ test "composed PostgreSQL reads use verified records and authoritative account s
     quiet.upsert.tags = &.{"ambient"};
     quiet.upsert.tags_present = true;
     _ = try track_writer.store().apply(a, quiet);
-    const catalog = try implementation.store().listTags(a, "fm.plyr.dev.track", 15);
+    const catalog = try implementation.store().listTags(a, "fm.plyr.dev.track", 15, null);
     try std.testing.expectEqual(@as(usize, 2), catalog.len);
     try std.testing.expectEqualStrings("drone", catalog[0].name);
     try std.testing.expectEqual(@as(i64, 7), catalog[0].total_plays);
     try std.testing.expectEqual(@as(i64, 1), catalog[0].track_count);
     try std.testing.expectEqual(@as(i64, 2), catalog[1].track_count);
+    _ = try pool.exec("UPDATE plyr_index.track_tag_records SET tags=ARRAY['ambient','zeta'] WHERE record_uri=$1", .{quiet.upsert.record_uri});
+    const tags_api = @import("../application/list_tags.zig");
+    const first_tags = tags_api.execute(a, implementation.store(), "fm.plyr.dev.track", "/v1/tags?limit=1").found;
+    try std.testing.expect(first_tags.has_more);
+    try std.testing.expectEqualStrings("drone", first_tags.data[0].name);
+    const second_target = try std.fmt.allocPrint(a, "/v1/tags?limit=1&cursor={s}", .{first_tags.next_cursor.?});
+    const second_tags = tags_api.execute(a, implementation.store(), "fm.plyr.dev.track", second_target).found;
+    try std.testing.expect(second_tags.has_more);
+    try std.testing.expectEqualStrings("ambient", second_tags.data[0].name);
+    const final_target = try std.fmt.allocPrint(a, "/v1/tags?limit=1&cursor={s}", .{second_tags.next_cursor.?});
+    const final_tags = tags_api.execute(a, implementation.store(), "fm.plyr.dev.track", final_target).found;
+    try std.testing.expect(!final_tags.has_more);
+    try std.testing.expect(final_tags.next_cursor == null);
+    try std.testing.expectEqualStrings("zeta", final_tags.data[0].name);
+    for ([_][]const u8{ "/v1/tags?limit=0", "/v1/tags?limit=101", "/v1/tags?limit=1&limit=2", "/v1/tags?cursor=bad", "/v1/tags?cursor=" }) |invalid| {
+        try std.testing.expectEqual(tags_api.Result.invalid_request, tags_api.execute(a, implementation.store(), "fm.plyr.dev.track", invalid));
+    }
     _ = try pool.exec("DELETE FROM plyr_index.track_records WHERE record_uri=$1", .{quiet.upsert.record_uri});
 
     try std.testing.expectEqual(@as(i64, 1), catalog[0].sources.verified_repo);
     try std.testing.expectEqual(@as(i64, 0), catalog[0].sources.legacy_plyr);
     _ = try pool.exec("INSERT INTO plyr_index.legacy_track_tags(record_uri,observed_record_cid,tag,source_track_id,source_observed_at) VALUES ($1,$3,'legacy-only',1,now()),($1,$3,'drone',1,now()),($2,$3,'legacy-only',2,now()),($2,$3,'drone',2,now())", .{ record_uri, pds_only_uri, record_cid });
-    try std.testing.expectEqual(@as(usize, 2), (try implementation.store().listTags(a, "fm.plyr.dev.track", 15)).len);
+    try std.testing.expectEqual(@as(usize, 2), (try implementation.store().listTags(a, "fm.plyr.dev.track", 15, null)).len);
     _ = try track_writer.store().apply(a, pds_only);
-    const inherited = try implementation.store().listTags(a, "fm.plyr.dev.track", 15);
+    const inherited = try implementation.store().listTags(a, "fm.plyr.dev.track", 15, null);
     try std.testing.expectEqualStrings("drone", inherited[0].name);
     try std.testing.expectEqual(@as(i64, 2), inherited[0].track_count);
     try std.testing.expectEqual(@as(i64, 1), inherited[0].sources.verified_repo);
@@ -1345,7 +1363,7 @@ test "composed PostgreSQL reads use verified records and authoritative account s
     roundtrip.upsert.tags = &.{ " - edge-tag - ", authored.items };
     roundtrip.upsert.tags_present = true;
     _ = try track_writer.store().apply(a, roundtrip);
-    const roundtrip_catalog = try implementation.store().listTags(a, "fm.plyr.dev.track", 15);
+    const roundtrip_catalog = try implementation.store().listTags(a, "fm.plyr.dev.track", 15, null);
     for ([_][]const u8{ "edge-tag", expanded.items }) |expected_tag| {
         var found = false;
         for (roundtrip_catalog) |entry| {
@@ -1385,7 +1403,7 @@ test "composed PostgreSQL reads use verified records and authoritative account s
         try std.testing.expect(!std.mem.eql(u8, tagged_page[0].value.record.uri, tagged_rest[0].value.record.uri));
     }
     _ = try pool.exec("UPDATE plyr_index.track_tag_records SET record_cid=$2 WHERE record_uri=$1", .{ record_uri, stale_subject_cid });
-    try std.testing.expectEqual(@as(usize, 1), (try implementation.store().listTags(a, "fm.plyr.dev.track", 15)).len);
+    try std.testing.expectEqual(@as(usize, 1), (try implementation.store().listTags(a, "fm.plyr.dev.track", 15, null)).len);
     try std.testing.expectEqual(@as(usize, 0), (try implementation.store().listPublic(a, .{
         .collection = "fm.plyr.dev.track",
         .scope = .discovery,
@@ -1395,9 +1413,9 @@ test "composed PostgreSQL reads use verified records and authoritative account s
     })).len);
     _ = try pool.exec("UPDATE plyr_index.track_tag_records SET record_cid=$2 WHERE record_uri=$1", .{ record_uri, record_cid });
     _ = try pool.exec("UPDATE plyr_index.track_policies SET visibility='private' WHERE record_uri=$1", .{record_uri});
-    try std.testing.expectEqual(@as(usize, 1), (try implementation.store().listTags(a, "fm.plyr.dev.track", 15)).len);
+    try std.testing.expectEqual(@as(usize, 1), (try implementation.store().listTags(a, "fm.plyr.dev.track", 15, null)).len);
     _ = try pool.exec("UPDATE plyr_index.track_policies SET visibility='public',moderation_decision='exclude' WHERE record_uri=$1", .{record_uri});
-    try std.testing.expectEqual(@as(usize, 1), (try implementation.store().listTags(a, "fm.plyr.dev.track", 15)).len);
+    try std.testing.expectEqual(@as(usize, 1), (try implementation.store().listTags(a, "fm.plyr.dev.track", 15, null)).len);
     _ = try pool.exec("UPDATE plyr_index.track_policies SET moderation_decision='allow' WHERE record_uri=$1", .{record_uri});
     _ = try availability_writer.store().apply(a, .{
         .repo_did = did,
@@ -1407,7 +1425,7 @@ test "composed PostgreSQL reads use verified records and authoritative account s
         .pds_origin = "https://pds.example",
         .observed_at_us = 1_001,
     });
-    try std.testing.expectEqual(@as(usize, 0), (try implementation.store().listTags(a, "fm.plyr.dev.track", 15)).len);
+    try std.testing.expectEqual(@as(usize, 0), (try implementation.store().listTags(a, "fm.plyr.dev.track", 15, null)).len);
     _ = try availability_writer.store().apply(a, .{
         .repo_did = did,
         .available = true,
@@ -1540,6 +1558,8 @@ const tags_query =
     \\ WHERE v.record_created_at_us IS NOT NULL
 ++ "\n" ++ discovery_policy ++
     \\ GROUP BY tag.name
-    \\ ORDER BY COALESCE(sum(metrics.play_count),0) DESC, tag.name
+    \\ HAVING $3::bigint IS NULL OR COALESCE(sum(metrics.play_count),0) < $3
+    \\   OR (COALESCE(sum(metrics.play_count),0) = $3 AND tag.name COLLATE "C" > $4::text COLLATE "C")
+    \\ ORDER BY COALESCE(sum(metrics.play_count),0) DESC, tag.name COLLATE "C"
     \\ LIMIT $2::bigint
 ;

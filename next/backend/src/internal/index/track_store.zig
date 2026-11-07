@@ -1,5 +1,6 @@
 const std = @import("std");
 const track = @import("../domain/track.zig");
+const tag_cursor = @import("../identity/tag_cursor.zig");
 const track_cursor = @import("../identity/track_cursor.zig");
 
 pub const ListRequest = struct {
@@ -33,10 +34,10 @@ pub const TrackStore = struct {
     list_public_fn: *const fn (*anyopaque, std.mem.Allocator, ListRequest) Error![]ListItem,
     ready_fn: *const fn (*anyopaque) bool,
 
-    tags_fn: ?*const fn (*anyopaque, std.mem.Allocator, []const u8, usize) Error![]const Tag = null,
+    tags_fn: ?*const fn (*anyopaque, std.mem.Allocator, []const u8, usize, ?tag_cursor.Cursor) Error![]const Tag = null,
 
-    pub fn listTags(self: TrackStore, allocator: std.mem.Allocator, collection: []const u8, limit: usize) Error![]const Tag {
-        return (self.tags_fn orelse return error.IndexUnavailable)(self.context, allocator, collection, limit);
+    pub fn listTags(self: TrackStore, allocator: std.mem.Allocator, collection: []const u8, limit: usize, after: ?tag_cursor.Cursor) Error![]const Tag {
+        return (self.tags_fn orelse return error.IndexUnavailable)(self.context, allocator, collection, limit, after);
     }
 
     pub const Error = error{
