@@ -2,7 +2,7 @@
 
 **Created** November 4, 2026. **Updated** November 7, 2026.
 
-**Code checkpoint** `214a8a561` on main, through #2450; client #2451 under final acceptance.
+**Code checkpoint** `a38d252894` on main, through #2453.
 
 **Purpose** Track the architectural rewrite, shipped foundations, remaining ports,
 and decisions required before each implementation slice.
@@ -51,19 +51,19 @@ checks. The latest frontend passed seven live viewport/theme cases and the
 Firefox artist-render/navigation regression; the real Zen browser was reloaded
 and inspected. None of this establishes full native acceptance.
 
-**Working order:** finish core feature journeys in small cycles, preserving
-production behavior and explicit failure/recovery contracts. Personal listening
-and player continuity are the next uncompleted planned cycles; their order is a
-product choice, not work already underway. No new runtime goal starts with this
-inventory update. SDK/MCP, legacy-URL work and cutover rehearsal remain deferred.
+**Working order:** continue core feature journeys in small cycles, preserving
+production behavior and explicit recovery contracts. Personal queue continuity
+is now implemented; private listening history/scrobbling, publishing and collection
+work remain open. Selecting the next slice is a product decision; no new runtime
+goal starts with this inventory update. SDK/MCP, legacy-URL work and cutover
+rehearsal remain deferred.
 
-## Personal queue cycle in progress, November 7
+## Personal queue cycle completed, November 7
 
 Backend #2447–#2450 are deployed to Next: bounded batch track hydration and
 owner-only personal coordination on the existing Zig/Redis foundation. Client
-#2451 adds occurrence-aware picks/tails, durable checkpoints and edit retries,
-explicit connected-device output handoff and bounded continuation. It is undergoing
-final browser acceptance; do not yet count that client as shipped. See the
+#2451/#2453 adds occurrence-aware picks/tails, durable checkpoints and edit retries,
+explicit connected-device output handoff and bounded continuation. It is deployed; the full live Chrome matrix and Firefox core matrix pass. See the
 [verification report](2026-11-07-personal-queue-verification.md) for evidence and
 limits. Jams continue to coordinate multiple accounts separately. This cycle adds
 no fixed infrastructure; retained Redis state and event traffic still cost capacity.
@@ -125,7 +125,7 @@ Existing production behavior is the review baseline. Each incomplete area needs 
 | Discovery | In-place chart period cycling, Latest, horizontally paginated server tag catalog, colored tags, automatic feed pagination and network artists; cancellable keyword search with artwork | For You, semantic/CLAP search, hidden tags, broader browse/Atlas behavior and representative performance budgets. Ranking/limit precede search metric hydration (#2408). [Home](../../next/app/src/Home.tsx), [Search](../../next/app/src/Search.tsx) |
 | Account entry | Typeahead, identity preview, original help copy, OAuth signup handoff | Remove or retain production discovery dependency; finish onboarding and listener/creator landing behavior; verify native OAuth and cancellation. [Login](../../next/app/app/login.tsx#L8) |
 | Login intent | Explicit return destinations survive web OAuth for Jam links and creation, Portal and signed-out track actions | Audit every protected journey and draft boundary, including Upload and Library; automatic action replay is a separate design. A Jam permission upgrade is distinct from being signed out (#2396). [Intent](../../next/app/app/oauth/callback.tsx), [Portal](../../next/app/src/Portal.tsx) |
-| Player and queue | Expo Audio, availability/retry/startup timeout, stable seek preview, repeat/shuffle/remove/clear, direct drag reorder, persistent dock, full-screen Now Playing, keyboard shortcuts and swipe navigation/dismissal | Personal queue synchronization, paused checkpoints and explicit/generated tails are implemented in #2451, awaiting final live-client acceptance. Title marquee, EQ, platform media controls and native interruptions/backgrounding remain. Navigation/seek checks do not prove native lifecycle parity. [Playback](../../next/app/src/playback.tsx) |
+| Player and queue | Expo Audio, availability/retry/startup timeout, stable seek preview, repeat/shuffle/remove/clear, direct drag reorder, persistent dock, full-screen Now Playing, keyboard shortcuts and swipe navigation/dismissal | Personal queue synchronization, paused checkpoints and explicit/generated tails are live in #2451/#2453, with real-browser concurrency, retry and Jam/radio acceptance. Title marquee, EQ, platform media controls and native interruptions/backgrounding remain. Navigation/seek checks do not prove native lifecycle parity. [Playback](../../next/app/src/playback.tsx) |
 | Plays and history | Qualified listened-time accounting and receipt outbox integrated into solo, catalog embeds, radio and audible Jam playback; durable atomic Postgres receipts and totals | Historical-total migration, share attribution, private listening history and Teal/Rocksky interoperability are undecided. Cooldown suppression is distinct from receipt idempotency. [Accounting](../internal/architecture/next-play-accounting.md) |
 | Preferences | Theme, accent, font, scale, keep-playing and play-through in a personal Space | Remaining production preference categories, conflicts/offline recovery, and policy for hosts without Spaces. [Preference schema](../../next/app/src/preference-space.ts#L7) |
 | Upload/publishing | One public file, cover, metadata and locally measured duration; 100 MB client cap | Batch/album publishing, recording, tags/credits, visibility/download policies, large/resumable upload behavior, metadata extraction, replacement/revisions/optimization, rights controls and failure recovery. Album text currently does not create an album collection. [Upload](../../next/app/app/upload.tsx#L9), [PDS publication](../../next/app/src/pds.ts#L265) |

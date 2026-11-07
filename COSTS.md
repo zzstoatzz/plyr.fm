@@ -257,7 +257,7 @@ one persistent primary; storage failover is not included in that estimate.
 
 ### November 7 personal queue cost addendum
 
-Personal queue synchronization (#2448–#2451) reuses the Jam coordinators and
+Personal queue synchronization (#2448–#2451, #2453) reuses the Jam coordinators and
 persistent Redis. This cycle adds no machine, volume or Postgres table, and
 progress samples do not write to Postgres. It does add Redis memory, AOF writes,
 WebSocket traffic and batched catalog reads; those are usage costs, not free capacity.

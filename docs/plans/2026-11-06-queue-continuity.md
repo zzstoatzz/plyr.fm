@@ -76,7 +76,7 @@ occurrence identity.
       session; preserve solo queue around Jam/radio handoffs.
 - [x] Add bounded continuation prefetch, repeat/end/error behavior and queue labels.
       Next does not yet have For You; do not label latest-catalog fallback as For You.
-- [ ] Adversarial review, concurrency/Redis tests, real decoded-browser verification,
+- [x] Adversarial review, concurrency/Redis tests, real decoded-browser verification,
       merge green PRs and verify live on Next with independent authenticated clients.
 
 ## References
@@ -91,4 +91,6 @@ Zig coordinator and live acceptance document as the current source of behavior.
 
 Implementation and acceptance evidence is recorded in the
 [November 7 verification report](../research/2026-11-07-personal-queue-verification.md).
-Backend #2447–#2450 are live; final client acceptance and deployment remain pending.
+Backend #2447–#2451 and client #2451/#2453 are live on Next. The deployed Chrome
+acceptance matrix passed, including independent authenticated clients and real
+Jam/radio playback. No normal production promotion ran.
