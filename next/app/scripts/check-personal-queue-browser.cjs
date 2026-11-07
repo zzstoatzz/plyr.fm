@@ -47,8 +47,8 @@ const assert = require('node:assert/strict');
   });
   await context.addInitScript(localCoordinator=>{
    const Audio=window.Audio;window.queueAudio=[];window.Audio=class extends Audio{constructor(...args){super(...args);window.queueAudio.push(this)}};
-   const Socket=window.WebSocket;window.queueFrames=[];window.queueSockets=[];
-   window.WebSocket=class extends Socket {constructor(url,protocols){const parsed=new URL(url);if(localCoordinator&&parsed.host==='plyr-jams-next.fly.dev'){const local=new URL(localCoordinator);parsed.protocol=local.protocol==='https:'?'wss:':'ws:';parsed.host=local.host;}super(parsed.toString(),protocols);window.queueSockets.push(this);this.addEventListener('message',e=>{try{const value=JSON.parse(e.data);if(value.state?.personal)window.queueFrames.push(value);}catch{}});}};
+   const Socket=window.WebSocket;window.queueFrames=[];window.queueSockets=[];window.queueCommands=[];
+   window.WebSocket=class extends Socket {constructor(url,protocols){const parsed=new URL(url);if(localCoordinator&&parsed.host==='plyr-jams-next.fly.dev'){const local=new URL(localCoordinator);parsed.protocol=local.protocol==='https:'?'wss:':'ws:';parsed.host=local.host;}super(parsed.toString(),protocols);const send=this.send.bind(this);this.send=value=>{try{const command=JSON.parse(value);if(command.action)window.queueCommands.push(command.action);}catch{}send(value)};window.queueSockets.push(this);this.addEventListener('message',e=>{try{const value=JSON.parse(e.data);if(value.state?.personal)window.queueFrames.push(value);}catch{}});}};
   }, localCoordinator);
   const page=await context.newPage();page.setDefaultTimeout(20000);
 
@@ -161,6 +161,7 @@ const assert = require('node:assert/strict');
  await a.getByRole('button',{name:'Queue',exact:true}).click();
  const before=await b.evaluate(()=>window.queueFrames.at(-1).state);
  const handles=a.getByLabel(/Reorder /);
+ await handles.nth(0).hover();
  const first=await handles.nth(0).boundingBox();const second=await handles.nth(1).boundingBox();
  assert.ok(first&&second);
  await a.mouse.move(first.x+first.width/2,first.y+first.height/2);await a.mouse.down();
@@ -252,7 +253,7 @@ const assert = require('node:assert/strict');
  await c.screenshot({path:path.join(artifacts,'generated-tail.png')});
  if(process.env.QUEUE_TEST_EXPECT_PROMOTION==='1') {
    const boundary=await c.evaluate(()=>window.queueFrames.at(-1).state.personal.explicitEnd);
-   const handles=c.getByLabel(/Reorder /).locator('visible=true');const from=await handles.nth(1).boundingBox();const to=await handles.nth(0).boundingBox();assert.ok(from&&to);
+   const handles=c.getByLabel(/Reorder /).locator('visible=true');await handles.nth(1).hover();const from=await handles.nth(1).boundingBox();const to=await handles.nth(0).boundingBox();assert.ok(from&&to);
    await c.mouse.move(from.x+from.width/2,from.y+from.height/2);await c.mouse.down();await c.mouse.move(to.x+to.width/2,to.y+to.height/2-8,{steps:10});await c.mouse.up();
    await c.waitForFunction(value=>window.queueFrames.at(-1).state.personal.explicitEnd===value+1,boundary);
    console.log('dragging an automatic tail entry promotes a durable explicit pick');
@@ -288,6 +289,6 @@ const assert = require('node:assert/strict');
  } catch(e) {
    let index=0;
    for(const browser of browsers)for(const context of browser.contexts())for(const page of context.pages())if(page.url().startsWith('https://next.plyr.fm/'))await page.screenshot({path:path.join(artifacts,'failure-'+index+++'.png')}).catch(()=>{});
-   for(const browser of browsers)for(const context of browser.contexts())for(const page of context.pages())if(page.url().startsWith('https://next.plyr.fm/'))console.log('failure queue states',await page.evaluate(()=>window.queueFrames?.slice(-8).map(f=>({revision:f.state.revision,occurrence:f.state.occurrence,playing:f.state.playing,keepPlaying:f.state.personal.keepPlaying,tail:f.state.personal.tailKind}))));console.error(e.stack);throw e;
+   for(const browser of browsers)for(const context of browser.contexts())for(const page of context.pages())if(page.url().startsWith('https://next.plyr.fm/'))console.log('failure queue states',await page.evaluate(()=>({commands:window.queueCommands?.slice(-8),states:window.queueFrames?.slice(-8).map(f=>({revision:f.state.revision,occurrence:f.state.occurrence,playing:f.state.playing,keepPlaying:f.state.personal.keepPlaying,tail:f.state.personal.tailKind}))})));console.error(e.stack);throw e;
  } finally {await Promise.all(browsers.map(b=>b.close()));}
 })().catch(e=>{console.error(e.message);process.exitCode=1});

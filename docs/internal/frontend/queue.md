@@ -2,7 +2,19 @@
 title: "queue design"
 ---
 
-## overview
+## Next implementation
+
+The remainder of this document describes the legacy Python/Svelte implementation
+and its product contract. Next retains that contract while replacing snapshot PUTs
+and process caches with occurrence-keyed semantic commands and Zig/Redis
+coordination. Private Space admission isolates the owner's personal queue; Jams
+remain many-account rooms. IndexedDB/MMKV checkpoints restore paused, and durable
+edits retain identical prepared headers across retry. Metadata resolves in bounded
+batches; passive devices do not fetch audio. See the
+[Next acceptance report](../../research/2026-11-07-personal-queue-verification.md)
+for implementation, real-browser evidence and remaining limits.
+
+## Legacy overview
 
 The queue is a cross-device, server-authoritative data model with optimistic local updates. Every device performs queue mutations locally, pushes a full snapshot to the API, and receives hydrated track metadata back. Servers keep an in-memory cache (per process) in sync via Postgres LISTEN/NOTIFY so horizontally scaled instances observe the latest queue state without adding Redis or similar infra.
 

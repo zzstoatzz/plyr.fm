@@ -1,14 +1,21 @@
 # plyr.fm - status
 
-## Personal queue synchronization in final acceptance (2026-11-07)
+## Personal queue synchronization live (2026-11-07)
 
-Backend #2447–#2450 are deployed to Next. Client #2451 synchronizes one account's
-queue across clients, with explicit output handoff, paused refresh, durable edits,
-batched metadata and bounded continuation. Real-browser checks use local client
-assets against the live backend while final acceptance continues; the new client
-is not yet deployed. [Evidence and limits](docs/research/2026-11-07-personal-queue-verification.md).
-Normal production has not been promoted. Optional ReleaseFast fixture failures
-reproduce on the baseline and are tracked separately in #2452.
+#2447–#2451 and #2453 are deployed to Next. One account's queue synchronizes across
+clients; explicit Play transfers connected output, refresh restores paused, edits
+survive lost acknowledgements, metadata hydrates in batches and continuation is
+bounded. Real live Chrome checks passed concurrency, reconnect, retry, pointer
+drag/promotion, repeat and decoded Jam/radio handoffs. The deployed Firefox core matrix also passed.
+TypeScript and 77 client
+tests pass, along with the normal Zig/Postgres/Redis suite and 500-case property
+campaign. iOS/Android bundles export; physical native lifecycle remains unverified.
+[Acceptance, architecture and limits](docs/research/2026-11-07-personal-queue-verification.md).
+
+Normal production machine versions/images remain unchanged and health is good;
+no production promotion ran. Personal queues reuse existing infrastructure, with
+retained Redis capacity noted in COSTS.md. Optional ReleaseFast fixture failures
+reproduce on the baseline and remain tracked in #2452.
 
 ## Next real-time Jams verified (2026-11-06)
 
