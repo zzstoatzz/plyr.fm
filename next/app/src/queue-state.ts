@@ -68,7 +68,7 @@ export function moveEntry<T>(state: QueueState<T>, from: number, to: number): Qu
   const entries = state.entries.slice();
   const [entry] = entries.splice(from, 1);
   entries.splice(to, 0, entry);
-  return { ...state, entries, ...(state.tail ? { tail: { ...state.tail, from: boundary + Number(from >= boundary && to < boundary) } } : {}) };
+  return { ...state, entries, ...(state.tail ? { tail: { ...state.tail, from: boundary + Number(from >= boundary && to <= boundary) } } : {}) };
 }
 
 export function shufflePicks<T>(state: QueueState<T>, random: () => number = Math.random): QueueState<T> {

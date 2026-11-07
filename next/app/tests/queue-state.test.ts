@@ -66,3 +66,11 @@ test('continuation compacts played history without discarding current or upcomin
   assert.equal(next.entries[next.index].key, state.entries[state.index].key);
   assert.equal(next.entries.at(-1)?.track.id, 'new');
 });
+
+test('dragging to the tail boundary promotes a pick even with no explicit future queue', () => {
+  const initial = switchContext(emptyQueue(), ['current', 'tail-a', 'tail-b'].map(entry), 0, 'Album');
+  const moved = moveEntry(initial, 2, 1);
+  assert.deepEqual(ids(moved), ['current', 'tail-b', 'tail-a']);
+  assert.equal(moved.tail?.from, 2);
+  assert.deepEqual(ids(clearPicks(moved)), ['current', 'tail-a']);
+});

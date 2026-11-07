@@ -79,7 +79,7 @@ export default function Queue() {
         {upcoming.length ? <QueueReorder queue={player.queue} start={player.index + 1} move={player.move}
           scrollRef={scrollRef} scrollMetrics={scrollMetrics} onDragging={setDragging}
           renderTrack={(track, index) => <>
-            {index === player.tail?.from && <View style={{ paddingVertical: 8 }}><Copy>From {player.tail.label}</Copy></View>}
+            {player.tail && index === Math.max(player.index + 1, player.tail.from) && <View style={{ paddingVertical: 8 }}><Copy>From {player.tail.label}</Copy></View>}
             <QueueTrack track={track} play={() => player.jump(index)} remove={() => player.remove(index)} />
           </>} /> : <Copy>Nothing queued. Add tracks from their menus.</Copy>}
       </View>
