@@ -29,7 +29,7 @@ export function HomeArtists({ artists }: { artists: NetworkArtist[] }) {
     </View>
     {width > 0 && <View style={[styles.artists, { gap }]}>
       {artists.slice(visiblePage * pageSize, (visiblePage + 1) * pageSize).map(artist => <Link key={artist.did} href={{ pathname: '/u/[handle]', params: { handle: artist.handle || artist.did } }} asChild>
-        <Pressable accessibilityRole="link" accessibilityLabel={artist.display_name || artist.handle} style={[styles.artist, { width: size }]}>
+        <Pressable accessibilityRole="link" accessibilityLabel={artist.display_name || artist.handle} style={StyleSheet.flatten([styles.artist, { width: size }])}>
           <Cover uri={artist.avatar_url} size={48} round />
           <View style={{ minWidth: 0, maxWidth: '100%', alignItems: 'center', gap: 2 }}>
             <Text numberOfLines={1} style={{ color: colors.text, fontSize: 13 * colors.scale }}>{artist.display_name || artist.handle}</Text>
