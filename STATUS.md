@@ -1,5 +1,15 @@
 # plyr.fm - status
 
+## Personal queue synchronization in final acceptance (2026-11-07)
+
+Backend #2447–#2450 are deployed to Next. Client #2451 synchronizes one account's
+queue across clients, with explicit output handoff, paused refresh, durable edits,
+batched metadata and bounded continuation. Real-browser checks use local client
+assets against the live backend while final acceptance continues; the new client
+is not yet deployed. [Evidence and limits](docs/research/2026-11-07-personal-queue-verification.md).
+Normal production has not been promoted. Optional ReleaseFast fixture failures
+reproduce on the baseline and are tracked separately in #2452.
+
 ## Next real-time Jams verified (2026-11-06)
 
 The Spaces-backed Zig/Redis Jam MVP is live on Next. Two independent browsers

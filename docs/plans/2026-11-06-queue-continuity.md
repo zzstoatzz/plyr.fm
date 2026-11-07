@@ -17,7 +17,8 @@ Tracking issue: #2446.
 - Collection playback and optional keep-playing are separate preferences. Clearing
   explicit picks does not veto continuation. Disabling keep-playing removes its
   generated tail, not an album the user deliberately started.
-- Navigation and anonymous-to-authenticated sign-in preserve audible playback.
+- In-document navigation and account adoption preserve audible playback. Full
+  external OAuth navigation restores the intended queue and position paused.
   Account switching/logout cannot expose another account's private state.
 - Refresh restores queue/position paused. Restored position earns no listening
   credit. Old media callbacks lose authority after a source or owner change.
@@ -66,14 +67,14 @@ occurrence identity.
 
 ## Work chunks
 
-- [ ] Preserve the production queue contract in a small occurrence-aware model.
-- [ ] Extend coordinator admission and state for private personal sessions, stable
+- [x] Preserve the production queue contract in a small occurrence-aware model.
+- [x] Extend coordinator admission and state for private personal sessions, stable
       queue intents, output ownership, persistence and cross-instance convergence.
-- [ ] Batch catalog hydration for referenced queue tracks with existing visibility
+- [x] Batch catalog hydration for referenced queue tracks with existing visibility
       rules, bounded requests and real Postgres endpoint coverage.
-- [ ] Connect client queue, account transitions and paused restoration to the shared
+- [x] Connect client queue, account transitions and paused restoration to the shared
       session; preserve solo queue around Jam/radio handoffs.
-- [ ] Add bounded continuation prefetch, repeat/end/error behavior and queue labels.
+- [x] Add bounded continuation prefetch, repeat/end/error behavior and queue labels.
       Next does not yet have For You; do not label latest-catalog fallback as For You.
 - [ ] Adversarial review, concurrency/Redis tests, real decoded-browser verification,
       merge green PRs and verify live on Next with independent authenticated clients.
@@ -87,3 +88,7 @@ occurrence identity.
 
 The old Jams foundation README describes a pre-coordinator implementation; use the
 Zig coordinator and live acceptance document as the current source of behavior.
+
+Implementation and acceptance evidence is recorded in the
+[November 7 verification report](../research/2026-11-07-personal-queue-verification.md).
+Backend #2447–#2450 are live; final client acceptance and deployment remain pending.

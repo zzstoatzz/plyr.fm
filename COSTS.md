@@ -254,3 +254,19 @@ November 5, excluding egress/snapshots. This was not included in the November 4
 $30–35 Next baseline above. No billing query was rerun for this documentation
 update; neither estimate is a refreshed invoice or a usage ceiling. Redis has
 one persistent primary; storage failover is not included in that estimate.
+
+### November 7 personal queue cost addendum
+
+Personal queue synchronization (#2448–#2451) reuses the Jam coordinators and
+persistent Redis. This cycle adds no machine, volume or Postgres table, and
+progress samples do not write to Postgres. It does add Redis memory, AOF writes,
+WebSocket traffic and batched catalog reads; those are usage costs, not free capacity.
+
+Personal state intentionally has no idle TTL. Each queue holds at most 200
+references; command and event history are bounded and expire separately. A local
+200-reference fixture serialized to 61,801 bytes. Eight retained full-state events
+can therefore consume roughly another 0.5 MB for an active full queue, before Redis
+and allocator overhead. This is a fixture size, not a measured per-user average.
+The existing 128 MB Redis limit uses `noeviction`: monitor retained state and
+admission/write failures before expanding usage. Redis remains one primary.
+The November 4/5 estimates above were not refreshed into a November 7 invoice.
