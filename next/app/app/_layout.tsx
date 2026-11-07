@@ -22,7 +22,7 @@ import { PlayerBar } from '../src/PlayerBar';
 import { NowPlayingOriginContext } from '../src/now-playing-origin';
 import { PreferencesProvider } from '../src/preference-context';
 import ChartNoAxesColumn from 'lucide-react-native/icons/chart-no-axes-column';
-import { contouredSurface, dockSurface } from '../src/materials';
+import { dockSurface } from '../src/materials';
 import { pageFrame } from '../src/controls';
 import { usePreferences } from '../src/preferences';
 
@@ -100,10 +100,10 @@ function Shell() {
       </Pressable>
     </Link>)}
   </View>;
-  return <RadioContext.Provider value={{ station, tune, togglePlayback, registerToggle }}><SafeAreaView style={{ flex: 1, backgroundColor: wide ? theme.dark ? '#15191e' : '#e7edf1' : theme.background, paddingHorizontal: wide ? 24 : 0, paddingTop: wide ? 24 : 0, paddingBottom: wide ? 16 : 0 }}>
+  return <RadioContext.Provider value={{ station, tune, togglePlayback, registerToggle }}><SafeAreaView style={{ flex: 1, backgroundColor: theme.background }}>
     <KeyboardShortcuts origin={path} />
     <StatusBar style={theme.dark ? 'light' : 'dark'} />
-    <View testID="app-frame" style={[wide && contouredSurface(theme), { flex: 1, width: '100%', maxWidth: 1720, alignSelf: 'center', flexDirection: wide ? 'row' : 'column', borderRadius: wide ? 28 : 0, overflow: 'hidden' }]}>
+    <View testID="app-frame" style={{ flex: 1, width: '100%', flexDirection: wide ? 'row' : 'column', overflow: 'hidden' }}>
       {wide && nav}
       <View style={{ flex: 1, minWidth: 0 }}>
         {!(wide && path === '/') && <View style={{
@@ -134,9 +134,7 @@ function Shell() {
         {!wide && <View style={route === '/now-playing' ? { display: 'none' } : undefined}>{station ? <RadioPlayer key={station.slug} compact tuned={station} /> : <PlayerBar />}</View>}
         {!wide && nav}
       </View>
-      {wide && <View pointerEvents="none" accessible={false} style={{ ...StyleSheet.absoluteFill, borderRadius: 28,
-        boxShadow: theme.dark ? 'inset 1px 1px 1px #e0eaf314, inset -2px -1px 8px #00000055' : 'inset 1px 1px 1px #ffffffcc, inset -2px -1px 8px #55687a18' }} />}
     </View>
-    {wide && <View style={route === '/now-playing' ? { display: 'none' } : undefined}>{station ? <View style={[dockSurface(theme), { marginTop: 18, borderRadius: 20, overflow: 'hidden', width: '100%', maxWidth: 1720, alignSelf: 'center' }]}><RadioPlayer key={station.slug} compact tuned={station} /></View> : <PlayerBar />}</View>}
+    {wide && <View style={route === '/now-playing' ? { display: 'none' } : undefined}>{station ? <View style={[dockSurface(theme), { overflow: 'hidden', width: '100%' }]}><RadioPlayer key={station.slug} compact tuned={station} /></View> : <PlayerBar />}</View>}
   </SafeAreaView></RadioContext.Provider>;
 }
