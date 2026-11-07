@@ -2,7 +2,7 @@
 
 **Created** November 4, 2026. **Updated** November 6, 2026.
 
-**Code checkpoint** `e98a14198` on main, through #2436.
+**Code checkpoint** `bb7180143` on main, through #2441.
 
 **Purpose** Track the architectural rewrite, shipped foundations, remaining ports,
 and decisions required before each implementation slice.
@@ -26,7 +26,8 @@ derived catalog/accounting store; no SQL writes occur per playback tick.
 | Play accounting, #2363/#2364/#2366/#2370 | Actual listened time, stable occurrence IDs, bounded durable client outbox, transactional Postgres receipt/cooldown/count; solo, catalog embeds, radio and audible Jam output use the shared qualification model. [Design](../internal/architecture/next-play-accounting.md), [browser evidence](2026-11-04-playback-browser-workflow.md). | Historical totals, private history/scrobbling, ingress abuse policy and long-term receipt growth; physical-device/background acceptance. |
 | Protected audio, #2421/#2426 | Record MAC verification and client-owned browser Range capabilities, with scoped image resolution. [Acceptance report](2026-11-05-private-audio-streaming.md). | Native remains file-backed; existing private-media compatibility and complete gated publishing still need their own port slice. |
 | Real-time Jams, #2422–#2425/#2428–#2430 | Real OAuth create/invite/join, explicit play/pause, host seeking, shared queue coordination and reconnect; two independent public browsers decoded audio and survived verified coordinator SIGKILL. [Completion audit](2026-11-06-jams-live-verification.md). | One Redis primary, admission-bounded revocation, one-speaker routing, native/background behavior and larger concurrency acceptance. This is the scoped MVP, not full legacy parity. |
-| Discovery and management, #2381/#2408/#2411/#2412/#2415 | Paginated creator tracks/albums, cancellable search reads with artwork, metrics hydrated after ranking/limiting, colored tags, automatic Home pagination and network artists. | For You, semantic/CLAP search, hidden tags and full publishing/collection editing remain. |
+| Discovery and management, #2381/#2408/#2411/#2412/#2415/#2438/#2441 | Paginated creator tracks/albums, cancellable search, metrics hydrated after ranking/limiting, colored tags, automatic Home pagination and network artists. Chart periods cycle in place, skipping empty periods; the horizontal tag strip fetches continuation pages near its end. | For You, semantic/CLAP search, hidden tags and full publishing/collection editing remain. |
+| Artwork consistency, #2439/#2440 | Missing track/collection artwork uses artist/owner avatars across Home, details, dock, Now Playing and canonical embeds. Search resolves indexed avatars after ranking/limiting, preserving field provenance. No per-card profile requests. Browser checks include an actual public no-cover track plus fixture no-cover collections and explicit-cover priority. | A missing avatar still needs a placeholder. Broken explicit image delivery and legacy embed compatibility are separate from this absence fallback. |
 | Stats, #2432 | Explained public totals for tracks, artists, duration and Next-qualified plays, excluding private/unlisted/removed records; cached rather than scanning on each request. | Not production historical counts or private listening analytics. Curate new metrics with explicit sources/definitions. |
 | Player and UI, #2429/#2435/#2436 | Scrubbing crash/snap-back fixed; direct queue drag, persistent dock, shortcuts and swipe behavior. Latest live UI has no outer beveled frame/gutters, a thin full-width status light, quieter navigation and no disabled end-of-feed button. | UI remains iterative. Two-column desktop feed is provisional, not a parity requirement. Physical iPhone/native behavior remains unverified. |
 
@@ -36,6 +37,14 @@ the mockup is not a standing specification. Keep the current decisions in
 signed-in-only Firefox/Zen page-load crash: Expo Router merged an artist link's
 style array into numbered CSS properties. Its regression renders network artists
 with fixture auth/follow responses; anonymous-only browser checks missed it.
+
+Tag pagination is a read-only keyset over total plays descending and tag name,
+with bounded 15-item client pages and explicit continuation metadata. The client
+retains loaded tags on failure, gates concurrent fetches, retries the same page,
+and keeps selection pinned. Real Postgres tests cover equal-count ties and final
+pages; browser tests cover horizontal prefetch and failed-page retry. Popularity
+counts are live rather than a frozen catalog snapshot; cross-page deduplication
+is not a claim that concurrent ranking changes cannot move a tag across a cursor.
 
 The backend play path and Jam failure evidence are recorded separately from UI
 checks. The latest frontend passed seven live viewport/theme cases and the
@@ -102,7 +111,7 @@ Existing production behavior is the review baseline. Each incomplete area needs 
 | Area | Present in Next | Remaining port or acceptance work |
 |---|---|---|
 | Public catalog | Home, keyword search, artist/track/album/playlist details, library and likes | Finish discovery controls, pagination and production behavior rather than treating route presence as completion. [Catalog](../../next/app/src/Catalog.tsx#L25) |
-| Discovery | Period-selectable charts, Latest, server tag filters, colored tags, automatic feed pagination and network artists; cancellable keyword search with artwork | For You, semantic/CLAP search, hidden tags, broader browse/Atlas behavior and representative performance budgets. Ranking/limit precede search metric hydration (#2408). [Home](../../next/app/src/Home.tsx), [Search](../../next/app/src/Search.tsx) |
+| Discovery | In-place chart period cycling, Latest, horizontally paginated server tag catalog, colored tags, automatic feed pagination and network artists; cancellable keyword search with artwork | For You, semantic/CLAP search, hidden tags, broader browse/Atlas behavior and representative performance budgets. Ranking/limit precede search metric hydration (#2408). [Home](../../next/app/src/Home.tsx), [Search](../../next/app/src/Search.tsx) |
 | Account entry | Typeahead, identity preview, original help copy, OAuth signup handoff | Remove or retain production discovery dependency; finish onboarding and listener/creator landing behavior; verify native OAuth and cancellation. [Login](../../next/app/app/login.tsx#L8) |
 | Login intent | Explicit return destinations survive web OAuth for Jam links and creation, Portal and signed-out track actions | Audit every protected journey and draft boundary, including Upload and Library; automatic action replay is a separate design. A Jam permission upgrade is distinct from being signed out (#2396). [Intent](../../next/app/app/oauth/callback.tsx), [Portal](../../next/app/src/Portal.tsx) |
 | Player and queue | Expo Audio, availability/retry/startup timeout, stable seek preview, repeat/shuffle/remove/clear, direct drag reorder, persistent dock, full-screen Now Playing, keyboard shortcuts and swipe navigation/dismissal | Queue/progress persistence, explicit versus generated queue semantics, title marquee, EQ, platform media controls and interruptions/backgrounding still need acceptance. Navigation/seek checks do not prove native lifecycle parity. [Playback](../../next/app/src/playback.tsx) |
