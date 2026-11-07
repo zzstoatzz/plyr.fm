@@ -6,8 +6,8 @@ import { HomeArtists } from './HomeArtists';
 import X from 'lucide-react-native/icons/x';
 import { api, type Track } from './api';
 import { useAuth } from './auth';
-import { Detail, Heading, Status, errorMessage, useColors, usePages, type Play } from './CatalogPieces';
-import { homeTags, type HomeTag } from './home-api';
+import { Detail, Heading, Status, useColors, usePages, type Play } from './CatalogPieces';
+import { useHomeTags } from './use-home-tags';
 import { parseSelectedTags, selectedTagsKey } from './home-state';
 import { readLocal, writeLocal } from './storage';
 import { Text } from './Text';
@@ -39,24 +39,14 @@ export function Home({ onPlay }: { onPlay: Play }) {
     return () => cancelAnimationFrame(frame);
   }, [fillViewport]);
   const tracks = useMemo(() => [...new Map(latest.data.map(track => [track.id, track])).values()], [latest.data]);
-  const [tags, setTags] = useState<HomeTag[]>([]);
-  const [tagError, setTagError] = useState<string>();
-  const [tagAttempt, setTagAttempt] = useState(0);
-  const [tagsLoading, setTagsLoading] = useState(false);
+  const tagPages = useHomeTags();
+  const tags = tagPages.tags;
+  const tagViewport = useRef({ width: 0, content: 0, offset: 0 });
+  const fillTags = () => {
+    const { width, content, offset } = tagViewport.current;
+    if (width > 0 && content > 0 && content - width - offset < 160) void tagPages.more();
+  };
   const network = useNetworkArtists(did);
-  useEffect(() => {
-    let current = true;
-    const controller = new AbortController();
-    setTagError(undefined);
-    setTagsLoading(true);
-    const timer = setTimeout(() => { setTagError('could not load tags'); controller.abort(); }, 15_000);
-    void homeTags(controller.signal).then((items) => {
-      if (current && !controller.signal.aborted) setTags(items.sort((left, right) => right.total_plays - left.total_plays));
-    }, (error: unknown) => {
-      if (current && !controller.signal.aborted) setTagError(errorMessage(error));
-    }).finally(() => { clearTimeout(timer); if (current) setTagsLoading(false); });
-    return () => { current = false; controller.abort(); clearTimeout(timer); };
-  }, [tagAttempt]);
   function changeTags(next: string[]) {
     list.current?.scrollToOffset({ offset: 0, animated: false });
     setSelection({ key, tags: next });
@@ -86,12 +76,17 @@ export function Home({ onPlay }: { onPlay: Play }) {
           <Pressable accessibilityRole="button" accessibilityLabel="Clear tag filters" onPress={() => changeTags([])} style={styles.clear}><Text style={{ color: colors.muted, fontSize: 12 * colors.scale }}>clear</Text></Pressable>
           {selected.map((name) => tag(name, true, tags.find((item) => item.name === name)?.track_count))}
         </View>}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tagScroller}>
+        <ScrollView horizontal testID="home-tags" showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tagScroller}
+          onLayout={event => { tagViewport.current.width = event.nativeEvent.layout.width; fillTags(); }}
+          onContentSizeChange={width => { tagViewport.current.content = width; fillTags(); }}
+          onScroll={event => { tagViewport.current.offset = event.nativeEvent.contentOffset.x; fillTags(); }} scrollEventThrottle={64}>
           {tags.filter(({ name }) => !selected.includes(name)).map(({ name, track_count }) => tag(name, false, track_count))}
+          {tagPages.hasMore && <Pressable accessibilityRole="button" accessibilityLabel="More tags" accessibilityState={{ busy: tagPages.loading, disabled: tagPages.loading }} disabled={tagPages.loading} onPress={() => void tagPages.more(true)} style={styles.tagTarget}>
+            <Text style={{ color: colors.muted, fontSize: 12 * colors.scale }}>{tagPages.loading ? 'loading…' : 'more'}</Text>
+          </Pressable>}
         </ScrollView>
       </View>}
-      {tagsLoading && tagAttempt > 0 && <WaveLoading label="loading tags..." />}
-      <Status error={tagError} retry={() => setTagAttempt((attempt) => attempt + 1)} />
+      <Status error={tagPages.error} retry={tagPages.retry} />
     </View>
   </View>;
   return <FlatList key={columns} numColumns={columns} columnWrapperStyle={columns === 2 ? { gap: 24 } : undefined} ref={list} testID="home-feed" data={tracks} keyExtractor={track => track.id}
