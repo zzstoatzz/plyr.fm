@@ -1,6 +1,6 @@
 export const palettes = {
   light: { background: '#fbfbfd', surface: '#eceef4', text: '#141826', muted: '#50596b', border: '#788399', danger: '#b42335' },
-  dark: { background: '#10131a', surface: '#202735', text: '#f4f6fa', muted: '#b7c2d5', border: '#73839a', danger: '#ff99a5' }
+  dark: { background: '#22282e', surface: '#2b333d', text: '#f4f6fa', muted: '#b7c2d5', border: '#73839a', danger: '#ff99a5' }
 };
 
 function rgb(hex: string): number[] {

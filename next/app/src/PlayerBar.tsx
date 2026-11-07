@@ -12,6 +12,8 @@ import SkipForward from 'lucide-react-native/icons/skip-forward';
 import { useAppearance } from './appearance';
 import { usePlayback } from './playback';
 import { Cover, artistName } from './CatalogPieces';
+import { dockSurface } from './materials';
+import { TrackLikes } from './TrackLikes';
 import { NowPlaying } from './NowPlaying';
 import { PlayerSeek } from './PlayerSeek';
 import { PlayerControl } from './PlayerControl';
@@ -38,7 +40,6 @@ export function PlayerBar() {
   const track = player.current;
   const playing = player.status.playing;
   const duration = player.status.duration || track.metadata.duration_seconds || 0;
-  const progress = duration ? Math.min(1, player.status.currentTime / duration) : 0;
   const play = <PlayerControl primary label={playing ? 'Pause' : 'Play'} icon={playing ? Pause : Play}
     onPress={() => player.setPlaying(!playing)} busy={player.loading} />;
   const error = player.error ?? player.status.error;
@@ -52,11 +53,16 @@ export function PlayerBar() {
     </View>
   </Pressable>;
   return <>
-    <View testID="player-dock" style={desktop ? { backgroundColor: theme.background, borderTopWidth: 1, borderColor: theme.border, paddingHorizontal: 24, paddingVertical: 8 }
-      : { backgroundColor: theme.surface, borderRadius: 14, margin: 6, overflow: 'hidden' }}>
-      {!desktop && <View style={{ height: 2, width: `${Math.max(0, progress) * 100}%`, backgroundColor: theme.accent }} />}
+    <View testID="player-dock" style={[dockSurface(theme), { width: desktop ? '100%' : undefined, maxWidth: 1720, alignSelf: desktop ? 'center' : undefined,
+      borderRadius: desktop ? 20 : 16, margin: desktop ? 0 : 6, marginTop: desktop ? 18 : 6, paddingHorizontal: desktop ? 20 : 6, paddingTop: desktop ? 12 : 6, paddingBottom: desktop ? 9 : 5, overflow: 'hidden' }]}>
+      <View pointerEvents="none" accessible={false} style={{ position: 'absolute', top: 0, left: 18, right: 18, height: 5,
+        backgroundColor: theme.dark ? '#dae9ed0d' : '#ffffff66', borderTopWidth: 1, borderTopColor: theme.dark ? '#e3f0f21c' : '#ffffffcc', borderBottomWidth: 1, borderBottomColor: '#00000022' }} />
+      <View pointerEvents="none" accessible={false} testID="playback-status-inlay" style={{ position: 'absolute', top: 1, left: 20, width: desktop ? 78 : 68, height: 5, borderBottomLeftRadius: 3, borderBottomRightRadius: 3,
+        opacity: playing ? 0.85 : 0.22, backgroundColor: theme.dark ? '#adcdd144' : '#7398a044',
+        borderTopWidth: 1, borderTopColor: '#e2f3f229', borderBottomWidth: 1, borderBottomColor: '#050e1733',
+        ...(Platform.OS === 'web' ? { backgroundImage: 'radial-gradient(ellipse at 45% 18%, #d7eef06b, transparent 78%), linear-gradient(90deg, #7395a01a, #a6c6cf4d 24%, #bdd5d64d 65%, #7e9da01a)' } : {}) }} />
       <View style={{ flexDirection: 'row', alignItems: 'center', padding: desktop ? 0 : 5, gap: desktop ? 24 : 4 }}>
-        {identity}
+        <View style={{ flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: desktop ? 6 : 0 }}>{identity}<TrackLikes key={track.id} track={track} iconOnly returnTo={path} /></View>
         {desktop ? <>
           <View style={{ flex: 1.4, minWidth: 224, maxWidth: 600 }}>
             <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center' }}>

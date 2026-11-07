@@ -1,13 +1,14 @@
-import { Link } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, Pressable, ScrollView, StyleSheet, View } from 'react-native';
-import { HomeTrackActions, HomeTrackRow } from './HomeTrackRow';
+import { HomeTrackRow } from './HomeTrackRow';
+import { HomeChart } from './HomeChart';
+import { HomeArtists } from './HomeArtists';
 import X from 'lucide-react-native/icons/x';
 import { api, type Track } from './api';
 import { useAuth } from './auth';
-import { Cover, Detail, Heading, Status, artistName, errorMessage, useColors, usePages, type Play } from './CatalogPieces';
+import { Detail, Heading, Status, errorMessage, useColors, usePages, type Play } from './CatalogPieces';
 import { homeTags, type HomeTag } from './home-api';
-import { nextPopulatedChart, parseSelectedTags, periodLabels, selectedTagsKey, type ChartPeriod } from './home-state';
+import { parseSelectedTags, selectedTagsKey } from './home-state';
 import { readLocal, writeLocal } from './storage';
 import { Text } from './Text';
 import { useNetworkArtists } from './use-network-artists';
@@ -18,6 +19,9 @@ import { WaveLoading } from './WaveLoading';
 export function Home({ onPlay }: { onPlay: Play }) {
   const colors = useColors();
   const list = useRef<FlatList<Track>>(null);
+  const [layoutWidth, setLayoutWidth] = useState(0);
+  const contentWidth = Math.max(0, layoutWidth - pageFrame.paddingHorizontal * 2);
+  const columns = contentWidth >= 900 * colors.scale ? 2 : 1;
   const { did } = useAuth();
   const key = selectedTagsKey(did);
   const [selection, setSelection] = useState(() => ({ key, tags: parseSelectedTags(readLocal(key)) }));
@@ -39,30 +43,7 @@ export function Home({ onPlay }: { onPlay: Play }) {
   const [tagError, setTagError] = useState<string>();
   const [tagAttempt, setTagAttempt] = useState(0);
   const [tagsLoading, setTagsLoading] = useState(false);
-  const [period, setPeriod] = useState<ChartPeriod>('month');
-  const [chart, setChart] = useState<Track[]>([]);
-  const [chartLoading, setChartLoading] = useState(true);
-  const [chartError, setChartError] = useState<string>();
-  const chartGeneration = useRef(0);
   const network = useNetworkArtists(did);
-  const loadChart = useCallback(async (cycle = false) => {
-    const generation = ++chartGeneration.current;
-    setChartLoading(true);
-    setChartError(undefined);
-    try {
-      const load = async (candidate: ChartPeriod) => (await api.chart(candidate)).data.slice(0, 10).map(({ track }) => track);
-      const result = cycle ? await nextPopulatedChart(period, load) : { period, tracks: await load(period) };
-      if (generation === chartGeneration.current) { setChart(result.tracks); setPeriod(result.period); }
-    } catch (error) {
-      if (generation === chartGeneration.current) setChartError(errorMessage(error));
-    } finally {
-      if (generation === chartGeneration.current) setChartLoading(false);
-    }
-  }, [period]);
-  useEffect(() => {
-    void loadChart();
-    return () => { chartGeneration.current += 1; };
-  }, []);
   useEffect(() => {
     let current = true;
     const controller = new AbortController();
@@ -93,46 +74,12 @@ export function Home({ onPlay }: { onPlay: Play }) {
     </Pressable>;
   }
   const header = <View style={styles.home}>
-    <View style={styles.section}>
-      <View style={styles.headingRow}>
-        <Heading>top tracks</Heading>
-        <Pressable accessibilityRole="button" accessibilityLabel={`Top tracks period: ${periodLabels[period]}`} disabled={chartLoading}
-          onPress={() => void loadChart(true)} style={styles.period}>
-          <Text style={{ color: colors.muted, fontSize: 13 * colors.scale }}>{periodLabels[period]} ▾</Text>
-        </Pressable>
-      </View>
-      {chart.length > 0 && <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.cards}>
-        {chart.map((track) => <View key={track.id} style={styles.card}>
-          <Pressable testID="track-play-control" accessibilityRole="button" accessibilityLabel={`Play ${track.metadata.title}`} onPress={() => onPlay(track, chart)}>
-            <Cover uri={track.media.artwork?.url ?? track.artist.profile.avatar_url} size={136} radius={8} />
-          </Pressable>
-          <Link href={{ pathname: '/track/[id]', params: { id: track.id } }} asChild>
-            <Pressable accessibilityRole="link" style={{ minHeight: 28, justifyContent: 'center' }}><Text numberOfLines={1} style={[styles.cardTitle, { color: colors.text, fontSize: 13 * colors.scale }]}>{track.metadata.title}</Text></Pressable>
-          </Link>
-          <Text numberOfLines={1} style={{ color: colors.muted, fontSize: 12 * colors.scale }}>{artistName(track)}</Text>
-          <HomeTrackActions track={track} />
-        </View>)}
-      </ScrollView>}
-      {chartLoading && !chart.length ? <WaveLoading label="loading..." /> : <Status error={chartError} retry={() => void loadChart()}
-        empty={!chart.length ? period === 'all_time' ? 'nothing liked yet' : `nothing liked in the ${periodLabels[period]}` : undefined} />}
-    </View>
-    {network.artists.length > 0 && <View style={styles.section}>
-      <Heading>artists you know</Heading>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.cards}>
-        {network.artists.map((artist) => <Link key={artist.did} href={{ pathname: '/u/[handle]', params: { handle: artist.handle || artist.did } }} asChild>
-          <Pressable accessibilityRole="link" style={styles.artist}>
-            <Cover uri={artist.avatar_url} size={72} round />
-            <Text numberOfLines={1} style={{ color: colors.text, fontSize: 13 * colors.scale }}>{artist.display_name || artist.handle}</Text>
-            <Text style={{ color: colors.muted, fontSize: 12 * colors.scale }}>{artist.track_count} {artist.track_count === 1 ? 'track' : 'tracks'}</Text>
-          </Pressable>
-        </Link>)}
-      </ScrollView>
-    </View>}
+    <HomeChart onPlay={onPlay} />
+    {network.artists.length > 0 && <HomeArtists artists={network.artists} />}
     {network.error && <Detail>{network.error}</Detail>}
     <View style={styles.section}>
       <View style={styles.headingRow}>
-        <Pressable accessibilityRole="button" accessibilityLabel="Refresh tracks" onPress={() => { list.current?.scrollToOffset({ offset: 0, animated: false }); latest.reload(); }} style={{ minHeight: 44, justifyContent: 'center' }}><Heading>tracks</Heading></Pressable>
-        <Text style={{ color: colors.muted, fontSize: 13 * colors.scale }}>latest</Text>
+        <Pressable accessibilityRole="button" accessibilityLabel="Refresh tracks" onPress={() => { list.current?.scrollToOffset({ offset: 0, animated: false }); latest.reload(); }} style={{ minHeight: 44, justifyContent: 'center' }}><Heading>latest tracks</Heading></Pressable>
       </View>
       {(selected.length > 0 || tags.length > 0) && <View style={styles.tags}>
         {selected.length > 0 && <View style={styles.pinned}>
@@ -147,15 +94,15 @@ export function Home({ onPlay }: { onPlay: Play }) {
       <Status error={tagError} retry={() => setTagAttempt((attempt) => attempt + 1)} />
     </View>
   </View>;
-  return <FlatList ref={list} testID="home-feed" data={tracks} keyExtractor={track => track.id}
-    style={{ flex: 1, backgroundColor: colors.background }} contentContainerStyle={{ ...pageFrame, paddingTop: 8, paddingBottom: 24 }}
-    onLayout={event => { viewport.current.height = event.nativeEvent.layout.height; fillViewport(); }}
+  return <FlatList key={columns} numColumns={columns} columnWrapperStyle={columns === 2 ? { gap: 24 } : undefined} ref={list} testID="home-feed" data={tracks} keyExtractor={track => track.id}
+    style={{ flex: 1, backgroundColor: colors.background }} contentContainerStyle={{ ...pageFrame, maxWidth: '100%', paddingTop: 16, paddingBottom: 24 }}
+    onLayout={event => { setLayoutWidth(event.nativeEvent.layout.width); viewport.current.height = event.nativeEvent.layout.height; fillViewport(); }}
     onContentSizeChange={(_, height) => { viewport.current.content = height; fillViewport(); }}
     onScroll={event => { viewport.current.offset = event.nativeEvent.contentOffset.y; }} scrollEventThrottle={32}
     accessibilityState={{ busy: latest.loading }} keyboardShouldPersistTaps="handled" ListHeaderComponent={header} onEndReachedThreshold={0.6}
     onEndReached={() => { if (latest.cursor && !latest.loading && !latest.error) latest.more(); }}
     initialNumToRender={12} maxToRenderPerBatch={10} windowSize={7}
-    renderItem={({ item }) => <HomeTrackRow track={item} tracks={tracks} onPlay={onPlay} />}
+    renderItem={({ item }) => columns === 2 ? <View style={{ width: (contentWidth - 24) / 2 }}><HomeTrackRow track={item} tracks={tracks} onPlay={onPlay} /></View> : <HomeTrackRow track={item} tracks={tracks} onPlay={onPlay} />}
     ListFooterComponent={<View style={{ paddingVertical: 12, gap: 8 }}>
       {latest.loading ? <WaveLoading label={tracks.length ? 'loading more...' : 'loading tracks...'} /> :
         <Status error={latest.error} retry={tracks.length ? undefined : latest.more} empty={!tracks.length ? selected.length ? 'no tracks match these tags' : 'no tracks yet' : undefined} />}
@@ -165,10 +112,8 @@ export function Home({ onPlay }: { onPlay: Play }) {
 }
 
 const styles = StyleSheet.create({
-  home: { gap: 18 }, section: { gap: 10 }, headingRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: 12, rowGap: 4 },
-  period: { minHeight: 44, minWidth: 44, justifyContent: 'center', paddingVertical: 8, paddingHorizontal: 2 }, cards: { gap: 16, paddingBottom: 4 }, card: { width: 136, gap: 4 },
-  cardTitle: { fontWeight: '600', marginTop: 4 },
-  artist: { width: 104, alignItems: 'center', gap: 6 }, tags: { gap: 8 }, pinned: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6 },
+  home: { gap: 26 }, section: { gap: 12 }, headingRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: 12, rowGap: 4 },
+  tags: { gap: 8 }, pinned: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6 },
   tagScroller: { gap: 6, alignItems: 'center' }, tagTarget: { minWidth: 44, minHeight: 44, maxWidth: '100%', justifyContent: 'center' },
   tag: { flexDirection: 'row', gap: 6, alignItems: 'center', minHeight: 36, borderRadius: 8, borderWidth: 1, paddingHorizontal: 9, paddingVertical: 6 },
   clear: { minWidth: 44, minHeight: 44, justifyContent: 'center', paddingVertical: 8, paddingRight: 4 }, more: { alignSelf: 'center', padding: 14 },

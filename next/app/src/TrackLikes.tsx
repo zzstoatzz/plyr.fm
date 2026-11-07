@@ -15,7 +15,7 @@ import { Sheet } from './Sheet';
 import { WaveLoading } from './WaveLoading';
 import { useAppearance } from './appearance';
 
-export function TrackLikes({ track, compact = false, returnTo, menu = false, onNavigate }: { track: Track; compact?: boolean; returnTo?: string; menu?: boolean; onNavigate?: () => void }) {
+export function TrackLikes({ track, compact = false, returnTo, menu = false, iconOnly = false, onNavigate }: { track: Track; compact?: boolean; returnTo?: string; menu?: boolean; iconOnly?: boolean; onNavigate?: () => void }) {
   const [open, setOpen] = useState(false);
   const [viewer, setViewer] = useState<{ did: string; uri: string; liked: boolean }>();
   const [count, setCount] = useState(track.metrics.like_count);
@@ -39,7 +39,7 @@ export function TrackLikes({ track, compact = false, returnTo, menu = false, onN
             <Heart size={21} color={theme.muted} />
           </Pressable>
         </Link>}
-      {!menu && <Pressable accessibilityRole="button" accessibilityLabel={`See ${label}`} onPress={() => setOpen(true)} style={[target, { paddingHorizontal: 4 }]}>
+      {!menu && !iconOnly && <Pressable accessibilityRole="button" accessibilityLabel={`See ${label}`} onPress={() => setOpen(true)} style={[target, { paddingHorizontal: 4 }]}>
         <Text numberOfLines={1} style={{ color: theme.muted, fontSize: 14 * theme.scale }}>{compact ? count : label}</Text>
       </Pressable>}
     </View>
