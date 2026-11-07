@@ -1,9 +1,10 @@
 const std = @import("std");
 const redis = @import("redis");
 const ConnectionConfig = @import("../redis/connection_config.zig").ConnectionConfig;
+const protocol = @import("protocol.zig");
 const Admission = @import("auth.zig").Admission;
 
-pub const Ticket = struct { admission: Admission, origin: []const u8 };
+pub const Ticket = struct { admission: Admission, origin: []const u8, client: ?protocol.Client = null };
 pub const Tickets = struct {
     allocator: std.mem.Allocator,
     io: std.Io,
@@ -19,11 +20,14 @@ pub const Tickets = struct {
         self.config.deinit();
     }
     pub fn issue(self: *Tickets, allocator: std.mem.Allocator, admission: Admission, origin: []const u8) ![]const u8 {
+        return self.issueForClient(allocator, admission, origin, null);
+    }
+    pub fn issueForClient(self: *Tickets, allocator: std.mem.Allocator, admission: Admission, origin: []const u8, client: ?protocol.Client) ![]const u8 {
         var random: [32]u8 = undefined;
         self.io.random(&random);
         const token = try std.fmt.allocPrint(allocator, "{x}", .{random});
         const key = try std.fmt.allocPrint(allocator, "plyr:next:jam-ticket:{s}", .{token});
-        const body = try std.json.Stringify.valueAlloc(allocator, Ticket{ .admission = admission, .origin = origin }, .{});
+        const body = if (client) |value| try std.json.Stringify.valueAlloc(allocator, Ticket{ .admission = admission, .origin = origin, .client = value }, .{}) else try std.json.Stringify.valueAlloc(allocator, .{ .admission = admission, .origin = origin }, .{});
         _ = try self.command(allocator, &.{ "SET", key, body, "EX", "30", "NX" });
         return token;
     }

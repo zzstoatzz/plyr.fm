@@ -9,6 +9,7 @@ pub const Config = struct {
     space_type: []const u8,
     plc_url: []const u8 = "https://plc.directory",
     test_pds_origin: ?[]const u8 = null,
+    owner_only: bool = false,
 };
 
 pub const Admission = struct {
@@ -37,6 +38,7 @@ pub fn admit(allocator: std.mem.Allocator, io: std.Io, config: Config, host: []c
     const signing_key = actor_document.signingKey() orelse return error.InvalidIdentity;
     if (!std.mem.eql(u8, signing_key.controller, actor)) return error.InvalidIdentity;
     identity.verify(signing_key.public_key_multibase) catch return error.InvalidIdentity;
+    if (config.owner_only and !std.mem.eql(u8, actor, host)) return error.AccessDenied;
     const space = try std.fmt.allocPrint(allocator, "at://{s}/space/{s}/{s}", .{ host, config.space_type, key });
     var delegated = zat.Jwt.parse(allocator, delegation) catch return error.InvalidDelegation;
     defer delegated.deinit();

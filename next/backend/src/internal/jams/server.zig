@@ -2,6 +2,8 @@ const std = @import("std");
 const websocket = @import("websocket");
 const auth = @import("auth.zig");
 const model = @import("model.zig");
+const protocol = @import("protocol.zig");
+const personal = @import("personal.zig");
 const room_store = @import("store.zig");
 const tickets = @import("tickets.zig");
 const config = @import("../../config.zig");
@@ -218,6 +220,15 @@ const Handler = struct {
         self.peer.writer = try std.Thread.spawn(.{}, Peer.send, .{self.peer});
         var snapshot = (try self.peer.context.store.read(allocator, self.peer.ticket.admission.room)) orelse return error.RoomNotStarted;
         defer snapshot.deinit();
+        if ((snapshot.state.personal != null) != (self.peer.ticket.client != null)) return error.AccessDenied;
+        if (self.peer.ticket.client) |client| {
+            var connected = try self.lifecycle(.connected, snapshot.state, client);
+            defer connected.deinit();
+            const initial = try std.json.Stringify.valueAlloc(allocator, .{ .type = "state", .state = connected.snapshot.state, .serverTimeMs = connected.snapshot.serverTimeMs }, .{});
+            defer allocator.free(initial);
+            self.peer.enqueue(initial);
+            return;
+        }
         const body = try std.json.Stringify.valueAlloc(allocator, .{ .type = "state", .state = snapshot.state, .serverTimeMs = snapshot.serverTimeMs }, .{});
         defer allocator.free(body);
         self.peer.enqueue(body);
@@ -247,10 +258,17 @@ const Handler = struct {
             return;
         }
         const command = try std.json.parseFromValueLeaky(model.Command, a, value, .{ .ignore_unknown_fields = true });
-        var applied = try context.store.apply(a, peer.ticket.admission.room, peer.ticket.admission.actor, peer.ticket.admission.host, command);
+        var applied = try context.store.applyAsClient(a, peer.ticket.admission.room, peer.ticket.admission.actor, peer.ticket.admission.host, command, peer.ticket.client orelse .{});
         defer applied.deinit();
         const body = try std.json.Stringify.valueAlloc(a, .{ .type = "result", .id = command.id, .outcome = applied.outcome, .state = applied.snapshot.state, .serverTimeMs = applied.snapshot.serverTimeMs }, .{});
         peer.enqueue(body);
+    }
+    fn lifecycle(self: *Handler, action: model.Action, state: model.State, original: protocol.Client) !room_store.Applied {
+        var client = original;
+        client.internal = true;
+        const id = try std.fmt.allocPrint(allocator, "{s}-{s}", .{ @tagName(action), client.connection });
+        defer allocator.free(id);
+        return self.peer.context.store.applyAsClient(allocator, self.peer.ticket.admission.room, self.peer.ticket.admission.actor, self.peer.ticket.admission.host, .{ .id = id, .epoch = state.epoch, .expectedRevision = state.revision, .occurrence = state.occurrence, .action = action }, client);
     }
     pub fn close(self: *Handler) void {
         const peer = self.peer;
@@ -261,6 +279,16 @@ const Handler = struct {
             break;
         };
         context.mutex.unlock(context.io);
+        if (peer.ticket.client) |client| {
+            if (context.store.read(allocator, peer.ticket.admission.room) catch null) |value| {
+                var snapshot = value;
+                defer snapshot.deinit();
+                if (self.lifecycle(.disconnected, snapshot.state, client)) |value_applied| {
+                    var applied = value_applied;
+                    applied.deinit();
+                } else |_| {}
+            }
+        }
         peer.stop();
         if (peer.writer) |writer| writer.join();
         for (peer.outbox) |body| if (body) |bytes| allocator.free(bytes);
@@ -283,17 +311,19 @@ const Handler = struct {
             const result = std.json.Stringify.valueAlloc(a, .{ .id = did, .service = .{.{ .id = context.auth_config.audience, .type = "PlyrJamCoordinator", .serviceEndpoint = env("JAM_PUBLIC_URL") orelse "https://plyr-jams-next.fly.dev" }} }, .{}) catch return;
             return http(conn, a, 200, result, origin);
         }
-        if (!std.mem.eql(u8, method, "POST") or !std.mem.eql(u8, url, "/v1/jams/join") or body.len > 60 * 1024) return http(conn, a, 404, "{}", origin);
+        const personal_join = std.mem.eql(u8, url, "/v1/playback/join");
+        if (!std.mem.eql(u8, method, "POST") or (!personal_join and !std.mem.eql(u8, url, "/v1/jams/join")) or body.len > (if (personal_join) @as(usize, 63 * 1024) else 60 * 1024)) return http(conn, a, 404, "{}", origin);
         if (context.admissions.fetchAdd(1, .acq_rel) >= 2) {
             _ = context.admissions.fetchSub(1, .acq_rel);
             return http(conn, a, 503, "{}", origin);
         }
         defer _ = context.admissions.fetchSub(1, .acq_rel);
-        join(conn, a, body, origin, context) catch |err| {
+        join(conn, a, body, origin, context, personal_join) catch |err| {
             std.log.warn("Jam admission failed: {s}", .{@errorName(err)});
-            const result = std.json.Stringify.valueAlloc(a, .{ .@"error" = .{ .message = if (err == error.RoomNotStarted) "The host needs to start this Jam" else "Could not authorize this Jam" } }, .{}) catch return;
+            const result = std.json.Stringify.valueAlloc(a, .{ .@"error" = .{ .message = if (personal_join) "Could not open your queue" else if (err == error.RoomNotStarted) "The host needs to start this Jam" else "Could not authorize this Jam" } }, .{}) catch return;
             const status: u16 = switch (err) {
                 error.RoomNotStarted => 409,
+                error.InvalidClient, error.InvalidRequest => 400,
                 error.InvalidRoom, error.InvalidIdentity, error.InvalidDelegation, error.InvalidCredential, error.AccessDenied => 403,
                 else => 503,
             };
@@ -302,25 +332,38 @@ const Handler = struct {
     }
 };
 
-fn join(conn: *websocket.Conn, a: std.mem.Allocator, body: []const u8, origin: []const u8, context: *Context) !void {
+fn join(conn: *websocket.Conn, a: std.mem.Allocator, body: []const u8, origin: []const u8, context: *Context, personal_join: bool) !void {
+    const Initial = struct { queue: []model.Track, index: u32 = 0, playing: bool = false, positionMs: u64 = 0, personal: ?protocol.Personal = null };
     const Request = struct {
         host: []const u8,
         key: []const u8,
         serviceToken: []const u8,
         delegationToken: []const u8,
-        initial: ?struct { queue: []model.Track, index: u32 = 0, playing: bool = false, positionMs: u64 = 0 } = null,
+        clientId: ?[]const u8 = null,
+        resumePlaying: bool = false,
+        initial: ?Initial = null,
     };
-    const request = try std.json.parseFromSliceLeaky(Request, a, body, .{ .ignore_unknown_fields = true });
-    const admission = try auth.admit(a, context.io, context.auth_config, request.host, request.key, request.serviceToken, request.delegationToken);
+    const request = std.json.parseFromSliceLeaky(Request, a, body, .{ .ignore_unknown_fields = true }) catch |err| return if (err == error.OutOfMemory) err else error.InvalidRequest;
+    if (personal_join != std.mem.eql(u8, request.key, personal.key)) return error.AccessDenied;
+    if (personal_join and !model.boundedId(request.clientId orelse "")) return error.InvalidClient;
+    var auth_config = context.auth_config;
+    auth_config.owner_only = personal_join;
+    const admission = try auth.admit(a, context.io, auth_config, request.host, request.key, request.serviceToken, request.delegationToken);
+    var client: ?protocol.Client = null;
+    if (personal_join) {
+        var bytes: [16]u8 = undefined;
+        context.io.random(&bytes);
+        client = .{ .id = request.clientId.?, .connection = try std.fmt.allocPrint(a, "{x}", .{bytes}), .resumePlaying = request.resumePlaying };
+    }
     var snapshot = try context.store.read(a, admission.room);
     defer if (snapshot) |*value| value.deinit();
     if (snapshot == null) {
         if (!std.mem.eql(u8, admission.actor, admission.host)) return error.RoomNotStarted;
-        const initial = request.initial orelse return error.RoomNotStarted;
+        const initial = request.initial orelse if (personal_join) Initial{ .queue = &.{} } else return error.RoomNotStarted;
         var bytes: [16]u8 = undefined;
         context.io.random(&bytes);
         const epoch = try std.fmt.allocPrint(a, "{x}", .{bytes});
-        snapshot = try context.store.createAt(a, admission.room, .{
+        snapshot = context.store.createAt(a, admission.room, .{
             .epoch = epoch,
             .revision = 0,
             .queue = initial.queue,
@@ -329,10 +372,17 @@ fn join(conn: *websocket.Conn, a: std.mem.Allocator, body: []const u8, origin: [
             .playing = initial.playing,
             .positionMs = initial.positionMs,
             .updatedAtMs = 0,
-        });
+            .personal = if (personal_join) blk: {
+                var value = initial.personal orelse protocol.Personal{ .explicitEnd = @intCast(initial.queue.len) };
+                value.output = if (initial.playing) .{ .clientId = client.?.id, .connectionId = client.?.connection } else null;
+                value.disconnected = false;
+                break :blk value;
+            } else null,
+        }) catch |err| return if (err == error.InvalidRoom) error.InvalidRequest else err;
     }
-    const token = try context.tickets.issue(a, admission, origin);
-    http(conn, a, 200, try std.json.Stringify.valueAlloc(a, .{ .ticket = token }, .{}), origin);
+    if ((snapshot.?.state.personal != null) != personal_join) return error.AccessDenied;
+    const token = try context.tickets.issueForClient(a, admission, origin, client);
+    http(conn, a, 200, try std.json.Stringify.valueAlloc(a, .{ .ticket = token, .connectionId = if (client) |value| value.connection else null }, .{}), origin);
 }
 
 fn http(conn: *websocket.Conn, a: std.mem.Allocator, status: u16, body: []const u8, origin: []const u8) void {

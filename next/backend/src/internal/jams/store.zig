@@ -372,7 +372,7 @@ const lua_common =
     \\ return true
     \\end
     \\local function encode(s)
-    \\ local q={}; for i,t in ipairs(s.queue) do q[i]=cjson.encode(t) end
+    \\ local q={}; for i,t in ipairs(s.queue) do if type(s.personal)=='table' then q[i]=cjson.encode(t) else q[i]=cjson.encode({id=t.id,uri=t.uri,cid=t.cid,durationMs=t.durationMs}) end end
     \\ return '{"epoch":'..cjson.encode(s.epoch)..',"revision":'..string.format('%.0f',s.revision)..',"queue":['..table.concat(q,',')..'],"index":'..s.index..',"occurrence":'..string.format('%.0f',s.occurrence)..',"playing":'..tostring(s.playing)..',"positionMs":'..string.format('%.0f',s.positionMs)..',"updatedAtMs":'..string.format('%.0f',s.updatedAtMs)..(type(s.personal)=='table' and ',"personal":'..cjson.encode(s.personal) or '')..'}'
     \\end
     \\
