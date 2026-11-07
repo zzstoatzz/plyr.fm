@@ -1,7 +1,7 @@
 import type { Track } from './api';
 import { JamConnection, type JamConnectionOptions, type JamState, type JamTrack, type Pending, type PlaybackIntent } from './jam-connection.ts';
 import { queueCheckpoint, type QueueCheckpoint, type QueueStorage } from './queue-checkpoint.ts';
-import type { DurableQueueEdit, QueueMutation } from './queue-mutation';
+import { mergeQueueMutations, type DurableQueueEdit, type QueueMutation } from './queue-mutation.ts';
 import * as queue from './queue-state.ts';
 
 export type Reference = JamTrack & { key: string };
@@ -40,22 +40,24 @@ export class PersonalQueue {
   private pumping = false;
   private commands = new Map<string, { finish(value: boolean): void; timer: ReturnType<typeof setTimeout> }>();
   private checkpoint?: QueueCheckpoint;
+  private localVersion = 0;
   initialized = false;
   private readonly options: PersonalQueueOptions;
 
   constructor(options: PersonalQueueOptions) { this.options = options; }
 
   async start(adopt?: QueueCheckpoint) {
+    const version = this.localVersion;
     let restored = adopt;
     try {
       restored ??= queueCheckpoint(await this.options.storage.load(this.options.owner), this.options.owner) ?? undefined;
-      this.mutations = await this.options.storage.loadMutations(this.options.owner);
+      this.mutations = mergeQueueMutations(await this.options.storage.loadMutations(this.options.owner), this.mutations);
     } catch { this.options.error('Could not restore your saved queue'); }
     if (this.closed) return;
-    if (restored) {
+    if (restored && version === this.localVersion) {
       this.checkpoint = restored;
       this.state = restored.state;
-      for (const entry of restored.state.entries) this.cache.set(entry.track.id, entry.track);
+      for (const entry of restored.state.entries) if (!this.cache.has(entry.track.id)) this.cache.set(entry.track.id, entry.track);
       this.options.changed(this.state, restored);
     }
     this.initialized = true;
@@ -106,6 +108,7 @@ export class PersonalQueue {
 
   local(state: queue.QueueState<Track>) {
     if (this.closed) return;
+    this.localVersion++;
     this.state = state;
     this.remember(state.entries.map(entry => entry.track));
     this.options.changed(state);
@@ -216,7 +219,9 @@ export class PersonalQueue {
   }
 
   private applyLocal(intent: DurableQueueEdit) {
-    this.state = this.reduce(this.state, intent);
+    const next = this.reduce(this.state, intent);
+    if (next !== this.state) this.localVersion++;
+    this.state = next;
     this.options.changed(this.state);
   }
 

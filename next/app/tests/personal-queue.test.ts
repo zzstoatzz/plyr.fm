@@ -35,7 +35,7 @@ function setup(journal: QueueMutation[] = []) {
   const storage: QueueStorage = { load: async () => null, loadMutations: async () => structuredClone(stored),
     saveMutations: async (_, entries, remove) => { stored = structuredClone(mergeQueueMutations(stored, entries, remove)); return stored; }, save: async () => {}, progress: async () => {} };
   const queue = new PersonalQueue({ owner: 'account', storage, id: () => 'edit',
-    resolve: async ids => { calls.push(ids); return { data: [track], missing: [] }; },
+    resolve: async ids => { calls.push(ids); return { data: ids.map(id => ({ ...track, id, record: { ...track.record, uri: Buffer.from(id.slice(4), 'base64url').toString() } })).reverse(), missing: [] }; },
     changed: state => changes.push(state), remote: () => {}, error: message => errors.push(message),
     connect: { admit: async () => ({ ticket: 'test', websocketUrl: 'wss://test' }), socket: () => socket } });
   return { queue, socket, calls, changes, errors, stored: () => stored };
@@ -104,4 +104,39 @@ test('two tabs cannot overwrite each other’s pending edits or prepare differen
   const second = mergeQueueMutations(first, [{ ...a, base: { ...prepared, expectedRevision: 6 } }]);
   assert.equal(second[0].base?.expectedRevision, 5);
   assert.deepEqual(mergeQueueMutations(second, [], ['b']).map(entry => entry.id), ['a']);
+});
+
+test('restoring 200 distinct occurrences performs two bounded metadata reads and maps by record identity', async () => {
+  const { queue, socket, calls } = setup();
+  try {
+    const refs = Array.from({ length: 200 }, (_, at) => {
+      const uri = `at://did:plc:aaaaaaaaaaaaaaaaaaaaaaaa/fm.plyr.track/queue-${at}`;
+      return { ...ref, key: `entry-${at}`, uri, id: 'trk_' + Buffer.from(uri).toString('base64url') };
+    });
+    await queue.start();
+    socket.receive({ type: 'state', state: { ...base, queue: refs, personal: { ...base.personal, explicitEnd: 200 } } });
+    await tick();
+    assert.equal(calls.length, 2);
+    assert.ok(calls.every(ids => ids.length <= 100));
+    assert.deepEqual(queue.state.entries.map(entry => entry.track.id), refs.map(ref => ref.id));
+    assert.ok(queue.state.entries.every(entry => entry.track.metadata.title === 'A'));
+  } finally { queue.close(); }
+});
+
+test('late checkpoint reads cannot replace a fresh local selection or its metadata', async () => {
+  let release: (value: unknown) => void = () => {};
+  const storage: QueueStorage = { load: () => new Promise(resolve => { release = resolve; }), loadMutations: async () => [],
+    saveMutations: async (_, entries) => entries, save: async () => {}, progress: async () => {} };
+  const queue = new PersonalQueue({ owner: 'anonymous', storage, id: () => 'test', resolve: async () => ({ data: [], missing: [] }),
+    changed: () => {}, remote: () => {}, error: () => {} });
+  try {
+    const starting = queue.start();
+    const fresh = { ...track, metadata: { ...track.metadata, title: 'Fresh selection' } };
+    queue.local({ entries: [{ key: 'fresh', track: fresh }], index: 0 });
+    release({ version: 1, owner: 'anonymous', updatedAt: 100, position: 20, repeat: 'off', keepPlaying: false,
+      state: { entries: [{ key: 'old', track }], index: 0 } });
+    await starting;
+    assert.equal(queue.state.entries[0].key, 'fresh');
+    assert.equal(queue.cache.get(track.id)?.metadata.title, 'Fresh selection');
+  } finally { queue.close(); }
 });
