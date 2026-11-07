@@ -94,7 +94,7 @@ export function usePersonalQueue(target: Target) {
       if (adopt?.state.entries.length && !imported && wire.queue[wire.index]?.key !== adopt.state.entries[adopt.state.index]?.key) return;
       const mine = wire.personal.output?.clientId === client.current;
       if (mine && resuming) return;
-      if (mine && pausedHere.current && wire.playing) return;
+      if (mine && pausedHere.current && wire.playing) { if (current.online) current.command({ action: 'pause' }); return; }
       const becameOwner = mine && !owned.current;
       owned.current = mine;
       setOutputElsewhere(!!wire.playing && !mine);
@@ -324,10 +324,22 @@ export function usePersonalQueue(target: Target) {
   }
 
   function command(intent: PlaybackIntent) {
-    if (intent.action === 'pause') pausedHere.current = true;
+    if (intent.action === 'pause') { pausedHere.current = true; playRequest.current++; pendingPlay.current = undefined; setWaiting(false); }
     else if (intent.action === 'play') pausedHere.current = false;
     if (intent.action === 'play' && held.current) { held.current = false; loaded.current = ''; }
     const current = session.current;
+    if (intent.action === 'play' && current?.synchronized && !current.online) {
+      const request = ++playRequest.current;
+      setWaiting(true);
+      void current.whenConnected().then(async connected => {
+        if (request !== playRequest.current || current !== session.current) return;
+        const accepted = connected && await current.dispatch({ action: 'play' });
+        if (request !== playRequest.current || current !== session.current) return;
+        setWaiting(false);
+        if (!accepted) runtime.current.error('Could not resume playback. Please try again.');
+      });
+      return true;
+    }
     const handled = current?.command(intent) ?? false;
     if (handled && intent.action === 'play' && owned.current && !runtime.current.ready) { loaded.current = ''; current?.refresh(); }
     return handled;

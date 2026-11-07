@@ -139,6 +139,7 @@ export class PersonalQueue {
     return true;
   }
 
+  get online() { return this.connected; }
   get synchronized() { return !!this.options.connect; }
   whenConnected(): Promise<boolean> {
     if (!this.options.connect || this.connected) return Promise.resolve(true);
