@@ -45,12 +45,9 @@ async function preview(route) {
           assert.ok(Math.abs(box.width - box.height) < 1, 'Covers remain square');
         }
         const period = page.getByRole('button', { name: 'Top tracks period: past month', exact: true });
-        await period.click();
-        await page.keyboard.press('Escape');
-        await page.getByRole('group', { name: 'Top tracks period', exact: true }).waitFor({ state: 'hidden' });
-        await period.click();
         const request = page.waitForResponse(response => new URL(response.url()).pathname === '/v1/charts/tracks' && new URL(response.url()).searchParams.get('period') === 'week');
-        await page.getByRole('button', { name: 'past week', exact: true }).click();
+        await period.click();
+        assert.equal(await page.getByRole('group', { name: 'Top tracks period', exact: true }).count(), 0, 'Period cycles without opening a menu');
         assert.equal((await request).status(), 200);
         await page.getByRole('button', { name: 'Top tracks period: past week', exact: true }).waitFor();
         await covers.first().waitFor();
