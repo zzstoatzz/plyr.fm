@@ -20,6 +20,7 @@ export function switchContext<T extends QueueTrack>(state: QueueState<T>, entrie
 }
 
 export function enqueue<T>(state: QueueState<T>, entry: QueueEntry<T>): QueueState<T> {
+  if (state.entries.some(previous => previous.key === entry.key)) return state;
   const at = explicitEnd(state);
   return { ...state, entries: [...state.entries.slice(0, at), entry, ...state.entries.slice(at)],
     index: state.index < 0 ? 0 : state.index, ...(state.tail ? { tail: { ...state.tail, from: at + 1 } } : {}) };

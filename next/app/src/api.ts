@@ -111,14 +111,14 @@ export class ApiError extends Error {
 	}
 }
 
-async function request<T>(url: string, timeout: number, signal?: AbortSignal): Promise<T> {
+async function request<T>(url: string, timeout: number, signal?: AbortSignal, init?: RequestInit): Promise<T> {
 	const controller = new AbortController();
 	const abort = () => controller.abort();
 	if (signal?.aborted) controller.abort();
 	signal?.addEventListener('abort', abort, { once: true });
 	const timer = setTimeout(() => controller.abort(), timeout);
 	try {
-		const response = await fetch(url, { signal: controller.signal });
+		const response = await fetch(url, { ...init, signal: controller.signal });
 		if (!response.ok) {
 			let message = response.statusText;
 			try { message = (await response.json())?.error?.message ?? message; } catch {}
@@ -156,6 +156,8 @@ interface TrackLike {
 }
 
 export const api = {
+  resolveTracks: (ids: string[], signal?: AbortSignal) => request<{ object: 'list'; data: Track[]; missing: string[] }>(API_URL + '/v1/tracks/resolve', 15_000, signal,
+    { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ids }) }),
   stats: () => get<{ object: 'platform_stats'; tracks: number; artists: number; duration_seconds: number; plays: number; updated_at_ms: number }>('/v1/stats'),
 	recordPlay: async (play: QualifiedPlay): Promise<PlayReceipt> => {
 		const url = new URL(`${API_URL}/v1/tracks/${encodeURIComponent(play.trackId)}/plays`);
