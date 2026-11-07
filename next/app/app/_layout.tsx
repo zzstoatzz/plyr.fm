@@ -81,10 +81,9 @@ function Shell() {
       <Pressable accessibilityRole="link" accessibilityLabel={label} aria-current={active ? 'page' : undefined} accessibilityState={{ selected: active }}
         style={{ minHeight: 48, flex: wide ? undefined : 1, paddingHorizontal: wide ? 12 : 8, borderRadius: 12, gap: wide ? 12 : 3,
           flexDirection: wide ? 'row' : 'column', alignItems: 'center', justifyContent: wide ? 'flex-start' : 'center',
-          borderLeftWidth: wide ? 2 : 0, borderLeftColor: active ? theme.accent : 'transparent',
           backgroundColor: active ? theme.surface : 'transparent' }}>
-        <Icon size={21} color={active ? theme.accent : theme.muted} strokeWidth={active ? 2.5 : 1.8} />
-        <Text style={{ color: active ? theme.accent : theme.muted, fontSize: (wide ? 15 : 11) * theme.scale, fontWeight: active ? '700' : '500' }}>{label}</Text>
+        <Icon size={21} color={active ? theme.text : theme.muted} strokeWidth={active ? 2.5 : 1.8} />
+        <Text style={{ color: active ? theme.text : theme.muted, fontSize: (wide ? 15 : 11) * theme.scale, fontWeight: active ? '700' : '500' }}>{label}</Text>
       </Pressable>
     </Link>)}
     {wide && <View style={{ flex: 1, minHeight: 24 }} />}

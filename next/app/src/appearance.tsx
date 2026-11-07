@@ -42,10 +42,10 @@ export function AppearanceProvider({ preferences, children }: { preferences: Per
   useEffect(() => {
     if (Platform.OS !== 'web') return;
     const style = document.createElement('style');
-    style.textContent = `:focus-visible { outline: 2px solid ${accent}; outline-offset: 2px; }`;
+    style.textContent = `:focus-visible { outline: 2px solid ${accent}; outline-offset: 2px; } * { scrollbar-width: thin; scrollbar-color: ${palette.border} transparent; }`;
     document.head.append(style);
     return () => style.remove();
-  }, [accent]);
+  }, [accent, palette.border]);
   const fontFamily = preferences.font === 'comic-sans' ? 'PlyrComic' : preferences.font === 'mono' ? Platform.select({ ios: 'Menlo', default: 'monospace' })
     : preferences.font === 'serif' ? Platform.select({ ios: 'Georgia', default: 'serif' }) : undefined;
   return <Appearance.Provider value={{
