@@ -41,12 +41,15 @@ const dist = path.resolve(__dirname, '../dist');
       await page.waitForTimeout(450);
       assert.ok(await position() <= gentle + 6, 'gentle vertical input stays precise');
       const start = await position();
+      let firstDuring;
       const burst = async (horizontal) => {
         for (let i = 0; i < 8; i++) { await page.mouse.wheel(horizontal ? 120 : 0, horizontal ? 0 : 120); await page.waitForTimeout(16); }
+        if (firstDuring === undefined) firstDuring = await position();
         await page.waitForTimeout(650);
       };
       await burst(true);
       const fast = await position() - start;
+      assert.ok(firstDuring - start >= 2000, 'fast motion responds during input rather than restarting easing');
       assert.ok(fast >= 4000, `horizontal burst travels thousands of pixels: ${fast}`);
       await strip.evaluate(node => node.addEventListener('wheel', () => { node.dataset.reverseStart = String(node.scrollLeft); }, { once: true, capture: true }));
       await page.mouse.wheel(-6, 0);
@@ -67,6 +70,7 @@ const dist = path.resolve(__dirname, '../dist');
       let bursts = 0;
       while (bursts < 6 && !await finalVisible()) { await burst(bursts % 2 === 0); bursts++; }
       assert.ok(await finalVisible(), 'rapid gestures reach the final tag across page boundaries');
+      const traversedMs = Date.now() - started;
       assert.deepEqual(reads, [0, 50, 100, 150, 200, 250, 300]);
       await page.emulateMedia({ reducedMotion: 'reduce' });
       await strip.evaluate(node => node.addEventListener('wheel', () => { node.dataset.reducedStart = String(node.scrollLeft); }, { once: true, capture: true }));
@@ -80,8 +84,20 @@ const dist = path.resolve(__dirname, '../dist');
       await page.mouse.wheel(0, 80);
       await page.waitForTimeout(200);
       assert.ok(await feed.evaluate(node => node.scrollTop) > vertical, 'terminal edge releases vertical scrolling to the feed');
+      await page.emulateMedia({ reducedMotion: 'no-preference' });
+      await strip.hover();
+      await strip.evaluate(node => node.dispatchEvent(new Event('pointerdown')));
+      const beforeTail = await position();
+      for (const delta of [-120, -120, -120, -120, -120, -120, -120, -120, -50, -30, -12, -8, -4, -2, -1]) {
+        await page.mouse.wheel(delta, 0);
+        await page.waitForTimeout(16);
+      }
+      const released = await position();
+      await page.waitForTimeout(750);
+      const coasted = await position();
+      assert.ok(beforeTail - coasted >= 4000 && coasted <= released + 1, `tapered release preserves fast travel: ${beforeTail} -> ${released} -> ${coasted}`);
       assert.deepEqual(errors, []);
-      console.log(`${width}: gentle ${gentle}px; first rapid burst ${Math.round(fast)}px; final tag in ${bursts + 1} bursts, ${Date.now() - started}ms after first burst; 7 pages, no errors`);
+      console.log(`${width}: gentle ${gentle}px; first rapid burst ${Math.round(fast)}px; final tag in ${bursts + 1} bursts, ${traversedMs}ms after first burst; 7 pages, no errors`);
       await page.screenshot({ path: `/tmp/tag-dynamics-${width}.png` });
       await context.close();
     }

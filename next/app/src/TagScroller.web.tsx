@@ -13,7 +13,30 @@ export function TagScroller({ children, hasMore, onNearEnd }: { children: ReactN
     let lastWheel = 0;
     let direction = 0;
     let energy = 0;
-    const motion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth';
+    let frame: number | undefined;
+    let lastFrame = 0;
+    const stop = () => {
+      if (frame !== undefined) cancelAnimationFrame(frame);
+      frame = undefined;
+      lastFrame = 0;
+    };
+    const animate = (now: number) => {
+      frame = undefined;
+      const elapsed = lastFrame ? Math.min(64, now - lastFrame) : 16;
+      lastFrame = now;
+      const goal = Math.max(0, Math.min(target.current, node.scrollWidth - node.clientWidth));
+      const remaining = goal - node.scrollLeft;
+      const step = Math.sign(remaining) * Math.max(1, Math.abs(remaining) * (1 - Math.exp(-elapsed / 70)));
+      node.scrollTo({ left: Math.abs(remaining) < 1 ? goal : node.scrollLeft + step, behavior: 'instant' });
+      if (Math.abs(remaining) >= 1) frame = requestAnimationFrame(animate);
+      else lastFrame = 0;
+    };
+    const travel = (precise = false) => {
+      if (precise || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        stop();
+        node.scrollTo({ left: target.current, behavior: 'instant' });
+      } else if (frame === undefined) frame = requestAnimationFrame(animate);
+    };
     const check = () => {
       const ahead = Math.max(node.clientWidth * 3, target.current - node.scrollLeft + node.clientWidth);
       if (canExtend.current && node.clientWidth > 0 && node.scrollWidth - node.clientWidth - node.scrollLeft < ahead) nearEnd.current();
@@ -28,23 +51,25 @@ export function TagScroller({ children, hasMore, onNearEnd }: { children: ReactN
       const elapsed = now - lastWheel;
       const sameDirection = direction === Math.sign(pixels) && elapsed < 250;
       const strength = Math.max(0, Math.abs(pixels) - 12);
-      energy = strength === 0 ? 0 : (sameDirection ? energy * Math.exp(-elapsed / 140) : 0) + Math.min(1, strength / 80);
+      const tail = sameDirection && elapsed < 100 && Math.abs(target.current - node.scrollLeft) > 1;
+      const precise = strength === 0 && !tail;
+      energy = precise ? 0 : (sameDirection ? energy * Math.exp(-elapsed / 140) : 0) + Math.min(1, strength / 80);
       const gain = strength === 0 ? 1 : Math.min(24, 1 + (strength / 50) ** 1.4 + energy * 2);
       const delta = pixels * gain;
       const max = node.scrollWidth - node.clientWidth;
       if (delta < 0 && node.scrollLeft <= 0 || delta > 0 && node.scrollLeft >= max - 1 && (!canExtend.current || target.current <= max)) return;
       event.preventDefault();
-      const base = strength > 0 && sameDirection && Math.sign(target.current - node.scrollLeft) === Math.sign(delta) ? target.current : node.scrollLeft;
+      const base = !precise && sameDirection && Math.sign(target.current - node.scrollLeft) === Math.sign(delta) ? target.current : node.scrollLeft;
       target.current = Math.max(0, Math.min(max + (canExtend.current ? node.clientWidth * 3 : 0), base + delta));
       direction = Math.sign(pixels);
       lastWheel = now;
       check();
-      node.scrollTo({ left: target.current, behavior: strength === 0 ? 'instant' : motion() });
+      travel(precise);
     };
-    const reset = () => { target.current = node.scrollLeft; lastWheel = 0; energy = 0; node.scrollTo({ left: target.current, behavior: 'instant' }); };
+    const reset = () => { stop(); target.current = node.scrollLeft; lastWheel = 0; energy = 0; };
     const resized = () => {
       check();
-      if (performance.now() - lastWheel < 600 && target.current > node.scrollLeft) node.scrollTo({ left: target.current, behavior: motion() });
+      if (performance.now() - lastWheel < 600 && target.current > node.scrollLeft) travel();
     };
     const observer = new ResizeObserver(resized);
     observer.observe(node);
@@ -55,6 +80,7 @@ export function TagScroller({ children, hasMore, onNearEnd }: { children: ReactN
     node.addEventListener('keydown', reset);
     check();
     return () => {
+      stop();
       observer.disconnect();
       node.removeEventListener('wheel', wheel);
       node.removeEventListener('scroll', check);
