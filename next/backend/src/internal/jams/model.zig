@@ -1,5 +1,6 @@
 const std = @import("std");
 const protocol = @import("protocol.zig");
+const personal = @import("personal.zig");
 const track_id = @import("../identity/track_id.zig");
 
 pub const max_tracks = protocol.max_tracks;
@@ -15,6 +16,7 @@ pub const boundedId = protocol.boundedId;
 pub const validateQueue = protocol.validateQueue;
 
 pub fn validateState(allocator: std.mem.Allocator, state: State, collection: []const u8) !bool {
+    if (state.personal != null) return personal.validate(allocator, state, collection);
     if (!boundedId(state.epoch) or state.revision > max_counter or state.occurrence > max_counter or
         state.updatedAtMs < 0 or state.updatedAtMs > max_counter or !try validateQueue(allocator, state.queue, collection)) return false;
     if (state.queue.len == 0) return state.index == 0 and !state.playing and state.positionMs == 0;
@@ -22,12 +24,21 @@ pub fn validateState(allocator: std.mem.Allocator, state: State, collection: []c
 }
 
 pub fn positionAt(state: State, now_ms: i64) u64 {
+    if (state.personal != null) return personal.position(state, now_ms);
     if (state.queue.len == 0) return 0;
     const elapsed: u64 = if (state.playing and now_ms > state.updatedAtMs) @intCast(now_ms - state.updatedAtMs) else 0;
     return @min(state.queue[state.index].durationMs, state.positionMs +| elapsed);
 }
 
 pub fn transition(allocator: std.mem.Allocator, state: State, command: Command, actor_did: []const u8, host_did: []const u8, now_ms: i64, collection: []const u8) !Result {
+    return transitionAsClient(allocator, state, command, actor_did, host_did, now_ms, collection, .{});
+}
+
+pub fn transitionAsClient(allocator: std.mem.Allocator, state: State, command: Command, actor_did: []const u8, host_did: []const u8, now_ms: i64, collection: []const u8, client: protocol.Client) !Result {
+    if (state.personal != null) {
+        if (!std.mem.eql(u8, actor_did, host_did)) return .{ .outcome = .forbidden, .state = state };
+        return personal.transition(allocator, state, command, client, now_ms, collection);
+    }
     if (!boundedId(command.id) or !boundedId(command.epoch) or command.expectedRevision > max_counter or
         command.occurrence > max_counter or now_ms < state.updatedAtMs) return .{ .outcome = .invalid, .state = state };
     if (!std.mem.eql(u8, state.epoch, command.epoch) or state.occurrence != command.occurrence)
@@ -39,6 +50,7 @@ pub fn transition(allocator: std.mem.Allocator, state: State, command: Command, 
         .seek => command.playing == null and command.positionMs != null and command.positionMs.? <= max_position_ms and command.queue == null and command.index == null,
         .replaceQueue => command.queue != null and command.index != null and command.positionMs == null,
         .selectTrack => command.index != null and command.queue == null and command.positionMs == null,
+        else => false,
     };
     if (!clean) return .{ .outcome = .invalid, .state = state };
     if (command.expectedRevision > state.revision) return .{ .outcome = .conflict, .state = state };
@@ -88,6 +100,7 @@ pub fn transition(allocator: std.mem.Allocator, state: State, command: Command, 
             }
             if (queue.len == 0) next.playing = false else next.positionMs = @min(next.positionMs, queue[next.index].durationMs);
         },
+        else => return .{ .outcome = .invalid, .state = state },
     }
     return .{ .outcome = .applied, .state = next };
 }

@@ -11,6 +11,27 @@ pub const Track = struct {
     uri: []const u8,
     cid: []const u8,
     durationMs: u64,
+    key: ?[]const u8 = null,
+};
+
+pub const Repeat = enum { off, all, one };
+pub const TailKind = enum { collection, generated };
+pub const Output = struct { clientId: []const u8, connectionId: []const u8 };
+pub const Personal = struct {
+    explicitEnd: u32,
+    tailKind: ?TailKind = null,
+    label: ?[]const u8 = null,
+    repeat: Repeat = .off,
+    keepPlaying: bool = false,
+    cursor: ?[]const u8 = null,
+    output: ?Output = null,
+    disconnected: bool = false,
+};
+pub const Client = struct {
+    id: []const u8 = "",
+    connection: []const u8 = "",
+    internal: bool = false,
+    resumePlaying: bool = false,
 };
 
 pub const State = struct {
@@ -22,9 +43,10 @@ pub const State = struct {
     playing: bool,
     positionMs: u64,
     updatedAtMs: i64,
+    personal: ?Personal = null,
 };
 
-pub const Action = enum { play, pause, seek, replaceQueue, selectTrack };
+pub const Action = enum { play, pause, seek, replaceQueue, selectTrack, enqueue, removeEntry, moveEntry, playContext, clearPicks, shufflePicks, setRepeat, setContinuation, appendContinuation, advance, progress, connected, disconnected };
 pub const Command = struct {
     id: []const u8,
     epoch: []const u8,
@@ -35,6 +57,14 @@ pub const Command = struct {
     positionMs: ?u64 = null,
     queue: ?[]const Track = null,
     index: ?u32 = null,
+    entry: ?Track = null,
+    entryKey: ?[]const u8 = null,
+    beforeKey: ?[]const u8 = null,
+    label: ?[]const u8 = null,
+    repeat: ?Repeat = null,
+    keepPlaying: ?bool = null,
+    cursor: ?[]const u8 = null,
+    expectedOutput: ?[]const u8 = null,
 };
 
 pub const Outcome = enum { applied, noop, duplicate, conflict, forbidden, invalid };
@@ -47,10 +77,14 @@ pub fn boundedId(value: []const u8) bool {
 }
 
 pub fn validateQueue(allocator: std.mem.Allocator, queue: []const Track, collection: []const u8) !bool {
+    return validateReferences(allocator, queue, collection, false);
+}
+
+pub fn validateReferences(allocator: std.mem.Allocator, queue: []const Track, collection: []const u8, allow_unknown_duration: bool) !bool {
     if (queue.len > max_tracks) return false;
     for (queue) |track| {
         if (track.id.len > 2048 or track.uri.len > 1024 or track.cid.len > 128 or
-            track.durationMs == 0 or track.durationMs > max_position_ms) return false;
+            (!allow_unknown_duration and track.durationMs == 0) or track.durationMs > max_position_ms) return false;
         var uri_buffer: [1024]u8 = undefined;
         const uri = track_id.decode(&uri_buffer, track.id) catch return false;
         if (!std.mem.eql(u8, uri, track.uri)) return false;
@@ -65,4 +99,3 @@ pub fn validateQueue(allocator: std.mem.Allocator, queue: []const Track, collect
     }
     return true;
 }
-

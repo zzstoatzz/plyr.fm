@@ -1,6 +1,8 @@
 const std = @import("std");
 const redis = @import("redis");
 const model = @import("model.zig");
+const protocol = @import("protocol.zig");
+const personal = @import("personal.zig");
 const ConnectionConfig = @import("../redis/connection_config.zig").ConnectionConfig;
 
 pub const global_stream = "plyr:next:jams:events";
@@ -113,23 +115,26 @@ pub const Store = struct {
         return self.snapshot(&arena, reply);
     }
     pub fn apply(self: *Store, allocator: std.mem.Allocator, room: []const u8, actor_did: []const u8, host_did: []const u8, command: model.Command) !Applied {
+        return self.applyAsClient(allocator, room, actor_did, host_did, command, .{});
+    }
+    pub fn applyAsClient(self: *Store, allocator: std.mem.Allocator, room: []const u8, actor_did: []const u8, host_did: []const u8, command: model.Command, client: protocol.Client) !Applied {
         if (!model.boundedId(command.id) or room.len == 0 or room.len > 2048 or actor_did.len > 512 or host_did.len > 512) return error.InvalidCommand;
         var arena = std.heap.ArenaAllocator.init(allocator);
         errdefer arena.deinit();
         const a = arena.allocator();
         const keys = try roomKeys(a, room);
-        const command_json = try std.json.Stringify.valueAlloc(a, command, .{});
+        const command_json = try commandJson(a, command);
         const fingerprint = try digest(a, command_json);
         const identity = try std.fmt.allocPrint(a, "{s}\x00{s}", .{ actor_did, command.id });
         const dedup = try digest(a, identity);
         for (0..8) |_| {
             var current = try self.read(allocator, room) orelse return error.RoomNotFound;
             defer current.deinit();
-            const decision = try model.transition(a, current.state, command, actor_did, host_did, @max(current.serverTimeMs, current.state.updatedAtMs), self.collection);
+            const decision = try model.transitionAsClient(a, current.state, command, actor_did, host_did, @max(current.serverTimeMs, current.state.updatedAtMs), self.collection, client);
             const candidate = try std.json.Stringify.valueAlloc(a, decision.state, .{});
             const revision = try std.fmt.allocPrint(a, "{d}", .{current.state.revision});
             const occurrence = try std.fmt.allocPrint(a, "{d}", .{command.occurrence});
-            const reply = try self.send(a, &.{ "EVAL", apply_script, "5", keys[0], keys[1], keys[2], keys[3], self.event_stream, room, current.state.epoch, revision, dedup, fingerprint, @tagName(decision.outcome), candidate, @tagName(command.action), command.epoch, occurrence }, false);
+            const reply = try self.send(a, &.{ "EVAL", apply_script, "5", keys[0], keys[1], keys[2], keys[3], self.event_stream, room, current.state.epoch, revision, dedup, fingerprint, @tagName(decision.outcome), candidate, @tagName(command.action), command.epoch, occurrence, if (current.state.personal != null and personal.canRebase(command.action)) "rebase" else "strict" }, false);
             const fields = try array(reply);
             if (fields.len == 1) {
                 if (std.mem.eql(u8, try string(fields[0]), "missing")) return error.RoomNotFound;
@@ -297,6 +302,40 @@ fn digest(allocator: std.mem.Allocator, text: []const u8) ![]const u8 {
     std.crypto.hash.sha2.Sha256.hash(text, &hash, .{});
     return std.fmt.allocPrint(allocator, "{x}", .{hash});
 }
+const LegacyTrack = struct { id: []const u8, uri: []const u8, cid: []const u8, durationMs: u64 };
+
+fn commandJson(a: std.mem.Allocator, command: model.Command) ![]const u8 {
+    const legacy_action = switch (command.action) {
+        .play, .pause, .seek, .replaceQueue, .selectTrack => true,
+        else => false,
+    };
+    var legacy = legacy_action and command.entry == null and command.entryKey == null and command.beforeKey == null and
+        command.label == null and command.repeat == null and command.keepPlaying == null and command.cursor == null and command.expectedOutput == null;
+    if (command.queue) |queue| for (queue) |entry| {
+        if (entry.key != null) {
+            legacy = false;
+            break;
+        }
+    };
+    if (!legacy) return std.json.Stringify.valueAlloc(a, command, .{});
+    const queue: ?[]LegacyTrack = if (command.queue) |entries| blk: {
+        const converted = try a.alloc(LegacyTrack, entries.len);
+        for (entries, converted) |entry, *out| out.* = .{ .id = entry.id, .uri = entry.uri, .cid = entry.cid, .durationMs = entry.durationMs };
+        break :blk converted;
+    } else null;
+    return std.json.Stringify.valueAlloc(a, .{ .id = command.id, .epoch = command.epoch, .expectedRevision = command.expectedRevision, .occurrence = command.occurrence, .action = command.action, .playing = command.playing, .positionMs = command.positionMs, .queue = queue, .index = command.index }, .{});
+}
+
+test "legacy command fingerprints survive rolling coordinator upgrades" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const command: model.Command = .{ .id = "legacy", .epoch = "epoch", .expectedRevision = 0, .occurrence = 1, .action = .pause };
+    try std.testing.expectEqualStrings(
+        "{\"id\":\"legacy\",\"epoch\":\"epoch\",\"expectedRevision\":0,\"occurrence\":1,\"action\":\"pause\",\"playing\":null,\"positionMs\":null,\"queue\":null,\"index\":null}",
+        try commandJson(arena.allocator(), command),
+    );
+}
+
 fn roomKeys(allocator: std.mem.Allocator, room: []const u8) ![4][]const u8 {
     if (room.len == 0 or room.len > 2048) return error.InvalidRoom;
     const hash = try digest(allocator, room);
@@ -334,20 +373,21 @@ const lua_common =
     \\end
     \\local function encode(s)
     \\ local q={}; for i,t in ipairs(s.queue) do q[i]=cjson.encode(t) end
-    \\ return '{"epoch":'..cjson.encode(s.epoch)..',"revision":'..string.format('%.0f',s.revision)..',"queue":['..table.concat(q,',')..'],"index":'..s.index..',"occurrence":'..string.format('%.0f',s.occurrence)..',"playing":'..tostring(s.playing)..',"positionMs":'..string.format('%.0f',s.positionMs)..',"updatedAtMs":'..string.format('%.0f',s.updatedAtMs)..'}'
+    \\ return '{"epoch":'..cjson.encode(s.epoch)..',"revision":'..string.format('%.0f',s.revision)..',"queue":['..table.concat(q,',')..'],"index":'..s.index..',"occurrence":'..string.format('%.0f',s.occurrence)..',"playing":'..tostring(s.playing)..',"positionMs":'..string.format('%.0f',s.positionMs)..',"updatedAtMs":'..string.format('%.0f',s.updatedAtMs)..(type(s.personal)=='table' and ',"personal":'..cjson.encode(s.personal) or '')..'}'
     \\end
     \\
 ;
 const read_script = lua_common ++
     \\local raw=redis.call('GET',KEYS[1]); if not raw then return false end
-    \\for _,key in ipairs(KEYS) do redis.call('EXPIRE',key,86400) end
-    \\local s=cjson.decode(raw); return {raw,tostring(math.max(nowms(),s.updatedAtMs)),lastid(KEYS[4])}
+    \\local s=cjson.decode(raw)
+    \\for i,key in ipairs(KEYS) do if i==1 and type(s.personal)=='table' then redis.call('PERSIST',key) else redis.call('EXPIRE',key,86400) end end
+    \\return {raw,tostring(math.max(nowms(),s.updatedAtMs)),lastid(KEYS[4])}
 ;
 const create_script = lua_common ++
     \\if not typesok() then return redis.error_reply('invalid room keys') end
     \\local raw=redis.call('GET',KEYS[1]); if raw then local s=cjson.decode(raw); return {raw,tostring(math.max(nowms(),s.updatedAtMs)),lastid(KEYS[4])} end
     \\local s=cjson.decode(ARGV[2]); s.updatedAtMs=nowms(); raw=encode(s)
-    \\redis.call('DEL',KEYS[2],KEYS[3],KEYS[4]); redis.call('SET',KEYS[1],raw,'EX',86400)
+    \\redis.call('DEL',KEYS[2],KEYS[3],KEYS[4]); redis.call('SET',KEYS[1],raw,'EX',86400); if type(s.personal)=='table' then redis.call('PERSIST',KEYS[1]) end
     \\local id=redis.call('XADD',KEYS[4],'MAXLEN',8,'*','state',raw,'time',tostring(s.updatedAtMs))
     \\redis.call('EXPIRE',KEYS[4],86400)
     \\redis.call('XADD',KEYS[5],'MAXLEN',1024,'*','room',ARGV[1],'epoch',s.epoch,'revision',string.format('%.0f',s.revision),'time',tostring(s.updatedAtMs))
@@ -358,18 +398,18 @@ const apply_script = lua_common ++
     \\local raw=redis.call('GET',KEYS[1]); if not raw then return {'missing'} end
     \\local s=cjson.decode(raw); local now=math.max(nowms(),s.updatedAtMs)
     \\local function result(outcome,rev) return {outcome,raw,tostring(now),lastid(KEYS[4]),rev,'ok'} end
-    \\if s.epoch~=ARGV[9] or s.occurrence~=tonumber(ARGV[10]) then return result('conflict',string.format('%.0f',s.revision)) end
+    \\if s.epoch~=ARGV[9] or (ARGV[11]~='rebase' and s.occurrence~=tonumber(ARGV[10])) then return result('conflict',string.format('%.0f',s.revision)) end
     \\local cached=redis.call('HGET',KEYS[2],ARGV[4])
     \\if cached then local fingerprint,outcome,rev=string.match(cached,'([^|]+)|([^|]+)|([^|]+)'); if fingerprint~=ARGV[5] then return result('invalid',string.format('%.0f',s.revision)) end; if outcome=='applied' or outcome=='noop' then return result('duplicate',rev) end; return result(outcome,rev) end
     \\if s.epoch~=ARGV[2] or s.revision~=tonumber(ARGV[3]) then return {'retry'} end
     \\local outcome=ARGV[6]
     \\if outcome=='applied' then
-    \\ local n=cjson.decode(ARGV[7]); if ARGV[8]~='seek' and n.occurrence==s.occurrence then
+    \\ local n=cjson.decode(ARGV[7]); if ARGV[8]~='seek' and ARGV[8]~='progress' and ARGV[8]~='advance' and n.occurrence==s.occurrence then
     \\  local elapsed=0; if s.playing then elapsed=math.max(0,now-s.updatedAtMs) end
-    \\  local duration=0; if #n.queue>0 then duration=n.queue[n.index+1].durationMs end
+    \\  local duration=0; if #n.queue>0 then duration=n.queue[n.index+1].durationMs; if duration==0 and type(n.personal)=='table' then duration=86400000 end end
     \\  n.positionMs=math.min(duration,s.positionMs+elapsed)
     \\ end
-    \\ n.updatedAtMs=now; raw=encode(n); s=n; redis.call('SET',KEYS[1],raw,'EX',86400)
+    \\ n.updatedAtMs=now; raw=encode(n); s=n; redis.call('SET',KEYS[1],raw,'EX',86400); if type(s.personal)=='table' then redis.call('PERSIST',KEYS[1]) end
     \\ redis.call('XADD',KEYS[4],'MAXLEN',8,'*','state',raw,'time',tostring(now)); redis.call('EXPIRE',KEYS[4],86400)
     \\ redis.call('XADD',KEYS[5],'MAXLEN',1024,'*','room',ARGV[1],'epoch',s.epoch,'revision',string.format('%.0f',s.revision),'time',tostring(now))
     \\end
@@ -398,12 +438,13 @@ const Race = struct {
     ready: *std.atomic.Value(u8),
     go: *std.atomic.Value(bool),
     actor: []const u8 = fixture_host,
+    client: protocol.Client = .{},
     outcome: ?model.Outcome = null,
     failure: ?anyerror = null,
     fn run(self: *Race) void {
         _ = self.ready.fetchAdd(1, .release);
         while (!self.go.load(.acquire)) std.atomic.spinLoopHint();
-        var result = self.store.apply(std.heap.page_allocator, self.room, self.actor, fixture_host, self.command) catch |err| {
+        var result = self.store.applyAsClient(std.heap.page_allocator, self.room, self.actor, fixture_host, self.command, self.client) catch |err| {
             self.failure = err;
             return;
         };
@@ -778,4 +819,67 @@ test "measure local Redis cross-store command to event and fresh-state latency" 
         const relative = percentiles(&after_ack);
         std.debug.print("Jam local Redis {s} tracks={d} n={d}: request->event p50={d}us p95={d}us; request->fresh-state p50={d}us p95={d}us; apply-ack p50={d}us p95={d}us; ack->event p50={d}us p95={d}us\n", .{ @tagName(@import("builtin").mode), track_count, latency_samples, event.p50, event.p95, snapshot.p50, snapshot.p95, ack.p50, ack.p95, relative.p50, relative.p95 });
     }
+}
+
+test "personal queues persist idle state and merge concurrent edits across Redis clients" {
+    const url_z = std.c.getenv("PLYR_ZIG_TEST_REDIS_URL") orelse return error.SkipZigTest;
+    const allocator = std.testing.allocator;
+    var arena = std.heap.ArenaAllocator.init(allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(allocator, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var left = try Store.init(allocator, io, std.mem.span(url_z), fixture_collection);
+    defer left.deinit();
+    var right = try Store.init(allocator, io, std.mem.span(url_z), fixture_collection);
+    defer right.deinit();
+    var random: [16]u8 = undefined;
+    io.random(&random);
+    const room = try std.fmt.allocPrint(a, "integration:personal:{x}", .{random});
+    const keys = try roomKeys(a, room);
+    defer _ = left.send(a, &.{ "DEL", keys[0], keys[1], keys[2], keys[3] }, false) catch {};
+    var current = try fixtureTrack(a, "current");
+    current.key = "current";
+    var initial = try left.createAt(allocator, room, .{ .epoch = "personal", .revision = 0, .queue = &.{current}, .index = 0, .occurrence = 1, .playing = false, .positionMs = 5432, .updatedAtMs = 0, .personal = .{ .explicitEnd = 1 } });
+    defer initial.deinit();
+    try std.testing.expectEqual(@as(i64, -1), (try left.send(a, &.{ "TTL", keys[0] }, false)).integer);
+    var first = try fixtureTrack(a, "same");
+    first.key = "pick-a";
+    var second = first;
+    second.key = "pick-b";
+    var ready: std.atomic.Value(u8) = .init(0);
+    var go: std.atomic.Value(bool) = .init(false);
+    var one: Race = .{ .store = &left, .room = room, .ready = &ready, .go = &go, .client = .{ .id = "a", .connection = "a1" }, .command = .{ .id = "add-a", .epoch = "personal", .expectedRevision = 0, .occurrence = 1, .action = .enqueue, .entry = first } };
+    var two: Race = .{ .store = &right, .room = room, .ready = &ready, .go = &go, .client = .{ .id = "b", .connection = "b1" }, .command = .{ .id = "add-b", .epoch = "personal", .expectedRevision = 0, .occurrence = 1, .action = .enqueue, .entry = second } };
+    const one_thread = try std.Thread.spawn(.{}, Race.run, .{&one});
+    const two_thread = try std.Thread.spawn(.{}, Race.run, .{&two});
+    while (ready.load(.acquire) != 2) std.atomic.spinLoopHint();
+    go.store(true, .release);
+    one_thread.join();
+    two_thread.join();
+    try std.testing.expectEqual(@as(?anyerror, null), one.failure);
+    try std.testing.expectEqual(@as(?anyerror, null), two.failure);
+    try std.testing.expectEqual(model.Outcome.applied, one.outcome.?);
+    try std.testing.expectEqual(model.Outcome.applied, two.outcome.?);
+    var snapshot = (try right.read(allocator, room)).?;
+    defer snapshot.deinit();
+    try std.testing.expectEqual(@as(usize, 3), snapshot.state.queue.len);
+    try std.testing.expectEqual(@as(u64, 2), snapshot.state.revision);
+    try std.testing.expectEqual(@as(u32, 3), snapshot.state.personal.?.explicitEnd);
+    try std.testing.expectEqual(@as(u64, 5432), snapshot.state.positionMs);
+    try std.testing.expect(!std.mem.eql(u8, snapshot.state.queue[1].key.?, snapshot.state.queue[2].key.?));
+    var duplicate = try right.applyAsClient(allocator, room, fixture_host, fixture_host, one.command, .{ .id = "a", .connection = "reconnected" });
+    defer duplicate.deinit();
+    try std.testing.expectEqual(model.Outcome.duplicate, duplicate.outcome);
+    var forbidden = try right.applyAsClient(allocator, room, fixture_guest, fixture_host, .{ .id = "foreign", .epoch = "personal", .expectedRevision = 2, .occurrence = 1, .action = .enqueue, .entry = first }, two.client);
+    defer forbidden.deinit();
+    try std.testing.expectEqual(model.Outcome.forbidden, forbidden.outcome);
+    _ = try left.send(a, &.{ "DEL", keys[1], keys[2], keys[3] }, false);
+    _ = try left.send(a, &.{ "EXPIRE", keys[0], "10" }, false);
+    var recovered = (try right.read(allocator, room)).?;
+    defer recovered.deinit();
+    try std.testing.expectEqual(@as(usize, 3), recovered.state.queue.len);
+    try std.testing.expectEqual(@as(i64, -1), (try left.send(a, &.{ "TTL", keys[0] }, false)).integer);
+    try std.testing.expectEqualStrings("0-0", recovered.lastEventId);
 }
