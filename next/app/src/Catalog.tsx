@@ -75,7 +75,7 @@ function Collection({ id, album, onPlay }: { id: string; album: boolean; onPlay:
     <Detail>{tracks.length} of {list.metrics.member_count} tracks available</Detail>
     </DetailHeader>
     <CollectionActions list={list} refresh={result.retry} onPlay={onPlay} actions={<>
-      {tracks[0] && <Action primary label={album ? 'Play album' : 'Play playlist'} onPress={() => onPlay(tracks[0], tracks)} />}
+      {tracks[0] && <Action primary label={album ? 'Play album' : 'Play playlist'} onPress={() => onPlay(tracks[0], tracks, list.metadata.name ?? (album ? 'album' : 'playlist'))} />}
       <ShareLink path={`/${album ? 'album' : 'playlist'}/${encodeURIComponent(id)}`} />
     </>} />
   </>;

@@ -1,0 +1,293 @@
+const fs = require('node:fs/promises');
+const path = require('node:path');
+const playwright = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
+const firefox = process.env.QUEUE_BROWSER === 'firefox';
+const browserType = firefox ? playwright.firefox : playwright.chromium;
+const root = process.env.QUEUE_ASSET_DIR;
+const localCoordinator = process.env.QUEUE_LOCAL_COORDINATOR;
+const artifacts = process.env.QUEUE_ARTIFACT_DIR || '/tmp/plyr-personal-queue-browser';
+async function localAssets(context) {
+  if (!root) return;
+  await context.route('https://next.plyr.fm/**',async route=>{
+    const url=new URL(route.request().url());
+    const name=decodeURIComponent(url.pathname);
+    if(name.includes('..')) return route.abort();
+    let file=path.join(root,name==='/'?'index.html':name);
+    let data;
+    try { data=await fs.readFile(file); } catch {if(name.endsWith('.js'))console.log('missing chunk',name);file=path.join(root,'index.html');data=await fs.readFile(file);}
+    const ext=path.extname(file);
+    await route.fulfill({status:200,body:data,contentType:({'.html':'text/html','.js':'application/javascript','.json':'application/json','.png':'image/png','.ttf':'font/ttf','.svg':'image/svg+xml','.woff2':'font/woff2'})[ext]||'application/octet-stream'});
+  });
+}
+
+const assert = require('node:assert/strict');
+(async()=>{
+ assert.ok(process.env.QUEUE_TEST_ACCOUNTS, 'set QUEUE_TEST_ACCOUNTS to disposable account JSON');
+ await fs.mkdir(artifacts, {recursive:true});
+ const accounts=JSON.parse(await fs.readFile(process.env.QUEUE_TEST_ACCOUNTS,'utf8'));
+ const account=accounts.host;
+ const launch = {headless:true,...(!firefox?{channel:'chrome'}:{}),...(process.env.QUEUE_TEST_EXECUTABLE?{executablePath:process.env.QUEUE_TEST_EXECUTABLE}:{}),args:localCoordinator&&!firefox?['--disable-features=LocalNetworkAccessChecks','--allow-running-insecure-content']:[]};
+ const browsers=await Promise.all([browserType.launch(launch),browserType.launch(launch)]);
+ const errors=[];
+ try {
+ async function signIn(browser, anonymous=false, identity=account, returnTo='/queue') {
+  const context=await browser.newContext({viewport:{width:1280,height:900}});await localAssets(context);
+  if(anonymous&&root)await context.route('https://next.plyr.fm/oauth-client-metadata.json',async route=>{await new Promise(resolve=>setTimeout(resolve,1000));await route.fallback();});
+  if (root) await context.route('https://pds.zat.dev/oauth/authorize**', async route => {
+    const response=await route.fetch({maxRedirects:0,headers:{...route.request().headers(),'accept-encoding':'identity'}});
+    const destination=response.headers().location;
+    if(destination&&new URL(destination,'https://pds.zat.dev').origin==='https://next.plyr.fm')
+      await route.fulfill({status:200,contentType:'text/html',body:'<script>location.replace('+JSON.stringify(destination)+')</script>'});
+    else await route.fulfill({response});
+  });
+  if (localCoordinator) await context.route('https://plyr-jams-next.fly.dev/v1/playback/join',async route=>{
+   const response=await fetch(localCoordinator+'/v1/playback/join',{method:'POST',headers:{'content-type':'application/json',origin:'https://next.plyr.fm'},body:route.request().postData()});
+   await route.fulfill({status:response.status,body:Buffer.from(await response.arrayBuffer()),headers:{'content-type':'application/json','access-control-allow-origin':'https://next.plyr.fm'}});
+   console.log('personal admission',response.status);
+  });
+  await context.addInitScript(localCoordinator=>{
+   const Audio=window.Audio;window.queueAudio=[];window.Audio=class extends Audio{constructor(...args){super(...args);window.queueAudio.push(this)}};
+   const Socket=window.WebSocket;window.queueFrames=[];window.queueSockets=[];
+   window.WebSocket=class extends Socket {constructor(url,protocols){const parsed=new URL(url);if(localCoordinator&&parsed.host==='plyr-jams-next.fly.dev'){const local=new URL(localCoordinator);parsed.protocol=local.protocol==='https:'?'wss:':'ws:';parsed.host=local.host;}super(parsed.toString(),protocols);window.queueSockets.push(this);this.addEventListener('message',e=>{try{const value=JSON.parse(e.data);if(value.state?.personal)window.queueFrames.push(value);}catch{}});}};
+  }, localCoordinator);
+  const page=await context.newPage();page.setDefaultTimeout(20000);
+
+  page.on('pageerror',e=>{errors.push(e.message);console.log('pageerror',e.message)});
+  page.on('console',e=>{if(e.text().startsWith('[playback]'))console.log(e.text())});
+  let anonymousPosition;
+  let anonymousKey;
+  if (anonymous) {
+    await page.goto('https://next.plyr.fm/track/'+found.id);
+    await page.getByRole('button',{name:'Play',exact:true}).first().click();
+    await page.waitForFunction(()=>window.queueAudio.some(a=>!a.paused&&a.currentTime>1));
+    await page.getByRole('button',{name:'Add to queue',exact:true}).click();
+    await page.getByRole('button',{name:'Add to queue',exact:true}).click();
+    await page.getByRole('button',{name:'Queue',exact:true}).click();
+    anonymousPosition=await page.evaluate(()=>window.queueAudio.find(a=>!a.paused).currentTime);
+    anonymousKey=await page.evaluate(()=>new Promise(resolve=>{const r=indexedDB.open('plyr-next-queue',1);r.onsuccess=()=>{const q=r.result.transaction('checkpoints').objectStore('checkpoints').get('anonymous');q.onsuccess=()=>{resolve(q.result.state.entries[q.result.state.index].key);r.result.close();};};}));
+    await page.getByRole('button',{name:'Start a Jam',exact:true}).click();
+  } else await page.goto('https://next.plyr.fm/login?'+new URLSearchParams({return_to:returnTo}));
+  await page.getByRole('combobox').fill(identity.handle);
+  await page.getByRole('combobox').press('Enter');
+  await page.waitForURL('https://pds.zat.dev/**');
+  try { await page.locator('input[name=password]').fill(identity.password); } catch(error) { await page.screenshot({path:path.join(artifacts,'provider-login-failure.png')}); console.log('provider login failure',new URL(page.url()).hostname);throw error; }
+  await page.getByRole('button',{name:/^authorize$/i}).click();
+  await page.waitForURL(url=>url.hostname==='next.plyr.fm'&&decodeURIComponent(url.pathname)===decodeURIComponent(returnTo.split('?')[0]));
+  await page.waitForFunction(()=>window.queueFrames.some(f=>f.type==='state'));
+  if (anonymous) {
+    await page.waitForFunction(key=>window.queueFrames.at(-1)?.state.queue[window.queueFrames.at(-1).state.index]?.key===key,anonymousKey);
+    await page.waitForFunction(()=>window.queueAudio.some(a=>a.src&&a.readyState>=2));
+    assert.equal(await page.evaluate(()=>window.queueAudio.some(a=>!a.paused)),false);
+    const position=await page.evaluate(()=>window.queueAudio.find(a=>a.src)?.currentTime);
+    assert.ok(Math.abs(position-anonymousPosition)<1.5);
+    assert.ok(await page.getByLabel(/Reorder /).count()>=2);
+    console.log('external sign-in preserves current occurrence, picks, return page and paused position');
+  }
+  return page;
+ }
+ const found=(await(await fetch('https://api.next.plyr.fm/v1/search?q=Sounds%20of%20the%20Drone%20Mix')).json()).data.find(t=>t.type==='track'&&t.title==='Sounds of the Drone Mix');
+ const a=await signIn(browsers[0]);const b=await signIn(browsers[1]);
+ await a.goto('https://next.plyr.fm/track/'+found.id);
+ await a.waitForFunction(()=>window.queueFrames.some(f=>f.type==='state'));
+ await a.getByRole('button',{name:'Play',exact:true}).first().click();
+ await a.waitForFunction(()=>window.queueAudio.some(a=>!a.paused&&a.currentTime>1));
+ await b.waitForFunction(()=>window.queueFrames.at(-1)?.state.playing);
+ assert.equal(await b.evaluate(()=>window.queueAudio.some(a=>!a.paused)),false);
+ console.log('one output plays, passive client stays silent');
+ await b.goto('https://next.plyr.fm/track/'+found.id);
+ await b.waitForFunction(()=>window.queueFrames.some(f=>f.type==='state'));
+ assert.equal(await b.evaluate(()=>window.queueAudio.some(a=>a.src)),false);
+ const baseline=await b.evaluate(()=>window.queueFrames.at(-1).state.queue.length);
+ const addingAt=performance.now();
+ await Promise.all([a.getByRole('button',{name:'Add to queue',exact:true}).click(),b.getByRole('button',{name:'Add to queue',exact:true}).click()]);
+ await b.waitForFunction(value=>window.queueFrames.at(-1)?.state.queue.length===value+2,baseline);
+ const state=await b.evaluate(()=>window.queueFrames.at(-1).state);
+ assert.equal(new Set(state.queue.map(e=>e.key)).size,state.queue.length);
+ console.log('duplicate track occurrences synchronized',state.queue.length,'in',Math.round(performance.now()-addingAt),'ms');
+ const passiveSlider=b.getByRole('slider',{name:'Playback position',exact:true});
+ const passivePosition=Number(await passiveSlider.getAttribute('aria-valuenow'));
+ await b.waitForTimeout(1200);
+ assert.ok(Number(await passiveSlider.getAttribute('aria-valuenow'))>passivePosition+0.5,'passive timeline must advance without local audio');
+ console.log('passive playhead follows the shared clock without fetching audio');
+ await b.getByRole('button',{name:'Play',exact:true}).first().click();
+ await b.waitForFunction(()=>window.queueAudio.some(a=>!a.paused&&a.currentTime>1));
+ await a.waitForFunction(()=>window.queueAudio.every(a=>a.paused));
+ console.log('explicit play hands off output');
+ await b.getByRole('button',{name:'Pause',exact:true}).first().click();
+ await b.waitForFunction(()=>window.queueAudio.every(a=>a.paused));
+ await b.reload();
+ await b.waitForFunction(()=>window.queueFrames.some(f=>f.type==='state'));
+ assert.equal(await b.evaluate(()=>window.queueAudio.some(a=>!a.paused)),false);
+ await b.getByRole('button',{name:'Queue',exact:true}).click();
+ await b.screenshot({path:path.join(artifacts,'signed-queue.png')});
+
+ console.log('refresh stays paused');
+ await b.getByRole('button',{name:'Play',exact:true}).first().click();
+ await b.waitForFunction(()=>window.queueAudio.some(a=>!a.paused&&a.currentTime>1));
+ const beforeReconnect=await b.evaluate(()=>window.queueAudio.find(a=>!a.paused).currentTime);
+ await b.evaluate(()=>window.queueSockets.at(-1).close());
+ await b.waitForFunction(()=>window.queueSockets.length>1&&window.queueSockets.at(-1).readyState===1);
+ await b.waitForTimeout(500);
+ const afterReconnect=await b.evaluate(()=>window.queueAudio.find(a=>!a.paused)?.currentTime);
+ assert.ok(afterReconnect>=beforeReconnect-0.1,'reconnect must preserve audible progress');
+ console.log('reconnect keeps audible position');
+ for (const action of ['Pause', 'Play']) {
+   let release;
+   const gate=new Promise(resolve=>{release=resolve});let admitted=false;
+   const admission='https://plyr-jams-next.fly.dev/v1/playback/join';
+   const hold=async route=>{admitted=true;await gate;await route.fallback();};
+   await b.route(admission,hold);
+   await b.evaluate(()=>window.queueSockets.at(-1).close());
+   await b.waitForFunction(()=>window.queueSockets.at(-1).readyState!==1);
+   for(let attempt=0;!admitted&&attempt<100;attempt++)await b.waitForTimeout(50);
+   assert.ok(admitted,'reconnect must reach held admission');
+   await b.getByRole('button',{name:action,exact:true}).first().click();
+   if(action==='Pause')assert.equal(await b.evaluate(()=>window.queueAudio.some(a=>!a.paused)),false);
+   release();await b.unroute(admission,hold);
+   await b.waitForFunction(playing=>window.queueFrames.at(-1).state.playing===playing,action==='Play');
+   await b.waitForFunction(playing=>window.queueAudio.some(a=>!a.paused)===playing,action==='Play');
+ }
+ console.log('Pause during delayed admission stays paused; Play waits and resumes after admission');
+ const count=await b.evaluate(()=>window.queueFrames.at(-1).state.queue.length);
+ await a.evaluate(()=>{window.queueSockets.at(-1).onmessage=null;});
+ await a.getByRole('button',{name:'Add to queue',exact:true}).click();
+ await b.waitForFunction(count=>window.queueFrames.at(-1).state.queue.length===count+1,count);
+ await a.reload();
+ await a.waitForFunction(()=>window.queueFrames.some(f=>f.type==='state'));
+ await a.waitForFunction(owner=>new Promise(resolve=>{const r=indexedDB.open('plyr-next-queue',1);r.onsuccess=()=>{const q=r.result.transaction('checkpoints').objectStore('checkpoints').get(owner+':mutations');q.onsuccess=()=>{resolve(q.result?.entries?.length===0);r.result.close();};};}),account.did);
+ assert.equal(await a.evaluate(()=>window.queueFrames.at(-1).state.queue.length),count+1);
+ assert.equal(await b.evaluate(()=>window.queueAudio.some(a=>!a.paused)),true);
+ console.log('lost acknowledgement survives reload without duplicating a pick or stealing output');
+ await a.getByRole('button',{name:'Queue',exact:true}).click();
+ const before=await b.evaluate(()=>window.queueFrames.at(-1).state);
+ const handles=a.getByLabel(/Reorder /);
+ const first=await handles.nth(0).boundingBox();const second=await handles.nth(1).boundingBox();
+ assert.ok(first&&second);
+ await a.mouse.move(first.x+first.width/2,first.y+first.height/2);await a.mouse.down();
+ await a.mouse.move(second.x+second.width/2,second.y+second.height/2+8,{steps:10});await a.mouse.up();
+ await b.waitForFunction(key=>window.queueFrames.at(-1).state.queue[window.queueFrames.at(-1).state.index+2]?.key===key,before.queue[before.index+1].key);
+ console.log('pointer drag reorders stable occurrences across devices');
+ await a.getByRole('link',{name:'Home',exact:true}).click();
+ assert.equal(await b.evaluate(()=>window.queueAudio.some(a=>!a.paused)),true);
+ await a.getByRole('button',{name:'Queue',exact:true}).click();
+ await a.getByRole('button',{name:'Play',exact:true}).first().click();
+ await a.waitForFunction(()=>window.queueAudio.some(a=>!a.paused));
+ await b.waitForFunction(()=>window.queueAudio.every(a=>a.paused));
+ const slider=a.getByRole('slider',{name:'Playback position',exact:true});
+ await slider.focus();await slider.press('Home');await slider.press('ArrowRight');
+ await a.waitForFunction(()=>window.queueAudio.some(a=>!a.paused&&a.currentTime<5));
+ const moving=await a.evaluate(()=>window.queueAudio.find(a=>!a.paused).currentTime);
+ await a.getByRole('link',{name:'Home',exact:true}).click();await a.waitForTimeout(400);
+ assert.ok(await a.evaluate(()=>window.queueAudio.find(a=>!a.paused)?.currentTime)>moving);
+ console.log('scrub and SPA navigation preserve playback');
+ await a.setViewportSize({width:390,height:844});
+ await a.getByRole('button',{name:'Open now playing',exact:true}).click();
+ await a.waitForURL(url=>url.pathname==='/now-playing');
+ await a.getByRole('heading',{name:'Now playing',exact:true}).waitFor();
+ await a.waitForTimeout(350);
+ await a.screenshot({path:path.join(artifacts,'phone-now-playing.png')});
+ await a.emulateMedia({colorScheme:'dark'});
+ await a.waitForTimeout(350);
+ await a.screenshot({path:path.join(artifacts,'phone-now-playing-dark.png')});
+ if(process.env.QUEUE_TEST_CORE_ONLY==='1'){assert.deepEqual(errors,[]);return;}
+ const c=await signIn(browsers[0],true);
+ let playbackAttempts=0;
+ const playbackRoute='https://api.next.plyr.fm/v1/tracks/*/playback';
+ await c.context().route(playbackRoute, async route=>{playbackAttempts++;if(playbackAttempts===1)await route.fulfill({status:503,json:{error:{message:'fixture unavailable'}}});else await route.continue();});
+ const failure=c.waitForResponse(response=>response.status()===503&&new URL(response.url()).pathname.endsWith('/playback'));
+ await c.getByRole('button',{name:/^Play Sounds of the Drone Mix by /}).first().click();
+ await failure;
+ await c.getByText('Couldn’t play this track',{exact:true}).waitFor();
+ await c.getByRole('button',{name:'Play',exact:true}).first().click();
+ await c.waitForFunction(()=>window.queueAudio.some(a=>!a.paused&&a.currentTime>0));
+ assert.equal(playbackAttempts,2);
+ await c.context().unroute(playbackRoute);
+ console.log('a real playback-resolution failure recovers through the player Play control');
+ await c.getByRole('button',{name:'Start a Jam',exact:true}).click();
+ await c.waitForURL(url=>url.pathname.startsWith('/jam/'));
+ const jamUrl=new URL(c.url());
+ await c.getByRole('button',{name:'Create Jam with current track',exact:true}).click();
+ await c.getByRole('button',{name:'Play Jam',exact:true}).waitFor();
+ await c.getByLabel('Guest DID', {exact:true}).fill(accounts.guest.did);
+ await c.getByRole('button',{name:'Invite guest',exact:true}).click();
+ await c.getByText(/Share https/).waitFor();
+ const guest=await signIn(browsers[1],false,accounts.guest,jamUrl.pathname+jamUrl.search);
+ await guest.getByRole('button',{name:'Join Jam',exact:true}).click();
+ await guest.getByRole('button',{name:'Play Jam',exact:true}).waitFor();
+ await c.getByRole('button',{name:'Play Jam',exact:true}).click();
+ await Promise.all([c,guest].map(page=>page.waitForFunction(()=>window.queueAudio.some(a=>!a.paused&&a.currentTime>1))));
+ await b.getByRole('button',{name:'Play',exact:true}).first().click();
+ await b.waitForFunction(()=>window.queueAudio.some(a=>!a.paused));
+ assert.equal(await c.evaluate(()=>window.queueAudio.some(a=>!a.paused)),true);
+ await c.getByRole('button',{name:'Leave Jam',exact:true}).click();
+ await c.getByRole('button',{name:'Join Jam',exact:true}).waitFor();
+ assert.equal(await b.evaluate(()=>window.queueAudio.some(a=>!a.paused)),true);
+ assert.equal(await guest.evaluate(()=>window.queueAudio.some(a=>!a.paused)),true);
+ console.log('Jam departure preserves the other personal output and the remaining Jam participant');
+ await c.getByRole('link',{name:'Radio',exact:true}).click();
+ await c.getByRole('button',{name:'Listen live',exact:true}).first().click();
+ await c.waitForFunction(()=>window.queueAudio.some(a=>!a.paused&&a.currentTime>0));
+ assert.equal(await b.evaluate(()=>window.queueAudio.some(a=>!a.paused)),true);
+ assert.equal(await guest.evaluate(()=>window.queueAudio.some(a=>!a.paused)),true);
+ await c.getByRole('button',{name:'Stop listening',exact:true}).first().click();
+ await c.waitForTimeout(300);
+ if(process.env.QUEUE_TEST_DEBUG)console.log('after radio stop',await c.getByRole('button').evaluateAll(nodes=>nodes.map(n=>n.getAttribute('aria-label')||n.textContent)));
+ await c.screenshot({path:path.join(artifacts,'after-radio-stop.png')});
+ await c.getByRole('button',{name:'Play',exact:true}).first().click();
+ await c.waitForFunction(()=>window.queueAudio.some(a=>!a.paused));
+ await b.waitForFunction(()=>window.queueAudio.every(a=>a.paused));
+ console.log('radio handoff pauses only local output and returns to the preserved personal queue');
+ await guest.getByRole('button',{name:'Leave Jam',exact:true}).click();
+ await c.getByRole('button',{name:'Queue',exact:true}).click();
+ const clear=c.getByRole('button',{name:'Clear upcoming',exact:true});
+ if(await clear.isEnabled()) {await clear.click();await c.getByRole('button',{name:'Clear upcoming',exact:true}).last().click();}
+ await c.getByRole('link',{name:'Settings',exact:true}).click();
+ if(!await c.getByRole('switch',{name:'keep playing',exact:true}).isChecked())await c.getByRole('switch',{name:'keep playing',exact:true}).click();
+ await c.waitForFunction(()=>window.queueFrames.at(-1).state.personal.keepPlaying&&window.queueFrames.at(-1).state.personal.tailKind==='generated');
+ await b.waitForFunction(()=>window.queueFrames.at(-1).state.personal.keepPlaying);
+ await c.waitForTimeout(1000);
+ assert.equal(await b.evaluate(()=>window.queueFrames.at(-1).state.personal.keepPlaying),true);
+ await c.getByRole('button',{name:'Queue',exact:true}).click();
+ await c.getByText('From latest tracks',{exact:true}).locator('visible=true').waitFor();
+ await c.screenshot({path:path.join(artifacts,'generated-tail.png')});
+ if(process.env.QUEUE_TEST_EXPECT_PROMOTION==='1') {
+   const boundary=await c.evaluate(()=>window.queueFrames.at(-1).state.personal.explicitEnd);
+   const handles=c.getByLabel(/Reorder /).locator('visible=true');const from=await handles.nth(1).boundingBox();const to=await handles.nth(0).boundingBox();assert.ok(from&&to);
+   await c.mouse.move(from.x+from.width/2,from.y+from.height/2);await c.mouse.down();await c.mouse.move(to.x+to.width/2,to.y+to.height/2-8,{steps:10});await c.mouse.up();
+   await c.waitForFunction(value=>window.queueFrames.at(-1).state.personal.explicitEnd===value+1,boundary);
+   console.log('dragging an automatic tail entry promotes a durable explicit pick');
+ }
+ await c.getByRole('link',{name:'Settings',exact:true}).click();
+ await c.getByRole('switch',{name:'keep playing',exact:true}).click();
+ await c.waitForFunction(()=>!window.queueFrames.at(-1).state.personal.keepPlaying&&window.queueFrames.at(-1).state.personal.tailKind===null);
+ console.log('bounded continuation synchronizes without passive clients reverting it; disabling removes only the generated tail');
+ await c.getByRole('button',{name:'Queue',exact:true}).click();
+ if(process.env.QUEUE_TEST_EXPECT_PROMOTION==='1'){await c.getByRole('button',{name:'Clear upcoming',exact:true}).click();await c.getByRole('button',{name:'Clear upcoming',exact:true}).last().click();await c.waitForFunction(()=>window.queueFrames.at(-1).state.queue.length===window.queueFrames.at(-1).state.index+1);}
+ await c.getByRole('button',{name:'Repeat: off',exact:true}).click();
+ await c.waitForFunction(()=>window.queueFrames.at(-1).state.personal.repeat==='all');
+ const occurrence=await c.evaluate(()=>window.queueFrames.at(-1).state.occurrence);
+ await c.getByRole('button',{name:'Next',exact:true}).click();
+ await c.waitForFunction(value=>window.queueFrames.at(-1).state.occurrence===value+1&&window.queueFrames.at(-1).state.index===0,occurrence);
+ await c.waitForFunction(()=>window.queueAudio.some(a=>!a.paused&&a.currentTime<2));
+ await c.getByRole('button',{name:'Repeat: all',exact:true}).click();
+ await c.waitForFunction(()=>window.queueFrames.at(-1).state.personal.repeat==='one'&&window.queueAudio.some(a=>!a.paused&&a.loop));
+ const one=await c.evaluate(()=>window.queueFrames.at(-1).state.occurrence);
+ await c.getByRole('slider',{name:'Playback position',exact:true}).press('End');
+ await c.waitForFunction(()=>window.queueAudio.some(a=>!a.paused&&a.currentTime<2));
+ assert.equal(await c.evaluate(()=>window.queueFrames.at(-1).state.occurrence),one);
+ await c.getByRole('button',{name:'Repeat: one',exact:true}).click();
+ await c.waitForFunction(()=>window.queueFrames.at(-1).state.personal.repeat==='off'&&window.queueAudio.some(a=>!a.paused&&!a.loop));
+ await c.getByRole('slider',{name:'Playback position',exact:true}).press('End');
+ await c.waitForFunction(value=>window.queueFrames.at(-1).state.occurrence===value+1&&window.queueFrames.at(-1).state.index===1,one);
+ await c.waitForFunction(()=>window.queueAudio.some(a=>!a.paused&&a.currentTime<2));
+ await c.waitForTimeout(300);
+ assert.equal(await c.evaluate(()=>window.queueFrames.at(-1).state.occurrence),one+1);
+ console.log('repeat-all, repeat-one and natural duplicate-track advancement preserve occurrence semantics');
+ console.log('browser errors',errors);
+ assert.deepEqual(errors,[]);
+ } catch(e) {
+   let index=0;
+   for(const browser of browsers)for(const context of browser.contexts())for(const page of context.pages())if(page.url().startsWith('https://next.plyr.fm/'))await page.screenshot({path:path.join(artifacts,'failure-'+index+++'.png')}).catch(()=>{});
+   for(const browser of browsers)for(const context of browser.contexts())for(const page of context.pages())if(page.url().startsWith('https://next.plyr.fm/'))console.log('failure queue states',await page.evaluate(()=>window.queueFrames?.slice(-8).map(f=>({revision:f.state.revision,occurrence:f.state.occurrence,playing:f.state.playing,keepPlaying:f.state.personal.keepPlaying,tail:f.state.personal.tailKind}))));console.error(e.stack);throw e;
+ } finally {await Promise.all(browsers.map(b=>b.close()));}
+})().catch(e=>{console.error(e.message);process.exitCode=1});

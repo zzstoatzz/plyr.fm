@@ -15,7 +15,7 @@ import { Pressable, type ScrollViewInstance, StyleSheet, View } from 'react-nati
 import type { Track } from '../src/api';
 import { useAppearance } from '../src/appearance';
 import { artistName, Cover, Heading } from '../src/CatalogPieces';
-import { Action, Copy, Page, row } from '../src/controls';
+import { Action, Copy, InlineLink, Page, row } from '../src/controls';
 import { usePlayback } from '../src/playback';
 import { useAppPreferences } from '../src/preference-context';
 import { Sheet } from '../src/Sheet';
@@ -32,12 +32,14 @@ export default function Queue() {
   const scrollRef = useRef<ScrollViewInstance>(null);
   const scrollMetrics = useRef({ offset: 0, height: 0, contentHeight: 0 });
   const upcoming = player.queue.slice(player.index + 1);
+  const picks = Math.max(0, (player.tail?.from ?? player.queue.length) - player.index - 1);
   const RepeatIcon = player.repeat === 'one' ? Repeat1 : Repeat;
 
   return <Page title="Queue" scrollRef={scrollRef} scrollEnabled={!dragging}
     onScroll={event => { scrollMetrics.current.offset = event.nativeEvent.contentOffset.y; }}
     onLayout={event => { scrollMetrics.current.height = event.nativeEvent.layout.height; }}
     onContentSizeChange={(_, height) => { scrollMetrics.current.contentHeight = height; }}>
+    {player.queueError && <Copy>{player.queueError}</Copy>}
     {player.current ? <>
       <View style={styles.section}>
         <View style={styles.header}>
@@ -60,13 +62,15 @@ export default function Queue() {
         </View>
       </View>
       <View style={styles.section}>
+        {player.deviceQueue && <Copy>Queue saved on this device. <InlineLink href="/login?return_to=%2Fqueue">Sign in again</InlineLink> to use it across devices.</Copy>}
+        {player.outputElsewhere && <Copy>Playing on another device. Press play to listen here.</Copy>}
         <View style={styles.header}>
           <Heading>Up next</Heading>
           <View style={styles.actions}>
-            <IconButton label="Shuffle upcoming" disabled={upcoming.length < 2} onPress={player.shuffle}>
+            <IconButton label="Shuffle upcoming" disabled={picks < 2 && !player.jam} onPress={player.shuffle}>
               <Shuffle size={20} color={theme.muted} />
             </IconButton>
-            <IconButton label="Clear upcoming" disabled={!upcoming.length} onPress={() => setDialog('clear')}>
+            <IconButton label="Clear upcoming" disabled={!(player.jam ? upcoming.length : picks)} onPress={() => setDialog('clear')}>
               <Trash size={20} color={theme.muted} />
             </IconButton>
           </View>
@@ -74,8 +78,10 @@ export default function Queue() {
         {upcoming.length > 1 && <Text style={{ color: theme.muted, fontSize: 13 * theme.scale, paddingHorizontal: 8, paddingBottom: 6 }}>drag the handles to reorder</Text>}
         {upcoming.length ? <QueueReorder queue={player.queue} start={player.index + 1} move={player.move}
           scrollRef={scrollRef} scrollMetrics={scrollMetrics} onDragging={setDragging}
-          renderTrack={(track, index) => <QueueTrack track={track} play={() => player.jump(index)}
-            remove={() => player.remove(index)} />} /> : <Copy>Nothing queued. Add tracks from their menus.</Copy>}
+          renderTrack={(track, index) => <>
+            {player.tail && index === Math.max(player.index + 1, player.tail.from) && <View style={{ paddingVertical: 8 }}><Copy>From {player.tail.label}</Copy></View>}
+            <QueueTrack track={track} play={() => player.jump(index)} remove={() => player.remove(index)} />
+          </>} /> : <Copy>Nothing queued. Add tracks from their menus.</Copy>}
       </View>
       {player.index > 0 && <View style={styles.section}>
         <Pressable accessibilityRole="button" accessibilityState={{ expanded: history }} onPress={() => setHistory(!history)}
@@ -87,7 +93,7 @@ export default function Queue() {
       </View>}
     </> : <Copy>Pick a track to start listening.</Copy>}
     {dialog === 'clear' && <Sheet title="Clear upcoming tracks?" close={() => setDialog(null)}>
-      <Copy>The current track will keep playing.</Copy>
+      <Copy>{player.jam ? "The current track will keep playing." : "Clear your picks. Tracks from the current collection will remain."}</Copy>
       <View style={row}>
         <Action label="Cancel" onPress={() => setDialog(null)} />
         <Action label="Clear upcoming" primary onPress={() => { player.clear(); setDialog(null); }} />

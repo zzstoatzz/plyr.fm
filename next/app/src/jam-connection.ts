@@ -1,8 +1,21 @@
+import type { DurableQueueEdit } from './queue-mutation';
 export interface JamTrack {
   id: string;
   uri: string;
   cid: string;
   durationMs: number;
+  key?: string;
+}
+
+export interface PersonalQueueState {
+  explicitEnd: number;
+  tailKind: 'collection' | 'generated' | null;
+  label: string | null;
+  repeat: 'off' | 'all' | 'one';
+  keepPlaying: boolean;
+  cursor: string | null;
+  output: { clientId: string; connectionId: string } | null;
+  disconnected: boolean;
 }
 
 export interface JamState {
@@ -14,6 +27,7 @@ export interface JamState {
   playing: boolean;
   positionMs: number;
   updatedAtMs: number;
+  personal?: PersonalQueueState | null;
 }
 
 export type JamIntent =
@@ -22,7 +36,15 @@ export type JamIntent =
   | { action: 'replaceQueue'; queue: JamTrack[]; index: number; playing?: boolean }
   | { action: 'selectTrack'; index: number; playing?: boolean };
 
-type Pending = JamIntent & { id: string; epoch: string; expectedRevision: number; occurrence: number };
+export type PersonalQueueIntent = DurableQueueEdit
+  | { action: 'playContext'; queue: (JamTrack & { key: string })[]; index: number; label?: string; playing: boolean; positionMs?: number }
+  | { action: 'selectTrack'; entryKey: string; playing?: boolean }
+  | { action: 'advance' }
+  | { action: 'appendContinuation'; queue: (JamTrack & { key: string })[]; cursor?: string | null }
+  | { action: 'progress'; positionMs: number; entry?: JamTrack };
+
+export type PlaybackIntent = JamIntent | PersonalQueueIntent;
+export type Pending = PlaybackIntent & { id: string; epoch: string; expectedRevision: number; occurrence: number; expectedOutput?: string | null };
 export type JamPhase = 'connecting' | 'connected' | 'reconnecting' | 'closed';
 export interface JamSocket {
   readyState: number;
@@ -38,20 +60,37 @@ function record(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value);
 }
 
+export function isPersonalQueue(value: unknown, length: number): value is PersonalQueueState {
+  if (!record(value) || !Number.isSafeInteger(value.explicitEnd) || typeof value.explicitEnd !== 'number' || value.explicitEnd < 0 || value.explicitEnd > length
+    || (value.repeat !== 'off' && value.repeat !== 'all' && value.repeat !== 'one') || typeof value.keepPlaying !== 'boolean' || typeof value.disconnected !== 'boolean') return false;
+  if (value.tailKind !== null && value.tailKind !== 'collection' && value.tailKind !== 'generated') return false;
+  if (value.label !== null && (typeof value.label !== 'string' || value.label.length > 200)) return false;
+  if (value.cursor !== null && (typeof value.cursor !== 'string' || value.cursor.length > 4096)) return false;
+  if (value.output !== null && (!record(value.output) || typeof value.output.clientId !== 'string' || typeof value.output.connectionId !== 'string'
+    || !/^[a-zA-Z0-9_-]{1,64}$/.test(value.output.clientId) || !/^[a-zA-Z0-9_-]{1,64}$/.test(value.output.connectionId))) return false;
+  return value.tailKind !== null || value.explicitEnd === length;
+}
+
 export function isJamState(value: unknown): value is JamState {
   if (!record(value) || typeof value.epoch !== 'string' || typeof value.occurrence !== 'number'
       || typeof value.playing !== 'boolean' || !Array.isArray(value.queue) || value.queue.length > 200) return false;
   if (![value.revision, value.index, value.occurrence, value.positionMs, value.updatedAtMs].every(n => typeof n === 'number' && Number.isSafeInteger(n) && n >= 0)) return false;
   if ((value.index as number) >= Math.max(1, value.queue.length)) return false;
   if (!value.queue.length && (value.index !== 0 || value.playing || value.positionMs !== 0)) return false;
+  const personal = value.personal !== undefined && value.personal !== null;
+  if (personal && !isPersonalQueue(value.personal, value.queue.length)) return false;
+  const keys = new Set<string>();
   return value.queue.every(track => record(track) && typeof track.id === 'string' && typeof track.uri === 'string'
-    && typeof track.cid === 'string' && typeof track.durationMs === 'number' && Number.isSafeInteger(track.durationMs) && track.durationMs > 0 && track.durationMs <= 86_400_000);
+    && typeof track.cid === 'string' && typeof track.durationMs === 'number' && Number.isSafeInteger(track.durationMs) && track.durationMs >= (personal ? 0 : 1) && track.durationMs <= 86_400_000 && (!personal ||
+      typeof track.key === 'string' && /^[a-zA-Z0-9_-]{1,64}$/.test(track.key) && !keys.has(track.key) && !!keys.add(track.key)));
 }
 
 export function jamPosition(state: JamState, serverNowMs: number): number {
   const elapsed = state.playing ? Math.max(0, serverNowMs - state.updatedAtMs) : 0;
   const duration = state.queue[state.index]?.durationMs ?? 0;
-  return Math.max(0, Math.min(duration || Number.MAX_SAFE_INTEGER, state.positionMs + elapsed));
+  const position = state.positionMs + elapsed;
+  if (state.personal?.repeat === 'one' && state.playing && duration > 0) return position % duration;
+  return Math.max(0, Math.min(duration || (state.personal ? 86_400_000 : Number.MAX_SAFE_INTEGER), position));
 }
 
 export class JamClock {
@@ -81,7 +120,7 @@ export interface JamConnectionOptions {
   onState: (state: JamState, force: boolean) => void;
   onPhase: (phase: JamPhase) => void;
   onError: (message: string) => void;
-  onResult?: (intent: JamIntent, outcome: string) => void;
+  onResult?: (intent: Pending, outcome: string) => void;
 }
 
 export class JamConnection {
@@ -192,12 +231,17 @@ export class JamConnection {
     }
   }
 
-  command(intent: JamIntent, expected?: Pick<JamState, 'epoch' | 'revision' | 'occurrence'>): boolean {
+  command(intent: PlaybackIntent, expected?: Pick<JamState, 'epoch' | 'revision' | 'occurrence'>): boolean {
     if (this.awaitingSnapshot || !this.state || this.socket?.readyState !== 1 || this.closed) { this.options.onError('The Jam is reconnecting'); return false; }
     const base = expected ?? this.state;
     const command = { ...intent, id: `${Math.floor(this.now()).toString(36)}-${++this.serial}-${Math.random().toString(36).slice(2, 10)}`, epoch: base.epoch,
-      expectedRevision: base.revision, occurrence: base.occurrence };
-    if (intent.action === 'seek') this.pending = this.pending.filter(pending => pending.action !== 'seek');
+      expectedRevision: base.revision, occurrence: base.occurrence, ...(this.state.personal ? { expectedOutput: this.state.personal.output?.connectionId ?? null } : {}) };
+    return this.enqueuePrepared(command);
+  }
+
+  enqueuePrepared(command: Pending): boolean {
+    if (this.awaitingSnapshot || !this.state || this.socket?.readyState !== 1 || this.closed) return false;
+    if (command.action === 'seek') this.pending = this.pending.filter(pending => pending.action !== 'seek');
     if (this.pending.length >= 16) { this.options.onError('Waiting for the Jam to catch up'); return false; }
     this.pending.push(command);
     this.flush();
@@ -225,9 +269,9 @@ export class JamConnection {
   private flush() {
     if (this.awaitingSnapshot || this.inFlight || !this.pending.length || this.socket?.readyState !== 1) return;
     const next = this.pending.shift()!;
-    if (next.epoch !== this.state?.epoch || next.occurrence !== this.state?.occurrence) { this.flush(); return; }
+    if (!this.state?.personal && (next.epoch !== this.state?.epoch || next.occurrence !== this.state?.occurrence)) { this.flush(); return; }
     const duplicateIntent = next.expectedRevision < this.state!.revision && (next.action === 'play' && this.state!.playing || next.action === 'pause' && !this.state!.playing);
-    if (next.expectedRevision !== this.state?.revision && !duplicateIntent) { this.pending = []; this.options.onError('The Jam changed. Try that action again.'); return; }
+    if (!this.state?.personal && next.expectedRevision !== this.state?.revision && !duplicateIntent) { this.pending = []; this.options.onError('The Jam changed. Try that action again.'); return; }
     this.inFlight = next;
     this.socket.send(JSON.stringify(next));
     this.commandTimer = setTimeout(() => this.socket?.close(), 8_000);

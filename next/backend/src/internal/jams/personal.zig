@@ -154,7 +154,7 @@ pub fn transition(a: std.mem.Allocator, state: p.State, command: p.Command, clie
             if (from < boundary) to = @min(to, boundary - 1);
             if (from == to) return .{ .outcome = .noop, .state = state };
             next.queue = try insert(a, try remove(a, state.queue, from), to, state.queue[from]);
-            personal.explicitEnd = @intCast(boundary + @intFromBool(from >= boundary and to < boundary));
+            personal.explicitEnd = @intCast(boundary + @intFromBool(from >= boundary and to <= boundary));
         },
         .playContext => {
             const queue = command.queue orelse return .{ .outcome = .invalid, .state = state };
@@ -420,7 +420,8 @@ test "observed personal media duration bounds completion and explicit replay" {
     var initial = try testState(a);
     var track = initial.queue[0];
     track.durationMs = 0;
-    initial.queue = &.{track};
+    initial.queue = try a.dupe(p.Track, &.{track});
+    initial.playing = false;
     initial.personal = .{ .explicitEnd = 1 };
     var state = (try transition(a, initial, testCommand(initial, .play), test_client, 200, test_collection)).state;
     var progress = testCommand(state, .progress);
@@ -463,4 +464,23 @@ test "personal repeat and continuation settings survive concurrent track transit
     result = try transition(a, state, setting, test_client, 220, test_collection);
     try std.testing.expectEqual(p.Outcome.applied, result.outcome);
     try std.testing.expect(result.state.personal.?.keepPlaying);
+}
+
+test "dragging the first tail boundary promotes a pick when no explicit future picks exist" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var state = try testState(a);
+    const tracks = try a.alloc(p.Track, 3);
+    tracks[0] = try testTrack(a, "current", "current");
+    tracks[1] = try testTrack(a, "tail-a", "tail-a");
+    tracks[2] = try testTrack(a, "tail-b", "tail-b");
+    state.queue = tracks;
+    var command = testCommand(state, .moveEntry);
+    command.entryKey = "tail-b";
+    command.beforeKey = "tail-a";
+    const result = try transition(a, state, command, test_client, 200, test_collection);
+    try std.testing.expectEqual(p.Outcome.applied, result.outcome);
+    try std.testing.expectEqualStrings("tail-b", result.state.queue[1].key.?);
+    try std.testing.expectEqual(@as(u32, 2), result.state.personal.?.explicitEnd);
 }

@@ -8,6 +8,7 @@ import { blobUrl } from './identity';
 import { gatedAudioUrl, releaseGatedAudioUrl } from './gated-audio';
 import { useJamPlayback, jamTrack, type ActiveJam } from './use-jam-playback';
 import type { JamIntent } from './jam-connection';
+import { usePersonalQueue } from './use-personal-queue';
 import { usePlayerAccounting } from './use-player-accounting';
 
 export function PlaybackProvider({ children, playThrough, keepPlaying, volume }: {
@@ -15,7 +16,7 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
 }) {
   const auth = useAuth();
   const player = useAudioPlayer(null, { updateInterval: 250 });
-  const status = useAudioPlayerStatus(player);
+  const emittedStatus = useAudioPlayerStatus(player);
   const accounting = usePlayerAccounting(player);
   const [queue, setQueue] = useState<Track[]>([]);
   const [index, setIndex] = useState(-1);
@@ -33,6 +34,8 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
   const [pendingSeek, setPendingSeek] = useState<{ source: number; seconds: number } | null>(null);
   const objectUrl = useRef<string | null>(null);
   const current = queue[index];
+  const status = ready ? emittedStatus : { ...emittedStatus, playing: false, isLoaded: false, didJustFinish: false,
+    currentTime: 0, duration: current?.metadata.duration_seconds ?? 0, isBuffering: resolving, error: null };
   useEffect(() => {
     if (pendingSeek && (pendingSeek.source !== sequence.current || status.error ||
       !status.isBuffering && Math.abs(status.currentTime - pendingSeek.seconds) < 0.5)) setPendingSeek(null);
@@ -47,18 +50,31 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
     play: () => player.play(),
     pause: () => player.pause(),
     setQueue: (tracks, at) => { setQueue(previous => previous.length === tracks.length && previous.every((track, index) => track === tracks[index]) ? previous : tracks); setIndex(at); },
-    clear: () => { accounting.stop(); sourceEvents.current?.remove(); sequence.current++; player.pause(); player.replace(null); if (objectUrl.current) releaseGatedAudioUrl(objectUrl.current); objectUrl.current = null; setQueue([]); setIndex(-1); setReady(false); setResolving(false); setStarting(null); }
+    clear: () => { accounting.stop(); sourceEvents.current?.remove(); sequence.current++; player.pause(); player.replace(null); if (objectUrl.current) releaseGatedAudioUrl(objectUrl.current); objectUrl.current = null; setQueue([]); setIndex(-1); setReady(false); setResolving(false); setStarting(null); setError(null); }
   }, auth.did);
+
+  const personal = usePersonalQueue({
+    current, ready, duration: () => player.duration,
+    position: () => player.currentTime, playing: () => player.playing,
+    load: (tracks, at) => load(tracks, at, false), loaded: waitForMedia,
+    seek: accounting.seekTo, play: () => player.play(), pause: () => player.pause(),
+    setQueue: (tracks, at) => { setQueue(previous => previous.length === tracks.length && previous.every((track, index) => track === tracks[index]) ? previous : tracks); setIndex(at); },
+    suspended: !!jam.jam, repeat, keepPlaying, setRepeat, error: setError,
+  });
+
+  useEffect(() => {
+    if (pendingSeek && personal.remote && Math.abs(personal.remote.positionMs / 1000 - pendingSeek.seconds) < 0.5) setPendingSeek(null);
+  }, [personal.remote, pendingSeek]);
 
   async function waitForMedia() {
     if (player.isLoaded) return;
     const request = sequence.current;
     await new Promise<void>((resolve, reject) => {
       const listener = player.addListener('playbackStatusUpdate', event => {
-        if (request !== sequence.current || event.error) { clearTimeout(timer); listener.remove(); reject(new Error('Jam audio changed while loading')); }
+        if (request !== sequence.current || event.error) { clearTimeout(timer); listener.remove(); reject(new Error('Audio changed while loading')); }
         else if (event.isLoaded) { clearTimeout(timer); listener.remove(); resolve(); }
       });
-      const timer = setTimeout(() => { listener.remove(); reject(new Error('Jam audio took too long to load')); }, 15_000);
+      const timer = setTimeout(() => { listener.remove(); reject(new Error('Audio took too long to load')); }, 15_000);
     });
   }
 
@@ -75,7 +91,9 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
   const previousAccount = useRef(auth.did);
   useEffect(() => {
     if (previousAccount.current === auth.did) return;
+    const previous = previousAccount.current;
     previousAccount.current = auth.did;
+    if (!previous && auth.did) return;
     accounting.stop();
     sourceEvents.current?.remove();
     sequence.current++;
@@ -85,6 +103,7 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
     objectUrl.current = null;
     setQueue([]);
     setIndex(-1);
+    setRepeat('off');
     setReady(false);
     setResolving(false);
     setStarting(null);
@@ -110,6 +129,7 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
     setError(null);
     try {
       const playback = await api.playback(track.id);
+      if (request !== sequence.current) return false;
       const { status: availability, space, delivery, artifact } = playback.availability;
       console.info("[playback] availability", { request, track: track.id, availability, delivery: !!delivery, artifact: !!artifact, elapsedMs: Date.now() - startedAt });
       let url: string;
@@ -159,6 +179,8 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
         }, { showSeekForward: true, showSeekBackward: true });
       }
       console.info("[playback] source attached", { request, track: track.id, elapsedMs: Date.now() - startedAt });
+      await waitForMedia();
+      if (request !== sequence.current) return false;
       setReady(true);
       if (start) {
         setStarting(request);
@@ -190,42 +212,33 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
     return () => clearTimeout(timeout);
   }, [current?.id, player, starting]);
 
-  function play(track: Track, collection?: Track[]) {
+  function play(track: Track, collection?: Track[], label?: string) {
     const list = playThrough && collection?.some((item) => item.id === track.id) ? collection : [track];
-    const at = list.findIndex((item) => item.id === track.id);
-    if (!jam.replaceQueue(list, at, true)) void load(list, at);
+    const selected = list.indexOf(track);
+    const at = selected >= 0 ? selected : list.findIndex((item) => item.id === track.id);
+    if (!jam.replaceQueue(list, at, true)) personal.play(track, list, list.length > 1 ? label ?? 'collection' : undefined);
   }
 
-  async function next() {
+  async function next(explicit = true) {
     if (jam.active()) {
       const room = jam.state();
       if (room && room.index + 1 < room.queue.length) jam.command({ action: 'selectTrack', index: room.index + 1 });
       else jam.command({ action: 'pause' });
       return;
     }
-    if (index + 1 < queue.length) { await load(queue, index + 1); return; }
-    if (repeat === 'all' && queue.length) { await load(queue, 0); return; }
-    if (!keepPlaying) return;
-    const request = sequence.current;
-    try {
-      const seen = new Set(queue.map((track) => track.id));
-      const result = await api.tracks({ limit: 30 });
-      if (request !== sequence.current) return;
-      const more = result.data.filter((track) => !seen.has(track.id));
-      if (more.length) await load([...queue, ...more], index + 1);
-    } catch {
-      if (request === sequence.current) setError('could not load more tracks');
-    }
+    await personal.next(explicit);
   }
 
   useEffect(() => {
-    if (ready && status.didJustFinish && (jam.active() ? jam.jam?.canSeek : repeat !== 'one')) void next();
+    if (ready && status.didJustFinish && (jam.active() ? jam.jam?.canSeek : repeat !== 'one')) void next(false);
     // Audio status is the trigger. Queue edits must not replay a finish event.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status.didJustFinish]);
 
   function setPlaying(playing: boolean) {
     if (jam.setPlaying(playing, jam.jam?.state)) return;
+    if (!playing) { personal.checkpoint(); player.pause(); }
+    if (personal.command({ action: playing ? 'play' : 'pause' })) return;
     if (loading || !current) return;
     if (playing && (!ready || status.error || error)) void load(queue, index);
     else if (playing && !player.playing) player.play();
@@ -239,73 +252,77 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
 
   function seek(seconds: number) {
     if (!Number.isFinite(seconds)) return;
-    const target = Math.max(0, Math.min(player.duration || seconds, seconds));
-    if (jam.command({ action: 'seek', positionMs: Math.round(target * 1000) }) || !ready) return;
+    const duration = !jam.active() && personal.remote ? personal.duration() : player.duration;
+    const target = Math.max(0, Math.min(duration || seconds, seconds));
+    if (jam.command({ action: 'seek', positionMs: Math.round(target * 1000) })) return;
+    if (personal.remote) {
+      setPendingSeek({ source: sequence.current, seconds: target });
+      if (personal.ownsOutput() && ready) {
+        const source = sequence.current;
+        void accounting.seekTo(target).then(() => { if (source === sequence.current) personal.checkpoint(target); }).catch(() => setError('Could not seek audio'));
+      }
+      personal.command({ action: 'seek', positionMs: Math.round(target * 1000) });
+      return;
+    }
+    if (!ready) return;
     const request = ++seekRequest.current;
     const source = sequence.current;
     setPendingSeek({ source, seconds: target });
-    void accounting.seekTo(target).catch(cause => {
+    void accounting.seekTo(target).then(() => { if (source === sequence.current && request === seekRequest.current) personal.checkpoint(target); }).catch(cause => {
       if (request !== seekRequest.current || source !== sequence.current) return;
       setPendingSeek(null);
       setError(cause instanceof Error ? cause.message : 'could not seek audio');
     });
   }
 
+  const remoteOutput = !jam.jam && !!personal.remote && !personal.ownsOutput();
+  const presentationStatus = remoteOutput ? { ...status, playing: false, isLoaded: false, isBuffering: false, didJustFinish: false,
+    currentTime: personal.position(), duration: personal.duration(), error: null } : status;
+  useEffect(() => { if (remoteOutput) setError(null); }, [personal.remote?.personal?.output?.clientId, current?.id]);
+  const accountVisible = previousAccount.current === null || previousAccount.current === auth.did;
   const value: Playback = {
-    jam: jam.jam,
+    jam: accountVisible ? jam.jam : undefined,
     canSeek: !jam.jam || jam.jam.canSeek && jam.jam.phase === 'connected',
-    seekPreview: jam.jam ? jam.jam.pendingSeekMs === undefined ? undefined : jam.jam.pendingSeekMs / 1000 : pendingSeek?.source === sequence.current ? pendingSeek.seconds : undefined,
-    joinJam: jam.join,
-    leaveJam: (restore = true) => jam.leave(restore),
+    seekPreview: jam.jam ? jam.jam.pendingSeekMs === undefined ? undefined : jam.jam.pendingSeekMs / 1000 : (pendingSeek?.source === sequence.current ? pendingSeek.seconds : undefined) ?? (remoteOutput ? undefined : personal.restoredPosition),
+    joinJam: input => { personal.suspend(); jam.join(input); },
+    leaveJam: (restore = true) => { jam.leave(false); if (restore) personal.restore(); },
     jamCommand: intent => intent.action === 'play' || intent.action === 'pause' ? jam.setPlaying(intent.action === 'play', jam.jam?.state) : jam.command(intent),
-    play, queue, current, index, loading, error, status, repeat: jam.jam ? 'off' : repeat, setRepeat: value => { if (!jam.active()) setRepeat(value); }, toggle, setPlaying, next,
+    play, queue: accountVisible ? queue : [], current: accountVisible ? current : undefined, index: accountVisible ? index : -1, loading: loading || personal.waiting, error, status: presentationStatus, tail: jam.jam || !accountVisible ? undefined : personal.state.tail, outputElsewhere: !jam.jam && personal.outputElsewhere, deviceQueue: personal.deviceOnly, queueError: jam.jam ? undefined : personal.queueError, keepPlaying: personal.keepPlaying, setKeepPlaying: personal.setKeepPlaying, repeat: jam.jam ? 'off' : repeat, setRepeat: value => { if (!jam.active()) personal.setRepeat(value); }, toggle, setPlaying, next,
     isPlaying: () => player.playing,
+    pauseLocal: () => { personal.suspend(); player.pause(); },
     previous: () => {
       const room = jam.state();
       if (jam.active()) {
         if (room && player.currentTime > 3 && jam.jam?.canSeek) jam.command({ action: 'seek', positionMs: 0 });
         else if (room && room.index > 0) jam.command({ action: 'selectTrack', index: room.index - 1 });
-      } else if (player.currentTime > 3 || index === 0) seek(0);
-      else void load(queue, index - 1);
+      } else if (personal.position() > 3 || index === 0) seek(0);
+      else personal.select(index - 1);
     },
     seek,
-    skip: (seconds) => { const base = jam.jam ? (jam.jam.pendingSeekMs === undefined ? player.currentTime : jam.jam.pendingSeekMs / 1000) : pendingSeek?.source === sequence.current ? pendingSeek.seconds : player.currentTime; seek(base + seconds); },
-    jump: (at) => { if (!jam.command({ action: 'selectTrack', index: at })) void load(queue, at); },
+    skip: (seconds) => { const base = jam.jam ? (jam.jam.pendingSeekMs === undefined ? player.currentTime : jam.jam.pendingSeekMs / 1000) : pendingSeek?.source === sequence.current ? pendingSeek.seconds : personal.position(); seek(base + seconds); },
+    jump: (at) => { if (!jam.command({ action: 'selectTrack', index: at })) personal.select(at); },
     enqueue: (track) => {
       const ref = jamTrack(track);
       if (jam.active()) { if (ref) jam.editQueue((items, at) => ({ queue: [...items, ref], index: at })); else jam.replaceQueue([...queue, track], index); }
-      else if (current) setQueue((items) => [...items, track]); else play(track);
+      else personal.enqueue(track);
     },
-    remove: (at) => { if (jam.editQueue((items, current) => ({ queue: at > current ? items.filter((_, position) => position !== at) : items, index: current }))) return; if (at > index) setQueue((items) => items.filter((_, position) => position !== at)); },
+    remove: (at) => { if (jam.editQueue((items, current) => ({ queue: at > current ? items.filter((_, position) => position !== at) : items, index: current }))) return; if (at > index) personal.remove(at); },
     move: (from, to) => {
       if (jam.editQueue((items, at) => {
         if (from <= at || to <= at || from >= items.length || to >= items.length) return { queue: items, index: at };
         const reordered = items.slice(); const [track] = reordered.splice(from, 1); reordered.splice(to, 0, track);
         return { queue: reordered, index: at };
       })) return;
-      setQueue((items) => {
-      if (from <= index || to <= index || from >= items.length || to >= items.length || from === to) return items;
-      const reordered = items.slice();
-      const [track] = reordered.splice(from, 1);
-      reordered.splice(to, 0, track);
-      return reordered;
-      });
+      personal.move(from, to);
     },
-    clear: () => { if (!jam.editQueue((items, at) => ({ queue: items.slice(0, at + 1), index: at }))) setQueue((items) => items.slice(0, index + 1)); },
+    clear: () => { if (!jam.editQueue((items, at) => ({ queue: items.slice(0, at + 1), index: at }))) personal.clear(); },
     shuffle: () => {
       if (jam.editQueue((items, at) => {
         const shuffled = items.slice();
         for (let i = shuffled.length - 1; i > at + 1; i--) { const j = at + 1 + Math.floor(Math.random() * (i - at)); [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]; }
         return { queue: shuffled, index: at };
       })) return;
-      setQueue((items) => {
-      const shuffled = items.slice();
-      for (let i = shuffled.length - 1; i > index + 1; i--) {
-        const j = index + 1 + Math.floor(Math.random() * (i - index));
-        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-      }
-      return shuffled;
-      });
+      personal.shuffle();
     }
   };
   return <PlaybackContext.Provider value={value}>{children}</PlaybackContext.Provider>;
@@ -318,7 +335,13 @@ interface Playback {
   joinJam(input: { host: string; key: string; admit: () => Promise<{ ticket: string; websocketUrl: string }> }): void;
   jamCommand(intent: JamIntent): boolean;
   leaveJam(restore?: boolean): void;
-  play(track: Track, collection?: Track[]): void;
+  play(track: Track, collection?: Track[], label?: string): void;
+  tail?: import('./queue-state').QueueTail;
+  outputElsewhere: boolean;
+  deviceQueue: boolean;
+  queueError?: string;
+  keepPlaying: boolean;
+  setKeepPlaying(value: boolean): void;
   queue: Track[];
   current?: Track;
   index: number;
@@ -330,6 +353,7 @@ interface Playback {
   toggle(): void;
   setPlaying(playing: boolean): void;
   isPlaying(): boolean;
+  pauseLocal(): void;
   next(): Promise<void>;
   previous(): void;
   seek(seconds: number): void;
