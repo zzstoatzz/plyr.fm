@@ -11,7 +11,7 @@ import { Action } from './controls';
 import { WaveLoading } from './WaveLoading';
 import { useAppearance } from './appearance';
 
-export type Play = (track: Track, queue?: Track[]) => void;
+export type Play = (track: Track, queue?: Track[], label?: string) => void;
 export type TrackActions = (track: Track) => ReactNode;
 type Result<T> = { data?: T; error?: string };
 export const useColors = useAppearance;

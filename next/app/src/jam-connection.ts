@@ -41,7 +41,7 @@ export type PersonalQueueIntent = DurableQueueEdit
   | { action: 'selectTrack'; entryKey: string; playing?: boolean }
   | { action: 'advance' }
   | { action: 'appendContinuation'; queue: (JamTrack & { key: string })[]; cursor?: string | null }
-  | { action: 'progress'; positionMs: number };
+  | { action: 'progress'; positionMs: number; entry?: JamTrack };
 
 export type PlaybackIntent = JamIntent | PersonalQueueIntent;
 export type Pending = PlaybackIntent & { id: string; epoch: string; expectedRevision: number; occurrence: number; expectedOutput?: string | null };

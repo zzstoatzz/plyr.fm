@@ -53,3 +53,16 @@ test('dragging promotes a tail entry to a pick without burying existing picks', 
   assert.equal(moveEntry(state, 1, 3).tail?.from, 3);
   assert.equal(moveEntry(state, 0, 2), state);
 });
+
+test('repeating the selected authored track later in a collection preserves both occurrences', () => {
+  const state = switchContext(emptyQueue(), [{ key: 'first', track: { id: 'same' } }, { key: 'second', track: { id: 'same' } }], 0, 'Album');
+  assert.deepEqual(state.entries.map(entry => entry.key), ['first', 'second']);
+});
+
+test('continuation compacts played history without discarding current or upcoming occurrences', () => {
+  const state = { entries: Array.from({ length: 200 }, (_, at) => entry(String(at))), index: 198 };
+  const next = enqueue(state, entry('new'));
+  assert.equal(next.entries.length, 200);
+  assert.equal(next.entries[next.index].key, state.entries[state.index].key);
+  assert.equal(next.entries.at(-1)?.track.id, 'new');
+});

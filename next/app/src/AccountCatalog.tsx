@@ -156,7 +156,7 @@ export function CollectionActions(props: CollectionControlsProps) {
   return <>
     <View style={styles.actions}>{props.actions}</View>
     <Heading>Tracks</Heading>
-    <TrackRows tracks={tracks} onPlay={props.onPlay} />
+    <TrackRows tracks={tracks} onPlay={(track, tracks) => props.onPlay(track, tracks, props.list.metadata.name ?? 'collection')} />
   </>;
 }
 
@@ -221,7 +221,7 @@ function EditCollection({ list, refresh, actions, onPlay }: CollectionControlsPr
       return track ? <Row key={position} href={{ pathname: '/track/[id]', params: { id: track.id } }}
         title={track.metadata.title} subtitle={artistName(track)} image={trackArtwork(track)} action={removeAction} />
         : <View key={position} style={styles.actions}><Detail>Unavailable track</Detail>{removeAction}</View>;
-    }) : <TrackRows tracks={tracks} onPlay={onPlay} />}
+    }) : <TrackRows tracks={tracks} onPlay={(track, tracks) => onPlay(track, tracks, list.metadata.name ?? 'collection')} />}
     {editing && !album && !mutation.busy && <View style={styles.actions}>
       <Button destructive label={confirmDelete ? 'Confirm delete playlist' : 'Delete playlist'}
         onPress={confirmDelete ? deletePlaylist : () => setConfirmDelete(true)} />

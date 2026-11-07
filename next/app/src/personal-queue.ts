@@ -18,6 +18,7 @@ export interface PersonalQueueOptions {
   changed(state: queue.QueueState<Track>, checkpoint?: QueueCheckpoint): void;
   remote(state: JamState, force: boolean): void;
   error(message: string): void;
+  connected?(state: JamState): void;
   connect?: Omit<JamConnectionOptions, 'onState' | 'onPhase' | 'onResult' | 'onError'>;
 }
 
@@ -25,6 +26,7 @@ export class PersonalQueue {
   state: queue.QueueState<Track> = queue.emptyQueue();
   wire?: JamState;
   readonly cache = new Map<string, Track>();
+  private readonly validated = new Set<string>();
   private readonly missing = new Set<string>();
   private readonly fetching = new Set<string>();
   private connection?: JamConnection;
@@ -32,8 +34,10 @@ export class PersonalQueue {
   private sent?: string;
   private closed = false;
   private connected = false;
+  private readonly waiters = new Set<(connected: boolean) => void>();
   private writes: Promise<void> = Promise.resolve();
   private pumping = false;
+  private commands = new Map<string, { finish(value: boolean): void; timer: ReturnType<typeof setTimeout> }>();
   private checkpoint?: QueueCheckpoint;
   initialized = false;
   private readonly options: PersonalQueueOptions;
@@ -58,18 +62,25 @@ export class PersonalQueue {
     this.connection = new JamConnection({ ...this.options.connect,
       onState: (state, force) => {
         if (!state.personal || this.closed) return;
+        console.info('[queue] state', { revision: state.revision, occurrence: state.occurrence, entries: state.queue.length, playing: state.playing });
         this.wire = state;
         this.project();
         this.options.remote(state, force);
         void this.hydrate();
       },
       onPhase: phase => {
+        const previous = this.connected;
         this.connected = phase === 'connected';
+        if (!previous && this.connected && this.wire) this.options.connected?.(this.wire);
+        if (this.connected) for (const finish of this.waiters) finish(true);
         if (!this.connected) this.sent = undefined;
         else void this.pump();
       },
       onError: message => this.options.error(message.replaceAll('The Jam', 'Your queue').replaceAll('the Jam', 'your queue')),
       onResult: (command, outcome) => {
+        console.info('[queue] result', { action: command.action, outcome });
+        const waiting = this.commands.get(command.id);
+        if (waiting) { clearTimeout(waiting.timer); this.commands.delete(command.id); waiting.finish(['applied', 'noop', 'duplicate'].includes(outcome)); }
         if (this.mutations[0]?.id !== command.id) return;
         this.mutations.shift();
         this.sent = undefined;
@@ -81,7 +92,8 @@ export class PersonalQueue {
     await this.connection.connect();
   }
 
-  remember(tracks: Track[]) { for (const track of tracks) this.cache.set(track.id, track); }
+  remember(tracks: Track[]) { for (const track of tracks) { this.cache.set(track.id, track); this.validated.add(track.id); this.missing.delete(track.id); } }
+  isMissing(id: string) { return this.missing.has(id); }
 
   seed() {
     const state = this.state;
@@ -100,6 +112,7 @@ export class PersonalQueue {
 
   async edit(intent: DurableQueueEdit) {
     if (this.closed) return;
+    if (intent.action === 'enqueue' && this.state.entries.length >= 200 && this.state.index <= 0) { this.options.error('Your queue is full. Remove a track first.'); return; }
     if (this.mutations.length >= 64) { this.options.error('Connect before adding more queue changes'); return; }
     if (!this.options.connect) { this.applyLocal(intent); return; }
     const mutation = { id: this.options.id(), intent };
@@ -111,7 +124,7 @@ export class PersonalQueue {
       return;
     }
     if (this.closed) return;
-    this.project();
+    if (this.wire) this.project(); else this.applyLocal(intent);
     await this.pump();
   }
 
@@ -120,6 +133,31 @@ export class PersonalQueue {
     if (!this.connected) { this.options.error('Your queue is reconnecting'); return true; }
     this.connection?.command(intent);
     return true;
+  }
+
+  get synchronized() { return !!this.options.connect; }
+  whenConnected(): Promise<boolean> {
+    if (!this.options.connect || this.connected) return Promise.resolve(true);
+    if (this.closed) return Promise.resolve(false);
+    return new Promise(resolve => {
+      const finish = (connected: boolean) => { clearTimeout(timer); this.waiters.delete(finish); resolve(connected); };
+      const timer = setTimeout(() => finish(false), 15_000);
+      this.waiters.add(finish);
+    });
+  }
+
+  dispatch(intent: PlaybackIntent): Promise<boolean> {
+    if (!this.connected || !this.wire || !this.connection) return Promise.resolve(false);
+    const id = this.options.id();
+    const wire = this.wire;
+    return new Promise(resolve => {
+      const timer = setTimeout(() => { this.commands.delete(id); resolve(false); }, 10_000);
+      this.commands.set(id, { finish: resolve, timer });
+      if (!this.connection!.enqueuePrepared({ ...intent, id, epoch: wire.epoch, expectedRevision: wire.revision,
+        occurrence: wire.occurrence, expectedOutput: wire.personal?.output?.connectionId ?? null })) {
+        clearTimeout(timer); this.commands.delete(id); resolve(false);
+      }
+    });
   }
 
   position(now: number) { return this.connection?.clock.serverNow() ?? now; }
@@ -131,6 +169,7 @@ export class PersonalQueue {
     this.checkpoint = snapshot;
     this.writes = this.writes.catch(() => {}).then(() => this.options.storage.save(this.options.owner, snapshot));
     void this.writes.catch(() => this.options.error('Could not save your queue'));
+    return this.writes;
   }
 
   progress(position: number) {
@@ -141,7 +180,13 @@ export class PersonalQueue {
     void this.writes.catch(() => this.options.error('Could not save your playback position'));
   }
 
-  close() { this.closed = true; this.connection?.close(); }
+  close() {
+    this.closed = true;
+    this.connection?.close();
+    for (const command of this.commands.values()) { clearTimeout(command.timer); command.finish(false); }
+    this.commands.clear();
+    for (const finish of this.waiters) finish(false);
+  }
 
   private persistMutations(remove: string[] = []) {
     const entries = this.mutations.map(entry => ({ ...entry }));
@@ -199,6 +244,10 @@ export class PersonalQueue {
     if (!this.wire?.personal) return;
     const wire = this.wire;
     const personal = wire.personal!;
+    for (const ref of wire.queue) {
+      const track = this.cache.get(ref.id);
+      if (track && track.metadata.duration_seconds === null && ref.durationMs > 0) this.cache.set(ref.id, { ...track, metadata: { ...track.metadata, duration_seconds: ref.durationMs / 1000 } });
+    }
     let state: queue.QueueState<Track> = { entries: wire.queue.map(ref => ({ key: ref.key!, track: this.cache.get(ref.id) ?? unavailable(ref) })),
       index: wire.queue.length ? wire.index : -1, ...(personal.tailKind ? { tail: { from: personal.explicitEnd, kind: personal.tailKind, label: personal.label ?? 'latest tracks' } } : {}) };
     for (const mutation of this.mutations) state = this.reduce(state, mutation.intent);
@@ -215,7 +264,7 @@ export class PersonalQueue {
     const state = this.wire;
     if (!state) return;
     const ids = [...new Set([...state.queue.slice(state.index), ...state.queue.slice(0, state.index)].map(ref => ref.id))]
-      .filter(id => !this.cache.has(id) && !this.missing.has(id) && !this.fetching.has(id));
+      .filter(id => !this.validated.has(id) && !this.missing.has(id) && !this.fetching.has(id));
     const chunks = [ids.slice(0, 100), ids.slice(100, 200)].filter(chunk => chunk.length);
     await Promise.all(chunks.map(async ids => {
       for (const id of ids) this.fetching.add(id);
@@ -223,7 +272,7 @@ export class PersonalQueue {
         const result = await this.options.resolve(ids);
         if (this.closed) return;
         this.remember(result.data);
-        for (const id of result.missing) this.missing.add(id);
+        for (const id of result.missing) { this.missing.add(id); this.cache.delete(id); }
         this.project();
         if (this.wire) this.options.remote(this.wire, false);
       } catch { if (!this.closed) this.options.error('Could not load your queue'); }

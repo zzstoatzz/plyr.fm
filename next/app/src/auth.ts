@@ -1,6 +1,7 @@
 import { ExpoOAuthClient, type OAuthSession } from '@atproto/oauth-client-expo';
 import { NATIVE_REDIRECT_URI, BASE_SCOPE_PARTS, SCOPE_PARTS, SITE_URL } from './auth-config';
 import { clearAuth, getAuth, scopeFor, setAuth } from './auth-state';
+import { prepareQueueLogin } from './queue-login';
 import { readLocal, removeLocal, writeLocal } from './storage';
 
 export { useAuth } from './auth-state';
@@ -48,6 +49,7 @@ export function takeLoginIntent(): undefined { return undefined; }
 
 export async function login(identifier: string, deviceOnly = false, intent?: string) {
 	const handle = identifier.trim().replace(/^@/, '');
+	await prepareQueueLogin();
 	const session = await oauthClient().signIn(handle, {
 		scope: await scopeFor(handle, deviceOnly),
 		redirect_uri: NATIVE_REDIRECT_URI
@@ -57,6 +59,7 @@ export async function login(identifier: string, deviceOnly = false, intent?: str
 }
 
 export async function createAccount(provider: string, _intent?: string) {
+	await prepareQueueLogin();
 	const session = await oauthClient().signIn(provider, {
 		scope: BASE_SCOPE_PARTS.join(' '), prompt: 'create', redirect_uri: NATIVE_REDIRECT_URI
 	});

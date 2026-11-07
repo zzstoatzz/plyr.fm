@@ -2,6 +2,7 @@ import { BrowserOAuthClient, type OAuthSession } from '@atproto/oauth-client-bro
 import { BASE_SCOPE_PARTS, SCOPE_PARTS, SITE_URL } from './auth-config';
 import { clearAuth, getAuth, scopeFor, setAuth } from './auth-state';
 
+import { completeQueueLogin, prepareQueueLogin } from './queue-login';
 import { returnPath } from './return-path';
 
 export { useAuth } from './auth-state';
@@ -50,8 +51,10 @@ async function initialize() {
 		try {
 			const { session, state } = await (await oauthClient()).initCallback(params);
 			callbackIntent = returnPath(state);
+			completeQueueLogin(true);
 			await activate(session);
 		} catch (error) {
+			completeQueueLogin(false);
 			clearAuth(error instanceof Error ? error.message : 'Could not sign in', params.get('error') === 'invalid_scope');
 		}
 		return;
@@ -70,10 +73,12 @@ async function initialize() {
 
 export async function login(identifier: string, deviceOnly = false, intent?: string): Promise<void> {
 	const handle = identifier.trim().replace(/^@/, '');
+	await prepareQueueLogin();
 	await (await oauthClient()).signInRedirect(handle, { scope: await scopeFor(handle, deviceOnly), state: intent });
 }
 
 export async function createAccount(provider: string, intent?: string): Promise<void> {
+	await prepareQueueLogin();
 	await (await oauthClient()).signInRedirect(provider, {
 		scope: BASE_SCOPE_PARTS.join(' '), prompt: 'create', state: intent
 	});

@@ -64,7 +64,7 @@ export function HomeChart({ onPlay }: { onPlay: Play }) {
     </View>
     {width > 0 && tracks.length > 0 && <View style={[styles.cards, { gap }]}>
       {tracks.slice(visiblePage * columns, (visiblePage + 1) * columns).map(track => <View key={track.id} style={{ width: size, minWidth: 0, gap: 2 }}>
-        <Pressable testID="track-play-control" accessibilityRole="button" accessibilityLabel={`Play ${track.metadata.title}`} onPress={() => onPlay(track, tracks)}>
+        <Pressable testID="track-play-control" accessibilityRole="button" accessibilityLabel={`Play ${track.metadata.title}`} onPress={() => onPlay(track)}>
           <Cover uri={trackArtwork(track)} size={size} radius={9} />
         </Pressable>
         <View style={styles.metadata}>
