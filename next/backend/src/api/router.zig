@@ -314,6 +314,12 @@ pub fn handle(
             id,
             request_id,
         );
+    } else if (mem.eql(u8, path, prefix ++ "/tracks/resolve")) {
+        if (request.head.method != .POST) {
+            try response.apiError(request, .method_not_allowed, request_id, app.cors);
+            return;
+        }
+        try tracks.resolve(request, allocator, app.track_store, app.track_collection, app.cors, request_id);
     } else if (trackId(path)) |id| {
         if (request.head.method != .GET) {
             try response.apiError(request, .method_not_allowed, request_id, app.cors);
