@@ -157,11 +157,11 @@ pub fn transition(a: std.mem.Allocator, state: p.State, command: p.Command, clie
             personal.explicitEnd = @intCast(entries.items.len);
             if (command.label) |_| for (queue[at + 1 ..]) |entry| {
                 var duplicate = false;
-                for (entries.items[0..personal.explicitEnd]) |pick| if (std.mem.eql(u8, pick.id, entry.id)) {
+                for (entries.items[1..personal.explicitEnd]) |pick| if (std.mem.eql(u8, pick.id, entry.id)) {
                     duplicate = true;
                     break;
                 };
-                if (!duplicate) try entries.append(a, entry);
+                if (!duplicate and entries.items.len < p.max_tracks) try entries.append(a, entry);
             };
             next.queue = try entries.toOwnedSlice(a);
             next.index = 0;
@@ -319,7 +319,7 @@ test "context switches preserve remote explicit picks and repeated collection tr
     const context = try a.alloc(p.Track, 3);
     context[0] = try testTrack(a, "new", "new");
     context[1] = try testTrack(a, "repeat-1", "repeated");
-    context[2] = try testTrack(a, "repeat-2", "repeated");
+    context[2] = try testTrack(a, "repeat-2", "new");
     var command = testCommand(initial, .playContext);
     command.queue = context;
     command.label = "New album";
