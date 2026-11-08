@@ -1,17 +1,52 @@
 import os
 import runpy
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 PROMOTE = runpy.run_path(str(Path(__file__).parents[1] / "release"))[
     "production_promotion"
 ]
+# hooks and `rebase --exec` export these; inherited, they aim the fixture's git at this checkout
+GIT_LOCATION_VARIABLES = (
+    "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+    "GIT_COMMON_DIR",
+    "GIT_DIR",
+    "GIT_INDEX_FILE",
+    "GIT_NAMESPACE",
+    "GIT_OBJECT_DIRECTORY",
+    "GIT_PREFIX",
+    "GIT_WORK_TREE",
+)
+
+
+def isolate_git(test: unittest.TestCase) -> None:
+    test.enterContext(mock.patch.dict(os.environ))
+    for name in GIT_LOCATION_VARIABLES:
+        os.environ.pop(name, None)
+
+
+def git_config(git_dir: Path, key: str) -> str | None:
+    result = subprocess.run(
+        ["git", "config", "--file", str(git_dir / "config"), "--get", key],
+        capture_output=True,
+        text=True,
+    )
+    return result.stdout.strip() if result.returncode == 0 else None
+
+
+def git_head(git_dir: Path) -> str:
+    return subprocess.check_output(
+        ["git", "--git-dir", str(git_dir), "rev-parse", "HEAD"], text=True
+    ).strip()
 
 
 class ReleasePromotionTests(unittest.TestCase):
     def setUp(self) -> None:
+        isolate_git(self)
         self.previous = Path.cwd()
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
@@ -78,6 +113,38 @@ class ReleasePromotionTests(unittest.TestCase):
         self.assertEqual(
             self.git("--git-dir=remote.git", "rev-parse", "production-fe"), concurrent
         )
+
+
+class GitIsolationTests(unittest.TestCase):
+    def setUp(self) -> None:
+        isolate_git(self)
+
+    def test_fixture_repos_ignore_an_inherited_git_dir(self) -> None:
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        sentinel = Path(temp.name) / "sentinel"
+        subprocess.run(["git", "init", "-q", str(sentinel)], check=True)
+        subprocess.run(
+            ["git", "-C", str(sentinel), "-c", "user.name=s", "-c", "user.email=s@s"]
+            + ["commit", "--allow-empty", "-qm", "sentinel"],
+            check=True,
+        )
+        git_dir = sentinel / ".git"
+        head = git_head(git_dir)
+
+        result = subprocess.run(
+            [sys.executable, "-m", "unittest", "-q"]
+            + ["test_release_promotion.ReleasePromotionTests"],
+            cwd=Path(__file__).parent,
+            env={**os.environ, "GIT_DIR": str(git_dir)},
+            capture_output=True,
+            text=True,
+        )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(git_config(git_dir, "core.bare"), "false")
+        self.assertIsNone(git_config(git_dir, "user.email"))
+        self.assertEqual(git_head(git_dir), head)
 
 
 if __name__ == "__main__":
