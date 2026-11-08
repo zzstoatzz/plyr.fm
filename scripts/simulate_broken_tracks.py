@@ -38,6 +38,7 @@ async def break_track(track_id: int) -> None:
     from dotenv import load_dotenv
     from sqlalchemy import select
 
+    from backend._internal.auth.app_password import resolve_pds
     from backend.models import Track
     from backend.utilities.database import db_session
 
@@ -69,13 +70,14 @@ async def break_track(track_id: int) -> None:
         password = os.getenv("ATPROTO_MAIN_PASSWORD")
 
         if handle and password:
-            print("  deleting from PDS...")
+            pds_url = await resolve_pds(handle)
+            print(f"  deleting from PDS {pds_url}...")
             result = subprocess.run(
                 [
                     "uvx",
                     "pdsx",
                     "--pds",
-                    "https://pds.zzstoatzz.io",
+                    pds_url,
                     "--handle",
                     handle,
                     "--password",
