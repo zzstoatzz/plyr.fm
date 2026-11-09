@@ -6,6 +6,7 @@
 
 const std = @import("std");
 const pg = @import("pg");
+const postgres_read = @import("postgres_read.zig");
 const zat = @import("zat");
 const lexicon_value = @import("../atproto/lexicon_value.zig");
 const domain = @import("../domain/search.zig");
@@ -37,12 +38,7 @@ pub const PostgresSearchStore = struct {
         allocator: std.mem.Allocator,
         request: store_module.Request,
     ) SearchStore.Error![]domain.Hit {
-        const conn = self.pool.acquire() catch |err| {
-            std.log.err("search connection failed: {}", .{err});
-            return error.IndexUnavailable;
-        };
-        defer self.pool.release(conn);
-        var result = conn.query(search_query, .{
+        var result = postgres_read.queryUnprepared(self.pool, "search.search_query", search_query, .{
             request.query,
             request.track_collection,
             request.list_collection,
@@ -53,10 +49,7 @@ pub const PostgresSearchStore = struct {
             request.types.playlist,
             @as(i64, @intCast(request.limit)),
         }) catch |err| {
-            if (conn.err) |pg_err|
-                std.log.err("search query failed: {}: {s}", .{ err, pg_err.message })
-            else
-                std.log.err("search query failed: {}", .{err});
+            std.log.err("search query failed: {}", .{err});
             return error.IndexUnavailable;
         };
         defer result.deinit();

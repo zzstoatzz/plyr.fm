@@ -59,4 +59,22 @@
         .old = "FROM old_rows WHERE subject_uri IS NOT NULL\n              UNION",
         .new = "FROM old_rows WHERE false\n              UNION",
     },
+    .{
+        .name = "a broken connection is retried twice",
+        .file = "src/internal/index/postgres_read.zig",
+        .old = "if (attempts_so_far != 1) return false;",
+        .new = "if (attempts_so_far > 2) return false;",
+    },
+    .{
+        .name = "a statement separator passes the read-only check",
+        .file = "src/internal/index/postgres_read.zig",
+        .old = "if (byte == ';') return \"contains a statement separator\";",
+        .new = "",
+    },
+    .{
+        .name = "a short write keyword passes the read-only check",
+        .file = "src/internal/index/postgres_read.zig",
+        .old = "if (std.ascii.eqlIgnoreCase(word, keyword)) return keyword;",
+        .new = "if (std.ascii.eqlIgnoreCase(word, keyword) and word.len > 2) return keyword;",
+    },
 }

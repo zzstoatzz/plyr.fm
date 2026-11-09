@@ -7,6 +7,7 @@
 
 const std = @import("std");
 const pg = @import("pg");
+const postgres_read = @import("postgres_read.zig");
 const zat = @import("zat");
 const lexicon_value = @import("../atproto/lexicon_value.zig");
 const artist = @import("../domain/artist.zig");
@@ -24,7 +25,7 @@ pub const PostgresArtistStore = struct {
 
     fn resolveOpaque(context: *anyopaque, allocator: std.mem.Allocator, dids: []const []const u8, collection: []const u8) ArtistStore.Error![]const artist_index.Summary {
         const self: *PostgresArtistStore = @ptrCast(@alignCast(context));
-        var result = self.pool.query(resolve_query, .{ collection, dids, self.profile_collection }) catch |err| {
+        var result = postgres_read.query(self.pool, "artist.resolve_query", resolve_query, .{ collection, dids, self.profile_collection }) catch |err| {
             std.log.err("PostgreSQL artist batch lookup failed: {}", .{err});
             return error.IndexUnavailable;
         };
@@ -64,8 +65,8 @@ pub const PostgresArtistStore = struct {
         identifier: artist_index.Identifier,
     ) ArtistStore.Error!?artist.Artist {
         var result = switch (identifier) {
-            .did => |did| self.pool.query(detail_by_did_query, .{ did, self.profile_collection }),
-            .handle => |handle| self.pool.query(detail_by_handle_query, .{ handle, self.profile_collection }),
+            .did => |did| postgres_read.query(self.pool, "artist.detail_by_did_query", detail_by_did_query, .{ did, self.profile_collection }),
+            .handle => |handle| postgres_read.query(self.pool, "artist.detail_by_handle_query", detail_by_handle_query, .{ handle, self.profile_collection }),
         } catch |err| {
             std.log.err("PostgreSQL artist lookup failed: {}", .{err});
             return error.IndexUnavailable;

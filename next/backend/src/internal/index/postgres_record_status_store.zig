@@ -2,6 +2,7 @@
 
 const std = @import("std");
 const pg = @import("pg");
+const postgres_read = @import("postgres_read.zig");
 const store_module = @import("record_status_store.zig");
 
 const RecordStatusStore = store_module.RecordStatusStore;
@@ -19,13 +20,8 @@ pub const PostgresRecordStatusStore = struct {
         record_uri: []const u8,
     ) RecordStatusStore.Error!?store_module.Status {
         const self: *PostgresRecordStatusStore = @ptrCast(@alignCast(context));
-        const conn = self.pool.acquire() catch return error.IndexUnavailable;
-        defer self.pool.release(conn);
-        var row = (conn.row(status_query, .{record_uri}) catch |err| {
-            if (conn.err) |pg_err|
-                std.log.err("record status query failed: {}: {s}", .{ err, pg_err.message })
-            else
-                std.log.err("record status query failed: {}", .{err});
+        var row = (postgres_read.row(self.pool, "record_status.status_query", status_query, .{record_uri}) catch |err| {
+            std.log.err("record status query failed: {}", .{err});
             return error.IndexUnavailable;
         }) orelse return null;
         defer row.deinit() catch {};
