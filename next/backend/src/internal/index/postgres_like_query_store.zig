@@ -2,6 +2,7 @@
 
 const std = @import("std");
 const pg = @import("pg");
+const postgres_read = @import("postgres_read.zig");
 const zat = @import("zat");
 const lexicon_value = @import("../atproto/lexicon_value.zig");
 const like = @import("../domain/like.zig");
@@ -37,14 +38,12 @@ pub const PostgresLikeQueryStore = struct {
             .{},
         ) catch return error.OutOfMemory;
         defer allocator.free(subjects_json);
-        const conn = self.pool.acquire() catch return error.IndexUnavailable;
-        defer self.pool.release(conn);
-        var result = conn.query(viewer_query, .{
+        var result = postgres_read.query(self.pool, "like_query.viewer_query", viewer_query, .{
             subjects_json,
             request.actor_did,
             request.like_collection,
         }) catch |err| {
-            logQueryError(conn, err);
+            logQueryError(err);
             return error.IndexUnavailable;
         };
         defer result.deinit();
@@ -68,11 +67,9 @@ pub const PostgresLikeQueryStore = struct {
         request: store_module.SubjectRequest,
     ) LikeQueryStore.Error![]store_module.Item {
         const self: *PostgresLikeQueryStore = @ptrCast(@alignCast(context));
-        const conn = self.pool.acquire() catch return error.IndexUnavailable;
-        defer self.pool.release(conn);
         const limit: i64 = @intCast(request.limit);
         var result = if (request.after) |after|
-            conn.query(after_query, .{
+            postgres_read.query(self.pool, "like_query.after_query", after_query, .{
                 request.subject_uri,
                 request.subject_cid,
                 request.like_collection,
@@ -81,18 +78,18 @@ pub const PostgresLikeQueryStore = struct {
                 after.at_uri,
                 limit,
             }) catch |err| {
-                logQueryError(conn, err);
+                logQueryError(err);
                 return error.IndexUnavailable;
             }
         else
-            conn.query(base_query, .{
+            postgres_read.query(self.pool, "like_query.base_query", base_query, .{
                 request.subject_uri,
                 request.subject_cid,
                 request.like_collection,
                 request.profile_collection,
                 limit,
             }) catch |err| {
-                logQueryError(conn, err);
+                logQueryError(err);
                 return error.IndexUnavailable;
             };
         defer result.deinit();
@@ -258,11 +255,8 @@ fn duplicateOptional(allocator: std.mem.Allocator, value: ?[]const u8) !?[]const
     return if (value) |present| try duplicate(allocator, present) else null;
 }
 
-fn logQueryError(conn: *pg.Conn, err: anyerror) void {
-    if (conn.err) |pg_err|
-        std.log.err("verified like query failed: {}: {s}", .{ err, pg_err.message })
-    else
-        std.log.err("verified like query failed: {}", .{err});
+fn logQueryError(err: anyerror) void {
+    std.log.err("verified like query failed: {}", .{err});
 }
 
 const columns =

@@ -7,6 +7,7 @@
 
 const std = @import("std");
 const pg = @import("pg");
+const postgres_read = @import("postgres_read.zig");
 const zat = @import("zat");
 const verified_list = @import("../domain/verified_list.zig");
 const album_id = @import("../identity/album_id.zig");
@@ -52,13 +53,8 @@ pub const PostgresVerifiedListStore = struct {
         request: store_module.CollectionRequest,
     ) VerifiedListStore.Error![]store_module.CollectionItem {
         const limit: i64 = @intCast(request.limit);
-        const conn = self.pool.acquire() catch |err| {
-            std.log.err("verified list collection connection failed: {}", .{err});
-            return error.IndexUnavailable;
-        };
-        defer self.pool.release(conn);
         var result = if (request.after) |after| blk: {
-            break :blk conn.query(collection_after_query, .{
+            break :blk postgres_read.query(self.pool, "verified_list.collection_after_query", collection_after_query, .{
                 request.collection,
                 request.profile_collection,
                 @tagName(request.kind),
@@ -67,18 +63,18 @@ pub const PostgresVerifiedListStore = struct {
                 after.at_uri,
                 limit,
             }) catch |err| {
-                logQueryError(conn, "verified list collection query failed", err);
+                logQueryError("verified list collection query failed", err);
                 return error.IndexUnavailable;
             };
         } else blk: {
-            break :blk conn.query(collection_query, .{
+            break :blk postgres_read.query(self.pool, "verified_list.collection_query", collection_query, .{
                 request.collection,
                 request.profile_collection,
                 @tagName(request.kind),
                 request.owner_did,
                 limit,
             }) catch |err| {
-                logQueryError(conn, "verified list collection query failed", err);
+                logQueryError("verified list collection query failed", err);
                 return error.IndexUnavailable;
             };
         };
@@ -110,12 +106,7 @@ pub const PostgresVerifiedListStore = struct {
         allocator: std.mem.Allocator,
         request: store_module.DetailRequest,
     ) VerifiedListStore.Error!?verified_list.Detail {
-        const conn = self.pool.acquire() catch |err| {
-            std.log.err("verified list detail connection failed: {}", .{err});
-            return error.IndexUnavailable;
-        };
-        defer self.pool.release(conn);
-        var result = conn.query(detail_query, .{
+        var result = postgres_read.query(self.pool, "verified_list.detail_query", detail_query, .{
             request.uri,
             request.list_collection,
             request.track_collection,
@@ -123,7 +114,7 @@ pub const PostgresVerifiedListStore = struct {
             @tagName(request.kind),
             self.like_collection,
         }) catch |err| {
-            logQueryError(conn, "verified list detail query failed", err);
+            logQueryError("verified list detail query failed", err);
             return error.IndexUnavailable;
         };
         defer result.deinit();
@@ -220,11 +211,8 @@ pub const PostgresVerifiedListStore = struct {
     }
 };
 
-fn logQueryError(conn: *pg.Conn, message: []const u8, err: anyerror) void {
-    if (conn.err) |pg_err|
-        std.log.err("{s}: {}: {s}", .{ message, err, pg_err.message })
-    else
-        std.log.err("{s}: {}", .{ message, err });
+fn logQueryError(message: []const u8, err: anyerror) void {
+    std.log.err("{s}: {}", .{ message, err });
 }
 
 /// Adapter that presents a wider pg row as though the composed track fields

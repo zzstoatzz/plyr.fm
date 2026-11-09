@@ -2,6 +2,7 @@
 
 const std = @import("std");
 const pg = @import("pg");
+const postgres_read = @import("postgres_read.zig");
 const composed = @import("postgres_composed_track_store.zig");
 const track_chart = @import("../domain/track_chart.zig");
 const store_module = @import("track_chart_store.zig");
@@ -21,19 +22,14 @@ pub const PostgresTrackChartStore = struct {
         request: store_module.Request,
     ) TrackChartStore.Error![]track_chart.Entry {
         const self: *PostgresTrackChartStore = @ptrCast(@alignCast(context));
-        const conn = self.pool.acquire() catch return error.IndexUnavailable;
-        defer self.pool.release(conn);
-        var result = conn.query(chart_query, .{
+        var result = postgres_read.query(self.pool, "track_chart.chart_query", chart_query, .{
             request.track_collection,
             request.profile_collection,
             request.like_collection,
             request.since_us,
             @as(i64, @intCast(request.limit)),
         }) catch |err| {
-            if (conn.err) |pg_err|
-                std.log.err("track chart query failed: {}: {s}", .{ err, pg_err.message })
-            else
-                std.log.err("track chart query failed: {}", .{err});
+            std.log.err("track chart query failed: {}", .{err});
             return error.IndexUnavailable;
         };
         defer result.deinit();

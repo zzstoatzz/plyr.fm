@@ -44,6 +44,49 @@ Every change returned identical rows or bodies. Notes:
   in 15 s locally). At next's ingest rate that is nothing; a full reconcile
   pays a few seconds.
 
+## prepared statements and the Neon wake path (2026-11-09)
+
+Hot reads go through `src/internal/index/postgres_read.zig`, which does two
+things the pool helpers didn't:
+
+- **Named prepared statements.** Each SQL constant is prepared once per
+  pooled connection under a name derived from its text at comptime, so a
+  name can never point at different SQL. Measured locally with
+  `scripts/read_path_bench.sql` (500 artists, 20k tracks, 100k likes) and
+  `scripts/bench_http.py --with-index`, ReleaseSafe, 4 vCPU container, Postgres
+  16 on the same host, concurrency 1, 5 s per row; bodies were byte-identical
+  before and after:
+
+  | endpoint | before p50 | after p50 |
+  |---|---|---|
+  | `/v1/tracks?limit=50` | 26.2 ms | 1.6 ms |
+  | `/v1/tracks?limit=50&cursor=…` | 27.0 ms | 1.6 ms |
+  | `/v1/tracks/{id}` | 3.9 ms | 0.23 ms |
+  | `/v1/tracks?limit=50`, concurrency 8 | 52 ms (146 req/s) | 4.5 ms (1,560 req/s) |
+
+  Search stays unprepared (`queryUnprepared`): after five executions
+  Postgres may switch a prepared statement to a generic plan, and for the
+  trigram search that plan was 10–20% slower than re-planning. Tag-filtered
+  discovery and period charts are prepared but were not benchmarked with
+  tags or a populated chart window; if a generic plan regresses one of them
+  on real data, move it to `queryUnprepared` too.
+
+- **One retry on a dead connection.** A read that fails with a transport
+  error or SQLSTATE class `08`, `57P` (what Neon suspend and
+  `pg_terminate_backend` send) or `0A000` (a cached plan invalidated by a
+  schema change) is retried once. The failed connection is released as
+  failed, so the pool replaces it, and the pool is LIFO, so the retry
+  normally runs on that replacement. Query errors are never retried, nor
+  are failures after the first row has been read. Only statements the
+  comptime read-only check accepts can use the module, so writes cannot be
+  retried by accident. A postgres test terminates every pooled backend and
+  asserts the following reads succeed; hegel properties
+  (`-Dfuzz-only=postgres_read`) cover the retry policy and the read-only
+  check, with mutants for both in `src/fuzz/mutants.zon`.
+
+Writes (ingest, play receipts, mirror bookkeeping) still use the pool
+directly and are not retried.
+
 ## ingest and the api
 
 - **No read/write contention measured.** With ~1,000 like writes/s (batched
@@ -67,19 +110,7 @@ the remainder in the background.
 
 ## open, ranked
 
-1. **Every request re-plans its query.** pg.zig sends unnamed statements, so
-   the large track query is parsed and planned on each request: about 9 ms of
-   the 14 ms a discovery page takes end to end, more than it spends executing.
-   Named prepared statements per pooled connection would remove that.
-2. **Idle connections and Neon suspend.** Neon suspends a compute after 5
-   minutes without active queries, and idle connections do not prevent it,
-   so the pool costs nothing while idle. The suspend closes the connections
-   it held, though, and the pool does not notice until one is used: with
-   every server-side connection terminated locally, the next request got a
-   503 and the ones after it succeeded. A Fly machine that outlives a Neon
-   suspend therefore fails one request on wake. Retrying once on a broken
-   connection (in the pool, or around `acquire` in the stores) would hide it.
-3. **One OS thread per connection** (`server.zig` spawns a thread per
+1. **One OS thread per connection** (`server.zig` spawns a thread per
    accepted stream, bounded by `MAX_CONNECTIONS`). Fine at current load on a
    256 MB machine; worth revisiting before raising the connection limit.
 
@@ -103,3 +134,5 @@ backfill from) and the `plyr_zig_canary` and `plyr_zig_worker` roles. Seed
 with `generate_series` into `actor_identities`, `account_availability`,
 `profile_records`, `track_records` and `like_records`, using real CIDs and
 TIDs (the stores refuse anything else), then `ANALYZE`.
+`scripts/read_path_bench.sql` is that fixture, for a `plyr_bench` database
+built the way CI builds one (Python `init_db.py`, then `scripts/migrate`).

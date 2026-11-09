@@ -204,6 +204,7 @@ pub fn main() !void {
 }
 
 test {
+    _ = @import("internal/index/postgres_read.zig");
     _ = @import("internal/projection/collection_proof.zig");
     _ = @import("internal/redis/connection_config.zig");
     _ = @import("internal/application/resolve_viewer_likes.zig");

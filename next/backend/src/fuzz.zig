@@ -14,6 +14,7 @@ const groups = .{
     .{ "await", @import("fuzz/await.zig") },
     .{ "health", @import("fuzz/health.zig") },
     .{ "like_counts", @import("fuzz/like_counts.zig") },
+    .{ "postgres_read", @import("fuzz/postgres_read.zig") },
 };
 
 pub fn main() !void {

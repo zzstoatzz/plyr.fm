@@ -2,6 +2,7 @@
 
 const std = @import("std");
 const pg = @import("pg");
+const postgres_read = @import("postgres_read.zig");
 const store_module = @import("ingest_status_store.zig");
 const mirror_store = @import("../delivery/postgres_mirror_store.zig");
 const stream_runner = @import("../ingest/stream_runner.zig");
@@ -19,17 +20,12 @@ pub const PostgresIngestStatusStore = struct {
 
     fn getOpaque(context: *anyopaque) IngestStatusStore.Error!store_module.Status {
         const self: *PostgresIngestStatusStore = @ptrCast(@alignCast(context));
-        const conn = self.pool.acquire() catch return error.IndexUnavailable;
-        defer self.pool.release(conn);
-        var row = (conn.row(status_query, .{
+        var row = (postgres_read.row(self.pool, "ingest_status.status_query", status_query, .{
             stream_runner.cursor_source,
             catalog_reconcile_runner.completed_source,
             @as(i64, @intCast(store_module.backlog_cap)),
         }) catch |err| {
-            if (conn.err) |pg_err|
-                std.log.err("ingest status query failed: {}: {s}", .{ err, pg_err.message })
-            else
-                std.log.err("ingest status query failed: {}", .{err});
+            std.log.err("ingest status query failed: {}", .{err});
             return error.IndexUnavailable;
         }) orelse return error.CorruptProjection;
         defer row.deinit() catch {};

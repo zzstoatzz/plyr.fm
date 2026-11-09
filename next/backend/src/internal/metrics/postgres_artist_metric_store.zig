@@ -6,6 +6,7 @@
 
 const std = @import("std");
 const pg = @import("pg");
+const postgres_read = @import("../index/postgres_read.zig");
 const zat = @import("zat");
 const artist_metrics = @import("../domain/artist_metrics.zig");
 const track_id = @import("../identity/track_id.zig");
@@ -34,7 +35,7 @@ pub const PostgresArtistMetricStore = struct {
         artist_did: []const u8,
         track_collection: []const u8,
     ) ArtistMetricStore.Error!artist_metrics.ArtistMetrics {
-        var query_row = self.pool.row(metrics_query, .{ artist_did, track_collection }) catch |err| {
+        var query_row = postgres_read.row(self.pool, "artist_metric.metrics_query", metrics_query, .{ artist_did, track_collection }) catch |err| {
             std.log.err("PostgreSQL artist metrics lookup failed: {}", .{err});
             return error.MetricsUnavailable;
         } orelse return error.CorruptMetrics;

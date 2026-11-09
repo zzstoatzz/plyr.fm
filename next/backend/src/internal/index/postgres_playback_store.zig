@@ -6,6 +6,7 @@
 
 const std = @import("std");
 const pg = @import("pg");
+const postgres_read = @import("postgres_read.zig");
 const zat = @import("zat");
 const playback = @import("../domain/playback.zig");
 const PlaybackStore = @import("playback_store.zig").PlaybackStore;
@@ -31,13 +32,8 @@ pub const PostgresPlaybackStore = struct {
         allocator: std.mem.Allocator,
         at_uri: []const u8,
     ) PlaybackStore.Error!?playback.Candidate {
-        const conn = self.pool.acquire() catch |err| {
-            std.log.err("playback connection failed: {}", .{err});
-            return error.IndexUnavailable;
-        };
-        defer self.pool.release(conn);
-        var query_row = conn.row(query, .{at_uri}) catch |err| {
-            logQueryError(conn, "playback query failed", err);
+        var query_row = postgres_read.row(self.pool, "playback.query", query, .{at_uri}) catch |err| {
+            logQueryError("playback query failed", err);
             return error.IndexUnavailable;
         } orelse return null;
         var active = true;
@@ -155,11 +151,8 @@ fn validateCid(allocator: std.mem.Allocator, value: []const u8, codec: u64) !voi
     if (parsed.codec() != codec) return error.InvalidCidCodec;
 }
 
-fn logQueryError(conn: *pg.Conn, message: []const u8, err: anyerror) void {
-    if (conn.err) |pg_err|
-        std.log.err("{s}: {}: {s}", .{ message, err, pg_err.message })
-    else
-        std.log.err("{s}: {}", .{ message, err });
+fn logQueryError(message: []const u8, err: anyerror) void {
+    std.log.err("{s}: {}", .{ message, err });
 }
 
 fn finishQueryRow(query_row: *pg.QueryRow) !void {

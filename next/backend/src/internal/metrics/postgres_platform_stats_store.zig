@@ -1,5 +1,6 @@
 const std = @import("std");
 const pg = @import("pg");
+const postgres_read = @import("../index/postgres_read.zig");
 const platform = @import("platform_stats_store.zig");
 
 pub const PostgresPlatformStatsStore = struct {
@@ -22,7 +23,7 @@ pub const PostgresPlatformStatsStore = struct {
         if (self.cached) |value| {
             if (now - self.refreshed_ns < 60 * std.time.ns_per_s) return value;
         }
-        var row = (self.pool.row(query, .{self.collection}) catch return error.MetricsUnavailable) orelse return error.CorruptMetrics;
+        var row = (postgres_read.row(self.pool, "platform_stats.query", query, .{self.collection}) catch return error.MetricsUnavailable) orelse return error.CorruptMetrics;
         var active = true;
         defer if (active) {
             row.deinit() catch row.result.deinit();
