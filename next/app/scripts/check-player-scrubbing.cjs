@@ -50,7 +50,7 @@ const server = http.createServer(async (req, res) => {
       const slider = page.getByRole('slider', { name: 'Playback position', exact: true });
       await slider.waitFor();
       await page.waitForFunction(() => document.querySelector('[aria-label="Playback position"]')?.getAttribute('aria-disabled') !== 'true' && window.fixtureAudio.some(audio => audio.readyState >= 2 && audio.duration === 120), null, { timeout: 15000 });
-      await page.waitForTimeout(300);
+      await page.waitForTimeout(600);
       await slider.evaluate(node => { window.scrubSamples = []; new MutationObserver(records => { for (const r of records) window.scrubSamples.push({ old: Number(r.oldValue), value: Number(node.getAttribute('aria-valuenow')) }); }).observe(node, { attributes: true, attributeFilter: ['aria-valuenow'], attributeOldValue: true }); });
       for (const fraction of [.7, .25, .8, .4]) {
       if (fraction === .8) await page.getByRole('button', { name: 'Pause', exact: true }).first().click();

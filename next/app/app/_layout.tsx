@@ -130,10 +130,10 @@ function Shell() {
             <Stack.Screen name="now-playing" options={{ presentation: Platform.OS === 'web' ? 'transparentModal' : 'card', animation: 'none', gestureEnabled: false, contentStyle: { backgroundColor: 'transparent' } }} />
           </Stack>
         </NowPlayingOriginContext.Provider>
-        {!wide && <View style={route === '/now-playing' ? { display: 'none' } : undefined}>{station ? <RadioPlayer key={station.slug} compact tuned={station} /> : <PlayerBar />}</View>}
+        {!wide && <View aria-hidden={route === '/now-playing'} pointerEvents={route === '/now-playing' ? 'none' : 'auto'}>{station ? <RadioPlayer key={station.slug} compact tuned={station} /> : <PlayerBar />}</View>}
         {!wide && nav}
       </View>
     </View>
-    {wide && <View style={route === '/now-playing' ? { display: 'none' } : undefined}>{station ? <View style={[glassSurface(theme), { overflow: 'hidden', width: '100%' }]}><RadioPlayer key={station.slug} compact tuned={station} /></View> : <PlayerBar />}</View>}
+    {wide && <View aria-hidden={route === '/now-playing'} pointerEvents={route === '/now-playing' ? 'none' : 'auto'}>{station ? <View style={[glassSurface(theme), { overflow: 'hidden', width: '100%' }]}><RadioPlayer key={station.slug} compact tuned={station} /></View> : <PlayerBar />}</View>}
   </SafeAreaView></RadioContext.Provider>;
 }
