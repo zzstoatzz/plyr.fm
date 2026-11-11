@@ -4,10 +4,7 @@ import Slider from './Slider';
 import type { Href } from 'expo-router';
 import ChevronDown from 'lucide-react-native/icons/chevron-down';
 import ListMusic from 'lucide-react-native/icons/list-music';
-import Pause from 'lucide-react-native/icons/pause';
-import Play from 'lucide-react-native/icons/play';
-import SkipBack from 'lucide-react-native/icons/skip-back';
-import SkipForward from 'lucide-react-native/icons/skip-forward';
+import { NextGlyph as SkipForward, PauseGlyph as Pause, PlayGlyph as Play, PreviousGlyph as SkipBack } from './PlayerGlyph';
 import X from 'lucide-react-native/icons/x';
 import { useEffect, useRef, useState } from 'react';
 import { Animated, Modal, Platform, Pressable, ScrollView, StyleSheet, View, useWindowDimensions, type ViewInstance } from 'react-native';
@@ -143,12 +140,12 @@ export function NowPlaying({ track, close: leave, navigate: go }: { track: Track
                 </View>
               </View>
               <View style={styles.transport}>
-                <View {...dismiss.protect}><PlayerControl icon={SkipBack} label="Previous" onPress={player.previous} /></View>
+                <View {...dismiss.protect}><PlayerControl large icon={SkipBack} label="Previous" onPress={player.previous} /></View>
                 {sideBySide && <PlayerSeek />}
                 <View {...dismiss.protect}><PlayerControl icon={playing ? Pause : Play} label={playing ? 'Pause' : 'Play'}
                   onPress={() => player.setPlaying(!playing)} primary large busy={player.loading} /></View>
                 {sideBySide && <PlayerSeek forward />}
-                <View {...dismiss.protect}><PlayerControl icon={SkipForward} label="Next" onPress={() => void player.next()} /></View>
+                <View {...dismiss.protect}><PlayerControl large icon={SkipForward} label="Next" onPress={() => void player.next()} /></View>
               </View>
               <View style={styles.utilities}>
                 <View {...dismiss.protect}><TrackLikes key={track.id} track={track} iconOnly returnTo="/now-playing" /></View>

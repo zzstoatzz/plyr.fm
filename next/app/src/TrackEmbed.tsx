@@ -3,11 +3,11 @@ import { Text } from './Text';
 import Slider from './Slider';
 import { Link } from 'expo-router';
 import Music from 'lucide-react-native/icons/eighth-note';
-import Pause from 'lucide-react-native/icons/pause';
-import Play from 'lucide-react-native/icons/play';
+import { PauseGlyph as Pause, PlayGlyph as Play } from './PlayerGlyph';
+import { PlayerLoader } from './PlayerLoader';
 import RotateCcw from 'lucide-react-native/icons/rotate-ccw';
 import { useState } from 'react';
-import { ActivityIndicator, Image, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { Image, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
 import type { Track } from './api';
 import { useAppearance } from './appearance';
 import { artistName } from './CatalogPieces';
@@ -43,7 +43,7 @@ export function TrackEmbed({ track, adult }: { track: Track; adult: boolean }) {
     style={({ pressed }) => ({ width: 48, height: 48, flexShrink: 0, borderRadius: 10,
       backgroundColor: 'rgba(10, 13, 20, 0.90)', alignItems: 'center', justifyContent: 'center',
       opacity: pressed || adult ? 0.65 : 1 })}>
-    {busy ? <ActivityIndicator accessibilityLabel="Loading playback" color="#fff" /> : <Icon color="#fff" size={26} fill={playing || error ? 'none' : '#fff'} />}
+    {busy ? <PlayerLoader color="#fff" size={22} /> : <Icon color="#fff" size={26} fill={playing || error ? 'none' : '#fff'} />}
   </Pressable>;
 
   const metadata = <View style={{ flex: 1, minWidth: 0, overflow: 'hidden', justifyContent: 'center', gap: 3 }}>

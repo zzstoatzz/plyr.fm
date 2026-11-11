@@ -3,12 +3,12 @@ import { Text } from './Text';
 import { useId, useState, type ReactNode, type Ref } from 'react';
 import { Link, type Href } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, TextInput, type TextInputProps, type ScrollViewProps, type ScrollViewInstance, View } from 'react-native';
-import type Play from 'lucide-react-native/icons/play';
+import type { Glyph } from './PlayerGlyph';
 import { useAppearance } from './appearance';
 import { onAccent } from './colors';
 
 export function Action({ label, onPress, href, disabled, selected, primary, destructive, icon: Icon, onArtwork }: {
-  label: string; onPress?: () => void; href?: Href; disabled?: boolean; selected?: boolean; primary?: boolean; destructive?: boolean; icon?: typeof Play; onArtwork?: boolean;
+  label: string; onPress?: () => void; href?: Href; disabled?: boolean; selected?: boolean; primary?: boolean; destructive?: boolean; icon?: Glyph; onArtwork?: boolean;
 }) {
   const theme = useAppearance();
   const [pressed, setPressed] = useState(false);
