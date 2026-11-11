@@ -55,7 +55,7 @@ async function run(browser, width) {
     await page.waitForURL(url => url.pathname === '/');
     await continuity();
     assert.ok(Math.abs(await scrollPosition() - origin) < 2, 'Browser back restores originating Home scroll');
-    assert.notEqual(await page.getByRole('link', { name: 'Home', exact: true }).evaluate(node => getComputedStyle(node).backgroundColor), await page.getByRole('link', { name: 'Search', exact: true }).evaluate(node => getComputedStyle(node).backgroundColor), 'Returned Home tab is visibly active');
+    assert.notEqual(await page.getByRole('link', { name: 'Home', exact: true }).evaluate(node => getComputedStyle(node.querySelector('[dir]')).color), await page.getByRole('link', { name: 'Search', exact: true }).evaluate(node => getComputedStyle(node.querySelector('[dir]')).color), 'Returned Home tab is visibly active');
     await page.goForward();
     await page.waitForURL('**/u/fixture.test');
     await continuity();
