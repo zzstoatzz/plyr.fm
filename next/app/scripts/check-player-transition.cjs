@@ -30,7 +30,7 @@ const dist = path.resolve(__dirname, '../dist');
     const record = async action => {
       const samples = [];
       await action();
-      for (const end = Date.now() + 700; Date.now() < end; await page.waitForTimeout(16)) samples.push(await sample());
+      for (const end = Date.now() + 1500; Date.now() < end; await page.waitForTimeout(16)) samples.push(await sample());
       return samples;
     };
     const opened = await record(() => dock.getByRole('button', { name: 'Open now playing', exact: true }).click());
