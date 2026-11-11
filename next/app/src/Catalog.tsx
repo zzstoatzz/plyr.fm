@@ -68,7 +68,7 @@ function Collection({ id, album, onPlay }: { id: string; album: boolean; onPlay:
   if (!list) return <Status loading={!result.error} error={result.error} retry={result.retry} />;
   const tracks = list.members.flatMap((member) => member.track ? [member.track] : []);
   return <>
-    <DetailHeader kind={album ? 'album' : 'playlist'} title={list.metadata.name ?? (album ? 'Album' : 'Playlist')} artwork={collectionArtwork(list)}>
+    <DetailHeader kind={album ? 'album' : 'playlist'} title={list.metadata.name ?? (album ? 'album' : 'playlist')} artwork={collectionArtwork(list)}>
     {list.owner.profile && <InlineLink href={{ pathname: '/u/[handle]', params: { handle: list.owner.profile.handle || list.owner.did } }}>
       {list.owner.profile.display_name || list.owner.profile.handle}
     </InlineLink>}
@@ -91,7 +91,7 @@ function ArtistPage({ handle, onPlay }: { handle: string; onPlay: Play }) {
     <DetailHeader title={artist.display_name || artist.handle} artwork={artist.avatar_url} round>
     <Detail>@{artist.handle}</Detail>
     {artist.bio && <Detail>{artist.bio}</Detail>}
-    {support && <InlineLink standalone href={support as Href}>Support artist</InlineLink>}
+    {support && <InlineLink standalone href={support as Href}>support artist</InlineLink>}
     </DetailHeader>
     <View style={styles.actions}>
       <ShareLink compact path={`/u/${encodeURIComponent(artist.handle || artist.did)}`} />
@@ -117,17 +117,17 @@ function ArtistCatalog({ did, onPlay }: { did: string; onPlay: Play }) {
   const likes = useResource(loadLikes);
   return <>
     {metrics.data && <Detail>{metrics.data.totals.tracks} tracks · {metrics.data.totals.plays} plays</Detail>}
-    <Heading>Tracks</Heading>
+    <Heading>tracks</Heading>
     {tracks.data[0] && <Button primary icon={PlayIcon} label="Play tracks" onPress={() => onPlay(tracks.data[0], tracks.data)} />}
     <TrackRows tracks={tracks.data} onPlay={onPlay} />
-    <Status loading={tracks.loading} error={tracks.error} retry={tracks.more} empty={!tracks.data.length ? 'No tracks yet.' : undefined} />
+    <Status loading={tracks.loading} error={tracks.error} retry={tracks.more} empty={!tracks.data.length ? 'no tracks yet.' : undefined} />
     {tracks.cursor && !tracks.loading && !tracks.error && <Button label="More tracks" onPress={tracks.more} />}
     {lists.data?.map((list, index) => list.data.length > 0 && <View style={styles.group} key={index}>
       <Heading>{index === 0 ? 'Albums' : 'Playlists'}</Heading>
       <ListRows lists={list.data} />
     </View>)}
     {likes.data && likes.data.data.length > 0 && <View style={styles.group}>
-      <Heading>Likes</Heading>
+      <Heading>likes</Heading>
       <TrackRows tracks={likes.data.data} onPlay={onPlay} />
     </View>}
   </>;
@@ -136,9 +136,9 @@ function ArtistCatalog({ did, onPlay }: { did: string; onPlay: Play }) {
 function Playlists() {
   const lists = usePages(loadPlaylists);
   return <>
-    <Heading main>Playlists</Heading>
+    <Heading main>playlists</Heading>
     <ListRows lists={lists.data} />
-    <Status loading={lists.loading} error={lists.error} retry={lists.more} empty={!lists.data.length ? 'No playlists yet.' : undefined} />
+    <Status loading={lists.loading} error={lists.error} retry={lists.more} empty={!lists.data.length ? 'no playlists yet.' : undefined} />
     {lists.cursor && !lists.loading && !lists.error && <Button label="More playlists" onPress={lists.more} />}
   </>;
 }
@@ -159,7 +159,7 @@ export function Catalog({
   else if ((screen === 'album' || screen === 'playlist') && id) {
     content = <Collection key={id} id={id} album={screen === 'album'} onPlay={onPlay} />;
   } else if (screen === 'artist' && handle) content = <ArtistPage key={handle} handle={handle} onPlay={onPlay} />;
-  else content = <Detail>This catalog link is incomplete.</Detail>;
+  else content = <Detail>this catalog link is incomplete.</Detail>;
   return <ScrollView style={{ flex: 1, backgroundColor: colors.background }} keyboardShouldPersistTaps="handled" keyboardDismissMode={screen === 'search' ? 'on-drag' : undefined} automaticallyAdjustKeyboardInsets={screen === 'search'}>
     <View style={styles.page}>{content}</View>
   </ScrollView>;

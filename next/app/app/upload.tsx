@@ -23,12 +23,12 @@ export default function Upload() {
       const item = await pickMedia(kind);
       if (!item) return;
       if (kind === 'audio/*') {
-        if (item.size > MAX_AUDIO_BYTES) throw new Error('Audio files are limited to 100 MB.');
+        if (item.size > MAX_AUDIO_BYTES) throw new Error('audio files are limited to 100 MB.');
         setFile(item);
         if (!title) setTitle(item.name.replace(/\.[^.]+$/, '').slice(0, 256));
       } else setArtwork(item);
     } catch (failure) {
-      setNote(failure instanceof Error ? failure.message : 'Could not open the file.');
+      setNote(failure instanceof Error ? failure.message : 'could not open the file.');
     }
   }
 
@@ -38,24 +38,24 @@ export default function Upload() {
     setNote(undefined);
     try {
       const duration = await measureAudioDuration(file).catch(() => undefined);
-      if (getAuth().agent !== auth.agent) throw new Error('Account changed before upload.');
+      if (getAuth().agent !== auth.agent) throw new Error('account changed before upload.');
       setSaved(await createPds(auth).uploadTrack({ file, artwork, title, artist, album, description, duration }));
     } catch (failure) {
-      setNote(failure instanceof Error ? failure.message : 'Upload failed.');
+      setNote(failure instanceof Error ? failure.message : 'upload failed.');
     } finally {
       setBusy(false);
     }
   }
 
-  return <Page title="Upload">
+  return <Page title="upload">
     {!auth.did ? <Action label="Sign in" href="/login" /> : saved ? <>
-      <Copy>{saved.status === 'indexed' ? 'Saved to your PDS.' : 'Saved to your PDS. Catalog indexing is separate.'}</Copy>
+      <Copy>{saved.status === 'indexed' ? 'saved to your PDS.' : 'saved to your PDS. catalog indexing is separate.'}</Copy>
       <Action label="View track" href={`/track/${trackIdFromUri(saved.uri)}`} />
       <Action label="Upload another" onPress={() => {
         setSaved(undefined); setFile(null); setArtwork(null); setTitle(''); setAlbum(''); setDescription('');
       }} />
     </> : <>
-      <Copy>Audio goes to your PDS.</Copy>
+      <Copy>audio goes to your PDS.</Copy>
       <Action label={file?.name ?? 'Choose audio'} onPress={() => void choose('audio/*')} disabled={busy} />
       <Action label={artwork?.name ?? 'Choose cover art'} onPress={() => void choose('image/*')} disabled={busy} />
       <Field label="Title" value={title} onChangeText={setTitle} maxLength={256} />

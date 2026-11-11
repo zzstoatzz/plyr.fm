@@ -32,7 +32,7 @@ export interface RadioSnapshot {
 
 export async function readRadio(station: RadioStation, signal: AbortSignal): Promise<RadioSnapshot> {
   const response = await fetch(`${station.origin}/api/radio/state`, { signal, cache: 'no-store' });
-  if (!response.ok) throw new Error('Could not reach this station');
+  if (!response.ok) throw new Error('could not reach this station');
   const state: RadioStateResponse = await response.json();
   return Object.freeze({
     currentSong: state.currentSong ? Object.freeze(state.currentSong) : null,

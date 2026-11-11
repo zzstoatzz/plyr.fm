@@ -30,25 +30,25 @@ export default function EditProfile() {
   async function save() {
     if (!profile || busy) return;
     if (avatar.trim() && !avatar.trim().startsWith('https://')) {
-      setMessage('Use an HTTPS avatar URL.');
+      setMessage('use an HTTPS avatar URL.');
       return;
     }
     setBusy(true);
     try {
       const status = await pds.saveProfile({ bio, avatar }, profile);
-      setMessage(status === 'indexed' ? 'Profile saved.' : 'Saved to your PDS. Check your public profile after indexing.');
+      setMessage(status === 'indexed' ? 'profile saved.' : 'saved to your PDS. check your public profile after indexing.');
       setProfile(await pds.myProfile());
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'Could not save profile.');
+      setMessage(error instanceof Error ? error.message : 'could not save profile.');
     } finally {
       setBusy(false);
     }
   }
 
-  return <Sheet title="Edit profile" close={() => {
+  return <Sheet title="edit profile" close={() => {
     if (!busy) router.canGoBack() ? router.back() : router.replace('/portal');
   }}>
-    {!did ? <Copy>Sign in to edit your profile.</Copy> : <>
+    {!did ? <Copy>sign in to edit your profile.</Copy> : <>
       <Field label="Bio" value={bio} onChangeText={setBio} multiline editable={!busy && !!profile} />
       <Field label="Avatar URL" value={avatar} onChangeText={setAvatar} autoCapitalize="none" editable={!busy && !!profile} />
       <Action primary label={busy ? 'Saving…' : 'Save profile'} disabled={!profile || busy} onPress={() => void save()} />

@@ -44,7 +44,7 @@ const track=process.env.PLAYBACK_TRACK || 'trk_YXQ6Ly9kaWQ6cGxjOjZwbWJzbndlcm1ha
  await host.getByText(/Share https/).waitFor();
  const guest=await signIn(browsers[1],'jamguesthttps.test',room);
  await guest.getByRole('button',{name:'Join Jam'}).click();
- await guest.getByText('Paused',{exact:true}).waitFor();
+ await guest.getByText('paused',{exact:true}).waitFor();
  await host.getByRole('button',{name:'Play Jam',exact:true}).click();
  const moving=page=>page.waitForFunction(()=>window.jamAudio.some(a=>!a.paused&&a.currentTime>2));
  await Promise.all([moving(host),moving(guest)]);
@@ -53,7 +53,7 @@ const track=process.env.PLAYBACK_TRACK || 'trk_YXQ6Ly9kaWQ6cGxjOjZwbWJzbndlcm1ha
  for(const page of [host,guest]){assert.equal(receipts.get(page).length,1);assert.equal(receipts.get(page)[0].counted,true);assert.equal(receipts.get(page)[0].sources.dedup,'postgres_durable');}
  console.log('Both independent Jam outputs earned durable Next receipts', [host, guest].map(page => ({ occurrence: receipts.get(page)[0].occurrence, count: receipts.get(page)[0].play_count }))); 
  await host.getByRole('button',{name:'Pause Jam'}).click();
- await guest.getByText('Paused',{exact:true}).waitFor();
+ await guest.getByText('paused',{exact:true}).waitFor();
  await guest.waitForFunction(()=>window.jamAudio.some(a=>a.paused&&a.currentTime>1));
  await host.getByRole('button',{name:'Play Jam',exact:true}).waitFor();
  await host.getByRole('button',{name:'Seek to start'}).click();

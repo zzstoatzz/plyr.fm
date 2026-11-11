@@ -55,7 +55,7 @@ async function initialize() {
 			await activate(session);
 		} catch (error) {
 			completeQueueLogin(false);
-			clearAuth(error instanceof Error ? error.message : 'Could not sign in', params.get('error') === 'invalid_scope');
+			clearAuth(error instanceof Error ? error.message : 'could not sign in', params.get('error') === 'invalid_scope');
 		}
 		return;
 	}

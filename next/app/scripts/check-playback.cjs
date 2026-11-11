@@ -102,7 +102,7 @@ async function run(browser, width, theme) {
     });
     await timed('openNowPlaying', async () => {
       await page.getByRole('button', { name: 'Open now playing', exact: true }).click();
-      await page.getByRole('heading', { name: 'Now playing', exact: true }).waitFor();
+      await page.getByRole('heading', { name: 'now playing', exact: true }).waitFor();
       await page.getByRole('slider', { name: 'Playback position', exact: true }).waitFor();
     });
     await screenshot('now-playing');

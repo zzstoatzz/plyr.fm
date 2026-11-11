@@ -43,9 +43,9 @@ export function TrackLikes({ track, compact = false, returnTo, menu = false, ico
         <Text numberOfLines={1} style={{ color: theme.muted, fontSize: 14 * theme.scale }}>{compact ? count : label}</Text>
       </Pressable>}
     </View>
-    {open && <Sheet title="Liked by" close={() => setOpen(false)}><People id={track.id} viewer={viewer?.did === auth.did && viewer.uri === track.record.uri ? viewer : undefined} close={() => setOpen(false)} /></Sheet>}
+    {open && <Sheet title="liked by" close={() => setOpen(false)}><People id={track.id} viewer={viewer?.did === auth.did && viewer.uri === track.record.uri ? viewer : undefined} close={() => setOpen(false)} /></Sheet>}
     {error && menu && <Text accessibilityRole="alert" style={{ color: theme.danger }}>{error}</Text>}
-    {error && !menu && <Sheet title="Couldn’t update like" close={() => setError(undefined)}>
+    {error && !menu && <Sheet title="couldn’t update like" close={() => setError(undefined)}>
       <Text style={{ color: theme.muted, fontSize: 15 * theme.scale }}>{error}</Text>
       <ActionRow label="close" icon={X} onPress={() => setError(undefined)} />
     </Sheet>}

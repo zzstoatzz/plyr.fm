@@ -107,7 +107,7 @@ export function usePersonalQueue(target: Target) {
       const ref = wire.queue[wire.index];
       const track = ref && current.cache.get(ref.id);
       if (!ref || !track) {
-        if (ref && current.isMissing(ref.id)) { runtime.current.error('This track is unavailable'); if (mine && wire.playing) current.command({ action: 'pause' }); }
+        if (ref && current.isMissing(ref.id)) { runtime.current.error('this track is unavailable'); if (mine && wire.playing) current.command({ action: 'pause' }); }
         return;
       }
       if (!mine) { setRestoredPosition(jamPosition(wire, current.position(Date.now())) / 1000); return; }
@@ -145,7 +145,7 @@ export function usePersonalQueue(target: Target) {
         setRestoredPosition(undefined);
         if (settled.personal?.output?.clientId === client.current && settled.playing && !pausedHere.current) runtime.current.play();
         else runtime.current.pause();
-      } catch (error) { if (!stale()) runtime.current.error(error instanceof Error ? error.message : 'Could not restore playback'); }
+      } catch (error) { if (!stale()) runtime.current.error(error instanceof Error ? error.message : 'could not restore playback'); }
       finally {
         synchronizing.key = '';
         if (!stale() && (reapply !== synchronizing.requested || current.wire?.occurrence !== wire.occurrence) && current.wire) void apply(current.wire, true);
@@ -171,7 +171,7 @@ export function usePersonalQueue(target: Target) {
             if (stale() || request !== synchronization.current) return;
             await runtime.current.seek(checkpoint.position);
             setRestoredPosition(undefined);
-          }).catch(() => runtime.current.error('Could not restore playback'));
+          }).catch(() => runtime.current.error('could not restore playback'));
         }
       },
       connected: async wire => {
@@ -199,8 +199,8 @@ export function usePersonalQueue(target: Target) {
           if (pendingPlay.current !== undefined) return;
           const result = await current.dispatch({ action: 'playContext', queue: state.entries.map(entry => queueReference(entry.track, entry.key)),
             index: state.index, label: state.tail?.label, playing: !returning && runtime.current.playing(), positionMs: Math.round(adopt.position * 1000) });
-          if (!result) runtime.current.error('Could not restore your listening queue');
-        } catch { runtime.current.error('Could not restore your listening queue'); }
+          if (!result) runtime.current.error('could not restore your listening queue');
+        } catch { runtime.current.error('could not restore your listening queue'); }
         finally {
           importing = false;
           if (!stale()) { setState(current.state); if (!(runtime.current.suspended || held.current)) runtime.current.setQueue(current.state.entries.map(entry => entry.track), current.state.index); }
@@ -323,7 +323,7 @@ export function usePersonalQueue(target: Target) {
     continuation.current.consumed(new Set(fresh.map(track => track.id)));
   }
   function ensureContinuation() {
-    continuing.current ??= fillContinuation().catch(() => runtime.current.error('Could not load more tracks')).finally(() => { continuing.current = undefined; });
+    continuing.current ??= fillContinuation().catch(() => runtime.current.error('could not load more tracks')).finally(() => { continuing.current = undefined; });
     return continuing.current;
   }
   useEffect(() => { void ensureContinuation(); }, [state, target.keepPlaying, target.suspended, remote?.personal?.keepPlaying]);
@@ -355,7 +355,7 @@ export function usePersonalQueue(target: Target) {
         const accepted = connected && await current.dispatch({ action: 'play' });
         if (request !== playRequest.current || current !== session.current) return;
         setWaiting(false);
-        if (!accepted) runtime.current.error('Could not resume playback. Please try again.');
+        if (!accepted) runtime.current.error('could not resume playback. please try again.');
       });
       return true;
     }
@@ -406,9 +406,9 @@ export function usePersonalQueue(target: Target) {
           runtime.current.setQueue(current.state.entries.map(entry => entry.track), current.state.index);
           current.refresh();
         }
-        if (!accepted && current.wire?.queue[current.wire.index]?.key !== entries[at].key) runtime.current.error('Could not start playback. Please try again.');
+        if (!accepted && current.wire?.queue[current.wire.index]?.key !== entries[at].key) runtime.current.error('could not start playback. please try again.');
       }).catch(() => {
-        if (request === playRequest.current) { pendingPlay.current = undefined; setWaiting(false); current.refresh(); runtime.current.error('Could not start playback'); }
+        if (request === playRequest.current) { pendingPlay.current = undefined; setWaiting(false); current.refresh(); runtime.current.error('could not start playback'); }
       });
       return true;
     }

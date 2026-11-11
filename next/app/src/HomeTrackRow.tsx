@@ -20,7 +20,7 @@ export function HomeTrackRow({ track, tracks, onPlay, returnTo = '/', height }: 
     <View pointerEvents="box-none" style={styles.meta}>
       <Link href={`/track/${track.id}`} asChild><Pressable accessibilityRole="link" accessibilityLabel={`Track details: ${track.metadata.title}`} style={styles.link}><Text numberOfLines={1} style={{ color: theme.text, fontSize: 15 * theme.scale, fontWeight: '600' }}>{track.metadata.title}</Text></Pressable></Link>
       <Link href={`/u/${encodeURIComponent(track.artist.profile.handle || track.artist.did)}`} asChild><Pressable accessibilityRole="link" style={styles.link}><Text numberOfLines={1} style={{ color: theme.muted, fontSize: 13 * theme.scale }}>{artistName(track)}</Text></Pressable></Link>
-      <Text numberOfLines={1} style={{ color: theme.faint, fontSize: 12 * theme.scale }}>{trackMeta(track)}</Text>
+      <View pointerEvents="none"><Text numberOfLines={1} style={{ color: theme.faint, fontSize: 12 * theme.scale }}>{trackMeta(track)}</Text></View>
     </View>
     <HomeTrackActions track={track} returnTo={returnTo} />
   </View></View>;

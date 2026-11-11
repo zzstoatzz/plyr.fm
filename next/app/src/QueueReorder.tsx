@@ -167,10 +167,10 @@ function DragHandle({ register, position, total, label, active, first, last, beg
     onPanResponderTerminationRequest: () => false
   })).current;
   return <View ref={register} {...responder.panHandlers} accessible focusable tabIndex={0} accessibilityRole="adjustable" accessibilityLabel={`Reorder ${label}`}
-    accessibilityHint={Platform.OS === 'web' ? 'Drag to reorder, or use the up and down arrow keys.' : 'Drag to reorder, or use the move earlier and move later actions.'}
-    aria-valuemin={1} aria-valuemax={total} aria-valuenow={position} aria-valuetext={active ? 'Moving' : `Position ${position} of ${total}`}
-    accessibilityValue={{ min: 1, max: total, now: position, text: active ? 'Moving' : `Position ${position} of ${total}` }}
-    accessibilityActions={[...(!first ? [{ name: 'decrement', label: 'Move earlier' }] : []), ...(!last ? [{ name: 'increment', label: 'Move later' }] : [])]}
+    accessibilityHint={Platform.OS === 'web' ? 'drag to reorder, or use the up and down arrow keys.' : 'drag to reorder, or use the move earlier and move later actions.'}
+    aria-valuemin={1} aria-valuemax={total} aria-valuenow={position} aria-valuetext={active ? 'Moving' : `position ${position} of ${total}`}
+    accessibilityValue={{ min: 1, max: total, now: position, text: active ? 'Moving' : `position ${position} of ${total}` }}
+    accessibilityActions={[...(!first ? [{ name: 'decrement', label: 'move earlier' }] : []), ...(!last ? [{ name: 'increment', label: 'move later' }] : [])]}
     onAccessibilityAction={event => {
       if (event.nativeEvent.actionName === 'decrement' && !first) move(-1);
       if (event.nativeEvent.actionName === 'increment' && !last) move(1);

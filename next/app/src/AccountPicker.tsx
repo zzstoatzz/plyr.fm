@@ -60,7 +60,7 @@ export function AccountPicker({ value, actors, disabled, change, choose, submit 
       keyboardShouldPersistTaps="handled" style={{ position: 'absolute', top: '100%', left: 0, right: 0, maxHeight: 288,
         backgroundColor: theme.background, borderWidth: 1, borderColor: theme.hairline, borderRadius: 10,
         shadowColor: '#000', shadowOpacity: theme.dark ? 0.3 : 0.12, shadowRadius: 12, shadowOffset: { width: 0, height: 6 } }}>
-      {Platform.OS === 'web' ? createElement('div', { id: 'account-suggestions', role: 'listbox', 'aria-label': 'Matching accounts' }, options) : options}
+      {Platform.OS === 'web' ? createElement('div', { id: 'account-suggestions', role: 'listbox', 'aria-label': 'matching accounts' }, options) : options}
     </ScrollView>}
   </View>;
 }

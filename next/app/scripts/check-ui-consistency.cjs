@@ -151,7 +151,7 @@ audio.writeUInt16LE(16, 34); audio.write('data', 36); audio.writeUInt32LE(audio.
           ['jam', `/jam/${did}~audit?track=${id}`, 'heading'], ['queue-empty', '/queue', 'heading'], ['radio', '/radio', 'heading'],
           ['embed-track', '/embed/track/' + id, 'Play'], ['embed-album', '/embed/album/alb_fixture', 'heading'],
           ['embed-playlist', '/embed/playlist/pls_fixture', 'heading'], ['embed-artist', '/embed/u/' + handle, 'heading'],
-          ['embed-radio', '/embed/radio', 'Listen live'], ['embed-album-slug', '/embed/album/' + handle + '/fixture', 'heading'],
+          ['embed-radio', '/embed/radio', 'listen live'], ['embed-album-slug', '/embed/album/' + handle + '/fixture', 'heading'],
         ]) {
           if (process.env.UI_AUDIT_ONLY && !process.env.UI_AUDIT_ONLY.split(',').includes(name)) continue;
           await page.goto(origin + route);

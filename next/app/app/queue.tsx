@@ -35,7 +35,7 @@ export default function Queue() {
   const picks = Math.max(0, (player.tail?.from ?? player.queue.length) - player.index - 1);
   const RepeatIcon = player.repeat === 'one' ? Repeat1 : Repeat;
 
-  return <Page title="Queue" scrollRef={scrollRef} scrollEnabled={!dragging}
+  return <Page title="queue" scrollRef={scrollRef} scrollEnabled={!dragging}
     onScroll={event => { scrollMetrics.current.offset = event.nativeEvent.contentOffset.y; }}
     onLayout={event => { scrollMetrics.current.height = event.nativeEvent.layout.height; }}
     onContentSizeChange={(_, height) => { scrollMetrics.current.contentHeight = height; }}>
@@ -43,7 +43,7 @@ export default function Queue() {
     {player.current ? <>
       <View style={styles.section}>
         <View style={styles.header}>
-          <Heading>Now playing</Heading>
+          <Heading>now playing</Heading>
           <View style={styles.actions}>
             <IconButton label={player.jam ? "Open Jam" : "Start a Jam"} selected={!!player.jam} onPress={() => {
               if (player.jam) { router.push({ pathname: '/jam/[room]', params: { room: `${player.jam.host}~${player.jam.key}` } }); return; }
@@ -65,7 +65,7 @@ export default function Queue() {
         {player.deviceQueue && <Copy>queue saved on this device. <InlineLink href="/login?return_to=%2Fqueue">sign in again</InlineLink> to use it across devices.</Copy>}
         {player.outputElsewhere && <Copy>playing on another device. press play to listen here.</Copy>}
         <View style={styles.header}>
-          <Heading>Up next</Heading>
+          <Heading>up next</Heading>
           <View style={styles.actions}>
             <IconButton label="Shuffle upcoming" disabled={picks < 2 && !player.jam} onPress={player.shuffle}>
               <Shuffle size={20} color={theme.muted} />
@@ -92,14 +92,14 @@ export default function Queue() {
           <QueueTrack key={`${track.id}:${index}`} track={track} play={() => player.jump(index)} />)}
       </View>}
     </> : <Copy>pick a track to start listening.</Copy>}
-    {dialog === 'clear' && <Sheet title="Clear upcoming tracks?" close={() => setDialog(null)}>
+    {dialog === 'clear' && <Sheet title="clear upcoming tracks?" close={() => setDialog(null)}>
       <Copy>{player.jam ? "the current track will keep playing." : "clear your picks. tracks from the current collection will remain."}</Copy>
       <View style={row}>
         <Action label="Cancel" onPress={() => setDialog(null)} />
         <Action label="Clear upcoming" primary onPress={() => { player.clear(); setDialog(null); }} />
       </View>
     </Sheet>}
-    {dialog === 'volume' && <Sheet title="Volume" close={() => setDialog(null)}>
+    {dialog === 'volume' && <Sheet title="volume" close={() => setDialog(null)}>
       <Slider accessibilityLabel="Volume" minimumValue={0} maximumValue={1} value={preferences.volume}
         minimumTrackTintColor={theme.accent} onSlidingComplete={(volume) => setPreferences({ volume })} />
     </Sheet>}

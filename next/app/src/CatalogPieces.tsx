@@ -18,7 +18,7 @@ type Result<T> = { data?: T; error?: string };
 export const useColors = useAppearance;
 
 export function errorMessage(error: unknown) {
-  return error instanceof Error ? error.message : 'Could not load the catalog.';
+  return error instanceof Error ? error.message : 'could not load the catalog.';
 }
 
 export function useResource<T>(load: () => Promise<T>, delay = 0, keepDataOnRetry = false) {
@@ -184,7 +184,7 @@ export function ListRows({ lists }: { lists: ListSummary[] }) {
       pathname: list.object === 'album' ? '/album/[id]' : '/playlist/[id]',
       params: { id: list.id },
     }}
-    title={list.metadata.name ?? 'Untitled'}
+    title={list.metadata.name ?? 'untitled'}
     subtitle={`${list.metrics.member_count} tracks`}
     image={collectionArtwork(list)}
   />)}</View>;

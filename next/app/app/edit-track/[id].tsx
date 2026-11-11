@@ -46,15 +46,15 @@ export default function EditTrack() {
         return;
       }
       setSaved(true);
-      setError(status === 'rejected' ? 'Saved to your PDS. The catalog rejected the change.' : 'Saved to your PDS. The catalog is catching up.');
+      setError(status === 'rejected' ? 'saved to your PDS. the catalog rejected the change.' : 'saved to your PDS. the catalog is catching up.');
     } catch (failure) {
-      setError(failure instanceof Error ? failure.message : 'Could not update track.');
+      setError(failure instanceof Error ? failure.message : 'could not update track.');
     } finally {
       setBusy(false);
     }
   }
 
-  return <Sheet title="Edit track" close={() => {
+  return <Sheet title="edit track" close={() => {
     if (!busy) router.canGoBack() ? router.back() : router.replace(`/track/${id}`);
   }}>
     {error && <Copy live>{error}</Copy>}
@@ -65,12 +65,12 @@ export default function EditTrack() {
       <View style={row}>
         <Action label={artwork?.name ?? 'Change cover'} disabled={busy} onPress={() => void pickMedia('image/*').then((file) => {
           if (file) setArtwork(file);
-        }).catch(() => setError('Could not open cover art.'))} />
-        <Action label={artwork === null ? 'Cover will be removed' : 'Remove cover'} disabled={busy} onPress={() => setArtwork(null)} />
+        }).catch(() => setError('could not open cover art.'))} />
+        <Action label={artwork === null ? 'cover will be removed' : 'remove cover'} disabled={busy} onPress={() => setArtwork(null)} />
       </View>
       <Action primary label="Save" disabled={busy || !title.trim()} onPress={() => void save(false)} />
       <Action destructive label={confirm ? 'Confirm delete' : 'Delete track'} disabled={busy} onPress={() => confirm ? void save(true) : setConfirm(true)} />
       {confirm && <Action label="Cancel delete" disabled={busy} onPress={() => setConfirm(false)} />}
-    </> : <Copy>{track ? 'Only the artist can edit this track.' : error ? '' : 'Loading track…'}</Copy>}
+    </> : <Copy>{track ? 'only the artist can edit this track.' : error ? '' : 'loading track…'}</Copy>}
   </Sheet>;
 }

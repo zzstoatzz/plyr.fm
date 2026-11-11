@@ -67,6 +67,6 @@ export function mergeQueueMutations(previous: QueueMutation[], entries: QueueMut
     merged.set(entry.id, known ? { ...known, base: known.base ?? entry.base } : entry);
   }
   for (const id of remove) merged.delete(id);
-  if (merged.size > 64) throw new Error('Connect before adding more queue changes');
+  if (merged.size > 64) throw new Error('connect before adding more queue changes');
   return [...merged.values()];
 }

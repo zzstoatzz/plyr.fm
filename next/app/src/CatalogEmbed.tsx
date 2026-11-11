@@ -20,13 +20,13 @@ interface EmbedData {
 
 async function legacy<T>(path: string): Promise<T> {
   const response = await fetch(`https://api.plyr.fm/${path}`);
-  if (!response.ok) throw new Error('Embed not found');
+  if (!response.ok) throw new Error('embed not found');
   return response.json() as Promise<T>;
 }
 
 async function legacyTracks(entries: { atproto_record_uri?: string }[]) {
   const results = await Promise.allSettled(entries.map(async entry => {
-    if (!entry.atproto_record_uri) throw new Error('Track has no record');
+    if (!entry.atproto_record_uri) throw new Error('track has no record');
     return api.track(trackIdFromUri(entry.atproto_record_uri));
   }));
   return results.flatMap(result => result.status === 'fulfilled' ? [result.value] : []);
@@ -59,7 +59,7 @@ async function loadEmbed(kind: Kind, id: string, handle: string, slug: string): 
   }
   const list = await (kind === 'album' ? api.album(id) : api.playlist(id));
   return {
-    title: list.metadata.name ?? (kind === 'album' ? 'Album' : 'Playlist'),
+    title: list.metadata.name ?? (kind === 'album' ? 'album' : 'playlist'),
     subtitle: list.owner.profile?.display_name,
     artwork: collectionArtwork(list),
     tracks: list.members.flatMap(member => member.track ? [member.track] : []),
@@ -98,6 +98,6 @@ export function CatalogEmbed({ kind }: { kind: Kind }) {
     </View>
     {kind !== 'track' && player.current && <Action label={player.status.playing ? 'Pause' : 'Resume'} onPress={player.toggle} />}
     {kind !== 'track' && <TrackRows tracks={data.tracks} onPlay={player.play} />}
-    {(player.error || player.status.error) && <Copy>Couldn’t play this track.</Copy>}
+    {(player.error || player.status.error) && <Copy>couldn’t play this track.</Copy>}
   </View>;
 }

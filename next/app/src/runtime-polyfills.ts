@@ -18,7 +18,7 @@ if (!globalThis.crypto?.subtle) {
         async digest(algorithm: AlgorithmIdentifier, data: BufferSource) {
           const name = (typeof algorithm === 'string' ? algorithm : algorithm.name).toUpperCase();
           const supported = algorithms[name];
-          if (!supported) throw new Error(`Unsupported digest algorithm: ${name}`);
+          if (!supported) throw new Error(`unsupported digest algorithm: ${name}`);
           return digest(supported, data);
         }
       }

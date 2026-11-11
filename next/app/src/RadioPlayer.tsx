@@ -109,7 +109,7 @@ export default function Radio({ compact = false, tuned }: { compact?: boolean; t
       <View style={{ flex: 1, minWidth: 0 }}>
         <Text numberOfLines={1} style={{ color: theme.text, fontSize: 15 * theme.scale, fontWeight: '700' }}>{song?.title ?? station.label}</Text>
         <Text numberOfLines={1} style={{ color: theme.muted, fontSize: 12 }}>
-          {status.error ? 'Couldn’t play this station' : error || (song ? `${song.artist} · Radio` : snapshot ? 'Off air' : 'Loading station…')}
+          {status.error ? 'couldn’t play this station' : error || (song ? `${song.artist} · Radio` : snapshot ? 'off air' : 'loading station…')}
         </Text>
       </View>
       {(song || tuned) && <PlayerControl icon={listening ? Pause : Play} label={listening ? 'Stop listening' : 'Listen live'}
@@ -118,8 +118,8 @@ export default function Radio({ compact = false, tuned }: { compact?: boolean; t
   </View>;
 
   const artwork = song?.hasCover ? radioMedia(station, song, 'cover') : null;
-  return <Page title="Radio">
-    <Copy>Choose a station</Copy>
+  return <Page title="radio">
+    <Copy>choose a station</Copy>
     <View style={row}>
       {radioStations.map(item => <Action key={item.slug} label={item.label} selected={item === station} primary={item === station}
         onPress={() => {
@@ -138,10 +138,10 @@ export default function Radio({ compact = false, tuned }: { compact?: boolean; t
           <Text style={{ color: '#fff' }}>{song.artist}</Text>
         </>}
         {(!song || error || status.error) && <Text accessibilityLiveRegion="polite" style={{ color: '#fff' }}>
-          {status.error ? 'Couldn’t play this station.' : error || (snapshot ? 'This station is off air.' : 'Loading station…')}
+          {status.error ? 'couldn’t play this station.' : error || (snapshot ? 'this station is off air.' : 'loading station…')}
         </Text>}
         <View style={row}>
-          <Action primary label={live.station === station ? 'Stop listening' : 'Listen live'} disabled={!song || solo.loading}
+          <Action primary label={live.station === station ? 'stop listening' : 'listen live'} disabled={!song || solo.loading}
             onPress={() => {
               const stopping = live.station === station;
               if (!stopping) { if (solo.jam) solo.leaveJam(false); else solo.pauseLocal(); }
