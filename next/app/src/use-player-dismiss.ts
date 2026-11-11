@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Animated, PanResponder, Platform, type ScrollEvent } from 'react-native';
+import { Animated, Easing, PanResponder, Platform, type ScrollEvent } from 'react-native';
 
-export function usePlayerDismiss(enabled: boolean, width: number, height: number, close: () => void) {
+export function usePlayerDismiss(enabled: boolean, width: number, height: number, close: () => void, still = false) {
   const [panel, setPanel] = useState<HTMLElement | null>(null);
   const panelRef = useCallback((node: unknown) => {
     if (Platform.OS === 'web') setPanel(node instanceof HTMLElement ? node : null);
   }, []);
   const directionalTouch = Platform.OS === 'web' && typeof CSS !== 'undefined' && CSS.supports('touch-action', 'pan-x pan-down');
-  const translation = useRef(new Animated.Value(0)).current;
+  const translation = useRef(new Animated.Value(still ? 0 : height)).current;
+  const entered = useRef(false);
   const latest = useRef({ enabled, height, close });
   latest.current = { enabled, height, close };
   const closing = useRef(false);
@@ -70,7 +71,9 @@ export function usePlayerDismiss(enabled: boolean, width: number, height: number
     closing.current = false;
     setDragging(false);
     translation.stopAnimation();
-    translation.setValue(0);
+    if (entered.current || still) translation.setValue(0);
+    else Animated.timing(translation, { toValue: 0, duration: 280, easing: Easing.out(Easing.cubic), useNativeDriver: native }).start();
+    entered.current = true;
   }, [enabled, width, height, translation]);
   useEffect(() => () => { generation.current++; active.current = null; translation.stopAnimation(); }, [translation]);
   useEffect(() => {
@@ -98,8 +101,18 @@ export function usePlayerDismiss(enabled: boolean, width: number, height: number
       panel.removeEventListener('touchcancel', end, true);
     };
   }, [panel, enabled, directionalTouch]);
+  const exit = (then: () => void) => {
+    if (closing.current) return;
+    closing.current = true;
+    active.current = null;
+    if (still) { then(); return; }
+    const request = generation.current;
+    Animated.timing(translation, { toValue: latest.current.height, duration: 220, easing: Easing.in(Easing.cubic), useNativeDriver: native }).start(({ finished }) => {
+      if (finished && request === generation.current) then();
+    });
+  };
   return {
-    translation, dragging, atTop, directionalTouch,
+    translation, dragging, atTop, directionalTouch, exit,
     panelRef,
     panHandlers: enabled ? responder.panHandlers : {},
     contentStartHandlers: {

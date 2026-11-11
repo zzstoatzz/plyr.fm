@@ -33,13 +33,15 @@ function time(value: number) {
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
 }
 
-export function NowPlaying({ track, close, navigate }: { track: Track; close: () => void; navigate: (target: Href) => void }) {
+export function NowPlaying({ track, close: leave, navigate: go }: { track: Track; close: () => void; navigate: (target: Href) => void }) {
   const player = usePlayback();
   const theme = useAppearance();
   const { width, height } = useWindowDimensions();
   const [scrub, setScrub] = useState<{ id: string; seconds: number } | null>(null);
   const compact = width < 600;
-  const dismiss = usePlayerDismiss(compact, width, height, close);
+  const dismiss = usePlayerDismiss(compact, width, height, leave, theme.reduceMotion);
+  const close = () => dismiss.exit(leave);
+  const navigate = (target: Href) => dismiss.exit(() => go(target));
   const scrollTouch = { touchAction: dismiss.directionalTouch && dismiss.atTop ? 'pan-x pan-down' : 'pan-x pan-y', cursor: 'auto' } as const;
   const sideBySide = width >= 800;
   const controlRoom = 370 + 64 * (theme.scale - 1);
@@ -59,7 +61,7 @@ export function NowPlaying({ track, close, navigate }: { track: Track; close: ()
   const facts = [`${plays} ${plays === 1 ? 'play' : 'plays'}`, likes > 0 && `${likes} ${likes === 1 ? 'like' : 'likes'}`,
     !Number.isNaN(added.getTime()) && `added ${added.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }).toLowerCase()}`].filter(Boolean).join(' · ');
 
-  return <Modal visible transparent accessibilityLabel="Now playing" animationType={theme.reduceMotion ? 'none' : 'fade'} onRequestClose={close}>
+  return <Modal visible transparent accessibilityLabel="Now playing" animationType="none" onRequestClose={close}>
     <View ref={dismiss.panelRef} style={styles.backdrop}>
       <AnimatedSafeAreaView {...dismiss.panHandlers} accessibilityViewIsModal={Platform.OS === 'web' ? undefined : true} edges={['top', 'bottom']}
         style={[{ transform: [{ translateY: dismiss.translation }] }, styles.panel, styles.full, { backgroundColor: theme.background }]}>
