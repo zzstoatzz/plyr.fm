@@ -3,26 +3,23 @@ import type { useAppearance } from './appearance';
 
 type Theme = ReturnType<typeof useAppearance>;
 
-export function contouredSurface(theme: Theme): ViewStyle {
+export function glassSurface(theme: Theme): ViewStyle {
   return {
-    backgroundColor: theme.background,
+    backgroundColor: Platform.OS === 'web' ? theme.glass : theme.surface,
     borderWidth: 1,
-    borderColor: theme.dark ? '#dce9ec24' : '#ffffffb3',
-    boxShadow: theme.dark
-      ? 'inset 1px 1px 1px #e0eaf314, inset -2px -1px 8px #00000055, 0px 12px 28px #00000026'
-      : 'inset 1px 1px 1px #ffffffcc, inset -2px -1px 8px #55687a18, 0px 12px 28px #34445418',
-    ...(Platform.OS === 'web' ? { backgroundImage: theme.dark
-      ? 'linear-gradient(90deg, #ffffff03, transparent 4%, transparent 97%, #dbe7ef05)'
-      : 'linear-gradient(90deg, #ffffff66, transparent 5%, transparent 97%, #ffffff80)' } : {}),
+    borderColor: theme.glassBorder,
+    ...(Platform.OS === 'web' ? { backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)' } : {}),
   };
 }
 
-export function dockSurface(theme: Theme): ViewStyle {
-  return {
-    ...contouredSurface(theme),
-    backgroundColor: theme.surface,
-    ...(Platform.OS === 'web' ? { backgroundImage: theme.dark
-      ? 'linear-gradient(180deg, #ffffff08, transparent 40%, #0000000a)'
-      : 'linear-gradient(180deg, #ffffffaa, #ffffff18)' } : {}),
-  };
+export function cardSurface(theme: Theme): ViewStyle {
+  return { backgroundColor: theme.card, borderWidth: 1, borderColor: theme.cardBorder, borderRadius: 8 };
+}
+
+export function artworkShadow(theme: Theme) {
+  return { boxShadow: theme.dark ? '0px 4px 12px #0000004d' : '0px 4px 12px #0000001f' };
+}
+
+export function accentGlow(accent: string): ViewStyle {
+  return { boxShadow: `0px 0px 14px 3px ${accent}73` };
 }

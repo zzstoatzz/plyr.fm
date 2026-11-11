@@ -3,19 +3,24 @@ import { Text } from './Text';
 import { useId, useState, type ReactNode, type Ref } from 'react';
 import { Link, type Href } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, TextInput, type TextInputProps, type ScrollViewProps, type ScrollViewInstance, View } from 'react-native';
+import type Play from 'lucide-react-native/icons/play';
 import { useAppearance } from './appearance';
+import { onAccent } from './colors';
 
-export function Action({ label, onPress, href, disabled, selected, primary, destructive }: {
-  label: string; onPress?: () => void; href?: Href; disabled?: boolean; selected?: boolean; primary?: boolean; destructive?: boolean;
+export function Action({ label, onPress, href, disabled, selected, primary, destructive, icon: Icon, onArtwork }: {
+  label: string; onPress?: () => void; href?: Href; disabled?: boolean; selected?: boolean; primary?: boolean; destructive?: boolean; icon?: typeof Play; onArtwork?: boolean;
 }) {
   const theme = useAppearance();
   const [pressed, setPressed] = useState(false);
   const press = usePressIntent(onPress);
+  const fill = primary ? destructive ? theme.danger : theme.accent : undefined;
+  const ink = fill ? destructive ? onAccent(fill) : theme.onAccent : onArtwork ? '#ffffff' : destructive ? theme.danger : theme.text;
   const control = <Pressable accessibilityRole={href ? 'link' : 'button'} accessibilityState={{ disabled, selected }} aria-pressed={selected}
     disabled={disabled} onPointerDown={press.onPointerDown} onPress={press.onPress} onPressIn={() => { press.onPressIn(); setPressed(true); }} onPressOut={() => { press.onPressOut(); setPressed(false); }}
-    style={{ ...styles.button, backgroundColor: primary ? (destructive ? theme.danger : theme.text) : pressed ? theme.background : theme.surface, opacity: disabled ? 0.5 : 1,
-      borderColor: selected ? theme.accent : pressed ? theme.border : 'transparent' }}>
-    <Text style={{ color: primary ? theme.background : destructive ? theme.danger : theme.text, fontFamily: theme.fontFamily, fontSize: 14 * theme.scale, fontWeight: '600', textAlign: 'center', flexShrink: 1 }}>{label}</Text>
+    style={{ ...styles.button, backgroundColor: fill ?? (onArtwork ? pressed ? '#ffffff33' : '#00000059' : pressed ? theme.hover : selected ? theme.surface : 'transparent'), opacity: disabled ? 0.5 : pressed && fill ? 0.85 : 1,
+      borderColor: fill ?? (onArtwork ? '#ffffff80' : selected ? theme.accent : theme.line) }}>
+    {Icon && <Icon size={18} color={ink} fill={primary ? ink : 'none'} />}
+    <Text style={{ color: ink, fontFamily: theme.fontFamily, fontSize: 14 * theme.scale, fontWeight: '600', textAlign: 'center', textTransform: 'lowercase', flexShrink: 1 }}>{label}</Text>
   </Pressable>;
   return href ? <Link href={href} asChild>{control}</Link> : control;
 }
@@ -23,7 +28,7 @@ export function Action({ label, onPress, href, disabled, selected, primary, dest
 export function Page({ title, children, scrollRef, ...scrollProps }: { title: string; children: ReactNode; scrollRef?: Ref<ScrollViewInstance> } & Pick<ScrollViewProps, 'scrollEnabled' | 'onScroll' | 'onContentSizeChange' | 'onLayout'>) {
   const theme = useAppearance();
   return <ScrollView ref={scrollRef} {...scrollProps} scrollEventThrottle={16} keyboardShouldPersistTaps="handled" style={{ backgroundColor: theme.background }} contentContainerStyle={styles.page}>
-    <Text accessibilityRole="header" aria-level={1} style={{ color: theme.text, fontSize: 28 * theme.scale, fontFamily: theme.fontFamily, fontWeight: '700' }}>{title}</Text>
+    <Text accessibilityRole="header" aria-level={1} style={{ color: theme.text, fontSize: 28 * theme.scale, fontFamily: theme.fontFamily, fontWeight: '700', textTransform: 'lowercase' }}>{title}</Text>
     {children}
   </ScrollView>;
 }
@@ -57,6 +62,6 @@ export const pageFrame = { width: '100%', maxWidth: 824, alignSelf: 'center', pa
 export const row = { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8 } as const;
 const styles = StyleSheet.create({
   page: { ...pageFrame, gap: 16, paddingTop: 16, paddingBottom: 32 },
-  button: { minHeight: 44, justifyContent: 'center', alignItems: 'center', borderRadius: 12, borderWidth: 1, paddingHorizontal: 16, paddingVertical: 10, maxWidth: '100%' },
-  input: { minHeight: 48, padding: 12, borderRadius: 10, borderWidth: 1 }
+  button: { minHeight: 44, flexDirection: 'row', gap: 8, justifyContent: 'center', alignItems: 'center', borderRadius: 24, borderWidth: 1, paddingHorizontal: 20, paddingVertical: 10, maxWidth: '100%' },
+  input: { minHeight: 48, padding: 12, borderRadius: 8, borderWidth: 1 }
 });
