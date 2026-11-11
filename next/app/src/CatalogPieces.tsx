@@ -2,7 +2,7 @@ import { trackArtwork, collectionArtwork } from './artwork';
 import { Text } from './Text';
 import { Link, type Href } from 'expo-router';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import { ActivityIndicator, Image, Pressable, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Animated, Platform, Pressable, StyleSheet, View } from 'react-native';
 import Music2 from 'lucide-react-native/icons/eighth-note';
 import PlayIcon from 'lucide-react-native/icons/play';
 import UserRound from 'lucide-react-native/icons/user-round';
@@ -116,8 +116,13 @@ export function Button(props: Parameters<typeof Action>[0]) {
 export function Cover({ uri, size = 48, round = false, radius = 8 }: { uri?: string | null; size?: number; round?: boolean; radius?: number }) {
   const colors = useColors();
   const [failedUri, setFailedUri] = useState<string>();
-  const style = { width: size, height: size, borderRadius: round ? size / 2 : radius, backgroundColor: colors.raised, ...(size >= 100 && !round ? artworkShadow(colors) : {}) };
-  return uri && uri !== failedUri && /^https?:\/\//i.test(uri) ? <Image accessibilityIgnoresInvertColors source={{ uri }} style={style} onError={() => setFailedUri(uri)} /> : <View style={[style, { alignItems: 'center', justifyContent: 'center' }]}>
+  const opacity = useRef(new Animated.Value(0)).current;
+  const borderRadius = round ? size / 2 : radius;
+  const style = { width: size, height: size, borderRadius, backgroundColor: colors.raised, ...(size >= 100 && !round ? artworkShadow(colors) : {}) };
+  const reveal = () => Animated.timing(opacity, { toValue: 1, duration: colors.reduceMotion ? 0 : 180, useNativeDriver: Platform.OS !== 'web' }).start();
+  return uri && uri !== failedUri && /^https?:\/\//i.test(uri) ? <View style={style}>
+    <Animated.Image accessibilityIgnoresInvertColors source={{ uri }} style={{ width: size, height: size, borderRadius, opacity }} onLoad={reveal} onError={() => setFailedUri(uri)} />
+  </View> : <View style={[style, { alignItems: 'center', justifyContent: 'center' }]}>
     {round ? <UserRound size={size * 0.38} color={colors.muted} /> : <Music2 size={size * 0.32} color={colors.muted} />}
   </View>;
 }

@@ -1,10 +1,13 @@
 import { useEffect, useState } from 'react';
 import { resolveArtists, type NetworkArtist } from './home-api';
 import { readFollows, resolveFollowArtists } from './home-network';
+import { readLocal, writeLocal } from './storage';
+
+const expectedKey = 'plyr-next:artists-you-know';
 
 const cache = new Map<string, { artists: NetworkArtist[]; at: number }>();
 
-export function useNetworkArtists(did: string | null) {
+export function useNetworkArtists(did: string | null, ready: boolean) {
   const [result, setResult] = useState<{ did: string | null; artists: NetworkArtist[]; error?: string }>({ did: null, artists: [] });
   useEffect(() => {
     if (!did) return;
@@ -37,5 +40,9 @@ export function useNetworkArtists(did: string | null) {
       }).finally(() => clearTimeout(timer));
     return () => { controller.abort(); clearTimeout(timer); };
   }, [did]);
-  return result.did === did ? result : { did, artists: [] };
+  const settled = ready && (!did || result.did === did);
+  const shown = settled && result.did === did && result.artists.length > 0;
+  useEffect(() => { if (settled) writeLocal(expectedKey, shown ? '1' : '0'); }, [settled, shown]);
+  if (result.did === did && did) return { ...result, loading: false };
+  return { did, artists: [], error: undefined, loading: !settled && readLocal(expectedKey) === '1' };
 }

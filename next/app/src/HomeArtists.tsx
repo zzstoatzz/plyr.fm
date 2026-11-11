@@ -1,6 +1,6 @@
 import { Link } from 'expo-router';
-import { useEffect, useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { useRef, useState } from 'react';
+import { Pressable, ScrollView, StyleSheet, View, type ScrollViewInstance } from 'react-native';
 import type { NetworkArtist } from './home-api';
 import { Cover, Heading, useColors } from './CatalogPieces';
 import { Text } from './Text';
@@ -8,28 +8,33 @@ import ChevronLeft from 'lucide-react-native/icons/chevron-left';
 import ChevronRight from 'lucide-react-native/icons/chevron-right';
 import { PlayerControl } from './PlayerControl';
 
-export function HomeArtists({ artists }: { artists: NetworkArtist[] }) {
+const placeholders = [0, 1, 2, 3, 4, 5, 6, 7];
+
+export function HomeArtists({ artists, loading }: { artists: NetworkArtist[]; loading: boolean }) {
   const colors = useColors();
-  const [width, setWidth] = useState(0);
-  const [page, setPage] = useState(0);
-  const gap = 16;
-  const columns = Math.max(1, Math.min(6, Math.floor((width + gap) / (96 * colors.scale + gap))));
-  const size = Math.max(1, (width - gap * (columns - 1)) / columns);
-  const pageSize = columns * (width < 600 ? 2 : 1);
-  const pages = Math.max(1, Math.ceil(artists.length / pageSize));
-  const visiblePage = Math.min(page, pages - 1);
-  useEffect(() => setPage(0), [columns]);
-  return <View style={styles.section} onLayout={event => setWidth(event.nativeEvent.layout.width)}>
+  const scroller = useRef<ScrollViewInstance>(null);
+  const [view, setView] = useState({ width: 0, content: 0, offset: 0 });
+  const item = 96 * colors.scale;
+  const overflow = view.content > view.width + 1;
+  const page = (direction: 1 | -1) => scroller.current?.scrollTo({ x: Math.max(0, view.offset + direction * view.width * 0.8), animated: !colors.reduceMotion });
+  return <View testID="home-artists" style={styles.section}>
     <View style={styles.header}>
       <View style={{ flex: 1, minWidth: 0 }}><Heading>artists you know</Heading></View>
-      {pages > 1 && <View style={{ flexDirection: 'row' }}>
-        <PlayerControl icon={ChevronLeft} label="Previous artists you know" disabled={visiblePage === 0} onPress={() => setPage(Math.max(0, visiblePage - 1))} />
-        <PlayerControl icon={ChevronRight} label="Next artists you know" disabled={visiblePage === pages - 1} onPress={() => setPage(Math.min(pages - 1, visiblePage + 1))} />
+      {overflow && view.width >= 600 && <View style={{ flexDirection: 'row' }}>
+        <PlayerControl icon={ChevronLeft} label="Previous artists you know" disabled={view.offset <= 0} onPress={() => page(-1)} />
+        <PlayerControl icon={ChevronRight} label="Next artists you know" disabled={view.offset + view.width >= view.content - 1} onPress={() => page(1)} />
       </View>}
     </View>
-    {width > 0 && <View style={[styles.artists, { gap }]}>
-      {artists.slice(visiblePage * pageSize, (visiblePage + 1) * pageSize).map(artist => <Link key={artist.did} href={{ pathname: '/u/[handle]', params: { handle: artist.handle || artist.did } }} asChild>
-        <Pressable accessibilityRole="link" accessibilityLabel={artist.display_name || artist.handle} style={StyleSheet.flatten([styles.artist, { width: size }])}>
+    <ScrollView ref={scroller} horizontal showsHorizontalScrollIndicator={false} scrollEnabled={!loading} contentContainerStyle={styles.artists}
+      accessibilityState={{ busy: loading }} scrollEventThrottle={32}
+      onLayout={event => { const { width } = event.nativeEvent.layout; setView(previous => ({ ...previous, width })); }}
+      onContentSizeChange={content => setView(previous => ({ ...previous, content }))}
+      onScroll={event => { const offset = event.nativeEvent.contentOffset.x; setView(previous => ({ ...previous, offset })); }}>
+      {loading ? placeholders.map(index => <View key={index} style={[styles.artist, { width: item }]}>
+        <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: colors.raised }} />
+        <View style={{ width: item * 0.7, height: 10 * colors.scale, borderRadius: 5, backgroundColor: colors.raised }} />
+      </View>) : artists.map(artist => <Link key={artist.did} href={{ pathname: '/u/[handle]', params: { handle: artist.handle || artist.did } }} asChild>
+        <Pressable accessibilityRole="link" accessibilityLabel={artist.display_name || artist.handle} style={StyleSheet.flatten([styles.artist, { width: item }])}>
           <Cover uri={artist.avatar_url} size={48} round />
           <View style={{ minWidth: 0, maxWidth: '100%', alignItems: 'center', gap: 2 }}>
             <Text numberOfLines={1} style={{ color: colors.text, fontSize: 13 * colors.scale }}>{artist.display_name || artist.handle}</Text>
@@ -37,11 +42,11 @@ export function HomeArtists({ artists }: { artists: NetworkArtist[] }) {
           </View>
         </Pressable>
       </Link>)}
-    </View>}
+    </ScrollView>
   </View>;
 }
 
 const styles = StyleSheet.create({
-  section: { gap: 12 }, header: { flexDirection: 'row', alignItems: 'center', gap: 8 }, artists: { flexDirection: 'row', flexWrap: 'wrap' },
-  artist: { alignItems: 'center', gap: 8, minHeight: 88, minWidth: 44 },
+  section: { gap: 12 }, header: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 44 }, artists: { gap: 16 },
+  artist: { alignItems: 'center', gap: 8, minHeight: 96, minWidth: 44 },
 });
