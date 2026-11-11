@@ -72,7 +72,7 @@ export function useJamPlayback(target: JamPlaybackTarget, did: string | null) {
     if (!pending) {
       const account = previousAccount.current;
       pending = api.track(ref.id).then(track => {
-        if (track.record.cid !== ref.cid || track.record.uri !== ref.uri) throw new Error('The Jam track has changed');
+        if (track.record.cid !== ref.cid || track.record.uri !== ref.uri) throw new Error('the jam track has changed');
         if (account === previousAccount.current) cache.current.set(key, track);
         return track;
       }).finally(() => fetching.current.delete(key));
@@ -94,7 +94,7 @@ export function useJamPlayback(target: JamPlaybackTarget, did: string | null) {
       }));
       if (version === stateVersion.current && connection === session.current) runtime.current.setQueue(tracks, state.index);
     } catch (failure) {
-      if (version === stateVersion.current && connection === session.current) update({ error: failure instanceof Error ? failure.message : 'Could not load the Jam queue' });
+      if (version === stateVersion.current && connection === session.current) update({ error: failure instanceof Error ? failure.message : 'could not load the jam queue' });
     }
   }
 
@@ -151,7 +151,7 @@ export function useJamPlayback(target: JamPlaybackTarget, did: string | null) {
           else if (!desired && runtime.current.playing()) runtime.current.pause();
           void hydrateQueue(connection.state!, work.version, connection);
         } catch (failure) {
-          if (request === generation.current && connection === session.current) update({ error: failure instanceof Error ? failure.message : 'Could not play this Jam' });
+          if (request === generation.current && connection === session.current) update({ error: failure instanceof Error ? failure.message : 'could not play this jam' });
         }
       }
     } finally { if (synchronizationId === synchronization.current) synchronizing.current = false; }
@@ -222,7 +222,7 @@ export function useJamPlayback(target: JamPlaybackTarget, did: string | null) {
 
   function command(intent: JamIntent, expected?: JamState) {
     if (!active.current || !session.current) return false;
-    if (intent.action === 'seek' && !active.current.canSeek) { update({ error: 'Only the host can seek in this Jam' }); return true; }
+    if (intent.action === 'seek' && !active.current.canSeek) { update({ error: 'only the host can seek in this jam' }); return true; }
     if (intent.action === 'seek') {
       const room = session.current.state;
       const duration = room?.queue[room.index]?.durationMs;
@@ -236,7 +236,7 @@ export function useJamPlayback(target: JamPlaybackTarget, did: string | null) {
   function replaceQueue(tracks: Track[], index: number, playing?: boolean) {
     if (!active.current) return false;
     const refs = tracks.map(jamTrack);
-    if (refs.some(track => !track)) { update({ error: 'This track is not ready for the Jam' }); return true; }
+    if (refs.some(track => !track)) { update({ error: 'this track is not ready for the jam' }); return true; }
     for (const track of tracks) if (track.record.cid) cache.current.set(`${track.id}/${track.record.cid}`, track);
     return command({ action: 'replaceQueue', queue: refs as JamTrack[], index, ...(playing === undefined ? {} : { playing }) });
   }
@@ -245,7 +245,7 @@ export function useJamPlayback(target: JamPlaybackTarget, did: string | null) {
     if (!active.current) return false;
     const room = session.current?.state;
     if (room) command({ action: 'replaceQueue', ...edit(room.queue.slice(), room.index) });
-    else update({ error: 'Waiting for the Jam to connect' });
+    else update({ error: 'waiting for the jam to connect' });
     return true;
   }
 
@@ -253,14 +253,14 @@ export function useJamPlayback(target: JamPlaybackTarget, did: string | null) {
     if (!active.current) return false;
     const current = session.current?.state;
     if (expected && current && (expected.epoch !== current.epoch || expected.occurrence !== current.occurrence || expected.revision !== current.revision && desired !== current.playing)) {
-      update({ error: 'The Jam changed. Try that action again.' });
+      update({ error: 'the jam changed. try that action again.' });
       return true;
     }
     if (active.current.phase !== 'connected') return command({ action: desired ? 'play' : 'pause' }, expected);
     optimisticPlaying.current = desired;
     update({ error: undefined });
     if (runtime.current.ready && runtime.current.current?.id === active.current.state?.queue[active.current.state.index]?.id) {
-      try { if (desired) runtime.current.play(); else runtime.current.pause(); } catch { update({ error: 'Tap play to listen to this Jam' }); }
+      try { if (desired) runtime.current.play(); else runtime.current.pause(); } catch { update({ error: 'tap play to listen to this jam' }); }
     }
     return command({ action: desired ? 'play' : 'pause' }, expected);
   }
@@ -284,7 +284,7 @@ export function useJamPlayback(target: JamPlaybackTarget, did: string | null) {
     if (!previous || previous.key !== key || position - previous.position < 0.02 || now - previous.at < 20) return;
     const drift = Math.abs(position - jamPosition(state, connection.clock.serverNow()) / 1000);
     if (drift <= 0.35) { corrections.current = 0; return; }
-    if (corrections.current >= 2) { update({ error: 'Playback is behind. Rejoin this Jam to catch up.' }); return; }
+    if (corrections.current >= 2) { update({ error: 'playback is behind. rejoin this jam to catch up.' }); return; }
     corrections.current++;
     synchronize(state, false, connection);
   }, [jam?.state?.epoch, jam?.state?.occurrence, jam?.state?.playing, jam?.pendingSeekMs, target.ready, target.buffering, target.observedPosition, playingHere]);

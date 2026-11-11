@@ -46,7 +46,7 @@ const output = process.env.HOME_LISTEN_OUTPUT || '/tmp/plyr-home-listening';
    const play=rows.first().getByRole('button',{name:'Play '+tracks[0].metadata.title,exact:true});
    assert.equal(await play.locator('svg').count(),0,'Row playback has no separate play glyph');
    const box=await rows.first().boundingBox();
-   await rows.first().click({position:{x:Math.min(100,box.width/2),y:box.height-4}});
+   await rows.first().click({position:{x:Math.min(100,box.width/2),y:box.height-12}});
    await page.waitForFunction(()=>window.jamAudio.some(a=>!a.paused&&a.currentTime>0.3));
    const before=await page.evaluate(()=>window.jamAudio.filter(a=>!a.paused).map(a=>a.src));
    await rows.nth(1).getByRole('button',{name:/More options/}).click();

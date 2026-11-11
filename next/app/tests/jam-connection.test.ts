@@ -109,7 +109,7 @@ test('late command acknowledgement still settles after a newer broadcast without
     socket.receive({ type: 'result', id: first.id, outcome: 'applied', state: { ...base, revision: 2, positionMs: 5_000 }, serverTimeMs: 10_000 });
     assert.equal(connection.state?.revision, 3);
     assert.equal(socket.sent.filter(frame => frame.action).length, 1);
-    assert.ok(errors.some(error => error.includes('Jam changed')));
+    assert.ok(errors.some(error => error.includes('jam changed')));
     connection.command({ action: 'pause' });
     assert.equal(socket.sent.filter(frame => frame.action).length, 2);
     assert.equal(socket.sent.at(-1)?.expectedRevision, 3);
@@ -129,7 +129,7 @@ test('captured pause retains its original revision and may noop after a peer alr
     const count = socket.sent.length;
     connection.command({ action: 'pause' }, base);
     assert.equal(socket.sent.length, count, 'A captured old Pause cannot be restamped over a newer Play');
-    assert.ok(errors.some(error => error.includes('Jam changed')));
+    assert.ok(errors.some(error => error.includes('jam changed')));
   } finally { connection.close(); }
 });
 

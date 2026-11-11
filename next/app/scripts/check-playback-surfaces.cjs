@@ -42,12 +42,12 @@ module.exports = async function runSurfaces({ browser, browserName, prepareConte
         await frame.getByRole('button', { name: 'Play', exact: true }).click();
       } else {
         await page.goto(`${origin}/radio?station=${process.env.PLAYBACK_STATION || 'loved'}`, { waitUntil: 'domcontentloaded' });
-        await page.getByRole('button', { name: 'Listen live', exact: true }).waitFor();
+        await page.getByRole('button', { name: 'listen live', exact: true }).waitFor();
         await page.waitForTimeout(400);
         report.preTuneAudioReads = report.requests.filter(request => /\/api\/songs\/[^/]+\/audio$/.test(request.path)).length;
         assert.equal(report.preTuneAudioReads, 0, 'The Radio page cannot preload audio before tuning');
         tapped = performance.now();
-        await page.getByRole('button', { name: 'Listen live', exact: true }).click();
+        await page.getByRole('button', { name: 'listen live', exact: true }).click();
       }
       await target.waitForFunction(() => window.__plyrPlaybackMedia.some(audio => !audio.paused && audio.currentTime > 0.15));
       report.tapToMediaProgressMs = Math.round(performance.now() - tapped);

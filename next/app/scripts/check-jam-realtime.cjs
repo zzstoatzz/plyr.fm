@@ -73,10 +73,10 @@ const output=process.env.JAM_REALTIME_OUTPUT||'/tmp/plyr-jam-realtime';
   }
   const [h,g]=clients;
   await h.page.getByRole('button',{name:'Create Jam with current track',exact:true}).click();
-  await h.page.getByText('Connected',{exact:true}).waitFor();
+  await h.page.getByText('connected',{exact:true}).waitFor();
   await h.page.getByRole('textbox',{name:'Guest DID',exact:true}).fill(accounts[handles[1]].did);
   await h.page.getByRole('button',{name:'Invite guest',exact:true}).click();
-  await g.page.getByRole('button',{name:'Join Jam',exact:true}).click();await g.page.getByText('Connected',{exact:true}).waitFor();
+  await g.page.getByRole('button',{name:'Join Jam',exact:true}).click();await g.page.getByText('connected',{exact:true}).waitFor();
   const media=page=>page.waitForFunction(()=>window.jamAudio.some(a=>!a.paused&&!a.seeking&&a.readyState>=2&&a.currentTime>.3),undefined,{timeout:15_000});
   const listen=async client=>{
    try{await client.page.waitForFunction(()=>window.jamAudio.some(a=>!a.paused&&!a.seeking&&a.readyState>=2&&a.currentTime>.3),undefined,{timeout:1500});return;}catch{}
@@ -127,7 +127,7 @@ const output=process.env.JAM_REALTIME_OUTPUT||'/tmp/plyr-jam-realtime';
   await Promise.all([h,g].map(listen));
   await h.page.getByRole('button',{name:'Open now playing',exact:true}).click();await h.page.getByRole('dialog').waitFor();
   const slider=h.page.getByRole('slider',{name:'Playback position',exact:true});await slider.focus();await slider.press('PageUp');await slider.press('PageUp');await slider.press('ArrowRight');
-  await h.page.getByRole('button',{name:'Close',exact:true}).click();await h.page.getByRole('dialog').waitFor({state:'hidden'});await h.page.getByText('Connected',{exact:true}).waitFor();
+  await h.page.getByRole('button',{name:'Close',exact:true}).click();await h.page.getByRole('dialog').waitFor({state:'hidden'});await h.page.getByText('connected',{exact:true}).waitFor();
   await g.page.getByRole('button',{name:'Open now playing',exact:true}).click();const gs=g.page.getByRole('slider',{name:'Playback position',exact:true});await gs.waitFor();assert.equal(await gs.getAttribute('aria-disabled'),'true');await g.page.getByRole('button',{name:'Close',exact:true}).click();await g.page.getByRole('dialog').waitFor({state:'hidden'});
   await media(h.page);await media(g.page);await sync('After rapid scrubbing');
   const before=clients.map(c=>c.stats());const epoch=state(h).epoch;const revision=state(h).revision;
@@ -156,7 +156,7 @@ const output=process.env.JAM_REALTIME_OUTPUT||'/tmp/plyr-jam-realtime';
   }else await h.disconnect();
   const recovered=c=>c.stats().admissions>before[clients.indexOf(c)].admissions&&c.stats().connections>before[clients.indexOf(c)].connections;
   await until(()=>barrier?clients.some(recovered):recovered(h),barrier?'No browser naturally reconnected with fresh admission after external failover':'Host did not reconnect with fresh admission');
-  for(const c of clients)await c.page.getByText('Connected',{exact:true}).waitFor();
+  for(const c of clients)await c.page.getByText('connected',{exact:true}).waitFor();
   if(barrier)console.log('External failover naturally reconnected client indices',clients.flatMap((c,i)=>recovered(c)?[i]:[]));
   else console.log(live?'Live reconnect fresh-admission ms':'Failover fresh-admission-to-second-instance ms',performance.now()-failoverStarted);
   for(const c of clients){assert.equal(state(c).epoch,epoch);assert.ok(state(c).revision>=revision);}
@@ -168,8 +168,8 @@ const output=process.env.JAM_REALTIME_OUTPUT||'/tmp/plyr-jam-realtime';
   const commandsBeforeRadio=h.commands.length;
   await h.page.getByRole('link',{name:'Home',exact:true}).first().click();
   await h.page.getByRole('link',{name:'Radio',exact:true}).click();
-  await h.page.getByRole('button',{name:'Listen live',exact:true}).click();
-  await h.page.getByRole('button',{name:'Stop listening',exact:true}).first().waitFor();
+  await h.page.getByRole('button',{name:'listen live',exact:true}).click();
+  await h.page.getByRole('button',{name:'stop listening',exact:true}).first().waitFor();
   await media(h.page);
   assert.equal(await h.page.evaluate(()=>window.preFailoverAudio.paused&&window.jamAudio.some(a=>a!==window.preFailoverAudio&&!a.paused&&!a.seeking&&a.readyState>=2&&a.currentTime>.3)),true,'Radio plays on this device after leaving the Jam');
   assert.equal(state(g).playing,true,'Leaving for radio must not pause the remaining Jam participant');

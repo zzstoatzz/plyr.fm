@@ -24,9 +24,9 @@ function usePds() {
   return useMemo(() => createPds({ did, rpc }), [did, rpc]);
 }
 
-function messageFor(status: AwaitStatus, saved = 'Saved to your PDS.') {
-  if (status === 'rejected') return 'Saved to your PDS, but the catalog rejected the change.';
-  if (status === 'pending') return 'Saved to your PDS. The catalog is catching up.';
+function messageFor(status: AwaitStatus, saved = 'saved to your PDS.') {
+  if (status === 'rejected') return 'saved to your PDS, but the catalog rejected the change.';
+  if (status === 'pending') return 'saved to your PDS. the catalog is catching up.';
   return saved;
 }
 
@@ -59,8 +59,8 @@ export function Library({ likesOnly, onPlay }: { likesOnly: boolean; onPlay: Pla
   const { ready, did } = useAuth();
   if (!ready) return <Status loading />;
   if (!did) return <>
-    {likesOnly && <Heading main>Liked tracks</Heading>}
-    <Detail>Sign in to see your liked tracks and playlists.</Detail>
+    {likesOnly && <Heading main>liked tracks</Heading>}
+    <Detail>sign in to see your liked tracks and playlists.</Detail>
     <View style={styles.actions}><Action primary label="Sign in" href="/login" /></View>
   </>;
   return <AccountLibrary key={did} did={did} likesOnly={likesOnly} onPlay={onPlay} />;
@@ -96,23 +96,23 @@ function AccountLibrary({ did, likesOnly, onPlay }: { did: string; likesOnly: bo
       setCreating(false);
       setName('');
       if (status === 'indexed' && focus.current.active && getAuth().did === did) router.push({ pathname: '/playlist/[id]', params: { id: playlistIdFromUri(uri) } });
-      return messageFor(status, 'Playlist created.');
+      return messageFor(status, 'playlist created.');
     });
   }
   return <>
-    {likesOnly && <Heading main>Liked tracks</Heading>}
-    {!likesOnly && <Heading>Liked tracks</Heading>}
+    {likesOnly && <Heading main>liked tracks</Heading>}
+    {!likesOnly && <Heading>liked tracks</Heading>}
     <TrackRows tracks={likes.data} onPlay={onPlay} />
-    <Status loading={likes.loading} error={likes.error} retry={likes.more} empty={!likes.data.length ? 'No liked tracks yet.' : undefined} />
+    <Status loading={likes.loading} error={likes.error} retry={likes.more} empty={!likes.data.length ? 'no liked tracks yet.' : undefined} />
     {likesOnly && likes.cursor && !likes.loading && !likes.error && <Button label="More liked tracks" onPress={likes.more} />}
     {!likesOnly && <>
-      <InlineLink standalone href="/liked">See all liked tracks</InlineLink>
-      <Heading>Playlists</Heading>
+      <InlineLink standalone href="/liked">see all liked tracks</InlineLink>
+      <Heading>playlists</Heading>
       <ListRows lists={lists.data} />
-      <Status loading={lists.loading} error={lists.error} retry={lists.more} empty={!lists.data.length ? 'No playlists yet.' : undefined} />
+      <Status loading={lists.loading} error={lists.error} retry={lists.more} empty={!lists.data.length ? 'no playlists yet.' : undefined} />
       {lists.cursor && !lists.loading && !lists.error && <Button label="More playlists" onPress={lists.more} />}
-      <InlineLink standalone href="/playlists">Browse public playlists</InlineLink>
-      {creating ? <Sheet title="New playlist" close={() => { if (!mutation.busy) setCreating(false); }}>
+      <InlineLink standalone href="/playlists">browse public playlists</InlineLink>
+      {creating ? <Sheet title="new playlist" close={() => { if (!mutation.busy) setCreating(false); }}>
         <NameInput label="Playlist name" value={name} onChange={setName} />
         {!mutation.busy && <View style={styles.actions}>
           {name.trim() && <Button label="Create playlist" onPress={create} />}
@@ -132,12 +132,12 @@ export function TrackPlaylistPicker({ track }: { track: Track }) {
   const lists = usePages(load);
   return <View style={{ gap: 8 }}>
     {lists.data.map(list => <ActionRow key={list.record.uri} icon={Music2} label={list.metadata.name ?? 'Untitled'} disabled={mutation.busy}
-      onPress={() => void mutation.run(async () => messageFor(await pds.addToPlaylist(list.record.uri, track), 'Added to playlist.'))} />)}
+      onPress={() => void mutation.run(async () => messageFor(await pds.addToPlaylist(list.record.uri, track), 'added to playlist.'))} />)}
     {lists.loading && <WaveLoading label="Loading playlists" />}
     {lists.error && <><Detail>{lists.error}</Detail><ActionRow icon={RefreshCw} label="retry" onPress={lists.more} /></>}
-    {!lists.loading && !lists.error && !lists.data.length && <Detail>Create a playlist from your library first.</Detail>}
+    {!lists.loading && !lists.error && !lists.data.length && <Detail>create a playlist from your library first.</Detail>}
     {lists.cursor && !lists.loading && !lists.error && <ActionRow icon={ListPlus} label="more playlists" onPress={lists.more} />}
-    {mutation.busy && <Detail>Adding to playlist…</Detail>}
+    {mutation.busy && <Detail>adding to playlist…</Detail>}
     {mutation.message && <Detail>{mutation.message}</Detail>}
   </View>;
 }
@@ -160,7 +160,7 @@ export function CollectionActions(props: CollectionControlsProps) {
   const tracks = props.list.members.flatMap(({ track }) => track ? [track] : []);
   return <>
     <CollectionBar>{props.actions}</CollectionBar>
-    <Heading>Tracks</Heading>
+    <Heading>tracks</Heading>
     <TrackRows tracks={tracks} onPlay={(track, tracks) => props.onPlay(track, tracks, props.list.metadata.name ?? 'collection')} />
   </>;
 }
@@ -182,14 +182,14 @@ function EditCollection({ list, refresh, actions, onPlay }: CollectionControlsPr
     void mutation.run(async () => {
       const status = await pds.renameCollection(list.record.uri, name, list.object);
       if (status === 'indexed') refresh();
-      return messageFor(status, album ? 'Album renamed.' : 'Playlist renamed.');
+      return messageFor(status, album ? 'album renamed.' : 'playlist renamed.');
     });
   }
   function remove(uri: string) {
     void mutation.run(async () => {
       const status = await pds.removeFromPlaylist(list.record.uri, uri);
       if (status === 'indexed') refresh();
-      return messageFor(status, 'Track removed.');
+      return messageFor(status, 'track removed.');
     });
   }
   function deletePlaylist() {
@@ -197,7 +197,7 @@ function EditCollection({ list, refresh, actions, onPlay }: CollectionControlsPr
       const status = await pds.deletePlaylist(list.record.uri);
       if ((status === 'deleted' || status === 'absent') && focused.current && getAuth().did === list.owner.did) router.replace('/library');
       setConfirmDelete(false);
-      return messageFor(status, 'Playlist deleted.');
+      return messageFor(status, 'playlist deleted.');
     });
   }
   const tracks = list.members.flatMap(({ track }) => track ? [track] : []);
@@ -218,14 +218,14 @@ function EditCollection({ list, refresh, actions, onPlay }: CollectionControlsPr
       {!mutation.busy && name.trim() && name.trim() !== list.metadata.name &&
         <Button label="Save name" onPress={rename} />}
     </View>}
-    <Heading>Tracks</Heading>
+    <Heading>tracks</Heading>
     {editing && !album ? list.members.map(({ track, position, subject }) => {
       const removeAction = !mutation.busy && <PlayerControl icon={X} destructive
         label={'Remove ' + (track?.metadata.title ?? 'unavailable track')}
         onPress={() => remove(subject.uri)} />;
       return track ? <Row key={position} href={{ pathname: '/track/[id]', params: { id: track.id } }}
         title={track.metadata.title} subtitle={artistName(track)} image={trackArtwork(track)} action={removeAction} />
-        : <View key={position} style={styles.actions}><Detail>Unavailable track</Detail>{removeAction}</View>;
+        : <View key={position} style={styles.actions}><Detail>unavailable track</Detail>{removeAction}</View>;
     }) : <TrackRows tracks={tracks} onPlay={(track, tracks) => onPlay(track, tracks, list.metadata.name ?? 'collection')} />}
     {editing && !album && !mutation.busy && <View style={styles.actions}>
       <Button destructive label={confirmDelete ? 'Confirm delete playlist' : 'Delete playlist'}

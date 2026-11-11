@@ -134,7 +134,7 @@ async function run(browser, width, theme) {
     const geometry = await Promise.all([page.getByTestId('track-like-controls').boundingBox(), play.boundingBox(), queue.boundingBox()]);
     assert.ok(Math.abs((geometry[1].x + geometry[1].width / 2) - (geometry[0].x + geometry[0].width / 2 + geometry[2].x + geometry[2].width / 2) / 2) < 2);
     await like.click();
-    await page.getByText('Liked by', { exact: true }).waitFor();
+    await page.getByText('liked by', { exact: true }).waitFor();
     await page.getByRole('button', { name: 'Close', exact: true }).click();
     await play.click();
     await page.getByRole('button', { name: 'Open now playing', exact: true }).waitFor();

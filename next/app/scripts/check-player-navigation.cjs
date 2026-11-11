@@ -67,7 +67,7 @@ async function run(browser, width) {
     await page.getByRole('button', { name: 'See 7 likes' }).click();
     await page.getByRole('link').filter({ hasText: 'A listener' }).click();
     await page.waitForURL('**/u/fixture.test');
-    assert.equal(await page.getByText('Liked by', { exact: true }).count(), 0, 'Row callback closes likes drawer without swallowing navigation');
+    assert.equal(await page.getByText('liked by', { exact: true }).count(), 0, 'Row callback closes likes drawer without swallowing navigation');
     await continuity();
     assert.deepEqual(errors, []);
     console.log(`${width}: browser/app back and forward preserve audio, origin tab and scroll`);

@@ -18,7 +18,7 @@ export default function Stats() {
   const duration = stats ? formatDuration(stats.duration_seconds) : '';
   const columns = width >= 1000 && theme.scale <= 1.15 ? 4 : width >= 350 && theme.scale <= 1.15 ? 2 : 1;
   return <Page title="stats">
-    <Copy>Music shared on plyr.fm.</Copy>
+    <Copy>music shared on plyr.fm.</Copy>
     {!stats && !result.error && <WaveLoading label="loading stats" />}
     <Status error={result.error} retry={result.retry} />
     {stats && <>
@@ -37,8 +37,8 @@ export default function Stats() {
       </View>
       <View style={{ gap: 8, marginTop: 12 }}>
         <Text accessibilityRole="header" aria-level={2} style={{ color: theme.text, fontSize: 18 * theme.scale, fontWeight: '700' }}>what counts</Text>
-        <Copy>Tracks, artists and audio cover the public catalog available on Next. Private, unlisted and removed tracks aren’t included. Artists have at least one included track.</Copy>
-        <Copy>Plays are qualifying listens counted by Next for those tracks. Production’s historical plays aren’t included yet. Audio is the catalog’s total running time, not time spent listening.</Copy>
+        <Copy>tracks, artists and audio cover the public catalog available on Next. private, unlisted and removed tracks aren’t included. artists have at least one included track.</Copy>
+        <Copy>plays are qualifying listens counted by Next for those tracks. production’s historical plays aren’t included yet. audio is the catalog’s total running time, not time spent listening.</Copy>
         <Copy>Updated {new Date(stats.updated_at_ms).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}. Totals can be up to a minute old.</Copy>
       </View>
       <View style={{ alignSelf: 'flex-start' }}><Action label="refresh stats" onPress={result.retry} /></View>

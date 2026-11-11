@@ -19,7 +19,7 @@ export function Portal() {
   const auth = useAuth();
   if (!auth.ready) return <Page title="portal"><WaveLoading label="Loading account" /></Page>;
   if (!auth.did) return <Page title="portal">
-    <Copy>Sign in to manage your music.</Copy>
+    <Copy>sign in to manage your music.</Copy>
     <View style={row}><Action label="sign in" href={{ pathname: '/login', params: { return_to: '/portal' } }} /></View>
   </Page>;
   return <AccountPortal key={auth.did} did={auth.did} handle={auth.handle} />;
@@ -75,7 +75,7 @@ function AccountPortal({ did, handle }: { did: string; handle: string | null }) 
       <Action label="edit profile" href="/edit-profile" />
       <Action label="public profile" href={{ pathname: '/u/[handle]', params: { handle: handle || did } }} />
     </View>
-    {artist.error && <View style={row}><Copy>Couldn’t load your profile.</Copy><Action label="retry profile" onPress={artist.retry} /></View>}
+    {artist.error && <View style={row}><Copy>couldn’t load your profile.</Copy><Action label="retry profile" onPress={artist.retry} /></View>}
     <View accessibilityRole="tablist" accessibilityLabel="Your catalog" {...(Platform.OS === 'web' ? { onKeyDown: (event: KeyDownEvent) => {
       const key = event.nativeEvent.key;
       if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(key)) return;
@@ -139,6 +139,6 @@ function OwnedAlbums({ did, active }: { did: string; active: boolean }) {
 function CatalogState({ loading, error, empty, retry }: { loading: boolean; error?: string; empty: boolean; retry: () => void }) {
   if (loading) return <WaveLoading label="Loading your music" />;
   if (error) return <View style={{ gap: 10 }}><Copy>{error}</Copy><View style={row}><Action label="retry" onPress={retry} /></View></View>;
-  if (empty) return <View style={{ gap: 12, paddingVertical: 20 }}><Copy>No published music here yet.</Copy><View style={row}><Action label="upload a track" href="/upload" /></View></View>;
+  if (empty) return <View style={{ gap: 12, paddingVertical: 20 }}><Copy>no published music here yet.</Copy><View style={row}><Action label="upload a track" href="/upload" /></View></View>;
   return null;
 }

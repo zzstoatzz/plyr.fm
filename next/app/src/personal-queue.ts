@@ -6,7 +6,7 @@ import * as queue from './queue-state.ts';
 
 export type Reference = JamTrack & { key: string };
 export function queueReference(track: Track, key: string): Reference {
-  if (!track.record.cid) throw new Error('This track is unavailable');
+  if (!track.record.cid) throw new Error('this track is unavailable');
   return { id: track.id, uri: track.record.uri, cid: track.record.cid, key, durationMs: Math.round((track.metadata.duration_seconds ?? 0) * 1000) };
 }
 
@@ -52,7 +52,7 @@ export class PersonalQueue {
     try {
       restored ??= queueCheckpoint(await this.options.storage.load(this.options.owner), this.options.owner) ?? undefined;
       this.mutations = mergeQueueMutations(await this.options.storage.loadMutations(this.options.owner), this.mutations);
-    } catch { this.options.error('Could not restore your saved queue'); }
+    } catch { this.options.error('could not restore your saved queue'); }
     if (this.closed) return;
     if (restored && version === this.localVersion) {
       this.checkpoint = restored;
@@ -79,7 +79,7 @@ export class PersonalQueue {
         if (!this.connected) this.sent = undefined;
         else void this.pump();
       },
-      onError: message => this.options.error(message.replaceAll('The Jam', 'Your queue').replaceAll('the Jam', 'your queue')),
+      onError: message => this.options.error(message.replaceAll('the jam', 'your queue').replaceAll('the Jam', 'your queue')),
       onResult: (command, outcome) => {
         console.info('[queue] result', { action: command.action, outcome });
         const waiting = this.commands.get(command.id);
@@ -87,8 +87,8 @@ export class PersonalQueue {
         if (this.mutations[0]?.id !== command.id) return;
         this.mutations.shift();
         this.sent = undefined;
-        void this.persistMutations([command.id]).then(() => this.pump()).catch(() => this.options.error('Could not save your queue change'));
-        if (!['applied', 'noop', 'duplicate'].includes(outcome)) this.options.error('Your queue changed. Please try that edit again.');
+        void this.persistMutations([command.id]).then(() => this.pump()).catch(() => this.options.error('could not save your queue change'));
+        if (!['applied', 'noop', 'duplicate'].includes(outcome)) this.options.error('your queue changed. please try that edit again.');
         this.project();
       },
     });
@@ -116,15 +116,15 @@ export class PersonalQueue {
 
   async edit(intent: DurableQueueEdit) {
     if (this.closed) return;
-    if (intent.action === 'enqueue' && this.state.entries.length >= 200 && this.state.index <= 0) { this.options.error('Your queue is full. Remove a track first.'); return; }
-    if (this.mutations.length >= 64) { this.options.error('Connect before adding more queue changes'); return; }
+    if (intent.action === 'enqueue' && this.state.entries.length >= 200 && this.state.index <= 0) { this.options.error('your queue is full. remove a track first.'); return; }
+    if (this.mutations.length >= 64) { this.options.error('connect before adding more queue changes'); return; }
     if (!this.options.connect) { this.applyLocal(intent); return; }
     const mutation = { id: this.options.id(), intent };
     this.mutations.push(mutation);
     try { await this.persistMutations(); }
     catch {
       this.mutations = this.mutations.filter(entry => entry !== mutation);
-      this.options.error('Could not save your queue change');
+      this.options.error('could not save your queue change');
       return;
     }
     if (this.closed) return;
@@ -134,7 +134,7 @@ export class PersonalQueue {
 
   command(intent: PlaybackIntent): boolean {
     if (!this.options.connect) return false;
-    if (!this.connected) { this.options.error('Your queue is reconnecting'); return true; }
+    if (!this.connected) { this.options.error('your queue is reconnecting'); return true; }
     this.connection?.command(intent);
     return true;
   }
@@ -173,7 +173,7 @@ export class PersonalQueue {
       position: this.state.entries.length ? Math.min(86400, Math.max(0, position)) : 0, repeat, keepPlaying };
     this.checkpoint = snapshot;
     this.writes = this.writes.catch(() => {}).then(() => this.options.storage.save(this.options.owner, snapshot));
-    void this.writes.catch(() => this.options.error('Could not save your queue'));
+    void this.writes.catch(() => this.options.error('could not save your queue'));
     return this.writes;
   }
 
@@ -182,7 +182,7 @@ export class PersonalQueue {
     if (!key || this.closed) return;
     const progress = { key, position: Math.min(86400, Math.max(0, position)), updatedAt: Date.now() };
     this.writes = this.writes.catch(() => {}).then(() => this.options.storage.progress(this.options.owner, progress));
-    void this.writes.catch(() => this.options.error('Could not save your playback position'));
+    void this.writes.catch(() => this.options.error('could not save your playback position'));
   }
 
   close() {
@@ -215,7 +215,7 @@ export class PersonalQueue {
       const command: Pending = { ...head.intent, id: head.id, ...head.base };
       this.sent = head.id;
       if (!this.connection?.enqueuePrepared(command)) this.sent = undefined;
-    } catch { this.options.error('Could not send your queue change'); }
+    } catch { this.options.error('could not send your queue change'); }
     finally { this.pumping = false; }
   }
 
@@ -283,7 +283,7 @@ export class PersonalQueue {
         for (const id of result.missing) { this.missing.add(id); this.cache.delete(id); }
         this.project();
         if (this.wire) this.options.remote(this.wire, false);
-      } catch { if (!this.closed) this.options.error('Could not load your queue'); }
+      } catch { if (!this.closed) this.options.error('could not load your queue'); }
       finally { for (const id of ids) this.fetching.delete(id); }
     }));
   }
@@ -292,6 +292,6 @@ export class PersonalQueue {
 function unavailable(ref: JamTrack): Track {
   const parts = ref.uri.slice(5).split('/');
   return { object: 'track', id: ref.id, record: { uri: ref.uri, cid: ref.cid, revision: null, collection: parts[1] ?? '', rkey: parts[2] ?? '' },
-    metadata: { title: 'Unavailable track', description: null, album: null, duration_seconds: ref.durationMs / 1000, created_at: '' },
+    metadata: { title: 'unavailable track', description: null, album: null, duration_seconds: ref.durationMs / 1000, created_at: '' },
     artist: { did: parts[0] ?? '', profile: { handle: '', display_name: '', avatar_url: null } }, media: {}, access: { visibility: 'public' }, metrics: { play_count: 0, like_count: 0 } };
 }

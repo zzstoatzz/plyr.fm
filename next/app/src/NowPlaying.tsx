@@ -68,7 +68,7 @@ export function NowPlaying({ track, close, navigate }: { track: Track; close: ()
           <View testID="now-playing-dismiss-region" style={[styles.dismissRegion, Platform.OS === 'web' && compact && touchHeader]}>
           <Text accessibilityRole="header"
             style={[styles.headerTitle, compact && styles.centerTitle,
-              { color: theme.muted, fontSize: 14 * theme.scale, fontFamily: theme.fontFamily }]}>Now playing</Text>
+              { color: theme.muted, fontSize: 14 * theme.scale, fontFamily: theme.fontFamily }]}>now playing</Text>
           </View>
           {compact ? <View style={styles.headerSpacer} /> : <View {...dismiss.protect}><PlayerControl icon={X} label="Close" onPress={close} /></View>}
         </View>

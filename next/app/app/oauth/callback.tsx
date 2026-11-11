@@ -12,7 +12,7 @@ export default function OAuthCallback() {
 	return (
 		<View style={{ padding: 24, gap: 12, alignItems: 'center' }}>
 			<WaveLoading label="Finishing sign-in" />
-			<Text>Finishing sign-in…</Text>
+			<Text>finishing sign-in…</Text>
 		</View>
 	);
 }

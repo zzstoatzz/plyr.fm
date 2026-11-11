@@ -66,9 +66,9 @@ function Shell() {
   ];
   const showBack = !['/', '/search', '/library', '/portal', '/login'].includes(path);
   const detail = /^\/(track|u|album|playlist|edit-track)\//.test(path);
-  const tabTitle = path === '/' ? (wide ? undefined : 'plyr.fm') : path === '/search' ? 'Search' : path === '/library' ? 'Library' : undefined;
-  const detailTitle = path.startsWith('/u/') ? 'Artist' : path.startsWith('/edit-track/') ? 'Edit track'
-    : path.startsWith('/album/') ? 'Album' : path.startsWith('/playlist/') ? 'Playlist' : 'Track';
+  const tabTitle = path === '/' ? (wide ? undefined : 'plyr.fm') : path === '/search' ? 'search' : path === '/library' ? 'library' : undefined;
+  const detailTitle = path.startsWith('/u/') ? 'artist' : path.startsWith('/edit-track/') ? 'edit track'
+    : path.startsWith('/album/') ? 'album' : path.startsWith('/playlist/') ? 'playlist' : 'track';
   const nav = <View role="navigation" accessibilityLabel="Main navigation" style={{
     flexDirection: wide ? 'column' : 'row', padding: wide ? 12 : 6, gap: wide ? 8 : 4, width: wide ? 180 : '100%',
     backgroundColor: wide ? theme.surface : theme.background,

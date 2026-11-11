@@ -71,10 +71,10 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
     const request = sequence.current;
     await new Promise<void>((resolve, reject) => {
       const listener = player.addListener('playbackStatusUpdate', event => {
-        if (request !== sequence.current || event.error) { clearTimeout(timer); listener.remove(); reject(new Error('Audio changed while loading')); }
+        if (request !== sequence.current || event.error) { clearTimeout(timer); listener.remove(); reject(new Error('audio changed while loading')); }
         else if (event.isLoaded) { clearTimeout(timer); listener.remove(); resolve(); }
       });
-      const timer = setTimeout(() => { listener.remove(); reject(new Error('Audio took too long to load')); }, 15_000);
+      const timer = setTimeout(() => { listener.remove(); reject(new Error('audio took too long to load')); }, 15_000);
     });
   }
 
@@ -207,7 +207,7 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
       setStarting(null);
       console.warn('[playback] startup timeout', { request: starting, track: current?.id, loaded: player.isLoaded, position: player.currentTime });
       setReady(false);
-      setError('Playback took too long to start');
+      setError('playback took too long to start');
     }, 15_000);
     return () => clearTimeout(timeout);
   }, [current?.id, player, starting]);
@@ -259,7 +259,7 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
       setPendingSeek({ source: sequence.current, seconds: target });
       if (personal.ownsOutput() && ready) {
         const source = sequence.current;
-        void accounting.seekTo(target).then(() => { if (source === sequence.current) personal.checkpoint(target); }).catch(() => setError('Could not seek audio'));
+        void accounting.seekTo(target).then(() => { if (source === sequence.current) personal.checkpoint(target); }).catch(() => setError('could not seek audio'));
       }
       personal.command({ action: 'seek', positionMs: Math.round(target * 1000) });
       return;

@@ -53,7 +53,7 @@ export function TrackEmbed({ track, adult }: { track: Track; adult: boolean }) {
           lineHeight: horizontal && height >= 200 ? 27 : 20, fontWeight: '700' }}>{track.metadata.title}</Text>
     </Link>
     <Text numberOfLines={1} style={{ width: '100%', color: muted, fontSize: 12, lineHeight: 17 }}>
-      {adult ? 'Adult content hidden' : error ? 'Couldn’t play this track. Try again.' : artistName(track)}
+      {adult ? 'adult content hidden' : error ? 'couldn’t play this track. try again.' : artistName(track)}
     </Text>
   </View>;
 

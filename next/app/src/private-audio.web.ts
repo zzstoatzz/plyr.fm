@@ -33,7 +33,7 @@ function listen() {
 }
 
 async function prepare() {
-	if (!('serviceWorker' in navigator)) throw new Error('Protected streaming is not supported by this browser');
+	if (!('serviceWorker' in navigator)) throw new Error('protected streaming is not supported by this browser');
 	listen();
 	await navigator.serviceWorker.register('/private-audio-worker.js', { scope: '/', updateViaCache: 'none' });
 	await navigator.serviceWorker.ready;
@@ -45,7 +45,7 @@ async function prepare() {
 		};
 		const timer = setTimeout(() => {
 			navigator.serviceWorker.removeEventListener('controllerchange', finish);
-			reject(new Error('Could not start protected streaming'));
+			reject(new Error('could not start protected streaming'));
 		}, 10_000);
 		navigator.serviceWorker.addEventListener('controllerchange', finish); finish();
 	});
@@ -53,7 +53,7 @@ async function prepare() {
 
 export async function privateAudioUrl(source: GatedAudioSource): Promise<string> {
 	registration ??= new Promise<void>((resolve, reject) => {
-		const timer = setTimeout(() => reject(new Error('Could not start protected streaming')), 10_000);
+		const timer = setTimeout(() => reject(new Error('could not start protected streaming')), 10_000);
 		void prepare().then(resolve, reject).finally(() => clearTimeout(timer));
 	}).catch(error => { registration = undefined; throw error; });
 	await registration;

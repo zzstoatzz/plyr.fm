@@ -61,7 +61,7 @@ const output = process.env.TRACK_ACTION_OUTPUT || `/tmp/plyr-track-actions-${Dat
         await page.getByRole('button', { name: 'See 8 likes', exact: true }).waitFor();
         await page.screenshot({ path: path.join(output, `${width}-${theme}-liked.png`) });
         await page.getByRole('button', { name: 'See 8 likes', exact: true }).click();
-        await page.getByText('Liked by', { exact: true }).waitFor();
+        await page.getByText('liked by', { exact: true }).waitFor();
         await page.getByRole('dialog').getByRole('link', { name: new RegExp(handle.replaceAll('.', '\\.')) }).waitFor();
         assert.equal(await page.getByText('no likes yet.', { exact: true }).count(), 0, 'Own like appears before indexing');
         await page.screenshot({ path: path.join(output, `${width}-${theme}-likers.png`) });
@@ -82,7 +82,7 @@ const output = process.env.TRACK_ACTION_OUTPUT || `/tmp/plyr-track-actions-${Dat
         duplicateLiker = false;
         loseNextCreate = true;
         await page.getByRole('button', { name: 'Like', exact: true }).click();
-        await page.getByText('Couldn’t update like', { exact: true }).waitFor();
+        await page.getByText('couldn’t update like', { exact: true }).waitFor();
         assert.equal(lost, 1, 'Lost response follows a real committed PDS create');
         await page.getByRole('button', { name: 'close', exact: true }).click();
         await page.getByRole('button', { name: 'See 7 likes', exact: true }).waitFor();
@@ -98,7 +98,7 @@ const output = process.env.TRACK_ACTION_OUTPUT || `/tmp/plyr-track-actions-${Dat
         const box = await playlist.boundingBox();
         assert.ok(box.width >= 300 && box.height >= 48, 'Menu actions are full-width rows');
         await playlist.click();
-        await page.getByText('Create a playlist from your library first.', { exact: true }).waitFor();
+        await page.getByText('create a playlist from your library first.', { exact: true }).waitFor();
         assert.equal(await page.getByRole('dialog').count(), 1, 'Playlist picker reuses a single sheet');
         await page.screenshot({ path: path.join(output, `${width}-${theme}-playlists.png`) });
         await page.getByRole('button', { name: 'back', exact: true }).click();
@@ -111,7 +111,7 @@ const output = process.env.TRACK_ACTION_OUTPUT || `/tmp/plyr-track-actions-${Dat
           const rejectDelete = route => route.abort();
           await page.route('https://pds.fixture.test/xrpc/com.atproto.repo.deleteRecord', rejectDelete);
           await page.getByRole('button', { name: 'Unlike', exact: true }).click();
-          await page.getByText('Couldn’t update like', { exact: true }).waitFor();
+          await page.getByText('couldn’t update like', { exact: true }).waitFor();
           await page.getByRole('button', { name: 'close', exact: true }).click();
           await page.getByRole('button', { name: 'See 0 likes', exact: true }).waitFor();
           await page.getByRole('button', { name: 'Unlike', exact: true }).waitFor();

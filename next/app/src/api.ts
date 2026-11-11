@@ -167,9 +167,9 @@ export const api = {
 		const timer = setTimeout(() => controller.abort(), 15_000);
 		try {
 			const response = await fetch(url, { method: 'POST', credentials: 'include', keepalive: true, signal: controller.signal });
-			if (!response.ok) throw new PlayDeliveryError(`Play receipt failed (${response.status})`, response.status >= 500 || response.status === 429);
+			if (!response.ok) throw new PlayDeliveryError(`play receipt failed (${response.status})`, response.status >= 500 || response.status === 429);
 			const receipt: unknown = await response.json();
-			if (!isPlayReceipt(receipt, play)) throw new PlayDeliveryError('Invalid play receipt', true);
+			if (!isPlayReceipt(receipt, play)) throw new PlayDeliveryError('invalid play receipt', true);
 			return receipt;
 		} finally {
 			clearTimeout(timer);

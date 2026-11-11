@@ -205,14 +205,14 @@ export class JamConnection {
             if (!this.state?.personal && message.outcome === 'applied' && sent && revision === sent.expectedRevision + 1) {
               for (const pending of this.pending) if (pending.epoch === sent.epoch && pending.occurrence === sent.occurrence && pending.expectedRevision === sent.expectedRevision) pending.expectedRevision = revision;
             } else if (message.outcome !== 'applied' && message.outcome !== 'noop' && message.outcome !== 'duplicate') {
-              this.options.onError(message.outcome === 'forbidden' ? 'Only the host can seek in this Jam' : 'The Jam changed. Try that action again.');
+              this.options.onError(message.outcome === 'forbidden' ? 'only the host can seek in this jam' : 'the jam changed. try that action again.');
             }
             if (sent) this.options.onResult?.(sent, String(message.outcome));
             this.inFlight = undefined;
             clearTimeout(this.commandTimer);
             this.flush();
           }
-        } catch { this.options.onError('Could not read the Jam update'); }
+        } catch { this.options.onError('could not read the jam update'); }
       };
       socket.onerror = () => socket.close();
       socket.onclose = () => {
@@ -225,14 +225,14 @@ export class JamConnection {
       };
     } catch (failure) {
       if (this.closed || generation !== this.generation) return;
-      this.options.onError(failure instanceof Error ? failure.message : 'Could not connect to the Jam. Retrying…');
+      this.options.onError(failure instanceof Error ? failure.message : 'could not connect to the jam. retrying…');
       this.reconnectAttempt++;
       this.reconnectTimer = setTimeout(() => void this.connect(), Math.min(10_000, 500 * this.reconnectAttempt));
     }
   }
 
   command(intent: PlaybackIntent, expected?: Pick<JamState, 'epoch' | 'revision' | 'occurrence'>): boolean {
-    if (this.awaitingSnapshot || !this.state || this.socket?.readyState !== 1 || this.closed) { this.options.onError('The Jam is reconnecting'); return false; }
+    if (this.awaitingSnapshot || !this.state || this.socket?.readyState !== 1 || this.closed) { this.options.onError('the jam is reconnecting'); return false; }
     const base = expected ?? this.state;
     const command = { ...intent, id: `${Math.floor(this.now()).toString(36)}-${++this.serial}-${Math.random().toString(36).slice(2, 10)}`, epoch: base.epoch,
       expectedRevision: base.revision, occurrence: base.occurrence, ...(this.state.personal ? { expectedOutput: this.state.personal.output?.connectionId ?? null } : {}) };
@@ -242,7 +242,7 @@ export class JamConnection {
   enqueuePrepared(command: Pending): boolean {
     if (this.awaitingSnapshot || !this.state || this.socket?.readyState !== 1 || this.closed) return false;
     if (command.action === 'seek') this.pending = this.pending.filter(pending => pending.action !== 'seek');
-    if (this.pending.length >= 16) { this.options.onError('Waiting for the Jam to catch up'); return false; }
+    if (this.pending.length >= 16) { this.options.onError('waiting for the jam to catch up'); return false; }
     this.pending.push(command);
     this.flush();
     return true;
@@ -271,7 +271,7 @@ export class JamConnection {
     const next = this.pending.shift()!;
     if (!this.state?.personal && (next.epoch !== this.state?.epoch || next.occurrence !== this.state?.occurrence)) { this.flush(); return; }
     const duplicateIntent = next.expectedRevision < this.state!.revision && (next.action === 'play' && this.state!.playing || next.action === 'pause' && !this.state!.playing);
-    if (!this.state?.personal && next.expectedRevision !== this.state?.revision && !duplicateIntent) { this.pending = []; this.options.onError('The Jam changed. Try that action again.'); return; }
+    if (!this.state?.personal && next.expectedRevision !== this.state?.revision && !duplicateIntent) { this.pending = []; this.options.onError('the jam changed. try that action again.'); return; }
     this.inFlight = next;
     this.socket.send(JSON.stringify(next));
     this.commandTimer = setTimeout(() => this.socket?.close(), 8_000);

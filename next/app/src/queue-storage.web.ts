@@ -45,7 +45,7 @@ export const queueStorage: QueueStorage = {
       };
       transaction.oncomplete = () => resolve(merged);
       transaction.onerror = () => reject(transaction.error);
-      transaction.onabort = () => reject(transaction.error ?? new Error('Could not save your queue change'));
+      transaction.onabort = () => reject(transaction.error ?? new Error('could not save your queue change'));
     });
   },
   async load(owner) {
@@ -60,6 +60,6 @@ export const queueStorage: QueueStorage = {
       transaction.onabort = () => reject(transaction.error);
     });
   },
-  async save(owner, snapshot) { const safe = queueCheckpoint(snapshot, owner); if (!safe) throw new Error('Could not save this queue'); await write(owner, safe); },
+  async save(owner, snapshot) { const safe = queueCheckpoint(snapshot, owner); if (!safe) throw new Error('could not save this queue'); await write(owner, safe); },
   progress: (owner, progress) => write(owner + ':progress', progress),
 };

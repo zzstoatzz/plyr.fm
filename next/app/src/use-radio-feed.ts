@@ -6,6 +6,6 @@ const feeds = new Map(radioStations.map(station => [station.slug, new RadioFeed(
 
 export function useRadioFeed(station: RadioStation) {
 	const feed = feeds.get(station.slug);
-	if (!feed) throw new Error('Unknown radio station');
+	if (!feed) throw new Error('unknown radio station');
 	return useSyncExternalStore(feed.subscribe, feed.getSnapshot, feed.getSnapshot);
 }

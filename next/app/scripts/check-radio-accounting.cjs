@@ -32,10 +32,10 @@ module.exports = async function runRadioAccounting({ browser, browserName, prepa
   });
   try {
     await page.goto(`${origin}/radio?station=${process.env.PLAYBACK_STATION || 'loved'}`, { waitUntil: 'domcontentloaded' });
-    await page.getByRole('button', { name: 'Listen live', exact: true }).waitFor();
+    await page.getByRole('button', { name: 'listen live', exact: true }).waitFor();
     const lookup = page.waitForRequest(request => new URL(request.url()).host === 'api.plyr.fm' && /^\/tracks\/\d+$/.test(new URL(request.url()).pathname), { timeout: 65_000 });
     const tapped = performance.now();
-    await page.getByRole('button', { name: 'Listen live', exact: true }).click();
+    await page.getByRole('button', { name: 'listen live', exact: true }).click();
     await page.waitForFunction(() => window.__plyrPlaybackMedia.some(audio => !audio.paused && audio.currentTime > 0.15));
     report.tapToMediaMs = Math.round(performance.now() - tapped);
     await lookup;
@@ -53,7 +53,7 @@ module.exports = async function runRadioAccounting({ browser, browserName, prepa
     }));
     assert.equal(report.pending.length, 1);
     assert.match(report.pending[0].trackId, /^radio:/);
-    await page.getByRole('button', { name: 'Stop listening', exact: true }).first().click();
+    await page.getByRole('button', { name: 'stop listening', exact: true }).first().click();
     await page.waitForFunction(() => window.__plyrPlaybackMedia.every(audio => audio.paused));
     const receipt = page.waitForResponse(response => response.request().method() === 'POST' && /\/plays\?/.test(response.url()) && response.ok());
     releaseIdentity();

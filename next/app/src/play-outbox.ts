@@ -162,7 +162,7 @@ export class PlayOutbox {
 					if (!canonicalTrackId(item.trackId)) {
 						const resolved = await this.options.resolve?.(item);
 						if (!resolved || resolved.occurrenceId !== item.occurrenceId || !canonicalTrackId(resolved.trackId) || resolved.trackId.length > 2048) {
-							throw new PlayDeliveryError('Invalid resolved play identity', true);
+							throw new PlayDeliveryError('invalid resolved play identity', true);
 						}
 						item.trackId = resolved.trackId;
 						item.persisted = this.options.storage.put({ trackId: item.trackId, occurrenceId: item.occurrenceId, createdAt: item.createdAt }).catch(() => {
@@ -175,7 +175,7 @@ export class PlayOutbox {
 					const receipt = await this.options.send(item);
 					if (receipt.occurrence !== item.occurrenceId || receipt.track_id !== item.trackId ||
 						!Number.isSafeInteger(receipt.play_count) || receipt.play_count < 0) {
-						throw new PlayDeliveryError('Invalid play receipt', true);
+						throw new PlayDeliveryError('invalid play receipt', true);
 					}
 					this.remove(item.occurrenceId);
 					this.options.onReceipt(receipt);

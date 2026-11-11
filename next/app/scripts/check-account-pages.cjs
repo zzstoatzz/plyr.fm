@@ -135,7 +135,7 @@ async function pdsCall(method, data, token) {
         assert.equal(requests.filter(url => url.startsWith('/v1/albums')).length, 2, 'Track edit does not refresh inactive albums');
         empty = true;
         await page.getByRole('button', { name: 'refresh catalog', exact: true }).click();
-        await page.getByText('No published music here yet.', { exact: true }).waitFor();
+        await page.getByText('no published music here yet.', { exact: true }).waitFor();
         await page.screenshot({ path: path.join(output, `${width}-${theme}-empty.png`) });
         await page.getByRole('link', { name: 'You', exact: true }).click();
         await page.getByRole('link', { name: 'Settings', exact: true }).click();

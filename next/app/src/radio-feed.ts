@@ -50,7 +50,7 @@ export class RadioFeed {
 		this.controller = controller;
 		let abort: () => void = () => {};
 		const cancelled = new Promise<never>((_, reject) => {
-			abort = () => reject(new Error('Radio read cancelled'));
+			abort = () => reject(new Error('radio read cancelled'));
 			controller.signal.addEventListener('abort', abort, { once: true });
 		});
 		const deadline = setTimeout(() => controller.abort(), this.timeoutMs);
@@ -61,7 +61,7 @@ export class RadioFeed {
 			this.notify();
 		} catch {
 			if (!this.active(generation)) return;
-			this.state = Object.freeze({ snapshot: this.state.snapshot, error: 'Could not reach this station. Retrying…' });
+			this.state = Object.freeze({ snapshot: this.state.snapshot, error: 'could not reach this station. retrying…' });
 			this.notify();
 		} finally {
 			clearTimeout(deadline);

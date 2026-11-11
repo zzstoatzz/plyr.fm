@@ -109,7 +109,7 @@ export default function Login() {
       else await login(identifier, localOnly, destination);
       router.replace(intent ?? '/settings');
     } catch (failure) {
-      setError(failure instanceof Error ? failure.message : 'Could not continue. Please try again.');
+      setError(failure instanceof Error ? failure.message : 'could not continue. please try again.');
     } finally {
       pending.current = false;
       setBusy(false);
@@ -141,7 +141,7 @@ export default function Login() {
         {!busy && <Action label="not you?" onPress={() => updateHandle('')} />}
       </View>}
       <Copy>your @handle from <InlineLink href="https://bsky.app">Bluesky</InlineLink> or <InlineLink href="https://blackskyweb.xyz">Blacksky</InlineLink></Copy>
-      {deviceOnly === 'true' && <Copy>Preferences will stay on this device for this sign-in.</Copy>}
+      {deviceOnly === 'true' && <Copy>preferences will stay on this device for this sign-in.</Copy>}
     </>}
     <Action primary label={busy ? (host ? 'taking you to ' + host + '…' : 'redirecting…') : creating ? 'create account' : host ? 'continue at ' + host : 'sign in'}
       onPress={() => void submit()} disabled={busy || (creating ? !provider : !identifier)} />

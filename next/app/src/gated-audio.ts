@@ -42,7 +42,7 @@ export async function gatedAudioUrl(uri: string, auth: Auth): Promise<string> {
 		fetch: (url, init) => fetch(url, init),
 		keypair: async () => P256Keypair.import(await getRandomBytesAsync(32))
 	});
-	if (!response.body) throw new Error('This track has no audio');
+	if (!response.body) throw new Error('this track has no audio');
 	const reader = response.body.getReader();
 	const type = response.headers.get('content-type')?.split(';')[0] ?? '';
 	const extension = EXTENSIONS[type] ?? 'audio';
@@ -57,10 +57,10 @@ export async function gatedAudioUrl(uri: string, auth: Auth): Promise<string> {
 				const { done, value } = await reader.read();
 				if (done) break;
 				bytes += value.byteLength;
-				if (bytes > MAX_AUDIO_BYTES) throw new Error('This protected track exceeds the 100 MB limit');
+				if (bytes > MAX_AUDIO_BYTES) throw new Error('this protected track exceeds the 100 MB limit');
 				await handle.writeBytes(value);
 			}
-			if (!bytes) throw new Error('This track has no audio');
+			if (!bytes) throw new Error('this track has no audio');
 		} finally {
 			handle.close();
 		}

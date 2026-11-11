@@ -20,9 +20,9 @@ export interface SpaceAudioTransport {
 
 async function mint(agent: Agent, space: string, authorityPds: string, transport: SpaceAudioTransport): Promise<Credential> {
 	const delegation = await agent.handle(`/xrpc/com.atproto.space.getDelegationToken?${new URLSearchParams({ space })}`, { method: 'GET' });
-	if (!delegation.ok) throw new Error('Your account cannot access this track');
+	if (!delegation.ok) throw new Error('your account cannot access this track');
 	const { token: delegationToken } = await delegation.json();
-	if (typeof delegationToken !== 'string') throw new Error('Invalid space delegation');
+	if (typeof delegationToken !== 'string') throw new Error('invalid space delegation');
 
 	const key = await transport.keypair();
 	const response = await transport.fetch(`${authorityPds}/xrpc/com.atproto.space.getSpaceCredential`, {
@@ -31,9 +31,9 @@ async function mint(agent: Agent, space: string, authorityPds: string, transport
 		body: JSON.stringify({ space, credentialKid: key.did(), delegationToken }),
 		redirect: 'error'
 	});
-	if (!response.ok) throw new Error('Your account cannot access this track');
+	if (!response.ok) throw new Error('your account cannot access this track');
 	const { credential: token } = await response.json();
-	if (typeof token !== 'string') throw new Error('Invalid space credential');
+	if (typeof token !== 'string') throw new Error('invalid space credential');
 	const { payload } = parseSpaceToken('credential', token);
 	return { key, token, expires: payload.exp * 1000 };
 }
@@ -76,20 +76,20 @@ export interface GatedAudioSource {
 }
 
 export async function resolveGatedAudio(uri: string, auth: Auth, transport: SpaceAudioTransport): Promise<GatedAudioSource> {
-	if (!auth.agent) throw new Error('Sign in to play this track');
+	if (!auth.agent) throw new Error('sign in to play this track');
 	const agent = auth.agent;
 	const parts = uri.slice('at://'.length).split('/');
 	if (!uri.startsWith('at://') || parts.length !== 7 || parts[1] !== 'space' || parts.some(part => !part)) {
-		throw new Error('Invalid space record URI');
+		throw new Error('invalid space record uri');
 	}
 	const [authority, , type, skey, repo, collection, rkey] = parts;
-	if (!isDid(authority) || !isDid(repo)) throw new Error('Invalid space record DID');
+	if (!isDid(authority) || !isDid(repo)) throw new Error('invalid space record did');
 	const space = `at://${authority}/space/${type}/${skey}`;
 	const authorityPds = await pdsEndpoint(authority);
 	const repoPds = repo === authority ? authorityPds : await pdsEndpoint(repo);
 	const document = await didDocument(repo);
 	const kem = document.verificationMethod?.find(method => method.id === `${repo}#atproto_kem`)?.publicKeyMultibase;
-	if (!kem) throw new Error('This track has no verification key');
+	if (!kem) throw new Error('this track has no verification key');
 	const [{ keyShare, sharedSecret }, credential] = await Promise.all([
 		encapsulate(`did:key:${kem}`), credentialFor(agent, space, authorityPds, transport)
 	]);
@@ -97,20 +97,20 @@ export async function resolveGatedAudio(uri: string, auth: Auth, transport: Spac
 	const record = await signedFetch(transport, credential, `${repoPds}/xrpc/com.atproto.space.getRecord?${recordParams}`, repo, {
 		[WANT_MAC_HEADER]: formatWantMacHeader(RECORD_MAC_TYPE, keyShare)
 	});
-	if (!record.ok) throw new Error('Could not read this protected track');
+	if (!record.ok) throw new Error('could not read this protected track');
 	const decoded = lexParse(await record.text(), { strict: true });
 	if (!isLexMap(decoded) || typeof decoded.uri !== 'string' || typeof decoded.cid !== 'string' || !isLexMap(decoded.value)) {
-		throw new Error('Invalid protected track');
+		throw new Error('invalid protected track');
 	}
 	const value = { uri: decoded.uri, cid: decoded.cid, value: decoded.value };
 	const mac = parseMacHeader(record.headers.get(MAC_HEADER) ?? undefined, RECORD_MAC_TYPE);
 	if (value.value.$type !== collection || !await verifyRecord(value, { uri, mac, sharedSecret })) {
-		throw new Error('Could not verify this protected track');
+		throw new Error('could not verify this protected track');
 	}
 	const blob = value.value.audioBlob;
 	if (!isLexMap(blob) || !isCid(blob.ref) || typeof blob.size !== 'number' || !Number.isSafeInteger(blob.size)
 		|| blob.size <= 0 || blob.size > 104_857_600 || typeof blob.mimeType !== 'string' || !/^audio\/[a-z0-9.+-]+$/i.test(blob.mimeType)) {
-		throw new Error('This track has no playable audio');
+		throw new Error('this track has no playable audio');
 	}
 	const blobParams = new URLSearchParams({ space, repo, cid: blob.ref.toString() });
 	return {
@@ -129,6 +129,6 @@ export async function resolveGatedAudio(uri: string, auth: Auth, transport: Spac
 export async function openGatedAudio(uri: string, auth: Auth, transport: SpaceAudioTransport): Promise<Response> {
 	const source = await resolveGatedAudio(uri, auth, transport);
 	const blob = await transport.fetch(source.url, { headers: await source.headers(), redirect: 'error', cache: 'no-store' });
-	if (!blob.ok) throw new Error('Could not load this protected audio');
+	if (!blob.ok) throw new Error('could not load this protected audio');
 	return blob;
 }
