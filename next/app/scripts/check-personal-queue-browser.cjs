@@ -198,7 +198,7 @@ const assert = require('node:assert/strict');
  const failure=c.waitForResponse(response=>response.status()===503&&new URL(response.url()).pathname.endsWith('/playback'));
  await c.getByRole('button',{name:/^Play Sounds of the Drone Mix by /}).first().click();
  await failure;
- await c.getByText('Couldn’t play this track',{exact:true}).waitFor();
+ await c.getByText('couldn’t play this track',{exact:true}).waitFor();
  await c.getByRole('button',{name:'Play',exact:true}).first().click();
  await c.waitForFunction(()=>window.queueAudio.some(a=>!a.paused&&a.currentTime>0));
  assert.equal(playbackAttempts,2);
@@ -249,7 +249,7 @@ const assert = require('node:assert/strict');
  await c.waitForTimeout(1000);
  assert.equal(await b.evaluate(()=>window.queueFrames.at(-1).state.personal.keepPlaying),true);
  await c.getByRole('button',{name:'Queue',exact:true}).click();
- await c.getByText('From latest tracks',{exact:true}).locator('visible=true').waitFor();
+ await c.getByText('from latest tracks',{exact:true}).locator('visible=true').waitFor();
  await c.screenshot({path:path.join(artifacts,'generated-tail.png')});
  if(process.env.QUEUE_TEST_EXPECT_PROMOTION==='1') {
    const boundary=await c.evaluate(()=>window.queueFrames.at(-1).state.personal.explicitEnd);

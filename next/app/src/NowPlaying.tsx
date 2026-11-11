@@ -3,7 +3,6 @@ import { Text } from './Text';
 import Slider from './Slider';
 import type { Href } from 'expo-router';
 import ChevronDown from 'lucide-react-native/icons/chevron-down';
-import Info from 'lucide-react-native/icons/info';
 import ListMusic from 'lucide-react-native/icons/list-music';
 import Pause from 'lucide-react-native/icons/pause';
 import Play from 'lucide-react-native/icons/play';
@@ -16,6 +15,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import type { Track } from './api';
 import { useAppearance } from './appearance';
 import { Cover, artistName } from './CatalogPieces';
+import { cardSurface } from './materials';
+import { ShareLink } from './ShareLink';
+import { TrackLikes } from './TrackLikes';
+import { usePlayCount } from './use-play-count';
 import { PlayerVolume } from './PlayerVolume';
 import { PlayerSeek } from './PlayerSeek';
 import { PlayerControl } from './PlayerControl';
@@ -48,17 +51,24 @@ export function NowPlaying({ track, close, navigate }: { track: Track; close: ()
   const playing = player.status.playing;
   const error = player.error || player.status.error;
   const caption = { color: theme.muted, fontFamily: theme.fontFamily, fontSize: 13 * theme.scale };
+  const label = { color: theme.faint, fontFamily: theme.fontFamily, fontSize: 13 * theme.scale, fontWeight: '600' } as const;
+  const upcoming = player.queue.slice(player.index + 1, player.index + 4);
+  const plays = usePlayCount(track.id, track.metrics.play_count);
+  const likes = track.metrics.like_count;
+  const added = new Date(track.metadata.created_at);
+  const facts = [`${plays} ${plays === 1 ? 'play' : 'plays'}`, likes > 0 && `${likes} ${likes === 1 ? 'like' : 'likes'}`,
+    !Number.isNaN(added.getTime()) && `added ${added.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }).toLowerCase()}`].filter(Boolean).join(' · ');
 
   return <Modal visible transparent accessibilityLabel="Now playing" animationType={theme.reduceMotion ? 'none' : 'fade'} onRequestClose={close}>
     <View ref={dismiss.panelRef} style={styles.backdrop}>
       <AnimatedSafeAreaView {...dismiss.panHandlers} accessibilityViewIsModal={Platform.OS === 'web' ? undefined : true} edges={['top', 'bottom']}
         style={[{ transform: [{ translateY: dismiss.translation }] }, styles.panel, styles.full, { backgroundColor: theme.background }]}>
-        <View style={[styles.header, { borderColor: theme.hairline }]}>
+        <View style={styles.header}>
           {compact && <View {...dismiss.protect}><PlayerControl icon={ChevronDown} label="Close" onPress={close} /></View>}
           <View testID="now-playing-dismiss-region" style={[styles.dismissRegion, Platform.OS === 'web' && compact && touchHeader]}>
           <Text accessibilityRole="header"
             style={[styles.headerTitle, compact && styles.centerTitle,
-              { color: theme.text, fontSize: 16 * theme.scale, fontFamily: theme.fontFamily }]}>Now playing</Text>
+              { color: theme.muted, fontSize: 14 * theme.scale, fontFamily: theme.fontFamily }]}>Now playing</Text>
           </View>
           {compact ? <View style={styles.headerSpacer} /> : <View {...dismiss.protect}><PlayerControl icon={X} label="Close" onPress={close} /></View>}
         </View>
@@ -90,7 +100,7 @@ export function NowPlaying({ track, close, navigate }: { track: Track; close: ()
                 <View testID="now-playing-time" style={styles.time}>
                   <Text style={[caption, styles.numeric]}>{time(position)}</Text>
                   <Text accessibilityLiveRegion="polite" style={[caption, styles.status]}>
-                    {error ? 'Couldn’t play this track' : ''}
+                    {error ? 'couldn’t play this track' : ''}
                   </Text>
                   <Text style={[caption, styles.numeric]}>{time(duration)}</Text>
                 </View>
@@ -103,17 +113,40 @@ export function NowPlaying({ track, close, navigate }: { track: Track; close: ()
                 {sideBySide && <PlayerSeek forward />}
                 <View {...dismiss.protect}><PlayerControl icon={SkipForward} label="Next" onPress={() => void player.next()} /></View>
               </View>
-              <View style={[styles.utilities, { borderColor: theme.hairline }]}>
-                <View {...dismiss.protect}><Pressable accessibilityRole="button" accessibilityLabel="Queue" style={styles.utility}
-                  onPress={() => navigate('/queue')}>
-                  <ListMusic size={18} color={theme.muted} /><Text style={caption}>Queue</Text>
-                </Pressable></View>
-                <View {...dismiss.protect}><Pressable accessibilityRole="button" accessibilityLabel="Track details" style={styles.utility}
-                  onPress={() => navigate(`/track/${track.id}`)}>
-                  <Info size={18} color={theme.muted} /><Text style={caption}>Track details</Text>
-                </Pressable></View>
+              <View style={styles.utilities}>
+                <View {...dismiss.protect}><TrackLikes key={track.id} track={track} iconOnly returnTo="/now-playing" /></View>
+                <View {...dismiss.protect}><ShareLink compact path={`/track/${encodeURIComponent(track.id)}`} /></View>
+                <View {...dismiss.protect}><PlayerControl icon={ListMusic} label="Queue" onPress={() => navigate('/queue')} /></View>
               </View>
               {sideBySide && <View style={{ alignItems: 'center' }}><PlayerVolume /></View>}
+              {upcoming.length > 0 && <View testID="now-playing-up-next" style={[styles.card, cardSurface(theme)]}>
+                <View style={styles.cardHeader}>
+                  <Text accessibilityRole="header" aria-level={2} style={label}>up next</Text>
+                  <View {...dismiss.protect}><Pressable accessibilityRole="button" accessibilityLabel="Open queue" style={styles.cardLink} onPress={() => navigate('/queue')}>
+                    <Text style={{ ...caption, color: theme.accent }}>open queue</Text>
+                  </Pressable></View>
+                </View>
+                {upcoming.map((next, offset) => <View key={`${next.id}:${offset}`} {...dismiss.protect}>
+                  <Pressable accessibilityRole="button" accessibilityLabel={`Play ${next.metadata.title} by ${artistName(next)}`}
+                    onPress={() => player.jump(player.index + 1 + offset)} style={({ pressed }) => [styles.next, { opacity: pressed ? 0.65 : 1 }]}>
+                    <Cover uri={trackArtwork(next)} size={40} />
+                    <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+                      <Text numberOfLines={1} style={{ color: theme.text, fontFamily: theme.fontFamily, fontSize: 14 * theme.scale, fontWeight: '600' }}>{next.metadata.title}</Text>
+                      <Text numberOfLines={1} style={caption}>{artistName(next)}</Text>
+                    </View>
+                  </Pressable>
+                </View>)}
+              </View>}
+              <View testID="now-playing-about" style={[styles.card, cardSurface(theme)]}>
+                <Text accessibilityRole="header" aria-level={2} style={label}>about this track</Text>
+                {track.metadata.description ? <Text style={{ color: theme.text, fontFamily: theme.fontFamily, fontSize: 15 * theme.scale, lineHeight: 22 * theme.scale }}>{track.metadata.description}</Text> : null}
+                {track.metadata.album ? <Text style={caption}>from {track.metadata.album}</Text> : null}
+                <Text style={caption}>{facts}</Text>
+                <View {...dismiss.protect} style={{ alignSelf: 'flex-start' }}><Pressable accessibilityRole="button" accessibilityLabel="Open track page" style={styles.cardLink}
+                  onPress={() => navigate(`/track/${track.id}`)}>
+                  <Text style={{ ...caption, color: theme.accent }}>open track page</Text>
+                </Pressable></View>
+              </View>
             </View>
           </ScrollView>
         </View>
@@ -126,9 +159,9 @@ const styles = StyleSheet.create({
   backdrop: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: 'transparent' },
   panel: { width: '100%' },
   full: { flex: 1 },
-  header: { flexDirection: 'row', alignItems: 'center', minHeight: 50, paddingHorizontal: 20, borderBottomWidth: StyleSheet.hairlineWidth },
+  header: { flexDirection: 'row', alignItems: 'center', minHeight: 50, paddingHorizontal: 20 },
   dismissRegion: { flex: 1, minHeight: 50, justifyContent: 'center' },
-  headerTitle: { fontWeight: '700' },
+  headerTitle: { fontWeight: '600', textTransform: 'lowercase' },
   centerTitle: { textAlign: 'center' },
   headerSpacer: { width: 44 },
   scrollRegion: { flex: 1, minHeight: 0 },
@@ -143,6 +176,9 @@ const styles = StyleSheet.create({
   status: { flex: 1, textAlign: 'center' },
   numeric: { fontVariant: ['tabular-nums'] },
   transport: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-evenly' },
-  utilities: { flexDirection: 'row', justifyContent: 'space-around', gap: 8, borderTopWidth: StyleSheet.hairlineWidth },
-  utility: { minHeight: 44, gap: 6, flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }
+  utilities: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  card: { padding: 16, gap: 10, borderRadius: 12 },
+  cardHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 24 },
+  cardLink: { minHeight: 44, minWidth: 44, justifyContent: 'center' },
+  next: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 48 }
 });

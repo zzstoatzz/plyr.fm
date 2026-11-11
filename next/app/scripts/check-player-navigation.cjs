@@ -41,7 +41,7 @@ async function run(browser, width) {
     assert.ok(origin > 100, 'Origin Home has real scrolled context');
     await screenshot(page, `navigation-${width}-origin`);
     await page.getByRole('button', { name: 'Open now playing', exact: true }).click();
-    await page.getByTestId('now-playing-scroll').getByRole('link').click();
+    await page.getByTestId('now-playing-scroll').getByRole('link').first().click();
     await page.waitForURL('**/u/fixture.test');
     await continuity();
     const trackLink = page.getByRole('link').filter({ hasText: track.metadata.title }).first();

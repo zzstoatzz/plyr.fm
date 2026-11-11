@@ -13,14 +13,14 @@ export function ShareLink({ path, compact = false, menu = false }: { path: strin
       const url = SITE_URL + path;
       if (Platform.OS === 'web' && typeof navigator.share !== 'function') {
         await navigator.clipboard.writeText(url);
-        setMessage('Link copied.');
+        setMessage('link copied.');
       } else if (Platform.OS === 'web') {
         await navigator.share({ url });
       } else {
         await Share.share({ message: url });
       }
     } catch (error) {
-      if (!(error instanceof Error && error.name === 'AbortError')) setMessage('Could not share this link.');
+      if (!(error instanceof Error && error.name === 'AbortError')) setMessage('could not share this link.');
     }
   }
   return <View style={{ gap: 8 }}>

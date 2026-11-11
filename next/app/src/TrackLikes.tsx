@@ -79,7 +79,7 @@ function LikeButton({ track, change, reportError, reportLiked, menu }: {
     const rollback = change(liked ? -1 : 1);
     try {
       const saved = await (liked ? pds.unlike(track, { waitForIndex: false }) : pds.like(track, { waitForIndex: false }));
-      if (alive.current) setStatus(saved === 'pending' ? 'Like saved. Updating catalog.' : liked ? 'Like removed.' : 'Track liked.');
+      if (alive.current) setStatus(saved === 'pending' ? 'like saved. updating catalog.' : liked ? 'like removed.' : 'track liked.');
     } catch (error) {
       confirmed = liked;
       rollback();
@@ -121,7 +121,7 @@ function People({ id, viewer, close }: { id: string; viewer?: { did: string; uri
       href={{ pathname: '/u/[handle]', params: { handle: actor.profile?.handle || actor.did } }} onNavigate={close} />)}
     {likes.loading && <WaveLoading label="Loading likes" />}
     {likes.error && <><Text style={{ color: theme.muted }}>{likes.error}</Text><ActionRow label="retry" icon={RefreshCw} onPress={likes.more} /></>}
-    {!likes.loading && !likes.error && !actors.length && <Text style={{ color: theme.muted }}>No likes yet.</Text>}
+    {!likes.loading && !likes.error && !actors.length && <Text style={{ color: theme.muted }}>no likes yet.</Text>}
     {likes.cursor && !likes.loading && !likes.error && <ActionRow label="more people" icon={RefreshCw} onPress={likes.more} />}
   </>;
 }

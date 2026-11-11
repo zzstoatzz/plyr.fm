@@ -141,7 +141,7 @@ async function run(browser, width, theme) {
       });
       await page.getByRole('button', { name: 'Play', exact: true }).first().click();
       await page.getByRole('button', { name: 'Open now playing', exact: true }).waitFor();
-      await page.getByText('Couldn’t play this track', { exact: true }).waitFor();
+      await page.getByText('couldn’t play this track', { exact: true }).waitFor();
       await screenshot('retry');
       await page.getByRole('button', { name: 'Play', exact: true }).first().click();
       await page.waitForFunction(() => window.__plyrPlaybackMedia.some(audio => !audio.paused && audio.currentTime > 0.15));

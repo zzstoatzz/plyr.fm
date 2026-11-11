@@ -62,8 +62,8 @@ export default function Queue() {
         </View>
       </View>
       <View style={styles.section}>
-        {player.deviceQueue && <Copy>Queue saved on this device. <InlineLink href="/login?return_to=%2Fqueue">Sign in again</InlineLink> to use it across devices.</Copy>}
-        {player.outputElsewhere && <Copy>Playing on another device. Press play to listen here.</Copy>}
+        {player.deviceQueue && <Copy>queue saved on this device. <InlineLink href="/login?return_to=%2Fqueue">sign in again</InlineLink> to use it across devices.</Copy>}
+        {player.outputElsewhere && <Copy>playing on another device. press play to listen here.</Copy>}
         <View style={styles.header}>
           <Heading>Up next</Heading>
           <View style={styles.actions}>
@@ -79,21 +79,21 @@ export default function Queue() {
         {upcoming.length ? <QueueReorder queue={player.queue} start={player.index + 1} move={player.move}
           scrollRef={scrollRef} scrollMetrics={scrollMetrics} onDragging={setDragging}
           renderTrack={(track, index) => <>
-            {player.tail && index === Math.max(player.index + 1, player.tail.from) && <View style={{ paddingVertical: 8 }}><Copy>From {player.tail.label}</Copy></View>}
+            {player.tail && index === Math.max(player.index + 1, player.tail.from) && <View style={{ paddingVertical: 8 }}><Copy>from {player.tail.label}</Copy></View>}
             <QueueTrack track={track} play={() => player.jump(index)} remove={() => player.remove(index)} />
-          </>} /> : <Copy>Nothing queued. Add tracks from their menus.</Copy>}
+          </>} /> : <Copy>nothing queued. add tracks from their menus.</Copy>}
       </View>
       {player.index > 0 && <View style={styles.section}>
         <Pressable accessibilityRole="button" accessibilityState={{ expanded: history }} onPress={() => setHistory(!history)}
           style={{ minHeight: 44, justifyContent: 'center' }}>
-          <Copy>{history ? 'Hide' : 'Show'} played tracks ({player.index})</Copy>
+          <Copy>{history ? 'hide' : 'show'} played tracks ({player.index})</Copy>
         </Pressable>
         {history && player.queue.slice(0, player.index).map((track, index) =>
           <QueueTrack key={`${track.id}:${index}`} track={track} play={() => player.jump(index)} />)}
       </View>}
-    </> : <Copy>Pick a track to start listening.</Copy>}
+    </> : <Copy>pick a track to start listening.</Copy>}
     {dialog === 'clear' && <Sheet title="Clear upcoming tracks?" close={() => setDialog(null)}>
-      <Copy>{player.jam ? "The current track will keep playing." : "Clear your picks. Tracks from the current collection will remain."}</Copy>
+      <Copy>{player.jam ? "the current track will keep playing." : "clear your picks. tracks from the current collection will remain."}</Copy>
       <View style={row}>
         <Action label="Cancel" onPress={() => setDialog(null)} />
         <Action label="Clear upcoming" primary onPress={() => { player.clear(); setDialog(null); }} />

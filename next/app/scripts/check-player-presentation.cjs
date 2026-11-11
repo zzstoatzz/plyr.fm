@@ -228,7 +228,7 @@ async function run(browser, width, theme) {
     await page.waitForTimeout(300);
     assert.equal(await header.count(), 0, 'onRequestClose remains available');
     await open();
-    await page.getByTestId('now-playing-scroll').getByRole('link').click();
+    await page.getByTestId('now-playing-scroll').getByRole('link').first().click();
     await page.waitForURL('**/u/fixture.test');
     assert.equal(await header.count(), 0, 'Artist link retains normal tap navigation');
     assert.equal(await page.evaluate(() => window.__sameMedia === window.__playerPresentationMedia && !window.__sameMedia.paused), true);
@@ -280,7 +280,7 @@ async function longContent(browser) {
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
     await page.waitForTimeout(550);
     assert.equal(await header.count(), 1, 'Upward intent cannot reverse into dismissal in same touch');
-    await page.getByRole('button', { name: 'Track details', exact: true }).scrollIntoViewIfNeeded();
+    await page.getByRole('button', { name: 'Open track page', exact: true }).scrollIntoViewIfNeeded();
     await screenshot(page, '390-dark-short-player-scrolled-scale-1.4');
     await page.getByRole('button', { name: 'Close', exact: true }).click();
     assert.deepEqual(errors, []);
