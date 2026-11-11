@@ -50,7 +50,7 @@ export function PlayerBar() {
     <Cover uri={trackArtwork(track)} size={desktop ? 52 : 42} />
     <View style={{ flex: 1, minWidth: 0 }}>
       <Text numberOfLines={1} style={{ color: theme.text, fontSize: 14 * theme.scale, fontWeight: '700' }}>{track.metadata.title}</Text>
-      <Text numberOfLines={1} style={{ color: theme.muted, fontSize: 12 * theme.scale }}>{error ? "Couldn’t play this track" : player.outputElsewhere ? "Playing on another device" : artistName(track)}</Text>
+      <Text numberOfLines={1} style={{ color: theme.muted, fontSize: 12 * theme.scale }}>{error ? "couldn’t play this track" : player.outputElsewhere ? "playing on another device" : artistName(track)}</Text>
     </View>
   </Pressable>;
   return <>

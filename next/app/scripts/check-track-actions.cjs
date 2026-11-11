@@ -63,14 +63,14 @@ const output = process.env.TRACK_ACTION_OUTPUT || `/tmp/plyr-track-actions-${Dat
         await page.getByRole('button', { name: 'See 8 likes', exact: true }).click();
         await page.getByText('Liked by', { exact: true }).waitFor();
         await page.getByRole('dialog').getByRole('link', { name: new RegExp(handle.replaceAll('.', '\\.')) }).waitFor();
-        assert.equal(await page.getByText('No likes yet.', { exact: true }).count(), 0, 'Own like appears before indexing');
+        assert.equal(await page.getByText('no likes yet.', { exact: true }).count(), 0, 'Own like appears before indexing');
         await page.screenshot({ path: path.join(output, `${width}-${theme}-likers.png`) });
         await page.getByRole('button', { name: 'Close', exact: true }).click();
         await page.getByRole('button', { name: 'Unlike', exact: true }).click();
         await page.getByRole('button', { name: 'See 7 likes', exact: true }).waitFor();
         staleLikers = true;
         await page.getByRole('button', { name: 'See 7 likes', exact: true }).click();
-        await page.getByText('No likes yet.', { exact: true }).waitFor();
+        await page.getByText('no likes yet.', { exact: true }).waitFor();
         assert.equal(await page.getByRole('dialog').getByRole('link').count(), 0, 'Removed own like is hidden even while indexed');
         await page.getByRole('button', { name: 'Close', exact: true }).click();
         staleLikers = false;
