@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
-import { FlatList, Pressable, ScrollView, StyleSheet, View, type ScrollViewInstance } from 'react-native';
+import { FlatList, Pressable, StyleSheet, View } from 'react-native';
 import { HomeTrackRow } from './HomeTrackRow';
 import { HomeChart } from './HomeChart';
 import { HomeArtists } from './HomeArtists';
@@ -19,7 +19,6 @@ import { TagScroller } from './TagScroller';
 export function Home({ onPlay }: { onPlay: Play }) {
   const colors = useColors();
   const list = useRef<FlatList<Track>>(null);
-  const pinned = useRef<ScrollViewInstance>(null);
   const [layoutWidth, setLayoutWidth] = useState(0);
   const contentWidth = Math.max(0, layoutWidth - pageFrame.paddingHorizontal * 2);
   const columns = contentWidth >= 900 * colors.scale ? 2 : 1;
@@ -69,20 +68,17 @@ export function Home({ onPlay }: { onPlay: Play }) {
         <Pressable accessibilityRole="button" accessibilityLabel="Refresh tracks" onPress={() => { list.current?.scrollToOffset({ offset: 0, animated: false }); latest.reload(); }} style={{ minHeight: 44, justifyContent: 'center' }}><Heading>latest tracks</Heading></Pressable>
       </View>
       {(selected.length > 0 || tags.length > 0 || !tagPages.error) && <View style={styles.tags}>
-        {selected.length > 0 && <View style={[styles.pinned, { borderColor: colors.hairline }]}>
-          <Pressable accessibilityRole="button" accessibilityLabel="Clear tag filters" onPress={() => changeTags([])} style={styles.tagTarget}>
+        <TagScroller hasMore={tagPages.hasMore} onNearEnd={() => void tagPages.more()} lead={selected.length}>
+          {selected.length > 0 && <Pressable accessibilityRole="button" accessibilityLabel="Clear tag filters" onPress={() => changeTags([])} style={styles.tagTarget}>
             <View style={[styles.tag, { borderStyle: 'dashed', borderColor: colors.line }]}><Text style={{ color: colors.faint, fontSize: 12 * colors.scale }}>clear</Text></View>
-          </Pressable>
-          <ScrollView ref={pinned} horizontal testID="home-tags-selected" showsHorizontalScrollIndicator={false} style={styles.pinnedScroller} contentContainerStyle={styles.pinnedRow}
-            onContentSizeChange={() => pinned.current?.scrollToEnd({ animated: false })}>
+          </Pressable>}
           {selected.map((name) => tag(name, true, tags.find((item) => item.name === name)?.track_count))}
-        </ScrollView></View>}
-        <View style={styles.scroller}><TagScroller hasMore={tagPages.hasMore} onNearEnd={() => void tagPages.more()}>
+          {selected.length > 0 && <View testID="home-tags-divider" style={[styles.divider, { backgroundColor: colors.line }]} />}
           {tags.filter(({ name }) => !selected.includes(name)).map(({ name, track_count }) => tag(name, false, track_count))}
           {tagPages.hasMore && <Pressable accessibilityRole="button" accessibilityLabel="More tags" accessibilityState={{ busy: tagPages.loading, disabled: tagPages.loading }} disabled={tagPages.loading} onPress={() => void tagPages.more(true)} style={styles.tagTarget}>
             <Text style={{ color: colors.muted, fontSize: 12 * colors.scale }}>{tagPages.loading ? 'loading…' : 'more'}</Text>
           </Pressable>}
-        </TagScroller></View>
+        </TagScroller>
       </View>}
       <Status error={tagPages.error} retry={tagPages.retry} />
     </View>
@@ -107,11 +103,8 @@ export function Home({ onPlay }: { onPlay: Play }) {
 
 const styles = StyleSheet.create({
   home: { gap: 18 }, section: { gap: 12 }, headingRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: 12, rowGap: 4 },
-  tags: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, minHeight: 36 },
-  pinned: { flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 1, maxWidth: '60%', paddingRight: 8, borderRightWidth: 1 },
-  pinnedScroller: { flexGrow: 0, flexShrink: 1 },
-  pinnedRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  scroller: { flex: 1, minWidth: 0 },
+  tags: { minHeight: 36 },
+  divider: { width: 1, height: 20, marginHorizontal: 4 },
   tagTarget: { minWidth: 44, minHeight: 36, maxWidth: '100%', justifyContent: 'center' },
   tag: { flexDirection: 'row', alignItems: 'center', minHeight: 28, borderRadius: 16, borderWidth: 1, paddingHorizontal: 11, paddingVertical: 4 },
   more: { alignSelf: 'center', padding: 14 },

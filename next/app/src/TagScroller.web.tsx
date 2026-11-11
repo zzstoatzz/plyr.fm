@@ -1,8 +1,17 @@
 import { useEffect, useRef, type ReactNode } from 'react';
 
-export function TagScroller({ children, hasMore, onNearEnd }: { children: ReactNode; hasMore: boolean; onNearEnd: () => void }) {
+export function TagScroller({ children, hasMore, onNearEnd, lead }: { children: ReactNode; hasMore: boolean; onNearEnd: () => void; lead: number }) {
   const element = useRef<HTMLDivElement>(null);
   const target = useRef(0);
+  const previous = useRef(lead);
+  useEffect(() => {
+    const node = element.current;
+    const grew = lead > previous.current;
+    previous.current = lead;
+    if (!node || !grew || node.scrollLeft <= 0) return;
+    target.current = 0;
+    node.scrollTo({ left: 0, behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' });
+  }, [lead]);
   const nearEnd = useRef(onNearEnd);
   nearEnd.current = onNearEnd;
   const canExtend = useRef(hasMore);
