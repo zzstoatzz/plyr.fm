@@ -13,7 +13,7 @@ import SkipForward from 'lucide-react-native/icons/skip-forward';
 import { useAppearance } from './appearance';
 import { usePlayback } from './playback';
 import { Cover, artistName } from './CatalogPieces';
-import { dockSurface } from './materials';
+import { glassSurface } from './materials';
 import { TrackLikes } from './TrackLikes';
 import { NowPlaying } from './NowPlaying';
 import { PlayerSeek } from './PlayerSeek';
@@ -54,7 +54,7 @@ export function PlayerBar() {
     </View>
   </Pressable>;
   return <>
-    <View testID="player-dock" style={[dockSurface(theme), { width: desktop ? '100%' : undefined, alignSelf: desktop ? 'center' : undefined,
+    <View testID="player-dock" style={[glassSurface(theme), { width: desktop ? '100%' : undefined, alignSelf: desktop ? 'center' : undefined,
       borderRadius: desktop ? 0 : 16, margin: desktop ? 0 : 6, marginTop: desktop ? 0 : 6, paddingHorizontal: desktop ? 20 : 6, paddingTop: desktop ? 12 : 6, paddingBottom: desktop ? 9 : 5, overflow: 'hidden' }]}>
       <View pointerEvents="none" accessible={false} testID="playback-status-inlay" style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2,
         opacity: playing ? 0.65 : 0.16, backgroundColor: theme.accent,

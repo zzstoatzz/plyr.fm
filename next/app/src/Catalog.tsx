@@ -46,7 +46,7 @@ function TrackDetail({ id, onPlay, onEnqueue, trackActions }: {
     <TrackPresentation track={track}
       controls={<>
         <View style={{ flex: 1, alignItems: 'center' }}><TrackLikes compact track={track} /></View>
-        <View style={{ flex: 1, alignItems: 'center' }}><PlayerControl primary large icon={player.current?.id === track.id && player.status.playing ? PauseIcon : PlayIcon}
+        <View style={{ flex: 1, alignItems: 'center' }}><PlayerControl primary large glow={player.current?.id === track.id && player.status.playing} icon={player.current?.id === track.id && player.status.playing ? PauseIcon : PlayIcon}
           label={player.current?.id === track.id && player.status.playing ? 'Pause' : 'Play'}
           busy={player.current?.id === track.id && player.loading}
           onPress={() => player.current?.id === track.id ? player.setPlaying(!player.status.playing) : onPlay(track)} /></View>
@@ -68,14 +68,14 @@ function Collection({ id, album, onPlay }: { id: string; album: boolean; onPlay:
   if (!list) return <Status loading={!result.error} error={result.error} retry={result.retry} />;
   const tracks = list.members.flatMap((member) => member.track ? [member.track] : []);
   return <>
-    <DetailHeader title={list.metadata.name ?? (album ? 'Album' : 'Playlist')} artwork={collectionArtwork(list)}>
+    <DetailHeader kind={album ? 'album' : 'playlist'} title={list.metadata.name ?? (album ? 'Album' : 'Playlist')} artwork={collectionArtwork(list)}>
     {list.owner.profile && <InlineLink href={{ pathname: '/u/[handle]', params: { handle: list.owner.profile.handle || list.owner.did } }}>
       {list.owner.profile.display_name || list.owner.profile.handle}
     </InlineLink>}
     <Detail>{tracks.length} of {list.metrics.member_count} tracks available</Detail>
     </DetailHeader>
     <CollectionActions list={list} refresh={result.retry} onPlay={onPlay} actions={<>
-      {tracks[0] && <Action primary label={album ? 'Play album' : 'Play playlist'} onPress={() => onPlay(tracks[0], tracks, list.metadata.name ?? (album ? 'album' : 'playlist'))} />}
+      {tracks[0] && <Action primary icon={PlayIcon} label={album ? 'Play album' : 'Play playlist'} onPress={() => onPlay(tracks[0], tracks, list.metadata.name ?? (album ? 'album' : 'playlist'))} />}
       <ShareLink path={`/${album ? 'album' : 'playlist'}/${encodeURIComponent(id)}`} />
     </>} />
   </>;
@@ -118,7 +118,7 @@ function ArtistCatalog({ did, onPlay }: { did: string; onPlay: Play }) {
   return <>
     {metrics.data && <Detail>{metrics.data.totals.tracks} tracks · {metrics.data.totals.plays} plays</Detail>}
     <Heading>Tracks</Heading>
-    {tracks.data[0] && <Button label="Play tracks" onPress={() => onPlay(tracks.data[0], tracks.data)} />}
+    {tracks.data[0] && <Button primary icon={PlayIcon} label="Play tracks" onPress={() => onPlay(tracks.data[0], tracks.data)} />}
     <TrackRows tracks={tracks.data} onPlay={onPlay} />
     <Status loading={tracks.loading} error={tracks.error} retry={tracks.more} empty={!tracks.data.length ? 'No tracks yet.' : undefined} />
     {tracks.cursor && !tracks.loading && !tracks.error && <Button label="More tracks" onPress={tracks.more} />}

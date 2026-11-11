@@ -1,6 +1,16 @@
 export const palettes = {
-  light: { background: '#fbfbfd', surface: '#eceef4', text: '#141826', muted: '#50596b', border: '#788399', danger: '#b42335' },
-  dark: { background: '#22282e', surface: '#2b333d', text: '#f4f6fa', muted: '#b7c2d5', border: '#73839a', danger: '#ff99a5' }
+  light: {
+    background: '#fafafa', surface: '#ffffff', raised: '#f5f5f5', hover: '#ebebeb',
+    text: '#171717', muted: '#525252', faint: '#737373',
+    border: '#8a8a8a', line: '#d4d4d4', hairline: '#e5e5e5', danger: '#dc2626',
+    card: '#fffffff0', cardBorder: '#00000014', glass: '#fafafabf', glassBorder: '#0000000f'
+  },
+  dark: {
+    background: '#0a0a0a', surface: '#141414', raised: '#1a1a1a', hover: '#1f1f1f',
+    text: '#e8e8e8', muted: '#b0b0b0', faint: '#808080',
+    border: '#6e6e6e', line: '#333333', hairline: '#282828', danger: '#ef4444',
+    card: '#121212e0', cardBorder: '#ffffff0f', glass: '#141414bf', glassBorder: '#ffffff0f'
+  }
 };
 
 function rgb(hex: string): number[] {
@@ -18,6 +28,10 @@ function luminance(hex: string): number {
 export function contrast(a: string, b: string): number {
   const x = luminance(a), y = luminance(b);
   return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
+}
+
+export function onAccent(accent: string): string {
+  return contrast(accent, '#0a0a0a') >= contrast(accent, '#ffffff') ? '#0a0a0a' : '#ffffff';
 }
 
 export function readableAccent(color: string, surfaces: string[]): string {

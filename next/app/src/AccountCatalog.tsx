@@ -8,7 +8,7 @@ import { ActionRow } from './ActionRow';
 import { WaveLoading } from './WaveLoading';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useMemo, useRef, useState, type ReactNode } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet, View, useWindowDimensions } from 'react-native';
 import { api, playlistIdFromUri, type AwaitStatus, type ListDetail, type Track } from './api';
 import { useAuth } from './auth';
 import { getAuth } from './auth-state';
@@ -149,12 +149,17 @@ interface CollectionControlsProps {
   onPlay: Play;
 }
 
+function CollectionBar({ children }: { children: ReactNode }) {
+  const { width } = useWindowDimensions();
+  return <View style={[styles.actions, width < 520 && { justifyContent: 'center' }]}>{children}</View>;
+}
+
 export function CollectionActions(props: CollectionControlsProps) {
   const { did } = useAuth();
   if (did && did === props.list.owner.did) return <EditCollection key={did} {...props} />;
   const tracks = props.list.members.flatMap(({ track }) => track ? [track] : []);
   return <>
-    <View style={styles.actions}>{props.actions}</View>
+    <CollectionBar>{props.actions}</CollectionBar>
     <Heading>Tracks</Heading>
     <TrackRows tracks={tracks} onPlay={(track, tracks) => props.onPlay(track, tracks, props.list.metadata.name ?? 'collection')} />
   </>;
@@ -197,7 +202,7 @@ function EditCollection({ list, refresh, actions, onPlay }: CollectionControlsPr
   }
   const tracks = list.members.flatMap(({ track }) => track ? [track] : []);
   return <>
-    <View style={styles.actions}>
+    <CollectionBar>
       {actions}
       <Button label={editing ? 'Done editing' : album ? 'Edit album' : 'Edit playlist'}
         onPress={() => {
@@ -206,7 +211,7 @@ function EditCollection({ list, refresh, actions, onPlay }: CollectionControlsPr
           setEditing(!editing);
           setConfirmDelete(false);
         }} />
-    </View>
+    </CollectionBar>
     {editing && <View style={styles.group}>
       <NameInput label={album ? 'Album name' : 'Playlist name'} value={name} onChange={setName} />
       <Status loading={mutation.busy} empty={mutation.message} />

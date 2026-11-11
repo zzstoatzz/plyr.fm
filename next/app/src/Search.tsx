@@ -57,7 +57,7 @@ export function Search({ onPlay }: { onPlay: Play }) {
     finally { if (attempt === request.current) setPlaying(undefined); }
   }
   return <>
-    <View style={[styles.field, { backgroundColor: theme.surface, borderColor: focused ? theme.accent : 'transparent', borderWidth: focused ? 2 : 1 }]}>
+    <View style={[styles.field, { backgroundColor: theme.surface, borderColor: focused ? theme.accent : theme.line, borderWidth: focused ? 2 : 1 }]}>
       <SearchIcon size={19} color={theme.muted} />
       <TextInput ref={input} accessibilityLabel="Search tracks, artists, albums and playlists" placeholder="tracks, artists, albums, playlists" placeholderTextColor={theme.muted}
         value={query} onChangeText={change} onFocus={() => setFocused(true)} onBlur={() => setFocused(false)} autoCapitalize="none" autoCorrect={false} returnKeyType="search"
@@ -84,7 +84,7 @@ export function Search({ onPlay }: { onPlay: Play }) {
           </>;
           const control = <Pressable testID={hit.type === 'track' ? 'track-play-control' : undefined} accessibilityRole={hit.type === 'track' ? 'button' : 'link'} accessibilityLabel={`${hit.type}: ${hit.title}, ${hit.owner.display_name || hit.owner.handle}`}
             disabled={playing === hit.id} accessibilityState={{ disabled: playing === hit.id, busy: playing === hit.id, selected: player.current?.id === hit.id }} onPress={hit.type === 'track' ? () => void play(hit) : undefined} onPressIn={() => setPressed(hit.id)} onPressOut={() => setPressed(undefined)}
-            style={{ ...styles.result, borderColor: theme.surface, backgroundColor: pressed === hit.id ? theme.surface : theme.background }}>{content}</Pressable>;
+            style={{ ...styles.result, borderColor: theme.hairline, backgroundColor: pressed === hit.id ? theme.surface : theme.background }}>{content}</Pressable>;
           return <View key={`${hit.type}:${hit.id}`}>{hit.type === 'track' ? control : <Link href={destination(hit)} asChild>{control}</Link>}
             {failure?.id === hit.id && <View style={{ paddingVertical: 8, gap: 8 }}><Detail>{failure.message}</Detail><Action label="retry playback" onPress={() => void play(hit)} /></View>}
           </View>;

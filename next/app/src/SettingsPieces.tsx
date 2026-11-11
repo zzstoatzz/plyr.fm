@@ -13,7 +13,7 @@ export function SettingsSection({ title, icon: Icon, children }: { title: string
       <Icon size={18} color={theme.muted} />
       <Text accessibilityRole="header" aria-level={2} style={{ color: theme.muted, fontSize: 14 * theme.scale, fontWeight: '600' }}>{title}</Text>
     </View>
-    <View style={{ borderRadius: 14, borderWidth: StyleSheet.hairlineWidth, borderColor: theme.surface, overflow: 'hidden' }}>{children}</View>
+    <View style={{ borderRadius: 14, borderWidth: StyleSheet.hairlineWidth, borderColor: theme.hairline, overflow: 'hidden' }}>{children}</View>
   </View>;
 }
 
@@ -32,7 +32,7 @@ export function SettingsRow({ label, value, detail, onPress, children, destructi
     {(onPress || href) && disclosure && !destructive && <ChevronRight size={18} color={theme.muted} />}
   </>;
   const style = { minHeight: 60, paddingHorizontal: 16, paddingVertical: 12, flexDirection: 'row' as const, alignItems: 'center' as const, gap: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth, borderColor: theme.surface };
+    borderBottomWidth: StyleSheet.hairlineWidth, borderColor: theme.hairline };
   const control = <Pressable accessibilityRole={href ? 'link' : 'button'} accessibilityLabel={value ? `${label}: ${value}` : label} onPress={onPress} onPressIn={() => setPressed(true)} onPressOut={() => setPressed(false)}
     style={{ ...style, backgroundColor: pressed ? theme.surface : theme.background }}>{content}</Pressable>;
   return href ? <Link href={href} asChild>{control}</Link> : onPress ? control : <View style={[style, { backgroundColor: theme.background }]}>{content}</View>;

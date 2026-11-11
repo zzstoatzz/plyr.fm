@@ -22,7 +22,7 @@ import { PlayerBar } from '../src/PlayerBar';
 import { NowPlayingOriginContext } from '../src/now-playing-origin';
 import { PreferencesProvider } from '../src/preference-context';
 import ChartNoAxesColumn from 'lucide-react-native/icons/chart-no-axes-column';
-import { dockSurface } from '../src/materials';
+import { glassSurface } from '../src/materials';
 import { pageFrame } from '../src/controls';
 import { usePreferences } from '../src/preferences';
 
@@ -71,8 +71,8 @@ function Shell() {
     : path.startsWith('/album/') ? 'Album' : path.startsWith('/playlist/') ? 'Playlist' : 'Track';
   const nav = <View role="navigation" accessibilityLabel="Main navigation" style={{
     flexDirection: wide ? 'column' : 'row', padding: wide ? 12 : 6, gap: wide ? 8 : 4, width: wide ? 180 : '100%',
-    backgroundColor: wide ? theme.dark ? '#1d2329' : theme.surface : theme.background,
-    borderRightWidth: wide ? 1 : 0, borderTopWidth: wide ? 0 : StyleSheet.hairlineWidth, borderColor: theme.dark ? '#00000044' : theme.border + '33'
+    backgroundColor: wide ? theme.surface : theme.background,
+    borderRightWidth: wide ? 1 : 0, borderTopWidth: wide ? 0 : StyleSheet.hairlineWidth, borderColor: theme.hairline
   }}>
     {wide && <Link href="/" asChild><Pressable accessibilityRole="link" accessibilityLabel="plyr.fm home" style={{ minHeight: 64, justifyContent: 'center', paddingHorizontal: 12 }}>
       <Text style={{ color: theme.text, fontSize: 29, fontWeight: '900', letterSpacing: -1 }}>plyr.fm</Text>
@@ -83,7 +83,7 @@ function Shell() {
           flexDirection: wide ? 'row' : 'column', alignItems: 'center', justifyContent: wide ? 'flex-start' : 'center',
           backgroundColor: active ? theme.surface : 'transparent' }}>
         <Icon size={21} color={active ? theme.text : theme.muted} strokeWidth={active ? 2.5 : 1.8} />
-        <Text style={{ color: active ? theme.text : theme.muted, fontSize: (wide ? 15 : 11) * theme.scale, fontWeight: active ? '700' : '500' }}>{label}</Text>
+        <Text style={{ color: active ? theme.text : theme.muted, fontSize: (wide ? 15 : 11) * theme.scale, fontWeight: active ? '700' : '500', textTransform: 'lowercase' }}>{label}</Text>
       </Pressable>
     </Link>)}
     {wide && <View style={{ flex: 1, minHeight: 24 }} />}
@@ -95,7 +95,7 @@ function Shell() {
       <Pressable accessibilityRole="link" accessibilityLabel={label} aria-current={path === href ? 'page' : undefined}
         style={{ minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 12, borderRadius: 10, backgroundColor: path === href ? theme.surface : 'transparent' }}>
         <Icon size={20} color={path === href ? theme.accent : theme.muted} />
-        <Text style={{ color: path === href ? theme.accent : theme.muted, fontSize: 14 * theme.scale }}>{label}</Text>
+        <Text style={{ color: path === href ? theme.accent : theme.muted, fontSize: 14 * theme.scale, textTransform: 'lowercase' }}>{label}</Text>
       </Pressable>
     </Link>)}
   </View>;
@@ -107,14 +107,14 @@ function Shell() {
       <View style={{ flex: 1, minWidth: 0 }}>
         {!(wide && path === '/') && <View style={{
           ...pageFrame, minHeight: tabTitle ? 66 : 48, flexDirection: 'row', alignItems: 'center',
-          borderBottomWidth: detail ? StyleSheet.hairlineWidth : 0, borderColor: theme.surface
+          borderBottomWidth: detail ? StyleSheet.hairlineWidth : 0, borderColor: theme.hairline
         }}>
           {showBack && <Pressable accessibilityRole="button" accessibilityLabel="Back"
             onPress={() => router.canGoBack() ? router.back() : router.replace('/')}
             style={{ width: 44, minHeight: 44, justifyContent: 'center' }}><ArrowLeft color={theme.text} size={22} /></Pressable>}
           {tabTitle ? <Text accessibilityRole="header" aria-level={1} numberOfLines={1}
-            style={{ flex: 1, color: theme.text, fontFamily: theme.fontFamily, fontSize: 30 * theme.scale, fontWeight: '800', letterSpacing: -0.8 }}>{tabTitle}</Text>
-            : detail ? <Text numberOfLines={1} style={{ flex: 1, textAlign: 'center', color: theme.text, fontSize: 16 * theme.scale, fontWeight: '700' }}>{detailTitle}</Text>
+            style={{ flex: 1, color: theme.text, fontFamily: theme.fontFamily, fontSize: 30 * theme.scale, fontWeight: '800', letterSpacing: -0.8, textTransform: 'lowercase' }}>{tabTitle}</Text>
+            : detail ? <Text numberOfLines={1} style={{ flex: 1, textAlign: 'center', color: theme.muted, fontSize: 14 * theme.scale, fontWeight: '600', textTransform: 'lowercase' }}>{detailTitle}</Text>
             : <View style={{ flex: 1 }} />}
           {!wide && path === '/' && <Link href="/radio" asChild><Pressable accessibilityRole="link" accessibilityLabel="Radio"
             style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}>
@@ -134,6 +134,6 @@ function Shell() {
         {!wide && nav}
       </View>
     </View>
-    {wide && <View style={route === '/now-playing' ? { display: 'none' } : undefined}>{station ? <View style={[dockSurface(theme), { overflow: 'hidden', width: '100%' }]}><RadioPlayer key={station.slug} compact tuned={station} /></View> : <PlayerBar />}</View>}
+    {wide && <View style={route === '/now-playing' ? { display: 'none' } : undefined}>{station ? <View style={[glassSurface(theme), { overflow: 'hidden', width: '100%' }]}><RadioPlayer key={station.slug} compact tuned={station} /></View> : <PlayerBar />}</View>}
   </SafeAreaView></RadioContext.Provider>;
 }
