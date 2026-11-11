@@ -5,7 +5,7 @@ import { useAppearance } from './appearance';
 
 export function AccountSection({ title, children }: { title: string; children: ReactNode }) {
   const theme = useAppearance();
-  return <View style={[styles.section, { borderColor: theme.surface }]}>
+  return <View style={[styles.section, { borderColor: theme.hairline }]}>
     <Text accessibilityRole="header" aria-level={2} style={{ color: theme.text, fontSize: 18 * theme.scale, fontWeight: '700' }}>{title}</Text>
     <View style={{ gap: 14 }}>{children}</View>
   </View>;
@@ -26,7 +26,7 @@ export function Choice({ label, selected, onPress, role = 'button', ref }: { lab
   const theme = useAppearance();
   return <Pressable ref={ref} accessibilityRole={role} tabIndex={role === 'tab' && !selected ? -1 : 0} accessibilityLabel={label} accessibilityState={{ selected }} aria-pressed={role === 'button' ? selected : undefined} aria-selected={role === 'tab' ? selected : undefined} onPress={onPress}
     style={({ pressed }) => ({ minHeight: 44, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12,
-      borderWidth: 1, borderColor: selected ? theme.accent : theme.surface, backgroundColor: selected || pressed ? theme.surface : 'transparent', justifyContent: 'center' })}>
+      borderWidth: 1, borderColor: selected ? theme.accent : theme.hairline, backgroundColor: selected || pressed ? theme.surface : 'transparent', justifyContent: 'center' })}>
     <Text style={{ color: selected ? theme.text : theme.muted, fontSize: 14 * theme.scale, fontWeight: selected ? '700' : '400' }}>{label}</Text>
   </Pressable>;
 }

@@ -2,10 +2,10 @@ import { createContext, useContext, useEffect, useMemo, useState, type ReactNode
 import { usePathname } from 'expo-router';
 import { AccessibilityInfo, Platform, useColorScheme } from 'react-native';
 import type { PersonalPreferences } from './preference-space';
-import { palettes, readableAccent } from './colors';
+import { onAccent, palettes, readableAccent } from './colors';
 
 const { light, dark } = palettes;
-const Appearance = createContext({ ...light, accent: '#244fa9', fontFamily: undefined as string | undefined, scale: 1, dark: false, reduceMotion: true });
+const Appearance = createContext({ ...light, accent: '#244fa9', onAccent: '#ffffff', fontFamily: undefined as string | undefined, scale: 1, dark: false, reduceMotion: true });
 
 export function AppearanceProvider({ preferences, children }: { preferences: PersonalPreferences; children: ReactNode }) {
   const system = useColorScheme();
@@ -49,7 +49,7 @@ export function AppearanceProvider({ preferences, children }: { preferences: Per
   const fontFamily = preferences.font === 'comic-sans' ? 'PlyrComic' : preferences.font === 'mono' ? Platform.select({ ios: 'Menlo', default: 'monospace' })
     : preferences.font === 'serif' ? Platform.select({ ios: 'Georgia', default: 'serif' }) : undefined;
   return <Appearance.Provider value={{
-    ...palette, accent, fontFamily, scale: preferences.scale, dark: isDark, reduceMotion
+    ...palette, accent, onAccent: onAccent(accent), fontFamily, scale: preferences.scale, dark: isDark, reduceMotion
   }}>{children}</Appearance.Provider>;
 }
 

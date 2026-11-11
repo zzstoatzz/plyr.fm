@@ -53,7 +53,7 @@ export function NowPlaying({ track, close, navigate }: { track: Track; close: ()
     <View ref={dismiss.panelRef} style={styles.backdrop}>
       <AnimatedSafeAreaView {...dismiss.panHandlers} accessibilityViewIsModal={Platform.OS === 'web' ? undefined : true} edges={['top', 'bottom']}
         style={[{ transform: [{ translateY: dismiss.translation }] }, styles.panel, styles.full, { backgroundColor: theme.background }]}>
-        <View style={[styles.header, { borderColor: theme.surface }]}>
+        <View style={[styles.header, { borderColor: theme.hairline }]}>
           {compact && <View {...dismiss.protect}><PlayerControl icon={ChevronDown} label="Close" onPress={close} /></View>}
           <View testID="now-playing-dismiss-region" style={[styles.dismissRegion, Platform.OS === 'web' && compact && touchHeader]}>
           <Text accessibilityRole="header"
@@ -103,7 +103,7 @@ export function NowPlaying({ track, close, navigate }: { track: Track; close: ()
                 {sideBySide && <PlayerSeek forward />}
                 <View {...dismiss.protect}><PlayerControl icon={SkipForward} label="Next" onPress={() => void player.next()} /></View>
               </View>
-              <View style={[styles.utilities, { borderColor: theme.surface }]}>
+              <View style={[styles.utilities, { borderColor: theme.hairline }]}>
                 <View {...dismiss.protect}><Pressable accessibilityRole="button" accessibilityLabel="Queue" style={styles.utility}
                   onPress={() => navigate('/queue')}>
                   <ListMusic size={18} color={theme.muted} /><Text style={caption}>Queue</Text>

@@ -83,7 +83,7 @@ function AccountPortal({ did, handle }: { did: string; handle: string | null }) 
       const next = key === 'Home' ? 'tracks' : key === 'End' ? 'albums' : tab === 'tracks' ? 'albums' : 'tracks';
       selectTab(next);
       (next === 'tracks' ? trackTab : albumTab).current?.focus();
-    } } : {})} style={[row, { paddingTop: 12, borderBottomWidth: 1, borderColor: theme.surface, paddingBottom: 12 }]}>
+    } } : {})} style={[row, { paddingTop: 12, borderBottomWidth: 1, borderColor: theme.hairline, paddingBottom: 12 }]}>
       <Choice ref={trackTab} role="tab" label="tracks" selected={tab === 'tracks'} onPress={() => selectTab('tracks')} />
       <Choice ref={albumTab} role="tab" label="albums" selected={tab === 'albums'} onPress={() => selectTab('albums')} />
     </View>
