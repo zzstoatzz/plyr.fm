@@ -2,7 +2,8 @@ import { trackArtwork } from './artwork';
 import { Text } from './Text';
 import { router, usePathname } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { Platform, Pressable, View, useWindowDimensions, type ViewInstance } from 'react-native';
+import { PanResponder, Platform, Pressable, View, useWindowDimensions, type ViewInstance } from 'react-native';
+import { playerSheet, useFlying } from './player-sheet';
 import Pause from 'lucide-react-native/icons/pause';
 import Play from 'lucide-react-native/icons/play';
 import SkipBack from 'lucide-react-native/icons/skip-back';
@@ -19,6 +20,8 @@ import { NowPlaying } from './NowPlaying';
 import { PlayerSeek } from './PlayerSeek';
 import { PlayerControl } from './PlayerControl';
 
+const liftTouch = { touchAction: 'none', cursor: 'auto' } as const;
+
 export function PlayerBar() {
   const player = usePlayback();
   const theme = useAppearance();
@@ -33,9 +36,46 @@ export function PlayerBar() {
     const frame = requestAnimationFrame(() => trigger.current?.focus());
     return () => cancelAnimationFrame(frame);
   }, [path]);
-  const { width } = useWindowDimensions();
+  const { width, height } = useWindowDimensions();
   const desktop = Platform.OS === 'web' && width >= 800;
   const [expanded, setExpanded] = useState(false);
+  const flying = useFlying();
+  const dock = useRef<ViewInstance>(null);
+  const launch = useRef(() => {});
+  const lead = useRef(0);
+  const present = !!player.current;
+  useEffect(() => {
+    if (!present || width >= 600) { playerSheet.dockTop = undefined; return; }
+    const frame = requestAnimationFrame(() => dock.current?.measureInWindow((_x, y, _width, tall) => { if (tall > 0) playerSheet.dockTop = y; }));
+    return () => cancelAnimationFrame(frame);
+  }, [present, width, height, theme.scale, path]);
+  const lift = useRef(PanResponder.create({
+    onMoveShouldSetPanResponderCapture: (_, gesture) => {
+      const acquire = playerSheet.dockTop !== undefined && !playerSheet.settle && gesture.numberActiveTouches <= 1
+        && gesture.dy < -8 && -gesture.dy > Math.abs(gesture.dx) * 1.5;
+      if (acquire) lead.current = gesture.dy;
+      return acquire;
+    },
+    onPanResponderGrant: () => {
+      playerSheet.dragging = true;
+      playerSheet.release = undefined;
+      playerSheet.translation.setValue(playerSheet.dockTop ?? 0);
+      launch.current();
+    },
+    onPanResponderMove: (_, gesture) => {
+      const top = playerSheet.dockTop ?? 0;
+      playerSheet.translation.setValue(Math.max(0, Math.min(top, top + gesture.dy + lead.current)));
+    },
+    onPanResponderRelease: (_, gesture) => finish(-(gesture.dy + lead.current) > 80 || gesture.vy < -0.5, gesture.vy * 1000),
+    onPanResponderTerminate: () => finish(false, 0),
+    onPanResponderTerminationRequest: () => false,
+  })).current;
+  function finish(open: boolean, velocity: number) {
+    playerSheet.dragging = false;
+    if (playerSheet.settle) playerSheet.settle(open, velocity);
+    else playerSheet.release = { open, velocity };
+  }
+  const carried = flying ? { opacity: 0 } : undefined;
   const [scrub, setScrub] = useState<{ id: string; seconds: number }>();
   if (!player.current) return null;
   const track = player.current;
@@ -45,16 +85,17 @@ export function PlayerBar() {
     onPress={() => player.setPlaying(!playing)} busy={player.loading} />;
   const error = player.error ?? player.status.error;
   const open = () => { openedFrom.current = path; if (Platform.OS === 'web') router.navigate('/now-playing'); else setExpanded(true); };
+  launch.current = open;
   const identity = <Pressable ref={trigger} accessibilityRole="button" accessibilityLabel="Open now playing" onPress={open}
     style={{ flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: desktop ? 12 : 10, minHeight: desktop ? 52 : 44 }}>
-    <Cover uri={trackArtwork(track)} size={desktop ? 52 : 40} radius={6} />
+    <View ref={node => { playerSheet.dock.art = node; }} style={carried}><Cover uri={trackArtwork(track)} size={desktop ? 52 : 40} radius={6} /></View>
     <View style={{ flex: 1, minWidth: 0 }}>
-      <Text numberOfLines={1} style={{ color: theme.text, fontSize: 14 * theme.scale, fontWeight: '700' }}>{track.metadata.title}</Text>
+      <View ref={node => { playerSheet.dock.title = node; }} style={carried}><Text numberOfLines={1} style={{ color: theme.text, fontSize: 14 * theme.scale, fontWeight: '700' }}>{track.metadata.title}</Text></View>
       <Text numberOfLines={1} style={{ color: theme.muted, fontSize: 12 * theme.scale }}>{error ? "couldn’t play this track" : player.outputElsewhere ? "playing on another device" : artistName(track)}</Text>
     </View>
   </Pressable>;
   return <>
-    <View testID="player-dock" style={[glassSurface(theme), { width: desktop ? '100%' : undefined, alignSelf: desktop ? 'center' : undefined,
+    <View ref={dock} testID="player-dock" {...(desktop || theme.reduceMotion ? {} : lift.panHandlers)} style={[glassSurface(theme), !desktop && Platform.OS === 'web' && liftTouch, { width: desktop ? '100%' : undefined, alignSelf: desktop ? 'center' : undefined,
       borderWidth: 0, borderTopWidth: 1, paddingHorizontal: desktop ? 20 : 12, paddingTop: desktop ? 12 : 4, paddingBottom: desktop ? 9 : 4, overflow: 'hidden' }]}>
       <View pointerEvents="none" accessible={false} testID="playback-status-inlay" style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2,
         opacity: playing ? 0.65 : 0.16, backgroundColor: theme.accent,

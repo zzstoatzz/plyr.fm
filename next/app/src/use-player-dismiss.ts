@@ -1,16 +1,18 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Animated, Easing, PanResponder, Platform, type ScrollEvent } from 'react-native';
+import { Animated, PanResponder, Platform, type ScrollEvent } from 'react-native';
+import { playerSheet } from './player-sheet';
 
-export function usePlayerDismiss(enabled: boolean, width: number, height: number, close: () => void, still = false) {
+export function usePlayerDismiss(enabled: boolean, width: number, height: number, close: () => void, still = false, rest = height) {
   const [panel, setPanel] = useState<HTMLElement | null>(null);
   const panelRef = useCallback((node: unknown) => {
     if (Platform.OS === 'web') setPanel(node instanceof HTMLElement ? node : null);
   }, []);
   const directionalTouch = Platform.OS === 'web' && typeof CSS !== 'undefined' && CSS.supports('touch-action', 'pan-x pan-down');
-  const translation = useRef(new Animated.Value(still ? 0 : height)).current;
+  const translation = playerSheet.translation;
   const entered = useRef(false);
-  const latest = useRef({ enabled, height, close });
-  latest.current = { enabled, height, close };
+  useState(() => { if (still) translation.setValue(0); else if (!playerSheet.dragging && !playerSheet.release) translation.setValue(rest); });
+  const latest = useRef({ enabled, rest, close, still });
+  latest.current = { enabled, rest, close, still };
   const closing = useRef(false);
   const blocked = useRef(false);
   const canPull = useRef(true);
@@ -21,6 +23,23 @@ export function usePlayerDismiss(enabled: boolean, width: number, height: number
   const acquiredAt = useRef({ dx: 0, dy: 0 });
   const active = useRef<number | null>(null);
   const native = Platform.OS !== 'web';
+  const spring = (toValue: number, velocity: number) => Animated.spring(translation, { toValue, velocity, stiffness: 420, damping: 40, mass: 1,
+    overshootClamping: true, restDisplacementThreshold: 1.5, restSpeedThreshold: 1.5, useNativeDriver: native });
+  const exit = (then: () => void, velocity = 0) => {
+    if (closing.current) return;
+    closing.current = true;
+    active.current = null;
+    if (latest.current.still) { then(); return; }
+    const request = generation.current;
+    spring(latest.current.rest, velocity).start(({ finished }) => { if (finished && request === generation.current) then(); });
+  };
+  const settle = (open: boolean, velocity = 0) => {
+    if (!open) { exit(latest.current.close, velocity); return; }
+    closing.current = false;
+    spring(0, velocity).start();
+  };
+  const api = useRef({ exit, settle });
+  api.current = { exit, settle };
   const snapBack = () => {
     active.current = null;
     setDragging(false);
@@ -45,7 +64,7 @@ export function usePlayerDismiss(enabled: boolean, width: number, height: number
     onPanResponderMove: (_, gesture) => {
       if (active.current !== generation.current) return;
       if (gesture.numberActiveTouches !== 1) { snapBack(); return; }
-      translation.setValue(Math.max(0, gesture.dy + acquiredAt.current.dy));
+      translation.setValue(Math.min(latest.current.rest, Math.max(0, gesture.dy + acquiredAt.current.dy)));
     },
     onPanResponderRelease: (_, gesture) => {
       if (active.current !== generation.current) return;
@@ -53,14 +72,9 @@ export function usePlayerDismiss(enabled: boolean, width: number, height: number
       const dy = gesture.dy + acquiredAt.current.dy;
       const dx = gesture.dx + acquiredAt.current.dx;
       const downward = dy > Math.abs(dx) * 1.2;
-      const dismiss = downward && (dy >= Math.min(120, latest.current.height * 0.16) || (dy >= 48 && gesture.vy >= 0.8));
-      if (dismiss) {
-        closing.current = true;
-        const request = generation.current;
-        Animated.timing(translation, { toValue: latest.current.height, duration: 170, useNativeDriver: native }).start(({ finished }) => {
-          if (finished && request === generation.current) latest.current.close();
-        });
-      } else snapBack();
+      const dismiss = downward && (dy >= Math.min(120, height * 0.16) || (dy >= 48 && gesture.vy >= 0.8));
+      if (dismiss) api.current.exit(latest.current.close, gesture.vy * 1000);
+      else snapBack();
     },
     onPanResponderTerminate: snapBack,
     onPanResponderTerminationRequest: () => active.current === null
@@ -70,12 +84,15 @@ export function usePlayerDismiss(enabled: boolean, width: number, height: number
     active.current = null;
     closing.current = false;
     setDragging(false);
-    translation.stopAnimation();
-    if (entered.current || still) translation.setValue(0);
-    else Animated.timing(translation, { toValue: 0, duration: 280, easing: Easing.out(Easing.cubic), useNativeDriver: native }).start();
+    if (entered.current || still) { translation.stopAnimation(); translation.setValue(0); }
+    else if (playerSheet.release) { const { open, velocity } = playerSheet.release; playerSheet.release = undefined; api.current.settle(open, velocity); }
+    else if (!playerSheet.dragging) api.current.settle(true);
     entered.current = true;
   }, [enabled, width, height, translation]);
-  useEffect(() => () => { generation.current++; active.current = null; translation.stopAnimation(); }, [translation]);
+  useEffect(() => {
+    playerSheet.settle = (open, velocity) => api.current.settle(open, velocity);
+    return () => { playerSheet.settle = undefined; generation.current++; active.current = null; translation.stopAnimation(); };
+  }, [translation]);
   useEffect(() => {
     if (!panel || !enabled || directionalTouch) return;
     let start: { x: number; y: number } | null = null;
@@ -101,16 +118,6 @@ export function usePlayerDismiss(enabled: boolean, width: number, height: number
       panel.removeEventListener('touchcancel', end, true);
     };
   }, [panel, enabled, directionalTouch]);
-  const exit = (then: () => void) => {
-    if (closing.current) return;
-    closing.current = true;
-    active.current = null;
-    if (still) { then(); return; }
-    const request = generation.current;
-    Animated.timing(translation, { toValue: latest.current.height, duration: 220, easing: Easing.in(Easing.cubic), useNativeDriver: native }).start(({ finished }) => {
-      if (finished && request === generation.current) then();
-    });
-  };
   return {
     translation, dragging, atTop, directionalTouch, exit,
     panelRef,
