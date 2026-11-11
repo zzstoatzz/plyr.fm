@@ -23,7 +23,7 @@ export function Home({ onPlay }: { onPlay: Play }) {
   const [layoutWidth, setLayoutWidth] = useState(0);
   const contentWidth = Math.max(0, layoutWidth - pageFrame.paddingHorizontal * 2);
   const columns = contentWidth >= 900 * colors.scale ? 2 : 1;
-  const { did } = useAuth();
+  const { did, ready } = useAuth();
   const key = selectedTagsKey(did);
   const [selection, setSelection] = useState(() => ({ key, tags: parseSelectedTags(readLocal(key)) }));
   const selected = selection.key === key ? selection.tags : parseSelectedTags(readLocal(key));
@@ -40,7 +40,7 @@ export function Home({ onPlay }: { onPlay: Play }) {
   const tracks = useMemo(() => [...new Map(latest.data.map(track => [track.id, track])).values()], [latest.data]);
   const tagPages = useHomeTags();
   const tags = tagPages.tags;
-  const network = useNetworkArtists(did);
+  const network = useNetworkArtists(did, ready);
   function changeTags(next: string[]) {
     list.current?.scrollToOffset({ offset: 0, animated: false });
     setSelection({ key, tags: next });
@@ -59,13 +59,13 @@ export function Home({ onPlay }: { onPlay: Play }) {
   }
   const header = <View style={styles.home} onLayout={event => setHeaderHeight(event.nativeEvent.layout.height)}>
     <HomeChart onPlay={onPlay} />
-    {network.artists.length > 0 && <HomeArtists artists={network.artists} />}
+    {(network.loading || network.artists.length > 0) && <HomeArtists artists={network.artists} loading={network.loading} />}
     {network.error && <Detail>{network.error}</Detail>}
     <View style={styles.section}>
       <View style={styles.headingRow}>
         <Pressable accessibilityRole="button" accessibilityLabel="Refresh tracks" onPress={() => { list.current?.scrollToOffset({ offset: 0, animated: false }); latest.reload(); }} style={{ minHeight: 44, justifyContent: 'center' }}><Heading>latest tracks</Heading></Pressable>
       </View>
-      {(selected.length > 0 || tags.length > 0) && <View style={styles.tags}>
+      {!tagPages.error && <View style={styles.tags}>
         {selected.length > 0 && <View style={styles.pinned}>
           <Pressable accessibilityRole="button" accessibilityLabel="Clear tag filters" onPress={() => changeTags([])} style={styles.clear}><Text style={{ color: colors.muted, fontSize: 12 * colors.scale }}>clear</Text></Pressable>
           {selected.map((name) => tag(name, true, tags.find((item) => item.name === name)?.track_count))}
@@ -100,7 +100,7 @@ export function Home({ onPlay }: { onPlay: Play }) {
 
 const styles = StyleSheet.create({
   home: { gap: 26 }, section: { gap: 12 }, headingRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: 12, rowGap: 4 },
-  tags: { gap: 8 }, pinned: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6 },
+  tags: { gap: 8, minHeight: 44 }, pinned: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6 },
   tagTarget: { minWidth: 44, minHeight: 44, maxWidth: '100%', justifyContent: 'center' },
   tag: { flexDirection: 'row', gap: 6, alignItems: 'center', minHeight: 32, borderRadius: 16, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 4 },
   clear: { minWidth: 44, minHeight: 44, justifyContent: 'center', paddingVertical: 8, paddingRight: 4 }, more: { alignSelf: 'center', padding: 14 },

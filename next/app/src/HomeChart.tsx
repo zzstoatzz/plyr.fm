@@ -1,7 +1,7 @@
 import { trackArtwork } from './artwork';
 import { Link } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
 import ChevronLeft from 'lucide-react-native/icons/chevron-left';
 import ChevronRight from 'lucide-react-native/icons/chevron-right';
 import { api, type Track } from './api';
@@ -10,7 +10,6 @@ import { HomeTrackActions } from './HomeTrackRow';
 import { nextPopulatedChart, periodLabels, type ChartPeriod } from './home-state';
 import { PlayerControl } from './PlayerControl';
 import { Text } from './Text';
-import { WaveLoading } from './WaveLoading';
 
 export function HomeChart({ onPlay }: { onPlay: Play }) {
   const colors = useColors();
@@ -18,7 +17,9 @@ export function HomeChart({ onPlay }: { onPlay: Play }) {
   const [tracks, setTracks] = useState<Track[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>();
-  const [width, setWidth] = useState(0);
+  const viewport = useWindowDimensions().width;
+  const [measured, setWidth] = useState(0);
+  const width = measured || Math.max(0, viewport - (viewport >= 800 ? 180 : 0) - 40);
   const [page, setPage] = useState(0);
   const generation = useRef(0);
   const pending = useRef(false);
@@ -44,6 +45,7 @@ export function HomeChart({ onPlay }: { onPlay: Play }) {
   const columns = Math.max(1, Math.min(6, Math.floor((width + gap) / (ideal + gap))));
   const size = Math.max(1, (width - gap * (columns - 1)) / columns);
   const pages = Math.max(1, Math.ceil(tracks.length / columns));
+  const lineHeight = Math.ceil(12 * colors.scale * 1.35);
   const visiblePage = Math.min(page, pages - 1);
   useEffect(() => setPage(0), [columns]);
   return <View testID="home-chart" style={styles.section} onLayout={event => setWidth(event.nativeEvent.layout.width)}>
@@ -75,11 +77,16 @@ export function HomeChart({ onPlay }: { onPlay: Play }) {
           </Link>
           <HomeTrackActions track={track} />
         </View>
-        <Text numberOfLines={1} style={{ color: colors.muted, fontSize: 12 * colors.scale }}>{artistName(track)}</Text>
+        <Text numberOfLines={1} style={{ color: colors.muted, fontSize: 12 * colors.scale, lineHeight }}>{artistName(track)}</Text>
       </View>)}
     </View>}
     {tracks.length > 0 && <Text accessibilityLiveRegion="polite" style={styles.announcement}>Top tracks page {visiblePage + 1} of {pages}</Text>}
-    {loading && !tracks.length ? <View style={{ minHeight: (width > 0 ? size : 136) + 66, justifyContent: 'center' }}><WaveLoading label="loading top tracks..." /></View> : <Status error={error} retry={() => void load(period)}
+    {loading && !tracks.length ? <View accessibilityRole="progressbar" accessibilityLabel="loading top tracks..." style={[styles.cards, { gap, minHeight: (width > 0 ? size : 136) + 2 + 44 + 2 + lineHeight }]}>
+      {width > 0 && Array.from({ length: columns }, (_, index) => <View key={index} style={{ width: size, gap: 2 }}>
+        <View style={{ width: size, height: size, borderRadius: 8, backgroundColor: colors.raised }} />
+        <View style={{ height: 44, justifyContent: 'center' }}><View style={{ width: '70%', height: 10 * colors.scale, borderRadius: 5, backgroundColor: colors.raised }} /></View>
+      </View>)}
+    </View> : <Status error={error} retry={() => void load(period)}
       empty={!tracks.length ? period === 'all_time' ? 'nothing liked yet' : `nothing liked in the ${periodLabels[period]}` : undefined} />}
   </View>;
 }
