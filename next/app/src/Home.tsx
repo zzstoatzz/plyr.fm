@@ -37,12 +37,16 @@ export function Home({ onPlay }: { onPlay: Play }) {
     const { height, content, offset } = viewport.current;
     if (height > 0 && content > 0 && content - offset - height <= height * 1.5 && latest.cursor && !latest.loading && !latest.error) latest.more();
   }, [latest.cursor, latest.loading, latest.error, latest.more]);
-  const tracks = useMemo(() => [...new Map(latest.data.map(track => [track.id, track])).values()], [latest.data]);
+  const loaded = useMemo(() => [...new Map(latest.data.map(track => [track.id, track])).values()], [latest.data]);
+  const pending = latest.loading && loaded.length === 0;
+  const held = useRef(loaded);
+  if (!pending) held.current = loaded;
+  const tracks = pending ? held.current : loaded;
+  const [listHeight, setListHeight] = useState(0);
   const tagPages = useHomeTags();
   const tags = tagPages.tags;
   const network = useNetworkArtists(did, ready);
   function changeTags(next: string[]) {
-    list.current?.scrollToOffset({ offset: 0, animated: false });
     setSelection({ key, tags: next });
     writeLocal(key, JSON.stringify(next));
   }
@@ -85,20 +89,20 @@ export function Home({ onPlay }: { onPlay: Play }) {
   </View>;
   return <FlatList key={columns} numColumns={columns} columnWrapperStyle={columns === 2 ? { gap: 24 } : undefined} ref={list} testID="home-feed" data={tracks} keyExtractor={track => track.id}
     style={{ flex: 1, backgroundColor: colors.background }} contentContainerStyle={{ ...pageFrame, maxWidth: '100%', paddingTop: 16, paddingBottom: 24 }}
-    onLayout={event => { setLayoutWidth(event.nativeEvent.layout.width); viewport.current.height = event.nativeEvent.layout.height; fillViewport(); }}
+    onLayout={event => { setLayoutWidth(event.nativeEvent.layout.width); setListHeight(event.nativeEvent.layout.height); viewport.current.height = event.nativeEvent.layout.height; fillViewport(); }}
     onContentSizeChange={(_, height) => { viewport.current.content = height; fillViewport(); }}
     onScroll={event => { viewport.current.offset = event.nativeEvent.contentOffset.y; fillViewport(); }} scrollEventThrottle={32}
     accessibilityState={{ busy: latest.loading }} keyboardShouldPersistTaps="handled" ListHeaderComponent={header} onEndReachedThreshold={1.5}
     onEndReached={() => { if (latest.cursor && !latest.loading && !latest.error) latest.more(); }}
     getItemLayout={(_, index) => ({ length: rowHeight, offset: 16 + headerHeight + index * rowHeight, index })}
     initialNumToRender={24} maxToRenderPerBatch={24} updateCellsBatchingPeriod={16} windowSize={11}
-    renderItem={({ item }) => columns === 2 ? <View style={{ width: (contentWidth - 24) / 2 }}><HomeTrackRow height={rowHeight} track={item} tracks={tracks} onPlay={onPlay} /></View> : <HomeTrackRow height={rowHeight} track={item} tracks={tracks} onPlay={onPlay} />}
-    ListFooterComponent={<View testID="home-feed-footer" style={{ height: 112, justifyContent: 'center' }}>
+    renderItem={({ item }) => columns === 2 ? <View style={{ width: (contentWidth - 24) / 2, opacity: pending ? 0.5 : 1 }}><HomeTrackRow height={rowHeight} track={item} tracks={tracks} onPlay={onPlay} /></View> : <View style={{ opacity: pending ? 0.5 : 1 }}><HomeTrackRow height={rowHeight} track={item} tracks={tracks} onPlay={onPlay} /></View>}
+    ListFooterComponent={<View style={{ minHeight: listHeight - Math.ceil(tracks.length / columns) * rowHeight }}><View testID="home-feed-footer" style={{ height: 112, justifyContent: 'center' }}>
       {latest.loading ? <WaveLoading label={tracks.length ? 'loading more...' : 'loading tracks...'} /> :
         <Status error={latest.error} retry={tracks.length ? undefined : latest.more} empty={!tracks.length ? selected.length ? 'no tracks match these tags' : 'no tracks yet' : undefined} />}
       {tracks.length > 0 && latest.error && <Pressable accessibilityRole="button" onPress={latest.more} style={styles.more}><Text style={{ color: colors.accent }}>retry loading tracks</Text></Pressable>}
       <Text accessibilityLiveRegion="polite" style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', color: 'transparent' }}>{tracks.length} tracks loaded</Text>
-    </View>} />;
+    </View></View>} />;
 }
 
 const styles = StyleSheet.create({
