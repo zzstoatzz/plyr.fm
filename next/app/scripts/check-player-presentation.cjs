@@ -225,7 +225,7 @@ async function run(browser, width, theme) {
     assert.equal(await header.count(), 0);
     await open();
     await page.keyboard.press('Escape');
-    await page.waitForTimeout(300);
+    await header.waitFor({ state: 'detached', timeout: 2000 });
     assert.equal(await header.count(), 0, 'onRequestClose remains available');
     await open();
     await page.getByTestId('now-playing-scroll').getByRole('link').first().click();

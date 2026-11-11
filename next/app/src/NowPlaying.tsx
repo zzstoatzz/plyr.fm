@@ -9,8 +9,8 @@ import Play from 'lucide-react-native/icons/play';
 import SkipBack from 'lucide-react-native/icons/skip-back';
 import SkipForward from 'lucide-react-native/icons/skip-forward';
 import X from 'lucide-react-native/icons/x';
-import { useState } from 'react';
-import { Animated, Modal, Platform, Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { Animated, Modal, Platform, Pressable, ScrollView, StyleSheet, View, useWindowDimensions, type ViewInstance } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { Track } from './api';
 import { useAppearance } from './appearance';
@@ -24,6 +24,8 @@ import { PlayerSeek } from './PlayerSeek';
 import { PlayerControl } from './PlayerControl';
 import { usePlayback } from './playback';
 import { usePlayerDismiss } from './use-player-dismiss';
+import { PlayerFlight } from './PlayerFlight';
+import { measure, playerSheet, setFlying, type Rect } from './player-sheet';
 
 const AnimatedSafeAreaView = Animated.createAnimatedComponent(SafeAreaView);
 const touchHeader = { touchAction: 'none', cursor: 'auto' } as const;
@@ -39,9 +41,22 @@ export function NowPlaying({ track, close: leave, navigate: go }: { track: Track
   const { width, height } = useWindowDimensions();
   const [scrub, setScrub] = useState<{ id: string; seconds: number } | null>(null);
   const compact = width < 600;
-  const dismiss = usePlayerDismiss(compact, width, height, leave, theme.reduceMotion);
-  const close = () => dismiss.exit(leave);
-  const navigate = (target: Href) => dismiss.exit(() => go(target));
+  const morph = compact && !theme.reduceMotion && playerSheet.dockTop !== undefined;
+  const rest = morph ? playerSheet.dockTop! : height;
+  const depart = (then: () => void) => () => { setFlying(false); then(); };
+  const dismiss = usePlayerDismiss(compact, width, height, depart(leave), theme.reduceMotion, rest);
+  const close = () => dismiss.exit(depart(leave));
+  const navigate = (target: Href) => dismiss.exit(depart(() => go(target)));
+  const [away, setAway] = useState(() => playerSheet.value > 0.5);
+  useEffect(() => {
+    const id = playerSheet.translation.addListener(({ value }) => setAway(value > 0.5));
+    return () => playerSheet.translation.removeListener(id);
+  }, []);
+  const backdrop = useRef<ViewInstance | null>(null);
+  const panelRef = useRef<ViewInstance>(null);
+  const artRef = useRef<ViewInstance>(null);
+  const titleRef = useRef<ViewInstance>(null);
+  const [rects, setRects] = useState<Record<'art' | 'title', { from: Rect; to: Rect }>>();
   const scrollTouch = { touchAction: dismiss.directionalTouch && dismiss.atTop ? 'pan-x pan-down' : 'pan-x pan-y', cursor: 'auto' } as const;
   const sideBySide = width >= 800;
   const controlRoom = 370 + 64 * (theme.scale - 1);
@@ -51,6 +66,26 @@ export function NowPlaying({ track, close: leave, navigate: go }: { track: Track
   const position = Math.max(0, Math.min(duration, scrub?.id === track.id ? scrub.seconds : player.seekPreview ?? player.status.currentTime));
   const updateScrub = (seconds: number) => setScrub({ id: track.id, seconds });
   const playing = player.status.playing;
+  useEffect(() => {
+    if (!morph) { setRects(undefined); return; }
+    let cancelled = false;
+    const frame = requestAnimationFrame(() => void (async () => {
+      const [base, panel, art, title, dockArt, dockTitle] = await Promise.all([measure(backdrop.current), measure(panelRef.current), measure(artRef.current),
+        measure(titleRef.current), measure(playerSheet.dock.art), measure(playerSheet.dock.title)]);
+      if (cancelled || !base || !panel || !art || !title || !dockArt || !dockTitle) return;
+      const open = (rect: Rect) => ({ ...rect, x: rect.x - panel.x, y: rect.y - panel.y });
+      const docked = (rect: Rect) => ({ ...rect, x: rect.x - base.x, y: rect.y - base.y - rest });
+      setRects({ art: { from: docked(dockArt), to: open(art) }, title: { from: docked(dockTitle), to: open(title) } });
+    })());
+    return () => { cancelled = true; cancelAnimationFrame(frame); };
+  }, [morph, track.id, track.metadata.title, width, height, theme.scale, artwork]);
+  const flights = morph && rects && dismiss.atTop ? rects : undefined;
+  useEffect(() => { setFlying(!!flights); }, [!!flights]);
+  useEffect(() => () => setFlying(false), []);
+  const carried = flights && away ? { opacity: 0 } : undefined;
+  const fade = (open: number, docked: number, from: number, to: number) => morph
+    ? playerSheet.translation.interpolate({ inputRange: [rest * from, rest * to], outputRange: [open, docked], extrapolate: 'clamp' }) : open;
+  const titleStyle = { lineHeight: 30 * theme.scale, color: theme.text, fontFamily: theme.fontFamily, fontSize: 25 * theme.scale, fontWeight: '800', letterSpacing: -0.4 } as const;
   const error = player.error || player.status.error;
   const caption = { color: theme.muted, fontFamily: theme.fontFamily, fontSize: 13 * theme.scale };
   const label = { color: theme.faint, fontFamily: theme.fontFamily, fontSize: 13 * theme.scale, fontWeight: '600' } as const;
@@ -62,9 +97,11 @@ export function NowPlaying({ track, close: leave, navigate: go }: { track: Track
     !Number.isNaN(added.getTime()) && `added ${added.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }).toLowerCase()}`].filter(Boolean).join(' · ');
 
   return <Modal visible transparent accessibilityLabel="Now playing" animationType="none" onRequestClose={close}>
-    <View ref={dismiss.panelRef} style={styles.backdrop}>
+    <View ref={node => { backdrop.current = node; dismiss.panelRef(node); }} style={styles.backdrop}>
       <AnimatedSafeAreaView {...dismiss.panHandlers} accessibilityViewIsModal={Platform.OS === 'web' ? undefined : true} edges={['top', 'bottom']}
-        style={[{ transform: [{ translateY: dismiss.translation }] }, styles.panel, styles.full, { backgroundColor: theme.background }]}>
+        style={[{ transform: [{ translateY: dismiss.translation }] }, styles.panel, styles.full]}>
+        <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: theme.background, opacity: fade(1, 0, 0.7, 1) }]} />
+        <Animated.View style={[styles.full, { opacity: fade(1, 0, 0, 0.35) }]}>
         <View style={styles.header}>
           {compact && <View {...dismiss.protect}><PlayerControl icon={ChevronDown} label="Close" onPress={close} /></View>}
           <View testID="now-playing-dismiss-region" style={[styles.dismissRegion, Platform.OS === 'web' && compact && touchHeader]}>
@@ -77,16 +114,14 @@ export function NowPlaying({ track, close: leave, navigate: go }: { track: Track
         <View {...dismiss.contentStartHandlers} style={styles.scrollRegion}>
           <ScrollView testID="now-playing-scroll" onScroll={dismiss.onScroll} scrollEventThrottle={16} scrollEnabled={!dismiss.dragging}
             style={Platform.OS === 'web' && compact ? scrollTouch : undefined} contentContainerStyle={[styles.content, sideBySide && styles.desktopContent]} alwaysBounceVertical={false}>
-            <View testID="now-playing-artwork" style={styles.art}>
-              <Cover uri={trackArtwork(track)} size={artwork} radius={16} />
+            <View testID="now-playing-artwork" style={[styles.art, carried]}>
+              <View ref={artRef}><Cover uri={trackArtwork(track)} size={artwork} radius={16} /></View>
             </View>
             <View style={[styles.body, sideBySide ? [styles.desktopBody, { maxWidth: 440 }] : { width: artwork }]}>
               <View style={styles.meta}>
-                <Text testID="now-playing-title" accessibilityRole="header" accessibilityLabel={track.metadata.title} numberOfLines={2}
-                  style={{ lineHeight: 30 * theme.scale, color: theme.text, fontFamily: theme.fontFamily,
-                    fontSize: 25 * theme.scale, fontWeight: '800', letterSpacing: -0.4 }}>
+                <View ref={titleRef} style={carried}><Text testID="now-playing-title" accessibilityRole="header" accessibilityLabel={track.metadata.title} numberOfLines={2} style={titleStyle}>
                   {track.metadata.title}
-                </Text>
+                </Text></View>
                 <View {...dismiss.protect} style={{ alignSelf: 'flex-start', maxWidth: '100%' }}><Pressable accessibilityRole="link" style={styles.artist} onPress={() => {
                   navigate(`/u/${encodeURIComponent(track.artist.profile.handle || track.artist.did)}`);
                 }}>
@@ -151,6 +186,18 @@ export function NowPlaying({ track, close: leave, navigate: go }: { track: Track
               </View>
             </View>
           </ScrollView>
+        </View>
+        </Animated.View>
+        <View ref={panelRef} pointerEvents="none" aria-hidden importantForAccessibility="no-hide-descendants" style={StyleSheet.absoluteFill}>
+          {flights && away && <View testID="now-playing-flights" style={StyleSheet.absoluteFill}>
+            <PlayerFlight testID="now-playing-flight-art" {...flights.art} rest={rest} origin={<Cover instant uri={trackArtwork(track)} size={flights.art.from.width} radius={6} />}>
+              <Cover instant uri={trackArtwork(track)} size={flights.art.to.width} radius={16} />
+            </PlayerFlight>
+            <PlayerFlight testID="now-playing-flight-title" {...flights.title} rest={rest} originFade={[0.05, 0.25]} fade={[0.5, 0.75]}
+              origin={<Text numberOfLines={1} style={{ color: theme.text, fontSize: 14 * theme.scale, fontWeight: '700' }}>{track.metadata.title}</Text>}>
+              <Text numberOfLines={2} style={titleStyle}>{track.metadata.title}</Text>
+            </PlayerFlight>
+          </View>}
         </View>
       </AnimatedSafeAreaView>
     </View>

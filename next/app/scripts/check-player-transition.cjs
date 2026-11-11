@@ -47,6 +47,39 @@ const dist = path.resolve(__dirname, '../dist');
     assert.ok(closed.every(item => item.dock), 'the dock is already in place when the sheet leaves');
     assert.equal(closed.at(-1).top, null, 'the sheet is gone after closing');
     assert.equal(await dock.getByRole('button', { name: 'Open now playing', exact: true }).count(), 1, 'the dock is usable again after closing');
-    console.log('393: now playing slides up from and down to a dock that stays in place');
+    const rect = id => page.evaluate(name => {
+      const node = document.querySelector(`[data-testid="${name}"]`);
+      if (!node) return null;
+      const box = node.getBoundingClientRect();
+      return { x: box.x, y: box.y, width: box.width, height: box.height };
+    }, id);
+    const dockArt = await dock.locator('img').first().boundingBox();
+    const box = await dock.boundingBox();
+    const cdp = await context.newCDPSession(page);
+    const finger = (type, y) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: type === 'touchEnd' ? [] : [{ x: box.x + 150, y }] });
+    const from = box.y + box.height / 2;
+    await finger('touchStart', from);
+    const sizes = [];
+    for (const stop of [0.25, 0.5, 0.75]) {
+      for (let step = 1; step <= 10; step++) { await finger('touchMove', from - box.y * (stop - 0.25 + 0.25 * step / 10)); await page.waitForTimeout(12); }
+      await page.waitForTimeout(200);
+      const art = await rect('now-playing-flight-art');
+      const sheet = await rect('now-playing-dismiss-region');
+      assert.ok(art && sheet, 'dragging up from the dock opens the sheet with the artwork in flight');
+      assert.ok(Math.abs(sheet.y - box.y * (1 - stop)) < 12, `the sheet follows the finger at ${stop}`);
+      sizes.push(art.width);
+    }
+    assert.ok(sizes[0] > dockArt.width + 20 && sizes[0] < sizes[1] && sizes[1] < sizes[2], 'the artwork grows as the sheet rises');
+    await finger('touchEnd');
+    await page.waitForFunction(() => document.querySelector('[data-testid="now-playing-dismiss-region"]')?.getBoundingClientRect().top === 0 && !document.querySelector('[data-testid="now-playing-flights"]'), undefined, { timeout: 3000 });
+    const full = await page.getByTestId('now-playing-artwork').locator('img').first().boundingBox();
+    assert.ok(sizes[2] < full.width, 'the artwork reaches full size only when the sheet is open');
+    await page.getByRole('button', { name: 'Close', exact: true }).click();
+    let last;
+    for (const end = Date.now() + 1500; Date.now() < end; await page.waitForTimeout(8)) { const art = await rect('now-playing-flight-art'); if (art) last = art; else if (last) break; }
+    assert.ok(last && Math.abs(last.x - dockArt.x) < 12 && Math.abs(last.y - dockArt.y) < 24 && last.width < dockArt.width + 24, 'the artwork lands on the dock artwork when closing');
+    await page.getByTestId('now-playing-dismiss-region').waitFor({ state: 'detached', timeout: 2000 });
+    assert.equal(await dock.locator('img').first().evaluate(node => getComputedStyle(node.parentElement.parentElement).opacity), '1', 'the dock artwork is visible again after closing');
+    console.log('393: now playing rises from the dock under the finger, artwork and title fly between the two, and it settles both ways');
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

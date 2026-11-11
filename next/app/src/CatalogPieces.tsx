@@ -113,10 +113,10 @@ export function Button(props: Parameters<typeof Action>[0]) {
   return <Action {...props} />;
 }
 
-export function Cover({ uri, size = 48, round = false, radius = 8 }: { uri?: string | null; size?: number; round?: boolean; radius?: number }) {
+export function Cover({ uri, size = 48, round = false, radius = 8, instant = false }: { uri?: string | null; size?: number; round?: boolean; radius?: number; instant?: boolean }) {
   const colors = useColors();
   const [failedUri, setFailedUri] = useState<string>();
-  const opacity = useRef(new Animated.Value(0)).current;
+  const opacity = useRef(new Animated.Value(instant ? 1 : 0)).current;
   const borderRadius = round ? size / 2 : radius;
   const style = { width: size, height: size, borderRadius, backgroundColor: colors.raised, ...(size >= 100 && !round ? artworkShadow(colors) : {}) };
   const reveal = () => Animated.timing(opacity, { toValue: 1, duration: colors.reduceMotion ? 0 : 180, useNativeDriver: Platform.OS !== 'web' }).start();
