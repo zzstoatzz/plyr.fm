@@ -49,6 +49,7 @@ export function usePersonalQueue(target: Target) {
   const [, refreshClock] = useState(0);
   const [outputElsewhere, setOutputElsewhere] = useState(false);
   const [restoredPosition, setRestoredPosition] = useState<number>();
+  const deferred = useRef<{ key: string; position: number } | undefined>(undefined);
 
   useEffect(() => {
     if (!auth.ready) return;
@@ -62,7 +63,7 @@ export function usePersonalQueue(target: Target) {
     const returning = !!auth.did && consumeQueueLogin();
     const adopting = !!auth.did && (source.current === 'anonymous' || returning);
     let adopt: QueueCheckpoint | undefined = adopting && !returning && previous ? { version: 1, owner: auth.did!, updatedAt: Date.now(),
-      state: previous.state, position: runtime.current.position(), repeat: runtime.current.repeat, keepPlaying: runtime.current.keepPlaying } : undefined;
+      state: previous.state, position: localPosition(), repeat: runtime.current.repeat, keepPlaying: runtime.current.keepPlaying } : undefined;
     previous?.close();
     continuation.current.reset();
     continuing.current = undefined;
@@ -81,6 +82,7 @@ export function usePersonalQueue(target: Target) {
     owned.current = false;
     setRemote(undefined);
     setOutputElsewhere(false);
+    deferred.current = undefined;
     setRestoredPosition(undefined);
 
     async function apply(wire: JamState, force: boolean) {
@@ -163,15 +165,12 @@ export function usePersonalQueue(target: Target) {
         runtime.current.setQueue(state.entries.map(entry => entry.track), state.index);
         if (checkpoint && (!auth.did || !auth.jamSpace) && state.entries.length && (!adopting || returning)) {
           runtime.current.setRepeat(checkpoint.repeat);
-          const request = ++synchronization.current;
-          setRestoredPosition(checkpoint.position);
-          void runtime.current.load(state.entries.map(entry => entry.track), state.index).then(async ready => {
-            if (!ready || stale() || request !== synchronization.current) return;
-            await runtime.current.loaded();
-            if (stale() || request !== synchronization.current) return;
-            await runtime.current.seek(checkpoint.position);
-            setRestoredPosition(undefined);
-          }).catch(() => runtime.current.error('could not restore playback'));
+          synchronization.current++;
+          const entry = state.entries[state.index];
+          const length = entry.track.metadata.duration_seconds;
+          const position = length && checkpoint.position > length - 5 ? 0 : checkpoint.position;
+          deferred.current = { key: entry.key, position };
+          setRestoredPosition(position);
         }
       },
       connected: async wire => {
@@ -231,7 +230,7 @@ export function usePersonalQueue(target: Target) {
       synchronization.current++;
       playRequest.current++;
       pendingPlay.current = undefined;
-      current.progress(current.wire && !owned.current ? jamPosition(current.wire, current.position(Date.now())) / 1000 : runtime.current.position());
+      current.progress(current.wire && !owned.current ? jamPosition(current.wire, current.position(Date.now())) / 1000 : localPosition());
       current.close();
       generation.current++;
     };
@@ -246,7 +245,7 @@ export function usePersonalQueue(target: Target) {
     const timer = setInterval(() => {
       const current = session.current;
       if (!current || (runtime.current.suspended || held.current)) return;
-      current.progress(current.wire && !owned.current ? jamPosition(current.wire, current.position(Date.now())) / 1000 : runtime.current.position());
+      current.progress(current.wire && !owned.current ? jamPosition(current.wire, current.position(Date.now())) / 1000 : localPosition());
       if (owned.current && runtime.current.playing()) current.command(progressIntent(current, runtime.current.position()));
     }, 5_000);
     return () => clearInterval(timer);
@@ -255,7 +254,7 @@ export function usePersonalQueue(target: Target) {
   useEffect(() => registerQueueLogin(async () => {
     const current = session.current;
     if (!current || (runtime.current.suspended || held.current)) return false;
-    await current.save(runtime.current.position(), runtime.current.repeat, keepPlaying());
+    await current.save(localPosition(), runtime.current.repeat, keepPlaying());
     return source.current === 'anonymous';
   }), []);
 
@@ -263,7 +262,7 @@ export function usePersonalQueue(target: Target) {
     const save = () => {
       const current = session.current;
       if (current && !(runtime.current.suspended || held.current)) current.progress(current.wire && !owned.current
-        ? jamPosition(current.wire, current.position(Date.now())) / 1000 : runtime.current.position());
+        ? jamPosition(current.wire, current.position(Date.now())) / 1000 : localPosition());
     };
     const subscription = AppState.addEventListener('change', state => { if (state !== 'active') save(); });
     if (typeof window !== 'undefined') window.addEventListener('pagehide', save);
@@ -287,7 +286,44 @@ export function usePersonalQueue(target: Target) {
 
   function position() {
     const current = session.current;
-    return current?.wire && !owned.current ? jamPosition(current.wire, current.position(Date.now())) / 1000 : runtime.current.position();
+    return current?.wire && !owned.current ? jamPosition(current.wire, current.position(Date.now())) / 1000 : localPosition();
+  }
+  function localPosition() {
+    const pending = deferred.current;
+    const state = session.current?.state;
+    return pending && state?.entries[state.index]?.key === pending.key ? pending.position : runtime.current.position();
+  }
+  function forget() {
+    if (!deferred.current) return;
+    deferred.current = undefined;
+    setRestoredPosition(undefined);
+  }
+  function defer(position: number) {
+    const pending = deferred.current;
+    const current = session.current;
+    if (!pending || !current || current.state.entries[current.state.index]?.key !== pending.key) return false;
+    deferred.current = { key: pending.key, position };
+    setRestoredPosition(position);
+    current.progress(position);
+    return true;
+  }
+  function resume() {
+    const current = session.current;
+    const pending = deferred.current;
+    if (!current || !pending || current.synchronized || current.state.entries[current.state.index]?.key !== pending.key) return false;
+    pausedHere.current = false;
+    const request = ++synchronization.current;
+    const active = () => request === synchronization.current && current === session.current;
+    void runtime.current.load(current.state.entries.map(entry => entry.track), current.state.index).then(async ready => {
+      if (!ready || !active()) return;
+      await runtime.current.loaded();
+      if (!active()) return;
+      await runtime.current.seek((deferred.current?.key === pending.key ? deferred.current : pending).position);
+      if (!active()) return;
+      forget();
+      if (!pausedHere.current) runtime.current.play();
+    }).catch(() => runtime.current.error('could not restore playback'));
+    return true;
   }
   function duration() {
     const current = session.current;
@@ -368,6 +404,7 @@ export function usePersonalQueue(target: Target) {
   function play(track: Track, collection?: Track[], label?: string) {
     held.current = false;
     pausedHere.current = false;
+    forget();
     const current = session.current;
     if (!current || source.current !== (auth.did ?? 'anonymous')) {
       early.current = early.current.filter(intent => intent.kind !== 'play');
@@ -425,6 +462,7 @@ export function usePersonalQueue(target: Target) {
   function edit(intent: Parameters<PersonalQueue['edit']>[0]) { void session.current?.edit(intent); }
   function select(at: number) {
     pausedHere.current = false;
+    forget();
     const current = session.current;
     const entry = current?.state.entries[at];
     if (!entry || !current) return;
@@ -436,9 +474,9 @@ export function usePersonalQueue(target: Target) {
   function checkpoint(position?: number) {
     const current = session.current;
     if (current && !(runtime.current.suspended || held.current)) current.progress(position ?? (current.wire && !owned.current
-      ? jamPosition(current.wire, current.position(Date.now())) / 1000 : runtime.current.position()));
+      ? jamPosition(current.wire, current.position(Date.now())) / 1000 : localPosition()));
   }
-  return { position, duration, keepPlaying: remote?.personal?.keepPlaying ?? target.keepPlaying, setKeepPlaying: (value: boolean) => edit({ action: 'setContinuation', keepPlaying: value }), queueError, waiting, deviceOnly: !!auth.did && !auth.jamSpace, checkpoint, ownsOutput: () => owned.current, next, state, remote, outputElsewhere, restoredPosition, command, play, select, local, remember,
+  return { position, duration, keepPlaying: remote?.personal?.keepPlaying ?? target.keepPlaying, setKeepPlaying: (value: boolean) => edit({ action: 'setContinuation', keepPlaying: value }), queueError, waiting, deviceOnly: !!auth.did && !auth.jamSpace, checkpoint, ownsOutput: () => owned.current, next, state, remote, outputElsewhere, restoredPosition, resume, defer, command, play, select, local, remember,
     enqueue,
     remove: (at: number) => { const entry = session.current?.state.entries[at]; if (entry) edit({ action: 'removeEntry', entryKey: entry.key }); },
     move: (from: number, to: number) => {

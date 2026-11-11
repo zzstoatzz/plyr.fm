@@ -240,6 +240,7 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
     if (!playing) { personal.checkpoint(); player.pause(); }
     if (personal.command({ action: playing ? 'play' : 'pause' })) return;
     if (loading || !current) return;
+    if (playing && !ready && personal.resume()) return;
     if (playing && (!ready || status.error || error)) void load(queue, index);
     else if (playing && !player.playing) player.play();
     else if (!playing && player.playing) player.pause();
@@ -264,7 +265,7 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
       personal.command({ action: 'seek', positionMs: Math.round(target * 1000) });
       return;
     }
-    if (!ready) return;
+    if (!ready) { personal.defer(target); return; }
     const request = ++seekRequest.current;
     const source = sequence.current;
     setPendingSeek({ source, seconds: target });
