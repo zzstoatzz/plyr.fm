@@ -70,20 +70,20 @@ function Shell() {
   const detailTitle = path.startsWith('/u/') ? 'artist' : path.startsWith('/edit-track/') ? 'edit track'
     : path.startsWith('/album/') ? 'album' : path.startsWith('/playlist/') ? 'playlist' : 'track';
   const nav = <View role="navigation" accessibilityLabel="Main navigation" style={{
-    flexDirection: wide ? 'column' : 'row', padding: wide ? 12 : 6, gap: wide ? 8 : 4, width: wide ? 180 : '100%',
-    backgroundColor: wide ? theme.surface : theme.background,
-    borderRightWidth: wide ? 1 : 0, borderTopWidth: wide ? 0 : StyleSheet.hairlineWidth, borderColor: theme.hairline
+    flexDirection: wide ? 'column' : 'row', padding: wide ? 12 : 0, paddingHorizontal: wide ? 12 : 8, gap: wide ? 8 : 0, width: wide ? 180 : '100%',
+    backgroundColor: theme.surface,
+    borderRightWidth: wide ? 1 : 0, borderTopWidth: wide ? 0 : 1, borderColor: wide ? theme.hairline : theme.line
   }}>
     {wide && <Link href="/" asChild><Pressable accessibilityRole="link" accessibilityLabel="plyr.fm home" style={{ minHeight: 64, justifyContent: 'center', paddingHorizontal: 12 }}>
       <Text style={{ color: theme.text, fontSize: 29, fontWeight: '900', letterSpacing: -1 }}>plyr.fm</Text>
     </Pressable></Link>}
     {tabs.map(({ label, href, icon: Icon, active }) => <Link key={label} href={href} asChild>
       <Pressable accessibilityRole="link" accessibilityLabel={label} aria-current={active ? 'page' : undefined} accessibilityState={{ selected: active }}
-        style={{ minHeight: 48, flex: wide ? undefined : 1, paddingHorizontal: wide ? 12 : 8, borderRadius: 12, gap: wide ? 12 : 3,
+        style={{ minHeight: 48, flex: wide ? undefined : 1, paddingHorizontal: wide ? 12 : 8, borderRadius: 12, gap: wide ? 12 : 2,
           flexDirection: wide ? 'row' : 'column', alignItems: 'center', justifyContent: wide ? 'flex-start' : 'center',
-          backgroundColor: active ? theme.surface : 'transparent' }}>
-        <Icon size={21} color={active ? theme.text : theme.muted} strokeWidth={active ? 2.5 : 1.8} />
-        <Text style={{ color: active ? theme.text : theme.muted, fontSize: (wide ? 15 : 11) * theme.scale, fontWeight: active ? '700' : '500', textTransform: 'lowercase' }}>{label}</Text>
+          backgroundColor: active && wide ? theme.hover : 'transparent' }}>
+        <Icon size={wide ? 21 : 20} color={active ? wide ? theme.text : theme.accent : theme.muted} strokeWidth={active ? 2.4 : 1.8} />
+        <Text style={{ color: active ? wide ? theme.text : theme.accent : theme.muted, fontSize: (wide ? 15 : 10) * theme.scale, fontWeight: active ? '700' : '500', textTransform: 'lowercase' }}>{label}</Text>
       </Pressable>
     </Link>)}
     {wide && <View style={{ flex: 1, minHeight: 24 }} />}
@@ -106,14 +106,14 @@ function Shell() {
       {wide && nav}
       <View style={{ flex: 1, minWidth: 0 }}>
         {!(wide && path === '/') && <View style={{
-          ...pageFrame, minHeight: tabTitle ? 66 : 48, flexDirection: 'row', alignItems: 'center',
+          ...pageFrame, minHeight: tabTitle ? 52 : 48, flexDirection: 'row', alignItems: 'center',
           borderBottomWidth: detail ? StyleSheet.hairlineWidth : 0, borderColor: theme.hairline
         }}>
           {showBack && <Pressable accessibilityRole="button" accessibilityLabel="Back"
             onPress={() => router.canGoBack() ? router.back() : router.replace('/')}
             style={{ width: 44, minHeight: 44, justifyContent: 'center' }}><ArrowLeft color={theme.text} size={22} /></Pressable>}
           {tabTitle ? <Text accessibilityRole="header" aria-level={1} numberOfLines={1}
-            style={{ flex: 1, color: theme.text, fontFamily: theme.fontFamily, fontSize: 30 * theme.scale, fontWeight: '800', letterSpacing: -0.8, textTransform: 'lowercase' }}>{tabTitle}</Text>
+            style={{ flex: 1, color: theme.text, fontFamily: theme.fontFamily, fontSize: 26 * theme.scale, fontWeight: '800', letterSpacing: -0.8, textTransform: 'lowercase' }}>{tabTitle}</Text>
             : detail ? <Text numberOfLines={1} style={{ flex: 1, textAlign: 'center', color: theme.muted, fontSize: 14 * theme.scale, fontWeight: '600', textTransform: 'lowercase' }}>{detailTitle}</Text>
             : <View style={{ flex: 1 }} />}
           {!wide && path === '/' && <Link href="/radio" asChild><Pressable accessibilityRole="link" accessibilityLabel="Radio"

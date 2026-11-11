@@ -46,8 +46,8 @@ export function PlayerBar() {
   const error = player.error ?? player.status.error;
   const open = () => { openedFrom.current = path; if (Platform.OS === 'web') router.navigate('/now-playing'); else setExpanded(true); };
   const identity = <Pressable ref={trigger} accessibilityRole="button" accessibilityLabel="Open now playing" onPress={open}
-    style={{ flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 52 }}>
-    <Cover uri={trackArtwork(track)} size={desktop ? 52 : 42} />
+    style={{ flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: desktop ? 12 : 10, minHeight: desktop ? 52 : 44 }}>
+    <Cover uri={trackArtwork(track)} size={desktop ? 52 : 40} radius={6} />
     <View style={{ flex: 1, minWidth: 0 }}>
       <Text numberOfLines={1} style={{ color: theme.text, fontSize: 14 * theme.scale, fontWeight: '700' }}>{track.metadata.title}</Text>
       <Text numberOfLines={1} style={{ color: theme.muted, fontSize: 12 * theme.scale }}>{error ? "couldn’t play this track" : player.outputElsewhere ? "playing on another device" : artistName(track)}</Text>
@@ -55,12 +55,12 @@ export function PlayerBar() {
   </Pressable>;
   return <>
     <View testID="player-dock" style={[glassSurface(theme), { width: desktop ? '100%' : undefined, alignSelf: desktop ? 'center' : undefined,
-      borderRadius: desktop ? 0 : 16, margin: desktop ? 0 : 6, marginTop: desktop ? 0 : 6, paddingHorizontal: desktop ? 20 : 6, paddingTop: desktop ? 12 : 6, paddingBottom: desktop ? 9 : 5, overflow: 'hidden' }]}>
+      borderWidth: 0, borderTopWidth: 1, paddingHorizontal: desktop ? 20 : 12, paddingTop: desktop ? 12 : 4, paddingBottom: desktop ? 9 : 4, overflow: 'hidden' }]}>
       <View pointerEvents="none" accessible={false} testID="playback-status-inlay" style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2,
         opacity: playing ? 0.65 : 0.16, backgroundColor: theme.accent,
         boxShadow: `0px 0px 5px ${theme.accent}66`,
         ...(Platform.OS === 'web' ? { backgroundImage: 'linear-gradient(180deg, #ffffff80, #ffffff00)' } : {}) }} />
-      <View style={{ flexDirection: 'row', alignItems: 'center', padding: desktop ? 0 : 5, gap: desktop ? 24 : 4 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: desktop ? 24 : 2 }}>
         <View style={{ flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: desktop ? 6 : 0 }}>{identity}<TrackLikes key={track.id} track={track} iconOnly returnTo={path} /></View>
         {desktop ? <>
           <View style={{ flex: 1.4, minWidth: 224, maxWidth: 600 }}>
