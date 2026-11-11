@@ -10,6 +10,7 @@ import type { ListSummary, Page, Track } from './api';
 import { Action } from './controls';
 import { WaveLoading } from './WaveLoading';
 import { useAppearance } from './appearance';
+import { artworkShadow, cardSurface } from './materials';
 
 export type Play = (track: Track, queue?: Track[], label?: string) => void;
 export type TrackActions = (track: Track) => ReactNode;
@@ -97,9 +98,10 @@ export function usePages<T>(load: (cursor?: string) => Promise<Page<T>>) {
   return { data, cursor, error, loading, reload, more };
 }
 
-export function Heading({ children, main = false }: { children: ReactNode; main?: boolean }) {
+export function Heading({ children, main = false, center = false }: { children: ReactNode; main?: boolean; center?: boolean }) {
   const colors = useColors();
-  return <Text accessibilityRole="header" aria-level={main ? 1 : 2} style={[main ? styles.title : styles.heading, { color: colors.text, fontFamily: colors.fontFamily, fontSize: (main ? 28 : 20) * colors.scale }]}>{children}</Text>;
+  return <Text accessibilityRole="header" aria-level={main ? 1 : 2} style={[main ? styles.title : styles.heading, { color: colors.text, fontFamily: colors.fontFamily, fontSize: (main ? 28 : 20) * colors.scale,
+    textAlign: center ? 'center' : undefined, textShadowColor: colors.dark ? '#00000073' : '#00000014', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3 }]}>{children}</Text>;
 }
 
 export function Detail({ children }: { children: ReactNode }) {
@@ -111,28 +113,29 @@ export function Button(props: Parameters<typeof Action>[0]) {
   return <Action {...props} />;
 }
 
-export function Cover({ uri, size = 48, round = false, radius = 9 }: { uri?: string | null; size?: number; round?: boolean; radius?: number }) {
+export function Cover({ uri, size = 48, round = false, radius = 8 }: { uri?: string | null; size?: number; round?: boolean; radius?: number }) {
   const colors = useColors();
   const [failedUri, setFailedUri] = useState<string>();
-  const style = { width: size, height: size, borderRadius: round ? size / 2 : radius, backgroundColor: colors.surface };
+  const style = { width: size, height: size, borderRadius: round ? size / 2 : radius, backgroundColor: colors.raised, ...(size >= 100 && !round ? artworkShadow(colors) : {}) };
   return uri && uri !== failedUri && /^https?:\/\//i.test(uri) ? <Image accessibilityIgnoresInvertColors source={{ uri }} style={style} onError={() => setFailedUri(uri)} /> : <View style={[style, { alignItems: 'center', justifyContent: 'center' }]}>
     {round ? <UserRound size={size * 0.38} color={colors.muted} /> : <Music2 size={size * 0.32} color={colors.muted} />}
   </View>;
 }
 
 export function Row({
-  title, subtitle, image, href, action, round = false, onNavigate,
+  title, subtitle, meta, image, href, action, round = false, onNavigate,
 }: {
-  title: string; subtitle?: string | null; image?: string | null; href: Href; action?: ReactNode; round?: boolean; onNavigate?: () => void;
+  title: string; subtitle?: string | null; meta?: string; image?: string | null; href: Href; action?: ReactNode; round?: boolean; onNavigate?: () => void;
 }) {
   const colors = useColors();
-  return <View style={[styles.row, { borderColor: colors.surface }]}>
+  return <View style={[styles.row, cardSurface(colors)]}>
     <Link href={href} asChild>
       <Pressable accessibilityRole="link" onPress={onNavigate} style={styles.rowLink}>
         <Cover uri={image} round={round} />
         <View style={styles.rowText}>
           <Text numberOfLines={1} style={[styles.rowTitle, { color: colors.text, fontFamily: colors.fontFamily, fontSize: 16 * colors.scale }]}>{title}</Text>
           {subtitle ? <Text numberOfLines={1} style={{ color: colors.muted, fontFamily: colors.fontFamily, fontSize: 14 * colors.scale }}>{subtitle}</Text> : null}
+          {meta ? <Text numberOfLines={1} style={{ color: colors.faint, fontFamily: colors.fontFamily, fontSize: 12 * colors.scale }}>{meta}</Text> : null}
         </View>
       </Pressable>
     </Link>
@@ -144,15 +147,21 @@ export function artistName(track: Track) {
   return track.metadata.artist_name || track.artist.profile.display_name || track.artist.profile.handle;
 }
 
+export function trackMeta(track: Track) {
+  const { play_count: plays, like_count: likes } = track.metrics;
+  return `${plays} ${plays === 1 ? 'play' : 'plays'}` + (likes > 0 ? ` · ${likes} ${likes === 1 ? 'like' : 'likes'}` : '');
+}
+
 export function TrackRows({ tracks, onPlay }: { tracks: Track[]; onPlay: Play }) {
-  return tracks.map((track, index) => <Row
+  return <View style={styles.rows}>{tracks.map((track, index) => <Row
     key={`${track.id}:${index}`}
     href={{ pathname: '/track/[id]', params: { id: track.id } }}
     title={track.metadata.title}
     subtitle={artistName(track)}
+    meta={trackMeta(track)}
     image={trackArtwork(track)}
     action={<RowPlay onPress={() => onPlay(track, tracks)} />}
-  />);
+  />)}</View>;
 }
 
 export function RowPlay({ onPress, label = 'Play', busy = false }: { onPress: () => void; label?: string; busy?: boolean }) {
@@ -164,7 +173,7 @@ export function RowPlay({ onPress, label = 'Play', busy = false }: { onPress: ()
 }
 
 export function ListRows({ lists }: { lists: ListSummary[] }) {
-  return lists.map((list) => <Row
+  return <View style={styles.rows}>{lists.map((list) => <Row
     key={list.id}
     href={{
       pathname: list.object === 'album' ? '/album/[id]' : '/playlist/[id]',
@@ -173,7 +182,7 @@ export function ListRows({ lists }: { lists: ListSummary[] }) {
     title={list.metadata.name ?? 'Untitled'}
     subtitle={`${list.metrics.member_count} tracks`}
     image={collectionArtwork(list)}
-  />);
+  />)}</View>;
 }
 
 export function Status({ loading, error, retry, empty }: { loading?: boolean; error?: string; retry?: () => void; empty?: string }) {
@@ -188,9 +197,10 @@ export function Status({ loading, error, retry, empty }: { loading?: boolean; er
 const styles = StyleSheet.create({
   group: { gap: 7 },
   title: { fontWeight: '800', letterSpacing: -0.8 },
-  heading: { fontWeight: '700', marginTop: 5 },
+  heading: { fontWeight: '700', marginTop: 5, textTransform: 'lowercase' },
+  rows: { gap: 8 },
   actions: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8 },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 6, borderBottomWidth: StyleSheet.hairlineWidth },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 6, paddingLeft: 12, paddingRight: 4 },
   rowLink: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 4 },
   rowText: { flex: 1, minWidth: 0, gap: 3 },
   rowTitle: { fontWeight: '600' },

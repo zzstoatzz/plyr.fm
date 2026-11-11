@@ -31,7 +31,7 @@ export function Home({ onPlay }: { onPlay: Play }) {
   const loadLatest = useCallback((cursor?: string) => api.tracks({ limit: 24, cursor, tag: parseSelectedTags(tagKey) }), [tagKey]);
   const latest = usePages(loadLatest);
   const [headerHeight, setHeaderHeight] = useState(0);
-  const rowHeight = Math.max(80, Math.ceil(48 * colors.scale + 24));
+  const rowHeight = Math.max(96, Math.ceil(64 * colors.scale + 32));
   const viewport = useRef({ height: 0, content: 0, offset: 0 });
   const fillViewport = useCallback(() => {
     const { height, content, offset } = viewport.current;
@@ -102,6 +102,6 @@ const styles = StyleSheet.create({
   home: { gap: 26 }, section: { gap: 12 }, headingRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: 12, rowGap: 4 },
   tags: { gap: 8 }, pinned: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6 },
   tagTarget: { minWidth: 44, minHeight: 44, maxWidth: '100%', justifyContent: 'center' },
-  tag: { flexDirection: 'row', gap: 6, alignItems: 'center', minHeight: 36, borderRadius: 8, borderWidth: 1, paddingHorizontal: 9, paddingVertical: 6 },
+  tag: { flexDirection: 'row', gap: 6, alignItems: 'center', minHeight: 32, borderRadius: 16, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 4 },
   clear: { minWidth: 44, minHeight: 44, justifyContent: 'center', paddingVertical: 8, paddingRight: 4 }, more: { alignSelf: 'center', padding: 14 },
 });

@@ -54,7 +54,7 @@ export function HomeChart({ onPlay }: { onPlay: Play }) {
           accessibilityHint="Show the next period with tracks" accessibilityState={{ busy: loading, disabled: loading }} disabled={loading}
           onPress={() => void load(period, true)}
           style={({ pressed }) => [styles.period, { opacity: pressed || loading ? 0.6 : 1 }]}>
-          <Text style={{ color: colors.muted, fontSize: 13 * colors.scale }}>{periodLabels[period]}</Text>
+          <Text style={{ color: colors.accent, fontSize: 13 * colors.scale }}>{periodLabels[period]}</Text>
         </Pressable>
       </View>
       {pages > 1 && <View style={styles.paging}>

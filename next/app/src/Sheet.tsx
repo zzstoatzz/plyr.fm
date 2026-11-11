@@ -18,7 +18,7 @@ export function Sheet({ title, close, children }: { title: string; close: () => 
       <View accessibilityViewIsModal={Platform.OS === 'web' ? undefined : true} style={{
         width: '100%', maxWidth: 520, maxHeight: '88%', borderTopLeftRadius: 22, borderTopRightRadius: 22,
         borderBottomLeftRadius: wide ? 22 : 0, borderBottomRightRadius: wide ? 22 : 0,
-        backgroundColor: theme.background, paddingBottom: wide ? 12 : insets.bottom
+        backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.hairline, paddingBottom: wide ? 12 : insets.bottom
       }}>
         <View style={{ paddingHorizontal: 20, paddingVertical: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
           <View style={{ flex: 1, minWidth: 0 }}><Heading>{title}</Heading></View>
