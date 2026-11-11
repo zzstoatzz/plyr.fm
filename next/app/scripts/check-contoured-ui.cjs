@@ -39,11 +39,10 @@ async function preview(route) {
         const count = await covers.count();
         const bounds = await chart.boundingBox();
         assert.ok(bounds);
-        for (const cover of await covers.all()) {
-          const box = await cover.boundingBox();
-          assert.ok(box && box.x >= bounds.x - 1 && box.x + box.width <= bounds.x + bounds.width + 1, 'Covers fit the available width');
-          assert.ok(Math.abs(box.width - box.height) < 1, 'Covers remain square');
-        }
+        assert.ok(bounds.x >= 0 && bounds.x + bounds.width <= width + 1, 'The chart stays inside the page');
+        const cards = await Promise.all((await covers.all()).map(card => card.boundingBox()));
+        assert.ok(cards.every(box => box && Math.abs(box.y - cards[0].y) < 1 && Math.abs(box.height - cards[0].height) < 1), 'Top tracks sit in one row of equal cards');
+        assert.ok(cards[0].height <= 80, 'Top track cards stay compact');
         const period = page.getByRole('button', { name: 'Top tracks period: past month', exact: true });
         const request = page.waitForResponse(response => new URL(response.url()).pathname === '/v1/charts/tracks' && new URL(response.url()).searchParams.get('period') === 'week');
         await period.click();
@@ -51,6 +50,7 @@ async function preview(route) {
         assert.equal((await request).status(), 200);
         await page.getByRole('button', { name: 'Top tracks period: past week', exact: true }).waitFor();
         await covers.first().waitFor();
+        await page.waitForTimeout(400);
         const next = page.getByRole('button', { name: 'Next top tracks', exact: true });
         if (await next.count()) {
           await next.click();
