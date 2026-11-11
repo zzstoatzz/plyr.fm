@@ -3,7 +3,6 @@ import { FlatList, Pressable, StyleSheet, View } from 'react-native';
 import { HomeTrackRow } from './HomeTrackRow';
 import { HomeChart } from './HomeChart';
 import { HomeArtists } from './HomeArtists';
-import X from 'lucide-react-native/icons/x';
 import { api, type Track } from './api';
 import { useAuth } from './auth';
 import { Detail, Heading, Status, useColors, usePages, type Play } from './CatalogPieces';
@@ -51,9 +50,8 @@ export function Home({ onPlay }: { onPlay: Play }) {
     return <Pressable key={name} accessibilityRole="button" hitSlop={4} accessibilityLabel={`${active ? 'Remove' : 'Filter by'} ${name}`}
       disabled={!active && selected.length >= 10} accessibilityState={{ selected: active, disabled: !active && selected.length >= 10 }} onPress={() => changeTags(active ? selected.filter((value) => value !== name) : [...selected, name])}
       style={styles.tagTarget}>
-      <View style={[styles.tag, { backgroundColor: palette.backgroundColor, borderColor: active ? colors.accent : palette.borderColor }]}>
-        <Text numberOfLines={1} style={{ color: palette.color, fontSize: 12 * colors.scale, flexShrink: 1 }}>{name}{count === undefined ? '' : ` (${count})`}</Text>
-        {active && <X size={12} color={colors.muted} />}
+      <View style={[styles.tag, { backgroundColor: active ? palette.backgroundColor : 'transparent', borderColor: palette.borderColor }]}>
+        <Text numberOfLines={1} style={{ color: palette.color, fontSize: 12 * colors.scale, fontWeight: active ? '600' : '400', flexShrink: 1 }}>{name}{count === undefined ? '' : <Text style={{ color: palette.color, fontSize: 10.5 * colors.scale }}> ({count})</Text>}</Text>
       </View>
     </Pressable>;
   }
@@ -65,17 +63,19 @@ export function Home({ onPlay }: { onPlay: Play }) {
       <View style={styles.headingRow}>
         <Pressable accessibilityRole="button" accessibilityLabel="Refresh tracks" onPress={() => { list.current?.scrollToOffset({ offset: 0, animated: false }); latest.reload(); }} style={{ minHeight: 44, justifyContent: 'center' }}><Heading>latest tracks</Heading></Pressable>
       </View>
-      {!tagPages.error && <View style={styles.tags}>
-        {selected.length > 0 && <View style={styles.pinned}>
-          <Pressable accessibilityRole="button" accessibilityLabel="Clear tag filters" onPress={() => changeTags([])} style={styles.clear}><Text style={{ color: colors.muted, fontSize: 12 * colors.scale }}>clear</Text></Pressable>
+      {(selected.length > 0 || tags.length > 0 || !tagPages.error) && <View style={styles.tags}>
+        {selected.length > 0 && <View style={[styles.pinned, { borderColor: colors.hairline }]}>
+          <Pressable accessibilityRole="button" accessibilityLabel="Clear tag filters" onPress={() => changeTags([])} style={styles.tagTarget}>
+            <View style={[styles.tag, { borderStyle: 'dashed', borderColor: colors.line }]}><Text style={{ color: colors.faint, fontSize: 12 * colors.scale }}>clear</Text></View>
+          </Pressable>
           {selected.map((name) => tag(name, true, tags.find((item) => item.name === name)?.track_count))}
         </View>}
-        <TagScroller hasMore={tagPages.hasMore} onNearEnd={() => void tagPages.more()}>
+        <View style={styles.scroller}><TagScroller hasMore={tagPages.hasMore} onNearEnd={() => void tagPages.more()}>
           {tags.filter(({ name }) => !selected.includes(name)).map(({ name, track_count }) => tag(name, false, track_count))}
           {tagPages.hasMore && <Pressable accessibilityRole="button" accessibilityLabel="More tags" accessibilityState={{ busy: tagPages.loading, disabled: tagPages.loading }} disabled={tagPages.loading} onPress={() => void tagPages.more(true)} style={styles.tagTarget}>
             <Text style={{ color: colors.muted, fontSize: 12 * colors.scale }}>{tagPages.loading ? 'loading…' : 'more'}</Text>
           </Pressable>}
-        </TagScroller>
+        </TagScroller></View>
       </View>}
       <Status error={tagPages.error} retry={tagPages.retry} />
     </View>
@@ -100,8 +100,10 @@ export function Home({ onPlay }: { onPlay: Play }) {
 
 const styles = StyleSheet.create({
   home: { gap: 26 }, section: { gap: 12 }, headingRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: 12, rowGap: 4 },
-  tags: { gap: 8, minHeight: 44 }, pinned: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6 },
-  tagTarget: { minWidth: 44, minHeight: 44, maxWidth: '100%', justifyContent: 'center' },
-  tag: { flexDirection: 'row', gap: 6, alignItems: 'center', minHeight: 32, borderRadius: 16, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 4 },
-  clear: { minWidth: 44, minHeight: 44, justifyContent: 'center', paddingVertical: 8, paddingRight: 4 }, more: { alignSelf: 'center', padding: 14 },
+  tags: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, minHeight: 36 },
+  pinned: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: 6, flexShrink: 1, maxWidth: '66%', paddingRight: 8, borderRightWidth: 1 },
+  scroller: { flex: 1, minWidth: 0 },
+  tagTarget: { minWidth: 44, minHeight: 36, maxWidth: '100%', justifyContent: 'center' },
+  tag: { flexDirection: 'row', alignItems: 'center', minHeight: 28, borderRadius: 16, borderWidth: 1, paddingHorizontal: 11, paddingVertical: 4 },
+  more: { alignSelf: 'center', padding: 14 },
 });
