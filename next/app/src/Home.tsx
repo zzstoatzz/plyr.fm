@@ -106,7 +106,7 @@ export function Home({ onPlay }: { onPlay: Play }) {
 }
 
 const styles = StyleSheet.create({
-  home: { gap: 26 }, section: { gap: 12 }, headingRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: 12, rowGap: 4 },
+  home: { gap: 18 }, section: { gap: 12 }, headingRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: 12, rowGap: 4 },
   tags: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, minHeight: 36 },
   pinned: { flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 1, maxWidth: '60%', paddingRight: 8, borderRightWidth: 1 },
   pinnedScroller: { flexGrow: 0, flexShrink: 1 },
