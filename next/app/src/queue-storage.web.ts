@@ -1,5 +1,12 @@
 import { mergeQueueMutations, queueMutations } from './queue-mutation';
-import { applyQueueProgress, queueCheckpoint, type QueueStorage } from './queue-checkpoint';
+import { applyQueueProgress, newerProgress, queueCheckpoint, type QueueStorage } from './queue-checkpoint';
+
+// IndexedDB writes started in pagehide often never commit on Safari, so the
+// newest position is also kept synchronously in localStorage.
+const latestKey = (owner: string) => `plyr-next-queue:${owner}:progress`;
+function latest(owner: string): unknown {
+  try { return JSON.parse(localStorage.getItem(latestKey(owner)) ?? 'null'); } catch { return null; }
+}
 
 let database: Promise<IDBDatabase> | undefined;
 function open(): Promise<IDBDatabase> {
@@ -55,11 +62,12 @@ export const queueStorage: QueueStorage = {
       const store = transaction.objectStore('checkpoints');
       const snapshot = store.get(owner);
       const progress = store.get(owner + ':progress');
-      transaction.oncomplete = () => resolve(applyQueueProgress(snapshot.result, progress.result, owner));
+      transaction.oncomplete = () => resolve(applyQueueProgress(snapshot.result, newerProgress(progress.result, latest(owner)), owner));
       transaction.onerror = () => reject(transaction.error);
       transaction.onabort = () => reject(transaction.error);
     });
   },
   async save(owner, snapshot) { const safe = queueCheckpoint(snapshot, owner); if (!safe) throw new Error('could not save this queue'); await write(owner, safe); },
   progress: (owner, progress) => write(owner + ':progress', progress),
+  latest(owner, progress) { try { localStorage.setItem(latestKey(owner), JSON.stringify(progress)); } catch { /* storage full or blocked */ } },
 };
