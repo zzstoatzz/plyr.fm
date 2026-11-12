@@ -62,3 +62,12 @@ a failed refresh keeps those rows available for retry.
 Changes made elsewhere, and writes still waiting for indexing, use the explicit
 refresh control. This is published-catalog management, not a private catalog
 or a client-side substitute for server search, filtering, or sorting.
+
+Track uploads and edits accept creator tags, one per line. Intentional changes
+follow the published track lexicon: up to 20 tags, each at most 50 UTF-8 bytes
+(not the legacy Python validator's code-point count). Tags are lowercased,
+whitespace collapsed, and edge spaces/hyphens removed; null characters are
+rejected. See the [Lexicon string specification](https://atproto.com/specs/lexicon#string).
+An untouched tag field preserves the original record, including absent tags;
+clearing edited tags writes an explicit empty array. Operator account labels
+never populate creator tags.
