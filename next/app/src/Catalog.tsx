@@ -1,6 +1,6 @@
 import { collectionArtwork } from './artwork';
-import { useLocalSearchParams } from 'expo-router';
-import { useCallback, useState, type ReactNode } from 'react';
+import { useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { useCallback, useRef, useState, type ReactNode } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { PauseGlyph as PauseIcon, PlayGlyph as PlayIcon } from './PlayerGlyph';
 import ListPlus from 'lucide-react-native/icons/list-plus';
@@ -23,6 +23,7 @@ import { ShareLink } from './ShareLink';
 import { TrackMenu } from './TrackMenu';
 import { usePlayCount } from './use-play-count';
 import { CollectionActions, Library } from './AccountCatalog';
+import { usePlaylistOrder } from './collections/use-playlist-order';
 
 const loadPlaylists = (cursor?: string) => api.playlists({ limit: 30, cursor });
 
@@ -62,7 +63,13 @@ function TrackDetail({ id, onPlay, onEnqueue, trackActions }: {
 function Collection({ id, album, onPlay }: { id: string; album: boolean; onPlay: Play }) {
   const load = useCallback(() => album ? api.album(id) : api.playlist(id), [id, album]);
   const result = useResource(load, 0, true);
-  const list = result.data;
+  const { list, saved } = usePlaylistOrder(result.data);
+  const focus = useRef({ visited: false, retry: result.retry });
+  focus.current.retry = result.retry;
+  useFocusEffect(useCallback(() => {
+    if (focus.current.visited) focus.current.retry();
+    focus.current.visited = true;
+  }, []));
   if (!list) return <Status loading={!result.error} error={result.error} retry={result.retry} />;
   const tracks = list.members.flatMap((member) => member.track ? [member.track] : []);
   return <>
@@ -72,7 +79,7 @@ function Collection({ id, album, onPlay }: { id: string; album: boolean; onPlay:
     </InlineLink>}
     <Detail>{list.metrics.member_count} {list.metrics.member_count === 1 ? 'track' : 'tracks'}{tracks.length < list.metrics.member_count ? ` · ${list.metrics.member_count - tracks.length} unavailable` : ''}</Detail>
     </DetailHeader>
-    <CollectionActions list={list} refresh={result.retry} onPlay={onPlay} actions={<>
+    <CollectionActions list={list} refresh={result.retry} onPlay={onPlay} onOrderSaved={saved} actions={<>
       {tracks[0] && <PlayerControl primary large icon={PlayIcon} label={album ? 'Play album' : 'Play playlist'} onPress={() => onPlay(tracks[0], tracks, list.metadata.name ?? (album ? 'album' : 'playlist'))} />}
       <ShareLink compact path={`/${album ? 'album' : 'playlist'}/${encodeURIComponent(id)}`} />
     </>} />

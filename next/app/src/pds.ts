@@ -12,6 +12,7 @@ import { TID } from '@atproto/common-web';
 import { createStorage } from './publishing/create-storage';
 import { recordCreator, CreateUnconfirmed } from './publishing/create-record';
 import type { CreateOperation, CreateReservation } from './publishing/create-operation';
+import { playlistOrdering } from './collections/playlist-order-pds';
 
 
 export interface MediaFile {
@@ -476,5 +477,8 @@ export function createPds(auth: Pick<Auth, 'did' | 'rpc'>) {
 		);
 		return await settle(uri);
 	}
-	return { myLikes, like, unlike, createPlaylist, addToPlaylist, removeFromPlaylist, renameCollection, deletePlaylist, uploadTrack, myProfile, saveProfile, myTrack, editTrack, deleteTrack, reserveCreate, pendingCreates, recoverCreate, dismissCreate, archiveCreate };
+	function playlistOrder() {
+		return playlistOrdering({ ...session(), collection: LIST(), assertSession, settle });
+	}
+	return { playlistOrder, myLikes, like, unlike, createPlaylist, addToPlaylist, removeFromPlaylist, renameCollection, deletePlaylist, uploadTrack, myProfile, saveProfile, myTrack, editTrack, deleteTrack, reserveCreate, pendingCreates, recoverCreate, dismissCreate, archiveCreate };
 }

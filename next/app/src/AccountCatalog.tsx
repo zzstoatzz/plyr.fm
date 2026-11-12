@@ -20,6 +20,8 @@ import { Action, Field, InlineLink } from './controls';
 import { Sheet } from './Sheet';
 import { createPds } from './pds';
 import { CreateRecovery, EarlierCreates, useCreateRecovery } from './publishing/CreateRecovery';
+import { PlaylistOrderEditor } from './collections/PlaylistOrderEditor';
+import type { PlaylistRevision } from './collections/playlist-order';
 
 function usePds() {
   const { did, rpc } = useAuth();
@@ -171,6 +173,7 @@ interface CollectionControlsProps {
   refresh: () => void;
   actions: ReactNode;
   onPlay: Play;
+  onOrderSaved: (revision: PlaylistRevision) => void;
 }
 
 function CollectionBar({ children }: { children: ReactNode }) {
@@ -191,11 +194,13 @@ export function CollectionActions(props: CollectionControlsProps) {
   </>;
 }
 
-function EditCollection({ list, refresh, actions, onPlay }: CollectionControlsProps) {
+function EditCollection({ list, refresh, actions, onPlay, onOrderSaved }: CollectionControlsProps) {
   const auth = useAuth();
   const pds = usePds();
   const router = useRouter();
   const [editing, setEditing] = useState(false);
+  const [reordering, setReordering] = useState(false);
+  const ordering = useMemo(() => pds.playlistOrder(), [pds]);
   const album = list.object === 'album';
   const [name, setName] = useState(list.metadata.name ?? '');
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -229,6 +234,8 @@ function EditCollection({ list, refresh, actions, onPlay }: CollectionControlsPr
     });
   }
   const tracks = list.members.flatMap(({ track }) => track ? [track] : []);
+  if (reordering) return <PlaylistOrderEditor list={list} ordering={ordering} close={() => setReordering(false)}
+    saved={revision => { if (getAuth().did === auth.did && getAuth().rpc === auth.rpc) onOrderSaved(revision); }} />;
   return <>
     <CollectionBar>
       {actions}
@@ -245,6 +252,7 @@ function EditCollection({ list, refresh, actions, onPlay }: CollectionControlsPr
       <Status loading={mutation.busy} empty={mutation.message} />
       {!mutation.busy && name.trim() && name.trim() !== list.metadata.name &&
         <Button label="Save name" onPress={rename} />}
+      {!album && !mutation.busy && <Action label="Reorder tracks" onPress={() => setReordering(true)} />}
     </View>}
     <Heading>tracks</Heading>
     {editing && !album ? list.members.map(({ track, position, subject }) => {
