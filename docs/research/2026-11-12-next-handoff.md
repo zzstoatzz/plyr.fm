@@ -9,46 +9,14 @@ This supersedes the [November 7 handoff](2026-11-07-rewrite-handoff.md) for the
 client, the player and account state. That document is still right about the
 catalog appview, Jams and the performance investigation.
 
-## What Next is and what we hold to
+## What Next is
 
 Next is the rewrite of plyr.fm that runs beside the legacy app until it can
 replace it: one Expo / React Native client for web, iOS and Android, a Zig
-appview for the catalog, and a small coordinator for live playback state.
-
-The appview is modelled on [Bobbin](https://til.desertthunder.dev/notes/2026/08/01/bobbin/),
-Tangled's read-only appview, and most of what we hold to follows from it.
-
-- The user's records are theirs. Tracks, lists, likes and profiles are written
-  by the client straight to the account's PDS and read back through an appview
-  that never writes them. A client that has just written waits for the appview
-  to project that exact version, the way Bobbin's `awaitRecord` works. Next and
-  production share those records.
-- Everything derived from records is disposable. The catalog index is rebuilt
-  from the network, so a missed event or a bad deploy is repaired by replaying,
-  not by hand-editing rows or writing a one-off migration. Keeping that true
-  is why the rebuild and repair work in the inventory matters before cutover.
-- State that cannot be rebuilt is kept small, named and separate: sign-in
-  sessions, the queue and its position, settings, metrics and moderation. Each
-  needs an owner and a recovery rule, because replay will not bring it back.
-- Small and domain-specific. The appview serves `fm.plyr.*` and nothing else,
-  in one binary with a modest memory budget. Reach for a new service, store or
-  dependency only when the existing ones provably cannot do the job.
-- Account state that is not a record belongs on our server, tied to the
-  account, for every account. A capability only some PDSes offer must not
-  decide whether a basic feature works.
-- Next should feel like production where production is good. The look, the
-  lowercase voice, toasts, server-owned resume and media controls are the
-  reference; the rewrite is a chance to make the same behaviour faster, not to
-  redesign it.
-- Phone first. A change is judged on a phone-sized screen with a finger:
-  vertical space, one-handed reach, motion that follows the touch.
-- One client, native in view. Use cross-platform primitives so the same
-  component can ship in the native apps; keep web-only code behind a small,
-  named seam.
-- Evidence over assertion. A change is done when a check that fails without it
-  passes with it, and the rendered result has been looked at.
-- Ship in small steps through the normal path: branch, PR, CI, squash merge,
-  deploy, verify live.
+appview for the catalog, and a small coordinator for live playback state. The
+client writes records and the server does not; what the server keeps is either
+rebuildable from records or its own named state. Those rules and their sources
+are in [next/AGENTS.md](../../next/AGENTS.md).
 
 ## Where things stand
 
@@ -93,7 +61,7 @@ for either. Jams still use Spaces.
 
 - We treated a missing PDS capability as "this account syncs on-device". The
   queue and settings were gated on Spaces although neither stored anything
-  there. The principle above about account state is the correction.
+  there. The rule in next/AGENTS.md about PDS capabilities is the correction.
 - Checks measured the wrong thing more than once: a URL change in place of
   what was drawn, a fixed wait in place of the event, an element's absence
   when it had become hidden. Assert the thing the user sees.
@@ -106,31 +74,6 @@ for either. Jams still use Spaces.
   manual deploy is only for an outage and only with the owner's say-so.
 - An open tab keeps running the build it loaded. After a deploy, reload
   before judging whether a fix worked.
-
-## Working here
-
-Client commands, the backend's commands and the deploy workflows are in the
-READMEs under `next/`. What is not obvious from them:
-
-- Browser checks live beside the client and are not in CI. Build the web
-  export first, then run a check with Node. Most serve that build under the
-  real origin. Run the ones for the area you touched and the player set after
-  any player change.
-- The queue fixture generates identities, serves their DID documents locally
-  and runs locally built coordinators against the compose Redis and Postgres.
-  It makes signed-in behaviour testable with no PDS account. The coordinator
-  check, the two-device sync check and the feedback check use it or the same
-  stubbed-agent approach.
-- To see a change in real iOS Safari, build the client with its API URL
-  pointed at a loopback proxy that forwards to the Next API, serve that build,
-  and open it in the simulator. The API only allows the production origin, so
-  a plain local build cannot load data.
-- Ship backend before client when both change. The coordinator deploy is
-  slower than the Pages deploy and the client must not call a route that is
-  not there yet.
-- The backend deploy applies migrations, grants the coordinator's database
-  login access to the account tables, stages that login on the coordinator
-  app and refuses to start the coordinator without it.
 
 ## Next work, in order
 
