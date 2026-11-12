@@ -60,6 +60,10 @@ jobs:
       - run: npm run check && npm test
       - name: install fixture SDK
         run: npm ci --prefix ../../app
+      - name: install media verification tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y ffmpeg
       - name: check fixture cleanup
         run: node --experimental-strip-types --test scripts/*node-check.mjs
       - name: validate worker bundle
