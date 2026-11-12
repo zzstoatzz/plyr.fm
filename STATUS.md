@@ -4,6 +4,15 @@ Start here for the next agent: [November 12 daily-driver checkpoint](docs/resear
 
 ## Next daily-driver work (2026-11-12)
 
+#2515 ships canonical playlist reordering to Next. Accepted order drives playback
+through appview delay and retained-screen saves; eight deployed browser cases and
+actual iOS simulator move/save/playback passed. Album creation remains open.
+
+#2511 and #2514 restore current Spaces credential and membership requests.
+Next/staging deployments and the real private-media browser flow passed:
+grant, member playback, removal, fresh-session playback and private recording.
+The failure was a removed PDS RPC alias; production was not promoted.
+
 #2505, #2508–#2510 add durable upload/playlist create recovery, verified
 iOS next/previous command dispatch and session-isolated collection editing.
 Recovery passed deployed browser checks and actual native MMKV acceptance.
