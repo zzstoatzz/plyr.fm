@@ -70,6 +70,11 @@ def exercise(database_url: str) -> None:
             )
             visible = get("/v1/tracks?limit=3&hidden_tag=")
             assert len(visible["data"]) == 3 and visible["has_more"]
+            many = get("/v1/tracks?limit=50&hidden_tag=")
+            assert len(many["data"]) == 50
+            assert all(
+                item["moderation"]["account_labels"] == ["ai"] for item in many["data"]
+            )
             track = visible["data"][0]
             assert track["moderation"]["account_labels"] == ["ai"]
             assert track["moderation"]["operator_labels"] == []
