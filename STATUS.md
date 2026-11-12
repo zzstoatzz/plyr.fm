@@ -9,9 +9,13 @@ bindings in the legacy backend and Next client. Next web, staging and deployed
 private-media E2E passed at `0580d72c`; native Hermes verified the SDK crypto path.
 This restores protocol compatibility, not real-account Next OAuth acceptance.
 
+#2518 adds album creation and canonical track organization. Eight deployed
+browser cases verify recovery, membership/order, return navigation and playback
+through appview delay; native creation, organizing and playback also passed.
+
 #2515 ships canonical playlist reordering to Next. Accepted order drives playback
 through appview delay and retained-screen saves; eight deployed browser cases and
-actual iOS simulator move/save/playback passed. Album creation remains open.
+actual iOS simulator move/save/playback passed.
 
 #2511 and #2514 restore current Spaces credential and membership requests.
 Next/staging deployments and the real private-media browser flow passed:

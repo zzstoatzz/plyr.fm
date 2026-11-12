@@ -6,6 +6,16 @@ finish line. This is execution evidence, not another parity inventory.
 
 ## shipped to Next
 
+- #2518: artists can create albums and add, remove or reorder track occurrences
+  using canonical list records. New references are checked against the owner's
+  PDS; existing duplicate/unavailable entries and unknown fields survive edits.
+  Lost responses reconcile the same record key, and accepted contents drive
+  playback while projection catches up. Returning from creation refreshes the
+  artist's album list. Deployment `43226900658` serves `4ff9ce2d`; eight deployed
+  fixture cases passed across phone/desktop, light/dark and enlarged text, with
+  conflict/reload controls visibly reachable. Native simulator creation,
+  organizing and playback also passed. These used synthetic PDS records, not
+  real account writes or native distribution.
 - #2512: current Spaces responses use `accept-signature`, signed record/commit
   headers and key-share-bound verification, with no legacy proof fallback.
   Python and the vendored SDK verify canonical bytes and CID bindings; the SDK
