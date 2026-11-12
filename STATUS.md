@@ -4,6 +4,17 @@ Start here for the next agent: [November 12 daily-driver checkpoint](docs/resear
 
 ## Next daily-driver work (2026-11-12)
 
+#2519 and #2522 ship public audio replacement and private publishing/playback.
+Replacement preserves the track URI and labels with CAS/reconciliation; eight
+deployed browser cases pass. Private music uses the existing player and stays out
+of public writes, metrics and queue sync; four deployed cases and scoped native
+playback/storage checks pass. Both paths currently cap PDS blobs at 100 MiB.
+Native touch/VoiceOver and real-account Next OAuth limits remain explicit.
+
+#2507/#2520 deploy large-upload staging and its real-service acceptance fixture.
+The fixture found activation returning 503 after successful staging and record
+creation; exact fixture cleanup passed. The dependent client remains held.
+
 #2512 verifies current Spaces response signatures and canonical record/commit
 bindings in the legacy backend and Next client. Next web, staging and deployed
 private-media E2E passed at `0580d72c`; native Hermes verified the SDK crypto path.
