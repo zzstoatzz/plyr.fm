@@ -115,7 +115,7 @@ production settings and secrets are not changed by this slice.
 
 ## acceptance
 
-Small deterministic fixtures cover duplicate dispatch, capacity, source mismatch,
+The completed owner integration must cover duplicate dispatch, capacity, source mismatch,
 lease loss, stale completion, output budget, uncertain receipts and cleanup.
 Cloud acceptance must exercise a synthetic 1.5 GiB source through the actual
 staging Rust service and R2 multipart path, verify bounded memory and both
