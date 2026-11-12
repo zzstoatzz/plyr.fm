@@ -61,6 +61,7 @@ async function diagnose(owner, xrpc) {
     assert.ok(document.id === owner, 'identity mismatch');
     const endpoint = document.service?.find(item => item.id === '#atproto_pds' || item.id === `${owner}#atproto_pds`)?.serviceEndpoint;
     assert.ok(typeof endpoint === 'string' && new URL(endpoint).protocol === 'https:', 'missing public PDS endpoint');
+    assert.ok(!new URL(endpoint).username && !new URL(endpoint).password, 'public PDS endpoint must not contain credentials');
     await writeFile(`${output}/identity.json`, JSON.stringify({ id: owner, endpoint, verificationMethod: document.verificationMethod }));
     stage = 'public collections';
     const described = JSON.parse(await bounded(`${xrpc('com.atproto.repo.describeRepo')}?repo=${encodeURIComponent(owner)}`, 65536));
