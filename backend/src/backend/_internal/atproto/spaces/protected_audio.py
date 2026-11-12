@@ -28,13 +28,11 @@ from backend._internal.atproto.spaces.client import (
     open_space_blob,
 )
 from backend._internal.atproto.spaces.mac import (
-    MAC_HEADER,
+    ACCEPT_SIGNATURE_HEADER,
     RECORD_MAC_TYPE,
-    WANT_MAC_HEADER,
     SpaceMacError,
     encapsulate,
-    format_want_mac_header,
-    parse_mac_header,
+    format_mac_request,
     verify_record_mac,
     verify_record_value,
 )
@@ -299,7 +297,7 @@ async def resolve_protected_audio(record_uri: str, owner: str) -> tuple[dict, di
                 "rkey": record.rkey,
             },
             extra_headers={
-                WANT_MAC_HEADER: format_want_mac_header(
+                ACCEPT_SIGNATURE_HEADER: format_mac_request(
                     exchange.key_share, mac_type=RECORD_MAC_TYPE
                 )
             },
@@ -317,12 +315,10 @@ async def resolve_protected_audio(record_uri: str, owner: str) -> tuple[dict, di
         try:
             verify_record_value(body["value"], cid)
             verify_record_mac(
-                exchange.shared_secret,
+                exchange,
                 uri=record_uri,
                 cid=cid,
-                mac=parse_mac_header(
-                    response.headers.get(MAC_HEADER), mac_type=RECORD_MAC_TYPE
-                ),
+                headers=response.headers,
             )
         except (SpaceMacError, ValueError) as exc:
             raise SpaceAccessError(f"protected audio record: {exc}") from exc

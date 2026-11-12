@@ -744,7 +744,7 @@ async def test_list_space_repos_routes_to_authority_host(
         session,
         host_url="https://authority-space.example",
         audience="did:plc:authority",
-        endpoint="com.atproto.space.listRepos",
+        endpoint="com.atproto.space.listWriters",
         space=space,
         params={"space": space, "limit": 20},
     )

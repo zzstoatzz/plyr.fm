@@ -1,7 +1,7 @@
-import {
-	encapsulate, formatWantMacHeader, MAC_HEADER, parseMacHeader, RECORD_MAC_TYPE,
-	verifyRecord, WANT_MAC_HEADER
-} from '@atproto/space';
+import { isSpaceAtUriString } from '@atproto/syntax';
+import { encapsulate, formatMacRequest, RECORD_MAC_PROFILE, verifyRecord } from '@atproto/space';
+import { isLexMap } from '@atproto/lex-data';
+import { lexParse } from '@atproto/lex-json';
 import type { Agent, Auth, Did } from './auth-state';
 import { credentialFor, signedFetch, type SpaceAudioTransport } from './gated-audio-shared.ts';
 import { didDocument, pdsEndpoint } from './identity.ts';
@@ -54,13 +54,22 @@ export function jamSpace(agent: Agent, did: Did, host: Did, key: string, transpo
 			const response = await signedFetch(
 				transport, credential,
 				`${endpoint}/xrpc/com.atproto.space.getRecord?${new URLSearchParams(record)}`, host,
-				{ [WANT_MAC_HEADER]: formatWantMacHeader(RECORD_MAC_TYPE, keyShare) }
+				{ 'accept-signature': formatMacRequest(RECORD_MAC_PROFILE, keyShare) }
 			);
 			if (!response.ok) throw new Error('could not read this jam');
-			const value = await response.json() as Parameters<typeof verifyRecord>[0];
+			const decoded = lexParse(await response.text(), { strict: true });
+			if (!isLexMap(decoded) || typeof decoded.uri !== 'string' || typeof decoded.cid !== 'string' || !isLexMap(decoded.value)) {
+				throw new Error('invalid jam record');
+			}
+			const value = { uri: decoded.uri, cid: decoded.cid, value: decoded.value };
 			const uri = `${space}/${host}/${collection}/self`;
-			const mac = parseMacHeader(response.headers.get(MAC_HEADER) ?? undefined, RECORD_MAC_TYPE);
-			if (value.value?.$type !== collection || !await verifyRecord(value, { uri, mac, sharedSecret })) {
+			if (!isSpaceAtUriString(uri)) throw new Error('invalid jam record uri');
+			if (value.value.$type !== collection) {
+				throw new Error('could not verify this jam');
+			}
+			try {
+				await verifyRecord(value, { uri, keyShare, sharedSecret, headers: response.headers });
+			} catch {
 				throw new Error('could not verify this jam');
 			}
 			return value.value;

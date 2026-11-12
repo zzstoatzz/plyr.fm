@@ -302,7 +302,7 @@ wheels = [
 
 [[package]]
 name = "atproto"
-version = "0.0.2.dev6"
+version = "0.0.1.dev2141"
 source = { git = "https://github.com/zzstoatzz/atproto?rev=1ad4f176292d688005c6247f1e65f2d2c1057b89#1ad4f176292d688005c6247f1e65f2d2c1057b89" }
 dependencies = [
     { name = "click" },
@@ -337,6 +337,7 @@ dependencies = [
     { name = "cachetools" },
     { name = "fastapi" },
     { name = "greenlet" },
+    { name = "http-sfv" },
     { name = "httpx" },
     { name = "logfire", extra = ["fastapi", "sqlalchemy"] },
     { name = "mutagen" },
@@ -388,6 +389,7 @@ requires-dist = [
     { name = "cachetools", specifier = ">=6.2.1" },
     { name = "fastapi", specifier = ">=0.115.0" },
     { name = "greenlet", specifier = ">=3.2.4" },
+    { name = "http-sfv", specifier = ">=0.9.9,<1" },
     { name = "httpx", specifier = ">=0.28.0" },
     { name = "logfire", extras = ["fastapi", "sqlalchemy"], specifier = ">=4.26.0" },
     { name = "mutagen", specifier = ">=1.47.0" },
@@ -1183,6 +1185,18 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/01/ee/02a2c011bdab74c6fb3c75474d40b3052059d95df7e73351460c8588d963/h11-0.16.0.tar.gz", hash = "sha256:4e35b956cf45792e4caa5885e69fba00bdbc6ffafbfa020300e549b208ee5ff1", size = 101250, upload-time = "2025-04-24T03:35:25.427Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/04/4b/29cac41a4d98d144bf5f6d33995617b185d14b22401f75ca86f384e87ff1/h11-0.16.0-py3-none-any.whl", hash = "sha256:63cf8bbe7522de3bf65932fda1d9c2772064ffb3dae62d55932da54b31cb6c86", size = 37515, upload-time = "2025-04-24T03:35:24.344Z" },
+]
+
+[[package]]
+name = "http-sfv"
+version = "0.9.9"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/57/ae/7684925d335eb4182d95b2d179c81fc05dbc89dc93e42b239c13f800525c/http_sfv-0.9.9.tar.gz", hash = "sha256:e132dc9bef990832bc01824f5fa9d4efc7d0f4271e4b227db35c8ef38540c739", size = 15973, upload-time = "2024-01-25T05:16:26.969Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/15/f7/f5adcd777e7e641c7824f4e45875a14cc7e0c6cd30b0f9db0c3698fd8e16/http_sfv-0.9.9-py3-none-any.whl", hash = "sha256:5feed51c90e9a1dc797701662d044d936923cf0027255c75452b8240e33d6c82", size = 16846, upload-time = "2024-01-25T05:16:24.072Z" },
 ]
 
 [[package]]

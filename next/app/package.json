@@ -17,13 +17,13 @@
   "dependencies": {
     "@atcute/atproto": "^4.0.4",
     "@atcute/client": "^5.1.2",
-    "@atproto/common-web": "^0.5.15",
-    "@atproto/crypto": "0.0.0-spaces-alpha-20261029171913",
-    "@atproto/lex-data": "0.0.0-spaces-alpha-20261029171913",
-    "@atproto/lex-json": "0.1.7",
+    "@atproto/common-web": "file:vendor/space-sdk/atproto-common-web-0.5.11.tgz",
+    "@atproto/crypto": "file:vendor/space-sdk/atproto-crypto-0.5.4.tgz",
+    "@atproto/lex-data": "file:vendor/space-sdk/atproto-lex-data-0.1.7.tgz",
+    "@atproto/lex-json": "file:vendor/space-sdk/atproto-lex-json-0.1.6.tgz",
     "@atproto/oauth-client-browser": "^0.5.11",
     "@atproto/oauth-client-expo": "^0.2.8",
-    "@atproto/space": "0.0.0-spaces-alpha-20261029171913",
+    "@atproto/space": "file:vendor/space-sdk/atproto-space-0.0.1.tgz",
     "@expo/metro-runtime": "~58.0.17",
     "@react-native-community/slider": "5.2.1",
     "core-js": "^3.51.0",
@@ -50,7 +50,7 @@
     "react-native-web": "^0.21.4"
   },
   "devDependencies": {
-    "@atproto/lex-cbor": "0.0.0-spaces-alpha-20261029171913",
+    "@atproto/lex-cbor": "file:vendor/space-sdk/atproto-lex-cbor-0.1.6.tgz",
     "@types/node": "^22.20.5",
     "@types/react": "~19.3.0",
     "axe-core": "^4.14.0",
@@ -59,9 +59,15 @@
   },
   "overrides": {
     "@atproto/car": "0.0.0-spaces-alpha-20261029171913",
-    "@atproto/crypto": "0.0.0-spaces-alpha-20261029171913",
-    "@atproto/lex-cbor": "0.0.0-spaces-alpha-20261029171913",
-    "@atproto/lex-data": "0.0.0-spaces-alpha-20261029171913",
-    "@atproto/syntax": "0.0.0-spaces-alpha-20261029171913"
+    "@atproto/crypto": "file:vendor/space-sdk/atproto-crypto-0.5.4.tgz",
+    "@atproto/lex-cbor": "file:vendor/space-sdk/atproto-lex-cbor-0.1.6.tgz",
+    "@atproto/lex-data": "file:vendor/space-sdk/atproto-lex-data-0.1.7.tgz",
+    "@atproto/syntax": "file:vendor/space-sdk/atproto-syntax-0.7.6.tgz",
+    "@atproto/common": "file:vendor/space-sdk/atproto-common-0.8.2.tgz",
+    "@atproto/common-web": "file:vendor/space-sdk/atproto-common-web-0.5.11.tgz",
+    "@atproto/lex-json": "file:vendor/space-sdk/atproto-lex-json-0.1.6.tgz",
+    "@atproto/lex-schema": "file:vendor/space-sdk/atproto-lex-schema-0.2.7.tgz",
+    "@atproto/space": "file:vendor/space-sdk/atproto-space-0.0.1.tgz",
+    "@atproto/star": "file:vendor/space-sdk/atproto-star-0.0.1.tgz"
   }
 }
