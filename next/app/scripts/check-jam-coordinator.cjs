@@ -38,7 +38,7 @@ async function socket(base, ticket) { const ws = new WebSocket(base.replace('htt
         const initial = { queue: [{ id: track.id, uri: track.record.uri, cid: track.record.cid, durationMs: Math.round(track.metadata.duration_seconds * 1000) }] };
         const denied = await join(a, guest, host.did, key);
         assert.equal(denied.status, 403);
-        await rpc('com.atproto.memberspace.putMember', { space, did: guest.did, read: true, write: false }, host.token);
+        await rpc('com.atproto.memberspace.putMembers', { space, members: [{ did: guest.did, read: true, write: false }] }, host.token);
         const first = await join(a, host, host.did, key, initial);
         assert.equal(first.status, 200, JSON.stringify(first));
         const h = await socket(b, first.ticket);

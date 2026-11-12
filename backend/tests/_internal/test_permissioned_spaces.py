@@ -323,8 +323,11 @@ async def test_add_and_remove_member_use_memberspace_methods(
     request.assert_awaited_with(
         session,
         "POST",
-        "com.atproto.memberspace.putMember",
-        payload={"space": space, "did": "did:plc:friend", "read": True, "write": False},
+        "com.atproto.memberspace.putMembers",
+        payload={
+            "space": space,
+            "members": [{"did": "did:plc:friend", "read": True, "write": False}],
+        },
         parse_response=False,
     )
 
@@ -337,8 +340,8 @@ async def test_add_and_remove_member_use_memberspace_methods(
     request.assert_awaited_with(
         session,
         "POST",
-        "com.atproto.memberspace.removeMember",
-        payload={"space": space, "did": "did:plc:friend"},
+        "com.atproto.memberspace.removeMembers",
+        payload={"space": space, "dids": ["did:plc:friend"]},
         parse_response=False,
     )
     # plyr forgets the credential it minted for the removed member

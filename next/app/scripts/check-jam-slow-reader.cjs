@@ -76,7 +76,7 @@ function remotePresent(pid, localPort) {
     const suffix = Date.now().toString(36), host = await account('slowhost' + suffix), guest = await account('slowguest' + suffix), key = 'slow' + suffix;
     const space = `at://${host.did}/space/fm.plyr.stg.jam/${key}`;
     await rpc('com.atproto.space.createSpace', { spaceType: 'fm.plyr.stg.jam', skey: key, policy: { $type: 'com.atproto.memberspace.policy', publicRead: false, publicWrite: false, publishPolicy: false, publishMembers: false } }, host.token);
-    await rpc('com.atproto.memberspace.putMember', { space, did: guest.did, read: true, write: false }, host.token);
+    await rpc('com.atproto.memberspace.putMembers', { space, members: [{ did: guest.did, read: true, write: false }] }, host.token);
     const hits = await (await fetch('https://api.next.plyr.fm/v1/search?q=Sounds%20of%20the%20Drone%20Mix')).json();
     const found = hits.data.find(hit => hit.type === 'track' && hit.title === 'Sounds of the Drone Mix');
     const track = await (await fetch('https://api.next.plyr.fm/v1/tracks/' + found.id)).json();

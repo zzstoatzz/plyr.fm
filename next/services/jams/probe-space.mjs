@@ -104,8 +104,8 @@ const { uri: space } = ok(await xrpc(host.pds, 'com.atproto.space.createSpace', 
 
 try {
   assert.equal((await credential(guest, space)).issued.ok, false, 'outsider cannot mint a credential');
-  ok(await xrpc(host.pds, 'com.atproto.memberspace.putMember', {
-    token: host.token, body: { space, did: guest.did, read: true, write: true },
+  ok(await xrpc(host.pds, 'com.atproto.memberspace.putMembers', {
+    token: host.token, body: { space, members: [{ did: guest.did, read: true, write: true }] },
   }), 'add guest');
 
   const guestCredential = await credential(guest, space);
@@ -146,8 +146,8 @@ try {
   assert.equal(applyRoomCommand(paused.state, input).outcome, 'conflict');
   ok(await put(host, space, stateCollection, 'self', paused.state), 'commit room response');
   assert.equal((await readVerified(guestCredential, space, host, stateCollection, 'self')).playing, false);
-  ok(await xrpc(host.pds, 'com.atproto.memberspace.removeMember', {
-    token: host.token, body: { space, did: guest.did },
+  ok(await xrpc(host.pds, 'com.atproto.memberspace.removeMembers', {
+    token: host.token, body: { space, dids: [guest.did] },
   }), 'remove guest');
   assert.equal((await credential(guest, space)).issued.ok, false, 'removed member cannot renew credential');
   console.log(`Cross-PDS room: writer discovered within ${discoveryMs} ms after putRecord, MACs and value CIDs verified, host state updated, outsider and removed member denied new credentials.`);
