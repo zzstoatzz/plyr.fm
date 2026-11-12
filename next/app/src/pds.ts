@@ -12,7 +12,7 @@ import { normalizeTrackTags } from './publishing/track-tags';
 import { TID } from '@atproto/common-web';
 import { createStorage } from './publishing/create-storage';
 import { recordCreator, CreateUnconfirmed } from './publishing/create-record';
-import type { CreateOperation, CreateReservation } from './publishing/create-operation';
+import { sameRecord, type CreateOperation, type CreateReservation } from './publishing/create-operation';
 import { albumPublishing } from './collections/album-pds';
 import { collectionOrdering } from './collections/collection-order-pds';
 import { MAX_AUDIO_BYTES } from './publishing/track-audio';
@@ -322,6 +322,14 @@ export function createPds(auth: Pick<Auth, 'did' | 'rpc'>) {
 		if (input.file.size > MAX_AUDIO_BYTES) throw new Error('audio files are limited to 100 MB');
 		const uploaded = await uploadBlob(rpc, input.file);
 		assertAccount();
+		const record = await prepareTrackRecord(input);
+		assertAccount();
+		return publishCreate(reservation, { ...record, audioBlob: uploaded.blob });
+	}
+
+	async function prepareTrackRecord(input: NewTrack) {
+		assertSession();
+		const tags = input.tags === undefined ? undefined : normalizeTrackTags(input.tags);
 		const ext = input.file.name.includes('.') ? input.file.name.split('.').pop()!.toLowerCase() : '';
 		const record: Record<string, unknown> = {
 			$type: NSID.track,
@@ -335,9 +343,40 @@ export function createPds(auth: Pick<Auth, 'did' | 'rpc'>) {
 		if (input.description?.trim()) record.description = input.description.trim();
 		if (input.duration && Number.isFinite(input.duration)) record.duration = Math.round(input.duration);
 		if (input.artwork) Object.assign(record, await uploadArtwork(input.artwork));
-		assertAccount();
+		assertSession();
 
-		return publishCreate(reservation, { ...record, audioBlob: uploaded.blob });
+		return record;
+	}
+
+	function uploadedIntent(operation: CreateOperation, audioUrl: string) {
+		assertSession();
+		if (operation.owner !== session().did || operation.collection !== NSID.track) throw new Error('not your upload reservation.');
+		const url = new URL(audioUrl);
+		if (url.protocol !== 'https:' || url.username || url.password) throw new Error('invalid uploaded audio address.');
+		if (operation.uri !== `at://${operation.owner}/${operation.collection}/${operation.rkey}`) throw new Error('invalid upload reservation.');
+		for (const field of ['audioBlob', 'audioSpace', 'audioFileId', 'supportGate', 'audioPayload', 'privateAudio', 'originalAudioBlob']) {
+			if (operation.record[field] != null) throw new Error('large uploads support public, open audio only.');
+		}
+		return { ...operation, record: { ...operation.record, audioUrl, downloadPolicy: 'open' } };
+	}
+
+	async function archiveUploadedTrack(operation: CreateOperation, audioUrl: string) {
+		const ready = uploadedIntent(operation, audioUrl);
+		await createStorage.put(ready);
+		assertSession();
+		await createStorage.archive(ready, true);
+	}
+
+	async function uploadedTrack(operation: CreateOperation, audioUrl: string, publish = false) {
+		const ready = uploadedIntent(operation, audioUrl);
+		const creator = recordCreator(session().rpc, createStorage, assertSession);
+		if (!publish) return creator.check(ready);
+		const previous = (await pendingCreates('track')).find(item => item.rkey === operation.rkey);
+		assertSession();
+		if (previous && !sameRecord(previous.record, ready.record)) throw new Error('publication differs from the saved creation attempt.');
+		if (previous) return creator.retry(previous);
+		const found = await creator.check(ready);
+		return found.state === 'missing' ? creator.create(ready) : found;
 	}
 
 	// the plyr profile is one fm.plyr.*.actor.profile/self record. unknown fields
@@ -412,5 +451,5 @@ export function createPds(auth: Pick<Auth, 'did' | 'rpc'>) {
 			}),
 		});
 	}
-	return { albumOrganization, collectionOrder, myLikes, like, unlike, createPlaylist, addToPlaylist, removeFromPlaylist, renameCollection, deletePlaylist, uploadTrack, myProfile, saveProfile, myTrack, editTrack, deleteTrack, reserveCreate, pendingCreates, recoverCreate, dismissCreate, archiveCreate };
+	return { albumOrganization, collectionOrder, myLikes, like, unlike, createPlaylist, addToPlaylist, removeFromPlaylist, renameCollection, deletePlaylist, uploadTrack, myProfile, saveProfile, myTrack, editTrack, deleteTrack, reserveCreate, pendingCreates, recoverCreate, dismissCreate, archiveCreate, prepareTrackRecord, uploadedTrack, archiveUploadedTrack };
 }

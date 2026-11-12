@@ -37,6 +37,17 @@ export const JAM_COORDINATOR_URL = (process.env.EXPO_PUBLIC_JAM_COORDINATOR_URL 
 export const JAM_SERVICE_AUDIENCE = process.env.EXPO_PUBLIC_JAM_SERVICE_AUDIENCE || 'did:web:plyr-jams-next.fly.dev#jams';
 export const JAM_JOIN_METHOD = process.env.EXPO_PUBLIC_JAM_JOIN_METHOD || `${JAM_SPACE.type}.join`;
 
+export const UPLOAD_AUTHORIZE_METHOD = process.env.EXPO_PUBLIC_UPLOAD_AUTHORIZE_METHOD || `${prefix}.upload.authorize`;
+export const UPLOAD_SERVICE_AUDIENCE = process.env.EXPO_PUBLIC_UPLOAD_SERVICE_AUDIENCE || JAM_SERVICE_AUDIENCE;
+export const UPLOAD_COORDINATOR_URL = (process.env.EXPO_PUBLIC_UPLOAD_COORDINATOR_URL || JAM_COORDINATOR_URL).replace(/\/$/, '');
+export const UPLOAD_SCOPE = `rpc:${UPLOAD_AUTHORIZE_METHOD}?aud=${UPLOAD_SERVICE_AUDIENCE}`;
+export function hasUploadGrant(scope: string): boolean {
+  return scope.split(' ').some(value => {
+    const [type, query] = value.split('?');
+    return type === `rpc:${UPLOAD_AUTHORIZE_METHOD}` && new URLSearchParams(query).get('aud') === UPLOAD_SERVICE_AUDIENCE;
+  });
+}
+
 export const SYNC_SCOPE = `rpc:${JAM_JOIN_METHOD}?aud=${JAM_SERVICE_AUDIENCE}`;
 export const JAM_SCOPE_PARTS = [
 	`space:${JAM_SPACE.type}?authority=self&collection=${JAM_SPACE.collection}&action=create&action=update&manage=create&manage=update`,
@@ -62,5 +73,5 @@ export const BASE_SCOPE_PARTS = ['atproto', ...Object.values(NSID).map(nsid => `
 const protectedAudioScope = prefix === 'fm.plyr'
 	? [`space:${prefix}.privateMedia?authority=*&collection=${NSID.track}&action=read`, `space:${process.env.EXPO_PUBLIC_AUDIO_SPACE_TYPE || 'fm.plyr.stg.audio'}?authority=*&collection=${NSID.track}&action=read`]
 	: [];
-export const SYNC_SCOPE_PARTS = [...BASE_SCOPE_PARTS, SYNC_SCOPE];
+export const SYNC_SCOPE_PARTS = [...BASE_SCOPE_PARTS, SYNC_SCOPE, UPLOAD_SCOPE];
 export const SCOPE_PARTS = [...SYNC_SCOPE_PARTS, ...protectedAudioScope, ...JAM_SCOPE_PARTS, PRIVATE_PUBLISH_SCOPE, PRIVATE_DELETE_SCOPE];
