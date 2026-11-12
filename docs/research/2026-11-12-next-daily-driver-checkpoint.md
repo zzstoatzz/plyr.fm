@@ -6,6 +6,13 @@ finish line. This is execution evidence, not another parity inventory.
 
 ## shipped to Next
 
+- #2512: current Spaces responses use `accept-signature`, signed record/commit
+  headers and key-share-bound verification, with no legacy proof fallback.
+  Python and the vendored SDK verify canonical bytes and CID bindings; the SDK
+  crypto path also passed on native Hermes. Next web `43224000461`, staging
+  `43224000377` and deployed private-media E2E `43224000344` all succeeded at
+  `0580d72c`. The fixture checks do not establish real-account Next OAuth or new
+  permission consent. Production was not promoted.
 - #2515: owners can reorder playlist occurrences with explicit Save/Cancel.
   Canonical snapshots and compare-and-swap preserve duplicate references,
   unavailable entries and unknown fields; ambiguous responses reconcile the
@@ -26,7 +33,7 @@ finish line. This is execution evidence, not another parity inventory.
   E2E `43219110198` passed. The latter verified outsider refusal, an owner grant,
   member audio 206, removal returning to 404, fresh-session private playback and
   private voice recording, with disposable tracks deleted afterward. No production
-  release was made. Signed response verification upgrades remain a separate slice.
+  release was made. Signed response verification subsequently shipped in #2512.
 - #2510: an owner can explicitly set aside an uncertain or permanently rejected
   create, with a warning that it may still appear. Its exact intent remains in
   earlier attempts for checking or resuming. Resolving an earlier attempt

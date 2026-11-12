@@ -4,6 +4,11 @@ Start here for the next agent: [November 12 daily-driver checkpoint](docs/resear
 
 ## Next daily-driver work (2026-11-12)
 
+#2512 verifies current Spaces response signatures and canonical record/commit
+bindings in the legacy backend and Next client. Next web, staging and deployed
+private-media E2E passed at `0580d72c`; native Hermes verified the SDK crypto path.
+This restores protocol compatibility, not real-account Next OAuth acceptance.
+
 #2515 ships canonical playlist reordering to Next. Accepted order drives playback
 through appview delay and retained-screen saves; eight deployed browser cases and
 actual iOS simulator move/save/playback passed. Album creation remains open.
