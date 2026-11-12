@@ -124,6 +124,8 @@ receipt remains as bounded test metadata, without active quota or alarms; this
 is not full resource erasure. Failed activation can retain a 4044-byte recovery
 reservation. Diagnose that failure before another run rather than exhausting
 the account's two-session quota. The fixture has no production target option.
+It uses app-password service authentication; real browser/native OAuth consent
+for the new upload permission remains a separate acceptance requirement.
 
 R2 API constraints: uniform nonfinal parts of at least 5 MiB, completed uploads
 can disappear from the multipart API after success, and incomplete uploads
