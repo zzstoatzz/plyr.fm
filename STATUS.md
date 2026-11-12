@@ -21,7 +21,9 @@ Native touch/VoiceOver and real-account Next OAuth limits remain explicit.
 unsupported redirect mode. Deployed acceptance verified the actual client
 decoder, signed activation, bytes and exact fixture cleanup. #2530/#2532 add
 browser attachment delivery and expose its header through CORS. #2531 adds a
-cloud-only 1.5 GiB acceptance fixture; its first full-size run is pending.
+cloud-only 1.5 GiB acceptance fixture; its first full-size run failed with a part
+409 and cancellation 409. Capacity acceptance remains open, with possible retained
+quota under investigation; no fresh retry is authorized by that failure.
 
 #2529 projects verified download preferences; historical reconciliation is
 still running. #2526 adds a disabled processing executor, not an enabled upload

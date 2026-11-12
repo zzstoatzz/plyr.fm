@@ -29,9 +29,12 @@ finish line. This is execution evidence, not another parity inventory.
 - #2531 at `61897fea` adds cloud-only full-size acceptance using the actual
   client transport, bounded generated WAV chunks, a deliberately lost part
   acknowledgement, resume and streamed download SHA-256 verification. The single
-  1.5 GiB run `43241857625` is pending. No full-size success or throughput claim
-  follows from its local tests. Exact record/object cleanup remains mandatory;
-  a completed failure may retain quota and must not trigger another fresh run.
+  1.5 GiB run `43241857625` failed with a part 409 and cancellation 409, before
+  completion/publication. Exact record/object cleanup ran, but upload cancellation
+  failed and the artifact reports possible retained 1,610,612,736-byte quota.
+  The error body was masked by the fixture's allowlist, so the cause remains
+  unclassified pending exact-reservation read-only diagnosis. No full-size success
+  or throughput claim follows; do not create a fresh retry or reset durable state.
 - #2525: owners can delete private tracks with explicit confirmation that the
   current record, including changes made elsewhere, will be removed. Missing
   grants and incompatible policies prevent writes; unresolved creation blocks
@@ -238,7 +241,9 @@ Private creation and public audio replacement share that cap. #2507/#2517 now
 provide public/open service-owned multipart staging with client canonical writes;
 small deployed acceptance passes after #2528. The earlier failed fixture
 `43230541415` completed exact record/object cleanup but may retain one 4,044-byte
-recovery reservation. Full-size run `43241857625` remains pending. Large and
+recovery reservation. Full-size run `43241857625` failed before completion with
+part/cancellation conflicts and possible retained quota; capacity acceptance
+remains open. Large and
 protected replacements, enabled transcoding, access/download-policy management,
 historical download-policy backfill and download-client acceptance remain open.
 Private metadata editing also
