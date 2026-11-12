@@ -157,13 +157,17 @@ export async function main({ deleteObject = deleteFixtureObject } = {}) {
     uploadStatus(activated, operation);
     const read = await request(audioUrl);
     assert.equal(read.status, 200); assert.equal(read.headers.get('x-content-type-options'), 'nosniff');
+    assert.equal(read.headers.get('content-disposition'), null);
     assert.deepEqual(Buffer.from(await read.arrayBuffer()), bytes);
-    const head = await request(audioUrl, { method: 'HEAD' });
+    const downloadUrl = `${audioUrl}?download=1`;
+    const head = await request(downloadUrl, { method: 'HEAD' });
     assert.equal(head.status, 200); assert.equal(head.headers.get('content-length'), String(bytes.length));
-    const range = await request(audioUrl, { headers: { range: 'bytes=0-43' } });
+    assert.equal(head.headers.get('content-disposition'), 'attachment; filename="audio.wav"');
+    const range = await request(downloadUrl, { headers: { range: 'bytes=0-43' } });
     assert.equal(range.status, 206); assert.equal(range.headers.get('content-range'), `bytes 0-43/${bytes.length}`);
+    assert.equal(range.headers.get('content-disposition'), 'attachment; filename="audio.wav"');
     assert.deepEqual(Buffer.from(await range.arrayBuffer()), bytes.subarray(0, 44));
-    console.log('deployed admission, private staging, signed activation, bytes, HEAD and range passed');
+    console.log('deployed admission, private staging, signed activation, bytes, attachment HEAD and range passed');
   } catch (error) { failure = error; }
   finally {
     const cleanup = [];
