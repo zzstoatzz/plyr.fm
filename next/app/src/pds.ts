@@ -12,7 +12,8 @@ import { TID } from '@atproto/common-web';
 import { createStorage } from './publishing/create-storage';
 import { recordCreator, CreateUnconfirmed } from './publishing/create-record';
 import type { CreateOperation, CreateReservation } from './publishing/create-operation';
-import { playlistOrdering } from './collections/playlist-order-pds';
+import { albumPublishing } from './collections/album-pds';
+import { collectionOrdering } from './collections/collection-order-pds';
 
 
 export interface MediaFile {
@@ -96,10 +97,10 @@ export function createPds(auth: Pick<Auth, 'did' | 'rpc'>) {
 		const { did, rpc } = session();
 		if (getAuth().did !== did || getAuth().rpc !== rpc) throw new Error('account changed before publishing.');
 	}
-	function pendingCreates(kind: 'track' | 'playlist') {
+	function pendingCreates(kind: 'track' | 'playlist' | 'album') {
 		return createStorage.load(session().did, kind === 'track' ? NSID.track : NSID.list);
 	}
-	async function reserveCreate(kind: 'track' | 'playlist'): Promise<CreateReservation> {
+	async function reserveCreate(kind: 'track' | 'playlist' | 'album'): Promise<CreateReservation> {
 		assertSession();
 		if ((await pendingCreates(kind)).some(operation => !operation.archived)) throw new CreateUnconfirmed();
 		assertSession();
@@ -477,8 +478,15 @@ export function createPds(auth: Pick<Auth, 'did' | 'rpc'>) {
 		);
 		return await settle(uri);
 	}
-	function playlistOrder() {
-		return playlistOrdering({ ...session(), collection: LIST(), assertSession, settle });
+	function collectionOrder(kind: 'album' | 'playlist' = 'playlist') {
+		return collectionOrdering({ ...session(), collection: LIST(), kind, assertSession, settle });
 	}
-	return { playlistOrder, myLikes, like, unlike, createPlaylist, addToPlaylist, removeFromPlaylist, renameCollection, deletePlaylist, uploadTrack, myProfile, saveProfile, myTrack, editTrack, deleteTrack, reserveCreate, pendingCreates, recoverCreate, dismissCreate, archiveCreate };
+	function albumOrganization() {
+		return albumPublishing({ ...session(), trackCollection: NSID.track as Nsid, assertSession, ordering: collectionOrder('album'),
+			publish: async (name, items) => publishCreate(await reserveCreate('album'), {
+				$type: NSID.list, name, listType: 'album', items, createdAt: new Date().toISOString(),
+			}),
+		});
+	}
+	return { albumOrganization, collectionOrder, myLikes, like, unlike, createPlaylist, addToPlaylist, removeFromPlaylist, renameCollection, deletePlaylist, uploadTrack, myProfile, saveProfile, myTrack, editTrack, deleteTrack, reserveCreate, pendingCreates, recoverCreate, dismissCreate, archiveCreate };
 }

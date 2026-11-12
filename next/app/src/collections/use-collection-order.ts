@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import type { ListDetail } from '../api';
+import type { ListDetail, Track } from '../api';
 import { useAuth } from '../auth';
 import { createPds } from '../pds';
-import type { PlaylistRevision } from './playlist-order';
+import type { CollectionRevision } from './collection-order';
 
-export function usePlaylistOrder(indexed: ListDetail | undefined) {
+export function useCollectionOrder(indexed: ListDetail | undefined) {
   const { did, rpc } = useAuth();
-  const ordering = useMemo(() => did && rpc ? createPds({ did, rpc }).playlistOrder() : undefined, [did, rpc]);
-  const [pending, setPending] = useState<{ revision: PlaylistRevision; baseline?: string; rpc: typeof rpc }>();
+  const ordering = useMemo(() => did && rpc ? createPds({ did, rpc }).collectionOrder(indexed?.object ?? 'playlist') : undefined, [did, rpc, indexed?.object]);
+  const [pending, setPending] = useState<{ revision: CollectionRevision; baseline?: string; tracks: Track[]; rpc: typeof rpc }>();
   const revision = pending?.rpc === rpc && pending.revision.uri === indexed?.record.uri ? pending.revision : undefined;
   useEffect(() => {
     if (!revision || !indexed) return;
@@ -21,11 +21,11 @@ export function usePlaylistOrder(indexed: ListDetail | undefined) {
     }
     return () => { current = false; };
   }, [indexed, pending, revision, ordering, did]);
-  const saved = useCallback((revision: PlaylistRevision) => {
-    setPending({ revision, baseline: indexed?.record.cid, rpc });
+  const saved = useCallback((revision: CollectionRevision, tracks: Track[] = []) => {
+    setPending({ revision, baseline: indexed?.record.cid, tracks, rpc });
   }, [indexed?.record.cid, rpc]);
   const list = indexed && revision ? { ...indexed, members: revision.value.items.map((item, position): ListDetail['members'][number] => {
-    const track = indexed.members.find(member => member.subject.uri === item.subject.uri)?.track ?? null;
+    const track = indexed.members.find(member => member.subject.uri === item.subject.uri)?.track ?? pending?.tracks.find(track => track.record.uri === item.subject.uri) ?? null;
     return { position, subject: item.subject, track, availability: track ? 'available' : 'unavailable' };
   }), metrics: { ...indexed.metrics, member_count: revision.value.items.length } } : indexed;
   return { list, saved };

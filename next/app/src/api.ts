@@ -230,3 +230,5 @@ function opaqueId(prefix: string, uri: string): string {
 /** /v1 ids are a type prefix + base64url(at-uri), reversible by design. */
 export const trackIdFromUri = (uri: string) => opaqueId('trk_', uri);
 export const playlistIdFromUri = (uri: string) => opaqueId('pls_', uri);
+
+export const albumIdFromUri = (uri: string) => opaqueId('alb_', uri);

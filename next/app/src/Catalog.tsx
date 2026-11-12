@@ -23,7 +23,7 @@ import { ShareLink } from './ShareLink';
 import { TrackMenu } from './TrackMenu';
 import { usePlayCount } from './use-play-count';
 import { CollectionActions, Library } from './AccountCatalog';
-import { usePlaylistOrder } from './collections/use-playlist-order';
+import { useCollectionOrder } from './collections/use-collection-order';
 
 const loadPlaylists = (cursor?: string) => api.playlists({ limit: 30, cursor });
 
@@ -63,7 +63,7 @@ function TrackDetail({ id, onPlay, onEnqueue, trackActions }: {
 function Collection({ id, album, onPlay }: { id: string; album: boolean; onPlay: Play }) {
   const load = useCallback(() => album ? api.album(id) : api.playlist(id), [id, album]);
   const result = useResource(load, 0, true);
-  const { list, saved } = usePlaylistOrder(result.data);
+  const { list, saved } = useCollectionOrder(result.data);
   const focus = useRef({ visited: false, retry: result.retry });
   focus.current.retry = result.retry;
   useFocusEffect(useCallback(() => {
