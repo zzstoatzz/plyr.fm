@@ -6,6 +6,32 @@ finish line. This is execution evidence, not another parity inventory.
 
 ## shipped to Next
 
+- #2517: the public/open large-upload client ships at `48f2bd50`. Existing
+  service-owned multipart bytes retain client-owned canonical publication and
+  exact-key recovery. Manual deployed acceptance `43237788036` passed the actual
+  client status decoder, signed activation, GET/HEAD/Range and exact record/object
+  cleanup; four deployed browser cases passed. This small fixture does not prove
+  full-size throughput, real-account OAuth consent or native distribution.
+- #2528 fixed the activation 503: Workers rejects `redirect: "error"` before
+  making a request. Manual redirect handling now rejects non-success responses
+  without forwarding credentials. #2530 at `0187aa0d` adds `?download=1` attachment
+  responses on published media. Deployed fixture `43238924547` verified plain
+  playback bytes, attachment HEAD/206 Range and exact cleanup. #2532 at `1880d6aa`
+  exposes `Content-Disposition` through CORS; deployment `43240468687` and a
+  read-only cross-origin missing-object HEAD verified the live header policy.
+- #2529 at `de99e71f` projects verified track download preferences without
+  treating a public playback URL as download authorization. Historical catalog
+  reconciliation `43239042552` is still running; complete backfill and the
+  dependent download client are not yet accepted.
+- #2526 at `555c6adf` adds the staged processing executor with execution disabled.
+  It is a prerequisite, not an enabled end-to-end upload/transcode path; durable
+  ownership, integration and deployed processing acceptance remain open.
+- #2531 at `61897fea` adds cloud-only full-size acceptance using the actual
+  client transport, bounded generated WAV chunks, a deliberately lost part
+  acknowledgement, resume and streamed download SHA-256 verification. The single
+  1.5 GiB run `43241857625` is pending. No full-size success or throughput claim
+  follows from its local tests. Exact record/object cleanup remains mandatory;
+  a completed failure may retain quota and must not trigger another fresh run.
 - #2525: owners can delete private tracks with explicit confirmation that the
   current record, including changes made elsewhere, will be removed. Missing
   grants and incompatible policies prevent writes; unresolved creation blocks
@@ -163,8 +189,9 @@ These changes passed their scoped local checks, review, CI and Next deployment
 checks. UI matrices covered phone/desktop, light/dark and enlarged text. Signed-in
 browser checks used mounted components with fixture identities and mocked PDS
 boundaries; they do not establish real OAuth or authorize user-record writes.
-Production was not promoted. No user records or moderation labels were written
-to establish this evidence.
+Production was not promoted. Live upload acceptance uses the existing disposable
+integration account with exact fixture record/object cleanup; no real-user
+records or moderation labels were written to establish this evidence.
 
 ## profile links and account labels
 
@@ -207,15 +234,15 @@ authenticated native Jam/remote-output transitions still need device acceptance.
 Publishing remains a substantial gap: production supports 1.5 GiB uploads,
 staging/transcoding, protected audio and explicit storage fallback consent.
 Next's public blob path is capped at 100 MiB by the published blob contract.
-Private creation and public audio replacement share that cap. #2507 implements
-service-owned multipart staging while clients retain canonical writes, but
-deployed fixture `43230541415` failed activation with HTTP 503 after successful
-admission, receipts, finish, prepublication denial and record creation. Exact
-record/object cleanup passed; one 4,044-byte recovery reservation may remain.
-The large-upload client stays held until actual activation succeeds. Large and
-protected replacements, transcoding and access/download-policy management remain
-open. Private metadata editing also requires conditional-write support absent
-from the current Spaces API; a preliminary read is not an atomic revision check.
+Private creation and public audio replacement share that cap. #2507/#2517 now
+provide public/open service-owned multipart staging with client canonical writes;
+small deployed acceptance passes after #2528. The earlier failed fixture
+`43230541415` completed exact record/object cleanup but may retain one 4,044-byte
+recovery reservation. Full-size run `43241857625` remains pending. Large and
+protected replacements, enabled transcoding, historical download-policy backfill
+and download-client acceptance remain open. Private metadata editing also
+requires conditional-write support absent from the current Spaces API; a
+preliminary read is not an atomic revision check.
 
 Backend measurements belong in [perf.md](../../next/backend/docs/perf.md), with
 dataset, cache state and limits. A workstation median is not a production SLO.
