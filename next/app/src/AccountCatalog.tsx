@@ -19,6 +19,7 @@ import {
 import { Action, Field, InlineLink } from './controls';
 import { Sheet } from './Sheet';
 import { createPds } from './pds';
+import { CreateRecovery, useCreateRecovery } from './publishing/CreateRecovery';
 
 function usePds() {
   const { did, rpc } = useAuth();
@@ -57,18 +58,22 @@ function NameInput({ value, onChange, label }: { value: string; onChange: (value
 }
 
 export function Library({ likesOnly, onPlay }: { likesOnly: boolean; onPlay: Play }) {
-  const { ready, did } = useAuth();
+  const { ready, did, rpc } = useAuth();
+  const [session, setSession] = useState({ rpc, version: 0 });
+  if (session.rpc !== rpc) setSession({ rpc, version: session.version + 1 });
   if (!ready) return <Status loading />;
   if (!did) return <>
     {likesOnly && <Heading main>liked tracks</Heading>}
     <Detail>sign in to see your liked tracks and playlists.</Detail>
     <View style={styles.actions}><Action primary label="Sign in" href="/login" /></View>
   </>;
-  return <AccountLibrary key={did} did={did} likesOnly={likesOnly} onPlay={onPlay} />;
+  return <AccountLibrary key={`${did}:${session.version}`} did={did} likesOnly={likesOnly} onPlay={onPlay} />;
 }
 
 function AccountLibrary({ did, likesOnly, onPlay }: { did: string; likesOnly: boolean; onPlay: Play }) {
+  const auth = useAuth();
   const pds = usePds();
+  const recovery = useCreateRecovery(auth, 'playlist');
   const router = useRouter();
   const [name, setName] = useState('');
   const [creating, setCreating] = useState(false);
@@ -94,12 +99,16 @@ function AccountLibrary({ did, likesOnly, onPlay }: { did: string; likesOnly: bo
   }, [reloadLikes, reloadLists]));
   function create() {
     void mutation.run(async () => {
-      const { uri, status } = await pds.createPlaylist(name);
-      setCreating(false);
-      setCreated(uri);
-      setName('');
-      if (status === 'indexed' && focus.current.active && getAuth().did === did) router.push({ pathname: '/playlist/[id]', params: { id: playlistIdFromUri(uri) } });
-      return messageFor(status, 'playlist created.');
+      try {
+        const { uri, status } = await pds.createPlaylist(name);
+        if (getAuth().rpc !== auth.rpc) return '';
+        setCreating(false); setCreated(uri); setName('');
+        if (status === 'indexed' && focus.current.active) router.push({ pathname: '/playlist/[id]', params: { id: playlistIdFromUri(uri) } });
+        return messageFor(status, 'playlist created.');
+      } finally {
+        const pending = await recovery.refresh();
+        if (pending.length && getAuth().rpc === auth.rpc) setCreating(false);
+      }
     });
   }
   const likedTracks = <>
@@ -110,10 +119,11 @@ function AccountLibrary({ did, likesOnly, onPlay }: { did: string; likesOnly: bo
   if (likesOnly) return <><Heading main>liked tracks</Heading>{likedTracks}</>;
   return <>
     <View style={styles.actions}>
-      <Action primary icon={ListPlus} label="New playlist" onPress={() => { mutation.clear(); setCreating(true); }} />
+      <Action primary icon={ListPlus} label="New playlist" disabled={recovery.loading || !!recovery.error || !!recovery.operations.length} onPress={() => { mutation.clear(); setCreating(true); }} />
       <Action label="Browse playlists" href="/playlists" />
     </View>
-    {!creating && <>
+    <CreateRecovery auth={auth} recovery={recovery} kind="playlist" onDismiss={() => { setCreated(undefined); mutation.clear(); }} />
+    {!creating && !recovery.operations.length && <>
       <Status empty={mutation.message} />
       {created && <InlineLink standalone href={{ pathname: '/playlist/[id]', params: { id: playlistIdFromUri(created) } }}>open created playlist</InlineLink>}
     </>}

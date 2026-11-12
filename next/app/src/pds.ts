@@ -8,6 +8,10 @@ import { NSID } from './config';
 import { blobUrl } from './identity';
 import { catalogChanged } from './catalog-changes';
 import { normalizeTrackTags } from './publishing/track-tags';
+import { TID } from '@atproto/common-web';
+import { createStorage } from './publishing/create-storage';
+import { recordCreator, CreateUnconfirmed } from './publishing/create-record';
+import type { CreateOperation, CreateReservation } from './publishing/create-operation';
 
 
 export interface MediaFile {
@@ -85,6 +89,39 @@ export function createPds(auth: Pick<Auth, 'did' | 'rpc'>) {
 	function session() {
 		if (!auth.rpc || !auth.did) throw new Error('sign in first');
 		return { rpc: auth.rpc, did: auth.did as `did:${string}:${string}` };
+	}
+
+	function assertSession() {
+		const { did, rpc } = session();
+		if (getAuth().did !== did || getAuth().rpc !== rpc) throw new Error('account changed before publishing.');
+	}
+	function pendingCreates(kind: 'track' | 'playlist') {
+		return createStorage.load(session().did, kind === 'track' ? NSID.track : NSID.list);
+	}
+	async function reserveCreate(kind: 'track' | 'playlist'): Promise<CreateReservation> {
+		assertSession();
+		if ((await pendingCreates(kind)).length) throw new CreateUnconfirmed();
+		assertSession();
+		const owner = session().did, collection = kind === 'track' ? NSID.track : NSID.list, rkey = TID.nextStr();
+		return { owner, collection, rkey, uri: `at://${owner}/${collection}/${rkey}` };
+	}
+	async function recoverCreate(operation: CreateOperation, retry = false) {
+		assertSession();
+		if (operation.owner !== session().did || (operation.collection !== NSID.track && operation.collection !== NSID.list)) throw new Error('not your pending creation');
+		const creator = recordCreator(session().rpc, createStorage, assertSession);
+		const result = await (retry ? creator.retry(operation) : creator.check(operation));
+		return result.state === 'accepted' ? { ...result, status: await settle(result.uri, result.cid) } : result;
+	}
+	async function dismissCreate(operation: CreateOperation, keepExisting = false) {
+		assertSession();
+		const result = await recoverCreate(operation);
+		if (result.state !== 'accepted' && !(keepExisting && result.state === 'different')) throw new CreateUnconfirmed();
+		await createStorage.delete(operation);
+	}
+	async function publishCreate(reservation: CreateReservation, record: Record<string, unknown>) {
+		const result = await recordCreator(session().rpc, createStorage, assertSession).create({ ...reservation, record });
+		if (result.state !== 'accepted') throw new CreateUnconfirmed();
+		return { uri: result.uri, status: await settle(result.uri, result.cid) };
 	}
 
 	/**
@@ -226,18 +263,9 @@ export function createPds(auth: Pick<Auth, 'did' | 'rpc'>) {
 	}
 
 	async function createPlaylist(name: string, first?: Track): Promise<{ uri: string; status: AwaitStatus }> {
-		const { rpc, did } = session();
+		const reservation = await reserveCreate('playlist');
 		const items = first?.record.cid ? [{ subject: { uri: first.record.uri, cid: first.record.cid } }] : [];
-		const res = await ok(
-			rpc.post('com.atproto.repo.createRecord', {
-				input: {
-					repo: did,
-					collection: LIST(),
-					record: { $type: NSID.list, name: name.trim().slice(0, 64), listType: 'playlist', items, createdAt: new Date().toISOString() }
-				}
-			})
-		);
-		return { uri: res.uri, status: await settle(res.uri, res.cid) };
+		return publishCreate(reservation, { $type: NSID.list, name: name.trim().slice(0, 64), listType: 'playlist', items, createdAt: new Date().toISOString() });
 	}
 
 	async function addToPlaylist(playlistUri: string, track: Track): Promise<AwaitStatus> {
@@ -277,9 +305,11 @@ export function createPds(auth: Pick<Auth, 'did' | 'rpc'>) {
 
 
 
-	async function uploadTrack(input: NewTrack): Promise<{ uri: string; status: AwaitStatus }> {
+	async function uploadTrack(input: NewTrack, reserved?: CreateReservation): Promise<{ uri: string; status: AwaitStatus }> {
 		const { rpc, did } = session();
 		const tags = input.tags === undefined ? undefined : normalizeTrackTags(input.tags);
+		const reservation = reserved ?? await reserveCreate('track');
+		if (reservation.owner !== did || reservation.collection !== NSID.track || reservation.uri !== `at://${did}/${NSID.track}/${reservation.rkey}`) throw new Error('not your upload reservation');
 		function assertAccount() {
 			if (getAuth().rpc !== rpc || getAuth().did !== did) throw new Error('account changed before publishing.');
 		}
@@ -303,10 +333,7 @@ export function createPds(auth: Pick<Auth, 'did' | 'rpc'>) {
 		if (input.artwork) Object.assign(record, await uploadArtwork(input.artwork));
 		assertAccount();
 
-		const res = await ok(rpc.post('com.atproto.repo.createRecord', {
-			input: { repo: did, collection: NSID.track as Nsid, record: { ...record, audioBlob: uploaded.blob } }
-		}));
-		return { uri: res.uri, status: await settle(res.uri, res.cid) };
+		return publishCreate(reservation, { ...record, audioBlob: uploaded.blob });
 	}
 
 	// the plyr profile is one fm.plyr.*.actor.profile/self record. unknown fields
@@ -440,5 +467,5 @@ export function createPds(auth: Pick<Auth, 'did' | 'rpc'>) {
 		);
 		return await settle(uri);
 	}
-	return { myLikes, like, unlike, createPlaylist, addToPlaylist, removeFromPlaylist, renameCollection, deletePlaylist, uploadTrack, myProfile, saveProfile, myTrack, editTrack, deleteTrack };
+	return { myLikes, like, unlike, createPlaylist, addToPlaylist, removeFromPlaylist, renameCollection, deletePlaylist, uploadTrack, myProfile, saveProfile, myTrack, editTrack, deleteTrack, reserveCreate, pendingCreates, recoverCreate, dismissCreate };
 }

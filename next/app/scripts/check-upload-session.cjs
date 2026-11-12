@@ -30,9 +30,13 @@ async function run(browser, width, theme) {
       const timeout = setTimeout(() => reject(new Error('upload did not reach the held PDS request')), 30_000);
       entered = () => { clearTimeout(timeout); resolve(); };
     });
-    const writes = [];
+    const writes = [], records = new Map();
     await page.exposeFunction('__uploadPds', async (url, body) => {
       if (url.includes('listRecords')) return { status: 200, body: { records: [] } };
+      if (url.includes('getRecord')) {
+        const record = records.get(new URL(url, 'https://fixture.invalid').searchParams.get('rkey'));
+        return record ? { status: 200, body: record } : { status: 404, body: { error: 'RecordNotFound' } };
+      }
       if (url.includes('uploadBlob')) {
         if (holdBlob) await new Promise(resolve => { release = resolve; entered(); });
         if (reject) return { status: 503, body: { error: 'Unavailable', message: 'fixture upload unavailable' } };
@@ -41,8 +45,10 @@ async function run(browser, width, theme) {
       assert.ok(url.includes('createRecord'), `unexpected PDS operation: ${url}`);
       const input = JSON.parse(body);
       writes.push(input);
+      const result = { uri: `at://${input.repo}/fm.plyr.track/${input.rkey}`, cid: 'createdcid', value: input.record };
+      records.set(input.rkey, result);
       if (holdCreate) await new Promise(resolve => { release = resolve; entered(); });
-      return { status: 200, body: { uri: `at://${input.repo}/fm.plyr.track/created`, cid: 'createdcid' } };
+      return { status: 200, body: result };
     });
     const signIn = account => page.evaluate(([id, owner]) => globalThis.__r(id).setAuth(owner, {
       handle: async (url, init) => {
@@ -111,6 +117,8 @@ async function run(browser, width, theme) {
     assert.equal(Object.hasOwn(writes[1].record, 'tags'), false, 'blank upload leaves tags absent');
     await screenshot(page, `upload-saved-${width}-${theme}`);
     await signIn(other);
+    await page.getByRole('link', { name: 'View track', exact: true }).waitFor();
+    await page.getByRole('button', { name: 'Upload another', exact: true }).click();
     await page.getByRole('button', { name: 'Choose audio', exact: true }).waitFor();
     assert.equal(await page.getByRole('link', { name: 'View track', exact: true }).count(), 0);
     assert.equal(await title.inputValue(), '');
@@ -121,6 +129,8 @@ async function run(browser, width, theme) {
     await reauthHeld;
     assert.equal(writes.length, 3);
     await signIn(other);
+    await page.getByRole('link', { name: 'View track', exact: true }).waitFor();
+    await page.getByRole('button', { name: 'Upload another', exact: true }).click();
     await page.getByRole('button', { name: 'Choose audio', exact: true }).waitFor();
     assert.equal(await title.inputValue(), '', 'reauthentication clears the previous session draft');
     await title.fill('fresh session draft');
