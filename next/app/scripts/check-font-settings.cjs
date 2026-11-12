@@ -18,6 +18,7 @@ const browserName = process.env.FONT_BROWSER || 'chromium';
       const context = await browser.newContext({ viewport: { width, height: 900 }, colorScheme: theme });
       const errors = [];
       const page = await context.newPage();
+      page.setDefaultTimeout(30_000);
       page.on('pageerror', error => errors.push(error.message));
       if (process.env.FONT_DIST) await context.route(origin + '/**', async route => {
         const root = path.resolve(process.env.FONT_DIST);
@@ -38,10 +39,13 @@ const browserName = process.env.FONT_BROWSER || 'chromium';
         assert.match(await family(heading), /PlyrComicBold/);
         assert.match(await family(page.getByText(/^font$/i)), /PlyrComic/);
         assert.match(await family(page.getByRole('link', { name: 'Home', exact: true }).getByText('Home', { exact: true })), /PlyrComic/);
+        await page.getByRole('button', { name: /^accent color:/i }).click();
         assert.match(await family(page.getByRole('textbox', { name: /^custom accent$/i })), /PlyrComic/);
+        await page.getByRole('button', { name: 'Close', exact: true }).click();
         assert.equal(await page.evaluate(() => document.fonts.check('16px PlyrComic') && document.fonts.check('16px PlyrComicBold')), true);
         await page.screenshot({ path: path.join(output, `${browserName}-${width}-${theme}-comic.png`) });
         for (const [label, pattern] of [['mono', /Menlo|monospace/], ['serif', /Georgia|serif/], ['system', /system-ui|apple-system|Roboto/], ['comic sans', /PlyrComicBold/]]) {
+          await page.getByRole('button', { name: /^font:/i }).click();
           await page.getByRole('button', { name: label, exact: true }).last().click();
           await page.waitForFunction(({ pattern }) => new RegExp(pattern).test(getComputedStyle(document.querySelector('[role="heading"]')).fontFamily), { pattern: pattern.source });
           assert.match(await family(heading), pattern);
