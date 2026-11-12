@@ -161,7 +161,7 @@ async function run(browser, width, theme) {
     const box = await header.boundingBox();
     const start = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
     const remains = async () => {
-      assert.equal(await header.count(), 1);
+      assert.equal(await header.isVisible(), true);
       assert.ok(Math.abs((await header.boundingBox()).y - box.y) < 2, 'Cancelled panel snaps back');
     };
     await gesture(page, cdp, start, 0, 24); await remains();
@@ -172,7 +172,7 @@ async function run(browser, width, theme) {
     if (width < 600) {
       await twoFingerCancel(page, cdp, start); await remains();
       await gesture(page, cdp, start, 0, 150, { resize: true });
-      assert.equal(await header.count(), 1);
+      assert.equal(await header.isVisible(), true);
       await page.setViewportSize({ width, height: 900 });
       await page.waitForTimeout(150);
       await remains();
@@ -181,14 +181,14 @@ async function run(browser, width, theme) {
     const scrub = await slider.boundingBox();
     const beforeScrub = await page.evaluate(() => window.__playerPresentationMedia.currentTime);
     await gesture(page, cdp, { x: scrub.x + 12, y: scrub.y + scrub.height / 2 }, scrub.width * 0.55, 8);
-    assert.equal(await header.count(), 1, 'Scrubbing must not dismiss the player');
+    assert.equal(await header.isVisible(), true, 'Scrubbing must not dismiss the player');
     const value = await page.evaluate(() => window.__playerPresentationMedia.currentTime);
     assert.ok(value > beforeScrub + 30, 'Touch drag must actually seek media beyond ordinary playback');
     const art = await page.getByTestId('now-playing-artwork').boundingBox();
     await gesture(page, cdp, { x: art.x + art.width / 2, y: art.y + art.height / 2 }, 0, 140);
     if (width < 600) {
       const continuous = async () => {
-        assert.equal(await header.count(), 0, 'Content pull collapses to dock');
+        assert.equal(await header.isVisible(), false, 'Content pull collapses to dock');
         await page.getByRole('button', { name: 'Open now playing', exact: true }).waitFor();
         const before = await page.evaluate(() => window.__sameMedia.currentTime);
         await page.waitForTimeout(300);
@@ -208,29 +208,29 @@ async function run(browser, width, theme) {
       const currentScrub = await slider.boundingBox();
       await gesture(page, cdp, { x: currentScrub.x + currentScrub.width / 2, y: currentScrub.y + currentScrub.height / 2 }, 50, 150);
       await remains();
-    } else assert.equal(await header.count(), 1, 'Desktop artwork does not dismiss');
+    } else assert.equal(await header.isVisible(), true, 'Desktop artwork does not dismiss');
     if (width < 600) {
       await gesture(page, cdp, start, 0, 180);
-      assert.equal(await header.count(), 0, 'Deliberate top swipe dismisses');
+      assert.equal(await header.isVisible(), false, 'Deliberate top swipe dismisses');
       await open();
       await gesture(page, cdp, start, 0, 90, { wait: 1, steps: 2 });
-      assert.equal(await header.count(), 0, 'A deliberate short fast flick dismisses');
+      assert.equal(await header.isVisible(), false, 'A deliberate short fast flick dismisses');
       await open();
     } else {
       await gesture(page, cdp, start, 0, 180);
-      assert.equal(await header.count(), 1, 'Floating desktop player does not use full-screen swipe');
+      assert.equal(await header.isVisible(), true, 'Floating desktop player does not use full-screen swipe');
     }
     await page.getByRole('button', { name: 'Close', exact: true }).click();
-    await header.waitFor({ state: 'detached' });
-    assert.equal(await header.count(), 0);
+    await header.waitFor({ state: 'hidden' });
+    assert.equal(await header.isVisible(), false);
     await open();
     await page.keyboard.press('Escape');
-    await header.waitFor({ state: 'detached', timeout: 2000 });
-    assert.equal(await header.count(), 0, 'onRequestClose remains available');
+    await header.waitFor({ state: 'hidden', timeout: 2000 });
+    assert.equal(await header.isVisible(), false, 'onRequestClose remains available');
     await open();
     await page.getByTestId('now-playing-scroll').getByRole('link').first().click();
     await page.waitForURL('**/u/fixture.test');
-    assert.equal(await header.count(), 0, 'Artist link retains normal tap navigation');
+    assert.equal(await header.isVisible(), false, 'Artist link retains normal tap navigation');
     assert.equal(await page.evaluate(() => window.__sameMedia === window.__playerPresentationMedia && !window.__sameMedia.paused), true);
     assert.deepEqual(errors, []);
     console.log(name + ': plain controls, balanced detail, likes, protected controls/links, body pull, playback continuity, scroll arbitration and cancellation passed');
@@ -259,16 +259,16 @@ async function longContent(browser) {
     const art = await page.getByTestId('now-playing-artwork').boundingBox();
     const cdp = await context.newCDPSession(page);
     await gesture(page, cdp, { x: art.x + art.width / 2, y: art.y + art.height / 2 }, 0, -130);
-    assert.equal(await header.count(), 1);
+    assert.equal(await header.isVisible(), true);
     assert.ok(Math.abs((await header.boundingBox()).y - top) < 2);
     const scroll = page.getByTestId('now-playing-scroll');
     assert.ok(await scroll.evaluate(node => node.scrollTop) > 20, 'Upward touch scrolls native body');
     await screenshot(page, '390-dark-short-player-scrolled-scale-1.4');
     await gesture(page, cdp, { x: 25, y: 280 }, 0, 260);
-    assert.equal(await header.count(), 1, 'Gesture starting scrolled does not dismiss');
+    assert.equal(await header.isVisible(), true, 'Gesture starting scrolled does not dismiss');
     assert.ok(await scroll.evaluate(node => node.scrollTop) <= 1, 'Downward touch returns body to top');
     await gesture(page, cdp, { x: 25, y: 280 }, 0, 160);
-    assert.equal(await header.count(), 0, 'Fresh downward pull at top collapses');
+    assert.equal(await header.isVisible(), false, 'Fresh downward pull at top collapses');
     await page.getByRole('button', { name: 'Open now playing', exact: true }).click();
     await header.waitFor();
     await page.waitForTimeout(300);
@@ -279,7 +279,7 @@ async function longContent(browser) {
     }
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
     await page.waitForTimeout(550);
-    assert.equal(await header.count(), 1, 'Upward intent cannot reverse into dismissal in same touch');
+    assert.equal(await header.isVisible(), true, 'Upward intent cannot reverse into dismissal in same touch');
     await page.getByRole('button', { name: 'Open track page', exact: true }).scrollIntoViewIfNeeded();
     await screenshot(page, '390-dark-short-player-scrolled-scale-1.4');
     await page.getByRole('button', { name: 'Close', exact: true }).click();

@@ -32,7 +32,8 @@ async function run(browser, width) {
     };
     const home = async () => {
       await page.waitForURL(url => url.pathname === '/');
-      assert.equal(await expanded.count(), 0);
+      await expanded.waitFor({ state: 'hidden', timeout: 2000 });
+      assert.equal(await expanded.isVisible(), false);
       await continuity();
       assert.equal(new URL(page.url()).pathname, '/', 'Closing consumes only the modal history entry');
     };

@@ -1,9 +1,11 @@
 import { trackArtwork } from './artwork';
 import { Text } from './Text';
-import { router, usePathname } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
-import { PanResponder, Platform, Pressable, View, useWindowDimensions, type ViewInstance } from 'react-native';
-import { playerSheet, useFlying } from './player-sheet';
+import { router, usePathname, type Href } from 'expo-router';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { PlayerPortal } from './PlayerPortal';
+import { Animated, PanResponder, Platform, Pressable, View, useWindowDimensions, type ViewInstance } from 'react-native';
+import { playerSheet, useFlying, useSheetPresent } from './player-sheet';
+import { PlaybackFreeze } from './playback';
 import ListMusic from 'lucide-react-native/icons/list-music';
 import Slider from './Slider';
 import { PlayerVolume } from './PlayerVolume';
@@ -41,14 +43,43 @@ export function PlayerBar() {
   const launch = useRef(() => {});
   const lead = useRef(0);
   const present = !!player.current;
+  const shown = useSheetPresent();
+  const hosted = Platform.OS === 'web' && width < 600;
+  const [dockTop, setDockTop] = useState<number>();
+  const route = useRef(path);
+  route.current = path;
   useEffect(() => {
-    if (!present || width >= 600) { playerSheet.dockTop = undefined; return; }
-    const frame = requestAnimationFrame(() => dock.current?.measureInWindow((_x, y, _width, tall) => { if (tall > 0) playerSheet.dockTop = y; }));
+    if (!present || width >= 600) { playerSheet.dockTop = undefined; setDockTop(undefined); return; }
+    const frame = requestAnimationFrame(() => dock.current?.measureInWindow((_x, y, _width, tall) => {
+      if (tall <= 0) return;
+      playerSheet.dockTop = y;
+      setDockTop(y);
+      if (!playerSheet.present) playerSheet.translation.setValue(y);
+    }));
     return () => cancelAnimationFrame(frame);
   }, [present, width, height, theme.scale, path]);
+  useEffect(() => {
+    if (!hosted) return;
+    playerSheet.opened = () => { if (route.current !== '/now-playing') router.navigate('/now-playing'); };
+    return () => { playerSheet.opened = undefined; playerSheet.hide(); };
+  }, [hosted]);
+  const leave = useRef((_target?: Href) => {});
+  leave.current = target => {
+    playerSheet.hide();
+    const origin = openedFrom.current ?? '/';
+    const same = typeof target === 'string' && target === origin;
+    if (route.current !== '/now-playing') { if (target !== undefined && !same) router.push(target); }
+    else if (target !== undefined && !same) router.replace(target);
+    else if (router.canGoBack()) router.back();
+    else router.replace('/');
+  };
+  const trackId = player.current?.id;
+  const sheet = useMemo(() => hosted && player.current ? <NowPlaying overlay present={shown} track={player.current} close={() => leave.current()} navigate={target => leave.current(target)} /> : null,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [hosted, shown, trackId]);
   const lift = useRef(PanResponder.create({
     onMoveShouldSetPanResponderCapture: (_, gesture) => {
-      const acquire = playerSheet.dockTop !== undefined && !playerSheet.settle && gesture.numberActiveTouches <= 1
+      const acquire = playerSheet.dockTop !== undefined && !playerSheet.present && gesture.numberActiveTouches <= 1
         && gesture.dy < -8 && -gesture.dy > Math.abs(gesture.dx) * 1.5;
       if (acquire) lead.current = gesture.dy;
       return acquire;
@@ -81,7 +112,7 @@ export function PlayerBar() {
   const play = <PlayerControl primary label={playing ? 'Pause' : 'Play'} icon={playing ? Pause : Play}
     onPress={() => player.setPlaying(!playing)} busy={player.loading} />;
   const error = player.error ?? player.status.error;
-  const open = () => { openedFrom.current = path; if (Platform.OS === 'web') router.navigate('/now-playing'); else setExpanded(true); };
+  const open = () => { openedFrom.current = path; if (hosted) playerSheet.show(); else if (Platform.OS === 'web') router.navigate('/now-playing'); else setExpanded(true); };
   launch.current = open;
   const identity = <Pressable ref={trigger} accessibilityRole="button" accessibilityLabel="Open now playing" onPress={open}
     style={{ flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: desktop ? 12 : 10, minHeight: desktop ? 52 : 44 }}>
@@ -92,8 +123,9 @@ export function PlayerBar() {
     </View>
   </Pressable>;
   return <>
-    <View ref={dock} testID="player-dock" {...(desktop || theme.reduceMotion ? {} : lift.panHandlers)} style={[glassSurface(theme), !desktop && Platform.OS === 'web' && liftTouch, { width: desktop ? '100%' : undefined, alignSelf: desktop ? 'center' : undefined,
-      borderWidth: 0, borderTopWidth: 1, paddingHorizontal: desktop ? 20 : 12, paddingTop: desktop ? 12 : 4, paddingBottom: desktop ? 9 : 4, overflow: 'hidden' }]}>
+    <Animated.View ref={dock} testID="player-dock" {...(desktop || theme.reduceMotion ? {} : lift.panHandlers)} style={[glassSurface(theme), !desktop && Platform.OS === 'web' && liftTouch, { width: desktop ? '100%' : undefined, alignSelf: desktop ? 'center' : undefined,
+      borderWidth: 0, borderTopWidth: 1, paddingHorizontal: desktop ? 20 : 12, paddingTop: desktop ? 12 : 4, paddingBottom: desktop ? 9 : 4, overflow: 'hidden' },
+      hosted && dockTop !== undefined && !theme.reduceMotion && { opacity: playerSheet.translation.interpolate({ inputRange: [dockTop * 0.75, dockTop], outputRange: [0, 1], extrapolate: 'clamp' }) }]}>
       <View pointerEvents="none" accessible={false} testID="playback-status-inlay" style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2,
         opacity: playing ? 0.65 : 0.16, backgroundColor: theme.accent,
         boxShadow: `0px 0px 5px ${theme.accent}66`,
@@ -118,7 +150,8 @@ export function PlayerBar() {
           </View>
         </> : <>{play}<PlayerControl label="Next" icon={SkipForward} onPress={() => void player.next()} /></>}
       </View>
-    </View>
+    </Animated.View>
+    {sheet && <PlayerPortal><PlaybackFreeze frozen={!shown}>{sheet}</PlaybackFreeze></PlayerPortal>}
     {Platform.OS !== 'web' && expanded && <NowPlaying track={track} close={() => setExpanded(false)} navigate={target => { setExpanded(false); router.push(target); }} />}
   </>;
 }

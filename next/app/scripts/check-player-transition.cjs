@@ -25,7 +25,7 @@ const dist = path.resolve(__dirname, '../dist');
     const sample = () => page.evaluate(() => {
       const sheet = document.querySelector('[data-testid="now-playing-dismiss-region"]');
       const dock = document.querySelector('[data-testid="player-dock"]');
-      return { top: sheet ? Math.round(sheet.getBoundingClientRect().top) : null, dock: !!dock && dock.getBoundingClientRect().height > 0 };
+      return { top: sheet && sheet.getClientRects().length ? Math.round(sheet.getBoundingClientRect().top) : null, dock: !!dock && dock.getBoundingClientRect().height > 0 };
     });
     const record = async action => {
       const samples = [];
@@ -49,7 +49,7 @@ const dist = path.resolve(__dirname, '../dist');
     assert.equal(await dock.getByRole('button', { name: 'Open now playing', exact: true }).count(), 1, 'the dock is usable again after closing');
     const rect = id => page.evaluate(name => {
       const node = document.querySelector(`[data-testid="${name}"]`);
-      if (!node) return null;
+      if (!node || !node.getClientRects().length) return null;
       const box = node.getBoundingClientRect();
       return { x: box.x, y: box.y, width: box.width, height: box.height };
     }, id);
@@ -71,14 +71,14 @@ const dist = path.resolve(__dirname, '../dist');
     }
     assert.ok(sizes[0] > dockArt.width + 20 && sizes[0] < sizes[1] && sizes[1] < sizes[2], 'the artwork grows as the sheet rises');
     await finger('touchEnd');
-    await page.waitForFunction(() => document.querySelector('[data-testid="now-playing-dismiss-region"]')?.getBoundingClientRect().top === 0 && !document.querySelector('[data-testid="now-playing-flights"]'), undefined, { timeout: 3000 });
+    await page.waitForFunction(() => (node => node && node.getClientRects().length > 0 && node.getBoundingClientRect().top === 0)(document.querySelector('[data-testid="now-playing-dismiss-region"]')) && !document.querySelector('[data-testid="now-playing-flights"]'), undefined, { timeout: 3000 });
     const full = await page.getByTestId('now-playing-artwork').locator('img').first().boundingBox();
     assert.ok(sizes[2] < full.width, 'the artwork reaches full size only when the sheet is open');
     await page.getByRole('button', { name: 'Close', exact: true }).click();
     let last;
     for (const end = Date.now() + 1500; Date.now() < end; await page.waitForTimeout(8)) { const art = await rect('now-playing-flight-art'); if (art) last = art; else if (last) break; }
     assert.ok(last && Math.abs(last.x - dockArt.x) < 12 && Math.abs(last.y - dockArt.y) < 24 && last.width < dockArt.width + 24, 'the artwork lands on the dock artwork when closing');
-    await page.getByTestId('now-playing-dismiss-region').waitFor({ state: 'detached', timeout: 2000 });
+    await page.getByTestId('now-playing-dismiss-region').waitFor({ state: 'hidden', timeout: 2000 });
     assert.equal(await dock.locator('img').first().evaluate(node => getComputedStyle(node.parentElement.parentElement).opacity), '1', 'the dock artwork is visible again after closing');
     console.log('393: now playing rises from the dock under the finger, artwork and title fly between the two, and it settles both ways');
   } finally { await browser.close(); }

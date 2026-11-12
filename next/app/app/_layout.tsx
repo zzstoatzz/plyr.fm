@@ -5,7 +5,6 @@ import { useFonts } from 'expo-font';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Animated, Platform, Pressable, View, useWindowDimensions, StyleSheet } from 'react-native';
-import { playerSheet } from '../src/player-sheet';
 import { AppearanceProvider, useAppearance } from '../src/appearance';
 import { restoreAuth, useAuth } from '../src/auth';
 import ArrowLeft from 'lucide-react-native/icons/arrow-left';
@@ -54,8 +53,6 @@ function Shell() {
   const lastPage = useRef('/');
   if (route !== '/now-playing') lastPage.current = route;
   const path = route === '/now-playing' ? lastPage.current : route;
-  const dockFade = route === '/now-playing' && !theme.reduceMotion && playerSheet.dockTop !== undefined
-    ? { opacity: playerSheet.translation.interpolate({ inputRange: [playerSheet.dockTop * 0.6, playerSheet.dockTop], outputRange: [0, 1], extrapolate: 'clamp' }) } : undefined;
   const auth = useAuth();
   const { width } = useWindowDimensions();
   const wide = width >= 800;
@@ -133,7 +130,7 @@ function Shell() {
             <Stack.Screen name="now-playing" options={{ presentation: Platform.OS === 'web' ? 'transparentModal' : 'card', animation: 'none', gestureEnabled: false, contentStyle: { backgroundColor: 'transparent' } }} />
           </Stack>
         </NowPlayingOriginContext.Provider>
-        {!wide && <Animated.View aria-hidden={route === '/now-playing'} pointerEvents={route === '/now-playing' ? 'none' : 'auto'} style={dockFade}>{station ? <RadioPlayer key={station.slug} compact tuned={station} /> : <PlayerBar />}</Animated.View>}
+        {!wide && <Animated.View aria-hidden={route === '/now-playing'} pointerEvents={route === '/now-playing' ? 'none' : 'auto'}>{station ? <RadioPlayer key={station.slug} compact tuned={station} /> : <PlayerBar />}</Animated.View>}
         {!wide && nav}
       </View>
     </View>

@@ -369,6 +369,13 @@ interface Playback {
 
 const PlaybackContext = createContext<Playback | null>(null);
 
+export function PlaybackFreeze({ frozen, children }: { frozen: boolean; children: ReactNode }) {
+  const live = useContext(PlaybackContext);
+  const held = useRef(live);
+  if (!frozen) held.current = live;
+  return <PlaybackContext.Provider value={frozen ? held.current : live}>{children}</PlaybackContext.Provider>;
+}
+
 export function usePlayback(): Playback {
   const value = useContext(PlaybackContext);
   if (!value) throw new Error('playback provider is missing');
