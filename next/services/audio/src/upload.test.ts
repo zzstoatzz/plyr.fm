@@ -227,6 +227,9 @@ test("held multipart request does not block existing published playback for its 
   let settled = false;
   void pending.then(() => { settled = true; });
   try {
+    let busy = false;
+    for (let count = 0; count < 20 && !busy; count++) busy = await runInDurableObject(transferring.stub, instance => instance["sessions"].busy);
+    expect(busy).toBe(true);
     for (const method of ["GET", "HEAD"]) {
       const response = await routeUpload(new Request(published.media, { method, headers: { range: "bytes=0-1" } }), env);
       expect(response?.status).toBe(method === "HEAD" ? 200 : 206);
