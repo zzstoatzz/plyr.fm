@@ -491,7 +491,7 @@ max_lines = 831
 
 [[rules]]
 path = "next/backend/src/internal/projection/postgres_verified_snapshot_store.zig"
-max_lines = 1091
+max_lines = 1094
 
 [[rules]]
 path = "next/backend/src/internal/projection/postgres_verified_commit_store.zig"
@@ -499,7 +499,7 @@ max_lines = 650
 
 [[rules]]
 path = "next/backend/src/internal/index/postgres_composed_track_store.zig"
-max_lines = 1691
+max_lines = 1701
 
 [[rules]]
 path = "next/backend/src/internal/ingest/projector.zig"
@@ -537,3 +537,7 @@ max_lines = 948
 [[rules]]
 path = "next/backend/src/internal/jams/server.zig"
 max_lines = 522
+
+[[rules]]
+path = "next/backend/src/internal/projection/postgres_track_store.zig"
+max_lines = 511

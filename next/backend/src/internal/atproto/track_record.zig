@@ -35,6 +35,7 @@ pub const Record = struct {
     featured_dids: []const []const u8,
     image_url: ?[]const u8,
     support_gate_type: ?[]const u8,
+    download_policy: []const u8,
     /// gated audio: the artist's space record holding the audio blob
     audio_space: ?managed_space.SpaceRecordUri = null,
     description: ?[]const u8,
@@ -94,6 +95,7 @@ pub fn parse(
         .featured_dids = try parseFeatures(allocator, value),
         .image_url = try optionalUri(value, "imageUrl"),
         .support_gate_type = try parseSupportGate(value),
+        .download_policy = (try optionalBoundedString(value, "downloadPolicy", 0, max_unbounded_string)) orelse (if (audio_space != null) "off" else "open"),
         .audio_space = audio_space,
         .description = try optionalBoundedString(value, "description", 0, 5000),
         .self_labels = try parseLabels(allocator, value),
@@ -349,6 +351,7 @@ test "gated tracks carry their audio in a space record" {
     };
     const record = try parse(a, .{ .map = &gated_map }, "fm.plyr.dev.track");
     try std.testing.expectEqualStrings("supporters", record.audio_space.?.space.skey);
+    try std.testing.expectEqualStrings("off", record.download_policy);
     try std.testing.expect(record.audio_url == null and record.audio_blob == null);
 
     var bad_map = gated_map;
@@ -400,4 +403,27 @@ test "authored tags retain claims and reject out-of-bounds arrays" {
     @memset(&long_tag, 'a');
     entries[entries.len - 1].value = .{ .array = &.{.{ .text = &long_tag }} };
     try std.testing.expectError(error.InvalidString, parse(a, .{ .map = &entries }, "fm.plyr.dev.track"));
+}
+
+test "download policy preserves unknown values and distinguishes absent public default" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    const base: zat.cbor.Value = .{ .map = &.{
+        .{ .key = "$type", .value = .{ .text = "fm.plyr.dev.track" } },
+        .{ .key = "title", .value = .{ .text = "One" } },
+        .{ .key = "artist", .value = .{ .text = "Artist" } },
+        .{ .key = "fileType", .value = .{ .text = "flac" } },
+        .{ .key = "createdAt", .value = .{ .text = "2026-08-08T12:00:00Z" } },
+        .{ .key = "audioUrl", .value = .{ .text = "https://media.example/audio.flac" } },
+    } };
+    try std.testing.expectEqualStrings("open", (try parse(a, base, "fm.plyr.dev.track")).download_policy);
+    const entries = try a.alloc(zat.cbor.Value.MapEntry, base.map.len + 1);
+    @memcpy(entries[0..base.map.len], base.map);
+    for ([_][]const u8{ "open", "ask", "supporters", "off", "future-policy", "" }) |policy| {
+        entries[base.map.len] = .{ .key = "downloadPolicy", .value = .{ .text = policy } };
+        try std.testing.expectEqualStrings(policy, (try parse(a, .{ .map = entries }, "fm.plyr.dev.track")).download_policy);
+    }
+    entries[base.map.len].value = .{ .boolean = true };
+    try std.testing.expectError(error.InvalidRecord, parse(a, .{ .map = entries }, "fm.plyr.dev.track"));
 }

@@ -103,6 +103,7 @@ pub const PostgresTrackStore = struct {
             .indexed_at_us = change.proof.indexed_at_us,
         });
         if (result != .stale) {
+            _ = conn.exec("UPDATE plyr_index.track_records SET download_policy = $3 WHERE record_uri = $1 AND record_cid = $2", .{ change.record_uri, change.record_cid, change.download_policy }) catch return error.ProjectionUnavailable;
             _ = conn.exec(upsert_tags_sql, .{ change.record_uri, change.record_cid, change.tags, change.tags_present }) catch |err| {
                 std.log.err("track tag projection upsert failed: {}", .{err});
                 return error.ProjectionUnavailable;
@@ -283,6 +284,7 @@ const upsert_record_sql =
     \\  image_url = EXCLUDED.image_url,
     \\  support_gate_type = EXCLUDED.support_gate_type,
     \\  audio_space = EXCLUDED.audio_space,
+    \\  download_policy = NULL,
     \\  description = EXCLUDED.description,
     \\  self_labels = EXCLUDED.self_labels,
     \\  deleted = EXCLUDED.deleted,
@@ -352,6 +354,7 @@ pub fn createTestTable(pool: *pg.Pool) !void {
         \\  CONSTRAINT uq_track_records_repo_path UNIQUE (owner_did, collection, rkey)
         \\)
     , .{});
+    _ = try pool.exec(@embedFile("migration_0038_download_policy"), .{});
     try created_at_us.addTestColumn(pool, "track_records");
     var statements = std.mem.splitScalar(u8, @embedFile("migration_0032_track_tags"), ';');
     while (statements.next()) |raw| {
@@ -402,6 +405,7 @@ test "PostgreSQL track projection replaces complete records and keeps tombstones
     const rev_1 = zat.Tid.fromTimestamp(1_000, 1);
     const rev_2 = zat.Tid.fromTimestamp(2_000, 1);
     var upsert_1 = makeUpsert(try cidString(a, "record-1"), "One", &rev_1.str(), commit_1);
+    upsert_1.upsert.download_policy = "ask";
     upsert_1.upsert.tags_present = true;
     upsert_1.upsert.tags = &.{ "  Hip-Hop  ", "HIP-HOP", "-Ambient-" };
     try std.testing.expectEqual(ApplyResult.applied, try store.apply(a, upsert_1));
@@ -416,12 +420,20 @@ test "PostgreSQL track projection replaces complete records and keeps tombstones
     try std.testing.expectEqual(@as(i64, 2), try replay_tags.get(i64, 0));
     try replay_tags.deinit();
 
+    _ = try pool.exec("UPDATE plyr_index.track_records SET download_policy = NULL", .{});
+    try std.testing.expectEqual(ApplyResult.idempotent, try store.apply(a, upsert_1));
+    var policy = (try pool.row("SELECT download_policy FROM plyr_index.track_records", .{})).?;
+    try std.testing.expectEqualStrings("ask", try policy.get([]const u8, 0));
+    try policy.deinit();
     try expectTrack(pool, "One", &rev_1.str(), false);
 
     const upsert_2 = makeUpsert(try cidString(a, "record-2"), "Two", &rev_2.str(), commit_2);
     try std.testing.expectEqual(ApplyResult.applied, try store.apply(a, upsert_2));
     try std.testing.expectEqual(ApplyResult.stale, try store.apply(a, upsert_1));
     try expectTrack(pool, "Two", &rev_2.str(), false);
+    var unknown_policy = (try pool.row("SELECT download_policy FROM plyr_index.track_records", .{})).?;
+    try std.testing.expect((try unknown_policy.get(?[]const u8, 0)) == null);
+    try unknown_policy.deinit();
     var cleared_tags = (try pool.row("SELECT cardinality(tags)::bigint,tags_present FROM plyr_index.track_tag_records", .{})).?;
     try std.testing.expectEqual(@as(i64, 0), try cleared_tags.get(i64, 0));
     try std.testing.expect(!try cleared_tags.get(bool, 1));
@@ -429,6 +441,7 @@ test "PostgreSQL track projection replaces complete records and keeps tombstones
 
     const conflict = makeUpsert(try cidString(a, "record-3"), "Three", &rev_2.str(), commit_3);
     try std.testing.expectError(error.RevisionConflict, store.apply(a, conflict));
+    _ = try pool.exec("UPDATE plyr_index.track_records SET download_policy = 'ask'", .{});
     const deletion: track_change.Change = .{ .delete = .{
         .record_uri = "at://did:plc:artist/fm.plyr.dev.track/3m123abc",
         .owner_did = "did:plc:artist",
@@ -438,6 +451,9 @@ test "PostgreSQL track projection replaces complete records and keeps tombstones
     } };
     try std.testing.expectEqual(ApplyResult.applied, try store.apply(a, deletion));
     try expectTrack(pool, null, &zat.Tid.fromTimestamp(3_000, 1).str(), true);
+    var deleted_policy = (try pool.row("SELECT download_policy FROM plyr_index.track_records", .{})).?;
+    try std.testing.expect((try deleted_policy.get(?[]const u8, 0)) == null);
+    try deleted_policy.deinit();
 }
 
 fn makeUpsert(record_cid: []const u8, title: []const u8, rev: []const u8, commit: zat.Cid) track_change.Change {

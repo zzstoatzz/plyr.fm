@@ -49,6 +49,7 @@ def _prepare(database_url: str, database: str) -> None:
             "0033",
             "0034",
             "0037",
+            "0038",
         ):
             (migration,) = (ROOT / "migrations").glob(f"{prefix}_*.sql")
             connection.execute(migration.read_text())
@@ -138,7 +139,9 @@ def _exercise(admin: Any, role: str, api_url: str) -> None:
             _wait_until_ready(port, process)
             status, first = _request(target, "/v1/tracks?limit=3")
             assert status == 200, (status, first)
-            track_id = json.loads(first)["data"][0]["id"]
+            tracks = json.loads(first)["data"]
+            assert all(track["access"]["download_policy"] is None for track in tracks)
+            track_id = tracks[0]["id"]
             paths = (
                 "/v1/tracks?limit=3",
                 "/v1/tracks?limit=3&tag=ambient",

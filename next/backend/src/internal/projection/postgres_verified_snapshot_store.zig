@@ -23,7 +23,7 @@ const verified = @import("verified_snapshot.zig");
 /// that used to reject valid records). A complete snapshot at the same
 /// revision as a head with an older version is then rebuilt instead of being
 /// treated as idempotent, so reconciliation repairs stale projections.
-pub const projection_version: i32 = 3;
+pub const projection_version: i32 = 4;
 
 const HeadDecision = union(enum) {
     done: verified.ApplyResult,
@@ -467,6 +467,7 @@ const tombstone_absent_tracks_sql =
     \\  image_url = NULL,
     \\  support_gate_type = NULL,
     \\  audio_space = NULL,
+    \\  download_policy = NULL,
     \\  description = NULL,
     \\  self_labels = '{}',
     \\  deleted = TRUE,
@@ -765,6 +766,7 @@ fn trackUpsert(
         .featured_dids = &.{},
         .image_url = null,
         .support_gate_type = null,
+        .download_policy = "ask",
         .description = null,
         .self_labels = &.{},
         .proof = .{
@@ -881,12 +883,13 @@ fn expectMemberCount(pool: *pg.Pool, rkey: []const u8, expected: i64) !void {
 
 fn expectTrackState(pool: *pg.Pool, rkey: []const u8, rev: []const u8, deleted: bool) !void {
     var row = (try pool.row(
-        "SELECT commit_rev, deleted FROM plyr_index.track_records WHERE rkey = $1",
+        "SELECT commit_rev, deleted, download_policy FROM plyr_index.track_records WHERE rkey = $1",
         .{rkey},
     )).?;
     defer row.deinit() catch {};
     try std.testing.expectEqualStrings(rev, try row.get([]const u8, 0));
     try std.testing.expectEqual(deleted, try row.get(bool, 1));
+    if (deleted) try std.testing.expect((try row.get(?[]const u8, 2)) == null) else try std.testing.expectEqualStrings("ask", try row.get([]const u8, 2));
 }
 
 fn expectProfileState(pool: *pg.Pool, bio: ?[]const u8, rev: []const u8, deleted: bool) !void {

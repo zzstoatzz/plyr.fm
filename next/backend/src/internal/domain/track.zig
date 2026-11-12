@@ -95,6 +95,7 @@ pub const Access = struct {
     in_discovery: bool,
     gate: ?Gate,
     space_uri: ?[]const u8,
+    download_policy: ?[]const u8 = null,
 };
 
 pub const Visibility = enum { public, unlisted, supporters };

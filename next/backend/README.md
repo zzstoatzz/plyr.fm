@@ -490,3 +490,6 @@ command; remote reconciliation uses the disposable Fly Machine and a dedicated
 next-branch writer credential that cannot mutate legacy tables.
 
 </details>
+
+Track download preference defaults and replay behavior are documented in
+[download policy](docs/download-policy.md).
