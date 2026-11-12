@@ -43,7 +43,8 @@ uploads. A public playback URL is not a general download authorization.
 The audio Worker exposes `/v1/uploads/{ownerHash}/{uploadId}`:
 
 - `POST`: start or resume the immutable session; reject mismatched reuse.
-- `GET`: state, fixed part size, part count and persisted received part numbers.
+- `GET`: state, fixed part size, part count, acknowledged parts with digests,
+  reserved digests for uncertain parts, `recoveryRequired` and `reservedBytes`.
 - `PUT /parts/{number}`: exactly the expected bytes, with server-owned receipt.
 - `POST /finish`: assemble all persisted receipts and return stable `audioUrl`.
 - `POST /activate`: check the reserved record and activate if authoritative.

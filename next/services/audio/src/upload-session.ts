@@ -41,6 +41,8 @@ export class UploadSessions {
   view(session: UploadSession) {
     return {
       state: session.state,
+      recoveryRequired: !["published", "cancelled"].includes(session.state) && session.nextCheck === null,
+      reservedBytes: ["published", "cancelled"].includes(session.state) ? 0 : session.sizeBytes,
       partSizeBytes: PART_BYTES,
       partCount: Math.ceil(session.sizeBytes / PART_BYTES),
       receivedParts: Object.entries(session.parts).filter(([, part]) => part.etag).map(([number, part]) => ({ number: Number(number), sha256: part.sha256 })),

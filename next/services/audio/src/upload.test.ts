@@ -128,6 +128,8 @@ test("authority outage stops bounded recovery without deleting completed bytes o
     await restarted.alarm();
     const after = await session(state, f.value.uploadId);
     expect(after.state).toBe("complete"); expect(after.nextCheck).toBeNull();
+    expect(restarted.view(after).recoveryRequired).toBe(true);
+    expect(restarted.view(after).reservedBytes).toBe(f.value.sizeBytes);
     expect(await env.AUDIO.head(after.key)).not.toBeNull();
     expect(await state.storage.get("active")).toEqual([f.value.uploadId]);
     await expect(restarted.cancel(after)).rejects.toThrow("PDS offline");
