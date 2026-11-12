@@ -21,6 +21,8 @@ use tokio::{fs::File, io::AsyncWriteExt, net::TcpListener, process::Command};
 use tokio_util::io::ReaderStream;
 use tracing::{error, info, warn};
 
+mod processing;
+
 #[derive(Debug, Deserialize, Default)]
 struct TranscodeParams {
     target: Option<String>,
@@ -63,7 +65,8 @@ async fn main() -> anyhow::Result<()> {
         .layer(middleware::from_fn(move |req, next| {
             auth_middleware(req, next, auth_token.clone())
         }))
-        .layer(DefaultBodyLimit::max(max_upload_bytes));
+        .layer(DefaultBodyLimit::max(max_upload_bytes))
+        .merge(processing::configured_router()?);
 
     let port: u16 = env::var("TRANSCODER_PORT")
         .ok()
