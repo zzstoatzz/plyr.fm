@@ -1,7 +1,7 @@
 import { isSpaceAtUriString } from '@atproto/syntax';
 import { P256Keypair } from '@atproto/crypto';
 import { createSpaceSigHeaders, encapsulate, formatMacRequest, parseSpaceToken, RECORD_MAC_PROFILE, verifyRecord } from '@atproto/space';
-import { isCid, isLexMap } from '@atproto/lex-data';
+import { isCid, isLexMap, type LexMap } from '@atproto/lex-data';
 import { lexParse } from '@atproto/lex-json';
 import { didDocument, pdsEndpoint } from './identity.ts';
 import type { Agent, Auth, Did } from './auth-state';
@@ -17,6 +17,7 @@ const credentials = new WeakMap<Agent, Map<string, Promise<Credential>>>();
 export interface SpaceAudioTransport {
 	keypair(): Promise<P256Keypair>;
 	fetch(url: string, init: RequestInit): Promise<Response>;
+	guard?(): void;
 }
 
 async function mint(agent: Agent, space: string, authorityPds: string, transport: SpaceAudioTransport): Promise<Credential> {
@@ -77,7 +78,7 @@ export interface GatedAudioSource {
 	headers(): Promise<Record<string, string>>;
 }
 
-export async function resolveGatedAudio(uri: string, auth: Auth, transport: SpaceAudioTransport): Promise<GatedAudioSource> {
+export async function resolveGatedAudio(uri: string, auth: Auth, transport: SpaceAudioTransport, validate?: (record: LexMap) => void): Promise<GatedAudioSource> {
 	if (!auth.agent) throw new Error('sign in to play this track');
 	const agent = auth.agent;
 	const parts = uri.slice('at://'.length).split('/');
@@ -92,6 +93,7 @@ export async function resolveGatedAudio(uri: string, auth: Auth, transport: Spac
 	const document = await didDocument(repo);
 	const kem = document.verificationMethod?.find(method => method.id === `${repo}#atproto_kem`)?.publicKeyMultibase;
 	if (!kem) throw new Error('this track has no verification key');
+	transport.guard?.();
 	const [{ keyShare, sharedSecret }, credential] = await Promise.all([
 		encapsulate(`did:key:${kem}`), credentialFor(agent, space, authorityPds, transport)
 	]);
@@ -113,6 +115,7 @@ export async function resolveGatedAudio(uri: string, auth: Auth, transport: Spac
 	} catch {
 		throw new Error('could not verify this protected track');
 	}
+	validate?.(value.value);
 	const blob = value.value.audioBlob;
 	if (!isLexMap(blob) || !isCid(blob.ref) || typeof blob.size !== 'number' || !Number.isSafeInteger(blob.size)
 		|| blob.size <= 0 || blob.size > 104_857_600 || typeof blob.mimeType !== 'string' || !/^audio\/[a-z0-9.+-]+$/i.test(blob.mimeType)) {

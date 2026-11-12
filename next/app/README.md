@@ -179,7 +179,12 @@ not deployed R2 capacity or real-account OAuth acceptance.
 Track options offers downloads for verified `open` and `ask` preferences when
 fresh effective access and playback still allow public listening. An existing
 artist support link may be offered before an `ask` download; support is optional.
-Unknown policies, protected sources and supporter-only downloads remain unavailable.
+Unknown policies and supporter-only downloads remain unavailable. A protected
+Space source additionally requires sign-in and an explicit `open` or `ask` on
+its freshly verified record. Missing policy, any support gate, and private
+visibility refuse download even when playback is readable. Protected bytes use
+the same 100 MiB limit and temporary-file cleanup; account changes cancel the
+attempt. Private titles and descriptions never replace public metadata.
 
 Browsers save small cross-origin audio with a 100 MiB buffering limit. Published
 Next audio-service URLs use its attachment endpoint without that limit. Other
@@ -193,6 +198,17 @@ Processed Next audio offers a choice of playback audio or the retained original
 upload. Raw uploads keep one download action. Choices require the published
 service manifest and refresh effective access before saving; a missing or invalid
 manifest does not authorize an original download.
+
+Supporter authorization remains unfinished. The existing Next verifier in
+`../backend/src/internal/space/network.zig` calls the fixed atprotofans
+`com.atprotofans.validateSupporter` endpoint with supporter DID, artist subject,
+and artist signer (5-second/64 KiB bound, strict boolean response). Its current
+consumer is the PDS-service-authenticated managed-space callback, not a listener
+download endpoint. A follow-up needs a viewer-authenticated Next decision that
+binds that viewer and the current track revision to effective moderation and
+both download policies. Space read credentials alone are not supporter proof.
+The attested broker path needs separate subject-binding verification before reuse;
+legacy cookie-authorized R2 downloads also remain outside this client path.
 
 `node scripts/check-downloads.cjs` checks real browser save events and exact
 fixture bytes, fresh-policy refusal, optional support, cancellation and track
