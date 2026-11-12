@@ -22,6 +22,12 @@ const mediaState = () => window.__plyrPlaybackMedia.map(audio => ({
 }));
 
 async function prepareContext(context, theme, preferences = {}) {
+  await context.route('**/*', route => {
+    const request = route.request();
+    if (['GET', 'HEAD', 'OPTIONS'].includes(request.method())) return route.fallback();
+    if (process.env.PLAYBACK_EXPECT_RECEIPT === '1' && request.method() === 'POST' && /\/v1\/tracks\/[^/]+\/plays/.test(new URL(request.url()).pathname)) return route.fallback();
+    return route.abort();
+  });
   if (process.env.PLAYBACK_DIST) {
     const root = path.resolve(process.env.PLAYBACK_DIST);
     await context.route(origin + '/**', async route => {

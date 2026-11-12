@@ -45,7 +45,7 @@ pub const PostgresComposedTrackStore = struct {
     fn resolveOpaque(context: *anyopaque, allocator: std.mem.Allocator, uris: []const []const u8) TrackStore.Error![]const track.Track {
         const self: *PostgresComposedTrackStore = @ptrCast(@alignCast(context));
         if (uris.len == 0) return &.{};
-        var result = self.pool.query(resolve_query, .{ uris, self.profile_collection, self.like_collection }) catch return error.IndexUnavailable;
+        var result = self.pool.queryOpts(resolve_query, .{ uris, self.profile_collection, self.like_collection }, .{ .cache_name = "plyr_resolve_query" }) catch return error.IndexUnavailable;
         defer result.deinit();
         var values: std.ArrayList(track.Track) = .empty;
         while (result.next() catch return error.IndexUnavailable) |row| {
@@ -57,7 +57,7 @@ pub const PostgresComposedTrackStore = struct {
 
     fn tagsOpaque(context: *anyopaque, allocator: std.mem.Allocator, collection: []const u8, limit: usize, after: ?tag_cursor.Cursor) TrackStore.Error![]const store_module.Tag {
         const self: *PostgresComposedTrackStore = @ptrCast(@alignCast(context));
-        var result = self.pool.query(tags_query, .{ collection, @as(i64, @intCast(limit)), if (after) |c| c.plays else @as(?i64, null), if (after) |c| c.name else @as(?[]const u8, null) }) catch return error.IndexUnavailable;
+        var result = self.pool.queryOpts(tags_query, .{ collection, @as(i64, @intCast(limit)), if (after) |c| c.plays else @as(?i64, null), if (after) |c| c.name else @as(?[]const u8, null) }, .{ .cache_name = "plyr_tags_query" }) catch return error.IndexUnavailable;
         defer result.deinit();
         var data: std.ArrayList(store_module.Tag) = .empty;
         while (result.next() catch return error.IndexUnavailable) |row| {
@@ -87,7 +87,7 @@ pub const PostgresComposedTrackStore = struct {
         defer self.pool.release(conn);
         const limit: i64 = @intCast(request.limit);
         var result = if (request.after) |after|
-            conn.query(liked_after_query, .{
+            conn.queryOpts(liked_after_query, .{
                 request.track_collection,
                 self.profile_collection,
                 self.like_collection,
@@ -95,18 +95,18 @@ pub const PostgresComposedTrackStore = struct {
                 after.created_at_us,
                 after.at_uri,
                 limit,
-            }) catch |err| {
+            }, .{ .cache_name = "plyr_liked_after_query" }) catch |err| {
                 logQueryError(conn, "composed liked-track query failed", err);
                 return error.IndexUnavailable;
             }
         else
-            conn.query(liked_query, .{
+            conn.queryOpts(liked_query, .{
                 request.track_collection,
                 self.profile_collection,
                 self.like_collection,
                 request.actor_did,
                 limit,
-            }) catch |err| {
+            }, .{ .cache_name = "plyr_liked_query" }) catch |err| {
                 logQueryError(conn, "composed liked-track query failed", err);
                 return error.IndexUnavailable;
             };
@@ -156,11 +156,11 @@ pub const PostgresComposedTrackStore = struct {
             return error.IndexUnavailable;
         };
         defer self.pool.release(conn);
-        var query_row = conn.row(detail_query, .{
+        var query_row = conn.rowOpts(detail_query, .{
             at_uri,
             self.profile_collection,
             self.like_collection,
-        }) catch |err| {
+        }, .{ .cache_name = "plyr_detail_query" }) catch |err| {
             if (conn.err) |pg_err|
                 std.log.err("composed track lookup failed: {}: {s}", .{ err, pg_err.message })
             else
@@ -199,7 +199,7 @@ pub const PostgresComposedTrackStore = struct {
         defer self.pool.release(conn);
         var result = switch (request.scope) {
             .discovery => if (request.after) |after|
-                conn.query(discovery_after_query, .{
+                conn.queryOpts(discovery_after_query, .{
                     request.collection,
                     self.profile_collection,
                     self.like_collection,
@@ -207,23 +207,23 @@ pub const PostgresComposedTrackStore = struct {
                     after.created_at_us,
                     after.at_uri,
                     limit,
-                }) catch |err| {
+                }, .{ .cache_name = "plyr_discovery_after_query" }) catch |err| {
                     logQueryError(conn, "composed discovery query failed", err);
                     return error.IndexUnavailable;
                 }
             else
-                conn.query(discovery_query, .{
+                conn.queryOpts(discovery_query, .{
                     request.collection,
                     self.profile_collection,
                     self.like_collection,
                     request.tags,
                     limit,
-                }) catch |err| {
+                }, .{ .cache_name = "plyr_discovery_query" }) catch |err| {
                     logQueryError(conn, "composed discovery query failed", err);
                     return error.IndexUnavailable;
                 },
             .artist => |artist_did| if (request.after) |after|
-                conn.query(artist_after_query, .{
+                conn.queryOpts(artist_after_query, .{
                     request.collection,
                     self.profile_collection,
                     self.like_collection,
@@ -232,19 +232,19 @@ pub const PostgresComposedTrackStore = struct {
                     after.created_at_us,
                     after.at_uri,
                     limit,
-                }) catch |err| {
+                }, .{ .cache_name = "plyr_artist_after_query" }) catch |err| {
                     logQueryError(conn, "composed artist catalogue query failed", err);
                     return error.IndexUnavailable;
                 }
             else
-                conn.query(artist_query, .{
+                conn.queryOpts(artist_query, .{
                     request.collection,
                     self.profile_collection,
                     self.like_collection,
                     request.tags,
                     artist_did,
                     limit,
-                }) catch |err| {
+                }, .{ .cache_name = "plyr_artist_query" }) catch |err| {
                     logQueryError(conn, "composed artist catalogue query failed", err);
                     return error.IndexUnavailable;
                 },
@@ -1572,6 +1572,32 @@ test "composed PostgreSQL reads use verified records and authoritative account s
     try std.testing.expect(std.mem.indexOf(u8, unfiltered_json, "legacy_track_tags") == null);
     try std.testing.expect(std.mem.indexOf(u8, unfiltered_json, "track_tag_records") == null);
     try unfiltered_plan.deinit();
+
+    for (0..8) |_| {
+        const missing = try implementation.store().listPublic(a, .{
+            .collection = "fm.plyr.dev.track",
+            .scope = .discovery,
+            .limit = 2,
+            .after = null,
+            .tags = &.{"absent-tag"},
+        });
+        try std.testing.expectEqual(@as(usize, 0), missing.len);
+        const present = try implementation.store().listPublic(a, .{
+            .collection = "fm.plyr.dev.track",
+            .scope = .discovery,
+            .limit = 2,
+            .after = null,
+            .tags = &.{"legacy-target"},
+        });
+        try std.testing.expectEqual(@as(usize, 1), present.len);
+        try std.testing.expectEqualStrings(pds_only_uri, present[0].value.record.uri);
+    }
+    var prepared = (try pool.row(
+        "SELECT generic_plans + custom_plans FROM pg_prepared_statements WHERE name = 'plyr_discovery_query'",
+        .{},
+    )).?;
+    try std.testing.expect(try prepared.get(i64, 0) >= 16);
+    try prepared.deinit();
 }
 
 fn requireDisposableDatabase(pool: *pg.Pool, allocator: std.mem.Allocator) !void {

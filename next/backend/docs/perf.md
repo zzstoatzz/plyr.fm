@@ -103,3 +103,96 @@ backfill from) and the `plyr_zig_canary` and `plyr_zig_worker` roles. Seed
 with `generate_series` into `actor_identities`, `account_availability`,
 `profile_records`, `track_records` and `like_records`, using real CIDs and
 TIDs (the stores refuse anything else), then `ANALYZE`.
+
+## composed read statement cache, November 12
+
+The composed track store now names its nine fixed queries through pg.zig's
+existing per-connection statement cache. Reuse avoids repeated Parse/Describe;
+Postgres still chooses between custom and generic plans. This is not a promise
+that every query stops planning. Names are bounded by the query set and disappear
+with the connection. No user values enter statement names.
+
+A local ReleaseSafe comparison used the same Postgres 16 container, 20,000
+tracks, one artist, 50-row responses, and identical before/after response SHA-256s.
+Each case warmed with 12 serial requests, then measured three seconds at one and
+eight concurrent clients. The first complete before/after pair had no errors:
+
+| read | concurrency | p50 before → after | p95 before → after | requests/s before → after |
+|---|---:|---:|---:|---:|
+| discovery | 1 | 28.3 → 31.6 ms | 39.2 → 51.7 ms | 32.2 → 28.9 |
+| discovery | 8 | 46.7 → 40.9 ms | 103.7 → 65.3 ms | 143.6 → 178.3 |
+| popular tag | 1 | 299.9 → 108.6 ms | 351.7 → 132.8 ms | 3.2 → 8.8 |
+| popular tag | 8 | 385.6 → 145.1 ms | 632.1 → 390.5 ms | 18.7 → 39.1 |
+| rare tag | 1 | 122.4 → 109.7 ms | 197.5 → 130.9 ms | 6.7 → 8.9 |
+| rare tag | 8 | 142.3 → 150.9 ms | 190.8 → 241.7 ms | 52.5 → 49.1 |
+| artist | 1 | 12.6 → 10.3 ms | 24.5 → 15.1 ms | 69.8 → 92.0 |
+| artist | 8 | 21.7 → 15.1 ms | 61.1 → 27.6 ms | 294.1 → 477.1 |
+
+These are short synthetic workstation samples, not production percentiles. The
+popular-tag and artist improvements warrant the change; unfiltered and rare-tag
+results do not establish a general speedup. The unfiltered single-client and
+rare-tag concurrent samples regressed. A second cached pass was started, but
+unrelated builds on the shared laptop resumed during that pass; the incomplete
+alternating campaign is not used as confirmation. Earlier measurements overlapping
+compilation, integration tests or fixture creation were discarded. Dense tag
+reads remain too expensive and need a separate query-plan investigation.
+
+The integration regression alternates missing and matching legacy tags beyond
+Postgres's initial custom-plan executions and verifies exact record identity. It
+also checks that the server actually reused the named statement. Existing tests
+exercise cursor/artist/account boundaries, projection changes and moderation on
+the same connection, so caching must not freeze values or policy decisions.
+
+### reproducing the larger fixture
+
+The existing `composed_track_bench.sql` seeds 100 tracks and predates several
+projection migrations. From `next/backend`, use a disposable `zig_bench` only:
+
+```bash
+docker compose --profile bench up -d --wait bench-db
+psql=(docker compose exec -T bench-db psql -X -v ON_ERROR_STOP=1 -U zig_bench -d zig_bench)
+"${psql[@]}" < scripts/composed_track_bench.sql
+"${psql[@]}" -c 'ALTER TABLE public.artists ADD COLUMN pds_url text'
+for prefix in 0023 0024 0026 0028 0029 0030 0032 0033 0034; do
+  for migration in migrations/"$prefix"_*.sql; do
+    "${psql[@]}" -1 < "$migration"
+  done
+done
+"${psql[@]}" <<'SQL'
+INSERT INTO plyr_index.track_tag_records
+SELECT record_uri, record_cid, ARRAY['ambient'], true
+FROM plyr_index.track_records;
+INSERT INTO plyr_index.track_records
+SELECT (jsonb_populate_record(NULL::plyr_index.track_records,
+  to_jsonb(t) || jsonb_build_object(
+    'record_uri', format('at://did:plc:bench/fm.plyr.dev.track/track-%s', n),
+    'rkey', format('track-%s', n),
+    'title', format('Benchmark Track %s', n),
+    'record_created_at', to_char(
+      TIMESTAMPTZ '2026-08-08 12:00:00+00' + n * INTERVAL '1 second',
+      'YYYY-MM-DD"T"HH24:MI:SS"Z"')
+  ))).*
+FROM (SELECT * FROM plyr_index.track_records LIMIT 1) t
+CROSS JOIN generate_series(101, 20000) n;
+INSERT INTO plyr_index.track_tag_records
+SELECT record_uri, record_cid,
+  ARRAY[CASE WHEN rkey IN ('track-101', 'track-102')
+    THEN 'rare-tag' ELSE 'ambient' END], true
+FROM plyr_index.track_records
+WHERE record_uri NOT IN (SELECT record_uri FROM plyr_index.track_tag_records);
+ANALYZE;
+SQL
+```
+
+Build each revision with `zig build -Doptimize=ReleaseSafe`, retaining separate
+binaries, and wait for fixture creation and other builds to finish. Run
+`scripts/bench_http.py --with-index --duration 3 --concurrency 1 --path ...`
+with the disposable database URL; repeat at concurrency 8. The paths are
+`/v1/tracks?limit=50`, the same with `&tag=ambient` or `&tag=rare-tag`, and
+`&artist_did=did:plc:bench`. For the table above, the script's
+`benchmark_process` helper was called with each retained binary, pool size 8,
+maximum connections 16, and a validation callback that made 12 requests and
+compared body hashes before timing. Keep that warmup and compare hashes across
+revisions when reproducing the table; the plain CLI command alone includes cold
+statement preparation and is a different measurement. Keep the full JSON output,
+including errors, sample count, p99 and memory, alongside any reported summary.
