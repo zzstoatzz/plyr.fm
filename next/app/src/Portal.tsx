@@ -1,28 +1,39 @@
 import { trackArtwork, collectionArtwork } from './artwork';
 import { Link, useFocusEffect } from 'expo-router';
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { Platform, Pressable, View, type KeyDownEvent, type ScrollViewInstance, type ViewInstance } from 'react-native';
+import { useCallback, useEffect, useRef, useState, type ReactNode, type Ref } from 'react';
+import { Platform, Pressable, ScrollView, View, type ScrollViewProps, type KeyDownEvent, type ScrollViewInstance, type ViewInstance } from 'react-native';
 import Pencil from 'lucide-react-native/icons/pencil';
 import RefreshCw from 'lucide-react-native/icons/refresh-cw';
 import { api, ApiError, type Artist, type ListSummary } from './api';
 import { useAuth } from './auth';
 import { useAppearance } from './appearance';
-import { Action, Copy, Page, row } from './controls';
+import { Action, Copy, InlineLink, pageFrame, row } from './controls';
 import { Cover, Detail, Row, useResource } from './CatalogPieces';
 import { Choice } from './AccountPieces';
 import { Text } from './Text';
 import { WaveLoading } from './WaveLoading';
 import { usePortalPages } from './use-portal-pages';
+import { ShareLink } from './ShareLink';
 import { catalogRevision } from './catalog-changes';
 
 export function Portal() {
   const auth = useAuth();
-  if (!auth.ready) return <Page title="portal"><WaveLoading label="Loading account" /></Page>;
-  if (!auth.did) return <Page title="portal">
+  if (!auth.ready) return <PortalPage><WaveLoading label="Loading account" /></PortalPage>;
+  if (!auth.did) return <PortalPage>
     <Copy>sign in to manage your music.</Copy>
     <View style={row}><Action label="sign in" href={{ pathname: '/login', params: { return_to: '/portal' } }} /></View>
-  </Page>;
+  </PortalPage>;
   return <AccountPortal key={auth.did} did={auth.did} handle={auth.handle} />;
+}
+
+function PortalPage({ children, scrollRef, ...props }: {
+  children: ReactNode; scrollRef?: Ref<ScrollViewInstance>;
+} & Pick<ScrollViewProps, 'onScroll' | 'onContentSizeChange'>) {
+  const theme = useAppearance();
+  return <ScrollView ref={scrollRef} {...props} scrollEventThrottle={16} keyboardShouldPersistTaps="handled"
+    style={{ backgroundColor: theme.background }} contentContainerStyle={{ ...pageFrame, gap: 16, paddingTop: 16, paddingBottom: 32 }}>
+    {children}
+  </ScrollView>;
 }
 
 function AccountPortal({ did, handle }: { did: string; handle: string | null }) {
@@ -34,12 +45,22 @@ function AccountPortal({ did, handle }: { did: string; handle: string | null }) 
   const positions = useRef({ tracks: 0, albums: 0 });
   const offset = useRef(0);
   const restore = useRef<number | null>(null);
+  const focusTab = useRef(false);
   const restoreScroll = useCallback(() => {
     if (restore.current === null) return;
     scroll.current?.scrollTo({ y: restore.current, animated: false });
     restore.current = null;
   }, []);
-  useEffect(() => { const frame = requestAnimationFrame(restoreScroll); return () => cancelAnimationFrame(frame); }, [tab, restoreScroll]);
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => {
+      restoreScroll();
+      if (focusTab.current) {
+        (tab === 'tracks' ? trackTab : albumTab).current?.focus();
+        focusTab.current = false;
+      }
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [tab, restoreScroll]);
   const selectTab = (next: typeof tab) => {
     if (next === tab) return;
     positions.current[tab] = offset.current;
@@ -62,34 +83,48 @@ function AccountPortal({ did, handle }: { did: string; handle: string | null }) 
     if (revision !== profileRevision.current) { profileRevision.current = revision; artist.retry(); }
   }, [did, artist.retry]));
   const name = profile?.display_name || handle || 'your music';
-  return <Page title="portal" scrollRef={scroll} onScroll={event => { offset.current = event.nativeEvent.contentOffset.y; }} onContentSizeChange={restoreScroll}>
+  const tabs = <View accessibilityRole="tablist" accessibilityLabel="Your catalog" {...(Platform.OS === 'web' ? { onKeyDown: (event: KeyDownEvent) => {
+      const key = event.nativeEvent.key;
+      if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(key)) return;
+      event.preventDefault();
+      const next = key === 'Home' ? 'tracks' : key === 'End' ? 'albums' : tab === 'tracks' ? 'albums' : 'tracks';
+      if (next === tab) {
+        focusTab.current = false;
+        (next === 'tracks' ? trackTab : albumTab).current?.focus();
+        return;
+      }
+      focusTab.current = true;
+      selectTab(next);
+    } } : {})} style={row}>
+      <Choice ref={trackTab} role="tab" label="tracks" selected={tab === 'tracks'} onPress={() => selectTab('tracks')} />
+      <Choice ref={albumTab} role="tab" label="albums" selected={tab === 'albums'} onPress={() => selectTab('albums')} />
+    </View>;
+  return <PortalPage scrollRef={scroll} onScroll={event => { offset.current = event.nativeEvent.contentOffset.y; }} onContentSizeChange={restoreScroll}>
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 8 }}>
       <Cover uri={profile?.avatar_url} size={64} round />
       <View style={{ flex: 1, minWidth: 0, gap: 4 }}>
         <Text numberOfLines={2} style={{ color: theme.text, fontSize: 22 * theme.scale, fontWeight: '700' }}>{name}</Text>
         {handle && <Detail>@{handle}</Detail>}
+        <InlineLink standalone href={{ pathname: '/u/[handle]', params: { handle: handle || did } }}>view public profile</InlineLink>
       </View>
     </View>
     <View style={row}>
-      <Action label="upload" href="/upload" />
+      <Action primary label="upload" href="/upload" />
       <Action label="edit profile" href="/edit-profile" />
-      <Action label="public profile" href={{ pathname: '/u/[handle]', params: { handle: handle || did } }} />
+      <ShareLink compact path={'/u/' + (handle || did)} />
     </View>
     {artist.error && <View style={row}><Copy>couldn’t load your profile.</Copy><Action label="retry profile" onPress={artist.retry} /></View>}
-    <View accessibilityRole="tablist" accessibilityLabel="Your catalog" {...(Platform.OS === 'web' ? { onKeyDown: (event: KeyDownEvent) => {
-      const key = event.nativeEvent.key;
-      if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(key)) return;
-      event.preventDefault();
-      const next = key === 'Home' ? 'tracks' : key === 'End' ? 'albums' : tab === 'tracks' ? 'albums' : 'tracks';
-      selectTab(next);
-      (next === 'tracks' ? trackTab : albumTab).current?.focus();
-    } } : {})} style={[row, { paddingTop: 12, borderBottomWidth: 1, borderColor: theme.hairline, paddingBottom: 12 }]}>
-      <Choice ref={trackTab} role="tab" label="tracks" selected={tab === 'tracks'} onPress={() => selectTab('tracks')} />
-      <Choice ref={albumTab} role="tab" label="albums" selected={tab === 'albums'} onPress={() => selectTab('albums')} />
-    </View>
-    <View style={{ display: tab === 'tracks' ? 'flex' : 'none' }} aria-hidden={tab !== 'tracks'}><OwnedTracks did={did} active={tab === 'tracks'} /></View>
-    {visited.current.albums && <View style={{ display: tab === 'albums' ? 'flex' : 'none' }} aria-hidden={tab !== 'albums'}><OwnedAlbums did={did} active={tab === 'albums'} /></View>}
-  </Page>;
+
+    <View style={{ display: tab === 'tracks' ? 'flex' : 'none' }} aria-hidden={tab !== 'tracks'}><OwnedTracks did={did} active={tab === 'tracks'} tabs={tab === 'tracks' ? tabs : null} /></View>
+    {visited.current.albums && <View style={{ display: tab === 'albums' ? 'flex' : 'none' }} aria-hidden={tab !== 'albums'}><OwnedAlbums did={did} active={tab === 'albums'} tabs={tab === 'albums' ? tabs : null} /></View>}
+  </PortalPage>;
+}
+
+function CatalogToolbar({ children, onRefresh, disabled }: { children: ReactNode; onRefresh: () => void; disabled: boolean }) {
+  const theme = useAppearance();
+  return <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingBottom: 12, borderBottomWidth: 1, borderColor: theme.hairline }}>
+    <View style={{ flex: 1 }}>{children}</View><Refresh onPress={onRefresh} disabled={disabled} />
+  </View>;
 }
 
 function Refresh({ onPress, disabled }: { onPress: () => void; disabled: boolean }) {
@@ -100,14 +135,12 @@ function Refresh({ onPress, disabled }: { onPress: () => void; disabled: boolean
   </Pressable>;
 }
 
-function OwnedTracks({ did, active }: { did: string; active: boolean }) {
+function OwnedTracks({ did, active, tabs }: { did: string; active: boolean; tabs: ReactNode }) {
   const theme = useAppearance();
   const load = useCallback((cursor?: string) => api.tracks({ artist_did: did, limit: 25, cursor }), [did]);
   const tracks = usePortalPages(did, 'tracks', load, active);
   return <View style={{ gap: 8 }}>
-    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-      <Detail>your published tracks</Detail><Refresh onPress={tracks.reload} disabled={tracks.loading} />
-    </View>
+    {tabs && <CatalogToolbar onRefresh={tracks.reload} disabled={tracks.loading}>{tabs}</CatalogToolbar>}
     {tracks.data.map(track => <Row key={track.record.uri} title={track.metadata.title} image={trackArtwork(track)}
       subtitle={`${track.metrics.play_count} ${track.metrics.play_count === 1 ? 'play' : 'plays'}${track.metadata.album ? ` · ${track.metadata.album}` : ''}`}
       href={{ pathname: '/track/[id]', params: { id: track.id } }}
@@ -121,13 +154,11 @@ function OwnedTracks({ did, active }: { did: string; active: boolean }) {
   </View>;
 }
 
-function OwnedAlbums({ did, active }: { did: string; active: boolean }) {
+function OwnedAlbums({ did, active, tabs }: { did: string; active: boolean; tabs: ReactNode }) {
   const load = useCallback((cursor?: string) => api.albums(did, { cursor, limit: 25 }), [did]);
   const albums = usePortalPages<ListSummary>(did, 'albums', load, active);
   return <View style={{ gap: 8 }}>
-    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-      <Detail>your published albums</Detail><Refresh onPress={albums.reload} disabled={albums.loading} />
-    </View>
+    {tabs && <CatalogToolbar onRefresh={albums.reload} disabled={albums.loading}>{tabs}</CatalogToolbar>}
     {albums.data.map(album => <Row key={album.record.uri} title={album.metadata.name || 'untitled album'} image={collectionArtwork(album)}
       subtitle={`${album.metrics.member_count} ${album.metrics.member_count === 1 ? 'track' : 'tracks'}`}
       href={{ pathname: '/album/[id]', params: { id: album.id } }} />)}
@@ -139,6 +170,6 @@ function OwnedAlbums({ did, active }: { did: string; active: boolean }) {
 function CatalogState({ loading, error, empty, retry }: { loading: boolean; error?: string; empty: boolean; retry: () => void }) {
   if (loading) return <WaveLoading label="Loading your music" />;
   if (error) return <View style={{ gap: 10 }}><Copy>{error}</Copy><View style={row}><Action label="retry" onPress={retry} /></View></View>;
-  if (empty) return <View style={{ gap: 12, paddingVertical: 20 }}><Copy>no published music here yet.</Copy><View style={row}><Action label="upload a track" href="/upload" /></View></View>;
+  if (empty) return <View style={{ gap: 12, paddingVertical: 20 }}><Copy>no published music here yet.</Copy></View>;
   return null;
 }
