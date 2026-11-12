@@ -17,7 +17,12 @@ async function request(url, init = {}) {
 
 async function json(url, init = {}) {
   const response = await request(url, init);
-  assert.ok(response.ok, `${new URL(url).pathname}: HTTP ${response.status}`);
+  if (!response.ok) {
+    const failure = await response.json().catch(() => ({}));
+    const known = ['record authority unavailable', 'invalid authority response', 'upload unavailable'];
+    const reason = known.includes(failure.error) ? ` (${failure.error})` : '';
+    throw new Error(`${new URL(url).pathname}: HTTP ${response.status}${reason}`);
+  }
   return response.json();
 }
 

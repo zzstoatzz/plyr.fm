@@ -38,11 +38,11 @@ for (const failure of [undefined, 'part', 'create', 'activate', 'cleanup']) test
       if (init.headers?.range) return new Response(bytes.subarray(0, 44), { status: 206, headers: { 'content-range': `bytes 0-43/${bytes.length}` } });
       return new Response(bytes, { headers: { 'x-content-type-options': 'nosniff' } });
     }
-    if (path.endsWith('/parts/1')) { bytes = init.body; return response({}, failure === 'part' ? 503 : 200); }
+    if (path.endsWith('/parts/1')) { bytes = init.body; return response({ error: 'do not expose private payloads' }, failure === 'part' ? 503 : 200); }
     if (path.endsWith('/finish')) return response({ audioUrl });
     if (path.endsWith('/activate')) {
       published = failure !== 'activate';
-      return response({ state: 'published', reservedBytes: 0 }, published ? 200 : 503);
+      return response({ state: 'published', reservedBytes: 0, error: 'record authority unavailable' }, published ? 200 : 503);
     }
     if (init.method === 'DELETE') { cancelled = true; return response({}); }
     if (!init.method) {
@@ -53,7 +53,11 @@ for (const failure of [undefined, 'part', 'create', 'activate', 'cleanup']) test
   });
   let deletes = 0;
   const run = main({ deleteObject: async key => { removed = key; if (++deletes === 2 && failure === 'cleanup') throw new Error('denied'); } });
-  if (failure) await assert.rejects(run); else await run;
+  if (failure) await assert.rejects(run, error => {
+    assert.ok(!error.message.includes('do not expose private payloads'));
+    if (failure === 'activate') assert.match(error.message, /record authority unavailable/);
+    return true;
+  }); else await run;
   assert.equal(`at://${deleted.repo}/${deleted.collection}/${deleted.rkey}`, admission.recordUri);
   assert.equal(removed, `plyr-next-audio/uploads/${createHash('sha256').update(owner).digest('hex')}/${admission.uploadId}`);
   assert.equal(cancelled, failure === 'part');
