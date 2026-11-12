@@ -15,6 +15,9 @@
 
 ## summary
 
+For the current bounded Next inspection, see the [November 12 checkpoint](#november-12-daily-driver-cost-checkpoint).
+The June figures below remain historical.
+
 **As of 2026-06-17.** Figures are monthly. Confidence is noted per line because not
 every provider exposes a clean per-project invoice; where a number is derived from
 measured usage × public list price it's marked **est**, and where it could not be
@@ -270,3 +273,34 @@ and allocator overhead. This is a fixture size, not a measured per-user average.
 The existing 128 MB Redis limit uses `noeviction`: monitor retained state and
 admission/write failures before expanding usage. Redis remains one primary.
 The November 4/5 estimates above were not refreshed into a November 7 invoice.
+
+### November 12 daily-driver cost checkpoint
+
+Read-only inspection of the [live feed](https://hub.waow.tech/api/costs.json),
+generated `2026-11-12T08:02:09.987369Z`. Amounts below convert its cents to USD.
+These are monthly estimates from measured uptime/list prices, not invoices.
+
+| Identified Next resource | Monthly estimate |
+| --- | ---: |
+| Zig API/ingester (`plyr-api-zig-canary`) | $8.44 |
+| `plyr-redis-next` | $2.02 |
+| Two Jam coordinators | $4.04 |
+| Jam Redis compute, volume and snapshots | $2.18 |
+| Next audio R2 storage | $0.11 |
+| **Identified Next subtotal, excluding Postgres and other gaps** | **$16.79** |
+
+The feed's `plyr.fm` project subtotal is $51.95 ($49.66 Fly, $2.29 Cloudflare).
+It omits $6.33 of identifiable Next Jam/R2 resources marked `unattributed`, so
+the combined identified estimate is $58.28 before missing costs.
+Neon explicitly reports no reconciled usage amount; AuDD, AI services, network,
+stopped root filesystems and other excluded usage are not proved free. The
+November 4 measured Postgres baseline is historical, not a refreshed November 12
+measurement. Do not present either subtotal as the complete cost of Next.
+
+The current `relay-api` estimate is $22.96/month, but retiring it requires moving
+its worker responsibilities as well as API traffic. Moderation, transcoding,
+radio and storage do not disappear because the client changes. Running both
+stacks has not yet established cheaper overall operation. Record the actual
+retirement set and refreshed database consumption at cutover; do not subtract
+the whole legacy footprint speculatively. No resources or billing settings were
+changed by this inspection.
