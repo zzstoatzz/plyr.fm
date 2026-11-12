@@ -6,6 +6,19 @@ finish line. This is execution evidence, not another parity inventory.
 
 ## shipped to Next
 
+- #2525: owners can delete private tracks with explicit confirmation that the
+  current record, including changes made elsewhere, will be removed. Missing
+  grants and incompatible policies prevent writes; unresolved creation blocks
+  deletion so recovery cannot recreate it. Lost responses reconcile through
+  readback, with Check as the only action while the outcome is unknown.
+  Confirmed absence removes every matching private queue occurrence, releases
+  current audio and leaves remaining tracks paused and playable. Deployment
+  `43233021408` serves `b3e84923`; eight deployed normal/enlarged browser cases
+  passed. Native simulator recovery verified exactly one synthetic delete and
+  one source release, using a local-file protected-source adapter. This does not
+  establish native signed transport or real-account OAuth. Private metadata
+  editing remains open: current ZDS `ebb84af9` and permissioned-data lexicons
+  `79271658` lack atomic revision preconditions.
 - #2522: private creation/recovery and playback use the owner's existing private
   space and the app's existing player. Policy checks preserve invited members;
   public-like/list-write boundaries, accounting and queue sync reject private
