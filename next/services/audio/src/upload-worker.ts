@@ -22,7 +22,7 @@ export class OwnerUploads extends DurableObject<UploadEnv> {
     super(ctx, env);
     const origin = env.PROCESSING_TRANSCODER_URL;
     const auth = env.PROCESSING_TRANSCODER_KEY;
-    this.processing = new ProcessingJobs(ctx.storage, env.AUDIO, origin === "https://plyr-transcoder-staging.fly.dev/v1/processing" && auth && auth.length >= 32 ? {
+    this.processing = new ProcessingJobs(ctx.storage, env.AUDIO, origin === "https://plyr-next-processing.fly.dev/v1/processing" && auth && auth.length >= 32 ? {
       secret: env.UPLOAD_CAPABILITY_SECRET, url: origin, auth,
     } : null);
     this.sessions = new UploadSessions(ctx.storage, env.AUDIO, session => this.inspect(session), Date.now, (session, retry) => this.processing.advance(session, retry));
@@ -54,7 +54,7 @@ export class OwnerUploads extends DurableObject<UploadEnv> {
         if (!claim || pieces[3] !== await ownerHash(claim.owner) || pieces[4] !== claim.uploadId) throw new UploadFailure(403, "invalid upload capability");
         const base = `${url.origin}/media/${pieces[3]}/${claim.uploadId}`;
         if (request.method === "POST" && pieces.length === 5) {
-          if (claim.processing && ((this.env.PROCESSING_TRANSCODER_KEY?.length ?? 0) < 32 || this.env.PROCESSING_TRANSCODER_URL !== "https://plyr-transcoder-staging.fly.dev/v1/processing")) throw new UploadFailure(503, "processing is not configured");
+          if (claim.processing && ((this.env.PROCESSING_TRANSCODER_KEY?.length ?? 0) < 32 || this.env.PROCESSING_TRANSCODER_URL !== "https://plyr-next-processing.fly.dev/v1/processing")) throw new UploadFailure(503, "processing is not configured");
           return Response.json(await this.sessions.start(claim, base));
         }
         const session = await this.sessions.load(claim.uploadId);
