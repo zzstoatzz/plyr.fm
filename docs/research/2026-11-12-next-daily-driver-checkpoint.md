@@ -6,6 +6,27 @@ finish line. This is execution evidence, not another parity inventory.
 
 ## shipped to Next
 
+- #2515: owners can reorder playlist occurrences with explicit Save/Cancel.
+  Canonical snapshots and compare-and-swap preserve duplicate references,
+  unavailable entries and unknown fields; ambiguous responses reconcile the
+  same candidate before another write. Accepted order drives playback while the
+  appview catches up, including saves completed behind Settings, skipped
+  intermediate revisions and account/route changes. Deployment `43219891155`
+  serves `eb8b7dd9`; eight deployed normal/enlarged browser cases passed and
+  screenshots were inspected. Actual iOS simulator move/save/Play/Next/pause
+  passed. The missing action and retained-screen busy bug each failed their
+  pre-fix checks. Album creation/organization remains separate work.
+- #2511 and #2514: current Spaces requests use `credentialKey` and the batch
+  `putMembers`/`removeMembers` methods. The prior field and singular methods
+  were removed by ZDS; staging telemetry identified the membership failure as
+  `404 UnknownMethod`, rather than a browser CORS configuration defect. Private
+  sharing and Next Jam invitations preserve read-only grants. Python and actual
+  Next invitation regressions fail on the old requests. Deployment `43219109965`
+  serves Next web `58d9a8f2`; staging deployment `43219110147` and real private-media
+  E2E `43219110198` passed. The latter verified outsider refusal, an owner grant,
+  member audio 206, removal returning to 404, fresh-session private playback and
+  private voice recording, with disposable tracks deleted afterward. No production
+  release was made. Signed response verification upgrades remain a separate slice.
 - #2510: an owner can explicitly set aside an uncertain or permanently rejected
   create, with a warning that it may still appear. Its exact intent remains in
   earlier attempts for checking or resuming. Resolving an earlier attempt
