@@ -51,6 +51,10 @@ instead. Add one when something bites.
   `bun install` first.
 - **Checks that need a local PDS or the compose Redis and Postgres** fail at
   setup without them; `node scripts/checks.mjs` lists what each one needs.
-- **Three checks failed on main before November 12** for older reasons:
-  keyboard shortcuts, the playback retry case and font settings. Don't read
-  their failure as yours without running them on main first.
+- **Some checks fail on main** for older reasons: keyboard shortcuts, the
+  playback retry case and font settings (from the November 12 handoff), and
+  `check-artist-catalog` at the Back step, where the second page of albums is
+  gone after returning. Run a failing check on main before reading it as yours.
+- **The player harness launches `chromium` with `channel: 'chrome'`.** Where
+  only Playwright's bundled Chromium exists (cloud containers), point
+  `PLAYWRIGHT_MODULE` at a small wrapper that drops `channel`.
