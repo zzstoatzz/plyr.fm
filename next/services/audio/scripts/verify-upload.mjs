@@ -164,7 +164,7 @@ export async function main({ deleteObject = deleteFixtureObject } = {}) {
     const existing = await transport.status();
     assert.equal(existing.state, 'transferring', 'resume only an unfinished fixture');
     const record = await request(`${xrpc('com.atproto.repo.getRecord')}?${new URLSearchParams({ repo: owner, collection, rkey })}`);
-    assert.equal(record.status, 400);
+    assert.ok(record.status === 400 || record.status === 404, 'resume requires absent canonical record');
     assert.equal((await record.json()).error, 'RecordNotFound', 'resume requires absent canonical record');
     resumedParts = existing.receivedParts.length;
     console.log(JSON.stringify({ resumedParts, uploadId, recordUri }));

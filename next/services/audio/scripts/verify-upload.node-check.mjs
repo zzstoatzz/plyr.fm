@@ -30,7 +30,7 @@ for (const state of ['complete', 'transferring']) test(`resume refuses ${state =
     if (path.endsWith('getRecord')) return Response.json({ value: { title: 'existing record' } });
     return Response.json({ state, partSizeBytes: 10485760, partCount: 154, reservedBytes: 1610612736, recoveryRequired: false, receivedParts: [], reservedDigests: [], ...(state === 'complete' ? { audioUrl } : {}) });
   });
-  await assert.rejects(main({ deleteObject: async () => { assert.fail('must not remove existing bytes'); } }), state === 'complete' ? /unfinished fixture/ : /200 !== 400/);
+  await assert.rejects(main({ deleteObject: async () => { assert.fail('must not remove existing bytes'); } }), state === 'complete' ? /unfinished fixture/ : /absent canonical record/);
 });
 
 for (const failure of [undefined, 'start-invalid', 'start-lost', 'part', 'status', 'create', 'activate', 'cleanup']) test(`deployed fixture exact cleanup: ${failure ?? 'success'}`, async t => {
