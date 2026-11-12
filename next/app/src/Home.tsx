@@ -24,6 +24,7 @@ export function Home({ onPlay }: { onPlay: Play }) {
 }
 
 function HomeFeed({ onPlay, hiddenTags }: { onPlay: Play; hiddenTags: string[] }) {
+  const hiddenKey = JSON.stringify(hiddenTags);
   const colors = useColors();
   const list = useRef<FlatList<Track>>(null);
   const [layoutWidth, setLayoutWidth] = useState(0);
@@ -34,7 +35,7 @@ function HomeFeed({ onPlay, hiddenTags }: { onPlay: Play; hiddenTags: string[] }
   const [selection, setSelection] = useState(() => ({ key, tags: parseSelectedTags(readLocal(key)) }));
   const selected = selection.key === key ? selection.tags : parseSelectedTags(readLocal(key));
   const tagKey = JSON.stringify(selected);
-  const loadLatest = useCallback((cursor?: string) => api.tracks({ limit: HOME_PAGE_SIZE, cursor, tag: parseSelectedTags(tagKey), hidden_tag: discoveryFilter(hiddenTags) }), [tagKey, hiddenTags]);
+  const loadLatest = useCallback((cursor?: string) => api.tracks({ limit: HOME_PAGE_SIZE, cursor, tag: parseSelectedTags(tagKey), hidden_tag: discoveryFilter(JSON.parse(hiddenKey)) }), [tagKey, hiddenKey]);
   const latest = usePages(loadLatest);
   const [headerHeight, setHeaderHeight] = useState(0);
   const rowHeight = Math.max(96, Math.ceil(64 * colors.scale + 32));

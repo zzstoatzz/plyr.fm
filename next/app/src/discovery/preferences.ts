@@ -21,6 +21,7 @@ export function hiddenTags(value: unknown): string[] | undefined {
   });
 }
 
-export function discoveryFilter(tags: string[]): string[] | undefined {
+export function discoveryFilter(value: unknown): string[] | undefined {
+  const tags = hiddenTags(value) ?? DEFAULT_HIDDEN_TAGS;
   return JSON.stringify(tags) === JSON.stringify(DEFAULT_HIDDEN_TAGS) ? undefined : tags.length ? tags : [''];
 }

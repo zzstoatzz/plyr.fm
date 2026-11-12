@@ -68,9 +68,9 @@ async function run(browser, width, theme) {
     }
     assert.ok(authModule);
     await page.route('https://plc.directory/**', route => route.fulfill({ json: { service: [] } }));
-    const signIn = did => page.evaluate(([id, did]) => globalThis.__r(id).setAuth(did, {
-      handle: async () => new Response(JSON.stringify({ records: [] }), { headers: { 'content-type': 'application/json' } }),
-    }, 'atproto'), [authModule, did]);
+    const signIn = (did, synced = false) => page.evaluate(([id, did, synced]) => globalThis.__r(id).setAuth(did, {
+      handle: async url => new Response(JSON.stringify(String(url).includes('getServiceAuth') ? { token: 'fixture' } : { records: [] }), { headers: { 'content-type': 'application/json' } }),
+    }, synced ? 'atproto rpc:fm.plyr.stg.jam.join?aud=did:web:plyr-jams-next.fly.dev#jams' : 'atproto'), [authModule, did, synced]);
     await signIn('did:plc:discoveryone');
     await edit();
     await page.getByRole('button', { name: 'Show all tags', exact: true }).click();
@@ -82,6 +82,28 @@ async function run(browser, width, theme) {
     await signIn('did:plc:discoveryone');
     await page.getByRole('button', { name: 'hidden tags: none', exact: true }).waitFor();
     assert.equal(await field.count(), 0, 'editor draft does not cross accounts');
+    let preferenceReads = 0;
+    await page.route('https://plyr-jams-next.fly.dev/v1/preferences', route => {
+      preferenceReads++;
+      return route.fulfill({ json: { preferences: { hiddenTags: defaults } } });
+    });
+    await page.route('https://plyr-jams-next.fly.dev/v1/playback/join', route => route.fulfill({ status: 503, json: { error: 'fixture unavailable' } }));
+    await page.route('https://public.api.bsky.app/**', route => route.fulfill({ json: { follows: [] } }));
+    await page.routeWebSocket('**/*', socket => socket.close());
+    await page.exposeFunction('__preferenceReads', () => preferenceReads);
+    await signIn('did:plc:discoverysync', true);
+    await page.waitForFunction(async () => await window.__preferenceReads() >= 1);
+    await go('/');
+    await feed.getByText('human recording', { exact: true }).waitFor();
+    const render = () => page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+    await render();
+    const beforeSync = queries.length;
+    const beforeReads = preferenceReads;
+    await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+    await page.waitForFunction(async count => await window.__preferenceReads() > count, beforeReads);
+    await render();
+    assert.equal(queries.length, beforeSync, 'same-value account sync retains the loaded feed and cursor');
+    await feed.getByText('human recording', { exact: true }).waitFor();
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
     assert.deepEqual(errors, []);
     console.log(`${width}/${theme}: defaults, show-all, normalized custom tags, validation, persistence and account isolation passed`);
