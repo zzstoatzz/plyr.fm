@@ -85,3 +85,17 @@ run against production. Docs for the eventual cutover stay staged until then.
   current app/backend source and workflows at `109b6899a`.
 - First slices: backend stale-connection/statement-planning investigation;
   scoped app/backend structure rules; repair the three browser checks in #2485.
+- First implementation: connection-owned prepared statements for composed reads;
+  artist catalog sections with independent pagination/retry; compact collection
+  playback; clearer search actions and stable input focus. Home preload and feed
+  now share a page size (previously 30 versus 24), and tag targets are 44px again.
+- Local acceptance: TypeScript, 77 client tests and web export; Home's unchanged
+  four-layout filter/clear check now passes. Keyboard, font and playback checks
+  pass after following current UI behavior; the playback 503 case required no
+  assertion change. Artist tests cover four layouts at normal and 1.4x text,
+  independent failures, cursor paging, Back and continued decoded audio. Search
+  covers four layouts at 1.3x text and explicit recovery from track hydration 503.
+  Screenshot matrices were inspected. Fixtures establish UI behavior, not real
+  account authorization. Native bundle exports are not device acceptance.
+- Backend measurements and their scope are in `next/backend/docs/perf.md`.
+  The existing dead-connection read failure (#2319) remains separate from caching.
