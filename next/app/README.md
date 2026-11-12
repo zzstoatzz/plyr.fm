@@ -157,7 +157,15 @@ upload service-auth permission. Existing sessions can keep listening and using
 the small PDS-blob path; sign in again only when large-upload permission is
 needed. Audio above 100 MiB and up to 1.5 GiB uses the service's public/open
 `audioUrl` path, with sequential 10 MiB reads on web and native. This does not
-complete protected uploads, restricted downloads or transcoding parity.
+complete protected uploads or restricted downloads.
+
+MP3 conversion is optional for public uploads, including small files. It uses
+plyr storage with a separate output-space reservation and keeps the original
+for download. AIFF and WebM require conversion. Processing can resume after
+reload without reselecting the source; a known output-capacity failure does
+not offer an ineffective retry. Increasing an existing reservation remains
+unsupported. See the [processing contract](../backend/docs/upload-processing.md)
+for retention, portability and acceptance limits.
 
 Pause stops transfer work without pretending to cancel an accepted request.
 Reselect the original file to resume; every server-reserved digest is checked
@@ -168,6 +176,8 @@ record verification. Setting a create aside retains completed-upload recovery.
 Completed cancellation conflicts remain visible and quota-bearing; published
 URLs remain public. Clearing local app data loses this client's recovery list.
 
+`check-processing-upload.cjs` exercises conversion consent, processing recovery,
+capacity failure and publication with small mocked HTTP/PDS fixtures.
 `check-large-upload.cjs` uses small file/HTTP/PDS fixtures and logical size
 metadata for the consent boundary. `check-large-upload-stream.mts` defaults to a
 small loopback streaming fixture; its 1.5 GiB mode runs only in cloud CI. The

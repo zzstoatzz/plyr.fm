@@ -2,7 +2,7 @@ import { strict as assert } from 'node:assert';
 import { createHash } from 'node:crypto';
 import { test } from 'node:test';
 import { createUploadTransport, UploadRequestError } from '../src/publishing/upload-transport.ts';
-import { audioFormat, MAX_SERVICE_AUDIO_BYTES, UPLOAD_PART_BYTES, transferParts, uploadOperation, uploadStatus, uploadPublication, type UploadOperation } from '../src/publishing/upload-model.ts';
+import { requiresAudioProcessing, audioFormat, MAX_SERVICE_AUDIO_BYTES, UPLOAD_PART_BYTES, transferParts, uploadOperation, uploadStatus, uploadPublication, type UploadOperation } from '../src/publishing/upload-model.ts';
 import { hasUploadGrant, UPLOAD_SCOPE, SYNC_SCOPE, SCOPE_PARTS, SYNC_SCOPE_PARTS } from '../src/auth-config.ts';
 
 const operation: UploadOperation = { owner: 'did:plc:fixture', collection: 'fm.plyr.track', rkey: '3jzfcijpj2z2a', uri: 'at://did:plc:fixture/fm.plyr.track/3jzfcijpj2z2a',
@@ -170,4 +170,10 @@ test('processing status rejects a changed recipe, incomplete artifact and premat
   assert.throws(() => uploadOperation({ ...input, processing: { recipe: 'unknown', outputBudget: 128 } }, input.owner), /reservation/);
   assert.equal(uploadStatus({ ...value, state: 'processing', recoveryRequired: true, processingFailure: 'output_budget_exceeded' }, input).processingFailure, 'output_budget_exceeded');
   assert.throws(() => uploadStatus({ ...value, state: 'processing', processingFailure: 'arbitrary upstream message' }, input), /invalid processing failure/);
+});
+
+
+test('AIFF and WebM require processing even when the picker omits the MIME or extension', () => {
+  for (const file of [{ name: 'track.AIF', type: '' }, { name: 'track.AIFF', type: '' }, { name: 'track.webm', type: '' }, { name: 'track', type: 'audio/x-aiff' }, { name: 'track', type: 'audio/webm' }]) assert.equal(requiresAudioProcessing(file), true);
+  for (const file of [{ name: 'track.wav', type: 'audio/wav' }, { name: 'track.mp3', type: 'audio/mpeg' }]) assert.equal(requiresAudioProcessing(file), false);
 });

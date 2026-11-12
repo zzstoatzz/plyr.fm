@@ -5,7 +5,7 @@ import { Action, Copy, Field, Page } from '../controls';
 import { measureAudioDuration, pickMedia } from '../media-picker';
 import { createPds, MAX_AUDIO_BYTES, type MediaFile } from '../pds';
 import { LargeUploads, useLargeUploads } from './LargeUploads';
-import { MAX_SERVICE_AUDIO_BYTES } from './upload-model';
+import { MAX_SERVICE_AUDIO_BYTES, requiresAudioProcessing } from './upload-model';
 import type { CreateReservation } from './create-operation';
 import { TagsField } from './TagsField';
 import { CreateRecovery, EarlierCreates, useCreateRecovery } from './CreateRecovery';
@@ -34,16 +34,24 @@ function AccountUpload({ auth }: { auth: Auth }) {
   const [tags, setTags] = useState('');
   const [busy, setBusy] = useState(false);
   const [serviceConsent, setServiceConsent] = useState(false);
+  const [processAudio, setProcessAudio] = useState(false);
+  const [outputMiB, setOutputMiB] = useState('128');
+  const [advanced, setAdvanced] = useState(false);
   const [note, setNote] = useState<string>();
   const recovery = useCreateRecovery(auth, 'track');
   const uploads = useLargeUploads(auth, recovery.refresh, resetCreation);
   const creationRecovery = { ...recovery, operations: recovery.operations.filter(operation => !uploads.operations.some(upload => upload.uri === operation.uri)),
     archived: recovery.archived.filter(operation => !uploads.operations.some(upload => upload.uri === operation.uri)) };
   const large = !!file && file.size > MAX_AUDIO_BYTES;
+  const processingRequired = !!file && requiresAudioProcessing(file);
+  const service = large || processAudio;
+  const outputBudget = /^\d+$/.test(outputMiB) ? Number(outputMiB) * 1024 * 1024 : 0;
+  const maximumOutputMiB = Math.floor((2 * MAX_SERVICE_AUDIO_BYTES - (file?.size ?? 0)) / (1024 * 1024));
+  const validBudget = Number.isSafeInteger(outputBudget) && outputBudget > 0 && Number(outputMiB) <= maximumOutputMiB;
   function resetCreation(operation: CreateReservation) {
     if (operation.rkey !== currentCreation.current) return;
     currentCreation.current = undefined;
-    setFile(null); setArtwork(null); setTitle(''); setAlbum(''); setDescription(''); setTags(''); setNote(undefined); setServiceConsent(false);
+    setFile(null); setArtwork(null); setTitle(''); setAlbum(''); setDescription(''); setTags(''); setNote(undefined); setServiceConsent(false); setProcessAudio(false); setOutputMiB('128'); setAdvanced(false);
   }
   useEffect(() => { live.current = true; return () => { live.current = false; }; }, []);
   const current = () => live.current && getAuth().did === auth.did && getAuth().rpc === auth.rpc;
@@ -55,6 +63,7 @@ function AccountUpload({ auth }: { auth: Auth }) {
       if (kind === 'audio/*') {
         if (item.size > MAX_SERVICE_AUDIO_BYTES) throw new Error('audio files are limited to 1.5 GiB.');
         setFile(item); setServiceConsent(false);
+        if (requiresAudioProcessing(item)) setProcessAudio(true);
         if (!title) setTitle(item.name.replace(/\.[^.]+$/, '').slice(0, 256));
       } else setArtwork(item);
     } catch (failure) {
@@ -64,7 +73,8 @@ function AccountUpload({ auth }: { auth: Auth }) {
 
   async function upload() {
     if (!current() || !file || locked.current || recovery.operations.length || !title.trim() || !artist.trim()) return;
-    if (large && (!serviceConsent || !auth.uploadStorage || uploads.loading || uploads.error)) return;
+    if (processingRequired && !processAudio) { setNote('AIFF and WebM need MP3 conversion before uploading.'); return; }
+    if (service && (!serviceConsent || !auth.uploadStorage || uploads.loading || uploads.error || (processAudio && !validBudget))) return;
     locked.current = true;
     setBusy(true);
     setNote(undefined);
@@ -75,7 +85,7 @@ function AccountUpload({ auth }: { auth: Auth }) {
       if (!current()) return;
       currentCreation.current = reservation.rkey;
       const input = { file, artwork, title, artist, album, description, duration, tags: tags.trim() ? tags.split('\n') : undefined };
-      if (large) await uploads.start(input, reservation);
+      if (service) await uploads.start(input, reservation, processAudio ? { recipe: 'mp3-320k-44100-v1', outputBudget } : undefined);
       else await pds.uploadTrack(input, reservation);
     } catch (failure) {
       if (current()) setNote(failure instanceof Error ? failure.message : 'upload failed.');
@@ -89,12 +99,26 @@ function AccountUpload({ auth }: { auth: Auth }) {
     <LargeUploads uploads={uploads} disabled={busy} />
     <EarlierCreates auth={auth} recovery={creationRecovery} kind="track" />
     {creationRecovery.loading || creationRecovery.error || creationRecovery.operations.length ? <CreateRecovery auth={auth} recovery={creationRecovery} kind="track" onDismiss={resetCreation} /> : uploads.operations.some(operation => operation.rkey === currentCreation.current) ? null : <>
-      <Copy>audio up to 100 MiB goes to your PDS. larger public files can use plyr storage, up to 1.5 GiB.</Copy>
+      <Copy>audio up to 100 MiB can go to your PDS. larger public files and MP3 conversion use plyr storage, up to 1.5 GiB per source file.</Copy>
       <Action label={file?.name ?? 'Choose audio'} onPress={() => void choose('audio/*')} disabled={busy} />
-      {large && <>
-        <Copy>large audio is stored by plyr, not your PDS. playback and downloads are public and remain public after publishing. protected audio, restricted downloads and transcoding are not supported here.</Copy>
+      {file && <Action label="Create MP3 playback" selected={processAudio} disabled={busy || processingRequired} onPress={() => { setProcessAudio(value => !value); setServiceConsent(false); }} />}
+      {processAudio && <>
+        <Copy>creates MP3 playback and retains your original for download. both copies become public.</Copy>
+        {processingRequired && <Copy>AIFF and WebM need MP3 conversion for playback.</Copy>}
+        <Copy>{validBudget ? `space reserved for roughly ${Math.floor(outputBudget / 40000 / 60)} minutes of MP3 playback.` : 'choose a valid MP3 reservation in advanced options.'}</Copy>
+        <Action label={advanced ? 'Hide advanced options' : 'Advanced options'} selected={advanced} disabled={busy} onPress={() => setAdvanced(value => !value)} />
+        {advanced && <>
+          <Field label="MP3 space to reserve (MiB)" value={outputMiB} onChangeText={value => { setOutputMiB(value); setServiceConsent(false); }} keyboardType="number-pad" editable={!busy} />
+          <Copy>choose up to {maximumOutputMiB} MiB. source size does not predict MP3 size; processing stops if this reservation is too small, and it cannot be enlarged yet.</Copy>
+          {!validBudget && <Copy live>enter a whole number from 1 to {maximumOutputMiB} MiB.</Copy>}
+          {validBudget && file && <Copy>reserving {Math.ceil(file.size / (1024 * 1024))} MiB for the original plus {outputMiB} MiB for MP3 output. other unfinished uploads also count toward your 3 GiB limit.</Copy>}
+          <Copy>your PDS record links to plyr storage; it does not contain a portable original blob.</Copy>
+        </>}
+      </>}
+      {service && <>
+        <Copy>audio is stored by plyr, not your PDS. playback and downloads are public and remain public after publishing. protected audio and restricted downloads are not supported here.</Copy>
         <Action label="Use plyr storage" selected={serviceConsent} disabled={busy} onPress={() => setServiceConsent(value => !value)} />
-        {!auth.uploadStorage && <><Copy>sign in again to grant large-upload permission. you will need to select the file again.</Copy><Action label="Sign in for large uploads" href={{ pathname: '/login', params: { return_to: '/upload' } }} /></>}
+        {!auth.uploadStorage && <><Copy>sign in again to grant plyr storage permission. you will need to select the file again.</Copy><Action label="Sign in for large uploads" href={{ pathname: '/login', params: { return_to: '/upload' } }} /></>}
       </>}
       <Action label={artwork?.name ?? 'Choose cover art'} onPress={() => void choose('image/*')} disabled={busy} />
       <Field label="Title" value={title} onChangeText={setTitle} maxLength={256} editable={!busy} />
@@ -103,7 +127,7 @@ function AccountUpload({ auth }: { auth: Auth }) {
       <Field label="Description" value={description} onChangeText={setDescription} maxLength={5000} multiline editable={!busy} />
       <TagsField value={tags} onChange={setTags} disabled={busy} />
       {!!recovery.operations.length && <Copy>finish or set aside the earlier creation before uploading another track.</Copy>}
-      <Action label={busy ? 'Uploading…' : 'Upload'} onPress={() => void upload()} disabled={busy || !!uploads.busy || !!recovery.operations.length || !file || !title.trim() || !artist.trim() || (large && (!serviceConsent || !auth.uploadStorage || uploads.loading || !!uploads.error))} />
+      <Action label={busy ? 'Uploading…' : 'Upload'} onPress={() => void upload()} disabled={busy || !!uploads.busy || !!recovery.operations.length || !file || (processingRequired && !processAudio) || !title.trim() || !artist.trim() || (service && (!serviceConsent || !auth.uploadStorage || uploads.loading || !!uploads.error || (processAudio && !validBudget)))} />
       {note && <Copy live>{note}</Copy>}
     </>}
   </>;

@@ -25,6 +25,10 @@ export function assertPublicUploadRecord(record: Record<string, unknown>): void 
   }
 }
 
+export function requiresAudioProcessing(file: { name: string; type: string }) {
+  return /\.(aiff?|webm)$/i.test(file.name) || ['audio/aiff', 'audio/x-aiff', 'audio/webm'].includes(file.type.toLowerCase());
+}
+
 export function audioFormat(name: string, type: string, processing = false) {
   const fileType = name.split('.').at(-1)?.toLowerCase() ?? '';
   const contentType = (processing ? processingFormats : formats)[fileType];
