@@ -31,34 +31,24 @@ queue with its playback position, and appearance and playback settings. Neither
 depends on the account's PDS supporting Spaces. Text scale is stored as an
 integer percentage. A settings write merges a patch on the server.
 
-The Spaces-based Jams prototype and browser acceptance cases are tracked in
-[#2303](https://github.com/zzstoatzz/plyr.fm/issues/2303).
+Jams use creator-owned Spaces; their prototype and browser acceptance cases are
+tracked in [#2303](https://github.com/zzstoatzz/plyr.fm/issues/2303).
 
 ## Player navigation
 
-Playback stays above the route stack. The desktop dock spans the viewport below
-navigation and content, with track info on the left, transport/seek in the center,
-and queue/volume on the right. Mobile keeps its compact dock above navigation.
+Playback stays above the route stack. On phone-width web the dock and Now
+Playing are one surface that stays mounted: tapping or dragging the dock opens
+it, the URL moves to `/now-playing` once it has settled, and Back, Close,
+Escape or a pull down closes it. A link inside it changes the page first and
+the sheet then leaves. On wide web `/now-playing` is a full-screen modal route
+with large artwork beside the controls.
 
-On web, `/now-playing` owns the full-screen presentation at every width. Desktop
-uses large artwork beside the familiar controls; mobile retains body swipe
-dismissal outside interactive controls. Browser Back, Close and Escape dismiss
-the player before navigating the page below. Links replace it with their
-destination. React Native Web Modal owns focus while open; the dock underneath
-is covered, not duplicated in the expanded player.
+Native keeps a local React Native Modal and hardware-Back handling and never
+pushes the web-only route. Native exports validate bundles, not gestures.
 
-Native currently keeps its existing local React Native Modal and hardware-Back
-handling. It never pushes the web-only player route. Moving native presentation
-to the route stack requires separating the shell into a route group so a root
-modal can cover the header, mini player, and tabs without nesting UIKit modals.
-That layout refactor is deferred; native detail navigation retains Expo's
-standard back gestures. Native exports validate bundles, not physical gestures.
-
-Browser regressions use `scripts/check-player-navigation.cjs` and
-`scripts/check-player-history.cjs` after `npm run build:web`. Set
-`PLAYER_URL=https://next.plyr.fm` to check published assets, `PLAYER_WEBKIT=1`
-for WebKit, and `WEBKIT_EXECUTABLE` if using a separately installed browser.
-The harness uses real fixture audio and blocks all real API/PDS mutations.
+Browser regressions for the player are the `check-player-*` scripts, run after
+`npm run build:web`. They use real fixture audio and block real API and PDS
+mutations.
 
 ## Creator portal catalog state
 
