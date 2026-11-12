@@ -7,7 +7,7 @@ import { api, type Track } from './api';
 import { useAuth } from './auth';
 import { Detail, Heading, Status, useColors, usePages, type Play } from './CatalogPieces';
 import { useHomeTags } from './use-home-tags';
-import { parseSelectedTags, selectedTagsKey } from './home-state';
+import { HOME_PAGE_SIZE, parseSelectedTags, selectedTagsKey } from './home-state';
 import { readLocal, writeLocal } from './storage';
 import { Text } from './Text';
 import { useNetworkArtists } from './use-network-artists';
@@ -27,7 +27,7 @@ export function Home({ onPlay }: { onPlay: Play }) {
   const [selection, setSelection] = useState(() => ({ key, tags: parseSelectedTags(readLocal(key)) }));
   const selected = selection.key === key ? selection.tags : parseSelectedTags(readLocal(key));
   const tagKey = JSON.stringify(selected);
-  const loadLatest = useCallback((cursor?: string) => api.tracks({ limit: 24, cursor, tag: parseSelectedTags(tagKey) }), [tagKey]);
+  const loadLatest = useCallback((cursor?: string) => api.tracks({ limit: HOME_PAGE_SIZE, cursor, tag: parseSelectedTags(tagKey) }), [tagKey]);
   const latest = usePages(loadLatest);
   const [headerHeight, setHeaderHeight] = useState(0);
   const rowHeight = Math.max(96, Math.ceil(64 * colors.scale + 32));
@@ -103,9 +103,9 @@ export function Home({ onPlay }: { onPlay: Play }) {
 
 const styles = StyleSheet.create({
   home: { gap: 18 }, section: { gap: 12 }, headingRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: 12, rowGap: 4 },
-  tags: { minHeight: 36 },
+  tags: { minHeight: 44 },
   divider: { width: 1, height: 20, marginHorizontal: 4 },
-  tagTarget: { minWidth: 44, minHeight: 36, maxWidth: '100%', justifyContent: 'center' },
+  tagTarget: { minWidth: 44, minHeight: 44, maxWidth: '100%', justifyContent: 'center' },
   tag: { flexDirection: 'row', alignItems: 'center', minHeight: 28, borderRadius: 16, borderWidth: 1, paddingHorizontal: 11, paddingVertical: 4 },
   more: { alignSelf: 'center', padding: 14 },
 });

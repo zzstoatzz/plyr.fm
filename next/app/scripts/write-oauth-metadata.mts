@@ -3,6 +3,7 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { URL } from 'node:url';
 import { NATIVE_REDIRECT_URI, SCOPE_PARTS, SITE_URL } from '../src/auth-config.ts';
+import { HOME_PAGE_SIZE } from '../src/home-state.ts';
 
 for (const applicationType of ['web', 'native'] as const) {
 	const native = applicationType === 'native';
@@ -46,7 +47,7 @@ if (location.pathname === '/') {
   link.rel = 'preload';
   link.as = 'fetch';
   link.crossOrigin = 'anonymous';
-  link.href = ${JSON.stringify(apiOrigin + '/v1/tracks?limit=30').replaceAll('<', '\\u003c')};
+  link.href = ${JSON.stringify(apiOrigin + `/v1/tracks?limit=${HOME_PAGE_SIZE}`).replaceAll('<', '\\u003c')};
   document.head.append(link);
 }
 </script>`;

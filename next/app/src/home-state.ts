@@ -1,3 +1,4 @@
+export const HOME_PAGE_SIZE = 24;
 export const periods = ['all_time', 'month', 'week', 'day'] as const;
 export type ChartPeriod = typeof periods[number];
 export const periodLabels: Record<ChartPeriod, string> = {
