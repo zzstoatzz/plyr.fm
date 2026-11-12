@@ -2,8 +2,6 @@
 
 import base64
 import hashlib
-import hmac
-import struct
 import time
 from typing import Any
 from unittest.mock import AsyncMock
@@ -17,6 +15,7 @@ from backend._internal.atproto.spaces import mac, protected_audio
 from backend._internal.atproto.spaces.client import SpaceAccessError, SpaceCredential
 from backend._internal.atproto.spaces.uris import build_record_uri, build_space_uri
 from backend.config import settings
+from tests._internal.test_permissioned_space_mac import response_headers
 
 
 @pytest.mark.parametrize("tamper", [False, True])
@@ -76,18 +75,9 @@ async def test_source_record_authenticates_the_value(
     )
 
     async def respond(*args: Any, **kwargs: Any) -> httpx.Response:
-        header = kwargs["extra_headers"][mac.WANT_MAC_HEADER]
-        key_share = header.split('key_share="')[1].rstrip('"')
+        header = kwargs["extra_headers"][mac.ACCEPT_SIGNATURE_HEADER]
+        key_share = header.split('keyid="')[1].split('"')[0]
         secret = mac.decapsulate(author_key, key_share)
-        uri_bytes = uri.encode()
-        digest = hmac.new(
-            secret,
-            b"atproto-space-record-v1"
-            + struct.pack(">H", len(uri_bytes))
-            + uri_bytes
-            + raw_cid,
-            hashlib.sha256,
-        ).digest()
         return httpx.Response(
             200,
             json={
@@ -95,9 +85,9 @@ async def test_source_record_authenticates_the_value(
                 "cid": cid,
                 "value": {**value, "audioFileId": "forged"} if tamper else value,
             },
-            headers={
-                mac.MAC_HEADER: f'type="atproto-space-record", ver=1, mac=:{base64.b64encode(digest).decode()}:'
-            },
+            headers=response_headers(
+                header, secret, "atproto-space-record", {"uri": uri, "cid": cid}
+            ),
         )
 
     monkeypatch.setattr(protected_audio, "_space_token_request", respond)

@@ -24,12 +24,10 @@ from cryptography.hazmat.primitives.asymmetric.utils import decode_dss_signature
 from backend._internal import Session as AuthSession
 from backend._internal.atproto.client import make_pds_request
 from backend._internal.atproto.spaces.mac import (
-    MAC_HEADER,
-    WANT_MAC_HEADER,
+    ACCEPT_SIGNATURE_HEADER,
     SpaceMacError,
     encapsulate,
-    format_want_mac_header,
-    parse_mac_header,
+    format_mac_request,
     verify_commit_mac,
 )
 from backend._internal.atproto.spaces.uris import (
@@ -522,10 +520,11 @@ async def _credential_read(
     """Perform a JSON space read, renewing once when the credential is stale.
 
     ``audience`` is the DID whose host is being asked. With ``commit_mac_repo``,
-    each request asks that repo's host to MAC its commit (when the author
-    publishes a ``#atproto_kem`` key) and a returned commit must verify.
+    each request requires the author's KEM key and a verified returned commit.
     """
     kem_key = await _kem_key(commit_mac_repo) if commit_mac_repo else None
+    if commit_mac_repo and not kem_key:
+        raise SpaceAccessError("space repo has no verification key")
     for attempt in range(2):
         credential = await get_space_credential(
             auth_session, space, force_refresh=attempt > 0
@@ -540,7 +539,7 @@ async def _credential_read(
             audience=audience,
             params=params,
             extra_headers=(
-                {WANT_MAC_HEADER: format_want_mac_header(encapsulation.key_share)}
+                {ACCEPT_SIGNATURE_HEADER: format_mac_request(encapsulation.key_share)}
                 if encapsulation
                 else None
             ),
@@ -552,12 +551,14 @@ async def _credential_read(
                 f"{endpoint} failed: {response.status_code} {response.text}"
             )
         body = response.json()
-        if encapsulation and (commit := body.get("commit")):
+        if encapsulation and commit_mac_repo:
             try:
                 verify_commit_mac(
-                    encapsulation.shared_secret,
-                    commit,
-                    parse_mac_header(response.headers.get(MAC_HEADER)),
+                    encapsulation,
+                    body.get("commit"),
+                    response.headers,
+                    space=space,
+                    repo=commit_mac_repo,
                 )
             except SpaceMacError as exc:
                 raise SpaceAccessError(f"{endpoint}: {exc}") from exc

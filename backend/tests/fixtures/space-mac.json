@@ -1,0 +1,33 @@
+{
+  "upstream": "bluesky-social/atproto@2d4a6736f5ce0202945c5fb794486d3d78d1f85d",
+  "authorPrivateKey": "62c3868357a464f8461d03aa0182c7cebcde841036aea7230ddc7339f1088346",
+  "keyShare": "did:key:zDnaexCXCyeFWXGnCUesVu6KucACKmUDm6i3M5fghGuy1jnch",
+  "sharedSecret": "2060e0558d1b34c10086bc137f849bb79ba59fcdc30544418e35c9cd301f0d0d",
+  "commit": {
+    "ver": 1,
+    "repo": "did:plc:fixture",
+    "space": "at://did:plc:fixture/space/fm.plyr.privateMedia/self",
+    "rev": "3mwcj3b6uak2f",
+    "data": {
+      "$bytes": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE="
+    }
+  },
+  "commitHeaders": {
+    "atproto-space-commit": "ver=1, repo=\"did:plc:fixture\", space=\"at://did:plc:fixture/space/fm.plyr.privateMedia/self\", rev=\"3mwcj3b6uak2f\", data=:AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=:",
+    "signature-input": "mac=(\"atproto-space-commit\";sf);keyid=\"did:key:zDnaexCXCyeFWXGnCUesVu6KucACKmUDm6i3M5fghGuy1jnch\";tag=\"atproto-space-repo\"",
+    "signature": "mac=:R3OHod+8phQNhPzRGSLdg/FKcS1HlpXwbjAgtZ2y7GY=:"
+  },
+  "record": {
+    "uri": "at://did:plc:fixture/space/fm.plyr.privateMedia/self/did:plc:fixture/fm.plyr.track/song",
+    "cid": "bafyreifoayngfuoa45dr3plturq5rvh7mlpgxxcv6qn25xxsmpmqwljpi4",
+    "value": {
+      "$type": "fm.plyr.track",
+      "title": "SDK proof fixture"
+    }
+  },
+  "recordHeaders": {
+    "atproto-space-record": "uri=\"at://did:plc:fixture/space/fm.plyr.privateMedia/self/did:plc:fixture/fm.plyr.track/song\", cid=\"bafyreifoayngfuoa45dr3plturq5rvh7mlpgxxcv6qn25xxsmpmqwljpi4\"",
+    "signature-input": "mac=(\"atproto-space-record\";sf);keyid=\"did:key:zDnaexCXCyeFWXGnCUesVu6KucACKmUDm6i3M5fghGuy1jnch\";tag=\"atproto-space-record\"",
+    "signature": "mac=:QOc2H+7+PsdhXtiI3Js9zI5cUwgqasubLxvQqzMxwKg=:"
+  }
+}

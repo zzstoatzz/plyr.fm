@@ -4,11 +4,11 @@ import { P256Keypair } from '@atproto/crypto';
 import { cidForCbor, cidForRawBytes } from '@atproto/lex-data';
 import { encode } from '@atproto/lex-cbor';
 import { lexStringify } from '@atproto/lex-json';
-import { computeRecordMac, createSpaceToken, decapsulate, formatMacHeader, parseWantMacHeader, RECORD_MAC_TYPE, WANT_MAC_HEADER } from '@atproto/space';
+import { createRecordMacHeaders, createSpaceCredential, decapsulate, parseMacRequest, RECORD_MAC_PROFILE, verifyCredentialSig, parseSpaceToken } from '@atproto/space';
 import { openGatedAudio, resolveGatedAudio } from '../src/gated-audio-shared.ts';
 import type { Auth, Did } from '../src/auth-state.ts';
 
-async function fixture(context: test.TestContext, failure?: 'mac' | 'value') {
+async function fixture(context: test.TestContext, failure?: 'mac' | 'value' | 'missing' | 'key') {
   const did: Did = `did:plc:${crypto.randomUUID().replaceAll('-', '').slice(0, 24)}`;
   const space = `at://${did}/space/fm.plyr.privateMedia/self`;
   const uri = `${space}/${did}/fm.plyr.track/song`;
@@ -27,14 +27,21 @@ async function fixture(context: test.TestContext, failure?: 'mac' | 'value') {
       if (url.includes('getSpaceCredential')) {
         mints++;
         const input: { credentialKey: string } = JSON.parse(String(init.body));
-        return Response.json({ credential: await createSpaceToken('credential', { iss: did, sub: space, keyId: input.credentialKey, expiresInSec: 60 }, signer) });
+        return Response.json({ credential: await createSpaceCredential({ iss: did, sub: space, keyId: input.credentialKey, expiresInSec: 60, keypair: signer }) });
       }
       if (url.includes('getRecord')) {
         const headers = new Headers(init.headers);
-        const share = parseWantMacHeader(headers.get(WANT_MAC_HEADER) ?? undefined, RECORD_MAC_TYPE);
-        const mac = failure === 'mac' ? new Uint8Array(32) : computeRecordMac(decapsulate(kem, share), uri, cid);
+        const token = headers.get('authorization')?.replace('Atproto-Space-Credential ', '');
+        assert.ok(token);
+        const credential = parseSpaceToken('credential', token);
+        await verifyCredentialSig(Object.fromEntries(headers), credential.payload.cnf.kid);
+        const request = parseMacRequest(headers.get('accept-signature') ?? undefined, RECORD_MAC_PROFILE);
+        assert.ok(request);
+        const signed = createRecordMacHeaders(uri, cid, { ...request, sharedSecret: decapsulate(kem, request.keyShare) });
+        if (failure === 'mac') signed.headers.signature = 'mac=:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=:';
+        if (failure === 'key') signed.headers['signature-input'] = signed.headers['signature-input'].replace(request.keyShare, kem.did());
         const returned = failure === 'value' ? { ...value, audioBlob: { ...value.audioBlob, size: 3 } } : value;
-        return new Response(lexStringify({ uri, cid: cid.toString(), value: returned }), { headers: { 'atproto-space-mac': formatMacHeader(RECORD_MAC_TYPE, mac) } });
+        return new Response(lexStringify({ uri, cid: cid.toString(), value: returned }), { headers: failure === 'missing' ? {} : signed.headers });
       }
       if (url.includes('getBlob')) { blobReads++; return new Response(new Uint8Array([1, 2, 3, 4])); }
       throw new Error('Unexpected transport request');
@@ -52,6 +59,8 @@ test('resolving protected audio verifies the record and does not download the bo
   assert.equal(f.blobReads(), 0);
   const first = await source.headers();
   assert.ok(first.authorization || first.Authorization);
+  const token = first.authorization.replace('Atproto-Space-Credential ', '');
+  await verifyCredentialSig(first, parseSpaceToken('credential', token).payload.cnf.kid);
   assert.equal(f.mints(), 1);
   const now = Date.now();
   context.mock.method(Date, 'now', () => now + 35_000);
@@ -60,8 +69,8 @@ test('resolving protected audio verifies the record and does not download the bo
   assert.notEqual(renewed.authorization ?? renewed.Authorization, first.authorization ?? first.Authorization);
 });
 
-for (const failure of ['mac', 'value'] as const) test(`protected playback rejects a mismatched ${failure} before reading audio`, async context => {
+for (const failure of ['mac', 'value', 'missing', 'key'] as const) test(`protected playback rejects a mismatched ${failure} before reading audio`, async context => {
   const f = await fixture(context, failure);
-  await assert.rejects(openGatedAudio(f.uri, f.auth, f.transport), /verify/);
+  await assert.rejects(openGatedAudio(f.uri, f.auth, f.transport), /verify|MAC|signature|match/);
   assert.equal(f.blobReads(), 0);
 });
