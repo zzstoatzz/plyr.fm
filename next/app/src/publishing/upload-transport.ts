@@ -21,7 +21,7 @@ export function createUploadTransport(auth: Pick<Auth, 'did' | 'agent' | 'upload
     active();
     const admission = await fetcher(`${UPLOAD_COORDINATOR_URL}/v1/uploads/authorize`, { method: 'POST', signal, redirect: 'error', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ serviceToken: token.token, uploadId: operation.uploadId, recordUri: operation.uri, sizeBytes: operation.sizeBytes,
-        contentType: operation.contentType, fileType: operation.fileType, visibility: 'public', downloadPolicy: 'open' }) });
+        contentType: operation.contentType, fileType: operation.fileType, visibility: 'public', downloadPolicy: 'open', processing: operation.processing }) });
     if (!admission.ok) throw new UploadRequestError(admission.status, admission.status === 403 ? 'large uploads are not allowed for this account.' : 'large upload service is unavailable. try again.');
     const value: unknown = await admission.json();
     if (!value || typeof value !== 'object' || !('uploadUrl' in value) || !('capability' in value) || !('expiresAt' in value)
@@ -57,6 +57,7 @@ export function createUploadTransport(auth: Pick<Auth, 'did' | 'agent' | 'upload
   return {
     start: () => statusRequest('POST'), status: () => statusRequest('GET'), finish: () => statusRequest('POST', '/finish'),
     activate: () => statusRequest('POST', '/activate'), cancel: () => statusRequest('DELETE'),
+    retryProcessing: () => statusRequest('POST', '/retry-processing'),
     async part(number: number, bytes: Uint8Array<ArrayBuffer>): Promise<UploadReceipt> {
       const value = await request('PUT', `/parts/${number}`, bytes);
       if (!value || typeof value !== 'object' || !('number' in value) || value.number !== number || !('sha256' in value) || typeof value.sha256 !== 'string' || !/^[a-f0-9]{64}$/.test(value.sha256)) throw new Error('invalid upload receipt.');

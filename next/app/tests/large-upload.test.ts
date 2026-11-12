@@ -2,7 +2,7 @@ import { strict as assert } from 'node:assert';
 import { createHash } from 'node:crypto';
 import { test } from 'node:test';
 import { createUploadTransport, UploadRequestError } from '../src/publishing/upload-transport.ts';
-import { audioFormat, MAX_SERVICE_AUDIO_BYTES, UPLOAD_PART_BYTES, transferParts, uploadOperation, type UploadOperation } from '../src/publishing/upload-model.ts';
+import { audioFormat, MAX_SERVICE_AUDIO_BYTES, UPLOAD_PART_BYTES, transferParts, uploadOperation, uploadStatus, uploadPublication, type UploadOperation } from '../src/publishing/upload-model.ts';
 import { hasUploadGrant, UPLOAD_SCOPE, SYNC_SCOPE, SCOPE_PARTS, SYNC_SCOPE_PARTS } from '../src/auth-config.ts';
 
 const operation: UploadOperation = { owner: 'did:plc:fixture', collection: 'fm.plyr.track', rkey: '3jzfcijpj2z2a', uri: 'at://did:plc:fixture/fm.plyr.track/3jzfcijpj2z2a',
@@ -12,18 +12,20 @@ const hash = async (bytes: Uint8Array) => createHash('sha256').update(bytes).dig
 function fixture(input = operation) {
   const receipts = new Map<number, string>(), reserved = new Map<number, string>();
   const calls: { method: string; path: string; size: number }[] = [];
-  const flags = { current: true, lostPart: false, lostFinish: false, rejectCapability: false };
+  const flags = { current: true, lostPart: false, lostFinish: false, rejectCapability: false, processingReady: false };
   let state = 'transferring', authorizations = 0, grants = 0;
   const base = `https://audio.fixture/v1/uploads/${'a'.repeat(64)}/${input.uploadId}`;
   const audioUrl = base.replace('/v1/uploads/', '/media/');
-  const status = () => ({ state, recoveryRequired: false, reservedBytes: state === 'published' ? 0 : input.sizeBytes, partSizeBytes: UPLOAD_PART_BYTES, partCount: Math.ceil(input.sizeBytes / UPLOAD_PART_BYTES),
-    receivedParts: [...receipts].map(([number, sha256]) => ({ number, sha256 })), reservedDigests: [...reserved].map(([number, sha256]) => ({ number, sha256 })), ...(['complete', 'published'].includes(state) ? { audioUrl } : {}) });
+  const status = () => ({ state, processing: input.processing, recoveryRequired: false, reservedBytes: ['published', 'cancelled'].includes(state) ? 0 : input.sizeBytes + (input.processing?.outputBudget ?? 0), partSizeBytes: UPLOAD_PART_BYTES, partCount: Math.ceil(input.sizeBytes / UPLOAD_PART_BYTES),
+    receivedParts: [...receipts].map(([number, sha256]) => ({ number, sha256 })), reservedDigests: [...reserved].map(([number, sha256]) => ({ number, sha256 })),
+    ...(['complete', 'published'].includes(state) ? { audioUrl, ...(input.processing ? { rendition: { fileType: 'mp3', contentType: 'audio/mpeg', duration: 1, sizeBytes: 10 } } : {}) } : {}) });
   const fetcher: typeof fetch = async (url, init) => {
     const path = new URL(String(url)).pathname, method = init?.method ?? 'GET';
     if (path === '/v1/uploads/authorize') {
       const body = JSON.parse(String(init?.body));
       assert.equal(body.recordUri, input.uri); assert.equal(body.uploadId, input.uploadId);
       assert.equal(body.visibility, 'public'); assert.equal(body.downloadPolicy, 'open');
+      assert.deepEqual(body.processing, input.processing);
       assert.equal(body.serviceToken, 'service-fixture'); authorizations++;
       return Response.json({ uploadUrl: base, capability: 'ephemeral-' + authorizations, expiresAt: Date.now() + 300000 });
     }
@@ -42,7 +44,7 @@ function fixture(input = operation) {
     }
     if (path.endsWith('/finish')) {
       assert.equal(receipts.size, Math.ceil(input.sizeBytes / UPLOAD_PART_BYTES));
-      state = 'complete';
+      state = input.processing && !flags.processingReady ? 'processing' : 'complete';
       if (flags.lostFinish) { flags.lostFinish = false; throw new TypeError('lost finish response'); }
     }
     if (path.endsWith('/activate')) state = 'published';
@@ -60,7 +62,7 @@ function fixture(input = operation) {
   } } };
   const assertCurrent = () => { if (!flags.current) throw new Error('account changed'); };
   const connect = (signal = new AbortController().signal) => createUploadTransport(auth, input, assertCurrent, signal, fetcher);
-  return { connect, calls, flags, reserved, receipts, auth, counts: () => ({ grants, authorizations }) };
+  return { connect, calls, flags, reserved, receipts, auth, status, counts: () => ({ grants, authorizations }) };
 }
 function reader(size: number, byte = 17) {
   const reads: { offset: number; length: number }[] = []; let closed = false;
@@ -131,4 +133,41 @@ test('pause after a read closes the file without sending that part', async () =>
   r.source.read = async (offset, length) => { const result = await read(offset, length); abort.abort(); return result; };
   await assert.rejects(transferParts(operation, r.source, f.connect(abort.signal), hash, abort.signal, () => {}), /paused/);
   assert.ok(r.closed()); assert.equal(f.calls.filter(call => call.method === 'PUT').length, 0);
+});
+
+test('processing recovery preserves the recipe and original identity without reading the file again', async () => {
+  const input: UploadOperation = { ...operation, name: 'original.aiff', fileType: 'aiff', contentType: 'audio/aiff',
+    processing: { recipe: 'mp3-320k-44100-v1', outputBudget: 128 }, record: { ...operation.record, fileType: 'aiff', futureMetadata: true } };
+  assert.deepEqual(uploadOperation(JSON.parse(JSON.stringify(input)), input.owner), input);
+  assert.deepEqual(audioFormat(input.name, 'audio/x-aiff', true), { fileType: 'aiff', contentType: 'audio/aiff' });
+  const f = fixture(input), first = reader(input.sizeBytes);
+  const processing = await transferParts(input, first.source, f.connect(), hash, new AbortController().signal, () => {});
+  assert.equal(processing.state, 'processing'); assert.equal(processing.audioUrl, undefined);
+  assert.throws(() => uploadPublication(input, processing), /not ready/);
+  const pending = reader(input.sizeBytes);
+  assert.equal((await transferParts(input, pending.source, f.connect(), hash, new AbortController().signal, () => {})).state, 'processing');
+  assert.equal(pending.reads.length, 0); assert.ok(pending.closed());
+  f.flags.processingReady = true;
+  const completed = await f.connect().finish(), publication = uploadPublication(input, completed);
+  assert.equal(publication.uri, input.uri); assert.equal(publication.rkey, input.rkey);
+  assert.deepEqual(publication.record, { ...input.record, fileType: 'mp3', duration: 1 });
+  assert.equal(input.record.fileType, 'aiff');
+  assert.equal(f.calls.filter(call => call.method === 'PUT').length, 1);
+});
+
+test('processing status rejects a changed recipe, incomplete artifact and prematurely public URL', () => {
+  const input: UploadOperation = { ...operation, processing: { recipe: 'mp3-320k-44100-v1', outputBudget: 128 } };
+  const f = fixture(input), value = f.status();
+  assert.throws(() => uploadStatus({ ...value, processing: { ...input.processing, outputBudget: 129 } }, input), /differs/);
+  assert.throws(() => uploadStatus({ ...value, audioUrl: 'https://audio.fixture/media/early' }, input), /unfinished/);
+  assert.throws(() => uploadStatus({ ...value, state: 'complete', audioUrl: 'https://audio.fixture/media/ready' }, input), /no playback rendition/);
+  for (const rendition of [
+    { fileType: 'mp3', contentType: 'audio/mpeg', duration: -1, sizeBytes: 10 },
+    { fileType: 'mp3', contentType: 'audio/mpeg', duration: 1, sizeBytes: 129 },
+    { fileType: 'aiff', contentType: 'audio/aiff', duration: 1, sizeBytes: 10 },
+  ]) assert.throws(() => uploadStatus({ ...value, rendition }, input), /invalid playback/);
+  assert.throws(() => uploadOperation({ ...input, processing: { ...input.processing, outputBudget: 2 * MAX_SERVICE_AUDIO_BYTES } }, input.owner), /reservation/);
+  assert.throws(() => uploadOperation({ ...input, processing: { recipe: 'unknown', outputBudget: 128 } }, input.owner), /reservation/);
+  assert.equal(uploadStatus({ ...value, state: 'processing', recoveryRequired: true, processingFailure: 'output_budget_exceeded' }, input).processingFailure, 'output_budget_exceeded');
+  assert.throws(() => uploadStatus({ ...value, state: 'processing', processingFailure: 'arbitrary upstream message' }, input), /invalid processing failure/);
 });
