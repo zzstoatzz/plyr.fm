@@ -71,3 +71,16 @@ rejected. See the [Lexicon string specification](https://atproto.com/specs/lexic
 An untouched tag field preserves the original record, including absent tags;
 clearing edited tags writes an explicit empty array. Operator account labels
 never populate creator tags.
+
+Track and playlist creates retain a device-local recovery entry, scoped to the
+account, before sending the exact record and client-generated TID to the PDS.
+Reloading checks that same address; an explicit retry reuses its key and record.
+An accepted create remains accessible until dismissed. A different existing
+record is never overwritten and can be explicitly kept. Recovery stores record
+metadata and blob references, never credentials or media bytes. Clearing local
+app data removes these entries; recovery does not transfer between devices.
+Known limitation: a permanently rejected record retains its immutable attempt
+and blocks new creates of that kind on this device. A later rejection plus a
+missing read cannot prove that an earlier request will not still commit. An
+explicit archive-and-reconcile flow is still needed; there is no automatic
+discard on validation or authorization errors.

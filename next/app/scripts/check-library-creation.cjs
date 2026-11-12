@@ -15,7 +15,7 @@ async function run(browser, width, theme) {
   try {
     let authModule;
     for (const url of await page.locator('script[src]').evaluateAll(nodes => nodes.map(node => node.src))) {
-      const source = await fs.readFile(path.join(dist, new URL(url).pathname), 'utf8');
+      const source = process.env.PLAYER_URL ? await (await page.request.get(url)).text() : await fs.readFile(path.join(dist, new URL(url).pathname), 'utf8');
       for (const module of source.split('__d(')) {
         if (module.includes('.setAuth=') || module.includes('"setAuth"')) authModule = Number(module.match(/\},(\d+),\[/)?.[1]);
       }
@@ -24,25 +24,30 @@ async function run(browser, width, theme) {
     let empty = false;
     await page.route('https://api.next.plyr.fm/v1/playlists?**', route => route.fulfill({ json: pageOf(empty ? [] : Array.from({ length: 12 }, (_, i) => playlist(i))) }));
     await page.route('https://api.next.plyr.fm/**/likes?**', route => route.fulfill({ json: pageOf(empty ? [] : [track]) }));
-    const createdId = 'pls_' + Buffer.from(`at://${did}/fm.plyr.list/created`).toString('base64url');
-    await page.route('https://api.next.plyr.fm/v1/playlists/' + createdId, route => route.fulfill({ json: { ...playlist('created'), id: createdId, metadata: { name: 'created playlist' }, members: [] } }));
+    let createdId;
+    await page.route('https://api.next.plyr.fm/v1/playlists/*', route => route.fulfill({ json: { ...playlist('created'), id: new URL(route.request().url()).pathname.split('/').at(-1), metadata: { name: 'created playlist' }, members: [] } }));
     let status = 'pending';
     await page.route('https://api.next.plyr.fm/v1/records/await?**', route => route.fulfill({ json: { status } }));
     await page.route('https://plc.directory/**', route => route.fulfill({ json: { id: did, alsoKnownAs: ['at://fixture.test'], service: [] } }));
     let reject = true;
     let held;
-    let hold = false;
-    const writes = [];
+    let hold = true, entered;
+    const waitForHold = () => new Promise(resolve => { entered = resolve; });
+    const writes = [], records = new Map();
     await page.exposeFunction('__libraryPds', async (url, init) => {
       if (url.includes('listRecords')) return { status: 200, body: { records: [] } };
+      if (url.includes('getRecord')) { const record = records.get(new URL(url, 'https://fixture.invalid').searchParams.get('rkey')); return record ? { status: 200, body: record } : { status: 404, body: { error: 'RecordNotFound' } }; }
       assert.ok(url.includes('com.atproto.repo.createRecord'), `Unexpected PDS operation: ${url}`);
       const input = JSON.parse(init.body);
       assert.equal(input.repo, did);
       assert.equal(input.collection, 'fm.plyr.list');
       writes.push(input);
+      if (hold) await new Promise(resolve => { held = resolve; entered(); });
       if (reject) return { status: 503, body: { error: 'Unavailable', message: 'fixture PDS unavailable' } };
-      if (hold) await new Promise(resolve => { held = resolve; });
-      return { status: 200, body: { uri: `at://${did}/fm.plyr.list/created`, cid: 'createdcid' } };
+      const result = { uri: `at://${did}/fm.plyr.list/${input.rkey}`, cid: 'createdcid', value: input.record };
+      records.set(input.rkey, result);
+      createdId = 'pls_' + Buffer.from(result.uri).toString('base64url');
+      return { status: 200, body: result };
     });
     const signIn = account => page.evaluate(([id, owner]) => globalThis.__r(id).setAuth(owner, {
       handle: async (url, init) => {
@@ -65,35 +70,39 @@ async function run(browser, width, theme) {
     await name.waitFor();
     assert.equal(await submit.isDisabled(), true, 'Blank name cannot submit');
     await name.fill('  a collection for the long way home  ');
+    const firstHeld = waitForHold();
     await submit.click();
-    const error = page.getByRole('alert').filter({ hasText: 'fixture PDS unavailable' });
-    await error.waitFor();
-    assert.equal(await name.inputValue(), '  a collection for the long way home  ');
-    const fieldBounds = await name.boundingBox(), errorBounds = await error.boundingBox();
-    assert.ok(errorBounds.y >= fieldBounds.y && errorBounds.y < 900, 'Failure is visible inside the sheet');
-    await screenshot(page, `create-error-${width}-${theme}`);
-    reject = false; hold = true;
-    await submit.click();
-    await page.waitForFunction(() => document.querySelector('[aria-label="Playlist name"]')?.readOnly);
+    await firstHeld;
+    assert.equal(await name.getAttribute('readonly'), '');
     assert.equal(await submit.isDisabled(), true);
     assert.equal(await page.getByRole('button', { name: /^cancel$/i }).isDisabled(), true);
     await page.getByRole('button', { name: 'Close', exact: true }).click();
     assert.equal(await name.isVisible(), true, 'Busy sheet cannot be dismissed');
-    assert.equal(writes.length, 2);
-    assert.equal(writes[1].record.name, 'a collection for the long way home');
     held(); hold = false;
+    await page.getByRole('button', { name: 'Retry same creation', exact: true }).waitFor();
+    assert.equal(await create.isDisabled(), true, 'Uncertain creation cannot start a duplicate');
+    assert.equal(await name.count(), 0, 'Uncertain record is immutable until recovered');
+    await screenshot(page, `create-error-${width}-${theme}`);
+    reject = false;
+    await page.getByRole('button', { name: 'Retry same creation', exact: true }).click();
     await page.getByText('saved to your PDS. the catalog is catching up.', { exact: true }).waitFor();
-    const saved = page.getByRole('link', { name: 'open created playlist', exact: true });
+    assert.equal(writes.length, 2);
+    assert.equal(writes[1].rkey, writes[0].rkey);
+    assert.equal(writes[1].record.name, 'a collection for the long way home');
+    await page.getByText('saved to your PDS. the catalog is catching up.', { exact: true }).waitFor();
+    const saved = page.getByRole('link', { name: /^open created playlist$/i });
     await saved.waitFor();
     assert.match(await saved.getAttribute('href'), /\/playlist\/pls_/);
     assert.equal(await name.count(), 0, 'Accepted create closes the submission form');
     assert.equal(writes.length, 2, 'Indexing delay does not repeat creation');
     await screenshot(page, `create-pending-${width}-${theme}`);
+    await page.getByRole('button', { name: 'Done', exact: true }).click();
     await create.click();
     await name.fill('another playlist');
     hold = true;
+    const nextHeld = waitForHold();
     await submit.click();
-    await page.waitForFunction(() => document.querySelector('[aria-label="Playlist name"]')?.readOnly);
+    await nextHeld;
     const before = page.url();
     empty = true;
     await signIn('did:plc:otherfixture');
@@ -104,10 +113,11 @@ async function run(browser, width, theme) {
     assert.equal(await name.count(), 0);
     await screenshot(page, `library-empty-${width}-${theme}`);
     await signIn(did);
+    await page.getByRole('button', { name: 'Done', exact: true }).click();
     await create.click();
     await name.fill('indexed playlist');
     await submit.click();
-    await page.waitForURL('**/playlist/' + createdId);
+    await page.waitForURL(url => url.pathname === '/playlist/' + createdId);
     await page.getByRole('button', { name: /^edit playlist$/i }).waitFor();
     assert.equal(writes.length, 4);
     assert.equal(writes[3].record.name, 'indexed playlist');

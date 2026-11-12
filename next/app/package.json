@@ -16,6 +16,7 @@
   "dependencies": {
     "@atcute/atproto": "^4.0.4",
     "@atcute/client": "^5.1.2",
+    "@atproto/common-web": "^0.5.15",
     "@atproto/crypto": "0.0.0-spaces-alpha-20261029171913",
     "@atproto/lex-data": "0.0.0-spaces-alpha-20261029171913",
     "@atproto/lex-json": "0.1.7",

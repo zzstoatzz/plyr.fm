@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../auth';
 import { getAuth, type Auth } from '../auth-state';
-import { trackIdFromUri } from '../api';
 import { Action, Copy, Field, Page } from '../controls';
 import { measureAudioDuration, pickMedia } from '../media-picker';
 import { createPds, MAX_AUDIO_BYTES, type MediaFile } from '../pds';
 import { TagsField } from './TagsField';
+import { CreateRecovery, useCreateRecovery } from './CreateRecovery';
 
 export default function Upload() {
   const auth = useAuth();
@@ -29,7 +29,7 @@ function AccountUpload({ auth }: { auth: Auth }) {
   const [tags, setTags] = useState('');
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string>();
-  const [saved, setSaved] = useState<{ uri: string; status: string }>();
+  const recovery = useCreateRecovery(auth, 'track');
   useEffect(() => { live.current = true; return () => { live.current = false; }; }, []);
   const current = () => live.current && getAuth().did === auth.did && getAuth().rpc === auth.rpc;
 
@@ -48,30 +48,25 @@ function AccountUpload({ auth }: { auth: Auth }) {
   }
 
   async function upload() {
-    if (!current() || !file || locked.current || saved || !title.trim() || !artist.trim()) return;
+    if (!current() || !file || locked.current || recovery.operations.length || !title.trim() || !artist.trim()) return;
     locked.current = true;
     setBusy(true);
     setNote(undefined);
     try {
       const duration = await measureAudioDuration(file).catch(() => undefined);
       if (!current()) return;
-      const result = await createPds(auth).uploadTrack({ file, artwork, title, artist, album, description, duration, tags: tags.trim() ? tags.split('\n') : undefined });
-      if (current()) setSaved(result);
+      await createPds(auth).uploadTrack({ file, artwork, title, artist, album, description, duration, tags: tags.trim() ? tags.split('\n') : undefined });
     } catch (failure) {
       if (current()) setNote(failure instanceof Error ? failure.message : 'upload failed.');
     } finally {
       locked.current = false;
-      if (current()) setBusy(false);
+      if (current()) { await recovery.refresh(); setBusy(false); }
     }
   }
 
-  return saved ? <>
-      <Copy>{saved.status === 'indexed' ? 'saved to your PDS.' : 'saved to your PDS. catalog indexing is separate.'}</Copy>
-      <Action label="View track" href={`/track/${trackIdFromUri(saved.uri)}`} />
-      <Action label="Upload another" onPress={() => {
-        setSaved(undefined); setFile(null); setArtwork(null); setTitle(''); setAlbum(''); setDescription(''); setTags('');
-      }} />
-    </> : <>
+  return recovery.loading || recovery.error || recovery.operations.length ? <CreateRecovery auth={auth} recovery={recovery} kind="track" onDismiss={() => {
+    setFile(null); setArtwork(null); setTitle(''); setAlbum(''); setDescription(''); setTags(''); setNote(undefined);
+  }} /> : <>
       <Copy>audio goes to your PDS. up to 100 MB per track.</Copy>
       <Action label={file?.name ?? 'Choose audio'} onPress={() => void choose('audio/*')} disabled={busy} />
       <Action label={artwork?.name ?? 'Choose cover art'} onPress={() => void choose('image/*')} disabled={busy} />
