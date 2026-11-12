@@ -166,6 +166,7 @@ fn trackFields(case: *hegel.TestCase, a: std.mem.Allocator) !std.ArrayList(Field
         .{ .key = "imageUrl", .required = false },
         .{ .key = "supportGate", .required = false },
         .{ .key = "description", .required = false },
+        .{ .key = "downloadPolicy", .required = false },
         .{ .key = "labels", .required = false },
     };
     for (specs) |spec| {
@@ -181,6 +182,8 @@ fn trackFields(case: *hegel.TestCase, a: std.mem.Allocator) !std.ArrayList(Field
             try boundedString(case, a, kind, 1, 16)
         else if (std.mem.eql(u8, key, "album"))
             try boundedString(case, a, kind, 0, 256)
+        else if (std.mem.eql(u8, key, "downloadPolicy"))
+            (if (kind == .valid) cbor.Value{ .text = try gen.pick(case, []const u8, &.{ "open", "ask", "off", "supporters", "future" }) } else cbor.Value{ .boolean = false })
         else if (std.mem.eql(u8, key, "description"))
             try boundedString(case, a, kind, 0, 5000)
         else if (std.mem.eql(u8, key, "createdAt"))

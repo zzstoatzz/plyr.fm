@@ -137,14 +137,14 @@ pub const PostgresComposedTrackStore = struct {
                 error.OutOfMemory => return error.OutOfMemory,
                 else => return error.CorruptProjection,
             };
-            const like_uri = row.get([]const u8, 48) catch return error.CorruptProjection;
+            const like_uri = row.get([]const u8, projected_column_count + 1) catch return error.CorruptProjection;
             const parsed_like = zat.AtUri.parse(like_uri) orelse return error.CorruptProjection;
             if (!std.mem.eql(u8, parsed_like.authority(), request.actor_did) or
                 !std.mem.eql(u8, parsed_like.collection() orelse return error.CorruptProjection, self.like_collection))
                 return error.CorruptProjection;
             items.append(allocator, .{
                 .value = value,
-                .liked_at_us = row.get(i64, 47) catch return error.CorruptProjection,
+                .liked_at_us = row.get(i64, projected_column_count) catch return error.CorruptProjection,
                 .like_uri = allocator.dupe(u8, like_uri) catch return error.OutOfMemory,
             }) catch return error.OutOfMemory;
         }
@@ -475,6 +475,7 @@ pub fn decodeRow(allocator: std.mem.Allocator, row: anytype) !track.Track {
                 .type = try duplicate(allocator, gate_type),
             } else null,
             .space_uri = try duplicateOptional(allocator, try row.get(?[]const u8, 29)),
+            .download_policy = try duplicateOptional(allocator, try row.get(?[]const u8, 47)),
         },
         .moderation = .{
             .self_labels = try parseLabels(allocator, try row.get([]const u8, 17)),
@@ -524,6 +525,8 @@ pub fn decodeRow(allocator: std.mem.Allocator, row: anytype) !track.Track {
         },
     };
 }
+
+pub const projected_column_count = 48;
 
 pub const projected_columns =
     \\  v.record_uri,
@@ -576,7 +579,8 @@ pub const projected_columns =
     \\  COALESCE(like_metrics.like_count, 0)::bigint,
     \\  v.image_url,
     \\  COALESCE((SELECT operator_labels FROM plyr_index.account_label_policies WHERE owner_did = v.owner_did
-    \\    AND (expires_at_us IS NULL OR expires_at_us > (extract(epoch FROM statement_timestamp()) * 1000000)::bigint)), '[]'::jsonb)::text
+    \\    AND (expires_at_us IS NULL OR expires_at_us > (extract(epoch FROM statement_timestamp()) * 1000000)::bigint)), '[]'::jsonb)::text,
+    \\  v.download_policy
 ;
 
 pub const projected_from = "FROM plyr_index.track_records AS v\n" ++ projected_joins;
@@ -859,6 +863,7 @@ test "composed PostgreSQL reads use verified records and authoritative account s
         .featured_dids = &.{},
         .image_url = "https://images.example/cover.jpg",
         .support_gate_type = "future-gate",
+        .download_policy = "ask",
         .description = "verified description",
         .self_labels = &.{"self-note"},
         .proof = .{ .commit_cid = commit, .commit_rev = &rev.str(), .indexed_at_us = 1_000 },
@@ -900,12 +905,17 @@ test "composed PostgreSQL reads use verified records and authoritative account s
         .like_collection = "fm.plyr.dev.like",
     };
     try std.testing.expect(implementation.store().ready());
+    _ = try pool.exec("UPDATE plyr_index.track_records SET download_policy = NULL", .{});
+    try std.testing.expectEqual(@import("../projection/track_store.zig").ApplyResult.idempotent, try track_writer.store().apply(a, change));
     const value = (try implementation.store().getByUri(a, record_uri)).?;
+    try std.testing.expectEqual(track.Visibility.public, value.access.visibility);
+    try std.testing.expectEqual(track.ModerationOverride.allow, value.moderation.override.?);
     try std.testing.expectEqualStrings("Verified Title", value.metadata.title);
     try std.testing.expectEqualStrings("Authored Credit", value.metadata.artist_name.?);
     try std.testing.expectEqualStrings("authored bio", value.artist.profile.bio.?);
     try std.testing.expectEqualStrings("https://pds.example/avatar.jpg", value.artist.profile.avatar_url.?);
     try std.testing.expectEqualStrings("future-gate", value.access.gate.?.type);
+    try std.testing.expectEqualStrings("ask", value.access.download_policy.?);
     try std.testing.expectEqual(@as(usize, 1), value.media.artifacts.len);
     try std.testing.expectEqual(@as(usize, 1), value.media.origins.len);
     try std.testing.expectEqualStrings("https://images.example/cover.jpg", value.media.artwork.?.url);
