@@ -17,7 +17,7 @@ async function run(browser, width, theme) {
   try {
     let authModule;
     for (const url of await page.locator('script[src]').evaluateAll(nodes => nodes.map(node => node.src))) {
-      const source = await fs.readFile(path.join(dist, new URL(url).pathname), 'utf8');
+      const source = process.env.PLAYER_URL ? await (await page.request.get(url)).text() : await fs.readFile(path.join(dist, new URL(url).pathname), 'utf8');
       for (const module of source.split('__d(')) {
         if (module.includes('.setAuth=') || module.includes('"setAuth"')) authModule = Number(module.match(/\},(\d+),\[/)?.[1]);
       }
@@ -106,8 +106,34 @@ async function run(browser, width, theme) {
     await page.getByRole('button', { name: 'Choose audio', exact: true }).waitFor();
     assert.equal(await page.getByRole('link', { name: 'View track', exact: true }).count(), 0);
     assert.equal(await title.inputValue(), '');
+    await choose();
+    holdCreate = true;
+    const reauthHeld = waitForHold();
+    await submit().click();
+    await reauthHeld;
+    assert.equal(writes.length, 3);
+    await signIn(other);
+    await page.getByRole('button', { name: 'Choose audio', exact: true }).waitFor();
+    assert.equal(await title.inputValue(), '', 'reauthentication clears the previous session draft');
+    await title.fill('fresh session draft');
+    const projected = page.waitForResponse(response => response.url().includes('/v1/records/await?'));
+    release(); holdCreate = false;
+    await projected;
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+    assert.equal(await page.getByRole('link', { name: 'View track', exact: true }).count(), 0, 'accepted old-session write must not replace the fresh form');
+    assert.equal(await title.inputValue(), 'fresh session draft');
+    await screenshot(page, `upload-fresh-session-${width}-${theme}`);
+    await choose();
+    await submit().click();
+    await page.getByRole('link', { name: 'View track', exact: true }).waitFor();
+    assert.equal(writes.length, 4, 'fresh session can submit once; accepted old write is not replayed');
+    await screenshot(page, `upload-reauth-${width}-${theme}`);
+    await page.evaluate(id => globalThis.__r(id).clearAuth(), authModule);
+    await page.getByRole('link', { name: 'Sign in', exact: true }).click();
+    await page.getByRole('heading', { name: 'sign in to plyr.fm', exact: true }).waitFor();
+    assert.equal(new URL(page.url()).searchParams.get('return_to'), '/upload');
     assert.deepEqual(errors, []);
-    console.log(`${width}/${theme}: isolated drafts, locked form, switch before/after create, retry and accepted-write recovery passed`);
+    console.log(`${width}/${theme}: isolated drafts, locked form, account switch and same-DID reauth, retry, accepted-write recovery and login return passed`);
   } finally { await page.unrouteAll({ behavior: 'ignoreErrors' }); await context.close(); }
 }
 
