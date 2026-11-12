@@ -4,6 +4,7 @@ import { PlayerControl } from './PlayerControl';
 import ListPlus from 'lucide-react-native/icons/list-plus';
 import Music2 from 'lucide-react-native/icons/eighth-note';
 import RefreshCw from 'lucide-react-native/icons/refresh-cw';
+import { AccountSection } from './AccountPieces';
 import { ActionRow } from './ActionRow';
 import { WaveLoading } from './WaveLoading';
 import { useFocusEffect, useRouter } from 'expo-router';
@@ -48,7 +49,7 @@ function useMutation() {
       setBusy(false);
     }
   }
-  return { busy, message, run };
+  return { busy, message, run, clear: () => setMessage(undefined) };
 }
 
 function NameInput({ value, onChange, label }: { value: string; onChange: (value: string) => void; label: string }) {
@@ -71,6 +72,7 @@ function AccountLibrary({ did, likesOnly, onPlay }: { did: string; likesOnly: bo
   const router = useRouter();
   const [name, setName] = useState('');
   const [creating, setCreating] = useState(false);
+  const [created, setCreated] = useState<string>();
   const mutation = useMutation();
   const loadLikes = useCallback((cursor?: string) => api.actorLikes(did, { limit: likesOnly ? 30 : 5, cursor }), [did, likesOnly]);
   const loadLists = useCallback((cursor?: string) => likesOnly
@@ -94,33 +96,44 @@ function AccountLibrary({ did, likesOnly, onPlay }: { did: string; likesOnly: bo
     void mutation.run(async () => {
       const { uri, status } = await pds.createPlaylist(name);
       setCreating(false);
+      setCreated(uri);
       setName('');
       if (status === 'indexed' && focus.current.active && getAuth().did === did) router.push({ pathname: '/playlist/[id]', params: { id: playlistIdFromUri(uri) } });
       return messageFor(status, 'playlist created.');
     });
   }
-  return <>
-    {likesOnly && <Heading main>liked tracks</Heading>}
-    {!likesOnly && <Heading>liked tracks</Heading>}
+  const likedTracks = <>
     <TrackRows tracks={likes.data} onPlay={onPlay} />
     <Status loading={likes.loading} error={likes.error} retry={likes.more} empty={!likes.data.length ? 'no liked tracks yet.' : undefined} />
     {likesOnly && likes.cursor && !likes.loading && !likes.error && <Button label="More liked tracks" onPress={likes.more} />}
-    {!likesOnly && <>
-      <InlineLink standalone href="/liked">see all liked tracks</InlineLink>
-      <Heading>playlists</Heading>
-      <ListRows lists={lists.data} />
-      <Status loading={lists.loading} error={lists.error} retry={lists.more} empty={!lists.data.length ? 'no playlists yet.' : undefined} />
-      {lists.cursor && !lists.loading && !lists.error && <Button label="More playlists" onPress={lists.more} />}
-      <InlineLink standalone href="/playlists">browse public playlists</InlineLink>
-      {creating ? <Sheet title="new playlist" close={() => { if (!mutation.busy) setCreating(false); }}>
-        <NameInput label="Playlist name" value={name} onChange={setName} />
-        {!mutation.busy && <View style={styles.actions}>
-          {name.trim() && <Button label="Create playlist" onPress={create} />}
-          <Button label="Cancel" onPress={() => setCreating(false)} />
-        </View>}
-      </Sheet> : <Button label="New playlist" onPress={() => setCreating(true)} />}
-      <Status loading={mutation.busy} empty={mutation.message} />
+  </>;
+  if (likesOnly) return <><Heading main>liked tracks</Heading>{likedTracks}</>;
+  return <>
+    <View style={styles.actions}>
+      <Action primary icon={ListPlus} label="New playlist" onPress={() => { mutation.clear(); setCreating(true); }} />
+      <Action label="Browse playlists" href="/playlists" />
+    </View>
+    {!creating && <>
+      <Status empty={mutation.message} />
+      {created && <InlineLink standalone href={{ pathname: '/playlist/[id]', params: { id: playlistIdFromUri(created) } }}>open created playlist</InlineLink>}
     </>}
+    <AccountSection title="liked tracks">
+      {likedTracks}
+      <InlineLink standalone href="/liked">see all liked tracks</InlineLink>
+    </AccountSection>
+    <AccountSection title="your playlists">
+      <ListRows lists={lists.data} />
+      <Status loading={lists.loading} error={lists.error} retry={lists.more} empty={!lists.data.length ? 'no playlists yet. make one for your next listen.' : undefined} />
+      {lists.cursor && !lists.loading && !lists.error && <Button label="More playlists" onPress={lists.more} />}
+    </AccountSection>
+    {creating && <Sheet title="new playlist" close={() => { if (!mutation.busy) setCreating(false); }}>
+      <Field label="Playlist name" value={name} onChangeText={setName} maxLength={64} editable={!mutation.busy} autoFocus />
+      <Status loading={mutation.busy} error={mutation.message} />
+      <View style={styles.actions}>
+        <Action primary label="Create playlist" disabled={mutation.busy || !name.trim()} onPress={create} />
+        <Action label="Cancel" disabled={mutation.busy} onPress={() => setCreating(false)} />
+      </View>
+    </Sheet>}
   </>;
 }
 
