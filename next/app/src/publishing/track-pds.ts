@@ -6,12 +6,14 @@ import { NSID } from '../config';
 import { normalizeTrackTags } from './track-tags';
 import { sameRecord } from './create-operation';
 import { replacedTrackAudio, validateReplacementAudio, TrackWriteUnconfirmed } from './track-audio';
+import { changedDownloadPreference, type DownloadPreference } from './track-download-policy';
 
 export class TrackRevisionConflict extends Error {
   constructor() { super('this track changed elsewhere. reload the latest version before saving.'); }
 }
 
 export interface TrackEdits {
+	downloadPolicy?: DownloadPreference;
 	audio?: { file: MediaFile; duration?: number };
 	tags?: string[];
 	title: string;
@@ -71,6 +73,12 @@ export function trackEditor({ session, assertSession, ownedRkey, uploadArtwork, 
 			record = replacedTrackAudio(record, edits.audio.file, uploaded.blob, edits.audio.duration);
 			await requirePublicAudio(uri);
 		}
+		if (edits.downloadPolicy !== undefined) {
+			const track = await api.track(trackIdFromUri(uri), { fresh: true });
+			assertSession();
+			if (track.record.uri !== uri || track.artist.did !== did) throw new Error('only the artist can edit this track.');
+			record = changedDownloadPreference(record, track.access.visibility, edits.downloadPolicy);
+		}
 		assertSession();
 		const res = await ok(
 			rpc.post('com.atproto.repo.putRecord', {
@@ -88,7 +96,7 @@ export function trackEditor({ session, assertSession, ownedRkey, uploadArtwork, 
 			return result;
 		}).catch(async (error: unknown) => {
 			assertSession();
-			if (edits.audio) {
+			if (edits.audio || edits.downloadPolicy !== undefined) {
 				let latest: Awaited<ReturnType<typeof readTrack>>;
 				try { latest = await readTrack(uri, rkey); }
 				catch { assertSession(); throw new TrackWriteUnconfirmed(); }
