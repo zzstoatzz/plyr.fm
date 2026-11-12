@@ -1,5 +1,9 @@
 # Next rewrite handoff
 
+Superseded for the client, the player and account state by the
+[November 12 handoff](2026-11-12-next-handoff.md). Personal queues and settings
+no longer use Spaces or unbounded Redis state.
+
 November 7, 2026. Start from current remote `main`, not an old task worktree.
 The runtime checkpoint is #2447–#2451 and #2453; #2454 records live acceptance.
 There is no unfinished implementation goal or pending deployment from this cycle.

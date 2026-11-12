@@ -1,6 +1,18 @@
 # plyr.fm - status
 
-Start here for the next agent: [November 7 rewrite handoff](docs/research/2026-11-07-rewrite-handoff.md).
+Start here for the next agent: [November 12 Next handoff](docs/research/2026-11-12-next-handoff.md).
+
+## Next phone client and account state (2026-11-12)
+
+#2459–#2484 are deployed to Next. The web client carries production's look and
+lowercase voice, compact Home shelves, a single-row tag filter, a dock that
+morphs into Now Playing under the finger, solid transport controls, Media
+Session, toasts and an animated like. A personal queue and an account's
+settings are now kept in Postgres behind one service-auth permission requested
+at every sign-in, with Redis as a 24 hour live cache; neither depends on PDS
+Spaces. Verified with local identities, a stubbed PDS and Chrome at phone
+size; a real signed-in account and the native apps have not exercised it
+(#2485). Production was not promoted.
 
 ## Personal queue synchronization live (2026-11-07)
 

@@ -79,7 +79,7 @@ The rewrite changes ownership and application boundaries as well as languages an
 | Index and delivery | Postgres is a derived index; R2 is a delivery mirror | Ingestion/projection writes remain necessary. Historical play totals and moderation decisions need their own retention/migration rules. |
 | Login | The user agent owns OAuth | Browser/native OAuth clients authorize PDS operations. Production login copy and return-intent behavior are product requirements worth preserving. |
 | Client | Expo / React Native for web, iOS, and Android | Web is deployed. Native bundle exports are not equivalent to native release acceptance. The temporary Svelte client was removed in #2331. |
-| Preferences | Owner-only personal Space | Appearance/playback settings sync through a dedicated staging Space type; volume remains local. The client currently supports a device-only fallback. |
+| Preferences | A merged row per account in PostgreSQL behind service auth | Appearance and playback settings sync for any sign-in that grants the account permission; volume remains local. An explicit device-only sign-in keeps them on the device. |
 | Jams | Creator-owned Space create/invite/join; shared queue and explicit controls, host-only seek, Redis clock/revision/epoch fencing, reconnect with fresh admission and cross-instance fan-out | One-speaker routing, immediate revocation, room lifecycle/invitation polish, physical-device/native background acceptance and Redis failover. Ownership transfer remains later. [MVP audit](2026-11-06-jams-live-verification.md) |
 | Cutover | API, in-repo SDK, MCP, and UI move together | SDK and MCP are still planned. Everything new remains under `next/` until cutover. |
 | Storage exploration | Postgres remains the current index | The ZKV/R2 spike in #2318 establishes feasibility, not an adopted migration or a cutover gate. |
@@ -127,7 +127,7 @@ Existing production behavior is the review baseline. Each incomplete area needs 
 | Login intent | Explicit return destinations survive web OAuth for Jam links and creation, Portal and signed-out track actions | Audit every protected journey and draft boundary, including Upload and Library; automatic action replay is a separate design. A Jam permission upgrade is distinct from being signed out (#2396). [Intent](../../next/app/app/oauth/callback.tsx), [Portal](../../next/app/src/Portal.tsx) |
 | Player and queue | Expo Audio, availability/retry/startup timeout, stable seek preview, repeat/shuffle/remove/clear, direct drag reorder, persistent dock, full-screen Now Playing, keyboard shortcuts and swipe navigation/dismissal | Personal queue synchronization, paused checkpoints and explicit/generated tails are live in #2451/#2453, with real-browser concurrency, retry and Jam/radio acceptance. Title marquee, EQ, platform media controls and native interruptions/backgrounding remain. Navigation/seek checks do not prove native lifecycle parity. [Playback](../../next/app/src/playback.tsx) |
 | Plays and history | Qualified listened-time accounting and receipt outbox integrated into solo, catalog embeds, radio and audible Jam playback; durable atomic Postgres receipts and totals | Historical-total migration, share attribution, private listening history and Teal/Rocksky interoperability are undecided. Cooldown suppression is distinct from receipt idempotency. [Accounting](../internal/architecture/next-play-accounting.md) |
-| Preferences | Theme, accent, font, scale, keep-playing and play-through in a personal Space | Remaining production preference categories, conflicts/offline recovery, and policy for hosts without Spaces. [Preference schema](../../next/app/src/preference-space.ts#L7) |
+| Preferences | Theme, accent, font, scale, keep-playing and play-through in PostgreSQL through the coordinator | Remaining production preference categories and conflict/offline recovery. |
 | Upload/publishing | One public file, cover, metadata and locally measured duration; 100 MB client cap | Batch/album publishing, recording, tags/credits, visibility/download policies, large/resumable upload behavior, metadata extraction, replacement/revisions/optimization, rights controls and failure recovery. Album text currently does not create an album collection. [Upload](../../next/app/app/upload.tsx#L9), [PDS publication](../../next/app/src/pds.ts#L265) |
 | Playlist editing | Create, rename, add a track, remove and delete; inline editing | Cover, reorder, add-from-editor workflow and privacy/profile visibility. [Collection editor](../../next/app/src/AccountCatalog.tsx#L193) |
 | Album editing | Detail/read and rename | Album creation, artwork, member editing/reordering/removal, deletion, publishing and download policies. The current album editor is not the production editor port. [Collection editor](../../next/app/src/AccountCatalog.tsx#L193) |
@@ -164,7 +164,8 @@ The still-open [Now Playing PR #2336](https://github.com/zzstoatzz/plyr.fm/pull/
   serving aggregates. The client owns pending receipt persistence; no network
   round trip occurs per media progress tick. Receipts are currently retained
   indefinitely, so storage growth is a real ongoing cost.
-- Private preference/room records and media remain on the user's PDS/Spaces.
+- Private room records and media remain on the user's PDS/Spaces. Personal queues
+  and settings are account state in PostgreSQL.
   Redis owns operational Jam sequencing, deduplication and snapshots; it is not
   the canonical user repository. Docket is not in the playback command path.
 - The [cost checkpoint](../../COSTS.md#next-backend-checkpoint-november-4-2026)
@@ -180,7 +181,7 @@ The still-open [Now Playing PR #2336](https://github.com/zzstoatzz/plyr.fm/pull/
 - What happens to historical play totals, share attribution and listening history? When do plays become interoperable records, local metrics, or both?
 - Which private-media shape and scope set do existing users consent to, and how are old protected tracks preserved?
 - What is the Jam acceptance contract for shared control, queue progression, room membership/revocation, output ownership and mobile backgrounding?
-- How does a Spaces-first client treat a PDS without the required capabilities?
+- Which features may depend on Spaces? Account state no longer does; Jams and protected audio still do.
 - Which production services and identifier/discovery read APIs remain after the main backend cuts over?
 - What constitutes a native release and a cutover-ready web app, beyond passing bundle exports and happy-path browser tests?
 
