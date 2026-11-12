@@ -17,6 +17,7 @@ async function run(browser, width, theme) {
   const { page, context, errors } = await setup(browser, width, theme, track, 1.3);
   try {
     const queries = [];
+    await page.route('https://api.next.plyr.fm/v1/tags?**', route => route.fulfill({ json: { object: 'list', data: ['ai', 'suno', 'acoustic'].map(name => ({ name, track_count: 1, total_plays: 1 })), has_more: false } }));
     await page.route('https://api.next.plyr.fm/v1/tracks?**', route => {
       const url = new URL(route.request().url());
       const tags = url.searchParams.has('hidden_tag') ? url.searchParams.getAll('hidden_tag').filter(Boolean) : defaults;
@@ -30,6 +31,8 @@ async function run(browser, width, theme) {
     const field = page.getByRole('textbox', { name: 'Tags, separated by commas', exact: true });
     await go('/');
     await feed.getByText('human recording', { exact: true }).waitFor();
+    await feed.getByRole('button', { name: 'Filter by acoustic', exact: true }).waitFor();
+    assert.equal(await feed.getByRole('button', { name: 'Filter by ai', exact: true }).count(), 0);
     assert.equal(await feed.getByText('account-labeled recording', { exact: true }).count(), 0);
     await go('/settings');
     await edit();
@@ -40,6 +43,7 @@ async function run(browser, width, theme) {
     await go('/');
     await feed.getByText('human recording', { exact: true }).waitFor();
     await feed.getByText('account-labeled recording', { exact: true }).waitFor();
+    await feed.getByRole('button', { name: 'Filter by ai', exact: true }).waitFor();
     await feed.getByText('suno-tagged recording', { exact: true }).waitFor();
     assert.deepEqual(queries.at(-1), { tags: [], cursor: null });
     await go('/settings');
