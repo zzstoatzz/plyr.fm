@@ -17,9 +17,21 @@ of public writes, metrics and queue sync; four deployed cases and scoped native
 playback/storage checks pass. Both paths currently cap PDS blobs at 100 MiB.
 Native touch/VoiceOver and real-account Next OAuth limits remain explicit.
 
-#2507/#2520 deploy large-upload staging and its real-service acceptance fixture.
-The fixture found activation returning 503 after successful staging and record
-creation; exact fixture cleanup passed. The dependent client remains held.
+#2517 ships the public/open large-upload client after #2528 fixed the Worker's
+unsupported redirect mode. Deployed acceptance verified the actual client
+decoder, signed activation, bytes and exact fixture cleanup. #2530/#2532 add
+browser attachment delivery and expose its header through CORS. #2531 adds a
+cloud-only 1.5 GiB acceptance fixture. After its first run hit part/cancellation
+conflicts, #2536 bounded owner-lock waiting and #2535 resumed the same 69-part
+reservation. All 154 parts, streaming SHA-256, signed publication, attachment/CORS
+checks, quota release and exact cleanup passed. This is one cloud capacity check,
+not a throughput SLO or real-account OAuth acceptance.
+
+#2529 projects verified download preferences; historical reconciliation finished
+with 461 verified, one absent, 16 retryable and two rejected outcomes, so complete
+backfill remains open. #2526 adds a disabled processing executor, not an enabled upload
+processing flow. Protected/large replacements, processing ownership, real-account
+OAuth and physical-device/native distribution acceptance remain open.
 
 #2512 verifies current Spaces response signatures and canonical record/commit
 bindings in the legacy backend and Next client. Next web, staging and deployed
