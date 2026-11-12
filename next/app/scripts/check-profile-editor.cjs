@@ -48,6 +48,17 @@ async function run(browser, width, theme) {
     const signIn = did => page.evaluate(([id, account]) => globalThis.__r(id).setAuth(account, {
       handle: async (url, init) => { const result = await window.__profilePds(String(url), init); window.__profileReplies = (window.__profileReplies || 0) + 1; return new Response(JSON.stringify(result.body), { status: result.status, headers: { 'content-type': 'application/json' } }); },
     }, 'atproto repo:fm.plyr.actor.profile'), [authModule, did]);
+    const previous = page.url();
+    await page.goto(new URL('/edit-profile', page.url()).href);
+    await page.getByRole('button', { name: 'Sign in', exact: true }).or(page.getByRole('link', { name: 'Sign in', exact: true })).click();
+    await page.getByRole('heading', { name: 'sign in to plyr.fm', exact: true }).waitFor();
+    await page.getByText('sign in to edit your profile.', { exact: true }).waitFor({ state: 'detached' });
+    assert.equal(await page.getByText('sign in to edit your profile.', { exact: true }).count(), 0);
+    assert.equal(new URL(page.url()).searchParams.get('return_to'), '/edit-profile');
+    await screenshot(page, `sign-in-${width}-${theme}`);
+    await page.goBack();
+    await page.waitForURL(previous);
+    assert.equal(await page.getByText('sign in to edit your profile.', { exact: true }).count(), 0, 'Back must not reopen the replaced editor gate');
     await page.goto(new URL('/edit-profile', page.url()).href);
     await page.getByText('sign in to edit your profile.', { exact: true }).waitFor();
     await signIn(first);

@@ -32,7 +32,7 @@ export function ProfileEditor() {
   if (!ready) return <Sheet title="edit profile" close={close}><WaveLoading label="Loading account" /></Sheet>;
   if (!did || !rpc) return <Sheet title="edit profile" close={close}>
     <Copy>sign in to edit your profile.</Copy>
-    <Action label="Sign in" href={{ pathname: '/login', params: { return_to: '/edit-profile' } }} />
+    <Action label="Sign in" onPress={() => router.replace({ pathname: '/login', params: { return_to: '/edit-profile' } })} />
   </Sheet>;
   return <AccountProfileEditor key={`${did}:${session.version}`} did={did} rpc={rpc} />;
 }
