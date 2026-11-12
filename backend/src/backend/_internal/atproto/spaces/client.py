@@ -212,8 +212,11 @@ async def add_space_member(auth_session: AuthSession, *, space: str, did: str) -
     await make_pds_request(
         auth_session,
         "POST",
-        "com.atproto.memberspace.putMember",
-        payload={"space": space, "did": did, "read": True, "write": False},
+        "com.atproto.memberspace.putMembers",
+        payload={
+            "space": space,
+            "members": [{"did": did, "read": True, "write": False}],
+        },
         parse_response=False,
     )
 
@@ -228,8 +231,8 @@ async def remove_space_member(
     await make_pds_request(
         auth_session,
         "POST",
-        "com.atproto.memberspace.removeMember",
-        payload={"space": space, "did": did},
+        "com.atproto.memberspace.removeMembers",
+        payload={"space": space, "dids": [did]},
         parse_response=False,
     )
     forget_credential(did, space)

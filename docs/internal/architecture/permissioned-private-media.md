@@ -117,7 +117,7 @@ on the authenticated DID (no `did` field) and governed by one `policy`, a `$type
 The memberspace policy keeps a member list even though the core sync protocol does not
 enumerate readers. The authority is authorized under every policy without a member
 grant; plyr.fm's portal access list adds and removes further members through
-`memberspace.putMember` (read-only)/`removeMember` (see private-media-access-list.md).
+`memberspace.putMembers` (read-only)/`removeMembers` (see private-media-access-list.md).
 `getSpace` (owner only) returns `{uri, policy}`; `updateSpace` takes `{space, policy}` and
 replaces the policy wholesale.
 

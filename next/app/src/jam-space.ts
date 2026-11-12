@@ -3,10 +3,10 @@ import {
 	verifyRecord, WANT_MAC_HEADER
 } from '@atproto/space';
 import type { Agent, Auth, Did } from './auth-state';
-import { credentialFor, signedFetch, type SpaceAudioTransport } from './gated-audio-shared';
-import { didDocument, pdsEndpoint } from './identity';
+import { credentialFor, signedFetch, type SpaceAudioTransport } from './gated-audio-shared.ts';
+import { didDocument, pdsEndpoint } from './identity.ts';
 
-import { JAM_SPACE, JAM_COORDINATOR_URL, JAM_SERVICE_AUDIENCE, JAM_JOIN_METHOD } from './auth-config';
+import { JAM_SPACE, JAM_COORDINATOR_URL, JAM_SERVICE_AUDIENCE, JAM_JOIN_METHOD } from './auth-config.ts';
 
 const { type, collection } = JAM_SPACE;
 
@@ -37,8 +37,8 @@ export function jamSpace(agent: Agent, did: Did, host: Did, key: string, transpo
 				publicRead: false, publicWrite: false, publishPolicy: false, publishMembers: false
 			}
 		}),
-		invite: (member: Did) => hostWrite('memberspace.putMember', {
-			space, did: member, read: true, write: false
+		invite: (member: Did) => hostWrite('memberspace.putMembers', {
+			space, members: [{ did: member, read: true, write: false }]
 		}),
 		publish: (snapshot: object) => hostWrite('space.putRecord', {
 			...record, record: { ...snapshot, $type: collection }
