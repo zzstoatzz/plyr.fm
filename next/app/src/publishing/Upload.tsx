@@ -4,6 +4,9 @@ import { getAuth, type Auth } from '../auth-state';
 import { Action, Copy, Field, Page } from '../controls';
 import { measureAudioDuration, pickMedia } from '../media-picker';
 import { createPds, MAX_AUDIO_BYTES, type MediaFile } from '../pds';
+import { LargeUploads, useLargeUploads } from './LargeUploads';
+import { MAX_SERVICE_AUDIO_BYTES } from './upload-model';
+import type { CreateReservation } from './create-operation';
 import { TagsField } from './TagsField';
 import { CreateRecovery, EarlierCreates, useCreateRecovery } from './CreateRecovery';
 
@@ -30,8 +33,18 @@ function AccountUpload({ auth }: { auth: Auth }) {
   const [description, setDescription] = useState('');
   const [tags, setTags] = useState('');
   const [busy, setBusy] = useState(false);
+  const [serviceConsent, setServiceConsent] = useState(false);
   const [note, setNote] = useState<string>();
   const recovery = useCreateRecovery(auth, 'track');
+  const uploads = useLargeUploads(auth, recovery.refresh, resetCreation);
+  const creationRecovery = { ...recovery, operations: recovery.operations.filter(operation => !uploads.operations.some(upload => upload.uri === operation.uri)),
+    archived: recovery.archived.filter(operation => !uploads.operations.some(upload => upload.uri === operation.uri)) };
+  const large = !!file && file.size > MAX_AUDIO_BYTES;
+  function resetCreation(operation: CreateReservation) {
+    if (operation.rkey !== currentCreation.current) return;
+    currentCreation.current = undefined;
+    setFile(null); setArtwork(null); setTitle(''); setAlbum(''); setDescription(''); setTags(''); setNote(undefined); setServiceConsent(false);
+  }
   useEffect(() => { live.current = true; return () => { live.current = false; }; }, []);
   const current = () => live.current && getAuth().did === auth.did && getAuth().rpc === auth.rpc;
 
@@ -40,8 +53,8 @@ function AccountUpload({ auth }: { auth: Auth }) {
       const item = await pickMedia(kind);
       if (!item || !current()) return;
       if (kind === 'audio/*') {
-        if (item.size > MAX_AUDIO_BYTES) throw new Error('audio files are limited to 100 MB.');
-        setFile(item);
+        if (item.size > MAX_SERVICE_AUDIO_BYTES) throw new Error('audio files are limited to 1.5 GiB.');
+        setFile(item); setServiceConsent(false);
         if (!title) setTitle(item.name.replace(/\.[^.]+$/, '').slice(0, 256));
       } else setArtwork(item);
     } catch (failure) {
@@ -51,6 +64,7 @@ function AccountUpload({ auth }: { auth: Auth }) {
 
   async function upload() {
     if (!current() || !file || locked.current || recovery.operations.length || !title.trim() || !artist.trim()) return;
+    if (large && (!serviceConsent || !auth.uploadStorage || uploads.loading || uploads.error)) return;
     locked.current = true;
     setBusy(true);
     setNote(undefined);
@@ -60,7 +74,9 @@ function AccountUpload({ auth }: { auth: Auth }) {
       const pds = createPds(auth), reservation = await pds.reserveCreate('track');
       if (!current()) return;
       currentCreation.current = reservation.rkey;
-      await pds.uploadTrack({ file, artwork, title, artist, album, description, duration, tags: tags.trim() ? tags.split('\n') : undefined }, reservation);
+      const input = { file, artwork, title, artist, album, description, duration, tags: tags.trim() ? tags.split('\n') : undefined };
+      if (large) await uploads.start(input, reservation);
+      else await pds.uploadTrack(input, reservation);
     } catch (failure) {
       if (current()) setNote(failure instanceof Error ? failure.message : 'upload failed.');
     } finally {
@@ -70,21 +86,24 @@ function AccountUpload({ auth }: { auth: Auth }) {
   }
 
   return <>
-    <EarlierCreates auth={auth} recovery={recovery} kind="track" />
-    {recovery.loading || recovery.error || recovery.operations.length ? <CreateRecovery auth={auth} recovery={recovery} kind="track" onDismiss={operation => {
-    if (operation.rkey !== currentCreation.current) return;
-    currentCreation.current = undefined;
-    setFile(null); setArtwork(null); setTitle(''); setAlbum(''); setDescription(''); setTags(''); setNote(undefined);
-  }} /> : <>
-      <Copy>audio goes to your PDS. up to 100 MB per track.</Copy>
+    <LargeUploads uploads={uploads} disabled={busy} />
+    <EarlierCreates auth={auth} recovery={creationRecovery} kind="track" />
+    {creationRecovery.loading || creationRecovery.error || creationRecovery.operations.length ? <CreateRecovery auth={auth} recovery={creationRecovery} kind="track" onDismiss={resetCreation} /> : uploads.operations.some(operation => operation.rkey === currentCreation.current) ? null : <>
+      <Copy>audio up to 100 MiB goes to your PDS. larger public files can use plyr storage, up to 1.5 GiB.</Copy>
       <Action label={file?.name ?? 'Choose audio'} onPress={() => void choose('audio/*')} disabled={busy} />
+      {large && <>
+        <Copy>large audio is stored by plyr, not your PDS. playback and downloads are public and remain public after publishing. protected audio, restricted downloads and transcoding are not supported here.</Copy>
+        <Action label="Use plyr storage" selected={serviceConsent} disabled={busy} onPress={() => setServiceConsent(value => !value)} />
+        {!auth.uploadStorage && <><Copy>sign in again to grant large-upload permission. you will need to select the file again.</Copy><Action label="Sign in for large uploads" href={{ pathname: '/login', params: { return_to: '/upload' } }} /></>}
+      </>}
       <Action label={artwork?.name ?? 'Choose cover art'} onPress={() => void choose('image/*')} disabled={busy} />
       <Field label="Title" value={title} onChangeText={setTitle} maxLength={256} editable={!busy} />
       <Field label="Artist" value={artist} onChangeText={setArtist} maxLength={256} editable={!busy} />
       <Field label="Album" value={album} onChangeText={setAlbum} maxLength={256} editable={!busy} />
       <Field label="Description" value={description} onChangeText={setDescription} maxLength={5000} multiline editable={!busy} />
       <TagsField value={tags} onChange={setTags} disabled={busy} />
-      <Action label={busy ? 'Uploading…' : 'Upload'} onPress={() => void upload()} disabled={busy || !file || !title.trim() || !artist.trim()} />
+      {!!recovery.operations.length && <Copy>finish or set aside the earlier creation before uploading another track.</Copy>}
+      <Action label={busy ? 'Uploading…' : 'Upload'} onPress={() => void upload()} disabled={busy || !!uploads.busy || !!recovery.operations.length || !file || !title.trim() || !artist.trim() || (large && (!serviceConsent || !auth.uploadStorage || uploads.loading || !!uploads.error))} />
       {note && <Copy live>{note}</Copy>}
     </>}
   </>;

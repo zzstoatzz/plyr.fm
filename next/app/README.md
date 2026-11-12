@@ -149,3 +149,27 @@ updates. Upstream atproto permissioned-data branch
 Editing needs an upstream atomic conditional-write contract plus discoverable
 support, or another protocol-supported concurrency mechanism. Reading before a
 write and sending an ignored public-repo swapRecord field are not substitutes.
+
+## Large public uploads
+
+Large public uploads require explicit service-storage consent and the separate
+upload service-auth permission. Existing sessions can keep listening and using
+the small PDS-blob path; sign in again only when large-upload permission is
+needed. Audio above 100 MiB and up to 1.5 GiB uses the service's public/open
+`audioUrl` path, with sequential 10 MiB reads on web and native. This does not
+complete protected uploads, restricted downloads or transcoding parity.
+
+Pause stops transfer work without pretending to cancel an accepted request.
+Reselect the original file to resume; every server-reserved digest is checked
+before sending new parts. Device-local recovery retains the original upload ID,
+record URI and prepared metadata, never credentials or media bytes. Publication
+reuses the same canonical create attempt and activates only after authoritative
+record verification. Setting a create aside retains completed-upload recovery.
+Completed cancellation conflicts remain visible and quota-bearing; published
+URLs remain public. Clearing local app data loses this client's recovery list.
+
+`check-large-upload.cjs` uses small file/HTTP/PDS fixtures and logical size
+metadata for the consent boundary. `check-large-upload-stream.mts` defaults to a
+small loopback streaming fixture; its 1.5 GiB mode runs only in cloud CI. The
+cloud receipt proves client chunking/recovery against a synthetic HTTP sink,
+not deployed R2 capacity or real-account OAuth acceptance.

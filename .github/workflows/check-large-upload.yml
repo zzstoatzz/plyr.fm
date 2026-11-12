@@ -1,0 +1,28 @@
+name: large upload client acceptance
+on:
+  pull_request:
+    paths:
+      - "next/app/src/publishing/upload-*.ts"
+      - "next/app/scripts/check-large-upload-stream.mts"
+      - ".github/workflows/check-large-upload.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  full-size-client:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: transfer synthetic 1.5 GiB with lost acknowledgement
+        working-directory: next/app
+        env:
+          LARGE_FULLSIZE: "1"
+        run: node --experimental-strip-types scripts/check-large-upload-stream.mts | tee "$RUNNER_TEMP/large-upload-client.json"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: large-upload-client-receipt
+          path: ${{ runner.temp }}/large-upload-client.json
