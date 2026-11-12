@@ -9,8 +9,6 @@ on:
     secrets:
       deploy_token:
         required: true
-      processing_token:
-        required: false
 
 permissions:
   contents: read
@@ -26,16 +24,9 @@ jobs:
         env:
           TARGET: ${{ inputs.target }}
           FLY_API_TOKEN: ${{ secrets.deploy_token }}
-          PROCESSING_TOKEN: ${{ secrets.processing_token }}
         run: |
           case "$TARGET" in
-            staging)
-              test -n "$PROCESSING_TOKEN"
-              printf 'NEXT_PROCESSING_AUTH_TOKEN=%s\n' "$PROCESSING_TOKEN" | flyctl secrets import --stage --app plyr-transcoder-staging
-              flyctl deploy --config services/transcoder/fly.staging.toml --remote-only --ha=false .
-              flyctl scale count 1 --app plyr-transcoder-staging --region iad --yes
-              exit 0
-              ;;
+            staging) config=services/transcoder/fly.staging.toml ;;
             production) config=services/transcoder/fly.toml ;;
             *) exit 1 ;;
           esac

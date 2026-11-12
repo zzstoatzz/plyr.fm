@@ -26,7 +26,6 @@ jobs:
       target: staging
     secrets:
       deploy_token: ${{ secrets.FLY_API_TOKEN_TRANSCODER_STAGING }}
-      processing_token: ${{ secrets.PLYR_NEXT_PROCESSING_AUTH_TOKEN }}
   deploy:
     needs: transcoder
     name: deploy staging

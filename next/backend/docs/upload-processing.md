@@ -142,32 +142,28 @@ require known lengths, with uniform parts except the final part.
 - [Workers invocation limits](https://developers.cloudflare.com/workers/platform/limits/)
 - [R2 multipart API](https://developers.cloudflare.com/r2/api/workers/workers-api-reference/)
 
-## staging wiring and release isolation
+## executor and isolation
 
-`deploy-staging.yml` invokes `deploy-transcoder.yml` with target `staging` on
-main changes. `deploy-prod.yml` invokes target `production` only on a published
-release. Source pushes and merges do not promote production.
+The executor is `next/services/processing`, deployed as the Next-owned Fly app
+`plyr-next-processing` by `deploy-next-processing.yml`. It shares no source,
+app, secret or deploy path with the legacy transcoder, and production never
+deploys it.
 
-The new route requires `FLY_APP_NAME=plyr-transcoder-staging`,
+It refuses to start unless `FLY_APP_NAME=plyr-next-processing` and both
 `NEXT_PROCESSING_ORIGIN` (the Next audio HTTPS origin) and
 `NEXT_PROCESSING_AUTH_TOKEN` (at least 32 bytes, sent by the DO in
-`X-Processing-Key`). Missing
-configuration leaves the route absent; partial or non-staging configuration
-must fail closed. Existing `/transcode` behavior is unchanged.
+`X-Processing-Key`) are set.
 
 The coordinator separately requires `UPLOAD_PROCESSING_ENABLED=true` before it
 admits a recipe/output budget. The audio Worker requires
-`PROCESSING_TRANSCODER_URL=https://plyr-transcoder-staging.fly.dev/v1/processing`
+`PROCESSING_TRANSCODER_URL=https://plyr-next-processing.fly.dev/v1/processing`
 and `PROCESSING_TRANSCODER_KEY` matching the executor token. Otherwise recipe
-admission fails before source reservation. None of these settings is enabled
-by this implementation. AIFF/AIF and WebM admission requires processing; the
-existing direct-upload format contract remains unchanged.
+admission fails before source reservation. AIFF/AIF and WebM admission requires
+processing; the existing direct-upload format contract remains unchanged.
 
-Before enabling background processing, staging's current auto-stop/minimum-zero
-configuration must change to keep its single processing machine alive. Callback
-traffic alone is not an inbound request keeping the Fly machine active. This
-staging-only capacity/configuration change and secret wiring require review;
-production settings and secrets are not changed by this slice.
+The app keeps one machine running with auto-stop off: after its single inbound
+dispatch an attempt has only outbound callback traffic, which does not keep a
+Fly machine alive.
 
 ## acceptance
 
