@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Preserve zat 0.6.4's pinned fixture hash while using curl for GitHub redirects.
+expected=N-V-__8AAIp5AQCe4JjGmPl8CplTkCis8PF1qvn7QX6GwDfu
+archive=$(mktemp "${TMPDIR:-/tmp}/plyr-interop.XXXXXX.tar.gz")
+package=
+trap 'rm -f "$archive"; if [[ -n "$package" ]]; then rm -rf "$package"; fi' EXIT
+curl --fail --silent --show-error --location --retry 2 --max-time 60 \
+  https://github.com/bluesky-social/atproto-interop-tests/archive/35bb5638ab1e5ce71fb88a0c95953fc557ef1925.tar.gz \
+  --output "$archive"
+actual=$(zig fetch "$archive")
+if [[ "$actual" != "$expected" ]]; then
+  echo "interop fixture hash mismatch: expected $expected, got $actual" >&2
+  exit 1
+fi
+mkdir -p zig-pkg
+if [[ ! -d "zig-pkg/$expected" ]]; then
+  package=$(mktemp -d zig-pkg/.interop.XXXXXX)
+  tar -xzf "$archive" --strip-components=1 -C "$package"
+  mv "$package" "zig-pkg/$expected"
+  package=
+fi

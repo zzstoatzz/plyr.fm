@@ -58,7 +58,7 @@ jobs:
         run: zig fmt --check build.zig src
 
       - name: build
-        run: zig build
+        run: scripts/fetch-interop-fixtures && zig build
 
       - name: test (with postgres + redis)
         env:
@@ -99,6 +99,10 @@ jobs:
       - name: durable play HTTP contract
         working-directory: backend
         run: uv run python ../next/backend/scripts/test_play_http.py
+
+      - name: stale connection read HTTP contract
+        working-directory: backend
+        run: uv run python ../next/backend/scripts/test_read_http.py
 
       - name: Python canary and benchmark contract checks
         working-directory: backend
@@ -150,4 +154,4 @@ jobs:
       - name: property harnesses
         env:
           PLYR_ZIG_TEST_DATABASE_URL: postgresql://zig_test:zig_test@127.0.0.1:5435/zig_test
-        run: zig build fuzz -Dhegel -Dfuzz-cases=500
+        run: scripts/fetch-interop-fixtures && zig build fuzz -Dhegel -Dfuzz-cases=500

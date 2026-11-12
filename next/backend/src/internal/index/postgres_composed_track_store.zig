@@ -10,6 +10,7 @@
 const tag_cursor = @import("../identity/tag_cursor.zig");
 const std = @import("std");
 const pg = @import("pg");
+const postgres_read = @import("postgres_read.zig");
 const zat = @import("zat");
 const lexicon_value = @import("../atproto/lexicon_value.zig");
 const track = @import("../domain/track.zig");
@@ -43,12 +44,19 @@ pub const PostgresComposedTrackStore = struct {
     }
 
     fn resolveOpaque(context: *anyopaque, allocator: std.mem.Allocator, uris: []const []const u8) TrackStore.Error![]const track.Track {
+        return postgres_read.run(TrackStore.Error![]const track.Track, resolveOnce, .{ context, allocator, uris });
+    }
+
+    fn resolveOnce(context: *anyopaque, allocator: std.mem.Allocator, uris: []const []const u8) postgres_read.Error![]const track.Track {
         const self: *PostgresComposedTrackStore = @ptrCast(@alignCast(context));
         if (uris.len == 0) return &.{};
-        var result = self.pool.queryOpts(resolve_query, .{ uris, self.profile_collection, self.like_collection }, .{ .cache_name = "plyr_resolve_query" }) catch return error.IndexUnavailable;
+        const conn = self.pool.acquire() catch return error.IndexUnavailable;
+        defer self.pool.release(conn);
+        var result = conn.queryOpts(resolve_query, .{ uris, self.profile_collection, self.like_collection }, .{ .cache_name = "plyr_resolve_query" }) catch |err| return postgres_read.failure(conn, err);
         defer result.deinit();
         var values: std.ArrayList(track.Track) = .empty;
-        while (result.next() catch return error.IndexUnavailable) |row| {
+        errdefer values.deinit(allocator);
+        while (result.next() catch |err| return postgres_read.failure(conn, err)) |row| {
             const value = decodeRow(allocator, row) catch |err| return if (err == error.OutOfMemory) error.OutOfMemory else error.CorruptProjection;
             values.append(allocator, value) catch return error.OutOfMemory;
         }
@@ -56,11 +64,18 @@ pub const PostgresComposedTrackStore = struct {
     }
 
     fn tagsOpaque(context: *anyopaque, allocator: std.mem.Allocator, collection: []const u8, limit: usize, after: ?tag_cursor.Cursor) TrackStore.Error![]const store_module.Tag {
+        return postgres_read.run(TrackStore.Error![]const store_module.Tag, tagsOnce, .{ context, allocator, collection, limit, after });
+    }
+
+    fn tagsOnce(context: *anyopaque, allocator: std.mem.Allocator, collection: []const u8, limit: usize, after: ?tag_cursor.Cursor) postgres_read.Error![]const store_module.Tag {
         const self: *PostgresComposedTrackStore = @ptrCast(@alignCast(context));
-        var result = self.pool.queryOpts(tags_query, .{ collection, @as(i64, @intCast(limit)), if (after) |c| c.plays else @as(?i64, null), if (after) |c| c.name else @as(?[]const u8, null) }, .{ .cache_name = "plyr_tags_query" }) catch return error.IndexUnavailable;
+        const conn = self.pool.acquire() catch return error.IndexUnavailable;
+        defer self.pool.release(conn);
+        var result = conn.queryOpts(tags_query, .{ collection, @as(i64, @intCast(limit)), if (after) |c| c.plays else @as(?i64, null), if (after) |c| c.name else @as(?[]const u8, null) }, .{ .cache_name = "plyr_tags_query" }) catch |err| return postgres_read.failure(conn, err);
         defer result.deinit();
         var data: std.ArrayList(store_module.Tag) = .empty;
-        while (result.next() catch return error.IndexUnavailable) |row| {
+        errdefer data.deinit(allocator);
+        while (result.next() catch |err| return postgres_read.failure(conn, err)) |row| {
             const count = row.get(i64, 1) catch return error.CorruptProjection;
             const plays = row.get(i64, 2) catch return error.CorruptProjection;
             if (count <= 0 or plays < 0) return error.CorruptProjection;
@@ -77,11 +92,15 @@ pub const PostgresComposedTrackStore = struct {
         return data.toOwnedSlice(allocator);
     }
 
-    fn listLikedOpaque(
+    fn listLikedOpaque(context: *anyopaque, allocator: std.mem.Allocator, request: liked_track_store.Request) liked_track_store.Store.Error![]liked_track_store.Item {
+        return postgres_read.run(liked_track_store.Store.Error![]liked_track_store.Item, listLikedOnce, .{ context, allocator, request });
+    }
+
+    fn listLikedOnce(
         context: *anyopaque,
         allocator: std.mem.Allocator,
         request: liked_track_store.Request,
-    ) liked_track_store.Store.Error![]liked_track_store.Item {
+    ) postgres_read.Error![]liked_track_store.Item {
         const self: *PostgresComposedTrackStore = @ptrCast(@alignCast(context));
         const conn = self.pool.acquire() catch return error.IndexUnavailable;
         defer self.pool.release(conn);
@@ -97,7 +116,7 @@ pub const PostgresComposedTrackStore = struct {
                 limit,
             }, .{ .cache_name = "plyr_liked_after_query" }) catch |err| {
                 logQueryError(conn, "composed liked-track query failed", err);
-                return error.IndexUnavailable;
+                return postgres_read.failure(conn, err);
             }
         else
             conn.queryOpts(liked_query, .{
@@ -108,12 +127,12 @@ pub const PostgresComposedTrackStore = struct {
                 limit,
             }, .{ .cache_name = "plyr_liked_query" }) catch |err| {
                 logQueryError(conn, "composed liked-track query failed", err);
-                return error.IndexUnavailable;
+                return postgres_read.failure(conn, err);
             };
         defer result.deinit();
         var items: std.ArrayList(liked_track_store.Item) = .empty;
         errdefer items.deinit(allocator);
-        while (result.next() catch return error.IndexUnavailable) |row| {
+        while (result.next() catch |err| return postgres_read.failure(conn, err)) |row| {
             const value = decodeRow(allocator, row) catch |err| switch (err) {
                 error.OutOfMemory => return error.OutOfMemory,
                 else => return error.CorruptProjection,
@@ -133,23 +152,31 @@ pub const PostgresComposedTrackStore = struct {
     }
 
     fn readyOpaque(context: *anyopaque) bool {
-        const self: *PostgresComposedTrackStore = @ptrCast(@alignCast(context));
-        var row = self.pool.row(readiness_sql, .{}) catch |err| {
+        return postgres_read.run(TrackStore.Error!bool, readyOnce, .{context}) catch |err| {
             std.log.err("composed track readiness failed: {}", .{err});
             return false;
-        } orelse return false;
-        finishQueryRow(&row) catch |err| {
-            std.log.err("composed track readiness cleanup failed: {}", .{err});
-            return false;
         };
+    }
+
+    fn readyOnce(context: *anyopaque) postgres_read.Error!bool {
+        const self: *PostgresComposedTrackStore = @ptrCast(@alignCast(context));
+        const conn = self.pool.acquire() catch return error.IndexUnavailable;
+        defer self.pool.release(conn);
+        var row = (conn.row(readiness_sql, .{}) catch |err|
+            return postgres_read.failure(conn, err)) orelse return false;
+        finishQueryRow(&row) catch |err| return postgres_read.failure(conn, err);
         return true;
     }
 
-    fn getByUriOpaque(
+    fn getByUriOpaque(context: *anyopaque, allocator: std.mem.Allocator, at_uri: []const u8) TrackStore.Error!?track.Track {
+        return postgres_read.run(TrackStore.Error!?track.Track, getByUriOnce, .{ context, allocator, at_uri });
+    }
+
+    fn getByUriOnce(
         context: *anyopaque,
         allocator: std.mem.Allocator,
         at_uri: []const u8,
-    ) TrackStore.Error!?track.Track {
+    ) postgres_read.Error!?track.Track {
         const self: *PostgresComposedTrackStore = @ptrCast(@alignCast(context));
         const conn = self.pool.acquire() catch |err| {
             std.log.err("composed track connection failed: {}", .{err});
@@ -165,7 +192,7 @@ pub const PostgresComposedTrackStore = struct {
                 std.log.err("composed track lookup failed: {}: {s}", .{ err, pg_err.message })
             else
                 std.log.err("composed track lookup failed: {}", .{err});
-            return error.IndexUnavailable;
+            return postgres_read.failure(conn, err);
         } orelse return null;
         var active = true;
         defer if (active) forceReleaseQueryRow(&query_row);
@@ -179,17 +206,21 @@ pub const PostgresComposedTrackStore = struct {
         finishQueryRow(&query_row) catch |err| {
             std.log.err("composed track result cleanup failed: {}", .{err});
             active = false;
-            return error.IndexUnavailable;
+            return postgres_read.failure(conn, err);
         };
         active = false;
         return value;
     }
 
-    fn listPublicOpaque(
+    fn listPublicOpaque(context: *anyopaque, allocator: std.mem.Allocator, request: store_module.ListRequest) TrackStore.Error![]store_module.ListItem {
+        return postgres_read.run(TrackStore.Error![]store_module.ListItem, listPublicOnce, .{ context, allocator, request });
+    }
+
+    fn listPublicOnce(
         context: *anyopaque,
         allocator: std.mem.Allocator,
         request: store_module.ListRequest,
-    ) TrackStore.Error![]store_module.ListItem {
+    ) postgres_read.Error![]store_module.ListItem {
         const self: *PostgresComposedTrackStore = @ptrCast(@alignCast(context));
         const limit: i64 = @intCast(request.limit);
         const conn = self.pool.acquire() catch |err| {
@@ -209,7 +240,7 @@ pub const PostgresComposedTrackStore = struct {
                     limit,
                 }, .{ .cache_name = "plyr_discovery_after_query" }) catch |err| {
                     logQueryError(conn, "composed discovery query failed", err);
-                    return error.IndexUnavailable;
+                    return postgres_read.failure(conn, err);
                 }
             else
                 conn.queryOpts(discovery_query, .{
@@ -220,7 +251,7 @@ pub const PostgresComposedTrackStore = struct {
                     limit,
                 }, .{ .cache_name = "plyr_discovery_query" }) catch |err| {
                     logQueryError(conn, "composed discovery query failed", err);
-                    return error.IndexUnavailable;
+                    return postgres_read.failure(conn, err);
                 },
             .artist => |artist_did| if (request.after) |after|
                 conn.queryOpts(artist_after_query, .{
@@ -234,7 +265,7 @@ pub const PostgresComposedTrackStore = struct {
                     limit,
                 }, .{ .cache_name = "plyr_artist_after_query" }) catch |err| {
                     logQueryError(conn, "composed artist catalogue query failed", err);
-                    return error.IndexUnavailable;
+                    return postgres_read.failure(conn, err);
                 }
             else
                 conn.queryOpts(artist_query, .{
@@ -246,7 +277,7 @@ pub const PostgresComposedTrackStore = struct {
                     limit,
                 }, .{ .cache_name = "plyr_artist_query" }) catch |err| {
                     logQueryError(conn, "composed artist catalogue query failed", err);
-                    return error.IndexUnavailable;
+                    return postgres_read.failure(conn, err);
                 },
         };
         defer result.deinit();
@@ -254,7 +285,7 @@ pub const PostgresComposedTrackStore = struct {
         errdefer items.deinit(allocator);
         while (result.next() catch |err| {
             std.log.err("composed track collection read failed: {}", .{err});
-            return error.IndexUnavailable;
+            return postgres_read.failure(conn, err);
         }) |row| {
             const value = decodeRow(allocator, row) catch |err| switch (err) {
                 error.OutOfMemory => return error.OutOfMemory,

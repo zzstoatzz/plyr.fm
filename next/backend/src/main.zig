@@ -275,6 +275,7 @@ test {
     _ = @import("internal/http/query.zig");
     _ = @import("internal/index/postgres_track_store.zig");
     _ = @import("internal/index/postgres_composed_track_store.zig");
+    _ = @import("internal/index/postgres_read.zig");
     _ = @import("internal/index/playback_store.zig");
     _ = @import("internal/index/postgres_playback_store.zig");
     _ = @import("internal/index/verified_list_store.zig");
