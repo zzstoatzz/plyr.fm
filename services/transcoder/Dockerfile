@@ -20,8 +20,9 @@ RUN rm -rf src
 # now copy actual sources (binary output stored in image layer)
 COPY services/transcoder/src ./src
 COPY backend/src/backend/upload_contract.json /app/backend/src/backend/upload_contract.json
+COPY --from=ffmpeg /ffmpeg /usr/local/bin/ffmpeg
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
-    cargo build --release
+    cargo test --release && cargo build --release
 
 FROM debian:bookworm-slim
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \

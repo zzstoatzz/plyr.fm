@@ -39,6 +39,10 @@ jobs:
         working-directory: services/transcoder
         run: cargo build --release
 
+      - name: verify processing boundary and lifecycle
+        working-directory: services/transcoder
+        run: cargo test
+
       - name: install uv
         uses: astral-sh/setup-uv@v7
 
