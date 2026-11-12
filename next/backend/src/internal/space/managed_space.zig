@@ -14,14 +14,11 @@
 
 const std = @import("std");
 const zat = @import("zat");
+const service_auth = @import("../atproto/service_auth.zig");
 
 pub const check_user_access_nsid = "com.atproto.managedspace.checkUserAccess";
-
-/// Clock skew tolerated on service-JWT expiry, in seconds.
-const expiry_skew_seconds = 30;
-/// Longest lifetime accepted on a service JWT (atproto service auth is
-/// short-lived; a far-future exp is a replayable credential).
-const max_lifetime_seconds = 5 * 60;
+/// DID-doc service id of plyr's XRPC appview, next to the managed-space one.
+pub const appview_service_id = "plyr_appview";
 
 pub const Config = struct {
     /// e.g. `did:web:api.next.plyr.fm`
@@ -46,11 +43,20 @@ pub const Config = struct {
         try std.json.Stringify.value(.{
             .@"@context" = .{"https://www.w3.org/ns/did/v1"},
             .id = self.service_did,
-            .service = .{.{
-                .id = try std.fmt.allocPrint(allocator, "#{s}", .{self.service_id}),
-                .type = "PlyrManagedSpace",
-                .serviceEndpoint = self.service_endpoint,
-            }},
+            .service = .{
+                .{
+                    .id = try std.fmt.allocPrint(allocator, "#{s}", .{self.service_id}),
+                    .type = "PlyrManagedSpace",
+                    .serviceEndpoint = self.service_endpoint,
+                },
+                // the XRPC appview (notifications): what a PDS proxies to
+                // for `atproto-proxy: {service_did}#plyr_appview`
+                .{
+                    .id = "#" ++ appview_service_id,
+                    .type = "PlyrAppView",
+                    .serviceEndpoint = self.service_endpoint,
+                },
+            },
         }, .{}, &out.writer);
         return out.written();
     }
@@ -141,26 +147,10 @@ pub fn decide(config: Config, space: SpaceUri, user: []const u8, access: Access)
     };
 }
 
-pub const AuthError = error{
-    OutOfMemory,
-    MalformedToken,
-    BadAudience,
-    BadMethod,
-    BadIssuer,
-    Expired,
-    IssuerKeyUnavailable,
-    BadSignature,
-};
+pub const AuthError = service_auth.Error;
 
 /// Resolves a DID to its `#atproto` signing key as a multibase string.
-pub const KeyLookup = struct {
-    context: *anyopaque,
-    lookup_fn: *const fn (*anyopaque, std.mem.Allocator, []const u8) anyerror![]const u8,
-
-    pub fn lookup(self: KeyLookup, allocator: std.mem.Allocator, did: []const u8) ![]const u8 {
-        return self.lookup_fn(self.context, allocator, did);
-    }
-};
+pub const KeyLookup = service_auth.KeyLookup;
 
 /// Verify the PDS's service JWT: aud is the managingApp (fragment included),
 /// lxm is checkUserAccess, iss is the space authority, signed by its key.
@@ -172,24 +162,12 @@ pub fn verifyServiceAuth(
     authority: []const u8,
     keys: KeyLookup,
 ) AuthError!void {
-    var jwt = zat.Jwt.parse(allocator, token) catch |err| switch (err) {
-        error.OutOfMemory => return error.OutOfMemory,
-        else => return error.MalformedToken,
-    };
-    defer jwt.deinit();
-    const payload = jwt.payload;
-    if (!std.mem.eql(u8, payload.aud, managing_app)) return error.BadAudience;
-    const lxm = payload.lxm orelse return error.BadMethod;
-    if (!std.mem.eql(u8, lxm, check_user_access_nsid)) return error.BadMethod;
-    const issuer = if (std.mem.indexOfScalar(u8, payload.iss, '#')) |hash| payload.iss[0..hash] else payload.iss;
+    const issuer = try service_auth.verify(allocator, now_seconds, token, .{
+        .audiences = &.{managing_app},
+        .method = check_user_access_nsid,
+    }, keys);
+    defer allocator.free(issuer);
     if (!std.mem.eql(u8, issuer, authority)) return error.BadIssuer;
-    if (now_seconds > payload.exp + expiry_skew_seconds) return error.Expired;
-    if (payload.exp - now_seconds > max_lifetime_seconds + expiry_skew_seconds) return error.Expired;
-    const key = keys.lookup(allocator, issuer) catch |err| switch (err) {
-        error.OutOfMemory => return error.OutOfMemory,
-        else => return error.IssuerKeyUnavailable,
-    };
-    jwt.verify(key) catch return error.BadSignature;
 }
 
 /// Answers "does `supporter` support `artist`".
@@ -279,6 +257,8 @@ test "did document names the managing-app service" {
     try std.testing.expectEqualStrings("did:web:api.next.plyr.fm", doc.id);
     try std.testing.expectEqualStrings("#plyr_space", doc.services[0].id);
     try std.testing.expectEqualStrings("https://api.next.plyr.fm", doc.services[0].service_endpoint);
+    try std.testing.expectEqualStrings("#plyr_appview", doc.services[1].id);
+    try std.testing.expectEqualStrings("https://api.next.plyr.fm", doc.services[1].service_endpoint);
 }
 
 const TestKeys = struct {
