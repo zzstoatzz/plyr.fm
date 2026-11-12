@@ -108,10 +108,7 @@ pub const Network = struct {
                     try std.fmt.allocPrint(allocator, "/xrpc/com.atproto.repo.listRecords?repo={s}&collection={s}&limit=100", .{ supporter, collection });
                 const body = (try self.getJson(allocator, pds, path)) orelse break;
                 const parsed = try std.json.parseFromSliceLeaky(std.json.Value, allocator, body, .{});
-                if (self.deadline_ns != null) {
-                    const records = if (parsed == .object) parsed.object.get("records") else null;
-                    if (records == null or records.? != .array) return error.InvalidSupporterResponse;
-                }
+                if (self.deadline_ns != null) try validatePage(parsed);
                 for (try attested.proofRefs(allocator, parsed, supporter, artist, &attested.default_trusted_brokers)) |proof| {
                     if (try self.proofVerified(allocator, proof)) return true;
                 }
@@ -225,4 +222,25 @@ test "budgeted supporter query requires an explicit boolean decision" {
     try std.testing.expectError(error.InvalidSupporterResponse, validFromBody(std.testing.allocator, "{}", true));
     try std.testing.expectError(error.InvalidSupporterResponse, validFromBody(std.testing.allocator, "{\"valid\":\"false\"}", true));
     try std.testing.expect(!try validFromBody(std.testing.allocator, "{\"valid\":false}", true));
+}
+
+fn validatePage(page: std.json.Value) !void {
+    const records = if (page == .object) page.object.get("records") else null;
+    if (records == null or records.? != .array) return error.InvalidSupporterResponse;
+    if (page.object.get("cursor")) |cursor| {
+        if (cursor != .string) return error.InvalidSupporterResponse;
+    }
+}
+
+test "budgeted supporter pages distinguish absent from malformed cursors" {
+    for ([_][]const u8{ "{\"records\":[]}", "{\"records\":[],\"cursor\":\"next\"}" }) |body| {
+        var parsed = try std.json.parseFromSlice(std.json.Value, std.testing.allocator, body, .{});
+        defer parsed.deinit();
+        try validatePage(parsed.value);
+    }
+    for ([_][]const u8{ "{\"records\":[],\"cursor\":null}", "{\"records\":[],\"cursor\":3}", "{\"records\":[],\"cursor\":false}", "{\"records\":{}}" }) |body| {
+        var parsed = try std.json.parseFromSlice(std.json.Value, std.testing.allocator, body, .{});
+        defer parsed.deinit();
+        try std.testing.expectError(error.InvalidSupporterResponse, validatePage(parsed.value));
+    }
 }
