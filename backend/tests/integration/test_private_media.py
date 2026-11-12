@@ -21,7 +21,22 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend._internal import get_session
 from backend._internal.atproto.client import make_pds_request
-from backend._internal.atproto.spaces.client import delete_space_record
+from backend._internal.atproto.spaces.client import (
+    _kem_key,
+    _repo_host_url,
+    _space_token_request,
+    delete_space_record,
+    get_space_credential,
+    list_space_repo_ops,
+)
+from backend._internal.atproto.spaces.mac import (
+    ACCEPT_SIGNATURE_HEADER,
+    RECORD_MAC_TYPE,
+    encapsulate,
+    format_mac_request,
+    verify_record_mac,
+    verify_record_value,
+)
 from backend._internal.atproto.spaces.uris import parse_space_record_uri
 from backend._internal.auth.app_password import create_app_password_session
 from backend.api.tracks import uploads
@@ -151,6 +166,46 @@ async def test_private_track_upload_playback_and_delete_live_zds(
                 },
             )
             assert stored["value"]["title"] == title
+
+            credential = await get_space_credential(session, parsed.space)
+            kem = await _kem_key(parsed.author_did)
+            assert kem is not None
+            exchange = encapsulate(kem)
+            signed_record = await _space_token_request(
+                await _repo_host_url(parsed.author_did),
+                "GET",
+                "com.atproto.space.getRecord",
+                credential.token,
+                credential.key,
+                audience=parsed.author_did,
+                params={
+                    "space": parsed.space,
+                    "repo": parsed.author_did,
+                    "collection": parsed.collection,
+                    "rkey": parsed.rkey,
+                },
+                extra_headers={
+                    ACCEPT_SIGNATURE_HEADER: format_mac_request(
+                        exchange.key_share, mac_type=RECORD_MAC_TYPE
+                    )
+                },
+            )
+            signed_record.raise_for_status()
+            proven = signed_record.json()
+            assert proven["uri"] == record_uri
+            verify_record_value(proven["value"], proven["cid"])
+            verify_record_mac(
+                exchange,
+                uri=record_uri,
+                cid=proven["cid"],
+                headers=signed_record.headers,
+            )
+            assert proven["value"]["title"] == title
+            ops = await list_space_repo_ops(
+                session, space=parsed.space, repo=parsed.author_did, limit=1
+            )
+            assert ops["commit"]["space"] == parsed.space
+            assert ops["commit"]["repo"] == parsed.author_did
 
             ranged = await http.get(
                 f"/audio/{track['file_id']}",

@@ -629,9 +629,8 @@ async def list_space_repo_ops(
 ) -> dict[str, Any]:
     """Pull incremental operations directly from a writer's repo host.
 
-    A full page carries ``cursor`` and no ``commit``; the page that reaches the
-    head of the oplog carries the ``commit`` (MAC-verified) and no ``cursor``. ``cursor``
-    takes precedence over ``since`` when both are sent.
+    Every page carries a MAC-verified commit; a full page also carries ``cursor``.
+    ``cursor`` takes precedence over ``since`` when both are sent.
     """
     params: dict[str, Any] = {"space": space, "repo": repo, "limit": limit}
     if since:
