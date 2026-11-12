@@ -112,6 +112,19 @@ its Durable Object migration. Backend admission ships before dependent client
 code. Deployment acceptance must prove exact versions and a disposable small
 fixture with teardown; no production account writes are part of this slice.
 
+After both exact deployment versions are verified, dispatch the existing
+`next audio service` workflow on main with `verify_upload=true`. The fixture
+uses the existing `ZAT_TEST_*` account secrets and Cloudflare credentials. It
+requires R2 object-delete permission and preflights that permission against its
+fresh generated key before staging bytes or creating a record. It
+creates one fresh integration-test record, stages 4044 bytes, verifies signed
+activation and GET/HEAD/Range, then deletes only its generated PDS key and exact
+R2 object. The cleanup keys cannot be supplied by workflow input. A published
+receipt remains as bounded test metadata, without active quota or alarms; this
+is not full resource erasure. Failed activation can retain a 4044-byte recovery
+reservation. Diagnose that failure before another run rather than exhausting
+the account's two-session quota. The fixture has no production target option.
+
 R2 API constraints: uniform nonfinal parts of at least 5 MiB, completed uploads
 can disappear from the multipart API after success, and incomplete uploads
 expire after 7 days by default. Sources:
