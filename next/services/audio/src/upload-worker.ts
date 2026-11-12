@@ -24,7 +24,7 @@ export class OwnerUploads extends DurableObject<UploadEnv> {
       headers: { "content-type": "application/json", authorization: `Bearer ${this.env.UPLOAD_CAPABILITY_SECRET}` },
       body: JSON.stringify({ owner: session.owner, recordUri: session.recordUri, audioUrl: session.audioUrl }),
       signal: AbortSignal.timeout(15000),
-      redirect: "error",
+      redirect: "manual",
     });
     if (!response.ok) throw new UploadFailure(503, "record authority unavailable");
     const result: unknown = await response.json();

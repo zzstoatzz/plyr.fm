@@ -49,6 +49,24 @@ test("capability verifies identity-bound size/policy and rejects tampering or ex
   expect(await verifyCapability(`${await token(value)}x`, secret)).toBeNull();
 });
 
+for (const redirected of [false, true]) test(`activation uses real Worker fetch and rejects redirects=${redirected}`, async () => {
+  const value = claim();
+  value.recordUri = `at://${value.owner}/fm.plyr.track/network-${redirected ? "redirect" : "verified"}`;
+  const f = await setup(value);
+  expect((await f.send("POST")).status).toBe(200);
+  expect((await f.send("PUT", "/parts/1", "0123456789")).status).toBe(200);
+  expect((await f.send("POST", "/finish")).status).toBe(200);
+  const activated = await f.send("POST", "/activate");
+  expect(activated.status).toBe(redirected ? 503 : 200);
+  if (redirected) {
+    expect(await activated.json()).toEqual({ error: "record authority unavailable" });
+    expect((await routeUpload(new Request(f.media), env))?.status).toBe(404);
+  } else {
+    expect(await activated.json()).toMatchObject({ state: "published", reservedBytes: 0 });
+    expect((await routeUpload(new Request(f.media), env))?.status).toBe(200);
+  }
+});
+
 test("multipart persists digests across eviction and never exposes unpublished bytes", async () => {
   const f = await setup();
   expect((await f.send("POST")).status).toBe(200);
