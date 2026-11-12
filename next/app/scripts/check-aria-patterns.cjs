@@ -18,6 +18,16 @@ async function serveUiSdk(page) {
   });
 }
 
+async function checkCombobox(page, name) {
+  const problems = await page.evaluate(async ({ origin, name }) => {
+    const { checkPattern } = await import(origin + '/testing.js');
+    const input = [...document.querySelectorAll('[role="combobox"]')].find(node => node.getAttribute('aria-label') === name);
+    if (!input) return `no combobox named ${name}`;
+    try { await checkPattern(input.parentElement.parentElement, 'combobox'); return null; } catch (error) { return error.message; }
+  }, { origin: uiSdkOrigin, name });
+  assert.equal(problems, null, `${name}: ${problems}`);
+}
+
 async function checkTabs(page, name) {
   const problems = await page.evaluate(async ({ origin, name }) => {
     const { checkPattern } = await import(origin + '/testing.js');
@@ -43,8 +53,17 @@ async function run(browser, width, theme) {
     await page.getByRole('link', { name: 'jack', exact: true }).first().click();
     await page.getByRole('tab', { name: 'tracks', exact: true }).waitFor();
     await checkTabs(page, 'Artist catalog');
+    await page.route('https://typeahead.waow.tech/**', route => route.fulfill({ json: { actors: [
+      { handle: 'nate.test', displayName: 'Nate' }, { handle: 'nathan.test' }, { handle: 'natalie.test', displayName: 'Natalie' },
+    ] } }));
+    await page.route('https://api.plyr.fm/auth/sign-in-preview?*', route => route.fulfill({ status: 404, json: {} }));
+    await page.goto(new URL('/login', page.url()).href);
+    const input = page.getByRole('combobox', { name: 'atmosphere account' });
+    await input.fill('na');
+    await page.getByRole('option').first().waitFor();
+    await checkCombobox(page, 'atmosphere account');
     assert.deepEqual(errors, []);
-    console.log(`${width}/${theme}: artist catalog tabs follow the APG tabs pattern`);
+    console.log(`${width}/${theme}: artist catalog tabs and the account picker follow their APG patterns`);
   } finally { await page.unrouteAll({ behavior: 'ignoreErrors' }); await context.close(); }
 }
 
