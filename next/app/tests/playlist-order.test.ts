@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { orderedPlaylist, playlistRecord, sameRecord } from '../src/collections/playlist-order.ts';
+import { orderedCollection, collectionRecord, sameRecord } from '../src/collections/collection-order.ts';
 
 test('ordering preserves every occurrence and unknown fields without mutating the snapshot', () => {
   const input = { listType: 'playlist', future: { intact: true }, items: [
@@ -8,19 +8,19 @@ test('ordering preserves every occurrence and unknown fields without mutating th
     { subject: { uri: 'at://missing', cid: 'b' }, occurrence: 'missing' },
     { subject: { uri: 'at://one', cid: 'a' }, occurrence: 'duplicate' },
   ] };
-  const parsed = playlistRecord(input);
-  const moved = orderedPlaylist(parsed, [2, 0, 1]);
+  const parsed = collectionRecord(input);
+  const moved = orderedCollection(parsed, [2, 0, 1]);
   assert.deepEqual(moved.items, [input.items[2], input.items[0], input.items[1]]);
   assert.deepEqual(moved.future, input.future);
   assert.deepEqual(parsed, input);
   for (const order of [[0, 0, 2], [0, 1], [0, 1, 3], [0, 1, 1.5], [-1, 0, 1]]) {
-    assert.throws(() => orderedPlaylist(parsed, order), /exactly once/);
+    assert.throws(() => orderedCollection(parsed, order), /exactly once/);
   }
 });
 
 test('malformed canonical entries fail closed rather than disappearing', () => {
   for (const value of [null, [], { listType: 'album', items: [] }, { listType: 'playlist', items: [null] },
-    { listType: 'playlist', items: [{ subject: { uri: 'at://one' } }] }]) assert.throws(() => playlistRecord(value));
+    { listType: 'playlist', items: [{ subject: { uri: 'at://one' } }] }]) assert.throws(() => collectionRecord(value));
 });
 
 test('record acknowledgement comparison ignores object key order but preserves array order and unknown fields', () => {

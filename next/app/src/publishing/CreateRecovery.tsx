@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useFocusEffect } from 'expo-router';
 import { getAuth, type Auth } from '../auth-state';
-import { playlistIdFromUri, trackIdFromUri } from '../api';
+import { albumIdFromUri, playlistIdFromUri, trackIdFromUri } from '../api';
 import { Action, Copy } from '../controls';
 import { createPds } from '../pds';
 import { WaveLoading } from '../WaveLoading';
 import type { CreateOperation } from './create-operation';
 
-export function useCreateRecovery(auth: Auth, kind: 'track' | 'playlist') {
+export function useCreateRecovery(auth: Auth, kind: 'track' | 'playlist' | 'album') {
   const pds = useMemo(() => createPds(auth), [auth.did, auth.rpc]);
   const [entries, setEntries] = useState<CreateOperation[]>([]);
   const [loading, setLoading] = useState(true);
@@ -28,7 +28,7 @@ export function useCreateRecovery(auth: Auth, kind: 'track' | 'playlist') {
   return { pds, operations: entries.filter(operation => !operation.archived), archived: entries.filter(operation => operation.archived), loading, error, refresh };
 }
 
-export function EarlierCreates({ recovery, auth, kind }: { recovery: Recovery; auth: Auth; kind: 'track' | 'playlist' }) {
+export function EarlierCreates({ recovery, auth, kind }: { recovery: Recovery; auth: Auth; kind: 'track' | 'playlist' | 'album' }) {
   const [expanded, setExpanded] = useState(false);
   if (!recovery.archived.length) return null;
   return <>
@@ -38,7 +38,7 @@ export function EarlierCreates({ recovery, auth, kind }: { recovery: Recovery; a
 }
 
 type Recovery = ReturnType<typeof useCreateRecovery>;
-export function CreateRecovery({ recovery, auth, kind, onDismiss }: { recovery: Recovery; auth: Auth; kind: 'track' | 'playlist'; onDismiss: (operation: CreateOperation) => void }) {
+export function CreateRecovery({ recovery, auth, kind, onDismiss }: { recovery: Recovery; auth: Auth; kind: 'track' | 'playlist' | 'album'; onDismiss: (operation: CreateOperation) => void }) {
   return <>
     {recovery.loading && <WaveLoading label="Loading creation recovery" />}
     {recovery.error && <><Copy live>{recovery.error}</Copy><Action label="Retry loading recovery" onPress={() => void recovery.refresh()} /></>}
@@ -46,7 +46,7 @@ export function CreateRecovery({ recovery, auth, kind, onDismiss }: { recovery: 
   </>;
 }
 
-function PendingCreate({ operation, auth, kind, recovery, onDismiss }: { operation: CreateOperation; auth: Auth; kind: 'track' | 'playlist'; recovery: Recovery; onDismiss: (operation: CreateOperation) => void }) {
+function PendingCreate({ operation, auth, kind, recovery, onDismiss }: { operation: CreateOperation; auth: Auth; kind: 'track' | 'playlist' | 'album'; recovery: Recovery; onDismiss: (operation: CreateOperation) => void }) {
   const [result, setResult] = useState<Awaited<ReturnType<typeof recovery.pds.recoverCreate>> | undefined>(() => operation.cid
     ? { state: 'accepted', uri: operation.uri, cid: operation.cid, status: 'pending' } : undefined);
   const [error, setError] = useState<string>();
@@ -79,6 +79,7 @@ function PendingCreate({ operation, auth, kind, recovery, onDismiss }: { operati
     }).catch(() => { if (current()) { setError('could not update this attempt. try again.'); } }).finally(() => { locked.current = false; if (current()) setBusy(false); });
   }
   const accepted = result?.state === 'accepted';
+  const album = operation.record.listType === 'album';
   const name = typeof operation.record.title === 'string' ? operation.record.title : typeof operation.record.name === 'string' ? operation.record.name : kind;
   return <>
     <Copy>{name}</Copy>
@@ -93,7 +94,7 @@ function PendingCreate({ operation, auth, kind, recovery, onDismiss }: { operati
       <Copy>this attempt may still appear. starting again could create a duplicate.</Copy>
       <Action label="Set aside attempt" disabled={busy} onPress={() => archive(true)} />
     </>}
-    {(accepted || result?.state === 'different') && <Action label={kind === 'track' ? 'View track' : accepted ? 'Open created playlist' : 'View existing playlist'} href={kind === 'track' ? `/track/${trackIdFromUri(operation.uri)}` : `/playlist/${playlistIdFromUri(operation.uri)}`} />}
+    {(accepted || result?.state === 'different') && <Action label={kind === 'track' ? 'View track' : accepted ? `Open created ${album ? 'album' : 'playlist'}` : `View existing ${album ? 'album' : 'playlist'}`} href={kind === 'track' ? `/track/${trackIdFromUri(operation.uri)}` : album ? `/album/${albumIdFromUri(operation.uri)}` : `/playlist/${playlistIdFromUri(operation.uri)}`} />}
     {result?.state === 'different' && <Action label="Keep existing record" disabled={busy} onPress={() => dismiss(true)} />}
     {accepted && <Action label={kind === 'track' && !operation.archived ? 'Upload another' : 'Done'} disabled={busy} onPress={() => dismiss()} />}
   </>;

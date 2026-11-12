@@ -20,8 +20,9 @@ import { Action, Field, InlineLink } from './controls';
 import { Sheet } from './Sheet';
 import { createPds } from './pds';
 import { CreateRecovery, EarlierCreates, useCreateRecovery } from './publishing/CreateRecovery';
-import { PlaylistOrderEditor } from './collections/PlaylistOrderEditor';
-import type { PlaylistRevision } from './collections/playlist-order';
+import { AlbumEditor } from './collections/AlbumEditor';
+import { CollectionOrderEditor } from './collections/CollectionOrderEditor';
+import type { CollectionRevision } from './collections/collection-order';
 
 function usePds() {
   const { did, rpc } = useAuth();
@@ -173,7 +174,7 @@ interface CollectionControlsProps {
   refresh: () => void;
   actions: ReactNode;
   onPlay: Play;
-  onOrderSaved: (revision: PlaylistRevision) => void;
+  onOrderSaved: (revision: CollectionRevision, tracks?: Track[]) => void;
 }
 
 function CollectionBar({ children }: { children: ReactNode }) {
@@ -200,7 +201,7 @@ function EditCollection({ list, refresh, actions, onPlay, onOrderSaved }: Collec
   const router = useRouter();
   const [editing, setEditing] = useState(false);
   const [reordering, setReordering] = useState(false);
-  const ordering = useMemo(() => pds.playlistOrder(), [pds]);
+  const ordering = useMemo(() => pds.collectionOrder(list.object), [pds, list.object]);
   const album = list.object === 'album';
   const [name, setName] = useState(list.metadata.name ?? '');
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -234,7 +235,9 @@ function EditCollection({ list, refresh, actions, onPlay, onOrderSaved }: Collec
     });
   }
   const tracks = list.members.flatMap(({ track }) => track ? [track] : []);
-  if (reordering) return <PlaylistOrderEditor list={list} ordering={ordering} close={() => setReordering(false)}
+  if (reordering && album) return <AlbumEditor list={list} close={() => setReordering(false)}
+    saved={(revision, tracks) => { if (getAuth().did === auth.did && getAuth().rpc === auth.rpc) onOrderSaved(revision, tracks); }} />;
+  if (reordering) return <CollectionOrderEditor list={list} ordering={ordering} close={() => setReordering(false)}
     saved={revision => { if (getAuth().did === auth.did && getAuth().rpc === auth.rpc) onOrderSaved(revision); }} />;
   return <>
     <CollectionBar>
@@ -252,7 +255,7 @@ function EditCollection({ list, refresh, actions, onPlay, onOrderSaved }: Collec
       <Status loading={mutation.busy} empty={mutation.message} />
       {!mutation.busy && name.trim() && name.trim() !== list.metadata.name &&
         <Button label="Save name" onPress={rename} />}
-      {!album && !mutation.busy && <Action label="Reorder tracks" onPress={() => setReordering(true)} />}
+      {!mutation.busy && <Action label={album ? "Organize tracks" : "Reorder tracks"} onPress={() => setReordering(true)} />}
     </View>}
     <Heading>tracks</Heading>
     {editing && !album ? list.members.map(({ track, position, subject }) => {

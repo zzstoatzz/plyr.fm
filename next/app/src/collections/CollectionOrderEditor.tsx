@@ -9,16 +9,16 @@ import { Action, Copy, row } from '../controls';
 import { PlayerControl } from '../PlayerControl';
 import { Text } from '../Text';
 import type { createPds } from '../pds';
-import { PlaylistOrderConflict, PlaylistOrderUnconfirmed, type PlaylistRevision } from './playlist-order';
+import { CollectionOrderConflict, CollectionOrderUnconfirmed, type CollectionRevision } from './collection-order';
 
-export function PlaylistOrderEditor({ list, ordering, close, saved }: {
+export function CollectionOrderEditor({ list, ordering, close, saved }: {
   list: ListDetail;
-  ordering: ReturnType<ReturnType<typeof createPds>['playlistOrder']>;
+  ordering: ReturnType<ReturnType<typeof createPds>['collectionOrder']>;
   close: () => void;
-  saved: (revision: PlaylistRevision) => void;
+  saved: (revision: CollectionRevision) => void;
 }) {
   const theme = useAppearance();
-  const [revision, setRevision] = useState<PlaylistRevision>();
+  const [revision, setRevision] = useState<CollectionRevision>();
   const [order, setOrder] = useState<number[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
@@ -55,7 +55,7 @@ export function PlaylistOrderEditor({ list, ordering, close, saved }: {
     } catch (error) {
       if (active.current) {
         setError(errorMessage(error));
-        setBlocked(error instanceof PlaylistOrderConflict || error instanceof PlaylistOrderUnconfirmed);
+        setBlocked(error instanceof CollectionOrderConflict || error instanceof CollectionOrderUnconfirmed);
       }
     } finally { locked.current = false; if (active.current) setBusy(false); }
   }

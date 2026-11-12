@@ -1,4 +1,4 @@
-import { type Href } from 'expo-router';
+import { useFocusEffect, type Href } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
 import { Platform, ScrollView, StyleSheet, View, type KeyDownEvent, type ViewInstance } from 'react-native';
 import { api, type Artist } from './api';
@@ -36,6 +36,12 @@ function useArtistCatalog(did: string) {
 function ArtistCatalog({ artist, onPlay }: { artist: Artist; onPlay: Play }) {
   const { tracks, albums, playlists, likes, metrics } = useArtistCatalog(artist.did);
   const [section, setSection] = useState<Section>('tracks');
+  const visited = useRef(false);
+  const reloadAlbums = albums.reload;
+  useFocusEffect(useCallback(() => {
+    if (visited.current) reloadAlbums();
+    visited.current = true;
+  }, [reloadAlbums]));
   const tabs = useRef<Partial<Record<Section, ViewInstance | null>>>({});
   const theme = useColors();
   const auth = useAuth();
@@ -76,7 +82,7 @@ function ArtistCatalog({ artist, onPlay }: { artist: Artist; onPlay: Play }) {
         <TrackRows tracks={tracks.data} onPlay={(track, queue) => onPlay(track, queue, name)} />
         <PageStatus page={tracks} label="tracks" />
       </>}
-      {section === 'albums' && <><ListRows lists={albums.data} /><PageStatus page={albums} label="albums" /></>}
+      {section === 'albums' && <>{auth.did === artist.did && <Action primary label="New album" href="/create-album" />}<ListRows lists={albums.data} /><PageStatus page={albums} label="albums" /></>}
       {section === 'playlists' && <><ListRows lists={playlists.data} /><PageStatus page={playlists} label="playlists" /></>}
       {section === 'likes' && <>
         <TrackRows tracks={likes.data} onPlay={(track, queue) => onPlay(track, queue, `liked by ${name}`)} />
