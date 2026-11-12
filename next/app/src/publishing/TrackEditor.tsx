@@ -11,6 +11,8 @@ import { measureAudioDuration, pickMedia } from '../media-picker';
 import { createPds, TrackRevisionConflict, type MediaFile } from '../pds';
 import { recordTags } from './track-tags';
 import { TagsField } from './TagsField';
+import { DownloadPreferenceField } from './DownloadPreferenceField';
+import { editableDownloadPreference, type DownloadPreference } from './track-download-policy';
 import { canReplaceTrackAudio, validateReplacementAudio, TrackWriteUnconfirmed } from './track-audio';
 
 function close(id: string) { router.canGoBack() ? router.back() : router.replace(`/track/${id}`); }
@@ -68,6 +70,7 @@ function TrackForm({ auth, data, reload, feedback }: { auth: Auth; data: Data; r
   const [description, setDescription] = useState(text('description'));
   const [tags, setTags] = useState((data.tags ?? []).join('\n'));
   const [tagsEdited, setTagsEdited] = useState(false);
+  const [downloadPolicy, setDownloadPolicy] = useState<DownloadPreference>();
   const [artwork, setArtwork] = useState<MediaFile | null>();
   const [audio, setAudio] = useState<MediaFile>();
   const [error, setError] = useState<string>();
@@ -91,7 +94,7 @@ function TrackForm({ auth, data, reload, feedback }: { auth: Auth; data: Data; r
       const duration = !deleting && audio ? await measureAudioDuration(audio).catch(() => undefined) : undefined;
       if (!current()) return;
       const status = deleting ? await pds.deleteTrack(track.record.uri)
-        : await pds.editTrack(track.record.uri, { title, album, description, artwork, audio: audio ? { file: audio, duration } : undefined, tags: tagsEdited ? tags.split('\n') : undefined }, revision);
+        : await pds.editTrack(track.record.uri, { title, album, description, artwork, audio: audio ? { file: audio, duration } : undefined, tags: tagsEdited ? tags.split('\n') : undefined, downloadPolicy }, revision);
       if (!current()) return;
       setSaved(true);
       setDeleted(deleting);
@@ -125,6 +128,7 @@ function TrackForm({ auth, data, reload, feedback }: { auth: Auth; data: Data; r
       <Field label="Album" value={album} onChangeText={setAlbum} maxLength={256} editable={!busy} />
       <Field label="Description" value={description} onChangeText={setDescription} maxLength={5000} multiline editable={!busy} />
       <TagsField value={tags} onChange={value => { setTags(value); setTagsEdited(true); }} disabled={busy} />
+      <DownloadPreferenceField value={downloadPolicy ?? editableDownloadPreference(revision.value, track.access.visibility)} onChange={setDownloadPolicy} disabled={busy || conflict} />
       <View style={row}>
         <Action label={artwork?.name ?? 'Change cover'} disabled={busy} onPress={() => void pickMedia('image/*').then(file => {
           if (file && current()) setArtwork(file);
