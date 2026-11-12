@@ -133,7 +133,7 @@ export function PlayerBar() {
         boxShadow: `0px 0px 5px ${theme.accent}66`,
         ...(Platform.OS === 'web' ? { backgroundImage: 'linear-gradient(180deg, #ffffff80, #ffffff00)' } : {}) }} />
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: desktop ? 24 : 2 }}>
-        <View style={{ flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: desktop ? 6 : 0 }}>{identity}<TrackLikes key={track.id} track={track} iconOnly returnTo={path} /></View>
+        <View style={{ flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: desktop ? 6 : 0 }}>{identity}{!player.privatePlayback && <TrackLikes key={track.id} track={track} iconOnly returnTo={path} />}</View>
         {desktop ? <>
           <View style={{ flex: 1.4, minWidth: 224, maxWidth: 600 }}>
             <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center' }}>

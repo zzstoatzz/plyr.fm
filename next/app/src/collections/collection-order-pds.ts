@@ -1,3 +1,4 @@
+import { assertPublicCollection } from '../publishing/track-reference';
 import { ok } from '@atcute/client';
 import type { Auth } from '../auth-state';
 import type { AwaitStatus } from '../api';
@@ -33,6 +34,7 @@ export function collectionOrdering({ rpc, did, collection, kind, assertSession, 
   async function write(revision: CollectionRevision, items: CollectionItem[]) {
     assertSession();
     const value = { ...collectionRecord({ ...revision.value, items }, kind), $type: collection, updatedAt: new Date().toISOString() };
+    assertPublicCollection(value);
     let saved: CollectionRevision;
     try {
       const result = await ok(rpc.post('com.atproto.repo.putRecord', { input: {

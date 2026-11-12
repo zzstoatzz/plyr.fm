@@ -95,3 +95,34 @@ intentional creation without erasing the earlier address or immutable record.
 Earlier attempts remain available for read-only status checks and explicit
 recovery; resuming never submits automatically. Late acceptance preserves the
 set-aside state. Validation and authorization errors never discard an attempt.
+
+## Private music
+
+`/private` reads and creates tracks directly in the owner's existing
+`privateMedia/self` space after explicit OAuth consent. The initial path accepts
+up to 100 MiB and preserves existing membership; invited members can read and
+download. Public policies and app-restricted spaces are rejected rather than
+changed. It does not yet manage members, supporter/download rules, transcoding,
+or large private uploads.
+
+Private playback uses the existing player and a device-local queue. Private
+references are excluded from personal queue synchronization, Jams, public
+appview requests and play accounting. Account or session replacement clears
+private playback. Recovery stores the exact private record metadata and blob
+reference on this device before canonical creation, reuses its TID on explicit
+retry, and never overwrites a different record. Clearing app data removes this
+recovery state.
+
+The supported ZDS contract is release 0.9.0 (`ebb84af`): `repo.uploadBlob` stages
+bytes; `sync.getBlob` exposes them only when a public repository record references
+the CID (`src/atproto/sync.zig`, `src/storage/store.zig:blobMetadata`). Space blob
+reads require authorized access and a reference in that space
+(`src/atproto/space.zig:getBlob`). The upstream store regression covers staged,
+private-only and shared public references. Byte-identical audio already published
+by the same owner remains public; uploading it privately does not retract it.
+This is source evidence, not a new live-service privacy acceptance claim.
+
+`node scripts/check-private-publishing.cjs` exercises synthetic OAuth/PDS writes,
+lost-response recovery, current-SDK signed playback, public/private handoff and
+session replacement with real external mutations blocked. Set `PRIVATE_SCALE=1.4`
+for enlarged-text checks and `PLAYER_DIST` for an isolated web export.

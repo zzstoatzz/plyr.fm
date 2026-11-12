@@ -2,6 +2,7 @@ import type { Href } from 'expo-router';
 import ChevronRight from 'lucide-react-native/icons/chevron-right';
 import { Pressable, StyleSheet, View, type ViewProps } from 'react-native';
 import type { Track } from './api';
+import { isPrivateTrack } from './publishing/private-track';
 import { useAppearance } from './appearance';
 import { Cover, artistName } from './CatalogPieces';
 import { Text } from './Text';
@@ -15,6 +16,7 @@ export function NowPlayingDetails({ track, plays, protect, navigate }: {
   const quiet = { color: theme.muted, fontFamily: theme.fontFamily, fontSize: 14 * theme.scale, lineHeight: 20 * theme.scale } as const;
   const section = [styles.section, { borderColor: theme.line }];
   const { profile } = track.artist;
+  const privateTrack = isPrivateTrack(track);
   const likes = track.metrics.like_count;
   const added = new Date(track.metadata.created_at);
   const facts = [`${plays} ${plays === 1 ? 'play' : 'plays'}`, `${likes} ${likes === 1 ? 'like' : 'likes'}`,
@@ -40,13 +42,13 @@ export function NowPlayingDetails({ track, plays, protect, navigate }: {
       <Text accessibilityRole="header" aria-level={2} style={heading}>about this track</Text>
       {track.metadata.description ? <Text style={body}>{track.metadata.description}</Text> : null}
       {track.metadata.album ? <Text style={quiet}>from <Text style={{ ...quiet, color: theme.text, fontWeight: '600' }}>{track.metadata.album}</Text></Text> : null}
-      <Text style={quiet}>{facts}</Text>
-      <View {...protect} style={{ alignSelf: 'flex-start' }}>
+      <Text style={quiet}>{privateTrack ? 'private space · listening stays on this device' : facts}</Text>
+      {!privateTrack && <View {...protect} style={{ alignSelf: 'flex-start' }}>
         <Pressable accessibilityRole="button" accessibilityLabel="Open track page" onPress={() => navigate(`/track/${track.id}`)}
           style={({ pressed }) => [styles.more, { borderColor: theme.border, backgroundColor: pressed ? theme.hover : 'transparent' }]}>
           <Text style={{ color: theme.text, fontFamily: theme.fontFamily, fontSize: 14 * theme.scale, fontWeight: '600' }}>track page</Text>
         </Pressable>
-      </View>
+      </View>}
     </View>
   </View>;
 }

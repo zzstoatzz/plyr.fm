@@ -1,4 +1,5 @@
 import type { Track } from './api';
+import { isPrivateTrack } from './publishing/private-track.ts';
 import { JamConnection, type JamConnectionOptions, type JamState, type JamTrack, type Pending, type PlaybackIntent } from './jam-connection.ts';
 import { queueCheckpoint, type QueueCheckpoint, type QueueStorage } from './queue-checkpoint.ts';
 import { mergeQueueMutations, type DurableQueueEdit, type QueueMutation } from './queue-mutation.ts';
@@ -6,6 +7,7 @@ import * as queue from './queue-state.ts';
 
 export type Reference = JamTrack & { key: string };
 export function queueReference(track: Track, key: string): Reference {
+  if (isPrivateTrack(track)) throw new Error('private tracks stay in the private queue.');
   if (!track.record.cid) throw new Error('this track is unavailable');
   return { id: track.id, uri: track.record.uri, cid: track.record.cid, key, durationMs: Math.round((track.metadata.duration_seconds ?? 0) * 1000) };
 }
@@ -95,7 +97,10 @@ export class PersonalQueue {
     await this.connection.connect();
   }
 
-  remember(tracks: Track[]) { for (const track of tracks) { this.cache.set(track.id, track); this.validated.add(track.id); this.missing.delete(track.id); } }
+  remember(tracks: Track[]) {
+    if (tracks.some(isPrivateTrack)) throw new Error('private tracks stay in the private queue.');
+    for (const track of tracks) { this.cache.set(track.id, track); this.validated.add(track.id); this.missing.delete(track.id); }
+  }
   isMissing(id: string) { return this.missing.has(id); }
 
   seed() {
@@ -108,6 +113,7 @@ export class PersonalQueue {
 
   local(state: queue.QueueState<Track>) {
     if (this.closed) return;
+    if (state.entries.some(entry => isPrivateTrack(entry.track))) throw new Error('private tracks stay in the private queue.');
     this.localVersion++;
     this.state = state;
     this.remember(state.entries.map(entry => entry.track));

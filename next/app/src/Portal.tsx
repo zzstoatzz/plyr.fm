@@ -110,6 +110,7 @@ function AccountPortal({ did, handle }: { did: string; handle: string | null }) 
     </View>
     <View style={row}>
       <Action primary label="upload" href="/upload" />
+      <Action label="private music" href="/private" />
       <Action label="edit profile" href="/edit-profile" />
       <ShareLink compact path={'/u/' + (handle || did)} />
     </View>

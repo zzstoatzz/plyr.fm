@@ -1,3 +1,4 @@
+import { publicTrackReference } from '../publishing/track-reference';
 import { ok } from '@atcute/client';
 import type { Track, AwaitStatus } from '../api';
 import type { Auth } from '../auth-state';
@@ -16,6 +17,7 @@ export function albumPublishing({ rpc, did, trackCollection, assertSession, orde
   async function verify(tracks: Track[]) {
     const items = new Map<Track, CollectionItem>();
     for (const track of tracks) {
+      publicTrackReference(track);
       assertSession();
       const prefix = `at://${did}/${trackCollection}/`;
       const rkey = track.record.uri.startsWith(prefix) ? track.record.uri.slice(prefix.length) : '';

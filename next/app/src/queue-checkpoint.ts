@@ -33,7 +33,7 @@ function track(value: unknown): value is Track {
   const { record, metadata, artist, media, access, metrics } = value;
   if (!object(artist.profile) || !string(artist.did) || !string(artist.profile.handle) || !string(artist.profile.display_name) || !nullable(artist.profile.avatar_url)) return false;
   if (artist.profile.bio !== undefined && !nullable(artist.profile.bio)) return false;
-  if (!string(record.uri) || !nullable(record.cid) || !nullable(record.revision) || !string(record.collection) || !string(record.rkey)) return false;
+  if (!string(record.uri) || record.uri.includes('/space/') || !nullable(record.cid) || !nullable(record.revision) || !string(record.collection) || !string(record.rkey)) return false;
   if (!string(metadata.title) || !nullable(metadata.description) || !nullable(metadata.album) || !string(metadata.created_at)
     || metadata.duration_seconds !== null && !seconds(metadata.duration_seconds) || metadata.artist_name !== undefined && !nullable(metadata.artist_name)) return false;
   if (media.artwork !== undefined && media.artwork !== null && (!object(media.artwork) || !string(media.artwork.url))) return false;

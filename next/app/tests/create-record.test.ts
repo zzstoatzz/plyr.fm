@@ -143,3 +143,14 @@ test('explicit archive survives late acceptance and preserves the original immut
   assert.equal([...f.durable.values()][0].archived, false);
   assert.throws(() => createOperation({ ...operation, archived: 'yes' }));
 });
+
+test('a recovered public collection cannot publish a private Space reference', async () => {
+  const f = fixture();
+  const unsafe = { ...operation, record: { ...operation.record, items: [{ subject: {
+    uri: 'at://did:plc:fixture/space/fm.plyr.privateMedia/self/did:plc:fixture/fm.plyr.track/private', cid: 'privatecid',
+  } }] } };
+  await f.storage.put(unsafe);
+  await assert.rejects(f.creator().retry(unsafe), /private tracks cannot/);
+  assert.equal(f.posts.length, 0);
+  assert.equal(f.durable.size, 1);
+});

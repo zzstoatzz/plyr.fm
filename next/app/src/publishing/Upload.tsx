@@ -12,6 +12,7 @@ export default function Upload() {
   const [session, setSession] = useState({ rpc: auth.rpc, version: 0 });
   if (session.rpc !== auth.rpc) setSession({ rpc: auth.rpc, version: session.version + 1 });
   return <Page title="upload">
+    <Action label="Private music" href="/private" />
     {!auth.ready ? <Copy>loading your account…</Copy> : !auth.did ? <Action label="Sign in" href={{ pathname: '/login', params: { return_to: '/upload' } }} />
       : <AccountUpload key={`${auth.did}:${session.version}`} auth={auth} />}
   </Page>;

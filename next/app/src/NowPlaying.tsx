@@ -204,8 +204,8 @@ export function NowPlaying({ track, close: leave, navigate: go, overlay = false,
                 <View {...dismiss.protect}><PlayerControl large icon={SkipForward} label="Next" onPress={() => void player.next()} /></View>
               </View>
               <View style={styles.utilities}>
-                <View {...dismiss.protect}><TrackLikes key={track.id} track={track} iconOnly returnTo="/now-playing" /></View>
-                <View {...dismiss.protect}><ShareLink compact path={`/track/${encodeURIComponent(track.id)}`} /></View>
+                {!player.privatePlayback && <View {...dismiss.protect}><TrackLikes key={track.id} track={track} iconOnly returnTo="/now-playing" /></View>}
+                {!player.privatePlayback && <View {...dismiss.protect}><ShareLink compact path={`/track/${encodeURIComponent(track.id)}`} /></View>}
                 <View {...dismiss.protect}><PlayerControl icon={ListMusic} label="Queue" onPress={() => navigate('/queue')} /></View>
               </View>
               {sideBySide && <View style={{ alignItems: 'center' }}><PlayerVolume /></View>}
