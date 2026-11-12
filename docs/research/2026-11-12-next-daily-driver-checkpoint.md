@@ -35,7 +35,8 @@ finish line. This is execution evidence, not another parity inventory.
   The error body was masked by the fixture's allowlist, so the cause remains
   unclassified. Exact-reservation read-only status confirmed `transferring`, 69
   acknowledged parts and the full reserved quota. #2536 reproduces old recovery
-  alarm contention and adds bounded owner-operation waiting; deployment is
+  alarm contention and adds bounded owner-operation waiting; deployment
+  `43243794512` passed at `0c06dd1d`. Same-reservation recovery acceptance remains
   pending. No full-size success or throughput claim follows; recovery must reuse
   this reservation rather than create a fresh retry or reset durable state.
 - #2525: owners can delete private tracks with explicit confirmation that the
