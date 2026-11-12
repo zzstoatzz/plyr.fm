@@ -565,7 +565,7 @@ async def test_staged_promotion_heartbeats_only_while_copy_is_pending(
         await release.wait()
 
     monkeypatch.setattr(uploads, "PROMOTION_HEARTBEAT_SECONDS", 0.01)
-    monkeypatch.setattr(_mock_storage(), "promote_staged", copy)
+    monkeypatch.setattr(uploads.storage, "promote_staged", copy)
     old = datetime.now(UTC) - timedelta(minutes=9)
     await db_session.execute(
         update(Job).where(Job.id == upload_id).values(updated_at=old)
