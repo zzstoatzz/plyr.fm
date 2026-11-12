@@ -10,6 +10,7 @@ import { useJamPlayback, jamTrack, type ActiveJam } from './use-jam-playback';
 import type { JamIntent } from './jam-connection';
 import { usePersonalQueue } from './use-personal-queue';
 import { usePlayerAccounting } from './use-player-accounting';
+import { useMediaSession } from './media-session';
 
 export function PlaybackProvider({ children, playThrough, keepPlaying, volume }: {
   children: ReactNode; playThrough: boolean; keepPlaying: boolean; volume: number;
@@ -326,6 +327,23 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
       personal.shuffle();
     }
   };
+  const shown = value.current;
+  const seekable = value.canSeek && !remoteOutput;
+  useMediaSession('player', shown ? {
+    title: shown.metadata.title,
+    artist: shown.metadata.artist_name || shown.artist.profile.display_name || shown.artist.profile.handle,
+    album: shown.metadata.album,
+    artwork: trackArtwork(shown),
+    playing: value.status.playing,
+    position: value.seekPreview ?? value.status.currentTime,
+    duration: value.status.duration || shown.metadata.duration_seconds || 0,
+    play: () => value.setPlaying(true),
+    pause: () => value.setPlaying(false),
+    previous: value.previous,
+    next: value.index + 1 < value.queue.length || value.keepPlaying || value.repeat === 'all' ? () => void value.next() : undefined,
+    seek: seekable ? value.seek : undefined,
+    skip: seekable ? value.skip : undefined,
+  } : null);
   return <PlaybackContext.Provider value={value}>{children}</PlaybackContext.Provider>;
 }
 

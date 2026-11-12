@@ -3,6 +3,7 @@ import { PauseGlyph as Pause, PlayGlyph as Play } from './PlayerGlyph';
 import { PlayerControl } from './PlayerControl';
 import { useAppearance } from './appearance';
 import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
+import { useMediaSession } from './media-session';
 import { router, useLocalSearchParams } from 'expo-router';
 import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { Image, StyleSheet, View } from 'react-native';
@@ -101,6 +102,14 @@ export default function Radio({ compact = false, tuned }: { compact?: boolean; t
     }
     if (!audio.playing) audio.play();
   }, [audio, listening, snapshot, source, status.isLoaded]);
+
+  useMediaSession('radio', compact && song && (listening || tuned) ? {
+    title: song.title, artist: song.artist, album: `${station.label} radio`,
+    artwork: song.hasCover ? radioMedia(station, song, 'cover') : null,
+    playing: listening && status.playing,
+    play: () => setListening(true),
+    pause: () => setListening(false),
+  } : null);
 
   if (compact) return <View style={{ width: '100%', maxWidth: tuned ? undefined : 360, padding: 8, gap: 6 }}>
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, padding: 8, borderRadius: 12, backgroundColor: theme.background }}>
