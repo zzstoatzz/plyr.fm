@@ -51,10 +51,12 @@ instead. Add one when something bites.
   `bun install` first.
 - **Checks that need a local PDS or the compose Redis and Postgres** fail at
   setup without them; `node scripts/checks.mjs` lists what each one needs.
-- **Some checks fail on main** for older reasons: keyboard shortcuts, the
-  playback retry case and font settings (from the November 12 handoff), and
-  `check-artist-catalog` at the Back step, where the second page of albums is
-  gone after returning. Run a failing check on main before reading it as yours.
+- **Some checks fail on main** for older reasons: keyboard shortcuts (it also
+  fetches live tracks from api.next.plyr.fm), the playback retry case and font
+  settings. Run a failing check on main before reading it as yours.
+- **Refetching a list on focus with `reload()` drops the pages someone already
+  loaded.** Use `revalidate()` from `usePages`, which refetches the loaded
+  pages and swaps them in.
 - **The player harness launches `chromium` with `channel: 'chrome'`.** Where
   only Playwright's bundled Chromium exists (cloud containers), point
   `PLAYWRIGHT_MODULE` at a small wrapper that drops `channel`.
