@@ -23,6 +23,10 @@ Private Space admission authorizes an owner-only Redis coordination session; the
 queue itself is not a portable PDS record. The catalog appview remains read-only
 for canonical user records. No server-owned OAuth session was added.
 
+Since November 11 a personal queue is admitted on the owner's service-auth
+identity alone. No Space is created or checked for it, so it no longer depends on
+the PDS supporting Spaces; Jams still use Space admission.
+
 ## Behavior and failure coverage
 
 - Stable occurrence keys retain duplicate authored records. Explicit picks precede

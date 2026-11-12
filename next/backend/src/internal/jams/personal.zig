@@ -2,8 +2,6 @@ const std = @import("std");
 const p = @import("protocol.zig");
 const track_id = @import("../identity/track_id.zig");
 
-pub const key = "personal-queue";
-
 pub fn validate(a: std.mem.Allocator, state: p.State, collection: []const u8) !bool {
     const personal = state.personal orelse return false;
     if (!p.boundedId(state.epoch) or state.revision > p.max_counter or state.occurrence > p.max_counter or

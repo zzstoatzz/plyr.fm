@@ -9,7 +9,6 @@ pub const Config = struct {
     space_type: []const u8,
     plc_url: []const u8 = "https://plc.directory",
     test_pds_origin: ?[]const u8 = null,
-    owner_only: bool = false,
 };
 
 pub const Admission = struct {
@@ -19,12 +18,9 @@ pub const Admission = struct {
     expires_ms: i64,
 };
 
-pub fn admit(allocator: std.mem.Allocator, io: std.Io, config: Config, host: []const u8, key: []const u8, service: []const u8, delegation: []const u8) !Admission {
-    if (zat.Did.parse(host) == null or zat.Rkey.parse(key) == null or key.len > 64) return error.InvalidRoom;
-    const now = std.Io.Timestamp.now(io, .real).toSeconds();
-    var resolver = zat.DidResolver.init(io, allocator);
-    defer resolver.deinit();
-    resolver.plc_url = config.plc_url;
+const Identity = struct { actor: []const u8, public_key: []const u8 };
+
+fn identify(allocator: std.mem.Allocator, resolver: *zat.DidResolver, config: Config, service: []const u8, now: i64) !Identity {
     var identity = zat.Jwt.parse(allocator, service) catch return error.InvalidIdentity;
     defer identity.deinit();
     if (!std.mem.eql(u8, try tokenType(allocator, service), "JWT") or !std.mem.eql(u8, identity.payload.aud, config.audience) or
@@ -32,20 +28,44 @@ pub fn admit(allocator: std.mem.Allocator, io: std.Io, config: Config, host: []c
         return error.InvalidIdentity;
     const actor = identity.payload.iss;
     const did = zat.Did.parse(actor) orelse return error.InvalidIdentity;
-    var actor_document = try resolver.resolve(did);
-    defer actor_document.deinit();
-    if (!std.mem.eql(u8, actor_document.id, actor)) return error.InvalidIdentity;
-    const signing_key = actor_document.signingKey() orelse return error.InvalidIdentity;
+    var document = try resolver.resolve(did);
+    defer document.deinit();
+    if (!std.mem.eql(u8, document.id, actor)) return error.InvalidIdentity;
+    const signing_key = document.signingKey() orelse return error.InvalidIdentity;
     if (!std.mem.eql(u8, signing_key.controller, actor)) return error.InvalidIdentity;
     identity.verify(signing_key.public_key_multibase) catch return error.InvalidIdentity;
-    if (config.owner_only and !std.mem.eql(u8, actor, host)) return error.AccessDenied;
+    return .{ .actor = try allocator.dupe(u8, actor), .public_key = try allocator.dupe(u8, signing_key.public_key_multibase) };
+}
+
+pub fn queueRoom(allocator: std.mem.Allocator, owner: []const u8) ![]const u8 {
+    return std.fmt.allocPrint(allocator, "queue:{s}", .{owner});
+}
+
+/// A personal queue belongs to whoever proves the identity; no Space is involved.
+pub fn admitOwner(allocator: std.mem.Allocator, io: std.Io, config: Config, service: []const u8) !Admission {
+    const now = std.Io.Timestamp.now(io, .real).toSeconds();
+    var resolver = zat.DidResolver.init(io, allocator);
+    defer resolver.deinit();
+    resolver.plc_url = config.plc_url;
+    const owner = try identify(allocator, &resolver, config, service, now);
+    return .{ .actor = owner.actor, .host = owner.actor, .room = try queueRoom(allocator, owner.actor), .expires_ms = (now + 600) * 1000 };
+}
+
+pub fn admit(allocator: std.mem.Allocator, io: std.Io, config: Config, host: []const u8, key: []const u8, service: []const u8, delegation: []const u8) !Admission {
+    if (zat.Did.parse(host) == null or zat.Rkey.parse(key) == null or key.len > 64) return error.InvalidRoom;
+    const now = std.Io.Timestamp.now(io, .real).toSeconds();
+    var resolver = zat.DidResolver.init(io, allocator);
+    defer resolver.deinit();
+    resolver.plc_url = config.plc_url;
+    const member = try identify(allocator, &resolver, config, service, now);
+    const actor = member.actor;
     const space = try std.fmt.allocPrint(allocator, "at://{s}/space/{s}/{s}", .{ host, config.space_type, key });
     var delegated = zat.Jwt.parse(allocator, delegation) catch return error.InvalidDelegation;
     defer delegated.deinit();
     if (!std.mem.eql(u8, try tokenType(allocator, delegation), "atproto-space-delegation+jwt") or !std.mem.eql(u8, delegated.payload.iss, actor) or
         !std.mem.eql(u8, delegated.payload.aud, try std.fmt.allocPrint(allocator, "{s}#atproto_pds", .{host})) or
         delegated.payload.exp <= now or delegated.payload.exp > now + 120) return error.InvalidDelegation;
-    delegated.verify(signing_key.public_key_multibase) catch return error.InvalidDelegation;
+    delegated.verify(member.public_key) catch return error.InvalidDelegation;
     const claims = try tokenClaims(allocator, delegation);
     if (!std.mem.eql(u8, string(claims, "sub") orelse "", space)) return error.InvalidDelegation;
     var host_document = try resolver.resolve(zat.Did.parse(host).?);
