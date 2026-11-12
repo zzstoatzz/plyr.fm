@@ -17,12 +17,38 @@ export class UploadFailure extends Error {
 
 export class UploadSessions {
   busy = false;
+  private waiting: (() => void)[] = [];
   constructor(private storage: DurableObjectStorage, private bucket: R2Bucket, private inspect: Inspection, private now = Date.now) {}
 
-  async exclusive<T>(operation: () => Promise<T>): Promise<T> {
-    if (this.busy) throw new UploadFailure(409, "upload operation in progress");
-    this.busy = true;
-    try { return await operation(); } finally { this.busy = false; }
+  async exclusive<T>(operation: () => Promise<T>, signal?: AbortSignal): Promise<T> {
+    if (signal?.aborted) throw new UploadFailure(408, "upload request aborted");
+    if (this.busy) await this.wait(signal);
+    else this.busy = true;
+    try {
+      if (signal?.aborted) throw new UploadFailure(408, "upload request aborted");
+      return await operation();
+    } finally {
+      const next = this.waiting.shift();
+      if (next) next();
+      else this.busy = false;
+    }
+  }
+
+  private wait(signal?: AbortSignal): Promise<void> {
+    if (this.waiting.length >= 2) return Promise.reject(new UploadFailure(409, "upload operation in progress"));
+    return new Promise((resolve, reject) => {
+      const cleanup = () => { clearTimeout(timer); signal?.removeEventListener("abort", abort); };
+      const ready = () => { cleanup(); resolve(); };
+      const fail = (error: UploadFailure) => {
+        const index = this.waiting.indexOf(ready);
+        if (index !== -1) this.waiting.splice(index, 1);
+        cleanup(); reject(error);
+      };
+      const abort = () => fail(new UploadFailure(408, "upload request aborted"));
+      const timer = setTimeout(() => fail(new UploadFailure(409, "upload operation in progress")), 20000);
+      this.waiting.push(ready);
+      signal?.addEventListener("abort", abort, { once: true });
+    });
   }
 
   async load(id: string) { return await this.storage.get<UploadSession>(`session:${id}`); }

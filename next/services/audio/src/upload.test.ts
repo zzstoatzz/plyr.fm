@@ -1,6 +1,6 @@
 import { env } from "cloudflare:workers";
 import { runInDurableObject, evictDurableObject } from "cloudflare:test";
-import { expect, test } from "vitest";
+import { expect, test, vi } from "vitest";
 import { ownerHash, MAX_UPLOAD_BYTES, verifyCapability } from "./upload-capability.ts";
 import type { UploadClaim } from "./upload-capability.ts";
 import { routeUpload } from "./upload-worker.ts";
@@ -224,17 +224,82 @@ test("held multipart request does not block existing published playback for its 
     finishBody = () => { controller.enqueue(new TextEncoder().encode("56789")); controller.close(); };
   } });
   const pending = transferring.send("PUT", "/parts/1", body);
+  let settled = false;
+  void pending.then(() => { settled = true; });
   try {
-    let busy = false;
-    for (let count = 0; count < 20 && !busy; count++) busy = (await transferring.send("GET")).status === 409;
-    expect(busy).toBe(true);
     for (const method of ["GET", "HEAD"]) {
       const response = await routeUpload(new Request(published.media, { method, headers: { range: "bytes=0-1" } }), env);
       expect(response?.status).toBe(method === "HEAD" ? 200 : 206);
       await response?.arrayBuffer();
     }
+    expect(settled).toBe(false);
   } finally { finishBody?.(); }
   expect((await pending).status).toBe(200);
+});
+
+test("old publication recovery serializes new parts and cancellation without changing bytes", async () => {
+  const old = await setup();
+  await old.send("POST"); await old.send("PUT", "/parts/1", "0123456789"); await old.send("POST", "/finish");
+  const fresh = await setup(claim(old.value.owner));
+  await fresh.send("POST");
+  await runInDurableObject(old.stub, async (_, state) => {
+    const current = await session(state, old.value.uploadId);
+    current.nextCheck = Date.now() - 1;
+    await state.storage.put(`session:${current.uploadId}`, current);
+    let release!: () => void;
+    let entered!: () => void;
+    const inspecting = new Promise<void>(resolve => { entered = resolve; });
+    const held = new Promise<void>(resolve => { release = resolve; });
+    const model = new UploadSessions(state.storage, env.AUDIO, async () => { entered(); await held; return "absent"; });
+    const alarm = model.exclusive(() => model.alarm());
+    await inspecting;
+    const order: string[] = [];
+    const part = model.exclusive(async () => {
+      order.push("part");
+      return model.part(await session(state, fresh.value.uploadId), 1, new Request(fresh.url, { method: "PUT", body: "0123456789" }));
+    });
+    const cancel = model.exclusive(async () => {
+      order.push("cancel");
+      const uploaded = await session(state, fresh.value.uploadId);
+      expect(uploaded.parts[1].sha256).toBe("84d89877f0d4041efb6bf91a16f0248f2fd573e6af05c19f96bedb9f882f7882");
+      expect(uploaded.parts[1].etag).toBeTruthy();
+      return model.cancel(uploaded);
+    });
+    expect(order).toEqual([]);
+    release();
+    await alarm;
+    expect((await part).sha256).toBe("84d89877f0d4041efb6bf91a16f0248f2fd573e6af05c19f96bedb9f882f7882");
+    expect(await cancel).toMatchObject({ state: "cancelled", reservedBytes: 0 });
+    expect(order).toEqual(["part", "cancel"]);
+    expect((await session(state, old.value.uploadId)).state).toBe("complete");
+  });
+});
+
+test("queued operations are bounded and cancelled or expired callbacks never execute", async () => {
+  const f = await setup();
+  await runInDurableObject(f.stub, async (_, state) => {
+    const model = new UploadSessions(state.storage, env.AUDIO, async () => "absent");
+    let release!: () => void;
+    const active = model.exclusive(() => new Promise<void>(resolve => { release = resolve; }));
+    const abort = new AbortController();
+    let calls = 0;
+    vi.useFakeTimers();
+    try {
+      const aborted = model.exclusive(async () => { calls++; }, abort.signal);
+      const expired = model.exclusive(async () => { calls++; });
+      const abortedCheck = expect(aborted).rejects.toMatchObject({ status: 408 });
+      const expiredCheck = expect(expired).rejects.toMatchObject({ status: 409 });
+      await expect(model.exclusive(async () => { calls++; })).rejects.toMatchObject({ status: 409 });
+      abort.abort();
+      await abortedCheck;
+      await vi.advanceTimersByTimeAsync(20000);
+      await expiredCheck;
+      release(); await active;
+      await model.exclusive(async () => { calls++; });
+      expect(calls).toBe(1);
+      expect(model.busy).toBe(false);
+    } finally { vi.useRealTimers(); release(); await active; }
+  });
 });
 
 test("cancellation resumes after R2 abort succeeds but its response is lost", async () => {
