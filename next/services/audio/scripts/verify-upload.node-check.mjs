@@ -4,7 +4,34 @@ import test from 'node:test';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { main } from './verify-upload.mjs';
+import { main, fixtureIdentity } from './verify-upload.mjs';
+
+test('resume binds both existing fixture identifiers and requires full-size mode', () => {
+  const env = { VERIFY_UPLOAD_FULLSIZE: 'true', RESUME_UPLOAD_ID: 'de9b411a-4b7d-4cbd-90e8-e985445ebd54', RESUME_RECORD_RKEY: '3n24pxgwdfk2w' };
+  assert.deepEqual(fixtureIdentity(env), { uploadId: env.RESUME_UPLOAD_ID, rkey: env.RESUME_RECORD_RKEY, resume: true });
+  for (const patch of [{ VERIFY_UPLOAD_FULLSIZE: 'false' }, { RESUME_UPLOAD_ID: '' }, { RESUME_RECORD_RKEY: '' }, { RESUME_UPLOAD_ID: '../other' }, { RESUME_RECORD_RKEY: '../other' }]) assert.throws(() => fixtureIdentity({ ...env, ...patch }));
+  assert.equal(fixtureIdentity({}).resume, false);
+});
+
+for (const state of ['complete', 'transferring']) test(`resume refuses ${state === 'complete' ? 'completed bytes' : 'an existing record'} before mutations`, async t => {
+  const env = { ZAT_TEST_PDS: 'https://fixture.invalid', ZAT_TEST_HANDLE: 'fixture.invalid', ZAT_TEST_PASSWORD: 'secret', CLOUDFLARE_API_TOKEN: 'secret', CLOUDFLARE_ACCOUNT_ID: 'fixture', GITHUB_REF: 'refs/heads/main', GITHUB_EVENT_NAME: 'workflow_dispatch', GITHUB_ACTIONS: 'true', RUNNER_OS: 'Linux', VERIFY_UPLOAD_FULLSIZE: 'true', RESUME_UPLOAD_ID: 'de9b411a-4b7d-4cbd-90e8-e985445ebd54', RESUME_RECORD_RKEY: '3n24pxgwdfk2w' };
+  const previous = Object.fromEntries(Object.keys(env).map(key => [key, process.env[key]]));
+  const cwd = process.cwd(), directory = await mkdtemp(join(tmpdir(), 'upload-resume-'));
+  Object.assign(process.env, env); process.chdir(directory);
+  t.after(async () => { process.chdir(cwd); await rm(directory, { recursive: true }); for (const [key, value] of Object.entries(previous)) if (value === undefined) delete process.env[key]; else process.env[key] = value; });
+  const owner = 'did:plc:aaaaaaaaaaaaaaaaaaaaaaaa', hash = createHash('sha256').update(owner).digest('hex');
+  const audioUrl = `https://plyr-next-audio.n8-3e9.workers.dev/media/${hash}/${env.RESUME_UPLOAD_ID}`;
+  t.mock.method(globalThis, 'fetch', async (url, init) => {
+    const path = new URL(url).pathname;
+    if (path.endsWith('createSession')) return Response.json({ did: owner, accessJwt: 'session' });
+    if (path.endsWith('getServiceAuth')) return Response.json({ token: 'scoped-token' });
+    if (path.endsWith('/authorize')) return Response.json({ capability: 'capability', expiresAt: Date.now() + 299000, uploadUrl: audioUrl.replace('/media/', '/v1/uploads/') });
+    assert.ok(!init.method || init.method === 'GET', 'resume preflight must not mutate');
+    if (path.endsWith('getRecord')) return Response.json({ value: { title: 'existing record' } });
+    return Response.json({ state, partSizeBytes: 10485760, partCount: 154, reservedBytes: 1610612736, recoveryRequired: false, receivedParts: [], reservedDigests: [], ...(state === 'complete' ? { audioUrl } : {}) });
+  });
+  await assert.rejects(main({ deleteObject: async () => { assert.fail('must not remove existing bytes'); } }), state === 'complete' ? /unfinished fixture/ : /absent canonical record/);
+});
 
 for (const failure of [undefined, 'start-invalid', 'start-lost', 'part', 'status', 'create', 'activate', 'cleanup']) test(`deployed fixture exact cleanup: ${failure ?? 'success'}`, async t => {
   const env = { ZAT_TEST_PDS: 'https://fixture.invalid', ZAT_TEST_HANDLE: 'fixture.invalid', ZAT_TEST_PASSWORD: 'secret', CLOUDFLARE_API_TOKEN: 'secret', CLOUDFLARE_ACCOUNT_ID: 'fixture', GITHUB_REF: 'refs/heads/main', GITHUB_EVENT_NAME: 'workflow_dispatch' };

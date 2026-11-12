@@ -24,6 +24,14 @@ on:
         description: Verify 1.5 GiB through real R2 with the disposable integration account
         type: boolean
         default: false
+      resume_upload_id:
+        description: Existing failed fixture UUID from its reservation artifact
+        type: string
+        default: ""
+      resume_record_rkey:
+        description: Matching record key from that same fixture artifact
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -75,6 +83,8 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           DIAGNOSE_UPLOAD: ${{ inputs.diagnose_upload }}
           VERIFY_UPLOAD_FULLSIZE: ${{ inputs.full_size }}
+          RESUME_UPLOAD_ID: ${{ inputs.resume_upload_id }}
+          RESUME_RECORD_RKEY: ${{ inputs.resume_record_rkey }}
         run: node --experimental-strip-types scripts/verify-upload.mjs
       - name: retain full-size acceptance and exact cleanup receipt
         if: always() && github.event_name == 'workflow_dispatch' && inputs.full_size && !inputs.diagnose_upload
