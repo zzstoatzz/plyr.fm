@@ -13,7 +13,7 @@ For `next/app` only. Never touch `frontend/`, `backend/` or `services/transcoder
 
 1. Read `next/app/contributing/pitfalls.md` and `decisions.md`. A settled decision is not yours to change in passing: production is the reference for look, phone first, one codebase for web, iOS and Android.
 2. Find the file that already does the same job and copy its shape: a screen in `app/` composes; behavior and UI live in `src/`. Search `src/` for the control before writing one. `controls.tsx` (`Action`, `Field`, `Page`, `Copy`, `InlineLink`), `Text`, `ActionRow`, `Sheet`, `CatalogPieces`, `useAppearance` and `onAccent` cover most needs.
-3. If the change needs keyboard or ARIA behavior another screen also needs (tabs, a listbox, a reorder handle, a layer that blocks shortcuts), write it once in `src/behaviors/` as pure decision functions with a hook on top, test the decisions in `tests/`, and have both screens use it.
+3. If the change needs keyboard or ARIA behavior another screen also needs (tabs, a listbox, a reorder handle, a layer that blocks shortcuts), write it once in `src/behaviors/` as pure decision functions with a hook on top, test the decisions in `tests/`, check the rendered result against its WAI-ARIA pattern with `checkPattern` (see `scripts/check-tab-patterns.cjs`), and have both screens use it. `src/behaviors/use-tabs.ts` is the model.
 
 ## while you write
 

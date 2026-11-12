@@ -14,8 +14,6 @@
   },
   "hand-rolled-roles": {
     "src/AccountPicker.tsx": "combobox and options; move to a listbox behavior",
-    "src/ArtistProfile.tsx": "tabs; move to a shared tabs behavior with Portal",
-    "src/Portal.tsx": "tabs; move to a shared tabs behavior with ArtistProfile",
     "src/QueueReorder.tsx": "adjustable reorder handle; move to a reorder behavior"
   },
   "seam-exports": {

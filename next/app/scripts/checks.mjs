@@ -90,6 +90,7 @@ const checks = {
   'check-search-layout': [/^src\/(Search|use-search)/, /^app\/search/],
   'check-settings-search': [/^src\/(SettingsPieces|Search)/, /^app\/settings/],
   'check-short-playback': [/^src\/playback\.tsx/],
+  'check-tab-patterns': [/^src\/behaviors\//, /^src\/(ArtistProfile|AccountPieces)/],
   'check-tag-scroll-dynamics': [/^src\/TagScroller/],
   'check-track-actions': [/^src\/(TrackMenu|ActionRow|ShareLink|TrackLikes|LikeHeart)/, /^app\/track/],
   'check-track-tags': [/^src\/publishing\/(TagsField|track-tags)/],

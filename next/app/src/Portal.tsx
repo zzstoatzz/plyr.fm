@@ -1,7 +1,7 @@
 import { trackArtwork, collectionArtwork } from './artwork';
 import { Link, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useRef, useState, type ReactNode, type Ref } from 'react';
-import { Platform, Pressable, ScrollView, View, type ScrollViewProps, type KeyDownEvent, type ScrollViewInstance, type ViewInstance } from 'react-native';
+import { Pressable, ScrollView, View, type ScrollViewProps, type ScrollViewInstance } from 'react-native';
 import Pencil from 'lucide-react-native/icons/pencil';
 import RefreshCw from 'lucide-react-native/icons/refresh-cw';
 import { api, ApiError, type Artist, type ListSummary } from './api';
@@ -15,6 +15,10 @@ import { WaveLoading } from './WaveLoading';
 import { usePortalPages } from './use-portal-pages';
 import { ShareLink } from './ShareLink';
 import { catalogRevision } from './catalog-changes';
+import { useTabs } from './behaviors/use-tabs';
+
+const portalTabs = ['tracks', 'albums'] as const;
+type PortalTab = typeof portalTabs[number];
 
 export function Portal() {
   const auth = useAuth();
@@ -37,28 +41,19 @@ function PortalPage({ children, scrollRef, ...props }: {
 }
 
 function AccountPortal({ did, handle }: { did: string; handle: string | null }) {
-  const trackTab = useRef<ViewInstance>(null);
-  const albumTab = useRef<ViewInstance>(null);
-  const [tab, setTab] = useState<'tracks' | 'albums'>('tracks');
+  const [tab, setTab] = useState<PortalTab>('tracks');
   const visited = useRef({ tracks: true, albums: false });
   const scroll = useRef<ScrollViewInstance>(null);
   const positions = useRef({ tracks: 0, albums: 0 });
   const offset = useRef(0);
   const restore = useRef<number | null>(null);
-  const focusTab = useRef(false);
   const restoreScroll = useCallback(() => {
     if (restore.current === null) return;
     scroll.current?.scrollTo({ y: restore.current, animated: false });
     restore.current = null;
   }, []);
   useEffect(() => {
-    const frame = requestAnimationFrame(() => {
-      restoreScroll();
-      if (focusTab.current) {
-        (tab === 'tracks' ? trackTab : albumTab).current?.focus();
-        focusTab.current = false;
-      }
-    });
+    const frame = requestAnimationFrame(restoreScroll);
     return () => cancelAnimationFrame(frame);
   }, [tab, restoreScroll]);
   const selectTab = (next: typeof tab) => {
@@ -68,6 +63,7 @@ function AccountPortal({ did, handle }: { did: string; handle: string | null }) 
     restore.current = positions.current[next];
     setTab(next);
   };
+  const catalogTabs = useTabs({ label: 'Your catalog', values: portalTabs, value: tab, onChange: selectTab });
   const theme = useAppearance();
   const load = useCallback(async () => {
     try { return await api.artist(did); }
@@ -83,21 +79,8 @@ function AccountPortal({ did, handle }: { did: string; handle: string | null }) 
     if (revision !== profileRevision.current) { profileRevision.current = revision; artist.retry(); }
   }, [did, artist.retry]));
   const name = profile?.display_name || handle || 'your music';
-  const tabs = <View accessibilityRole="tablist" accessibilityLabel="Your catalog" {...(Platform.OS === 'web' ? { onKeyDown: (event: KeyDownEvent) => {
-      const key = event.nativeEvent.key;
-      if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(key)) return;
-      event.preventDefault();
-      const next = key === 'Home' ? 'tracks' : key === 'End' ? 'albums' : tab === 'tracks' ? 'albums' : 'tracks';
-      if (next === tab) {
-        focusTab.current = false;
-        (next === 'tracks' ? trackTab : albumTab).current?.focus();
-        return;
-      }
-      focusTab.current = true;
-      selectTab(next);
-    } } : {})} style={row}>
-      <Choice ref={trackTab} role="tab" label="tracks" selected={tab === 'tracks'} onPress={() => selectTab('tracks')} />
-      <Choice ref={albumTab} role="tab" label="albums" selected={tab === 'albums'} onPress={() => selectTab('albums')} />
+  const tabs = <View {...catalogTabs.list} style={row}>
+      {portalTabs.map(value => <Choice key={value} {...catalogTabs.tab(value)} />)}
     </View>;
   return <PortalPage scrollRef={scroll} onScroll={event => { offset.current = event.nativeEvent.contentOffset.y; }} onContentSizeChange={restoreScroll}>
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 8 }}>
@@ -116,8 +99,8 @@ function AccountPortal({ did, handle }: { did: string; handle: string | null }) 
     </View>
     {artist.error && <View style={row}><Copy>couldn’t load your profile.</Copy><Action label="retry profile" onPress={artist.retry} /></View>}
 
-    <View style={{ display: tab === 'tracks' ? 'flex' : 'none' }} aria-hidden={tab !== 'tracks'}><OwnedTracks did={did} active={tab === 'tracks'} tabs={tab === 'tracks' ? tabs : null} /></View>
-    {visited.current.albums && <View style={{ display: tab === 'albums' ? 'flex' : 'none' }} aria-hidden={tab !== 'albums'}><OwnedAlbums did={did} active={tab === 'albums'} tabs={tab === 'albums' ? tabs : null} /></View>}
+    <View {...catalogTabs.panel('tracks')} style={{ display: tab === 'tracks' ? 'flex' : 'none' }} aria-hidden={tab !== 'tracks'}><OwnedTracks did={did} active={tab === 'tracks'} tabs={tab === 'tracks' ? tabs : null} /></View>
+    {visited.current.albums && <View {...catalogTabs.panel('albums')} style={{ display: tab === 'albums' ? 'flex' : 'none' }} aria-hidden={tab !== 'albums'}><OwnedAlbums did={did} active={tab === 'albums'} tabs={tab === 'albums' ? tabs : null} /></View>}
   </PortalPage>;
 }
 

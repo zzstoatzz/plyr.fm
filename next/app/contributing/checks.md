@@ -37,5 +37,11 @@ printed, so you can pick one or add the mapping. A change to a shared control
 the UI audit, which runs axe and screenshots at 390 and 1280 wide in light and
 dark. A change to the player reaches the whole player set.
 
+`check-tab-patterns.cjs` loads `@ui-sdk/core/testing` into the page and runs
+`checkPattern(root, 'tabs')`, which checks roles, names, `aria-controls`
+links and the arrow, Home, End, Enter and Space contract. Use the same
+approach for any new behavior: `listbox`, `combobox`, `slider`, `dialog`,
+`menu` and more are supported.
+
 A new check must fail without the change it guards and assert what the user
 sees. Add it to `scripts/checks.mjs`; lint fails until you do.
