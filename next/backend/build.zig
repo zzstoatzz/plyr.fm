@@ -51,6 +51,9 @@ pub fn build(b: *std.Build) void {
     root_module.addAnonymousImport("migration_0038_download_policy", .{
         .root_source_file = b.path("migrations/0038_add_track_download_policy.sql"),
     });
+    root_module.addAnonymousImport("migration_0039_notification_seen", .{
+        .root_source_file = b.path("migrations/0039_add_notification_seen.sql"),
+    });
     const zat_module = b.dependency("zat", .{
         .target = target,
         .optimize = optimize,
