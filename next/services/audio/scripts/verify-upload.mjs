@@ -14,6 +14,15 @@ const coordinator = 'https://plyr-jams-next.fly.dev';
 const audioOrigin = 'https://plyr-next-audio.n8-3e9.workers.dev';
 const collection = 'fm.plyr.track';
 
+export function fixtureIdentity(env = process.env) {
+  const uploadId = env.RESUME_UPLOAD_ID || '', rkey = env.RESUME_RECORD_RKEY || '';
+  if (!uploadId && !rkey) return { uploadId: randomUUID(), rkey: TID.nextStr(), resume: false };
+  assert.ok(env.VERIFY_UPLOAD_FULLSIZE === 'true', 'resume requires the full-size fixture');
+  assert.match(uploadId, /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/);
+  assert.match(rkey, /^[234567abcdefghijklmnopqrstuvwxyz]{13}$/);
+  return { uploadId, rkey, resume: true };
+}
+
 async function request(url, init = {}) {
   return fetch(url, { ...init, redirect: 'error', signal: AbortSignal.timeout(20000) });
 }
@@ -100,6 +109,7 @@ export async function main({ deleteObject = deleteFixtureObject } = {}) {
   assert.ok(process.env.GITHUB_REF === 'refs/heads/main' && process.env.GITHUB_EVENT_NAME === 'workflow_dispatch', 'manual main-only fixture');
   const fullSize = process.env.VERIFY_UPLOAD_FULLSIZE === 'true';
   if (fullSize) assert.ok(process.env.GITHUB_ACTIONS === 'true' && process.env.RUNNER_OS === 'Linux', 'full-size fixture is cloud-only');
+  const identity = fixtureIdentity();
   const pds = new URL(process.env.ZAT_TEST_PDS);
   assert.ok(pds.protocol === 'https:' && !pds.username && !pds.password, 'invalid fixture PDS');
   const xrpc = method => new URL(`/xrpc/${method}`, pds).href;
@@ -107,7 +117,7 @@ export async function main({ deleteObject = deleteFixtureObject } = {}) {
   assert.ok(typeof session.did === 'string' && session.did.startsWith('did:'), 'invalid fixture DID');
   assert.ok(typeof session.accessJwt === 'string', 'missing fixture session');
   if (process.env.DIAGNOSE_UPLOAD === 'true') return diagnose(session.did, xrpc);
-  const owner = session.did, rkey = TID.nextStr(), uploadId = randomUUID();
+  const owner = session.did, { rkey, uploadId, resume } = identity;
   const ownerHash = createHash('sha256').update(owner).digest('hex');
   const object = `plyr-next-audio/uploads/${ownerHash}/${uploadId}`;
   const recordUri = `at://${owner}/${collection}/${rkey}`;
@@ -128,7 +138,8 @@ export async function main({ deleteObject = deleteFixtureObject } = {}) {
     const response = await fetch(url, init);
     if (!response.ok) {
       const failure = await response.json().catch(() => ({}));
-      const known = ['record authority unavailable', 'invalid authority response', 'upload unavailable'];
+      const known = ['record authority unavailable', 'invalid authority response', 'upload unavailable', 'upload operation in progress', 'upload not accepting parts', 'part differs from reserved bytes', 'upload reservation mismatch', 'completed upload requires publication recovery'];
+      console.log(JSON.stringify({ failedRequest: { method: init.method, path: new URL(url).pathname, status: response.status, error: known.includes(failure.error) ? failure.error : 'upload request failed' } }));
       return Response.json({ error: known.includes(failure.error) ? failure.error : 'upload request failed' }, { status: response.status });
     }
     if (String(url) === `${coordinator}/v1/uploads/authorize` && response.ok) {
@@ -147,12 +158,22 @@ export async function main({ deleteObject = deleteFixtureObject } = {}) {
     await mkdir('upload-acceptance', { recursive: true });
     await writeFile(artifact, JSON.stringify({ owner, uploadId, recordUri, object, sizeBytes: source.size }));
   }
-  await deleteObject(object);
+  if (!resume) await deleteObject(object);
+  let resumedParts = 0;
+  if (resume) {
+    const existing = await transport.status();
+    assert.equal(existing.state, 'transferring', 'resume only an unfinished fixture');
+    const record = await request(`${xrpc('com.atproto.repo.getRecord')}?${new URLSearchParams({ repo: owner, collection, rkey })}`);
+    assert.equal(record.status, 400);
+    assert.equal((await record.json()).error, 'RecordNotFound', 'resume requires absent canonical record');
+    resumedParts = existing.receivedParts.length;
+    console.log(JSON.stringify({ resumedParts, uploadId, recordUri }));
+  }
   let started = false, completed = false, published = false, cancelled = false;
   let failure;
   try {
     started = true;
-    await transport.start();
+    if (!resume) await transport.start();
     const transfer = {
       status: transport.status,
       part: transport.part,
@@ -161,7 +182,7 @@ export async function main({ deleteObject = deleteFixtureObject } = {}) {
         return status;
       },
     };
-    const { finished, lostAcknowledgement } = await transferFixture(operation, source, transfer, fullSize);
+    const { finished, lostAcknowledgement } = await transferFixture(operation, source, transfer, fullSize && !resume);
     assert.equal(finished.audioUrl, audioUrl);
     const status = await transport.status();
     assert.equal(status.partSizeBytes, UPLOAD_PART_BYTES);
@@ -194,7 +215,7 @@ export async function main({ deleteObject = deleteFixtureObject } = {}) {
     assert.equal(range.status, 206); assert.equal(range.headers.get('content-range'), `bytes 0-43/${source.size}`);
     assert.equal(range.headers.get('content-disposition'), 'attachment; filename="audio.wav"');
     assert.deepEqual(Buffer.from(await range.arrayBuffer()), source.read(0, 44));
-    const receipt = { ...verified, partCount: status.partCount, lostAcknowledgement, peakRssBytes: process.resourceUsage().maxRSS * 1024 };
+    const receipt = { ...verified, partCount: status.partCount, resumedParts, lostAcknowledgement, peakRssBytes: process.resourceUsage().maxRSS * 1024 };
     if (artifact) await writeFile('upload-acceptance/receipt.json', JSON.stringify(receipt));
     console.log(JSON.stringify(receipt));
     console.log('deployed client transfer, signed activation, streaming bytes, attachment HEAD and range passed');

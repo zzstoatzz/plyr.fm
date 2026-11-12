@@ -152,6 +152,15 @@ the retained reservation: the account has only two unfinished slots, and deletin
 an object does not release its receipt's quota. Do not reset Durable Object state
 or describe this as successful cleanup of the reservation.
 
+After diagnosing a failed transfer, use `resume_upload_id` and
+`resume_record_rkey` from its reservation artifact together with `full_size=true`
+to continue that exact fixture. Preflight requires a transferring reservation
+and an absent canonical record. It never starts another reservation or deletes
+existing bytes before transfer; the client verifies every reserved digest before
+sending missing parts. Its receipt distinguishes previously acknowledged parts
+from a newly injected lost acknowledgement. Completed or published fixtures need
+their own recovery investigation and are rejected by this transfer-only mode.
+
 For an authority failure, dispatch `diagnose_upload=true` instead. This logs in
 to the same test account but creates no records or uploads. It inspects at most
 three public collections with `limit=1`, then retains one public record CAR
