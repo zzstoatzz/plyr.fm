@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../auth';
 import { getAuth, type Auth } from '../auth-state';
 import { trackIdFromUri } from '../api';
@@ -8,13 +8,16 @@ import { createPds, MAX_AUDIO_BYTES, type MediaFile } from '../pds';
 
 export default function Upload() {
   const auth = useAuth();
+  const [session, setSession] = useState({ rpc: auth.rpc, version: 0 });
+  if (session.rpc !== auth.rpc) setSession({ rpc: auth.rpc, version: session.version + 1 });
   return <Page title="upload">
-    {!auth.ready ? <Copy>loading your account…</Copy> : !auth.did ? <Action label="Sign in" href="/login" />
-      : <AccountUpload key={auth.did} auth={auth} />}
+    {!auth.ready ? <Copy>loading your account…</Copy> : !auth.did ? <Action label="Sign in" href={{ pathname: '/login', params: { return_to: '/upload' } }} />
+      : <AccountUpload key={`${auth.did}:${session.version}`} auth={auth} />}
   </Page>;
 }
 
 function AccountUpload({ auth }: { auth: Auth }) {
+  const live = useRef(true);
   const locked = useRef(false);
   const [file, setFile] = useState<MediaFile | null>(null);
   const [artwork, setArtwork] = useState<MediaFile | null>(null);
@@ -25,35 +28,38 @@ function AccountUpload({ auth }: { auth: Auth }) {
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string>();
   const [saved, setSaved] = useState<{ uri: string; status: string }>();
+  useEffect(() => { live.current = true; return () => { live.current = false; }; }, []);
+  const current = () => live.current && getAuth().did === auth.did && getAuth().rpc === auth.rpc;
 
   async function choose(kind: 'audio/*' | 'image/*') {
     try {
       const item = await pickMedia(kind);
-      if (!item || getAuth().agent !== auth.agent) return;
+      if (!item || !current()) return;
       if (kind === 'audio/*') {
         if (item.size > MAX_AUDIO_BYTES) throw new Error('audio files are limited to 100 MB.');
         setFile(item);
         if (!title) setTitle(item.name.replace(/\.[^.]+$/, '').slice(0, 256));
       } else setArtwork(item);
     } catch (failure) {
-      setNote(failure instanceof Error ? failure.message : 'could not open the file.');
+      if (current()) setNote(failure instanceof Error ? failure.message : 'could not open the file.');
     }
   }
 
   async function upload() {
-    if (!file || locked.current || saved || !title.trim() || !artist.trim()) return;
+    if (!current() || !file || locked.current || saved || !title.trim() || !artist.trim()) return;
     locked.current = true;
     setBusy(true);
     setNote(undefined);
     try {
       const duration = await measureAudioDuration(file).catch(() => undefined);
-      if (getAuth().agent !== auth.agent) throw new Error('account changed before upload.');
-      setSaved(await createPds(auth).uploadTrack({ file, artwork, title, artist, album, description, duration }));
+      if (!current()) return;
+      const result = await createPds(auth).uploadTrack({ file, artwork, title, artist, album, description, duration });
+      if (current()) setSaved(result);
     } catch (failure) {
-      setNote(failure instanceof Error ? failure.message : 'upload failed.');
+      if (current()) setNote(failure instanceof Error ? failure.message : 'upload failed.');
     } finally {
       locked.current = false;
-      setBusy(false);
+      if (current()) setBusy(false);
     }
   }
 
