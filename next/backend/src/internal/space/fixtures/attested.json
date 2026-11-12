@@ -1,0 +1,44 @@
+{
+  "page": {
+    "records": [
+      {
+        "uri": "at://did:plc:fan/network.attested.payment.oneTime/3abc",
+        "value": {
+          "$type": "network.attested.payment.oneTime",
+          "subject": "did:plc:artist",
+          "amount": 2500,
+          "currency": "USD",
+          "txnid": "fixture-1",
+          "createdAt": "2026-11-12T00:00:00Z",
+          "custom": {
+            "note": "preserve metadata",
+            "enabled": true
+          },
+          "signatures": [
+            {
+              "uri": "at://did:plc:7srqsetux75b6flzbbyag2ro/network.attested.payment.proof/3abc",
+              "cid": "bafyreie7t243f6rnqkpojtwghvtj7ohax2hgehqbwurtz6k3ep4zjvdliy"
+            },
+            {
+              "uri": "at://did:plc:irrelevant/network.attested.payment.proof/3abc",
+              "cid": "bafyreie7t243f6rnqkpojtwghvtj7ohax2hgehqbwurtz6k3ep4zjvdliy"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "proof": {
+    "uri": "at://did:plc:7srqsetux75b6flzbbyag2ro/network.attested.payment.proof/3abc",
+    "cid": "bafyreie7t243f6rnqkpojtwghvtj7ohax2hgehqbwurtz6k3ep4zjvdliy",
+    "value": {
+      "$type": "network.attested.payment.proof",
+      "status": "verified",
+      "issuedAt": "2026-11-12T00:01:00Z",
+      "custom": {
+        "receipt": "synthetic"
+      },
+      "cid": "bafyreid6cexvzmvfesxr7musmo3zwvazxk754gj4uh25kkxjd7ogpmkvqa"
+    }
+  }
+}
