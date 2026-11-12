@@ -1,7 +1,9 @@
 import { DurableObject } from "cloudflare:workers";
 import { ownerHash, verifyCapability, sameUpload } from "./upload-capability.ts";
-import { UploadFailure, UploadSessions } from "./upload-session.ts";
+import { UploadFailure, UploadSessions, boundedBody } from "./upload-session.ts";
 import type { UploadSession } from "./upload-session.ts";
+import { ProcessingJobs } from "./processing-jobs.ts";
+import { verifyProcessing } from "./processing-capability.ts";
 
 export interface UploadEnv {
   AUDIO: R2Bucket;
@@ -9,13 +11,21 @@ export interface UploadEnv {
   UPLOAD_CAPABILITY_SECRET: string;
   UPLOAD_INSPECT_URL: string;
   UPLOAD_ALLOWED_ORIGINS: string;
+  PROCESSING_TRANSCODER_URL?: string;
+  PROCESSING_TRANSCODER_KEY?: string;
 }
 
 export class OwnerUploads extends DurableObject<UploadEnv> {
   private sessions: UploadSessions;
+  private processing: ProcessingJobs;
   constructor(ctx: DurableObjectState, env: UploadEnv) {
     super(ctx, env);
-    this.sessions = new UploadSessions(ctx.storage, env.AUDIO, session => this.inspect(session));
+    const origin = env.PROCESSING_TRANSCODER_URL;
+    const auth = env.PROCESSING_TRANSCODER_KEY;
+    this.processing = new ProcessingJobs(ctx.storage, env.AUDIO, origin === "https://plyr-transcoder-staging.fly.dev/v1/processing" && auth && auth.length >= 32 ? {
+      secret: env.UPLOAD_CAPABILITY_SECRET, url: origin, auth,
+    } : null);
+    this.sessions = new UploadSessions(ctx.storage, env.AUDIO, session => this.inspect(session), Date.now, (session, retry) => this.processing.advance(session, retry));
   }
 
   private async inspect(session: UploadSession) {
@@ -35,14 +45,18 @@ export class OwnerUploads extends DurableObject<UploadEnv> {
   async fetch(request: Request): Promise<Response> {
     try {
       const mediaPath = new URL(request.url).pathname.split("/");
-      if (mediaPath[1] === "media" && mediaPath.length === 4) return await this.media(request, mediaPath[3]);
+      if (mediaPath[1] === "media" && [4, 5].includes(mediaPath.length)) return await this.media(request, mediaPath[3], mediaPath[4]);
+      if (mediaPath[1] === "v1" && mediaPath[2] === "processing") return await this.processingCallback(request, mediaPath);
       return await this.sessions.exclusive(async () => {
         const url = new URL(request.url);
         const pieces = url.pathname.split("/");
         const claim = await verifyCapability(request.headers.get("authorization")?.replace(/^Bearer /, "") ?? null, this.env.UPLOAD_CAPABILITY_SECRET);
         if (!claim || pieces[3] !== await ownerHash(claim.owner) || pieces[4] !== claim.uploadId) throw new UploadFailure(403, "invalid upload capability");
         const base = `${url.origin}/media/${pieces[3]}/${claim.uploadId}`;
-        if (request.method === "POST" && pieces.length === 5) return Response.json(await this.sessions.start(claim, base));
+        if (request.method === "POST" && pieces.length === 5) {
+          if (claim.processing && ((this.env.PROCESSING_TRANSCODER_KEY?.length ?? 0) < 32 || this.env.PROCESSING_TRANSCODER_URL !== "https://plyr-transcoder-staging.fly.dev/v1/processing")) throw new UploadFailure(503, "processing is not configured");
+          return Response.json(await this.sessions.start(claim, base));
+        }
         const session = await this.sessions.load(claim.uploadId);
         if (!session) throw new UploadFailure(404, "upload not found");
         if (!sameUpload(session, claim)) throw new UploadFailure(403, "upload reservation mismatch");
@@ -50,6 +64,7 @@ export class OwnerUploads extends DurableObject<UploadEnv> {
         if (request.method === "PUT" && pieces[5] === "parts" && pieces.length === 7) return Response.json(await this.sessions.part(session, Number(pieces[6]), request));
         if (request.method === "POST" && pieces[5] === "finish" && pieces.length === 6) return Response.json(await this.sessions.finish(session));
         if (request.method === "POST" && pieces[5] === "activate" && pieces.length === 6) return Response.json(await this.sessions.activate(session));
+        if (request.method === "POST" && pieces[5] === "retry-processing" && pieces.length === 6) return Response.json(await this.sessions.progress(session, true));
         if (request.method === "DELETE" && pieces.length === 5) return Response.json(await this.sessions.cancel(session));
         throw new UploadFailure(405, "method not allowed");
       }, request.signal);
@@ -58,17 +73,44 @@ export class OwnerUploads extends DurableObject<UploadEnv> {
     }
   }
 
-  private async media(request: Request, id: string): Promise<Response> {
+  private async processingCallback(request: Request, pieces: string[]) {
+    const claim = await verifyProcessing(request.headers.get("authorization")?.replace(/^Bearer /, "") ?? null, this.env.UPLOAD_CAPABILITY_SECRET);
+    if (!claim || pieces[3] !== claim.uploadId || pieces[4] !== String(claim.generation)) throw new UploadFailure(403, "invalid processing capability");
+    const session = await this.sessions.load(claim.uploadId);
+    if (!session || await ownerHash(session.owner) !== claim.ownerHash || !session.processing) throw new UploadFailure(403, "processing owner mismatch");
+    if (request.method === "GET" && pieces[5] === "source" && pieces.length === 6) return this.processing.source(claim, session);
+    if (request.method === "POST" && pieces[5] === "heartbeat" && pieces.length === 6) await this.processing.heartbeat(claim);
+    else if (request.method === "PUT" && pieces[5] === "parts" && pieces.length === 7) await this.processing.part(claim, session, Number(pieces[6]), request);
+    else if (request.method === "POST" && pieces[5] === "complete" && pieces.length === 6) {
+      const length = Number(request.headers.get("content-length"));
+      if (!Number.isSafeInteger(length) || length <= 0 || length > 65536) throw new UploadFailure(413, "processing completion too large");
+      const bytes = await boundedBody(request, length);
+      await this.processing.complete(claim, session, JSON.parse(new TextDecoder().decode(bytes)));
+    } else throw new UploadFailure(405, "method not allowed");
+    return new Response(null, { status: 204 });
+  }
+
+  private async media(request: Request, id: string, variant?: string): Promise<Response> {
     if (request.method !== "GET" && request.method !== "HEAD") return new Response(null, { status: 405 });
+    if (variant !== undefined && variant !== "original" && variant !== "manifest") return new Response(null, { status: 404 });
     const session = await this.sessions.load(id);
     if (!session || session.state !== "published") return new Response(null, { status: 404 });
+    const job = session.processing ? await this.processing.load(id) : undefined;
+    if (session.processing && job?.phase !== "ready") return new Response(null, { status: 404 });
+    if (variant === "manifest") return request.method === "HEAD" ? new Response(null, { headers: { "content-type": "application/json" } }) : Response.json({
+      original: { url: `${session.audioUrl}/original`, contentType: session.contentType, fileType: session.fileType, sizeBytes: session.sizeBytes },
+      playback: { url: session.audioUrl, contentType: job ? "audio/mpeg" : session.contentType, sizeBytes: job?.outputSize ?? session.sizeBytes, duration: job?.duration },
+    });
+    const key = variant === "original" ? session.key : job?.key ?? session.key;
+    const contentType = variant === "original" || !job ? session.contentType : "audio/mpeg";
     let read: R2ObjectBody | null;
-    try { read = request.method === "HEAD" ? null : await this.env.AUDIO.get(session.key, { range: request.headers }); }
+    try { read = request.method === "HEAD" ? null : await this.env.AUDIO.get(key, { range: request.headers }); }
     catch { return new Response(null, { status: 416 }); }
-    const object = read ?? (request.method === "HEAD" ? await this.env.AUDIO.head(session.key) : null);
+    const object = read ?? (request.method === "HEAD" ? await this.env.AUDIO.head(key) : null);
     if (!object) return new Response(null, { status: 404 });
-    const headers = new Headers({ "content-type": session.contentType, "x-content-type-options": "nosniff", "accept-ranges": "bytes", etag: object.httpEtag, "cache-control": "public, max-age=300" });
-    if (new URL(request.url).searchParams.get("download") === "1") headers.set("content-disposition", `attachment; filename="audio.${session.fileType}"`);
+    const headers = new Headers({ "content-type": contentType, "x-content-type-options": "nosniff", "accept-ranges": "bytes", etag: object.httpEtag, "cache-control": "public, max-age=300" });
+    if (variant === "original") headers.set("content-disposition", `attachment; filename="original.${session.fileType}"`);
+    else if (new URL(request.url).searchParams.get("download") === "1") headers.set("content-disposition", `attachment; filename="audio.${job ? "mp3" : session.fileType}"`);
     let size = object.size;
     let status = 200;
     if (request.method !== "HEAD" && request.headers.has("range") && object.range) {
@@ -90,6 +132,11 @@ export class OwnerUploads extends DurableObject<UploadEnv> {
 
 export async function routeUpload(request: Request, env: UploadEnv): Promise<Response | null> {
   const url = new URL(request.url);
+  if (url.pathname.startsWith("/v1/processing/")) {
+    const claim = await verifyProcessing(request.headers.get("authorization")?.replace(/^Bearer /, "") ?? null, env.UPLOAD_CAPABILITY_SECRET);
+    if (!claim || !env.UPLOADS) return new Response(null, { status: 403 });
+    return env.UPLOADS.get(env.UPLOADS.idFromName(claim.ownerHash)).fetch(request);
+  }
   const match = /^\/(?:v1\/uploads|media)\/([a-f0-9]{64})\/([0-9a-f-]{36})(?:\/.*)?$/.exec(url.pathname);
   if (!match) return null;
   const origin = request.headers.get("origin");
@@ -99,7 +146,8 @@ export async function routeUpload(request: Request, env: UploadEnv): Promise<Res
   if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: { ...cors, "access-control-allow-methods": media ? "GET, HEAD, OPTIONS" : "GET, POST, PUT, DELETE, OPTIONS", "access-control-allow-headers": "authorization, content-type, range" } });
   if (!env.UPLOADS) return new Response(null, { status: 503 });
   if (media) {
-    if (url.pathname.split("/").length !== 4 || !await env.AUDIO.head(`uploads/${match[1]}/${match[2]}`)) return new Response(null, { status: 404, headers: cors });
+    const pieces = url.pathname.split("/");
+    if (!(pieces.length === 4 || (pieces.length === 5 && ["original", "manifest"].includes(pieces[4]))) || !await env.AUDIO.head(`uploads/${match[1]}/${match[2]}`)) return new Response(null, { status: 404, headers: cors });
   } else {
     const claim = await verifyCapability(request.headers.get("authorization")?.replace(/^Bearer /, "") ?? null, env.UPLOAD_CAPABILITY_SECRET);
     if (!claim || claim.uploadId !== match[2] || await ownerHash(claim.owner) !== match[1]) return new Response(null, { status: 403, headers: cors });

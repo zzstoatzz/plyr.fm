@@ -1,12 +1,14 @@
-import { MAX_UPLOAD_BYTES, PART_BYTES, sameUpload, ownerHash } from "./upload-capability.ts";
+import { MAX_UPLOAD_BYTES, PART_BYTES, sameUpload, ownerHash, reservedBytes } from "./upload-capability.ts";
 
 import type { UploadClaim } from "./upload-capability.ts";
 export type UploadSession = Omit<UploadClaim, "expiresAt"> & {
-  audioUrl: string; key: string; state: "starting" | "transferring" | "completing" | "complete" | "published" | "cancelling" | "cancelled";
+  audioUrl: string; key: string; state: "starting" | "transferring" | "completing" | "processing" | "complete" | "published" | "cancelling" | "cancelled";
   parts: Record<number, { sha256: string; etag?: string }>; createdAt: number; nextCheck: number | null;
   starts: number; checks: number; multipartId?: string;
+  rendition?: { duration: number; sizeBytes: number };
 };
 type Inspection = (session: UploadSession) => Promise<"published" | "absent" | "conflict">;
+type Process = (session: UploadSession, retry: boolean) => Promise<{ ready: boolean; nextCheck: number | null; artifact?: { duration: number; sizeBytes: number } }>;
 const DAY = 86400000;
 const ACTIVE_LIMIT = 2;
 const MAX_ATTEMPTS = 20;
@@ -18,7 +20,7 @@ export class UploadFailure extends Error {
 export class UploadSessions {
   busy = false;
   private waiting: (() => void)[] = [];
-  constructor(private storage: DurableObjectStorage, private bucket: R2Bucket, private inspect: Inspection, private now = Date.now) {}
+  constructor(private storage: DurableObjectStorage, private bucket: R2Bucket, private inspect: Inspection, private now = Date.now, private process?: Process) {}
 
   async exclusive<T>(operation: () => Promise<T>, signal?: AbortSignal): Promise<T> {
     if (signal?.aborted) throw new UploadFailure(408, "upload request aborted");
@@ -68,7 +70,9 @@ export class UploadSessions {
     return {
       state: session.state,
       recoveryRequired: !["published", "cancelled"].includes(session.state) && session.nextCheck === null,
-      reservedBytes: ["published", "cancelled"].includes(session.state) ? 0 : session.sizeBytes,
+      reservedBytes: ["published", "cancelled"].includes(session.state) ? 0 : reservedBytes(session),
+      processing: session.processing ?? undefined,
+      rendition: session.rendition ? { ...session.rendition, contentType: "audio/mpeg", fileType: "mp3" } : undefined,
       partSizeBytes: PART_BYTES,
       partCount: Math.ceil(session.sizeBytes / PART_BYTES),
       receivedParts: Object.entries(session.parts).filter(([, part]) => part.etag).map(([number, part]) => ({ number: Number(number), sha256: part.sha256 })),
@@ -85,7 +89,7 @@ export class UploadSessions {
     } else {
       const active = await this.storage.get<string[]>("active") ?? [];
       const sessions = await Promise.all(active.map(id => this.load(id)));
-      if (active.length >= ACTIVE_LIMIT || sessions.reduce((sum, item) => sum + (item?.sizeBytes ?? MAX_UPLOAD_BYTES), claim.sizeBytes) > ACTIVE_LIMIT * MAX_UPLOAD_BYTES)
+      if (active.length >= ACTIVE_LIMIT || sessions.reduce((sum, item) => sum + (item ? reservedBytes(item) : MAX_UPLOAD_BYTES), reservedBytes(claim)) > ACTIVE_LIMIT * MAX_UPLOAD_BYTES)
         throw new UploadFailure(429, "active upload limit reached");
       const { expiresAt, ...reservation } = claim;
       session = { ...reservation, audioUrl, key: `uploads/${await ownerHash(claim.owner)}/${claim.uploadId}`, state: "starting", parts: {}, createdAt: this.now(), nextCheck: this.now() + DAY, starts: 0, checks: 0 };
@@ -126,20 +130,22 @@ export class UploadSessions {
     return { number, sha256 };
   }
 
-  async recoverComplete(session: UploadSession) {
-    if (session.state !== "completing") return;
+  async recoverComplete(session: UploadSession): Promise<UploadSession["state"]> {
+    if (session.state !== "completing") return session.state;
     const object = await this.bucket.head(session.key);
     if (object) {
       if (object.size !== session.sizeBytes || object.customMetadata?.owner !== session.owner || object.customMetadata?.uploadId !== session.uploadId)
         throw new UploadFailure(409, "completed object differs from reservation");
-      session.state = "complete";
+      session.state = session.processing ? "processing" : "complete";
       session.nextCheck = this.now() + 1000;
       await this.save(session);
     }
+    return session.state;
   }
 
   async finish(session: UploadSession) {
-    await this.recoverComplete(session);
+    const state = await this.recoverComplete(session);
+    if (state === "processing") return this.progress(session);
     if (["complete", "published"].includes(session.state)) return this.view(session);
     if (!["transferring", "completing"].includes(session.state)) throw new UploadFailure(409, "upload cannot finish");
     const count = Math.ceil(session.sizeBytes / PART_BYTES);
@@ -153,7 +159,18 @@ export class UploadSessions {
     session.nextCheck = this.now() + 1000;
     await this.save(session);
     await this.bucket.resumeMultipartUpload(session.key, session.multipartId ?? "").complete(parts);
-    await this.recoverComplete(session);
+    if (await this.recoverComplete(session) === "processing") return this.progress(session);
+    return this.view(session);
+  }
+
+  async progress(session: UploadSession, retry = false) {
+    if (session.state !== "processing") throw new UploadFailure(409, "upload is not processing");
+    if (!this.process) throw new UploadFailure(503, "processing unavailable");
+    const result = await this.process(session, retry);
+    if (result.ready) { session.state = "complete"; session.rendition = result.artifact; }
+    session.checks = 0;
+    session.nextCheck = result.nextCheck;
+    await this.save(session);
     return this.view(session);
   }
 
@@ -174,7 +191,7 @@ export class UploadSessions {
     await this.recoverComplete(session);
     if (session.state === "published") throw new UploadFailure(409, "published audio cannot be cancelled");
     if (session.state === "cancelled") return this.view(session);
-    if (["complete", "completing"].includes(session.state)) {
+    if (["complete", "completing", "processing"].includes(session.state)) {
       const result = await this.inspect(session);
       if (result !== "absent") throw new UploadFailure(409, "publication must be resolved before cancellation");
       // A later client create can still race absence, so completed bytes are retained.
@@ -194,6 +211,11 @@ export class UploadSessions {
     for (const id of active) {
       const session = await this.load(id);
       if (!session || session.nextCheck == null || session.nextCheck > this.now()) continue;
+      if (session.state === "processing") {
+        try { await this.progress(session); }
+        catch { session.checks += 1; session.nextCheck = session.checks < MAX_ATTEMPTS ? this.now() + 30000 : null; await this.save(session); }
+        continue;
+      }
       try {
         await this.recoverComplete(session);
         if (session.state === "completing") await this.finish(session);
@@ -212,7 +234,7 @@ export class UploadSessions {
   }
 }
 
-async function boundedBody(request: Request, expected: number) {
+export async function boundedBody(request: Request, expected: number) {
   if (!request.body) throw new UploadFailure(400, "missing part bytes");
   const reader = request.body.getReader();
   const bytes = new Uint8Array(expected);

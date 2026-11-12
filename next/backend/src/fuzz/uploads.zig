@@ -14,6 +14,8 @@ fn reservationIsolation(_: void, case: *hegel.TestCase) !void {
     const wrong_owner = try case.int(u8, 0, 1) == 1;
     const wrong_collection = try case.int(u8, 0, 1) == 1;
     const restricted = try case.int(u8, 0, 1) == 1;
+    const processing = try case.int(u8, 0, 1) == 1;
+    const budget = try gen.pick(case, u64, &.{ 0, 1, admission.max_bytes, 2 * admission.max_bytes, std.math.maxInt(u64) });
     const request: admission.Request = .{
         .serviceToken = "",
         .uploadId = "12345678-1234-4123-8123-123456789abc",
@@ -23,8 +25,9 @@ fn reservationIsolation(_: void, case: *hegel.TestCase) !void {
         .fileType = "mp3",
         .visibility = "public",
         .downloadPolicy = if (restricted) "supporters" else "open",
+        .processing = if (processing) .{ .recipe = "mp3-320k-44100-v1", .outputBudget = budget } else null,
     };
-    const expected = size > 0 and size <= 1_610_612_736 and !wrong_owner and !wrong_collection and !restricted;
+    const expected = size > 0 and size <= 1_610_612_736 and !wrong_owner and !wrong_collection and !restricted and (!processing or (budget > 0 and budget <= 2 * admission.max_bytes - size));
     const accepted = if (admission.validate(request, if (wrong_owner) "did:plc:bbbbbbbbbbbbbbbbbbbbbbbb" else owner, if (wrong_collection) "fm.plyr.track" else collection)) |_| true else |_| false;
     if (expected != accepted) return case.fail("upload admission escaped size/owner/collection/public boundary");
 }

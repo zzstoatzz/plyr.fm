@@ -2,7 +2,7 @@
 
 This contract extends the Next public/open upload journey to retain an original
 and publish an MP3 playback rendition. Implementation is staged: the Rust
-execution seam precedes the audio Worker owner-state integration and client.
+execution seam and audio Worker owner-state integration precede the client.
 It is not enabled by deploying source alone.
 
 ## ownership and publication
@@ -40,7 +40,10 @@ supplied as an arbitrary request URL.
 Rust pulls the source into a temporary file, encodes to a second temporary file,
 and uploads sequential 10 MiB output parts. It never buffers a whole file.
 Part sizes and hashes are checked before R2 receipts become authoritative.
-Completion includes exact output size and the complete ordered part set.
+Completion includes exact output size, integer duration and the complete ordered
+part set. Rust probes only its generated MP3, with a separate 15-second deadline
+and at most 64 bytes of stdout. Duration rounds to seconds for the existing track
+field; it is service metadata until the client writes the canonical record.
 The DO reconciles lost part/completion replies through persisted digests and
 R2 object metadata before making the rendition ready.
 
@@ -51,6 +54,24 @@ lease permits a fresh generation; stale callbacks cannot change that generation.
 Rust restarts can require re-encoding, but never a new canonical record key.
 Automatic attempts are bounded, followed by explicit retry. Alarms do short
 lease/reconciliation/dispatch work, never wait for an encode.
+
+The owner allows three automatic generations. Each has a 90-second lease and
+is checked every 30 seconds; an authenticated heartbeat renews the lease within
+the two-hour attempt lifetime. A failed generation must finish multipart/object
+cleanup before another can consume its output reservation. Lost abort replies
+retain that reservation until cleanup succeeds or R2 explicitly reports
+`NoSuchUpload` (10024). An unavailable bucket or an absent object alone does not
+prove the multipart upload is gone. The Worker recognizes the action-specific
+error representation used by workerd; the documented absence code is listed in
+[R2 errors](https://developers.cloudflare.com/r2/api/error-codes/).
+
+User status keeps the same upload ID and canonical URI throughout `processing`.
+It returns no playback URL until the rendition is ready. Explicit retry uses
+`POST /v1/uploads/{ownerHash}/{uploadId}/retry-processing`; completed-source cancellation
+still reports a recovery conflict and retains the original. Callback requests
+use `/v1/processing/{uploadId}/{generation}/` followed by `source`, `heartbeat`,
+`parts/{number}` or `complete`, with an owner/generation/expiry-bound capability
+distinct from upload admission. No processing capability reaches the client.
 
 Rust's individual attempt deadline is two hours, with 20-second heartbeats and
 a 15-second heartbeat request timeout. The owner must fence expired generations
@@ -107,6 +128,14 @@ The new route requires `FLY_APP_NAME=plyr-transcoder-staging`,
 configuration leaves the route absent; partial or non-staging configuration
 must fail closed. Existing `/transcode` behavior is unchanged.
 
+The coordinator separately requires `UPLOAD_PROCESSING_ENABLED=true` before it
+admits a recipe/output budget. The audio Worker requires
+`PROCESSING_TRANSCODER_URL=https://plyr-transcoder-staging.fly.dev/v1/processing`
+and `PROCESSING_TRANSCODER_KEY` matching the executor token. Otherwise recipe
+admission fails before source reservation. None of these settings is enabled
+by this implementation. AIFF/AIF and WebM admission requires processing; the
+existing direct-upload format contract remains unchanged.
+
 Before enabling background processing, staging's current auto-stop/minimum-zero
 configuration must change to keep its single processing machine alive. Callback
 traffic alone is not an inbound request keeping the Fly machine active. This
@@ -115,8 +144,14 @@ production settings and secrets are not changed by this slice.
 
 ## acceptance
 
-The completed owner integration must cover duplicate dispatch, capacity, source mismatch,
-lease loss, stale completion, output budget, uncertain receipts and cleanup.
+Local owner fixtures exercise actual workerd/R2-emulator admission, retained
+source, rendition parts/completion, eviction, publication gates, range downloads,
+lease fencing, a held stale part, lost part/completion replies and ambiguous
+abort recovery. They use a stub executor dispatch, not a deployed Rust/R2 pair.
+Executor fixtures independently cover format compatibility, source authority,
+mid-flight lease loss, output bounds and multipart completion. Full owner/executor
+integration must still verify duplicate dispatch, source mismatch, stale
+completion and cleanup against the deployed services.
 Cloud acceptance must exercise a synthetic 1.5 GiB source through the actual
 staging Rust service and R2 multipart path, verify bounded memory and both
 original and rendition downloads after fixture publication, then clean up exact
