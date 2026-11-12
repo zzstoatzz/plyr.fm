@@ -38,7 +38,7 @@ export function EarlierCreates({ recovery, auth, kind }: { recovery: Recovery; a
 }
 
 type Recovery = ReturnType<typeof useCreateRecovery>;
-export function CreateRecovery({ recovery, auth, kind, onDismiss }: { recovery: Recovery; auth: Auth; kind: 'track' | 'playlist'; onDismiss: () => void }) {
+export function CreateRecovery({ recovery, auth, kind, onDismiss }: { recovery: Recovery; auth: Auth; kind: 'track' | 'playlist'; onDismiss: (operation: CreateOperation) => void }) {
   return <>
     {recovery.loading && <WaveLoading label="Loading creation recovery" />}
     {recovery.error && <><Copy live>{recovery.error}</Copy><Action label="Retry loading recovery" onPress={() => void recovery.refresh()} /></>}
@@ -46,7 +46,7 @@ export function CreateRecovery({ recovery, auth, kind, onDismiss }: { recovery: 
   </>;
 }
 
-function PendingCreate({ operation, auth, kind, recovery, onDismiss }: { operation: CreateOperation; auth: Auth; kind: 'track' | 'playlist'; recovery: Recovery; onDismiss: () => void }) {
+function PendingCreate({ operation, auth, kind, recovery, onDismiss }: { operation: CreateOperation; auth: Auth; kind: 'track' | 'playlist'; recovery: Recovery; onDismiss: (operation: CreateOperation) => void }) {
   const [result, setResult] = useState<Awaited<ReturnType<typeof recovery.pds.recoverCreate>> | undefined>(() => operation.cid
     ? { state: 'accepted', uri: operation.uri, cid: operation.cid, status: 'pending' } : undefined);
   const [error, setError] = useState<string>();
@@ -68,14 +68,14 @@ function PendingCreate({ operation, auth, kind, recovery, onDismiss }: { operati
     if (locked.current || !current()) return;
     locked.current = true; setBusy(true);
     void recovery.pds.dismissCreate(operation, keepExisting).then(async () => {
-      if (current()) { await recovery.refresh(); if (current()) onDismiss(); }
+      if (current()) { await recovery.refresh(); if (current()) onDismiss(operation); }
     }).catch(() => { if (current()) { setError('could not clear recovery. try again.'); setBusy(false); } }).finally(() => { locked.current = false; });
   }
   function archive(archived: boolean) {
     if (locked.current || !current()) return;
     locked.current = true; setBusy(true);
     void recovery.pds.archiveCreate(operation, archived).then(async () => {
-      if (current()) { await recovery.refresh(); if (current()) onDismiss(); }
+      if (current()) { await recovery.refresh(); if (current()) onDismiss(operation); }
     }).catch(() => { if (current()) { setError('could not update this attempt. try again.'); } }).finally(() => { locked.current = false; if (current()) setBusy(false); });
   }
   const accepted = result?.state === 'accepted';

@@ -20,6 +20,7 @@ export default function Upload() {
 function AccountUpload({ auth }: { auth: Auth }) {
   const live = useRef(true);
   const locked = useRef(false);
+  const currentCreation = useRef<string | undefined>(undefined);
   const [file, setFile] = useState<MediaFile | null>(null);
   const [artwork, setArtwork] = useState<MediaFile | null>(null);
   const [title, setTitle] = useState('');
@@ -55,7 +56,10 @@ function AccountUpload({ auth }: { auth: Auth }) {
     try {
       const duration = await measureAudioDuration(file).catch(() => undefined);
       if (!current()) return;
-      await createPds(auth).uploadTrack({ file, artwork, title, artist, album, description, duration, tags: tags.trim() ? tags.split('\n') : undefined });
+      const pds = createPds(auth), reservation = await pds.reserveCreate('track');
+      if (!current()) return;
+      currentCreation.current = reservation.rkey;
+      await pds.uploadTrack({ file, artwork, title, artist, album, description, duration, tags: tags.trim() ? tags.split('\n') : undefined }, reservation);
     } catch (failure) {
       if (current()) setNote(failure instanceof Error ? failure.message : 'upload failed.');
     } finally {
@@ -66,7 +70,9 @@ function AccountUpload({ auth }: { auth: Auth }) {
 
   return <>
     <EarlierCreates auth={auth} recovery={recovery} kind="track" />
-    {recovery.loading || recovery.error || recovery.operations.length ? <CreateRecovery auth={auth} recovery={recovery} kind="track" onDismiss={() => {
+    {recovery.loading || recovery.error || recovery.operations.length ? <CreateRecovery auth={auth} recovery={recovery} kind="track" onDismiss={operation => {
+    if (operation.rkey !== currentCreation.current) return;
+    currentCreation.current = undefined;
     setFile(null); setArtwork(null); setTitle(''); setAlbum(''); setDescription(''); setTags(''); setNote(undefined);
   }} /> : <>
       <Copy>audio goes to your PDS. up to 100 MB per track.</Copy>

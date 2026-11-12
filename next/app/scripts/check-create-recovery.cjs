@@ -191,6 +191,36 @@ async function run(browser, width, theme, kind) {
     await page.getByRole('button', { name: 'Done', exact: true }).click();
     await page.getByRole('button', { name: 'Hide earlier attempts (1)', exact: true }).waitFor({ state: 'detached' });
     if (kind === 'track') assert.equal(await page.getByRole('textbox', { name: 'Title', exact: true }).inputValue(), 'keep my new draft');
+    if (kind === 'track') {
+      reject = true; commit = false;
+      await start('historical attempt with new draft');
+      await page.getByRole('button', { name: 'Set aside attempt', exact: true }).click();
+      await page.getByRole('button', { name: /^(Show|Hide) earlier attempts \(1\)$/ }).waitFor();
+      await enter(page);
+      await page.getByRole('button', { name: 'Show earlier attempts (1)', exact: true }).waitFor();
+      const chooser = page.waitForEvent('filechooser');
+      await page.getByRole('button', { name: 'Choose audio', exact: true }).click();
+      await (await chooser).setFiles({ name: 'fresh-draft.wav', mimeType: 'audio/wav', buffer: audio });
+      await page.getByRole('button', { name: 'fresh-draft.wav', exact: true }).waitFor();
+      await page.getByRole('textbox', { name: 'Title', exact: true }).fill('preserve my unsent draft');
+      await page.getByRole('textbox', { name: 'Artist', exact: true }).fill('draft artist');
+      await page.getByRole('button', { name: 'Show earlier attempts (1)', exact: true }).click();
+      await page.getByRole('button', { name: 'Resume recovery', exact: true }).click();
+      reject = false; commit = true; lost = false;
+      await page.getByRole('button', { name: 'Retry same creation', exact: true }).click();
+      await view(page).waitFor();
+      await dismiss().click();
+      await page.getByRole('textbox', { name: 'Title', exact: true }).waitFor();
+      assert.equal(await page.getByRole('textbox', { name: 'Title', exact: true }).inputValue(), 'preserve my unsent draft', 'resolving historical recovery must preserve the unrelated draft');
+      await page.getByRole('button', { name: 'fresh-draft.wav', exact: true }).waitFor();
+      await screenshot(page, `track-draft-preserved-${width}-${theme}`);
+      await page.getByRole('button', { name: 'Upload', exact: true }).click();
+      await view(page).waitFor();
+      assert.equal(writes.at(-1).record.title, 'preserve my unsent draft');
+      await dismiss().click();
+      await page.getByRole('button', { name: 'Choose audio', exact: true }).waitFor();
+      assert.equal(await page.getByRole('textbox', { name: 'Title', exact: true }).inputValue(), '', 'dismissing the current upload still resets its draft');
+    }
     hold = true; commit = false; lost = false;
     const archivedHeld = new Promise(resolve => { entered = resolve; });
     await start('late response after set aside');
