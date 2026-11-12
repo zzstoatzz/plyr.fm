@@ -62,7 +62,7 @@ export class OwnerUploads extends DurableObject<UploadEnv> {
         if (!sameUpload(session, claim)) throw new UploadFailure(403, "upload reservation mismatch");
         if (request.method === "GET" && pieces.length === 5) {
           const job = session.processing ? await this.processing.load(session.uploadId) : undefined;
-          return Response.json({ ...this.sessions.view(session), ...(job?.failure ? { processingFailure: job.failure,
+          return Response.json({ ...this.sessions.view(session), ...(job ? { processingGeneration: job.claim.generation } : {}), ...(job?.failure ? { processingFailure: job.failure,
             recoveryRequired: session.nextCheck === null || job.failure === "output_budget_exceeded" || job.phase === "recovery" } : {}) });
         }
         if (request.method === "PUT" && pieces[5] === "parts" && pieces.length === 7) return Response.json(await this.sessions.part(session, Number(pieces[6]), request));
@@ -104,6 +104,7 @@ export class OwnerUploads extends DurableObject<UploadEnv> {
     const job = session.processing ? await this.processing.load(id) : undefined;
     if (session.processing && job?.phase !== "ready") return new Response(null, { status: 404 });
     if (variant === "manifest") return request.method === "HEAD" ? new Response(null, { headers: { "content-type": "application/json" } }) : Response.json({
+      processed: !!job,
       original: { url: `${session.audioUrl}/original`, contentType: session.contentType, fileType: session.fileType, sizeBytes: session.sizeBytes },
       playback: { url: session.audioUrl, contentType: job ? "audio/mpeg" : session.contentType, sizeBytes: job?.outputSize ?? session.sizeBytes, duration: job?.duration },
     });
