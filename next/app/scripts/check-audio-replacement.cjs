@@ -69,6 +69,7 @@ async function run(browser, width, theme, scale) {
     await page.goto(new URL(`/edit-track/${track.id}`, page.url()).href);
     await page.getByText('only the artist can edit this track.', { exact: true }).waitFor();
     await page.goto(new URL(`/track/${track.id}`, page.url()).href);
+    await page.waitForFunction(id => globalThis.__r(id).getAuth().ready, authModule);
     await signIn();
     await page.getByRole('button', { name: 'More', exact: true }).click();
     await page.getByRole('link', { name: 'edit track', exact: true }).click();
