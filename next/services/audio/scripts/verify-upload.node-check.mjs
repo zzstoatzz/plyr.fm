@@ -39,7 +39,7 @@ for (const failure of [undefined, 'start-invalid', 'start-lost', 'part', 'status
     if (path.includes('/media/')) {
       if (!published) return new Response(null, { status: 404 });
       const disposition = new URL(url).searchParams.get('download') === '1' ? { 'content-disposition': 'attachment; filename="audio.wav"' } : {};
-      if (init.method === 'HEAD') return new Response(null, { headers: { ...disposition, 'content-length': String(bytes.length) } });
+      if (init.method === 'HEAD') return new Response(null, { headers: { ...disposition, 'content-length': String(bytes.length), 'access-control-allow-origin': '*', 'access-control-expose-headers': 'content-disposition' } });
       if (init.headers?.range) return new Response(bytes.subarray(0, 44), { status: 206, headers: { ...disposition, 'content-range': `bytes 0-43/${bytes.length}` } });
       return new Response(bytes, { headers: { 'x-content-type-options': 'nosniff' } });
     }

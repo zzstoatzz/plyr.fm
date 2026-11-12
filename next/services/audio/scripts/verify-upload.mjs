@@ -185,9 +185,11 @@ export async function main({ deleteObject = deleteFixtureObject } = {}) {
     assert.equal(read.headers.get('content-disposition'), null);
     const verified = await verifyStream(read, source);
     const downloadUrl = `${audioUrl}?download=1`;
-    const head = await request(downloadUrl, { method: 'HEAD' });
+    const head = await request(downloadUrl, { method: 'HEAD', headers: { origin: 'https://next.plyr.fm' } });
     assert.equal(head.status, 200); assert.equal(head.headers.get('content-length'), String(source.size));
     assert.equal(head.headers.get('content-disposition'), 'attachment; filename="audio.wav"');
+    assert.equal(head.headers.get('access-control-allow-origin'), '*');
+    assert.ok(head.headers.get('access-control-expose-headers')?.split(',').map(value => value.trim().toLowerCase()).includes('content-disposition'));
     const range = await request(downloadUrl, { headers: { range: 'bytes=0-43' } });
     assert.equal(range.status, 206); assert.equal(range.headers.get('content-range'), `bytes 0-43/${source.size}`);
     assert.equal(range.headers.get('content-disposition'), 'attachment; filename="audio.wav"');
