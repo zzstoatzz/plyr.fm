@@ -6,6 +6,26 @@ finish line. This is execution evidence, not another parity inventory.
 
 ## shipped to Next
 
+- #2522: private creation/recovery and playback use the owner's existing private
+  space and the app's existing player. Policy checks preserve invited members;
+  public-like/list-write boundaries, accounting and queue sync reject private
+  references. Deployment `43230579868` serves `29c8a84a`; four deployed fixture
+  cases verify consent, lost-response recovery, signed record verification,
+  public/private handoff, session replacement and policy denial. The previously
+  unguarded mini-player Like action and late player callbacks fail negative
+  controls. Native MMKV checks and playback/handoff passed, with a local-file
+  protected-source adapter: this does not prove native signed transport or real
+  private streaming/cache disposal. No real account writes or native release.
+- #2519: artists can replace public/open audio up to 100 MiB while preserving
+  the record URI, labels and unknown fields. Canonical and effective access
+  checks run before upload/publication; CAS conflicts retain the draft and lost
+  responses reconcile the exact candidate. Deployment `43229921357` serves
+  `f291ff077`; all eight deployed normal/enlarged browser cases passed. Native
+  menu entry and same-DID session replacement work, and coordinate Save produced
+  one synthetic blob upload and one CAS update. Measured native scrolling is
+  correctly bounded; CUA delivered touch-down without movement, so physical
+  scrolling and VoiceOver remain unverified. An entry-dependent accessibility
+  snapshot omission was not reproduced as hidden or unhittable native controls.
 - #2518: artists can create albums and add, remove or reorder track occurrences
   using canonical list records. New references are checked against the owner's
   PDS; existing duplicate/unavailable entries and unknown fields survive edits.
@@ -174,10 +194,15 @@ authenticated native Jam/remote-output transitions still need device acceptance.
 Publishing remains a substantial gap: production supports 1.5 GiB uploads,
 staging/transcoding, protected audio and explicit storage fallback consent.
 Next's public blob path is capped at 100 MiB by the published blob contract.
-Raising a UI limit alone cannot provide parity. A compatible large-file path
-needs service-owned byte staging and recoverable artifacts while the client
-continues creating the canonical record. Collection management and existing
-access/download policies also remain required.
+Private creation and public audio replacement share that cap. #2507 implements
+service-owned multipart staging while clients retain canonical writes, but
+deployed fixture `43230541415` failed activation with HTTP 503 after successful
+admission, receipts, finish, prepublication denial and record creation. Exact
+record/object cleanup passed; one 4,044-byte recovery reservation may remain.
+The large-upload client stays held until actual activation succeeds. Large and
+protected replacements, transcoding and access/download-policy management remain
+open. Private metadata editing also requires conditional-write support absent
+from the current Spaces API; a preliminary read is not an atomic revision check.
 
 Backend measurements belong in [perf.md](../../next/backend/docs/perf.md), with
 dataset, cache state and limits. A workstation median is not a production SLO.
