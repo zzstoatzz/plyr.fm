@@ -67,7 +67,7 @@ function Shell() {
   ];
   const showBack = !['/', '/search', '/library', '/portal', '/login'].includes(path);
   const detail = /^\/(track|u|album|playlist|edit-track)\//.test(path);
-  const tabTitle = path === '/' ? (wide ? undefined : 'plyr.fm') : path === '/search' ? 'search' : path === '/library' ? 'library' : undefined;
+  const tabTitle = path === '/' ? (wide ? undefined : 'plyr.fm') : path === '/search' ? 'search' : path === '/library' ? 'library' : path === '/portal' ? 'your music' : undefined;
   const detailTitle = path.startsWith('/u/') ? 'artist' : path.startsWith('/edit-track/') ? 'edit track'
     : path.startsWith('/album/') ? 'album' : path.startsWith('/playlist/') ? 'playlist' : 'track';
   const nav = <View role="navigation" accessibilityLabel="Main navigation" style={{
