@@ -46,8 +46,10 @@ finish line. This is execution evidence, not another parity inventory.
 - #2529 at `de99e71f` projects verified track download preferences without
   treating a public playback URL as download authorization. Historical catalog
   reconciliation `43239042552` finished with 461 verified, one absent, 16 retryable
-  and two rejected outcomes; its temporary machine was cleaned up. Rejected
-  outcomes are still being classified. Complete backfill is not established;
+  and two rejected outcomes; its temporary machine was cleaned up. One repository
+  failed the official signature verifier with a fresh DID key; the second
+  rejection's exact reason was unavailable after log retention. Complete backfill
+  remains unproven with one signature rejection and one unclassified rejection;
   the public download client shipped separately in #2537 and refuses unknown data.
 - #2526 at `555c6adf` adds the staged processing executor with execution disabled.
   It is a prerequisite, not an enabled end-to-end upload/transcode path. Durable
