@@ -27,6 +27,11 @@ Since November 11 a personal queue is admitted on the owner's service-auth
 identity alone. No Space is created or checked for it, so it no longer depends on
 the PDS supporting Spaces; Jams still use Space admission.
 
+The queue's record is the `plyr_playback.queue_records` row for the owner in
+PostgreSQL, written within about a second of each change. Redis holds the live
+copy with the same 24 hour expiry as a Jam room and is reseeded from the record
+when a client connects and Redis has nothing.
+
 ## Behavior and failure coverage
 
 - Stable occurrence keys retain duplicate authored records. Explicit picks precede

@@ -80,6 +80,20 @@ jobs:
           command -v psql > /dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client; }
           scripts/migrate
 
+      # The Jam coordinator records personal queues with the writer login.
+      # Its role name is read from the credential, so no name is assumed here.
+      - name: grant queue records to the coordinator's role
+        env:
+          MIGRATOR_DATABASE_URL: ${{ secrets.ZIG_NEXT_MIGRATOR_DATABASE_URL }}
+          WRITER_DATABASE_URL: ${{ secrets.ZIG_NEXT_WRITER_DATABASE_URL }}
+        run: |
+          plain() { local url="${1/postgresql+psycopg:/postgresql:}"; url="${url/postgresql+psycopg2:/postgresql:}"; echo "${url/postgresql+asyncpg:/postgresql:}"; }
+          role="$(psql "$(plain "$WRITER_DATABASE_URL")" -X -q -At -v ON_ERROR_STOP=1 -c 'SELECT current_user')"
+          psql "$(plain "$MIGRATOR_DATABASE_URL")" -X -q -v ON_ERROR_STOP=1 -v role="$role" <<'SQL'
+          GRANT USAGE ON SCHEMA plyr_playback TO :"role";
+          GRANT SELECT, INSERT, UPDATE ON plyr_playback.queue_records TO :"role";
+          SQL
+
   build:
     name: build next image
     runs-on: ubuntu-latest
@@ -103,7 +117,7 @@ jobs:
 
   deploy-jams:
     name: deploy next Jam coordinator
-    needs: build
+    needs: [migrate, build]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
@@ -111,6 +125,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: superfly/flyctl-actions/setup-flyctl@master
+      - name: stage the queue record credential
+        env:
+          QUEUE_DATABASE_URL: ${{ secrets.ZIG_NEXT_WRITER_DATABASE_URL }}
+        run: flyctl secrets set --stage --app plyr-jams-next DATABASE_URL="$QUEUE_DATABASE_URL" > /dev/null
       - name: deploy the shared immutable backend image
         working-directory: next/backend
         env:

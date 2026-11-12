@@ -36,7 +36,7 @@ function serviceToken(account, { key = account.privateKey, aud = audience, lxm =
   return `${body}.${Buffer.concat([raw.subarray(0, 32), Buffer.from(low.toString(16).padStart(64, '0'), 'hex')]).toString('base64url')}`;
 }
 
-// Serves the identities' DID documents and runs locally built coordinators against the test Redis.
+// Serves the identities' DID documents and runs locally built coordinators against the test Redis and PostgreSQL.
 async function startQueueFixture(accounts, { port = Number(process.env.QUEUE_TEST_PORT || 5351), count = 2 } = {}) {
   const ports = Array.from({ length: count }, (_, at) => port + at);
   const documents = Object.fromEntries(accounts.map(account => [account.did, { id: account.did,
@@ -47,10 +47,17 @@ async function startQueueFixture(accounts, { port = Number(process.env.QUEUE_TES
   });
   await new Promise(resolve => directory.listen(port + count, '127.0.0.1', resolve));
   const keys = accounts.flatMap(account => ['state', 'commands', 'command-order', 'events'].map(suffix => `plyr:next:jam:${createHash('sha256').update(`queue:${account.did}`).digest('hex')}:${suffix}`));
-  const cleanup = () => execFileSync('docker', ['compose', '-f', path.resolve(__dirname, '../../backend/compose.yaml'), 'exec', '-T', 'test-redis', 'redis-cli', 'DEL', ...keys], { stdio: 'ignore' });
-  cleanup();
-  const environment = { ...process.env, MODE: 'jams', INDEX_MODE: 'disabled', DOCKET_URL: 'redis://127.0.0.1:6380/0', TRACK_COLLECTION_NSID: 'fm.plyr.track', LIST_COLLECTION_NSID: 'fm.plyr.list', PROFILE_COLLECTION_NSID: 'fm.plyr.actor.profile', LIKE_COLLECTION_NSID: 'fm.plyr.like', CORS_ALLOWED_ORIGINS: 'https://next.plyr.fm', PLC_DIRECTORY_URL: `http://127.0.0.1:${port + count}` };
-  delete environment.JAM_TEST_MODE; delete environment.JAM_TEST_PDS_ORIGIN;
+  const compose = ['compose', '-f', path.resolve(__dirname, '../../backend/compose.yaml'), 'exec', '-T'];
+  const forget = () => execFileSync('docker', [...compose, 'test-redis', 'redis-cli', 'DEL', ...keys], { stdio: 'ignore' });
+  const sql = (text, input) => execFileSync('docker', [...compose, 'zig-db', 'psql', '-U', 'zig_test', '-d', 'zig_test', '-X', '-q', '-At', '-v', 'ON_ERROR_STOP=1', ...(input ? ['-f', '-'] : ['-c', text])], { input, encoding: 'utf8' }).trim();
+  const schema = require('node:fs').readFileSync(path.resolve(__dirname, '../../backend/migrations/0035_add_queue_records.sql'), 'utf8');
+  sql(null, 'DROP SCHEMA IF EXISTS plyr_playback CASCADE;\n' + schema);
+  const record = account => { const row = sql(`SELECT revision || ' ' || state::text FROM plyr_playback.queue_records WHERE owner_did = '${account.did}'`); return row ? { revision: Number(row.slice(0, row.indexOf(' '))), state: JSON.parse(row.slice(row.indexOf(' ') + 1)) } : null; };
+  const cleanup = () => { forget(); sql('DROP SCHEMA IF EXISTS plyr_playback CASCADE'); };
+  forget();
+  const environment = { ...process.env, MODE: 'jams', INDEX_MODE: 'disabled', DOCKET_URL: 'redis://127.0.0.1:6380/0', TRACK_COLLECTION_NSID: 'fm.plyr.track', LIST_COLLECTION_NSID: 'fm.plyr.list', PROFILE_COLLECTION_NSID: 'fm.plyr.actor.profile', LIKE_COLLECTION_NSID: 'fm.plyr.like', CORS_ALLOWED_ORIGINS: 'https://next.plyr.fm', PLC_DIRECTORY_URL: `http://127.0.0.1:${port + count}`,
+    DATABASE_URL: process.env.QUEUE_TEST_DATABASE_URL || 'postgresql://zig_test:zig_test@127.0.0.1:5435/zig_test' };
+  delete environment.JAM_TEST_MODE; delete environment.JAM_TEST_PDS_ORIGIN; delete environment.WORKER_DATABASE_URL;
   const children = ports.map(value => spawn(path.resolve(__dirname, '../../backend/zig-out/bin/plyr-backend'), [], { env: { ...environment, PORT: String(value) }, stdio: ['ignore', 'ignore', process.env.QUEUE_FIXTURE_LOGS ? 'inherit' : 'ignore'] }));
   const bases = ports.map(value => `http://127.0.0.1:${value}`);
   const stop = async () => { for (const child of children) child.kill('SIGTERM'); directory.close(); await new Promise(resolve => setTimeout(resolve, 100)); cleanup(); };
@@ -61,7 +68,7 @@ async function startQueueFixture(accounts, { port = Number(process.env.QUEUE_TES
       assert.ok(healthy, 'local coordinator ready');
     }
   } catch (error) { await stop(); throw error; }
-  return { bases, stop };
+  return { bases, stop, forget, record };
 }
 
 module.exports = { identity, serviceToken, startQueueFixture };
