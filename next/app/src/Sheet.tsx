@@ -5,12 +5,14 @@ import X from 'lucide-react-native/icons/x';
 import { useAppearance } from './appearance';
 import { Heading } from './CatalogPieces';
 
-export function Sheet({ title, close, children, notice }: { title: string; close: () => void; children: ReactNode; notice?: ReactNode }) {
+export function Sheet({ title, close, children, notice, visible = true, onDismiss }: {
+  title: string; close: () => void; children: ReactNode; notice?: ReactNode; visible?: boolean; onDismiss?: () => void;
+}) {
   const theme = useAppearance();
   const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const wide = width >= 800;
-  return <Modal transparent accessibilityLabel={title} animationType={theme.reduceMotion ? 'none' : 'fade'} visible onRequestClose={close}>
+  return <Modal transparent accessibilityLabel={title} animationType={theme.reduceMotion ? 'none' : 'fade'} visible={visible} onDismiss={onDismiss} onRequestClose={close}>
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       style={{ flex: 1, justifyContent: wide ? 'center' : 'flex-end', alignItems: 'center' }}>
       <Pressable accessible={false} focusable={false} tabIndex={-1} aria-hidden onPress={close}

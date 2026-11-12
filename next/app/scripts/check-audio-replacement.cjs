@@ -68,7 +68,11 @@ async function run(browser, width, theme, scale) {
     const reset = async extra => { record = { ...structuredClone(initial), ...extra }; cid = `fresh-${writes.length}`; unreadable = false; loseResponse = false; await signIn(); await title.waitFor(); };
     await page.goto(new URL(`/edit-track/${track.id}`, page.url()).href);
     await page.getByText('only the artist can edit this track.', { exact: true }).waitFor();
-    await signIn(); await title.waitFor();
+    await page.goto(new URL(`/track/${track.id}`, page.url()).href);
+    await signIn();
+    await page.getByRole('button', { name: 'More', exact: true }).click();
+    await page.getByRole('link', { name: 'edit track', exact: true }).click();
+    await title.waitFor();
     await choose();
     await page.evaluate(() => Promise.all(document.getAnimations().filter(animation => animation.effect?.getComputedTiming().iterations !== Infinity).map(animation => animation.finished.catch(() => undefined))));
     await screenshot(page, `replacement-draft-${width}-${theme}-${scale}`);
