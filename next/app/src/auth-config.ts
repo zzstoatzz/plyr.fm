@@ -23,19 +23,21 @@ export const JAM_COORDINATOR_URL = (process.env.EXPO_PUBLIC_JAM_COORDINATOR_URL 
 export const JAM_SERVICE_AUDIENCE = process.env.EXPO_PUBLIC_JAM_SERVICE_AUDIENCE || 'did:web:plyr-jams-next.fly.dev#jams';
 export const JAM_JOIN_METHOD = process.env.EXPO_PUBLIC_JAM_JOIN_METHOD || `${JAM_SPACE.type}.join`;
 
+export const QUEUE_SCOPE = `rpc:${JAM_JOIN_METHOD}?aud=${JAM_SERVICE_AUDIENCE}`;
 export const JAM_SCOPE_PARTS = [
-  `rpc:${JAM_JOIN_METHOD}?aud=${JAM_SERVICE_AUDIENCE}`,
 	`space:${JAM_SPACE.type}?authority=self&collection=${JAM_SPACE.collection}&action=create&action=update&manage=create&manage=update`,
 	`space:${JAM_SPACE.type}?authority=*&action=read`
 ];
 
-export function hasJamGrant(scope: string): boolean {
-  const parts = scope.split(' ');
-  const service = parts.some(value => {
+export function hasQueueGrant(scope: string): boolean {
+  return scope.split(' ').some(value => {
     const [type, query] = value.split('?');
     return type === `rpc:${JAM_JOIN_METHOD}` && new URLSearchParams(query).get('aud') === JAM_SERVICE_AUDIENCE;
   });
-	return service && parts.some(value => {
+}
+
+export function hasJamGrant(scope: string): boolean {
+	return hasQueueGrant(scope) && scope.split(' ').some(value => {
 		const [type, query] = value.split('?');
 		const grant = new URLSearchParams(query);
 		return type === `space:${JAM_SPACE.type}` && grant.get('authority') === '*' && grant.getAll('action').includes('read');
@@ -48,8 +50,8 @@ const preferenceScope = `space:${PREFERENCE_SPACE.type}?authority=self&skey=self
 const protectedAudioScope = prefix === 'fm.plyr'
 	? [`space:${prefix}.privateMedia?authority=*&collection=${NSID.track}&action=read`, `space:${process.env.EXPO_PUBLIC_AUDIO_SPACE_TYPE || 'fm.plyr.stg.audio'}?authority=*&collection=${NSID.track}&action=read`]
 	: [];
-export const STANDARD_SCOPE_PARTS = [...BASE_SCOPE_PARTS, ...(PREFERENCE_SYNC ? [preferenceScope] : []), ...protectedAudioScope];
-export const SCOPE_PARTS = [...STANDARD_SCOPE_PARTS, ...JAM_SCOPE_PARTS];
+export const SYNC_SCOPE_PARTS = [...BASE_SCOPE_PARTS, QUEUE_SCOPE];
+export const SCOPE_PARTS = [...SYNC_SCOPE_PARTS, ...(PREFERENCE_SYNC ? [preferenceScope] : []), ...protectedAudioScope, ...JAM_SCOPE_PARTS];
 
 export function hasPreferenceGrant(scope: string, did: string): boolean {
 	return PREFERENCE_SYNC && scope.split(' ').some((value) => {
