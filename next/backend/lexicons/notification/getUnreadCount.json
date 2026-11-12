@@ -1,0 +1,18 @@
+{
+  "lexicon": 1,
+  "id": "fm.plyr.notification.getUnreadCount",
+  "defs": {
+    "main": {
+      "type": "query",
+      "description": "How many of the authenticated account's notifications are after its seenAt.",
+      "output": {
+        "encoding": "application/json",
+        "schema": {
+          "type": "object",
+          "required": ["count"],
+          "properties": { "count": { "type": "integer" } }
+        }
+      }
+    }
+  }
+}
