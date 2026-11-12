@@ -248,3 +248,33 @@ the result. The testing allocator checks allocation cleanup. Separate tests cove
 the two-attempt limit and non-retryable errors. A test-name filter is now available
 through `-Dtest-filter` so these failure tests can run independently of unrelated
 integration tests.
+
+## discovery exclusion cost, November 12
+
+The account-label/hidden-tag change was checked against the existing 20,000-track
+fixture above, with no matching hidden tags or account labels. Both binaries were
+Debug builds, one local API and one database connection at a time. Each variant
+made 12 warmup requests followed by 20 measured sequential requests to
+`/v1/tracks?limit=50`; the returned record URI order had to remain identical.
+The order was baseline, changed query, baseline again, with other agent builds
+held. This is a small local regression check, not a production latency budget.
+
+| query | median | range |
+|---|---:|---:|
+| before hidden filters | 27.74 ms | 24.76–29.98 ms |
+| account and hidden-tag filters | 43.50 ms | 41.38–46.59 ms |
+| before, repeated | 27.23 ms | 24.10–29.63 ms |
+
+The extra policy costs about 16 ms in this fixture. An initial correlated
+`NOT EXISTS` shape cost 2,361 ms median: `EXPLAIN (ANALYZE, BUFFERS)` showed inflated
+estimated subplan costs crossing PostgreSQL's JIT optimization threshold, with
+roughly 1.6 seconds of JIT compilation for the page query alone. The shipped shape
+uses uncorrelated exclusion sets with non-null keys, retaining PostgreSQL's tag
+normalizer and the empty-preference shortcut. Its custom page plan stayed below
+the JIT threshold. Negative filters still execute before ordering and `LIMIT`.
+
+Reproduce with the 20,000-row setup above plus migration 0037, retaining separate
+Debug binaries before and after the change. Keep tag and account exclusion tables
+free of matches, use pool size one, and time individual complete HTTP reads after
+the warmup. Repeat the baseline last to expose host-load drift; do not compare
+these Debug timings with the ReleaseSafe table above.

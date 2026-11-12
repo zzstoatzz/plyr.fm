@@ -2,6 +2,7 @@
 
 const std = @import("std");
 const pg = @import("pg");
+const tag_filter = @import("../domain/tag_filter.zig");
 const postgres_test_lock = @import("../testing/postgres_lock.zig");
 
 pub const Patch = struct {
@@ -11,6 +12,7 @@ pub const Patch = struct {
     keepPlaying: ?bool = null,
     playThrough: ?bool = null,
     scale: ?u16 = null,
+    hiddenTags: ?[]const []const u8 = null,
 
     pub fn valid(self: Patch) bool {
         if (self.theme) |value| if (!oneOf(value, &.{ "system", "light", "dark" })) return false;
@@ -20,11 +22,14 @@ pub const Patch = struct {
             if (value.len != 7 or value[0] != '#') return false;
             for (value[1..]) |digit| if (!std.ascii.isHex(digit)) return false;
         }
+        if (self.hiddenTags) |values| {
+            for (values) |value| if (!tag_filter.valid(value)) return false;
+        }
         return true;
     }
 
     pub fn empty(self: Patch) bool {
-        return self.theme == null and self.accent == null and self.font == null and self.keepPlaying == null and self.playThrough == null and self.scale == null;
+        return self.theme == null and self.accent == null and self.font == null and self.keepPlaying == null and self.playThrough == null and self.scale == null and self.hiddenTags == null;
     }
 };
 
@@ -46,7 +51,14 @@ pub const Preferences = struct {
     /// Merges the patch into the account's settings and returns the result.
     pub fn merge(self: Preferences, allocator: std.mem.Allocator, owner: []const u8, patch: Patch) ![]const u8 {
         if (!patch.valid()) return error.InvalidPreferences;
-        const json = try std.json.Stringify.valueAlloc(allocator, patch, .{ .emit_null_optional_fields = false });
+        var arena = std.heap.ArenaAllocator.init(allocator);
+        defer arena.deinit();
+        var normalized = patch;
+        if (patch.hiddenTags) |values| normalized.hiddenTags = tag_filter.canonical(arena.allocator(), values) catch |err| switch (err) {
+            error.OutOfMemory => return error.OutOfMemory,
+            else => return error.InvalidPreferences,
+        };
+        const json = try std.json.Stringify.valueAlloc(allocator, normalized, .{ .emit_null_optional_fields = false });
         defer allocator.free(json);
         var row = try self.pool.row(merge_sql, .{ owner, json }) orelse return error.PreferencesUnavailable;
         defer row.deinit() catch {};
@@ -74,6 +86,8 @@ test "a settings patch accepts only known values" {
     try std.testing.expect(!(Patch{ .accent = "#12345g" }).valid());
     try std.testing.expect(!(Patch{ .font = "papyrus" }).valid());
     try std.testing.expect(!(Patch{ .scale = 200 }).valid());
+    try std.testing.expect(!(Patch{ .hiddenTags = &.{" -- "} }).valid());
+    try std.testing.expect(!(Patch{ .hiddenTags = &.{} }).empty());
     try std.testing.expect((Patch{}).empty());
     try std.testing.expect(!(Patch{ .playThrough = false }).empty());
 }
@@ -102,13 +116,20 @@ test "account settings merge per owner" {
     const none = try preferences.read(allocator, owner);
     defer allocator.free(none);
     try std.testing.expectEqualStrings("{}", none);
-    const first = try preferences.merge(allocator, owner, .{ .theme = "dark", .scale = 115 });
+    const first = try preferences.merge(allocator, owner, .{ .theme = "dark", .scale = 115, .hiddenTags = &.{ " SUNO ", "ai", "ai" } });
     defer allocator.free(first);
     const second = try preferences.merge(allocator, owner, .{ .theme = "light", .keepPlaying = true });
     defer allocator.free(second);
     const parsed = try std.json.parseFromSlice(Patch, allocator, second, .{});
     defer parsed.deinit();
     try std.testing.expectEqualStrings("light", parsed.value.theme.?);
+    try std.testing.expectEqual(@as(usize, 2), parsed.value.hiddenTags.?.len);
+    try std.testing.expectEqualStrings("ai", parsed.value.hiddenTags.?[0]);
+    const cleared = try preferences.merge(allocator, owner, .{ .hiddenTags = &.{} });
+    defer allocator.free(cleared);
+    const cleared_value = try std.json.parseFromSlice(Patch, allocator, cleared, .{});
+    defer cleared_value.deinit();
+    try std.testing.expectEqual(@as(usize, 0), cleared_value.value.hiddenTags.?.len);
     try std.testing.expectEqual(@as(?u16, 115), parsed.value.scale);
     try std.testing.expectEqual(@as(?bool, true), parsed.value.keepPlaying);
     try std.testing.expectError(error.InvalidPreferences, preferences.merge(allocator, owner, .{ .font = "papyrus" }));

@@ -1,4 +1,5 @@
 const std = @import("std");
+const tag_filter = @import("../domain/tag_filter.zig");
 const zat = @import("zat");
 const track = @import("../domain/track.zig");
 const track_list = @import("../domain/track_list.zig");
@@ -16,6 +17,7 @@ const Options = struct {
     cursor: ?[]const u8 = null,
     artist_did: ?[]const u8 = null,
     tags: []const []const u8 = &.{},
+    hidden_tags: []const []const u8 = tag_filter.defaults,
 };
 
 pub const Result = union(enum) {
@@ -59,6 +61,7 @@ pub fn execute(
         .limit = requested,
         .after = after,
         .tags = options.tags,
+        .hidden_tags = options.hidden_tags,
     }) catch |err| return classifyStoreError(err);
     if (items.len > requested) return .internal_error;
 
@@ -88,6 +91,9 @@ fn parseOptions(allocator: std.mem.Allocator, target: []const u8) !Options {
     var saw_cursor = false;
     var saw_artist_did = false;
     var tags: std.ArrayList([]const u8) = .empty;
+    var hidden: std.ArrayList([]const u8) = .empty;
+    var saw_hidden = false;
+    var empty_hidden = false;
     var pairs = query.Iterator.init(allocator, target);
     while (try pairs.next()) |pair| {
         if (std.mem.eql(u8, pair.name, "limit")) {
@@ -107,7 +113,7 @@ fn parseOptions(allocator: std.mem.Allocator, target: []const u8) !Options {
             result.artist_did = pair.value;
         } else if (std.mem.eql(u8, pair.name, "tag")) {
             if (pair.value.len == 0 or pair.value.len > max_tag_filter_bytes or std.mem.indexOfScalar(u8, pair.value, 0) != null or !std.unicode.utf8ValidateSlice(pair.value)) return error.InvalidQuery;
-            const normalized = try normalizeTag(allocator, pair.value);
+            const normalized = try tag_filter.normalize(allocator, pair.value);
             if (normalized.len == 0) return error.InvalidQuery;
             var seen = false;
             for (tags.items) |existing| if (std.mem.eql(u8, existing, normalized)) {
@@ -116,10 +122,20 @@ fn parseOptions(allocator: std.mem.Allocator, target: []const u8) !Options {
             };
             if (!seen) try tags.append(allocator, normalized);
             if (tags.items.len > 10) return error.InvalidQuery;
+        } else if (std.mem.eql(u8, pair.name, "hidden_tag")) {
+            if (pair.value.len == 0) {
+                if (saw_hidden) return error.InvalidQuery;
+                empty_hidden = true;
+            } else {
+                if (empty_hidden) return error.InvalidQuery;
+                try hidden.append(allocator, pair.value);
+            }
+            saw_hidden = true;
         } else {
             return error.InvalidQuery;
         }
     }
+    if (saw_hidden) result.hidden_tags = try tag_filter.canonical(allocator, hidden.items);
     std.mem.sort([]const u8, tags.items, {}, struct {
         fn less(_: void, a: []const u8, b: []const u8) bool {
             return std.mem.lessThan(u8, a, b);
@@ -129,24 +145,8 @@ fn parseOptions(allocator: std.mem.Allocator, target: []const u8) !Options {
     return result;
 }
 
-fn normalizeTag(allocator: std.mem.Allocator, raw: []const u8) ![]const u8 {
-    var result: std.ArrayList(u8) = .empty;
-    var space = false;
-    for (std.mem.trim(u8, raw, " \t\r\n")) |byte| {
-        if (std.ascii.isWhitespace(byte)) {
-            space = true;
-            continue;
-        }
-        if (space and result.items.len > 0) try result.append(allocator, ' ');
-        try result.append(allocator, std.ascii.toLower(byte));
-        space = false;
-    }
-    return std.mem.trim(u8, result.items, " -");
-}
-
 fn filterPrefix(allocator: std.mem.Allocator, options: Options, collection: []const u8) ![]const u8 {
-    if (options.tags.len == 0 and options.artist_did == null) return "";
-    const encoded = try std.json.Stringify.valueAlloc(allocator, .{ collection, options.artist_did, options.tags }, .{});
+    const encoded = try std.json.Stringify.valueAlloc(allocator, .{ collection, options.artist_did, options.tags, if (options.artist_did == null) options.hidden_tags else &.{} }, .{});
     var digest: [32]u8 = undefined;
     std.crypto.hash.sha2.Sha256.hash(encoded, &digest, .{});
     return std.fmt.allocPrint(allocator, "trkfilter_{s}_", .{std.fmt.bytesToHex(digest, .lower)});
@@ -289,7 +289,8 @@ test "collection returns one page and a cursor from the last visible row" {
     try std.testing.expect(page.next_cursor != null);
 
     const storage = try arena.allocator().alloc(u8, page.next_cursor.?.len);
-    const decoded = try track_cursor.decode(storage, page.next_cursor.?);
+    const prefix = try filterPrefix(arena.allocator(), .{}, "fm.plyr.dev.track");
+    const decoded = try track_cursor.decode(storage, page.next_cursor.?[prefix.len..]);
     try std.testing.expectEqual(@as(i64, 200), decoded.created_at_us);
     try std.testing.expectEqualStrings(uri_b, decoded.at_uri);
 
@@ -356,10 +357,10 @@ test "derived tag names normalize idempotently within their filter bound" {
     defer arena.deinit();
     const a = arena.allocator();
     for ([_][]const u8{ " - ambient - ", "-- - AMBIENT - --", "\t- a\t b -\r\n", "---", "hip-hop" }) |value| {
-        const once = try normalizeTag(a, value);
-        try std.testing.expectEqualStrings(once, try normalizeTag(a, once));
+        const once = try tag_filter.normalize(a, value);
+        try std.testing.expectEqualStrings(once, try tag_filter.normalize(a, once));
     }
-    try std.testing.expectEqualStrings("ambient", try normalizeTag(a, " - ambient - "));
+    try std.testing.expectEqualStrings("ambient", try tag_filter.normalize(a, " - ambient - "));
     var expanded: std.ArrayList(u8) = .empty;
     for (0..25) |_| try expanded.appendSlice(a, "ⱥ");
     const selected = try parseOptions(a, try std.fmt.allocPrint(a, "/v1/tracks?tag={s}", .{expanded.items}));
@@ -369,4 +370,19 @@ test "derived tag names normalize idempotently within their filter bound" {
     const accepted = try std.fmt.allocPrint(a, "/v1/tracks?tag={s}", .{boundary});
     _ = try parseOptions(a, accepted);
     try std.testing.expectError(error.InvalidQuery, parseOptions(a, try std.fmt.allocPrint(a, "{s}a", .{accepted})));
+}
+
+test "discovery hidden tags default normalize and bind cursors" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    const defaults = try parseOptions(a, "/v1/tracks");
+    try std.testing.expectEqual(@as(usize, 3), defaults.hidden_tags.len);
+    const none = try parseOptions(a, "/v1/tracks?hidden_tag=");
+    try std.testing.expectEqual(@as(usize, 0), none.hidden_tags.len);
+    const custom = try parseOptions(a, "/v1/tracks?hidden_tag=SUNO&hidden_tag=ai&hidden_tag=ai");
+    try std.testing.expectEqual(@as(usize, 2), custom.hidden_tags.len);
+    try std.testing.expectEqualStrings("ai", custom.hidden_tags[0]);
+    try std.testing.expectError(error.InvalidQuery, parseOptions(a, "/v1/tracks?hidden_tag=&hidden_tag=ai"));
+    try std.testing.expect(!std.mem.eql(u8, try filterPrefix(a, defaults, "fm.plyr.track"), try filterPrefix(a, none, "fm.plyr.track")));
 }

@@ -9,15 +9,17 @@ read-only discovery view over public and supporter-gated tracks. It reuses the
 complete v1 track representation; list and detail cannot quietly disagree
 about identity, provenance, media, access, moderation, or projection state.
 
-The collection accepts three query parameters:
+The collection accepts these query parameters:
 
 | parameter | contract |
 |---|---|
 | `limit` | optional integer from 1 through 100; defaults to 50 |
 | `cursor` | optional opaque cursor returned by the preceding page |
 | `artist_did` | optional canonical artist DID; switches from discovery to that artist's public catalogue |
+| `tag` | repeatable positive tag filter; matches any supplied effective tag |
+| `hidden_tag` | repeatable discovery exclusion; omitted defaults to `ai`, `ai-slop`, `suno`; a single empty value means show all |
 
-Unknown, duplicate, empty, malformed, and out-of-range parameters return
+Unknown, duplicate scalar, malformed, and out-of-range parameters return
 `400 invalid_request`. The server does not clamp a caller mistake or interpret
 an offset.
 
@@ -67,10 +69,31 @@ The initial anonymous collection includes only rows that:
 Supporter visibility means discoverable metadata, not permission to stream the
 audio. Playback remains a separate authorization resource.
 
-Viewer preferences, tags, hidden-tag defaults, search, and other filters are not
-smuggled into this collection. They remain open contract work. In particular,
-the appview should not hard-code a default tag preference into the canonical
-catalogue query merely because Python currently does so for one client feed.
+Discovery excludes effective track tags and signed operator account labels
+that intersect `hidden_tag`, in SQL before pagination. Artist-scoped requests
+ignore the hidden-tag set. Search, collections and playback retain their existing
+policies; Next radio still uses the production station service.
+
+Tag filters accept at most ten distinct normalized UTF-8 values, each at most
+200 input bytes, with no NUL or empty normalized value. Normalization lowercases
+ASCII, collapses ASCII whitespace, trims surrounding spaces/hyphens, deduplicates
+and byte-sorts. An empty `hidden_tag` cannot be combined with another value.
+Discovery cursors bind the canonical hidden-tag set, so changing preferences
+requires a fresh first page.
+
+The account preference service persists the optional `hiddenTags` string array
+with the same normalization and bounds; an empty array is an explicit opt-out.
+The client supplies that preference on discovery requests. Public requests do not
+read private account settings or infer a viewer.
+
+The operator labeler remains the authority for account `ai` assertions.
+`label_sync` queries both track URI and DID subjects, replays from a new
+`labels:v2:` cursor, and keeps account claims separately in
+`plyr_index.account_label_policies`. Negation deletes the account policy; the
+projection can be rebuilt by replaying the labeler. Future expiration is retained
+and checked on every read, even after the sync cursor advances. No record tags are changed.
+Responses expose account assertions in `moderation.account_labels` and their
+provenance in `sources.account_labels`, separate from track operator labels.
 
 ## artist catalogue policy
 

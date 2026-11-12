@@ -104,6 +104,10 @@ jobs:
         working-directory: backend
         run: uv run python ../next/backend/scripts/test_read_http.py
 
+      - name: discovery label and preference HTTP contract
+        working-directory: backend
+        run: uv run python ../next/backend/scripts/test_discovery_http.py
+
       - name: Python canary and benchmark contract checks
         working-directory: backend
         run: |

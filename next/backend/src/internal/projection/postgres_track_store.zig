@@ -299,6 +299,7 @@ const classify_replay_sql =
 ;
 
 pub fn createTestTable(pool: *pg.Pool) !void {
+    _ = try pool.exec(@embedFile("migration_0037_account_labels"), .{});
     _ = try pool.exec(
         \\CREATE TABLE plyr_index.track_records (
         \\  record_uri text PRIMARY KEY,
