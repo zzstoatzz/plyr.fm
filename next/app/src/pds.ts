@@ -3,7 +3,7 @@ import type {} from '@atcute/atproto';
 // from the firehose, and /v1/records/await gives read-after-write.
 import { ok } from '@atcute/client';
 import { api, type AwaitStatus, type Track } from './api';
-import type { Auth } from './auth-state';
+import { getAuth, type Auth } from './auth-state';
 import { NSID } from './config';
 import { blobUrl } from './identity';
 import { catalogChanged } from './catalog-changes';
@@ -272,9 +272,14 @@ export function createPds(auth: Pick<Auth, 'did' | 'rpc'>) {
 
 	async function uploadTrack(input: NewTrack): Promise<{ uri: string; status: AwaitStatus }> {
 		const { rpc, did } = session();
+		function assertAccount() {
+			if (getAuth().rpc !== rpc || getAuth().did !== did) throw new Error('account changed before publishing.');
+		}
+		assertAccount();
 		if (!input.file.type.startsWith('audio/')) throw new Error('pick an audio file');
 		if (input.file.size > MAX_AUDIO_BYTES) throw new Error('audio files are limited to 100 MB');
 		const uploaded = await uploadBlob(rpc, input.file);
+		assertAccount();
 		const ext = input.file.name.includes('.') ? input.file.name.split('.').pop()!.toLowerCase() : '';
 		const record: Record<string, unknown> = {
 			$type: NSID.track,
@@ -287,6 +292,7 @@ export function createPds(auth: Pick<Auth, 'did' | 'rpc'>) {
 		if (input.description?.trim()) record.description = input.description.trim();
 		if (input.duration && Number.isFinite(input.duration)) record.duration = Math.round(input.duration);
 		if (input.artwork) Object.assign(record, await uploadArtwork(input.artwork));
+		assertAccount();
 
 		const res = await ok(rpc.post('com.atproto.repo.createRecord', {
 			input: { repo: did, collection: NSID.track as Nsid, record: { ...record, audioBlob: uploaded.blob } }
