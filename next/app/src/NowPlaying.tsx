@@ -45,7 +45,11 @@ export function NowPlaying({ track, close: leave, navigate: go, overlay = false,
   const depart = (then: () => void) => () => { setFlying(false); then(); };
   const dismiss = usePlayerDismiss(compact, width, height, depart(leave), theme.reduceMotion, rest, present);
   const close = () => dismiss.exit(depart(leave));
-  const navigate = (target: Href) => dismiss.exit(depart(() => go(target)));
+  const navigate = (target: Href) => {
+    if (!overlay) { setFlying(false); go(target); return; }
+    go(target);
+    dismiss.exit(depart(() => playerSheet.hide()));
+  };
   const [away, setAway] = useState(() => playerSheet.value > 0.5);
   useEffect(() => {
     const id = playerSheet.translation.addListener(({ value }) => setAway(value > 0.5));

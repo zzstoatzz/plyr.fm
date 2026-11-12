@@ -18,10 +18,11 @@ export const playerSheet = {
   settle: undefined as ((open: boolean, velocity: number) => void) | undefined,
   dock: { art: null, title: null } as Record<'art' | 'title', Measurable | null>,
   instant: false,
+  leaving: false,
   opened: undefined as (() => void) | undefined,
   get present() { return present; },
   show(instant = false) { if (!present) playerSheet.instant = instant; setPresent(true); },
-  hide() { setPresent(false); },
+  hide() { playerSheet.leaving = false; setPresent(false); },
 };
 
 function setPresent(next: boolean) {
