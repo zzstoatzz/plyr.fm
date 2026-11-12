@@ -6,6 +6,23 @@ finish line. This is execution evidence, not another parity inventory.
 
 ## shipped to Next
 
+- #2518: artists can create albums and add, remove or reorder track occurrences
+  using canonical list records. New references are checked against the owner's
+  PDS; existing duplicate/unavailable entries and unknown fields survive edits.
+  Lost responses reconcile the same record key, and accepted contents drive
+  playback while projection catches up. Returning from creation refreshes the
+  artist's album list. Deployment `43226900658` serves `4ff9ce2d`; eight deployed
+  fixture cases passed across phone/desktop, light/dark and enlarged text, with
+  conflict/reload controls visibly reachable. Native simulator creation,
+  organizing and playback also passed. These used synthetic PDS records, not
+  real account writes or native distribution.
+- #2512: current Spaces responses use `accept-signature`, signed record/commit
+  headers and key-share-bound verification, with no legacy proof fallback.
+  Python and the vendored SDK verify canonical bytes and CID bindings; the SDK
+  crypto path also passed on native Hermes. Next web `43224000461`, staging
+  `43224000377` and deployed private-media E2E `43224000344` all succeeded at
+  `0580d72c`. The fixture checks do not establish real-account Next OAuth or new
+  permission consent. Production was not promoted.
 - #2515: owners can reorder playlist occurrences with explicit Save/Cancel.
   Canonical snapshots and compare-and-swap preserve duplicate references,
   unavailable entries and unknown fields; ambiguous responses reconcile the
@@ -26,7 +43,7 @@ finish line. This is execution evidence, not another parity inventory.
   E2E `43219110198` passed. The latter verified outsider refusal, an owner grant,
   member audio 206, removal returning to 404, fresh-session private playback and
   private voice recording, with disposable tracks deleted afterward. No production
-  release was made. Signed response verification upgrades remain a separate slice.
+  release was made. Signed response verification subsequently shipped in #2512.
 - #2510: an owner can explicitly set aside an uncertain or permanently rejected
   create, with a warning that it may still appear. Its exact intent remains in
   earlier attempts for checking or resuming. Resolving an earlier attempt
