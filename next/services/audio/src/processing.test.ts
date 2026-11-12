@@ -97,6 +97,7 @@ test("real callback routes keep source and rendition private until canonical pub
   await evictDurableObject(f.stub);
   expect(await (await f.send("POST", "/finish")).json()).toMatchObject({ state: "complete", rendition: { duration: 1, sizeBytes: output.length, contentType: "audio/mpeg" } });
   expect((await f.callback(claim, "heartbeat", "POST")).status).toBe(409);
+  expect((await f.callback(claim, "failed", "POST", JSON.stringify({ reason: "output_budget_exceeded" }))).status).toBe(409);
   expect((await f.send("POST", "/activate")).status).toBe(200);
   expect(await (await routeUpload(new Request(f.media), env))?.text()).toBe(output);
   const original = await routeUpload(new Request(`${f.media}/original`, { headers: { range: "bytes=1-3" } }), env);
@@ -224,4 +225,53 @@ test("lost abort reply keeps reservation until documented absence permits recove
     await jobs.advance(session);
     expect(aborts).toBe(2); expect((await jobs.load(session.uploadId))?.claim.generation).toBe(2);
   });
+});
+
+test("reported capacity failure survives eviction and never retries the same budget", async () => {
+  const f = await setup(); const claim = await f.finishSource();
+  const failure = JSON.stringify({ reason: "output_budget_exceeded" });
+  expect((await f.callback(claim, "failed", "POST", failure)).status).toBe(204);
+  expect((await f.callback(claim, "failed", "POST", failure)).status).toBe(204);
+  expect(await (await f.send("GET")).json()).toMatchObject({ state: "processing", recoveryRequired: true, processingFailure: "output_budget_exceeded", reservedBytes: 30 });
+  await evictDurableObject(f.stub);
+  for (let check = 0; check < 3; check++) {
+    expect(await (await f.send("POST", "/finish")).json()).toMatchObject({ state: "processing", recoveryRequired: true, processingFailure: "output_budget_exceeded" });
+  }
+  expect((await f.send("POST", "/retry-processing")).status).toBe(409);
+  const state = await f.state();
+  expect(state.job.claim.generation).toBe(1); expect(state.job.attempts).toBe(1); expect(state.job.phase).toBe("recovery");
+  expect(state.session.processing?.outputBudget).toBe(20);
+  expect(await env.AUDIO.head(state.session.key)).not.toBeNull();
+  expect((await routeUpload(new Request(f.media), env))?.status).toBe(404);
+});
+
+test("executor failures have bounded retries and stale reports cannot stop a later attempt", async () => {
+  const f = await setup(); const original = await f.finishSource();
+  expect((await f.callback(original, "failed", "POST", JSON.stringify({ reason: "arbitrary error text" }))).status).toBe(400);
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    const claim = (await f.state()).job.claim;
+    expect((await f.callback(claim, "failed", "POST", JSON.stringify({ reason: "executor_failed" }))).status).toBe(204);
+    expect((await f.send("POST", "/finish")).status).toBe(200);
+    if (attempt < 3) expect((await f.callback(claim, "failed", "POST", JSON.stringify({ reason: "output_budget_exceeded" }))).status).toBe(409);
+  }
+  expect(await (await f.send("GET")).json()).toMatchObject({ recoveryRequired: true, processingFailure: "executor_failed" });
+  expect((await f.state()).job.claim.generation).toBe(3);
+  expect((await f.send("POST", "/retry-processing")).status).toBe(200);
+  expect((await f.state()).job.claim.generation).toBe(4);
+  expect((await f.callback(original, "failed", "POST", JSON.stringify({ reason: "output_budget_exceeded" }))).status).toBe(409);
+  expect((await f.state()).job.failure).toBeUndefined();
+});
+
+test("unreported expired leases become explicit recovery after bounded attempts", async () => {
+  const f = await setup(); await f.finishSource();
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    await runInDurableObject(f.stub, async (_, context) => {
+      const job = await context.storage.get<ProcessingJob>(`processing:${f.value.uploadId}`);
+      if (!job) throw new Error("missing job");
+      job.leaseUntil = Date.now() - 1; await context.storage.put(`processing:${f.value.uploadId}`, job);
+    });
+    expect((await f.send("POST", "/finish")).status).toBe(200);
+  }
+  expect(await (await f.send("GET")).json()).toMatchObject({ recoveryRequired: true, processingFailure: "lease_expired" });
+  expect((await f.state()).job.claim.generation).toBe(3);
 });

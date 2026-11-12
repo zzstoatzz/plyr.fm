@@ -73,6 +73,18 @@ use `/v1/processing/{uploadId}/{generation}/` followed by `source`, `heartbeat`,
 `parts/{number}` or `complete`, with an owner/generation/expiry-bound capability
 distinct from upload admission. No processing capability reaches the client.
 
+The executor reports a bounded `failed` callback with either
+`output_budget_exceeded` or `executor_failed`, never arbitrary error text.
+The owner also records `lease_expired` when an unreported attempt loses its lease.
+Only the active generation may report a failure; a completion already being
+reconciled cannot be changed into a failure. Status exposes `processingFailure`.
+Known output-budget exhaustion cleans partial output, retains the original and
+reservation, stops automatic attempts and rejects explicit retry with the same
+budget. Other failures retain bounded retries. If the failure callback cannot be
+delivered, lease recovery still applies; it cannot infer an undelivered reason.
+Increasing the immutable budget is not implemented and must not be advertised as
+a recovery action. Processing UI remains gated on handling this distinction.
+
 Rust's individual attempt deadline is two hours, with 20-second heartbeats and
 a 15-second heartbeat request timeout. The owner must fence expired generations
 and reject heartbeats after completion. Cloud full-size tests must establish

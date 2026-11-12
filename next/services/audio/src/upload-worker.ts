@@ -60,7 +60,11 @@ export class OwnerUploads extends DurableObject<UploadEnv> {
         const session = await this.sessions.load(claim.uploadId);
         if (!session) throw new UploadFailure(404, "upload not found");
         if (!sameUpload(session, claim)) throw new UploadFailure(403, "upload reservation mismatch");
-        if (request.method === "GET" && pieces.length === 5) return Response.json(this.sessions.view(session));
+        if (request.method === "GET" && pieces.length === 5) {
+          const job = session.processing ? await this.processing.load(session.uploadId) : undefined;
+          return Response.json({ ...this.sessions.view(session), ...(job?.failure ? { processingFailure: job.failure,
+            recoveryRequired: session.nextCheck === null || job.failure === "output_budget_exceeded" || job.phase === "recovery" } : {}) });
+        }
         if (request.method === "PUT" && pieces[5] === "parts" && pieces.length === 7) return Response.json(await this.sessions.part(session, Number(pieces[6]), request));
         if (request.method === "POST" && pieces[5] === "finish" && pieces.length === 6) return Response.json(await this.sessions.finish(session));
         if (request.method === "POST" && pieces[5] === "activate" && pieces.length === 6) return Response.json(await this.sessions.activate(session));
@@ -81,11 +85,13 @@ export class OwnerUploads extends DurableObject<UploadEnv> {
     if (request.method === "GET" && pieces[5] === "source" && pieces.length === 6) return this.processing.source(claim, session);
     if (request.method === "POST" && pieces[5] === "heartbeat" && pieces.length === 6) await this.processing.heartbeat(claim);
     else if (request.method === "PUT" && pieces[5] === "parts" && pieces.length === 7) await this.processing.part(claim, session, Number(pieces[6]), request);
-    else if (request.method === "POST" && pieces[5] === "complete" && pieces.length === 6) {
+    else if (request.method === "POST" && ["complete", "failed"].includes(pieces[5]) && pieces.length === 6) {
       const length = Number(request.headers.get("content-length"));
       if (!Number.isSafeInteger(length) || length <= 0 || length > 65536) throw new UploadFailure(413, "processing completion too large");
       const bytes = await boundedBody(request, length);
-      await this.processing.complete(claim, session, JSON.parse(new TextDecoder().decode(bytes)));
+      const value: unknown = JSON.parse(new TextDecoder().decode(bytes));
+      if (pieces[5] === "failed") await this.processing.failed(claim, value);
+      else await this.processing.complete(claim, session, value);
     } else throw new UploadFailure(405, "method not allowed");
     return new Response(null, { status: 204 });
   }

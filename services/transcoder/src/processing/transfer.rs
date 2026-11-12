@@ -11,6 +11,15 @@ use tokio::{
 
 use super::{accepted, Attempt, Receipt, Runner, PART_BYTES};
 
+#[derive(Debug)]
+pub(super) struct OutputBudgetExceeded;
+impl std::fmt::Display for OutputBudgetExceeded {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("rendition exceeds admitted output budget")
+    }
+}
+impl std::error::Error for OutputBudgetExceeded {}
+
 pub(super) async fn process(runner: &Runner, attempt: &Attempt) -> anyhow::Result<()> {
     let directory = tempfile::tempdir_in(&runner.scratch)?;
     let scratch = directory.path().to_owned();
@@ -118,7 +127,7 @@ async fn copy_bounded(
         }
         size += count as u64;
         if size > budget {
-            bail!("rendition exceeds admitted output budget");
+            return Err(OutputBudgetExceeded.into());
         }
         file.write_all(&buffer[..count]).await?;
     }
@@ -183,7 +192,10 @@ async fn upload(
 ) -> anyhow::Result<()> {
     let mut file = File::open(path).await?;
     let size = file.metadata().await?.len();
-    if size == 0 || size > attempt.output_budget {
+    if size > attempt.output_budget {
+        return Err(OutputBudgetExceeded.into());
+    }
+    if size == 0 {
         bail!("invalid rendition size");
     }
     let mut parts = Vec::new();
