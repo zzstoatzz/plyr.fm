@@ -38,11 +38,11 @@ function ArtistCatalog({ artist, onPlay }: { artist: Artist; onPlay: Play }) {
   const { tracks, albums, playlists, likes, metrics } = useArtistCatalog(artist.did);
   const [section, setSection] = useState<Section>('tracks');
   const visited = useRef(false);
-  const reloadAlbums = albums.reload;
+  const revalidateAlbums = albums.revalidate;
   useFocusEffect(useCallback(() => {
-    if (visited.current) reloadAlbums();
+    if (visited.current) void revalidateAlbums();
     visited.current = true;
-  }, [reloadAlbums]));
+  }, [revalidateAlbums]));
   const catalogTabs = useTabs({ label: 'Artist catalog', values: sections, value: section, onChange: setSection });
   const theme = useColors();
   const auth = useAuth();
