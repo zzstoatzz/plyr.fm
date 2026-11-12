@@ -80,6 +80,35 @@ const dist = path.resolve(__dirname, '../dist');
     assert.ok(last && Math.abs(last.x - dockArt.x) < 12 && Math.abs(last.y - dockArt.y) < 24 && last.width < dockArt.width + 24, 'the artwork lands on the dock artwork when closing');
     await page.getByTestId('now-playing-dismiss-region').waitFor({ state: 'hidden', timeout: 2000 });
     assert.equal(await dock.locator('img').first().evaluate(node => getComputedStyle(node.parentElement.parentElement).opacity), '1', 'the dock artwork is visible again after closing');
-    console.log('393: now playing rises from the dock under the finger, artwork and title fly between the two, and it settles both ways');
+    const leaveBy = async (name, role, expected) => {
+      await page.goto(origin);
+      await page.getByTestId('home-track-row').first().waitFor();
+      await dock.getByRole('button', { name: 'Open now playing', exact: true }).click();
+      await page.waitForURL('**/now-playing');
+      const control = page.getByRole('dialog').getByRole(role, { name }).first();
+      await control.scrollIntoViewIfNeeded();
+      await page.waitForTimeout(300);
+      await page.evaluate(() => {
+        window.__leaving = [];
+        const tick = () => {
+          const sheet = document.querySelector('[data-testid="now-playing-dismiss-region"]');
+          const shown = !!sheet && sheet.getClientRects().length > 0;
+          window.__leaving.push({ path: location.pathname, top: shown ? sheet.getBoundingClientRect().top : null });
+          if (window.__leaving.length < 240) requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+      });
+      await control.click();
+      await page.waitForURL(expected);
+      await page.getByTestId('now-playing-dismiss-region').waitFor({ state: 'hidden', timeout: 3000 });
+      const frames = await page.evaluate(() => window.__leaving);
+      const exposed = frames.filter(frame => frame.path === '/now-playing' && (frame.top === null || frame.top > 8));
+      assert.equal(exposed.length, 0, `${name}: the previous page is never uncovered before the destination loads`);
+      assert.ok(frames.some(frame => frame.top !== null && frame.top > 40 && frame.path !== '/now-playing'), `${name}: the sheet slides away over the destination`);
+    };
+    await leaveBy(/^Artist: /, 'link', '**/u/**');
+    await leaveBy('Queue', 'button', '**/queue');
+    await leaveBy('Open track page', 'button', '**/track/**');
+    console.log('393: now playing rises from the dock under the finger, artwork and title fly between the two, it settles both ways, and its links change the page before the sheet leaves');
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

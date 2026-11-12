@@ -20,7 +20,7 @@ export default function NowPlayingRoute() {
   useEffect(() => {
     if (!hosted || !playable) return;
     playerSheet.show(true);
-    return () => playerSheet.hide();
+    return () => { if (!playerSheet.leaving) playerSheet.hide(); };
   }, [hosted, playable]);
   if (Platform.OS !== 'web' || !player.current) return <Redirect href="/" />;
   if (hosted) return null;

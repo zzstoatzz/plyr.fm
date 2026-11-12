@@ -230,6 +230,7 @@ async function run(browser, width, theme) {
     await open();
     await page.getByTestId('now-playing-scroll').getByRole('link').first().click();
     await page.waitForURL('**/u/fixture.test');
+    await header.waitFor({ state: 'hidden', timeout: 2000 });
     assert.equal(await header.isVisible(), false, 'Artist link retains normal tap navigation');
     assert.equal(await page.evaluate(() => window.__sameMedia === window.__playerPresentationMedia && !window.__sameMedia.paused), true);
     assert.deepEqual(errors, []);

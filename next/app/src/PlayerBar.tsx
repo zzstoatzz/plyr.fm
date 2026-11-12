@@ -65,11 +65,13 @@ export function PlayerBar() {
   }, [hosted]);
   const leave = useRef((_target?: Href) => {});
   leave.current = target => {
-    playerSheet.hide();
     const origin = openedFrom.current ?? '/';
-    const same = typeof target === 'string' && target === origin;
-    if (route.current !== '/now-playing') { if (target !== undefined && !same) router.push(target); }
-    else if (target !== undefined && !same) router.replace(target);
+    const elsewhere = target !== undefined && !(typeof target === 'string' && target === origin);
+    const routed = route.current === '/now-playing';
+    if (target === undefined) playerSheet.hide();
+    else playerSheet.leaving = true;
+    if (elsewhere) { if (routed) router.replace(target); else router.push(target); }
+    else if (!routed) return;
     else if (router.canGoBack()) router.back();
     else router.replace('/');
   };
