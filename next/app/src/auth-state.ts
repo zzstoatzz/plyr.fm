@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react';
 import { Client } from '@atcute/client';
-import { BASE_SCOPE_PARTS, SCOPE_PARTS, hasPreferenceGrant, hasJamGrant } from './auth-config';
+import { BASE_SCOPE_PARTS, SCOPE_PARTS, SYNC_SCOPE_PARTS, hasPreferenceGrant, hasJamGrant, hasQueueGrant } from './auth-config';
 import { didDocument, pdsEndpoint, pdsSupportsSpaces } from './identity';
 
 export type Did = `did:${string}:${string}`;
@@ -13,13 +13,14 @@ export type Auth = {
 	rpc: Client | null;
 	preferenceSpace: boolean;
 	jamSpace: boolean;
+	queueSync: boolean;
 	error: string | null;
 	scopeRejected: boolean;
 };
 
 const initial: Auth = {
 	did: null, ready: false, handle: null, agent: null, rpc: null,
-	preferenceSpace: false, jamSpace: false, error: null, scopeRejected: false
+	preferenceSpace: false, jamSpace: false, queueSync: false, error: null, scopeRejected: false
 };
 
 let state = initial;
@@ -42,7 +43,7 @@ export function getAuth(): Auth {
 }
 
 export function setAuth(did: Did, agent: Agent, scope: string) {
-	update({ ...initial, ready: true, did, agent, rpc: new Client({ handler: agent }), preferenceSpace: hasPreferenceGrant(scope, did), jamSpace: hasJamGrant(scope) });
+	update({ ...initial, ready: true, did, agent, rpc: new Client({ handler: agent }), preferenceSpace: hasPreferenceGrant(scope, did), jamSpace: hasJamGrant(scope), queueSync: hasQueueGrant(scope) });
 	void didDocument(did).then(doc => {
 		if (state.agent !== agent) return;
 		update({ ...state, handle: doc.alsoKnownAs?.find(value => value.startsWith('at://'))?.slice(5) ?? null });
@@ -56,15 +57,14 @@ function update(next: Auth) {
 
 
 export async function scopeFor(identifier: string, deviceOnly: boolean): Promise<string> {
-	const base = BASE_SCOPE_PARTS.join(' ');
-	if (deviceOnly || SCOPE_PARTS.length === BASE_SCOPE_PARTS.length) return base;
+	if (deviceOnly) return BASE_SCOPE_PARTS.join(' ');
 	try {
 		const did = identifier.startsWith('did:') ? identifier : await resolveHandle(identifier);
 		if (typeof did === 'string' && await pdsSupportsSpaces(await pdsEndpoint(did))) return SCOPE_PARTS.join(' ');
 	} catch {
-		/* Space scope is optional when capability discovery fails. */
+		/* Space scopes are optional when capability discovery fails. */
 	}
-	return base;
+	return SYNC_SCOPE_PARTS.join(' ');
 }
 
 async function resolveHandle(handle: string): Promise<unknown> {

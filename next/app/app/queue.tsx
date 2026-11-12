@@ -62,7 +62,7 @@ export default function Queue() {
         </View>
       </View>
       <View style={styles.section}>
-        {player.deviceQueue && <Copy>queue saved on this device. <InlineLink href="/login?return_to=%2Fqueue">sign in again</InlineLink> to use it across devices.</Copy>}
+        {player.deviceQueue && <Copy>this sign-in keeps your queue on this device. <InlineLink href="/login?return_to=%2Fqueue">sign in again</InlineLink> to sync it to your account.</Copy>}
         {player.outputElsewhere && <Copy>playing on another device. press play to listen here.</Copy>}
         <View style={styles.header}>
           <Heading>up next</Heading>
