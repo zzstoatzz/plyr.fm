@@ -15,6 +15,7 @@ import { ShareLink } from './ShareLink';
 import { TrackLikes } from './TrackLikes';
 import { usePlayback } from './playback';
 import { Sheet } from './Sheet';
+import { DownloadAction } from './downloads/DownloadAction';
 
 export function TrackMenu({ track, close, actions, returnTo }: { track: Track; close: () => void; actions?: ReactNode; returnTo?: string }) {
   const { did } = useAuth();
@@ -42,6 +43,7 @@ export function TrackMenu({ track, close, actions, returnTo }: { track: Track; c
         {did === track.artist.did && <ActionRow icon={Pencil} label="edit track"
           href={Platform.OS === 'ios' ? undefined : `/edit-track/${track.id}`}
           onPress={Platform.OS === 'ios' ? () => setEditing(true) : close} />}
+        <DownloadAction key={track.record.uri} track={track} />
         <ShareLink menu path={`/track/${encodeURIComponent(track.id)}`} />
         {did ? <ActionRow icon={ListPlus} label="add to playlist" onPress={() => setPlaylists(true)} /> :
           <ActionRow icon={LogIn} label="sign in to save" href={{ pathname: '/login', params: { return_to: `/track/${track.id}` } }} onPress={close} />}

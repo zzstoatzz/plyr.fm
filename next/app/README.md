@@ -173,3 +173,23 @@ metadata for the consent boundary. `check-large-upload-stream.mts` defaults to a
 small loopback streaming fixture; its 1.5 GiB mode runs only in cloud CI. The
 cloud receipt proves client chunking/recovery against a synthetic HTTP sink,
 not deployed R2 capacity or real-account OAuth acceptance.
+
+## Public downloads
+
+Track options offers downloads for verified `open` and `ask` preferences when
+fresh effective access and playback still allow public listening. An existing
+artist support link may be offered before an `ask` download; support is optional.
+Unknown policies, protected sources and supporter-only downloads remain unavailable.
+
+Browsers save small cross-origin audio with a 100 MiB buffering limit. Published
+Next audio-service URLs use its attachment endpoint without that limit. Other
+large or non-CORS sources need a direct-download service contract. iOS downloads
+to a temporary file and opens the system save/share sheet, then removes the
+cache file when the sheet finishes. Rebuild the native app after installing the
+Expo Sharing dependency. Public-byte URLs remain public; this UI does not revoke
+existing copies or implement owner policy editing.
+
+`node scripts/check-downloads.cjs` checks real browser save events and exact
+fixture bytes, fresh-policy refusal, optional support, cancellation and track
+navigation. Set `DOWNLOAD_SCALE=1.4` for enlarged text and `PLAYER_DIST` for a
+local export. The native save path also requires a rebuilt simulator/device check.

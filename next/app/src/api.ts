@@ -27,7 +27,7 @@ export interface Track {
 		profile: { handle: string; display_name: string; avatar_url: string | null; bio?: string | null };
 	};
 	media: { artwork?: { url: string } | null };
-	access: { visibility: 'public' | 'unlisted' | 'supporters' | 'private' };
+	access: { visibility: 'public' | 'unlisted' | 'supporters' | 'private'; download_policy?: string | null; gate?: { type: string } | null; space_uri?: string | null };
 	metrics: { play_count: number; like_count: number };
 	moderation?: { self_labels: string[]; operator_labels: string[]; account_labels?: string[] };
 }
@@ -181,7 +181,9 @@ export const api = {
 	track: (id: string, options?: { fresh?: boolean }) => options?.fresh
 		? request<Track>(`${API_URL}/v1/tracks/${encodeURIComponent(id)}`, 15_000, undefined, { cache: 'no-store' })
 		: get<Track>(`/v1/tracks/${encodeURIComponent(id)}`),
-	playback: (id: string) => get<Playback>(`/v1/tracks/${encodeURIComponent(id)}/playback`),
+	playback: (id: string, options?: { fresh?: boolean }) => options?.fresh
+		? request<Playback>(`${API_URL}/v1/tracks/${encodeURIComponent(id)}/playback`, 15_000, undefined, { cache: 'no-store' })
+		: get<Playback>(`/v1/tracks/${encodeURIComponent(id)}/playback`),
 	artist: (didOrHandle: string) => get<Artist>(`/v1/artists/${encodeURIComponent(didOrHandle)}`),
 	artistMetrics: (did: string) => get<ArtistMetrics>(`/v1/artists/${encodeURIComponent(did)}/metrics`),
 	albums: (artist_did: string, p: { limit?: number; cursor?: string } = {}) => get<Page<ListSummary>>('/v1/albums', { artist_did, ...p }),
