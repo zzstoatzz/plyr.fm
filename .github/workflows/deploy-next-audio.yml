@@ -24,6 +24,10 @@ on:
         description: Verify 1.5 GiB through real R2 with the disposable integration account
         type: boolean
         default: false
+      verify_processing:
+        description: Verify the staged rendition and retained original with the disposable account
+        type: boolean
+        default: false
       resume_upload_id:
         description: Existing failed fixture UUID from its reservation artifact
         type: string
@@ -41,7 +45,7 @@ concurrency: next-audio-${{ github.event_name == 'pull_request' && github.ref ||
 jobs:
   audio:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 55
     defaults:
       run:
         working-directory: next/services/audio
@@ -56,6 +60,10 @@ jobs:
       - run: npm run check && npm test
       - name: install fixture SDK
         run: npm ci --prefix ../../app
+      - name: install media verification tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y ffmpeg
       - name: check fixture cleanup
         run: node --experimental-strip-types --test scripts/*node-check.mjs
       - name: validate worker bundle
@@ -74,7 +82,7 @@ jobs:
           node --input-type=module -e 'import { writeFileSync } from "node:fs"; writeFileSync(process.env.UPLOAD_SECRETS_FILE, JSON.stringify({ UPLOAD_CAPABILITY_SECRET: process.env.UPLOAD_CAPABILITY_SECRET }), { mode: 0o600 });'
           npm run deploy -- --secrets-file "$UPLOAD_SECRETS_FILE"
       - name: verify deployed upload activation
-        if: github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch' && (inputs.verify_upload || inputs.diagnose_upload || inputs.full_size)
+        if: github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch' && (inputs.verify_upload || inputs.diagnose_upload || inputs.full_size || inputs.verify_processing)
         env:
           ZAT_TEST_PDS: ${{ secrets.ZAT_TEST_PDS }}
           ZAT_TEST_HANDLE: ${{ secrets.ZAT_TEST_HANDLE }}
@@ -83,11 +91,17 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           DIAGNOSE_UPLOAD: ${{ inputs.diagnose_upload }}
           VERIFY_UPLOAD_FULLSIZE: ${{ inputs.full_size }}
+          VERIFY_UPLOAD_PROCESSING: ${{ inputs.verify_processing }}
           RESUME_UPLOAD_ID: ${{ inputs.resume_upload_id }}
           RESUME_RECORD_RKEY: ${{ inputs.resume_record_rkey }}
-        run: node --experimental-strip-types scripts/verify-upload.mjs
+        run: |
+          if [ "$VERIFY_UPLOAD_PROCESSING" = true ]; then
+            command -v ffmpeg
+            command -v ffprobe
+          fi
+          node --experimental-strip-types scripts/verify-upload.mjs
       - name: retain full-size acceptance and exact cleanup receipt
-        if: always() && github.event_name == 'workflow_dispatch' && inputs.full_size && !inputs.diagnose_upload
+        if: always() && github.event_name == 'workflow_dispatch' && (inputs.full_size || inputs.verify_processing) && !inputs.diagnose_upload
         uses: actions/upload-artifact@v4
         with:
           name: full-size-upload-acceptance
