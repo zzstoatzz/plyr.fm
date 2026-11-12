@@ -7,7 +7,7 @@ import ListPlus from 'lucide-react-native/icons/list-plus';
 import Ellipsis from 'lucide-react-native/icons/ellipsis';
 import { api, type Track } from './api';
 import {
-  Button, Detail, Heading, ListRows, Status, useColors,
+  Button, Detail, Heading, ListRows, Status, trackCount, useColors,
   usePages, useResource, type Play, type TrackActions,
 } from './CatalogPieces';
 import { Search } from './Search';
@@ -77,8 +77,11 @@ function Collection({ id, album, onPlay }: { id: string; album: boolean; onPlay:
     {list.owner.profile && <InlineLink href={{ pathname: '/u/[handle]', params: { handle: list.owner.profile.handle || list.owner.did } }}>
       {list.owner.profile.display_name || list.owner.profile.handle}
     </InlineLink>}
-    <Detail>{list.metrics.member_count} {list.metrics.member_count === 1 ? 'track' : 'tracks'}{tracks.length < list.metrics.member_count ? ` · ${list.metrics.member_count - tracks.length} unavailable` : ''}</Detail>
+    <Detail>{tracks.length ? trackCount(tracks.length) : 'no playable tracks'}{tracks.length && tracks.length < list.metrics.member_count ? ` · ${list.metrics.member_count - tracks.length} no longer available` : ''}</Detail>
     </DetailHeader>
+    {!tracks.length && list.metrics.member_count > 0 && <Detail>
+      {list.metrics.member_count === 1 ? 'the track in this ' : 'the tracks in this '}{album ? 'album' : 'playlist'} {list.metrics.member_count === 1 ? 'was' : 'were'} deleted or can't be loaded right now.
+    </Detail>}
     <CollectionActions list={list} refresh={result.retry} onPlay={onPlay} onOrderSaved={saved} actions={<>
       {tracks[0] && <PlayerControl primary large icon={PlayIcon} label={album ? 'Play album' : 'Play playlist'} onPress={() => onPlay(tracks[0], tracks, list.metadata.name ?? (album ? 'album' : 'playlist'))} />}
       <ShareLink compact path={`/${album ? 'album' : 'playlist'}/${encodeURIComponent(id)}`} />
