@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { AppState } from 'react-native';
+import { AppState, Platform } from 'react-native';
 import { randomUUID } from 'expo-crypto';
 import { api, type Track } from './api';
 import { useAuth } from './auth';
@@ -265,8 +265,8 @@ export function usePersonalQueue(target: Target) {
         ? jamPosition(current.wire, current.position(Date.now())) / 1000 : localPosition());
     };
     const subscription = AppState.addEventListener('change', state => { if (state !== 'active') save(); });
-    if (typeof window !== 'undefined') window.addEventListener('pagehide', save);
-    return () => { subscription.remove(); if (typeof window !== 'undefined') window.removeEventListener('pagehide', save); };
+    if (Platform.OS === 'web') window.addEventListener('pagehide', save);
+    return () => { subscription.remove(); if (Platform.OS === 'web') window.removeEventListener('pagehide', save); };
   }, []);
 
   useEffect(() => { if (!target.suspended) session.current?.refresh(); }, [target.suspended]);
