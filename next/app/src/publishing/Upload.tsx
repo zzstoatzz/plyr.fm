@@ -102,7 +102,8 @@ function AccountUpload({ auth }: { auth: Auth }) {
       <Field label="Album" value={album} onChangeText={setAlbum} maxLength={256} editable={!busy} />
       <Field label="Description" value={description} onChangeText={setDescription} maxLength={5000} multiline editable={!busy} />
       <TagsField value={tags} onChange={setTags} disabled={busy} />
-      <Action label={busy ? 'Uploading…' : 'Upload'} onPress={() => void upload()} disabled={busy || !!uploads.busy || !file || !title.trim() || !artist.trim() || (large && (!serviceConsent || !auth.uploadStorage || uploads.loading || !!uploads.error))} />
+      {!!recovery.operations.length && <Copy>finish or set aside the earlier creation before uploading another track.</Copy>}
+      <Action label={busy ? 'Uploading…' : 'Upload'} onPress={() => void upload()} disabled={busy || !!uploads.busy || !!recovery.operations.length || !file || !title.trim() || !artist.trim() || (large && (!serviceConsent || !auth.uploadStorage || uploads.loading || !!uploads.error))} />
       {note && <Copy live>{note}</Copy>}
     </>}
   </>;

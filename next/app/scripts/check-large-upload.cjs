@@ -182,7 +182,19 @@ async function run(browser, width, theme) {
     assert.equal(writes.length, 1);
     await signIn('did:plc:otherfixture');
     assert.equal(await page.getByText('resumable fixture', { exact: true }).count(), 0);
+    await page.evaluate(operation => new Promise((resolve, reject) => {
+      const request = indexedDB.open('plyr-next-pending-creates', 1);
+      request.onsuccess = () => { const transaction = request.result.transaction('operations', 'readwrite'), store = transaction.objectStore('operations');
+        const key = `${operation.owner}/${operation.collection}/${operation.rkey}`, read = store.get(key);
+        read.onsuccess = () => store.put({ ...read.result, archived: false }, key);
+        transaction.oncomplete = () => { request.result.close(); resolve(); }; transaction.onerror = () => reject(transaction.error); };
+    }), operation);
     await signIn(); offlineRecord = false; lostCreate = false;
+    await choose('fresh.wav');
+    await page.getByRole('textbox', { name: 'Title', exact: true }).fill('unrelated fresh draft');
+    await page.getByRole('textbox', { name: 'Artist', exact: true }).fill('fixture artist');
+    await page.getByText('finish or set aside the earlier creation before uploading another track.', { exact: true }).waitFor();
+    assert.ok(await page.getByRole('button', { name: 'Upload', exact: true }).isDisabled());
     await page.getByRole('button', { name: 'Check upload status', exact: true }).click();
     await page.getByRole('button', { name: 'Check playback availability', exact: true }).click();
     await page.getByText('saved. public audio is available.', { exact: true }).waitFor();
@@ -190,6 +202,8 @@ async function run(browser, width, theme) {
     await screenshot(page, `large-published-${width}-${theme}`);
     await page.getByRole('button', { name: 'Done with upload', exact: true }).click();
     await page.getByText('resumable fixture', { exact: true }).waitFor({ state: 'detached' });
+    assert.equal(await page.getByRole('textbox', { name: 'Title', exact: true }).inputValue(), 'unrelated fresh draft');
+    assert.ok(await page.getByRole('button', { name: 'Upload', exact: true }).isEnabled());
     assert.deepEqual(errors, []);
     console.log(`${width}/${theme}: consent, dedicated grant, bounded small transfer, mismatch protection, capability refresh, lost part/finish/create, cancellation conflict, archive/reload, held-part same-account reauth, owner isolation and activation passed`);
   } catch (error) { console.error(await page.locator('body').innerText()); await screenshot(page, `large-failure-${width}-${theme}`); throw error; }
