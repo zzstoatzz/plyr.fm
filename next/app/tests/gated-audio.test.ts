@@ -26,8 +26,8 @@ async function fixture(context: test.TestContext, failure?: 'mac' | 'value') {
     async fetch(url: string, init: RequestInit) {
       if (url.includes('getSpaceCredential')) {
         mints++;
-        const input: { credentialKid: string } = JSON.parse(String(init.body));
-        return Response.json({ credential: await createSpaceToken('credential', { iss: did, sub: space, keyId: input.credentialKid, expiresInSec: 60 }, signer) });
+        const input: { credentialKey: string } = JSON.parse(String(init.body));
+        return Response.json({ credential: await createSpaceToken('credential', { iss: did, sub: space, keyId: input.credentialKey, expiresInSec: 60 }, signer) });
       }
       if (url.includes('getRecord')) {
         const headers = new Headers(init.headers);

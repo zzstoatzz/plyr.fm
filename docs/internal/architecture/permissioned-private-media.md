@@ -138,7 +138,7 @@ The member-private read path is:
    `{authorityDid}#atproto_pds` (the October 21 alpha dropped `#atproto_space_host`).
    Public-client deployments omit it.
 4. plyr.fm generates a fresh P-256 key and posts an unsigned JSON body to
-   `getSpaceCredential` on the space host: `space`, `credentialKid` (the key's
+   `getSpaceCredential` on the space host: `space`, `credentialKey` (the key's
    `did:key`), `delegationToken`, and the optional `clientAttestation`. The credential
    is bound to that key.
 5. The resulting short-lived credential reads any repo in the space from that repo's own
@@ -153,6 +153,13 @@ branch answers the old form with `401 BadSpaceSignature`. On 2026-10-22 upstream
 the delegation token and key out of a signed issuance request into the body
 (`credentialKid`), renamed the read scheme to `Atproto-Space-Credential`, and tagged the
 signature; an older client gets `400 Missing credentialKid`.
+
+The November lexicon review renamed that body field to `credentialKey`, with
+the same P-256 `did:key` value. ZDS 0.9 removed the temporary `credentialKid`
+alias on November 11 ([source change](https://tangled.org/zat.dev/zds/commit/00d2d932199906d98e2dba81bf2d685c49c3f9f6)).
+Python, Next and the coordinator send the current field; the earlier name now
+fails with `400 Missing credentialKey`. This issuance change is separate from
+the response-MAC upgrade described in the current ZDS contract.
 
 The same release replaced signed commits with MACs. A credential read of
 `getRecord`, `getRepo`, `getLatestCommit` or `listRepoOps` must send

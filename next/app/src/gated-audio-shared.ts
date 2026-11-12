@@ -28,7 +28,7 @@ async function mint(agent: Agent, space: string, authorityPds: string, transport
 	const response = await transport.fetch(`${authorityPds}/xrpc/com.atproto.space.getSpaceCredential`, {
 		method: 'POST',
 		headers: { 'content-type': 'application/json' },
-		body: JSON.stringify({ space, credentialKid: key.did(), delegationToken }),
+		body: JSON.stringify({ space, credentialKey: key.did(), delegationToken }),
 		redirect: 'error'
 	});
 	if (!response.ok) throw new Error('your account cannot access this track');
