@@ -6,9 +6,9 @@ Start here for the next agent: [November 12 daily-driver checkpoint](docs/resear
 
 #2505, #2508–#2510 add durable upload/playlist create recovery, verified
 iOS next/previous command dispatch and session-isolated collection editing.
-Recovery passed deployed browser checks and actual native MMKV acceptance;
-native commands passed both patched and unpatched comparison builds. Physical
-device gestures and native distribution remain unverified.
+Recovery passed deployed browser checks and actual native MMKV acceptance.
+Native commands worked with the patch and failed on the unpatched control build.
+Physical device gestures and native distribution remain unverified.
 Uncertain attempts can be explicitly set aside without losing their recovery
 history or an unrelated fresh upload draft.
 
