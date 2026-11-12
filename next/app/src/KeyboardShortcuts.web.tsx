@@ -3,6 +3,7 @@ import { useContext, useEffect, useRef } from 'react';
 import { usePlayback } from './playback';
 import { useAppPreferences } from './preference-context';
 import { RadioContext } from './RadioPlayer';
+import { layers } from './behaviors/layers';
 
 export function KeyboardShortcuts({ origin }: { origin: string }) {
   const player = usePlayback();
@@ -18,7 +19,7 @@ export function KeyboardShortcuts({ origin }: { origin: string }) {
       if (event.defaultPrevented || event.isComposing) return;
       const target = event.target instanceof Element ? event.target : null;
       const { player, radio, preferences, path, origin } = latest.current;
-      if (path !== '/now-playing' && [...document.querySelectorAll('[role="dialog"]')].some(dialog => dialog.getClientRects().length && !dialog.closest('[aria-hidden="true"]'))) return;
+      if (path !== '/now-playing' && layers.isOpen()) return;
       const key = event.key.toLowerCase();
       const navigate = (href: '/settings' | '/queue') => path === '/now-playing' ? router.replace(href) : router.navigate(href);
       if ((event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey) {

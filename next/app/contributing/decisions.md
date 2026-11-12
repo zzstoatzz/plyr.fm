@@ -38,7 +38,8 @@ nate first. Add an entry when a PR settles something.
 
 - The account picker's combobox and the queue's reorder handle are still
   hand-rolled. Each is listed in `scripts/lint-exemptions.json` until it moves
-  to a behavior. Tabs moved to `src/behaviors/use-tabs.ts`.
+  to a behavior. Tabs moved to `src/behaviors/use-tabs.ts`; open overlays are
+  tracked by `src/behaviors/layers.ts`.
 - The permission for queue and settings is still named for joining a Jam.
 - Sensitive artwork is not filtered from Media Session.
 - Native has no next/previous on the lock screen beyond the iOS patch.

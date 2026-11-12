@@ -26,9 +26,9 @@ instead. Add one when something bites.
   crashes native startup (#2496 was a `pagehide` listener). Use a `.web.ts`
   seam rather than a `Platform.OS` check; `npm run lint` catches new ones.
 - **React Native `Modal` behaves differently on web.** `Sheet.tsx` sets
-  `accessibilityViewIsModal` only off web, and `KeyboardShortcuts.web.tsx`
-  finds open overlays by querying `[role="dialog"]`. An overlay without that
-  role doesn't stop shortcuts from firing under it.
+  `accessibilityViewIsModal` only off web. Global shortcuts don't see the
+  DOM: an overlay holds them by calling `useLayer` (`Sheet` does), so a new
+  overlay that isn't a `Sheet` must call it too.
 - **The iOS player depends on a pinned `expo-audio` patch.** Changing it needs
   a native rebuild; see [patches/README.md](../patches/README.md).
 

@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import X from 'lucide-react-native/icons/x';
 import { useAppearance } from './appearance';
 import { Heading } from './CatalogPieces';
+import { useLayer } from './behaviors/use-layer';
 
 export function Sheet({ title, close, children, notice, visible = true, onDismiss }: {
   title: string; close: () => void; children: ReactNode; notice?: ReactNode; visible?: boolean; onDismiss?: () => void;
@@ -12,6 +13,7 @@ export function Sheet({ title, close, children, notice, visible = true, onDismis
   const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const wide = width >= 800;
+  useLayer(visible);
   return <Modal transparent accessibilityLabel={title} animationType={theme.reduceMotion ? 'none' : 'fade'} visible={visible} onDismiss={onDismiss} onRequestClose={close}>
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       style={{ flex: 1, justifyContent: wide ? 'center' : 'flex-end', alignItems: 'center' }}>
