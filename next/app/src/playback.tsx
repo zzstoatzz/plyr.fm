@@ -11,6 +11,7 @@ import type { JamIntent } from './jam-connection';
 import { usePersonalQueue } from './use-personal-queue';
 import { usePlayerAccounting } from './use-player-accounting';
 import { useMediaSession } from './media-session';
+import { useRemoteTrackControls } from './use-remote-track-controls';
 import { toast } from './toast';
 
 export function PlaybackProvider({ children, playThrough, keepPlaying, volume }: {
@@ -26,6 +27,7 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
   const [starting, setStarting] = useState<number | null>(null);
   const loading = resolving || starting !== null;
   const [ready, setReady] = useState(false);
+  const [lockScreenSuspended, setLockScreenSuspended] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [repeat, setRepeat] = useState<'off' | 'all' | 'one'>('off');
   const settings = useRef({ repeat, volume });
@@ -127,6 +129,7 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
     setIndex(at);
     setReady(false);
     setResolving(true);
+    setLockScreenSuspended(false);
     setStarting(null);
     setError(null);
     try {
@@ -173,7 +176,7 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
           setStarting((pending) => pending === request ? null : pending);
         }
       });
-      if (Platform.OS !== 'web') {
+      if (Platform.OS === 'android') {
         player.setActiveForLockScreen(true, {
           title: track.metadata.title,
           artist: track.artist.profile.display_name,
@@ -238,6 +241,7 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
   }, [status.didJustFinish]);
 
   function setPlaying(playing: boolean) {
+    if (playing) setLockScreenSuspended(false);
     if (jam.setPlaying(playing, jam.jam?.state)) return;
     if (!playing) { personal.checkpoint(); player.pause(); }
     if (personal.command({ action: playing ? 'play' : 'pause' })) return;
@@ -292,7 +296,7 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
     jamCommand: intent => intent.action === 'play' || intent.action === 'pause' ? jam.setPlaying(intent.action === 'play', jam.jam?.state) : jam.command(intent),
     play, queue: accountVisible ? queue : [], current: accountVisible ? current : undefined, index: accountVisible ? index : -1, loading: loading || personal.waiting, error, status: presentationStatus, tail: jam.jam || !accountVisible ? undefined : personal.state.tail, outputElsewhere: !jam.jam && personal.outputElsewhere, deviceQueue: personal.deviceOnly, queueError: jam.jam ? undefined : personal.queueError, keepPlaying: personal.keepPlaying, setKeepPlaying: personal.setKeepPlaying, repeat: jam.jam ? 'off' : repeat, setRepeat: value => { if (!jam.active()) personal.setRepeat(value); }, toggle, setPlaying, next,
     isPlaying: () => player.playing,
-    pauseLocal: () => { personal.suspend(); player.pause(); },
+    pauseLocal: () => { setLockScreenSuspended(true); personal.suspend(); player.pause(); },
     previous: () => {
       const room = jam.state();
       if (jam.active()) {
@@ -331,6 +335,11 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
   };
   const shown = value.current;
   const seekable = value.canSeek && !remoteOutput;
+  useRemoteTrackControls(player, shown && ready && !remoteOutput && !lockScreenSuspended ? {
+    metadata: { title: shown.metadata.title, artist: shown.metadata.artist_name || shown.artist.profile.display_name || shown.artist.profile.handle, artworkUrl: trackArtwork(shown) },
+    previous: value.canSeek ? value.previous : undefined,
+    next: value.canSeek && (value.index + 1 < value.queue.length || !value.jam && (value.keepPlaying || value.repeat === 'all')) ? () => void value.next() : undefined,
+  } : null);
   useMediaSession('player', shown ? {
     title: shown.metadata.title,
     artist: shown.metadata.artist_name || shown.artist.profile.display_name || shown.artist.profile.handle,

@@ -96,10 +96,13 @@ the RN path, not physical-device lock-screen controls, App Store readiness or
 replacement of the existing iOS app. The discovery settings client also passed
 native custom-tag normalization, show-all/default restoration and Home navigation;
 server enforcement has separate acceptance.
-Native remote next/previous remains unimplemented: the current single-player
-`expo-audio@58.0.11` path does not expose those controls. That needs implementation,
-not just another smoke test. Physical interruptions, audio-route changes and
-lock-screen interaction still need device acceptance.
+Native iOS next/previous uses a pinned `expo-audio@58.0.11` patch that emits
+commands from Expo's existing remote-command owner to the app queue. Simulator
+OS commands verified next, previous/restart and return to the prior track;
+radio handoff cleared personal metadata and command handlers. These checks used
+an inspected MediaRemote sender through LLDB, not lock-screen button presses.
+Physical interruptions, audio-route changes, lock-screen/headset interaction and
+authenticated native Jam/remote-output transitions still need device acceptance.
 
 Publishing remains a substantial gap: production supports 1.5 GiB uploads,
 staging/transcoding, protected audio and explicit storage fallback consent.
