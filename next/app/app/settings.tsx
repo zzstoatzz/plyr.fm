@@ -13,6 +13,7 @@ import { SettingsSection, SettingsRow } from '../src/SettingsPieces';
 import { Sheet } from '../src/Sheet';
 import { usePlayback } from '../src/playback';
 import { useAppPreferences } from '../src/preference-context';
+import { DiscoverySettings } from '../src/discovery/DiscoverySettings';
 
 const themes = ['system', 'light', 'dark'] as const;
 const fonts = ['comic-sans', 'system', 'mono', 'serif'] as const;
@@ -48,6 +49,7 @@ export default function Settings() {
         <Switch {...(Platform.OS === 'web' ? { activeThumbColor: theme.background } : {})} accessibilityLabel={label} value={key === 'keepPlaying' ? player.keepPlaying : preferences[key]} thumbColor={theme.background} trackColor={{ false: theme.border, true: theme.accent }} ios_backgroundColor={theme.border} onValueChange={value => { if (key === 'keepPlaying') player.setKeepPlaying(value); setPreferences({ [key]: value }); }} />
       </SettingsRow>)}
     </SettingsSection>
+    <DiscoverySettings key={auth.did ?? 'anonymous'} />
     <SettingsSection title="account" icon={UserRound}>
       {auth.did ? <>
         <SettingsRow label={auth.handle ? `@${auth.handle}` : auth.did} detail={status === 'synced' ? 'your settings are saved with your account.' : status === 'syncing' ? 'saving your settings…' : status === 'error' ? 'couldn’t save settings with your account. your changes are kept on this device.' : 'your settings are saved on this device.'} />

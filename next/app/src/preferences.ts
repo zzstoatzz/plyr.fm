@@ -3,13 +3,14 @@ import { AppState } from 'react-native';
 import type { Auth } from './auth-state';
 import { accountPreferences, type PersonalPreferences } from './preference-sync';
 import { readLocal, writeLocal } from './storage';
+import { DEFAULT_HIDDEN_TAGS, hiddenTags } from './discovery/preferences';
 
 export type Preferences = PersonalPreferences & { volume: number };
 export type PreferenceStatus = 'local' | 'syncing' | 'synced' | 'error';
 
 const KEY = 'plyr-next:prefs';
 const DEFAULTS: Preferences = {
-	theme: 'system', accent: '#6a9fff', font: 'comic-sans', keepPlaying: false, playThrough: true, volume: 1, scale: 1
+	theme: 'system', accent: '#6a9fff', font: 'comic-sans', keepPlaying: false, playThrough: true, volume: 1, scale: 1, hiddenTags: DEFAULT_HIDDEN_TAGS
 };
 type Account = {
 	did: string;
@@ -22,7 +23,8 @@ type Account = {
 
 function loadLocal(): Preferences {
 	try {
-		return { ...DEFAULTS, ...JSON.parse(readLocal(KEY) ?? '{}') };
+		const local = JSON.parse(readLocal(KEY) ?? '{}');
+		return { ...DEFAULTS, ...local, hiddenTags: hiddenTags(local?.hiddenTags) ?? DEFAULT_HIDDEN_TAGS };
 	} catch {
 		return DEFAULTS;
 	}
@@ -91,7 +93,7 @@ export function usePreferences(auth: Auth) {
 		try {
 			const cached = JSON.parse(readLocal(`${KEY}:${did}`) ?? 'null');
 			if (cached) {
-				value = { ...local, ...cached.preferences, volume: local.volume };
+				value = { ...local, ...cached.preferences, volume: local.volume, hiddenTags: hiddenTags(cached.preferences?.hiddenTags) ?? DEFAULT_HIDDEN_TAGS };
 				account.pending = cached.pending ?? {};
 			}
 		} catch {
