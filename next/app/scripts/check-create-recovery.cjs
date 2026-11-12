@@ -21,7 +21,7 @@ async function run(browser, width, theme, kind) {
     await context.route('https://plc.directory/**', route => route.fulfill({ json: { service: [] } }));
     await context.route('https://api.next.plyr.fm/v1/records/await?**', route => route.fulfill({ json: { status: 'pending' } }));
     const records = new Map(), writes = [];
-    let commit = true, lost = true, offline = true, hold = false, entered, release;
+    let commit = true, lost = true, offline = true, hold = false, reject = false, entered, release;
     await context.exposeFunction('__recoveryPds', async (endpoint, body) => {
       const url = new URL(endpoint, 'https://fixture.invalid');
       if (url.pathname.endsWith('listRecords')) return { status: 200, body: { records: [] } };
@@ -34,6 +34,7 @@ async function run(browser, width, theme, kind) {
       assert.ok(url.pathname.endsWith('createRecord'), `unexpected RPC ${url.pathname}`);
       const input = JSON.parse(body);
       writes.push(input);
+      if (reject) return { status: 400, body: { error: 'InvalidRecord', message: 'fixture permanent validation failure' } };
       assert.equal(input.repo, did);
       const rkey = input.rkey ?? '3jzfcijpj2z2' + '234567ab'[writes.length % 8];
       const uri = `at://${input.repo}/${input.collection}/${rkey}`;
@@ -131,6 +132,117 @@ async function run(browser, width, theme, kind) {
     await page.getByRole('button', { name: 'Check status', exact: true }).click();
     await view(page).waitFor();
     await dismiss().click();
+    reject = true; commit = false;
+    await start('rejected immutable attempt');
+    await page.getByRole('button', { name: 'Set aside attempt', exact: true }).waitFor();
+    const rejected = writes.at(-1), rejectedCount = writes.length;
+    await page.getByText('this attempt may still appear. starting again could create a duplicate.', { exact: true }).waitFor();
+    await screenshot(page, `${kind}-set-aside-${width}-${theme}`);
+    await page.evaluate(() => {
+      const transaction = IDBDatabase.prototype.transaction;
+      IDBDatabase.prototype.transaction = function (...args) {
+        const result = transaction.apply(this, args);
+        if (this.name === 'plyr-next-pending-creates' && args[1] === 'readwrite') {
+          IDBDatabase.prototype.transaction = transaction;
+          queueMicrotask(() => result.abort());
+        }
+        return result;
+      };
+    });
+    await page.getByRole('button', { name: 'Set aside attempt', exact: true }).click();
+    await page.getByText('could not update this attempt. try again.', { exact: true }).waitFor();
+    assert.equal(await page.getByRole('button', { name: 'Show earlier attempts (1)', exact: true }).count(), 0, 'failed archive cannot unlock creation');
+    assert.equal(writes.length, rejectedCount);
+    await page.getByRole('button', { name: 'Set aside attempt', exact: true }).click();
+    await page.getByRole('button', { name: 'Show earlier attempts (1)', exact: true }).waitFor();
+    await enter(page);
+    await page.getByRole('button', { name: 'Show earlier attempts (1)', exact: true }).waitFor();
+    assert.equal(writes.length, rejectedCount, 'archiving and reload never create');
+    await signIn(page, 'did:plc:otherfixture');
+    assert.equal(await page.getByRole('button', { name: 'Show earlier attempts (1)', exact: true }).count(), 0);
+    await signIn(page);
+    await page.getByRole('button', { name: 'Show earlier attempts (1)', exact: true }).click();
+    await page.getByRole('button', { name: 'Resume recovery', exact: true }).waitFor();
+    assert.equal(await page.getByRole('button', { name: 'Retry same creation', exact: true }).count(), 0);
+    await page.getByRole('button', { name: 'Resume recovery', exact: true }).click();
+    await page.getByRole('button', { name: 'Retry same creation', exact: true }).waitFor();
+    assert.equal(writes.length, rejectedCount, 'resume does not submit');
+    await page.getByRole('button', { name: 'Retry same creation', exact: true }).click();
+    await page.getByRole('button', { name: 'Set aside attempt', exact: true }).waitFor({ state: 'visible' });
+    await page.getByText('could not confirm creation. check again when connected.', { exact: true }).waitFor();
+    assert.equal(writes.at(-1).rkey, rejected.rkey);
+    assert.deepEqual(writes.at(-1).record, rejected.record);
+    await page.getByRole('button', { name: 'Set aside attempt', exact: true }).click();
+    reject = false; commit = true; lost = false;
+    await start('intentional second creation');
+    await view(page).waitFor();
+    assert.notEqual(writes.at(-1).rkey, rejected.rkey, 'new explicit creation gets its own address');
+    await dismiss().click();
+    await dismiss().waitFor({ state: 'detached' });
+    const archivedUri = `at://${did}/${rejected.collection}/${rejected.rkey}`;
+    records.set(rejected.rkey, { uri: archivedUri, cid: 'late-original', value: rejected.record });
+    const beforeArchivedCheck = writes.length;
+    await enter(page);
+    await page.getByRole('button', { name: 'Show earlier attempts (1)', exact: true }).click();
+    await view(page).waitFor();
+    assert.equal(writes.length, beforeArchivedCheck, 'earlier attempt reconciliation is read-only');
+    if (kind === 'track') await page.getByRole('textbox', { name: 'Title', exact: true }).fill('keep my new draft');
+    await screenshot(page, `${kind}-earlier-accepted-${width}-${theme}`);
+    await page.getByRole('button', { name: 'Done', exact: true }).click();
+    await page.getByRole('button', { name: 'Hide earlier attempts (1)', exact: true }).waitFor({ state: 'detached' });
+    if (kind === 'track') assert.equal(await page.getByRole('textbox', { name: 'Title', exact: true }).inputValue(), 'keep my new draft');
+    if (kind === 'track') {
+      reject = true; commit = false;
+      await start('historical attempt with new draft');
+      await page.getByRole('button', { name: 'Set aside attempt', exact: true }).click();
+      await page.getByRole('button', { name: /^(Show|Hide) earlier attempts \(1\)$/ }).waitFor();
+      await enter(page);
+      await page.getByRole('button', { name: 'Show earlier attempts (1)', exact: true }).waitFor();
+      const chooser = page.waitForEvent('filechooser');
+      await page.getByRole('button', { name: 'Choose audio', exact: true }).click();
+      await (await chooser).setFiles({ name: 'fresh-draft.wav', mimeType: 'audio/wav', buffer: audio });
+      await page.getByRole('button', { name: 'fresh-draft.wav', exact: true }).waitFor();
+      await page.getByRole('textbox', { name: 'Title', exact: true }).fill('preserve my unsent draft');
+      await page.getByRole('textbox', { name: 'Artist', exact: true }).fill('draft artist');
+      await page.getByRole('button', { name: 'Show earlier attempts (1)', exact: true }).click();
+      await page.getByRole('button', { name: 'Resume recovery', exact: true }).click();
+      reject = false; commit = true; lost = false;
+      await page.getByRole('button', { name: 'Retry same creation', exact: true }).click();
+      await view(page).waitFor();
+      await dismiss().click();
+      await page.getByRole('textbox', { name: 'Title', exact: true }).waitFor();
+      assert.equal(await page.getByRole('textbox', { name: 'Title', exact: true }).inputValue(), 'preserve my unsent draft', 'resolving historical recovery must preserve the unrelated draft');
+      await page.getByRole('button', { name: 'fresh-draft.wav', exact: true }).waitFor();
+      await screenshot(page, `track-draft-preserved-${width}-${theme}`);
+      await page.getByRole('button', { name: 'Upload', exact: true }).click();
+      await view(page).waitFor();
+      assert.equal(writes.at(-1).record.title, 'preserve my unsent draft');
+      await dismiss().click();
+      await page.getByRole('button', { name: 'Choose audio', exact: true }).waitFor();
+      assert.equal(await page.getByRole('textbox', { name: 'Title', exact: true }).inputValue(), '', 'dismissing the current upload still resets its draft');
+    }
+    hold = true; commit = false; lost = false;
+    const archivedHeld = new Promise(resolve => { entered = resolve; });
+    await start('late response after set aside');
+    await archivedHeld;
+    const heldWrite = writes.at(-1), heldCount = writes.length;
+    await signIn(page);
+    await page.getByRole('button', { name: 'Set aside attempt', exact: true }).click();
+    await page.getByRole('button', { name: 'Show earlier attempts (1)', exact: true }).waitFor();
+    const heldUri = `at://${did}/${heldWrite.collection}/${heldWrite.rkey}`;
+    records.set(heldWrite.rkey, { uri: heldUri, cid: 'late-held', value: heldWrite.record });
+    const archivedSettled = page.waitForResponse(response => response.url().includes('/v1/records/await?'));
+    release(); hold = false;
+    await archivedSettled;
+    await enter(page);
+    await page.getByRole('button', { name: 'Show earlier attempts (1)', exact: true }).waitFor();
+    assert.equal(await view(page).count(), 0, 'late response cannot reactivate the archived attempt');
+    await page.getByRole('button', { name: 'Show earlier attempts (1)', exact: true }).click();
+    await view(page).waitFor();
+    assert.equal(writes.length, heldCount, 'late acceptance and archive recovery never submit');
+    await page.getByRole('button', { name: 'Done', exact: true }).click();
+    await page.getByRole('button', { name: 'Hide earlier attempts (1)', exact: true }).waitFor({ state: 'detached' });
+    lost = true;
     commit = false;
     await start('collision must not overwrite');
     await page.getByRole('button', { name: 'Check status', exact: true }).click();
@@ -171,7 +283,7 @@ async function run(browser, width, theme, kind) {
     await page.getByText('could not load creation recovery. try again before publishing.', { exact: true }).waitFor();
     assert.equal(writes.length, before, 'aborted recovery read fails closed without hanging');
     assert.deepEqual(errors, []);
-    console.log(`${kind} ${width}/${theme}: lost response/reload, account isolation, same-key retry across tabs, accepted recovery and differing-record protection passed`);
+    console.log(`${kind} ${width}/${theme}: lost response/reload, account isolation, same-key retry across tabs, accepted recovery, explicit archive/resume, storage failure, draft preservation and differing-record protection passed`);
   } catch (error) { console.error(await page.locator('body').innerText()); await screenshot(page, `${kind}-failure-${width}-${theme}`); throw error; }
   finally { await context.close(); }
 }

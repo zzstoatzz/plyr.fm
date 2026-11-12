@@ -13,6 +13,7 @@ function fixture() {
     async load(owner, collection) { return [...durable.values()].filter(item => item.owner === owner && item.collection === collection); },
     async put(item) { if (flags.failStorage) throw new Error('disk unavailable'); durable.set(createKey(item), structuredClone(item)); },
     async accept(item, cid) { const existing = durable.get(createKey(item)); if (existing) durable.set(createKey(item), { ...existing, cid }); },
+    async archive(item, archived) { const existing = durable.get(createKey(item)); if (!existing) throw new Error('missing'); durable.set(createKey(item), { ...existing, archived }); },
     async delete(item) { durable.delete(createKey(item)); },
   };
   const rpc = new Client({ handler: async (url, init) => {
@@ -118,7 +119,27 @@ test('later rejection and absent read cannot erase an earlier in-flight create',
   await started;
   await assert.rejects(creator.retry(operation), CreateUnconfirmed);
   assert.equal(f.durable.size, 1, 'later rejection must retain earlier intent');
+  await f.storage.archive(operation, true);
   release();
   assert.equal((await first).state, 'accepted');
   assert.equal([...f.durable.values()][0].cid, 'late');
+  assert.equal([...f.durable.values()][0].archived, true, 'late completion cannot reactivate an archived attempt');
+});
+
+test('explicit archive survives late acceptance and preserves the original immutable intent', async () => {
+  const f = fixture();
+  f.flags.commit = false; f.flags.lost = true;
+  await assert.rejects(f.creator().create(operation), CreateUnconfirmed);
+  await f.storage.archive(operation, true);
+  const restored = createOperation(JSON.parse(JSON.stringify([...f.durable.values()][0])));
+  assert.equal(restored.archived, true);
+  assert.deepEqual(restored.record, operation.record);
+  f.records.set(operation.rkey, operation.record);
+  assert.equal((await f.creator().check(restored)).state, 'accepted');
+  assert.equal([...f.durable.values()][0].archived, true);
+  assert.equal(f.posts.length, 1);
+  await f.storage.archive(operation, false);
+  assert.equal([...f.durable.values()][0].cid, 'cid1');
+  assert.equal([...f.durable.values()][0].archived, false);
+  assert.throws(() => createOperation({ ...operation, archived: 'yes' }));
 });

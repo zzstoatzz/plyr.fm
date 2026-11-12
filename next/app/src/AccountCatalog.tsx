@@ -19,7 +19,7 @@ import {
 import { Action, Field, InlineLink } from './controls';
 import { Sheet } from './Sheet';
 import { createPds } from './pds';
-import { CreateRecovery, useCreateRecovery } from './publishing/CreateRecovery';
+import { CreateRecovery, EarlierCreates, useCreateRecovery } from './publishing/CreateRecovery';
 
 function usePds() {
   const { did, rpc } = useAuth();
@@ -123,6 +123,7 @@ function AccountLibrary({ did, likesOnly, onPlay }: { did: string; likesOnly: bo
       <Action label="Browse playlists" href="/playlists" />
     </View>
     <CreateRecovery auth={auth} recovery={recovery} kind="playlist" onDismiss={() => { setCreated(undefined); mutation.clear(); }} />
+    <EarlierCreates auth={auth} recovery={recovery} kind="playlist" />
     {!creating && !recovery.operations.length && <>
       <Status empty={mutation.message} />
       {created && <InlineLink standalone href={{ pathname: '/playlist/[id]', params: { id: playlistIdFromUri(created) } }}>open created playlist</InlineLink>}

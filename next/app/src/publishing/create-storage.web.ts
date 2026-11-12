@@ -65,4 +65,17 @@ export const createStorage: CreateStorage = {
       transaction.onabort = () => reject(transaction.error);
     });
   },
+  async archive(operation, archived) {
+    const database = await open();
+    await new Promise<void>((resolve, reject) => {
+      const transaction = database.transaction('operations', 'readwrite'), store = transaction.objectStore('operations'), key = createKey(operation);
+      const request = store.get(key);
+      request.onsuccess = () => {
+        try { store.put({ ...scopedCreate(request.result, operation.owner, operation.collection, key), archived }, key); } catch { transaction.abort(); }
+      };
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error);
+      transaction.onabort = () => reject(transaction.error ?? new Error('could not update this creation attempt.'));
+    });
+  },
 };
