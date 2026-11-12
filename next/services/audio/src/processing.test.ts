@@ -86,7 +86,7 @@ test("unconfigured processing fails before reserving source bytes", async () => 
 test("real callback routes keep source and rendition private until canonical publication", async () => {
   const f = await setup();
   const claim = await f.finishSource();
-  expect(await (await f.send("GET")).json()).toMatchObject({ state: "processing", reservedBytes: 30 });
+  expect(await (await f.send("GET")).json()).toMatchObject({ state: "processing", reservedBytes: 30, processingGeneration: 1 });
   for (const path of [f.media, `${f.media}/original`, `${f.media}/manifest`]) expect((await routeUpload(new Request(path), env))?.status).toBe(404);
   expect((await f.send("POST", "/activate")).status).toBe(409);
   expect(await (await f.callback(claim, "source", "GET")).text()).toBe(source);
@@ -103,7 +103,7 @@ test("real callback routes keep source and rendition private until canonical pub
   const original = await routeUpload(new Request(`${f.media}/original`, { headers: { range: "bytes=1-3" } }), env);
   expect(original?.status).toBe(206); expect(original?.headers.get("content-disposition")).toBe('attachment; filename="original.aiff"');
   expect(await original?.text()).toBe(source.slice(1, 4));
-  expect(await (await routeUpload(new Request(`${f.media}/manifest`), env))?.json()).toMatchObject({ original: { sizeBytes: source.length }, playback: { sizeBytes: output.length, contentType: "audio/mpeg" } });
+  expect(await (await routeUpload(new Request(`${f.media}/manifest`), env))?.json()).toMatchObject({ processed: true, original: { sizeBytes: source.length }, playback: { sizeBytes: output.length, contentType: "audio/mpeg" } });
 });
 
 test("expired generation fences callbacks and retries retain original and record identity", async () => {
@@ -115,6 +115,7 @@ test("expired generation fences callbacks and retries retain original and record
   });
   expect((await f.send("POST", "/finish")).status).toBe(200);
   const next = await f.state(); expect(next.job.claim.generation).toBe(2); expect(next.session.recordUri).toBe(f.value.recordUri);
+  expect(await (await f.send("GET")).json()).toMatchObject({ processingGeneration: 2 });
   expect((await f.callback(claim, "heartbeat", "POST")).status).toBe(409);
   expect((await f.callback(claim, "parts/1", "PUT", output, { "X-Part-SHA256": await digest(output) })).status).toBe(409);
   expect(await (await f.callback(next.job.claim, "source", "GET")).text()).toBe(source);

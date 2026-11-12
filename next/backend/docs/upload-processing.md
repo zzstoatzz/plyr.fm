@@ -85,6 +85,12 @@ delivered, lease recovery still applies; it cannot infer an undelivered reason.
 Increasing the immutable budget is not implemented and must not be advertised as
 a recovery action. Processing UI remains gated on handling this distinction.
 
+Authenticated upload status includes `processingGeneration` once an attempt
+exists. A fixture can retain its exact private rendition key
+`processing/{ownerHash}/{uploadId}/{processingGeneration}` without recording a
+capability. Published manifests distinguish processed uploads with
+`processed: true`; raw uploads report false and need no original/rendition choice.
+
 Rust's individual attempt deadline is two hours, with 20-second heartbeats and
 a 15-second heartbeat request timeout. The owner must fence expired generations
 and reject heartbeats after completion. Cloud full-size tests must establish
@@ -97,6 +103,15 @@ This check does not reserve disk against legacy concurrent jobs: later I/O
 failures remain recoverable. Full-size cloud acceptance must record free space
 before dispatch and peak disk use; it cannot assume a Fly image's nominal disk
 size is all available to the job.
+
+Executor logs bind `scratch_available_bytes` before input and
+`owned_scratch_peak_file_bytes` after encoding to the upload UUID and generation.
+The latter sums the two monotonically growing source/output files' logical byte
+lengths; it is owned scratch usage, not whole-machine peak disk or filesystem
+allocation overhead. No media, credentials or capabilities enter these logs.
+Successful cloud fixtures remove only their exact source and observed generation
+after publication. Unfinished failures retain objects and their reservation
+artifact for fenced diagnosis; never delete bytes under an active executor.
 
 The new encoder allows only file/pipe protocols and mp3, wav, flac, ogg, mov,
 aac, aiff and matroska/webm demuxers. This covers the legacy `AudioFormat`
