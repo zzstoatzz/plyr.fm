@@ -278,3 +278,33 @@ Debug binaries before and after the change. Keep tag and account exclusion table
 free of matches, use pool size one, and time individual complete HTTP reads after
 the warmup. Repeat the baseline last to expose host-load drift; do not compare
 these Debug timings with the ReleaseSafe table above.
+
+## first-visit startup, November 12
+
+After the API had naturally stopped, Fly reported no running `app` process.
+One public `/ready` request started it and took 2.225 seconds end to end.
+The existing API machine then reported started in `sjc`; the ingester was
+already running. No machine was stopped or restarted for this measurement.
+
+Nine sequential loopback HTTP reads on that API machine, after startup,
+produced the following complete-response times. The shell used Bash's elapsed-time
+measurement and consumed the entire HTTP response; these do not
+include the laptop-to-Fly network or TLS handshake. All responses were 200.
+
+| route | three samples |
+| --- | --- |
+| `/ready` | 45, 45, 46 ms |
+| `/v1/tracks?limit=24` | 85, 76, 53 ms |
+| `/v1/tracks?limit=24&hidden_tag=` | 53, 51, 59 ms |
+
+This small sample identifies a real startup penalty, not a regional p95 or an
+attribution of individual SQL costs. Both services run the deployed `2d705ce1`
+image. The database branch is `plyr-stg/next-zig` in AWS `us-west-2`.
+
+The API now keeps one existing machine warm in its primary region. Extra
+machines, if added later, can still stop automatically. This changes the idle
+capacity floor, not the binary, SQL, database capacity or ingester count. Fly's
+[minimum-machine semantics](https://fly.io/docs/launch/autostop-autostart/)
+apply to the primary region; `fly.canary.toml` keeps that region and the API in
+`sjc`. Reverting the floor to zero restores idle savings and the measured
+first-visit tradeoff. Cost assumptions are recorded in `COSTS.md`.

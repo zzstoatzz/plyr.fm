@@ -304,3 +304,15 @@ stacks has not yet established cheaper overall operation. Record the actual
 retirement set and refreshed database consumption at cutover; do not subtract
 the whole legacy footprint speculatively. No resources or billing settings were
 changed by this inspection.
+
+### November 12 warm API floor
+
+The Next API keeps one existing 256 MB machine warm in `sjc` to avoid a measured
+2.225-second first request from a stopped machine. No replica or larger machine
+is added. The November 12 feed observed that API at 21% uptime; using its roughly
+$2.02/month estimate for a continuously running shared-1x/256MB machine implies
+about $1.60/month incremental compute at that previous duty cycle, or roughly
+$2/month over a completely idle API. Regional prices and actual billing can
+differ; these are planning estimates, not a refreshed invoice. The ingester and
+database remain unchanged. This intentional latency tradeoff does not establish
+cheaper overall operation; the retirement and coverage gaps above still apply.
