@@ -65,6 +65,7 @@ const checks = {
   'check-library-creation': [/^src\/(collections|AccountCatalog)/, /^app\/(library|create-album)/],
   'check-login-picker': [/^src\/(AccountPicker|auth|identity)/, /^app\/login/],
   'check-media-session': [/^src\/media-session/],
+  'check-overlay-shortcuts': [/^src\/(Sheet|KeyboardShortcuts|behaviors\/(layers|use-layer))/],
   'check-personal-queue-browser': [/^src\/(personal-queue|use-personal-queue|queue-)/],
   'check-personal-queue-coordinator': [/^src\/(personal-queue|queue-)/],
   'check-play-outbox-storage': [/^src\/play-outbox/],
